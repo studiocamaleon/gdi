@@ -4,6 +4,7 @@ import {
   IsEnum,
   IsNumber,
   IsOptional,
+  IsString,
   IsUUID,
   Max,
   Min,
@@ -21,6 +22,10 @@ export class CentroCostoRecursoMaquinaPeriodoItemDto {
   @IsOptional()
   @IsUUID()
   maquinaId?: string;
+
+  @IsOptional()
+  @IsString()
+  nombreRecurso?: string;
 
   @IsEnum(MetodoDepreciacionMaquinaDto)
   metodoDepreciacion: MetodoDepreciacionMaquinaDto;

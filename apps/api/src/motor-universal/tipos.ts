@@ -36,7 +36,7 @@ export interface JobContext {
   cantidad: number;
   /** Lista de piezas para nesting (gap H7 — multi-medida). */
   piezas?: Array<{ cantidad: number; anchoMm: number; altoMm: number }>;
-  /** Medidas custom cuando producto.modoMedidas = LIBRE. */
+  /** Medidas custom cuando el producto permite medida personalizada (LIBRE o MIXTA). */
   medidaCustomMm?: { anchoMm: number; altoMm: number };
   /** Multiplicador caras (1 simple faz, 2 doble faz). */
   caras?: 1 | 2;
@@ -58,6 +58,14 @@ export interface JobContext {
   m2_instalados?: number;
   /** Para instalación: zona elegida. */
   zonaInstalacion?: string;
+  /** Área total calculada desde las piezas comerciales. */
+  piezaAreaTotalM2?: number;
+  /** Metros lineales comerciales o ingresados por el usuario. */
+  metrosLineales?: number;
+  metroLineal?: number;
+  ml?: number;
+  cantidadComercial?: number;
+  cantidadComercialPricing?: number;
   /** Map booleano: opcionales activados por el comercial (key = configPasoId). */
   opcionalesActivados?: Record<string, boolean>;
   /** Materiales elegidos explícitamente por el comercial (key = configPasoId_slotCodigo). */
@@ -127,6 +135,7 @@ export interface CotizacionResultado {
       nombre: string;
       porcentaje: number;
       orden: number;
+      desglosarCliente?: boolean;
     }>;
     /** Lista de comisiones aplicadas. */
     comisiones: Array<{
@@ -273,6 +282,7 @@ export interface NestingVisualConfig {
   pieceBleedMm?: number;
   allowRotation: boolean;
   substrateLabel?: string;
+  centerPlacements?: boolean;
   usableArea: {
     xMm: number;
     yMm: number;
@@ -321,6 +331,9 @@ export interface MaterialEjecutado {
   materialSku: string;
   materialDisplayName: string;
   materiaPrimaNombre?: string | null;
+  materiaPrimaTemplateId?: string | null;
+  materiaPrimaTipoTecnico?: string | null;
+  atributosVarianteJson?: Record<string, unknown> | null;
   tipoLineaCosto: 'MATERIAL' | 'CONSUMIBLE_MAQUINA';
   cantidad: number;
   unidad: string;
@@ -344,10 +357,7 @@ export interface MaterialEjecutado {
   };
   /** Modo de selección que se aplicó. */
   modoSeleccion:
-    | 'HARDCODED'
-    | 'COMERCIAL_ELIGE'
-    | 'MOTOR_ELIGE_AUTO'
-    | 'MAQUINA_CONSUMIBLE';
+    'HARDCODED' | 'COMERCIAL_ELIGE' | 'MOTOR_ELIGE_AUTO' | 'MAQUINA_CONSUMIBLE';
 }
 
 export interface CargoDirectoEjecutado {
@@ -355,9 +365,7 @@ export interface CargoDirectoEjecutado {
   cargoCodigo: string;
   cargoNombre: string;
   modoCalculo:
-    | 'MONTO_FIJO_PLANO'
-    | 'PORCENTAJE_SOBRE_BASE'
-    | 'POR_UNIDAD_INPUT';
+    'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT';
   monto: number;
   detalle?: Record<string, unknown>;
 }
@@ -395,9 +403,9 @@ export interface ProductoCargado {
   productoCodigo: string;
   productoNombre: string;
   unidadComercial: string;
-  modoMedidas: string;
+  modoMedidas: 'FIJA' | 'LIBRE' | 'COMERCIAL_ELIGE' | 'MIXTA';
   /**
-   * Medida default del producto (modoMedidas = FIJA o COMERCIAL_ELIGE). Cuando
+   * Medida default del producto (FIJA, COMERCIAL_ELIGE o MIXTA). Cuando
    * el comercial NO carga `piezas[]` ni `medidaCustomMm` en el JobContext, el
    * dispatcher de nesting (pre_prensa look-ahead) usa estos valores como
    * fallback. Si el producto no las declara, el dispatcher falla y el motor
@@ -455,6 +463,7 @@ export interface PasoCargado {
     productivityUnit: string | null;
     setupMin: number | null;
     cleanupMin: number | null;
+    feedReloadMin?: number | null;
     detalleJson?: unknown;
   };
   /** Centro de costo manual para pasos sin máquina. */
@@ -473,6 +482,7 @@ export interface PasoCargado {
   maquinasCandidatas?: Array<{
     id: string;
     maquinaId: string;
+    perfilDefaultId?: string | null;
     esPreferida: boolean;
     orden: number;
     maquina: {
@@ -495,8 +505,21 @@ export interface PasoCargado {
       productivityUnit: string | null;
       setupMin: number | null;
       cleanupMin: number | null;
+      feedReloadMin?: number | null;
       detalleJson: unknown;
     }>;
+    perfilDefault?: {
+      id: string;
+      nombre: string;
+      tipoPerfil?: string | null;
+      activo: boolean;
+      productivityValue: number | null;
+      productivityUnit: string | null;
+      setupMin: number | null;
+      cleanupMin: number | null;
+      feedReloadMin?: number | null;
+      detalleJson: unknown;
+    } | null;
   }>;
   /** Otros perfiles disponibles de la máquina M-1 (para selección automática). */
   perfilesDisponibles?: Array<{
@@ -508,6 +531,7 @@ export interface PasoCargado {
     productivityUnit?: string | null;
     setupMin: number | null;
     cleanupMin: number | null;
+    feedReloadMin?: number | null;
     detalleJson: unknown;
   }>;
   slots: SlotCargado[];
@@ -530,6 +554,8 @@ export interface ConsumibleMaquinaCargado {
     sku: string;
     nombreVariante?: string | null;
     materiaPrimaNombre?: string | null;
+    materiaPrimaTemplateId?: string | null;
+    materiaPrimaTipoTecnico?: string | null;
     precioReferencia: number | null;
     unidadStock?: string | null;
     atributosVarianteJson?: Record<string, unknown> | null;
@@ -563,6 +589,8 @@ export interface SlotCargado {
     sku: string;
     nombreVariante?: string | null;
     materiaPrimaNombre?: string | null;
+    materiaPrimaTemplateId?: string | null;
+    materiaPrimaTipoTecnico?: string | null;
     precioReferencia: number | null;
     atributosVarianteJson?: Record<string, unknown> | null;
     /** G-M9: unidad de stock heredada de la materia prima padre. */

@@ -171,6 +171,7 @@ enum UnidadProduccionMaquina {
   GOLPES_MIN
   PLIEGOS_MIN
   M_MIN
+  MM_S
 }
 
 enum TipoPerfilOperativoMaquina {
@@ -241,6 +242,13 @@ enum UnidadDesgasteMaquina {
   HORAS
   CICLOS
   PIEZAS
+}
+
+enum ModoMedidasProducto {
+  FIJA
+  LIBRE
+  COMERCIAL_ELIGE
+  MIXTA
 }
 
 enum FamiliaMateriaPrima {
@@ -348,65 +356,65 @@ enum OrigenMovimientoStockMateriaPrima {
 }
 
 model Tenant {
-  id                                   String                               @id @default(uuid()) @db.Uuid
-  nombre                               String
-  slug                                 String                               @unique
-  activo                               Boolean                              @default(true)
-  createdAt                            DateTime                             @default(now())
-  updatedAt                            DateTime                             @updatedAt
-  memberships                          Membership[]
-  authSessions                         AuthSession[]
-  invitations                          Invitation[]
-  clientes                             Cliente[]
-  proveedores                          Proveedor[]
-  empleados                            Empleado[]
-  plantas                              Planta[]
-  areasCosto                           AreaCosto[]
-  centrosCosto                         CentroCosto[]
-  centroCostoRecursos                  CentroCostoRecurso[]
-  centroCostoRecursosMaquinaria        CentroCostoRecursoMaquinaPeriodo[]
-  centroCostoComponentesCostoPeriodo   CentroCostoComponenteCostoPeriodo[]
-  centroCostoCapacidadesPeriodo        CentroCostoCapacidadPeriodo[]
-  centroCostoTarifasPeriodo            CentroCostoTarifaPeriodo[]
-  maquinas                             Maquina[]
-  maquinaPerfilesOperativos            MaquinaPerfilOperativo[]
-  maquinaConsumibles                   MaquinaConsumible[]
-  maquinaComponentesDesgaste           MaquinaComponenteDesgaste[]
-  materiasPrimas                       MateriaPrima[]
-  materiaPrimaVariantes                MateriaPrimaVariante[]
-  almacenesMateriaPrima                AlmacenMateriaPrima[]
-  almacenesMateriaPrimaUbicaciones     AlmacenMateriaPrimaUbicacion[]
-  stockMateriaPrimaVariantes           StockMateriaPrimaVariante[]
-  movimientoStockMateriaPrima          MovimientoStockMateriaPrima[]
-  clienteContactos                     ClienteContacto[]
-  clienteDireccions                    ClienteDireccion[]
-  proveedorContactos                   ProveedorContacto[]
-  proveedorDireccions                  ProveedorDireccion[]
-  empleadoDireccions                   EmpleadoDireccion[]
-  empleadoComisions                    EmpleadoComision[]
-  productosImpuestosCatalogo           ProductoImpuestoCatalogo[]
-  productosComisionesCatalogo          ProductoComisionCatalogo[]
-  estaciones                           Estacion[]
+  id                                               String                                            @id @default(uuid()) @db.Uuid
+  nombre                                           String
+  slug                                             String                                            @unique
+  activo                                           Boolean                                           @default(true)
+  createdAt                                        DateTime                                          @default(now())
+  updatedAt                                        DateTime                                          @updatedAt
+  memberships                                      Membership[]
+  authSessions                                     AuthSession[]
+  invitations                                      Invitation[]
+  clientes                                         Cliente[]
+  proveedores                                      Proveedor[]
+  empleados                                        Empleado[]
+  plantas                                          Planta[]
+  areasCosto                                       AreaCosto[]
+  centrosCosto                                     CentroCosto[]
+  centroCostoRecursos                              CentroCostoRecurso[]
+  centroCostoRecursosMaquinaria                    CentroCostoRecursoMaquinaPeriodo[]
+  centroCostoComponentesCostoPeriodo               CentroCostoComponenteCostoPeriodo[]
+  centroCostoCapacidadesPeriodo                    CentroCostoCapacidadPeriodo[]
+  centroCostoTarifasPeriodo                        CentroCostoTarifaPeriodo[]
+  maquinas                                         Maquina[]
+  maquinaPerfilesOperativos                        MaquinaPerfilOperativo[]
+  maquinaConsumibles                               MaquinaConsumible[]
+  maquinaComponentesDesgaste                       MaquinaComponenteDesgaste[]
+  materiasPrimas                                   MateriaPrima[]
+  materiaPrimaVariantes                            MateriaPrimaVariante[]
+  almacenesMateriaPrima                            AlmacenMateriaPrima[]
+  almacenesMateriaPrimaUbicaciones                 AlmacenMateriaPrimaUbicacion[]
+  stockMateriaPrimaVariantes                       StockMateriaPrimaVariante[]
+  movimientoStockMateriaPrima                      MovimientoStockMateriaPrima[]
+  clienteContactos                                 ClienteContacto[]
+  clienteDireccions                                ClienteDireccion[]
+  proveedorContactos                               ProveedorContacto[]
+  proveedorDireccions                              ProveedorDireccion[]
+  empleadoDireccions                               EmpleadoDireccion[]
+  empleadoComisions                                EmpleadoComision[]
+  productosImpuestosCatalogo                       ProductoImpuestoCatalogo[]
+  productosComisionesCatalogo                      ProductoComisionCatalogo[]
+  estaciones                                       Estacion[]
   // === Modelo Universal V2 (Fase F.1.2) ===
-  rutas                                Ruta[]
-  rutaPasos                            RutaPaso[]
-  rutaVersiones                        RutaVersion[]
-  productos                            Producto[]
-  productoRutasAlternativas            ProductoRutaAlternativa[]
-  productoConfigPasos                  ProductoConfigPaso[]
-  productoConfigPasoSlotsMateriales    ProductoConfigPasoSlotMaterial[]
-  productoConfigPasoSlotMaterialCandidatos ProductoConfigPasoSlotMaterialCandidato[]
+  rutas                                            Ruta[]
+  rutaPasos                                        RutaPaso[]
+  rutaVersiones                                    RutaVersion[]
+  productos                                        Producto[]
+  productoRutasAlternativas                        ProductoRutaAlternativa[]
+  productoConfigPasos                              ProductoConfigPaso[]
+  productoConfigPasoSlotsMateriales                ProductoConfigPasoSlotMaterial[]
+  productoConfigPasoSlotMaterialCandidatos         ProductoConfigPasoSlotMaterialCandidato[]
   productoConfigPasoSlotMaterialCandidatoVariantes ProductoConfigPasoSlotMaterialCandidatoVariante[]
-  productoConfigPasoMaquinasCandidatas ProductoConfigPasoMaquinaCandidata[]
-  productoPasosExtras                  ProductoPasoExtra[]
-  cargosDirectosCatalogo               CargoDirectoCatalogo[]
-  productoCargosDirectosPaso           ProductoCargoDirectoPaso[]
-  productoCargosDirectosCotizacion     ProductoCargoDirectoCotizacion[]
-  cotizacionesV2                       Cotizacion[]
-  cotizacionesV2Items                  CotizacionItem[]
-  productosPreciosEspecialesClientesV2 ProductoPrecioEspecialClienteV2[]
-  productosImpuestosAplicados          ProductoImpuestoAplicado[]
-  productosComisionesAplicadas         ProductoComisionAplicada[]
+  productoConfigPasoMaquinasCandidatas             ProductoConfigPasoMaquinaCandidata[]
+  productoPasosExtras                              ProductoPasoExtra[]
+  cargosDirectosCatalogo                           CargoDirectoCatalogo[]
+  productoCargosDirectosPaso                       ProductoCargoDirectoPaso[]
+  productoCargosDirectosCotizacion                 ProductoCargoDirectoCotizacion[]
+  cotizacionesV2                                   Cotizacion[]
+  cotizacionesV2Items                              CotizacionItem[]
+  productosPreciosEspecialesClientesV2             ProductoPrecioEspecialClienteV2[]
+  productosImpuestosAplicados                      ProductoImpuestoAplicado[]
+  productosComisionesAplicadas                     ProductoComisionAplicada[]
 }
 
 model User {
@@ -722,7 +730,7 @@ model CentroCosto {
   capacidadesPeriodo      CentroCostoCapacidadPeriodo[]
   tarifasPeriodo          CentroCostoTarifaPeriodo[]
   maquinasPrincipales     Maquina[]                           @relation("MaquinaCentroCostoPrincipal")
-  productoConfigPasos      ProductoConfigPaso[]                 @relation("ProductoConfigPasoCentroCostoManual")
+  productoConfigPasos     ProductoConfigPaso[]                @relation("ProductoConfigPasoCentroCostoManual")
 
   @@unique([tenantId, codigo])
   @@index([tenantId, plantaId, areaCostoId])
@@ -765,7 +773,7 @@ model CentroCostoRecursoMaquinaPeriodo {
   id                      String                    @id @default(uuid()) @db.Uuid
   tenantId                String                    @db.Uuid
   centroCostoRecursoId    String                    @db.Uuid
-  maquinaId               String                    @db.Uuid
+  maquinaId               String?                   @db.Uuid
   periodo                 String
   metodoDepreciacion      MetodoDepreciacionMaquina @default(LINEAL)
   valorCompra             Decimal                   @db.Decimal(14, 2)
@@ -788,7 +796,7 @@ model CentroCostoRecursoMaquinaPeriodo {
   updatedAt               DateTime                  @updatedAt
   tenant                  Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   centroCostoRecurso      CentroCostoRecurso        @relation(fields: [centroCostoRecursoId], references: [id], onDelete: Cascade)
-  maquina                 Maquina                   @relation(fields: [maquinaId], references: [id], onDelete: Cascade)
+  maquina                 Maquina?                  @relation(fields: [maquinaId], references: [id], onDelete: SetNull)
 
   @@unique([tenantId, centroCostoRecursoId, periodo])
   @@index([tenantId, maquinaId, periodo])
@@ -913,33 +921,35 @@ model Maquina {
 /// altoAplicable). Ahora todas viven en `detalleJson` con las claves que la
 /// plantilla declare.
 model MaquinaPerfilOperativo {
-  id                    String                         @id @default(uuid()) @db.Uuid
-  tenantId              String                         @db.Uuid
-  maquinaId             String                         @db.Uuid
-  nombre                String
-  tipoPerfil            TipoPerfilOperativoMaquina
-  activo                Boolean                        @default(true)
-  productivityValue     Decimal?                       @db.Decimal(12, 2)
-  productivityUnit      UnidadProduccionMaquina?
-  setupMin              Decimal?                       @db.Decimal(12, 2)
-  cleanupMin            Decimal?                       @db.Decimal(12, 2)
-  feedReloadMin         Decimal?                       @db.Decimal(12, 2)
+  id                                  String                               @id @default(uuid()) @db.Uuid
+  tenantId                            String                               @db.Uuid
+  maquinaId                           String                               @db.Uuid
+  nombre                              String
+  tipoPerfil                          TipoPerfilOperativoMaquina
+  activo                              Boolean                              @default(true)
+  productivityValue                   Decimal?                             @db.Decimal(12, 2)
+  productivityUnit                    UnidadProduccionMaquina?
+  setupMin                            Decimal?                             @db.Decimal(12, 2)
+  cleanupMin                          Decimal?                             @db.Decimal(12, 2)
+  feedReloadMin                       Decimal?                             @db.Decimal(12, 2)
   /// Discriminantes y params específicos de la plantilla.
   /// Ej. IMPRESORA_LASER: { caras: 'SIMPLE_FAZ' | 'DOBLE_FAZ',
   ///   colores: 'BN' | 'CMYK', gramajeMinGr, gramajeMaxGr }
   /// Ej. GUILLOTINA: { gramajeMinGr, gramajeMaxGr, pliegosMaxPorTanda }
   /// Ej. PLOTTER_DE_CORTE: { tipoCorte: 'COMPLETO' | 'KISS_CUT',
-  ///   modoOperacion: 'ROLLO' | 'HOJAS', factorComplejidad: {...} }
-  detalleJson           Json?
+  ///   modoOperacion: 'ROLLO' | 'HOJAS',
+  ///   factorComplejidad: 'simple' | 'intermedio' | 'complejo' | 'personalizado' }
+  detalleJson                         Json?
   /// Regla declarativa JsonLogic para auto-selección por el motor (G-M8).
-  reglaSeleccionJson    Json?
-  createdAt             DateTime                       @default(now())
-  updatedAt             DateTime                       @updatedAt
-  tenant                Tenant                         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  maquina               Maquina                        @relation(fields: [maquinaId], references: [id], onDelete: Cascade)
-  consumibles           MaquinaConsumible[]
+  reglaSeleccionJson                  Json?
+  createdAt                           DateTime                             @default(now())
+  updatedAt                           DateTime                             @updatedAt
+  tenant                              Tenant                               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  maquina                             Maquina                              @relation(fields: [maquinaId], references: [id], onDelete: Cascade)
+  consumibles                         MaquinaConsumible[]
   // === Modelo Universal V2 ===
-  productoConfigPasosM1 ProductoConfigPaso[]           @relation("ProductoConfigPasoPerfilM1")
+  productoConfigPasosM1               ProductoConfigPaso[]                 @relation("ProductoConfigPasoPerfilM1")
+  productoConfigPasoCandidatasDefault ProductoConfigPasoMaquinaCandidata[] @relation("ProductoConfigPasoMaquinaCandidataPerfilDefault")
 
   @@unique([tenantId, maquinaId, nombre])
   @@index([tenantId, maquinaId, activo])
@@ -1009,30 +1019,30 @@ model Estacion {
 }
 
 model MateriaPrima {
-  id                    String                 @id @default(uuid()) @db.Uuid
-  tenantId              String                 @db.Uuid
-  materialPresetId      String?                @db.Uuid
-  codigo                String
-  nombre                String
-  descripcion           String?
-  canonicalMaterialKey  String?
-  canonicalMaterialName String?
-  canonicalAliasUsado   String?
-  familia               FamiliaMateriaPrima
-  subfamilia            SubfamiliaMateriaPrima
-  tipoTecnico           String
-  templateId            String
-  unidadStock           UnidadMateriaPrima
-  unidadCompra          UnidadMateriaPrima
-  esConsumible          Boolean                @default(false)
-  esRepuesto            Boolean                @default(false)
-  activo                Boolean                @default(true)
-  atributosTecnicosJson Json
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
-  tenant                Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  materialPreset        MaterialPreset?        @relation(fields: [materialPresetId], references: [id], onDelete: SetNull)
-  variantes             MateriaPrimaVariante[]
+  id                                       String                                    @id @default(uuid()) @db.Uuid
+  tenantId                                 String                                    @db.Uuid
+  materialPresetId                         String?                                   @db.Uuid
+  codigo                                   String
+  nombre                                   String
+  descripcion                              String?
+  canonicalMaterialKey                     String?
+  canonicalMaterialName                    String?
+  canonicalAliasUsado                      String?
+  familia                                  FamiliaMateriaPrima
+  subfamilia                               SubfamiliaMateriaPrima
+  tipoTecnico                              String
+  templateId                               String
+  unidadStock                              UnidadMateriaPrima
+  unidadCompra                             UnidadMateriaPrima
+  esConsumible                             Boolean                                   @default(false)
+  esRepuesto                               Boolean                                   @default(false)
+  activo                                   Boolean                                   @default(true)
+  atributosTecnicosJson                    Json
+  createdAt                                DateTime                                  @default(now())
+  updatedAt                                DateTime                                  @updatedAt
+  tenant                                   Tenant                                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  materialPreset                           MaterialPreset?                           @relation(fields: [materialPresetId], references: [id], onDelete: SetNull)
+  variantes                                MateriaPrimaVariante[]
   productoConfigPasoSlotMaterialCandidatos ProductoConfigPasoSlotMaterialCandidato[]
 
   @@unique([tenantId, codigo])
@@ -1043,32 +1053,32 @@ model MateriaPrima {
 }
 
 model MateriaPrimaVariante {
-  id                      String                           @id @default(uuid()) @db.Uuid
-  tenantId                String                           @db.Uuid
-  materiaPrimaId          String                           @db.Uuid
-  materialPresetVarianteId String?                         @db.Uuid
-  sku                     String
-  nombreVariante          String?
-  activo                  Boolean                          @default(true)
-  atributosVarianteJson   Json
-  unidadStock             UnidadMateriaPrima?
-  unidadCompra            UnidadMateriaPrima?
-  precioReferencia        Decimal?                         @db.Decimal(14, 6)
-  moneda                  String?                          @db.VarChar(3)
-  proveedorReferenciaId   String?                          @db.Uuid
-  createdAt               DateTime                         @default(now())
-  updatedAt               DateTime                         @updatedAt
-  tenant                  Tenant                           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  materiaPrima            MateriaPrima                     @relation(fields: [materiaPrimaId], references: [id], onDelete: Cascade)
-  materialPresetVariante  MaterialPresetVariante?          @relation(fields: [materialPresetVarianteId], references: [id], onDelete: SetNull)
-  proveedorReferencia     Proveedor?                       @relation("MateriaPrimaVarianteProveedorReferencia", fields: [proveedorReferenciaId], references: [id], onDelete: SetNull)
-  stocks                  StockMateriaPrimaVariante[]
-  movimientosStock        MovimientoStockMateriaPrima[]
-  maquinaConsumibles      MaquinaConsumible[]              @relation("MaquinaConsumibleMateriaPrimaVariante")
-  maquinaDesgastes        MaquinaComponenteDesgaste[]      @relation("MaquinaDesgasteMateriaPrimaVariante")
+  id                             String                                            @id @default(uuid()) @db.Uuid
+  tenantId                       String                                            @db.Uuid
+  materiaPrimaId                 String                                            @db.Uuid
+  materialPresetVarianteId       String?                                           @db.Uuid
+  sku                            String
+  nombreVariante                 String?
+  activo                         Boolean                                           @default(true)
+  atributosVarianteJson          Json
+  unidadStock                    UnidadMateriaPrima?
+  unidadCompra                   UnidadMateriaPrima?
+  precioReferencia               Decimal?                                          @db.Decimal(14, 6)
+  moneda                         String?                                           @db.VarChar(3)
+  proveedorReferenciaId          String?                                           @db.Uuid
+  createdAt                      DateTime                                          @default(now())
+  updatedAt                      DateTime                                          @updatedAt
+  tenant                         Tenant                                            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  materiaPrima                   MateriaPrima                                      @relation(fields: [materiaPrimaId], references: [id], onDelete: Cascade)
+  materialPresetVariante         MaterialPresetVariante?                           @relation(fields: [materialPresetVarianteId], references: [id], onDelete: SetNull)
+  proveedorReferencia            Proveedor?                                        @relation("MateriaPrimaVarianteProveedorReferencia", fields: [proveedorReferenciaId], references: [id], onDelete: SetNull)
+  stocks                         StockMateriaPrimaVariante[]
+  movimientosStock               MovimientoStockMateriaPrima[]
+  maquinaConsumibles             MaquinaConsumible[]                               @relation("MaquinaConsumibleMateriaPrimaVariante")
+  maquinaDesgastes               MaquinaComponenteDesgaste[]                       @relation("MaquinaDesgasteMateriaPrimaVariante")
   // === Modelo Universal V2 ===
-  productoConfigPasoSlots ProductoConfigPasoSlotMaterial[]                   @relation("ProductoConfigPasoSlotMaterialVariante")
-  slotMaterialCandidatoDefaults ProductoConfigPasoSlotMaterialCandidato[]    @relation("ProductoConfigPasoSlotMaterialCandidatoDefaultVariante")
+  productoConfigPasoSlots        ProductoConfigPasoSlotMaterial[]                  @relation("ProductoConfigPasoSlotMaterialVariante")
+  slotMaterialCandidatoDefaults  ProductoConfigPasoSlotMaterialCandidato[]         @relation("ProductoConfigPasoSlotMaterialCandidatoDefaultVariante")
   slotMaterialCandidatoVariantes ProductoConfigPasoSlotMaterialCandidatoVariante[]
 
   @@unique([tenantId, sku])
@@ -1078,50 +1088,50 @@ model MateriaPrimaVariante {
 }
 
 model MaterialPreset {
-  id                       String                   @id @default(uuid()) @db.Uuid
-  key                      String                   @unique
-  nombreCanonico           String
-  descripcionCorta         String
-  familia                  FamiliaMateriaPrima
-  subfamilia               SubfamiliaMateriaPrima
-  tipoTecnico              String
-  templateId               String
-  iconKind                 String
-  aliasDisponiblesJson     Json
-  usosRecomendadosJson     Json
-  procesosCompatiblesJson  Json
-  advertenciasJson         Json
-  activo                   Boolean                  @default(true)
-  orden                    Int                      @default(0)
-  createdAt                DateTime                 @default(now())
-  updatedAt                DateTime                 @updatedAt
-  variantes                MaterialPresetVariante[]
-  materiasPrimas           MateriaPrima[]
+  id                      String                   @id @default(uuid()) @db.Uuid
+  key                     String                   @unique
+  nombreCanonico          String
+  descripcionCorta        String
+  familia                 FamiliaMateriaPrima
+  subfamilia              SubfamiliaMateriaPrima
+  tipoTecnico             String
+  templateId              String
+  iconKind                String
+  aliasDisponiblesJson    Json
+  usosRecomendadosJson    Json
+  procesosCompatiblesJson Json
+  advertenciasJson        Json
+  activo                  Boolean                  @default(true)
+  orden                   Int                      @default(0)
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  variantes               MaterialPresetVariante[]
+  materiasPrimas          MateriaPrima[]
 
   @@index([activo, orden])
   @@index([familia, subfamilia, activo])
 }
 
 model MaterialPresetVariante {
-  id                       String                  @id @default(uuid()) @db.Uuid
-  presetId                 String                  @db.Uuid
-  skuSugerido              String
-  nombreVarianteSugerido   String?
-  formato                  String
-  espesor                  Decimal?                @db.Decimal(10, 3)
-  color                    String
-  recomendada              Boolean                 @default(false)
-  atributosVarianteJson    Json
-  unidadStock              UnidadMateriaPrima?
-  unidadCompra             UnidadMateriaPrima?
-  precioReferencia         Decimal?                @db.Decimal(14, 6)
-  moneda                   String?                 @db.VarChar(3)
-  orden                    Int                     @default(0)
-  activo                   Boolean                 @default(true)
-  createdAt                DateTime                @default(now())
-  updatedAt                DateTime                @updatedAt
-  preset                   MaterialPreset          @relation(fields: [presetId], references: [id], onDelete: Cascade)
-  materiasPrimasVariantes  MateriaPrimaVariante[]
+  id                      String                 @id @default(uuid()) @db.Uuid
+  presetId                String                 @db.Uuid
+  skuSugerido             String
+  nombreVarianteSugerido  String?
+  formato                 String
+  espesor                 Decimal?               @db.Decimal(10, 3)
+  color                   String
+  recomendada             Boolean                @default(false)
+  atributosVarianteJson   Json
+  unidadStock             UnidadMateriaPrima?
+  unidadCompra            UnidadMateriaPrima?
+  precioReferencia        Decimal?               @db.Decimal(14, 6)
+  moneda                  String?                @db.VarChar(3)
+  orden                   Int                    @default(0)
+  activo                  Boolean                @default(true)
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+  preset                  MaterialPreset         @relation(fields: [presetId], references: [id], onDelete: Cascade)
+  materiasPrimasVariantes MateriaPrimaVariante[]
 
   @@unique([presetId, skuSugerido])
   @@index([presetId, activo, orden])
@@ -1310,6 +1320,8 @@ model RutaPaso {
   orden           Int
   /// Referencia a FamiliaCodigo de apps/api/src/productos-servicios/pasos/familias.ts (no FK por ser hardcoded en código).
   familiaCodigo   String
+  /// Nombre de ícono visual para vistas de producción/tablero/kanban.
+  icono           String               @default("Layout")
   activo          Boolean              @default(true)
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
@@ -1354,18 +1366,18 @@ model ProductoCategoriaComercial {
 }
 
 model ProductoSubcategoriaComercial {
-  id                   String                     @id @default(uuid()) @db.Uuid
-  categoriaId          String                     @db.Uuid
-  codigo               String                     @unique
-  nombre               String
-  descripcion          String?
-  atributosSchemaJson  Json
-  orden                Int                        @default(0)
-  activo               Boolean                    @default(true)
-  categoria            ProductoCategoriaComercial @relation(fields: [categoriaId], references: [id], onDelete: Restrict)
-  productos            Producto[]
-  createdAt            DateTime                   @default(now())
-  updatedAt            DateTime                   @updatedAt
+  id                  String                     @id @default(uuid()) @db.Uuid
+  categoriaId         String                     @db.Uuid
+  codigo              String                     @unique
+  nombre              String
+  descripcion         String?
+  atributosSchemaJson Json
+  orden               Int                        @default(0)
+  activo              Boolean                    @default(true)
+  categoria           ProductoCategoriaComercial @relation(fields: [categoriaId], references: [id], onDelete: Restrict)
+  productos           Producto[]
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
 
   @@unique([categoriaId, codigo])
   @@index([categoriaId, activo, orden])
@@ -1380,8 +1392,7 @@ model Producto {
   descripcion               String?
   /// 'unidad' | 'm2' | 'metro_lineal'
   unidadComercial           String                            @default("unidad")
-  /// 'FIJA' | 'LIBRE' | 'COMERCIAL_ELIGE' (gap H4 de Fase E).
-  modoMedidas               String                            @default("FIJA")
+  modoMedidas               ModoMedidasProducto               @default(FIJA)
   medidaDefaultAnchoMm      Decimal?                          @db.Decimal(12, 2)
   medidaDefaultAltoMm       Decimal?                          @db.Decimal(12, 2)
   medidasPredefinidasJson   Json?
@@ -1478,49 +1489,49 @@ model ProductoConfigPaso {
 }
 
 model ProductoConfigPasoSlotMaterial {
-  id                       String                @id @default(uuid()) @db.Uuid
-  tenantId                 String                @db.Uuid
-  productoConfigPasoId     String                @db.Uuid
+  id                    String                                    @id @default(uuid()) @db.Uuid
+  tenantId              String                                    @db.Uuid
+  productoConfigPasoId  String                                    @db.Uuid
   /// Código del slot declarado por la familia (ej: 'sustrato_principal').
-  slotCodigo               String
+  slotCodigo            String
   /// 'HARDCODED' | 'COMERCIAL_ELIGE' | 'MOTOR_ELIGE_AUTO'.
-  modoSeleccion            String
+  modoSeleccion         String
   /// 'MENOR_COSTO' | 'MAYOR_APROVECHAMIENTO' | 'MENOR_CAPACIDAD_QUE_CUMPLA'.
-  criterioMotorAuto        String?
-  criterioInputCampo       String?
-  criterioMaterialCampo    String?
-  materialVarianteId       String?               @db.Uuid
+  criterioMotorAuto     String?
+  criterioInputCampo    String?
+  criterioMaterialCampo String?
+  materialVarianteId    String?                                   @db.Uuid
   /// 'simple' | 'm2-exact' | 'consumed-length' | 'plate-segments'.
-  estrategiaCosto          String                @default("simple")
+  estrategiaCosto       String                                    @default("simple")
   /// 'por_unidad_productiva' | 'por_m2' | 'por_pieza' | 'por_metro_lineal' | 'fijo'.
-  formula                  String                @default("por_unidad_productiva")
-  aplicaMultiCaras         Boolean               @default(false)
-  activo                   Boolean               @default(true)
-  createdAt                DateTime              @default(now())
-  updatedAt                DateTime              @updatedAt
-  tenant                   Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  productoConfigPaso       ProductoConfigPaso    @relation(fields: [productoConfigPasoId], references: [id], onDelete: Cascade)
-  materialVariante         MateriaPrimaVariante? @relation("ProductoConfigPasoSlotMaterialVariante", fields: [materialVarianteId], references: [id])
-  candidatos               ProductoConfigPasoSlotMaterialCandidato[]
+  formula               String                                    @default("por_unidad_productiva")
+  aplicaMultiCaras      Boolean                                   @default(false)
+  activo                Boolean                                   @default(true)
+  createdAt             DateTime                                  @default(now())
+  updatedAt             DateTime                                  @updatedAt
+  tenant                Tenant                                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productoConfigPaso    ProductoConfigPaso                        @relation(fields: [productoConfigPasoId], references: [id], onDelete: Cascade)
+  materialVariante      MateriaPrimaVariante?                     @relation("ProductoConfigPasoSlotMaterialVariante", fields: [materialVarianteId], references: [id])
+  candidatos            ProductoConfigPasoSlotMaterialCandidato[]
 
   @@unique([tenantId, productoConfigPasoId, slotCodigo])
   @@index([tenantId, productoConfigPasoId])
 }
 
 model ProductoConfigPasoSlotMaterialCandidato {
-  id                 String                                      @id @default(uuid()) @db.Uuid
-  tenantId           String                                      @db.Uuid
-  slotMaterialId     String                                      @db.Uuid
-  materiaPrimaId     String                                      @db.Uuid
-  defaultVarianteId  String?                                     @db.Uuid
-  orden              Int                                         @default(0)
-  createdAt          DateTime                                    @default(now())
-  updatedAt          DateTime                                    @updatedAt
-  tenant             Tenant                                      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  slotMaterial       ProductoConfigPasoSlotMaterial              @relation(fields: [slotMaterialId], references: [id], onDelete: Cascade)
-  materiaPrima       MateriaPrima                                @relation(fields: [materiaPrimaId], references: [id], onDelete: Cascade)
-  defaultVariante    MateriaPrimaVariante?                       @relation("ProductoConfigPasoSlotMaterialCandidatoDefaultVariante", fields: [defaultVarianteId], references: [id], onDelete: SetNull)
-  variantes          ProductoConfigPasoSlotMaterialCandidatoVariante[]
+  id                String                                            @id @default(uuid()) @db.Uuid
+  tenantId          String                                            @db.Uuid
+  slotMaterialId    String                                            @db.Uuid
+  materiaPrimaId    String                                            @db.Uuid
+  defaultVarianteId String?                                           @db.Uuid
+  orden             Int                                               @default(0)
+  createdAt         DateTime                                          @default(now())
+  updatedAt         DateTime                                          @updatedAt
+  tenant            Tenant                                            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  slotMaterial      ProductoConfigPasoSlotMaterial                    @relation(fields: [slotMaterialId], references: [id], onDelete: Cascade)
+  materiaPrima      MateriaPrima                                      @relation(fields: [materiaPrimaId], references: [id], onDelete: Cascade)
+  defaultVariante   MateriaPrimaVariante?                             @relation("ProductoConfigPasoSlotMaterialCandidatoDefaultVariante", fields: [defaultVarianteId], references: [id], onDelete: SetNull)
+  variantes         ProductoConfigPasoSlotMaterialCandidatoVariante[]
 
   @@unique([tenantId, slotMaterialId, materiaPrimaId])
   @@index([tenantId, slotMaterialId])
@@ -1528,15 +1539,15 @@ model ProductoConfigPasoSlotMaterialCandidato {
 }
 
 model ProductoConfigPasoSlotMaterialCandidatoVariante {
-  id             String                                  @id @default(uuid()) @db.Uuid
-  tenantId       String                                  @db.Uuid
-  candidatoId    String                                  @db.Uuid
-  varianteId     String                                  @db.Uuid
-  orden          Int                                     @default(0)
-  createdAt      DateTime                                @default(now())
-  tenant         Tenant                                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  candidato      ProductoConfigPasoSlotMaterialCandidato @relation(fields: [candidatoId], references: [id], onDelete: Cascade)
-  variante       MateriaPrimaVariante                    @relation(fields: [varianteId], references: [id], onDelete: Cascade)
+  id          String                                  @id @default(uuid()) @db.Uuid
+  tenantId    String                                  @db.Uuid
+  candidatoId String                                  @db.Uuid
+  varianteId  String                                  @db.Uuid
+  orden       Int                                     @default(0)
+  createdAt   DateTime                                @default(now())
+  tenant      Tenant                                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  candidato   ProductoConfigPasoSlotMaterialCandidato @relation(fields: [candidatoId], references: [id], onDelete: Cascade)
+  variante    MateriaPrimaVariante                    @relation(fields: [varianteId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, candidatoId, varianteId])
   @@index([tenantId, candidatoId])
@@ -1544,20 +1555,24 @@ model ProductoConfigPasoSlotMaterialCandidatoVariante {
 }
 
 model ProductoConfigPasoMaquinaCandidata {
-  id                   String             @id @default(uuid()) @db.Uuid
-  tenantId             String             @db.Uuid
-  productoConfigPasoId String             @db.Uuid
-  maquinaId            String             @db.Uuid
-  esPreferida          Boolean            @default(false)
-  orden                Int                @default(0)
-  activo               Boolean            @default(true)
-  createdAt            DateTime           @default(now())
-  tenant               Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  productoConfigPaso   ProductoConfigPaso @relation(fields: [productoConfigPasoId], references: [id], onDelete: Cascade)
-  maquina              Maquina            @relation("ProductoConfigPasoMaquinaCandidata", fields: [maquinaId], references: [id])
+  id                    String                  @id @default(uuid()) @db.Uuid
+  tenantId              String                  @db.Uuid
+  productoConfigPasoId  String                  @db.Uuid
+  maquinaId             String                  @db.Uuid
+  perfilDefaultId       String?                 @db.Uuid
+  modoColorAllowedModes String[]                @default([])
+  esPreferida           Boolean                 @default(false)
+  orden                 Int                     @default(0)
+  activo                Boolean                 @default(true)
+  createdAt             DateTime                @default(now())
+  tenant                Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productoConfigPaso    ProductoConfigPaso      @relation(fields: [productoConfigPasoId], references: [id], onDelete: Cascade)
+  maquina               Maquina                 @relation("ProductoConfigPasoMaquinaCandidata", fields: [maquinaId], references: [id])
+  perfilDefault         MaquinaPerfilOperativo? @relation("ProductoConfigPasoMaquinaCandidataPerfilDefault", fields: [perfilDefaultId], references: [id])
 
   @@unique([tenantId, productoConfigPasoId, maquinaId])
   @@index([tenantId, productoConfigPasoId])
+  @@index([tenantId, perfilDefaultId])
 }
 
 /// Pasos extras puntuales que un producto agrega a su ruta sin formar parte del esqueleto reusable.
@@ -1679,22 +1694,22 @@ model Cotizacion {
 }
 
 model CotizacionItem {
-  id                String     @id @default(uuid()) @db.Uuid
-  tenantId          String     @db.Uuid
-  cotizacionId      String     @db.Uuid
-  productoId        String     @db.Uuid
-  rutaAlternativaId String?    @db.Uuid
-  cantidad          Decimal    @db.Decimal(14, 2)
+  id                                String     @id @default(uuid()) @db.Uuid
+  tenantId                          String     @db.Uuid
+  cotizacionId                      String     @db.Uuid
+  productoId                        String     @db.Uuid
+  rutaAlternativaId                 String?    @db.Uuid
+  cantidad                          Decimal    @db.Decimal(14, 2)
   /// Inputs del comercial al cotizar (ya normalizados).
-  jobContextJson    Json
+  jobContextJson                    Json
   /// Snapshot completo: ruta + producto + materiales + valores + cargos (sub-tema 07 §7).
-  snapshotJson      Json
-  costoUnitario     Decimal?   @db.Decimal(14, 2)
-  costoTotal        Decimal?   @db.Decimal(14, 2)
-  precioUnitario    Decimal?   @db.Decimal(14, 2)
-  precioTotal       Decimal?   @db.Decimal(14, 2)
+  snapshotJson                      Json
+  costoUnitario                     Decimal?   @db.Decimal(14, 2)
+  costoTotal                        Decimal?   @db.Decimal(14, 2)
+  precioUnitario                    Decimal?   @db.Decimal(14, 2)
+  precioTotal                       Decimal?   @db.Decimal(14, 2)
   /// Trazabilidad por bucket (a-g del molde).
-  trazabilidadJson  Json?
+  trazabilidadJson                  Json?
   /// === Snapshots inmutables del Tab Precio al momento de cotizar (Sprint 5.a) ===
   /// Si los catalogos del tenant cambian (porcentajes, esquemas inactivados),
   /// la cotización guarda lo que se aplicó realmente. Sin esto, recargar una
@@ -1708,11 +1723,11 @@ model CotizacionItem {
   /// Si aplicó override por cliente: copia de ProductoPrecioEspecialClienteV2.configJson
   /// + metadata { precioEspecialId, clienteId, descripcion }. Null si se usó precio standard.
   precioEspecialClienteSnapshotJson Json?
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
-  tenant            Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  cotizacion        Cotizacion @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
-  producto          Producto   @relation(fields: [productoId], references: [id])
+  createdAt                         DateTime   @default(now())
+  updatedAt                         DateTime   @updatedAt
+  tenant                            Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cotizacion                        Cotizacion @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
+  producto                          Producto   @relation(fields: [productoId], references: [id])
 
   @@index([tenantId, cotizacionId])
 }

@@ -206,6 +206,25 @@ describe('Catálogo de familias', () => {
       },
     });
   });
+
+  it('impresion_por_area permite film de transferencia como sustrato principal', () => {
+    const familia = getFamilia('impresion_por_area');
+    const sustrato = familia.slotsRequeridos.find(
+      (slot) => slot.codigo === 'sustrato_principal',
+    );
+
+    expect(sustrato?.compatibilidadMaterial).toMatchObject({
+      familiasMateriaPrima: expect.arrayContaining([
+        'SUSTRATO',
+        'TRANSFERENCIA_LAMINACION',
+      ]),
+      subfamiliasMateriaPrima: expect.arrayContaining([
+        'SUSTRATO_ROLLO_FLEXIBLE',
+        'FILM_TRANSFERENCIA',
+        'PAPEL_TRANSFERENCIA',
+      ]),
+    });
+  });
 });
 
 describe('Categorías', () => {

@@ -120,7 +120,7 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
 
   // ─── §8 PLOTTER_DE_CORTE ────────────────────────────────────────
   // Discriminantes (detalle): tipoCorte (COMPLETO|KISS_CUT), modoOperacion (ROLLO|HOJAS).
-  // paramsPerfilJson (detalle): factorComplejidad {SIMPLE,INTERMEDIO,COMPLEJO}.
+  // paramsPerfilJson (detalle): factorComplejidad simple|intermedio|complejo|personalizado.
   [PlantillaMaquinariaDto.plotter_de_corte]: buildRule({
     detalleKeys: ['tipoCorte', 'modoOperacion', 'factorComplejidad'],
     requiredFieldKeys: [

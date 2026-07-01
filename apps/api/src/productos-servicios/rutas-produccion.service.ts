@@ -26,7 +26,13 @@ export class RutasProduccionService {
       include: {
         pasos: {
           orderBy: { orden: 'asc' },
-          select: { id: true, version: true, orden: true, familiaCodigo: true },
+          select: {
+            id: true,
+            version: true,
+            orden: true,
+            familiaCodigo: true,
+            icono: true,
+          },
         },
         _count: { select: { productosAlternativas: true } },
       },
@@ -40,11 +46,13 @@ export class RutasProduccionService {
 
   async crearRuta(tenantId: string, dto: CrearRutaDto) {
     this.familias.validarFamiliasDePasos(dto.pasos);
+    const baseCodigo = dto.codigo?.trim() || this.codigoFromNombre(dto.nombre);
+    const codigo = await this.nextCopyCode(tenantId, baseCodigo);
     try {
       const ruta = await this.prisma.ruta.create({
         data: {
           tenantId,
-          codigo: dto.codigo,
+          codigo,
           nombre: dto.nombre,
           descripcion: dto.descripcion ?? null,
           versionActual: 1,
@@ -55,6 +63,7 @@ export class RutasProduccionService {
               version: 1,
               orden: p.orden,
               familiaCodigo: p.familiaCodigo,
+              icono: p.icono ?? 'Layout',
               activo: true,
             })),
           },
@@ -77,18 +86,14 @@ export class RutasProduccionService {
         err.code === 'P2002'
       ) {
         throw new BadRequestException(
-          `Ya existe una ruta con código "${dto.codigo}"`,
+          `Ya existe una ruta con código "${codigo}"`,
         );
       }
       throw err;
     }
   }
 
-  async duplicarRuta(
-    tenantId: string,
-    id: string,
-    dto: DuplicarRutaDto = {},
-  ) {
+  async duplicarRuta(tenantId: string, id: string, dto: DuplicarRutaDto = {}) {
     const origen = await this.prisma.ruta.findFirst({
       where: { id, tenantId },
       include: {
@@ -126,6 +131,7 @@ export class RutasProduccionService {
                 version: 1,
                 orden: paso.orden,
                 familiaCodigo: paso.familiaCodigo,
+                icono: paso.icono,
                 activo: paso.activo,
               })),
             },
@@ -139,7 +145,7 @@ export class RutasProduccionService {
             rutaId: rutaDuplicada.id,
             version: 1,
             snapshotJson: this.buildRutaSnapshot(rutaDuplicada.pasos),
-            cambios: `Copia de ${origen.nombre}`,
+            cambios: 'Versión inicial',
           },
         });
 
@@ -202,6 +208,7 @@ export class RutasProduccionService {
               version: nuevaVersion,
               orden: p.orden,
               familiaCodigo: p.familiaCodigo,
+              icono: p.icono ?? 'Layout',
               activo: true,
             })),
           });
@@ -271,7 +278,7 @@ export class RutasProduccionService {
       tenantId: string;
       rutaId: string;
       version: number;
-      pasos: Array<{ orden: number; familiaCodigo: string }>;
+      pasos: Array<{ orden: number; familiaCodigo: string; icono?: string }>;
     },
   ) {
     const actuales = await tx.rutaPaso.findMany({
@@ -330,6 +337,7 @@ export class RutasProduccionService {
           data: {
             orden: match.paso.orden,
             familiaCodigo: match.paso.familiaCodigo,
+            icono: match.paso.icono ?? match.actual.icono,
             activo: true,
           },
         });
@@ -343,6 +351,7 @@ export class RutasProduccionService {
           version: args.version,
           orden: match.paso.orden,
           familiaCodigo: match.paso.familiaCodigo,
+          icono: match.paso.icono ?? 'Layout',
           activo: true,
         },
       });
@@ -377,7 +386,9 @@ export class RutasProduccionService {
       });
       if (!exists) return candidate;
     }
-    throw new BadRequestException('No se pudo generar un código de copia único.');
+    throw new BadRequestException(
+      'No se pudo generar un código de copia único.',
+    );
   }
 
   private codigoFromNombre(nombre: string) {
@@ -416,6 +427,7 @@ export class RutasProduccionService {
       id: string;
       orden: number;
       familiaCodigo: string;
+      icono?: string;
       version?: number;
       activo?: boolean;
     }>,
@@ -429,6 +441,7 @@ export class RutasProduccionService {
           orden: paso.orden,
           familiaCodigo: paso.familiaCodigo,
           familia: paso.familiaCodigo,
+          icono: paso.icono ?? 'Layout',
           version: paso.version ?? 1,
           activo: paso.activo ?? true,
         })),

@@ -18,6 +18,7 @@ import {
   type GranFormatoPiece,
 } from '../helpers/granformato-pieces';
 import {
+  buildGranFormatoPieceLabelCm,
   buildGranFormatoNestingOrientacion,
   countGranFormatoRowsAndPiecesPerRow,
   type EvaluateGranFormatoMixedShelfLayoutInput,
@@ -108,9 +109,10 @@ function toPlacement(
     heightMm,
     centerXMm: xMm + widthMm / 2,
     centerYMm: yMm + heightMm / 2,
-    label: `${Math.round(piece.originalWidthMm / 10)}x${Math.round(
-      piece.originalHeightMm / 10,
-    )} cm`,
+    label: buildGranFormatoPieceLabelCm(
+      piece.originalWidthMm,
+      piece.originalHeightMm,
+    ),
     rotated,
     originalWidthMm: piece.originalWidthMm,
     originalHeightMm: piece.originalHeightMm,

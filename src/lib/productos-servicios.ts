@@ -5,18 +5,19 @@
  * MetodoCalculoPrecioProducto, etc.) que se usaba en el modelo viejo.
  */
 
-export type UnidadComercialProducto = 'unidad' | 'm2' | 'metro_lineal';
+export type UnidadComercialProducto = "unidad" | "m2" | "metro_lineal";
 
 export const unidadComercialProductoItems: Array<{
   value: UnidadComercialProducto;
   label: string;
 }> = [
-  { value: 'unidad', label: 'Unidad' },
-  { value: 'm2', label: 'Metro cuadrado (m²)' },
-  { value: 'metro_lineal', label: 'Metro lineal' },
+  { value: "unidad", label: "Unidad" },
+  { value: "m2", label: "Metro cuadrado (m²)" },
+  { value: "metro_lineal", label: "Metro lineal" },
 ];
 
-export type ModoMedidasProducto = 'FIJA' | 'LIBRE' | 'COMERCIAL_ELIGE';
+export type ModoMedidasProducto =
+  "FIJA" | "LIBRE" | "COMERCIAL_ELIGE" | "MIXTA";
 
 export interface MedidaPredefinidaProducto {
   id: string;
@@ -61,13 +62,13 @@ export interface ProductoSubcategoriaComercial {
 // ============================================================================
 
 export type MetodoCalculoPrecioProducto =
-  | 'margen_variable'
-  | 'por_margen'
-  | 'precio_fijo'
-  | 'fijado_por_cantidad'
-  | 'fijo_con_margen_variable'
-  | 'variable_por_cantidad'
-  | 'precio_fijo_para_margen_minimo';
+  | "margen_variable"
+  | "por_margen"
+  | "precio_fijo"
+  | "fijado_por_cantidad"
+  | "fijo_con_margen_variable"
+  | "variable_por_cantidad"
+  | "precio_fijo_para_margen_minimo";
 
 // ============================================================================
 // PRODUCTO (modelo nuevo)
@@ -84,7 +85,7 @@ export interface ProductoListItem {
   medidasPredefinidasJson: MedidaPredefinidaProducto[] | null;
   precioConfigJson: unknown;
   unidadComercial: string;
-  modoMedidas: string;
+  modoMedidas: ModoMedidasProducto;
   activo: boolean;
   subcategoriaComercial: ProductoSubcategoriaComercial & {
     categoria: Omit<ProductoCategoriaComercial, "subcategorias">;
@@ -97,7 +98,10 @@ export interface ProductoListItem {
   }>;
 }
 
-export interface ProductoDetalle extends Omit<ProductoListItem, "rutasAlternativas"> {
+export interface ProductoDetalle extends Omit<
+  ProductoListItem,
+  "rutasAlternativas"
+> {
   rutasAlternativas: RutaAlternativaDetalle[];
   pasosExtras: PasoExtra[];
   cargosDirectosCotizacion: CargoCotizacionDetalle[];
@@ -122,6 +126,7 @@ export interface RutaPaso {
   id: string;
   orden: number;
   familiaCodigo: string;
+  icono?: string | null;
   activo: boolean;
 }
 
@@ -181,8 +186,21 @@ export interface ConfigPasoDetalle {
   maquinasCandidatas?: Array<{
     id: string;
     maquinaId: string;
+    perfilDefaultId?: string | null;
+    modoColorAllowedModes?: string[];
+    modoColorOptions?: Array<{
+      value: string;
+      label: string;
+      perfilIds: string[];
+    }>;
     esPreferida: boolean;
     orden: number;
+    perfilDefault?: {
+      id: string;
+      nombre: string;
+      tipoPerfil?: string | null;
+      detalleJson?: Record<string, unknown> | null;
+    } | null;
     maquina: {
       id: string;
       codigo: string;
@@ -191,8 +209,11 @@ export interface ConfigPasoDetalle {
       parametrosTecnicosJson?: Record<string, unknown> | null;
       perfilesOperativos?: Array<{
         id: string;
+        nombre?: string;
         activo?: boolean;
         tipoPerfil?: string | null;
+        productivityValue?: number | string | null;
+        productivityUnit?: string | null;
         detalleJson?: Record<string, unknown> | null;
       }>;
       centroCostoPrincipalId?: string | null;
@@ -281,7 +302,12 @@ export interface RutaListItem {
   descripcion: string | null;
   versionActual: number;
   activo: boolean;
-  pasos: Array<{ id: string; orden: number; familiaCodigo: string }>;
+  pasos: Array<{
+    id: string;
+    orden: number;
+    familiaCodigo: string;
+    icono?: string | null;
+  }>;
   _count: { productosAlternativas: number };
 }
 

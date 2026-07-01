@@ -46,6 +46,7 @@ import {
 } from "@/lib/materiales-slot-display";
 import { evaluarJsonLogicBoolean } from "@/lib/json-logic";
 import { getMachineTechnology, machineTechnologyLabel } from "@/lib/maquinaria-tecnologias";
+import { getCurrentPeriodo } from "@/lib/costos";
 
 type CatalogSpec = {
   key: string;
@@ -126,6 +127,11 @@ type SlotMaterialCandidato = {
   }>;
 };
 
+type MachineMarginsMm = {
+  leftMm: number;
+  rightMm: number;
+};
+
 type ModoColorComercial = {
   configPasoId: string;
   familiaCodigo: string;
@@ -174,6 +180,36 @@ const ZONAS_VIATICO = [
   { value: "GBA_SUR", label: "GBA Sur" },
   { value: "FUERA_AMBA", label: "Fuera AMBA" },
 ];
+
+const MODO_COLOR_LABELS: Record<string, string> = {
+  SIN_IMPRESION: "Sin impresión",
+  BN: "Blanco y negro",
+  CMYK: "CMYK",
+  "CMYK+blanco": "CMYK + Blanco",
+  "CMYK+barniz": "CMYK + Barniz",
+  "CMYK+blanco+barniz": "CMYK + Blanco + Barniz",
+};
+
+const ENRICHED_SPEC_LABELS: Record<string, string> = {
+  medidas: "Medidas",
+  formato_medidas: "Medidas",
+  material: "Material",
+  espesor: "Espesor",
+  espesor_material: "Espesor",
+  tecnologia: "Tecnología",
+  tecnologia_proceso: "Tecnología",
+  proceso: "Proceso",
+  modo_color: "Modo de color",
+};
+
+const ENRICHED_SPEC_ORDER = [
+  "medidas",
+  "material",
+  "espesor",
+  "tecnologia",
+  "modo_color",
+];
+
 const MATERIAL_BASE_SLOT_CODES = new Set([
   "sustrato_principal",
   "material_principal",
@@ -196,6 +232,17 @@ const DEFAULT_MOTOR_CONFIG: MotorConfigState = {
   zonaInstalacion: "CABA",
   m2Instalados: 0,
 };
+
+const CUSTOM_MEASURE_ID = "__custom_measure__";
+
+function createDefaultPiezaInput(): PiezaInput {
+  return {
+    uiKey: `pz-${Date.now()}-${Math.random()}`,
+    cantidad: 1,
+    anchoMm: 0,
+    altoMm: 0,
+  };
+}
 
 function materialSelectionKey(configPasoId: string, slotCodigo: string) {
   return `${configPasoId}_${slotCodigo}`;
@@ -275,23 +322,37 @@ function getCantidadDefault(producto: ProductoListItem) {
 function formatDefaultMedidas(producto: ProductoListItem) {
   const medidaDefault = getMedidaDefault(producto);
   if (medidaDefault) {
-    return `${Math.round(medidaDefault.anchoMm)} x ${Math.round(medidaDefault.altoMm)} mm`;
+    return formatMedidasCm(medidaDefault.anchoMm, medidaDefault.altoMm);
   }
   if (producto.medidaDefaultAnchoMm && producto.medidaDefaultAltoMm) {
     const ancho = Number(producto.medidaDefaultAnchoMm);
     const alto = Number(producto.medidaDefaultAltoMm);
     if (Number.isFinite(ancho) && Number.isFinite(alto)) {
-      return `${Math.round(ancho)} x ${Math.round(alto)} mm`;
+      return formatMedidasCm(ancho, alto);
     }
   }
-  return producto.modoMedidas === "LIBRE" ? "Medidas libres" : "A definir";
+  return modoMedidasPermitePersonalizada(producto.modoMedidas)
+    ? "Medida personalizada"
+    : "A definir";
+}
+
+function modoMedidasUsaPredefinidas(modoMedidas: string | null | undefined) {
+  return (
+    modoMedidas === "FIJA" ||
+    modoMedidas === "COMERCIAL_ELIGE" ||
+    modoMedidas === "MIXTA"
+  );
+}
+
+function modoMedidasPermitePersonalizada(modoMedidas: string | null | undefined) {
+  return modoMedidas === "LIBRE" || modoMedidas === "MIXTA";
 }
 
 function getSelectedPredefinedMeasure(
   producto: ProductoDetalle | null,
   medidaPredefinidaId: string,
 ) {
-  if (!producto || producto.modoMedidas !== "FIJA") return null;
+  if (!producto || !modoMedidasUsaPredefinidas(producto.modoMedidas)) return null;
   const medidas = getMedidasPredefinidas(producto);
   return (
     medidas.find((medida) => medida.id === medidaPredefinidaId) ??
@@ -305,8 +366,11 @@ function formatMedidaPredefinidaSpec(
   medida: ReturnType<typeof getSelectedPredefinedMeasure>,
 ) {
   if (!medida) return "";
-  const size = `${medida.anchoMm} x ${medida.altoMm} mm`;
+  const size = formatMedidasCm(medida.anchoMm, medida.altoMm);
   const label = medidaLabel(medida);
+  if (!label || label.includes(" mm") || label === `${medida.anchoMm} x ${medida.altoMm} mm`) {
+    return size;
+  }
   return label === size ? size : `${label} · ${size}`;
 }
 
@@ -614,9 +678,94 @@ function normalizeModoColor(value: unknown): string | undefined {
   return value.trim();
 }
 
+type MaquinaCandidataComercial = NonNullable<ConfigPasoDetalle["maquinasCandidatas"]>[number];
+
+type TecnologiaCandidataComercial = {
+  value: string;
+  label: string;
+  candidatas: MaquinaCandidataComercial[];
+};
+
+function getPreferredCandidate(candidates: MaquinaCandidataComercial[]) {
+  return candidates.find((candidate) => candidate.esPreferida) ?? candidates[0] ?? null;
+}
+
+function getActiveCandidateForConfig(
+  config: ConfigPasoDetalle,
+  motorConfig: Pick<MotorConfigState, "seleccionMaquina">,
+) {
+  const candidates = config.maquinasCandidatas ?? [];
+  const selectedId = motorConfig.seleccionMaquina[config.id];
+  const selected = selectedId
+    ? candidates.find((candidate) => candidate.maquinaId === selectedId)
+    : null;
+  return selected ?? getPreferredCandidate(candidates);
+}
+
+function getModoColorOptionsForConfig(
+  config: ConfigPasoDetalle,
+  motorConfig?: Pick<MotorConfigState, "seleccionMaquina">,
+) {
+  const activeCandidate = motorConfig
+    ? getActiveCandidateForConfig(config, motorConfig)
+    : null;
+  if (activeCandidate) {
+    const derivedOptions = buildModoColorOptionsFromCandidate(activeCandidate);
+    if (derivedOptions.length) return derivedOptions;
+    if (activeCandidate.modoColorOptions?.length) {
+      return activeCandidate.modoColorOptions;
+    }
+  }
+  return config.modoColorOptions ?? [];
+}
+
+function getModoColorsFromPerfil(perfil: { detalleJson?: Record<string, unknown> | null } | null | undefined) {
+  const detalle =
+    perfil?.detalleJson && typeof perfil.detalleJson === "object"
+      ? perfil.detalleJson
+      : {};
+  const raw = detalle.colores ?? detalle.modoColor;
+  const values = Array.isArray(raw) ? raw : [raw];
+  return Array.from(
+    new Set(
+      values
+        .map((value) => normalizeModoColor(value))
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+}
+
+function buildModoColorOptionsFromCandidate(candidate: MaquinaCandidataComercial) {
+  const allowedValues = Array.isArray(candidate.modoColorAllowedModes)
+    ? candidate.modoColorAllowedModes
+        .map((mode) => normalizeModoColor(mode))
+        .filter((mode): mode is string => Boolean(mode))
+    : [];
+  const allowed = allowedValues.length > 0 ? new Set(allowedValues) : null;
+  const modes = new Map<string, Set<string>>();
+  if (!allowed || allowed.has("SIN_IMPRESION")) {
+    modes.set("SIN_IMPRESION", new Set<string>());
+  }
+  for (const perfil of candidate.maquina.perfilesOperativos ?? []) {
+    if (perfil.activo === false) continue;
+    for (const mode of getModoColorsFromPerfil(perfil)) {
+      if (allowed && !allowed.has(mode)) continue;
+      const current = modes.get(mode) ?? new Set<string>();
+      current.add(perfil.id);
+      modes.set(mode, current);
+    }
+  }
+  return Array.from(modes.entries()).map(([value, perfilIds]) => ({
+    value,
+    label: MODO_COLOR_LABELS[value] ?? value,
+    perfilIds: Array.from(perfilIds),
+  }));
+}
+
 function getModosColorComercial(
   ruta: RutaAlternativaDetalle | null,
   includeConfig: (config: ConfigPasoDetalle) => boolean = () => true,
+  motorConfig?: Pick<MotorConfigState, "seleccionMaquina">,
 ) {
   return (
     ruta?.configPasos
@@ -624,10 +773,11 @@ function getModosColorComercial(
       .filter(includeConfig)
       .map((config) => {
         const modoConfig = getModoColorConfig(config.paramsPasoJson);
-        const allowedModes = Array.isArray(modoConfig.allowedModes)
+        const usaModosPorCandidata = (config.maquinasCandidatas?.length ?? 0) > 0;
+        const allowedModes = !usaModosPorCandidata && Array.isArray(modoConfig.allowedModes)
           ? modoConfig.allowedModes.map(normalizeModoColor).filter(Boolean)
           : [];
-        const options = (config.modoColorOptions ?? []).filter(
+        const options = getModoColorOptionsForConfig(config, motorConfig).filter(
           (option) =>
             allowedModes.length === 0 ||
             allowedModes.includes(normalizeModoColor(option.value) ?? ""),
@@ -652,20 +802,8 @@ function getModosColorComercial(
   );
 }
 
-type MaquinaCandidataComercial = NonNullable<ConfigPasoDetalle["maquinasCandidatas"]>[number];
-
-type TecnologiaCandidataComercial = {
-  value: string;
-  label: string;
-  candidatas: MaquinaCandidataComercial[];
-};
-
 function getCandidateTechnology(candidate: MaquinaCandidataComercial) {
   return getMachineTechnology(candidate.maquina) ?? "sin_tecnologia";
-}
-
-function getPreferredCandidate(candidates: MaquinaCandidataComercial[]) {
-  return candidates.find((candidate) => candidate.esPreferida) ?? candidates[0] ?? null;
 }
 
 function getPasosConTecnologias(
@@ -704,12 +842,7 @@ function getActiveMachineForConfig(
   config: ConfigPasoDetalle,
   motorConfig: MotorConfigState,
 ) {
-  const candidates = config.maquinasCandidatas ?? [];
-  const selectedId = motorConfig.seleccionMaquina[config.id];
-  const selected = selectedId
-    ? candidates.find((candidate) => candidate.maquinaId === selectedId)
-    : null;
-  return selected?.maquina ?? getPreferredCandidate(candidates)?.maquina ?? config.maquinaM1;
+  return getActiveCandidateForConfig(config, motorConfig)?.maquina ?? config.maquinaM1;
 }
 
 function getProductoNecesitaInstalacion(producto: ProductoDetalle | null) {
@@ -749,6 +882,30 @@ function formatNumberForSpec(value: number) {
   return new Intl.NumberFormat("es-AR", {
     maximumFractionDigits: 2,
   }).format(value);
+}
+
+function mmToCm(value: number) {
+  return value / 10;
+}
+
+function cmToMm(value: number) {
+  return value * 10;
+}
+
+function formatCmFromMm(value: number) {
+  const mm = Number(value);
+  if (!Number.isFinite(mm)) return "0";
+  return formatNumberForSpec(mmToCm(mm));
+}
+
+function formatCmInputFromMm(value: number) {
+  const mm = Number(value);
+  if (!Number.isFinite(mm) || mm <= 0) return "";
+  return formatNumberForSpec(mmToCm(mm));
+}
+
+function formatMedidasCm(anchoMm: number, altoMm: number) {
+  return `${formatCmFromMm(anchoMm)} x ${formatCmFromMm(altoMm)} cm`;
 }
 
 function parseDecimalInput(value: string) {
@@ -812,6 +969,48 @@ function getVariantWidthMm(attrs: Record<string, unknown> | null | undefined) {
   return ancho <= 10 ? ancho * 1000 : ancho;
 }
 
+function getNumberFromUnknown(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value.replace(",", "."));
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function getRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function getMachineMarginsMm(
+  machine: NonNullable<ConfigPasoDetalle["maquinaM1"]> | null | undefined,
+): MachineMarginsMm {
+  const params = getRecord(machine?.parametrosTecnicosJson);
+  const source = getRecord(params.margenesNoImprimiblesMm);
+  const uniform =
+    getNumberFromUnknown(params.margenNoImprimibleMm) ??
+    getNumberFromUnknown(params.margenNoImprimible);
+  const left =
+    getNumberFromUnknown(source.leftMm) ??
+    getNumberFromUnknown(source.izq) ??
+    getNumberFromUnknown(source.left) ??
+    uniform ??
+    0;
+  const right =
+    getNumberFromUnknown(source.rightMm) ??
+    getNumberFromUnknown(source.der) ??
+    getNumberFromUnknown(source.right) ??
+    uniform ??
+    0;
+
+  return {
+    leftMm: Math.max(0, left),
+    rightMm: Math.max(0, right),
+  };
+}
+
 function getVariantColorLabel(attrs: Record<string, unknown> | null | undefined) {
   return getTextAttr(attrs, ["colorBase", "color", "colorMaterial"]);
 }
@@ -837,9 +1036,13 @@ function getSelectedMaterialSummaries(
       const selectedId =
         config.seleccionMaterial[materialSelectionKey(slot.configPasoId, slot.slotCodigo)] ||
         defaultSlotCandidateId(slot);
-      const selectedCandidate = slot.candidatos.find((candidate) =>
-        candidate.variantes.some((variant) => variant.variantId === selectedId),
-      );
+      const selectedCandidate =
+        slot.candidatos.find(
+          (candidate) =>
+            candidate.variantes.some((variant) => variant.variantId === selectedId) ||
+            Boolean(selectedId && candidate.defaultVarianteId === selectedId),
+        ) ??
+        (!selectedId && slot.candidatos.length === 1 ? slot.candidatos[0] : null);
       const selectedVariant = selectedCandidate?.variantes.find(
         (variant) => variant.variantId === selectedId,
       );
@@ -996,7 +1199,9 @@ function mapProductoReal(producto: ProductoListItem | ProductoDetalle): CatalogP
           ? "Por metro lineal"
           : "Por unidad",
     unidad,
-    medidasMode: producto.modoMedidas === "LIBRE" ? "calculada" : "fija",
+    medidasMode: modoMedidasPermitePersonalizada(producto.modoMedidas)
+      ? "calculada"
+      : "fija",
     precioBase: 0,
     precioConfigJson: producto.precioConfigJson,
     descripcion: producto.descripcion ?? categoria.nombre,
@@ -1102,7 +1307,7 @@ function labelPrecioUnitario(unidad: string) {
 function isMetroLinealConMedidasVariables(productoDetalle: ProductoDetalle | null) {
   return (
     productoDetalle?.unidadComercial === "metro_lineal" &&
-    (productoDetalle.modoMedidas === "LIBRE" ||
+    (modoMedidasPermitePersonalizada(productoDetalle.modoMedidas) ||
       productoDetalle.modoMedidas === "COMERCIAL_ELIGE")
   );
 }
@@ -1112,10 +1317,18 @@ function usaPiezasParaCotizar(
   config: Pick<MotorConfigState, "modoCotizacionLineal">,
 ) {
   return (
-    (productoDetalle?.modoMedidas === "LIBRE" &&
+    (modoMedidasPermitePersonalizada(productoDetalle?.modoMedidas) &&
       !isMetroLinealConMedidasVariables(productoDetalle)) ||
     (isMetroLinealConMedidasVariables(productoDetalle) &&
       config.modoCotizacionLineal === "nesting")
+  );
+}
+
+function usaCantidadComercialParaPiezas(productoDetalle: ProductoDetalle | null) {
+  return (
+    productoDetalle?.unidadComercial === "unidad" &&
+    modoMedidasPermitePersonalizada(productoDetalle.modoMedidas) &&
+    !isMetroLinealConMedidasVariables(productoDetalle)
   );
 }
 
@@ -1134,18 +1347,35 @@ function defaultSpecs(product: CatalogProduct) {
   return Object.fromEntries(product.specs.map((spec) => [spec.key, spec.def]));
 }
 
-function getSelectedLinearMaterialWidthMm(
+function getSelectedLinearMaterialMetrics(
+  productoDetalle: ProductoDetalle | null,
   slotsComercialElige: SlotComercialElige[],
   config: MotorConfigState,
+  includeConfig: (config: ConfigPasoDetalle) => boolean = () => true,
 ) {
+  const rutaSel = getRutaSeleccionada(productoDetalle, config.rutaAlternativaId);
   for (const slot of slotsComercialElige) {
     if (slot.formula !== "por_metro_lineal") continue;
+    const configPaso = rutaSel?.configPasos.find((paso) => paso.id === slot.configPasoId);
+    if (configPaso && !includeConfig(configPaso)) continue;
     const key = materialSelectionKey(slot.configPasoId, slot.slotCodigo);
     const selected = config.seleccionMaterial[key] || defaultSlotCandidateId(slot);
     if (!selected) continue;
     for (const candidate of slot.candidatos) {
       const variant = candidate.variantes.find((item) => item.variantId === selected);
-      if (variant?.anchoMm) return variant.anchoMm;
+      if (!variant?.anchoMm) continue;
+      const margins = getMachineMarginsMm(
+        configPaso ? getActiveMachineForConfig(configPaso, config) : null,
+      );
+      const usableWidthMm = Math.max(
+        0,
+        variant.anchoMm - margins.leftMm - margins.rightMm,
+      );
+      return {
+        materialWidthMm: variant.anchoMm,
+        usableWidthMm: usableWidthMm > 0 ? usableWidthMm : variant.anchoMm,
+        margins,
+      };
     }
   }
   return null;
@@ -1166,9 +1396,14 @@ function buildJobContext(
   const cotizaLinealDirecto =
     isMetroLinealConMedidasVariables(productoDetalle) &&
     config.modoCotizacionLineal === "directo";
+  const piezasUsanCantidadComercial =
+    cotizaConPiezas && usaCantidadComercialParaPiezas(productoDetalle);
+  const usaMedidaPersonalizadaReal = cotizaConPiezas && config.piezas.length > 0;
   const cantidadTrabajo =
     cotizaLinealDirecto
       ? 1
+      : piezasUsanCantidadComercial
+      ? qty
       : cotizaConPiezas
       ? config.piezas.reduce(
           (total, pieza) =>
@@ -1182,25 +1417,33 @@ function buildJobContext(
     tipoCopia: config.tipoCopia,
     numerosXTalonario: config.numerosXTalonario,
     opcionalesActivados: config.opcionalesActivados,
+    medidaModo: usaMedidaPersonalizadaReal ? "personalizada" : "predefinida",
   };
-  const anchoMaterialLinealMm =
+  const materialLinealMetrics =
     cotizaLinealDirecto
-      ? getSelectedLinearMaterialWidthMm(slotsComercialElige, config)
+      ? getSelectedLinearMaterialMetrics(
+          productoDetalle,
+          slotsComercialElige,
+          config,
+          includeConfig,
+        )
       : null;
+  const anchoMaterialLinealMm = materialLinealMetrics?.materialWidthMm ?? null;
+  const anchoUtilLinealMm = materialLinealMetrics?.usableWidthMm ?? null;
   const piezaLinealDirecta =
-    anchoMaterialLinealMm && qty > 0
+    anchoUtilLinealMm && qty > 0
       ? [
           {
             uiKey: "lineal-directo",
             cantidad: 1,
-            anchoMm: anchoMaterialLinealMm,
+            anchoMm: anchoUtilLinealMm,
             altoMm: qty * 1000,
           },
         ]
       : [];
 
   const piezasContexto =
-    cotizaConPiezas && config.piezas.length > 0
+    usaMedidaPersonalizadaReal
       ? config.piezas
       : piezaLinealDirecta.length > 0
         ? piezaLinealDirecta
@@ -1217,7 +1460,7 @@ function buildJobContext(
 
   if (piezasContexto.length > 0) {
     ctx.piezas = piezasContexto.map((pieza) => ({
-      cantidad: pieza.cantidad,
+      cantidad: piezasUsanCantidadComercial ? qty : pieza.cantidad,
       anchoMm: pieza.anchoMm,
       altoMm: pieza.altoMm,
     }));
@@ -1225,7 +1468,11 @@ function buildJobContext(
     ctx.piezaAltoMaxMm = Math.max(...piezasContexto.map((pieza) => pieza.altoMm));
     ctx.piezaAreaTotalM2 = piezasContexto.reduce(
       (total, pieza) =>
-        total + (pieza.cantidad * pieza.anchoMm * pieza.altoMm) / 1_000_000,
+        total +
+        ((piezasUsanCantidadComercial ? qty : pieza.cantidad) *
+          pieza.anchoMm *
+          pieza.altoMm) /
+          1_000_000,
       0,
     );
     if (piezasContexto.length === 1) {
@@ -1248,6 +1495,7 @@ function buildJobContext(
       ctx.metrosLineales = qty;
       if (anchoMaterialLinealMm) {
         ctx.anchoMaterialMm = anchoMaterialLinealMm;
+        ctx.anchoUtilMaterialMm = anchoUtilLinealMm;
         ctx.largoMaterialMm = qty * 1000;
       }
     }
@@ -1297,7 +1545,11 @@ function buildJobContext(
     ctx.tecnologia = Array.from(tecnologiasActivas)[0];
   }
 
-  const modosColorComercial = getModosColorComercial(rutaSel, includeConfig).filter(
+  const modosColorComercial = getModosColorComercial(
+    rutaSel,
+    includeConfig,
+    config,
+  ).filter(
     (modo) =>
       modo.modoActivacion !== "OPCIONAL" ||
       Boolean(config.opcionalesActivados[modo.configPasoId]),
@@ -1327,6 +1579,10 @@ function calcularCantidadComercial(
   qty: number,
 ) {
   if (config && usaPiezasParaCotizar(productoDetalle, config) && config.piezas.length) {
+    if (usaCantidadComercialParaPiezas(productoDetalle)) {
+      return qty;
+    }
+
     const totalPiezas = config.piezas.reduce(
       (total, pieza) =>
         total + (Number.isFinite(pieza.cantidad) ? pieza.cantidad : 0),
@@ -1348,20 +1604,11 @@ function calcularCantidadComercial(
   return qty;
 }
 
-function getCantidadDesdeNestingLineal(cotizacion: CotizacionExitosa) {
-  for (const paso of cotizacion.pasos) {
-    const nesting = paso.nestingResult;
-    if (nesting?.unidad !== "m_lineales") continue;
-    const cantidad = Number(nesting.cantidadCalculada);
-    if (Number.isFinite(cantidad) && cantidad > 0) return cantidad;
-  }
-  return null;
-}
-
 function buildPresentableSpecs(
   product: CatalogProduct,
   productoDetalle: ProductoDetalle | null,
   config: MotorConfigState,
+  qty: number,
   specs: Record<string, string>,
   slotsComercialElige: SlotComercialElige[],
   ruleContext: Record<string, unknown>,
@@ -1372,7 +1619,8 @@ function buildPresentableSpecs(
   const hasSpec = (key: string) => product.specs.some((spec) => spec.key === key);
   const setSpec = (key: string, value: string | undefined) => {
     if (!value) return;
-    if (!hasSpec(key) || !hasUsefulSpecValue(value)) return;
+    if (!hasSpec(key) && !ENRICHED_SPEC_LABELS[key]) return;
+    if (!hasUsefulSpecValue(value)) return;
     base[key] = value;
   };
   const rutaSeleccionada = getRutaSeleccionada(productoDetalle, config.rutaAlternativaId);
@@ -1411,18 +1659,22 @@ function buildPresentableSpecs(
     setSpec("espesor", espesor);
     setSpec("espesor_material", espesor);
   }
-  if (usaPiezasParaCotizar(productoDetalle, config) && config.piezas.length > 0) {
-    const medidas = config.piezas
-      .map((pieza) => {
-        const unidad = pieza.cantidad === 1 ? "unidad" : "unidades";
-        return `${pieza.cantidad} ${unidad} · ${pieza.anchoMm} x ${pieza.altoMm} mm`;
-      })
-      .join("\n");
+  const usaMedidasPersonalizadas =
+    usaPiezasParaCotizar(productoDetalle, config) && config.piezas.length > 0;
+  if (usaMedidasPersonalizadas) {
+    const medidas = Array.from(
+      new Set(
+        config.piezas.map((pieza) => formatMedidasCm(pieza.anchoMm, pieza.altoMm)),
+      ),
+    ).join("\n");
     setSpec("medidas", medidas);
     setSpec("formato_medidas", medidas);
     setSpec("m2_medidas_instaladas", medidas);
   } else if (productoDetalle) {
-    const medidas = formatDefaultMedidas(productoDetalle);
+    const medidas =
+      productoDetalle.unidadComercial === "metro_lineal"
+        ? `${qty.toLocaleString("es-AR")} ml`
+        : formatDefaultMedidas(productoDetalle);
     setSpec("medidas", medidas);
     setSpec("formato_medidas", medidas);
   }
@@ -1430,7 +1682,7 @@ function buildPresentableSpecs(
     productoDetalle,
     config.medidaPredefinidaId,
   );
-  if (medidaPredefinida) {
+  if (medidaPredefinida && !usaMedidasPersonalizadas) {
     const medidas = formatMedidaPredefinidaSpec(medidaPredefinida);
     setSpec("medidas", medidas);
     setSpec("formato_medidas", medidas);
@@ -1438,8 +1690,10 @@ function buildPresentableSpecs(
   if (hasSpec("caras") || product.subcategoriaComercialCodigo === "tarjetas") {
     setSpec("caras", config.caras === 2 ? "Doble faz" : "Simple faz");
   }
-  const modosColor = getModosColorComercial(rutaSeleccionada, (paso) =>
-    isConfigPasoVisibleForContext(paso, config, ruleContext),
+  const modosColor = getModosColorComercial(
+    rutaSeleccionada,
+    (paso) => isConfigPasoVisibleForContext(paso, config, ruleContext),
+    config,
   );
   const selectedModoColorLabels = modosColor
     .filter(
@@ -1561,6 +1815,7 @@ function buildItem(
         product,
         options.productoDetalle,
         options.motorConfig,
+        qty,
         specs,
         options.slotsComercialElige,
         options.ruleContext,
@@ -1583,8 +1838,7 @@ function buildItem(
     subtotal > 0 ? (impuestoMonto / subtotal) * 100 : product.impuestoPct;
   const cantidadComercial =
     product.unidad === "ml"
-      ? getCantidadDesdeNestingLineal(cotizacion) ??
-        cotizacion.cantidadComercialPricing ??
+      ? cotizacion.cantidadComercialPricing ??
         calcularCantidadComercial(
           product,
           options?.productoDetalle ?? null,
@@ -1617,13 +1871,15 @@ function buildItem(
     visible: shouldShowCommercialSpec(spec, especificaciones[spec.key], product, especificaciones),
     orden: (index + 1) * 10,
   }));
-  if (especificaciones.modo_color && !atributosSchema.some((attr) => attr.key === "modo_color")) {
+  for (const key of ENRICHED_SPEC_ORDER) {
+    if (!hasUsefulSpecValue(especificaciones[key])) continue;
+    if (atributosSchema.some((attr) => attr.key === key)) continue;
     atributosSchema.push({
-      key: "modo_color",
-      label: "Modo de color",
+      key,
+      label: ENRICHED_SPEC_LABELS[key] ?? humanizeCodigo(key),
       tipo: "text",
       visible: true,
-      orden: atributosSchema.length * 10 + 10,
+      orden: 1_000 + ENRICHED_SPEC_ORDER.indexOf(key) * 10,
     });
   }
 
@@ -1701,12 +1957,18 @@ function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
       };
     })
     .filter((pieza): pieza is PiezaInput => pieza != null);
+  const medidaPredefinidaId =
+    typeof ctx.medidaPredefinidaId === "string" ? ctx.medidaPredefinidaId : "";
+  const medidaModo =
+    typeof ctx.medidaModo === "string" ? ctx.medidaModo : "";
+  const restaurarPiezasPersonalizadas =
+    medidaModo === "personalizada" ||
+    (!medidaModo && !medidaPredefinidaId && piezas.length > 0);
 
   return {
     ...DEFAULT_MOTOR_CONFIG,
     rutaAlternativaId: item.rutaAlternativaId ?? "",
-    medidaPredefinidaId:
-      typeof ctx.medidaPredefinidaId === "string" ? ctx.medidaPredefinidaId : "",
+    medidaPredefinidaId,
     caras: Number(ctx.caras) === 2 ? 2 : 1,
     tipoCopia:
       Number(ctx.tipoCopia) === 3 ? 3 : Number(ctx.tipoCopia) === 2 ? 2 : 1,
@@ -1714,7 +1976,7 @@ function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
       Number.isFinite(Number(ctx.numerosXTalonario)) && Number(ctx.numerosXTalonario) > 0
         ? Number(ctx.numerosXTalonario)
         : DEFAULT_MOTOR_CONFIG.numerosXTalonario,
-    piezas,
+    piezas: restaurarPiezasPersonalizadas ? piezas : [],
     opcionalesActivados: Object.fromEntries(
       Object.entries(opcionalesRaw).map(([key, value]) => [key, Boolean(value)]),
     ),
@@ -1792,6 +2054,7 @@ function ApSelectStep({
       .toLowerCase()
       .includes(normalized);
   });
+  const uniqueFilteredProduct = filtered.length === 1 ? filtered[0] : null;
 
   return (
     <>
@@ -1802,6 +2065,11 @@ function ApSelectStep({
           placeholder="Buscar por código, nombre o descripción..."
           value={query}
           onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" || !uniqueFilteredProduct) return;
+            event.preventDefault();
+            onPick(uniqueFilteredProduct);
+          }}
         />
         <span className="kbd">⌘K</span>
       </div>
@@ -1868,7 +2136,7 @@ function ApSelectStep({
             <button
               key={product.code}
               type="button"
-              className="ap-prod"
+              className={`ap-prod ${uniqueFilteredProduct?.code === product.code ? "is-keyboard-target" : ""}`}
               onClick={() => onPick(product)}
             >
               <span className="ap-prod-main">
@@ -2013,20 +2281,33 @@ function ApConfigStep({
     () => getPasosConTecnologias(rutaSel, includeVisibleConfig),
     [includeVisibleConfig, rutaSel],
   );
-  const modosColorComercial = React.useMemo(
-    () => getModosColorComercial(rutaSel, includeVisibleConfig),
-    [includeVisibleConfig, rutaSel],
+  const pasosQueRequierenTecnologia = React.useMemo(
+    () => new Set(pasosConTecnologias.map((paso) => paso.configPasoId)),
+    [pasosConTecnologias],
   );
-  const modosColorVisibles = modosColorComercial;
+  const modosColorComercial = React.useMemo(
+    () => getModosColorComercial(rutaSel, includeVisibleConfig, motorConfig),
+    [includeVisibleConfig, motorConfig, rutaSel],
+  );
+  const modosColorVisibles = modosColorComercial.filter(
+    (modo) =>
+      !pasosQueRequierenTecnologia.has(modo.configPasoId) ||
+      Boolean(motorConfig.seleccionMaquina[modo.configPasoId]),
+  );
   const necesitaInstalacion = getProductoNecesitaInstalacion(productoDetalle);
   const medidasPredefinidas = React.useMemo(
     () =>
-      productoDetalle?.modoMedidas === "FIJA"
+      modoMedidasUsaPredefinidas(productoDetalle?.modoMedidas)
         ? getMedidasPredefinidas(productoDetalle)
         : [],
     [productoDetalle],
   );
-  const cantidadPiezaRefs = React.useRef<Record<string, HTMLInputElement | null>>({});
+  const usaMedidaMixta = productoDetalle?.modoMedidas === "MIXTA";
+  const usaMedidaPersonalizada =
+    modoMedidasPermitePersonalizada(productoDetalle?.modoMedidas) &&
+    (productoDetalle?.modoMedidas !== "MIXTA" || motorConfig.piezas.length > 0);
+  const piezasUsanCantidadComercial = usaCantidadComercialParaPiezas(productoDetalle);
+  const piezaFocusRefs = React.useRef<Record<string, HTMLInputElement | null>>({});
   const focusPiezaCantidadKey = React.useRef<string | null>(null);
 
   const updateMotorConfig = React.useCallback(
@@ -2049,26 +2330,18 @@ function ApConfigStep({
   );
 
   const addPieza = React.useCallback(() => {
-    const uiKey = `pz-${Date.now()}-${Math.random()}`;
-    focusPiezaCantidadKey.current = uiKey;
+    const pieza = createDefaultPiezaInput();
+    focusPiezaCantidadKey.current = pieza.uiKey;
     setMotorConfig((current) => ({
       ...current,
-      piezas: [
-        ...current.piezas,
-        {
-          uiKey,
-          cantidad: 1,
-          anchoMm: 1000,
-          altoMm: 500,
-        },
-      ],
+      piezas: [...current.piezas, pieza],
     }));
   }, [setMotorConfig]);
 
   React.useEffect(() => {
     const uiKey = focusPiezaCantidadKey.current;
     if (!uiKey) return;
-    const input = cantidadPiezaRefs.current[uiKey];
+    const input = piezaFocusRefs.current[uiKey];
     if (!input) return;
     input.focus();
     input.select();
@@ -2148,11 +2421,38 @@ function ApConfigStep({
           machineKeys.has(key),
         ),
       );
+      for (const paso of pasosConTecnologias) {
+        if (seleccionMaquina[paso.configPasoId]) continue;
+        const preferredCandidate = getPreferredCandidate(
+          paso.tecnologias.flatMap((tech) => tech.candidatas),
+        );
+        if (preferredCandidate) {
+          seleccionMaquina[paso.configPasoId] = preferredCandidate.maquinaId;
+        }
+      }
       const seleccionModoColor = Object.fromEntries(
         Object.entries(current.seleccionModoColor).filter(([key]) =>
           colorKeys.has(key),
         ),
       );
+      for (const modo of modosColorComercial) {
+        const selected = normalizeModoColor(seleccionModoColor[modo.configPasoId]);
+        const validValues = new Set(
+          modo.options
+            .map((option) => normalizeModoColor(option.value))
+            .filter((value): value is string => Boolean(value)),
+        );
+        if (selected && validValues.has(selected)) continue;
+        const fallback =
+          modo.defaultMode && validValues.has(modo.defaultMode)
+            ? modo.defaultMode
+            : Array.from(validValues)[0];
+        if (fallback) {
+          seleccionModoColor[modo.configPasoId] = fallback;
+        } else {
+          delete seleccionModoColor[modo.configPasoId];
+        }
+      }
 
       if (
         Object.keys(opcionalesActivados).length ===
@@ -2161,8 +2461,14 @@ function ApConfigStep({
           Object.keys(current.seleccionMaterial).length &&
         Object.keys(seleccionMaquina).length ===
           Object.keys(current.seleccionMaquina).length &&
+        Object.entries(seleccionMaquina).every(
+          ([key, value]) => current.seleccionMaquina[key] === value,
+        ) &&
         Object.keys(seleccionModoColor).length ===
-          Object.keys(current.seleccionModoColor).length
+          Object.keys(current.seleccionModoColor).length &&
+        Object.entries(seleccionModoColor).every(
+          ([key, value]) => current.seleccionModoColor[key] === value,
+        )
       ) {
         return current;
       }
@@ -2229,9 +2535,10 @@ function ApConfigStep({
     options: Array<{ value: string; label: string }>,
     onChange: (value: string) => void,
     equalWidth = false,
+    wrapFourColumns = false,
   ) => (
     <div
-      className={`ap-segmented${equalWidth ? " ap-segmented-equal" : ""}${options.length === 1 ? " ap-segmented-single" : ""}`}
+      className={`ap-segmented${equalWidth ? " ap-segmented-equal" : ""}${options.length === 1 ? " ap-segmented-single" : ""}${wrapFourColumns ? " ap-segmented-grid-4" : ""}`}
       role="radiogroup"
       style={
         equalWidth
@@ -2264,7 +2571,11 @@ function ApConfigStep({
     options: Array<{ value: string; label: string }>,
     onChange: (value: string) => void,
   ) => (
-    <div className="ap-option-list" role="radiogroup" aria-label={name}>
+    <div
+      className={`ap-option-list${options.length > 2 ? " ap-option-list-grid-2" : ""}`}
+      role="radiogroup"
+      aria-label={name}
+    >
       {options.map((option) => {
         const selected = option.value === value;
         return (
@@ -2321,28 +2632,35 @@ function ApConfigStep({
         "";
       setMaterial(key, variantId);
     };
+    const materialOptions = slot.candidatos.map((candidate) => ({
+      value: candidate.materiaPrimaId,
+      label: candidate.label,
+    }));
     return (
       <div
-        className={`ap-spec ${selectedCandidate && selectedCandidate.variantes.length > 1 ? "ap-spec-wide" : ""}`}
+        className={`ap-spec ${
+          (selectedCandidate && selectedCandidate.variantes.length > 1) ||
+          materialOptions.length > 2
+            ? "ap-spec-wide"
+            : ""
+        }`}
         key={key}
       >
         <label>{humanizeCodigo(slot.slotCodigo)}</label>
-        <select
-          className="ap-native-select"
-          value={selectedCandidate?.materiaPrimaId ?? ""}
-          onChange={(event) => selectMaterial(event.target.value)}
-        >
-          {slot.candidatos.length === 0 ? (
-            <option value="">Sin materiales candidatos configurados</option>
-          ) : !selectedCandidate ? (
-            <option value="">Elegí material</option>
-          ) : null}
-          {slot.candidatos.map((candidate) => (
-            <option key={candidate.materiaPrimaId} value={candidate.materiaPrimaId}>
-              {candidate.label}
-            </option>
-          ))}
-        </select>
+        {materialOptions.length > 0 ? (
+          renderSegmentedControl(
+            humanizeCodigo(slot.slotCodigo),
+            selectedCandidate?.materiaPrimaId ?? "",
+            materialOptions,
+            selectMaterial,
+            true,
+            materialOptions.length > 2,
+          )
+        ) : (
+          <div className="ctrl-input">
+            <span>Sin materiales candidatos configurados</span>
+          </div>
+        )}
         {selectedCandidate && selectedCandidate.variantes.length > 1 ? (
           useAttributePicker ? (
             <div className="ap-material-attrs">
@@ -2425,11 +2743,11 @@ function ApConfigStep({
                     onClick={() => setMaterial(key, variant.variantId)}
                   >
                     <span className="ap-variant-title">{variant.label}</span>
-                    <span className="ap-variant-meta">
-                      {variant.isFallbackLabel
-                        ? `Sin atributos descriptivos · ${variant.sku}`
-                        : variant.description}
-                    </span>
+                    {variant.isFallbackLabel ? (
+                      <span className="ap-variant-meta">
+                        Sin atributos descriptivos · {variant.sku}
+                      </span>
+                    ) : null}
                     {isDefault ? (
                       <span className="ap-variant-badge">Predeterminada</span>
                     ) : null}
@@ -2440,12 +2758,18 @@ function ApConfigStep({
           </div>
           )
         ) : null}
-        {options?.showHint !== false && !useAttributePicker && selectedVariant?.isFallbackLabel ? (
+        {options?.showHint !== false &&
+        materialOptions.length <= 1 &&
+        !useAttributePicker &&
+        selectedVariant?.isFallbackLabel ? (
           <p className="ap-spec-hint">
             Esta variante no tiene atributos descriptivos cargados. Código interno:{" "}
             {selectedVariant.sku}
           </p>
-        ) : options?.showHint !== false && !useAttributePicker && selectedVariant?.description ? (
+        ) : options?.showHint !== false &&
+          materialOptions.length <= 1 &&
+          !useAttributePicker &&
+          selectedVariant?.description ? (
           <p className="ap-spec-hint">{selectedVariant.description}</p>
         ) : null}
       </div>
@@ -2624,58 +2948,81 @@ function ApConfigStep({
     );
   };
 
-  const renderPiezasEditor = () => (
+  const renderPiezasEditor = (options?: { hideCantidad?: boolean }) => (
     <div className="ap-spec ap-spec-wide">
       <div className="ap-piezas">
-        <div className="ap-pieza-head" aria-hidden="true">
-          <span>Cantidad</span>
-          <span />
+        <div
+          className={`ap-pieza-head${options?.hideCantidad ? " ap-pieza-head-medidas" : ""}`}
+          aria-hidden="true"
+        >
+          {options?.hideCantidad ? null : (
+            <>
+              <span>Cantidad</span>
+              <span />
+            </>
+          )}
           <span>Ancho</span>
           <span />
           <span>Alto</span>
           <span />
-          <span />
         </div>
         {motorConfig.piezas.map((pieza, index) => (
-          <div className="ap-pieza-row" key={pieza.uiKey}>
-            <input
-              ref={(node) => {
-                cantidadPiezaRefs.current[pieza.uiKey] = node;
-              }}
-              type="number"
-              min="1"
-              value={pieza.cantidad}
-              onChange={(event) =>
-                updatePieza(index, { cantidad: Number(event.target.value) || 0 })
-              }
-              aria-label="Cantidad de piezas"
-            />
+          <div
+            className={`ap-pieza-row${options?.hideCantidad ? " ap-pieza-row-medidas" : ""}`}
+            key={pieza.uiKey}
+          >
+            {options?.hideCantidad ? null : (
+              <>
+                <input
+                  ref={(node) => {
+                    piezaFocusRefs.current[pieza.uiKey] = node;
+                  }}
+                  type="number"
+                  min="1"
+                  value={pieza.cantidad}
+                  onChange={(event) =>
+                    updatePieza(index, { cantidad: Number(event.target.value) || 0 })
+                  }
+                  aria-label="Cantidad de piezas"
+                />
+                <span>x</span>
+              </>
+            )}
+            <label className="ap-input-unit">
+              <input
+                ref={(node) => {
+                  if (options?.hideCantidad) piezaFocusRefs.current[pieza.uiKey] = node;
+                }}
+                type="number"
+                min="0"
+                step="0.1"
+                value={formatCmInputFromMm(pieza.anchoMm)}
+                onChange={(event) =>
+                  updatePieza(index, { anchoMm: cmToMm(parseDecimalInput(event.target.value)) })
+                }
+                aria-label="Ancho en cm"
+              />
+              <span>cm</span>
+            </label>
             <span>x</span>
-            <input
-              type="number"
-              min="0"
-              value={pieza.anchoMm}
-              onChange={(event) =>
-                updatePieza(index, { anchoMm: Number(event.target.value) || 0 })
-              }
-              aria-label="Ancho en mm"
-            />
-            <span>x</span>
-            <input
-              type="number"
-              min="0"
-              value={pieza.altoMm}
-              onChange={(event) =>
-                updatePieza(index, { altoMm: Number(event.target.value) || 0 })
-              }
-              onKeyDown={(event) => {
-                if (event.key !== "Enter") return;
-                event.preventDefault();
-                addPieza();
-              }}
-              aria-label="Alto en mm"
-            />
-            <span>mm</span>
+            <label className="ap-input-unit">
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                value={formatCmInputFromMm(pieza.altoMm)}
+                onChange={(event) =>
+                  updatePieza(index, { altoMm: cmToMm(parseDecimalInput(event.target.value)) })
+                }
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") return;
+                  event.preventDefault();
+                  addPieza();
+                }}
+                aria-label="Alto en cm"
+              />
+              <span>cm</span>
+            </label>
             <button
               type="button"
               className="ap-qty-btn"
@@ -2700,14 +3047,7 @@ function ApConfigStep({
       modoCotizacionLineal: modo,
       piezas:
         modo === "nesting" && current.piezas.length === 0
-          ? [
-              {
-                uiKey: `pz-${Date.now()}`,
-                cantidad: 1,
-                anchoMm: 1000,
-                altoMm: 500,
-              },
-            ]
+          ? [createDefaultPiezaInput()]
           : current.piezas,
     }));
   };
@@ -2793,28 +3133,58 @@ function ApConfigStep({
                   </>
                 )}
               </>
-            ) : productoDetalle.modoMedidas === "LIBRE" ? (
-              renderPiezasEditor()
+            ) : usaMedidaPersonalizada && !usaMedidaMixta ? (
+              <>
+                {renderPiezasEditor({ hideCantidad: piezasUsanCantidadComercial })}
+                {piezasUsanCantidadComercial ? (
+                  <div className="ap-spec ap-spec-wide">
+                    <label>Cantidad</label>
+                    {renderQuantityControl()}
+                  </div>
+                ) : null}
+              </>
             ) : (
               <>
-                {medidasPredefinidas.length > 1 ? (
+                {usaMedidaMixta || medidasPredefinidas.length > 1 ? (
                   <div className="ap-spec ap-spec-wide">
                     <label>Medida</label>
                     {renderSegmentedControl(
                       "Medida",
-                      getSelectedPredefinedMeasure(
-                        productoDetalle,
-                        motorConfig.medidaPredefinidaId,
-                      )?.id ?? "",
-                      medidasPredefinidas.map((medida) => ({
-                        value: medida.id,
-                        label: medidaLabel(medida),
-                      })),
-                      (value) => updateMotorConfig({ medidaPredefinidaId: value }),
+                      usaMedidaMixta && motorConfig.piezas.length > 0
+                        ? CUSTOM_MEASURE_ID
+                        : getSelectedPredefinedMeasure(
+                            productoDetalle,
+                            motorConfig.medidaPredefinidaId,
+                          )?.id ?? "",
+                      [
+                        ...medidasPredefinidas.map((medida) => ({
+                          value: medida.id,
+                          label: formatMedidaPredefinidaSpec(medida),
+                        })),
+                        ...(usaMedidaMixta
+                          ? [{ value: CUSTOM_MEASURE_ID, label: "Personalizada" }]
+                          : []),
+                      ],
+                      (value) => {
+                        if (value === CUSTOM_MEASURE_ID) {
+                          updateMotorConfig({
+                            medidaPredefinidaId: "",
+                            piezas:
+                              motorConfig.piezas.length > 0
+                                ? motorConfig.piezas
+                                : [createDefaultPiezaInput()],
+                          });
+                          return;
+                        }
+                        updateMotorConfig({ medidaPredefinidaId: value, piezas: [] });
+                      },
                       true,
                     )}
                   </div>
                 ) : null}
+              {usaMedidaMixta && motorConfig.piezas.length > 0
+                ? renderPiezasEditor({ hideCantidad: piezasUsanCantidadComercial })
+                : null}
               <div className="ap-spec ap-spec-wide">
                 <label>Cantidad</label>
                 {renderQuantityControl()}
@@ -2873,61 +3243,17 @@ function ApConfigStep({
               </>
             ) : null}
 
-            {modosColorVisibles.map((modo) => {
-              const value =
-                normalizeModoColor(motorConfig.seleccionModoColor[modo.configPasoId]) ??
-                modo.defaultMode ??
-                normalizeModoColor(modo.options[0]?.value) ??
-                "";
-              const modoOptions = modo.options.map((option) => ({
-                value: normalizeModoColor(option.value) ?? option.value,
-                label: option.label,
-              }));
-              return (
-                <div
-                  className={`ap-spec ${modoOptions.length > 2 ? "ap-spec-wide" : ""}`}
-                  key={modo.configPasoId}
-                >
-                  <label>
-                    {modosColorVisibles.length === 1
-                      ? "Modo de color"
-                      : `${humanizeCodigo(modo.familiaCodigo)} · color`}
-                  </label>
-                  {modoOptions.length > 2
-                    ? renderOptionList(
-                        "Modo de color",
-                        value,
-                        modoOptions,
-                        (nextValue) => setModoColor(modo.configPasoId, nextValue),
-                      )
-                    : renderSegmentedControl(
-                        "Modo de color",
-                        value,
-                        modoOptions,
-                        (nextValue) => setModoColor(modo.configPasoId, nextValue),
-                        true,
-                      )}
-                </div>
-              );
-            })}
-
-            {slotsMaterialesGenerales.map((slot) => renderMaterialSelect(slot))}
-
             {pasosConTecnologias.map((paso) => {
               const allCandidates = paso.tecnologias.flatMap((tech) => tech.candidatas);
-              const selectedId =
-                motorConfig.seleccionMaquina[paso.configPasoId] ||
-                getPreferredCandidate(allCandidates)?.maquinaId ||
-                "";
+              const selectedId = motorConfig.seleccionMaquina[paso.configPasoId] || "";
               const selectedCandidate =
-                allCandidates.find((candidate) => candidate.maquinaId === selectedId) ??
-                getPreferredCandidate(allCandidates);
+                allCandidates.find((candidate) => candidate.maquinaId === selectedId) ?? null;
               const selectedTechnologyValue = selectedCandidate
                 ? getCandidateTechnology(selectedCandidate)
-                : paso.tecnologias[0]?.value;
+                : "";
               const selectedTechnology =
                 paso.tecnologias.find((tech) => tech.value === selectedTechnologyValue) ??
-                paso.tecnologias[0];
+                null;
               const techOptions = paso.tecnologias.map((tech) => ({
                 value: tech.value,
                 label: tech.label,
@@ -2969,6 +3295,40 @@ function ApConfigStep({
                 </div>
               );
             })}
+
+            {modosColorVisibles.map((modo) => {
+              const value =
+                normalizeModoColor(motorConfig.seleccionModoColor[modo.configPasoId]) ??
+                modo.defaultMode ??
+                normalizeModoColor(modo.options[0]?.value) ??
+                "";
+              const modoOptions = modo.options.map((option) => ({
+                value: normalizeModoColor(option.value) ?? option.value,
+                label: option.label,
+              }));
+              return (
+                <div
+                  className={`ap-spec ${modoOptions.length > 2 ? "ap-spec-wide" : ""}`}
+                  key={modo.configPasoId}
+                >
+                  <label>
+                    {modosColorVisibles.length === 1
+                      ? "Modo de color"
+                      : `${humanizeCodigo(modo.familiaCodigo)} · color`}
+                  </label>
+                  {renderSegmentedControl(
+                    "Modo de color",
+                    value,
+                    modoOptions,
+                    (nextValue) => setModoColor(modo.configPasoId, nextValue),
+                    true,
+                    modoOptions.length > 2,
+                  )}
+                </div>
+              );
+            })}
+
+            {slotsMaterialesGenerales.map((slot) => renderMaterialSelect(slot))}
 
             {necesitaInstalacion ? (
               <>
@@ -3392,14 +3752,7 @@ export function AgregarProductoSheet({
       medidaPredefinidaId: medidaDefault?.id ?? "",
       piezas:
         iniciaConPiezas
-          ? [
-              {
-                uiKey: `pz-${Date.now()}`,
-                cantidad: 1,
-                anchoMm: 1000,
-                altoMm: 500,
-              },
-            ]
+          ? [createDefaultPiezaInput()]
           : [],
       numerosXTalonario: next.subcategoriaComercialCodigo === "talonarios" ? 50 : 50,
     });
@@ -3458,7 +3811,7 @@ export function AgregarProductoSheet({
         productoId: product.id,
         rutaAlternativaId: motorConfig.rutaAlternativaId || null,
         jobContext: jobContext as never,
-        periodo: "2026-03",
+        periodo: getCurrentPeriodo(),
       });
       setCotizacion(res);
       if (!res.exitoso) {

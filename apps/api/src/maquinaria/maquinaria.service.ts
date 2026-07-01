@@ -335,6 +335,7 @@ export class MaquinariaService {
       UnidadProduccionMaquinaDto.golpes_min,
       UnidadProduccionMaquinaDto.pliegos_min,
       UnidadProduccionMaquinaDto.m_min,
+      UnidadProduccionMaquinaDto.mm_s,
     ]);
 
   constructor(private readonly prisma: PrismaService) {}

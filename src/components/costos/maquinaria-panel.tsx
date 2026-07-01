@@ -63,6 +63,7 @@ import {
   estadoMaquinaItems,
   geometriaTrabajoMaquinaItems,
   getEstadoMaquinaLabel,
+  getFamiliaPlantillaMaquinariaLabel,
   getGeometriaTrabajoMaquinaLabel,
   tipoPerfilOperativoMaquinaItems,
   type Maquina,
@@ -71,10 +72,12 @@ import {
   type MaquinariaTemplateDefinition,
   type MaquinariaTemplateField,
   type MaquinariaTemplateOption,
+  type FamiliaPlantillaMaquinaria,
   type PlantillaMaquinaria,
   type TipoPerfilOperativoMaquina,
   type TipoConsumibleMaquina,
   type UnidadConsumoMaquina,
+  type UnidadProduccionMaquina,
 } from "@/lib/maquinaria";
 import {
   getMaquinariaTemplate,
@@ -83,6 +86,7 @@ import {
 } from "@/lib/maquinaria-templates";
 import { getMateriasPrimas } from "@/lib/materias-primas-api";
 import type { MateriaPrima, MateriaPrimaVariante } from "@/lib/materias-primas";
+import { getVarianteDisplayName } from "@/lib/materias-primas-variantes-display";
 import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
 
 // ─── Props ──────────────────────────────────────────────────────────
@@ -119,6 +123,17 @@ const CANAL_META: Record<
   negro: { label: "Negro", short: "K", swatch: "#111827" },
   blanco: { label: "Blanco", short: "W", swatch: "#ffffff" },
   barniz: { label: "Barniz", short: "V", swatch: "#c7b58a" },
+};
+
+type FactorComplejidadPlotter = "simple" | "intermedio" | "complejo" | "personalizado";
+
+const PLOTTER_CORTE_PRODUCTIVITY_BY_COMPLEXITY: Record<
+  Exclude<FactorComplejidadPlotter, "personalizado">,
+  number
+> = {
+  simple: 36,
+  intermedio: 54,
+  complejo: 90,
 };
 
 function normalizeCanal(value: unknown): ConsumibleCanal | null {
@@ -370,6 +385,25 @@ function setPerfilFieldValue(perfil: LocalPerfil, key: string, value: unknown): 
   return { ...perfil, detalle: { ...(perfil.detalle ?? {}), [key]: value } };
 }
 
+function getDefaultProductivityUnit(form: MaquinaPayload): UnidadProduccionMaquina {
+  return (
+    getMaquinariaTemplate(form.plantilla)?.defaultProductionUnit ??
+    form.unidadProduccionPrincipal
+  );
+}
+
+function getAllowedProductivityUnits(form: MaquinaPayload): UnidadProduccionMaquina[] {
+  const template = getMaquinariaTemplate(form.plantilla);
+  return template?.allowedProductionUnits ?? [getDefaultProductivityUnit(form)];
+}
+
+function normalizeProductionUnitForTemplate(form: MaquinaPayload): UnidadProduccionMaquina {
+  const allowedUnits = getAllowedProductivityUnits(form);
+  return allowedUnits.includes(form.unidadProduccionPrincipal)
+    ? form.unidadProduccionPrincipal
+    : getDefaultProductivityUnit(form);
+}
+
 function SelectDisplay({
   label,
   placeholder = "Elegí",
@@ -476,6 +510,76 @@ function shouldDisplayGranFormatoFieldInCm(
   );
 }
 
+function getTemplateUnitLabel(unit: MaquinariaTemplateField["unit"]) {
+  if (!unit) return "";
+  const labels: Partial<Record<NonNullable<MaquinariaTemplateField["unit"]>, string>> = {
+    mm_s: "mm/seg",
+    m2_h: "m²/h",
+    g_m2: "g/m²",
+    m_min: "m/min",
+    piezas_h: "piezas/h",
+    copias_min: "copias/min",
+    unidades_min: "unid/min",
+  };
+  return labels[unit] ?? unit;
+}
+
+function getMachineSectionFamilyLabel(family: FamiliaPlantillaMaquinaria) {
+  if (family === "impresion_digital" || family === "impresion_gran_formato") {
+    return "Impresoras";
+  }
+  return getFamiliaPlantillaMaquinariaLabel(family);
+}
+
+function formatMachineNumber(value: number | null | undefined) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  return new Intl.NumberFormat("es-AR", {
+    maximumFractionDigits: value % 1 === 0 ? 0 : 2,
+  }).format(value);
+}
+
+function formatMachineValue(
+  value: number | null | undefined,
+  unit: "mm" | "cm" | "micrones" | "g_m2",
+) {
+  const displayValue = unit === "cm" && typeof value === "number" ? value / 10 : value;
+  const formatted = formatMachineNumber(displayValue);
+  if (!formatted) return null;
+  if (unit === "g_m2") return `${formatted} g/m²`;
+  if (unit === "cm") return `${formatted} cm`;
+  return `${formatted} ${unit === "micrones" ? "mic" : unit}`;
+}
+
+function getMachineTechnologyLabel(maquina: Maquina) {
+  const tecnologia = maquina.parametrosTecnicos?.tecnologia;
+  if (typeof tecnologia === "string" && tecnologia.trim()) {
+    return tecnologia
+      .replaceAll("_", " ")
+      .toUpperCase();
+  }
+  return getGeometriaTrabajoMaquinaLabel(maquina.geometriaTrabajo);
+}
+
+function getMachineSummarySpecs(maquina: Maquina) {
+  const specs: Array<{ label: string; value: string }> = [];
+  const ancho = formatMachineValue(maquina.anchoUtil, "cm");
+  if (ancho) specs.push({ label: "Ancho máx.", value: ancho });
+
+  const largo = formatMachineValue(maquina.largoUtil, "cm");
+  if (largo) specs.push({ label: "Largo máx.", value: largo });
+
+  const espesor = formatMachineValue(
+    maquina.espesorMaximo,
+    maquina.plantilla === "laminadora_bopp_rollo" ? "micrones" : "mm",
+  );
+  if (espesor) specs.push({ label: "Espesor", value: espesor });
+
+  const gramaje = formatMachineValue(maquina.gramajeMaxGr, "g_m2");
+  if (gramaje) specs.push({ label: "Gramaje", value: gramaje });
+
+  return specs.slice(0, 4);
+}
+
 function mmToCmForInput(value: unknown) {
   if (typeof value !== "number") return value;
   return Number((value / 10).toFixed(4));
@@ -562,16 +666,110 @@ function cleanPerfilDetailsForType(perfil: LocalPerfil): LocalPerfil {
   return { ...perfil, detalle };
 }
 
+function complexityFromPlotterProductivity(
+  productivityValue: unknown,
+): FactorComplejidadPlotter {
+  const value = Number(productivityValue);
+  if (!Number.isFinite(value)) return "simple";
+  const match = Object.entries(PLOTTER_CORTE_PRODUCTIVITY_BY_COMPLEXITY).find(
+    ([, defaultValue]) => Math.abs(value - defaultValue) < 0.001,
+  );
+  return (match?.[0] as FactorComplejidadPlotter | undefined) ?? "personalizado";
+}
+
+function normalizePlotterCortePerfil(perfil: LocalPerfil, form: MaquinaPayload): LocalPerfil {
+  if (form.plantilla !== "plotter_de_corte") return perfil;
+
+  const detalle = { ...(perfil.detalle ?? {}) };
+  const rawFactor = detalle.factorComplejidad;
+  const currentFactor =
+    typeof rawFactor === "string" &&
+    ["simple", "intermedio", "complejo", "personalizado"].includes(rawFactor)
+      ? (rawFactor as FactorComplejidadPlotter)
+      : complexityFromPlotterProductivity(perfil.productivityValue);
+  const factorComplejidad =
+    currentFactor === "personalizado" && !Number.isFinite(Number(perfil.productivityValue))
+      ? "simple"
+      : currentFactor;
+
+  return {
+    ...perfil,
+    productivityValue:
+      typeof perfil.productivityValue === "number"
+        ? perfil.productivityValue
+        : factorComplejidad === "personalizado"
+          ? perfil.productivityValue
+          : PLOTTER_CORTE_PRODUCTIVITY_BY_COMPLEXITY[factorComplejidad],
+    productivityUnit: "m2_h",
+    detalle: {
+      ...detalle,
+      factorComplejidad,
+    },
+  };
+}
+
+function setPerfilFieldValueForTemplate(
+  perfil: LocalPerfil,
+  form: MaquinaPayload,
+  key: string,
+  value: unknown,
+): LocalPerfil {
+  if (form.plantilla !== "plotter_de_corte") {
+    return setPerfilFieldValue(perfil, key, value);
+  }
+
+  if (key === "factorComplejidad") {
+    const rawFactor = typeof value === "string" ? value : "simple";
+    const factor = ["simple", "intermedio", "complejo", "personalizado"].includes(rawFactor)
+      ? (rawFactor as FactorComplejidadPlotter)
+      : "simple";
+    const next = setPerfilFieldValue(perfil, key, factor);
+    if (factor === "personalizado") {
+      return { ...next, productivityUnit: "m2_h" };
+    }
+    return {
+      ...next,
+      productivityValue: PLOTTER_CORTE_PRODUCTIVITY_BY_COMPLEXITY[factor] ?? 36,
+      productivityUnit: "m2_h",
+    };
+  }
+
+  if (key === "productivityValue") {
+    const next = setPerfilFieldValue(perfil, key, value);
+    return setPerfilFieldValue(
+      { ...next, productivityUnit: "m2_h" },
+      "factorComplejidad",
+      complexityFromPlotterProductivity(value),
+    );
+  }
+
+  return setPerfilFieldValue(perfil, key, value);
+}
+
 function normalizePerfilTypeForTemplate(
   perfil: LocalPerfil,
   form: MaquinaPayload,
 ): LocalPerfil {
   const allowedTypes = getAllowedProfileTypes(form);
-  if (allowedTypes.includes(perfil.tipoPerfil)) return cleanPerfilDetailsForType(perfil);
-  return cleanPerfilDetailsForType({
+  const allowedUnits = getAllowedProductivityUnits(form);
+  const defaultUnit = getDefaultProductivityUnit(form);
+  const perfilWithDefaults = {
     ...perfil,
-    tipoPerfil: getDefaultProfileType(form),
-  });
+    productivityUnit:
+      perfil.productivityUnit && allowedUnits.includes(perfil.productivityUnit)
+        ? perfil.productivityUnit
+        : defaultUnit,
+  };
+  if (allowedTypes.includes(perfilWithDefaults.tipoPerfil)) {
+    return normalizePlotterCortePerfil(cleanPerfilDetailsForType(perfilWithDefaults), form);
+  }
+  return normalizePlotterCortePerfil(
+    cleanPerfilDetailsForType({
+      ...perfilWithDefaults,
+      tipoPerfil: getDefaultProfileType(form),
+    }),
+    form,
+  );
 }
 
 function shouldShowMaquinaField(field: MaquinariaTemplateField, form: MaquinaPayload) {
@@ -780,7 +978,9 @@ function FieldInput({
             }}
           />
           {field.unit && (
-            <span className="text-muted-foreground text-xs">{field.unit}</span>
+            <span className="text-muted-foreground text-xs">
+              {getTemplateUnitLabel(field.unit)}
+            </span>
           )}
         </div>
       );
@@ -926,6 +1126,10 @@ export function MaquinariaPanel({
   );
 
   React.useEffect(() => {
+    setMaquinas(initialMaquinas);
+  }, [initialMaquinas]);
+
+  React.useEffect(() => {
     if (!isSheetOpen || materiasPrimas.length > 0 || loadingMaterias) return;
     setLoadingMaterias(true);
     getMateriasPrimas()
@@ -951,6 +1155,23 @@ export function MaquinariaPanel({
     }
     return result;
   }, [maquinas, filterText, filterPlantilla]);
+
+  const groupedMaquinas = React.useMemo(() => {
+    const maquinasByPlantilla = new Map<PlantillaMaquinaria, Maquina[]>();
+    for (const maquina of filteredMaquinas) {
+      maquinasByPlantilla.set(maquina.plantilla, [
+        ...(maquinasByPlantilla.get(maquina.plantilla) ?? []),
+        maquina,
+      ]);
+    }
+
+    return maquinariaTemplates
+      .map((template) => ({
+        template,
+        machines: maquinasByPlantilla.get(template.id) ?? [],
+      }))
+      .filter((group) => group.machines.length > 0);
+  }, [filteredMaquinas]);
 
   const openNueva = React.useCallback(() => {
     const initialForm = emptyMaquina(plantas[0]?.id ?? "");
@@ -1053,17 +1274,24 @@ export function MaquinariaPanel({
   };
 
   const handleAgregarPerfil = () => {
-    setPerfiles((prev) => [
-      ...prev,
-      {
-        uiKey: `p-${Date.now()}-${Math.random()}`,
-        id: crypto.randomUUID(),
-        nombre: "Nuevo perfil",
-        tipoPerfil: getDefaultProfileType(form),
-        activo: true,
-        detalle: {},
-      },
-    ]);
+    setPerfiles((prev) => {
+      const nuevoPerfil = normalizePerfilTypeForTemplate(
+        {
+          uiKey: `p-${Date.now()}-${Math.random()}`,
+          id: crypto.randomUUID(),
+          nombre: "Nuevo perfil",
+          tipoPerfil: getDefaultProfileType(form),
+          productivityUnit: getDefaultProductivityUnit(form),
+          activo: true,
+          detalle: {},
+        },
+        form,
+      );
+      return [
+        ...prev,
+        nuevoPerfil,
+      ];
+    });
   };
 
   const handleEliminarPerfil = (uiKey: string) => {
@@ -1132,8 +1360,12 @@ export function MaquinariaPanel({
     }
     setSaving(true);
     try {
+      const normalizedForm: MaquinaPayload = {
+        ...form,
+        unidadProduccionPrincipal: normalizeProductionUnitForTemplate(form),
+      };
       const normalizedPerfiles = perfiles.map((perfil) =>
-        normalizePerfilTypeForTemplate(perfil, form),
+        normalizePerfilTypeForTemplate(perfil, normalizedForm),
       );
       const perfilesOperativos = normalizedPerfiles.map((perfil) => {
         const payloadPerfil: Partial<LocalPerfil> = { ...perfil };
@@ -1141,9 +1373,9 @@ export function MaquinariaPanel({
         return payloadPerfil as NonNullable<MaquinaPayload["perfilesOperativos"]>[number];
       });
       const payload: MaquinaPayload = {
-        ...form,
+        ...normalizedForm,
         perfilesOperativos,
-        consumibles: normalizeRequiredPrinterConsumibles(form, normalizedPerfiles),
+        consumibles: normalizeRequiredPrinterConsumibles(normalizedForm, normalizedPerfiles),
       };
       if (editingId) {
         const updated = await updateMaquina(editingId, payload);
@@ -1239,75 +1471,161 @@ export function MaquinariaPanel({
               Sin máquinas todavía.
             </p>
           ) : (
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th style={{ width: 36 }}></th>
-                  <th>Nombre</th>
-                  <th style={{ width: 260 }}>Plantilla</th>
-                  <th style={{ width: 110 }}>Estado</th>
-                  <th className="right" style={{ width: 90 }}>Perfiles</th>
-                  <th className="right" style={{ width: 130 }}>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredMaquinas.map((m) => (
-                  <tr key={m.id} onClick={() => handleEditar(m)}>
-                    <td>
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleToggle(m);
-                        }}
-                      >
-                        {m.activo ? (
-                          <span className="ok-pill"><CheckCircle2Icon size={12} /></span>
-                        ) : (
-                          <CircleIcon size={14} className="text-[var(--muted-text)]" />
-                        )}
-                      </button>
-                    </td>
-                    <td className="name">{m.nombre}</td>
-                    <td><span className="tag">{getPlantillaMaquinariaLabel(m.plantilla)}</span></td>
-                    <td>
-                      <span className={m.estado === "activa" ? "tag ok" : "tag muted"} title={`código: ${m.estado}`}>
-                        <span className="d" />
-                        {getEstadoMaquinaLabel(m.estado)}
-                      </span>
-                    </td>
-                    <td className="right">
-                      {m.perfilesOperativos.length}
-                    </td>
-                    <td className="right">
-                      <span className="inline-flex gap-1.5">
-                        <button
-                          type="button"
-                          className="btn h-7 px-2.5 text-[12px]"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleEditar(m);
+            <div className="divide-y">
+              {groupedMaquinas.map(({ template, machines }) => (
+                <section key={template.id} className="py-3 first:pt-0 last:pb-0">
+                  <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2">
+                    <div className="min-w-0">
+                      <h2 className="text-sm font-semibold leading-tight">
+                        {template.label}
+                      </h2>
+                      <p className="text-muted-foreground text-xs">
+                        {getMachineSectionFamilyLabel(template.family)}
+                      </p>
+                    </div>
+                    <span className="tag">{machines.length}</span>
+                  </div>
+                  <div className="grid gap-3 px-4 pb-2 md:grid-cols-2 xl:grid-cols-3">
+                    {machines.map((m) => {
+                      const specs = getMachineSummarySpecs(m);
+                      const makeModel = [m.fabricante, m.modelo].filter(Boolean).join(" · ");
+                      return (
+                        <div
+                          key={m.id}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => handleEditar(m)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              handleEditar(m);
+                            }
                           }}
+                          className="group flex min-h-[190px] flex-col rounded-lg border border-border/70 bg-background p-4 text-left shadow-sm transition hover:border-primary/40 hover:shadow-md"
                         >
-                          Editar
-                        </button>
-                        <button
-                          type="button"
-                          className="icon-btn"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleDesactivar(m);
-                          }}
-                          title="Desactivar"
-                        >
-                          <Trash2Icon size={14} />
-                        </button>
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <h3 className="truncate text-sm font-semibold leading-tight">
+                                {m.nombre}
+                              </h3>
+                              <p className="mt-1 truncate text-xs text-muted-foreground">
+                                {makeModel || m.codigo}
+                              </p>
+                            </div>
+                            <span
+                              className={m.estado === "activa" ? "tag ok shrink-0" : "tag muted shrink-0"}
+                              title={`código: ${m.estado}`}
+                            >
+                              <span className="d" />
+                              {getEstadoMaquinaLabel(m.estado)}
+                            </span>
+                          </div>
+
+                          <div className="mt-4 grid grid-cols-2 gap-2">
+                            <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+                              <p className="text-[11px] text-muted-foreground">Tecnología</p>
+                              <p className="mt-1 truncate text-sm font-medium">
+                                {getMachineTechnologyLabel(m)}
+                              </p>
+                            </div>
+                            <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+                              <p className="text-[11px] text-muted-foreground">Planta</p>
+                              <p className="mt-1 truncate text-sm font-medium">
+                                {m.plantaNombre || "Sin planta"}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="mt-3 grid grid-cols-2 gap-2">
+                            {specs.length > 0 ? (
+                              specs.map((spec) => (
+                                <div key={spec.label} className="min-w-0">
+                                  <p className="text-[11px] text-muted-foreground">
+                                    {spec.label}
+                                  </p>
+                                  <p className="truncate text-sm font-medium">
+                                    {spec.value}
+                                  </p>
+                                </div>
+                              ))
+                            ) : (
+                              <p className="col-span-2 text-xs text-muted-foreground">
+                                Sin capacidades cargadas
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="mt-auto flex items-center justify-between gap-3 pt-4">
+                            <span className="text-xs text-muted-foreground">
+                              {m.perfilesOperativos.length} perfil
+                              {m.perfilesOperativos.length === 1 ? "" : "es"}
+                            </span>
+                            <span className="inline-flex gap-1.5">
+                              <span
+                                role="button"
+                                tabIndex={0}
+                                className="btn h-7 px-2.5 text-[12px]"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleEditar(m);
+                                }}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter" || event.key === " ") {
+                                    event.stopPropagation();
+                                    handleEditar(m);
+                                  }
+                                }}
+                              >
+                                Editar
+                              </span>
+                              <span
+                                role="button"
+                                tabIndex={0}
+                                className="icon-btn"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleToggle(m);
+                                }}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter" || event.key === " ") {
+                                    event.stopPropagation();
+                                    handleToggle(m);
+                                  }
+                                }}
+                                title={m.activo ? "Desactivar rápido" : "Activar rápido"}
+                              >
+                                {m.activo ? (
+                                  <CheckCircle2Icon size={14} />
+                                ) : (
+                                  <CircleIcon size={14} />
+                                )}
+                              </span>
+                              <span
+                                role="button"
+                                tabIndex={0}
+                                className="icon-btn"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleDesactivar(m);
+                                }}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter" || event.key === " ") {
+                                    event.stopPropagation();
+                                    handleDesactivar(m);
+                                  }
+                                }}
+                                title="Desactivar"
+                              >
+                                <Trash2Icon size={14} />
+                              </span>
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              ))}
+            </div>
           )}
       </div>
 
@@ -1652,7 +1970,6 @@ function ConsumiblesImpresionEditor({
         consumoBase: existing?.consumoBase ?? defaultConsumoBase(current.plantilla, canal),
         perfilOperativoId,
         perfilOperativoNombre: perfil?.nombre,
-        activo: existing?.activo ?? true,
         detalle: { ...(existing?.detalle ?? {}), color: canal },
         observaciones: existing?.observaciones,
         ...patch,
@@ -1764,7 +2081,7 @@ function ConsumiblesImpresionEditor({
                         <SelectDisplay
                           label={
                             selectedOption
-                              ? `${selectedOption.materiaPrima.nombre} · ${selectedOption.variante.nombreVariante ?? selectedOption.variante.sku}`
+                              ? getConsumibleVariantOptionLabel(selectedOption)
                               : ""
                           }
                           placeholder="Elegir tóner"
@@ -1773,7 +2090,7 @@ function ConsumiblesImpresionEditor({
                       <SelectContent className="max-h-80">
                         {opciones.map((item) => (
                           <SelectItem key={item.variante.id} value={item.variante.id}>
-                            {item.materiaPrima.nombre} · {item.variante.nombreVariante ?? item.variante.sku}
+                            {getConsumibleVariantOptionLabel(item)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -1892,7 +2209,7 @@ function ConsumiblesImpresionEditor({
                           <SelectDisplay
                             label={
                               selectedOption
-                                ? `${selectedOption.materiaPrima.nombre} · ${selectedOption.variante.nombreVariante ?? selectedOption.variante.sku}`
+                                ? getConsumibleVariantOptionLabel(selectedOption)
                                 : ""
                             }
                             placeholder="Elegir consumible"
@@ -1901,7 +2218,7 @@ function ConsumiblesImpresionEditor({
                         <SelectContent className="max-h-80">
                           {opciones.map((item) => (
                             <SelectItem key={item.variante.id} value={item.variante.id}>
-                              {item.materiaPrima.nombre} · {item.variante.nombreVariante ?? item.variante.sku}
+                              {getConsumibleVariantOptionLabel(item)}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -1942,6 +2259,13 @@ type VarianteConsumibleOption = {
   materiaPrima: MateriaPrima;
   variante: MateriaPrimaVariante;
 };
+
+function getConsumibleVariantOptionLabel(item: VarianteConsumibleOption) {
+  return `${item.materiaPrima.nombre} · ${getVarianteDisplayName(
+    item.materiaPrima,
+    item.variante,
+  )}`;
+}
 
 function getVariantesConsumiblesCompatibles(
   materiasPrimas: MateriaPrima[],
@@ -2049,12 +2373,15 @@ function PerfilesOperativosEditor({
                 <Select
                   value={perfil.tipoPerfil}
                   onValueChange={(v) => {
-                    const next = cleanPerfilDetailsForType(
-                      setPerfilFieldValue(
-                        perfil,
-                        "tipoPerfil",
-                        v ?? getDefaultProfileType(form),
+                    const next = normalizePerfilTypeForTemplate(
+                      cleanPerfilDetailsForType(
+                        setPerfilFieldValue(
+                          perfil,
+                          "tipoPerfil",
+                          v ?? getDefaultProfileType(form),
+                        ),
                       ),
+                      form,
                     );
                     setPerfiles((prev) =>
                       prev.map((p) => (p.uiKey === perfil.uiKey ? next : p)),
@@ -2100,7 +2427,7 @@ function PerfilesOperativosEditor({
                     value={getPerfilFieldValue(perfil, field.key)}
                     max={profileFieldMax}
                     onChange={(v) => {
-                      const next = setPerfilFieldValue(perfil, field.key, v);
+                      const next = setPerfilFieldValueForTemplate(perfil, form, field.key, v);
                       setPerfiles((prev) =>
                         prev.map((p) => (p.uiKey === perfil.uiKey ? next : p)),
                       );

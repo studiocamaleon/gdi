@@ -338,6 +338,12 @@ export const modoMedidasLabels: DiccionarioLabels = {
       "El modelador declara opciones de medida y el comercial elige una al cotizar.",
     ejemplo: "Banner: A4 / A3 / SRA3.",
   },
+  MIXTA: {
+    label: "Mixta",
+    descripcion:
+      "El modelador declara medidas predefinidas, pero el comercial también puede cargar una medida personalizada al cotizar.",
+    ejemplo: "Carteles con formatos habituales, pero con opción de medida especial.",
+  },
 };
 
 // ════════════════════════════════════════════════════════════════════
@@ -632,6 +638,7 @@ export const unidadProduccionLabels: DiccionarioLabels = {
   ciclo: { label: "Ciclo", descripcion: "Ciclo completo de la máquina." },
   golpes_min: { label: "Golpes/min", descripcion: "Golpes/troqueles por minuto." },
   pliegos_min: { label: "Pliegos/min", descripcion: "Pliegos por minuto." },
+  mm_s: { label: "mm/seg", descripcion: "Milímetros por segundo. Típico de velocidades declaradas por fabricantes." },
   metro_lineal: { label: "Metro lineal", descripcion: "Metros lineales." },
   m2: { label: "m²", descripcion: "Metros cuadrados." },
   a4_equiv: { label: "A4-eq", descripcion: "Cantidad equivalente a hojas A4." },

@@ -55,7 +55,8 @@ export type UnidadProduccionMaquina =
   | "cortes_min"
   | "golpes_min"
   | "pliegos_min"
-  | "m_min";
+  | "m_min"
+  | "mm_s";
 
 export type TipoPerfilOperativoMaquina =
   | "impresion"
@@ -162,7 +163,9 @@ export type MaquinariaTemplateFieldUnit =
   | "g_m2"
   | "kg"
   | "litros"
+  | "m_min"
   | "mm_s"
+  | "seg"
   | "min"
   | "horas"
   | "porcentaje"
@@ -353,6 +356,7 @@ export const unidadProduccionMaquinaItems: Array<{
   { label: "Golpes por minuto", value: "golpes_min" },
   { label: "Pliegos por minuto", value: "pliegos_min" },
   { label: "Metros por minuto", value: "m_min" },
+  { label: "Milímetros por segundo", value: "mm_s" },
 ];
 
 export const tipoPerfilOperativoMaquinaItems: Array<{

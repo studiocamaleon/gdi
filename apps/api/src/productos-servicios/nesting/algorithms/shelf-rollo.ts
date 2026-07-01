@@ -128,6 +128,22 @@ export function buildGranFormatoNestingOrientacion(
   return hasRotated ? 'rotada' : 'normal';
 }
 
+function formatCmFromMm(mm: number): string {
+  const roundedToMm = Math.round(mm);
+  const valueCm = roundedToMm / 10;
+  const text = Number.isInteger(valueCm)
+    ? String(valueCm)
+    : valueCm.toFixed(1).replace(/\.0$/, '');
+  return text.replace('.', ',');
+}
+
+export function buildGranFormatoPieceLabelCm(
+  widthMm: number,
+  heightMm: number,
+): string {
+  return `${formatCmFromMm(widthMm)}x${formatCmFromMm(heightMm)} cm`;
+}
+
 export function countGranFormatoRowsAndPiecesPerRow(
   placements: GranFormatoCostosPreviewPlacement[],
   toleranceMm: number,
@@ -246,7 +262,19 @@ export function evaluateGranFormatoMixedShelfLayout(
     );
     const wasteProxyMm2 =
       input.printableWidthMm * consumedContentLengthMm - placedAreaMm2;
-    return { consumedContentLengthMm, wasteProxyMm2 };
+    const hasRotated = state.placements.some((placement) => placement.rotated);
+    const hasNormal = state.placements.some((placement) => !placement.rotated);
+    const mixedOrientationPenalty = hasRotated && hasNormal ? 1 : 0;
+    const maxUsedWidthMm = state.rows.reduce(
+      (max, row) => Math.max(max, row.usedWidthMm),
+      0,
+    );
+    return {
+      consumedContentLengthMm,
+      wasteProxyMm2,
+      mixedOrientationPenalty,
+      maxUsedWidthMm,
+    };
   };
 
   const rankStates = (a: State, b: State) => {
@@ -255,7 +283,9 @@ export function evaluateGranFormatoMixedShelfLayout(
     return (
       left.consumedContentLengthMm - right.consumedContentLengthMm ||
       left.wasteProxyMm2 - right.wasteProxyMm2 ||
-      a.rows.length - b.rows.length
+      left.mixedOrientationPenalty - right.mixedOrientationPenalty ||
+      a.rows.length - b.rows.length ||
+      right.maxUsedWidthMm - left.maxUsedWidthMm
     );
   };
 
@@ -318,9 +348,10 @@ export function evaluateGranFormatoMixedShelfLayout(
                   heightMm: option.heightMm,
                   centerXMm: xMm + option.widthMm / 2,
                   centerYMm: targetRow.yMm + option.heightMm / 2,
-                  label: `${Math.round(piece.originalWidthMm / 10)}x${Math.round(
-                    piece.originalHeightMm / 10,
-                  )} cm`,
+                  label: buildGranFormatoPieceLabelCm(
+                    piece.originalWidthMm,
+                    piece.originalHeightMm,
+                  ),
                   rotated: option.rotated,
                   originalWidthMm: piece.originalWidthMm,
                   originalHeightMm: piece.originalHeightMm,
@@ -355,9 +386,10 @@ export function evaluateGranFormatoMixedShelfLayout(
                 heightMm: option.heightMm,
                 centerXMm: input.marginLeftMm + option.widthMm / 2,
                 centerYMm: newRow.yMm + option.heightMm / 2,
-                label: `${Math.round(piece.originalWidthMm / 10)}x${Math.round(
-                  piece.originalHeightMm / 10,
-                )} cm`,
+                label: buildGranFormatoPieceLabelCm(
+                  piece.originalWidthMm,
+                  piece.originalHeightMm,
+                ),
                 rotated: option.rotated,
                 originalWidthMm: piece.originalWidthMm,
                 originalHeightMm: piece.originalHeightMm,

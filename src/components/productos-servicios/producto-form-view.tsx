@@ -19,7 +19,11 @@ import {
   eliminarProducto,
   getCatalogoComercial,
 } from "@/lib/productos-servicios-api";
-import type { ProductoCategoriaComercial, ProductoDetalle } from "@/lib/productos-servicios";
+import type {
+  ModoMedidasProducto,
+  ProductoCategoriaComercial,
+  ProductoDetalle,
+} from "@/lib/productos-servicios";
 import { unidadComercialProductoItems } from "@/lib/productos-servicios";
 import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
 import {
@@ -40,9 +44,9 @@ interface Props {
 }
 
 const MODOS_MEDIDAS = [
-  { value: "FIJA", label: "Medidas fijas (default declarado)" },
-  { value: "LIBRE", label: "Medidas libres (comercial las carga al cotizar)" },
-  { value: "COMERCIAL_ELIGE", label: "Comercial elige (fija o libre al cotizar)" },
+  { value: "FIJA", label: "Fija" },
+  { value: "COMERCIAL_ELIGE", label: "Comercial elige" },
+  { value: "MIXTA", label: "Mixta" },
 ];
 
 export function ProductoFormView({ modo, productoExistente }: Props) {
@@ -50,7 +54,6 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
   const [guardando, setGuardando] = React.useState(false);
   const [eliminando, setEliminando] = React.useState(false);
 
-  const [codigo, setCodigo] = React.useState(productoExistente?.codigo ?? "");
   const [nombre, setNombre] = React.useState(productoExistente?.nombre ?? "");
   const [descripcion, setDescripcion] = React.useState(productoExistente?.descripcion ?? "");
   const [catalogoComercial, setCatalogoComercial] = React.useState<ProductoCategoriaComercial[]>([]);
@@ -60,7 +63,9 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
   const [unidadComercial, setUnidadComercial] = React.useState(
     productoExistente?.unidadComercial ?? "unidad",
   );
-  const [modoMedidas, setModoMedidas] = React.useState(productoExistente?.modoMedidas ?? "FIJA");
+  const [modoMedidas, setModoMedidas] = React.useState<ModoMedidasProducto>(
+    productoExistente?.modoMedidas ?? "FIJA",
+  );
   const [anchoDefault, setAnchoDefault] = React.useState(
     productoExistente?.medidaDefaultAnchoMm ?? "",
   );
@@ -112,14 +117,14 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
         atributosComercialesJson:
           (productoExistente?.atributosComercialesJson as Record<string, unknown> | null) ?? {},
         unidadComercial: unidadComercial as "unidad" | "m2" | "metro_lineal",
-        modoMedidas: modoMedidas as "FIJA" | "LIBRE" | "COMERCIAL_ELIGE",
+        modoMedidas,
         medidaDefaultAnchoMm: anchoDefault ? Number(anchoDefault) : undefined,
         medidaDefaultAltoMm: altoDefault ? Number(altoDefault) : undefined,
         precioConfigJson,
       };
 
       if (modo === "crear") {
-        const creado = (await crearProducto({ ...payload, codigo })) as { id: string };
+        const creado = (await crearProducto(payload)) as { id: string };
         toast.success(`Producto "${nombre}" creado`);
         router.push(`/productos-servicios/${creado.id}`);
       } else {
@@ -179,19 +184,22 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
             <CardDescription>Código y nombre del producto en el catálogo.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="codigo">Código *</Label>
-              <Input
-                id="codigo"
-                value={codigo}
-                onChange={(e) => setCodigo(e.target.value)}
-                disabled={modo === "editar"}
-                placeholder="TARJ-PREMIUM-300"
-              />
-              {modo === "editar" && (
+            {modo === "editar" ? (
+              <div className="space-y-2">
+                <Label htmlFor="codigo">Código</Label>
+                <Input
+                  id="codigo"
+                  value={productoExistente?.codigo ?? ""}
+                  disabled
+                  placeholder="Generado por el sistema"
+                />
                 <p className="text-muted-foreground text-xs">El código no se puede modificar.</p>
-              )}
-            </div>
+              </div>
+            ) : (
+              <p className="rounded-md border bg-muted/35 px-3 py-2 text-muted-foreground text-xs">
+                El código se genera automáticamente al guardar el producto.
+              </p>
+            )}
             <div className="space-y-2">
               <Label htmlFor="nombre">Nombre *</Label>
               <Input
@@ -267,7 +275,7 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
               <HumanSelect
                 id="modoMedidas"
                 value={modoMedidas}
-                onValueChange={(v) => setModoMedidas(v || "FIJA")}
+                onValueChange={(v) => setModoMedidas((v || "FIJA") as ModoMedidasProducto)}
                 options={MODOS_MEDIDAS.map((it) => optionFromLabel(it.value, modoMedidasLabels))}
               />
             </div>
@@ -328,7 +336,7 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
         ) : (
           <div />
         )}
-        <Button onClick={handleGuardar} disabled={guardando || !codigo || !nombre} size="lg">
+        <Button onClick={handleGuardar} disabled={guardando || !nombre.trim()} size="lg">
           <SaveIcon className="mr-2 size-4" />
           {guardando ? "Guardando..." : modo === "crear" ? "Crear producto" : "Guardar cambios"}
         </Button>

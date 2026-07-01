@@ -173,7 +173,7 @@ export class CostosMapper {
       empleadoId: recurso.empleadoId ?? '',
       empleadoNombre: recurso.empleado?.nombreCompleto ?? '',
       maquinaId: recurso.maquinaId ?? '',
-      maquinaNombre: recurso.maquina?.nombre ?? '',
+      maquinaNombre: recurso.maquina?.nombre ?? recurso.nombreRecurso ?? '',
       nombreRecurso: recurso.nombreRecurso ?? '',
       tipoGastoGeneral: recurso.tipoGastoGeneral
         ? this.fromPrismaTipoGastoGeneral(recurso.tipoGastoGeneral)
@@ -252,6 +252,7 @@ export class CostosMapper {
       id: string;
       periodo: string;
       maquinaId: string | null;
+      nombreRecurso?: string | null;
       maquina?: { nombre: string } | null;
     },
   ) {
@@ -297,7 +298,7 @@ export class CostosMapper {
       centroCostoRecursoId: recurso.id,
       periodo: recurso.periodo,
       maquinaId: recurso.maquinaId ?? '',
-      maquinaNombre: recurso.maquina?.nombre ?? '',
+      maquinaNombre: recurso.maquina?.nombre ?? recurso.nombreRecurso ?? '',
       metodoDepreciacion,
       valorCompra,
       valorResidual,

@@ -188,7 +188,7 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
       geometriaTrabajo: GeometriaTrabajoMaquina.ROLLO,
       unidadProduccionPrincipal: UnidadProduccionMaquina.M2_H,
       anchoUtil: "1370",
-      espesorMaximo: "1",
+      espesorMaximo: "1000",
       activo: true,
       parametrosTecnicosJson: {
         tecnologia: "LATEX",
@@ -459,7 +459,7 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
   // ============================================================================
   // 5. PLOTTER_DE_CORTE (Skycut C24) — vinilo
   //    Doc §8: anchoUtil + paramsTecnicos.modosOperacionSoportados.
-  //    Perfil por tipoCorte + modoOperacion. paramsPerfilJson: factorComplejidad.
+  //    Perfil por tipoCorte + modoOperacion. factorComplejidad controla la productividad base.
   // ============================================================================
   const skycut = await prisma.maquina.create({
     data: {
@@ -502,7 +502,7 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
       detalleJson: {
         tipoCorte: "COMPLETO",
         modoOperacion: "ROLLO",
-        factorComplejidad: { SIMPLE: 1.0, INTERMEDIO: 1.5, COMPLEJO: 3.0 },
+        factorComplejidad: "simple",
       },
     },
   });
@@ -522,7 +522,7 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
       detalleJson: {
         tipoCorte: "KISS_CUT",
         modoOperacion: "ROLLO",
-        factorComplejidad: { SIMPLE: 1.0, INTERMEDIO: 1.5, COMPLEJO: 3.0 },
+        factorComplejidad: "simple",
       },
     },
   });
@@ -565,11 +565,10 @@ async function seedMaquinas(prisma, tenantId, plantaId) {
       nombre: "Estándar",
       tipoPerfil: TipoPerfilOperativoMaquina.LAMINADO,
       activo: true,
-      productivityValue: "8000",
+      productivityValue: "8",
       productivityUnit: UnidadProduccionMaquina.M_MIN,
       setupMin: "8",
       cleanupMin: "2",
-      feedReloadMin: "5",
       detalleJson: {},
     },
   });

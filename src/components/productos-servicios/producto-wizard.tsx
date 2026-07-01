@@ -71,6 +71,7 @@ import {
 import type {
   CargoDirectoCatalogo,
   MedidaPredefinidaProducto,
+  ModoMedidasProducto,
   ProductoCategoriaComercial,
   ProductoDetalle,
   RutaListItem,
@@ -127,10 +128,25 @@ const STEPS = [
 type StepId = (typeof STEPS)[number]["id"];
 
 const MODOS_MEDIDAS = [
-  { value: "FIJA", label: "Medidas fijas (default declarado)" },
-  { value: "LIBRE", label: "Medidas libres (comercial las carga al cotizar)" },
-  { value: "COMERCIAL_ELIGE", label: "Comercial elige (fija o libre al cotizar)" },
+  { value: "FIJA", label: "Fija" },
+  { value: "COMERCIAL_ELIGE", label: "Comercial elige" },
+  { value: "MIXTA", label: "Mixta" },
 ];
+
+function modoMedidasUsaPredefinidas(modo: string) {
+  return modo !== "LIBRE";
+}
+
+function normalizarMedidasPorModo(
+  modo: string,
+  medidas: MedidaPredefinidaProducto[],
+) {
+  if (!modoMedidasUsaPredefinidas(modo)) return [];
+  const normalizadas = normalizeMedidasDraft(medidas);
+  if (modo !== "FIJA") return normalizadas;
+  const defaultMedida = normalizadas.find((medida) => medida.esDefault) ?? normalizadas[0];
+  return defaultMedida ? [{ ...defaultMedida, esDefault: true }] : [];
+}
 
 function nuevaMedidaPredefinida(index: number): MedidaPredefinidaProducto {
   return {
@@ -259,12 +275,8 @@ interface ValidacionStep {
 
 // ─── Validaciones por step ─────────────────────────────────────────
 
-function validarIdentidad(state: {
-  codigo: string;
-  nombre: string;
-}): ValidacionStep {
+function validarIdentidad(state: { nombre: string }): ValidacionStep {
   const errores: string[] = [];
-  if (!state.codigo.trim()) errores.push("Falta código");
   if (!state.nombre.trim()) errores.push("Falta nombre");
   return { errores, warnings: [] };
 }
@@ -338,7 +350,9 @@ export function ProductoWizard({
   const [unidadComercial, setUnidadComercial] = React.useState(
     productoExistente?.unidadComercial ?? "unidad",
   );
-  const [modoMedidas, setModoMedidas] = React.useState(productoExistente?.modoMedidas ?? "FIJA");
+  const [modoMedidas, setModoMedidas] = React.useState<ModoMedidasProducto>(
+    productoExistente?.modoMedidas ?? "FIJA",
+  );
   const [medidas, setMedidas] = React.useState<MedidaPredefinidaProducto[]>(
     () =>
       productoExistente
@@ -393,7 +407,7 @@ export function ProductoWizard({
   }, []);
 
   // Validaciones por step (tiempo real)
-  const valIdentidad = validarIdentidad({ codigo, nombre });
+  const valIdentidad = validarIdentidad({ nombre });
   const valRutas = validarRutas(productoExistente);
   const valConfigPasos = validarConfigPasos(productoExistente);
   const valCargos = validarCargos();
@@ -427,7 +441,7 @@ export function ProductoWizard({
       toast.error(valIdentidad.errores[0]);
       return;
     }
-    const medidasNormalizadas = modoMedidas === "LIBRE" ? [] : normalizeMedidasDraft(medidas);
+    const medidasNormalizadas = normalizarMedidasPorModo(modoMedidas, medidas);
     const medidaDefault = medidasNormalizadas.find((medida) => medida.esDefault);
     if (modoMedidas === "FIJA" && !medidaDefault) {
       toast.error("Agregá al menos una medida predefinida.");
@@ -442,14 +456,14 @@ export function ProductoWizard({
         atributosComercialesJson:
           (productoExistente?.atributosComercialesJson as Record<string, unknown> | null) ?? {},
         unidadComercial: unidadComercial as "unidad" | "m2" | "metro_lineal",
-        modoMedidas: modoMedidas as "FIJA" | "LIBRE" | "COMERCIAL_ELIGE",
+        modoMedidas,
         medidaDefaultAnchoMm: medidaDefault?.anchoMm,
         medidaDefaultAltoMm: medidaDefault?.altoMm,
         medidasPredefinidasJson: medidasNormalizadas,
         precioConfigJson: precioConfig as unknown as Record<string, unknown>,
       };
       if (modo === "crear") {
-        const creado = (await crearProducto({ ...payload, codigo })) as { id: string };
+        const creado = (await crearProducto(payload)) as { id: string };
         toast.success("Producto creado · seguí con las rutas");
         router.push(`/productos-servicios/${creado.id}?tab=${avanzar ? "rutas" : "identidad"}`);
         router.refresh();
@@ -469,7 +483,7 @@ export function ProductoWizard({
   // ── Step 5: guardar precio ────────────────────────────────────────
   const guardarPrecio = async () => {
     if (!productoExistente) return;
-    const medidasNormalizadas = modoMedidas === "LIBRE" ? [] : normalizeMedidasDraft(medidas);
+    const medidasNormalizadas = normalizarMedidasPorModo(modoMedidas, medidas);
     const medidaDefault = medidasNormalizadas.find((medida) => medida.esDefault);
     setGuardandoStep(true);
     try {
@@ -480,7 +494,7 @@ export function ProductoWizard({
         atributosComercialesJson:
           (productoExistente?.atributosComercialesJson as Record<string, unknown> | null) ?? {},
         unidadComercial: unidadComercial as "unidad" | "m2" | "metro_lineal",
-        modoMedidas: modoMedidas as "FIJA" | "LIBRE" | "COMERCIAL_ELIGE",
+        modoMedidas,
         medidaDefaultAnchoMm: medidaDefault?.anchoMm,
         medidaDefaultAltoMm: medidaDefault?.altoMm,
         medidasPredefinidasJson: medidasNormalizadas,
@@ -725,8 +739,8 @@ interface StepIdentidadProps {
   setSubcategoriaComercialCodigo: (v: string) => void;
   unidadComercial: string;
   setUnidadComercial: (v: string) => void;
-  modoMedidas: string;
-  setModoMedidas: (v: string) => void;
+  modoMedidas: ModoMedidasProducto;
+  setModoMedidas: (v: ModoMedidasProducto) => void;
   medidas: MedidaPredefinidaProducto[];
   setMedidas: (v: MedidaPredefinidaProducto[]) => void;
   activo: boolean;
@@ -751,21 +765,22 @@ function StepIdentidad(props: StepIdentidadProps) {
           <CardDescription>Cómo se llama el producto en el catálogo.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="codigo">
-              Código <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="codigo"
-              value={props.codigo}
-              onChange={(e) => props.setCodigo(e.target.value)}
-              disabled={props.modo === "editar"}
-              placeholder="TARJ-PREMIUM-300"
-            />
-            {props.modo === "editar" && (
+          {props.modo === "editar" ? (
+            <div className="space-y-2">
+              <Label htmlFor="codigo">Código</Label>
+              <Input
+                id="codigo"
+                value={props.codigo}
+                disabled
+                placeholder="Generado por el sistema"
+              />
               <p className="text-muted-foreground text-xs">El código no se puede modificar.</p>
-            )}
-          </div>
+            </div>
+          ) : (
+            <p className="rounded-md border bg-muted/35 px-3 py-2 text-muted-foreground text-xs">
+              El código se genera automáticamente al guardar el producto.
+            </p>
+          )}
           <div className="space-y-2">
             <Label htmlFor="nombre">
               Nombre <span className="text-destructive">*</span>
@@ -844,12 +859,12 @@ function StepIdentidad(props: StepIdentidadProps) {
             />
             <HumanSelect
               value={props.modoMedidas}
-              onValueChange={(v) => props.setModoMedidas(v || "FIJA")}
+              onValueChange={(v) => props.setModoMedidas((v || "FIJA") as ModoMedidasProducto)}
               options={MODOS_MEDIDAS.map((it) => optionFromLabel(it.value, modoMedidasLabels))}
               id="modoMedidas"
             />
           </div>
-          {props.modoMedidas !== "LIBRE" && (
+          {modoMedidasUsaPredefinidas(props.modoMedidas) && (
             <MedidasPredefinidasWizard
               medidas={props.medidas}
               onChange={props.setMedidas}

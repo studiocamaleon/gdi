@@ -49,6 +49,8 @@ type DisplayTransform = {
   substrateHeightMm: number;
   scale: number;
   padPx: number;
+  padXPx?: number;
+  padYPx?: number;
   offsetXMm?: number;
   offsetYMm?: number;
 };
@@ -576,6 +578,8 @@ function SubstrateView({
   const wPx = displayWidthMm * scale;
   const hPx = displayHeightMm * scale;
   const padPx = 34;
+  const padXPx = Math.max(padPx, (360 - wPx) / 2);
+  const padYPx = padPx;
   const effectiveVisualConfig = getEffectiveVisualConfig(visualConfig, widthMm, heightMm);
   const displayTransform: DisplayTransform = {
     rotated: displayLandscape,
@@ -583,6 +587,8 @@ function SubstrateView({
     substrateHeightMm: heightMm,
     scale,
     padPx,
+    padXPx,
+    padYPx,
   };
   const placementTransform = getCenteredPlacementTransform(
     displayTransform,
@@ -590,8 +596,8 @@ function SubstrateView({
     effectiveVisualConfig,
     substrate.kind,
   );
-  const viewBoxW = wPx + padPx * 2;
-  const viewBoxH = hPx + padPx * 2;
+  const viewBoxW = wPx + padXPx * 2;
+  const viewBoxH = hPx + padYPx * 2;
   const hasMargins = Object.values(effectiveVisualConfig.margins).some((value) => value > 0);
   const largeSheet = substrate.kind === "sheet" && Math.max(widthMm, heightMm) >= 1000;
   const canvasMaxWidth = Math.min(
@@ -697,6 +703,8 @@ function SubstrateView({
           />
           <DimensionLabels
             padPx={padPx}
+            padXPx={padXPx}
+            padYPx={padYPx}
             widthPx={wPx}
             heightPx={hPx}
             widthMm={displayWidthMm}
@@ -722,6 +730,8 @@ function SubstrateView({
 
 function DimensionLabels({
   padPx,
+  padXPx = padPx,
+  padYPx = padPx,
   widthPx,
   heightPx,
   widthMm,
@@ -729,6 +739,8 @@ function DimensionLabels({
   kind,
 }: {
   padPx: number;
+  padXPx?: number;
+  padYPx?: number;
   widthPx: number;
   heightPx: number;
   widthMm: number;
@@ -737,19 +749,19 @@ function DimensionLabels({
 }) {
   return (
     <>
-      <text x={padPx + widthPx / 2} y={padPx - 10} textAnchor="middle" fontSize={11} fill="#4b5563" fontFamily="monospace">
-        {formatMm(widthMm)} {kind === "roll" ? "(ancho rollo)" : ""}
+      <text x={padXPx + widthPx / 2} y={Math.max(13, padYPx - 12)} textAnchor="middle" fontSize={11} fill="#4b5563" fontFamily="monospace">
+        {formatMm(widthMm)}
       </text>
       <text
-        x={padPx - 12}
-        y={padPx + heightPx / 2}
+        x={Math.max(13, padXPx - 14)}
+        y={padYPx + heightPx / 2}
         textAnchor="middle"
         fontSize={11}
         fill="#4b5563"
         fontFamily="monospace"
-        transform={`rotate(-90, ${padPx - 12}, ${padPx + heightPx / 2})`}
+        transform={`rotate(-90, ${Math.max(13, padXPx - 14)}, ${padYPx + heightPx / 2})`}
       >
-        {formatMm(heightMm)} {kind === "roll" ? "(largo consumido)" : ""}
+        {formatMm(heightMm)}
       </text>
     </>
   );
@@ -962,7 +974,13 @@ function getCenteredPlacementTransform(
   visualConfig: VisualConfig,
   substrateKind: "sheet" | "roll",
 ): DisplayTransform {
-  if (substrateKind !== "sheet" || placements.length === 0) return transform;
+  if (
+    substrateKind !== "sheet" ||
+    placements.length === 0 ||
+    visualConfig.centerPlacements !== true
+  ) {
+    return transform;
+  }
 
   const bounds = placements.reduce(
     (acc, placement) => ({
@@ -995,20 +1013,22 @@ function mapDisplayRect(
   heightMm: number,
 ) {
   const { padPx, scale } = transform;
+  const padXPx = transform.padXPx ?? padPx;
+  const padYPx = transform.padYPx ?? padPx;
   const displayXMm = xMm + (transform.offsetXMm ?? 0);
   const displayYMm = yMm + (transform.offsetYMm ?? 0);
   if (!transform.rotated) {
     return {
-      x: padPx + displayXMm * scale,
-      y: padPx + displayYMm * scale,
+      x: padXPx + displayXMm * scale,
+      y: padYPx + displayYMm * scale,
       width: widthMm * scale,
       height: heightMm * scale,
     };
   }
 
   return {
-    x: padPx + (transform.substrateHeightMm - displayYMm - heightMm) * scale,
-    y: padPx + displayXMm * scale,
+    x: padXPx + (transform.substrateHeightMm - displayYMm - heightMm) * scale,
+    y: padYPx + displayXMm * scale,
     width: heightMm * scale,
     height: widthMm * scale,
   };

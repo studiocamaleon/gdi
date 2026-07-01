@@ -167,10 +167,11 @@ export class CostosValidacionesService {
 
       if (
         recurso.tipoRecurso === TipoRecursoCentroCostoDto.maquinaria &&
-        !recurso.maquinaId
+        !recurso.maquinaId &&
+        !recurso.nombreRecurso?.trim()
       ) {
         throw new BadRequestException(
-          'Los recursos de tipo maquinaria necesitan una máquina asociada.',
+          'Los recursos de tipo maquinaria necesitan un nombre de máquina.',
         );
       }
 

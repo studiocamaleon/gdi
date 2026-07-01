@@ -277,6 +277,7 @@ export type CentroCostoRecursoPayload = {
 export type CentroCostoRecursoMaquinariaPayload = {
   centroCostoRecursoId: string;
   maquinaId?: string;
+  nombreRecurso?: string;
   metodoDepreciacion: MetodoDepreciacionMaquina;
   valorCompra: number;
   valorResidual: number;

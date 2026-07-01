@@ -28,6 +28,17 @@ function tipoPerfilCompatibleConFamilia(
   return true;
 }
 
+function normalizarFormulaSlotMaterial(
+  familiaCodigo: string,
+  slotCodigo: string,
+  formula?: string | null,
+) {
+  if (familiaCodigo === 'laminado' && slotCodigo === 'film') {
+    return 'por_metro_lineal';
+  }
+  return formula ?? 'por_unidad_productiva';
+}
+
 @Injectable()
 export class ConfigPasosService {
   constructor(
@@ -227,7 +238,11 @@ export class ConfigPasosService {
               criterioMaterialCampo: s.criterioMaterialCampo ?? null,
               materialVarianteId: s.materialVarianteId ?? null,
               estrategiaCosto: s.estrategiaCosto ?? 'simple',
-              formula: s.formula ?? 'por_unidad_productiva',
+              formula: normalizarFormulaSlotMaterial(
+                rutaPaso.familiaCodigo,
+                s.slotCodigo,
+                s.formula,
+              ),
               aplicaMultiCaras: s.aplicaMultiCaras ?? false,
               activo: true,
             },
@@ -269,6 +284,8 @@ export class ConfigPasosService {
               tenantId,
               productoConfigPasoId: configPaso.id,
               maquinaId: maquina.maquinaId,
+              perfilDefaultId: maquina.perfilDefaultId ?? null,
+              modoColorAllowedModes: maquina.modoColorAllowedModes ?? [],
               esPreferida: maquina.esPreferida,
               orden: maquina.orden ?? index,
               activo: true,
@@ -289,12 +306,20 @@ export class ConfigPasosService {
     if (!dto.maquinasCandidatas) return [];
     const unique = new Map<
       string,
-      { maquinaId: string; esPreferida?: boolean; orden?: number }
+      {
+        maquinaId: string;
+        perfilDefaultId?: string | null;
+        modoColorAllowedModes?: string[];
+        esPreferida?: boolean;
+        orden?: number;
+      }
     >();
     for (const [index, candidate] of dto.maquinasCandidatas.entries()) {
       if (!unique.has(candidate.maquinaId)) {
         unique.set(candidate.maquinaId, {
           maquinaId: candidate.maquinaId,
+          perfilDefaultId: candidate.perfilDefaultId ?? null,
+          modoColorAllowedModes: candidate.modoColorAllowedModes ?? [],
           esPreferida: candidate.esPreferida,
           orden: candidate.orden ?? index,
         });
@@ -347,6 +372,26 @@ export class ConfigPasosService {
           `La máquina candidata ${maquina.nombre} no tiene perfiles operativos compatibles con ${familiaCodigo}.`,
         );
       }
+      if (candidate.perfilDefaultId) {
+        const perfilDefault = maquina.perfilesOperativos.find(
+          (perfil) => perfil.id === candidate.perfilDefaultId,
+        );
+        if (!perfilDefault) {
+          throw new BadRequestException(
+            `El perfil default de la candidata ${maquina.nombre} no pertenece a la máquina o no está activo.`,
+          );
+        }
+        if (
+          !tipoPerfilCompatibleConFamilia(
+            familiaCodigo,
+            String(perfilDefault.tipoPerfil ?? ''),
+          )
+        ) {
+          throw new BadRequestException(
+            `El perfil default ${perfilDefault.id} no es compatible con ${familiaCodigo}.`,
+          );
+        }
+      }
 
       if (
         familiaCodigo === 'plotter_corte' &&
@@ -369,6 +414,8 @@ export class ConfigPasosService {
       candidates[0]?.maquinaId;
     return candidates.map((candidate, index) => ({
       maquinaId: candidate.maquinaId,
+      perfilDefaultId: candidate.perfilDefaultId ?? null,
+      modoColorAllowedModes: candidate.modoColorAllowedModes ?? [],
       esPreferida: candidate.maquinaId === preferredId,
       orden: candidate.orden ?? index,
     }));

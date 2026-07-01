@@ -111,6 +111,10 @@ export class JobContextDto {
 
   @IsOptional()
   @IsNumber()
+  piezaAreaTotalM2?: number;
+
+  @IsOptional()
+  @IsNumber()
   anchoMaterialMm?: number;
 
   @IsOptional()
@@ -126,9 +130,8 @@ export class CotizarDto {
   @IsUUID()
   rutaAlternativaId?: string | null;
 
-  @ValidateNested()
-  @Type(() => JobContextDto)
-  jobContext!: JobContextDto;
+  @IsObject()
+  jobContext!: JobContextDto & Record<string, unknown>;
 
   @IsOptional()
   @IsUUID()

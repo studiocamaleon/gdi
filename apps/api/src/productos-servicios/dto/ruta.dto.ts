@@ -21,14 +21,18 @@ export class PasoRutaDto {
   @IsString()
   @IsNotEmpty()
   familiaCodigo!: string;
+
+  @IsOptional()
+  @IsString()
+  icono?: string;
 }
 
 export class CrearRutaDto {
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @Length(3, 100)
   @Matches(/^[A-Za-z0-9_-]+$/)
-  codigo!: string;
+  codigo?: string;
 
   @IsString()
   @IsNotEmpty()

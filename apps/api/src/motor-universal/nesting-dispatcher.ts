@@ -590,6 +590,14 @@ function chooseBestRollLayout(
   if (Math.abs(lengthDiff) > 1) {
     return lengthDiff > 0 ? maxRectsResult : shelfResult;
   }
+  const shelfOrientationPenalty = shelfResult.orientacion === 'mixta' ? 1 : 0;
+  const maxRectsOrientationPenalty =
+    maxRectsResult.orientacion === 'mixta' ? 1 : 0;
+  if (shelfOrientationPenalty !== maxRectsOrientationPenalty) {
+    return shelfOrientationPenalty < maxRectsOrientationPenalty
+      ? shelfResult
+      : maxRectsResult;
+  }
   return maxRectsResult.usefulAreaM2 >= shelfResult.usefulAreaM2
     ? maxRectsResult
     : shelfResult;
@@ -1102,6 +1110,7 @@ function runGrid2DSingle(
       separationVMm: config.separationVMm,
       allowRotation: config.allowRotation,
       substrateLabel: 'Pliego',
+      centerPlacements: shouldCenterPlacementsForPaso(paso),
     }),
   };
 }
@@ -1190,6 +1199,7 @@ function buildVisualConfig(input: {
   separationVMm: number;
   allowRotation: boolean;
   substrateLabel: string;
+  centerPlacements?: boolean;
   panelizado?: NestingVisualConfig['panelizado'];
 }): NestingVisualConfig {
   const displayMargins = {
@@ -1223,6 +1233,7 @@ function buildVisualConfig(input: {
     pieceBleedMm: input.pieceBleedMm,
     allowRotation: input.allowRotation,
     substrateLabel: input.substrateLabel,
+    centerPlacements: input.centerPlacements,
     panelizado: input.panelizado,
     usableArea: {
       xMm: input.margins.leftMm,
@@ -1237,6 +1248,13 @@ function buildVisualConfig(input: {
       heightMm: printableHeightMm,
     },
   };
+}
+
+function shouldCenterPlacementsForPaso(paso: PasoCargado) {
+  return (
+    paso.familiaCodigo === 'impresion_por_hoja' &&
+    paso.maquina?.plantilla?.toLowerCase() === 'impresora_laser'
+  );
 }
 
 function getPiezasParaNesting(jobContext: JobContext) {

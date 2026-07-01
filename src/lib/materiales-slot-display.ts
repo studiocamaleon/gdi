@@ -60,15 +60,9 @@ export function getSlotMaterialVariantDisplay(
       ? details.map((detail) => `${detail.label}: ${detail.value}`).join(" · ")
       : variante.nombreVariante?.trim() || "Variante sin descripcion";
 
-  const price = variante.precioReferencia
-    ? Number(variante.precioReferencia).toLocaleString("es-AR")
-    : null;
-
   return {
     label,
-    description: price
-      ? `${materiaPrima.nombre} · Referencia: $${price}`
-      : materiaPrima.nombre,
+    description: "",
     details,
     fallbackCode: variante.sku,
   };

@@ -22,6 +22,7 @@ export enum ModoMedidasDto {
   FIJA = 'FIJA',
   LIBRE = 'LIBRE',
   COMERCIAL_ELIGE = 'COMERCIAL_ELIGE',
+  MIXTA = 'MIXTA',
 }
 
 export interface MedidaPredefinidaDto {
@@ -33,13 +34,14 @@ export interface MedidaPredefinidaDto {
 }
 
 export class CrearProductoDto {
+  @IsOptional()
   @IsString()
   @IsNotEmpty()
   @Length(3, 50)
   @Matches(/^[A-Za-z0-9_-]+$/, {
     message: 'Código solo letras/números/_/-, sin espacios',
   })
-  codigo!: string;
+  codigo?: string;
 
   @IsString()
   @IsNotEmpty()

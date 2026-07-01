@@ -3,8 +3,10 @@ import { ValidationPipe } from '@nestjs/common';
 import { CotizarDto } from '../cotizar.dto';
 
 describe('CotizarDto', () => {
-  it('preserva modoColor y modoColorPorPaso con ValidationPipe whitelist', async () => {
+  it('preserva claves runtime del jobContext con ValidationPipe whitelist', async () => {
     const pipe = new ValidationPipe({ whitelist: true, transform: true });
+    const configPasoId = '22222222-2222-4222-8222-222222222222';
+    const maquinaId = '33333333-3333-4333-8333-333333333333';
     const payload = {
       productoId: '11111111-1111-4111-8111-111111111111',
       jobContext: {
@@ -12,9 +14,10 @@ describe('CotizarDto', () => {
         caras: 1,
         modoColor: 'BN',
         modoColorPorPaso: {
-          '22222222-2222-4222-8222-222222222222': 'BN',
+          [configPasoId]: 'BN',
         },
-        'modoColor_22222222-2222-4222-8222-222222222222': 'BN',
+        [`modoColor_${configPasoId}`]: 'BN',
+        [`maquinaSeleccionada_${configPasoId}`]: maquinaId,
       },
     };
 
@@ -25,12 +28,15 @@ describe('CotizarDto', () => {
 
     expect(result.jobContext.modoColor).toBe('BN');
     expect(result.jobContext.modoColorPorPaso).toEqual({
-      '22222222-2222-4222-8222-222222222222': 'BN',
+      [configPasoId]: 'BN',
     });
     expect(
+      (result.jobContext as Record<string, unknown>)[`modoColor_${configPasoId}`],
+    ).toBe('BN');
+    expect(
       (result.jobContext as Record<string, unknown>)[
-        'modoColor_22222222-2222-4222-8222-222222222222'
+        `maquinaSeleccionada_${configPasoId}`
       ],
-    ).toBeUndefined();
+    ).toBe(maquinaId);
   });
 });

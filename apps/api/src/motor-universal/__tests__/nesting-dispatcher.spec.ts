@@ -112,6 +112,88 @@ function buildPasoPouch(separacionEntrePiezasMm = 0) {
   };
 }
 
+function buildPasoImpresionPorHoja(plantilla = 'IMPRESORA_LASER') {
+  return {
+    rutaPasoId: 'rp-hoja',
+    rutaPasoOrden: 1,
+    familiaCodigo: 'impresion_por_hoja',
+    configPasoId: 'cp-hoja',
+    modoActivacion: 'OBLIGATORIO',
+    condicionActivacionJson: null,
+    modoTiempo: 'T-3',
+    mecanismoCantidad: 'CALCULADO_POR_PASO',
+    mecanismoCantidadConfigJson: null,
+    multiplicadoresActivos: [],
+    paramsPasoJson: {
+      nestingConfig: {
+        algorithm: 'grid-2d-single',
+        allowRotation: true,
+        separationHMm: 0,
+        separationVMm: 0,
+      },
+    },
+    maquinaM1Id: null,
+    perfilM1Id: null,
+    setupOverrideMin: null,
+    cleanupOverrideMin: null,
+    tiempoFijoOverrideMin: null,
+    slots: [],
+    cargosDirectosPaso: [],
+    maquina: {
+      id: 'm-hoja',
+      codigo: 'LASER',
+      nombre: 'Laser',
+      plantilla,
+      parametrosTecnicosJson: {
+        geometria: 'PLIEGO',
+        margenesNoImprimiblesMm: { izq: 5, der: 5, sup: 5, inf: 5 },
+      },
+    },
+  };
+}
+
+function buildPasoAreaPlaca() {
+  return {
+    rutaPasoId: 'rp-area',
+    rutaPasoOrden: 1,
+    familiaCodigo: 'impresion_por_area',
+    configPasoId: 'cp-area',
+    modoActivacion: 'OBLIGATORIO',
+    condicionActivacionJson: null,
+    modoTiempo: 'T-3',
+    mecanismoCantidad: 'CALCULADO_POR_PASO',
+    mecanismoCantidadConfigJson: null,
+    multiplicadoresActivos: [],
+    paramsPasoJson: {
+      nestingConfig: {
+        algorithm: 'packingsolver-rectangle',
+        allowRotation: true,
+        separationHMm: 0,
+        separationVMm: 0,
+      },
+    },
+    maquinaM1Id: null,
+    perfilM1Id: null,
+    setupOverrideMin: null,
+    cleanupOverrideMin: null,
+    tiempoFijoOverrideMin: null,
+    slots: [],
+    cargosDirectosPaso: [],
+    maquina: {
+      id: 'm-area',
+      codigo: 'UV',
+      nombre: 'UV mesa',
+      plantilla: 'IMPRESORA_GRAN_FORMATO_POR_AREA',
+      parametrosTecnicosJson: {
+        geometria: 'MESA_EXTENSORA',
+        anchoMesaMm: 1220,
+        largoMesaMm: 2440,
+        margenesNoImprimiblesMm: { izq: 0, der: 0, sup: 0, inf: 0 },
+      },
+    },
+  };
+}
+
 const materialPouchA4 = {
   id: 'pouch-a4',
   atributosVarianteJson: {
@@ -135,6 +217,16 @@ const jobContext = {
 const material = {
   id: 'vinilo-137',
   atributosVarianteJson: { anchoMm: 1370 },
+};
+
+const materialPliego = {
+  id: 'papel-22x34',
+  atributosVarianteJson: { anchoMm: 220, altoMm: 340 },
+};
+
+const materialPlaca = {
+  id: 'pvc-122x244',
+  atributosVarianteJson: { anchoMm: 1220, largoMm: 2440 },
 };
 
 describe('runNestingForPaso rollo optimizado', () => {
@@ -274,6 +366,38 @@ describe('runNestingForPaso plastificado pouch', () => {
     );
 
     expect(result).toBeNull();
+  });
+});
+
+describe('runNestingForPaso centrado visual de placements', () => {
+  it('activa el centrado solo para impresion laser por hoja', () => {
+    const result = runNestingForPaso(
+      buildPasoImpresionPorHoja() as never,
+      {
+        cantidad: 100,
+        piezas: [{ cantidad: 100, anchoMm: 90, altoMm: 50 }],
+      },
+      materialPliego,
+    );
+
+    expect(result).not.toBeNull();
+    expect(result!.algorithm).toBe('grid-2d-single');
+    expect(result!.visualConfig?.centerPlacements).toBe(true);
+  });
+
+  it('no activa el centrado en impresion por area sobre placa', () => {
+    const result = runNestingForPaso(
+      buildPasoAreaPlaca() as never,
+      {
+        cantidad: 4,
+        piezas: [{ cantidad: 4, anchoMm: 100, altoMm: 450 }],
+      },
+      materialPlaca,
+    );
+
+    expect(result).not.toBeNull();
+    expect(result!.unidad).toBe('pliegos');
+    expect(result!.visualConfig?.centerPlacements).toBeUndefined();
   });
 });
 

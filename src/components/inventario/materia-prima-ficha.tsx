@@ -275,6 +275,18 @@ function normalizeVarianteAtributos(
     setNumberIfMissing(normalized, "alto", normalized.altoMm ?? normalized.largoMm);
     setNumberIfMissing(normalized, "margenNoUsable", normalized.margenNoUsableMm);
     setNumberIfMissing(normalized, "espesor", normalized.espesorMicrones);
+  } else if (normalizedTemplateId === "iman_flexible_rollo_v1") {
+    setNumberIfMissing(normalized, "ancho", normalized.anchoMm);
+    setNumberIfMissing(
+      normalized,
+      "largo",
+      normalized.largoRolloMm ?? normalized.largoMm,
+      1000,
+    );
+    setNumberIfMissing(normalized, "espesor", normalized.espesorMm);
+  } else if (normalizedTemplateId === "iman_redondo_v1") {
+    setNumberIfMissing(normalized, "diametro", normalized.diametroMm);
+    setNumberIfMissing(normalized, "espesor", normalized.espesorMm);
   }
 
   const aliasMap: Record<string, string> = {
@@ -430,6 +442,14 @@ function buildPayload(
       setLegacyNumber(normalized, "largoMm", normalized.alto);
       setLegacyNumber(normalized, "margenNoUsableMm", normalized.margenNoUsable);
       setLegacyNumber(normalized, "espesorMicrones", normalized.espesor);
+    } else if (normalizedTemplateId === "iman_flexible_rollo_v1") {
+      setLegacyNumber(normalized, "anchoMm", normalized.ancho);
+      setLegacyNumber(normalized, "largoMm", normalized.largo, 1000);
+      setLegacyNumber(normalized, "largoRolloMm", normalized.largo, 1000);
+      setLegacyNumber(normalized, "espesorMm", normalized.espesor);
+    } else if (normalizedTemplateId === "iman_redondo_v1") {
+      setLegacyNumber(normalized, "diametroMm", normalized.diametro);
+      setLegacyNumber(normalized, "espesorMm", normalized.espesor);
     } else if (
       normalizedTemplateId === "tinta_impresion_v1" ||
       normalizedTemplateId === "quimico_acabado_v1"

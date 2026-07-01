@@ -69,6 +69,7 @@ export enum UnidadProduccionMaquinaDto {
   golpes_min = 'golpes_min',
   pliegos_min = 'pliegos_min',
   m_min = 'm_min',
+  mm_s = 'mm_s',
 }
 
 export enum TipoPerfilOperativoMaquinaDto {

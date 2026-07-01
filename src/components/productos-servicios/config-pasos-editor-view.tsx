@@ -65,7 +65,10 @@ import {
 } from "@/lib/rule-builder";
 import { getVarianteOptionChips } from "@/lib/materias-primas-variantes-display";
 import { tecnologiaMaquinaItems } from "@/lib/maquinaria";
-import { getMachineTechnology, machineTechnologyLabel } from "@/lib/maquinaria-tecnologias";
+import {
+  getMachineTechnology,
+  machineTechnologyLabel,
+} from "@/lib/maquinaria-tecnologias";
 
 interface Props {
   producto: ProductoDetalle;
@@ -78,9 +81,18 @@ interface Props {
 type ConfigState = Record<string, UpsertConfigPasoPayload>;
 type SavedConfigSnapshots = Record<string, string>;
 
-const MODOS_ACTIVACION = ["OBLIGATORIO", "OPCIONAL", "CONDICIONAL", "NO_EJECUTAR"];
+const MODOS_ACTIVACION = [
+  "OBLIGATORIO",
+  "OPCIONAL",
+  "CONDICIONAL",
+  "NO_EJECUTAR",
+];
 const MODOS_SELECCION = ["HARDCODED", "COMERCIAL_ELIGE", "MOTOR_ELIGE_AUTO"];
-const CRITERIOS_AUTO = ["MENOR_COSTO", "MAYOR_APROVECHAMIENTO", "MENOR_CAPACIDAD_QUE_CUMPLA"];
+const CRITERIOS_AUTO = [
+  "MENOR_COSTO",
+  "MAYOR_APROVECHAMIENTO",
+  "MENOR_CAPACIDAD_QUE_CUMPLA",
+];
 const FORMULAS = [
   "por_unidad_productiva",
   "por_pieza",
@@ -109,10 +121,161 @@ const MONTAJE_SOURCE_OPTIONS = [
   {
     value: "pliegos_impresos",
     label: "Pliegos impresos",
-    description: "Usa pliegos_impresos y el tamaño de pliego publicado por impresión.",
+    description:
+      "Usa pliegos_impresos y el tamaño de pliego publicado por impresión.",
   },
 ];
-const COSTING_STRATEGIES = ["simple", "m2-exact", "consumed-length", "plate-segments"];
+const T2_PRODUCTIVITY_UNIT_OPTIONS = [
+  {
+    value: "unidades_h",
+    label: "Unidades o pliegos/h",
+    description: "Usa la cantidad del paso: pliegos, piezas, packs u otra unidad contable.",
+  },
+  {
+    value: "m2_h",
+    label: "m²/h",
+    description: "Metros cuadrados por hora.",
+  },
+  {
+    value: "ml_h",
+    label: "ml/h",
+    description: "Metros lineales por hora.",
+  },
+];
+const T2_TIME_CALCULATION_MODE_OPTIONS = [
+  {
+    value: "productivity",
+    label: "Productividad por hora",
+    description: "Ejemplo: 120 pliegos por hora.",
+  },
+  {
+    value: "batch_time",
+    label: "Tiempo por lote",
+    description: "Ejemplo: 2 pliegos cada 1 minuto.",
+  },
+];
+const T2_QUANTITY_SOURCE_OPTIONS = [
+  {
+    value: "cantidad",
+    label: "Cantidad efectiva del paso",
+    description: "Respeta el mecanismo de cantidad configurado para el paso.",
+  },
+  {
+    value: "area_piezas_m2",
+    label: "Área calculada desde piezas",
+    description: "Usa el área real de las medidas cargadas al cotizar.",
+  },
+  {
+    value: "m2_instalados",
+    label: "m² instalados manuales",
+    description: "Usa el campo m² instalados que carga comercial.",
+  },
+  {
+    value: "metros_lineales",
+    label: "Metros lineales cotizados",
+    description: "Usa los metros lineales comerciales del producto.",
+  },
+];
+const T2_PRODUCTIVITY_UNIT_SUFFIX: Record<string, string> = {
+  unidades_h: "unid./h",
+  m2_h: "m²/h",
+  ml_h: "ml/h",
+};
+const T2_BATCH_UNIT_SUFFIX: Record<string, string> = {
+  unidades_h: "unid./pliegos",
+  m2_h: "m²",
+  ml_h: "ml",
+};
+function getDefaultT2ProductivityUnit(familiaCodigo?: string) {
+  return familiaCodigo === "instalacion_in_situ" ? "m2_h" : "unidades_h";
+}
+
+function getDefaultT2TimeCalculationMode(familiaCodigo?: string) {
+  return familiaCodigo === "embalaje" || familiaCodigo === "montaje_sobre_sustrato"
+    ? "batch_time"
+    : "productivity";
+}
+
+function getDefaultT2QuantitySource(familiaCodigo?: string, unit?: string) {
+  if (unit === "unidades_h") return "cantidad";
+  if (unit === "m2_h") return "area_piezas_m2";
+  if (unit === "ml_h") return "metros_lineales";
+  if (familiaCodigo === "instalacion_in_situ") return "area_piezas_m2";
+  return "cantidad";
+}
+
+function getDefaultMecanismoCantidad(familiaCodigo?: string) {
+  if (familiaCodigo === "corte_manual") return "HEREDAR_DEL_OUTPUT_CANONICO";
+  if (familiaCodigo === "montaje_sobre_sustrato") return "CALCULADO_POR_PASO";
+  return null;
+}
+
+function getT2QuantitySourceOptions(unit: string) {
+  if (unit === "m2_h") {
+    return T2_QUANTITY_SOURCE_OPTIONS.filter((option) =>
+      ["area_piezas_m2", "m2_instalados", "cantidad"].includes(option.value),
+    );
+  }
+  if (unit === "ml_h") {
+    return T2_QUANTITY_SOURCE_OPTIONS.filter((option) =>
+      ["metros_lineales", "cantidad"].includes(option.value),
+    );
+  }
+  return T2_QUANTITY_SOURCE_OPTIONS.filter(
+    (option) => option.value === "cantidad",
+  );
+}
+
+function formatT2Number(value: number, digits = 2) {
+  return new Intl.NumberFormat("es-AR", {
+    maximumFractionDigits: digits,
+    minimumFractionDigits: value % 1 === 0 ? 0 : 1,
+  }).format(value);
+}
+
+function getT2UnitLabel(unit: string, mode: "batch" | "productivity") {
+  if (unit === "m2_h") return "m²";
+  if (unit === "ml_h") return "ml";
+  return mode === "batch" ? "pliegos/unidades" : "pliegos/unidades";
+}
+
+function getT2TimeSummary({
+  timeCalculationMode,
+  productivityUnit,
+  productivityValue,
+  batchTimeMin,
+  batchSize,
+}: {
+  timeCalculationMode: string;
+  productivityUnit: string;
+  productivityValue: number | null;
+  batchTimeMin: number | null;
+  batchSize: number | null;
+}) {
+  const unitLabel = getT2UnitLabel(
+    productivityUnit,
+    timeCalculationMode === "batch_time" ? "batch" : "productivity",
+  );
+  if (timeCalculationMode === "batch_time") {
+    if (!batchTimeMin || !batchSize) {
+      return "Ejemplo: 2 pliegos cada 1 minuto. El motor calcula cantidad ÷ pliegos por lote × minutos.";
+    }
+    const hourly = (batchSize / batchTimeMin) * 60;
+    return `${formatT2Number(batchSize)} ${unitLabel} cada ${formatT2Number(
+      batchTimeMin,
+    )} min = ${formatT2Number(hourly)} ${unitLabel}/h.`;
+  }
+  if (!productivityValue) {
+    return "Ejemplo: 120 pliegos/unidades por hora. El motor calcula cantidad ÷ productividad.";
+  }
+  return `${formatT2Number(productivityValue)} ${unitLabel}/h.`;
+}
+const COSTING_STRATEGIES = [
+  "simple",
+  "m2-exact",
+  "consumed-length",
+  "plate-segments",
+];
 const MODO_COLOR_LABELS: Record<string, string> = {
   SIN_IMPRESION: "Sin impresión",
   BN: "Blanco y negro",
@@ -122,58 +285,188 @@ const MODO_COLOR_LABELS: Record<string, string> = {
   "CMYK+blanco+barniz": "CMYK + Blanco + Barniz",
 };
 const PLIEGO_IMPRESION_PRESETS = [
-  { value: "materia_prima", label: "Tamaño materia prima", description: "Usa el ancho y alto del sustrato comprado.", anchoMm: null, altoMm: null },
-  { value: "A5", label: "A5", description: "148 × 210 mm", anchoMm: 148, altoMm: 210 },
-  { value: "A4", label: "A4", description: "210 × 297 mm", anchoMm: 210, altoMm: 297 },
-  { value: "A3", label: "A3", description: "297 × 420 mm", anchoMm: 297, altoMm: 420 },
-  { value: "A2", label: "A2", description: "420 × 594 mm", anchoMm: 420, altoMm: 594 },
-  { value: "SRA4", label: "SRA4", description: "225 × 320 mm", anchoMm: 225, altoMm: 320 },
-  { value: "SRA3", label: "SRA3", description: "320 × 450 mm", anchoMm: 320, altoMm: 450 },
-  { value: "carta", label: "Carta", description: "216 × 279 mm", anchoMm: 216, altoMm: 279 },
-  { value: "oficio", label: "Oficio", description: "216 × 356 mm", anchoMm: 216, altoMm: 356 },
-  { value: "personalizado", label: "Personalizado", description: "Cargar ancho y alto manualmente.", anchoMm: null, altoMm: null },
+  {
+    value: "materia_prima",
+    label: "Tamaño materia prima",
+    description: "Usa el ancho y alto del sustrato comprado.",
+    anchoMm: null,
+    altoMm: null,
+  },
+  {
+    value: "A5",
+    label: "A5",
+    description: "148 × 210 mm",
+    anchoMm: 148,
+    altoMm: 210,
+  },
+  {
+    value: "A4",
+    label: "A4",
+    description: "210 × 297 mm",
+    anchoMm: 210,
+    altoMm: 297,
+  },
+  {
+    value: "A3",
+    label: "A3",
+    description: "297 × 420 mm",
+    anchoMm: 297,
+    altoMm: 420,
+  },
+  {
+    value: "A2",
+    label: "A2",
+    description: "420 × 594 mm",
+    anchoMm: 420,
+    altoMm: 594,
+  },
+  {
+    value: "SRA4",
+    label: "SRA4",
+    description: "225 × 320 mm",
+    anchoMm: 225,
+    altoMm: 320,
+  },
+  {
+    value: "SRA3",
+    label: "SRA3",
+    description: "320 × 450 mm",
+    anchoMm: 320,
+    altoMm: 450,
+  },
+  {
+    value: "carta",
+    label: "Carta",
+    description: "216 × 279 mm",
+    anchoMm: 216,
+    altoMm: 279,
+  },
+  {
+    value: "oficio",
+    label: "Oficio",
+    description: "216 × 356 mm",
+    anchoMm: 216,
+    altoMm: 356,
+  },
+  {
+    value: "personalizado",
+    label: "Personalizado",
+    description: "Cargar ancho y alto manualmente.",
+    anchoMm: null,
+    altoMm: null,
+  },
 ];
 const PLIEGO_IMPRESION_OPTIONS = PLIEGO_IMPRESION_PRESETS.map((preset) => ({
   value: preset.value,
   label: preset.label,
   description: preset.description,
 }));
-const PANEL_AXIS_OPTIONS = optionsFromLabels(["automatic", "vertical", "horizontal"], {
-  automatic: { label: "Automática", descripcion: "Prueba dividir ancho y alto, y elige el mejor resultado." },
-  vertical: { label: "Vertical", descripcion: "Divide el ancho de la pieza en paneles." },
-  horizontal: { label: "Horizontal", descripcion: "Divide el alto de la pieza en paneles." },
-});
-const PANEL_MANUAL_AXIS_OPTIONS = optionsFromLabels(["vertical", "horizontal"], {
-  vertical: { label: "Vertical", descripcion: "Divide el ancho de la pieza en paneles." },
-  horizontal: { label: "Horizontal", descripcion: "Divide el alto de la pieza en paneles." },
-});
+const PANEL_AXIS_OPTIONS = optionsFromLabels(
+  ["automatic", "vertical", "horizontal"],
+  {
+    automatic: {
+      label: "Automática",
+      descripcion: "Prueba dividir ancho y alto, y elige el mejor resultado.",
+    },
+    vertical: {
+      label: "Vertical",
+      descripcion: "Divide el ancho de la pieza en paneles.",
+    },
+    horizontal: {
+      label: "Horizontal",
+      descripcion: "Divide el alto de la pieza en paneles.",
+    },
+  },
+);
+const PANEL_MANUAL_AXIS_OPTIONS = optionsFromLabels(
+  ["vertical", "horizontal"],
+  {
+    vertical: {
+      label: "Vertical",
+      descripcion: "Divide el ancho de la pieza en paneles.",
+    },
+    horizontal: {
+      label: "Horizontal",
+      descripcion: "Divide el alto de la pieza en paneles.",
+    },
+  },
+);
 const PANEL_MODE_OPTIONS = optionsFromLabels(["automatic", "manual"], {
-  automatic: { label: "Automático", descripcion: "El motor divide piezas grandes cuando no entran completas." },
-  manual: { label: "Manual", descripcion: "El usuario define la división de paneles." },
+  automatic: {
+    label: "Automático",
+    descripcion: "El motor divide piezas grandes cuando no entran completas.",
+  },
+  manual: {
+    label: "Manual",
+    descripcion: "El usuario define la división de paneles.",
+  },
 });
 const PANEL_DISTRIBUTION_OPTIONS = optionsFromLabels(["equilibrada", "libre"], {
-  equilibrada: { label: "Equilibrada", descripcion: "Paneles de tamaño similar." },
-  libre: { label: "Libre", descripcion: "Llena cada panel hasta el máximo antes de abrir otro." },
+  equilibrada: {
+    label: "Equilibrada",
+    descripcion: "Paneles de tamaño similar.",
+  },
+  libre: {
+    label: "Libre",
+    descripcion: "Llena cada panel hasta el máximo antes de abrir otro.",
+  },
 });
-const PANEL_WIDTH_INTERPRETATION_OPTIONS = optionsFromLabels(["total", "util"], {
-  total: { label: "Ancho total", descripcion: "El máximo incluye solapes." },
-  util: { label: "Ancho útil", descripcion: "El máximo se interpreta sin contar solapes." },
-});
+const PANEL_WIDTH_INTERPRETATION_OPTIONS = optionsFromLabels(
+  ["total", "util"],
+  {
+    total: { label: "Ancho total", descripcion: "El máximo incluye solapes." },
+    util: {
+      label: "Ancho útil",
+      descripcion: "El máximo se interpreta sin contar solapes.",
+    },
+  },
+);
 const MIN_PANEL_MAX_WIDTH_MM = 300;
 
 const NESTING_ALGORITHM_OPTIONS = optionsFromLabels(NESTING_ALGORITHMS, {
-  auto: { label: "Automático", descripcion: "El motor elige según la geometría y las piezas." },
-  "shelf-rollo": { label: "Rollo", descripcion: "Acomoda piezas sobre rollo de ancho fijo." },
-  "maxrects-rollo": { label: "Rollo optimizado", descripcion: "Acomoda piezas mixtas en rollo minimizando el largo consumido." },
-  "grid-2d-single": { label: "Grilla simple", descripcion: "Una medida repetida sobre pliego o placa." },
-  "grid-2d-multi": { label: "Grilla multi", descripcion: "Varias medidas sobre una o más placas." },
-  "packingsolver-rectangle": { label: "PackingSolver Rectangle", descripcion: "Motor profesional para rígidos sobre placa." },
+  auto: {
+    label: "Automático",
+    descripcion: "El motor elige según la geometría y las piezas.",
+  },
+  "shelf-rollo": {
+    label: "Rollo",
+    descripcion: "Acomoda piezas sobre rollo de ancho fijo.",
+  },
+  "maxrects-rollo": {
+    label: "Rollo optimizado",
+    descripcion:
+      "Acomoda piezas mixtas en rollo minimizando el largo consumido.",
+  },
+  "grid-2d-single": {
+    label: "Grilla simple",
+    descripcion: "Una medida repetida sobre pliego o placa.",
+  },
+  "grid-2d-multi": {
+    label: "Grilla multi",
+    descripcion: "Varias medidas sobre una o más placas.",
+  },
+  "packingsolver-rectangle": {
+    label: "PackingSolver Rectangle",
+    descripcion: "Motor profesional para rígidos sobre placa.",
+  },
 });
 const COSTING_STRATEGY_OPTIONS = optionsFromLabels(COSTING_STRATEGIES, {
-  simple: { label: "Simple", descripcion: "Usa la fórmula de consumo del slot sin costeo especial." },
-  "m2-exact": { label: "m² exactos", descripcion: "Cobra el área útil de las piezas." },
-  "consumed-length": { label: "Largo consumido", descripcion: "Cobra placa completa y último tramo proporcional." },
-  "plate-segments": { label: "Segmentos de placa", descripcion: "Cobra por escalones de ocupación de la placa." },
+  simple: {
+    label: "Simple",
+    descripcion: "Usa la fórmula de consumo del slot sin costeo especial.",
+  },
+  "m2-exact": {
+    label: "m² exactos",
+    descripcion: "Cobra el área útil de las piezas.",
+  },
+  "consumed-length": {
+    label: "Largo consumido",
+    descripcion: "Cobra placa completa y último tramo proporcional.",
+  },
+  "plate-segments": {
+    label: "Segmentos de placa",
+    descripcion: "Cobra por escalones de ocupación de la placa.",
+  },
 });
 
 function optionLabel(options: HumanSelectOption[], value: string) {
@@ -210,7 +503,10 @@ const SELECCION_MATERIAL_OPTIONS = optionsFromLabels(
   modoSeleccionMaterialLabels,
 );
 const FORMULA_OPTIONS = optionsFromLabels(FORMULAS, formulaConsumoLabels);
-const CRITERIO_AUTO_OPTIONS = optionsFromLabels(CRITERIOS_AUTO, criterioMotorAutoLabels);
+const CRITERIO_AUTO_OPTIONS = optionsFromLabels(
+  CRITERIOS_AUTO,
+  criterioMotorAutoLabels,
+);
 
 function machineOption(
   maquina: Pick<MaquinaLookup, "id" | "codigo" | "nombre" | "plantilla">,
@@ -237,11 +533,16 @@ function profileOption(
   };
 }
 
-function perfilCompatibleConFamilia(familiaCodigo: string | undefined, perfil: PerfilLookup | null | undefined) {
+function perfilCompatibleConFamilia(
+  familiaCodigo: string | undefined,
+  perfil: PerfilLookup | null | undefined,
+) {
   if (!familiaCodigo || !perfil) return true;
   const tipoPerfil = String(perfil.tipoPerfil ?? "").toLowerCase();
-  if (familiaCodigo === "plotter_corte") return tipoPerfil === "corte" || tipoPerfil === "mixto";
-  if (familiaCodigo === "impresion_por_area") return tipoPerfil === "impresion" || tipoPerfil === "mixto";
+  if (familiaCodigo === "plotter_corte")
+    return tipoPerfil === "corte" || tipoPerfil === "mixto";
+  if (familiaCodigo === "impresion_por_area")
+    return tipoPerfil === "impresion" || tipoPerfil === "mixto";
   return true;
 }
 
@@ -252,11 +553,17 @@ function maquinaCompatibleConFamilia(
 ) {
   if (!(plantillasCompatibles ?? []).includes(maquina.plantilla)) return false;
   if (familiaCodigo !== "plotter_corte") return true;
-  if (String(maquina.plantilla).toUpperCase() !== "IMPRESORA_GRAN_FORMATO_POR_AREA") return true;
+  if (
+    String(maquina.plantilla).toUpperCase() !==
+    "IMPRESORA_GRAN_FORMATO_POR_AREA"
+  )
+    return true;
   const params = maquina.parametrosTecnicosJson ?? {};
   return (
     params.soportaCorteIntegrado === true &&
-    maquina.perfilesOperativos.some((perfil) => perfilCompatibleConFamilia("plotter_corte", perfil))
+    maquina.perfilesOperativos.some((perfil) =>
+      perfilCompatibleConFamilia("plotter_corte", perfil),
+    )
   );
 }
 
@@ -266,36 +573,67 @@ function maquinaCandidataCompatibleConFamilia(
   maquina: MaquinaLookup,
 ) {
   return (
-    maquinaCompatibleConFamilia(familiaCodigo, plantillasCompatibles, maquina) &&
-    maquina.perfilesOperativos.some((perfil) => perfilCompatibleConFamilia(familiaCodigo, perfil))
+    maquinaCompatibleConFamilia(
+      familiaCodigo,
+      plantillasCompatibles,
+      maquina,
+    ) &&
+    maquina.perfilesOperativos.some((perfil) =>
+      perfilCompatibleConFamilia(familiaCodigo, perfil),
+    )
   );
 }
 
 function normalizeMaquinasCandidatas(
   candidatas: NonNullable<UpsertConfigPasoPayload["maquinasCandidatas"]>,
 ) {
-  const unique = new Map<string, { maquinaId: string; esPreferida?: boolean; orden?: number }>();
+  const unique = new Map<
+    string,
+    {
+      maquinaId: string;
+      perfilDefaultId?: string | null;
+      modoColorAllowedModes?: string[];
+      esPreferida?: boolean;
+      orden?: number;
+    }
+  >();
   for (const [index, candidata] of candidatas.entries()) {
     if (!candidata.maquinaId || unique.has(candidata.maquinaId)) continue;
     unique.set(candidata.maquinaId, {
       maquinaId: candidata.maquinaId,
+      perfilDefaultId: candidata.perfilDefaultId ?? null,
+      modoColorAllowedModes: Array.isArray(candidata.modoColorAllowedModes)
+        ? Array.from(
+            new Set(
+              candidata.modoColorAllowedModes
+                .map((item) => normalizeModoColor(item))
+                .filter((item): item is string => item !== null),
+            ),
+          )
+        : [],
       esPreferida: candidata.esPreferida,
       orden: candidata.orden ?? index,
     });
   }
-  const values = Array.from(unique.values()).sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+  const values = Array.from(unique.values()).sort(
+    (a, b) => (a.orden ?? 0) - (b.orden ?? 0),
+  );
   const preferredId =
     values.find((candidata) => candidata.esPreferida)?.maquinaId ??
     values[0]?.maquinaId ??
     null;
   return values.map((candidata, index) => ({
     maquinaId: candidata.maquinaId,
+    perfilDefaultId: candidata.perfilDefaultId ?? null,
+    modoColorAllowedModes: candidata.modoColorAllowedModes ?? [],
     esPreferida: candidata.maquinaId === preferredId,
     orden: index,
   }));
 }
 
-function centroCostoOption(centro: Pick<CentroCostoLookup, "id" | "codigo" | "nombre">): HumanSelectOption {
+function centroCostoOption(
+  centro: Pick<CentroCostoLookup, "id" | "codigo" | "nombre">,
+): HumanSelectOption {
   return {
     value: centro.id,
     label: centro.nombre,
@@ -310,8 +648,10 @@ function materialVariantOption(
   const variantDetails = getMaterialVariantAttributeDetails(mp, variante);
   const variantLabel =
     variantDetails.length > 0
-      ? variantDetails.map((detail) => `${detail.label}: ${detail.value}`).join(" · ")
-      : variante.nombreVariante ?? variante.sku;
+      ? variantDetails
+          .map((detail) => `${detail.label}: ${detail.value}`)
+          .join(" · ")
+      : (variante.nombreVariante ?? variante.sku);
 
   return {
     value: variante.id,
@@ -367,7 +707,9 @@ function getMaterialVariantAttributeDetails(
       atributosVariante: variante.atributosVarianteJson ?? {},
       unidadStock: null,
       unidadCompra: null,
-      precioReferencia: variante.precioReferencia ? Number(variante.precioReferencia) : null,
+      precioReferencia: variante.precioReferencia
+        ? Number(variante.precioReferencia)
+        : null,
       moneda: "ARS",
       proveedorReferenciaId: null,
       proveedorReferenciaNombre: "",
@@ -389,13 +731,28 @@ function humanizeCode(code: string) {
 
 function slotNombre(
   slotCodigo: string,
-  familia: { slotsRequeridos: Array<{ codigo: string; nombre: string; tipo?: string }> } | undefined,
+  familia:
+    | {
+        slotsRequeridos: Array<{
+          codigo: string;
+          nombre: string;
+          tipo?: string;
+        }>;
+      }
+    | undefined,
 ) {
   if (slotCodigo === "sustrato_principal") return "Sustrato principal";
-  return familia?.slotsRequeridos.find((slot) => slot.codigo === slotCodigo)?.nombre ?? humanizeCode(slotCodigo);
+  return (
+    familia?.slotsRequeridos.find((slot) => slot.codigo === slotCodigo)
+      ?.nombre ?? humanizeCode(slotCodigo)
+  );
 }
 
-function isConsumibleMaquinaSlot(slot: { tipo?: string; codigo?: string; slotCodigo?: string }) {
+function isConsumibleMaquinaSlot(slot: {
+  tipo?: string;
+  codigo?: string;
+  slotCodigo?: string;
+}) {
   return slot.tipo === "CONSUMIBLE_MAQUINA";
 }
 
@@ -410,17 +767,28 @@ function jsonToText(value: Record<string, unknown> | null | undefined): string {
   }
 }
 
-function textToJson(text: string): { ok: true; value: Record<string, unknown> | null } | { ok: false; error: string } {
+function textToJson(
+  text: string,
+):
+  | { ok: true; value: Record<string, unknown> | null }
+  | { ok: false; error: string } {
   const trimmed = text.trim();
   if (!trimmed) return { ok: true, value: null };
   try {
     const parsed = JSON.parse(trimmed);
-    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      Array.isArray(parsed)
+    ) {
       return { ok: false, error: "Debe ser un objeto JSON ({ ... })" };
     }
     return { ok: true, value: parsed as Record<string, unknown> };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "JSON inválido" };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "JSON inválido",
+    };
   }
 }
 
@@ -441,19 +809,27 @@ function getNestingConfig(params: Record<string, unknown> | null | undefined) {
   return asRecord(asRecord(params).nestingConfig);
 }
 
-function getPanelizadoConfig(params: Record<string, unknown> | null | undefined) {
+function getPanelizadoConfig(
+  params: Record<string, unknown> | null | undefined,
+) {
   return asRecord(getNestingConfig(params).panelizado);
 }
 
-function getPliegoImpresionConfig(params: Record<string, unknown> | null | undefined) {
+function getPliegoImpresionConfig(
+  params: Record<string, unknown> | null | undefined,
+) {
   return asRecord(getNestingConfig(params).pliegoImpresion);
 }
 
-function getExtraMarginsConfig(params: Record<string, unknown> | null | undefined) {
+function getExtraMarginsConfig(
+  params: Record<string, unknown> | null | undefined,
+) {
   return asRecord(getNestingConfig(params).extraMargins);
 }
 
-function getModoColorConfig(params: Record<string, unknown> | null | undefined) {
+function getModoColorConfig(
+  params: Record<string, unknown> | null | undefined,
+) {
   return asRecord(asRecord(params).modoColorConfig);
 }
 
@@ -496,7 +872,9 @@ function normalizeModoColor(value: unknown) {
   return value.trim();
 }
 
-function modosColorFromPerfil(perfil: { detalleJson?: Record<string, unknown> | null } | null | undefined) {
+function modosColorFromPerfil(
+  perfil: { detalleJson?: Record<string, unknown> | null } | null | undefined,
+) {
   const detalle = asRecord(perfil?.detalleJson);
   const raw = detalle.colores ?? detalle.modoColor;
   const values = Array.isArray(raw) ? raw : [raw];
@@ -509,7 +887,10 @@ function modosColorFromPerfil(perfil: { detalleJson?: Record<string, unknown> | 
   );
 }
 
-function modoColorAplica(familiaCodigo: string | undefined, cfg: UpsertConfigPasoPayload) {
+function modoColorAplica(
+  familiaCodigo: string | undefined,
+  cfg: UpsertConfigPasoPayload,
+) {
   if (!familiaCodigo || !cfg.maquinaM1Id) return false;
   return ["impresion_por_hoja", "impresion_por_area"].includes(familiaCodigo);
 }
@@ -523,7 +904,16 @@ function buildModoColorOptions(
       }
     | null
     | undefined,
-  configExistente: { modoColorOptions?: Array<{ value: string; label: string; perfilIds: string[] }> } | null | undefined,
+  configExistente:
+    | {
+        modoColorOptions?: Array<{
+          value: string;
+          label: string;
+          perfilIds: string[];
+        }>;
+      }
+    | null
+    | undefined,
   includeSinImpresion = false,
 ) {
   const modes = new Map<string, number>();
@@ -548,13 +938,37 @@ function buildModoColorOptions(
     label: option.label,
     code: `${option.perfilIds.length} perfil${option.perfilIds.length === 1 ? "" : "es"}`,
   }));
-  if (includeSinImpresion && !options.some((option) => option.value === "SIN_IMPRESION")) {
-    options.unshift({ value: "SIN_IMPRESION", label: "Sin impresión", code: "sin perfil" });
+  if (
+    includeSinImpresion &&
+    !options.some((option) => option.value === "SIN_IMPRESION")
+  ) {
+    options.unshift({
+      value: "SIN_IMPRESION",
+      label: "Sin impresión",
+      code: "sin perfil",
+    });
   }
   return options;
 }
 
-function nestingAplica(familiaCodigo: string | undefined, cfg: UpsertConfigPasoPayload) {
+function resolveModoColorAllowedModes(
+  allowedModes: string[] | null | undefined,
+  options: Array<{ value: string }>,
+) {
+  const optionValues = options.map((option) => option.value);
+  const normalizedAllowed = Array.isArray(allowedModes)
+    ? allowedModes
+        .map((item) => normalizeModoColor(item))
+        .filter((item): item is string => item !== null)
+        .filter((item) => optionValues.includes(item))
+    : [];
+  return normalizedAllowed.length > 0 ? normalizedAllowed : optionValues;
+}
+
+function nestingAplica(
+  familiaCodigo: string | undefined,
+  cfg: UpsertConfigPasoPayload,
+) {
   if (!familiaCodigo) return false;
   if (familiaCodigo === "pre_prensa") return false;
   if (cfg.mecanismoCantidad === "CALCULADO_POR_PASO") return true;
@@ -570,16 +984,31 @@ function nestingAplica(familiaCodigo: string | undefined, cfg: UpsertConfigPasoP
 function panelizadoAplica(
   familiaCodigo: string | undefined,
   nestingConfig: Record<string, unknown>,
-  maquina: { parametrosTecnicosJson?: Record<string, unknown> | null } | null | undefined,
+  maquina:
+    | { parametrosTecnicosJson?: Record<string, unknown> | null }
+    | null
+    | undefined,
   tieneSustratoRollo: boolean,
 ) {
   if (familiaCodigo !== "impresion_por_area") {
     return false;
   }
   const algorithm = String(nestingConfig.algorithm ?? "auto");
-  if (algorithm !== "auto" && algorithm !== "shelf-rollo" && algorithm !== "maxrects-rollo") return false;
-  const geometria = String(asRecord(maquina?.parametrosTecnicosJson).geometria ?? "").toUpperCase();
-  return geometria === "ROLLO" || geometria === "MESA_EXTENSORA" || geometria === "" || tieneSustratoRollo;
+  if (
+    algorithm !== "auto" &&
+    algorithm !== "shelf-rollo" &&
+    algorithm !== "maxrects-rollo"
+  )
+    return false;
+  const geometria = String(
+    asRecord(maquina?.parametrosTecnicosJson).geometria ?? "",
+  ).toUpperCase();
+  return (
+    geometria === "ROLLO" ||
+    geometria === "MESA_EXTENSORA" ||
+    geometria === "" ||
+    tieneSustratoRollo
+  );
 }
 
 function sanitizeNestingConfigForFamilia(
@@ -594,10 +1023,18 @@ function sanitizeNestingConfigForFamilia(
 }
 
 function defaultNestingSeparationForFamily(familiaCodigo: string | undefined) {
-  return familiaCodigo === "impresion_por_area" || familiaCodigo === "plotter_corte" ? 5 : 0;
+  return familiaCodigo === "impresion_por_area" ||
+    familiaCodigo === "plotter_corte"
+    ? 5
+    : 0;
 }
 
-function getMachineMargins(maquina: { parametrosTecnicosJson?: Record<string, unknown> | null } | null | undefined) {
+function getMachineMargins(
+  maquina:
+    | { parametrosTecnicosJson?: Record<string, unknown> | null }
+    | null
+    | undefined,
+) {
   const params = asRecord(maquina?.parametrosTecnicosJson);
   const raw = asRecord(params.margenesNoImprimiblesMm);
   return {
@@ -621,6 +1058,18 @@ function formatMm(value: unknown) {
   const n = readOptionalNumber(value);
   if (n === undefined) return null;
   return `${n} mm`;
+}
+
+function mmToCmInput(value: unknown) {
+  const n = readOptionalNumber(value);
+  if (n === undefined) return "";
+  return String(n / 10);
+}
+
+function cmInputToMm(value: string) {
+  if (value.trim() === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed * 10 : null;
 }
 
 type PanelAxis = "vertical" | "horizontal";
@@ -649,16 +1098,24 @@ function readManualLayout(value: unknown): PanelManualLayout | null {
     .map((item) => {
       const row = asRecord(item);
       const panelsRaw = Array.isArray(row.panels) ? row.panels : [];
-      const sourcePieceId = typeof row.sourcePieceId === "string" ? row.sourcePieceId : "";
+      const sourcePieceId =
+        typeof row.sourcePieceId === "string" ? row.sourcePieceId : "";
       const pieceWidthMm = readOptionalNumber(row.pieceWidthMm);
       const pieceHeightMm = readOptionalNumber(row.pieceHeightMm);
       const axis: PanelAxis | null =
-        row.axis === "horizontal" ? "horizontal" : row.axis === "vertical" ? "vertical" : null;
+        row.axis === "horizontal"
+          ? "horizontal"
+          : row.axis === "vertical"
+            ? "vertical"
+            : null;
       const panels = panelsRaw
         .map((panel) => {
           const current = asRecord(panel);
           return {
-            panelIndex: Math.max(1, Math.trunc(readOptionalNumber(current.panelIndex) ?? 1)),
+            panelIndex: Math.max(
+              1,
+              Math.trunc(readOptionalNumber(current.panelIndex) ?? 1),
+            ),
             usefulWidthMm: readOptionalNumber(current.usefulWidthMm) ?? 0,
             usefulHeightMm: readOptionalNumber(current.usefulHeightMm) ?? 0,
             overlapStartMm: readOptionalNumber(current.overlapStartMm) ?? 0,
@@ -669,13 +1126,23 @@ function readManualLayout(value: unknown): PanelManualLayout | null {
         })
         .filter((panel) => panel.finalWidthMm > 0 && panel.finalHeightMm > 0)
         .sort((a, b) => a.panelIndex - b.panelIndex);
-      if (!sourcePieceId || !pieceWidthMm || !pieceHeightMm || !axis || panels.length === 0) return null;
+      if (
+        !sourcePieceId ||
+        !pieceWidthMm ||
+        !pieceHeightMm ||
+        !axis ||
+        panels.length === 0
+      )
+        return null;
       return {
         sourcePieceId,
         pieceWidthMm,
         pieceHeightMm,
         axis,
-        panels: panels.map((panel, index) => ({ ...panel, panelIndex: index + 1 })),
+        panels: panels.map((panel, index) => ({
+          ...panel,
+          panelIndex: index + 1,
+        })),
       };
     })
     .filter((item): item is NonNullable<typeof item> => item != null);
@@ -699,7 +1166,14 @@ function getProductoPanelMeasures(producto: ProductoDetalle) {
   const widthMm = readOptionalNumber(producto.medidaDefaultAnchoMm);
   const heightMm = readOptionalNumber(producto.medidaDefaultAltoMm);
   return widthMm && heightMm
-    ? [{ sourcePieceId: "piece-0-0", label: "Medida del producto", widthMm, heightMm }]
+    ? [
+        {
+          sourcePieceId: "piece-0-0",
+          label: "Medida del producto",
+          widthMm,
+          heightMm,
+        },
+      ]
     : [];
 }
 
@@ -713,12 +1187,17 @@ function buildDefaultManualLayoutForMeasures(input: {
 }): PanelManualLayout {
   return {
     items: input.measures.map((measure) => {
-      const splitDimension = input.axis === "vertical" ? measure.widthMm : measure.heightMm;
+      const splitDimension =
+        input.axis === "vertical" ? measure.widthMm : measure.heightMm;
       const physicalLimit = Math.max(
         1,
         Math.min(
-          input.maxPanelWidthMm && input.maxPanelWidthMm > 0 ? input.maxPanelWidthMm : Number.POSITIVE_INFINITY,
-          input.printableWidthMm && input.printableWidthMm > 0 ? input.printableWidthMm : Number.POSITIVE_INFINITY,
+          input.maxPanelWidthMm && input.maxPanelWidthMm > 0
+            ? input.maxPanelWidthMm
+            : Number.POSITIVE_INFINITY,
+          input.printableWidthMm && input.printableWidthMm > 0
+            ? input.printableWidthMm
+            : Number.POSITIVE_INFINITY,
         ),
       );
       const usefulLimit =
@@ -732,16 +1211,24 @@ function buildDefaultManualLayoutForMeasures(input: {
         const segment = base + (index < remainder ? 1 : 0);
         const overlapStartMm = index === 0 ? 0 : input.overlapMm;
         const overlapEndMm = index === panelCount - 1 ? 0 : input.overlapMm;
-        const usefulWidthMm = input.axis === "vertical" ? segment : measure.widthMm;
-        const usefulHeightMm = input.axis === "horizontal" ? segment : measure.heightMm;
+        const usefulWidthMm =
+          input.axis === "vertical" ? segment : measure.widthMm;
+        const usefulHeightMm =
+          input.axis === "horizontal" ? segment : measure.heightMm;
         return {
           panelIndex: index + 1,
           usefulWidthMm,
           usefulHeightMm,
           overlapStartMm,
           overlapEndMm,
-          finalWidthMm: input.axis === "vertical" ? usefulWidthMm + overlapStartMm + overlapEndMm : measure.widthMm,
-          finalHeightMm: input.axis === "horizontal" ? usefulHeightMm + overlapStartMm + overlapEndMm : measure.heightMm,
+          finalWidthMm:
+            input.axis === "vertical"
+              ? usefulWidthMm + overlapStartMm + overlapEndMm
+              : measure.widthMm,
+          finalHeightMm:
+            input.axis === "horizontal"
+              ? usefulHeightMm + overlapStartMm + overlapEndMm
+              : measure.heightMm,
         };
       });
       return {
@@ -760,7 +1247,8 @@ function recalculateManualLayoutItem(
 ): PanelManualLayout["items"][number] {
   const panels = item.panels.map((panel, index) => {
     const overlapStartMm = index === 0 ? 0 : panel.overlapStartMm;
-    const overlapEndMm = index === item.panels.length - 1 ? 0 : panel.overlapEndMm;
+    const overlapEndMm =
+      index === item.panels.length - 1 ? 0 : panel.overlapEndMm;
     return {
       ...panel,
       panelIndex: index + 1,
@@ -785,21 +1273,42 @@ function validateManualLayoutItem(input: {
   printableWidthMm: number | null;
   widthInterpretation: "total" | "util";
 }) {
-  const splitDimension = input.item.axis === "vertical" ? input.item.pieceWidthMm : input.item.pieceHeightMm;
+  const splitDimension =
+    input.item.axis === "vertical"
+      ? input.item.pieceWidthMm
+      : input.item.pieceHeightMm;
   const usefulTotal = input.item.panels.reduce(
-    (acc, panel) => acc + (input.item.axis === "vertical" ? panel.usefulWidthMm : panel.usefulHeightMm),
+    (acc, panel) =>
+      acc +
+      (input.item.axis === "vertical"
+        ? panel.usefulWidthMm
+        : panel.usefulHeightMm),
     0,
   );
   if (Math.abs(usefulTotal - splitDimension) > 1) {
     return "La suma útil de los paneles no coincide con la medida original.";
   }
-  const maxLimit = input.maxPanelWidthMm && input.maxPanelWidthMm > 0 ? input.maxPanelWidthMm : null;
-  const printableLimit = input.printableWidthMm && input.printableWidthMm > 0 ? input.printableWidthMm : null;
+  const maxLimit =
+    input.maxPanelWidthMm && input.maxPanelWidthMm > 0
+      ? input.maxPanelWidthMm
+      : null;
+  const printableLimit =
+    input.printableWidthMm && input.printableWidthMm > 0
+      ? input.printableWidthMm
+      : null;
   for (const panel of input.item.panels) {
-    const useful = input.item.axis === "vertical" ? panel.usefulWidthMm : panel.usefulHeightMm;
-    const final = input.item.axis === "vertical" ? panel.finalWidthMm : panel.finalHeightMm;
-    if (useful <= 0 || final <= 0) return "Todos los paneles deben tener medidas mayores a 0.";
-    if (maxLimit && (input.widthInterpretation === "total" ? final : useful) > maxLimit) {
+    const useful =
+      input.item.axis === "vertical"
+        ? panel.usefulWidthMm
+        : panel.usefulHeightMm;
+    const final =
+      input.item.axis === "vertical" ? panel.finalWidthMm : panel.finalHeightMm;
+    if (useful <= 0 || final <= 0)
+      return "Todos los paneles deben tener medidas mayores a 0.";
+    if (
+      maxLimit &&
+      (input.widthInterpretation === "total" ? final : useful) > maxLimit
+    ) {
       return "Hay paneles que superan el ancho máximo configurado.";
     }
     if (printableLimit && final > printableLimit) {
@@ -812,7 +1321,10 @@ function validateManualLayoutItem(input: {
 function getPliegoPresetValue(pliegoImpresion: Record<string, unknown>) {
   const explicitPreset =
     typeof pliegoImpresion.preset === "string" ? pliegoImpresion.preset : null;
-  if (explicitPreset && PLIEGO_IMPRESION_PRESETS.some((preset) => preset.value === explicitPreset)) {
+  if (
+    explicitPreset &&
+    PLIEGO_IMPRESION_PRESETS.some((preset) => preset.value === explicitPreset)
+  ) {
     return explicitPreset;
   }
   const ancho = readOptionalNumber(pliegoImpresion.anchoMm);
@@ -885,7 +1397,9 @@ function MaterialSearchSelect({
       />
       <div className="max-h-56 space-y-1 overflow-auto rounded border bg-white p-1">
         {loading ? (
-          <div className="text-muted-foreground px-2 py-2 text-xs">Buscando...</div>
+          <div className="text-muted-foreground px-2 py-2 text-xs">
+            Buscando...
+          </div>
         ) : items.length === 0 ? (
           <div className="text-muted-foreground px-2 py-2 text-xs">
             Sin materias primas compatibles.
@@ -894,24 +1408,28 @@ function MaterialSearchSelect({
           items.map((item) => {
             const selected = selectedSet.has(item.id);
             return (
-            <button
-              key={item.id}
-              type="button"
-              className={`flex w-full items-center justify-between gap-3 rounded px-2 py-2 text-left text-xs transition ${
-                selected ? "bg-muted/70 text-muted-foreground" : "hover:bg-muted"
-              }`}
-              onClick={() => {
-                if (!selected) onSelect(item);
-              }}
-              disabled={selected}
-            >
-              <span className="min-w-0">
-                <span className="block truncate font-medium">{item.nombre}</span>
-              </span>
-              <span className="text-muted-foreground shrink-0 text-[11px]">
-                {selected ? "Seleccionado" : "Seleccionar"}
-              </span>
-            </button>
+              <button
+                key={item.id}
+                type="button"
+                className={`flex w-full items-center justify-between gap-3 rounded px-2 py-2 text-left text-xs transition ${
+                  selected
+                    ? "bg-muted/70 text-muted-foreground"
+                    : "hover:bg-muted"
+                }`}
+                onClick={() => {
+                  if (!selected) onSelect(item);
+                }}
+                disabled={selected}
+              >
+                <span className="min-w-0">
+                  <span className="block truncate font-medium">
+                    {item.nombre}
+                  </span>
+                </span>
+                <span className="text-muted-foreground shrink-0 text-[11px]">
+                  {selected ? "Seleccionado" : "Seleccionar"}
+                </span>
+              </button>
             );
           })
         )}
@@ -920,7 +1438,9 @@ function MaterialSearchSelect({
   );
 }
 
-type SlotCandidateConfig = NonNullable<UpsertSlotMaterialPayload["candidatos"]>[number];
+type SlotCandidateConfig = NonNullable<
+  UpsertSlotMaterialPayload["candidatos"]
+>[number];
 type MaterialVariantSearchItem = MateriaPrimaBusquedaItem["variantes"][number];
 
 function textAttr(attrs: Record<string, unknown>, keys: string[]) {
@@ -935,14 +1455,17 @@ function textAttr(attrs: Record<string, unknown>, keys: string[]) {
 function numberAttr(attrs: Record<string, unknown>, keys: string[]) {
   for (const key of keys) {
     const raw = attrs[key];
-    const value = typeof raw === "string" ? Number(raw.replace(",", ".")) : Number(raw);
+    const value =
+      typeof raw === "string" ? Number(raw.replace(",", ".")) : Number(raw);
     if (Number.isFinite(value)) return value;
   }
   return null;
 }
 
 function formatNumber(value: number) {
-  return new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(value);
+  return new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(
+    value,
+  );
 }
 
 function getVariantAttributeSummary(variante: MaterialVariantSearchItem) {
@@ -955,7 +1478,15 @@ function getVariantAttributeSummary(variante: MaterialVariantSearchItem) {
   return { attrs, color, espesor, ancho, alto, largo };
 }
 
-function materiaPrimaLooksLikeRoll(materiaPrima: Pick<MateriaPrimaBusquedaItem, "codigo" | "nombre" | "familia" | "subfamilia"> | null | undefined) {
+function materiaPrimaLooksLikeRoll(
+  materiaPrima:
+    | Pick<
+        MateriaPrimaBusquedaItem,
+        "codigo" | "nombre" | "familia" | "subfamilia"
+      >
+    | null
+    | undefined,
+) {
   const text = [
     materiaPrima?.codigo,
     materiaPrima?.nombre,
@@ -968,7 +1499,12 @@ function materiaPrimaLooksLikeRoll(materiaPrima: Pick<MateriaPrimaBusquedaItem, 
   return text.includes("ROLLO") || text.includes("ROLL");
 }
 
-function varianteLooksLikeRoll(variante: { atributosVarianteJson?: Record<string, unknown> | null } | null | undefined) {
+function varianteLooksLikeRoll(
+  variante:
+    | { atributosVarianteJson?: Record<string, unknown> | null }
+    | null
+    | undefined,
+) {
   const attrs = asRecord(variante?.atributosVarianteJson);
   return (
     readOptionalNumber(attrs.largoRolloMm) != null ||
@@ -988,7 +1524,9 @@ function canUseColorThicknessSelector(materiaPrima: MateriaPrimaBusquedaItem) {
   });
 }
 
-function getVariantMeasureLabel(summary: ReturnType<typeof getVariantAttributeSummary>) {
+function getVariantMeasureLabel(
+  summary: ReturnType<typeof getVariantAttributeSummary>,
+) {
   if (summary.ancho !== null && summary.alto !== null) {
     return `${formatNumber(summary.ancho)} x ${formatNumber(summary.alto)} m`;
   }
@@ -1011,14 +1549,16 @@ function patchEnabledVariantIds(
   const nextIds = checked
     ? [...candidate.varianteIds, varianteId]
     : candidate.varianteIds.filter((id) => id !== varianteId);
-  const safeIds = nextIds.length > 0 ? Array.from(new Set(nextIds)) : [varianteId];
+  const safeIds =
+    nextIds.length > 0 ? Array.from(new Set(nextIds)) : [varianteId];
   const defaultStillEnabled =
-    candidate.defaultVarianteId && safeIds.includes(candidate.defaultVarianteId);
+    candidate.defaultVarianteId &&
+    safeIds.includes(candidate.defaultVarianteId);
   return {
     varianteIds: safeIds,
     defaultVarianteId: defaultStillEnabled
       ? candidate.defaultVarianteId
-      : safeIds[0] ?? null,
+      : (safeIds[0] ?? null),
   };
 }
 
@@ -1054,7 +1594,9 @@ function ColorThicknessVariantSelector({
 
   React.useEffect(() => {
     if (!colors.includes(selectedColor)) {
-      setSelectedColor(defaultVariant?.summary.color || colors[0] || "Sin color");
+      setSelectedColor(
+        defaultVariant?.summary.color || colors[0] || "Sin color",
+      );
     }
   }, [colors, defaultVariant?.summary.color, selectedColor]);
 
@@ -1076,10 +1618,14 @@ function ColorThicknessVariantSelector({
         <div className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
           Color y espesor habilitados
         </div>
-        <Badge variant="outline">{candidate.varianteIds.length} variantes</Badge>
+        <Badge variant="outline">
+          {candidate.varianteIds.length} variantes
+        </Badge>
       </div>
       <div className="space-y-1">
-        <div className="text-muted-foreground text-[11px] font-medium">Color</div>
+        <div className="text-muted-foreground text-[11px] font-medium">
+          Color
+        </div>
         <div className="flex flex-wrap gap-1.5">
           {colors.map((color) => {
             const count = variants.filter(
@@ -1105,7 +1651,9 @@ function ColorThicknessVariantSelector({
         </div>
       </div>
       <div className="space-y-1">
-        <div className="text-muted-foreground text-[11px] font-medium">Espesor</div>
+        <div className="text-muted-foreground text-[11px] font-medium">
+          Espesor
+        </div>
         <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-4">
           {visibleVariants.map(({ variante, summary }) => {
             const checked = enabledVariantIds.has(variante.id);
@@ -1128,7 +1676,13 @@ function ColorThicknessVariantSelector({
                     className="mt-0.5"
                     checked={checked}
                     onChange={(event) =>
-                      onChange(patchEnabledVariantIds(candidate, variante.id, event.target.checked))
+                      onChange(
+                        patchEnabledVariantIds(
+                          candidate,
+                          variante.id,
+                          event.target.checked,
+                        ),
+                      )
                     }
                   />
                   <span className="min-w-0">
@@ -1138,7 +1692,9 @@ function ColorThicknessVariantSelector({
                         : variante.nombreVariante || variante.sku}
                     </span>
                     {medida ? (
-                      <span className="text-muted-foreground block truncate">{medida}</span>
+                      <span className="text-muted-foreground block truncate">
+                        {medida}
+                      </span>
                     ) : null}
                     {precio ? (
                       <span className="text-muted-foreground block truncate">
@@ -1172,7 +1728,11 @@ function requiereMecanismoCantidad(
   cfg: UpsertConfigPasoPayload,
   familia:
     | {
-        slotsRequeridos: Array<{ codigo: string; requerido: boolean; tipo?: string }>;
+        slotsRequeridos: Array<{
+          codigo: string;
+          requerido: boolean;
+          tipo?: string;
+        }>;
       }
     | undefined,
 ) {
@@ -1180,8 +1740,8 @@ function requiereMecanismoCantidad(
   if (cfg.modoTiempo !== "T-1") return true;
 
   const tieneMaterialesDeclarados =
-    (familia?.slotsRequeridos.filter((slot) => !isConsumibleMaquinaSlot(slot)).length ?? 0) > 0 ||
-    (cfg.slotsMateriales?.length ?? 0) > 0;
+    (familia?.slotsRequeridos.filter((slot) => !isConsumibleMaquinaSlot(slot))
+      .length ?? 0) > 0 || (cfg.slotsMateriales?.length ?? 0) > 0;
   return tieneMaterialesDeclarados;
 }
 
@@ -1190,15 +1750,22 @@ function validarBasico(
   familia:
     | {
         relacionMaquinaSoportada: string[];
-        slotsRequeridos: Array<{ codigo: string; requerido: boolean; tipo?: string }>;
+        slotsRequeridos: Array<{
+          codigo: string;
+          requerido: boolean;
+          tipo?: string;
+        }>;
       }
     | undefined,
 ): TabValidacion {
   const errores: string[] = [];
   const warnings: string[] = [];
-  const soportaManual = familia?.relacionMaquinaSoportada.includes("M-0") ?? false;
-  const soportaMaquina = familia?.relacionMaquinaSoportada.includes("M-1") ?? false;
-  const requiereMaquina = cfg.modoTiempo === "T-3" || (soportaMaquina && !soportaManual);
+  const soportaManual =
+    familia?.relacionMaquinaSoportada.includes("M-0") ?? false;
+  const soportaMaquina =
+    familia?.relacionMaquinaSoportada.includes("M-1") ?? false;
+  const requiereMaquina =
+    cfg.modoTiempo === "T-3" || (soportaMaquina && !soportaManual);
   if (requiereMaquina && !cfg.maquinaM1Id) {
     errores.push("Falta máquina principal");
   }
@@ -1216,9 +1783,24 @@ function validarBasico(
     const params = asRecord(cfg.paramsPasoJson);
     const horasEstimadas = readOptionalNumber(params.horasEstimadas);
     const productividad = readOptionalNumber(params.productivityValue);
-    const campoHoras = typeof params.campoHorasJobContext === "string" ? params.campoHorasJobContext.trim() : "";
-    if (!horasEstimadas && !productividad && !campoHoras) {
-      warnings.push("Productividad u horas del paso sin definir");
+    const batchTimeMin = readOptionalNumber(params.batchTimeMin);
+    const batchSize = readOptionalNumber(params.batchSize);
+    const modoCalculo =
+      typeof params.timeCalculationMode === "string"
+        ? params.timeCalculationMode
+        : "productivity";
+    const campoHoras =
+      typeof params.campoHorasJobContext === "string"
+        ? params.campoHorasJobContext.trim()
+        : "";
+    if (
+      !horasEstimadas &&
+      !campoHoras &&
+      (modoCalculo === "batch_time"
+        ? !batchTimeMin || !batchSize
+        : !productividad)
+    ) {
+      warnings.push("Tiempo del paso sin definir");
     }
   }
   return { errores, warnings };
@@ -1226,7 +1808,16 @@ function validarBasico(
 
 function validarMateriales(
   cfg: UpsertConfigPasoPayload,
-  familia: { slotsRequeridos: Array<{ codigo: string; nombre: string; requerido: boolean; tipo?: string }> } | undefined,
+  familia:
+    | {
+        slotsRequeridos: Array<{
+          codigo: string;
+          nombre: string;
+          requerido: boolean;
+          tipo?: string;
+        }>;
+      }
+    | undefined,
 ): TabValidacion {
   const errores: string[] = [];
   const warnings: string[] = [];
@@ -1240,19 +1831,28 @@ function validarMateriales(
     }
   }
   for (const slot of slots) {
-    const slotDecl = familia.slotsRequeridos.find((sr) => sr.codigo === slot.slotCodigo);
+    const slotDecl = familia.slotsRequeridos.find(
+      (sr) => sr.codigo === slot.slotCodigo,
+    );
     if (slotDecl && isConsumibleMaquinaSlot(slotDecl)) continue;
     if (slot.modoSeleccion === "HARDCODED" && !slot.materialVarianteId) {
-      errores.push(`${slotNombre(slot.slotCodigo, familia)}: sin variante de material`);
+      errores.push(
+        `${slotNombre(slot.slotCodigo, familia)}: sin variante de material`,
+      );
     }
     if (slot.modoSeleccion === "MOTOR_ELIGE_AUTO" && !slot.criterioMotorAuto) {
-      warnings.push(`${slotNombre(slot.slotCodigo, familia)}: sin criterio del sistema`);
+      warnings.push(
+        `${slotNombre(slot.slotCodigo, familia)}: sin criterio del sistema`,
+      );
     }
     if (
-      (slot.modoSeleccion === "COMERCIAL_ELIGE" || slot.modoSeleccion === "MOTOR_ELIGE_AUTO") &&
+      (slot.modoSeleccion === "COMERCIAL_ELIGE" ||
+        slot.modoSeleccion === "MOTOR_ELIGE_AUTO") &&
       (slot.candidatos?.length ?? 0) === 0
     ) {
-      errores.push(`${slotNombre(slot.slotCodigo, familia)}: sin materiales candidatos`);
+      errores.push(
+        `${slotNombre(slot.slotCodigo, familia)}: sin materiales candidatos`,
+      );
     }
   }
   return { errores, warnings };
@@ -1276,13 +1876,21 @@ function validarAvanzado(
   }
   if (familia?.codigo === "impresion_por_hoja" && cfg) {
     const pliegoImpresion = getPliegoImpresionConfig(cfg.paramsPasoJson);
-    const hasAncho = pliegoImpresion.anchoMm !== undefined && pliegoImpresion.anchoMm !== null && pliegoImpresion.anchoMm !== "";
-    const hasAlto = pliegoImpresion.altoMm !== undefined && pliegoImpresion.altoMm !== null && pliegoImpresion.altoMm !== "";
+    const hasAncho =
+      pliegoImpresion.anchoMm !== undefined &&
+      pliegoImpresion.anchoMm !== null &&
+      pliegoImpresion.anchoMm !== "";
+    const hasAlto =
+      pliegoImpresion.altoMm !== undefined &&
+      pliegoImpresion.altoMm !== null &&
+      pliegoImpresion.altoMm !== "";
     if (hasAncho || hasAlto) {
       const ancho = readOptionalNumber(pliegoImpresion.anchoMm);
       const alto = readOptionalNumber(pliegoImpresion.altoMm);
       if (!ancho || ancho <= 0 || !alto || alto <= 0) {
-        errores.push("Pliego de impresión: completá ancho y alto mayores a 0 mm");
+        errores.push(
+          "Pliego de impresión: completá ancho y alto mayores a 0 mm",
+        );
       }
     }
   }
@@ -1303,7 +1911,12 @@ function PanelManualEditorSheet({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  measures: Array<{ sourcePieceId: string; label: string; widthMm: number; heightMm: number }>;
+  measures: Array<{
+    sourcePieceId: string;
+    label: string;
+    widthMm: number;
+    heightMm: number;
+  }>;
   layout: PanelManualLayout | null;
   axis: PanelAxis;
   overlapMm: number;
@@ -1329,37 +1942,72 @@ function PanelManualEditorSheet({
       });
     setDraft(next);
     setSelectedPieceId(next.items[0]?.sourcePieceId ?? "");
-  }, [axis, layout, maxPanelWidthMm, measures, open, overlapMm, printableWidthMm, widthInterpretation]);
+  }, [
+    axis,
+    layout,
+    maxPanelWidthMm,
+    measures,
+    open,
+    overlapMm,
+    printableWidthMm,
+    widthInterpretation,
+  ]);
 
   const selectedItem = React.useMemo(
-    () => draft?.items.find((item) => item.sourcePieceId === selectedPieceId) ?? draft?.items[0] ?? null,
+    () =>
+      draft?.items.find((item) => item.sourcePieceId === selectedPieceId) ??
+      draft?.items[0] ??
+      null,
     [draft, selectedPieceId],
   );
-  const selectedMeasure = measures.find((measure) => measure.sourcePieceId === selectedItem?.sourcePieceId);
+  const selectedMeasure = measures.find(
+    (measure) => measure.sourcePieceId === selectedItem?.sourcePieceId,
+  );
   const validation = selectedItem
-    ? validateManualLayoutItem({ item: selectedItem, maxPanelWidthMm, printableWidthMm, widthInterpretation })
+    ? validateManualLayoutItem({
+        item: selectedItem,
+        maxPanelWidthMm,
+        printableWidthMm,
+        widthInterpretation,
+      })
     : null;
   const allValid =
     draft?.items.every(
-      (item) => !validateManualLayoutItem({ item, maxPanelWidthMm, printableWidthMm, widthInterpretation }),
+      (item) =>
+        !validateManualLayoutItem({
+          item,
+          maxPanelWidthMm,
+          printableWidthMm,
+          widthInterpretation,
+        }),
     ) ?? false;
 
-  const updateSelectedItem = (updater: (item: PanelManualLayout["items"][number]) => PanelManualLayout["items"][number]) => {
+  const updateSelectedItem = (
+    updater: (
+      item: PanelManualLayout["items"][number],
+    ) => PanelManualLayout["items"][number],
+  ) => {
     if (!selectedItem) return;
     setDraft((current) =>
       current
         ? {
             items: current.items.map((item) =>
-              item.sourcePieceId === selectedItem.sourcePieceId ? updater(item) : item,
+              item.sourcePieceId === selectedItem.sourcePieceId
+                ? updater(item)
+                : item,
             ),
           }
         : current,
     );
   };
 
-  const splitEvenly = (item: PanelManualLayout["items"][number], panelCount: number) => {
+  const splitEvenly = (
+    item: PanelManualLayout["items"][number],
+    panelCount: number,
+  ) => {
     const count = Math.max(1, panelCount);
-    const dimension = item.axis === "vertical" ? item.pieceWidthMm : item.pieceHeightMm;
+    const dimension =
+      item.axis === "vertical" ? item.pieceWidthMm : item.pieceHeightMm;
     const base = Math.floor(dimension / count);
     const remainder = Math.round(dimension - base * count);
     const panels = Array.from({ length: count }, (_, index) => {
@@ -1369,11 +2017,18 @@ function PanelManualEditorSheet({
       return {
         panelIndex: index + 1,
         usefulWidthMm: item.axis === "vertical" ? segment : item.pieceWidthMm,
-        usefulHeightMm: item.axis === "horizontal" ? segment : item.pieceHeightMm,
+        usefulHeightMm:
+          item.axis === "horizontal" ? segment : item.pieceHeightMm,
         overlapStartMm,
         overlapEndMm,
-        finalWidthMm: item.axis === "vertical" ? segment + overlapStartMm + overlapEndMm : item.pieceWidthMm,
-        finalHeightMm: item.axis === "horizontal" ? segment + overlapStartMm + overlapEndMm : item.pieceHeightMm,
+        finalWidthMm:
+          item.axis === "vertical"
+            ? segment + overlapStartMm + overlapEndMm
+            : item.pieceWidthMm,
+        finalHeightMm:
+          item.axis === "horizontal"
+            ? segment + overlapStartMm + overlapEndMm
+            : item.pieceHeightMm,
       };
     });
     return { ...item, panels };
@@ -1381,34 +2036,47 @@ function PanelManualEditorSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="!w-[760px] !max-w-[92vw] overflow-y-auto">
+      <SheetContent
+        side="right"
+        className="!w-[760px] !max-w-[92vw] overflow-y-auto"
+      >
         <SheetHeader>
           <SheetTitle>Editor manual de paneles</SheetTitle>
           <SheetDescription>
-            Definí cómo se divide cada medida cuando la pieza no entra completa en el ancho imprimible del rollo.
+            Definí cómo se divide cada medida cuando la pieza no entra completa
+            en el ancho imprimible del rollo.
           </SheetDescription>
         </SheetHeader>
         <div className="space-y-4 px-4">
           {measures.length === 0 ? (
             <div className="rounded-md border bg-muted/20 p-4 text-sm text-muted-foreground">
-              Este producto no tiene una medida fija o predefinida para preparar el layout manual.
+              Este producto no tiene una medida fija o predefinida para preparar
+              el layout manual.
             </div>
           ) : (
             <>
               <div className="flex flex-wrap gap-2">
                 {draft?.items.map((item, index) => {
-                  const measure = measures.find((current) => current.sourcePieceId === item.sourcePieceId);
+                  const measure = measures.find(
+                    (current) => current.sourcePieceId === item.sourcePieceId,
+                  );
                   return (
                     <button
                       key={item.sourcePieceId}
                       type="button"
                       className={`rounded-md border px-3 py-2 text-left text-xs ${
-                        item.sourcePieceId === selectedItem?.sourcePieceId ? "border-foreground bg-muted" : "bg-background"
+                        item.sourcePieceId === selectedItem?.sourcePieceId
+                          ? "border-foreground bg-muted"
+                          : "bg-background"
                       }`}
                       onClick={() => setSelectedPieceId(item.sourcePieceId)}
                     >
-                      <span className="block font-medium">{measure?.label ?? `Pieza ${index + 1}`}</span>
-                      <span className="text-muted-foreground">{item.pieceWidthMm} × {item.pieceHeightMm} mm</span>
+                      <span className="block font-medium">
+                        {measure?.label ?? `Pieza ${index + 1}`}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {item.pieceWidthMm} × {item.pieceHeightMm} mm
+                      </span>
                     </button>
                   );
                 })}
@@ -1418,9 +2086,14 @@ function PanelManualEditorSheet({
                 <div className="space-y-4 rounded-md border bg-background p-3">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <div className="text-sm font-medium">{selectedMeasure?.label ?? "Medida seleccionada"}</div>
+                      <div className="text-sm font-medium">
+                        {selectedMeasure?.label ?? "Medida seleccionada"}
+                      </div>
                       <div className="text-xs text-muted-foreground">
-                        {selectedItem.pieceWidthMm} × {selectedItem.pieceHeightMm} mm · {selectedItem.panels.length} panel{selectedItem.panels.length === 1 ? "" : "es"}
+                        {selectedItem.pieceWidthMm} ×{" "}
+                        {selectedItem.pieceHeightMm} mm ·{" "}
+                        {selectedItem.panels.length} panel
+                        {selectedItem.panels.length === 1 ? "" : "es"}
                       </div>
                     </div>
                     <HumanSelect
@@ -1429,8 +2102,12 @@ function PanelManualEditorSheet({
                       triggerClassName="min-h-9 min-w-40 text-xs"
                       onValueChange={(value) =>
                         updateSelectedItem((item) => {
-                          const nextAxis = value === "horizontal" ? "horizontal" : "vertical";
-                          return splitEvenly({ ...item, axis: nextAxis }, item.panels.length);
+                          const nextAxis =
+                            value === "horizontal" ? "horizontal" : "vertical";
+                          return splitEvenly(
+                            { ...item, axis: nextAxis },
+                            item.panels.length,
+                          );
                         })
                       }
                     />
@@ -1438,15 +2115,26 @@ function PanelManualEditorSheet({
 
                   <div className="flex h-20 overflow-hidden rounded-md border bg-muted/20">
                     {selectedItem.panels.map((panel) => {
-                      const useful = selectedItem.axis === "vertical" ? panel.usefulWidthMm : panel.usefulHeightMm;
-                      const total = selectedItem.axis === "vertical" ? selectedItem.pieceWidthMm : selectedItem.pieceHeightMm;
+                      const useful =
+                        selectedItem.axis === "vertical"
+                          ? panel.usefulWidthMm
+                          : panel.usefulHeightMm;
+                      const total =
+                        selectedItem.axis === "vertical"
+                          ? selectedItem.pieceWidthMm
+                          : selectedItem.pieceHeightMm;
                       return (
                         <div
                           key={panel.panelIndex}
                           className="flex min-w-12 items-center justify-center border-r last:border-r-0"
-                          style={{ flexGrow: Math.max(1, useful), flexBasis: `${Math.max(5, (useful / total) * 100)}%` }}
+                          style={{
+                            flexGrow: Math.max(1, useful),
+                            flexBasis: `${Math.max(5, (useful / total) * 100)}%`,
+                          }}
                         >
-                          <span className="text-xs font-medium">P{panel.panelIndex}</span>
+                          <span className="text-xs font-medium">
+                            P{panel.panelIndex}
+                          </span>
                         </div>
                       );
                     })}
@@ -1454,11 +2142,22 @@ function PanelManualEditorSheet({
 
                   <div className="grid gap-2">
                     {selectedItem.panels.map((panel, index) => {
-                      const usefulValue = selectedItem.axis === "vertical" ? panel.usefulWidthMm : panel.usefulHeightMm;
-                      const finalValue = selectedItem.axis === "vertical" ? panel.finalWidthMm : panel.finalHeightMm;
+                      const usefulValue =
+                        selectedItem.axis === "vertical"
+                          ? panel.usefulWidthMm
+                          : panel.usefulHeightMm;
+                      const finalValue =
+                        selectedItem.axis === "vertical"
+                          ? panel.finalWidthMm
+                          : panel.finalHeightMm;
                       return (
-                        <div key={panel.panelIndex} className="grid grid-cols-[80px_minmax(0,1fr)_120px] items-center gap-2 text-xs">
-                          <div className="font-medium">Panel {panel.panelIndex}</div>
+                        <div
+                          key={panel.panelIndex}
+                          className="grid grid-cols-[80px_minmax(0,1fr)_120px] items-center gap-2 text-xs"
+                        >
+                          <div className="font-medium">
+                            Panel {panel.panelIndex}
+                          </div>
                           <Input
                             type="number"
                             min={1}
@@ -1466,21 +2165,40 @@ function PanelManualEditorSheet({
                             value={String(usefulValue)}
                             onChange={(event) =>
                               updateSelectedItem((item) => {
-                                const panels = item.panels.map((current, currentIndex) => {
-                                  if (currentIndex !== index) return current;
-                                  const nextUseful = event.target.value === "" ? 1 : Math.max(1, Number(event.target.value));
-                                  return {
-                                    ...current,
-                                    usefulWidthMm: item.axis === "vertical" ? nextUseful : item.pieceWidthMm,
-                                    usefulHeightMm: item.axis === "horizontal" ? nextUseful : item.pieceHeightMm,
-                                  };
+                                const panels = item.panels.map(
+                                  (current, currentIndex) => {
+                                    if (currentIndex !== index) return current;
+                                    const nextUseful =
+                                      event.target.value === ""
+                                        ? 1
+                                        : Math.max(
+                                            1,
+                                            Number(event.target.value),
+                                          );
+                                    return {
+                                      ...current,
+                                      usefulWidthMm:
+                                        item.axis === "vertical"
+                                          ? nextUseful
+                                          : item.pieceWidthMm,
+                                      usefulHeightMm:
+                                        item.axis === "horizontal"
+                                          ? nextUseful
+                                          : item.pieceHeightMm,
+                                    };
+                                  },
+                                );
+                                return recalculateManualLayoutItem({
+                                  ...item,
+                                  panels,
                                 });
-                                return recalculateManualLayoutItem({ ...item, panels });
                               })
                             }
                             className="h-8 text-xs"
                           />
-                          <div className="text-muted-foreground">final {Math.round(finalValue)} mm</div>
+                          <div className="text-muted-foreground">
+                            final {Math.round(finalValue)} mm
+                          </div>
                         </div>
                       );
                     })}
@@ -1491,7 +2209,11 @@ function PanelManualEditorSheet({
                       type="button"
                       size="sm"
                       variant="outline"
-                      onClick={() => updateSelectedItem((item) => splitEvenly(item, item.panels.length + 1))}
+                      onClick={() =>
+                        updateSelectedItem((item) =>
+                          splitEvenly(item, item.panels.length + 1),
+                        )
+                      }
                     >
                       Agregar panel
                     </Button>
@@ -1500,7 +2222,11 @@ function PanelManualEditorSheet({
                       size="sm"
                       variant="outline"
                       disabled={selectedItem.panels.length <= 1}
-                      onClick={() => updateSelectedItem((item) => splitEvenly(item, item.panels.length - 1))}
+                      onClick={() =>
+                        updateSelectedItem((item) =>
+                          splitEvenly(item, item.panels.length - 1),
+                        )
+                      }
                     >
                       Quitar panel
                     </Button>
@@ -1508,7 +2234,11 @@ function PanelManualEditorSheet({
                       type="button"
                       size="sm"
                       variant="outline"
-                      onClick={() => updateSelectedItem((item) => splitEvenly(item, item.panels.length))}
+                      onClick={() =>
+                        updateSelectedItem((item) =>
+                          splitEvenly(item, item.panels.length),
+                        )
+                      }
                     >
                       Equilibrar
                     </Button>
@@ -1585,12 +2315,19 @@ export function ConfigPasosEditorView({
   const [configs, setConfigs] = React.useState<ConfigState>(() => {
     const initial: ConfigState = {};
     for (const paso of rutaAlternativa.ruta.pasos) {
-      const existente = rutaAlternativa.configPasos.find((cp) => cp.rutaPasoId === paso.id);
+      const existente = rutaAlternativa.configPasos.find(
+        (cp) => cp.rutaPasoId === paso.id,
+      );
       const familia = familiasMap.get(paso.familiaCodigo);
       initial[paso.id] = {
         rutaPasoId: paso.id,
-        modoActivacion: existente?.modoActivacion ?? familia?.modoActivacionDefault ?? "OBLIGATORIO",
-        condicionActivacionJson: (existente?.condicionActivacionJson as Record<string, unknown> | null | undefined) ?? null,
+        modoActivacion:
+          existente?.modoActivacion ??
+          familia?.modoActivacionDefault ??
+          "OBLIGATORIO",
+        condicionActivacionJson:
+          (existente?.condicionActivacionJson as
+            Record<string, unknown> | null | undefined) ?? null,
         modoTiempo:
           existente?.modoTiempo ??
           (familia?.modosTiempoSoportados.length === 1
@@ -1598,41 +2335,53 @@ export function ConfigPasosEditorView({
             : null),
         mecanismoCantidad:
           existente?.mecanismoCantidad ??
+          getDefaultMecanismoCantidad(paso.familiaCodigo) ??
           (familia?.mecanismosCantidadSoportados.length === 1
             ? familia.mecanismosCantidadSoportados[0]
             : null),
-        mecanismoCantidadConfigJson: (existente?.mecanismoCantidadConfigJson as Record<string, unknown> | null | undefined) ?? null,
+        mecanismoCantidadConfigJson:
+          (existente?.mecanismoCantidadConfigJson as
+            Record<string, unknown> | null | undefined) ?? null,
         multiplicadoresActivos: existente?.multiplicadoresActivos ?? [],
-        paramsPasoJson: (existente?.paramsPasoJson as Record<string, unknown> | null | undefined) ?? null,
+        paramsPasoJson:
+          (existente?.paramsPasoJson as
+            Record<string, unknown> | null | undefined) ?? null,
         nombreVisible: existente?.nombreVisible ?? null,
         maquinaM1Id: existente?.maquinaM1?.id ?? null,
         perfilM1Id: existente?.perfilM1?.id ?? null,
-        centroCostoId: existente?.maquinaM1 ? null : (existente?.centroCosto?.id ?? null),
+        centroCostoId: existente?.maquinaM1
+          ? null
+          : (existente?.centroCosto?.id ?? null),
         setupOverrideMin: existente?.setupOverrideMin ?? null,
         cleanupOverrideMin: existente?.cleanupOverrideMin ?? null,
         tiempoFijoOverrideMin: existente?.tiempoFijoOverrideMin ?? null,
         maquinasCandidatas: normalizeMaquinasCandidatas(
           existente?.maquinasCandidatas?.map((candidata, index) => ({
             maquinaId: candidata.maquinaId,
+            perfilDefaultId:
+              candidata.perfilDefaultId ?? candidata.perfilDefault?.id ?? null,
+            modoColorAllowedModes: candidata.modoColorAllowedModes ?? [],
             esPreferida: candidata.esPreferida,
             orden: candidata.orden ?? index,
           })) ?? [],
         ),
-        slotsMateriales: existente?.slotsMateriales.map<UpsertSlotMaterialPayload>((s) => ({
-          slotCodigo: s.slotCodigo,
-          modoSeleccion: s.modoSeleccion as "HARDCODED" | "COMERCIAL_ELIGE" | "MOTOR_ELIGE_AUTO",
-          criterioMotorAuto: s.criterioMotorAuto ?? null,
-          materialVarianteId: s.materialVariante?.id ?? null,
-          candidatos: s.candidatos.map((candidate) => ({
-            materiaPrimaId: candidate.materiaPrimaId,
-            defaultVarianteId: candidate.defaultVarianteId,
-            orden: candidate.orden,
-            varianteIds: candidate.variantes.map((item) => item.variante.id),
-          })),
-          estrategiaCosto: s.estrategiaCosto,
-          formula: s.formula,
-          aplicaMultiCaras: s.aplicaMultiCaras,
-        })) ?? [],
+        slotsMateriales:
+          existente?.slotsMateriales.map<UpsertSlotMaterialPayload>((s) => ({
+            slotCodigo: s.slotCodigo,
+            modoSeleccion: s.modoSeleccion as
+              "HARDCODED" | "COMERCIAL_ELIGE" | "MOTOR_ELIGE_AUTO",
+            criterioMotorAuto: s.criterioMotorAuto ?? null,
+            materialVarianteId: s.materialVariante?.id ?? null,
+            candidatos: s.candidatos.map((candidate) => ({
+              materiaPrimaId: candidate.materiaPrimaId,
+              defaultVarianteId: candidate.defaultVarianteId,
+              orden: candidate.orden,
+              varianteIds: candidate.variantes.map((item) => item.variante.id),
+            })),
+            estrategiaCosto: s.estrategiaCosto,
+            formula: s.formula,
+            aplicaMultiCaras: s.aplicaMultiCaras,
+          })) ?? [],
       };
     }
     return initial;
@@ -1673,20 +2422,26 @@ export function ConfigPasosEditorView({
   });
 
   // JSON text por paso (sólo UI; al guardar se parsea de vuelta a objeto)
-  const [jsonTexts] = React.useState<Record<string, { params: string; mecanismo: string }>>(
-    () => {
-      const map: Record<string, { params: string; mecanismo: string }> = {};
-      for (const paso of rutaAlternativa.ruta.pasos) {
-        const existente = rutaAlternativa.configPasos.find((cp) => cp.rutaPasoId === paso.id);
-        const params = existente?.paramsPasoJson as Record<string, unknown> | null | undefined;
-        map[paso.id] = {
-          params: jsonToText(stripNestingConfig(params)),
-          mecanismo: jsonToText(existente?.mecanismoCantidadConfigJson as Record<string, unknown> | null | undefined),
-        };
-      }
-      return map;
-    },
-  );
+  const [jsonTexts] = React.useState<
+    Record<string, { params: string; mecanismo: string }>
+  >(() => {
+    const map: Record<string, { params: string; mecanismo: string }> = {};
+    for (const paso of rutaAlternativa.ruta.pasos) {
+      const existente = rutaAlternativa.configPasos.find(
+        (cp) => cp.rutaPasoId === paso.id,
+      );
+      const params = existente?.paramsPasoJson as
+        Record<string, unknown> | null | undefined;
+      map[paso.id] = {
+        params: jsonToText(stripNestingConfig(params)),
+        mecanismo: jsonToText(
+          existente?.mecanismoCantidadConfigJson as
+            Record<string, unknown> | null | undefined,
+        ),
+      };
+    }
+    return map;
+  });
   const [savedConfigSnapshots, setSavedConfigSnapshots] =
     React.useState<SavedConfigSnapshots>(() => {
       const snapshots: SavedConfigSnapshots = {};
@@ -1706,7 +2461,9 @@ export function ConfigPasosEditorView({
     () => rutaAlternativa.ruta.pasos[0]?.id ?? "",
   );
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
-  const [panelEditorPasoId, setPanelEditorPasoId] = React.useState<string | null>(null);
+  const [panelEditorPasoId, setPanelEditorPasoId] = React.useState<
+    string | null
+  >(null);
 
   React.useEffect(() => {
     const ids = rutaAlternativa.ruta.pasos.map((paso) => paso.id);
@@ -1733,35 +2490,181 @@ export function ConfigPasosEditorView({
     return () => window.removeEventListener("keydown", onKey);
   }, [rutaAlternativa.ruta.pasos]);
 
-  const updateConfig = (rutaPasoId: string, patch: Partial<UpsertConfigPasoPayload>) => {
-    setConfigs((prev) => ({ ...prev, [rutaPasoId]: { ...prev[rutaPasoId], ...patch } }));
+  const updateConfig = (
+    rutaPasoId: string,
+    patch: Partial<UpsertConfigPasoPayload>,
+  ) => {
+    setConfigs((prev) => ({
+      ...prev,
+      [rutaPasoId]: { ...prev[rutaPasoId], ...patch },
+    }));
   };
 
-  const toggleMaquinaCandidata = (rutaPasoId: string, maquinaId: string, checked: boolean) => {
+  const toggleMaquinaCandidata = (
+    rutaPasoId: string,
+    maquinaId: string,
+    checked: boolean,
+  ) => {
     setConfigs((prev) => {
       const cfg = prev[rutaPasoId];
       const current = cfg.maquinasCandidatas ?? [];
+      const paso = rutaAlternativa.ruta.pasos.find(
+        (item) => item.id === rutaPasoId,
+      );
+      const maquina = lookups.maquinas.find((item) => item.id === maquinaId);
+      const perfilDefaultId =
+        maquina?.perfilesOperativos.find((perfil) =>
+          perfilCompatibleConFamilia(paso?.familiaCodigo, perfil),
+        )?.id ?? null;
       const next = checked
         ? normalizeMaquinasCandidatas([
             ...current,
-            { maquinaId, esPreferida: current.length === 0, orden: current.length },
+            {
+              maquinaId,
+              perfilDefaultId,
+              modoColorAllowedModes: [],
+              esPreferida: current.length === 0,
+              orden: current.length,
+            },
           ])
-        : normalizeMaquinasCandidatas(current.filter((candidata) => candidata.maquinaId !== maquinaId));
-      return { ...prev, [rutaPasoId]: { ...cfg, maquinasCandidatas: next } };
+        : normalizeMaquinasCandidatas(
+            current.filter((candidata) => candidata.maquinaId !== maquinaId),
+          );
+      const preferredId =
+        next.find((candidata) => candidata.esPreferida)?.maquinaId ?? null;
+      const preferredCandidate = preferredId
+        ? next.find((candidata) => candidata.maquinaId === preferredId)
+        : null;
+      return {
+        ...prev,
+        [rutaPasoId]: {
+          ...cfg,
+          ...(preferredId
+            ? {
+                maquinaM1Id: preferredId,
+                perfilM1Id: preferredCandidate?.perfilDefaultId ?? null,
+                centroCostoId: null,
+              }
+            : {}),
+          maquinasCandidatas: next,
+        },
+      };
     });
   };
 
-  const setMaquinaCandidataPreferida = (rutaPasoId: string, maquinaId: string) => {
+  const setMaquinaCandidataPreferida = (
+    rutaPasoId: string,
+    maquinaId: string,
+  ) => {
     setConfigs((prev) => {
       const cfg = prev[rutaPasoId];
       const current = cfg.maquinasCandidatas ?? [];
+      const paso = rutaAlternativa.ruta.pasos.find(
+        (item) => item.id === rutaPasoId,
+      );
+      const maquina = lookups.maquinas.find((item) => item.id === maquinaId);
+      const candidataActual = current.find(
+        (candidata) => candidata.maquinaId === maquinaId,
+      );
+      const perfilDefaultId =
+        candidataActual?.perfilDefaultId ??
+        maquina?.perfilesOperativos.find((perfil) =>
+          perfilCompatibleConFamilia(paso?.familiaCodigo, perfil),
+        )?.id ??
+        null;
       const next = normalizeMaquinasCandidatas(
         current.map((candidata) => ({
           ...candidata,
+          perfilDefaultId:
+            candidata.maquinaId === maquinaId
+              ? perfilDefaultId
+              : (candidata.perfilDefaultId ?? null),
           esPreferida: candidata.maquinaId === maquinaId,
         })),
       );
-      return { ...prev, [rutaPasoId]: { ...cfg, maquinasCandidatas: next } };
+      return {
+        ...prev,
+        [rutaPasoId]: {
+          ...cfg,
+          maquinaM1Id: maquinaId,
+          perfilM1Id: perfilDefaultId,
+          centroCostoId: null,
+          maquinasCandidatas: next,
+        },
+      };
+    });
+  };
+
+  const setMaquinaCandidataPerfilDefault = (
+    rutaPasoId: string,
+    maquinaId: string,
+    perfilDefaultId: string | null,
+  ) => {
+    setConfigs((prev) => {
+      const cfg = prev[rutaPasoId];
+      const current = cfg.maquinasCandidatas ?? [];
+      const preferred = current.some(
+        (candidata) =>
+          candidata.maquinaId === maquinaId && candidata.esPreferida,
+      );
+      const next = normalizeMaquinasCandidatas(
+        current.map((candidata) =>
+          candidata.maquinaId === maquinaId
+            ? { ...candidata, perfilDefaultId }
+            : candidata,
+        ),
+      );
+      return {
+        ...prev,
+        [rutaPasoId]: {
+          ...cfg,
+          ...(preferred
+            ? { maquinaM1Id: maquinaId, perfilM1Id: perfilDefaultId }
+            : {}),
+          maquinasCandidatas: next,
+        },
+      };
+    });
+  };
+
+  const setMaquinaCandidataModoColorAllowed = (
+    rutaPasoId: string,
+    maquinaId: string,
+    allowedModes: string[] | null,
+  ) => {
+    setConfigs((prev) => {
+      const cfg = prev[rutaPasoId];
+      const current = cfg.maquinasCandidatas ?? [];
+      const maquina = lookups.maquinas.find((item) => item.id === maquinaId);
+      const options = buildModoColorOptions(maquina, null, true);
+      const optionValues = options.map((option) => option.value);
+      const normalizedAllowed = Array.from(
+        new Set(
+          (allowedModes ?? [])
+            .map((item) => normalizeModoColor(item))
+            .filter((item): item is string => item !== null)
+            .filter((item) => optionValues.includes(item)),
+        ),
+      );
+      const nextAllowed =
+        normalizedAllowed.length === 0 ||
+        normalizedAllowed.length === optionValues.length
+          ? []
+          : normalizedAllowed;
+      const next = normalizeMaquinasCandidatas(
+        current.map((candidata) =>
+          candidata.maquinaId === maquinaId
+            ? { ...candidata, modoColorAllowedModes: nextAllowed }
+            : candidata,
+        ),
+      );
+      return {
+        ...prev,
+        [rutaPasoId]: {
+          ...cfg,
+          maquinasCandidatas: next,
+        },
+      };
     });
   };
 
@@ -1772,7 +2675,10 @@ export function ConfigPasosEditorView({
       const next = current.includes(multiplicador)
         ? current.filter((item) => item !== multiplicador)
         : [...current, multiplicador];
-      return { ...prev, [rutaPasoId]: { ...cfg, multiplicadoresActivos: next } };
+      return {
+        ...prev,
+        [rutaPasoId]: { ...cfg, multiplicadoresActivos: next },
+      };
     });
   };
 
@@ -1806,7 +2712,10 @@ export function ConfigPasosEditorView({
       const cfg = prev[rutaPasoId];
       const params = asRecord(cfg.paramsPasoJson);
       const current = getNestingConfig(params);
-      const nextNesting: Record<string, unknown> = { ...current, pieceBleedMm: value };
+      const nextNesting: Record<string, unknown> = {
+        ...current,
+        pieceBleedMm: value,
+      };
       delete nextNesting.separationHMm;
       delete nextNesting.separationVMm;
       delete nextNesting.exteriorMarginFromSpacing;
@@ -1841,7 +2750,12 @@ export function ConfigPasosEditorView({
       const extraMargins = { ...asRecord(current.extraMargins), ...patch };
       for (const key of Object.keys(extraMargins)) {
         const value = extraMargins[key];
-        if (value === null || value === undefined || value === "" || Number(value) === 0) {
+        if (
+          value === null ||
+          value === undefined ||
+          value === "" ||
+          Number(value) === 0
+        ) {
           delete extraMargins[key];
         }
       }
@@ -1894,7 +2808,10 @@ export function ConfigPasosEditorView({
       const cfg = prev[rutaPasoId];
       const params = asRecord(cfg.paramsPasoJson);
       const current = getNestingConfig(params);
-      const pliegoImpresion = { ...asRecord(current.pliegoImpresion), ...patch };
+      const pliegoImpresion = {
+        ...asRecord(current.pliegoImpresion),
+        ...patch,
+      };
       for (const key of Object.keys(pliegoImpresion)) {
         const value = pliegoImpresion[key];
         if (value === "" || value === null || value === undefined) {
@@ -1905,15 +2822,22 @@ export function ConfigPasosEditorView({
         Object.keys(pliegoImpresion).length > 0
           ? { ...current, pliegoImpresion }
           : Object.fromEntries(
-              Object.entries(current).filter(([key]) => key !== "pliegoImpresion"),
+              Object.entries(current).filter(
+                ([key]) => key !== "pliegoImpresion",
+              ),
             );
       const nextParams = { ...params, nestingConfig: nextNesting };
       return { ...prev, [rutaPasoId]: { ...cfg, paramsPasoJson: nextParams } };
     });
   };
 
-  const updateNestingPliegoPreset = (rutaPasoId: string, presetValue: string) => {
-    const preset = PLIEGO_IMPRESION_PRESETS.find((item) => item.value === presetValue);
+  const updateNestingPliegoPreset = (
+    rutaPasoId: string,
+    presetValue: string,
+  ) => {
+    const preset = PLIEGO_IMPRESION_PRESETS.find(
+      (item) => item.value === presetValue,
+    );
     if (!preset || preset.value === "materia_prima") {
       updateNestingPliegoImpresion(rutaPasoId, {
         preset: null,
@@ -1985,7 +2909,9 @@ export function ConfigPasosEditorView({
         Object.keys(nextConfig).length > 0
           ? { ...params, modoColorConfig: nextConfig }
           : Object.fromEntries(
-              Object.entries(params).filter(([key]) => key !== "modoColorConfig"),
+              Object.entries(params).filter(
+                ([key]) => key !== "modoColorConfig",
+              ),
             );
       return { ...prev, [rutaPasoId]: { ...cfg, paramsPasoJson: nextParams } };
     });
@@ -2007,14 +2933,22 @@ export function ConfigPasosEditorView({
   const addSlotFromFamilia = (rutaPasoId: string, slotCodigo: string) => {
     setConfigs((prev) => {
       const cfg = prev[rutaPasoId];
-      const existente = cfg.slotsMateriales?.find((s) => s.slotCodigo === slotCodigo);
+      const existente = cfg.slotsMateriales?.find(
+        (s) => s.slotCodigo === slotCodigo,
+      );
       if (existente) return prev; // ya existe
+      const familiaCodigo = rutaAlternativa.ruta.pasos.find(
+        (paso) => paso.id === rutaPasoId,
+      )?.familiaCodigo;
       const nuevoSlot: UpsertSlotMaterialPayload = {
         slotCodigo,
         modoSeleccion: "HARDCODED",
         materialVarianteId: null,
         estrategiaCosto: "simple",
-        formula: "por_unidad_productiva",
+        formula:
+          familiaCodigo === "laminado" && slotCodigo === "film"
+            ? "por_metro_lineal"
+            : "por_unidad_productiva",
         aplicaMultiCaras: false,
       };
       return {
@@ -2032,14 +2966,21 @@ export function ConfigPasosEditorView({
     slotIdx: number,
     materiaPrima: MateriaPrimaBusquedaItem,
   ) => {
-    setCandidateMaterials((prev) => ({ ...prev, [materiaPrima.id]: materiaPrima }));
+    setCandidateMaterials((prev) => ({
+      ...prev,
+      [materiaPrima.id]: materiaPrima,
+    }));
     setConfigs((prev) => {
       const cfg = prev[rutaPasoId];
       const slots = [...(cfg.slotsMateriales ?? [])];
       const slot = slots[slotIdx];
       if (!slot) return prev;
       const current = slot.candidatos ?? [];
-      if (current.some((candidate) => candidate.materiaPrimaId === materiaPrima.id)) {
+      if (
+        current.some(
+          (candidate) => candidate.materiaPrimaId === materiaPrima.id,
+        )
+      ) {
         return prev;
       }
       const variantIds = materiaPrima.variantes.map((variante) => variante.id);
@@ -2083,7 +3024,9 @@ export function ConfigPasosEditorView({
     rutaPasoId: string,
     slotIdx: number,
     materiaPrimaId: string,
-    patch: Partial<NonNullable<UpsertSlotMaterialPayload["candidatos"]>[number]>,
+    patch: Partial<
+      NonNullable<UpsertSlotMaterialPayload["candidatos"]>[number]
+    >,
   ) => {
     setConfigs((prev) => {
       const cfg = prev[rutaPasoId];
@@ -2127,19 +3070,26 @@ export function ConfigPasosEditorView({
       return;
     }
     if (!mecanismoRes.ok) {
-      toast.error(`JSON inválido en "Config de cantidad": ${mecanismoRes.error}`);
+      toast.error(
+        `JSON inválido en "Config de cantidad": ${mecanismoRes.error}`,
+      );
       return;
     }
     const condicionActivacionJson =
       configs[rutaPasoId].modoActivacion === "CONDICIONAL"
-        ? (configs[rutaPasoId].condicionActivacionJson as Record<string, unknown> | null | undefined) ?? null
+        ? ((configs[rutaPasoId].condicionActivacionJson as
+            Record<string, unknown> | null | undefined) ?? null)
         : null;
     if (configs[rutaPasoId].modoActivacion === "CONDICIONAL") {
       const camposRegla = getRuleFields({
-        includeMeasureFields: producto.modoMedidas === "LIBRE",
+        includeMeasureFields:
+          producto.modoMedidas === "LIBRE" || producto.modoMedidas === "MIXTA",
         extraFields: technologyRuleFields,
       });
-      const parsedRule = jsonLogicToRuleGroup(condicionActivacionJson, camposRegla);
+      const parsedRule = jsonLogicToRuleGroup(
+        condicionActivacionJson,
+        camposRegla,
+      );
       if (parsedRule.supported) {
         const validation = validateRuleGroup(parsedRule.group, camposRegla);
         if (!validation.ok) {
@@ -2152,6 +3102,8 @@ export function ConfigPasosEditorView({
     setGuardando(rutaPasoId);
     try {
       const currentParams = asRecord(configs[rutaPasoId].paramsPasoJson);
+      const tieneMaquinasCandidatas =
+        (configs[rutaPasoId].maquinasCandidatas ?? []).length > 0;
       const nestingConfig = sanitizeNestingConfigForFamilia(
         getNestingConfig(currentParams),
         familia?.codigo,
@@ -2165,14 +3117,17 @@ export function ConfigPasosEditorView({
       );
       const maquinaGuardada = maquinaSel ?? configExistente?.maquinaM1 ?? null;
       const perfilGuardado =
-        maquinaSel?.perfilesOperativos.find((p) => p.id === configs[rutaPasoId].perfilM1Id) ??
+        maquinaSel?.perfilesOperativos.find(
+          (p) => p.id === configs[rutaPasoId].perfilM1Id,
+        ) ??
         configExistente?.perfilM1 ??
         null;
       const modoColorOptions = buildModoColorOptions(
         maquinaGuardada,
         configExistente,
         ["impresion_por_hoja", "impresion_por_area"].includes(
-          rutaAlternativa.ruta.pasos.find((paso) => paso.id === rutaPasoId)?.familiaCodigo ?? "",
+          rutaAlternativa.ruta.pasos.find((paso) => paso.id === rutaPasoId)
+            ?.familiaCodigo ?? "",
         ),
       );
       const modoColorAllowed = Array.isArray(modoColorConfigRaw.allowedModes)
@@ -2192,7 +3147,7 @@ export function ConfigPasosEditorView({
         allowedForSave[0] ??
         null;
       const modoColorConfig =
-        modoColorConfigRaw.enabled === true
+        !tieneMaquinasCandidatas && modoColorConfigRaw.enabled === true
           ? {
               ...modoColorConfigRaw,
               defaultMode: defaultForSave,
@@ -2206,7 +3161,8 @@ export function ConfigPasosEditorView({
           : modoColorConfigRaw;
       const modoColorConfigClean = Object.fromEntries(
         Object.entries(modoColorConfig).filter(([, value]) => {
-          if (value === "" || value === null || value === undefined) return false;
+          if (value === "" || value === null || value === undefined)
+            return false;
           if (Array.isArray(value) && value.length === 0) return false;
           return true;
         }),
@@ -2214,10 +3170,40 @@ export function ConfigPasosEditorView({
       const paramsPasoJson = { ...(paramsRes.value ?? {}), ...currentParams };
       delete paramsPasoJson.nestingConfig;
       delete paramsPasoJson.modoColorConfig;
+      if (configs[rutaPasoId].modoTiempo === "T-2") {
+        const unit =
+          typeof paramsPasoJson.productivityUnit === "string"
+            ? paramsPasoJson.productivityUnit
+            : getDefaultT2ProductivityUnit(familia?.codigo);
+        const sourceOptions = getT2QuantitySourceOptions(unit);
+        const rawSource =
+          typeof paramsPasoJson.productivityQuantitySource === "string"
+            ? paramsPasoJson.productivityQuantitySource
+            : getDefaultT2QuantitySource(familia?.codigo, unit);
+        const rawTimeMode =
+          typeof paramsPasoJson.timeCalculationMode === "string"
+            ? paramsPasoJson.timeCalculationMode
+            : getDefaultT2TimeCalculationMode(familia?.codigo);
+        paramsPasoJson.productivityUnit = unit;
+        paramsPasoJson.timeCalculationMode =
+          T2_TIME_CALCULATION_MODE_OPTIONS.some(
+            (option) => option.value === rawTimeMode,
+          )
+            ? rawTimeMode
+            : getDefaultT2TimeCalculationMode(familia?.codigo);
+        paramsPasoJson.productivityQuantitySource = sourceOptions.some(
+          (option) => option.value === rawSource,
+        )
+          ? rawSource
+          : getDefaultT2QuantitySource(familia?.codigo, unit);
+      }
       if (Object.keys(nestingConfig).length > 0) {
         paramsPasoJson.nestingConfig = nestingConfig;
       }
-      if (Object.keys(modoColorConfigClean).length > 0) {
+      if (
+        !tieneMaquinasCandidatas &&
+        Object.keys(modoColorConfigClean).length > 0
+      ) {
         paramsPasoJson.modoColorConfig = modoColorConfigClean;
       }
       await upsertConfigPaso(rutaAlternativa.id, {
@@ -2226,8 +3212,11 @@ export function ConfigPasosEditorView({
           ? null
           : (configs[rutaPasoId].centroCostoId ?? null),
         condicionActivacionJson,
-        mecanismoCantidad: cantidadRelevante ? configs[rutaPasoId].mecanismoCantidad : null,
-        paramsPasoJson: Object.keys(paramsPasoJson).length > 0 ? paramsPasoJson : null,
+        mecanismoCantidad: cantidadRelevante
+          ? configs[rutaPasoId].mecanismoCantidad
+          : null,
+        paramsPasoJson:
+          Object.keys(paramsPasoJson).length > 0 ? paramsPasoJson : null,
         mecanismoCantidadConfigJson: mecanismoRes.value,
       });
       setSavedConfigSnapshots((prev) => ({
@@ -2243,15 +3232,24 @@ export function ConfigPasosEditorView({
     }
   };
 
-  const getPasoSummary = (paso: RutaAlternativaDetalle["ruta"]["pasos"][number]) => {
+  const getPasoSummary = (
+    paso: RutaAlternativaDetalle["ruta"]["pasos"][number],
+  ) => {
     const familia = familiasMap.get(paso.familiaCodigo);
     const cfg = configs[paso.id];
     const jsonText = jsonTexts[paso.id];
-    const configExistente = rutaAlternativa.configPasos.find((cp) => cp.rutaPasoId === paso.id);
+    const configExistente = rutaAlternativa.configPasos.find(
+      (cp) => cp.rutaPasoId === paso.id,
+    );
     const noEjecutar = cfg.modoActivacion === "NO_EJECUTAR";
-    const cantidadRelevante = !noEjecutar && requiereMecanismoCantidad(cfg, familia);
-    const valBasico = noEjecutar ? { errores: [], warnings: [] } : validarBasico(cfg, familia);
-    const valMateriales = noEjecutar ? { errores: [], warnings: [] } : validarMateriales(cfg, familia);
+    const cantidadRelevante =
+      !noEjecutar && requiereMecanismoCantidad(cfg, familia);
+    const valBasico = noEjecutar
+      ? { errores: [], warnings: [] }
+      : validarBasico(cfg, familia);
+    const valMateriales = noEjecutar
+      ? { errores: [], warnings: [] }
+      : validarMateriales(cfg, familia);
     const valAvanzado = noEjecutar
       ? { errores: [], warnings: [] }
       : validarAvanzado(
@@ -2261,9 +3259,13 @@ export function ConfigPasosEditorView({
           familia ? { codigo: familia.codigo } : undefined,
         );
     const totalErrores =
-      valBasico.errores.length + valMateriales.errores.length + valAvanzado.errores.length;
+      valBasico.errores.length +
+      valMateriales.errores.length +
+      valAvanzado.errores.length;
     const totalWarnings =
-      valBasico.warnings.length + valMateriales.warnings.length + valAvanzado.warnings.length;
+      valBasico.warnings.length +
+      valMateriales.warnings.length +
+      valAvanzado.warnings.length;
     const maquinaSel =
       lookups.maquinas.find((maquina) => maquina.id === cfg.maquinaM1Id) ??
       configExistente?.maquinaM1 ??
@@ -2272,15 +3274,16 @@ export function ConfigPasosEditorView({
       ? lookups.centrosCosto.find((centro) => centro.id === cfg.centroCostoId)
       : null;
     const optional = cfg.modoActivacion === "OPCIONAL";
-    const status = totalErrores > 0 || totalWarnings > 0
-      ? "warning"
-      : noEjecutar
-        ? "skipped"
-        : configExistente
-        ? "done"
-        : optional
-          ? "optional"
-          : "pending";
+    const status =
+      totalErrores > 0 || totalWarnings > 0
+        ? "warning"
+        : noEjecutar
+          ? "skipped"
+          : configExistente
+            ? "done"
+            : optional
+              ? "optional"
+              : "pending";
     return {
       familia,
       cfg,
@@ -2290,7 +3293,7 @@ export function ConfigPasosEditorView({
       totalWarnings,
       maquinaNombre: noEjecutar
         ? "No se ejecuta"
-        : maquinaSel?.nombre ?? centroManual?.nombre ?? "Sin centro asignado",
+        : (maquinaSel?.nombre ?? centroManual?.nombre ?? "Sin centro asignado"),
       status,
       optional,
       skipped: noEjecutar,
@@ -2305,21 +3308,38 @@ export function ConfigPasosEditorView({
     paso,
     summary: getPasoSummary(paso),
   }));
-  const skippedCount = stepSummaries.filter(({ summary }) => summary.skipped).length;
-  const activeStepCount = Math.max(0, rutaAlternativa.ruta.pasos.length - skippedCount);
-  const doneCount = stepSummaries.filter(({ summary }) => summary.status === "done").length;
-  const activePaso = rutaAlternativa.ruta.pasos[activeIdx] ?? rutaAlternativa.ruta.pasos[0];
+  const skippedCount = stepSummaries.filter(
+    ({ summary }) => summary.skipped,
+  ).length;
+  const activeStepCount = Math.max(
+    0,
+    rutaAlternativa.ruta.pasos.length - skippedCount,
+  );
+  const doneCount = stepSummaries.filter(
+    ({ summary }) => summary.status === "done",
+  ).length;
+  const activePaso =
+    rutaAlternativa.ruta.pasos[activeIdx] ?? rutaAlternativa.ruta.pasos[0];
   const goPrev = () => {
     const prev = rutaAlternativa.ruta.pasos[Math.max(0, activeIdx - 1)];
     if (prev) setActivePasoId(prev.id);
   };
   const goNext = () => {
-    const next = rutaAlternativa.ruta.pasos[Math.min(rutaAlternativa.ruta.pasos.length - 1, activeIdx + 1)];
+    const next =
+      rutaAlternativa.ruta.pasos[
+        Math.min(rutaAlternativa.ruta.pasos.length - 1, activeIdx + 1)
+      ];
     if (next) setActivePasoId(next.id);
   };
 
   return (
-    <div className={embedded ? "pasos-editor-root" : "pasos-editor-root flex flex-1 flex-col"}>
+    <div
+      className={
+        embedded
+          ? "pasos-editor-root"
+          : "pasos-editor-root flex flex-1 flex-col"
+      }
+    >
       <div className="editor-shell">
         <aside className="editor-side">
           <div className="side-head">
@@ -2338,10 +3358,16 @@ export function ConfigPasosEditorView({
           <div className="side-progress">
             <span>
               {doneCount}/{activeStepCount} activos
-              {skippedCount > 0 ? ` · ${skippedCount} omitido${skippedCount === 1 ? "" : "s"}` : ""}
+              {skippedCount > 0
+                ? ` · ${skippedCount} omitido${skippedCount === 1 ? "" : "s"}`
+                : ""}
             </span>
             <div className="bar">
-              <span style={{ width: `${(doneCount / Math.max(1, activeStepCount)) * 100}%` }} />
+              <span
+                style={{
+                  width: `${(doneCount / Math.max(1, activeStepCount)) * 100}%`,
+                }}
+              />
             </div>
           </div>
           <div className="pasos">
@@ -2359,7 +3385,13 @@ export function ConfigPasosEditorView({
                   onClick={() => setActivePasoId(paso.id)}
                 >
                   <span className="ix">
-                    {summary.skipped ? "—" : summary.status === "done" ? <CheckIcon className="size-3" /> : idx + 1}
+                    {summary.skipped ? (
+                      "—"
+                    ) : summary.status === "done" ? (
+                      <CheckIcon className="size-3" />
+                    ) : (
+                      idx + 1
+                    )}
                   </span>
                   <span className="body">
                     <span className="ttl">{pasoLabel}</span>
@@ -2371,17 +3403,20 @@ export function ConfigPasosEditorView({
                       : summary.status === "done"
                         ? "✓"
                         : summary.status === "warning"
-                        ? "!"
-                        : summary.optional
-                          ? "Opt"
-                          : "·"}
+                          ? "!"
+                          : summary.optional
+                            ? "Opt"
+                            : "·"}
                   </span>
                 </button>
               );
             })}
           </div>
           <div className="kbd-panel">
-            <span className="kbd-hint">Navegar pasos con <span className="k">↑</span> <span className="k">↓</span></span>
+            <span className="kbd-hint">
+              Navegar pasos con <span className="k">↑</span>{" "}
+              <span className="k">↓</span>
+            </span>
           </div>
         </aside>
 
@@ -2401,7 +3436,13 @@ export function ConfigPasosEditorView({
                     onClick={() => setActivePasoId(paso.id)}
                     title={pasoLabel}
                   >
-                    <span className="d">{summary.skipped ? "—" : summary.status === "done" ? "✓" : idx + 1}</span>
+                    <span className="d">
+                      {summary.skipped
+                        ? "—"
+                        : summary.status === "done"
+                          ? "✓"
+                          : idx + 1}
+                    </span>
                     <span className="lb">{pasoLabel.split(" ")[0]}</span>
                   </button>
                   {idx < rutaAlternativa.ruta.pasos.length - 1 && (
@@ -2409,8 +3450,10 @@ export function ConfigPasosEditorView({
                       className={`edge ${
                         !summary.skipped &&
                         summary.status === "done" &&
-                        !getPasoSummary(rutaAlternativa.ruta.pasos[idx + 1]!).skipped &&
-                        getPasoSummary(rutaAlternativa.ruta.pasos[idx + 1]!).status === "done"
+                        !getPasoSummary(rutaAlternativa.ruta.pasos[idx + 1]!)
+                          .skipped &&
+                        getPasoSummary(rutaAlternativa.ruta.pasos[idx + 1]!)
+                          .status === "done"
                           ? "done"
                           : ""
                       }`}
@@ -2421,1807 +3464,3146 @@ export function ConfigPasosEditorView({
             })}
           </div>
 
-          {activePaso ? (
-            rutaAlternativa.ruta.pasos
-              .filter((paso) => paso.id === activePaso.id)
-              .map((paso) => {
-          const idx = rutaAlternativa.ruta.pasos.findIndex((item) => item.id === paso.id);
-          const familia = familiasMap.get(paso.familiaCodigo);
-          const cfg = configs[paso.id];
-          const pasoLabel = cfg.nombreVisible?.trim() || familia?.nombre || paso.familiaCodigo;
-          const jsonText = jsonTexts[paso.id];
-          const configExistente = rutaAlternativa.configPasos.find(
-            (cp) => cp.rutaPasoId === paso.id,
-          );
-          const maquinasCompatibles = lookups.maquinas.filter((m) =>
-            maquinaCompatibleConFamilia(paso.familiaCodigo, familia?.plantillasCompatibles, m),
-          );
-          const soportaM2 = familia?.relacionMaquinaSoportada.includes("M-2") ?? false;
-          const maquinasCandidatasCompatibles = lookups.maquinas.filter((m) =>
-            maquinaCandidataCompatibleConFamilia(
-              paso.familiaCodigo,
-              familia?.plantillasCompatibles,
-              m,
-            ),
-          );
-          const candidatasCfg = normalizeMaquinasCandidatas(cfg.maquinasCandidatas ?? []);
-          const candidatasSeleccionadas = new Set(
-            candidatasCfg.map((candidata) => candidata.maquinaId),
-          );
-          const candidataPreferidaId =
-            candidatasCfg.find((candidata) => candidata.esPreferida)?.maquinaId ??
-            candidatasCfg[0]?.maquinaId ??
-            null;
-          const tecnologiasCandidatas = Array.from(
-            new Set(
-              candidatasCfg
-                .map((candidata) =>
-                  maquinasCandidatasCompatibles.find((maquina) => maquina.id === candidata.maquinaId),
-                )
-                .filter((maquina): maquina is MaquinaLookup => Boolean(maquina))
-                .map((maquina) => getMachineTechnology(maquina) ?? "sin_tecnologia"),
-            ),
-          );
-          const maquinaSel = lookups.maquinas.find((m) => m.id === cfg.maquinaM1Id);
-          const maquinaGuardada = maquinaSel ?? configExistente?.maquinaM1 ?? null;
-          const maquinaOptions = ensureSelectedOption(
-            maquinasCompatibles.map((m) => machineOption(m)),
-            cfg.maquinaM1Id,
-            maquinaGuardada
-              ? machineOption(maquinaGuardada, "guardada/no compatible")
-              : undefined,
-          );
-          const perfilGuardado =
-            maquinaSel?.perfilesOperativos.find((p) => p.id === cfg.perfilM1Id) ??
-            configExistente?.perfilM1 ??
-            null;
-          const perfilOptions = ensureSelectedOption(
-            (maquinaSel?.perfilesOperativos ?? [])
-              .filter((p) => perfilCompatibleConFamilia(paso.familiaCodigo, p))
-              .map((p) => profileOption(p)),
-            cfg.perfilM1Id,
-            perfilGuardado
-              ? profileOption(perfilGuardado, "guardado/no disponible")
-              : undefined,
-          );
-          const opcionesActivacion = Array.from(
-            new Set([...(familia?.modosActivacionSoportados ?? MODOS_ACTIVACION), "NO_EJECUTAR"]),
-          ).map(
-            (m) => optionFromLabel(m, modoActivacionLabels),
-          );
-          const opcionesTiempo = (
-            familia?.modosTiempoSoportados ?? ["T-1", "T-2", "T-3", "T-4"]
-          ).map((m) => optionFromLabel(m, modoTiempoLabels));
-          const opcionesCantidad = (
-            familia?.mecanismosCantidadSoportados ?? [
-              "DIRECT_FROM_JOBCONTEXT",
-              "HEREDAR_DEL_OUTPUT_CANONICO",
-              "CALCULADO_POR_PASO",
-              "CONVERSION",
-            ]
-          ).map((m) => optionFromLabel(m, mecanismoCantidadLabels));
-          const centroGuardado = configExistente?.centroCosto ?? null;
-          const centroCostoOptions = ensureSelectedOption(
-            lookups.centrosCosto.map((centro) => centroCostoOption(centro)),
-            cfg.centroCostoId,
-            centroGuardado ? centroCostoOption(centroGuardado) : undefined,
-          );
+          {activePaso
+            ? rutaAlternativa.ruta.pasos
+                .filter((paso) => paso.id === activePaso.id)
+                .map((paso) => {
+                  const idx = rutaAlternativa.ruta.pasos.findIndex(
+                    (item) => item.id === paso.id,
+                  );
+                  const familia = familiasMap.get(paso.familiaCodigo);
+                  const cfg = configs[paso.id];
+                  const pasoLabel =
+                    cfg.nombreVisible?.trim() ||
+                    familia?.nombre ||
+                    paso.familiaCodigo;
+                  const jsonText = jsonTexts[paso.id];
+                  const configExistente = rutaAlternativa.configPasos.find(
+                    (cp) => cp.rutaPasoId === paso.id,
+                  );
+                  const maquinasCompatibles = lookups.maquinas.filter((m) =>
+                    maquinaCompatibleConFamilia(
+                      paso.familiaCodigo,
+                      familia?.plantillasCompatibles,
+                      m,
+                    ),
+                  );
+                  const soportaM2 =
+                    familia?.relacionMaquinaSoportada.includes("M-2") ?? false;
+                  const maquinasCandidatasCompatibles = lookups.maquinas.filter(
+                    (m) =>
+                      maquinaCandidataCompatibleConFamilia(
+                        paso.familiaCodigo,
+                        familia?.plantillasCompatibles,
+                        m,
+                      ),
+                  );
+                  const candidatasCfg = normalizeMaquinasCandidatas(
+                    cfg.maquinasCandidatas ?? [],
+                  );
+                  const candidatasSeleccionadas = new Set(
+                    candidatasCfg.map((candidata) => candidata.maquinaId),
+                  );
+                  const candidataPreferidaId =
+                    candidatasCfg.find((candidata) => candidata.esPreferida)
+                      ?.maquinaId ??
+                    candidatasCfg[0]?.maquinaId ??
+                    null;
+                  const tecnologiasCandidatas = Array.from(
+                    new Set(
+                      candidatasCfg
+                        .map((candidata) =>
+                          maquinasCandidatasCompatibles.find(
+                            (maquina) => maquina.id === candidata.maquinaId,
+                          ),
+                        )
+                        .filter((maquina): maquina is MaquinaLookup =>
+                          Boolean(maquina),
+                        )
+                        .map(
+                          (maquina) =>
+                            getMachineTechnology(maquina) ?? "sin_tecnologia",
+                        ),
+                    ),
+                  );
+                  const maquinaSel = lookups.maquinas.find(
+                    (m) => m.id === cfg.maquinaM1Id,
+                  );
+                  const maquinaGuardada =
+                    maquinaSel ?? configExistente?.maquinaM1 ?? null;
+                  const maquinaOptions = ensureSelectedOption(
+                    maquinasCompatibles.map((m) => machineOption(m)),
+                    cfg.maquinaM1Id,
+                    maquinaGuardada
+                      ? machineOption(maquinaGuardada, "guardada/no compatible")
+                      : undefined,
+                  );
+                  const perfilGuardado =
+                    maquinaSel?.perfilesOperativos.find(
+                      (p) => p.id === cfg.perfilM1Id,
+                    ) ??
+                    configExistente?.perfilM1 ??
+                    null;
+                  const perfilOptions = ensureSelectedOption(
+                    (maquinaSel?.perfilesOperativos ?? [])
+                      .filter((p) =>
+                        perfilCompatibleConFamilia(paso.familiaCodigo, p),
+                      )
+                      .map((p) => profileOption(p)),
+                    cfg.perfilM1Id,
+                    perfilGuardado
+                      ? profileOption(perfilGuardado, "guardado/no disponible")
+                      : undefined,
+                  );
+                  const opcionesActivacion = Array.from(
+                    new Set([
+                      ...(familia?.modosActivacionSoportados ??
+                        MODOS_ACTIVACION),
+                      "NO_EJECUTAR",
+                    ]),
+                  ).map((m) => optionFromLabel(m, modoActivacionLabels));
+                  const opcionesTiempo = (
+                    familia?.modosTiempoSoportados ?? [
+                      "T-1",
+                      "T-2",
+                      "T-3",
+                      "T-4",
+                    ]
+                  ).map((m) => optionFromLabel(m, modoTiempoLabels));
+                  const opcionesCantidad = (
+                    familia?.mecanismosCantidadSoportados ?? [
+                      "DIRECT_FROM_JOBCONTEXT",
+                      "HEREDAR_DEL_OUTPUT_CANONICO",
+                      "CALCULADO_POR_PASO",
+                      "CONVERSION",
+                    ]
+                  ).map((m) => {
+                    const option = optionFromLabel(m, mecanismoCantidadLabels);
+                    if (
+                      familia?.codigo === "corte_manual" &&
+                      m === "HEREDAR_DEL_OUTPUT_CANONICO"
+                    ) {
+                      return {
+                        ...option,
+                        label: "Pliegos impresos del paso anterior",
+                        description:
+                          "Usa la cantidad de pliegos ya impresos/montados, no la cantidad final de imanes.",
+                      };
+                    }
+                    return option;
+                  });
+                  const centroGuardado = configExistente?.centroCosto ?? null;
+                  const centroCostoOptions = ensureSelectedOption(
+                    lookups.centrosCosto.map((centro) =>
+                      centroCostoOption(centro),
+                    ),
+                    cfg.centroCostoId,
+                    centroGuardado
+                      ? centroCostoOption(centroGuardado)
+                      : undefined,
+                  );
 
-          const slotsManuales = familia?.slotsRequeridos.filter(
-            (slot) => !isConsumibleMaquinaSlot(slot),
-          ) ?? [];
-          const slotsAutomaticos = familia?.slotsRequeridos.filter(isConsumibleMaquinaSlot) ?? [];
-          const requiereMateriales = slotsManuales.length > 0 || slotsAutomaticos.length > 0;
-          const noEjecutar = cfg.modoActivacion === "NO_EJECUTAR";
-          const cantidadRelevante = !noEjecutar && requiereMecanismoCantidad(cfg, familia);
-          const mostrarNesting = nestingAplica(familia?.codigo, cfg);
-          const mostrarSetupCleanupOverrides = Boolean(cfg.maquinaM1Id);
-          const mostrarTiempoFijoOverride = cfg.modoTiempo === "T-1" && !cfg.maquinaM1Id;
-          const mostrarProductividadPropia = cfg.modoTiempo === "T-2";
-          const paramsPaso = asRecord(cfg.paramsPasoJson);
-          const productividadPropia = readOptionalNumber(paramsPaso.productivityValue);
-          const horasEstimadasPaso = readOptionalNumber(paramsPaso.horasEstimadas);
-          const soportaPasoManual = familia?.relacionMaquinaSoportada.includes("M-0") ?? false;
-          const requiereMaquinaPrincipal =
-            cfg.modoTiempo === "T-3" ||
-            ((familia?.relacionMaquinaSoportada.includes("M-1") ?? false) && !soportaPasoManual);
-          const mostrarOverridesTiempo = mostrarSetupCleanupOverrides || mostrarTiempoFijoOverride;
-	          const nestingConfig = getNestingConfig(cfg.paramsPasoJson);
-	          const modoColorConfig = getModoColorConfig(cfg.paramsPasoJson);
-	          const panelizadoConfig = getPanelizadoConfig(cfg.paramsPasoJson);
-          const pliegoImpresionConfig = getPliegoImpresionConfig(cfg.paramsPasoJson);
-          const nestingExtraMargins = getExtraMarginsConfig(cfg.paramsPasoJson);
-          const pliegoImpresionPreset = getPliegoPresetValue(pliegoImpresionConfig);
-          const pliegoImpresionEsPersonalizado = pliegoImpresionPreset === "personalizado";
-          const nestingMargins = asRecord(nestingConfig.margins);
-          const nestingCosting = asRecord(nestingConfig.costing);
-          const nestingCostingStrategy =
-            typeof nestingCosting.strategy === "string" ? nestingCosting.strategy : "simple";
-          const nestingDefineCosteo = mostrarNesting && nestingCostingStrategy !== "simple";
-          const multiplicadoresSoportados = familia?.multiplicadoresSoportados ?? [];
-          const sustratoPrincipal = cfg.slotsMateriales?.find(
-            (slot) => slot.slotCodigo === "sustrato_principal",
-          );
-          const varianteSustrato = lookups.materiasPrimas
-            .flatMap((materia) => materia.variantes)
-            .find((variante) => variante.id === sustratoPrincipal?.materialVarianteId);
-          const attrsSustrato = asRecord(varianteSustrato?.atributosVarianteJson);
-          const sustratoRolloDisponible =
-            varianteLooksLikeRoll(varianteSustrato) ||
-            (sustratoPrincipal?.candidatos ?? []).some((candidate) => {
-              const materiaPrima = candidateMaterials[candidate.materiaPrimaId];
-              if (!materiaPrima) return false;
-              if (materiaPrimaLooksLikeRoll(materiaPrima)) return true;
-              const enabledVariantIds = new Set(candidate.varianteIds);
-              return materiaPrima.variantes.some((variante) => {
-                const enabled = enabledVariantIds.size === 0 || enabledVariantIds.has(variante.id);
-                return enabled && varianteLooksLikeRoll(variante);
-              });
-            });
-          const sustratoAnchoLabel = formatMm(attrsSustrato.anchoMm ?? attrsSustrato.widthMm);
-          const sustratoAltoLabel = formatMm(
-            attrsSustrato.largoMm ?? attrsSustrato.altoMm ?? attrsSustrato.heightMm,
-          );
-          const maquinaParaDefaults =
-            maquinaSel?.parametrosTecnicosJson
-              ? maquinaSel
-              : configExistente?.maquinaM1?.id === cfg.maquinaM1Id &&
-                  configExistente?.maquinaM1?.parametrosTecnicosJson
-                ? configExistente.maquinaM1
-                : maquinaSel ?? configExistente?.maquinaM1;
-	          const machineMargins = getMachineMargins(maquinaParaDefaults);
-	          const mostrarModoColor = modoColorAplica(familia?.codigo, cfg);
-	          const modoColorOptions = buildModoColorOptions(
-	            maquinaGuardada,
-	            configExistente,
-	            ["impresion_por_hoja", "impresion_por_area"].includes(paso.familiaCodigo),
-	          );
-	          const modoColorAllowed = Array.isArray(modoColorConfig.allowedModes)
-	            ? modoColorConfig.allowedModes
-	                .map((item) => normalizeModoColor(item))
-	                .filter((item): item is string => item !== null)
-	            : [];
-	          const modoColorEnabled = modoColorConfig.enabled === true;
-	          const modoColorPerfilDefault = modosColorFromPerfil(perfilGuardado)[0] ?? "";
-	          const modoColorEffectiveAllowed =
-	            modoColorEnabled && modoColorAllowed.length > 0
-	              ? modoColorAllowed.filter((mode) =>
-	                  modoColorOptions.some((option) => option.value === mode),
-	                )
-	              : modoColorOptions.map((option) => option.value);
-	          const modoColorDefaultOptions =
-	            modoColorOptions.filter((option) =>
-	              modoColorEffectiveAllowed.includes(option.value),
-	            );
-	          const modoColorDefault =
-	            modoColorDefaultOptions.find((option) => option.value === modoColorPerfilDefault)?.value ??
-	            modoColorDefaultOptions[0]?.value ??
-	            "";
-	          const modoColorIsSelectable = modoColorDefaultOptions.length > 1;
-	          const modoColorSummary = !modoColorEnabled
-	            ? modoColorOptions.length > 1
-	              ? "Sin restricción: el comercial elige entre todos los modos compatibles."
-	              : modoColorOptions.length === 1
-	                ? `Sin restricción: se usa ${modoColorOptions[0]?.label} automáticamente.`
-	                : "La máquina/perfil todavía no declara modos de color."
-	            : modoColorIsSelectable
-	              ? "El comercial elegirá entre los modos permitidos."
-	              : `Modo fijo: ${
-	                  modoColorDefaultOptions[0]?.label ?? "sin modo disponible"
-	                }.`;
-	          const defaultSeparation = defaultNestingSeparationForFamily(familia?.codigo);
-          const legacySeparationH = getResolvedNestingNumber(nestingConfig.separationHMm, undefined, defaultSeparation);
-          const legacySeparationV = getResolvedNestingNumber(nestingConfig.separationVMm, undefined, defaultSeparation);
-          const resolvedPieceBleed = getResolvedNestingNumber(
-            nestingConfig.pieceBleedMm,
-            Math.max(legacySeparationH, legacySeparationV) / 2,
-            0,
-          );
-          const mostrarPanelizado = panelizadoAplica(
-            familia?.codigo,
-            nestingConfig,
-            maquinaParaDefaults,
-            sustratoRolloDisponible,
-          );
-          const resolvedPanelMaxWidth = getDisplayPanelMaxWidth(panelizadoConfig.maxPanelWidthMm);
-          const resolvedPanelOverlap = getResolvedNestingNumber(panelizadoConfig.overlapMm, undefined, 20);
-          const panelizadoMode = panelizadoConfig.mode === "manual" ? "manual" : "automatic";
-          const panelizadoAxis =
-            panelizadoConfig.axis === "automatic" || panelizadoConfig.axis === "automatica"
-              ? "automatic"
-              : panelizadoConfig.axis === "horizontal"
-                ? "horizontal"
-                : panelizadoConfig.axis === "vertical"
-                  ? "vertical"
-                  : "automatic";
-          const panelizadoWidthInterpretation =
-            panelizadoConfig.widthInterpretation === "util" ? "util" : "total";
-          const panelManualLayout = readManualLayout(panelizadoConfig.manualLayout);
-          const panelMeasures = getProductoPanelMeasures(producto);
-          const rollWidthForPanelMm =
-            readOptionalNumber(attrsSustrato.anchoMm) ??
-            readOptionalNumber(attrsSustrato.widthMm) ??
-            readOptionalNumber(maquinaParaDefaults?.parametrosTecnicosJson?.anchoMaxRolloMm) ??
-            readOptionalNumber(maquinaParaDefaults?.parametrosTecnicosJson?.anchoMaxMm) ??
-            readOptionalNumber(maquinaParaDefaults?.parametrosTecnicosJson?.anchoUtil);
-          const printableWidthForPanelMm =
-            rollWidthForPanelMm != null
-              ? Math.max(0, rollWidthForPanelMm - (machineMargins.leftMm ?? 0) - (machineMargins.rightMm ?? 0))
-              : null;
-          const panelSummary =
-            panelizadoConfig.enabled === true
-              ? [
-                  panelizadoMode === "manual" ? "Manual" : "Automático",
-                  panelizadoAxis === "automatic" ? "dirección automática" : panelizadoAxis === "vertical" ? "vertical" : "horizontal",
-                  `${resolvedPanelOverlap} mm solape`,
-                  resolvedPanelMaxWidth > 0 ? `${resolvedPanelMaxWidth} mm máx.` : "máx. ancho imprimible",
-                ].join(" · ")
-              : "";
-          const valBasico = noEjecutar ? { errores: [], warnings: [] } : validarBasico(cfg, familia);
-          const valMateriales = noEjecutar ? { errores: [], warnings: [] } : validarMateriales(cfg, familia);
-          const valAvanzado = noEjecutar
-            ? { errores: [], warnings: [] }
-            : validarAvanzado(
-                jsonText.params,
-                cantidadRelevante ? jsonText.mecanismo : "",
-                cfg,
-                familia ? { codigo: familia.codigo } : undefined,
-              );
-          const totalErrores =
-            valBasico.errores.length + valMateriales.errores.length + valAvanzado.errores.length;
-          const totalWarnings =
-            valBasico.warnings.length + valMateriales.warnings.length + valAvanzado.warnings.length;
-          const pasoTieneCambios = hasUnsavedChanges(paso.id);
+                  const slotsManuales =
+                    familia?.slotsRequeridos.filter(
+                      (slot) => !isConsumibleMaquinaSlot(slot),
+                    ) ?? [];
+                  const slotsAutomaticos =
+                    familia?.slotsRequeridos.filter(isConsumibleMaquinaSlot) ??
+                    [];
+                  const requiereMateriales =
+                    slotsManuales.length > 0 || slotsAutomaticos.length > 0;
+                  const noEjecutar = cfg.modoActivacion === "NO_EJECUTAR";
+                  const cantidadRelevante =
+                    !noEjecutar && requiereMecanismoCantidad(cfg, familia);
+                  const mostrarNesting = nestingAplica(familia?.codigo, cfg);
+                  const mostrarSetupCleanupOverrides = Boolean(cfg.maquinaM1Id);
+                  const mostrarTiempoFijoOverride =
+                    cfg.modoTiempo === "T-1" && !cfg.maquinaM1Id;
+                  const mostrarProductividadPropia = cfg.modoTiempo === "T-2";
+                  const paramsPaso = asRecord(cfg.paramsPasoJson);
+                  const productividadPropia = readOptionalNumber(
+                    paramsPaso.productivityValue,
+                  );
+                  const horasEstimadasPaso = readOptionalNumber(
+                    paramsPaso.horasEstimadas,
+                  );
+                  const batchTimeMin = readOptionalNumber(
+                    paramsPaso.batchTimeMin,
+                  );
+                  const batchSize = readOptionalNumber(paramsPaso.batchSize);
+                  const timeCalculationModeRaw =
+                    typeof paramsPaso.timeCalculationMode === "string"
+                      ? paramsPaso.timeCalculationMode
+                      : getDefaultT2TimeCalculationMode(familia?.codigo);
+                  const timeCalculationMode =
+                    T2_TIME_CALCULATION_MODE_OPTIONS.some(
+                      (option) => option.value === timeCalculationModeRaw,
+                    )
+                      ? timeCalculationModeRaw
+                      : getDefaultT2TimeCalculationMode(familia?.codigo);
+                  const productivityUnit =
+                    typeof paramsPaso.productivityUnit === "string"
+                      ? paramsPaso.productivityUnit
+                      : getDefaultT2ProductivityUnit(familia?.codigo);
+                  const productivityQuantitySourceRaw =
+                    typeof paramsPaso.productivityQuantitySource === "string"
+                      ? paramsPaso.productivityQuantitySource
+                      : getDefaultT2QuantitySource(
+                          familia?.codigo,
+                          productivityUnit,
+                        );
+                  const productivityQuantitySourceOptions =
+                    getT2QuantitySourceOptions(productivityUnit);
+                  const productivityQuantitySource =
+                    productivityQuantitySourceOptions.some(
+                      (option) =>
+                        option.value === productivityQuantitySourceRaw,
+                    )
+                      ? productivityQuantitySourceRaw
+                      : getDefaultT2QuantitySource(
+                          familia?.codigo,
+                          productivityUnit,
+                        );
+                  const productivityUnitSuffix =
+                    T2_PRODUCTIVITY_UNIT_SUFFIX[productivityUnit] ??
+                    T2_PRODUCTIVITY_UNIT_SUFFIX.unidades_h;
+                  const batchUnitSuffix =
+                    T2_BATCH_UNIT_SUFFIX[productivityUnit] ??
+                    T2_BATCH_UNIT_SUFFIX.unidades_h;
+                  const t2TimeSummary = getT2TimeSummary({
+                    timeCalculationMode,
+                    productivityUnit,
+                    productivityValue: productividadPropia ?? null,
+                    batchTimeMin: batchTimeMin ?? null,
+                    batchSize: batchSize ?? null,
+                  });
+                  const soportaPasoManual =
+                    familia?.relacionMaquinaSoportada.includes("M-0") ?? false;
+                  const requiereMaquinaPrincipal =
+                    cfg.modoTiempo === "T-3" ||
+                    ((familia?.relacionMaquinaSoportada.includes("M-1") ??
+                      false) &&
+                      !soportaPasoManual);
+                  const mostrarOverridesTiempo =
+                    mostrarSetupCleanupOverrides || mostrarTiempoFijoOverride;
+                  const nestingConfig = getNestingConfig(cfg.paramsPasoJson);
+                  const modoColorConfig = getModoColorConfig(
+                    cfg.paramsPasoJson,
+                  );
+                  const panelizadoConfig = getPanelizadoConfig(
+                    cfg.paramsPasoJson,
+                  );
+                  const pliegoImpresionConfig = getPliegoImpresionConfig(
+                    cfg.paramsPasoJson,
+                  );
+                  const nestingExtraMargins = getExtraMarginsConfig(
+                    cfg.paramsPasoJson,
+                  );
+                  const pliegoImpresionPreset = getPliegoPresetValue(
+                    pliegoImpresionConfig,
+                  );
+                  const pliegoImpresionEsPersonalizado =
+                    pliegoImpresionPreset === "personalizado";
+                  const nestingMargins = asRecord(nestingConfig.margins);
+                  const nestingCosting = asRecord(nestingConfig.costing);
+                  const nestingCostingStrategy =
+                    typeof nestingCosting.strategy === "string"
+                      ? nestingCosting.strategy
+                      : "simple";
+                  const nestingDefineCosteo =
+                    mostrarNesting && nestingCostingStrategy !== "simple";
+                  const multiplicadoresSoportados =
+                    familia?.multiplicadoresSoportados ?? [];
+                  const sustratoPrincipal = cfg.slotsMateriales?.find(
+                    (slot) => slot.slotCodigo === "sustrato_principal",
+                  );
+                  const varianteSustrato = lookups.materiasPrimas
+                    .flatMap((materia) => materia.variantes)
+                    .find(
+                      (variante) =>
+                        variante.id === sustratoPrincipal?.materialVarianteId,
+                    );
+                  const attrsSustrato = asRecord(
+                    varianteSustrato?.atributosVarianteJson,
+                  );
+                  const sustratoRolloDisponible =
+                    varianteLooksLikeRoll(varianteSustrato) ||
+                    (sustratoPrincipal?.candidatos ?? []).some((candidate) => {
+                      const materiaPrima =
+                        candidateMaterials[candidate.materiaPrimaId];
+                      if (!materiaPrima) return false;
+                      if (materiaPrimaLooksLikeRoll(materiaPrima)) return true;
+                      const enabledVariantIds = new Set(candidate.varianteIds);
+                      return materiaPrima.variantes.some((variante) => {
+                        const enabled =
+                          enabledVariantIds.size === 0 ||
+                          enabledVariantIds.has(variante.id);
+                        return enabled && varianteLooksLikeRoll(variante);
+                      });
+                    });
+                  const sustratoAnchoLabel = formatMm(
+                    attrsSustrato.anchoMm ?? attrsSustrato.widthMm,
+                  );
+                  const sustratoAltoLabel = formatMm(
+                    attrsSustrato.largoMm ??
+                      attrsSustrato.altoMm ??
+                      attrsSustrato.heightMm,
+                  );
+                  const maquinaParaDefaults = maquinaSel?.parametrosTecnicosJson
+                    ? maquinaSel
+                    : configExistente?.maquinaM1?.id === cfg.maquinaM1Id &&
+                        configExistente?.maquinaM1?.parametrosTecnicosJson
+                      ? configExistente.maquinaM1
+                      : (maquinaSel ?? configExistente?.maquinaM1);
+                  const machineMargins = getMachineMargins(maquinaParaDefaults);
+                  const mostrarModoColor = modoColorAplica(
+                    familia?.codigo,
+                    cfg,
+                  );
+                  const modoColorOptions = buildModoColorOptions(
+                    maquinaGuardada,
+                    configExistente,
+                    ["impresion_por_hoja", "impresion_por_area"].includes(
+                      paso.familiaCodigo,
+                    ),
+                  );
+                  const modoColorAllowed = Array.isArray(
+                    modoColorConfig.allowedModes,
+                  )
+                    ? modoColorConfig.allowedModes
+                        .map((item) => normalizeModoColor(item))
+                        .filter((item): item is string => item !== null)
+                    : [];
+                  const modoColorEnabled = modoColorConfig.enabled === true;
+                  const modoColorPerfilDefault =
+                    modosColorFromPerfil(perfilGuardado)[0] ?? "";
+                  const modoColorEffectiveAllowed =
+                    modoColorEnabled && modoColorAllowed.length > 0
+                      ? modoColorAllowed.filter((mode) =>
+                          modoColorOptions.some(
+                            (option) => option.value === mode,
+                          ),
+                        )
+                      : modoColorOptions.map((option) => option.value);
+                  const modoColorDefaultOptions = modoColorOptions.filter(
+                    (option) =>
+                      modoColorEffectiveAllowed.includes(option.value),
+                  );
+                  const modoColorDefault =
+                    modoColorDefaultOptions.find(
+                      (option) => option.value === modoColorPerfilDefault,
+                    )?.value ??
+                    modoColorDefaultOptions[0]?.value ??
+                    "";
+                  const modoColorIsSelectable =
+                    modoColorDefaultOptions.length > 1;
+                  const modoColorSummary = !modoColorEnabled
+                    ? modoColorOptions.length > 1
+                      ? "Sin restricción: el comercial elige entre todos los modos compatibles."
+                      : modoColorOptions.length === 1
+                        ? `Sin restricción: se usa ${modoColorOptions[0]?.label} automáticamente.`
+                        : "La máquina/perfil todavía no declara modos de color."
+                    : modoColorIsSelectable
+                      ? "El comercial elegirá entre los modos permitidos."
+                      : `Modo fijo: ${
+                          modoColorDefaultOptions[0]?.label ??
+                          "sin modo disponible"
+                        }.`;
+                  const defaultSeparation = defaultNestingSeparationForFamily(
+                    familia?.codigo,
+                  );
+                  const legacySeparationH = getResolvedNestingNumber(
+                    nestingConfig.separationHMm,
+                    undefined,
+                    defaultSeparation,
+                  );
+                  const legacySeparationV = getResolvedNestingNumber(
+                    nestingConfig.separationVMm,
+                    undefined,
+                    defaultSeparation,
+                  );
+                  const resolvedPieceBleed = getResolvedNestingNumber(
+                    nestingConfig.pieceBleedMm,
+                    Math.max(legacySeparationH, legacySeparationV) / 2,
+                    0,
+                  );
+                  const mostrarPanelizado = panelizadoAplica(
+                    familia?.codigo,
+                    nestingConfig,
+                    maquinaParaDefaults,
+                    sustratoRolloDisponible,
+                  );
+                  const resolvedPanelMaxWidth = getDisplayPanelMaxWidth(
+                    panelizadoConfig.maxPanelWidthMm,
+                  );
+                  const resolvedPanelOverlap = getResolvedNestingNumber(
+                    panelizadoConfig.overlapMm,
+                    undefined,
+                    20,
+                  );
+                  const panelizadoMode =
+                    panelizadoConfig.mode === "manual" ? "manual" : "automatic";
+                  const panelizadoAxis =
+                    panelizadoConfig.axis === "automatic" ||
+                    panelizadoConfig.axis === "automatica"
+                      ? "automatic"
+                      : panelizadoConfig.axis === "horizontal"
+                        ? "horizontal"
+                        : panelizadoConfig.axis === "vertical"
+                          ? "vertical"
+                          : "automatic";
+                  const panelizadoWidthInterpretation =
+                    panelizadoConfig.widthInterpretation === "util"
+                      ? "util"
+                      : "total";
+                  const panelManualLayout = readManualLayout(
+                    panelizadoConfig.manualLayout,
+                  );
+                  const panelMeasures = getProductoPanelMeasures(producto);
+                  const rollWidthForPanelMm =
+                    readOptionalNumber(attrsSustrato.anchoMm) ??
+                    readOptionalNumber(attrsSustrato.widthMm) ??
+                    readOptionalNumber(
+                      maquinaParaDefaults?.parametrosTecnicosJson
+                        ?.anchoMaxRolloMm,
+                    ) ??
+                    readOptionalNumber(
+                      maquinaParaDefaults?.parametrosTecnicosJson?.anchoMaxMm,
+                    ) ??
+                    readOptionalNumber(
+                      maquinaParaDefaults?.parametrosTecnicosJson?.anchoUtil,
+                    );
+                  const printableWidthForPanelMm =
+                    rollWidthForPanelMm != null
+                      ? Math.max(
+                          0,
+                          rollWidthForPanelMm -
+                            (machineMargins.leftMm ?? 0) -
+                            (machineMargins.rightMm ?? 0),
+                        )
+                      : null;
+                  const panelSummary =
+                    panelizadoConfig.enabled === true
+                      ? [
+                          panelizadoMode === "manual" ? "Manual" : "Automático",
+                          panelizadoAxis === "automatic"
+                            ? "dirección automática"
+                            : panelizadoAxis === "vertical"
+                              ? "vertical"
+                              : "horizontal",
+                          `${resolvedPanelOverlap} mm solape`,
+                          resolvedPanelMaxWidth > 0
+                            ? `${resolvedPanelMaxWidth} mm máx.`
+                            : "máx. ancho imprimible",
+                        ].join(" · ")
+                      : "";
+                  const valBasico = noEjecutar
+                    ? { errores: [], warnings: [] }
+                    : validarBasico(cfg, familia);
+                  const valMateriales = noEjecutar
+                    ? { errores: [], warnings: [] }
+                    : validarMateriales(cfg, familia);
+                  const valAvanzado = noEjecutar
+                    ? { errores: [], warnings: [] }
+                    : validarAvanzado(
+                        jsonText.params,
+                        cantidadRelevante ? jsonText.mecanismo : "",
+                        cfg,
+                        familia ? { codigo: familia.codigo } : undefined,
+                      );
+                  const totalErrores =
+                    valBasico.errores.length +
+                    valMateriales.errores.length +
+                    valAvanzado.errores.length;
+                  const totalWarnings =
+                    valBasico.warnings.length +
+                    valMateriales.warnings.length +
+                    valAvanzado.warnings.length;
+                  const pasoTieneCambios = hasUnsavedChanges(paso.id);
 
-          return (
-            <React.Fragment key={paso.id}>
-            <div className="step-head">
-              <div style={{ flex: 1 }}>
-                <div className="pill-row">
-                  <span style={{ color: "var(--muted-text)", fontFamily: "var(--font-mono)", fontSize: 12 }}>
-                    Paso {idx + 1} de {rutaAlternativa.ruta.pasos.length}
-                  </span>
-                  {!noEjecutar ? (
-                    <span className={`tag ${totalErrores === 0 && totalWarnings === 0 ? "ok" : "warm"}`}>
-                      <span className="d" />
-                      {totalErrores > 0
-                        ? `${totalErrores} error${totalErrores === 1 ? "" : "es"}`
-                        : totalWarnings > 0
-                          ? `${totalWarnings} pendiente${totalWarnings === 1 ? "" : "s"}`
-                          : configExistente
-                            ? "Configurado"
-                            : "Pendiente"}
-                    </span>
-                  ) : null}
-                  <span className="tag muted">
-                    {cfg.modoActivacion ? getLabel(modoActivacionLabels, cfg.modoActivacion).label : "Sin activación"}
-                  </span>
-                </div>
-                <h1>{pasoLabel}</h1>
-                <div className="sub">
-                  {maquinaGuardada ? (
-                    <>
-                      Máquina: <strong style={{ color: "var(--ink)", fontWeight: 500 }}>{maquinaGuardada.nombre}</strong>
-                      {perfilGuardado ? <> · perfil {perfilGuardado.nombre}</> : null}
-                    </>
-                  ) : cfg.centroCostoId ? (
-                    <>
-                      Centro de costo: <strong style={{ color: "var(--ink)", fontWeight: 500 }}>
-                        {lookups.centrosCosto.find((centro) => centro.id === cfg.centroCostoId)?.nombre ?? "Seleccionado"}
-                      </strong>
-                    </>
-                  ) : (
-                    "Sin centro asignado"
-                  )}
-                </div>
-              </div>
-              <div className="pill-row">
-                <button className="btn" type="button" onClick={goPrev} disabled={idx === 0}>
-                  <ArrowLeftIcon className="size-4" />
-                </button>
-                <button className="btn" type="button" onClick={goNext} disabled={idx === rutaAlternativa.ruta.pasos.length - 1}>
-                  Siguiente →
-                </button>
-                <button
-                  className="btn btn-primary"
-                  type="button"
-                  onClick={() => guardarPaso(paso.id)}
-                  disabled={guardando === paso.id || totalErrores > 0 || !pasoTieneCambios}
-                >
-                  {pasoTieneCambios ? (
-                    <SaveIcon className="size-4" />
-                  ) : (
-                    <CheckIcon className="size-4" />
-                  )}
-                  {guardando === paso.id
-                    ? "Guardando..."
-                    : pasoTieneCambios
-                      ? "Guardar paso"
-                      : "Guardado"}
-                </button>
-              </div>
-            </div>
-
-            <div className="config-step-content pasos-sections">
-              <section className="section-block open">
-                <div className="sb-head">
-                  <span className="num">01</span>
-                  <span className="ttl">Activación</span>
-                  <span className="hint">Cuándo se ejecuta este paso al cotizar</span>
-                </div>
-                <div className="sb-body">
-                  <div className="wiz-grid">
-                    <div className="field md:col-span-full">
-                      <LabelConTooltip
-                        label="Nombre visible del paso"
-                        tooltip="Nombre operativo que verá comercial y producción. Si lo dejás vacío, se usa el nombre técnico de la familia."
-                      />
-                      <Input
-                        value={cfg.nombreVisible ?? ""}
-                        placeholder={familia?.nombre ?? paso.familiaCodigo}
-                        onChange={(event) =>
-                          updateConfig(paso.id, {
-                            nombreVisible: event.target.value || null,
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="field">
-                      <label>Cuándo se ejecuta</label>
-                      <div className="segmented">
-                        {opcionesActivacion.map((option) => (
-                          <button
-                            key={option.value}
-                            type="button"
-                            className={cfg.modoActivacion === option.value ? "on" : ""}
-                            onClick={() => updateConfig(paso.id, { modoActivacion: option.value })}
-                          >
-                            {option.label}
-                          </button>
-                        ))}
-                      </div>
-                      <span className="help">
-                        No ejecutar apaga este paso solo para esta ruta del producto.
-                      </span>
-                    </div>
-                    <div className="field">
-                      <label>Multiplicadores</label>
-                      <div className="chip-row">
-                        {multiplicadoresSoportados.length > 0 ? (
-                          multiplicadoresSoportados.map((multiplicador) => {
-                            const activo = cfg.multiplicadoresActivos?.includes(multiplicador);
-                            return (
-                              <button
-                                key={multiplicador}
-                                type="button"
-                                className={`tag mono ${activo ? "active" : "muted dashed"}`}
-                                onClick={() => toggleMultiplicador(paso.id, multiplicador)}
-                                title={
-                                  multiplicador === "caras"
-                                    ? "Duplica tiempo y consumibles de máquina cuando el comercial elige doble faz. Los materiales se duplican por slot."
-                                    : "Activa o desactiva este multiplicador para el paso."
-                                }
+                  return (
+                    <React.Fragment key={paso.id}>
+                      <div className="step-head">
+                        <div style={{ flex: 1 }}>
+                          <div className="pill-row">
+                            <span
+                              style={{
+                                color: "var(--muted-text)",
+                                fontFamily: "var(--font-mono)",
+                                fontSize: 12,
+                              }}
+                            >
+                              Paso {idx + 1} de{" "}
+                              {rutaAlternativa.ruta.pasos.length}
+                            </span>
+                            {!noEjecutar ? (
+                              <span
+                                className={`tag ${totalErrores === 0 && totalWarnings === 0 ? "ok" : "warm"}`}
                               >
-                                {multiplicador}
-                              </button>
-                            );
-                          })
-                        ) : (
-                          <span className="tag muted dashed">Sin multiplicadores</span>
-                        )}
-                      </div>
-                      <span className="help">
-                        Variables que multiplican el tiempo del paso. En materiales, caras se define por slot.
-                      </span>
-                    </div>
-                    {cfg.modoActivacion === "CONDICIONAL" && (
-                      <div className="md:col-span-full">
-                        <RuleBuilder
-                          value={cfg.condicionActivacionJson as Record<string, unknown> | null | undefined}
-                          includeMeasureFields={producto.modoMedidas === "LIBRE"}
-                          extraFields={technologyRuleFields}
-                          onChange={(value) =>
-                            updateConfig(paso.id, { condicionActivacionJson: value })
-                          }
-                        />
-                      </div>
-                    )}
-                  </div>
-                  {(valBasico.errores.length > 0 || valBasico.warnings.length > 0) && (
-                    <ListaValidacion validacion={valBasico} />
-                  )}
-                </div>
-              </section>
-
-              {!noEjecutar && (
-                <>
-              <section className="section-block open">
-                <div className="sb-head">
-                  <span className="num">02</span>
-                  <span className="ttl">Tiempo y costo</span>
-                  <span className="chev">›</span>
-                </div>
-                <div className="sb-body">
-                  <div className="wiz-grid">
-                    <div className="field">
-                      <LabelConTooltip
-                        label="¿Cómo se calcula el tiempo?"
-                        tooltip="Define la base del cálculo: tiempo fijo, productividad propia, productividad de máquina, o input manual del comercial."
-                      />
-                      <HumanSelect
-                        value={cfg.modoTiempo ?? ""}
-                        onValueChange={(v) => updateConfig(paso.id, { modoTiempo: v || null })}
-                        options={opcionesTiempo}
-                        placeholder="Elegir"
-                      />
-                    </div>
-                    <div className="field">
-                      <LabelConTooltip
-                        label="Centro de costo"
-                        tooltip="Centro horario usado para calcular la tarifa de este paso."
-                      />
-                      {cfg.maquinaM1Id ? (
-                        <div className="control select">
-                          <span>{maquinaGuardada?.centroCostoPrincipal?.nombre ?? "Centro heredado de máquina"}</span>
-                        </div>
-                      ) : (
-                        <HumanSelect
-                          value={cfg.centroCostoId ?? ""}
-                          onValueChange={(v) => updateConfig(paso.id, { centroCostoId: v || null })}
-                          options={centroCostoOptions}
-                          placeholder={
-                            lookups.centrosCosto.length === 0
-                              ? "No hay centros horarios activos"
-                              : "Elegir centro horario"
-                          }
-                        />
-                      )}
-                    </div>
-                    {mostrarTiempoFijoOverride && (
-                      <div className="field">
-                        <LabelConTooltip
-                          label={
-                            <>
-                              Tiempo fijo override <span className="hint">opcional</span>
-                            </>
-                          }
-                          tooltip="Sólo aplica en pasos sin máquina con tiempo fijo."
-                          iconSize="sm"
-                        />
-                        <Input
-                          type="number"
-                          min={0}
-                          step={0.5}
-                          value={cfg.tiempoFijoOverrideMin ?? ""}
-                          onChange={(e) =>
-                            updateConfig(paso.id, {
-                              tiempoFijoOverrideMin: e.target.value === "" ? null : Number(e.target.value),
-                            })
-                          }
-                          placeholder="—"
-                        />
-                      </div>
-                    )}
-                    {mostrarProductividadPropia && (
-                      <div className="field md:col-span-full">
-                        <LabelConTooltip
-                          label="Tiempo propio del paso"
-                          tooltip="Usalo para pasos manuales o externos que no dependen de una máquina. Podés definir una productividad o un tiempo fijo estimado."
-                          iconSize="sm"
-                        />
-                        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                          <div className="space-y-1">
-                            <span className="text-muted-foreground text-xs">Productividad</span>
-                            <div className="flex items-center gap-2">
-                              <Input
-                                type="number"
-                                min={0}
-                                step={1}
-                                value={productividadPropia ?? ""}
-                                onChange={(event) =>
-                                  updateStepParams(paso.id, {
-                                    productivityValue:
-                                      event.target.value === "" ? null : Number(event.target.value),
-                                  })
-                                }
-                                placeholder="Ej. 500"
-                              />
-                              <span className="text-muted-foreground whitespace-nowrap text-xs">
-                                unidades/h
+                                <span className="d" />
+                                {totalErrores > 0
+                                  ? `${totalErrores} error${totalErrores === 1 ? "" : "es"}`
+                                  : totalWarnings > 0
+                                    ? `${totalWarnings} pendiente${totalWarnings === 1 ? "" : "s"}`
+                                    : configExistente
+                                      ? "Configurado"
+                                      : "Pendiente"}
                               </span>
-                            </div>
+                            ) : null}
+                            <span className="tag muted">
+                              {cfg.modoActivacion
+                                ? getLabel(
+                                    modoActivacionLabels,
+                                    cfg.modoActivacion,
+                                  ).label
+                                : "Sin activación"}
+                            </span>
                           </div>
-                          <div className="space-y-1">
-                            <span className="text-muted-foreground text-xs">Horas estimadas</span>
-                            <div className="flex items-center gap-2">
-                              <Input
-                                type="number"
-                                min={0}
-                                step={0.25}
-                                value={horasEstimadasPaso ?? ""}
-                                onChange={(event) =>
-                                  updateStepParams(paso.id, {
-                                    horasEstimadas:
-                                      event.target.value === "" ? null : Number(event.target.value),
-                                  })
-                                }
-                                placeholder="Opcional"
-                              />
-                              <span className="text-muted-foreground whitespace-nowrap text-xs">h</span>
-                            </div>
-                          </div>
-                        </div>
-                        <span className="help">
-                          Si completás horas estimadas, el motor usa ese tiempo fijo. Si no, calcula
-                          cantidad / productividad.
-                        </span>
-                      </div>
-                    )}
-                    {cantidadRelevante && (
-                      <div className="field">
-                        <LabelConTooltip
-                          label="¿De dónde sale la cantidad?"
-                          tooltip="Cómo el motor decide cuántas unidades produce este paso."
-                        />
-                        <HumanSelect
-                          value={cfg.mecanismoCantidad ?? ""}
-                          onValueChange={(v) => updateConfig(paso.id, { mecanismoCantidad: v || null })}
-                          options={opcionesCantidad}
-                          placeholder="Elegir"
-                        />
-                      </div>
-                    )}
-                    {familia?.codigo === "montaje_sobre_sustrato" && (
-                      <div className="field">
-                        <LabelConTooltip
-                          label="Piezas a montar"
-                          tooltip="Define qué medidas usa el paso para calcular el nesting del material de montaje."
-                        />
-                        <HumanSelect
-                          value={String(paramsPaso.fuentePiezasMontaje ?? "piezas_jobcontext")}
-                          onValueChange={(value) =>
-                            updateStepParams(paso.id, {
-                              fuentePiezasMontaje: value || "piezas_jobcontext",
-                            })
-                          }
-                          options={MONTAJE_SOURCE_OPTIONS}
-                          placeholder="Elegir origen"
-                        />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </section>
-
-              {familia && familia.relacionMaquinaSoportada.includes("M-1") && (
-                <section className="section-block open">
-                  <div className="sb-head">
-                    <span className="num">03</span>
-                    <span className="ttl">Máquina y perfil</span>
-                    <span className="chev">›</span>
-                  </div>
-                  <div className="sb-body">
-                    <div className="wiz-grid">
-                      <div className="field">
-                        <LabelConTooltip
-                          label={
-                            <>
-                              Máquina principal{" "}
-                              {requiereMaquinaPrincipal ? <span className="req">*</span> : null}
-                            </>
-                          }
-                          tooltip={
-                            requiereMaquinaPrincipal
-                              ? "Máquina del taller que ejecuta este paso. La lista filtra por compatibilidad con la familia."
-                              : "Opcional. Dejala sin asignar si este paso se ejecuta manualmente y usa centro de costo."
-                          }
-                          required={requiereMaquinaPrincipal}
-                        />
-                        <HumanSelect
-                          value={cfg.maquinaM1Id ?? ""}
-                          onValueChange={(v) =>
-                            updateConfig(paso.id, {
-                              maquinaM1Id: v || null,
-                              perfilM1Id: null,
-                              centroCostoId: null,
-                            })
-                          }
-                          options={maquinaOptions}
-                          placeholder={
-                            maquinasCompatibles.length === 0
-                              ? "No hay máquinas compatibles"
-                              : "Sin asignar"
-                          }
-                        />
-                      </div>
-	                      {maquinaSel || perfilGuardado ? (
-	                        <div className="field">
-                          <LabelConTooltip
-                            label="Perfil default de la máquina"
-                            tooltip="Perfil operativo base. Si el modo de color comercial está activo, el motor usa automáticamente un perfil compatible con el color elegido o default."
-                          />
-                          <HumanSelect
-                            value={cfg.perfilM1Id ?? ""}
-                            onValueChange={(v) => updateConfig(paso.id, { perfilM1Id: v || null })}
-                            disabled={!maquinaSel}
-                            options={perfilOptions}
-                            placeholder={maquinaSel ? "Elegir" : "Elegí máquina primero"}
-                          />
-	                        </div>
-	                      ) : null}
-                      {soportaM2 ? (
-                        <div className="field md:col-span-full">
-                          <LabelConTooltip
-                            label="Tecnologías / máquinas candidatas"
-                            tooltip="Máquinas que este producto puede usar para este paso. En la OT el comercial elegirá tecnología; si una tecnología tiene una sola máquina, no se muestra selector de máquina."
-                          />
-                          <div className="space-y-2 rounded-md border bg-background/70 p-3">
-                            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                              <span>
-                                {candidatasCfg.length === 0
-                                  ? "Sin candidatas configuradas."
-                                  : `${candidatasCfg.length} máquina${candidatasCfg.length === 1 ? "" : "s"} · ${tecnologiasCandidatas.length} tecnología${tecnologiasCandidatas.length === 1 ? "" : "s"}`}
-                              </span>
-                              {candidataPreferidaId ? (
-                                <span className="tag muted">
-                                  Preferida:{" "}
-                                  {lookups.maquinas.find((maquina) => maquina.id === candidataPreferidaId)
-                                    ?.nombre ?? "sin máquina"}
-                                </span>
-                              ) : null}
-                            </div>
-                            {maquinasCandidatasCompatibles.length === 0 ? (
-                              <p className="text-xs text-muted-foreground">
-                                No hay máquinas compatibles con perfiles activos para esta familia.
-                              </p>
+                          <h1>{pasoLabel}</h1>
+                          <div className="sub">
+                            {maquinaGuardada ? (
+                              <>
+                                Máquina:{" "}
+                                <strong
+                                  style={{
+                                    color: "var(--ink)",
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  {maquinaGuardada.nombre}
+                                </strong>
+                                {perfilGuardado ? (
+                                  <> · perfil {perfilGuardado.nombre}</>
+                                ) : null}
+                              </>
+                            ) : cfg.centroCostoId ? (
+                              <>
+                                Centro de costo:{" "}
+                                <strong
+                                  style={{
+                                    color: "var(--ink)",
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  {lookups.centrosCosto.find(
+                                    (centro) => centro.id === cfg.centroCostoId,
+                                  )?.nombre ?? "Seleccionado"}
+                                </strong>
+                              </>
                             ) : (
-                              <div className="grid gap-2 md:grid-cols-2">
-                                {maquinasCandidatasCompatibles.map((maquina) => {
-                                  const selected = candidatasSeleccionadas.has(maquina.id);
-                                  const preferred = selected && candidataPreferidaId === maquina.id;
-                                  return (
-                                    <div
-                                      key={maquina.id}
-                                      className={`flex items-center gap-3 rounded-md border bg-white px-3 py-2 text-xs ${
-                                        selected ? "border-foreground/40" : ""
-                                      }`}
-                                    >
-                                      <input
-                                        type="checkbox"
-                                        checked={selected}
-                                        onChange={(event) =>
-                                          toggleMaquinaCandidata(
-                                            paso.id,
-                                            maquina.id,
-                                            event.target.checked,
-                                          )
-                                        }
-                                      />
-                                      <div className="min-w-0 flex-1">
-                                        <div className="truncate font-medium text-foreground">
-                                          {maquina.nombre}
-                                        </div>
-                                        <div className="truncate text-muted-foreground">
-                                          {machineTechnologyLabel(maquina)} · {maquina.codigo}
-                                        </div>
-                                      </div>
-                                      <button
-                                        type="button"
-                                        className={`grid size-8 place-items-center rounded border ${
-                                          preferred
-                                            ? "border-foreground bg-foreground text-background"
-                                            : "bg-background text-muted-foreground"
-                                        }`}
-                                        disabled={!selected}
-                                        title="Marcar como preferida"
-                                        onClick={() => setMaquinaCandidataPreferida(paso.id, maquina.id)}
-                                      >
-                                        <StarIcon
-                                          className="size-4"
-                                          fill={preferred ? "currentColor" : "none"}
-                                        />
-                                      </button>
-                                    </div>
-                                  );
-                                })}
-                              </div>
+                              "Sin centro asignado"
                             )}
                           </div>
                         </div>
-                      ) : null}
-	                      {mostrarModoColor ? (
-	                        <div className="field md:col-span-full">
-	                          <LabelConTooltip
-	                            label="Modo de color del producto"
-	                            tooltip="Define si este producto usa todos los modos compatibles de la ruta/máquina o si limita modos específicos para cotizar."
-	                          />
-	                          <div className="space-y-3 rounded border bg-background/70 p-3">
-	                            <div className="rounded-md border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-	                              {modoColorConfig.enabled === true ? (
-	                                <span>
-	                                  Este producto <strong className="text-foreground">limita</strong> los modos
-	                                  de color que se pueden cotizar. Si queda más de un modo permitido,
-	                                  el comercial deberá elegir al agregar el producto.
-	                                </span>
-	                              ) : (
-	                                <span>
-	                                  Sin configuración propia: el comercial verá todos los modos de color
-	                                  compatibles con la ruta, máquina y perfiles disponibles.
-	                                </span>
-	                              )}
-	                            </div>
-	                            <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(220px,0.7fr)_minmax(0,1.3fr)]">
-	                              <label className="flex items-start gap-2 rounded-md border bg-white px-3 py-2 text-xs">
-	                                <input
-	                                  className="mt-0.5"
-	                                  type="checkbox"
-	                                  checked={modoColorConfig.enabled === true}
-	                                  onChange={(e) =>
-	                                    updateModoColorConfig(paso.id, {
-	                                      enabled: e.target.checked,
-	                                      comercialElige: e.target.checked
-	                                        ? modoColorDefaultOptions.length > 1
-	                                        : null,
-	                                      defaultMode:
-	                                        e.target.checked && !modoColorDefault
-	                                          ? (modoColorDefaultOptions[0]?.value ?? null)
-	                                          : modoColorDefault || null,
-	                                    })
-	                                  }
-	                                />
-	                                <span className="space-y-0.5">
-	                                  <span className="block font-medium text-foreground">
-	                                    Definir modos para este producto
-	                                  </span>
-	                                  <span className="block text-muted-foreground">
-	                                    Restringe las opciones disponibles en Agregar producto.
-	                                  </span>
-	                                </span>
-	                              </label>
-	                              <div className="space-y-2 rounded-md border bg-white px-3 py-2">
-	                                <LabelConTooltip
-	                                  label="Modos de color"
-	                                  tooltip="Los modos salen de los perfiles de la máquina. Si hay más de uno permitido, el comercial elegirá al cotizar."
-	                                  iconSize="sm"
-	                                />
-	                                {modoColorOptions.length === 0 ? (
-	                                  <p className="text-xs text-muted-foreground">
-	                                    La máquina/perfil todavía no declara modos de color.
-	                                  </p>
-	                                ) : (
-	                                  <div className="segmented w-full">
-	                                    {modoColorOptions.map((option) => {
-	                                      const selected = modoColorEffectiveAllowed.includes(option.value);
-	                                      const nextAllowed = selected
-	                                        ? modoColorEffectiveAllowed.filter((item) => item !== option.value)
-	                                        : [...modoColorEffectiveAllowed, option.value];
-	                                      const safeNextAllowed =
-	                                        nextAllowed.length > 0 ? nextAllowed : [option.value];
-	                                      const nextDefault =
-	                                        safeNextAllowed.includes(modoColorPerfilDefault)
-	                                          ? modoColorPerfilDefault
-	                                          : safeNextAllowed[0];
-	                                      return (
-	                                        <button
-	                                          key={option.value}
-	                                          type="button"
-	                                          className={selected ? "on" : ""}
-	                                          disabled={!modoColorEnabled}
-	                                          onClick={() => {
-	                                            updateModoColorConfig(paso.id, {
-	                                              enabled: true,
-	                                              allowedModes:
-	                                                safeNextAllowed.length === modoColorOptions.length &&
-	                                                !safeNextAllowed.includes("SIN_IMPRESION")
-	                                                  ? null
-	                                                  : safeNextAllowed,
-	                                              defaultMode: nextDefault,
-	                                              comercialElige: safeNextAllowed.length > 1,
-	                                            });
-	                                          }}
-	                                          title={option.code}
-	                                        >
-	                                          {option.label}
-	                                        </button>
-	                                      );
-	                                    })}
-	                                  </div>
-	                                )}
-	                                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-	                                  <span>{modoColorSummary}</span>
-	                                  {modoColorDefault ? (
-	                                    <span className="tag muted">
-	                                      Default por perfil:{" "}
-	                                      {modoColorOptions.find((option) => option.value === modoColorDefault)
-	                                        ?.label ?? modoColorDefault}
-	                                    </span>
-	                                  ) : null}
-	                                </div>
-	                              </div>
-	                            </div>
-	                          </div>
-	                        </div>
-	                      ) : null}
-	                    </div>
-	                  </div>
-	                </section>
-              )}
-
-              {/* ── TAB MATERIALES ───────────────────────────────────── */}
-              {familia && (
-                    <section className="section-block open">
-                      <div className="sb-head">
-                        <span className="num">{familia.relacionMaquinaSoportada.includes("M-1") ? "04" : "03"}</span>
-                        <span className="ttl">Materiales</span>
-                        <span className="hint">
-                          {!requiereMateriales
-                            ? "Sin materiales en este paso"
-                            : slotsManuales.length === 0
-                              ? "Automáticos por máquina"
-                              : `${slotsManuales.length} slot(s)`}
-                        </span>
-                      </div>
-                      <div className="sb-body space-y-3">
-                      {!requiereMateriales ? (
-                        <p className="material-empty">
-                          Este paso no requiere materiales.{" "}
-                          <button type="button" className="slot-link">
-                            Agregar slot
+                        <div className="pill-row">
+                          <button
+                            className="btn"
+                            type="button"
+                            onClick={goPrev}
+                            disabled={idx === 0}
+                          >
+                            <ArrowLeftIcon className="size-4" />
                           </button>
-                        </p>
-                      ) : (
-                        <>
-                      <div className="flex items-center justify-between gap-2">
-                        <LabelConTooltip
-                          label={
-                            <>
-                              <PackageIcon className="mr-1 inline size-3" />
-                              Materiales que consume el paso
-                            </>
-                          }
-                          tooltip="Cada slot es un tipo de material que el paso necesita (papel, tinta, film, etc.). Podés definir si el material es fijo, lo elige el comercial, o lo elige el sistema automáticamente."
-                        />
-                        <div className="flex flex-wrap gap-1">
-                          {slotsManuales.map((slot) => {
-                            const yaExiste = cfg.slotsMateriales?.some(
-                              (s) => s.slotCodigo === slot.codigo,
-                            );
-                            if (yaExiste) return null;
-                            return (
-                              <Button
-                                key={slot.codigo}
-                                variant="outline"
-                                size="sm"
-                                onClick={() => addSlotFromFamilia(paso.id, slot.codigo)}
-                                className="h-7 text-xs"
-                              >
-                                + {slot.nombre}
-                                {slot.requerido && <span className="text-red-500">*</span>}
-                              </Button>
-                            );
-                          })}
+                          <button
+                            className="btn"
+                            type="button"
+                            onClick={goNext}
+                            disabled={
+                              idx === rutaAlternativa.ruta.pasos.length - 1
+                            }
+                          >
+                            Siguiente →
+                          </button>
+                          <button
+                            className="btn btn-primary"
+                            type="button"
+                            onClick={() => guardarPaso(paso.id)}
+                            disabled={
+                              guardando === paso.id ||
+                              totalErrores > 0 ||
+                              !pasoTieneCambios
+                            }
+                          >
+                            {pasoTieneCambios ? (
+                              <SaveIcon className="size-4" />
+                            ) : (
+                              <CheckIcon className="size-4" />
+                            )}
+                            {guardando === paso.id
+                              ? "Guardando..."
+                              : pasoTieneCambios
+                                ? "Guardar paso"
+                                : "Guardado"}
+                          </button>
                         </div>
                       </div>
 
-                      {slotsAutomaticos.length > 0 && (
-                        <div className="rounded-md border border-dashed bg-muted/30 p-3 text-xs text-muted-foreground">
-                          <div className="font-medium text-foreground">Consumibles automáticos por máquina/perfil</div>
-                          <div>
-                            {slotsAutomaticos.map((slot) => slotNombre(slot.codigo, familia)).join(" · ")}
+                      <div className="config-step-content pasos-sections">
+                        <section className="section-block open">
+                          <div className="sb-head">
+                            <span className="num">01</span>
+                            <span className="ttl">Activación</span>
+                            <span className="hint">
+                              Cuándo se ejecuta este paso al cotizar
+                            </span>
                           </div>
-                          <div>
-                            Se configuran en Maquinaria. El motor toma tinta, tóner o barniz desde la máquina y el perfil seleccionado.
-                          </div>
-                        </div>
-                      )}
-
-                      {(cfg.slotsMateriales ?? []).length === 0 && (
-                        <p className="text-muted-foreground py-4 text-center text-xs italic">
-                          {slotsManuales.length > 0
-                            ? "Sin slots configurados. Agregá uno con los botones de arriba."
-                            : "No hay materiales manuales para configurar en este paso."}
-                        </p>
-                      )}
-
-                      {(cfg.slotsMateriales ?? []).map((slot, slotIdx) => {
-                        const slotDecl = familia.slotsRequeridos.find((sr) => sr.codigo === slot.slotCodigo);
-                        if (slotDecl && isConsumibleMaquinaSlot(slotDecl)) {
-                          return (
-                            <div key={slotIdx} className="rounded border border-dashed bg-muted/20 p-2 text-xs text-muted-foreground">
-                              {slotNombre(slot.slotCodigo, familia)} se resolverá automáticamente desde Maquinaria.
-                            </div>
-                          );
-                        }
-                        const selectedCandidates = slot.candidatos ?? [];
-                        const hardcodedMateria = Object.values(candidateMaterials).find(
-                          (materiaPrima) =>
-                            materiaPrima.variantes.some(
-                              (variante) => variante.id === slot.materialVarianteId,
-                            ),
-                        );
-                        const hardcodedVariante = hardcodedMateria?.variantes.find(
-                          (variante) => variante.id === slot.materialVarianteId,
-                        );
-                        const hardcodedVarianteLabel =
-                          hardcodedMateria && hardcodedVariante
-                            ? varianteOptionFromBusqueda(hardcodedMateria, hardcodedVariante).label
-                            : slot.materialVarianteId
-                              ? "Variante guardada"
-                              : "Sin seleccionar";
-                        return (
-                        <div key={slotIdx} className="bg-muted/30 space-y-2 rounded border p-2">
-                          <div className="flex items-center justify-between">
-                            <Badge variant="outline" title={slot.slotCodigo}>
-                              {slotNombre(slot.slotCodigo, familia)}
-                            </Badge>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 px-2 text-red-600"
-                              onClick={() => removeSlot(paso.id, slotIdx)}
-                            >
-                              ×
-                            </Button>
-                          </div>
-                          <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-                            <div className="space-y-1">
-                              <LabelConTooltip
-                                label="¿Quién elige el material?"
-                                tooltip="Material fijo (modelador), el comercial elige al cotizar, o el sistema elige automáticamente con un criterio."
-                              />
-                              <HumanSelect
-                                value={slot.modoSeleccion}
-                                onValueChange={(v) =>
-                                  updateSlot(paso.id, slotIdx, {
-                                    modoSeleccion: (v || "HARDCODED") as
-                                      | "HARDCODED"
-                                      | "COMERCIAL_ELIGE"
-                                      | "MOTOR_ELIGE_AUTO",
-                                  })
-                                }
-                                options={SELECCION_MATERIAL_OPTIONS}
-                                triggerClassName="min-h-9 text-xs"
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <LabelConTooltip
-                                label="¿Cómo se calcula el consumo?"
-                                tooltip="Fórmula que el motor usa para calcular cuánto material se consume (por pieza, por m², por metro lineal, etc.)."
-                              />
-                              <HumanSelect
-                                value={slot.formula ?? "por_unidad_productiva"}
-                                onValueChange={(v) =>
-                                  updateSlot(paso.id, slotIdx, { formula: v || "por_unidad_productiva" })
-                                }
-                                options={FORMULA_OPTIONS}
-                                triggerClassName="min-h-9 text-xs"
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <LabelConTooltip
-                                label="Costeo"
-                                tooltip={
-                                  nestingDefineCosteo
-                                    ? "Este paso toma el costeo desde Acomodado / nesting. El valor del slot no se usa mientras esa estrategia esté activa."
-                                    : "Estrategia de costeo del material cuando no hay una estrategia activa en Acomodado / nesting."
-                                }
-                              />
-                              {nestingDefineCosteo ? (
-                                <div className="min-h-9 rounded border bg-muted/40 px-3 py-2 text-xs">
-                                  <div className="font-medium text-foreground">
-                                    {optionLabel(COSTING_STRATEGY_OPTIONS, nestingCostingStrategy)}
-                                  </div>
-                                  <div className="text-muted-foreground">
-                                    Definido en Acomodado / nesting
-                                  </div>
-                                </div>
-                              ) : (
-                                <HumanSelect
-                                  value={slot.estrategiaCosto ?? "simple"}
-                                  onValueChange={(v) =>
-                                    updateSlot(paso.id, slotIdx, { estrategiaCosto: v || "simple" })
-                                  }
-                                  options={COSTING_STRATEGY_OPTIONS}
-                                  triggerClassName="min-h-9 text-xs"
+                          <div className="sb-body">
+                            <div className="wiz-grid">
+                              <div className="field md:col-span-full">
+                                <LabelConTooltip
+                                  label="Nombre visible del paso"
+                                  tooltip="Nombre operativo que verá comercial y producción. Si lo dejás vacío, se usa el nombre técnico de la familia."
                                 />
-                              )}
-                            </div>
-                          </div>
-                          {slot.modoSeleccion === "HARDCODED" && (
-                            <div className="space-y-2 rounded border bg-background p-3">
-                              <LabelConTooltip
-                                label="Material fijo"
-                                tooltip="Elegí una materia prima compatible y luego una variante concreta para dejar fija en este paso."
-                              />
-                              <MaterialSearchSelect
-                                compatibilidad={slotDecl?.compatibilidadMaterial}
-                                placeholder="Buscar materia prima compatible..."
-                                selectedIds={hardcodedMateria ? [hardcodedMateria.id] : []}
-                                onSelect={(materiaPrima) => {
-                                  setCandidateMaterials((prev) => ({
-                                    ...prev,
-                                    [materiaPrima.id]: materiaPrima,
-                                  }));
-                                  updateSlot(paso.id, slotIdx, {
-                                    materialVarianteId: materiaPrima.variantes[0]?.id ?? null,
-                                  });
-                                }}
-                              />
-                              {hardcodedMateria && hardcodedMateria.variantes.length > 1 ? (
-                                <HumanSelect
-                                  value={slot.materialVarianteId ?? ""}
-                                  onValueChange={(v) =>
-                                    updateSlot(paso.id, slotIdx, {
-                                      materialVarianteId: v || null,
+                                <Input
+                                  value={cfg.nombreVisible ?? ""}
+                                  placeholder={
+                                    familia?.nombre ?? paso.familiaCodigo
+                                  }
+                                  onChange={(event) =>
+                                    updateConfig(paso.id, {
+                                      nombreVisible: event.target.value || null,
                                     })
                                   }
-                                  options={hardcodedMateria.variantes.map((variante) =>
-                                    varianteOptionFromBusqueda(hardcodedMateria, variante),
-                                  )}
-                                  placeholder="Elegir variante"
-                                  triggerClassName="min-h-8 text-xs"
                                 />
-                              ) : (
-                                <div className="text-muted-foreground text-xs">
-                                  Variante: {hardcodedVarianteLabel}
+                              </div>
+                              <div className="field">
+                                <label>Cuándo se ejecuta</label>
+                                <div className="segmented">
+                                  {opcionesActivacion.map((option) => (
+                                    <button
+                                      key={option.value}
+                                      type="button"
+                                      className={
+                                        cfg.modoActivacion === option.value
+                                          ? "on"
+                                          : ""
+                                      }
+                                      onClick={() =>
+                                        updateConfig(paso.id, {
+                                          modoActivacion: option.value,
+                                        })
+                                      }
+                                    >
+                                      {option.label}
+                                    </button>
+                                  ))}
+                                </div>
+                                <span className="help">
+                                  No ejecutar apaga este paso solo para esta
+                                  ruta del producto.
+                                </span>
+                              </div>
+                              <div className="field">
+                                <label>Multiplicadores</label>
+                                <div className="chip-row">
+                                  {multiplicadoresSoportados.length > 0 ? (
+                                    multiplicadoresSoportados.map(
+                                      (multiplicador) => {
+                                        const activo =
+                                          cfg.multiplicadoresActivos?.includes(
+                                            multiplicador,
+                                          );
+                                        return (
+                                          <button
+                                            key={multiplicador}
+                                            type="button"
+                                            className={`tag mono ${activo ? "active" : "muted dashed"}`}
+                                            onClick={() =>
+                                              toggleMultiplicador(
+                                                paso.id,
+                                                multiplicador,
+                                              )
+                                            }
+                                            title={
+                                              multiplicador === "caras"
+                                                ? "Duplica tiempo y consumibles de máquina cuando el comercial elige doble faz. Los materiales se duplican por slot."
+                                                : "Activa o desactiva este multiplicador para el paso."
+                                            }
+                                          >
+                                            {multiplicador}
+                                          </button>
+                                        );
+                                      },
+                                    )
+                                  ) : (
+                                    <span className="tag muted dashed">
+                                      Sin multiplicadores
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="help">
+                                  Variables que multiplican el tiempo del paso.
+                                  En materiales, caras se define por slot.
+                                </span>
+                              </div>
+                              {cfg.modoActivacion === "CONDICIONAL" && (
+                                <div className="md:col-span-full">
+                                  <RuleBuilder
+                                    value={
+                                      cfg.condicionActivacionJson as
+                                        | Record<string, unknown>
+                                        | null
+                                        | undefined
+                                    }
+                                    includeMeasureFields={
+                                      producto.modoMedidas === "LIBRE" ||
+                                      producto.modoMedidas === "MIXTA"
+                                    }
+                                    extraFields={technologyRuleFields}
+                                    onChange={(value) =>
+                                      updateConfig(paso.id, {
+                                        condicionActivacionJson: value,
+                                      })
+                                    }
+                                  />
                                 </div>
                               )}
                             </div>
-                          )}
-                          {slot.modoSeleccion !== "HARDCODED" && (
-                            <div className="space-y-2 rounded border bg-background p-3">
-                              <div className="flex flex-wrap items-center justify-between gap-2">
-                                <LabelConTooltip
-                                  label="Materiales candidatos"
-                                  tooltip="Lista de variantes entre las que podrá elegir el comercial, o entre las que el sistema resolverá automáticamente."
-                                />
-                                <span className="text-muted-foreground text-[11px]">
-                                  {selectedCandidates.length} materia
-                                  {selectedCandidates.length === 1 ? "" : "s"}
-                                </span>
+                            {(valBasico.errores.length > 0 ||
+                              valBasico.warnings.length > 0) && (
+                              <ListaValidacion validacion={valBasico} />
+                            )}
+                          </div>
+                        </section>
+
+                        {!noEjecutar && (
+                          <>
+                            <section className="section-block open">
+                              <div className="sb-head">
+                                <span className="num">02</span>
+                                <span className="ttl">Tiempo y costo</span>
+                                <span className="chev">›</span>
                               </div>
-                              <MaterialSearchSelect
-                                compatibilidad={slotDecl?.compatibilidadMaterial}
-                                placeholder="Buscar materia prima compatible..."
-                                selectedIds={selectedCandidates.map(
-                                  (candidate) => candidate.materiaPrimaId,
-                                )}
-                                onSelect={(materiaPrima) =>
-                                  addSlotCandidate(paso.id, slotIdx, materiaPrima)
-                                }
-                              />
-                              <div className="space-y-2">
-                                {selectedCandidates.map((candidate) => {
-                                  const materiaPrima = candidateMaterials[candidate.materiaPrimaId];
-                                  const variantOptions =
-                                    materiaPrima?.variantes.map((variante) =>
-                                      varianteOptionFromBusqueda(materiaPrima, variante),
-                                    ) ?? [];
-                                  const enabledVariantIds = new Set(candidate.varianteIds);
-                                  return (
-                                    <div key={candidate.materiaPrimaId} className="rounded border bg-white p-2">
-                                      <div className="mb-2 flex items-center justify-between gap-2">
-                                        <div className="min-w-0 text-xs">
-                                          <div className="truncate font-medium">
-                                            {materiaPrima?.nombre ?? candidate.materiaPrimaId}
+                              <div className="sb-body">
+                                <div className="wiz-grid">
+                                  <div className="field">
+                                    <LabelConTooltip
+                                      label="¿Cómo se calcula el tiempo?"
+                                      tooltip="Define la base del cálculo: tiempo fijo, productividad propia, productividad de máquina, o input manual del comercial."
+                                    />
+                                    <HumanSelect
+                                      value={cfg.modoTiempo ?? ""}
+                                      onValueChange={(v) =>
+                                        updateConfig(paso.id, {
+                                          modoTiempo: v || null,
+                                        })
+                                      }
+                                      options={opcionesTiempo}
+                                      placeholder="Elegir"
+                                    />
+                                  </div>
+                                  <div className="field">
+                                    <LabelConTooltip
+                                      label="Centro de costo"
+                                      tooltip="Centro horario usado para calcular la tarifa de este paso."
+                                    />
+                                    {cfg.maquinaM1Id ? (
+                                      <div className="control select">
+                                        <span>
+                                          {maquinaGuardada?.centroCostoPrincipal
+                                            ?.nombre ??
+                                            "Centro heredado de máquina"}
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      <HumanSelect
+                                        value={cfg.centroCostoId ?? ""}
+                                        onValueChange={(v) =>
+                                          updateConfig(paso.id, {
+                                            centroCostoId: v || null,
+                                          })
+                                        }
+                                        options={centroCostoOptions}
+                                        placeholder={
+                                          lookups.centrosCosto.length === 0
+                                            ? "No hay centros horarios activos"
+                                            : "Elegir centro horario"
+                                        }
+                                      />
+                                    )}
+                                  </div>
+                                  {mostrarTiempoFijoOverride && (
+                                    <div className="field">
+                                      <LabelConTooltip
+                                        label={
+                                          <>
+                                            Tiempo fijo override{" "}
+                                            <span className="hint">
+                                              opcional
+                                            </span>
+                                          </>
+                                        }
+                                        tooltip="Sólo aplica en pasos sin máquina con tiempo fijo."
+                                        iconSize="sm"
+                                      />
+                                      <Input
+                                        type="number"
+                                        min={0}
+                                        step={0.5}
+                                        value={cfg.tiempoFijoOverrideMin ?? ""}
+                                        onChange={(e) =>
+                                          updateConfig(paso.id, {
+                                            tiempoFijoOverrideMin:
+                                              e.target.value === ""
+                                                ? null
+                                                : Number(e.target.value),
+                                          })
+                                        }
+                                        placeholder="—"
+                                      />
+                                    </div>
+                                  )}
+                                  {mostrarProductividadPropia && (
+                                    <div className="field md:col-span-full">
+                                      <LabelConTooltip
+                                        label="Ritmo de trabajo manual"
+                                        tooltip="Usalo para pasos manuales o externos que no dependen de una máquina. Podés cargar una productividad por hora o un tiempo por lote, por ejemplo 2 pliegos cada 1 minuto."
+                                        iconSize="sm"
+                                      />
+                                      <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                                        <div className="space-y-1">
+                                          <span className="text-muted-foreground text-xs">
+                                            Cómo querés cargar el ritmo
+                                          </span>
+                                          <HumanSelect
+                                            value={timeCalculationMode}
+                                            onValueChange={(value) =>
+                                              updateStepParams(paso.id, {
+                                                timeCalculationMode:
+                                                  value ||
+                                                  getDefaultT2TimeCalculationMode(
+                                                    familia?.codigo,
+                                                  ),
+                                              })
+                                            }
+                                            options={
+                                              T2_TIME_CALCULATION_MODE_OPTIONS
+                                            }
+                                            placeholder="Elegir forma"
+                                          />
+                                        </div>
+                                        <div className="space-y-1">
+                                          <span className="text-muted-foreground text-xs">
+                                            Tiempo fijo estimado
+                                          </span>
+                                          <div className="flex items-center gap-2">
+                                            <Input
+                                              type="number"
+                                              min={0}
+                                              step={0.25}
+                                              value={horasEstimadasPaso ?? ""}
+                                              onChange={(event) =>
+                                                updateStepParams(paso.id, {
+                                                  horasEstimadas:
+                                                    event.target.value === ""
+                                                      ? null
+                                                      : Number(
+                                                          event.target.value,
+                                                        ),
+                                                })
+                                              }
+                                              placeholder="Opcional"
+                                            />
+                                            <span className="text-muted-foreground whitespace-nowrap text-xs">
+                                              h
+                                            </span>
                                           </div>
                                         </div>
-                                        <button
-                                          type="button"
-                                          className="text-xs text-red-600"
-                                          onClick={() =>
-                                            removeSlotCandidate(
-                                              paso.id,
-                                              slotIdx,
-                                              candidate.materiaPrimaId,
-                                            )
-                                          }
-                                        >
-                                          Quitar
-                                        </button>
+                                        {timeCalculationMode ===
+                                        "batch_time" ? (
+                                          <>
+                                            <div className="space-y-1">
+                                              <span className="text-muted-foreground text-xs">
+                                                Tiempo del lote
+                                              </span>
+                                              <div className="flex items-center gap-2">
+                                                <Input
+                                                  type="number"
+                                                  min={0}
+                                                  step={0.25}
+                                                  value={batchTimeMin ?? ""}
+                                                  onChange={(event) =>
+                                                    updateStepParams(paso.id, {
+                                                      batchTimeMin:
+                                                        event.target.value ===
+                                                        ""
+                                                          ? null
+                                                          : Number(
+                                                              event.target
+                                                                .value,
+                                                            ),
+                                                    })
+                                                  }
+                                                  placeholder="Ej. 1"
+                                                />
+                                                <span className="text-muted-foreground whitespace-nowrap text-xs">
+                                                  min
+                                                </span>
+                                              </div>
+                                            </div>
+                                            <div className="space-y-1">
+                                              <span className="text-muted-foreground text-xs">
+                                                Tamaño del lote
+                                              </span>
+                                              <div className="flex items-center gap-2">
+                                                <Input
+                                                  type="number"
+                                                  min={0}
+                                                  step={
+                                                    productivityUnit ===
+                                                    "unidades_h"
+                                                      ? 1
+                                                      : 0.25
+                                                  }
+                                                  value={batchSize ?? ""}
+                                                  onChange={(event) =>
+                                                    updateStepParams(paso.id, {
+                                                      batchSize:
+                                                        event.target.value ===
+                                                        ""
+                                                          ? null
+                                                          : Number(
+                                                              event.target
+                                                                .value,
+                                                            ),
+                                                    })
+                                                  }
+                                                  placeholder={
+                                                    productivityUnit ===
+                                                    "unidades_h"
+                                                      ? "Ej. 1"
+                                                      : "Ej. 2"
+                                                  }
+                                                />
+                                                <span className="text-muted-foreground whitespace-nowrap text-xs">
+                                                  {batchUnitSuffix}
+                                                </span>
+                                              </div>
+                                            </div>
+                                          </>
+                                        ) : (
+                                          <div className="space-y-1 md:col-span-full">
+                                              <span className="text-muted-foreground text-xs">
+                                              Productividad por hora
+                                            </span>
+                                            <div className="flex items-center gap-2">
+                                              <Input
+                                                type="number"
+                                                min={0}
+                                                step={1}
+                                                value={
+                                                  productividadPropia ?? ""
+                                                }
+                                                onChange={(event) =>
+                                                  updateStepParams(paso.id, {
+                                                    productivityValue:
+                                                      event.target.value === ""
+                                                        ? null
+                                                        : Number(
+                                                            event.target.value,
+                                                          ),
+                                                  })
+                                                }
+                                                placeholder="Ej. 500"
+                                              />
+                                              <span className="text-muted-foreground whitespace-nowrap text-xs">
+                                                {productivityUnitSuffix}
+                                              </span>
+                                            </div>
+                                          </div>
+                                        )}
+                                        <div className="space-y-1">
+                                          <span className="text-muted-foreground text-xs">
+                                            Qué unidad estás midiendo
+                                          </span>
+                                          <HumanSelect
+                                            value={productivityUnit}
+                                            onValueChange={(value) => {
+                                              const nextUnit =
+                                                value ||
+                                                getDefaultT2ProductivityUnit(
+                                                  familia?.codigo,
+                                                );
+                                              updateStepParams(paso.id, {
+                                                productivityUnit: nextUnit,
+                                                productivityQuantitySource:
+                                                  getDefaultT2QuantitySource(
+                                                    familia?.codigo,
+                                                    nextUnit,
+                                                  ),
+                                              });
+                                            }}
+                                            options={
+                                              T2_PRODUCTIVITY_UNIT_OPTIONS
+                                            }
+                                            placeholder="Elegir unidad"
+                                          />
+                                        </div>
+                                        <div className="space-y-1">
+                                          <span className="text-muted-foreground text-xs">
+                                            Qué cantidad cronometra este paso
+                                          </span>
+                                          <HumanSelect
+                                            value={productivityQuantitySource}
+                                            onValueChange={(value) =>
+                                              updateStepParams(paso.id, {
+                                                productivityQuantitySource:
+                                                  value ||
+                                                  getDefaultT2QuantitySource(
+                                                    familia?.codigo,
+                                                    productivityUnit,
+                                                  ),
+                                              })
+                                            }
+                                            options={
+                                              productivityQuantitySourceOptions
+                                            }
+                                            placeholder="Elegir fuente"
+                                          />
+                                        </div>
                                       </div>
-                                      {materiaPrima && materiaPrima.variantes.length > 1 ? (
-                                        canUseColorThicknessSelector(materiaPrima) ? (
-                                          <ColorThicknessVariantSelector
-                                            materiaPrima={materiaPrima}
-                                            candidate={candidate}
-                                            onChange={(patch) =>
-                                              updateSlotCandidate(
-                                                paso.id,
-                                                slotIdx,
-                                                candidate.materiaPrimaId,
-                                                patch,
-                                              )
+                                      <span className="help">
+                                        {t2TimeSummary} Si completás tiempo fijo estimado, el motor usa ese tiempo y no calcula por ritmo.
+                                      </span>
+                                    </div>
+                                  )}
+                                  {cantidadRelevante && (
+                                    <div className="field">
+                                      <LabelConTooltip
+                                        label="¿De dónde sale la cantidad?"
+                                        tooltip="Cómo el motor decide cuántas unidades produce este paso."
+                                      />
+                                      <HumanSelect
+                                        value={cfg.mecanismoCantidad ?? ""}
+                                        onValueChange={(v) =>
+                                          updateConfig(paso.id, {
+                                            mecanismoCantidad: v || null,
+                                          })
+                                        }
+                                        options={opcionesCantidad}
+                                        placeholder="Elegir"
+                                      />
+                                    </div>
+                                  )}
+                                  {familia?.codigo ===
+                                    "montaje_sobre_sustrato" && (
+                                    <div className="field">
+                                      <LabelConTooltip
+                                        label="Piezas a montar"
+                                        tooltip="Define qué medidas usa el paso para calcular el nesting del material de montaje."
+                                      />
+                                      <HumanSelect
+                                        value={String(
+                                          paramsPaso.fuentePiezasMontaje ??
+                                            "piezas_jobcontext",
+                                        )}
+                                        onValueChange={(value) =>
+                                          updateStepParams(paso.id, {
+                                            fuentePiezasMontaje:
+                                              value || "piezas_jobcontext",
+                                          })
+                                        }
+                                        options={MONTAJE_SOURCE_OPTIONS}
+                                        placeholder="Elegir origen"
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </section>
+
+                            {familia &&
+                              familia.relacionMaquinaSoportada.includes(
+                                "M-1",
+                              ) && (
+                                <section className="section-block open">
+                                  <div className="sb-head">
+                                    <span className="num">03</span>
+                                    <span className="ttl">
+                                      Máquina y perfil
+                                    </span>
+                                    <span className="chev">›</span>
+                                  </div>
+                                  <div className="sb-body">
+                                    <div className="wiz-grid">
+                                      <div className="field">
+                                        <LabelConTooltip
+                                          label={
+                                            <>
+                                              Máquina principal{" "}
+                                              {requiereMaquinaPrincipal ? (
+                                                <span className="req">*</span>
+                                              ) : null}
+                                            </>
+                                          }
+                                          tooltip={
+                                            requiereMaquinaPrincipal
+                                              ? "Máquina del taller que ejecuta este paso. La lista filtra por compatibilidad con la familia."
+                                              : "Opcional. Dejala sin asignar si este paso se ejecuta manualmente y usa centro de costo."
+                                          }
+                                          required={requiereMaquinaPrincipal}
+                                        />
+                                        <HumanSelect
+                                          value={cfg.maquinaM1Id ?? ""}
+                                          onValueChange={(v) =>
+                                            updateConfig(paso.id, {
+                                              maquinaM1Id: v || null,
+                                              perfilM1Id: null,
+                                              centroCostoId: null,
+                                            })
+                                          }
+                                          options={maquinaOptions}
+                                          placeholder={
+                                            maquinasCompatibles.length === 0
+                                              ? "No hay máquinas compatibles"
+                                              : "Sin asignar"
+                                          }
+                                        />
+                                      </div>
+                                      {maquinaSel || perfilGuardado ? (
+                                        <div className="field">
+                                          <LabelConTooltip
+                                            label="Perfil default de la máquina"
+                                            tooltip="Perfil operativo base. Si el modo de color comercial está activo, el motor usa automáticamente un perfil compatible con el color elegido o default."
+                                          />
+                                          <HumanSelect
+                                            value={cfg.perfilM1Id ?? ""}
+                                            onValueChange={(v) =>
+                                              updateConfig(paso.id, {
+                                                perfilM1Id: v || null,
+                                              })
+                                            }
+                                            disabled={!maquinaSel}
+                                            options={perfilOptions}
+                                            placeholder={
+                                              maquinaSel
+                                                ? "Elegir"
+                                                : "Elegí máquina primero"
                                             }
                                           />
-                                        ) : (
-                                        <div className="mb-2 space-y-1 rounded border bg-muted/20 p-2">
-                                          <div className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
-                                            Variantes habilitadas para cotizar
+                                        </div>
+                                      ) : null}
+                                      {soportaM2 ? (
+                                        <div className="field md:col-span-full">
+                                          <LabelConTooltip
+                                            label="Tecnologías / máquinas candidatas"
+                                            tooltip="Máquinas que este producto puede usar para este paso. En la OT el comercial elegirá tecnología; si una tecnología tiene una sola máquina, no se muestra selector de máquina."
+                                          />
+                                          <div className="space-y-2 rounded-md border bg-background/70 p-3">
+                                            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                              <span>
+                                                {candidatasCfg.length === 0
+                                                  ? "Sin candidatas configuradas."
+                                                  : `${candidatasCfg.length} máquina${candidatasCfg.length === 1 ? "" : "s"} · ${tecnologiasCandidatas.length} tecnología${tecnologiasCandidatas.length === 1 ? "" : "s"}`}
+                                              </span>
+                                              {candidataPreferidaId ? (
+                                                <span className="tag muted">
+                                                  Preferida:{" "}
+                                                  {lookups.maquinas.find(
+                                                    (maquina) =>
+                                                      maquina.id ===
+                                                      candidataPreferidaId,
+                                                  )?.nombre ?? "sin máquina"}
+                                                </span>
+                                              ) : null}
+                                            </div>
+                                            {maquinasCandidatasCompatibles.length ===
+                                            0 ? (
+                                              <p className="text-xs text-muted-foreground">
+                                                No hay máquinas compatibles con
+                                                perfiles activos para esta
+                                                familia.
+                                              </p>
+                                            ) : (
+                                              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                                                {maquinasCandidatasCompatibles.map(
+                                                  (maquina) => {
+                                                    const selected =
+                                                      candidatasSeleccionadas.has(
+                                                        maquina.id,
+                                                      );
+                                                    const preferred =
+                                                      selected &&
+                                                      candidataPreferidaId ===
+                                                        maquina.id;
+                                                    const candidataCfg =
+                                                      candidatasCfg.find(
+                                                        (candidata) =>
+                                                          candidata.maquinaId ===
+                                                          maquina.id,
+                                                      );
+                                                    const perfilesCompatibles =
+                                                      maquina.perfilesOperativos.filter(
+                                                        (perfil) =>
+                                                          perfilCompatibleConFamilia(
+                                                            paso.familiaCodigo,
+                                                            perfil,
+                                                          ),
+                                                      );
+                                                    return (
+                                                      <div
+                                                        key={maquina.id}
+                                                        className={`grid gap-2 rounded-md border bg-white px-3 py-2 text-xs ${
+                                                          selected
+                                                            ? "border-foreground/40"
+                                                            : ""
+                                                        }`}
+                                                      >
+                                                        <div className="flex items-center gap-3">
+                                                          <input
+                                                            type="checkbox"
+                                                            checked={selected}
+                                                            onChange={(event) =>
+                                                              toggleMaquinaCandidata(
+                                                                paso.id,
+                                                                maquina.id,
+                                                                event.target
+                                                                  .checked,
+                                                              )
+                                                            }
+                                                          />
+                                                          <div className="min-w-0 flex-1">
+                                                            <div className="truncate font-medium text-foreground">
+                                                              {maquina.nombre}
+                                                            </div>
+                                                            <div className="truncate text-muted-foreground">
+                                                              {machineTechnologyLabel(
+                                                                maquina,
+                                                              )}{" "}
+                                                              · {maquina.codigo}
+                                                            </div>
+                                                          </div>
+                                                          <button
+                                                            type="button"
+                                                            className={`grid size-8 place-items-center rounded border ${
+                                                              preferred
+                                                                ? "border-foreground bg-foreground text-background"
+                                                                : "bg-background text-muted-foreground"
+                                                            }`}
+                                                            disabled={!selected}
+                                                            title="Marcar como preferida"
+                                                            onClick={() =>
+                                                              setMaquinaCandidataPreferida(
+                                                                paso.id,
+                                                                maquina.id,
+                                                              )
+                                                            }
+                                                          >
+                                                            <StarIcon
+                                                              className="size-4"
+                                                              fill={
+                                                                preferred
+                                                                  ? "currentColor"
+                                                                  : "none"
+                                                              }
+                                                            />
+                                                          </button>
+                                                        </div>
+                                                        {selected ? (
+                                                          <div className="grid gap-1">
+                                                            <span className="text-[11px] font-medium text-muted-foreground">
+                                                              Perfil default
+                                                            </span>
+                                                            <select
+                                                              className="h-8 rounded-md border bg-background px-2 text-xs"
+                                                              value={
+                                                                candidataCfg?.perfilDefaultId ??
+                                                                ""
+                                                              }
+                                                              onChange={(
+                                                                event,
+                                                              ) =>
+                                                                setMaquinaCandidataPerfilDefault(
+                                                                  paso.id,
+                                                                  maquina.id,
+                                                                  event.target
+                                                                    .value ||
+                                                                    null,
+                                                                )
+                                                              }
+                                                            >
+                                                              <option value="">
+                                                                Primer perfil
+                                                                compatible
+                                                              </option>
+                                                              {perfilesCompatibles.map(
+                                                                (perfil) => (
+                                                                  <option
+                                                                    key={
+                                                                      perfil.id
+                                                                    }
+                                                                    value={
+                                                                      perfil.id
+                                                                    }
+                                                                  >
+                                                                    {
+                                                                      perfil.nombre
+                                                                    }
+                                                                  </option>
+                                                                ),
+                                                              )}
+                                                            </select>
+                                                          </div>
+                                                        ) : null}
+                                                        {selected &&
+                                                        mostrarModoColor ? (
+                                                          <div className="grid gap-1">
+                                                            <span className="text-[11px] font-medium text-muted-foreground">
+                                                              Modos de color
+                                                              habilitados
+                                                            </span>
+                                                            {(() => {
+                                                              const candidateModoOptions =
+                                                                buildModoColorOptions(
+                                                                  maquina,
+                                                                  null,
+                                                                  true,
+                                                                );
+                                                              const candidateAllowed =
+                                                                resolveModoColorAllowedModes(
+                                                                  candidataCfg?.modoColorAllowedModes,
+                                                                  candidateModoOptions,
+                                                                );
+                                                              return candidateModoOptions.length ===
+                                                                0 ? (
+                                                                <p className="text-[11px] text-muted-foreground">
+                                                                  Esta máquina
+                                                                  todavía no
+                                                                  declara modos
+                                                                  de color en
+                                                                  sus perfiles.
+                                                                </p>
+                                                              ) : (
+                                                                <div
+                                                                  className={`segmented w-full text-[11px] ${
+                                                                    candidateModoOptions.length >
+                                                                    2
+                                                                      ? "segmented-grid-2"
+                                                                      : ""
+                                                                  }`}
+                                                                >
+                                                                  {candidateModoOptions.map(
+                                                                    (
+                                                                      option,
+                                                                    ) => {
+                                                                      const optionSelected =
+                                                                        candidateAllowed.includes(
+                                                                          option.value,
+                                                                        );
+                                                                      const nextAllowed =
+                                                                        optionSelected
+                                                                          ? candidateAllowed.filter(
+                                                                              (
+                                                                                item,
+                                                                              ) =>
+                                                                                item !==
+                                                                                option.value,
+                                                                            )
+                                                                          : [
+                                                                              ...candidateAllowed,
+                                                                              option.value,
+                                                                            ];
+                                                                      const safeNextAllowed =
+                                                                        nextAllowed.length >
+                                                                        0
+                                                                          ? nextAllowed
+                                                                          : [
+                                                                              option.value,
+                                                                            ];
+                                                                      return (
+                                                                        <button
+                                                                          key={
+                                                                            option.value
+                                                                          }
+                                                                          type="button"
+                                                                          className={
+                                                                            optionSelected
+                                                                              ? "on"
+                                                                              : ""
+                                                                          }
+                                                                          onClick={() =>
+                                                                            setMaquinaCandidataModoColorAllowed(
+                                                                              paso.id,
+                                                                              maquina.id,
+                                                                              safeNextAllowed,
+                                                                            )
+                                                                          }
+                                                                          title={
+                                                                            option.code
+                                                                          }
+                                                                        >
+                                                                          {
+                                                                            option.label
+                                                                          }
+                                                                        </button>
+                                                                      );
+                                                                    },
+                                                                  )}
+                                                                </div>
+                                                              );
+                                                            })()}
+                                                            <span className="text-[11px] text-muted-foreground">
+                                                              Si queda más de un
+                                                              modo, el comercial
+                                                              elige al agregar
+                                                              el producto.
+                                                            </span>
+                                                          </div>
+                                                        ) : null}
+                                                      </div>
+                                                    );
+                                                  },
+                                                )}
+                                              </div>
+                                            )}
                                           </div>
-                                          <div className="grid gap-1 sm:grid-cols-2">
-                                            {materiaPrima.variantes.map((variante) => {
-                                              const checked = enabledVariantIds.has(variante.id);
-                                              const option = varianteOptionFromBusqueda(
-                                                materiaPrima,
-                                                variante,
-                                              );
-                                              return (
-                                                <label
-                                                  key={variante.id}
-                                                  className={`flex items-start gap-3 rounded border px-3 py-2 text-xs transition ${
-                                                    checked
-                                                      ? "border-foreground/15 bg-white shadow-sm"
-                                                      : "border-transparent bg-white/70 text-muted-foreground"
-                                                  }`}
-                                                >
-                                                  <input
-                                                    type="checkbox"
-                                                    className="mt-0.5"
-                                                    checked={checked}
-                                                    onChange={(event) => {
-                                                      const nextIds = event.target.checked
-                                                        ? [...candidate.varianteIds, variante.id]
-                                                        : candidate.varianteIds.filter(
-                                                            (id) => id !== variante.id,
+                                        </div>
+                                      ) : null}
+                                      {mostrarModoColor &&
+                                      (!soportaM2 ||
+                                        candidatasCfg.length === 0) ? (
+                                        <div className="field md:col-span-full">
+                                          <LabelConTooltip
+                                            label="Modo de color del producto"
+                                            tooltip="Define si este producto usa todos los modos compatibles de la ruta/máquina o si limita modos específicos para cotizar."
+                                          />
+                                          <div className="space-y-3 rounded border bg-background/70 p-3">
+                                            <div className="rounded-md border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                                              {modoColorConfig.enabled ===
+                                              true ? (
+                                                <span>
+                                                  Este producto{" "}
+                                                  <strong className="text-foreground">
+                                                    limita
+                                                  </strong>{" "}
+                                                  los modos de color que se
+                                                  pueden cotizar. Si queda más
+                                                  de un modo permitido, el
+                                                  comercial deberá elegir al
+                                                  agregar el producto.
+                                                </span>
+                                              ) : (
+                                                <span>
+                                                  Sin configuración propia: el
+                                                  comercial verá todos los modos
+                                                  de color compatibles con la
+                                                  ruta, máquina y perfiles
+                                                  disponibles.
+                                                </span>
+                                              )}
+                                            </div>
+                                            <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(220px,0.7fr)_minmax(0,1.3fr)]">
+                                              <label className="flex items-start gap-2 rounded-md border bg-white px-3 py-2 text-xs">
+                                                <input
+                                                  className="mt-0.5"
+                                                  type="checkbox"
+                                                  checked={
+                                                    modoColorConfig.enabled ===
+                                                    true
+                                                  }
+                                                  onChange={(e) =>
+                                                    updateModoColorConfig(
+                                                      paso.id,
+                                                      {
+                                                        enabled:
+                                                          e.target.checked,
+                                                        comercialElige: e.target
+                                                          .checked
+                                                          ? modoColorDefaultOptions.length >
+                                                            1
+                                                          : null,
+                                                        defaultMode:
+                                                          e.target.checked &&
+                                                          !modoColorDefault
+                                                            ? (modoColorDefaultOptions[0]
+                                                                ?.value ?? null)
+                                                            : modoColorDefault ||
+                                                              null,
+                                                      },
+                                                    )
+                                                  }
+                                                />
+                                                <span className="space-y-0.5">
+                                                  <span className="block font-medium text-foreground">
+                                                    Definir modos para este
+                                                    producto
+                                                  </span>
+                                                  <span className="block text-muted-foreground">
+                                                    Restringe las opciones
+                                                    disponibles en Agregar
+                                                    producto.
+                                                  </span>
+                                                </span>
+                                              </label>
+                                              <div className="space-y-2 rounded-md border bg-white px-3 py-2">
+                                                <LabelConTooltip
+                                                  label="Modos de color"
+                                                  tooltip="Los modos salen de los perfiles de la máquina. Si hay más de uno permitido, el comercial elegirá al cotizar."
+                                                  iconSize="sm"
+                                                />
+                                                {modoColorOptions.length ===
+                                                0 ? (
+                                                  <p className="text-xs text-muted-foreground">
+                                                    La máquina/perfil todavía no
+                                                    declara modos de color.
+                                                  </p>
+                                                ) : (
+                                                  <div
+                                                    className={`segmented w-full ${
+                                                      modoColorOptions.length >
+                                                      2
+                                                        ? "segmented-grid-2"
+                                                        : ""
+                                                    }`}
+                                                  >
+                                                    {modoColorOptions.map(
+                                                      (option) => {
+                                                        const selected =
+                                                          modoColorEffectiveAllowed.includes(
+                                                            option.value,
                                                           );
-                                                      const safeIds =
-                                                        nextIds.length > 0
-                                                          ? Array.from(new Set(nextIds))
-                                                          : [variante.id];
-                                                      const defaultStillEnabled =
-                                                        candidate.defaultVarianteId &&
-                                                        safeIds.includes(candidate.defaultVarianteId);
-                                                      updateSlotCandidate(
+                                                        const nextAllowed =
+                                                          selected
+                                                            ? modoColorEffectiveAllowed.filter(
+                                                                (item) =>
+                                                                  item !==
+                                                                  option.value,
+                                                              )
+                                                            : [
+                                                                ...modoColorEffectiveAllowed,
+                                                                option.value,
+                                                              ];
+                                                        const safeNextAllowed =
+                                                          nextAllowed.length > 0
+                                                            ? nextAllowed
+                                                            : [option.value];
+                                                        const nextDefault =
+                                                          safeNextAllowed.includes(
+                                                            modoColorPerfilDefault,
+                                                          )
+                                                            ? modoColorPerfilDefault
+                                                            : safeNextAllowed[0];
+                                                        return (
+                                                          <button
+                                                            key={option.value}
+                                                            type="button"
+                                                            className={
+                                                              selected
+                                                                ? "on"
+                                                                : ""
+                                                            }
+                                                            disabled={
+                                                              !modoColorEnabled
+                                                            }
+                                                            onClick={() => {
+                                                              updateModoColorConfig(
+                                                                paso.id,
+                                                                {
+                                                                  enabled: true,
+                                                                  allowedModes:
+                                                                    safeNextAllowed.length ===
+                                                                      modoColorOptions.length &&
+                                                                    !safeNextAllowed.includes(
+                                                                      "SIN_IMPRESION",
+                                                                    )
+                                                                      ? null
+                                                                      : safeNextAllowed,
+                                                                  defaultMode:
+                                                                    nextDefault,
+                                                                  comercialElige:
+                                                                    safeNextAllowed.length >
+                                                                    1,
+                                                                },
+                                                              );
+                                                            }}
+                                                            title={option.code}
+                                                          >
+                                                            {option.label}
+                                                          </button>
+                                                        );
+                                                      },
+                                                    )}
+                                                  </div>
+                                                )}
+                                                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                                  <span>
+                                                    {modoColorSummary}
+                                                  </span>
+                                                  {modoColorDefault ? (
+                                                    <span className="tag muted">
+                                                      Default por perfil:{" "}
+                                                      {modoColorOptions.find(
+                                                        (option) =>
+                                                          option.value ===
+                                                          modoColorDefault,
+                                                      )?.label ??
+                                                        modoColorDefault}
+                                                    </span>
+                                                  ) : null}
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                </section>
+                              )}
+
+                            {/* ── TAB MATERIALES ───────────────────────────────────── */}
+                            {familia && (
+                              <section className="section-block open">
+                                <div className="sb-head">
+                                  <span className="num">
+                                    {familia.relacionMaquinaSoportada.includes(
+                                      "M-1",
+                                    )
+                                      ? "04"
+                                      : "03"}
+                                  </span>
+                                  <span className="ttl">Materiales</span>
+                                  <span className="hint">
+                                    {!requiereMateriales
+                                      ? "Sin materiales en este paso"
+                                      : slotsManuales.length === 0
+                                        ? "Automáticos por máquina"
+                                        : `${slotsManuales.length} slot(s)`}
+                                  </span>
+                                </div>
+                                <div className="sb-body space-y-3">
+                                  {!requiereMateriales ? (
+                                    <p className="material-empty">
+                                      Este paso no requiere materiales.{" "}
+                                      <button
+                                        type="button"
+                                        className="slot-link"
+                                      >
+                                        Agregar slot
+                                      </button>
+                                    </p>
+                                  ) : (
+                                    <>
+                                      <div className="flex items-center justify-between gap-2">
+                                        <LabelConTooltip
+                                          label={
+                                            <>
+                                              <PackageIcon className="mr-1 inline size-3" />
+                                              Materiales que consume el paso
+                                            </>
+                                          }
+                                          tooltip="Cada slot es un tipo de material que el paso necesita (papel, tinta, film, etc.). Podés definir si el material es fijo, lo elige el comercial, o lo elige el sistema automáticamente."
+                                        />
+                                        <div className="flex flex-wrap gap-1">
+                                          {slotsManuales.map((slot) => {
+                                            const yaExiste =
+                                              cfg.slotsMateriales?.some(
+                                                (s) =>
+                                                  s.slotCodigo === slot.codigo,
+                                              );
+                                            if (yaExiste) return null;
+                                            return (
+                                              <Button
+                                                key={slot.codigo}
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() =>
+                                                  addSlotFromFamilia(
+                                                    paso.id,
+                                                    slot.codigo,
+                                                  )
+                                                }
+                                                className="h-7 text-xs"
+                                              >
+                                                + {slot.nombre}
+                                                {slot.requerido && (
+                                                  <span className="text-red-500">
+                                                    *
+                                                  </span>
+                                                )}
+                                              </Button>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+
+                                      {slotsAutomaticos.length > 0 && (
+                                        <div className="rounded-md border border-dashed bg-muted/30 p-3 text-xs text-muted-foreground">
+                                          <div className="font-medium text-foreground">
+                                            Consumibles automáticos por
+                                            máquina/perfil
+                                          </div>
+                                          <div>
+                                            {slotsAutomaticos
+                                              .map((slot) =>
+                                                slotNombre(
+                                                  slot.codigo,
+                                                  familia,
+                                                ),
+                                              )
+                                              .join(" · ")}
+                                          </div>
+                                          <div>
+                                            Se configuran en Maquinaria. El
+                                            motor toma tinta, tóner o barniz
+                                            desde la máquina y el perfil
+                                            seleccionado.
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {(cfg.slotsMateriales ?? []).length ===
+                                        0 && (
+                                        <p className="text-muted-foreground py-4 text-center text-xs italic">
+                                          {slotsManuales.length > 0
+                                            ? "Sin slots configurados. Agregá uno con los botones de arriba."
+                                            : "No hay materiales manuales para configurar en este paso."}
+                                        </p>
+                                      )}
+
+                                      {(cfg.slotsMateriales ?? []).map(
+                                        (slot, slotIdx) => {
+                                          const slotDecl =
+                                            familia.slotsRequeridos.find(
+                                              (sr) =>
+                                                sr.codigo === slot.slotCodigo,
+                                            );
+                                          if (
+                                            slotDecl &&
+                                            isConsumibleMaquinaSlot(slotDecl)
+                                          ) {
+                                            return (
+                                              <div
+                                                key={slotIdx}
+                                                className="rounded border border-dashed bg-muted/20 p-2 text-xs text-muted-foreground"
+                                              >
+                                                {slotNombre(
+                                                  slot.slotCodigo,
+                                                  familia,
+                                                )}{" "}
+                                                se resolverá automáticamente
+                                                desde Maquinaria.
+                                              </div>
+                                            );
+                                          }
+                                          const selectedCandidates =
+                                            slot.candidatos ?? [];
+                                          const hardcodedMateria =
+                                            Object.values(
+                                              candidateMaterials,
+                                            ).find((materiaPrima) =>
+                                              materiaPrima.variantes.some(
+                                                (variante) =>
+                                                  variante.id ===
+                                                  slot.materialVarianteId,
+                                              ),
+                                            );
+                                          const hardcodedVariante =
+                                            hardcodedMateria?.variantes.find(
+                                              (variante) =>
+                                                variante.id ===
+                                                slot.materialVarianteId,
+                                            );
+                                          const hardcodedVarianteLabel =
+                                            hardcodedMateria &&
+                                            hardcodedVariante
+                                              ? varianteOptionFromBusqueda(
+                                                  hardcodedMateria,
+                                                  hardcodedVariante,
+                                                ).label
+                                              : slot.materialVarianteId
+                                                ? "Variante guardada"
+                                                : "Sin seleccionar";
+                                          return (
+                                            <div
+                                              key={slotIdx}
+                                              className="bg-muted/30 space-y-2 rounded border p-2"
+                                            >
+                                              <div className="flex items-center justify-between">
+                                                <Badge
+                                                  variant="outline"
+                                                  title={slot.slotCodigo}
+                                                >
+                                                  {slotNombre(
+                                                    slot.slotCodigo,
+                                                    familia,
+                                                  )}
+                                                </Badge>
+                                                <Button
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  className="h-6 px-2 text-red-600"
+                                                  onClick={() =>
+                                                    removeSlot(paso.id, slotIdx)
+                                                  }
+                                                >
+                                                  ×
+                                                </Button>
+                                              </div>
+                                              <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+                                                <div className="space-y-1">
+                                                  <LabelConTooltip
+                                                    label="¿Quién elige el material?"
+                                                    tooltip="Material fijo (modelador), el comercial elige al cotizar, o el sistema elige automáticamente con un criterio."
+                                                  />
+                                                  <HumanSelect
+                                                    value={slot.modoSeleccion}
+                                                    onValueChange={(v) =>
+                                                      updateSlot(
                                                         paso.id,
                                                         slotIdx,
-                                                        candidate.materiaPrimaId,
                                                         {
-                                                          varianteIds: safeIds,
-                                                          defaultVarianteId: defaultStillEnabled
-                                                            ? candidate.defaultVarianteId
-                                                            : safeIds[0] ?? null,
+                                                          modoSeleccion: (v ||
+                                                            "HARDCODED") as
+                                                            | "HARDCODED"
+                                                            | "COMERCIAL_ELIGE"
+                                                            | "MOTOR_ELIGE_AUTO",
+                                                        },
+                                                      )
+                                                    }
+                                                    options={
+                                                      SELECCION_MATERIAL_OPTIONS
+                                                    }
+                                                    triggerClassName="min-h-9 text-xs"
+                                                  />
+                                                </div>
+                                                <div className="space-y-1">
+                                                  <LabelConTooltip
+                                                    label="¿Cómo se calcula el consumo?"
+                                                    tooltip="Fórmula que el motor usa para calcular cuánto material se consume (por pieza, por m², por metro lineal, etc.)."
+                                                  />
+                                                  <HumanSelect
+                                                    value={
+                                                      slot.formula ??
+                                                      "por_unidad_productiva"
+                                                    }
+                                                    onValueChange={(v) =>
+                                                      updateSlot(
+                                                        paso.id,
+                                                        slotIdx,
+                                                        {
+                                                          formula:
+                                                            v ||
+                                                            "por_unidad_productiva",
+                                                        },
+                                                      )
+                                                    }
+                                                    options={FORMULA_OPTIONS}
+                                                    triggerClassName="min-h-9 text-xs"
+                                                  />
+                                                </div>
+                                                <div className="space-y-1">
+                                                  <LabelConTooltip
+                                                    label="Costeo"
+                                                    tooltip={
+                                                      nestingDefineCosteo
+                                                        ? "Este paso toma el costeo desde Acomodado / nesting. El valor del slot no se usa mientras esa estrategia esté activa."
+                                                        : "Estrategia de costeo del material cuando no hay una estrategia activa en Acomodado / nesting."
+                                                    }
+                                                  />
+                                                  {nestingDefineCosteo ? (
+                                                    <div className="min-h-9 rounded border bg-muted/40 px-3 py-2 text-xs">
+                                                      <div className="font-medium text-foreground">
+                                                        {optionLabel(
+                                                          COSTING_STRATEGY_OPTIONS,
+                                                          nestingCostingStrategy,
+                                                        )}
+                                                      </div>
+                                                      <div className="text-muted-foreground">
+                                                        Definido en Acomodado /
+                                                        nesting
+                                                      </div>
+                                                    </div>
+                                                  ) : (
+                                                    <HumanSelect
+                                                      value={
+                                                        slot.estrategiaCosto ??
+                                                        "simple"
+                                                      }
+                                                      onValueChange={(v) =>
+                                                        updateSlot(
+                                                          paso.id,
+                                                          slotIdx,
+                                                          {
+                                                            estrategiaCosto:
+                                                              v || "simple",
+                                                          },
+                                                        )
+                                                      }
+                                                      options={
+                                                        COSTING_STRATEGY_OPTIONS
+                                                      }
+                                                      triggerClassName="min-h-9 text-xs"
+                                                    />
+                                                  )}
+                                                </div>
+                                              </div>
+                                              {slot.modoSeleccion ===
+                                                "HARDCODED" && (
+                                                <div className="space-y-2 rounded border bg-background p-3">
+                                                  <LabelConTooltip
+                                                    label="Material fijo"
+                                                    tooltip="Elegí una materia prima compatible y luego una variante concreta para dejar fija en este paso."
+                                                  />
+                                                  <MaterialSearchSelect
+                                                    compatibilidad={
+                                                      slotDecl?.compatibilidadMaterial
+                                                    }
+                                                    placeholder="Buscar materia prima compatible..."
+                                                    selectedIds={
+                                                      hardcodedMateria
+                                                        ? [hardcodedMateria.id]
+                                                        : []
+                                                    }
+                                                    onSelect={(
+                                                      materiaPrima,
+                                                    ) => {
+                                                      setCandidateMaterials(
+                                                        (prev) => ({
+                                                          ...prev,
+                                                          [materiaPrima.id]:
+                                                            materiaPrima,
+                                                        }),
+                                                      );
+                                                      updateSlot(
+                                                        paso.id,
+                                                        slotIdx,
+                                                        {
+                                                          materialVarianteId:
+                                                            materiaPrima
+                                                              .variantes[0]
+                                                              ?.id ?? null,
                                                         },
                                                       );
                                                     }}
                                                   />
-                                                  <span className="min-w-0">
-                                                    <span className="block text-sm font-medium leading-snug text-foreground">
-                                                      {option.label}
+                                                  {hardcodedMateria &&
+                                                  hardcodedMateria.variantes
+                                                    .length > 1 ? (
+                                                    <HumanSelect
+                                                      value={
+                                                        slot.materialVarianteId ??
+                                                        ""
+                                                      }
+                                                      onValueChange={(v) =>
+                                                        updateSlot(
+                                                          paso.id,
+                                                          slotIdx,
+                                                          {
+                                                            materialVarianteId:
+                                                              v || null,
+                                                          },
+                                                        )
+                                                      }
+                                                      options={hardcodedMateria.variantes.map(
+                                                        (variante) =>
+                                                          varianteOptionFromBusqueda(
+                                                            hardcodedMateria,
+                                                            variante,
+                                                          ),
+                                                      )}
+                                                      placeholder="Elegir variante"
+                                                      triggerClassName="min-h-8 text-xs"
+                                                    />
+                                                  ) : (
+                                                    <div className="text-muted-foreground text-xs">
+                                                      Variante:{" "}
+                                                      {hardcodedVarianteLabel}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              )}
+                                              {slot.modoSeleccion !==
+                                                "HARDCODED" && (
+                                                <div className="space-y-2 rounded border bg-background p-3">
+                                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                                    <LabelConTooltip
+                                                      label="Materiales candidatos"
+                                                      tooltip="Lista de variantes entre las que podrá elegir el comercial, o entre las que el sistema resolverá automáticamente."
+                                                    />
+                                                    <span className="text-muted-foreground text-[11px]">
+                                                      {
+                                                        selectedCandidates.length
+                                                      }{" "}
+                                                      materia
+                                                      {selectedCandidates.length ===
+                                                      1
+                                                        ? ""
+                                                        : "s"}
                                                     </span>
-                                                    {option.description ? (
-                                                      <span className="text-muted-foreground block truncate">
-                                                        {option.description}
-                                                      </span>
-                                                    ) : null}
-                                                    {option.details && option.details.length > 0 ? (
-                                                      <span className="mt-1 flex flex-wrap gap-1">
-                                                        {option.details.map((detail) => (
-                                                          <span
-                                                            key={`${option.value}-${detail.label}-${detail.value}`}
-                                                            className="rounded border bg-muted px-1.5 py-0.5 text-[11px] leading-none text-muted-foreground"
-                                                          >
-                                                            <span className="font-medium text-foreground">
-                                                              {detail.label}:
-                                                            </span>{" "}
-                                                            {detail.value}
-                                                          </span>
-                                                        ))}
-                                                      </span>
-                                                    ) : (
-                                                      <span className="text-muted-foreground mt-1 block text-[11px]">
-                                                        Sin atributos de variante cargados. Código: {variante.sku}
-                                                      </span>
+                                                  </div>
+                                                  <MaterialSearchSelect
+                                                    compatibilidad={
+                                                      slotDecl?.compatibilidadMaterial
+                                                    }
+                                                    placeholder="Buscar materia prima compatible..."
+                                                    selectedIds={selectedCandidates.map(
+                                                      (candidate) =>
+                                                        candidate.materiaPrimaId,
                                                     )}
+                                                    onSelect={(materiaPrima) =>
+                                                      addSlotCandidate(
+                                                        paso.id,
+                                                        slotIdx,
+                                                        materiaPrima,
+                                                      )
+                                                    }
+                                                  />
+                                                  <div className="space-y-2">
+                                                    {selectedCandidates.map(
+                                                      (candidate) => {
+                                                        const materiaPrima =
+                                                          candidateMaterials[
+                                                            candidate
+                                                              .materiaPrimaId
+                                                          ];
+                                                        const variantOptions =
+                                                          materiaPrima?.variantes.map(
+                                                            (variante) =>
+                                                              varianteOptionFromBusqueda(
+                                                                materiaPrima,
+                                                                variante,
+                                                              ),
+                                                          ) ?? [];
+                                                        const enabledVariantIds =
+                                                          new Set(
+                                                            candidate.varianteIds,
+                                                          );
+                                                        return (
+                                                          <div
+                                                            key={
+                                                              candidate.materiaPrimaId
+                                                            }
+                                                            className="rounded border bg-white p-2"
+                                                          >
+                                                            <div className="mb-2 flex items-center justify-between gap-2">
+                                                              <div className="min-w-0 text-xs">
+                                                                <div className="truncate font-medium">
+                                                                  {materiaPrima?.nombre ??
+                                                                    candidate.materiaPrimaId}
+                                                                </div>
+                                                              </div>
+                                                              <button
+                                                                type="button"
+                                                                className="text-xs text-red-600"
+                                                                onClick={() =>
+                                                                  removeSlotCandidate(
+                                                                    paso.id,
+                                                                    slotIdx,
+                                                                    candidate.materiaPrimaId,
+                                                                  )
+                                                                }
+                                                              >
+                                                                Quitar
+                                                              </button>
+                                                            </div>
+                                                            {materiaPrima &&
+                                                            materiaPrima
+                                                              .variantes
+                                                              .length > 1 ? (
+                                                              canUseColorThicknessSelector(
+                                                                materiaPrima,
+                                                              ) ? (
+                                                                <ColorThicknessVariantSelector
+                                                                  materiaPrima={
+                                                                    materiaPrima
+                                                                  }
+                                                                  candidate={
+                                                                    candidate
+                                                                  }
+                                                                  onChange={(
+                                                                    patch,
+                                                                  ) =>
+                                                                    updateSlotCandidate(
+                                                                      paso.id,
+                                                                      slotIdx,
+                                                                      candidate.materiaPrimaId,
+                                                                      patch,
+                                                                    )
+                                                                  }
+                                                                />
+                                                              ) : (
+                                                                <div className="mb-2 space-y-1 rounded border bg-muted/20 p-2">
+                                                                  <div className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
+                                                                    Variantes
+                                                                    habilitadas
+                                                                    para cotizar
+                                                                  </div>
+                                                                  <div className="grid gap-1 sm:grid-cols-2 xl:grid-cols-3">
+                                                                    {materiaPrima.variantes.map(
+                                                                      (
+                                                                        variante,
+                                                                      ) => {
+                                                                        const checked =
+                                                                          enabledVariantIds.has(
+                                                                            variante.id,
+                                                                          );
+                                                                        const option =
+                                                                          varianteOptionFromBusqueda(
+                                                                            materiaPrima,
+                                                                            variante,
+                                                                          );
+                                                                        const precioReferencia =
+                                                                          variante.precioReferencia
+                                                                            ? Number(
+                                                                                variante.precioReferencia,
+                                                                              ).toLocaleString(
+                                                                                "es-AR",
+                                                                              )
+                                                                            : null;
+                                                                        return (
+                                                                          <label
+                                                                            key={
+                                                                              variante.id
+                                                                            }
+                                                                            className={`flex items-start gap-3 rounded border px-3 py-2 text-xs transition ${
+                                                                              checked
+                                                                                ? "border-foreground/15 bg-white shadow-sm"
+                                                                                : "border-transparent bg-white/70 text-muted-foreground"
+                                                                            }`}
+                                                                          >
+                                                                            <input
+                                                                              type="checkbox"
+                                                                              className="mt-0.5"
+                                                                              checked={
+                                                                                checked
+                                                                              }
+                                                                              onChange={(
+                                                                                event,
+                                                                              ) => {
+                                                                                const nextIds =
+                                                                                  event
+                                                                                    .target
+                                                                                    .checked
+                                                                                    ? [
+                                                                                        ...candidate.varianteIds,
+                                                                                        variante.id,
+                                                                                      ]
+                                                                                    : candidate.varianteIds.filter(
+                                                                                        (
+                                                                                          id,
+                                                                                        ) =>
+                                                                                          id !==
+                                                                                          variante.id,
+                                                                                      );
+                                                                                const safeIds =
+                                                                                  nextIds.length >
+                                                                                  0
+                                                                                    ? Array.from(
+                                                                                        new Set(
+                                                                                          nextIds,
+                                                                                        ),
+                                                                                      )
+                                                                                    : [
+                                                                                        variante.id,
+                                                                                      ];
+                                                                                const defaultStillEnabled =
+                                                                                  candidate.defaultVarianteId &&
+                                                                                  safeIds.includes(
+                                                                                    candidate.defaultVarianteId,
+                                                                                  );
+                                                                                updateSlotCandidate(
+                                                                                  paso.id,
+                                                                                  slotIdx,
+                                                                                  candidate.materiaPrimaId,
+                                                                                  {
+                                                                                    varianteIds:
+                                                                                      safeIds,
+                                                                                    defaultVarianteId:
+                                                                                      defaultStillEnabled
+                                                                                        ? candidate.defaultVarianteId
+                                                                                        : (safeIds[0] ??
+                                                                                          null),
+                                                                                  },
+                                                                                );
+                                                                              }}
+                                                                            />
+                                                                            <span className="min-w-0">
+                                                                              <span className="block text-sm font-medium leading-snug text-foreground">
+                                                                                {
+                                                                                  materiaPrima.nombre
+                                                                                }
+                                                                              </span>
+                                                                              {precioReferencia ? (
+                                                                                <span className="text-muted-foreground block truncate">
+                                                                                  Referencia:
+                                                                                  $
+                                                                                  {
+                                                                                    precioReferencia
+                                                                                  }
+                                                                                </span>
+                                                                              ) : null}
+                                                                              {option.details &&
+                                                                              option
+                                                                                .details
+                                                                                .length >
+                                                                                0 ? (
+                                                                                <span className="mt-1 flex flex-wrap gap-1">
+                                                                                  {option.details.map(
+                                                                                    (
+                                                                                      detail,
+                                                                                    ) => (
+                                                                                      <span
+                                                                                        key={`${option.value}-${detail.label}-${detail.value}`}
+                                                                                        className="rounded border bg-muted px-1.5 py-0.5 text-[11px] leading-none text-muted-foreground"
+                                                                                      >
+                                                                                        <span className="font-medium text-foreground">
+                                                                                          {
+                                                                                            detail.label
+                                                                                          }
+                                                                                          :
+                                                                                        </span>{" "}
+                                                                                        {
+                                                                                          detail.value
+                                                                                        }
+                                                                                      </span>
+                                                                                    ),
+                                                                                  )}
+                                                                                </span>
+                                                                              ) : (
+                                                                                <span className="text-muted-foreground mt-1 block text-[11px]">
+                                                                                  Sin
+                                                                                  atributos
+                                                                                  de
+                                                                                  variante
+                                                                                  cargados.
+                                                                                  Código:{" "}
+                                                                                  {
+                                                                                    variante.sku
+                                                                                  }
+                                                                                </span>
+                                                                              )}
+                                                                            </span>
+                                                                          </label>
+                                                                        );
+                                                                      },
+                                                                    )}
+                                                                  </div>
+                                                                </div>
+                                                              )
+                                                            ) : null}
+                                                            <div className="space-y-1">
+                                                              <Label className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
+                                                                Variante
+                                                                predeterminada
+                                                              </Label>
+                                                              <HumanSelect
+                                                                value={
+                                                                  candidate.defaultVarianteId ??
+                                                                  ""
+                                                                }
+                                                                onValueChange={(
+                                                                  v,
+                                                                ) =>
+                                                                  updateSlotCandidate(
+                                                                    paso.id,
+                                                                    slotIdx,
+                                                                    candidate.materiaPrimaId,
+                                                                    {
+                                                                      defaultVarianteId:
+                                                                        v ||
+                                                                        null,
+                                                                    },
+                                                                  )
+                                                                }
+                                                                options={variantOptions.filter(
+                                                                  (option) =>
+                                                                    candidate.varianteIds.includes(
+                                                                      option.value,
+                                                                    ),
+                                                                )}
+                                                                placeholder="Elegir variante predeterminada"
+                                                                triggerClassName="min-h-10 text-xs"
+                                                                contentClassName="min-w-[520px]"
+                                                              />
+                                                            </div>
+                                                          </div>
+                                                        );
+                                                      },
+                                                    )}
+                                                  </div>
+                                                  {selectedCandidates.length ===
+                                                  0 ? (
+                                                    <p className="text-muted-foreground text-xs">
+                                                      Agregá al menos una
+                                                      materia prima candidata
+                                                      para este slot.
+                                                    </p>
+                                                  ) : null}
+                                                </div>
+                                              )}
+                                              {slot.modoSeleccion ===
+                                                "MOTOR_ELIGE_AUTO" && (
+                                                <div className="space-y-1">
+                                                  <LabelConTooltip
+                                                    label="Criterio del sistema"
+                                                    tooltip="Cómo elige el sistema entre los candidatos: el más barato, el de mejor aprovechamiento, o el de capacidad mínima que cumpla."
+                                                  />
+                                                  <HumanSelect
+                                                    value={
+                                                      slot.criterioMotorAuto ??
+                                                      ""
+                                                    }
+                                                    onValueChange={(v) =>
+                                                      updateSlot(
+                                                        paso.id,
+                                                        slotIdx,
+                                                        {
+                                                          criterioMotorAuto:
+                                                            v || null,
+                                                        },
+                                                      )
+                                                    }
+                                                    options={
+                                                      CRITERIO_AUTO_OPTIONS
+                                                    }
+                                                    placeholder="Elegí criterio"
+                                                    triggerClassName="min-h-9 text-xs"
+                                                  />
+                                                </div>
+                                              )}
+                                              <label className="flex items-center gap-2 text-xs">
+                                                <input
+                                                  type="checkbox"
+                                                  checked={
+                                                    !!slot.aplicaMultiCaras
+                                                  }
+                                                  onChange={(e) =>
+                                                    updateSlot(
+                                                      paso.id,
+                                                      slotIdx,
+                                                      {
+                                                        aplicaMultiCaras:
+                                                          e.target.checked,
+                                                      },
+                                                    )
+                                                  }
+                                                />
+                                                <span>
+                                                  Multiplicar consumo por caras
+                                                  <span className="text-muted-foreground ml-1">
+                                                    (si doble faz, consume el
+                                                    doble)
                                                   </span>
-                                                </label>
-                                              );
-                                            })}
-                                          </div>
-                                        </div>
-                                        )
-                                      ) : null}
-                                      <div className="space-y-1">
-                                        <Label className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
-                                          Variante predeterminada
-                                        </Label>
-                                        <HumanSelect
-                                          value={candidate.defaultVarianteId ?? ""}
-                                          onValueChange={(v) =>
-                                            updateSlotCandidate(
-                                              paso.id,
-                                              slotIdx,
-                                              candidate.materiaPrimaId,
-                                              { defaultVarianteId: v || null },
-                                            )
-                                          }
-                                          options={variantOptions.filter((option) =>
-                                            candidate.varianteIds.includes(option.value),
-                                          )}
-                                          placeholder="Elegir variante predeterminada"
-                                          triggerClassName="min-h-10 text-xs"
-                                          contentClassName="min-w-[520px]"
+                                                </span>
+                                              </label>
+                                            </div>
+                                          );
+                                        },
+                                      )}
+
+                                      {(valMateriales.errores.length > 0 ||
+                                        valMateriales.warnings.length > 0) && (
+                                        <ListaValidacion
+                                          validacion={valMateriales}
                                         />
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                              </section>
+                            )}
+
+                            {/* ── TAB AVANZADO ─────────────────────────────────────── */}
+                            <section
+                              className={`section-block ${advancedOpen ? "open" : "closed"}`}
+                            >
+                              <button
+                                type="button"
+                                className="sb-head"
+                                onClick={() => setAdvancedOpen((open) => !open)}
+                              >
+                                <span className="num">
+                                  {familia?.relacionMaquinaSoportada.includes(
+                                    "M-1",
+                                  )
+                                    ? "05"
+                                    : "04"}
+                                </span>
+                                <span className="ttl">Avanzado</span>
+                                <span className="hint">
+                                  Overrides y notas internas
+                                </span>
+                                <span className="chev">›</span>
+                              </button>
+                              {advancedOpen && (
+                                <div className="sb-body space-y-4">
+                                  <p className="text-muted-foreground text-xs">
+                                    Ajustes operativos del paso. Los parámetros
+                                    técnicos internos se preservan, pero no se
+                                    editan desde esta vista.
+                                  </p>
+
+                                  {/* Overrides de tiempo */}
+                                  {mostrarOverridesTiempo && (
+                                    <div className="space-y-2">
+                                      <div className="text-sm font-medium">
+                                        Overrides de tiempo (minutos)
+                                      </div>
+                                      <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                                        {mostrarSetupCleanupOverrides && (
+                                          <>
+                                            <div className="space-y-1">
+                                              <LabelConTooltip
+                                                label="Setup override"
+                                                tooltip="Sobrescribe el tiempo de preparación del perfil de máquina. Vacío = usar el del perfil."
+                                                iconSize="sm"
+                                              />
+                                              <Input
+                                                type="number"
+                                                min={0}
+                                                step={0.5}
+                                                value={
+                                                  cfg.setupOverrideMin ?? ""
+                                                }
+                                                onChange={(e) =>
+                                                  updateConfig(paso.id, {
+                                                    setupOverrideMin:
+                                                      e.target.value === ""
+                                                        ? null
+                                                        : Number(
+                                                            e.target.value,
+                                                          ),
+                                                  })
+                                                }
+                                                placeholder="—"
+                                                className="h-8 text-xs"
+                                              />
+                                            </div>
+                                            <div className="space-y-1">
+                                              <LabelConTooltip
+                                                label="Cleanup override"
+                                                tooltip="Sobrescribe el tiempo de cierre/post-proceso del perfil de máquina. Vacío = usar el del perfil."
+                                                iconSize="sm"
+                                              />
+                                              <Input
+                                                type="number"
+                                                min={0}
+                                                step={0.5}
+                                                value={
+                                                  cfg.cleanupOverrideMin ?? ""
+                                                }
+                                                onChange={(e) =>
+                                                  updateConfig(paso.id, {
+                                                    cleanupOverrideMin:
+                                                      e.target.value === ""
+                                                        ? null
+                                                        : Number(
+                                                            e.target.value,
+                                                          ),
+                                                  })
+                                                }
+                                                placeholder="—"
+                                                className="h-8 text-xs"
+                                              />
+                                            </div>
+                                          </>
+                                        )}
+                                        {mostrarTiempoFijoOverride && (
+                                          <div className="space-y-1">
+                                            <LabelConTooltip
+                                              label="Tiempo fijo override"
+                                              tooltip="Sólo aplica en pasos sin máquina con tiempo fijo."
+                                              iconSize="sm"
+                                            />
+                                            <Input
+                                              type="number"
+                                              min={0}
+                                              step={0.5}
+                                              value={
+                                                cfg.tiempoFijoOverrideMin ?? ""
+                                              }
+                                              onChange={(e) =>
+                                                updateConfig(paso.id, {
+                                                  tiempoFijoOverrideMin:
+                                                    e.target.value === ""
+                                                      ? null
+                                                      : Number(e.target.value),
+                                                })
+                                              }
+                                              placeholder="—"
+                                              className="h-8 text-xs"
+                                            />
+                                          </div>
+                                        )}
                                       </div>
                                     </div>
-                                  );
-                                })}
-                              </div>
-                              {selectedCandidates.length === 0 ? (
-                                <p className="text-muted-foreground text-xs">
-                                  Agregá al menos una materia prima candidata para este slot.
-                                </p>
-                              ) : null}
-                            </div>
-                          )}
-                          {slot.modoSeleccion === "MOTOR_ELIGE_AUTO" && (
-                            <div className="space-y-1">
-                              <LabelConTooltip
-                                label="Criterio del sistema"
-                                tooltip="Cómo elige el sistema entre los candidatos: el más barato, el de mejor aprovechamiento, o el de capacidad mínima que cumpla."
-                              />
-                              <HumanSelect
-                                value={slot.criterioMotorAuto ?? ""}
-                                onValueChange={(v) =>
-                                  updateSlot(paso.id, slotIdx, { criterioMotorAuto: v || null })
-                                }
-                                options={CRITERIO_AUTO_OPTIONS}
-                                placeholder="Elegí criterio"
-                                triggerClassName="min-h-9 text-xs"
-                              />
-                            </div>
-                          )}
-                          <label className="flex items-center gap-2 text-xs">
-                            <input
-                              type="checkbox"
-                              checked={!!slot.aplicaMultiCaras}
-                              onChange={(e) =>
-                                updateSlot(paso.id, slotIdx, { aplicaMultiCaras: e.target.checked })
-                              }
-                            />
-                            <span>
-                              Multiplicar consumo por caras
-                              <span className="text-muted-foreground ml-1">
-                                (si doble faz, consume el doble)
-                              </span>
-                            </span>
-                          </label>
-                        </div>
-                        );
-                      })}
-
-                      {(valMateriales.errores.length > 0 || valMateriales.warnings.length > 0) && (
-                        <ListaValidacion validacion={valMateriales} />
-                      )}
-                        </>
-                      )}
-                      </div>
-                    </section>
-                  )}
-
-                  {/* ── TAB AVANZADO ─────────────────────────────────────── */}
-                  <section className={`section-block ${advancedOpen ? "open" : "closed"}`}>
-                    <button type="button" className="sb-head" onClick={() => setAdvancedOpen((open) => !open)}>
-                      <span className="num">{familia?.relacionMaquinaSoportada.includes("M-1") ? "05" : "04"}</span>
-                      <span className="ttl">Avanzado</span>
-                      <span className="hint">Overrides y notas internas</span>
-                      <span className="chev">›</span>
-                    </button>
-                    {advancedOpen && (
-                    <div className="sb-body space-y-4">
-                    <p className="text-muted-foreground text-xs">
-                      Ajustes operativos del paso. Los parámetros técnicos internos se preservan, pero no se editan desde esta vista.
-                    </p>
-
-                    {/* Overrides de tiempo */}
-                    {mostrarOverridesTiempo && (
-                      <div className="space-y-2">
-                        <div className="text-sm font-medium">Overrides de tiempo (minutos)</div>
-                        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                          {mostrarSetupCleanupOverrides && (
-                            <>
-                              <div className="space-y-1">
-                                <LabelConTooltip
-                                  label="Setup override"
-                                  tooltip="Sobrescribe el tiempo de preparación del perfil de máquina. Vacío = usar el del perfil."
-                                  iconSize="sm"
-                                />
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  step={0.5}
-                                  value={cfg.setupOverrideMin ?? ""}
-                                  onChange={(e) =>
-                                    updateConfig(paso.id, {
-                                      setupOverrideMin: e.target.value === "" ? null : Number(e.target.value),
-                                    })
-                                  }
-                                  placeholder="—"
-                                  className="h-8 text-xs"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <LabelConTooltip
-                                  label="Cleanup override"
-                                  tooltip="Sobrescribe el tiempo de cierre/post-proceso del perfil de máquina. Vacío = usar el del perfil."
-                                  iconSize="sm"
-                                />
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  step={0.5}
-                                  value={cfg.cleanupOverrideMin ?? ""}
-                                  onChange={(e) =>
-                                    updateConfig(paso.id, {
-                                      cleanupOverrideMin: e.target.value === "" ? null : Number(e.target.value),
-                                    })
-                                  }
-                                  placeholder="—"
-                                  className="h-8 text-xs"
-                                />
-                              </div>
-                            </>
-                          )}
-                          {mostrarTiempoFijoOverride && (
-                            <div className="space-y-1">
-                              <LabelConTooltip
-                                label="Tiempo fijo override"
-                                tooltip="Sólo aplica en pasos sin máquina con tiempo fijo."
-                                iconSize="sm"
-                              />
-                              <Input
-                                type="number"
-                                min={0}
-                                step={0.5}
-                                value={cfg.tiempoFijoOverrideMin ?? ""}
-                                onChange={(e) =>
-                                  updateConfig(paso.id, {
-                                    tiempoFijoOverrideMin: e.target.value === "" ? null : Number(e.target.value),
-                                  })
-                                }
-                                placeholder="—"
-                                className="h-8 text-xs"
-                              />
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {mostrarNesting && (
-                      <div className="space-y-3 rounded-md border bg-muted/20 p-3">
-                        <LabelConTooltip
-                          label={
-                            <>
-                              <Grid2X2Icon className="mr-1 inline size-3" />
-                              Acomodado / nesting
-                            </>
-                          }
-                          tooltip="Configuración del acomodo de piezas para este paso. Se guarda como nestingConfig, pero se edita desde controles visuales."
-                        />
-                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                          <div className="space-y-1">
-                            <LabelConTooltip
-                              label="Algoritmo"
-                              tooltip="Automático elige según la geometría de máquina/material y las medidas del trabajo."
-                              iconSize="sm"
-                            />
-                            <HumanSelect
-                              value={String(nestingConfig.algorithm ?? "auto")}
-                              onValueChange={(v) => updateNestingConfig(paso.id, { algorithm: v || "auto" })}
-                              options={NESTING_ALGORITHM_OPTIONS}
-                              triggerClassName="min-h-9 text-xs"
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <LabelConTooltip
-                              label="Demasía por lado"
-                              tooltip="Margen extra alrededor de cada pieza. Entre dos piezas se acumulan ambos lados."
-                              iconSize="sm"
-                            />
-                            <Input
-                              type="number"
-                              min={0}
-                              step={0.5}
-                              value={String(resolvedPieceBleed)}
-                              onChange={(e) =>
-                                updateNestingPieceBleed(paso.id, e.target.value === "" ? 0 : Number(e.target.value))
-                              }
-                              className="h-8 text-xs"
-                            />
-                          </div>
-                        </div>
-                        {familia?.codigo === "impresion_por_hoja" && (
-                          <div className="space-y-2 rounded border bg-background/70 p-3">
-                            <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-                              <LabelConTooltip
-                                label="Pliego de impresión"
-                                tooltip="Tamaño real de hoja que entra a la impresora. Si queda vacío, el motor usa el tamaño del sustrato principal comprado."
-                                iconSize="sm"
-                              />
-                              {sustratoAnchoLabel && sustratoAltoLabel && (
-                                <span className="text-muted-foreground text-xs">
-                                  Sustrato comprado: {sustratoAnchoLabel} × {sustratoAltoLabel}
-                                </span>
-                              )}
-                            </div>
-                            <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-                              <div className="space-y-1">
-                                <LabelConTooltip
-                                  label="Tamaño"
-                                  tooltip="Elegí un formato estándar o personalizado si el pliego del producto tiene otra medida."
-                                  iconSize="sm"
-                                />
-                                <HumanSelect
-                                  value={pliegoImpresionPreset}
-                                  onValueChange={(v) => updateNestingPliegoPreset(paso.id, v || "materia_prima")}
-                                  options={PLIEGO_IMPRESION_OPTIONS}
-                                  triggerClassName="min-h-9 text-xs"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <LabelConTooltip
-                                  label="Ancho del pliego"
-                                  tooltip="Ancho en milímetros del pliego ya cortado para imprimir."
-                                  iconSize="sm"
-                                />
-                                <Input
-                                  type="number"
-                                  min={1}
-                                  step={1}
-                                  disabled={!pliegoImpresionEsPersonalizado}
-                                  value={String(pliegoImpresionConfig.anchoMm ?? "")}
-                                  onChange={(e) =>
-                                    updateNestingPliegoImpresion(paso.id, {
-                                      anchoMm: e.target.value === "" ? null : Number(e.target.value),
-                                    })
-                                  }
-                                  placeholder="Usar sustrato"
-                                  className="h-8 text-xs"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <LabelConTooltip
-                                  label="Alto del pliego"
-                                  tooltip="Alto/largo en milímetros del pliego ya cortado para imprimir."
-                                  iconSize="sm"
-                                />
-                                <Input
-                                  type="number"
-                                  min={1}
-                                  step={1}
-                                  disabled={!pliegoImpresionEsPersonalizado}
-                                  value={String(pliegoImpresionConfig.altoMm ?? "")}
-                                  onChange={(e) =>
-                                    updateNestingPliegoImpresion(paso.id, {
-                                      altoMm: e.target.value === "" ? null : Number(e.target.value),
-                                    })
-                                  }
-                                  placeholder="Usar sustrato"
-                                  className="h-8 text-xs"
-                                />
-                              </div>
-                            </div>
-                            <p className="text-muted-foreground text-xs">
-                              La imposición, el tiempo y los consumibles se calculan sobre este pliego; el sustrato principal se convierte contra el tamaño comprado cuando corresponde.
-                            </p>
-                          </div>
-                        )}
-                        <label className="flex items-center gap-2 text-xs">
-                          <input
-                            type="checkbox"
-                            checked={nestingConfig.allowRotation !== false}
-                            onChange={(e) => updateNestingConfig(paso.id, { allowRotation: e.target.checked })}
-                          />
-                          <span>Permitir rotar piezas</span>
-                        </label>
-
-                        {mostrarPanelizado && (
-                          <div className="space-y-3 rounded border border-orange-200/70 bg-orange-50/30 p-3">
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                              <label className="flex items-center gap-2 text-xs font-medium">
-                                <input
-                                  type="checkbox"
-                                  checked={panelizadoConfig.enabled === true}
-                                  onChange={(e) =>
-                                    updateNestingPanelizado(paso.id, {
-                                      enabled: e.target.checked,
-                                      mode: e.target.checked ? panelizadoMode : "automatic",
-                                      axis: e.target.checked ? panelizadoAxis : "automatic",
-                                      manualLayout: e.target.checked ? panelizadoConfig.manualLayout : null,
-                                    })
-                                  }
-                                />
-                                <span>Panelizar piezas grandes</span>
-                              </label>
-                              {panelSummary ? (
-                                <span className="rounded-full border bg-background px-2 py-1 text-[11px] text-muted-foreground">
-                                  {panelSummary}
-                                </span>
-                              ) : null}
-                            </div>
-                            {panelizadoConfig.enabled === true && (
-                              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                                <div className="space-y-1">
-                                  <LabelConTooltip
-                                    label="Modo de panelizado"
-                                    tooltip="Automático divide las piezas grandes según reglas. Manual usa el layout de paneles definido por el usuario."
-                                    iconSize="sm"
-                                  />
-                                  <HumanSelect
-                                    value={panelizadoMode}
-                                    onValueChange={(v) =>
-                                      updateNestingPanelizado(paso.id, {
-                                        mode: v === "manual" ? "manual" : "automatic",
-                                        axis: v === "manual" && panelizadoAxis === "automatic" ? "vertical" : panelizadoAxis,
-                                        manualLayout: v === "manual" ? panelizadoConfig.manualLayout ?? null : null,
-                                      })
-                                    }
-                                    options={PANEL_MODE_OPTIONS}
-                                    triggerClassName="min-h-9 text-xs"
-                                  />
-                                </div>
-                                <div className="space-y-1">
-                                  <LabelConTooltip
-                                    label="Dirección de panelizado"
-                                    tooltip="Define si se divide el ancho o el alto de la pieza cuando no entra en el rollo."
-                                    iconSize="sm"
-                                  />
-                                  <HumanSelect
-                                    value={panelizadoMode === "manual" && panelizadoAxis === "automatic" ? "vertical" : panelizadoAxis}
-                                    onValueChange={(v) =>
-                                      updateNestingPanelizado(paso.id, {
-                                        axis:
-                                          panelizadoMode === "manual" && v === "automatic"
-                                            ? "vertical"
-                                            : v || "vertical",
-                                        manualLayout: panelizadoMode === "manual" ? null : panelizadoConfig.manualLayout,
-                                      })
-                                    }
-                                    options={panelizadoMode === "manual" ? PANEL_MANUAL_AXIS_OPTIONS : PANEL_AXIS_OPTIONS}
-                                    triggerClassName="min-h-9 text-xs"
-                                  />
-                                </div>
-                                <div className="space-y-1">
-                                  <LabelConTooltip
-                                    label="Solape"
-                                    tooltip="Milímetros que se agregan entre paneles para poder montarlos."
-                                    iconSize="sm"
-                                  />
-                                  <Input
-                                    type="number"
-                                    min={0}
-                                    step={1}
-                                    value={String(resolvedPanelOverlap)}
-                                    onChange={(e) =>
-                                      updateNestingPanelizado(paso.id, {
-                                        overlapMm: e.target.value === "" ? 0 : Number(e.target.value),
-                                      })
-                                    }
-                                    className="h-8 text-xs"
-                                  />
-                                </div>
-                                <div className="space-y-1">
-                                  <LabelConTooltip
-                                    label="Ancho máximo por panel (mm)"
-                                    tooltip="Límite físico de cada panel en milímetros. Si queda en 0, el motor usa el ancho útil del rollo. Valores menores a 300 mm se tratan como 0 para evitar paneles demasiado angostos."
-                                    iconSize="sm"
-                                  />
-                                  <Input
-                                    type="number"
-                                    min={0}
-                                    step={1}
-                                    value={String(resolvedPanelMaxWidth)}
-                                    onChange={(e) =>
-                                      updateNestingPanelizado(paso.id, {
-                                        maxPanelWidthMm: e.target.value === "" ? 0 : Number(e.target.value),
-                                      })
-                                    }
-                                    className="h-8 text-xs"
-                                  />
-                                </div>
-                                <div className="space-y-1">
-                                  <LabelConTooltip
-                                    label="Distribución"
-                                    tooltip="Define cómo reparte la medida útil entre paneles."
-                                    iconSize="sm"
-                                  />
-                                  <HumanSelect
-                                    value={String(panelizadoConfig.distribution ?? "equilibrada")}
-                                    onValueChange={(v) =>
-                                      updateNestingPanelizado(paso.id, { distribution: v || "equilibrada" })
-                                    }
-                                    options={PANEL_DISTRIBUTION_OPTIONS}
-                                    triggerClassName="min-h-9 text-xs"
-                                  />
-                                </div>
-                                <div className="space-y-1 md:col-span-2">
-                                  <LabelConTooltip
-                                    label="Interpretación del ancho"
-                                    tooltip="Define si el ancho máximo contempla el panel completo o sólo la parte útil."
-                                    iconSize="sm"
-                                  />
-                                  <HumanSelect
-                                    value={String(panelizadoConfig.widthInterpretation ?? "total")}
-                                    onValueChange={(v) =>
-                                      updateNestingPanelizado(paso.id, { widthInterpretation: v || "total" })
-                                    }
-                                    options={PANEL_WIDTH_INTERPRETATION_OPTIONS}
-                                    triggerClassName="min-h-9 text-xs"
-                                  />
-                                </div>
-                                {panelizadoMode === "manual" ? (
-                                  <div className="space-y-1 md:col-span-3">
-                                    <LabelConTooltip
-                                      label="Layout manual de paneles"
-                                      tooltip="Define los cortes de panel para las medidas fijas o predefinidas del producto."
-                                      iconSize="sm"
-                                    />
-                                    <div className="flex flex-wrap items-center gap-2">
-                                      <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="outline"
-                                        disabled={panelMeasures.length === 0}
-                                        onClick={() => setPanelEditorPasoId(paso.id)}
-                                      >
-                                        Editar paneles
-                                      </Button>
-                                      <span className="text-xs text-muted-foreground">
-                                        {panelManualLayout
-                                          ? `${panelManualLayout.items.length} medida${panelManualLayout.items.length === 1 ? "" : "s"} con layout manual`
-                                          : "Sin layout manual guardado"}
-                                      </span>
-                                    </div>
-                                  </div>
-                                ) : null}
-                              </div>
-                            )}
-                            <PanelManualEditorSheet
-                              open={panelEditorPasoId === paso.id}
-                              onOpenChange={(open) => setPanelEditorPasoId(open ? paso.id : null)}
-                              measures={panelMeasures}
-                              layout={panelManualLayout}
-                              axis={panelizadoAxis === "horizontal" ? "horizontal" : "vertical"}
-                              overlapMm={resolvedPanelOverlap}
-                              maxPanelWidthMm={resolvedPanelMaxWidth > 0 ? resolvedPanelMaxWidth : null}
-                              printableWidthMm={printableWidthForPanelMm}
-                              widthInterpretation={panelizadoWidthInterpretation}
-                              onApply={(layout) =>
-                                updateNestingPanelizado(paso.id, {
-                                  mode: "manual",
-                                  axis: layout.items[0]?.axis ?? (panelizadoAxis === "horizontal" ? "horizontal" : "vertical"),
-                                  manualLayout: layout,
-                                })
-                              }
-                            />
-                          </div>
-                        )}
-
-                        <div className="space-y-2">
-                          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                            <div className="text-xs font-medium">Margen extra del pliego</div>
-                            <span className="text-muted-foreground text-xs">
-                              Se suma al margen de máquina y no cambia la separación entre piezas.
-                            </span>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-                            {[
-                              ["leftMm", "Izq."],
-                              ["rightMm", "Der."],
-                              ["topMm", "Sup."],
-                              ["bottomMm", "Inf."],
-                            ].map(([key, label]) => (
-                              <div key={key} className="space-y-1">
-                                <span className="text-muted-foreground text-xs">{label}</span>
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  step={0.5}
-                                  value={String(nestingExtraMargins[key] ?? "")}
-                                  onChange={(e) =>
-                                    updateNestingExtraMargins(paso.id, {
-                                      [key]: e.target.value === "" ? null : Number(e.target.value),
-                                    })
-                                  }
-                                  placeholder="0"
-                                  className="h-8 text-xs"
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <div className="text-xs font-medium">Márgenes no imprimibles</div>
-                          <p className="text-muted-foreground text-xs">
-                            Margen técnico efectivo. Si lo editás, sobrescribe el margen heredado de la máquina.
-                          </p>
-                          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-                            {[
-                              ["leftMm", "Izq."],
-                              ["rightMm", "Der."],
-                              ["topMm", "Sup."],
-                              ["bottomMm", "Inf."],
-                            ].map(([key, label]) => (
-                              <div key={key} className="space-y-1">
-                                <span className="text-muted-foreground text-xs">{label}</span>
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  step={0.5}
-                                  value={String(
-                                    getResolvedNestingNumber(
-                                      nestingMargins[key],
-                                      machineMargins[key as keyof typeof machineMargins],
-                                      0,
-                                    ),
                                   )}
-                                  onChange={(e) =>
-                                    updateNestingMargins(paso.id, {
-                                      [key]: e.target.value === "" ? 0 : Number(e.target.value),
-                                    })
-                                  }
-                                  className="h-8 text-xs"
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        </div>
 
-                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                          <div className="space-y-1">
-                            <LabelConTooltip
-                              label="Costeo del sustrato"
-                              tooltip="Define cómo se cobra el material cuando hay resultado de nesting."
-                              iconSize="sm"
-                            />
-                            <HumanSelect
-                              value={String(nestingCosting.strategy ?? "simple")}
-                              onValueChange={(v) => updateNestingCosting(paso.id, { strategy: v || "simple" })}
-                              options={COSTING_STRATEGY_OPTIONS}
-                              triggerClassName="min-h-9 text-xs"
-                            />
-                          </div>
-                          {nestingCosting.strategy === "plate-segments" && (
-                            <div className="space-y-1">
-                              <LabelConTooltip
-                                label="Escalones de ocupación"
-                                tooltip="Porcentajes de placa que se cobran según ocupación: una placa al 60% cobra el primer escalón igual o superior."
-                                ejemplo="25, 50, 75, 100"
-                                iconSize="sm"
-                              />
-                              <Input
-                                value={Array.isArray(nestingCosting.segmentSteps) ? nestingCosting.segmentSteps.join(", ") : "25, 50, 75, 100"}
-                                onChange={(e) =>
-                                  updateNestingCosting(paso.id, {
-                                    segmentSteps: e.target.value
-                                      .split(",")
-                                      .map((item) => Number(item.trim()))
-                                      .filter((item) => Number.isFinite(item)),
-                                  })
-                                }
-                                className="h-8 text-xs"
-                              />
-                            </div>
-                          )}
-                        </div>
+                                  {mostrarNesting && (
+                                    <div className="space-y-3 rounded-md border bg-muted/20 p-3">
+                                      <LabelConTooltip
+                                        label={
+                                          <>
+                                            <Grid2X2Icon className="mr-1 inline size-3" />
+                                            Acomodado / nesting
+                                          </>
+                                        }
+                                        tooltip="Configuración del acomodo de piezas para este paso. Se guarda como nestingConfig, pero se edita desde controles visuales."
+                                      />
+                                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                        <div className="space-y-1">
+                                          <LabelConTooltip
+                                            label="Algoritmo"
+                                            tooltip="Automático elige según la geometría de máquina/material y las medidas del trabajo."
+                                            iconSize="sm"
+                                          />
+                                          <HumanSelect
+                                            value={String(
+                                              nestingConfig.algorithm ?? "auto",
+                                            )}
+                                            onValueChange={(v) =>
+                                              updateNestingConfig(paso.id, {
+                                                algorithm: v || "auto",
+                                              })
+                                            }
+                                            options={NESTING_ALGORITHM_OPTIONS}
+                                            triggerClassName="min-h-9 text-xs"
+                                          />
+                                        </div>
+                                        <div className="space-y-1">
+                                          <LabelConTooltip
+                                            label="Demasía por lado"
+                                            tooltip="Margen extra alrededor de cada pieza. Entre dos piezas se acumulan ambos lados."
+                                            iconSize="sm"
+                                          />
+                                          <Input
+                                            type="number"
+                                            min={0}
+                                            step={0.5}
+                                            value={String(resolvedPieceBleed)}
+                                            onChange={(e) =>
+                                              updateNestingPieceBleed(
+                                                paso.id,
+                                                e.target.value === ""
+                                                  ? 0
+                                                  : Number(e.target.value),
+                                              )
+                                            }
+                                            className="h-8 text-xs"
+                                          />
+                                        </div>
+                                      </div>
+                                      {familia?.codigo ===
+                                        "impresion_por_hoja" && (
+                                        <div className="space-y-2 rounded border bg-background/70 p-3">
+                                          <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                                            <LabelConTooltip
+                                              label="Pliego de impresión"
+                                              tooltip="Tamaño real de hoja que entra a la impresora. Si queda vacío, el motor usa el tamaño del sustrato principal comprado."
+                                              iconSize="sm"
+                                            />
+                                            {sustratoAnchoLabel &&
+                                              sustratoAltoLabel && (
+                                                <span className="text-muted-foreground text-xs">
+                                                  Sustrato comprado:{" "}
+                                                  {sustratoAnchoLabel} ×{" "}
+                                                  {sustratoAltoLabel}
+                                                </span>
+                                              )}
+                                          </div>
+                                          <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+                                            <div className="space-y-1">
+                                              <LabelConTooltip
+                                                label="Tamaño"
+                                                tooltip="Elegí un formato estándar o personalizado si el pliego del producto tiene otra medida."
+                                                iconSize="sm"
+                                              />
+                                              <HumanSelect
+                                                value={pliegoImpresionPreset}
+                                                onValueChange={(v) =>
+                                                  updateNestingPliegoPreset(
+                                                    paso.id,
+                                                    v || "materia_prima",
+                                                  )
+                                                }
+                                                options={
+                                                  PLIEGO_IMPRESION_OPTIONS
+                                                }
+                                                triggerClassName="min-h-9 text-xs"
+                                              />
+                                            </div>
+                                            <div className="space-y-1">
+                                              <LabelConTooltip
+                                                label="Ancho del pliego"
+                                                tooltip="Ancho en milímetros del pliego ya cortado para imprimir."
+                                                iconSize="sm"
+                                              />
+                                              <Input
+                                                type="number"
+                                                min={1}
+                                                step={1}
+                                                disabled={
+                                                  !pliegoImpresionEsPersonalizado
+                                                }
+                                                value={String(
+                                                  pliegoImpresionConfig.anchoMm ??
+                                                    "",
+                                                )}
+                                                onChange={(e) =>
+                                                  updateNestingPliegoImpresion(
+                                                    paso.id,
+                                                    {
+                                                      anchoMm:
+                                                        e.target.value === ""
+                                                          ? null
+                                                          : Number(
+                                                              e.target.value,
+                                                            ),
+                                                    },
+                                                  )
+                                                }
+                                                placeholder="Usar sustrato"
+                                                className="h-8 text-xs"
+                                              />
+                                            </div>
+                                            <div className="space-y-1">
+                                              <LabelConTooltip
+                                                label="Alto del pliego"
+                                                tooltip="Alto/largo en milímetros del pliego ya cortado para imprimir."
+                                                iconSize="sm"
+                                              />
+                                              <Input
+                                                type="number"
+                                                min={1}
+                                                step={1}
+                                                disabled={
+                                                  !pliegoImpresionEsPersonalizado
+                                                }
+                                                value={String(
+                                                  pliegoImpresionConfig.altoMm ??
+                                                    "",
+                                                )}
+                                                onChange={(e) =>
+                                                  updateNestingPliegoImpresion(
+                                                    paso.id,
+                                                    {
+                                                      altoMm:
+                                                        e.target.value === ""
+                                                          ? null
+                                                          : Number(
+                                                              e.target.value,
+                                                            ),
+                                                    },
+                                                  )
+                                                }
+                                                placeholder="Usar sustrato"
+                                                className="h-8 text-xs"
+                                              />
+                                            </div>
+                                          </div>
+                                          <p className="text-muted-foreground text-xs">
+                                            La imposición, el tiempo y los
+                                            consumibles se calculan sobre este
+                                            pliego; el sustrato principal se
+                                            convierte contra el tamaño comprado
+                                            cuando corresponde.
+                                          </p>
+                                        </div>
+                                      )}
+                                      <label className="flex items-center gap-2 text-xs">
+                                        <input
+                                          type="checkbox"
+                                          checked={
+                                            nestingConfig.allowRotation !==
+                                            false
+                                          }
+                                          onChange={(e) =>
+                                            updateNestingConfig(paso.id, {
+                                              allowRotation: e.target.checked,
+                                            })
+                                          }
+                                        />
+                                        <span>Permitir rotar piezas</span>
+                                      </label>
+
+                                      {mostrarPanelizado && (
+                                        <div className="space-y-3 rounded border border-orange-200/70 bg-orange-50/30 p-3">
+                                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                            <label className="flex items-center gap-2 text-xs font-medium">
+                                              <input
+                                                type="checkbox"
+                                                checked={
+                                                  panelizadoConfig.enabled ===
+                                                  true
+                                                }
+                                                onChange={(e) =>
+                                                  updateNestingPanelizado(
+                                                    paso.id,
+                                                    {
+                                                      enabled: e.target.checked,
+                                                      mode: e.target.checked
+                                                        ? panelizadoMode
+                                                        : "automatic",
+                                                      axis: e.target.checked
+                                                        ? panelizadoAxis
+                                                        : "automatic",
+                                                      manualLayout: e.target
+                                                        .checked
+                                                        ? panelizadoConfig.manualLayout
+                                                        : null,
+                                                    },
+                                                  )
+                                                }
+                                              />
+                                              <span>
+                                                Panelizar piezas grandes
+                                              </span>
+                                            </label>
+                                            {panelSummary ? (
+                                              <span className="rounded-full border bg-background px-2 py-1 text-[11px] text-muted-foreground">
+                                                {panelSummary}
+                                              </span>
+                                            ) : null}
+                                          </div>
+                                          {panelizadoConfig.enabled ===
+                                            true && (
+                                            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                                              <div className="space-y-1">
+                                                <LabelConTooltip
+                                                  label="Modo de panelizado"
+                                                  tooltip="Automático divide las piezas grandes según reglas. Manual usa el layout de paneles definido por el usuario."
+                                                  iconSize="sm"
+                                                />
+                                                <HumanSelect
+                                                  value={panelizadoMode}
+                                                  onValueChange={(v) =>
+                                                    updateNestingPanelizado(
+                                                      paso.id,
+                                                      {
+                                                        mode:
+                                                          v === "manual"
+                                                            ? "manual"
+                                                            : "automatic",
+                                                        axis:
+                                                          v === "manual" &&
+                                                          panelizadoAxis ===
+                                                            "automatic"
+                                                            ? "vertical"
+                                                            : panelizadoAxis,
+                                                        manualLayout:
+                                                          v === "manual"
+                                                            ? (panelizadoConfig.manualLayout ??
+                                                              null)
+                                                            : null,
+                                                      },
+                                                    )
+                                                  }
+                                                  options={PANEL_MODE_OPTIONS}
+                                                  triggerClassName="min-h-9 text-xs"
+                                                />
+                                              </div>
+                                              <div className="space-y-1">
+                                                <LabelConTooltip
+                                                  label="Dirección de panelizado"
+                                                  tooltip="Define si se divide el ancho o el alto de la pieza cuando no entra en el rollo."
+                                                  iconSize="sm"
+                                                />
+                                                <HumanSelect
+                                                  value={
+                                                    panelizadoMode ===
+                                                      "manual" &&
+                                                    panelizadoAxis ===
+                                                      "automatic"
+                                                      ? "vertical"
+                                                      : panelizadoAxis
+                                                  }
+                                                  onValueChange={(v) =>
+                                                    updateNestingPanelizado(
+                                                      paso.id,
+                                                      {
+                                                        axis:
+                                                          panelizadoMode ===
+                                                            "manual" &&
+                                                          v === "automatic"
+                                                            ? "vertical"
+                                                            : v || "vertical",
+                                                        manualLayout:
+                                                          panelizadoMode ===
+                                                          "manual"
+                                                            ? null
+                                                            : panelizadoConfig.manualLayout,
+                                                      },
+                                                    )
+                                                  }
+                                                  options={
+                                                    panelizadoMode === "manual"
+                                                      ? PANEL_MANUAL_AXIS_OPTIONS
+                                                      : PANEL_AXIS_OPTIONS
+                                                  }
+                                                  triggerClassName="min-h-9 text-xs"
+                                                />
+                                              </div>
+                                              <div className="space-y-1">
+                                                <LabelConTooltip
+                                                  label="Solape"
+                                                  tooltip="Milímetros que se agregan entre paneles para poder montarlos."
+                                                  iconSize="sm"
+                                                />
+                                                <Input
+                                                  type="number"
+                                                  min={0}
+                                                  step={1}
+                                                  value={String(
+                                                    resolvedPanelOverlap,
+                                                  )}
+                                                  onChange={(e) =>
+                                                    updateNestingPanelizado(
+                                                      paso.id,
+                                                      {
+                                                        overlapMm:
+                                                          e.target.value === ""
+                                                            ? 0
+                                                            : Number(
+                                                                e.target.value,
+                                                              ),
+                                                      },
+                                                    )
+                                                  }
+                                                  className="h-8 text-xs"
+                                                />
+                                              </div>
+                                              <div className="space-y-1">
+                                                <LabelConTooltip
+                                                  label="Ancho máximo por panel (mm)"
+                                                  tooltip="Límite físico de cada panel en milímetros. Si queda en 0, el motor usa el ancho útil del rollo. Valores menores a 300 mm se tratan como 0 para evitar paneles demasiado angostos."
+                                                  iconSize="sm"
+                                                />
+                                                <Input
+                                                  type="number"
+                                                  min={0}
+                                                  step={1}
+                                                  value={String(
+                                                    resolvedPanelMaxWidth,
+                                                  )}
+                                                  onChange={(e) =>
+                                                    updateNestingPanelizado(
+                                                      paso.id,
+                                                      {
+                                                        maxPanelWidthMm:
+                                                          e.target.value === ""
+                                                            ? 0
+                                                            : Number(
+                                                                e.target.value,
+                                                              ),
+                                                      },
+                                                    )
+                                                  }
+                                                  className="h-8 text-xs"
+                                                />
+                                              </div>
+                                              <div className="space-y-1">
+                                                <LabelConTooltip
+                                                  label="Distribución"
+                                                  tooltip="Define cómo reparte la medida útil entre paneles."
+                                                  iconSize="sm"
+                                                />
+                                                <HumanSelect
+                                                  value={String(
+                                                    panelizadoConfig.distribution ??
+                                                      "equilibrada",
+                                                  )}
+                                                  onValueChange={(v) =>
+                                                    updateNestingPanelizado(
+                                                      paso.id,
+                                                      {
+                                                        distribution:
+                                                          v || "equilibrada",
+                                                      },
+                                                    )
+                                                  }
+                                                  options={
+                                                    PANEL_DISTRIBUTION_OPTIONS
+                                                  }
+                                                  triggerClassName="min-h-9 text-xs"
+                                                />
+                                              </div>
+                                              <div className="space-y-1 md:col-span-2">
+                                                <LabelConTooltip
+                                                  label="Interpretación del ancho"
+                                                  tooltip="Define si el ancho máximo contempla el panel completo o sólo la parte útil."
+                                                  iconSize="sm"
+                                                />
+                                                <HumanSelect
+                                                  value={String(
+                                                    panelizadoConfig.widthInterpretation ??
+                                                      "total",
+                                                  )}
+                                                  onValueChange={(v) =>
+                                                    updateNestingPanelizado(
+                                                      paso.id,
+                                                      {
+                                                        widthInterpretation:
+                                                          v || "total",
+                                                      },
+                                                    )
+                                                  }
+                                                  options={
+                                                    PANEL_WIDTH_INTERPRETATION_OPTIONS
+                                                  }
+                                                  triggerClassName="min-h-9 text-xs"
+                                                />
+                                              </div>
+                                              {panelizadoMode === "manual" ? (
+                                                <div className="space-y-1 md:col-span-3">
+                                                  <LabelConTooltip
+                                                    label="Layout manual de paneles"
+                                                    tooltip="Define los cortes de panel para las medidas fijas o predefinidas del producto."
+                                                    iconSize="sm"
+                                                  />
+                                                  <div className="flex flex-wrap items-center gap-2">
+                                                    <Button
+                                                      type="button"
+                                                      size="sm"
+                                                      variant="outline"
+                                                      disabled={
+                                                        panelMeasures.length ===
+                                                        0
+                                                      }
+                                                      onClick={() =>
+                                                        setPanelEditorPasoId(
+                                                          paso.id,
+                                                        )
+                                                      }
+                                                    >
+                                                      Editar paneles
+                                                    </Button>
+                                                    <span className="text-xs text-muted-foreground">
+                                                      {panelManualLayout
+                                                        ? `${panelManualLayout.items.length} medida${panelManualLayout.items.length === 1 ? "" : "s"} con layout manual`
+                                                        : "Sin layout manual guardado"}
+                                                    </span>
+                                                  </div>
+                                                </div>
+                                              ) : null}
+                                            </div>
+                                          )}
+                                          <PanelManualEditorSheet
+                                            open={panelEditorPasoId === paso.id}
+                                            onOpenChange={(open) =>
+                                              setPanelEditorPasoId(
+                                                open ? paso.id : null,
+                                              )
+                                            }
+                                            measures={panelMeasures}
+                                            layout={panelManualLayout}
+                                            axis={
+                                              panelizadoAxis === "horizontal"
+                                                ? "horizontal"
+                                                : "vertical"
+                                            }
+                                            overlapMm={resolvedPanelOverlap}
+                                            maxPanelWidthMm={
+                                              resolvedPanelMaxWidth > 0
+                                                ? resolvedPanelMaxWidth
+                                                : null
+                                            }
+                                            printableWidthMm={
+                                              printableWidthForPanelMm
+                                            }
+                                            widthInterpretation={
+                                              panelizadoWidthInterpretation
+                                            }
+                                            onApply={(layout) =>
+                                              updateNestingPanelizado(paso.id, {
+                                                mode: "manual",
+                                                axis:
+                                                  layout.items[0]?.axis ??
+                                                  (panelizadoAxis ===
+                                                  "horizontal"
+                                                    ? "horizontal"
+                                                    : "vertical"),
+                                                manualLayout: layout,
+                                              })
+                                            }
+                                          />
+                                        </div>
+                                      )}
+
+                                      <div className="space-y-2">
+                                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                                          <div className="text-xs font-medium">
+                                            Margen extra del pliego
+                                          </div>
+                                          <span className="text-muted-foreground text-xs">
+                                            Se suma al margen de máquina y no
+                                            cambia la separación entre piezas.
+                                          </span>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                                          {[
+                                            ["leftMm", "Izq."],
+                                            ["rightMm", "Der."],
+                                            ["topMm", "Sup."],
+                                            ["bottomMm", "Inf."],
+                                          ].map(([key, label]) => (
+                                            <div
+                                              key={key}
+                                              className="space-y-1"
+                                            >
+                                              <span className="text-muted-foreground text-xs">
+                                                {label}
+                                              </span>
+                                              <Input
+                                                type="number"
+                                                min={0}
+                                                step={0.5}
+                                                value={String(
+                                                  nestingExtraMargins[key] ??
+                                                    "",
+                                                )}
+                                                onChange={(e) =>
+                                                  updateNestingExtraMargins(
+                                                    paso.id,
+                                                    {
+                                                      [key]:
+                                                        e.target.value === ""
+                                                          ? null
+                                                          : Number(
+                                                              e.target.value,
+                                                            ),
+                                                    },
+                                                  )
+                                                }
+                                                placeholder="0"
+                                                className="h-8 text-xs"
+                                              />
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+
+                                      <div className="space-y-2">
+                                        <div className="text-xs font-medium">
+                                          Márgenes no imprimibles (cm)
+                                        </div>
+                                        <p className="text-muted-foreground text-xs">
+                                          Margen técnico efectivo en
+                                          centímetros. Si lo editás, sobrescribe
+                                          el margen heredado de la máquina.
+                                        </p>
+                                        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                                          {[
+                                            ["leftMm", "Izq."],
+                                            ["rightMm", "Der."],
+                                            ["topMm", "Sup."],
+                                            ["bottomMm", "Inf."],
+                                          ].map(([key, label]) => (
+                                            <div
+                                              key={key}
+                                              className="space-y-1"
+                                            >
+                                              <span className="text-muted-foreground text-xs">
+                                                {label} (cm)
+                                              </span>
+                                              <div className="relative">
+                                                <Input
+                                                  type="number"
+                                                  min={0}
+                                                  step={0.1}
+                                                  value={mmToCmInput(
+                                                    getResolvedNestingNumber(
+                                                      nestingMargins[key],
+                                                      machineMargins[
+                                                        key as keyof typeof machineMargins
+                                                      ],
+                                                      0,
+                                                    ),
+                                                  )}
+                                                  onChange={(e) =>
+                                                    updateNestingMargins(
+                                                      paso.id,
+                                                      {
+                                                        [key]: cmInputToMm(
+                                                          e.target.value,
+                                                        ),
+                                                      },
+                                                    )
+                                                  }
+                                                  className="h-8 pr-9 text-xs"
+                                                />
+                                                <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground">
+                                                  cm
+                                                </span>
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+
+                                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                        <div className="space-y-1">
+                                          <LabelConTooltip
+                                            label="Costeo del sustrato"
+                                            tooltip="Define cómo se cobra el material cuando hay resultado de nesting."
+                                            iconSize="sm"
+                                          />
+                                          <HumanSelect
+                                            value={String(
+                                              nestingCosting.strategy ??
+                                                "simple",
+                                            )}
+                                            onValueChange={(v) =>
+                                              updateNestingCosting(paso.id, {
+                                                strategy: v || "simple",
+                                              })
+                                            }
+                                            options={COSTING_STRATEGY_OPTIONS}
+                                            triggerClassName="min-h-9 text-xs"
+                                          />
+                                        </div>
+                                        {nestingCosting.strategy ===
+                                          "plate-segments" && (
+                                          <div className="space-y-1">
+                                            <LabelConTooltip
+                                              label="Escalones de ocupación"
+                                              tooltip="Porcentajes de placa que se cobran según ocupación: una placa al 60% cobra el primer escalón igual o superior."
+                                              ejemplo="25, 50, 75, 100"
+                                              iconSize="sm"
+                                            />
+                                            <Input
+                                              value={
+                                                Array.isArray(
+                                                  nestingCosting.segmentSteps,
+                                                )
+                                                  ? nestingCosting.segmentSteps.join(
+                                                      ", ",
+                                                    )
+                                                  : "25, 50, 75, 100"
+                                              }
+                                              onChange={(e) =>
+                                                updateNestingCosting(paso.id, {
+                                                  segmentSteps: e.target.value
+                                                    .split(",")
+                                                    .map((item) =>
+                                                      Number(item.trim()),
+                                                    )
+                                                    .filter((item) =>
+                                                      Number.isFinite(item),
+                                                    ),
+                                                })
+                                              }
+                                              className="h-8 text-xs"
+                                            />
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {valAvanzado.errores.length > 0 && (
+                                    <ListaValidacion validacion={valAvanzado} />
+                                  )}
+                                </div>
+                              )}
+                            </section>
+                          </>
+                        )}
                       </div>
-                    )}
-
-                    {valAvanzado.errores.length > 0 && (
-                      <ListaValidacion validacion={valAvanzado} />
-                    )}
-                    </div>
-                    )}
-                  </section>
-                </>
-              )}
-            </div>
-            </React.Fragment>
-          );
-        })
-          ) : null}
+                    </React.Fragment>
+                  );
+                })
+            : null}
         </main>
       </div>
     </div>
@@ -4231,7 +6613,8 @@ export function ConfigPasosEditorView({
 // ─── Sub-componente: lista de validaciones ─────────────────────────
 
 function ListaValidacion({ validacion }: { validacion: TabValidacion }) {
-  if (validacion.errores.length === 0 && validacion.warnings.length === 0) return null;
+  if (validacion.errores.length === 0 && validacion.warnings.length === 0)
+    return null;
   return (
     <div className="space-y-1 rounded border border-amber-200 bg-amber-50 p-2 text-xs">
       {validacion.errores.map((e, idx) => (

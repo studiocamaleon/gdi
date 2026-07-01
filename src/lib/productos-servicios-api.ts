@@ -4,19 +4,22 @@
  * Endpoints respaldados por `apps/api/src/productos-servicios/productos-servicios.controller.ts`.
  */
 
-import { apiRequest } from '@/lib/api';
+import { apiRequest } from "@/lib/api";
 import type {
   CargoDirectoCatalogo,
   CatalogoFamilias,
   MedidaPredefinidaProducto,
+  ModoMedidasProducto,
   ProductoCategoriaComercial,
   ProductoDetalle,
   ProductoListItem,
   RutaListItem,
-} from '@/lib/productos-servicios';
+} from "@/lib/productos-servicios";
 
-export async function getProductos(activo?: boolean): Promise<ProductoListItem[]> {
-  const qs = activo === undefined ? '' : `?activo=${activo}`;
+export async function getProductos(
+  activo?: boolean,
+): Promise<ProductoListItem[]> {
+  const qs = activo === undefined ? "" : `?activo=${activo}`;
   return apiRequest<ProductoListItem[]>(`/productos-servicios/productos${qs}`);
 }
 
@@ -24,32 +27,42 @@ export async function getProductoById(id: string): Promise<ProductoDetalle> {
   return apiRequest<ProductoDetalle>(`/productos-servicios/productos/${id}`);
 }
 
-export async function getCatalogoComercial(): Promise<ProductoCategoriaComercial[]> {
-  return apiRequest<ProductoCategoriaComercial[]>('/productos-servicios/catalogo-comercial');
+export async function getCatalogoComercial(): Promise<
+  ProductoCategoriaComercial[]
+> {
+  return apiRequest<ProductoCategoriaComercial[]>(
+    "/productos-servicios/catalogo-comercial",
+  );
 }
 
 export interface ValidacionProducto {
   exitoso: boolean;
   errores: Array<{
-    severidad: 'ERROR' | 'WARNING';
+    severidad: "ERROR" | "WARNING";
     codigo: string;
     mensaje: string;
-    ubicacion?: { rutaAltId?: string; rutaPasoId?: string; slotCodigo?: string };
+    ubicacion?: {
+      rutaAltId?: string;
+      rutaPasoId?: string;
+      slotCodigo?: string;
+    };
   }>;
 }
 
 export async function validarProducto(id: string): Promise<ValidacionProducto> {
-  return apiRequest<ValidacionProducto>(`/productos-servicios/productos/${id}/validar`);
+  return apiRequest<ValidacionProducto>(
+    `/productos-servicios/productos/${id}/validar`,
+  );
 }
 
 export interface CrearProductoPayload {
-  codigo: string;
+  codigo?: string;
   nombre: string;
   descripcion?: string;
   subcategoriaComercialCodigo: string;
   atributosComercialesJson?: Record<string, unknown>;
-  unidadComercial: 'unidad' | 'm2' | 'metro_lineal';
-  modoMedidas: 'FIJA' | 'LIBRE' | 'COMERCIAL_ELIGE';
+  unidadComercial: "unidad" | "m2" | "metro_lineal";
+  modoMedidas: ModoMedidasProducto;
   medidaDefaultAnchoMm?: number;
   medidaDefaultAltoMm?: number;
   medidasPredefinidasJson?: MedidaPredefinidaProducto[];
@@ -57,10 +70,10 @@ export interface CrearProductoPayload {
 }
 
 export async function crearProducto(payload: CrearProductoPayload) {
-  return apiRequest('/productos-servicios/productos', {
-    method: 'POST',
+  return apiRequest("/productos-servicios/productos", {
+    method: "POST",
     body: JSON.stringify(payload),
-    headers: { 'Content-Type': 'application/json' },
+    headers: { "Content-Type": "application/json" },
   });
 }
 
@@ -69,8 +82,8 @@ export interface ActualizarProductoPayload {
   descripcion?: string;
   subcategoriaComercialCodigo?: string;
   atributosComercialesJson?: Record<string, unknown>;
-  unidadComercial?: 'unidad' | 'm2' | 'metro_lineal';
-  modoMedidas?: 'FIJA' | 'LIBRE' | 'COMERCIAL_ELIGE';
+  unidadComercial?: "unidad" | "m2" | "metro_lineal";
+  modoMedidas?: ModoMedidasProducto;
   medidaDefaultAnchoMm?: number | null;
   medidaDefaultAltoMm?: number | null;
   medidasPredefinidasJson?: MedidaPredefinidaProducto[] | null;
@@ -78,11 +91,14 @@ export interface ActualizarProductoPayload {
   activo?: boolean;
 }
 
-export async function actualizarProducto(id: string, payload: ActualizarProductoPayload) {
+export async function actualizarProducto(
+  id: string,
+  payload: ActualizarProductoPayload,
+) {
   return apiRequest(`/productos-servicios/productos/${id}`, {
-    method: 'PATCH',
+    method: "PATCH",
     body: JSON.stringify(payload),
-    headers: { 'Content-Type': 'application/json' },
+    headers: { "Content-Type": "application/json" },
   });
 }
 
@@ -96,21 +112,24 @@ export async function duplicarProducto(
   id: string,
   payload: DuplicarProductoPayload = {},
 ): Promise<{ id: string }> {
-  return apiRequest<{ id: string }>(`/productos-servicios/productos/${id}/duplicar`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return apiRequest<{ id: string }>(
+    `/productos-servicios/productos/${id}/duplicar`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+    },
+  );
 }
 
 export async function eliminarProducto(id: string) {
   return apiRequest(`/productos-servicios/productos/${id}`, {
-    method: 'DELETE',
+    method: "DELETE",
   });
 }
 
 export async function getRutas(): Promise<RutaListItem[]> {
-  return apiRequest<RutaListItem[]>('/productos-servicios/rutas');
+  return apiRequest<RutaListItem[]>("/productos-servicios/rutas");
 }
 
 export async function getRutaById(id: string) {
@@ -120,20 +139,21 @@ export async function getRutaById(id: string) {
 export interface PasoRutaPayload {
   orden: number;
   familiaCodigo: string;
+  icono?: string;
 }
 
 export interface CrearRutaPayload {
-  codigo: string;
+  codigo?: string;
   nombre: string;
   descripcion?: string;
   pasos: PasoRutaPayload[];
 }
 
 export async function crearRuta(payload: CrearRutaPayload) {
-  return apiRequest('/productos-servicios/rutas', {
-    method: 'POST',
+  return apiRequest("/productos-servicios/rutas", {
+    method: "POST",
     body: JSON.stringify(payload),
-    headers: { 'Content-Type': 'application/json' },
+    headers: { "Content-Type": "application/json" },
   });
 }
 
@@ -146,11 +166,14 @@ export interface ActualizarRutaPayload {
   cambios?: string;
 }
 
-export async function actualizarRuta(id: string, payload: ActualizarRutaPayload) {
+export async function actualizarRuta(
+  id: string,
+  payload: ActualizarRutaPayload,
+) {
   return apiRequest(`/productos-servicios/rutas/${id}`, {
-    method: 'PATCH',
+    method: "PATCH",
     body: JSON.stringify(payload),
-    headers: { 'Content-Type': 'application/json' },
+    headers: { "Content-Type": "application/json" },
   });
 }
 
@@ -164,15 +187,18 @@ export async function duplicarRuta(
   id: string,
   payload: DuplicarRutaPayload = {},
 ): Promise<{ id: string }> {
-  return apiRequest<{ id: string }>(`/productos-servicios/rutas/${id}/duplicar`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return apiRequest<{ id: string }>(
+    `/productos-servicios/rutas/${id}/duplicar`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+    },
+  );
 }
 
 export async function eliminarRuta(id: string) {
-  return apiRequest(`/productos-servicios/rutas/${id}`, { method: 'DELETE' });
+  return apiRequest(`/productos-servicios/rutas/${id}`, { method: "DELETE" });
 }
 
 // ============================================================================
@@ -188,12 +214,18 @@ export interface CrearProductoRutaAltPayload {
   orden?: number;
 }
 
-export async function crearProductoRutaAlt(productoId: string, payload: CrearProductoRutaAltPayload) {
-  return apiRequest(`/productos-servicios/productos/${productoId}/rutas-alternativas`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-    headers: { 'Content-Type': 'application/json' },
-  });
+export async function crearProductoRutaAlt(
+  productoId: string,
+  payload: CrearProductoRutaAltPayload,
+) {
+  return apiRequest(
+    `/productos-servicios/productos/${productoId}/rutas-alternativas`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+    },
+  );
 }
 
 export interface ActualizarProductoRutaAltPayload {
@@ -208,11 +240,14 @@ export async function actualizarProductoRutaAlt(
   rutaAltId: string,
   payload: ActualizarProductoRutaAltPayload,
 ) {
-  return apiRequest(`/productos-servicios/productos/rutas-alternativas/${rutaAltId}`, {
-    method: 'PATCH',
-    body: JSON.stringify(payload),
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return apiRequest(
+    `/productos-servicios/productos/rutas-alternativas/${rutaAltId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+    },
+  );
 }
 
 export interface DuplicarProductoRutaAltPayload {
@@ -223,17 +258,23 @@ export async function duplicarProductoRutaAlt(
   rutaAltId: string,
   payload: DuplicarProductoRutaAltPayload = {},
 ) {
-  return apiRequest(`/productos-servicios/productos/rutas-alternativas/${rutaAltId}/duplicar`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return apiRequest(
+    `/productos-servicios/productos/rutas-alternativas/${rutaAltId}/duplicar`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+    },
+  );
 }
 
 export async function eliminarProductoRutaAlt(rutaAltId: string) {
-  return apiRequest(`/productos-servicios/productos/rutas-alternativas/${rutaAltId}`, {
-    method: 'DELETE',
-  });
+  return apiRequest(
+    `/productos-servicios/productos/rutas-alternativas/${rutaAltId}`,
+    {
+      method: "DELETE",
+    },
+  );
 }
 
 // ============================================================================
@@ -242,7 +283,7 @@ export async function eliminarProductoRutaAlt(rutaAltId: string) {
 
 export interface UpsertSlotMaterialPayload {
   slotCodigo: string;
-  modoSeleccion: 'HARDCODED' | 'COMERCIAL_ELIGE' | 'MOTOR_ELIGE_AUTO';
+  modoSeleccion: "HARDCODED" | "COMERCIAL_ELIGE" | "MOTOR_ELIGE_AUTO";
   criterioMotorAuto?: string | null;
   criterioInputCampo?: string | null;
   criterioMaterialCampo?: string | null;
@@ -260,6 +301,8 @@ export interface UpsertSlotMaterialPayload {
 
 export interface UpsertMaquinaCandidataPayload {
   maquinaId: string;
+  perfilDefaultId?: string | null;
+  modoColorAllowedModes?: string[];
   esPreferida?: boolean;
   orden?: number;
 }
@@ -284,66 +327,83 @@ export interface UpsertConfigPasoPayload {
   maquinasCandidatas?: UpsertMaquinaCandidataPayload[];
 }
 
-export async function upsertConfigPaso(rutaAltId: string, payload: UpsertConfigPasoPayload) {
-  return apiRequest(`/productos-servicios/productos/rutas-alternativas/${rutaAltId}/config-pasos`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-    headers: { 'Content-Type': 'application/json' },
-  });
+export async function upsertConfigPaso(
+  rutaAltId: string,
+  payload: UpsertConfigPasoPayload,
+) {
+  return apiRequest(
+    `/productos-servicios/productos/rutas-alternativas/${rutaAltId}/config-pasos`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+    },
+  );
 }
 
 export async function getCatalogoFamilias(): Promise<CatalogoFamilias> {
-  return apiRequest<CatalogoFamilias>('/productos-servicios/familias');
+  return apiRequest<CatalogoFamilias>("/productos-servicios/familias");
 }
 
-export async function getCargosDirectosCatalogo(soloActivos = true): Promise<CargoDirectoCatalogo[]> {
-  const qs = soloActivos ? '' : '?soloActivos=false';
-  return apiRequest<CargoDirectoCatalogo[]>(`/productos-servicios/cargos-directos${qs}`);
+export async function getCargosDirectosCatalogo(
+  soloActivos = true,
+): Promise<CargoDirectoCatalogo[]> {
+  const qs = soloActivos ? "" : "?soloActivos=false";
+  return apiRequest<CargoDirectoCatalogo[]>(
+    `/productos-servicios/cargos-directos${qs}`,
+  );
 }
 
 export interface CrearCargoDirectoPayload {
   codigo: string;
   nombre: string;
   descripcion?: string;
-  modoCalculo: 'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT';
+  modoCalculo:
+    "MONTO_FIJO_PLANO" | "PORCENTAJE_SOBRE_BASE" | "POR_UNIDAD_INPUT";
   modosActivacionSoportados?: string[];
   configJson?: Record<string, unknown>;
 }
 
 export async function crearCargoDirecto(payload: CrearCargoDirectoPayload) {
-  return apiRequest('/productos-servicios/cargos-directos', {
-    method: 'POST',
+  return apiRequest("/productos-servicios/cargos-directos", {
+    method: "POST",
     body: JSON.stringify(payload),
-    headers: { 'Content-Type': 'application/json' },
+    headers: { "Content-Type": "application/json" },
   });
 }
 
 export interface ActualizarCargoDirectoPayload {
   nombre?: string;
   descripcion?: string;
-  modoCalculo?: 'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT';
+  modoCalculo?:
+    "MONTO_FIJO_PLANO" | "PORCENTAJE_SOBRE_BASE" | "POR_UNIDAD_INPUT";
   modosActivacionSoportados?: string[];
   configJson?: Record<string, unknown>;
   activo?: boolean;
 }
 
-export async function actualizarCargoDirecto(id: string, payload: ActualizarCargoDirectoPayload) {
+export async function actualizarCargoDirecto(
+  id: string,
+  payload: ActualizarCargoDirectoPayload,
+) {
   return apiRequest(`/productos-servicios/cargos-directos/${id}`, {
-    method: 'PATCH',
+    method: "PATCH",
     body: JSON.stringify(payload),
-    headers: { 'Content-Type': 'application/json' },
+    headers: { "Content-Type": "application/json" },
   });
 }
 
 export async function eliminarCargoDirecto(id: string) {
-  return apiRequest(`/productos-servicios/cargos-directos/${id}`, { method: 'DELETE' });
+  return apiRequest(`/productos-servicios/cargos-directos/${id}`, {
+    method: "DELETE",
+  });
 }
 
 // === Asociación cargos ↔ producto/paso (F.3.10) ===
 
 export interface AsociarCargoCotizacionPayload {
   cargoDirectoCatalogoId: string;
-  modoActivacion: 'OBLIGATORIO' | 'OPCIONAL' | 'CONDICIONAL';
+  modoActivacion: "OBLIGATORIO" | "OPCIONAL" | "CONDICIONAL";
   condicionActivacionJson?: Record<string, unknown>;
   configOverrideJson?: Record<string, unknown>;
 }
@@ -352,38 +412,53 @@ export async function asociarCargoCotizacion(
   productoId: string,
   payload: AsociarCargoCotizacionPayload,
 ) {
-  return apiRequest(`/productos-servicios/productos/${productoId}/cargos-cotizacion`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return apiRequest(
+    `/productos-servicios/productos/${productoId}/cargos-cotizacion`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+    },
+  );
 }
 
 export async function desasociarCargoCotizacion(asociacionId: string) {
-  return apiRequest(`/productos-servicios/productos/cargos-cotizacion/${asociacionId}`, {
-    method: 'DELETE',
-  });
+  return apiRequest(
+    `/productos-servicios/productos/cargos-cotizacion/${asociacionId}`,
+    {
+      method: "DELETE",
+    },
+  );
 }
 
 export interface AsociarCargoPasoPayload {
   cargoDirectoCatalogoId: string;
-  modoActivacion: 'OBLIGATORIO' | 'OPCIONAL' | 'CONDICIONAL';
+  modoActivacion: "OBLIGATORIO" | "OPCIONAL" | "CONDICIONAL";
   condicionActivacionJson?: Record<string, unknown>;
   configOverrideJson?: Record<string, unknown>;
 }
 
-export async function asociarCargoPaso(configPasoId: string, payload: AsociarCargoPasoPayload) {
-  return apiRequest(`/productos-servicios/productos/config-pasos/${configPasoId}/cargos`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-    headers: { 'Content-Type': 'application/json' },
-  });
+export async function asociarCargoPaso(
+  configPasoId: string,
+  payload: AsociarCargoPasoPayload,
+) {
+  return apiRequest(
+    `/productos-servicios/productos/config-pasos/${configPasoId}/cargos`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+    },
+  );
 }
 
 export async function desasociarCargoPaso(asociacionId: string) {
-  return apiRequest(`/productos-servicios/productos/config-pasos/cargos/${asociacionId}`, {
-    method: 'DELETE',
-  });
+  return apiRequest(
+    `/productos-servicios/productos/config-pasos/cargos/${asociacionId}`,
+    {
+      method: "DELETE",
+    },
+  );
 }
 
 // === G-F3: Pasos extras inline ===
@@ -392,26 +467,35 @@ export interface AgregarPasoExtraPayload {
   familiaCodigo: string;
   insertarDespuesDeRutaPasoId?: string | null;
   ordenInterno?: number;
-  modoActivacion?: 'OBLIGATORIO' | 'OPCIONAL' | 'CONDICIONAL';
-  modoTiempo?: 'T-1' | 'T-2' | 'T-3' | 'T-4';
-  mecanismoCantidad?: 'DIRECT_FROM_JOBCONTEXT' | 'CONVERSION';
+  modoActivacion?: "OBLIGATORIO" | "OPCIONAL" | "CONDICIONAL";
+  modoTiempo?: "T-1" | "T-2" | "T-3" | "T-4";
+  mecanismoCantidad?: "DIRECT_FROM_JOBCONTEXT" | "CONVERSION";
   paramsPasoJson?: Record<string, unknown>;
   maquinaM1Id?: string;
   perfilM1Id?: string;
 }
 
-export async function agregarPasoExtra(productoId: string, payload: AgregarPasoExtraPayload) {
-  return apiRequest(`/productos-servicios/productos/${productoId}/pasos-extras`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-    headers: { 'Content-Type': 'application/json' },
-  });
+export async function agregarPasoExtra(
+  productoId: string,
+  payload: AgregarPasoExtraPayload,
+) {
+  return apiRequest(
+    `/productos-servicios/productos/${productoId}/pasos-extras`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+    },
+  );
 }
 
 export async function eliminarPasoExtra(pasoExtraId: string) {
-  return apiRequest(`/productos-servicios/productos/pasos-extras/${pasoExtraId}`, {
-    method: 'DELETE',
-  });
+  return apiRequest(
+    `/productos-servicios/productos/pasos-extras/${pasoExtraId}`,
+    {
+      method: "DELETE",
+    },
+  );
 }
 
 export interface LookupsConfigPaso {
@@ -431,10 +515,10 @@ export interface LookupsConfigPaso {
       id: string;
       nombre: string;
       tipoPerfil?: string | null;
-	      productivityValue: string | null;
-	      productivityUnit: string | null;
-	      detalleJson?: Record<string, unknown> | null;
-	    }>;
+      productivityValue: string | null;
+      productivityUnit: string | null;
+      detalleJson?: Record<string, unknown> | null;
+    }>;
   }>;
   centrosCosto: Array<{
     id: string;
@@ -460,7 +544,9 @@ export interface LookupsConfigPaso {
 }
 
 export async function getLookupsConfigPaso(): Promise<LookupsConfigPaso> {
-  return apiRequest<LookupsConfigPaso>('/productos-servicios/lookups-config-paso');
+  return apiRequest<LookupsConfigPaso>(
+    "/productos-servicios/lookups-config-paso",
+  );
 }
 
 export interface BuscarMateriasPrimasParams {
@@ -493,15 +579,19 @@ export async function buscarMateriasPrimasConfigPaso(
   params: BuscarMateriasPrimasParams,
 ): Promise<MateriaPrimaBusquedaItem[]> {
   const search = new URLSearchParams();
-  if (params.q) search.set('q', params.q);
-  if (params.familias?.length) search.set('familias', params.familias.join(','));
-  if (params.subfamilias?.length) search.set('subfamilias', params.subfamilias.join(','));
-  if (params.templateIds?.length) search.set('templateIds', params.templateIds.join(','));
-  if (params.tipoTecnico?.length) search.set('tipoTecnico', params.tipoTecnico.join(','));
-  if (params.limit) search.set('limit', String(params.limit));
+  if (params.q) search.set("q", params.q);
+  if (params.familias?.length)
+    search.set("familias", params.familias.join(","));
+  if (params.subfamilias?.length)
+    search.set("subfamilias", params.subfamilias.join(","));
+  if (params.templateIds?.length)
+    search.set("templateIds", params.templateIds.join(","));
+  if (params.tipoTecnico?.length)
+    search.set("tipoTecnico", params.tipoTecnico.join(","));
+  if (params.limit) search.set("limit", String(params.limit));
   const qs = search.toString();
   return apiRequest<MateriaPrimaBusquedaItem[]>(
-    `/productos-servicios/materias-primas/buscar${qs ? `?${qs}` : ''}`,
+    `/productos-servicios/materias-primas/buscar${qs ? `?${qs}` : ""}`,
   );
 }
 
@@ -519,17 +609,17 @@ export async function buscarMateriasPrimasConfigPaso(
  */
 export interface NestingViewerInput {
   algorithm:
-    | 'shelf-rollo'
-    | 'maxrects-rollo'
-    | 'grid-2d-single'
-    | 'grid-2d-multi'
-    | 'packingsolver-rectangle';
+    | "shelf-rollo"
+    | "maxrects-rollo"
+    | "grid-2d-single"
+    | "grid-2d-multi"
+    | "packingsolver-rectangle";
   cantidadCalculada: number;
-  unidad: 'm_lineales' | 'pliegos' | 'pouches' | 'm2' | 'piezas';
+  unidad: "m_lineales" | "pliegos" | "pouches" | "m2" | "piezas";
   aprovechamientoPct: number;
   substrates: Array<
-    | { kind: 'sheet'; count: number; widthMm: number; heightMm: number }
-    | { kind: 'roll'; lengthMm: number; widthMm: number }
+    | { kind: "sheet"; count: number; widthMm: number; heightMm: number }
+    | { kind: "roll"; lengthMm: number; widthMm: number }
   >;
   placements: Array<{
     pieceId: string;
@@ -541,7 +631,7 @@ export interface NestingViewerInput {
     rotated: boolean;
     panelIndex?: number;
     panelCount?: number;
-    panelAxis?: 'vertical' | 'horizontal';
+    panelAxis?: "vertical" | "horizontal";
     usefulWidthMm?: number;
     usefulHeightMm?: number;
     overlapStartMm?: number;
@@ -567,6 +657,7 @@ export interface NestingViewerInput {
     pieceBleedMm?: number;
     allowRotation: boolean;
     substrateLabel?: string;
+    centerPlacements?: boolean;
     usableArea: {
       xMm: number;
       yMm: number;
@@ -581,17 +672,17 @@ export interface NestingViewerInput {
     };
     panelizado?: {
       enabled: boolean;
-      mode: 'automatic' | 'manual';
-      axis: 'automatic' | 'vertical' | 'horizontal' | null;
+      mode: "automatic" | "manual";
+      axis: "automatic" | "vertical" | "horizontal" | null;
       overlapMm: number | null;
       maxPanelWidthMm: number | null;
-      distribution: 'equilibrada' | 'libre' | null;
-      widthInterpretation: 'total' | 'util' | null;
+      distribution: "equilibrada" | "libre" | null;
+      widthInterpretation: "total" | "util" | null;
       panelCount: number;
     };
   };
   costingPreview?: {
-    strategy: 'simple' | 'm2-exact' | 'consumed-length' | 'plate-segments';
+    strategy: "simple" | "m2-exact" | "consumed-length" | "plate-segments";
     label: string;
     chargedRatio?: number;
     chargedLengthMm?: number;
@@ -635,6 +726,12 @@ export interface CotizarRequest {
     modoColor?: string;
     distanciaKm?: number;
     m2_instalados?: number;
+    piezaAreaTotalM2?: number;
+    metrosLineales?: number;
+    metroLineal?: number;
+    ml?: number;
+    cantidadComercial?: number;
+    cantidadComercialPricing?: number;
     zonaInstalacion?: string;
     opcionalesActivados?: Record<string, boolean>;
     slotMateriales?: Record<string, string>;
@@ -685,6 +782,7 @@ export interface CotizarResponse {
         nombre: string;
         porcentaje: number;
         orden: number;
+        desglosarCliente?: boolean;
       }>;
       comisiones: Array<{
         catalogoId: string;
@@ -693,7 +791,10 @@ export interface CotizarResponse {
         porcentaje: number;
         orden: number;
       }>;
-      precioEspecialCliente: { precioEspecialId: string; clienteId: string } | null;
+      precioEspecialCliente: {
+        precioEspecialId: string;
+        clienteId: string;
+      } | null;
       precioBase: number;
       totalComisiones: number;
       totalImpuestos: number;
@@ -724,17 +825,20 @@ export interface CotizarResponse {
         materialSku: string;
         materialDisplayName: string;
         materiaPrimaNombre?: string | null;
-        tipoLineaCosto: 'MATERIAL' | 'CONSUMIBLE_MAQUINA';
+        materiaPrimaTemplateId?: string | null;
+        materiaPrimaTipoTecnico?: string | null;
+        atributosVarianteJson?: Record<string, unknown> | null;
+        tipoLineaCosto: "MATERIAL" | "CONSUMIBLE_MAQUINA";
         cantidad: number;
         unidad: string;
         precioUnitario: number;
         costoTotal: number;
         estrategiaCosto: string;
         modoSeleccion:
-          | 'HARDCODED'
-          | 'COMERCIAL_ELIGE'
-          | 'MOTOR_ELIGE_AUTO'
-          | 'MAQUINA_CONSUMIBLE';
+          | "HARDCODED"
+          | "COMERCIAL_ELIGE"
+          | "MOTOR_ELIGE_AUTO"
+          | "MAQUINA_CONSUMIBLE";
         detalleCosteoNesting?: {
           strategy: string;
           totalCost: number;
@@ -768,10 +872,10 @@ export interface CotizarResponse {
 }
 
 export async function cotizar(req: CotizarRequest): Promise<CotizarResponse> {
-  return apiRequest<CotizarResponse>('/motor-universal/cotizar', {
-    method: 'POST',
+  return apiRequest<CotizarResponse>("/motor-universal/cotizar", {
+    method: "POST",
     body: JSON.stringify(req),
-    headers: { 'Content-Type': 'application/json' },
+    headers: { "Content-Type": "application/json" },
   });
 }
 
@@ -784,23 +888,26 @@ export interface CotizarYGuardarResponse {
 export async function cotizarYGuardar(
   req: CotizarRequest & { cotizacionId?: string },
 ): Promise<CotizarYGuardarResponse> {
-  return apiRequest<CotizarYGuardarResponse>('/motor-universal/cotizar-y-guardar', {
-    method: 'POST',
-    body: JSON.stringify(req),
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return apiRequest<CotizarYGuardarResponse>(
+    "/motor-universal/cotizar-y-guardar",
+    {
+      method: "POST",
+      body: JSON.stringify(req),
+      headers: { "Content-Type": "application/json" },
+    },
+  );
 }
 
 export async function recotizarCotizacionItem(
   id: string,
-  req: Omit<CotizarRequest, 'productoId'>,
+  req: Omit<CotizarRequest, "productoId">,
 ): Promise<CotizarYGuardarResponse> {
   return apiRequest<CotizarYGuardarResponse>(
     `/motor-universal/cotizacion-items/${id}/recotizar`,
     {
-      method: 'PATCH',
+      method: "PATCH",
       body: JSON.stringify(req),
-      headers: { 'Content-Type': 'application/json' },
+      headers: { "Content-Type": "application/json" },
     },
   );
 }
@@ -835,38 +942,54 @@ export interface ActualizarImpuestoCatalogoPayload {
   activo?: boolean;
 }
 
-export async function getImpuestosCatalogo(soloActivos = true): Promise<ImpuestoCatalogoItem[]> {
-  const qs = soloActivos ? '' : '?soloActivos=false';
-  return apiRequest<ImpuestoCatalogoItem[]>(`/productos-servicios/impuestos-catalogo${qs}`);
+export async function getImpuestosCatalogo(
+  soloActivos = true,
+): Promise<ImpuestoCatalogoItem[]> {
+  const qs = soloActivos ? "" : "?soloActivos=false";
+  return apiRequest<ImpuestoCatalogoItem[]>(
+    `/productos-servicios/impuestos-catalogo${qs}`,
+  );
 }
 
-export async function getImpuestoCatalogoById(id: string): Promise<ImpuestoCatalogoItem> {
-  return apiRequest<ImpuestoCatalogoItem>(`/productos-servicios/impuestos-catalogo/${id}`);
+export async function getImpuestoCatalogoById(
+  id: string,
+): Promise<ImpuestoCatalogoItem> {
+  return apiRequest<ImpuestoCatalogoItem>(
+    `/productos-servicios/impuestos-catalogo/${id}`,
+  );
 }
 
-export async function crearImpuestoCatalogo(payload: CrearImpuestoCatalogoPayload) {
-  return apiRequest<ImpuestoCatalogoItem>('/productos-servicios/impuestos-catalogo', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-    headers: { 'Content-Type': 'application/json' },
-  });
+export async function crearImpuestoCatalogo(
+  payload: CrearImpuestoCatalogoPayload,
+) {
+  return apiRequest<ImpuestoCatalogoItem>(
+    "/productos-servicios/impuestos-catalogo",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+    },
+  );
 }
 
 export async function actualizarImpuestoCatalogo(
   id: string,
   payload: ActualizarImpuestoCatalogoPayload,
 ) {
-  return apiRequest<ImpuestoCatalogoItem>(`/productos-servicios/impuestos-catalogo/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify(payload),
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return apiRequest<ImpuestoCatalogoItem>(
+    `/productos-servicios/impuestos-catalogo/${id}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+    },
+  );
 }
 
 export async function eliminarImpuestoCatalogo(id: string) {
-  return apiRequest<{ tipo: 'soft' | 'hard'; item: ImpuestoCatalogoItem }>(
+  return apiRequest<{ tipo: "soft" | "hard"; item: ImpuestoCatalogoItem }>(
     `/productos-servicios/impuestos-catalogo/${id}`,
-    { method: 'DELETE' },
+    { method: "DELETE" },
   );
 }
 
@@ -896,38 +1019,54 @@ export interface ActualizarComisionCatalogoPayload {
   activo?: boolean;
 }
 
-export async function getComisionesCatalogo(soloActivos = true): Promise<ComisionCatalogoItem[]> {
-  const qs = soloActivos ? '' : '?soloActivos=false';
-  return apiRequest<ComisionCatalogoItem[]>(`/productos-servicios/comisiones-catalogo${qs}`);
+export async function getComisionesCatalogo(
+  soloActivos = true,
+): Promise<ComisionCatalogoItem[]> {
+  const qs = soloActivos ? "" : "?soloActivos=false";
+  return apiRequest<ComisionCatalogoItem[]>(
+    `/productos-servicios/comisiones-catalogo${qs}`,
+  );
 }
 
-export async function getComisionCatalogoById(id: string): Promise<ComisionCatalogoItem> {
-  return apiRequest<ComisionCatalogoItem>(`/productos-servicios/comisiones-catalogo/${id}`);
+export async function getComisionCatalogoById(
+  id: string,
+): Promise<ComisionCatalogoItem> {
+  return apiRequest<ComisionCatalogoItem>(
+    `/productos-servicios/comisiones-catalogo/${id}`,
+  );
 }
 
-export async function crearComisionCatalogo(payload: CrearComisionCatalogoPayload) {
-  return apiRequest<ComisionCatalogoItem>('/productos-servicios/comisiones-catalogo', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-    headers: { 'Content-Type': 'application/json' },
-  });
+export async function crearComisionCatalogo(
+  payload: CrearComisionCatalogoPayload,
+) {
+  return apiRequest<ComisionCatalogoItem>(
+    "/productos-servicios/comisiones-catalogo",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+    },
+  );
 }
 
 export async function actualizarComisionCatalogo(
   id: string,
   payload: ActualizarComisionCatalogoPayload,
 ) {
-  return apiRequest<ComisionCatalogoItem>(`/productos-servicios/comisiones-catalogo/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify(payload),
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return apiRequest<ComisionCatalogoItem>(
+    `/productos-servicios/comisiones-catalogo/${id}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+    },
+  );
 }
 
 export async function eliminarComisionCatalogo(id: string) {
-  return apiRequest<{ tipo: 'soft' | 'hard'; item: ComisionCatalogoItem }>(
+  return apiRequest<{ tipo: "soft" | "hard"; item: ComisionCatalogoItem }>(
     `/productos-servicios/comisiones-catalogo/${id}`,
-    { method: 'DELETE' },
+    { method: "DELETE" },
   );
 }
 
@@ -954,7 +1093,9 @@ export interface AsignarBatchItem {
   orden?: number;
 }
 
-export async function getImpuestosAplicados(productoId: string): Promise<ImpuestoAplicado[]> {
+export async function getImpuestosAplicados(
+  productoId: string,
+): Promise<ImpuestoAplicado[]> {
   return apiRequest<ImpuestoAplicado[]>(
     `/productos-servicios/productos/${productoId}/precio/impuestos`,
   );
@@ -967,21 +1108,26 @@ export async function setImpuestosAplicados(
   return apiRequest<ImpuestoAplicado[]>(
     `/productos-servicios/productos/${productoId}/precio/impuestos`,
     {
-      method: 'PUT',
+      method: "PUT",
       body: JSON.stringify({ items }),
-      headers: { 'Content-Type': 'application/json' },
+      headers: { "Content-Type": "application/json" },
     },
   );
 }
 
-export async function quitarImpuestoAplicado(productoId: string, impuestoCatalogoId: string) {
+export async function quitarImpuestoAplicado(
+  productoId: string,
+  impuestoCatalogoId: string,
+) {
   return apiRequest(
     `/productos-servicios/productos/${productoId}/precio/impuestos/${impuestoCatalogoId}`,
-    { method: 'DELETE' },
+    { method: "DELETE" },
   );
 }
 
-export async function getComisionesAplicadas(productoId: string): Promise<ComisionAplicada[]> {
+export async function getComisionesAplicadas(
+  productoId: string,
+): Promise<ComisionAplicada[]> {
   return apiRequest<ComisionAplicada[]>(
     `/productos-servicios/productos/${productoId}/precio/comisiones`,
   );
@@ -994,17 +1140,20 @@ export async function setComisionesAplicadas(
   return apiRequest<ComisionAplicada[]>(
     `/productos-servicios/productos/${productoId}/precio/comisiones`,
     {
-      method: 'PUT',
+      method: "PUT",
       body: JSON.stringify({ items }),
-      headers: { 'Content-Type': 'application/json' },
+      headers: { "Content-Type": "application/json" },
     },
   );
 }
 
-export async function quitarComisionAplicada(productoId: string, comisionCatalogoId: string) {
+export async function quitarComisionAplicada(
+  productoId: string,
+  comisionCatalogoId: string,
+) {
   return apiRequest(
     `/productos-servicios/productos/${productoId}/precio/comisiones/${comisionCatalogoId}`,
-    { method: 'DELETE' },
+    { method: "DELETE" },
   );
 }
 
@@ -1044,9 +1193,9 @@ export async function crearPrecioEspecialCliente(
   return apiRequest<PrecioEspecialClienteItem>(
     `/productos-servicios/productos/${productoId}/precios-especiales`,
     {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify(payload),
-      headers: { 'Content-Type': 'application/json' },
+      headers: { "Content-Type": "application/json" },
     },
   );
 }
@@ -1058,15 +1207,15 @@ export async function actualizarPrecioEspecialCliente(
   return apiRequest<PrecioEspecialClienteItem>(
     `/productos-servicios/precios-especiales/${id}`,
     {
-      method: 'PATCH',
+      method: "PATCH",
       body: JSON.stringify(payload),
-      headers: { 'Content-Type': 'application/json' },
+      headers: { "Content-Type": "application/json" },
     },
   );
 }
 
 export async function eliminarPrecioEspecialCliente(id: string) {
   return apiRequest(`/productos-servicios/precios-especiales/${id}`, {
-    method: 'DELETE',
+    method: "DELETE",
   });
 }

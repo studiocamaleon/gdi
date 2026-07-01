@@ -3,7 +3,27 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CopyIcon, GitBranchIcon, Loader2Icon, PlusIcon, SearchIcon } from "lucide-react";
+import {
+  BookOpenIcon,
+  CircleDotIcon,
+  CopyIcon,
+  FactoryIcon,
+  GitBranchIcon,
+  LayersIcon,
+  LayoutDashboardIcon,
+  Loader2Icon,
+  PackageIcon,
+  PaintbrushIcon,
+  PlusIcon,
+  PrinterIcon,
+  ScissorsIcon,
+  SearchIcon,
+  ShieldCheckIcon,
+  SunIcon,
+  TruckIcon,
+  WrenchIcon,
+  ZapIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { EstadoVacio } from "@/components/ui/estado-vacio";
@@ -19,15 +39,53 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { FamiliaListItem, RutaListItem } from "@/lib/productos-servicios";
-import { duplicarRuta, getCatalogoFamilias } from "@/lib/productos-servicios-api";
+import {
+  duplicarRuta,
+  getCatalogoFamilias,
+} from "@/lib/productos-servicios-api";
 
 const Ico = {
   Arrow: (props: React.SVGProps<SVGSVGElement>) => (
-    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <svg
+      viewBox="0 0 24 24"
+      width="14"
+      height="14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
       <path d="M5 12h14M13 6l6 6-6 6" />
     </svg>
   ),
 };
+
+const STEP_ICONS = {
+  Layout: LayoutDashboardIcon,
+  Layers: LayersIcon,
+  Printer: PrinterIcon,
+  Plot: FactoryIcon,
+  Cut: ScissorsIcon,
+  Scissors: ScissorsIcon,
+  Brush: PaintbrushIcon,
+  Stamp: CircleDotIcon,
+  Fold: LayersIcon,
+  Cnc: FactoryIcon,
+  Beam: ZapIcon,
+  Book: BookOpenIcon,
+  Tool: WrenchIcon,
+  Shield: ShieldCheckIcon,
+  Package: PackageIcon,
+  Truck: TruckIcon,
+  Wrench: WrenchIcon,
+  Sun: SunIcon,
+};
+
+function getStepIcon(icono?: string | null) {
+  return STEP_ICONS[icono as keyof typeof STEP_ICONS] ?? LayoutDashboardIcon;
+}
 
 function StepChain({
   pasos,
@@ -41,11 +99,16 @@ function StepChain({
       {pasos.map((paso, index) => (
         <React.Fragment key={paso.id}>
           <span className="step-chip" title={paso.familiaCodigo}>
+            {React.createElement(getStepIcon(paso.icono), {
+              className: "step-chip-icon",
+            })}
             <span className="ix">{index + 1}.</span>
             <span className="truncate">{familiaLabel(paso.familiaCodigo)}</span>
           </span>
           {index < pasos.length - 1 ? (
-            <span className="step-arrow" aria-hidden="true">→</span>
+            <span className="step-arrow" aria-hidden="true">
+              →
+            </span>
           ) : null}
         </React.Fragment>
       ))}
@@ -59,7 +122,9 @@ export function RutasTable({ initialRutas }: { initialRutas: RutaListItem[] }) {
   const [familias, setFamilias] = React.useState<FamiliaListItem[]>([]);
   const [search, setSearch] = React.useState("");
   const [duplicandoId, setDuplicandoId] = React.useState<string | null>(null);
-  const [rutaADuplicar, setRutaADuplicar] = React.useState<RutaListItem | null>(null);
+  const [rutaADuplicar, setRutaADuplicar] = React.useState<RutaListItem | null>(
+    null,
+  );
   const [nombreCopia, setNombreCopia] = React.useState("");
 
   React.useEffect(() => {
@@ -80,8 +145,11 @@ export function RutasTable({ initialRutas }: { initialRutas: RutaListItem[] }) {
     const term = search.trim().toLowerCase();
     if (!term) return rutas;
     return rutas.filter((r) => {
-      const nombresPasos = r.pasos.map((p) => familiaLabel(p.familiaCodigo).toLowerCase()).join(" ");
-      const haystack = `${r.codigo} ${r.nombre} ${r.descripcion ?? ""} ${nombresPasos}`.toLowerCase();
+      const nombresPasos = r.pasos
+        .map((p) => familiaLabel(p.familiaCodigo).toLowerCase())
+        .join(" ");
+      const haystack =
+        `${r.codigo} ${r.nombre} ${r.descripcion ?? ""} ${nombresPasos}`.toLowerCase();
       return haystack.includes(term);
     });
   }, [rutas, search, familiaLabel]);
@@ -111,7 +179,9 @@ export function RutasTable({ initialRutas }: { initialRutas: RutaListItem[] }) {
     setNombreCopia(`${ruta.nombre} copia`);
   };
 
-  const handleDuplicarRuta = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleDuplicarRuta = async (
+    event: React.FormEvent<HTMLFormElement>,
+  ) => {
     event.preventDefault();
     if (!rutaADuplicar || duplicandoId) return;
     const nombre = nombreCopia.trim();
@@ -128,7 +198,9 @@ export function RutasTable({ initialRutas }: { initialRutas: RutaListItem[] }) {
       router.refresh();
       router.push(`/productos-servicios/rutas/${duplicada.id}`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "No se pudo duplicar la ruta");
+      toast.error(
+        err instanceof Error ? err.message : "No se pudo duplicar la ruta",
+      );
     } finally {
       setDuplicandoId(null);
     }
@@ -140,11 +212,15 @@ export function RutasTable({ initialRutas }: { initialRutas: RutaListItem[] }) {
         <div className="title-block">
           <h1>Rutas de producción</h1>
           <div className="sub">
-            {rutas.length} rutas reusables. Cada ruta es un esqueleto de pasos que los productos pueden referenciar.
+            {rutas.length} rutas reusables. Cada ruta es un esqueleto de pasos
+            que los productos pueden referenciar.
           </div>
         </div>
         <button className="btn">Importar</button>
-        <Link href="/productos-servicios/rutas/nueva" className="btn btn-primary">
+        <Link
+          href="/productos-servicios/rutas/nueva"
+          className="btn btn-primary"
+        >
           <PlusIcon size={14} />
           Nueva ruta
         </Link>
@@ -154,14 +230,20 @@ export function RutasTable({ initialRutas }: { initialRutas: RutaListItem[] }) {
         <EstadoVacio
           titulo="Sin rutas cargadas"
           descripcion="Las rutas son los caminos de producción reusables. Empezá creando una desde cero o ejecutá el seed."
-          cta={{ label: "Crear ruta", href: "/productos-servicios/rutas/nueva", icon: PlusIcon }}
+          cta={{
+            label: "Crear ruta",
+            href: "/productos-servicios/rutas/nueva",
+            icon: PlusIcon,
+          }}
         />
       ) : (
         <div className="card">
           <div className="search-card-head">
             <div className="ttl-block">
               <span className="title">Rutas</span>
-              <span className="count">{rutasFiltradas.length} de {rutas.length}</span>
+              <span className="count">
+                {rutasFiltradas.length} de {rutas.length}
+              </span>
             </div>
             <label className="search-inline">
               <SearchIcon size={14} />
@@ -188,9 +270,15 @@ export function RutasTable({ initialRutas }: { initialRutas: RutaListItem[] }) {
                 <tr>
                   <th>Nombre</th>
                   <th style={{ width: "38%" }}>Pasos</th>
-                  <th className="right" style={{ width: 90 }}>Versión</th>
-                  <th className="right" style={{ width: 150 }}>Productos que la usan</th>
-                  <th className="right" style={{ width: 110 }}>Acciones</th>
+                  <th className="right" style={{ width: 90 }}>
+                    Versión
+                  </th>
+                  <th className="right" style={{ width: 150 }}>
+                    Productos que la usan
+                  </th>
+                  <th className="right" style={{ width: 110 }}>
+                    Acciones
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -208,16 +296,23 @@ export function RutasTable({ initialRutas }: { initialRutas: RutaListItem[] }) {
                   >
                     <td>
                       <div className="name">{ruta.nombre}</div>
-                      {ruta.descripcion ? <div className="desc">{ruta.descripcion}</div> : null}
+                      {ruta.descripcion ? (
+                        <div className="desc">{ruta.descripcion}</div>
+                      ) : null}
                     </td>
                     <td>
-                      <StepChain pasos={ruta.pasos} familiaLabel={familiaLabel} />
+                      <StepChain
+                        pasos={ruta.pasos}
+                        familiaLabel={familiaLabel}
+                      />
                     </td>
                     <td className="right">
                       <span className="tag version">v{ruta.versionActual}</span>
                     </td>
                     <td className="right">
-                      <span className={`tag usage ${ruta._count.productosAlternativas === 0 ? "zero" : ""}`}>
+                      <span
+                        className={`tag usage ${ruta._count.productosAlternativas === 0 ? "zero" : ""}`}
+                      >
                         <GitBranchIcon size={12} />
                         {ruta._count.productosAlternativas}
                       </span>
@@ -272,8 +367,8 @@ export function RutasTable({ initialRutas }: { initialRutas: RutaListItem[] }) {
             <AlertDialogHeader>
               <AlertDialogTitle>Duplicar ruta de producción</AlertDialogTitle>
               <AlertDialogDescription>
-                Definí el nombre de la copia. Se copiarán los pasos de la versión actual y el
-                sistema generará el código automáticamente.
+                Definí el nombre de la copia. Se copiarán los pasos de la
+                versión actual y el sistema generará el código automáticamente.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <div className="mt-4 grid gap-3">
@@ -289,7 +384,10 @@ export function RutasTable({ initialRutas }: { initialRutas: RutaListItem[] }) {
                 />
               </div>
               <div className="rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                Código sugerido: <span className="font-mono text-foreground">{codigoPreview}</span>
+                Código sugerido:{" "}
+                <span className="font-mono text-foreground">
+                  {codigoPreview}
+                </span>
               </div>
             </div>
             <AlertDialogFooter>

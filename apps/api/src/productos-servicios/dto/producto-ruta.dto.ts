@@ -102,6 +102,15 @@ export class UpsertMaquinaCandidataDto {
   maquinaId!: string;
 
   @IsOptional()
+  @IsUUID()
+  perfilDefaultId?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  modoColorAllowedModes?: string[];
+
+  @IsOptional()
   @IsBoolean()
   esPreferida?: boolean;
 

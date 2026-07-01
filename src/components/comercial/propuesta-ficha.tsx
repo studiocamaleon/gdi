@@ -29,7 +29,10 @@ import { toast } from "sonner";
 
 import type { ClienteDetalle } from "@/lib/clientes";
 import type { CurrentUser } from "@/lib/auth";
-import type { CargoDirectoCatalogo, ProductoListItem } from "@/lib/productos-servicios";
+import type {
+  CargoDirectoCatalogo,
+  ProductoListItem,
+} from "@/lib/productos-servicios";
 import {
   cotizar,
   recotizarCotizacionItem,
@@ -50,6 +53,7 @@ import {
 import { AgregarProductoSheet } from "@/components/comercial/agregar-producto-sheet";
 import { NestingViewer } from "@/components/nesting/nesting-viewer";
 import { listClientes } from "@/lib/clientes-api";
+import { getCurrentPeriodo } from "@/lib/costos";
 
 type PropuestaFichaProps = {
   initialClientes: ClienteDetalle[];
@@ -125,6 +129,17 @@ function getCotizacionImpuestos(cotizacion: CotizacionExitosa) {
     : 0;
 }
 
+function getCotizacionCantidadPrecio(
+  cotizacion: CotizacionExitosa,
+  itemCantidad: number,
+) {
+  return (
+    cotizacion.cantidadComercialPricing ??
+    cotizacion.cantidadEfectiva ??
+    itemCantidad
+  );
+}
+
 function getCotizacionPasos(cotizacion: CotizacionExitosa) {
   return cotizacion.pasos
     .filter((paso) => paso.activado)
@@ -136,6 +151,70 @@ function getCotizacionPasos(cotizacion: CotizacionExitosa) {
     }));
 }
 
+function getModoColorChannels(value: string) {
+  const normalized = value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+  const channels: Array<{ key: string; label: string; className: string }> = [];
+  const push = (key: string, label: string, className: string) => {
+    if (!channels.some((channel) => channel.key === key)) {
+      channels.push({ key, label, className });
+    }
+  };
+
+  if (normalized.includes("sin impresion")) {
+    return channels;
+  }
+  if (
+    normalized.includes("cmyk") ||
+    normalized.includes("color") ||
+    normalized.includes("cuatricrom")
+  ) {
+    push("c", "C", "cyan");
+    push("m", "M", "magenta");
+    push("y", "Y", "yellow");
+    push("k", "K", "black");
+  } else if (
+    normalized.includes("blanco y negro") ||
+    normalized.includes("byn") ||
+    normalized.includes("b/n") ||
+    normalized.includes("negro")
+  ) {
+    push("k", "K", "black");
+  }
+  if (normalized.includes("blanco")) {
+    push("w", "W", "white");
+  }
+  if (normalized.includes("barniz") || normalized.includes("varnish")) {
+    push("v", "V", "varnish");
+  }
+
+  return channels;
+}
+
+function ModoColorSpecValue({ value }: { value: string }) {
+  const channels = getModoColorChannels(value);
+
+  return (
+    <div className="op-color-mode-value">
+      {channels.length > 0 ? (
+        <span className="op-color-dots" aria-hidden="true">
+          {channels.map((channel) => (
+            <span
+              className={`op-color-dot ${channel.className}`}
+              key={channel.key}
+            >
+              {channel.label}
+            </span>
+          ))}
+        </span>
+      ) : null}
+      <span className="op-color-mode-text">{value}</span>
+    </div>
+  );
+}
+
 function applyCotizacionToItem(
   item: PropuestaItem,
   cotizacion: CotizacionExitosa,
@@ -144,7 +223,8 @@ function applyCotizacionToItem(
   const subtotal = getCotizacionNeto(cotizacion);
   const impuestoMonto = getCotizacionImpuestos(cotizacion);
   const total = getCotizacionTotal(cotizacion);
-  const impuestoPorcentaje = subtotal > 0 ? (impuestoMonto / subtotal) * 100 : 0;
+  const impuestoPorcentaje =
+    subtotal > 0 ? (impuestoMonto / subtotal) * 100 : 0;
 
   return {
     ...item,
@@ -202,11 +282,10 @@ function getSourcePiecesFromJobContext(
   });
 }
 
-function getPanelAxis(
-  nesting: NestingViewerInput,
-): "vertical" | "horizontal" {
-  const placementAxis = nesting.placements.find((placement) => placement.panelAxis)
-    ?.panelAxis;
+function getPanelAxis(nesting: NestingViewerInput): "vertical" | "horizontal" {
+  const placementAxis = nesting.placements.find(
+    (placement) => placement.panelAxis,
+  )?.panelAxis;
   if (placementAxis === "horizontal") return "horizontal";
   if (placementAxis === "vertical") return "vertical";
   return nesting.visualConfig?.panelizado?.axis === "horizontal"
@@ -225,7 +304,10 @@ function buildPanelLayoutFromNesting(
 ): PanelManualLayout | null {
   const sourcePieces = getSourcePiecesFromJobContext(item.jobContext);
   if (!sourcePieces.length) return null;
-  const placementsBySource = new Map<string, NestingViewerInput["placements"]>();
+  const placementsBySource = new Map<
+    string,
+    NestingViewerInput["placements"]
+  >();
   for (const placement of nesting.placements) {
     const sourcePieceId = inferSourcePieceId(placement.pieceId);
     const current = placementsBySource.get(sourcePieceId) ?? [];
@@ -260,9 +342,10 @@ function buildPanelLayoutFromNesting(
   return { items };
 }
 
-function buildFullPanel(
-  sourcePiece: { pieceWidthMm: number; pieceHeightMm: number },
-): PanelLayoutPanel {
+function buildFullPanel(sourcePiece: {
+  pieceWidthMm: number;
+  pieceHeightMm: number;
+}): PanelLayoutPanel {
   return {
     panelIndex: 1,
     usefulWidthMm: sourcePiece.pieceWidthMm,
@@ -284,11 +367,17 @@ function buildPanelFromPlacement(
   const overlapEndMm = Number(placement.overlapEndMm ?? 0);
   const usefulWidthMm =
     axis === "vertical"
-      ? Number(placement.usefulWidthMm ?? placement.widthMm - overlapStartMm - overlapEndMm)
+      ? Number(
+          placement.usefulWidthMm ??
+            placement.widthMm - overlapStartMm - overlapEndMm,
+        )
       : sourcePiece.pieceWidthMm;
   const usefulHeightMm =
     axis === "horizontal"
-      ? Number(placement.usefulHeightMm ?? placement.heightMm - overlapStartMm - overlapEndMm)
+      ? Number(
+          placement.usefulHeightMm ??
+            placement.heightMm - overlapStartMm - overlapEndMm,
+        )
       : sourcePiece.pieceHeightMm;
 
   return {
@@ -303,7 +392,10 @@ function buildPanelFromPlacement(
         : sourcePiece.pieceWidthMm,
     finalHeightMm:
       axis === "horizontal"
-        ? Math.max(1, Math.round(usefulHeightMm + overlapStartMm + overlapEndMm))
+        ? Math.max(
+            1,
+            Math.round(usefulHeightMm + overlapStartMm + overlapEndMm),
+          )
         : sourcePiece.pieceHeightMm,
   };
 }
@@ -344,19 +436,27 @@ function removePanelRuntimeOverride(
     typeof next.configPasoRuntime === "object" &&
     next.configPasoRuntime !== null &&
     !Array.isArray(next.configPasoRuntime)
-      ? ({ ...(next.configPasoRuntime as Record<string, unknown>) } as Record<string, unknown>)
+      ? ({ ...(next.configPasoRuntime as Record<string, unknown>) } as Record<
+          string,
+          unknown
+        >)
       : {};
   const stepRuntime =
     typeof runtime[configPasoId] === "object" &&
     runtime[configPasoId] !== null &&
     !Array.isArray(runtime[configPasoId])
-      ? ({ ...(runtime[configPasoId] as Record<string, unknown>) } as Record<string, unknown>)
+      ? ({ ...(runtime[configPasoId] as Record<string, unknown>) } as Record<
+          string,
+          unknown
+        >)
       : {};
   const nestingConfig =
     typeof stepRuntime.nestingConfig === "object" &&
     stepRuntime.nestingConfig !== null &&
     !Array.isArray(stepRuntime.nestingConfig)
-      ? ({ ...(stepRuntime.nestingConfig as Record<string, unknown>) } as Record<string, unknown>)
+      ? ({
+          ...(stepRuntime.nestingConfig as Record<string, unknown>),
+        } as Record<string, unknown>)
       : {};
   delete nestingConfig.panelizado;
   stepRuntime.nestingConfig = nestingConfig;
@@ -376,22 +476,31 @@ function applyPanelRuntimeOverride(args: {
     typeof next.configPasoRuntime === "object" &&
     next.configPasoRuntime !== null &&
     !Array.isArray(next.configPasoRuntime)
-      ? ({ ...(next.configPasoRuntime as Record<string, unknown>) } as Record<string, unknown>)
+      ? ({ ...(next.configPasoRuntime as Record<string, unknown>) } as Record<
+          string,
+          unknown
+        >)
       : {};
   const stepRuntime =
     typeof runtime[args.configPasoId] === "object" &&
     runtime[args.configPasoId] !== null &&
     !Array.isArray(runtime[args.configPasoId])
-      ? ({ ...(runtime[args.configPasoId] as Record<string, unknown>) } as Record<string, unknown>)
+      ? ({
+          ...(runtime[args.configPasoId] as Record<string, unknown>),
+        } as Record<string, unknown>)
       : {};
   const nestingConfig =
     typeof stepRuntime.nestingConfig === "object" &&
     stepRuntime.nestingConfig !== null &&
     !Array.isArray(stepRuntime.nestingConfig)
-      ? ({ ...(stepRuntime.nestingConfig as Record<string, unknown>) } as Record<string, unknown>)
+      ? ({
+          ...(stepRuntime.nestingConfig as Record<string, unknown>),
+        } as Record<string, unknown>)
       : {};
   const panelizado = args.nesting.visualConfig?.panelizado;
-  const axis = args.layout.items.find((item) => item.panels.length > 1)?.axis ?? "vertical";
+  const axis =
+    args.layout.items.find((item) => item.panels.length > 1)?.axis ??
+    "vertical";
   nestingConfig.panelizado = {
     enabled: true,
     mode: "manual",
@@ -417,7 +526,10 @@ function formatPlazoEntrega(fechaEstimada: string, fechaCreacion: string) {
   if (!estimated || !created) return "A definir";
 
   const dayMs = 24 * 60 * 60 * 1000;
-  const days = Math.max(0, Math.ceil((estimated.getTime() - created.getTime()) / dayMs));
+  const days = Math.max(
+    0,
+    Math.ceil((estimated.getTime() - created.getTime()) / dayMs),
+  );
   if (days === 0) return "Hoy";
   if (days === 1) return "1 dia";
   return `${days} dias`;
@@ -523,10 +635,7 @@ function sortClientesByName(clientes: ClienteDetalle[]) {
   return [...clientes].sort((a, b) => a.nombre.localeCompare(b.nombre));
 }
 
-function mergeClientes(
-  current: ClienteDetalle[],
-  incoming: ClienteDetalle[],
-) {
+function mergeClientes(current: ClienteDetalle[], incoming: ClienteDetalle[]) {
   const map = new Map<string, ClienteDetalle>();
   for (const cliente of [...current, ...incoming]) {
     map.set(cliente.id, cliente);
@@ -668,7 +777,11 @@ function ClienteCombobox({
               aria-label="Buscar cliente"
             />
             {query ? (
-              <button type="button" onClick={() => setQuery("")} aria-label="Limpiar búsqueda">
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                aria-label="Limpiar búsqueda"
+              >
                 <XIcon />
               </button>
             ) : null}
@@ -687,8 +800,9 @@ function ClienteCombobox({
                 <span className="cliente-option-main">
                   <strong>{cliente.nombre}</strong>
                   <small>
-                    {[cliente.razonSocial, cliente.email].filter(Boolean).join(" · ") ||
-                      "Sin datos adicionales"}
+                    {[cliente.razonSocial, cliente.email]
+                      .filter(Boolean)
+                      .join(" · ") || "Sin datos adicionales"}
                   </small>
                 </span>
                 {cliente.id === value ? <CheckIcon /> : null}
@@ -768,7 +882,10 @@ function CanalVentaSelect({
 
       {open ? (
         <div className="cliente-combobox-popover canal-combobox-popover">
-          <div className="cliente-combobox-results canal-combobox-results" role="listbox">
+          <div
+            className="cliente-combobox-results canal-combobox-results"
+            role="listbox"
+          >
             {CANALES_VENTA.map((canal) => (
               <button
                 key={canal.value}
@@ -811,6 +928,232 @@ function isDuplicateModoColorSpec(item: PropuestaItem, key: string) {
   return Boolean(value && modoColor && value === modoColor);
 }
 
+function normalizeSearchText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim();
+}
+
+function asDisplayText(value: unknown) {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return "";
+}
+
+function asDisplayNumber(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value.replace(",", "."));
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function formatVariantNumber(value: number) {
+  return new Intl.NumberFormat("es-AR", {
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function getAttrText(attrs: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = asDisplayText(attrs[key]);
+    if (value) return value;
+  }
+  return "";
+}
+
+function getAttrNumber(attrs: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = asDisplayNumber(attrs[key]);
+    if (value !== null) return value;
+  }
+  return null;
+}
+
+function getCommercialMaterialKind(material: MaterialCosteo) {
+  const templateId = normalizeSearchText(material.materiaPrimaTemplateId ?? "");
+  const tipoTecnico = normalizeSearchText(material.materiaPrimaTipoTecnico ?? "");
+  const attrs = material.atributosVarianteJson ?? {};
+  const combined = `${templateId} ${tipoTecnico}`;
+
+  if (combined.includes("sustrato_hoja")) return "sustrato_hoja";
+  if (combined.includes("laminado_film")) return "laminado_film";
+  if (combined.includes("laminado_pouch")) return "laminado_pouch";
+  if (combined.includes("vinilo_de_corte")) return "vinilo_de_corte";
+  if (combined.includes("sustrato_rollo")) return "sustrato_rollo";
+  if (combined.includes("sustrato_rigido")) return "sustrato_rigido";
+  if (combined.includes("film_transferencia")) return "film_transferencia";
+  if (combined.includes("papel_transferencia")) return "papel_transferencia";
+  if (combined.includes("toner")) return "toner";
+  if (combined.includes("tinta_impresion")) return "tinta_impresion";
+
+  if (attrs.formatoComercial && (attrs.gramaje ?? attrs.gramajeGr)) {
+    return "sustrato_hoja";
+  }
+  if ((attrs.micrones ?? attrs.espesorMicrones ?? attrs.espesor) && attrs.acabado) {
+    return "laminado_film";
+  }
+  return "generico";
+}
+
+function getMaterialVariantParts(material: MaterialCosteo) {
+  const attrs = material.atributosVarianteJson ?? {};
+  const kind = getCommercialMaterialKind(material);
+  const parts: string[] = [];
+  const push = (value: string) => {
+    if (value && !parts.some((part) => normalizeSearchText(part) === normalizeSearchText(value))) {
+      parts.push(value);
+    }
+  };
+
+  const gramaje = getAttrNumber(attrs, ["gramajeGr", "gramaje"]);
+  const acabado = getAttrText(attrs, ["acabado"]);
+  const color = getAttrText(attrs, ["color", "colorBase"]);
+  const micrones = getAttrNumber(attrs, [
+    "micrones",
+    "espesorMicrones",
+    "espesor",
+  ]);
+
+  if (kind === "sustrato_hoja") {
+    if (gramaje !== null) push(`${formatVariantNumber(gramaje)} g/m²`);
+    push(acabado);
+    if (color && normalizeSearchText(color) !== "blanco") push(color);
+  } else if (kind === "laminado_film" || kind === "laminado_pouch") {
+    if (micrones !== null) push(`${formatVariantNumber(micrones)} mic`);
+    push(acabado);
+    push(getAttrText(attrs, ["adhesivoTipo"]));
+  } else if (kind === "vinilo_de_corte") {
+    push(getAttrText(attrs, ["tipoVinilo"]));
+    push(color);
+    push(acabado);
+    push(getAttrText(attrs, ["adhesivoTipo"]));
+  } else if (kind === "sustrato_rollo") {
+    push(getAttrText(attrs, ["material", "tipoMaterial", "tipoVinilo"]));
+    push(color);
+    push(acabado);
+  } else if (kind === "sustrato_rigido") {
+    if (micrones !== null) push(`${formatVariantNumber(micrones)} mm`);
+    push(color);
+    push(getAttrText(attrs, ["material"]));
+  } else if (kind === "film_transferencia") {
+    push(getAttrText(attrs, ["tecnologiaCompatible"]));
+    if (micrones !== null) push(`${formatVariantNumber(micrones)} mic`);
+  } else if (kind === "papel_transferencia") {
+    if (gramaje !== null) push(`${formatVariantNumber(gramaje)} g/m²`);
+    push(getAttrText(attrs, ["ladoImprimible", "tecnologiaCompatible"]));
+  } else if (kind === "toner" || kind === "tinta_impresion") {
+    push(color);
+    push(getAttrText(attrs, ["tecnologiaCompatible", "equipoCompatible"]));
+  } else {
+    const commercialKeys = [
+      "material",
+      "tipoMaterial",
+      "gramaje",
+      "gramajeGr",
+      "espesor",
+      "espesorMicrones",
+      "micrones",
+      "color",
+      "colorBase",
+      "acabado",
+      "tipoVinilo",
+      "adhesivoTipo",
+    ];
+    for (const key of commercialKeys) {
+      const numberValue = asDisplayNumber(attrs[key]);
+      if (numberValue !== null) {
+        const suffix = key.toLowerCase().includes("gramaje")
+          ? " g/m²"
+          : key.toLowerCase().includes("mic")
+            ? " mic"
+            : "";
+        push(`${formatVariantNumber(numberValue)}${suffix}`);
+      } else {
+        push(asDisplayText(attrs[key]));
+      }
+    }
+  }
+
+  if (parts.length === 0) {
+    const fallback = material.materialDisplayName || material.materialNombre;
+    if (fallback && fallback !== material.materialSku) push(fallback);
+  }
+
+  return parts;
+}
+
+function getMaterialVariantOnlyLabel(material: MaterialCosteo) {
+  const parts = getMaterialVariantParts(material);
+  return parts.length > 0
+    ? parts.join(" · ")
+    : material.materialDisplayName || material.materialNombre;
+}
+
+function getMaterialCommercialLabel(material: MaterialCosteo) {
+  const attrs = material.atributosVarianteJson ?? {};
+  const materialName =
+    asDisplayText(attrs.material) ||
+    material.materiaPrimaNombre?.trim() ||
+    material.materialDisplayName?.trim() ||
+    material.materialNombre;
+  const variant = getMaterialVariantOnlyLabel(material);
+  const normalizedVariant = normalizeSearchText(variant);
+  const normalizedName = normalizeSearchText(materialName);
+  if (!variant || normalizedVariant === normalizedName) return materialName;
+  return `${materialName} · ${variant}`;
+}
+
+function getMainCommercialMaterial(item: PropuestaItem) {
+  const materiales = item.cotizacion.pasos
+    .filter((paso) => paso.activado)
+    .flatMap((paso) =>
+      (paso.materiales ?? []).map((material) => ({ paso, material })),
+    )
+    .filter(({ material }) => material.tipoLineaCosto === "MATERIAL");
+
+  const preferred = materiales.find(({ paso, material }) => {
+    const familia = normalizeSearchText(paso.familiaCodigo);
+    const slot = normalizeSearchText(material.slotCodigo);
+    return (
+      familia.includes("impresion") &&
+      ["sustrato", "papel", "pliego", "media", "material"].some((key) =>
+        slot.includes(key),
+      )
+    );
+  });
+
+  return preferred?.material ?? materiales[0]?.material ?? null;
+}
+
+function isMaterialSpecKey(key: string, label: string) {
+  const normalized = normalizeSearchText(`${key} ${label}`);
+  return normalized === "material" || normalized.includes(" material");
+}
+
+function getOptionalMaterialDetails(item: PropuestaItem, adicional: string) {
+  const adicionalNorm = normalizeSearchText(adicional);
+  const details = new Set<string>();
+
+  for (const paso of item.cotizacion.pasos) {
+    if (!paso.activado) continue;
+    const pasoLabel = paso.nombreVisible?.trim() || humanizeCodigo(paso.familiaCodigo);
+    const pasoNorm = normalizeSearchText(pasoLabel);
+    if (!pasoNorm || (!pasoNorm.includes(adicionalNorm) && !adicionalNorm.includes(pasoNorm))) {
+      continue;
+    }
+    for (const material of paso.materiales ?? []) {
+      if (material.tipoLineaCosto !== "MATERIAL") continue;
+      details.add(getMaterialVariantOnlyLabel(material));
+    }
+  }
+
+  return Array.from(details).filter(Boolean);
+}
+
 function formatCantidadCosto(value: number, unidad: string) {
   const unidadLabel = formatUnidadCosto(unidad, value);
   return `${value.toLocaleString("es-AR", {
@@ -821,7 +1164,9 @@ function formatCantidadCosto(value: number, unidad: string) {
 
 function formatCostoUnitarioMaterial(value: number, unidad: string) {
   const unidadLabel = formatUnidadCosto(unidad, 1);
-  return unidadLabel ? `${formatCurrency(value)} / ${unidadLabel}` : formatCurrency(value);
+  return unidadLabel
+    ? `${formatCurrency(value)} / ${unidadLabel}`
+    : formatCurrency(value);
 }
 
 function formatUnidadCosto(unidad: string, cantidad = 1) {
@@ -888,9 +1233,21 @@ function nestingTabLabel(result: NestingViewerInput | undefined) {
 
 function getCostBuckets(item: PropuestaItem) {
   return [
-    { key: "materiales", label: "Materiales", amount: item.cotizacion.costos.materialesTotal },
-    { key: "centro-costo", label: "Centro de costo", amount: item.cotizacion.costos.tiempoTotal },
-    { key: "cargos", label: "Cargos directos", amount: item.cotizacion.costos.cargosDirectosTotal },
+    {
+      key: "materiales",
+      label: "Materiales",
+      amount: item.cotizacion.costos.materialesTotal,
+    },
+    {
+      key: "centro-costo",
+      label: "Centro de costo",
+      amount: item.cotizacion.costos.tiempoTotal,
+    },
+    {
+      key: "cargos",
+      label: "Cargos directos",
+      amount: item.cotizacion.costos.cargosDirectosTotal,
+    },
   ].filter((bucket) => bucket.amount > 0);
 }
 
@@ -909,11 +1266,7 @@ function sumCargosPaso(paso: PasoCosteo) {
 }
 
 function getVisibleCostSteps(pasos: PasoCosteo[]) {
-  return pasos.filter(
-    (paso) =>
-      paso.activado ||
-      paso.costoTotal > 0,
-  );
+  return pasos.filter((paso) => paso.activado || paso.costoTotal > 0);
 }
 
 function formatTiempoPaso(paso: PasoCosteo) {
@@ -960,18 +1313,31 @@ function MaterialesPasoTable({ materiales }: { materiales: MaterialCosteo[] }) {
         </thead>
         <tbody>
           {visibles.map((material, index) => (
-            <tr key={`${material.slotCodigo}-${material.materialVarianteId}-${index}`}>
+            <tr
+              key={`${material.slotCodigo}-${material.materialVarianteId}-${index}`}
+            >
               <td>
-                <strong>{material.materialDisplayName || material.materialNombre}</strong>
+                <strong>
+                  {material.materialDisplayName || material.materialNombre}
+                </strong>
               </td>
               <td>
-                <span className="cost-chip">{formatModoSeleccion(material.modoSeleccion)}</span>
+                <span className="cost-chip">
+                  {formatModoSeleccion(material.modoSeleccion)}
+                </span>
               </td>
-              <td className="num">{formatCantidadCosto(material.cantidad, material.unidad)}</td>
               <td className="num">
-                {formatCostoUnitarioMaterial(material.precioUnitario, material.unidad)}
+                {formatCantidadCosto(material.cantidad, material.unidad)}
               </td>
-              <td className="num strong">{formatCurrency(material.costoTotal)}</td>
+              <td className="num">
+                {formatCostoUnitarioMaterial(
+                  material.precioUnitario,
+                  material.unidad,
+                )}
+              </td>
+              <td className="num strong">
+                {formatCurrency(material.costoTotal)}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -987,7 +1353,10 @@ function CargosPasoList({ cargos }: { cargos: CargoPasoCosteo[] }) {
   return (
     <div className="cost-charges">
       {visibles.map((cargo) => (
-        <div className="cost-charge" key={`${cargo.cargoCodigo}-${cargo.cargoNombre}`}>
+        <div
+          className="cost-charge"
+          key={`${cargo.cargoCodigo}-${cargo.cargoNombre}`}
+        >
           <span>{cargo.cargoNombre}</span>
           <small>{humanizeCodigo(cargo.modoCalculo)}</small>
           <strong>{formatCurrency(cargo.monto)}</strong>
@@ -1019,7 +1388,9 @@ function ProduccionItemView({
   }));
   const [activeNestingKey, setActiveNestingKey] = React.useState("");
   const activeNestingTab =
-    nestingTabs.find((tab) => tab.key === activeNestingKey) ?? nestingTabs[0] ?? null;
+    nestingTabs.find((tab) => tab.key === activeNestingKey) ??
+    nestingTabs[0] ??
+    null;
 
   React.useEffect(() => {
     if (nestingTabs.length === 0) return;
@@ -1058,7 +1429,8 @@ function ProduccionItemView({
         <div className="cost-title">Ruta de producción</div>
         <div className="production-route">
           {pasosActivos.map((paso, index) => {
-            const title = paso.nombreVisible?.trim() || humanizeCodigo(paso.familiaCodigo);
+            const title =
+              paso.nombreVisible?.trim() || humanizeCodigo(paso.familiaCodigo);
             const detail = paso.tiempo
               ? `${formatTiempoPaso(paso)} · ${getCentroCostoLabel(paso)}`
               : getCentroCostoLabel(paso);
@@ -1091,7 +1463,11 @@ function ProduccionItemView({
           </div>
           <div className="production-nestings">
             {nestingTabs.length > 1 ? (
-              <div className="production-nesting-tabs" role="tablist" aria-label="Nesting del item">
+              <div
+                className="production-nesting-tabs"
+                role="tablist"
+                aria-label="Nesting del item"
+              >
                 {nestingTabs.map((tab) => {
                   const selected = tab.key === activeNestingTab?.key;
                   return (
@@ -1110,10 +1486,7 @@ function ProduccionItemView({
               </div>
             ) : null}
             {activeNestingTab ? (
-              <div
-                className="production-nesting"
-                key={activeNestingTab.key}
-              >
+              <div className="production-nesting" key={activeNestingTab.key}>
                 {isPanelEditableStep(activeNestingTab.paso) ? (
                   <div className="mb-3 flex justify-end">
                     <button
@@ -1130,7 +1503,8 @@ function ProduccionItemView({
                   result={activeNestingTab.paso.nestingResult!}
                   costingDetails={activeNestingTab.paso.materiales ?? []}
                   maxPx={
-                    activeNestingTab.paso.nestingResult?.substrates[0]?.kind === "sheet"
+                    activeNestingTab.paso.nestingResult?.substrates[0]?.kind ===
+                    "sheet"
                       ? 420
                       : 560
                   }
@@ -1192,7 +1566,9 @@ function PanelesManualEditor({
     setSelectedId(editableSourceIds[0] ?? "");
   }, [baseLayout, editableSourceIds]);
 
-  const selected = layout?.items.find((layoutItem) => layoutItem.sourcePieceId === selectedId);
+  const selected = layout?.items.find(
+    (layoutItem) => layoutItem.sourcePieceId === selectedId,
+  );
   const panelizado = paso.nestingResult.visualConfig?.panelizado;
   const overlapMm = Number(panelizado?.overlapMm ?? 0);
   const printableLimit =
@@ -1206,7 +1582,7 @@ function PanelesManualEditor({
   const totalAxis =
     selected?.axis === "horizontal"
       ? selected.pieceHeightMm
-      : selected?.pieceWidthMm ?? 0;
+      : (selected?.pieceWidthMm ?? 0);
   const invalidMessage = selected
     ? getManualLayoutInvalidMessage(selected, printableLimit)
     : "No hay piezas panelizadas editables.";
@@ -1261,7 +1637,9 @@ function PanelesManualEditor({
       <PanelEditorShell title="Editar paneles" onClose={onClose}>
         <div className="op-empty">
           <div className="ttl">No se pudo reconstruir el panelizado</div>
-          <div className="sub">El item no tiene piezas suficientes para armar un layout manual.</div>
+          <div className="sub">
+            El item no tiene piezas suficientes para armar un layout manual.
+          </div>
         </div>
       </PanelEditorShell>
     );
@@ -1295,13 +1673,18 @@ function PanelesManualEditor({
                 : "Sin pieza seleccionada"}
             </strong>
             <span>
-              {selected?.axis === "horizontal" ? "Paneles horizontales" : "Paneles verticales"}
+              {selected?.axis === "horizontal"
+                ? "Paneles horizontales"
+                : "Paneles verticales"}
             </span>
           </div>
 
           <div className="panel-bar" ref={barRef}>
             {selected?.panels.map((panel, index) => {
-              const size = selected.axis === "vertical" ? panel.usefulWidthMm : panel.usefulHeightMm;
+              const size =
+                selected.axis === "vertical"
+                  ? panel.usefulWidthMm
+                  : panel.usefulHeightMm;
               const pct = totalAxis > 0 ? (size / totalAxis) * 100 : 0;
               return (
                 <div
@@ -1323,7 +1706,9 @@ function PanelesManualEditor({
                       onPointerDown={(event) => {
                         event.preventDefault();
                         dragIndex.current = index;
-                        event.currentTarget.setPointerCapture?.(event.pointerId);
+                        event.currentTarget.setPointerCapture?.(
+                          event.pointerId,
+                        );
                       }}
                     />
                   ) : null}
@@ -1337,7 +1722,8 @@ function PanelesManualEditor({
               <div key={panel.panelIndex}>
                 <span>Panel {panel.panelIndex}</span>
                 <strong>
-                  {formatMmAsCm(panel.finalWidthMm)} x {formatMmAsCm(panel.finalHeightMm)} cm
+                  {formatMmAsCm(panel.finalWidthMm)} x{" "}
+                  {formatMmAsCm(panel.finalHeightMm)} cm
                 </strong>
               </div>
             ))}
@@ -1350,7 +1736,12 @@ function PanelesManualEditor({
       </div>
 
       <div className="panel-editor-actions">
-        <button type="button" className="btn" onClick={onClose} disabled={saving}>
+        <button
+          type="button"
+          className="btn"
+          onClick={onClose}
+          disabled={saving}
+        >
           Cancelar
         </button>
         <button
@@ -1407,10 +1798,12 @@ function getManualLayoutInvalidMessage(
 ) {
   const usefulTotal = item.panels.reduce(
     (acc, panel) =>
-      acc + (item.axis === "vertical" ? panel.usefulWidthMm : panel.usefulHeightMm),
+      acc +
+      (item.axis === "vertical" ? panel.usefulWidthMm : panel.usefulHeightMm),
     0,
   );
-  const expected = item.axis === "vertical" ? item.pieceWidthMm : item.pieceHeightMm;
+  const expected =
+    item.axis === "vertical" ? item.pieceWidthMm : item.pieceHeightMm;
   if (Math.abs(usefulTotal - expected) > 1) {
     return "La suma de paneles no coincide con la medida original.";
   }
@@ -1429,6 +1822,357 @@ function formatMmAsCm(value: number) {
   return new Intl.NumberFormat("es-AR", {
     maximumFractionDigits: 1,
   }).format(value / 10);
+}
+
+function formatDecimal(value: number, maximumFractionDigits = 2) {
+  return new Intl.NumberFormat("es-AR", {
+    maximumFractionDigits,
+  }).format(value);
+}
+
+type PricePieceRow = {
+  key: string;
+  label: string;
+  cantidad: number;
+  baseLabel: string;
+  netoAsignado: number;
+  brutoAsignado: number;
+  netoUnitario: number;
+};
+
+type CommercialPriceDetail = {
+  precioNeto: number;
+  precioBruto: number;
+  impuestos: number;
+  cantidadPrecio: number;
+  precioPromedioNeto: number;
+  precioPromedioBruto: number;
+  unidadLabel: string;
+  pieceRows: PricePieceRow[];
+  asignacionLabel: string;
+  materiales: Array<{
+    key: string;
+    nombre: string;
+    cantidad: number;
+    unidad: string;
+    costo: number;
+  }>;
+  cargos: Array<{ key: string; nombre: string; monto: number; origen: string }>;
+};
+
+function getCommercialPieceRows(
+  item: PropuestaItem,
+  precioNeto: number,
+  precioBruto: number,
+): { rows: PricePieceRow[]; asignacionLabel: string } {
+  const piezas = Array.isArray(item.jobContext?.piezas)
+    ? (item.jobContext.piezas as Array<{
+        cantidad?: unknown;
+        anchoMm?: unknown;
+        altoMm?: unknown;
+      }>)
+    : [];
+  const normalized = piezas
+    .map((pieza, index) => {
+      const cantidad = Math.max(1, Number(pieza.cantidad ?? 0) || 0);
+      const anchoMm = Number(pieza.anchoMm ?? 0);
+      const altoMm = Number(pieza.altoMm ?? 0);
+      const areaM2 =
+        anchoMm > 0 && altoMm > 0
+          ? (cantidad * anchoMm * altoMm) / 1_000_000
+          : 0;
+      const metrosLineales = altoMm > 0 ? (cantidad * altoMm) / 1000 : 0;
+      return { index, cantidad, anchoMm, altoMm, areaM2, metrosLineales };
+    })
+    .filter((pieza) => pieza.cantidad > 0);
+
+  if (normalized.length === 0) {
+    return { rows: [], asignacionLabel: "Promedio comercial" };
+  }
+
+  const totalArea = normalized.reduce((acc, pieza) => acc + pieza.areaM2, 0);
+  const totalMl = normalized.reduce(
+    (acc, pieza) => acc + pieza.metrosLineales,
+    0,
+  );
+  const totalCantidad = normalized.reduce(
+    (acc, pieza) => acc + pieza.cantidad,
+    0,
+  );
+  const allocationMode =
+    item.unidadMedida === "metro_lineal" && totalMl > 0
+      ? "ml"
+      : totalArea > 0
+        ? "area"
+        : "cantidad";
+  const totalBase =
+    allocationMode === "ml"
+      ? totalMl
+      : allocationMode === "area"
+        ? totalArea
+        : totalCantidad;
+  const asignacionLabel =
+    allocationMode === "ml"
+      ? "Proporcional por metro lineal"
+      : allocationMode === "area"
+        ? "Proporcional por superficie"
+        : "Proporcional por cantidad";
+
+  return {
+    asignacionLabel,
+    rows: normalized.map((pieza) => {
+      const base =
+        allocationMode === "ml"
+          ? pieza.metrosLineales
+          : allocationMode === "area"
+            ? pieza.areaM2
+            : pieza.cantidad;
+      const weight = totalBase > 0 ? base / totalBase : 0;
+      const netoAsignado = precioNeto * weight;
+      const brutoAsignado = precioBruto * weight;
+      const baseLabel =
+        allocationMode === "ml"
+          ? `${formatDecimal(base)} ml`
+          : allocationMode === "area"
+            ? `${formatDecimal(base)} m²`
+            : `${formatDecimal(base, 0)} u.`;
+      const medidaLabel =
+        pieza.anchoMm > 0 && pieza.altoMm > 0
+          ? `${formatMmAsCm(pieza.anchoMm)} × ${formatMmAsCm(pieza.altoMm)} cm`
+          : "Medida sin definir";
+
+      return {
+        key: `piece-price-${pieza.index}`,
+        label: medidaLabel,
+        cantidad: pieza.cantidad,
+        baseLabel,
+        netoAsignado,
+        brutoAsignado,
+        netoUnitario: pieza.cantidad > 0 ? netoAsignado / pieza.cantidad : 0,
+      };
+    }),
+  };
+}
+
+function buildCommercialPriceDetail(
+  item: PropuestaItem,
+): CommercialPriceDetail {
+  const precioNeto = item.subtotal;
+  const precioBruto = getCotizacionTotal(item.cotizacion);
+  const impuestos = getCotizacionImpuestos(item.cotizacion);
+  const cantidadPrecio = getCotizacionCantidadPrecio(
+    item.cotizacion,
+    item.cantidad,
+  );
+  const { rows: pieceRows, asignacionLabel } = getCommercialPieceRows(
+    item,
+    precioNeto,
+    precioBruto,
+  );
+  const cargosPaso = item.cotizacion.pasos.flatMap((paso) =>
+    (paso.cargosDirectosPaso ?? [])
+      .filter((cargo) => cargo.monto > 0)
+      .map((cargo) => ({
+        key: `paso-${paso.configPasoId}-${cargo.cargoCodigo}`,
+        nombre: cargo.cargoNombre,
+        monto: cargo.monto,
+        origen:
+          paso.nombreVisible?.trim() || humanizeCodigo(paso.familiaCodigo),
+      })),
+  );
+  const cargosCotizacion = item.cotizacion.cargosDirectosCotizacion
+    .filter((cargo) => cargo.monto > 0)
+    .map((cargo) => ({
+      key: `cotizacion-${cargo.cargoCodigo}`,
+      nombre: cargo.cargoNombre,
+      monto: cargo.monto,
+      origen: "Cotización",
+    }));
+  const materialesMap = new Map<
+    string,
+    {
+      key: string;
+      nombre: string;
+      cantidad: number;
+      unidad: string;
+      costo: number;
+    }
+  >();
+  for (const material of item.cotizacion.pasos.flatMap(
+    (paso) => paso.materiales ?? [],
+  )) {
+    if (material.costoTotal <= 0) continue;
+    const nombre =
+      material.materialDisplayName?.trim() ||
+      material.materialNombre?.trim() ||
+      material.materiaPrimaNombre?.trim() ||
+      "Material";
+    const key = `${nombre}-${material.unidad}`;
+    const current = materialesMap.get(key) ?? {
+      key,
+      nombre,
+      cantidad: 0,
+      unidad: material.unidad,
+      costo: 0,
+    };
+    current.cantidad += material.cantidad;
+    current.costo += material.costoTotal;
+    materialesMap.set(key, current);
+  }
+
+  return {
+    precioNeto,
+    precioBruto,
+    impuestos,
+    cantidadPrecio,
+    precioPromedioNeto: cantidadPrecio > 0 ? precioNeto / cantidadPrecio : 0,
+    precioPromedioBruto: cantidadPrecio > 0 ? precioBruto / cantidadPrecio : 0,
+    unidadLabel: formatUnidad(item.unidadMedida),
+    pieceRows,
+    asignacionLabel,
+    materiales: Array.from(materialesMap.values()).sort(
+      (a, b) => b.costo - a.costo,
+    ),
+    cargos: [...cargosPaso, ...cargosCotizacion],
+  };
+}
+
+function CommercialPriceDetailPanel({
+  item,
+  detail,
+}: {
+  item: PropuestaItem;
+  detail: CommercialPriceDetail;
+}) {
+  return (
+    <div className="op-price-detail">
+      <div className="op-price-detail-head">
+        <div>
+          <div className="op-price-title">Detalle comercial del precio</div>
+          <div className="op-price-sub">
+            {detail.asignacionLabel}. El motor calcula el precio a nivel ítem.
+          </div>
+        </div>
+        <span className="op-price-badge">Estimado proporcional</span>
+      </div>
+
+      <div className="op-price-kpis">
+        <div className="op-price-kpi">
+          <span>Precio neto</span>
+          <strong>{formatCurrency(detail.precioNeto)}</strong>
+        </div>
+        <div className="op-price-kpi">
+          <span>Impuestos</span>
+          <strong>{formatCurrency(detail.impuestos)}</strong>
+        </div>
+        <div className="op-price-kpi">
+          <span>Total con impuestos</span>
+          <strong>{formatCurrency(detail.precioBruto)}</strong>
+        </div>
+        <div className="op-price-kpi">
+          <span>Promedio por {detail.unidadLabel}</span>
+          <strong>{formatCurrency(detail.precioPromedioBruto)}</strong>
+        </div>
+      </div>
+
+      {detail.pieceRows.length > 0 ? (
+        <div className="op-price-table-wrap">
+          <table className="op-price-table">
+            <thead>
+              <tr>
+                <th>Pieza</th>
+                <th className="num">Cant.</th>
+                <th className="num">Base</th>
+                <th className="num">Neto asignado</th>
+                <th className="num">Neto por pieza</th>
+                <th className="num">Total c/imp.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {detail.pieceRows.map((row) => (
+                <tr key={row.key}>
+                  <td>{row.label}</td>
+                  <td className="num">{formatDecimal(row.cantidad, 0)}</td>
+                  <td className="num">{row.baseLabel}</td>
+                  <td className="num">{formatCurrency(row.netoAsignado)}</td>
+                  <td className="num">{formatCurrency(row.netoUnitario)}</td>
+                  <td className="num">{formatCurrency(row.brutoAsignado)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="op-price-note">
+          No hay piezas con medidas para distribuir el precio. Se muestra el
+          promedio por {detail.unidadLabel}.
+        </div>
+      )}
+
+      {detail.materiales.length > 0 ? (
+        <div className="op-price-materials">
+          <div className="op-price-list-title">Materiales costeados</div>
+          <div className="op-price-material-grid">
+            {detail.materiales.map((material) => (
+              <div className="op-price-material" key={material.key}>
+                <span>{material.nombre}</span>
+                <small>
+                  {formatDecimal(material.cantidad)} {material.unidad}
+                </small>
+                <strong>{formatCurrency(material.costo)}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="op-price-lists">
+        <div>
+          <div className="op-price-list-title">Opcionales activados</div>
+          <div className="op-chips">
+            {item.adicionales.length > 0 ? (
+              item.adicionales.map((adicional) => {
+                const details = getOptionalMaterialDetails(item, adicional);
+                return (
+                  <span key={adicional} className="adi-chip-detail neutral">
+                    <span className="adi-chip">{adicional}</span>
+                    {details.length > 0 ? (
+                      <span className="adi-chip-variant">
+                        {details.join(" · ")}
+                      </span>
+                    ) : null}
+                  </span>
+                );
+              })
+            ) : (
+              <span className="adi-chip neutral">Sin opcionales activados</span>
+            )}
+          </div>
+        </div>
+        <div>
+          <div className="op-price-list-title">Cargos con monto explícito</div>
+          {detail.cargos.length > 0 ? (
+            <div className="op-price-charge-list">
+              {detail.cargos.map((cargo) => (
+                <div className="op-price-charge" key={cargo.key}>
+                  <span>
+                    {cargo.nombre}
+                    <small>{cargo.origen}</small>
+                  </span>
+                  <strong>{formatCurrency(cargo.monto)}</strong>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="op-price-note compact">
+              No hay cargos separados en el snapshot. Los opcionales productivos
+              quedan incluidos dentro del precio del ítem.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function PasoCostDetail({ paso }: { paso: PasoCosteo }) {
@@ -1456,16 +2200,34 @@ function PasoCostDetail({ paso }: { paso: PasoCosteo }) {
 function CostosItemView({
   item,
   costo,
-  margen,
   calculoPendiente,
 }: {
   item: PropuestaItem;
   costo: number;
-  margen: number;
   calculoPendiente: boolean;
 }) {
   const precioNeto = item.subtotal;
-  const margenMonto = precioNeto - costo;
+  const precioBruto = getCotizacionTotal(item.cotizacion);
+  const desglosePrecio = item.cotizacion.desglosePrecio;
+  const cantidadPrecio = getCotizacionCantidadPrecio(
+    item.cotizacion,
+    item.cantidad,
+  );
+  const precioBaseTotal = desglosePrecio
+    ? desglosePrecio.precioBase * cantidadPrecio
+    : precioNeto;
+  const comisionesTotal = desglosePrecio
+    ? desglosePrecio.totalComisiones * cantidadPrecio
+    : 0;
+  const impuestosTotal = getCotizacionImpuestos(item.cotizacion);
+  const margenPrecioMonto = precioBaseTotal - costo;
+  const margenPrecioPct =
+    precioBruto > 0 ? (margenPrecioMonto / precioBruto) * 100 : 0;
+  const costoPrecioPct = precioBruto > 0 ? (costo / precioBruto) * 100 : 0;
+  const comisionesPrecioPct =
+    precioBruto > 0 ? (comisionesTotal / precioBruto) * 100 : 0;
+  const impuestosPrecioPct =
+    precioBruto > 0 ? (impuestosTotal / precioBruto) * 100 : 0;
   const costoUnitario = item.cantidad > 0 ? costo / item.cantidad : 0;
   const buckets = getCostBuckets(item);
   const cargosPaso = item.cotizacion.pasos
@@ -1503,23 +2265,32 @@ function CostosItemView({
   return (
     <div className="op-costs">
       <div className="cost-hero">
-        <div>
-          <div className="cost-eyebrow">Costeo del Motor Universal</div>
-          <div className="cost-main">{formatCurrency(costo)}</div>
-          <div className="cost-sub">
-            Costo por {formatUnidad(item.unidadMedida)}: {formatCurrency(costoUnitario)} ·{" "}
-            Cantidad: {formatCantidadItem(item)} {formatUnidad(item.unidadMedida)}
-          </div>
+        <div className="cost-metric primary">
+          <span>Costo operativo</span>
+          <strong>{formatCurrency(costo)}</strong>
+          <small>
+            {costoPrecioPct.toFixed(0)}% del precio · Costo por{" "}
+            {formatUnidad(item.unidadMedida)}: {formatCurrency(costoUnitario)} ·{" "}
+            Cantidad: {formatCantidadItem(item)}{" "}
+            {formatUnidad(item.unidadMedida)}
+          </small>
         </div>
-        <div className="cost-margin">
+        <div className="cost-metric">
           <span>Margen bruto</span>
-          <strong className={margen < 25 ? "warn" : ""}>{margen.toFixed(1)}%</strong>
-          <small>{formatCurrency(margenMonto)}</small>
+          <strong className={margenPrecioPct < 25 ? "warn" : ""}>
+            {formatCurrency(margenPrecioMonto)}
+          </strong>
+          <small>{margenPrecioPct.toFixed(0)}% del precio</small>
         </div>
-        <div className="cost-margin">
-          <span>Precio neto</span>
-          <strong>{formatCurrency(precioNeto)}</strong>
-          <small>sin impuestos</small>
+        <div className="cost-metric">
+          <span>Comisiones</span>
+          <strong>{formatCurrency(comisionesTotal)}</strong>
+          <small>{comisionesPrecioPct.toFixed(0)}% del precio</small>
+        </div>
+        <div className="cost-metric">
+          <span>Impuestos</span>
+          <strong>{formatCurrency(impuestosTotal)}</strong>
+          <small>{impuestosPrecioPct.toFixed(0)}% del precio</small>
         </div>
       </div>
 
@@ -1535,7 +2306,9 @@ function CostosItemView({
                   <strong>{formatCurrency(bucket.amount)}</strong>
                 </div>
                 <div className="cost-bar-track">
-                  <span style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
+                  <span
+                    style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
+                  />
                 </div>
                 <div className="cost-bar-pct">{pct.toFixed(0)}%</div>
               </div>
@@ -1545,95 +2318,103 @@ function CostosItemView({
       </div>
 
       <div className="cost-section">
-          <div className="cost-title">Desglose por paso</div>
-          <div className="cost-steps-table-wrap">
-            <table className="cost-steps-table">
-              <thead>
-                <tr>
-                  <th>Paso</th>
-                  <th>Centro de costo</th>
-                  <th className="num">Tiempo</th>
-                  <th className="num">Materiales</th>
-                  <th className="num">Cargos</th>
-                  <th className="num">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleCostSteps.map((paso, visibleIndex) => {
-                  const stepKey = `${paso.rutaPasoOrden}-${paso.familiaCodigo}`;
-                  const materialesTotal = sumMaterialesPaso(paso);
-                  const cargosTotal = sumCargosPaso(paso);
-                  const centroCostoTotal = paso.tiempo?.costo ?? 0;
-                  const puedeExpandir =
-                    paso.activado &&
-                    (Boolean(paso.tiempo) ||
-                      (paso.materiales?.length ?? 0) > 0 ||
-                      (paso.cargosDirectosPaso?.length ?? 0) > 0);
-                  const expanded = expandedCostSteps.has(stepKey);
-                  return (
-                    <React.Fragment key={stepKey}>
-                      <tr
-                        className={`${paso.activado ? "" : "muted-row"} ${
-                          puedeExpandir ? "clickable" : ""
-                        } ${expanded ? "open" : ""}`}
-                        onClick={puedeExpandir ? () => toggleCostStep(stepKey) : undefined}
-                      >
-                        <td>
-                          <div className="cost-step-name">
-                            <span className="cost-step-title">
-                              {puedeExpandir ? (
-                                <ChevronRightIcon
-                                  className="cost-row-chevron"
-                                  aria-hidden="true"
-                                />
-                              ) : null}
-                              <span>
-                                {visibleIndex + 1}.{" "}
-                                {paso.nombreVisible?.trim() ||
-                                  humanizeCodigo(paso.familiaCodigo)}
-                              </span>
+        <div className="cost-title">Desglose por paso</div>
+        <div className="cost-steps-table-wrap">
+          <table className="cost-steps-table">
+            <thead>
+              <tr>
+                <th>Paso</th>
+                <th>Centro de costo</th>
+                <th className="num">Tiempo</th>
+                <th className="num">Materiales</th>
+                <th className="num">Cargos</th>
+                <th className="num">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleCostSteps.map((paso, visibleIndex) => {
+                const stepKey = `${paso.rutaPasoOrden}-${paso.familiaCodigo}`;
+                const materialesTotal = sumMaterialesPaso(paso);
+                const cargosTotal = sumCargosPaso(paso);
+                const centroCostoTotal = paso.tiempo?.costo ?? 0;
+                const puedeExpandir =
+                  paso.activado &&
+                  (Boolean(paso.tiempo) ||
+                    (paso.materiales?.length ?? 0) > 0 ||
+                    (paso.cargosDirectosPaso?.length ?? 0) > 0);
+                const expanded = expandedCostSteps.has(stepKey);
+                return (
+                  <React.Fragment key={stepKey}>
+                    <tr
+                      className={`${paso.activado ? "" : "muted-row"} ${
+                        puedeExpandir ? "clickable" : ""
+                      } ${expanded ? "open" : ""}`}
+                      onClick={
+                        puedeExpandir
+                          ? () => toggleCostStep(stepKey)
+                          : undefined
+                      }
+                    >
+                      <td>
+                        <div className="cost-step-name">
+                          <span className="cost-step-title">
+                            {puedeExpandir ? (
+                              <ChevronRightIcon
+                                className="cost-row-chevron"
+                                aria-hidden="true"
+                              />
+                            ) : null}
+                            <span>
+                              {visibleIndex + 1}.{" "}
+                              {paso.nombreVisible?.trim() ||
+                                humanizeCodigo(paso.familiaCodigo)}
                             </span>
-                          </div>
-                        </td>
-                        <td>
-                          <div className="cost-step-center">
-                            <strong>{getCentroCostoLabel(paso)}</strong>
-                            <span>{formatTarifaCentroCosto(paso)}</span>
-                          </div>
-                        </td>
-                        <td className="num">
-                          {paso.tiempo ? (
-                            <>
-                              <strong>{formatCurrency(centroCostoTotal)}</strong>
-                              <span>{formatTiempoPaso(paso)}</span>
-                            </>
-                          ) : (
-                            <span>-</span>
-                          )}
-                        </td>
-                        <td className="num">
-                          {materialesTotal > 0 ? formatCurrency(materialesTotal) : "-"}
-                        </td>
-                        <td className="num">
-                          {cargosTotal > 0 ? formatCurrency(cargosTotal) : "-"}
-                        </td>
-                        <td className="num strong">
-                          {paso.costoTotal > 0 ? formatCurrency(paso.costoTotal) : "-"}
+                          </span>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="cost-step-center">
+                          <strong>{getCentroCostoLabel(paso)}</strong>
+                          <span>{formatTarifaCentroCosto(paso)}</span>
+                        </div>
+                      </td>
+                      <td className="num">
+                        {paso.tiempo ? (
+                          <>
+                            <strong>{formatCurrency(centroCostoTotal)}</strong>
+                            <span>{formatTiempoPaso(paso)}</span>
+                          </>
+                        ) : (
+                          <span>-</span>
+                        )}
+                      </td>
+                      <td className="num">
+                        {materialesTotal > 0
+                          ? formatCurrency(materialesTotal)
+                          : "-"}
+                      </td>
+                      <td className="num">
+                        {cargosTotal > 0 ? formatCurrency(cargosTotal) : "-"}
+                      </td>
+                      <td className="num strong">
+                        {paso.costoTotal > 0
+                          ? formatCurrency(paso.costoTotal)
+                          : "-"}
+                      </td>
+                    </tr>
+                    {puedeExpandir && expanded ? (
+                      <tr className="cost-step-detail-row">
+                        <td colSpan={6}>
+                          <PasoCostDetail paso={paso} />
                         </td>
                       </tr>
-                      {puedeExpandir && expanded ? (
-                        <tr className="cost-step-detail-row">
-                          <td colSpan={6}>
-                            <PasoCostDetail paso={paso} />
-                          </td>
-                        </tr>
-                      ) : null}
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                    ) : null}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {cargosPaso.length > 0 || cargosCotizacion.length > 0 ? (
@@ -1648,7 +2429,10 @@ function CostosItemView({
               </div>
             ))}
             {cargosCotizacion.map((cargo) => (
-              <div className="cost-charge" key={`cotizacion-${cargo.cargoCodigo}`}>
+              <div
+                className="cost-charge"
+                key={`cotizacion-${cargo.cargoCodigo}`}
+              >
                 <span>{cargo.cargoNombre}</span>
                 <small>Cotización</small>
                 <strong>{formatCurrency(cargo.monto)}</strong>
@@ -1683,10 +2467,27 @@ function ProductRow({
   fechaEstimada: string;
 }) {
   const [innerTab, setInnerTab] = React.useState<InnerTab>("specs");
+  const [priceDetailOpen, setPriceDetailOpen] = React.useState(false);
   const fechaInputRef = React.useRef<HTMLInputElement | null>(null);
   const costo = calcularCostoTotal(item);
   const calculoPendiente = item.precioUnitario === 0 && item.total === 0;
-  const margen = item.subtotal > 0 ? ((item.subtotal - costo) / item.subtotal) * 100 : 0;
+  const margen =
+    item.subtotal > 0 ? ((item.subtotal - costo) / item.subtotal) * 100 : 0;
+  const commercialPriceDetail = React.useMemo(
+    () => buildCommercialPriceDetail(item),
+    [item],
+  );
+  const mainMaterial = React.useMemo(() => getMainCommercialMaterial(item), [item]);
+  const optionalMaterialDetails = React.useMemo(
+    () =>
+      new Map(
+        item.adicionales.map((adicional) => [
+          adicional,
+          getOptionalMaterialDetails(item, adicional),
+        ]),
+      ),
+    [item],
+  );
   const specs = item.atributosSchema
     .filter(
       (attr) =>
@@ -1697,7 +2498,10 @@ function ProductRow({
     .sort((a, b) => a.orden - b.orden)
     .map((attr) => ({
       lbl: attr.label,
-      val: item.especificaciones[attr.key] ?? "A definir",
+      val:
+        mainMaterial && isMaterialSpecKey(attr.key, attr.label)
+          ? getMaterialCommercialLabel(mainMaterial)
+          : item.especificaciones[attr.key] ?? "A definir",
     }));
 
   return (
@@ -1717,7 +2521,8 @@ function ProductRow({
           <div className="cd">
             <span className="code">{item.productoCodigo}</span>
             <span className="fam">
-              {item.categoriaComercialNombre} · {item.subcategoriaComercialNombre}
+              {item.categoriaComercialNombre} ·{" "}
+              {item.subcategoriaComercialNombre}
             </span>
           </div>
         </div>
@@ -1725,9 +2530,15 @@ function ProductRow({
           <span className="v">{formatCantidadItem(item)}</span>
           <span className="u">{formatUnidad(item.unidadMedida)}</span>
         </div>
-        <div className="num">{calculoPendiente ? "A cotizar" : formatCurrency(item.subtotal)}</div>
-        <div className="num">{calculoPendiente ? "-" : formatCurrency(item.impuestoMonto)}</div>
-        <div className="num total">{calculoPendiente ? "Pendiente" : formatCurrency(item.total)}</div>
+        <div className="num">
+          {calculoPendiente ? "A cotizar" : formatCurrency(item.subtotal)}
+        </div>
+        <div className="num">
+          {calculoPendiente ? "-" : formatCurrency(item.impuestoMonto)}
+        </div>
+        <div className="num total">
+          {calculoPendiente ? "Pendiente" : formatCurrency(item.total)}
+        </div>
         <span
           className="x"
           role="button"
@@ -1784,15 +2595,65 @@ function ProductRow({
           {innerTab === "specs" ? (
             <>
               <div className="op-specs">
-                {specs.map((spec) => (
-                  <div className="spec" key={spec.lbl}>
-                    <div className="lbl">{spec.lbl}</div>
-                    <div className={`val ${spec.lbl.toLowerCase().includes("medida") ? "multi" : ""}`}>
-                      {spec.val}
+                {specs.map((spec) => {
+                  const isMedidasSpec = spec.lbl
+                    .toLowerCase()
+                    .includes("medida");
+                  const isModoColorSpec = spec.lbl
+                    .toLowerCase()
+                    .includes("modo de color");
+                  return (
+                    <div
+                      className={`spec ${isMedidasSpec ? "with-action" : ""} ${
+                        isModoColorSpec ? "color-mode-spec" : ""
+                      }`}
+                      key={spec.lbl}
+                    >
+                      <div className="spec-head">
+                        <div className="lbl">{spec.lbl}</div>
+                        {isMedidasSpec ? (
+                          <button
+                            type="button"
+                            className={`op-price-detail-trigger ${
+                              priceDetailOpen ? "on" : ""
+                            }`}
+                            onClick={() =>
+                              setPriceDetailOpen((current) => !current)
+                            }
+                            disabled={calculoPendiente}
+                            aria-label={
+                              priceDetailOpen
+                                ? "Ocultar detalle de precio"
+                                : "Ver detalle de precio"
+                            }
+                            title={
+                              priceDetailOpen
+                                ? "Ocultar detalle de precio"
+                                : "Ver detalle de precio"
+                            }
+                          >
+                            <CircleDollarSignIcon />
+                          </button>
+                        ) : null}
+                      </div>
+                      <div className={`val ${isMedidasSpec ? "multi" : ""}`}>
+                        {isModoColorSpec ? (
+                          <ModoColorSpecValue value={spec.val} />
+                        ) : (
+                          spec.val
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
+
+              {priceDetailOpen && !calculoPendiente ? (
+                <CommercialPriceDetailPanel
+                  item={item}
+                  detail={commercialPriceDetail}
+                />
+              ) : null}
 
               <div className="op-extras">
                 <div className="op-adicionales">
@@ -1802,12 +2663,23 @@ function ProductRow({
                   </div>
                   <div className="op-chips">
                     {item.adicionales.length > 0 ? (
-                      item.adicionales.map((adicional) => (
-                        <span key={adicional} className="adi-chip">
-                          <CheckIcon />
-                          {adicional}
-                        </span>
-                      ))
+                      item.adicionales.map((adicional) => {
+                        const details =
+                          optionalMaterialDetails.get(adicional) ?? [];
+                        return (
+                          <span key={adicional} className="adi-chip-detail">
+                            <span className="adi-chip">
+                              <CheckIcon />
+                              {adicional}
+                            </span>
+                            {details.length > 0 ? (
+                              <span className="adi-chip-variant">
+                                {details.join(" · ")}
+                              </span>
+                            ) : null}
+                          </span>
+                        );
+                      })
                     ) : (
                       <span className="adi-chip">Sin opcionales activados</span>
                     )}
@@ -1823,7 +2695,9 @@ function ProductRow({
                       type="date"
                       value={item.fechaEntrega ?? fechaEstimada}
                       onClick={() => fechaInputRef.current?.showPicker?.()}
-                      onChange={(event) => onChangeFechaEntrega(event.target.value)}
+                      onChange={(event) =>
+                        onChangeFechaEntrega(event.target.value)
+                      }
                       aria-label={`Fecha estimada de ${item.productoNombre}`}
                     />
                   </div>
@@ -1836,7 +2710,6 @@ function ProductRow({
             <CostosItemView
               item={item}
               costo={costo}
-              margen={margen}
               calculoPendiente={calculoPendiente}
             />
           ) : null}
@@ -1890,6 +2763,68 @@ function calcularComisionesItems(items: PropuestaItem[]) {
   }, 0);
 }
 
+type ImpuestoResumenLinea = {
+  key: string;
+  nombre: string;
+  porcentaje: number;
+  monto: number;
+};
+
+function getImpuestosProductoResumen(items: PropuestaItem[]) {
+  const lineas = new Map<string, ImpuestoResumenLinea>();
+  let ocultos = 0;
+
+  for (const item of items) {
+    const desglose = item.cotizacion.desglosePrecio;
+    const totalImpuestos = getCotizacionImpuestos(item.cotizacion);
+    if (!desglose || totalImpuestos <= 0) continue;
+
+    const impuestos = desglose.impuestos ?? [];
+    const totalPct = impuestos.reduce(
+      (acc, impuesto) => acc + impuesto.porcentaje,
+      0,
+    );
+    if (totalPct <= 0) continue;
+
+    for (const impuesto of impuestos) {
+      const monto = totalImpuestos * (impuesto.porcentaje / totalPct);
+      if (impuesto.desglosarCliente === false) {
+        ocultos += monto;
+        continue;
+      }
+
+      const key = impuesto.catalogoId || impuesto.codigo || impuesto.nombre;
+      const current = lineas.get(key) ?? {
+        key,
+        nombre: impuesto.nombre,
+        porcentaje: impuesto.porcentaje,
+        monto: 0,
+      };
+      current.monto += monto;
+      lineas.set(key, current);
+    }
+  }
+
+  return {
+    visibles: Array.from(lineas.values()).sort((a, b) => b.monto - a.monto),
+    ocultos,
+  };
+}
+
+function formatImpuestoResumenLabel(linea: ImpuestoResumenLinea) {
+  if (linea.porcentaje <= 0) return linea.nombre;
+  const porcentaje = linea.porcentaje.toFixed(2);
+  const porcentajeCompacto = Number.isInteger(linea.porcentaje)
+    ? linea.porcentaje.toFixed(0)
+    : porcentaje.replace(/0+$/, "").replace(/\.$/, "");
+  const nombreNormalizado = linea.nombre.replace(",", ".").toLowerCase();
+  const yaIncluyePorcentaje =
+    nombreNormalizado.includes(`${porcentaje.toLowerCase()}%`) ||
+    nombreNormalizado.includes(`${porcentajeCompacto.toLowerCase()}%`);
+
+  return yaIncluyePorcentaje ? linea.nombre : `${linea.nombre} ${porcentaje}%`;
+}
+
 function asNumber(value: unknown, fallback = 0) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -1918,7 +2853,10 @@ function getCargoDefaultPrecioUnidad(cargo: CargoDirectoCatalogo | null) {
 
 function getCargoInputLabel(cargo: CargoDirectoCatalogo | null) {
   const config = getCargoConfig(cargo);
-  const inputCantidad = typeof config.inputCantidad === "string" ? config.inputCantidad : "cantidad";
+  const inputCantidad =
+    typeof config.inputCantidad === "string"
+      ? config.inputCantidad
+      : "cantidad";
   const unidad = typeof config.unidad === "string" ? config.unidad : "";
   const labels: Record<string, string> = {
     distanciaKm: "Distancia",
@@ -1933,10 +2871,19 @@ function getCargoInputLabel(cargo: CargoDirectoCatalogo | null) {
   return unidad ? `${label} (${unidad})` : label;
 }
 
-function calcularResumenOrden(items: PropuestaItem[], cargosOrden: PropuestaCargoDirecto[]) {
+function calcularResumenOrden(
+  items: PropuestaItem[],
+  cargosOrden: PropuestaCargoDirecto[],
+) {
   const productos = calcularResumen(items);
-  const cargosSubtotal = cargosOrden.reduce((acc, cargo) => acc + cargo.montoNeto, 0);
-  const cargosImpuestos = cargosOrden.reduce((acc, cargo) => acc + cargo.impuestoMonto, 0);
+  const cargosSubtotal = cargosOrden.reduce(
+    (acc, cargo) => acc + cargo.montoNeto,
+    0,
+  );
+  const cargosImpuestos = cargosOrden.reduce(
+    (acc, cargo) => acc + cargo.impuestoMonto,
+    0,
+  );
   const cargosTotal = cargosOrden.reduce((acc, cargo) => acc + cargo.total, 0);
 
   return {
@@ -1965,8 +2912,13 @@ function ResumenBar({
   fechaCreacion: string;
 }) {
   const resumen = calcularResumenOrden(items, cargosOrden);
-  const subtotal = resumen.subtotal;
-  const impuestos = resumen.impuestos;
+  const impuestosProductoResumen = getImpuestosProductoResumen(items);
+  const cargosImpuestos = resumen.cargosImpuestos;
+  const subtotal = resumen.subtotal + impuestosProductoResumen.ocultos;
+  const impuestosVisibles = Math.max(
+    0,
+    resumen.impuestos - impuestosProductoResumen.ocultos,
+  );
   const costoTotal = items.reduce(
     (acc, item) => acc + calcularCostoTotal(item),
     0,
@@ -1977,6 +2929,27 @@ function ResumenBar({
   const comisiones = calcularComisionesItems(items);
   const totalConCargos = resumen.total;
   const margen = subtotal > 0 ? ((subtotal - costoTotal) / subtotal) * 100 : 0;
+  const impuestoLineas = [
+    ...impuestosProductoResumen.visibles,
+    ...(cargosImpuestos > 0
+      ? [
+          {
+            key: "cargos-directos",
+            nombre: "Impuestos sobre cargos",
+            porcentaje: 0,
+            monto: cargosImpuestos,
+          },
+        ]
+      : []),
+  ];
+  if (impuestosVisibles > 0 && impuestoLineas.length === 0) {
+    impuestoLineas.push({
+      key: "impuestos",
+      nombre: "Impuestos",
+      porcentaje: 0,
+      monto: impuestosVisibles,
+    });
+  }
 
   return (
     <div className="resumen-bar">
@@ -1997,7 +2970,9 @@ function ResumenBar({
           ) : null}
           <span className="cond">
             <span className="cl">Plazo entrega</span>
-            <span className="cv">{formatPlazoEntrega(fechaEstimada, fechaCreacion)}</span>
+            <span className="cv">
+              {formatPlazoEntrega(fechaEstimada, fechaCreacion)}
+            </span>
           </span>
           <span className="cond">
             <span className="cl">Forma de pago</span>
@@ -2015,8 +2990,16 @@ function ResumenBar({
         <div className="rbsep">+</div>
         <div className="rbcol">
           <div className="lbl">Impuestos</div>
-          <div className="val">{formatCurrency(impuestos)}</div>
-          <div className="hint">IVA 21%</div>
+          <div className="val">{formatCurrency(impuestosVisibles)}</div>
+          <div className="hint">
+            {impuestoLineas.length > 0
+              ? impuestoLineas
+                  .map((linea) => formatImpuestoResumenLabel(linea))
+                  .join(" · ")
+              : impuestosProductoResumen.ocultos > 0
+                ? "Incluidos en subtotal"
+                : "Sin impuestos"}
+          </div>
         </div>
         <div className="rbsep">+</div>
         <div className="rbcol">
@@ -2026,8 +3009,8 @@ function ResumenBar({
             {cargosOrdenTotal > 0
               ? `${cargosOrden.length} cargo${cargosOrden.length === 1 ? "" : "s"} de orden`
               : cargosItems > 0
-              ? "Incluidos en productos"
-              : "Sin cargos configurados"}
+                ? "Incluidos en productos"
+                : "Sin cargos configurados"}
           </div>
         </div>
         <div className="rbsep">·</div>
@@ -2153,7 +3136,9 @@ function buildCargoOrdenSnapshot({
 
   const montoRedondeado = Math.max(0, Math.round(montoNeto));
   const impuestoPorcentaje = 21;
-  const impuestoMonto = Math.round(montoRedondeado * (impuestoPorcentaje / 100));
+  const impuestoMonto = Math.round(
+    montoRedondeado * (impuestoPorcentaje / 100),
+  );
 
   return {
     id: `cargo-${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -2161,7 +3146,8 @@ function buildCargoOrdenSnapshot({
     codigoSnapshot: cargo.codigo,
     nombreSnapshot: cargo.nombre,
     descripcionSnapshot: cargo.descripcion,
-    modoCalculoSnapshot: cargo.modoCalculo as PropuestaCargoDirecto["modoCalculoSnapshot"],
+    modoCalculoSnapshot:
+      cargo.modoCalculo as PropuestaCargoDirecto["modoCalculoSnapshot"],
     configSnapshot: nextConfig,
     baseCalculo: subtotalBase,
     cantidadInput:
@@ -2193,7 +3179,11 @@ function CargoOrdenSheet({
   const selectedCargo = cargos.find((cargo) => cargo.id === cargoId) ?? null;
   const selectedConfig = getCargoConfig(selectedCargo);
   const zonas = Array.isArray(selectedConfig.zonas)
-    ? (selectedConfig.zonas as Array<{ codigo?: string; nombre?: string; monto?: number }>)
+    ? (selectedConfig.zonas as Array<{
+        codigo?: string;
+        nombre?: string;
+        monto?: number;
+      }>)
     : [];
   const [monto, setMonto] = React.useState(0);
   const [porcentaje, setPorcentaje] = React.useState(0);
@@ -2247,7 +3237,11 @@ function CargoOrdenSheet({
   return (
     <>
       <div className="sheet-backdrop" onClick={onClose} />
-      <aside className="sheet sheet-ap cargo-sheet" aria-modal="true" role="dialog">
+      <aside
+        className="sheet sheet-ap cargo-sheet"
+        aria-modal="true"
+        role="dialog"
+      >
         <div className="sheet-head">
           <span className="sheet-ico">
             <CircleDollarSignIcon />
@@ -2255,10 +3249,16 @@ function CargoOrdenSheet({
           <div className="body">
             <h2>Agregar cargo a la OT</h2>
             <div className="sub">
-              Usa el catálogo de Costos, pero guarda un snapshot para esta orden.
+              Usa el catálogo de Costos, pero guarda un snapshot para esta
+              orden.
             </div>
           </div>
-          <button type="button" className="close" onClick={onClose} aria-label="Cerrar">
+          <button
+            type="button"
+            className="close"
+            onClick={onClose}
+            aria-label="Cerrar"
+          >
             <XIcon />
           </button>
         </div>
@@ -2267,13 +3267,18 @@ function CargoOrdenSheet({
           {cargos.length === 0 ? (
             <div className="orden-tab-empty">
               <div className="ttl">Sin cargos disponibles</div>
-              <div className="sub">Creá cargos en Costos &gt; Cargos directos.</div>
+              <div className="sub">
+                Creá cargos en Costos &gt; Cargos directos.
+              </div>
             </div>
           ) : (
             <>
               <div className="cargo-field">
                 <label>Cargo</label>
-                <select value={cargoId} onChange={(event) => setCargoId(event.target.value)}>
+                <select
+                  value={cargoId}
+                  onChange={(event) => setCargoId(event.target.value)}
+                >
                   {cargos.map((cargo) => (
                     <option key={cargo.id} value={cargo.id}>
                       {cargo.nombre}
@@ -2286,7 +3291,9 @@ function CargoOrdenSheet({
                 <div className="cargo-calc-card">
                   <div>
                     <span className="lbl">Tipo de cálculo</span>
-                    <strong>{selectedCargo.modoCalculo.replaceAll("_", " ")}</strong>
+                    <strong>
+                      {selectedCargo.modoCalculo.replaceAll("_", " ")}
+                    </strong>
                   </div>
                   <div>
                     <span className="lbl">Base actual</span>
@@ -2306,7 +3313,8 @@ function CargoOrdenSheet({
                       >
                         {zonas.map((zona) => (
                           <option key={zona.codigo} value={zona.codigo}>
-                            {zona.nombre ?? zona.codigo} · {formatCurrency(asNumber(zona.monto))}
+                            {zona.nombre ?? zona.codigo} ·{" "}
+                            {formatCurrency(asNumber(zona.monto))}
                           </option>
                         ))}
                       </select>
@@ -2319,7 +3327,9 @@ function CargoOrdenSheet({
                         type="number"
                         min="0"
                         value={monto}
-                        onChange={(event) => setMonto(Number(event.target.value) || 0)}
+                        onChange={(event) =>
+                          setMonto(Number(event.target.value) || 0)
+                        }
                       />
                     </div>
                   ) : null}
@@ -2334,7 +3344,9 @@ function CargoOrdenSheet({
                     min="0"
                     step="0.1"
                     value={porcentaje}
-                    onChange={(event) => setPorcentaje(Number(event.target.value) || 0)}
+                    onChange={(event) =>
+                      setPorcentaje(Number(event.target.value) || 0)
+                    }
                   />
                 </div>
               ) : null}
@@ -2348,7 +3360,9 @@ function CargoOrdenSheet({
                       min="0"
                       step="0.01"
                       value={cantidadInput}
-                      onChange={(event) => setCantidadInput(Number(event.target.value) || 0)}
+                      onChange={(event) =>
+                        setCantidadInput(Number(event.target.value) || 0)
+                      }
                     />
                   </div>
                   <div className="cargo-field">
@@ -2357,7 +3371,9 @@ function CargoOrdenSheet({
                       type="number"
                       min="0"
                       value={precioUnidad}
-                      onChange={(event) => setPrecioUnidad(Number(event.target.value) || 0)}
+                      onChange={(event) =>
+                        setPrecioUnidad(Number(event.target.value) || 0)
+                      }
                     />
                   </div>
                 </div>
@@ -2417,10 +3433,14 @@ export function PropuestaFicha({
   const [tab, setTab] = React.useState<OrdenTab>("productos");
   const [openIds, setOpenIds] = React.useState<Set<string>>(() => new Set());
   const [items, setItems] = React.useState<PropuestaItem[]>([]);
-  const [cargosOrden, setCargosOrden] = React.useState<PropuestaCargoDirecto[]>([]);
+  const [cargosOrden, setCargosOrden] = React.useState<PropuestaCargoDirecto[]>(
+    [],
+  );
   const [addOpen, setAddOpen] = React.useState(false);
   const [cargoOpen, setCargoOpen] = React.useState(false);
-  const [editingItem, setEditingItem] = React.useState<PropuestaItem | null>(null);
+  const [editingItem, setEditingItem] = React.useState<PropuestaItem | null>(
+    null,
+  );
   const [panelEditor, setPanelEditor] = React.useState<{
     item: PropuestaItem;
     paso: PanelEditorPaso;
@@ -2431,6 +3451,37 @@ export function PropuestaFicha({
   const [fechaEstimada, setFechaEstimada] = React.useState(offsetDate(7));
   const [fechaCreacion] = React.useState(() => offsetDate(0));
   const fechaEstimadaInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  const abrirAgregarProducto = React.useCallback(() => {
+    setEditingItem(null);
+    setTab("productos");
+    setAddOpen(true);
+  }, []);
+
+  React.useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      const isEditableTarget =
+        target?.closest("input, textarea, select, [contenteditable='true']") !=
+        null;
+      const key = event.key.toLowerCase();
+      const isAddShortcut =
+        key === "n" &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !event.shiftKey &&
+        !isEditableTarget;
+      if (!isAddShortcut) return;
+
+      event.preventDefault();
+      if (addOpen || cargoOpen || panelEditor) return;
+      abrirAgregarProducto();
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [abrirAgregarProducto, addOpen, cargoOpen, panelEditor]);
 
   function toggle(id: string) {
     setOpenIds((prev) => {
@@ -2470,7 +3521,7 @@ export function PropuestaFicha({
       const request = {
         rutaAlternativaId: item.rutaAlternativaId ?? null,
         jobContext: nextJobContext as never,
-        periodo: "2026-03",
+        periodo: getCurrentPeriodo(),
       };
       const response = item.cotizacionItemId
         ? await recotizarCotizacionItem(item.cotizacionItemId, request)
@@ -2579,7 +3630,11 @@ export function PropuestaFicha({
                 .slice(0, 2)
                 .toUpperCase()}
             </span>
-            <span>{currentUser?.nombreCompleto ?? currentUser?.email ?? "Usuario actual"}</span>
+            <span>
+              {currentUser?.nombreCompleto ??
+                currentUser?.email ??
+                "Usuario actual"}
+            </span>
           </div>
         </FieldCard>
 
@@ -2587,7 +3642,11 @@ export function PropuestaFicha({
           <CanalVentaSelect value={canalVenta} onChange={setCanalVenta} />
         </FieldCard>
 
-        <FieldCard label="Fecha estimada" icon={<CalendarIcon />} hint="Entrega">
+        <FieldCard
+          label="Fecha estimada"
+          icon={<CalendarIcon />}
+          hint="Entrega"
+        >
           <div className="ctrl-input">
             <input
               ref={fechaEstimadaInputRef}
@@ -2616,10 +3675,7 @@ export function PropuestaFicha({
             <button
               type="button"
               className="btn btn-primary"
-              onClick={() => {
-                setEditingItem(null);
-                setAddOpen(true);
-              }}
+              onClick={abrirAgregarProducto}
             >
               <PlusIcon />
               Agregar producto
@@ -2663,7 +3719,10 @@ export function PropuestaFicha({
                     setItems((current) =>
                       current.map((candidate) =>
                         candidate.id === item.id
-                          ? { ...candidate, fechaEntrega: fechaEntrega || fechaEstimada }
+                          ? {
+                              ...candidate,
+                              fechaEntrega: fechaEntrega || fechaEstimada,
+                            }
                           : candidate,
                       ),
                     );
@@ -2675,10 +3734,7 @@ export function PropuestaFicha({
             <button
               type="button"
               className="orden-add-ghost"
-              onClick={() => {
-                setEditingItem(null);
-                setAddOpen(true);
-              }}
+              onClick={abrirAgregarProducto}
             >
               <PlusIcon />
               Agregar otro producto a la{" "}
@@ -2692,9 +3748,15 @@ export function PropuestaFicha({
             <div className="orden-cargos-head">
               <div>
                 <div className="ttl">Cargos de la orden</div>
-                <div className="sub">Aplicados al total general con snapshot del catálogo.</div>
+                <div className="sub">
+                  Aplicados al total general con snapshot del catálogo.
+                </div>
               </div>
-              <button type="button" className="btn" onClick={() => setCargoOpen(true)}>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => setCargoOpen(true)}
+              >
                 <PlusIcon />
                 Agregar cargo
               </button>
@@ -2703,7 +3765,6 @@ export function PropuestaFicha({
               {cargosOrden.map((cargo) => (
                 <div className="orden-cargo-row" key={cargo.id}>
                   <div className="cargo-main">
-                    <span className="cargo-code">{humanizeCodigo(cargo.codigoSnapshot)}</span>
                     <strong>{cargo.nombreSnapshot}</strong>
                     <small>{cargo.detalle}</small>
                     {cargo.nota ? <em>{cargo.nota}</em> : null}
@@ -2725,7 +3786,9 @@ export function PropuestaFicha({
                     className="icon-btn"
                     onClick={() =>
                       setCargosOrden((current) =>
-                        current.filter((candidate) => candidate.id !== cargo.id),
+                        current.filter(
+                          (candidate) => candidate.id !== cargo.id,
+                        ),
                       )
                     }
                     aria-label={`Eliminar cargo ${cargo.nombreSnapshot}`}
@@ -2791,7 +3854,9 @@ export function PropuestaFicha({
         }}
         onSaveItem={(item) => {
           setItems((current) =>
-            current.map((candidate) => (candidate.id === item.id ? item : candidate)),
+            current.map((candidate) =>
+              candidate.id === item.id ? item : candidate,
+            ),
           );
           setOpenIds((current) => new Set([...current, item.id]));
           setAddOpen(false);

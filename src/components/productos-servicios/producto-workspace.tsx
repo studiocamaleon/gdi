@@ -45,6 +45,7 @@ import type {
   CargoDirectoCatalogo,
   CatalogoFamilias,
   MedidaPredefinidaProducto,
+  ModoMedidasProducto,
   ProductoCategoriaComercial,
   ProductoDetalle,
   RutaListItem,
@@ -85,6 +86,21 @@ function nuevaMedidaPredefinida(index: number): MedidaPredefinidaProducto {
     altoMm: 0,
     esDefault: index === 0,
   };
+}
+
+function modoMedidasUsaPredefinidas(modo: string) {
+  return modo !== "LIBRE";
+}
+
+function normalizarMedidasPorModo(
+  modo: string,
+  medidas: MedidaPredefinidaProducto[],
+) {
+  if (!modoMedidasUsaPredefinidas(modo)) return [];
+  const normalizadas = normalizeMedidasDraft(medidas);
+  if (modo !== "FIJA") return normalizadas;
+  const defaultMedida = normalizadas.find((medida) => medida.esDefault) ?? normalizadas[0];
+  return defaultMedida ? [{ ...defaultMedida, esDefault: true }] : [];
 }
 
 function MedidasPredefinidasEditor({
@@ -389,7 +405,7 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
     producto.subcategoriaComercial?.codigo ?? "producto_a_medida",
   );
   const [unidadComercial, setUnidadComercial] = React.useState(producto.unidadComercial);
-  const [modoMedidas, setModoMedidas] = React.useState(producto.modoMedidas);
+  const [modoMedidas, setModoMedidas] = React.useState<ModoMedidasProducto>(producto.modoMedidas);
   const [medidas, setMedidas] = React.useState<MedidaPredefinidaProducto[]>(() =>
     getMedidasPredefinidas(producto),
   );
@@ -403,7 +419,7 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
       subcategoriaComercialCodigo,
       unidadComercial,
       modoMedidas,
-      medidas: modoMedidas === "LIBRE" ? [] : normalizeMedidasDraft(medidas),
+      medidas: normalizarMedidasPorModo(modoMedidas, medidas),
       activo,
     }),
     [
@@ -420,9 +436,7 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
     () => ({
       ...identidadPersistida,
       medidas:
-        identidadPersistida.modoMedidas === "LIBRE"
-          ? []
-          : normalizeMedidasDraft(identidadPersistida.medidas),
+        normalizarMedidasPorModo(identidadPersistida.modoMedidas, identidadPersistida.medidas),
     }),
     [identidadPersistida],
   );
@@ -458,7 +472,7 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
       toast.error("Falta nombre");
       return;
     }
-    const medidasNormalizadas = modoMedidas === "LIBRE" ? [] : normalizeMedidasDraft(medidas);
+    const medidasNormalizadas = normalizarMedidasPorModo(modoMedidas, medidas);
     const medidaDefault = medidasNormalizadas.find((medida) => medida.esDefault);
     if (modoMedidas === "FIJA" && !medidaDefault) {
       toast.error("Agregá al menos una medida predefinida.");
@@ -473,7 +487,7 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
         atributosComercialesJson:
           (producto.atributosComercialesJson as Record<string, unknown> | null) ?? {},
         unidadComercial: unidadComercial as "unidad" | "m2" | "metro_lineal",
-        modoMedidas: modoMedidas as "FIJA" | "LIBRE" | "COMERCIAL_ELIGE",
+        modoMedidas,
         medidaDefaultAnchoMm: medidaDefault?.anchoMm ?? null,
         medidaDefaultAltoMm: medidaDefault?.altoMm ?? null,
         medidasPredefinidasJson: medidasNormalizadas,
@@ -572,11 +586,12 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
           <div className="field">
             <label>Manejo de medidas</label>
             <div className="segmented" style={{ width: "100%" }}>
-              <button type="button" className={modoMedidas === "FIJA" ? "on" : ""} onClick={() => setModoMedidas("FIJA")} style={{ flex: 1 }}>Medida fija del producto</button>
-              <button type="button" className={modoMedidas !== "FIJA" ? "on" : ""} onClick={() => setModoMedidas("LIBRE")} style={{ flex: 1 }}>El comercial ingresa</button>
-            </div>
+              <button type="button" className={modoMedidas === "FIJA" ? "on" : ""} onClick={() => setModoMedidas("FIJA")} style={{ flex: 1 }}>Fija</button>
+              <button type="button" className={modoMedidas === "COMERCIAL_ELIGE" ? "on" : ""} onClick={() => setModoMedidas("COMERCIAL_ELIGE")} style={{ flex: 1 }}>Comercial elige</button>
+              <button type="button" className={modoMedidas === "MIXTA" ? "on" : ""} onClick={() => setModoMedidas("MIXTA")} style={{ flex: 1 }}>Mixta</button>
           </div>
-          {modoMedidas !== "LIBRE" && (
+          </div>
+          {modoMedidasUsaPredefinidas(modoMedidas) && (
             <MedidasPredefinidasEditor medidas={medidas} onChange={setMedidas} />
           )}
         </div>

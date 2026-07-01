@@ -87,6 +87,7 @@ export interface ImpuestoSnapshot {
   nombre: string;
   porcentaje: number;
   orden: number;
+  desglosarCliente?: boolean;
 }
 
 export interface ComisionSnapshot {

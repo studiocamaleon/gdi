@@ -26,7 +26,13 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import { EstadoVacio } from "@/components/ui/estado-vacio";
 import { Input } from "@/components/ui/input";
@@ -87,6 +93,17 @@ interface ActualizarPrecioCatalogoPayload {
 
 export type PrecioCatalogoTipo = "impuestos" | "comisiones";
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function getDesglosarCliente(detalleJson: unknown) {
+  const detalle = asRecord(detalleJson);
+  return detalle.desglosarCliente !== false;
+}
+
 interface PrecioCatalogoAdapter {
   entidadSingular: string;
   entidadPlural: string;
@@ -98,7 +115,10 @@ interface PrecioCatalogoAdapter {
   tooltipPorcentaje: string;
   tooltipDetalleJson: string;
   crear: (payload: CrearPrecioCatalogoPayload) => Promise<unknown>;
-  actualizar: (id: string, payload: ActualizarPrecioCatalogoPayload) => Promise<unknown>;
+  actualizar: (
+    id: string,
+    payload: ActualizarPrecioCatalogoPayload,
+  ) => Promise<unknown>;
   eliminar: (id: string) => Promise<unknown>;
 }
 
@@ -147,7 +167,9 @@ interface Props {
 export function PrecioCatalogoManager({ initialItems, tipo }: Props) {
   const adapter = ADAPTERS[tipo];
   const router = useRouter();
-  const [editando, setEditando] = React.useState<PrecioCatalogoItem | null>(null);
+  const [editando, setEditando] = React.useState<PrecioCatalogoItem | null>(
+    null,
+  );
   const [openSheet, setOpenSheet] = React.useState(false);
   const [guardando, setGuardando] = React.useState(false);
   const [aBorrar, setABorrar] = React.useState<PrecioCatalogoItem | null>(null);
@@ -157,6 +179,7 @@ export function PrecioCatalogoManager({ initialItems, tipo }: Props) {
   const [nombre, setNombre] = React.useState("");
   const [porcentaje, setPorcentaje] = React.useState("");
   const [detalleJsonStr, setDetalleJsonStr] = React.useState("");
+  const [desglosarCliente, setDesglosarCliente] = React.useState(true);
 
   const Icono = adapter.icono;
 
@@ -166,6 +189,7 @@ export function PrecioCatalogoManager({ initialItems, tipo }: Props) {
     setNombre("");
     setPorcentaje("");
     setDetalleJsonStr("");
+    setDesglosarCliente(true);
     setOpenSheet(true);
   };
 
@@ -174,7 +198,10 @@ export function PrecioCatalogoManager({ initialItems, tipo }: Props) {
     setCodigo(item.codigo);
     setNombre(item.nombre);
     setPorcentaje(String(item.porcentaje));
-    setDetalleJsonStr(item.detalleJson ? JSON.stringify(item.detalleJson, null, 2) : "");
+    setDetalleJsonStr(
+      item.detalleJson ? JSON.stringify(item.detalleJson, null, 2) : "",
+    );
+    setDesglosarCliente(getDesglosarCliente(item.detalleJson));
     setOpenSheet(true);
   };
 
@@ -191,8 +218,18 @@ export function PrecioCatalogoManager({ initialItems, tipo }: Props) {
           return;
         }
       }
+      if (tipo === "impuestos") {
+        detalleJson = {
+          ...(detalleJson ?? {}),
+          desglosarCliente,
+        };
+      }
       const porcentajeNum = Number(porcentaje);
-      if (Number.isNaN(porcentajeNum) || porcentajeNum < 0 || porcentajeNum > 100) {
+      if (
+        Number.isNaN(porcentajeNum) ||
+        porcentajeNum < 0 ||
+        porcentajeNum > 100
+      ) {
         toast.error("Porcentaje debe ser un número entre 0 y 100");
         setGuardando(false);
         return;
@@ -204,10 +241,19 @@ export function PrecioCatalogoManager({ initialItems, tipo }: Props) {
           porcentaje: porcentajeNum,
           detalleJson,
         });
-        toast.success(`${capitalizar(adapter.entidadSingular)} "${nombre}" actualizado`);
+        toast.success(
+          `${capitalizar(adapter.entidadSingular)} "${nombre}" actualizado`,
+        );
       } else {
-        await adapter.crear({ codigo, nombre, porcentaje: porcentajeNum, detalleJson });
-        toast.success(`${capitalizar(adapter.entidadSingular)} "${nombre}" creado`);
+        await adapter.crear({
+          codigo,
+          nombre,
+          porcentaje: porcentajeNum,
+          detalleJson,
+        });
+        toast.success(
+          `${capitalizar(adapter.entidadSingular)} "${nombre}" creado`,
+        );
       }
       setOpenSheet(false);
       router.refresh();
@@ -234,10 +280,12 @@ export function PrecioCatalogoManager({ initialItems, tipo }: Props) {
     <div className="flex flex-1 flex-col gap-6 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{adapter.entidadPlural}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {adapter.entidadPlural}
+          </h1>
           <p className="text-muted-foreground text-sm">
-            Catálogo de esquemas de {adapter.entidadPlural.toLowerCase()} del tenant. Se aplican
-            a productos para calcular el precio final.
+            Catálogo de esquemas de {adapter.entidadPlural.toLowerCase()} del
+            tenant. Se aplican a productos para calcular el precio final.
           </p>
         </div>
         <Sheet open={openSheet} onOpenChange={setOpenSheet}>
@@ -305,6 +353,28 @@ export function PrecioCatalogoManager({ initialItems, tipo }: Props) {
                   placeholder="21"
                 />
               </div>
+              {tipo === "impuestos" ? (
+                <label className="flex items-start gap-3 rounded-md border p-3 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={desglosarCliente}
+                    onChange={(event) =>
+                      setDesglosarCliente(event.target.checked)
+                    }
+                  />
+                  <span className="space-y-1">
+                    <span className="block font-medium">
+                      Desglosar al cliente
+                    </span>
+                    <span className="text-muted-foreground block text-xs">
+                      Si está desactivado, el impuesto se incluye dentro del
+                      subtotal visible y no aparece como línea separada en el
+                      resumen financiero.
+                    </span>
+                  </span>
+                </label>
+              ) : null}
               <div className="space-y-2">
                 <LabelConTooltip
                   label="Detalle (JSON)"
@@ -332,7 +402,11 @@ export function PrecioCatalogoManager({ initialItems, tipo }: Props) {
                 onClick={handleGuardar}
                 disabled={guardando || !nombre || !codigo || !porcentaje}
               >
-                {guardando ? "Guardando..." : editando ? "Guardar cambios" : "Crear"}
+                {guardando
+                  ? "Guardando..."
+                  : editando
+                    ? "Guardar cambios"
+                    : "Crear"}
               </Button>
             </SheetFooter>
           </SheetContent>
@@ -345,7 +419,9 @@ export function PrecioCatalogoManager({ initialItems, tipo }: Props) {
             <Icono className="size-5" />
             <CardTitle>Catálogo</CardTitle>
           </div>
-          <CardDescription>{initialItems.length} esquemas en el catálogo.</CardDescription>
+          <CardDescription>
+            {initialItems.length} esquemas en el catálogo.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {initialItems.length === 0 ? (
@@ -366,7 +442,10 @@ export function PrecioCatalogoManager({ initialItems, tipo }: Props) {
                 <TableRow>
                   <TableHead>Nombre</TableHead>
                   <TableHead className="text-right">%</TableHead>
-                  <TableHead className="text-center">Productos que lo usan</TableHead>
+                  {tipo === "impuestos" ? <TableHead>Cliente</TableHead> : null}
+                  <TableHead className="text-center">
+                    Productos que lo usan
+                  </TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
@@ -380,8 +459,25 @@ export function PrecioCatalogoManager({ initialItems, tipo }: Props) {
                     <TableCell className="text-right font-mono">
                       {item.porcentaje.toFixed(2)}%
                     </TableCell>
+                    {tipo === "impuestos" ? (
+                      <TableCell>
+                        <Badge
+                          variant={
+                            getDesglosarCliente(item.detalleJson)
+                              ? "default"
+                              : "secondary"
+                          }
+                        >
+                          {getDesglosarCliente(item.detalleJson)
+                            ? "Desglosado"
+                            : "Oculto"}
+                        </Badge>
+                      </TableCell>
+                    ) : null}
                     <TableCell className="text-center">
-                      <Badge variant="outline">{item._count?.productosAplicados ?? 0}</Badge>
+                      <Badge variant="outline">
+                        {item._count?.productosAplicados ?? 0}
+                      </Badge>
                     </TableCell>
                     <TableCell>
                       <Badge variant={item.activo ? "default" : "secondary"}>
@@ -389,7 +485,11 @@ export function PrecioCatalogoManager({ initialItems, tipo }: Props) {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" onClick={() => abrirEditar(item)}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => abrirEditar(item)}
+                      >
                         <PencilIcon className="size-3" />
                       </Button>
                       <Button
@@ -417,7 +517,8 @@ export function PrecioCatalogoManager({ initialItems, tipo }: Props) {
           aBorrar ? (
             <>
               Vas a eliminar {adapter.articuloSingular}{" "}
-              <strong>{aBorrar.nombre}</strong> ({aBorrar.porcentaje.toFixed(2)}%) del catálogo.
+              <strong>{aBorrar.nombre}</strong> ({aBorrar.porcentaje.toFixed(2)}
+              %) del catálogo.
             </>
           ) : null
         }

@@ -58,48 +58,58 @@ export class ProductosService {
       altoDefault: dto.medidaDefaultAltoMm,
     });
     const medidaDefault = medidas.find((medida) => medida.esDefault);
+    const codigoManual = dto.codigo?.trim();
+    const codigoBase = codigoManual || this.codigoFromNombre(dto.nombre, 'PRODUCTO');
 
-    try {
-      return await this.prisma.producto.create({
-        data: {
-          tenantId,
-          subcategoriaComercialId: subcategoriaComercial.id,
-          codigo: dto.codigo,
-          nombre: dto.nombre,
-          descripcion: dto.descripcion ?? null,
-          unidadComercial: dto.unidadComercial,
-          modoMedidas: dto.modoMedidas,
-          medidaDefaultAnchoMm: medidaDefault
-            ? new Prisma.Decimal(medidaDefault.anchoMm)
-            : null,
-          medidaDefaultAltoMm: medidaDefault
-            ? new Prisma.Decimal(medidaDefault.altoMm)
-            : null,
-          medidasPredefinidasJson:
-            medidas.length > 0
-              ? (medidas as Prisma.InputJsonValue)
-              : Prisma.JsonNull,
-          precioConfigJson: (dto.precioConfigJson ??
-            Prisma.JsonNull) as Prisma.InputJsonValue,
-          atributosComercialesJson: (dto.atributosComercialesJson ??
-            Prisma.JsonNull) as Prisma.InputJsonValue,
-          activo: true,
-        },
-        include: {
-          subcategoriaComercial: { include: { categoria: true } },
-        },
-      });
-    } catch (err) {
-      if (
-        err instanceof Prisma.PrismaClientKnownRequestError &&
-        err.code === 'P2002'
-      ) {
-        throw new BadRequestException(
-          `Ya existe un producto con código "${dto.codigo}"`,
-        );
+    for (let intento = 0; intento < 5; intento += 1) {
+      const codigo = await this.nextCopyCode(tenantId, codigoBase);
+      try {
+        return await this.prisma.producto.create({
+          data: {
+            tenantId,
+            subcategoriaComercialId: subcategoriaComercial.id,
+            codigo,
+            nombre: dto.nombre,
+            descripcion: dto.descripcion ?? null,
+            unidadComercial: dto.unidadComercial,
+            modoMedidas: dto.modoMedidas,
+            medidaDefaultAnchoMm: medidaDefault
+              ? new Prisma.Decimal(medidaDefault.anchoMm)
+              : null,
+            medidaDefaultAltoMm: medidaDefault
+              ? new Prisma.Decimal(medidaDefault.altoMm)
+              : null,
+            medidasPredefinidasJson:
+              medidas.length > 0
+                ? (medidas as Prisma.InputJsonValue)
+                : Prisma.JsonNull,
+            precioConfigJson: (dto.precioConfigJson ??
+              Prisma.JsonNull) as Prisma.InputJsonValue,
+            atributosComercialesJson: (dto.atributosComercialesJson ??
+              Prisma.JsonNull) as Prisma.InputJsonValue,
+            activo: true,
+          },
+          include: {
+            subcategoriaComercial: { include: { categoria: true } },
+          },
+        });
+      } catch (err) {
+        if (
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === 'P2002'
+        ) {
+          if (codigoManual) {
+            throw new BadRequestException(
+              `Ya existe un producto con código "${codigo}"`,
+            );
+          }
+          continue;
+        }
+        throw err;
       }
-      throw err;
     }
+
+    throw new BadRequestException('No se pudo generar un código de producto único.');
   }
 
   async actualizarProducto(
@@ -348,6 +358,8 @@ export class ProductosService {
                   tenantId,
                   productoConfigPasoId: configDuplicada.id,
                   maquinaId: maquina.maquinaId,
+                  perfilDefaultId: maquina.perfilDefaultId,
+                  modoColorAllowedModes: maquina.modoColorAllowedModes,
                   esPreferida: maquina.esPreferida,
                   orden: maquina.orden,
                   activo: maquina.activo,
@@ -474,7 +486,7 @@ export class ProductosService {
     throw new BadRequestException('No se pudo generar un código de copia único.');
   }
 
-  private codigoFromNombre(nombre: string) {
+  private codigoFromNombre(nombre: string, fallback = 'PRODUCTO-COPIA') {
     const codigo = nombre
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
@@ -482,7 +494,7 @@ export class ProductosService {
       .replace(/^-+|-+$/g, '')
       .replace(/-{2,}/g, '-')
       .toUpperCase();
-    return codigo || 'PRODUCTO-COPIA';
+    return codigo || fallback;
   }
 
   private jsonOrNull(value: Prisma.JsonValue | null) {
@@ -686,6 +698,14 @@ export class ProductosService {
                   where: { activo: true },
                   orderBy: [{ esPreferida: 'desc' }, { orden: 'asc' }],
                   include: {
+                    perfilDefault: {
+                      select: {
+                        id: true,
+                        nombre: true,
+                        tipoPerfil: true,
+                        detalleJson: true,
+                      },
+                    },
                     maquina: {
                       select: {
                         id: true,
@@ -743,6 +763,16 @@ export class ProductosService {
 	        configPasos: rutaAlt.configPasos.map((configPaso) => ({
 	          ...configPaso,
 	          modoColorOptions: this.buildModoColorOptions(configPaso),
+	          maquinasCandidatas: configPaso.maquinasCandidatas.map(
+	            (candidata) => ({
+	              ...candidata,
+	              modoColorOptions: this.buildModoColorOptionsForProfiles(
+	                candidata.maquina?.perfilesOperativos ?? [],
+	                configPaso.paramsPasoJson,
+	                candidata.modoColorAllowedModes,
+	              ),
+	            }),
+	          ),
 	        })),
 	      })),
 	    };
@@ -791,6 +821,60 @@ export class ProductosService {
 	      profiles,
 	      modoColorConfig.allowedModes,
 	    );
+	  }
+
+	  private buildModoColorOptionsForProfiles(
+	    profiles: Array<{
+	      id: string;
+	      activo?: boolean;
+	      tipoPerfil?: string | null;
+	      detalleJson?: Prisma.JsonValue | null;
+	    }>,
+	    paramsPasoJson?: Prisma.JsonValue | null,
+	    allowedModesOverride?: string[] | null,
+	  ) {
+	    const params =
+	      paramsPasoJson &&
+	      typeof paramsPasoJson === 'object' &&
+	      !Array.isArray(paramsPasoJson)
+	        ? (paramsPasoJson as Record<string, unknown>)
+	        : {};
+	    const modoColorConfig =
+	      params.modoColorConfig &&
+	      typeof params.modoColorConfig === 'object' &&
+	      !Array.isArray(params.modoColorConfig)
+	        ? (params.modoColorConfig as Record<string, unknown>)
+	        : {};
+	    const explicitAllowed = Array.isArray(allowedModesOverride)
+	      ? allowedModesOverride.length > 0
+	        ? allowedModesOverride
+	        : null
+	      : Array.isArray(modoColorConfig.allowedModes)
+	        ? modoColorConfig.allowedModes
+	        : null;
+	    const options = buildModoColorOptionsFromProfiles(
+	      profiles,
+	      explicitAllowed ?? undefined,
+	    );
+	    const shouldIncludeSinImpresion =
+	      !explicitAllowed ||
+	      explicitAllowed.some(
+	        (mode) => typeof mode === 'string' && mode === 'SIN_IMPRESION',
+	      );
+	    if (
+	      shouldIncludeSinImpresion &&
+	      !options.some((option) => option.value === 'SIN_IMPRESION')
+	    ) {
+	      return [
+	        {
+	          value: 'SIN_IMPRESION',
+	          label: 'Sin impresión',
+	          perfilIds: [],
+	        },
+	        ...options,
+	      ];
+	    }
+	    return options;
 	  }
 
   listarCatalogoComercial() {

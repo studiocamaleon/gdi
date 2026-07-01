@@ -84,6 +84,13 @@ const modoOperacionPlotterOptions = [
   option("HOJAS", "Hojas"),
 ];
 
+const factorComplejidadPlotterOptions = [
+  option("simple", "Simple"),
+  option("intermedio", "Intermedio"),
+  option("complejo", "Complejo"),
+  option("personalizado", "Personalizado"),
+];
+
 const modoLaminadoOptions = [
   option("UNA_CARA", "Una cara"),
   option("DOS_CARAS_1_PASADA", "Dos caras (1 pasada)"),
@@ -340,7 +347,7 @@ function buildGuillotinaSections(): MaquinariaTemplateSection[] {
       title: "Parámetros técnicos",
       description: "Tiempo por corte (constante en la máquina, casi no varía con material).",
       fields: [
-        field({ key: "tiempoPorCorteSeg", label: "Tiempo por corte", scope: "maquina", kind: "number", unit: "min", required: true, description: "Segundos por cada corte individual (ej. 8)." }),
+        field({ key: "tiempoPorCorteSeg", label: "Tiempo por corte", scope: "maquina", kind: "number", unit: "seg", required: true, description: "Segundos por cada corte individual (ej. 8)." }),
       ],
     }),
     section({
@@ -395,7 +402,7 @@ function buildPlotterCorteSections(): MaquinariaTemplateSection[] {
         field({ key: "feedReloadMin", label: "Cambio de rollo", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo entre rollos." }),
         field({ key: "tipoCorte", label: "Tipo de corte", scope: "perfil_operativo", kind: "select", required: true, options: tipoCorteOptions, description: "Completo (atraviesa) o kiss-cut (solo vinilo)." }),
         field({ key: "modoOperacion", label: "Modo operación", scope: "perfil_operativo", kind: "select", options: modoOperacionPlotterOptions, description: "Rollo u hojas." }),
-        field({ key: "factorComplejidad", label: "Factor complejidad (JSON)", scope: "perfil_operativo", kind: "textarea", description: "JSON: { SIMPLE: 1.0, INTERMEDIO: 1.5, COMPLEJO: 3.0 }." }),
+        field({ key: "factorComplejidad", label: "Factor de complejidad", scope: "perfil_operativo", kind: "select", options: factorComplejidadPlotterOptions, description: "" }),
       ],
     }),
     section({ id: "desgaste_repuestos", title: "Desgaste y repuestos", description: "Cuchilla.", fields: genericWearFields }),
@@ -452,7 +459,7 @@ function buildLaminadoraBoppSections(): MaquinariaTemplateSection[] {
       description: "Ancho máx de pliego que pasa.",
       fields: [
         field({ key: "anchoUtil", label: "Ancho útil máximo", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Ancho máx de pliego." }),
-        field({ key: "espesorMaximo", label: "Espesor máximo", scope: "maquina", kind: "number", unit: "mm", description: "Espesor máx del pliego (ej. 1mm)." }),
+        field({ key: "espesorMaximo", label: "Espesor máximo", scope: "maquina", kind: "number", unit: "micrones", description: "Espesor máximo admitido, declarado en micrones (ej. 1000 mic)." }),
       ],
     }),
     section({
@@ -471,10 +478,9 @@ function buildLaminadoraBoppSections(): MaquinariaTemplateSection[] {
       description: "Solo 1 perfil 'Estándar': la velocidad/setup no varía mucho entre tipos de film.",
       fields: [
         field({ key: "nombre", label: "Nombre del perfil", scope: "perfil_operativo", kind: "text", required: true, description: "Estándar." }),
-        field({ key: "productivityValue", label: "Velocidad", scope: "perfil_operativo", kind: "number", unit: "mm_s", required: true, description: "mm/min de avance." }),
+        field({ key: "productivityValue", label: "Velocidad", scope: "perfil_operativo", kind: "number", unit: "m_min", required: true, description: "m/min de avance." }),
         field({ key: "setupMin", label: "Setup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Incluye calentamiento." }),
         field({ key: "cleanupMin", label: "Cleanup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de limpieza." }),
-        field({ key: "feedReloadMin", label: "Cambio de rollo film", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo entre rollos de film." }),
       ],
     }),
   ];
@@ -754,9 +760,9 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
     visibleSections: commonTemplateSections,
     sections: buildPlotterCorteSections(),
     help: {
-      summary: "Perfiles por tipoCorte + modoOperacion. Complejidad la elige el comercial al cotizar (factor multiplicador).",
+      summary: "Perfiles por tipoCorte + modoOperacion. El factor de complejidad ajusta la productividad m²/hora.",
       tips: [
-        "Configurá factorComplejidad como JSON con keys SIMPLE / INTERMEDIO / COMPLEJO.",
+        "Simple usa 36 m²/h, Intermedio 54 m²/h y Complejo 90 m²/h.",
         "Para multi-rollo, declarar feedReloadMin > 0.",
       ],
       examples: ["Skycut C24 para vinilo de rotulación"],
@@ -789,7 +795,7 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
     visibleSections: commonTemplateSections,
     sections: buildLaminadoraBoppSections(),
     help: {
-      summary: "Perfil único 'Estándar'. Velocidad medida en mm/min.",
+      summary: "Perfil único 'Estándar'. Velocidad medida en m/min.",
       tips: [
         "Declarar modosOperacionSoportados según las capacidades reales (1 o 2 pasadas para doble cara).",
         "Los márgenes de desperdicio impactan el cálculo de consumo de film.",

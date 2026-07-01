@@ -16,6 +16,29 @@ const baseInput = {
   ],
 };
 
+describe('evaluateGranFormatoMixedShelfLayout', () => {
+  it('prefiere orientacion uniforme en rollo cuando empata el largo y preserva decimales A4', () => {
+    const result = evaluateGranFormatoMixedShelfLayout({
+      printableWidthMm: 600,
+      marginLeftMm: 5,
+      marginStartMm: 10,
+      marginEndMm: 10,
+      separacionHorizontalMm: 0,
+      separacionVerticalMm: 0,
+      permitirRotacion: true,
+      medidas: [{ anchoMm: 210, altoMm: 297, cantidad: 5 }],
+    });
+
+    expect(result).not.toBeNull();
+    expect(result!.orientacion).toBe('rotada');
+    expect(result!.consumedLengthMm).toBe(650);
+    expect(result!.placements.every((placement) => placement.rotated)).toBe(true);
+    expect(
+      result!.placements.every((placement) => placement.label === '21x29,7 cm'),
+    ).toBe(true);
+  });
+});
+
 describe('evaluateGranFormatoMaxRectsRollLayout', () => {
   it('mejora el largo consumido frente a shelf-rollo para piezas mixtas', () => {
     const shelf = evaluateGranFormatoMixedShelfLayout(baseInput);

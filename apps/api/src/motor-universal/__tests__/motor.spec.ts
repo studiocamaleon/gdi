@@ -68,7 +68,7 @@ async function ensureCentroHorarioConTarifa(tenantId: string) {
       tenantId_centroCostoId_periodo_estado: {
         tenantId,
         centroCostoId: centro.id,
-        periodo: '2026-03',
+        periodo: '2026-06',
         estado: EstadoTarifaCentroCostoPeriodo.PUBLICADA,
       },
     },
@@ -317,6 +317,80 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(result.cotizacion!.pasos.length).toBe(5);
   });
 
+  it('G-F2: al elegir máquina UV en gran formato usa sus tintas y no las ecosolventes', async () => {
+    if (!tenantId) return;
+    const vinilo = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'VINILO-BLANCO-IMP' },
+    });
+    const configPaso = await prisma.productoConfigPaso.findFirstOrThrow({
+      where: {
+        tenantId,
+        productoRutaAlternativa: { productoId: vinilo.id },
+        rutaPaso: { familiaCodigo: 'impresion_por_area' },
+      },
+      include: {
+        maquinasCandidatas: {
+          include: { maquina: { include: { perfilesOperativos: true } } },
+        },
+      },
+    });
+    const maquinaUv = configPaso.maquinasCandidatas.find(
+      (candidata) =>
+        ((candidata.maquina.parametrosTecnicosJson as Record<string, unknown>)
+          ?.tecnologia as string | undefined) === 'UV',
+    );
+    expect(maquinaUv).toBeDefined();
+    const perfilUv8Pass = maquinaUv!.maquina.perfilesOperativos.find(
+      (perfil) => perfil.nombre === 'CMYK - 8 pass',
+    );
+    expect(perfilUv8Pass).toBeDefined();
+    await prisma.productoConfigPasoMaquinaCandidata.update({
+      where: { id: maquinaUv!.id },
+      data: { perfilDefaultId: perfilUv8Pass!.id },
+    });
+
+    let result: Awaited<ReturnType<MotorUniversalService['cotizar']>>;
+    try {
+      result = await motorService.cotizar({
+        tenantId,
+        productoId: vinilo.id,
+        periodo: '2026-06',
+        jobContext: {
+          cantidad: 1,
+          piezas: [{ cantidad: 1, anchoMm: 1000, altoMm: 500 }],
+          [`maquinaSeleccionada_${configPaso.id}`]: maquinaUv!.maquinaId,
+        },
+      });
+    } finally {
+      await prisma.productoConfigPasoMaquinaCandidata.update({
+        where: { id: maquinaUv!.id },
+        data: { perfilDefaultId: null },
+      });
+    }
+
+    expect(result.exitoso).toBe(true);
+    const impresion = result.cotizacion!.pasos.find(
+      (p) => p.familiaCodigo === 'impresion_por_area',
+    );
+    const consumibles = impresion!.materiales!.filter(
+      (m) => m.tipoLineaCosto === 'CONSUMIBLE_MAQUINA',
+    );
+    expect(consumibles.length).toBeGreaterThan(0);
+    expect(
+      consumibles.every((m) => m.materialSku.startsWith('TINTA-UV-MIMAKI')),
+    ).toBe(true);
+    expect(
+      consumibles.some((m) => m.materialSku.startsWith('TINTA-LATEX-ROLAND')),
+    ).toBe(false);
+    expect(
+      consumibles.some((m) => /l[aá]tex|roland/i.test(m.materialDisplayName)),
+    ).toBe(false);
+    const cmyk = consumibles.filter(
+      (m) => m.materialSku !== 'TINTA-UV-MIMAKI-W',
+    );
+    expect(cmyk.every((m) => m.cantidad > 10)).toBe(true);
+  });
+
   it('Talonario duplicado tipoCopia=2: capa 1 + capa 2 se activan, capa 3 NO (CONDICIONAL JsonLogic)', async () => {
     if (!tenantId) return;
     const talonario = await prisma.producto.findFirstOrThrow({
@@ -445,7 +519,8 @@ describe('MotorUniversalService — smoke tests', () => {
       jobContext: {
         cantidad: 5,
         medidaCustomMm: { anchoMm: 200, altoMm: 300 },
-        [`slotMaterial_${impresion.id}_${slot.slotCodigo}`]: candidato.varianteId,
+        [`slotMaterial_${impresion.id}_${slot.slotCodigo}`]:
+          candidato.varianteId,
       },
     });
 
@@ -566,7 +641,7 @@ describe('MotorUniversalService — smoke tests', () => {
     const result = await motorService.cotizar({
       tenantId,
       productoId: tarjetas.id,
-      periodo: '2026-03',
+      periodo: '2026-06',
       jobContext: { cantidad: 300, caras: 1 },
     });
 
@@ -585,6 +660,28 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(pliegos).toBe(30);
     expect(impresion!.tiempo!.runMin).toBeCloseTo(0.75, 2);
     expect(impresion!.tiempo!.totalMin).toBe(8);
+  });
+
+  it('Guillotina calcula tiempo por tandas, cortes y rango de gramaje', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+    });
+
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: tarjetas.id,
+      periodo: '2026-06',
+      jobContext: { cantidad: 300, caras: 1 },
+    });
+
+    expect(result.exitoso).toBe(true);
+    const guillotina = result.cotizacion!.pasos.find(
+      (p) => p.familiaCodigo === 'corte_guillotina',
+    );
+    expect(guillotina).toBeDefined();
+    expect(guillotina!.tiempo!.runMin).toBeCloseTo((14 * 8) / 60, 2);
+    expect(guillotina!.tiempo!.totalMin).toBe(6);
   });
 
   it('F.2.6: Talonario con tipoCopia=3 multiplica el tiempo del paso impresión', async () => {
@@ -627,15 +724,15 @@ describe('MotorUniversalService — smoke tests', () => {
     const result = await motorService.cotizar({
       tenantId,
       productoId: tarjetas.id,
-      periodo: '2026-03',
+      periodo: '2026-06',
       jobContext: { cantidad: 1000, caras: 2 },
     });
 
     expect(result.exitoso).toBe(true);
 
     // Verificar que hay tarifa manual y tarifa heredada desde máquina.
-    const tarifas = result.cotizacion!.pasos
-      .filter((p) => p.activado)
+    const tarifas = result
+      .cotizacion!.pasos.filter((p) => p.activado)
       .map((p) => p.tiempo?.tarifaHora ?? 0);
     expect(tarifas).toEqual(expect.arrayContaining([tarifaHoraManual]));
     expect(tarifas.some((tarifa) => Math.abs(tarifa - 22727.27) < 0.5)).toBe(
@@ -760,21 +857,47 @@ describe('MotorUniversalService — smoke tests', () => {
     if (!tenantId) return;
     const tarjetas = await prisma.producto.findFirstOrThrow({
       where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+      include: {
+        rutasAlternativas: {
+          include: {
+            configPasos: {
+              include: {
+                rutaPaso: true,
+                slotsMateriales: {
+                  include: { candidatos: { include: { variantes: true } } },
+                },
+              },
+            },
+          },
+        },
+      },
     });
+    const impresion = tarjetas.rutasAlternativas[0].configPasos.find(
+      (c) => c.rutaPaso.familiaCodigo === 'impresion_por_hoja',
+    )!;
+    const slotSustrato = impresion.slotsMateriales.find(
+      (s) => s.slotCodigo === 'sustrato_principal',
+    )!;
+    const sustrato = slotSustrato.candidatos[0].variantes[0];
     const result = await motorService.cotizar({
       tenantId,
       productoId: tarjetas.id,
-      periodo: '2026-03',
-      jobContext: { cantidad: 1000, caras: 2 },
+      periodo: '2026-06',
+      jobContext: {
+        cantidad: 1000,
+        caras: 2,
+        [`slotMaterial_${impresion.id}_${slotSustrato.slotCodigo}`]:
+          sustrato.varianteId,
+      },
     });
     expect(result.exitoso).toBe(true);
     const embalaje = result.cotizacion!.pasos.find(
       (p) => p.familiaCodigo === 'embalaje',
     );
     expect(embalaje?.activado).toBe(true);
-    // CONVERSION devuelve 10 cajas; el motor T-2 todavía no usa run, pero al menos
-    // verificamos que el paso se ejecutó sin error
-    expect(embalaje!.materiales?.length).toBeGreaterThan(0);
+    const caja = embalaje!.materiales?.find((m) => m.slotCodigo === 'caja');
+    expect(caja).toBeDefined();
+    expect(caja!.cantidad).toBe(10);
   });
 
   it('F.2.4: Tarjetas doble faz → motor selecciona automáticamente perfil "Papel grueso doble faz" (20 ppm vs 40 simple)', async () => {
@@ -1266,7 +1389,7 @@ describe('MotorUniversalService — smoke tests', () => {
       await motorService.cotizarYGuardar({
         tenantId,
         productoId: tarjetas.id,
-        periodo: '2026-03',
+        periodo: '2026-06',
         jobContext: { cantidad: 500, caras: 2 },
       });
 
@@ -1519,9 +1642,10 @@ describe('MotorUniversalService — smoke tests', () => {
       const result = await motorService.cotizar({
         tenantId,
         productoId: tarjetas.id,
-        periodo: '2026-03',
+        periodo: '2026-06',
         jobContext: { cantidad: 100, caras: 1, gramajeGr: 300 },
       });
+      expect(result.errores).toEqual([]);
       expect(result.exitoso).toBe(true);
       const impresion = result.cotizacion!.pasos.find(
         (p) => p.familiaCodigo === 'impresion_por_hoja',
@@ -1660,6 +1784,7 @@ describe('MotorUniversalService — smoke tests', () => {
           opcionalesActivados: { [diseno!.id]: true },
         },
       });
+      expect(result.errores).toEqual([]);
       expect(result.exitoso).toBe(true);
       const pasoDiseno = result.cotizacion!.pasos.find(
         (p) => p.familiaCodigo === 'diseno_grafico',
@@ -1723,6 +1848,7 @@ describe('MotorUniversalService — smoke tests', () => {
         periodo: '2026-03',
         jobContext: { cantidad: 1000, caras: 2 },
       });
+      expect(result.errores).toEqual([]);
       expect(result.exitoso).toBe(true);
       const pasoEmbalaje = result.cotizacion!.pasos.find(
         (p) => p.familiaCodigo === 'embalaje',
@@ -1739,6 +1865,252 @@ describe('MotorUniversalService — smoke tests', () => {
           paramsPasoJson: { piezasPorCaja: 100 },
         },
       });
+    }
+  });
+
+  it('G-M5: T-2 puede calcular productividad propia por m² desde piezas', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+      include: {
+        rutasAlternativas: {
+          include: { configPasos: { include: { rutaPaso: true } } },
+        },
+      },
+    });
+    const ruta = tarjetas.rutasAlternativas[0];
+    const embalaje = ruta.configPasos.find(
+      (c) => c.rutaPaso.familiaCodigo === 'embalaje',
+    );
+    const guillotina = ruta.configPasos.find(
+      (c) => c.rutaPaso.familiaCodigo === 'corte_guillotina',
+    );
+    expect(embalaje).toBeDefined();
+    const centro = await ensureCentroHorarioConTarifa(tenantId);
+    const original = {
+      modoActivacion: embalaje!.modoActivacion,
+      modoTiempo: embalaje!.modoTiempo,
+      centroCostoId: embalaje!.centroCostoId,
+      paramsPasoJson: embalaje!.paramsPasoJson,
+      guillotinaModoActivacion: guillotina?.modoActivacion ?? null,
+    };
+
+    await prisma.productoConfigPaso.update({
+      where: { id: embalaje!.id },
+      data: {
+        modoActivacion: 'OBLIGATORIO',
+        modoTiempo: 'T-2',
+        centroCostoId: centro.id,
+        paramsPasoJson: {
+          productivityValue: 5,
+          productivityUnit: 'm2_h',
+          productivityQuantitySource: 'area_piezas_m2',
+        },
+      },
+    });
+    if (guillotina) {
+      await prisma.productoConfigPaso.update({
+        where: { id: guillotina.id },
+        data: { modoActivacion: 'NO_EJECUTAR' },
+      });
+    }
+
+    try {
+      const result = await motorService.cotizar({
+        tenantId,
+        productoId: tarjetas.id,
+        periodo: '2026-06',
+        jobContext: {
+          cantidad: 100,
+          piezas: [{ cantidad: 2, anchoMm: 1000, altoMm: 500 }],
+        },
+      });
+      expect(result.errores).toEqual([]);
+      expect(result.exitoso).toBe(true);
+      const pasoEmbalaje = result.cotizacion!.pasos.find(
+        (p) => p.familiaCodigo === 'embalaje',
+      );
+      expect(pasoEmbalaje!.tiempo!.runMin).toBeCloseTo(12, 2);
+    } finally {
+      await prisma.productoConfigPaso.update({
+        where: { id: embalaje!.id },
+        data: {
+          modoActivacion: original.modoActivacion,
+          modoTiempo: original.modoTiempo,
+          centroCostoId: original.centroCostoId,
+          paramsPasoJson: original.paramsPasoJson,
+        },
+      });
+      if (guillotina) {
+        await prisma.productoConfigPaso.update({
+          where: { id: guillotina.id },
+          data: { modoActivacion: original.guillotinaModoActivacion },
+        });
+      }
+    }
+  });
+
+  it('G-M5: T-2 puede calcular productividad propia por m² instalados manuales', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+      include: {
+        rutasAlternativas: {
+          include: { configPasos: { include: { rutaPaso: true } } },
+        },
+      },
+    });
+    const ruta = tarjetas.rutasAlternativas[0];
+    const embalaje = ruta.configPasos.find(
+      (c) => c.rutaPaso.familiaCodigo === 'embalaje',
+    );
+    const guillotina = ruta.configPasos.find(
+      (c) => c.rutaPaso.familiaCodigo === 'corte_guillotina',
+    );
+    expect(embalaje).toBeDefined();
+    const centro = await ensureCentroHorarioConTarifa(tenantId);
+    const original = {
+      modoActivacion: embalaje!.modoActivacion,
+      modoTiempo: embalaje!.modoTiempo,
+      centroCostoId: embalaje!.centroCostoId,
+      paramsPasoJson: embalaje!.paramsPasoJson,
+      guillotinaModoActivacion: guillotina?.modoActivacion ?? null,
+    };
+
+    await prisma.productoConfigPaso.update({
+      where: { id: embalaje!.id },
+      data: {
+        modoActivacion: 'OBLIGATORIO',
+        modoTiempo: 'T-2',
+        centroCostoId: centro.id,
+        paramsPasoJson: {
+          productivityValue: 5,
+          productivityUnit: 'm2_h',
+          productivityQuantitySource: 'm2_instalados',
+        },
+      },
+    });
+    if (guillotina) {
+      await prisma.productoConfigPaso.update({
+        where: { id: guillotina.id },
+        data: { modoActivacion: 'NO_EJECUTAR' },
+      });
+    }
+
+    try {
+      const result = await motorService.cotizar({
+        tenantId,
+        productoId: tarjetas.id,
+        periodo: '2026-06',
+        jobContext: {
+          cantidad: 100,
+          m2_instalados: 10,
+        },
+      });
+      expect(result.errores).toEqual([]);
+      expect(result.exitoso).toBe(true);
+      const pasoEmbalaje = result.cotizacion!.pasos.find(
+        (p) => p.familiaCodigo === 'embalaje',
+      );
+      expect(pasoEmbalaje!.tiempo!.runMin).toBeCloseTo(120, 2);
+    } finally {
+      await prisma.productoConfigPaso.update({
+        where: { id: embalaje!.id },
+        data: {
+          modoActivacion: original.modoActivacion,
+          modoTiempo: original.modoTiempo,
+          centroCostoId: original.centroCostoId,
+          paramsPasoJson: original.paramsPasoJson,
+        },
+      });
+      if (guillotina) {
+        await prisma.productoConfigPaso.update({
+          where: { id: guillotina.id },
+          data: { modoActivacion: original.guillotinaModoActivacion },
+        });
+      }
+    }
+  });
+
+  it('G-M5: T-2 puede calcular productividad propia por metros lineales cotizados', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+      include: {
+        rutasAlternativas: {
+          include: { configPasos: { include: { rutaPaso: true } } },
+        },
+      },
+    });
+    const ruta = tarjetas.rutasAlternativas[0];
+    const embalaje = ruta.configPasos.find(
+      (c) => c.rutaPaso.familiaCodigo === 'embalaje',
+    );
+    const guillotina = ruta.configPasos.find(
+      (c) => c.rutaPaso.familiaCodigo === 'corte_guillotina',
+    );
+    expect(embalaje).toBeDefined();
+    const centro = await ensureCentroHorarioConTarifa(tenantId);
+    const original = {
+      modoActivacion: embalaje!.modoActivacion,
+      modoTiempo: embalaje!.modoTiempo,
+      centroCostoId: embalaje!.centroCostoId,
+      paramsPasoJson: embalaje!.paramsPasoJson,
+      guillotinaModoActivacion: guillotina?.modoActivacion ?? null,
+    };
+
+    await prisma.productoConfigPaso.update({
+      where: { id: embalaje!.id },
+      data: {
+        modoActivacion: 'OBLIGATORIO',
+        modoTiempo: 'T-2',
+        centroCostoId: centro.id,
+        paramsPasoJson: {
+          productivityValue: 4,
+          productivityUnit: 'ml_h',
+          productivityQuantitySource: 'metros_lineales',
+        },
+      },
+    });
+    if (guillotina) {
+      await prisma.productoConfigPaso.update({
+        where: { id: guillotina.id },
+        data: { modoActivacion: 'NO_EJECUTAR' },
+      });
+    }
+
+    try {
+      const result = await motorService.cotizar({
+        tenantId,
+        productoId: tarjetas.id,
+        periodo: '2026-06',
+        jobContext: {
+          cantidad: 100,
+          metrosLineales: 8,
+        },
+      });
+      expect(result.errores).toEqual([]);
+      expect(result.exitoso).toBe(true);
+      const pasoEmbalaje = result.cotizacion!.pasos.find(
+        (p) => p.familiaCodigo === 'embalaje',
+      );
+      expect(pasoEmbalaje!.tiempo!.runMin).toBeCloseTo(120, 2);
+    } finally {
+      await prisma.productoConfigPaso.update({
+        where: { id: embalaje!.id },
+        data: {
+          modoActivacion: original.modoActivacion,
+          modoTiempo: original.modoTiempo,
+          centroCostoId: original.centroCostoId,
+          paramsPasoJson: original.paramsPasoJson,
+        },
+      });
+      if (guillotina) {
+        await prisma.productoConfigPaso.update({
+          where: { id: guillotina.id },
+          data: { modoActivacion: original.guillotinaModoActivacion },
+        });
+      }
     }
   });
 
@@ -2132,7 +2504,9 @@ describe('MotorUniversalService — smoke tests', () => {
       fakeMaterial,
     );
     expect(r).not.toBeNull();
-    expect(['packingsolver-rectangle', 'grid-2d-multi']).toContain(r!.algorithm);
+    expect(['packingsolver-rectangle', 'grid-2d-multi']).toContain(
+      r!.algorithm,
+    );
     expect(r!.unidad).toBe('pliegos');
     expect(r!.cantidadCalculada).toBeGreaterThanOrEqual(1);
     expect(r!.placements.length).toBe(3);
@@ -2659,7 +3033,9 @@ describe('MotorUniversalService — smoke tests', () => {
         where: { id: impresion!.id },
         data: {
           paramsPasoJson:
-            originalParams === null ? Prisma.JsonNull : (originalParams as never),
+            originalParams === null
+              ? Prisma.JsonNull
+              : (originalParams as never),
         },
       });
     }

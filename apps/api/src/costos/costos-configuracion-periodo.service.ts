@@ -62,8 +62,7 @@ export class CostosConfiguracionPeriodoService {
       recursosMaquinaria: centro.recursos
         .filter(
           (recurso) =>
-            recurso.tipoRecurso === TipoRecursoCentroCosto.MAQUINARIA &&
-            Boolean(recurso.maquinaId),
+            recurso.tipoRecurso === TipoRecursoCentroCosto.MAQUINARIA,
         )
         .map((recurso) =>
           this.mapper.toRecursoMaquinariaResponse(
@@ -247,7 +246,6 @@ export class CostosConfiguracionPeriodoService {
         centroCostoId: id,
         periodo: normalizedPeriodo,
         tipoRecurso: TipoRecursoCentroCosto.MAQUINARIA,
-        maquinaId: { not: null },
       },
       include: {
         maquina: true,
@@ -291,18 +289,33 @@ export class CostosConfiguracionPeriodoService {
       },
     });
     const recursoById = new Map(recursos.map((item) => [item.id, item]));
+    const normalizeMachineResourceName = (value?: string | null) =>
+      value?.trim().toLocaleLowerCase() ?? '';
+    const recursoByMaquinaId = new Map(
+      recursos
+        .filter((item) => item.maquinaId)
+        .map((item) => [item.maquinaId as string, item]),
+    );
+    const recursoByNombre = new Map(
+      recursos
+        .filter((item) => !item.maquinaId && item.nombreRecurso?.trim())
+        .map((item) => [normalizeMachineResourceName(item.nombreRecurso), item]),
+    );
 
     for (const item of payload.recursos) {
-      const recurso = recursoById.get(item.centroCostoRecursoId);
+      const recurso =
+        recursoById.get(item.centroCostoRecursoId) ??
+        (item.maquinaId ? recursoByMaquinaId.get(item.maquinaId) : undefined) ??
+        recursoByNombre.get(normalizeMachineResourceName(item.nombreRecurso));
       if (!recurso) {
         throw new BadRequestException(
           'Uno de los recursos de maquinaria no pertenece al centro/período seleccionado.',
         );
       }
 
-      if (!recurso.maquinaId) {
+      if (!recurso.maquinaId && !recurso.nombreRecurso?.trim()) {
         throw new BadRequestException(
-          'El recurso de maquinaria debe tener una máquina vinculada antes de cargar costeo.',
+          'El recurso de maquinaria debe tener un nombre antes de cargar costeo.',
         );
       }
     }
@@ -438,6 +451,7 @@ export class CostosConfiguracionPeriodoService {
               ? (recurso.maquinaId ?? null)
               : null,
           nombreRecurso:
+            recurso.tipoRecurso === TipoRecursoCentroCostoDto.maquinaria ||
             recurso.tipoRecurso === TipoRecursoCentroCostoDto.gasto_general ||
             recurso.tipoRecurso === TipoRecursoCentroCostoDto.activo_fijo
               ? recurso.nombreRecurso?.trim() || null
@@ -508,9 +522,7 @@ export class CostosConfiguracionPeriodoService {
     payload: UpsertCentroRecursosMaquinariaDto,
   ) {
     const recursosMaquinaria = recursos.filter(
-      (recurso) =>
-        recurso.tipoRecurso === TipoRecursoCentroCosto.MAQUINARIA &&
-        Boolean(recurso.maquinaId),
+      (recurso) => recurso.tipoRecurso === TipoRecursoCentroCosto.MAQUINARIA,
     );
     const recursoById = new Map(
       recursosMaquinaria.map((item) => [item.id, item]),
@@ -518,22 +530,28 @@ export class CostosConfiguracionPeriodoService {
     const recursoByMaquinaId = new Map(
       recursosMaquinaria
         .filter((item) => item.maquinaId)
-        .map((item) => [item.maquinaId!, item]),
+        .map((item) => [item.maquinaId as string, item]),
     );
+    const normalizeMachineResourceName = (value?: string | null) =>
+      value?.trim().toLocaleLowerCase() ?? '';
+    const recursoByNombre = new Map(
+      recursosMaquinaria
+        .filter((item) => !item.maquinaId && item.nombreRecurso?.trim())
+        .map((item) => [normalizeMachineResourceName(item.nombreRecurso), item]),
+    );
+    const findRecursoMaquinaria = (
+      item: UpsertCentroRecursosMaquinariaDto['recursos'][number],
+    ) =>
+      recursoById.get(item.centroCostoRecursoId) ??
+      (item.maquinaId ? recursoByMaquinaId.get(item.maquinaId) : undefined) ??
+      recursoByNombre.get(normalizeMachineResourceName(item.nombreRecurso));
     const payloadResourceIds: string[] = [];
 
     for (const item of payload.recursos) {
-      const recurso =
-        recursoById.get(item.centroCostoRecursoId) ??
-        (item.maquinaId ? recursoByMaquinaId.get(item.maquinaId) : undefined);
+      const recurso = findRecursoMaquinaria(item);
       if (!recurso) {
         throw new BadRequestException(
           'Uno de los recursos de maquinaria no pertenece al centro/período seleccionado.',
-        );
-      }
-      if (!recurso.maquinaId) {
-        throw new BadRequestException(
-          'El recurso de maquinaria debe tener una máquina vinculada antes de cargar costeo.',
         );
       }
       payloadResourceIds.push(recurso.id);
@@ -553,9 +571,7 @@ export class CostosConfiguracionPeriodoService {
     });
 
     for (const item of payload.recursos) {
-      const recurso =
-        recursoById.get(item.centroCostoRecursoId) ??
-        (item.maquinaId ? recursoByMaquinaId.get(item.maquinaId) : undefined);
+      const recurso = findRecursoMaquinaria(item);
       if (!recurso) continue;
       const calculado = this.computeMaquinariaCosteo(item);
 
@@ -570,7 +586,7 @@ export class CostosConfiguracionPeriodoService {
         create: {
           tenantId: auth.tenantId,
           centroCostoRecursoId: recurso.id,
-          maquinaId: recurso.maquinaId!,
+          maquinaId: recurso.maquinaId ?? null,
           periodo,
           metodoDepreciacion: this.mapper.toPrismaMetodoDepreciacionMaquina(
             item.metodoDepreciacion,
@@ -593,7 +609,7 @@ export class CostosConfiguracionPeriodoService {
           tarifaHoraCalc: calculado.tarifaHora,
         },
         update: {
-          maquinaId: recurso.maquinaId!,
+          maquinaId: recurso.maquinaId ?? null,
           metodoDepreciacion: this.mapper.toPrismaMetodoDepreciacionMaquina(
             item.metodoDepreciacion,
           ),
@@ -766,21 +782,6 @@ export class CostosConfiguracionPeriodoService {
     const horasPorDia = new Prisma.Decimal(payload.horasPorDia);
     const horasBaseMes = diasPorMes.mul(horasPorDia);
     const capacidadTeorica = horasBaseMes;
-    const capacidadHoraMaquina = recursos
-      .filter(
-        (recurso) => recurso.tipoRecurso === TipoRecursoCentroCosto.MAQUINARIA,
-      )
-      .reduce((acc, recurso) => {
-        const item = recurso.maquinariaPeriodo[0];
-        if (!item) {
-          return acc;
-        }
-        const horasProductivas = item.horasProgramadasMes
-          .mul(item.disponibilidadPct)
-          .mul(item.eficienciaPct)
-          .div(new Prisma.Decimal(10000));
-        return acc.plus(horasProductivas);
-      }, new Prisma.Decimal(0));
     const capacidadHoraHombre = recursos
       .filter(
         (recurso) => recurso.tipoRecurso === TipoRecursoCentroCosto.EMPLEADO,
@@ -793,9 +794,7 @@ export class CostosConfiguracionPeriodoService {
         );
       }, new Prisma.Decimal(0));
     const capacidadAuto =
-      unidadBase === UnidadBaseCentroCosto.HORA_MAQUINA
-        ? capacidadHoraMaquina
-        : unidadBase === UnidadBaseCentroCosto.HORA_HOMBRE
+      unidadBase === UnidadBaseCentroCosto.HORA_HOMBRE
           ? capacidadHoraHombre
           : capacidadTeorica;
     const overrideManualCapacidad =

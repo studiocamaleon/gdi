@@ -260,6 +260,8 @@ export class ProductoRutasService {
               tenantId,
               productoConfigPasoId: configDuplicada.id,
               maquinaId: maquina.maquinaId,
+              perfilDefaultId: maquina.perfilDefaultId,
+              modoColorAllowedModes: maquina.modoColorAllowedModes,
               esPreferida: maquina.esPreferida,
               orden: maquina.orden,
               activo: maquina.activo,

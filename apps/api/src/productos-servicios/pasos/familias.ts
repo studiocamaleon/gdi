@@ -26,11 +26,13 @@ const MP = {
     subfamiliasMateriaPrima: ['SUSTRATO_HOJA'],
   },
   sustratoImpresionArea: {
-    familiasMateriaPrima: ['SUSTRATO'],
+    familiasMateriaPrima: ['SUSTRATO', 'TRANSFERENCIA_LAMINACION'],
     subfamiliasMateriaPrima: [
       'SUSTRATO_ROLLO_FLEXIBLE',
       'SUSTRATO_RIGIDO',
       'OBJETO_PROMOCIONAL_BASE',
+      'FILM_TRANSFERENCIA',
+      'PAPEL_TRANSFERENCIA',
     ],
   },
   sustratoPieza: {
@@ -263,7 +265,10 @@ const proof: DefinicionFamilia = {
     'Impresión de prueba para validar color con el cliente antes de tirada.',
   relacionMaquinaSoportada: ['M-1'],
   modosTiempoSoportados: ['T-1'],
-  mecanismosCantidadSoportados: ['DIRECT_FROM_JOBCONTEXT'],
+  mecanismosCantidadSoportados: [
+    'DIRECT_FROM_JOBCONTEXT',
+    'HEREDAR_DEL_OUTPUT_CANONICO',
+  ],
   modosActivacionSoportados: ['OPCIONAL'],
   modoActivacionDefault: 'OPCIONAL',
   multiplicadoresSoportados: [],
@@ -472,7 +477,10 @@ const aplicacion_transfer: DefinicionFamilia = {
   descripcion: 'Aplica film transfer impreso a textil con plancha térmica.',
   relacionMaquinaSoportada: ['M-1'],
   modosTiempoSoportados: ['T-3'],
-  mecanismosCantidadSoportados: ['DIRECT_FROM_JOBCONTEXT'],
+  mecanismosCantidadSoportados: [
+    'DIRECT_FROM_JOBCONTEXT',
+    'HEREDAR_DEL_OUTPUT_CANONICO',
+  ],
   modosActivacionSoportados: ['OBLIGATORIO'],
   modoActivacionDefault: 'OBLIGATORIO',
   multiplicadoresSoportados: [],
@@ -735,7 +743,10 @@ const corte_manual: DefinicionFamilia = {
     'Corte manual con trincheta o sierra para señalética PVC, MDF fino. Sin máquina industrial.',
   relacionMaquinaSoportada: ['M-0'],
   modosTiempoSoportados: ['T-2'],
-  mecanismosCantidadSoportados: ['DIRECT_FROM_JOBCONTEXT'],
+  mecanismosCantidadSoportados: [
+    'DIRECT_FROM_JOBCONTEXT',
+    'HEREDAR_DEL_OUTPUT_CANONICO',
+  ],
   modosActivacionSoportados: ['OBLIGATORIO', 'OPCIONAL'],
   modoActivacionDefault: 'OPCIONAL',
   multiplicadoresSoportados: [],

@@ -4,7 +4,8 @@ import type {
   UnidadMateriaPrima,
 } from "@/lib/materias-primas";
 
-export type MaterialPresetInstallStatus = "not-installed" | "partial" | "installed";
+export type MaterialPresetInstallStatus =
+  "not-installed" | "partial" | "installed";
 
 export type MaterialPresetVariant = {
   id: string;
@@ -93,7 +94,10 @@ export const bibliotecaUses: Record<string, { nm: string; code: string }> = {
   packaging: { nm: "Packaging", code: "Packaging" },
 };
 
-export const bibliotecaFamilias: Record<string, { nm: string; key: string; parent: string }> = {
+export const bibliotecaFamilias: Record<
+  string,
+  { nm: string; key: string; parent: string }
+> = {
   sustrato_rigido: {
     nm: "Sustrato rígido",
     key: "sustrato_rigido",
@@ -103,5 +107,40 @@ export const bibliotecaFamilias: Record<string, { nm: string; key: string; paren
     nm: "Sustrato hoja",
     key: "sustrato_hoja",
     parent: "sustrato",
+  },
+  sustrato_rollo_flexible: {
+    nm: "Sustrato en rollo",
+    key: "sustrato_rollo_flexible",
+    parent: "sustrato",
+  },
+  tinta_impresion: {
+    nm: "Tinta impresión",
+    key: "tinta_impresion",
+    parent: "tinta_colorante",
+  },
+  toner: {
+    nm: "Tóner",
+    key: "toner",
+    parent: "tinta_colorante",
+  },
+  film_transferencia: {
+    nm: "Film de transferencia",
+    key: "film_transferencia",
+    parent: "transferencia_laminacion",
+  },
+  laminado_film: {
+    nm: "Laminado film",
+    key: "laminado_film",
+    parent: "transferencia_laminacion",
+  },
+  laminado_pouch: {
+    nm: "Laminado pouch",
+    key: "laminado_pouch",
+    parent: "transferencia_laminacion",
+  },
+  iman_ceramico_flexible: {
+    nm: "Imanes",
+    key: "iman_ceramico_flexible",
+    parent: "magnetico_fijacion",
   },
 };

@@ -49,8 +49,6 @@ import {
   unidadBaseItems,
 } from "@/lib/costos";
 import { EmpleadoDetalle } from "@/lib/empleados";
-import { getMaquinas } from "@/lib/maquinaria-api";
-import { Maquina } from "@/lib/maquinaria";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -542,8 +540,6 @@ export function CentroCostoConfigurator({
   const [empleadosDisponibilidad, setEmpleadosDisponibilidad] = React.useState<
     EmpleadoDisponibilidadCentroCosto[]
   >([]);
-  const [maquinas, setMaquinas] = React.useState<Maquina[]>([]);
-
   const plantaLabelById = React.useMemo(
     () => new Map(plantas.map((planta) => [planta.id, planta.nombre])),
     [plantas],
@@ -559,18 +555,6 @@ export function CentroCostoConfigurator({
       ),
     [empleados],
   );
-  const maquinaById = React.useMemo(
-    () => new Map(maquinas.map((maquina) => [maquina.id, maquina])),
-    [maquinas],
-  );
-  const maquinariaDisponibles = React.useMemo(() => {
-    if (!baseForm) {
-      return [];
-    }
-    return maquinas.filter(
-      (maquina) => maquina.activo && maquina.plantaId === baseForm.plantaId,
-    );
-  }, [baseForm, maquinas]);
   const disponibilidadEmpleadoById = React.useMemo(
     () =>
       new Map(
@@ -643,28 +627,6 @@ export function CentroCostoConfigurator({
 
   const capacidadTeorica =
     (capacityForm.diasPorMes || 0) * (capacityForm.horasPorDia || 0);
-  const capacidadAutoHoraMaquina = resourcesForm
-    .filter(
-      (resource) => resource.activo && resource.tipoRecurso === "maquinaria",
-    )
-    .reduce((total, resource) => {
-      const item =
-        machineCostsForm.find(
-          (current) => current.centroCostoRecursoId === resource.id,
-        ) ??
-        machineCostsForm.find(
-          (current) => current.maquinaId === resource.maquinaId,
-        );
-      if (!item) {
-        return total;
-      }
-      return (
-        total +
-        item.horasProgramadasMes *
-          (item.disponibilidadPct / 100) *
-          (item.eficienciaPct / 100)
-      );
-    }, 0);
   const capacidadAutoHoraHombre = resourcesForm
     .filter(
       (resource) => resource.activo && resource.tipoRecurso === "empleado",
@@ -675,12 +637,9 @@ export function CentroCostoConfigurator({
       0,
     );
   const capacidadAutomatica =
-    baseForm?.unidadBaseFutura === "hora_maquina"
-      ? capacidadAutoHoraMaquina
-      : baseForm?.unidadBaseFutura === "hora_hombre"
+    baseForm?.unidadBaseFutura === "hora_hombre"
         ? capacidadAutoHoraHombre
         : capacidadTeorica;
-  const usaCapacidadMaquinaria = baseForm?.unidadBaseFutura === "hora_maquina";
   const capacidadPractica =
     capacityForm.overrideManualCapacidad !== undefined &&
     Number.isFinite(capacityForm.overrideManualCapacidad)
@@ -746,7 +705,7 @@ export function CentroCostoConfigurator({
       )
       .every(
         (resource) =>
-          Boolean(resource.maquinaId) &&
+          Boolean(resource.nombreRecurso?.trim()) &&
           machineCostsForm.some(
             (item) => item.centroCostoRecursoId === resource.id,
           ),
@@ -911,35 +870,6 @@ export function CentroCostoConfigurator({
 
   React.useEffect(() => {
     if (!open) {
-      return;
-    }
-
-    let cancelled = false;
-
-    startLoading(async () => {
-      try {
-        const data = await getMaquinas();
-        if (!cancelled) {
-          setMaquinas(data);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          toast.error(
-            error instanceof Error
-              ? error.message
-              : "No se pudo cargar el catálogo de máquinas.",
-          );
-        }
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [open]);
-
-  React.useEffect(() => {
-    if (!open) {
       setActiveStep("identidad");
       setPeriodo(getCurrentPeriodo());
     }
@@ -979,28 +909,19 @@ export function CentroCostoConfigurator({
           (resource) =>
             resource.tipoRecurso === "maquinaria" &&
             resource.activo &&
-            Boolean(resource.maquinaId),
+            Boolean(resource.nombreRecurso?.trim()),
         )
         .map((resource) => {
           const currentItem = currentByResourceId.get(resource.id);
-          const maquina = resource.maquinaId
-            ? maquinaById.get(resource.maquinaId)
-            : null;
+          const machineName = resource.nombreRecurso?.trim() || "Máquina";
           const nextBase = currentItem
             ? {
                 ...currentItem,
                 centroCostoRecursoId: resource.id,
                 maquinaId: resource.maquinaId ?? currentItem.maquinaId,
-                maquinaNombre:
-                  maquina?.nombre ??
-                  currentItem.maquinaNombre ??
-                  resource.nombreRecurso ??
-                  "",
+                maquinaNombre: machineName,
               }
-            : createMachineCostDefault(
-                resource,
-                maquina?.nombre ?? resource.nombreRecurso ?? "Máquina",
-              );
+            : createMachineCostDefault(resource, machineName);
           const preview = calculateMachineCostPreview(nextBase);
           return {
             ...nextBase,
@@ -1015,7 +936,7 @@ export function CentroCostoConfigurator({
 
       return next;
     });
-  }, [baseForm, maquinaById, periodo, resourcesForm]);
+  }, [baseForm, periodo, resourcesForm]);
 
   const handleCopyLastPeriod = () => {
     if (!centro) {
@@ -1052,18 +973,20 @@ export function CentroCostoConfigurator({
           activo: item.activo,
         }));
         setResourcesForm(copiedResources);
-        const resourceIdByMaquinaId = new Map(
+        const resourceIdByMachineKey = new Map(
           copiedResources
-            .filter(
-              (resource) =>
-                resource.tipoRecurso === "maquinaria" && resource.maquinaId,
-            )
-            .map((resource) => [resource.maquinaId as string, resource.id]),
+            .filter((resource) => resource.tipoRecurso === "maquinaria")
+            .map((resource) => [
+              resource.maquinaId || resource.nombreRecurso?.trim() || "",
+              resource.id,
+            ]),
         );
         setMachineCostsForm(
           detail.recursosMaquinaria
             .map((item) => {
-              const nextResourceId = resourceIdByMaquinaId.get(item.maquinaId);
+              const nextResourceId = resourceIdByMachineKey.get(
+                item.maquinaId || item.maquinaNombre?.trim() || "",
+              );
               if (!nextResourceId) {
                 return null;
               }
@@ -1134,7 +1057,7 @@ export function CentroCostoConfigurator({
           (resource) =>
             resource.tipoRecurso === "maquinaria" &&
             resource.activo &&
-            Boolean(resource.maquinaId),
+            Boolean(resource.nombreRecurso?.trim()),
         )
         .map((resource) => {
           const currentItem =
@@ -1142,9 +1065,11 @@ export function CentroCostoConfigurator({
               (item) => item.centroCostoRecursoId === resource.id,
             ) ??
             machineCostsForm.find(
-              (item) => item.maquinaId === resource.maquinaId,
+              (item) =>
+                Boolean(resource.maquinaId) &&
+                item.maquinaId === resource.maquinaId,
             );
-          const maquinaNombre = resource.nombreRecurso || "Máquina";
+          const maquinaNombre = resource.nombreRecurso?.trim() || "Máquina";
           const merged = currentItem
             ? {
                 ...currentItem,
@@ -1166,6 +1091,7 @@ export function CentroCostoConfigurator({
           return {
             centroCostoRecursoId: merged.centroCostoRecursoId,
             maquinaId: merged.maquinaId,
+            nombreRecurso: maquinaNombre,
             metodoDepreciacion: merged.metodoDepreciacion,
             valorCompra: merged.valorCompra,
             valorResidual: merged.valorResidual,
@@ -1322,30 +1248,21 @@ export function CentroCostoConfigurator({
         .filter(
           (resource) =>
             resource.tipoRecurso === "maquinaria" &&
-            Boolean(resource.maquinaId) &&
+            Boolean(resource.nombreRecurso?.trim()) &&
             resource.activo,
         )
         .map((resource) => {
           const costItem = machineCostsForm.find(
             (item) => item.centroCostoRecursoId === resource.id,
           );
-          const maquina = resource.maquinaId
-            ? maquinaById.get(resource.maquinaId)
-            : null;
+          const machineName = resource.nombreRecurso?.trim() || "Máquina";
           const merged = costItem
             ? {
                 ...costItem,
                 maquinaId: resource.maquinaId ?? costItem.maquinaId,
-                maquinaNombre:
-                  maquina?.nombre ??
-                  costItem.maquinaNombre ??
-                  resource.nombreRecurso ??
-                  "",
+                maquinaNombre: machineName,
               }
-            : createMachineCostDefault(
-                resource,
-                maquina?.nombre ?? resource.nombreRecurso ?? "Máquina",
-              );
+            : createMachineCostDefault(resource, machineName);
           const preview = calculateMachineCostPreview(merged);
 
           return {
@@ -1356,7 +1273,7 @@ export function CentroCostoConfigurator({
             },
           };
         }),
-    [machineCostsForm, maquinaById, resourcesForm],
+    [machineCostsForm, resourcesForm],
   );
 
   const manualComponents = React.useMemo(
@@ -1834,56 +1751,20 @@ export function CentroCostoConfigurator({
                           {resource.tipoRecurso === "maquinaria" ? (
                             <Field>
                               <FieldLabel>Máquina</FieldLabel>
-                              <Select
-                                value={resource.maquinaId ?? ""}
-                                onValueChange={(value) => {
-                                  if (!value) {
-                                    return;
-                                  }
-                                  const maquina = maquinariaDisponibles.find(
-                                    (item) => item.id === value,
-                                  );
-                                  setResourcesForm((current) =>
-                                    current.map((item) =>
-                                      item.id === resource.id
-                                        ? {
-                                            ...item,
-                                            maquinaId: value,
-                                            nombreRecurso:
-                                              maquina?.nombre ?? "",
-                                          }
-                                        : item,
-                                    ),
-                                  );
-                                }}
-                              >
-                                <SelectTrigger className="w-full">
-                                  <SelectValue placeholder="Selecciona una máquina">
-                                    {(value) =>
-                                      typeof value === "string"
-                                        ? (maquinariaDisponibles.find(
-                                            (item) => item.id === value,
-                                          )?.nombre ?? "Selecciona una máquina")
-                                        : "Selecciona una máquina"
-                                    }
-                                  </SelectValue>
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectGroup>
-                                    {maquinariaDisponibles.map((maquina) => (
-                                      <SelectItem
-                                        key={maquina.id}
-                                        value={maquina.id}
-                                      >
-                                        {maquina.nombre} ({maquina.codigo})
-                                      </SelectItem>
-                                    ))}
-                                  </SelectGroup>
-                                </SelectContent>
-                              </Select>
+                              <Input
+                                value={resource.nombreRecurso ?? ""}
+                                onChange={(event) =>
+                                  updateResource(resource.id, (current) => ({
+                                    ...current,
+                                    maquinaId: undefined,
+                                    nombreRecurso: event.target.value,
+                                  }))
+                                }
+                                placeholder="Ej: Guillotina Polar 115"
+                              />
                               <FieldDescription>
-                                Solo se listan máquinas activas de la planta del
-                                centro.
+                                Escribí el nombre libremente; no hace falta que
+                                exista previamente en Maquinaria.
                               </FieldDescription>
                             </Field>
                           ) : null}
@@ -3105,9 +2986,9 @@ export function CentroCostoConfigurator({
             <CardHeader>
               <CardTitle>¿Cuántas horas reales trabaja al mes?</CardTitle>
               <CardDescription>
-                La capacidad práctica se calcula automáticamente según los
-                recursos del paso 2. Podés ajustar días/horas base o usar una
-                capacidad manual.
+                La capacidad práctica se define desde días y horas reales del
+                mes. Si ya conocés el total exacto, podés cargar una capacidad
+                manual.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-5">
@@ -3117,8 +2998,6 @@ export function CentroCostoConfigurator({
                   <Input
                     inputMode="decimal"
                     value={String(capacityForm.diasPorMes)}
-                    readOnly={usaCapacidadMaquinaria}
-                    disabled={usaCapacidadMaquinaria}
                     onChange={(event) =>
                       setCapacityForm((current) => ({
                         ...current,
@@ -3126,19 +3005,13 @@ export function CentroCostoConfigurator({
                       }))
                     }
                   />
-                  <FieldDescription>
-                    {usaCapacidadMaquinaria
-                      ? "Se usa capacidad de maquinaria del paso 2."
-                      : "Ejemplo: 22"}
-                  </FieldDescription>
+                  <FieldDescription>Ejemplo: 22</FieldDescription>
                 </Field>
                 <Field>
                   <FieldLabel>Horas por día</FieldLabel>
                   <Input
                     inputMode="decimal"
                     value={String(capacityForm.horasPorDia)}
-                    readOnly={usaCapacidadMaquinaria}
-                    disabled={usaCapacidadMaquinaria}
                     onChange={(event) =>
                       setCapacityForm((current) => ({
                         ...current,
@@ -3146,11 +3019,7 @@ export function CentroCostoConfigurator({
                       }))
                     }
                   />
-                  <FieldDescription>
-                    {usaCapacidadMaquinaria
-                      ? "Se usa capacidad de maquinaria del paso 2."
-                      : "Ejemplo: 8"}
-                  </FieldDescription>
+                  <FieldDescription>Ejemplo: 8</FieldDescription>
                 </Field>
                 <Field>
                   <FieldLabel>Capacidad manual</FieldLabel>
