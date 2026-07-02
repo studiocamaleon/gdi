@@ -25,6 +25,13 @@ export interface NestingPanelizadoConfig {
   manualLayout?: Record<string, unknown> | null;
 }
 
+export interface PrintSheetCandidateConfig {
+  id: string;
+  nombre: string;
+  anchoMm: number;
+  altoMm: number;
+}
+
 const MIN_PANEL_MAX_WIDTH_MM = 300;
 
 export interface NestingConfigResolved {
@@ -44,6 +51,8 @@ export interface NestingConfigResolved {
   rollWidthMm: number | null;
   sheetWidthMm: number | null;
   sheetHeightMm: number | null;
+  printSheetMode: 'fixed' | 'automatic';
+  printSheetCandidates: PrintSheetCandidateConfig[];
   purchaseSheetWidthMm: number | null;
   purchaseSheetHeightMm: number | null;
   machineGeometry: string | null;
@@ -257,6 +266,16 @@ export function resolveNestingConfig(
   );
   const purchaseSheetWidthMm = readNumber(materialAttrs.anchoMm);
   const purchaseSheetHeightMm = readNumber(materialAttrs.altoMm, materialAttrs.largoMm);
+  const printSheetMode =
+    paso.familiaCodigo === 'impresion_por_hoja' &&
+    normalizePrintSheetMode(pliegoImpresionConfig.modo, pliegoImpresionConfig.mode) ===
+      'automatic'
+      ? 'automatic'
+      : 'fixed';
+  const printSheetCandidates =
+    paso.familiaCodigo === 'impresion_por_hoja'
+      ? normalizePrintSheetCandidates(pliegoImpresionConfig.candidatos)
+      : [];
   const configuredPrintSheetWidthMm =
     paso.familiaCodigo === 'impresion_por_hoja'
       ? readNumber(
@@ -294,6 +313,8 @@ export function resolveNestingConfig(
       configuredPrintSheetHeightMm ??
       purchaseSheetHeightMm ??
       readNumber(maqParams.largoMesaMm),
+    printSheetMode,
+    printSheetCandidates,
     purchaseSheetWidthMm,
     purchaseSheetHeightMm,
     machineGeometry: geometry,
@@ -437,6 +458,41 @@ function normalizeMargins(
     startMm: readNumber(value.startMm, value.inicio, value.sup, defaults.startMm),
     endMm: readNumber(value.endMm, value.fin, value.inf, defaults.endMm),
   };
+}
+
+function normalizePrintSheetMode(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value !== 'string') continue;
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'automatico' || normalized === 'automatic') {
+      return 'automatic';
+    }
+  }
+  return 'fixed';
+}
+
+function normalizePrintSheetCandidates(value: unknown): PrintSheetCandidateConfig[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item, index) => {
+      const record = asRecord(item);
+      if (record.activo === false || record.enabled === false) return null;
+      const anchoMm = readNumber(record.anchoMm, record.widthMm);
+      const altoMm = readNumber(record.altoMm, record.largoMm, record.heightMm);
+      if (!anchoMm || anchoMm <= 0 || !altoMm || altoMm <= 0) return null;
+      const id =
+        typeof record.id === 'string' && record.id.trim()
+          ? record.id.trim()
+          : `candidato_${index + 1}`;
+      const nombre =
+        typeof record.nombre === 'string' && record.nombre.trim()
+          ? record.nombre.trim()
+          : typeof record.label === 'string' && record.label.trim()
+            ? record.label.trim()
+            : `${anchoMm} × ${altoMm} mm`;
+      return { id, nombre, anchoMm, altoMm };
+    })
+    .filter((item): item is PrintSheetCandidateConfig => item !== null);
 }
 
 function readBoolean(...values: unknown[]): boolean {

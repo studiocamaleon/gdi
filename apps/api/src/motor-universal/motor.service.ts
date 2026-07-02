@@ -24,6 +24,7 @@ import type {
   ErrorMotor,
   ProductoCargado,
   PasoCargado,
+  SlotCargado,
   JobContext,
   MaterialEjecutado,
   CargoDirectoEjecutado,
@@ -54,12 +55,22 @@ import {
   modoColorMatchesPerfil,
   normalizeModoColor,
 } from '../productos-servicios/modo-color-comercial';
+import { calcularPerimetroPiezasM } from './job-context-metrics';
 
 const MODO_SIN_IMPRESION = 'SIN_IMPRESION';
 const FAMILIAS_IMPRESION = new Set([
   'impresion_por_area',
   'impresion_por_hoja',
 ]);
+
+type MinimoComercialBase = 'cantidad_comercial' | 'pliegos_impresos';
+
+type MinimoComercialContext = {
+  base: MinimoComercialBase;
+  cantidadReal: number;
+  unidadLabel: string;
+  error?: ErrorMotor;
+};
 
 /**
  * G-M9 — Resuelve la unidad efectiva de un material consumido. Cuando la
@@ -333,17 +344,30 @@ export class MotorUniversalService {
     return JSON.stringify(value);
   }
 
-  async cotizar(input: CotizarInput): Promise<CotizarOutput> {
+  async cotizar(
+    input: CotizarInput,
+    opciones?: {
+      omitirPrecioReferenciaMinimo?: boolean;
+      /**
+       * Producto ya cargado por el caller (mismo tenant/producto/ruta), para
+       * evitar recargar el "include gigante" cuando cotizar-y-guardar ya lo
+       * tiene en memoria.
+       */
+      productoPrecargado?: ProductoCargado;
+    },
+  ): Promise<CotizarOutput> {
     const errores: ErrorMotor[] = [];
 
     // 1. INICIALIZACIÓN
     let producto: ProductoCargado;
     try {
-      producto = await this.cargarProductoYRuta(
-        input.tenantId,
-        input.productoId,
-        input.rutaAlternativaId ?? null,
-      );
+      producto =
+        opciones?.productoPrecargado ??
+        (await this.cargarProductoYRuta(
+          input.tenantId,
+          input.productoId,
+          input.rutaAlternativaId ?? null,
+        ));
     } catch (err) {
       return {
         exitoso: false,
@@ -429,6 +453,7 @@ export class MotorUniversalService {
       const pasosSiguientes = producto.pasos.slice(i + 1);
 
       const ejecucion = await this.ejecutarPaso(
+        input.tenantId,
         paso,
         jobContext,
         errores,
@@ -500,13 +525,39 @@ export class MotorUniversalService {
       cargosDirectosPasoTotal + cargosDirectosCotizacionTotal;
     const total = tiempoTotal + materialesTotal + cargosDirectosTotal;
     const cantidadEfectiva = jobContext.cantidad ?? 1;
-    const cantidadComercialPricing = this.resolverCantidadComercialPricing(
+    const cantidadComercialReal = this.resolverCantidadComercialBase(
       producto,
       jobContext,
       pasosEjecutados,
     );
-    const costoUnitarioComercial =
-      cantidadComercialPricing > 0 ? total / cantidadComercialPricing : 0;
+    const minimoComercialContext = this.resolverMinimoComercialContext(
+      producto,
+      cantidadComercialReal,
+      pasosEjecutados,
+    );
+    if (minimoComercialContext.error) {
+      return { exitoso: false, errores: [minimoComercialContext.error] };
+    }
+    const errorMinimo = this.validarMinimoComercial(
+      producto,
+      minimoComercialContext,
+    );
+    if (errorMinimo) {
+      return { exitoso: false, errores: [errorMinimo] };
+    }
+    const cantidadComercialPricing = this.resolverCantidadComercialPricing(
+      producto,
+      jobContext,
+      pasosEjecutados,
+      minimoComercialContext,
+    );
+    const costoUnitarioComercial = this.resolverCostoUnitarioComercial(
+      total,
+      minimoComercialContext.base === 'pliegos_impresos'
+        ? minimoComercialContext.cantidadReal
+        : cantidadComercialReal,
+      cantidadComercialPricing,
+    );
 
     const cotizacion: CotizacionResultado = {
       productoId: producto.productoId,
@@ -515,8 +566,17 @@ export class MotorUniversalService {
       rutaNombre: producto.rutaAlternativaNombre,
       cantidadEfectiva,
       cantidadPedida: input.jobContext.cantidad,
+      cantidadComercialReal,
       cantidadComercialPricing,
-      unidadComercialPricing: producto.unidadComercial,
+      unidadComercialPricing:
+        minimoComercialContext.base === 'pliegos_impresos'
+          ? 'pliegos'
+          : producto.unidadComercial,
+      minimoComercialAplicado: this.buildMinimoComercialAplicado(
+        producto,
+        minimoComercialContext,
+        cantidadComercialPricing,
+      ),
       costos: {
         tiempoTotal,
         materialesTotal,
@@ -595,6 +655,20 @@ export class MotorUniversalService {
       };
     }
 
+    const cotizacionReferenciaMinimo =
+      await this.resolverCotizacionReferenciaMinimoComercial({
+        input,
+        producto,
+        minimoContext: minimoComercialContext,
+        cantidadComercialReal,
+        cantidadComercialPricing,
+        omitir: opciones?.omitirPrecioReferenciaMinimo ?? false,
+      });
+    if (cotizacionReferenciaMinimo?.desglosePrecio) {
+      cotizacion.precio = cotizacionReferenciaMinimo.precio;
+      cotizacion.desglosePrecio = cotizacionReferenciaMinimo.desglosePrecio;
+    }
+
     return { exitoso: true, errores: [], cotizacion };
   }
 
@@ -618,44 +692,85 @@ export class MotorUniversalService {
     cotizacionId?: string;
     cotizacionItemId?: string;
   }> {
-    const result = await this.cotizar(input);
-    if (!result.exitoso || !result.cotizacion) {
+    // Cargamos el producto una sola vez y lo reutilizamos tanto para cotizar
+    // como para el snapshot (A2: evita recargar el "include gigante"). Si la
+    // carga falla, dejamos que cotizar produzca el error estándar.
+    let producto: ProductoCargado | null = null;
+    try {
+      producto = await this.cargarProductoYRuta(
+        input.tenantId,
+        input.productoId,
+        input.rutaAlternativaId ?? null,
+      );
+    } catch {
+      producto = null;
+    }
+    const result = await this.cotizar(
+      input,
+      producto ? { productoPrecargado: producto } : undefined,
+    );
+    if (!result.exitoso || !result.cotizacion || !producto) {
       return { result };
     }
 
-    // 1. Encontrar o crear cotización
-    let cotizacionId = input.cotizacionId;
-    if (!cotizacionId) {
-      const nueva = await this.prisma.cotizacion.create({
-        data: {
-          tenantId: input.tenantId,
-          clienteId: input.clienteId ?? null,
-          estado: 'borrador',
-        },
-      });
-      cotizacionId = nueva.id;
-    }
+    // Crear (o reusar) la cotización y su item de forma ATÓMICA (M6): si el
+    // item falla, no queda una cotización borrador huérfana.
+    const productoCargado = producto;
+    const { cotizacionId, itemId } = await this.prisma.$transaction(
+      async (tx) => {
+        let cid = input.cotizacionId;
+        if (cid) {
+          // La cotización debe pertenecer al tenant y estar en borrador
+          // (evita IDOR de escritura cross-tenant).
+          const existente = await tx.cotizacion.findFirst({
+            where: { id: cid, tenantId: input.tenantId },
+            select: { id: true, estado: true },
+          });
+          if (!existente) {
+            throw new NotFoundException('No se encontró la cotización.');
+          }
+          if (existente.estado !== 'borrador') {
+            throw new BadRequestException(
+              'Solo se pueden agregar items a una cotización en borrador.',
+            );
+          }
+        } else {
+          // El cliente asociado debe pertenecer al tenant.
+          if (input.clienteId) {
+            const cliente = await tx.cliente.findFirst({
+              where: { id: input.clienteId, tenantId: input.tenantId },
+              select: { id: true },
+            });
+            if (!cliente) {
+              throw new NotFoundException('No se encontró el cliente.');
+            }
+          }
+          const nueva = await tx.cotizacion.create({
+            data: {
+              tenantId: input.tenantId,
+              clienteId: input.clienteId ?? null,
+              estado: 'borrador',
+            },
+          });
+          cid = nueva.id;
+        }
 
-    // 2. Recuperar producto cargado para construir snapshot completo
-    const producto = await this.cargarProductoYRuta(
-      input.tenantId,
-      input.productoId,
-      input.rutaAlternativaId ?? null,
+        const item = await tx.cotizacionItem.create({
+          data: this.buildCotizacionItemData({
+            tenantId: input.tenantId,
+            cotizacionId: cid,
+            productoId: input.productoId,
+            jobContext: input.jobContext,
+            producto: productoCargado,
+            cotizacion: result.cotizacion!,
+          }),
+        });
+
+        return { cotizacionId: cid, itemId: item.id };
+      },
     );
 
-    // 3. Crear CotizacionItem con snapshot
-    const item = await this.prisma.cotizacionItem.create({
-      data: this.buildCotizacionItemData({
-        tenantId: input.tenantId,
-        cotizacionId,
-        productoId: input.productoId,
-        jobContext: input.jobContext,
-        producto,
-        cotizacion: result.cotizacion,
-      }),
-    });
-
-    return { result, cotizacionId, cotizacionItemId: item.id };
+    return { result, cotizacionId, cotizacionItemId: itemId };
   }
 
   async recotizarItem(input: {
@@ -749,7 +864,7 @@ export class MotorUniversalService {
       cotizacionId: args.cotizacionId,
       productoId: args.productoId,
       rutaAlternativaId: args.cotizacion.rutaAlternativaId,
-      cantidad: args.cotizacion.cantidadComercialPricing.toString(),
+      cantidad: args.cotizacion.cantidadComercialReal.toString(),
       jobContextJson: args.jobContext as never,
       snapshotJson: {
         producto: {
@@ -758,6 +873,7 @@ export class MotorUniversalService {
           nombre: args.producto.productoNombre,
           unidadComercial: args.producto.unidadComercial,
           modoMedidas: args.producto.modoMedidas,
+          minimoComercialBase: args.producto.minimoComercialBase,
         },
         ruta: {
           id: args.producto.rutaId,
@@ -779,8 +895,10 @@ export class MotorUniversalService {
         ejecucion: {
           cantidadEfectiva: args.cotizacion.cantidadEfectiva,
           cantidadPedida: args.cotizacion.cantidadPedida,
+          cantidadComercialReal: args.cotizacion.cantidadComercialReal,
           cantidadComercialPricing: args.cotizacion.cantidadComercialPricing,
           unidadComercialPricing: args.cotizacion.unidadComercialPricing,
+          minimoComercialAplicado: args.cotizacion.minimoComercialAplicado,
           costos: args.cotizacion.costos,
         },
       } as never,
@@ -934,6 +1052,106 @@ export class MotorUniversalService {
     producto: ProductoCargado,
     jobContext: JobContext,
     pasosEjecutados: PasoEjecutado[],
+    minimoContext?: MinimoComercialContext,
+  ): number {
+    const context =
+      minimoContext ??
+      this.resolverMinimoComercialContext(
+        producto,
+        this.resolverCantidadComercialBase(producto, jobContext, pasosEjecutados),
+        pasosEjecutados,
+      );
+    if (context.base === 'pliegos_impresos') {
+      const minimo = this.getMinimoComercialCantidad(producto);
+      if (
+        producto.minimoComercialPolitica === 'ADVERTIR_FACTURAR_MINIMO' &&
+        minimo &&
+        context.cantidadReal < minimo
+      ) {
+        return minimo;
+      }
+      return context.cantidadReal;
+    }
+    const cantidadBase = this.resolverCantidadComercialBase(
+      producto,
+      jobContext,
+      pasosEjecutados,
+    );
+    const minimo = this.getMinimoComercialCantidad(producto);
+    if (
+      producto.minimoComercialPolitica === 'ADVERTIR_FACTURAR_MINIMO' &&
+      minimo &&
+      cantidadBase < minimo
+    ) {
+      return minimo;
+    }
+    return cantidadBase;
+  }
+
+  private resolverMinimoComercialContext(
+    producto: ProductoCargado,
+    cantidadComercialReal: number,
+    pasosEjecutados: PasoEjecutado[],
+  ): MinimoComercialContext {
+    const base = this.normalizarMinimoComercialBase(producto.minimoComercialBase);
+    if (
+      base !== 'pliegos_impresos' ||
+      producto.minimoComercialPolitica === 'NONE' ||
+      !this.getMinimoComercialCantidad(producto)
+    ) {
+      return {
+        base: 'cantidad_comercial',
+        cantidadReal: cantidadComercialReal,
+        unidadLabel: this.labelUnidadComercial(producto.unidadComercial),
+      };
+    }
+
+    const pliegos = this.resolverPliegosImpresosDesdePasos(pasosEjecutados);
+    if (!pliegos) {
+      return {
+        base: 'pliegos_impresos',
+        cantidadReal: 0,
+        unidadLabel: 'pliegos',
+        error: {
+          codigo: 'minimo_comercial_pliegos_sin_output',
+          severidad: 'ERROR',
+          mensaje:
+            'El mínimo comercial está configurado por pliegos impresos, pero la ruta no publicó pliegos_impresos.',
+          contexto: {
+            minimoComercialBase: 'pliegos_impresos',
+            outputsDisponibles: pasosEjecutados.flatMap((paso) =>
+              Object.keys(paso.outputsCanonicos ?? {}),
+            ),
+          },
+          sugerencia:
+            'Usá una ruta con impresión por hoja/nesting o cambiá la base del mínimo a cantidad comercial.',
+        },
+      };
+    }
+
+    return {
+      base: 'pliegos_impresos',
+      cantidadReal: pliegos,
+      unidadLabel: 'pliegos',
+    };
+  }
+
+  private resolverPliegosImpresosDesdePasos(
+    pasosEjecutados: PasoEjecutado[],
+  ): number | null {
+    for (let index = pasosEjecutados.length - 1; index >= 0; index -= 1) {
+      const value = this.numeroPositivo(
+        pasosEjecutados[index]?.outputsCanonicos?.pliegos_impresos,
+      );
+      if (value) return value;
+    }
+    return null;
+  }
+
+  private resolverCantidadComercialBase(
+    producto: ProductoCargado,
+    jobContext: JobContext,
+    pasosEjecutados: PasoEjecutado[],
   ): number {
     const unidad = producto.unidadComercial?.toLowerCase();
     const cantidadFallback = this.numeroPositivo(jobContext.cantidad) ?? 1;
@@ -970,6 +1188,178 @@ export class MotorUniversalService {
       this.numeroPositivo(jobContext.cantidadComercialPricing) ??
       cantidadFallback
     );
+  }
+
+  private resolverCostoUnitarioComercial(
+    costoTotalReal: number,
+    cantidadComercialReal: number,
+    cantidadComercialPricing: number,
+  ) {
+    const cantidadBase =
+      cantidadComercialReal > 0 ? cantidadComercialReal : cantidadComercialPricing;
+    return cantidadBase > 0 ? costoTotalReal / cantidadBase : 0;
+  }
+
+  private async resolverCotizacionReferenciaMinimoComercial(args: {
+    input: CotizarInput;
+    producto: ProductoCargado;
+    minimoContext: MinimoComercialContext;
+    cantidadComercialReal: number;
+    cantidadComercialPricing: number;
+    omitir: boolean;
+  }): Promise<CotizacionResultado | null> {
+    if (args.omitir) return null;
+    if (
+      args.producto.minimoComercialPolitica !== 'ADVERTIR_FACTURAR_MINIMO' ||
+      args.cantidadComercialPricing <= args.minimoContext.cantidadReal
+    ) {
+      return null;
+    }
+
+    const jobContextReferencia = this.crearJobContextReferenciaMinimoComercial(
+      args.input.jobContext,
+      args.producto,
+      args.cantidadComercialReal,
+      args.cantidadComercialPricing,
+      args.minimoContext,
+    );
+    const resultado = await this.cotizar(
+      {
+        ...args.input,
+        jobContext: jobContextReferencia,
+      },
+      { omitirPrecioReferenciaMinimo: true },
+    );
+
+    if (!resultado.exitoso || !resultado.cotizacion) return null;
+    return resultado.cotizacion;
+  }
+
+  private crearJobContextReferenciaMinimoComercial(
+    jobContext: JobContext,
+    producto: ProductoCargado,
+    cantidadComercialReal: number,
+    cantidadComercialPricing: number,
+    minimoContext?: MinimoComercialContext,
+  ): JobContext {
+    const next = JSON.parse(JSON.stringify(jobContext)) as JobContext;
+    const unidad = producto.unidadComercial?.toLowerCase();
+    const minimoBase = minimoContext?.base ?? 'cantidad_comercial';
+    const ratioBase =
+      minimoBase === 'pliegos_impresos'
+        ? (minimoContext?.cantidadReal ?? 0)
+        : cantidadComercialReal;
+    const ratio = ratioBase > 0 ? cantidadComercialPricing / ratioBase : 1;
+
+    if (minimoBase === 'pliegos_impresos') {
+      next.cantidad = Math.max(1, Math.ceil(cantidadComercialPricing));
+      next.cantidadComercial = next.cantidad;
+      next.cantidadComercialPricing = next.cantidad;
+      delete next.piezas;
+      delete next.medidaCustomMm;
+      delete next.piezaAreaTotalM2;
+      delete next.metrosLineales;
+      delete next.metroLineal;
+      delete next.ml;
+      return next;
+    }
+
+    if (unidad === 'm2' || unidad === 'm²') {
+      next.cantidadComercial = cantidadComercialPricing;
+      next.cantidadComercialPricing = cantidadComercialPricing;
+      next.piezaAreaTotalM2 = cantidadComercialPricing;
+    } else if (
+      unidad === 'metro_lineal' ||
+      unidad === 'ml' ||
+      unidad === 'metro lineal'
+    ) {
+      next.cantidadComercial = cantidadComercialPricing;
+      next.cantidadComercialPricing = cantidadComercialPricing;
+      next.metrosLineales = cantidadComercialPricing;
+      next.metroLineal = cantidadComercialPricing;
+      next.ml = cantidadComercialPricing;
+    } else {
+      next.cantidad = cantidadComercialPricing;
+      next.cantidadComercial = cantidadComercialPricing;
+      next.cantidadComercialPricing = cantidadComercialPricing;
+    }
+
+    if (next.piezas?.length) {
+      next.piezas = next.piezas.map((pieza) => ({
+        ...pieza,
+        cantidad: Math.max(1, Math.round(pieza.cantidad * ratio)),
+      }));
+    }
+
+    return next;
+  }
+
+  private getMinimoComercialCantidad(producto: ProductoCargado) {
+    const minimo = Number(producto.minimoComercialCantidad ?? 0);
+    return Number.isFinite(minimo) && minimo > 0 ? minimo : null;
+  }
+
+  private validarMinimoComercial(
+    producto: ProductoCargado,
+    minimoContext: MinimoComercialContext,
+  ): ErrorMotor | null {
+    if (producto.minimoComercialPolitica !== 'BLOQUEAR') return null;
+    const minimo = this.getMinimoComercialCantidad(producto);
+    if (!minimo || minimoContext.cantidadReal >= minimo) return null;
+    return {
+      codigo: 'minimo_comercial_no_alcanzado',
+      severidad: 'ERROR',
+      mensaje: `La cantidad (${this.formatCantidadComercial(
+        minimoContext.cantidadReal,
+      )}) es menor al mínimo requerido (${this.formatCantidadComercial(
+        minimo,
+      )} ${minimoContext.unidadLabel}).`,
+      contexto: {
+        cantidadComercialReal: minimoContext.cantidadReal,
+        minimoComercialCantidad: minimo,
+        minimoComercialPolitica: producto.minimoComercialPolitica,
+        minimoComercialBase: minimoContext.base,
+        unidadComercial: producto.unidadComercial,
+        unidadMinimo: minimoContext.unidadLabel,
+      },
+      sugerencia: 'Aumentá la cantidad o ajustá el mínimo comercial del producto.',
+    };
+  }
+
+  private buildMinimoComercialAplicado(
+    producto: ProductoCargado,
+    minimoContext: MinimoComercialContext,
+    cantidadComercialPricing: number,
+  ): CotizacionResultado['minimoComercialAplicado'] {
+    const minimo = this.getMinimoComercialCantidad(producto);
+    if (producto.minimoComercialPolitica === 'NONE' || !minimo) return null;
+    return {
+      base: minimoContext.base,
+      cantidadMinima: minimo,
+      cantidadReal: minimoContext.cantidadReal,
+      cantidadPricing: cantidadComercialPricing,
+      aplicado:
+        producto.minimoComercialPolitica === 'ADVERTIR_FACTURAR_MINIMO' &&
+        cantidadComercialPricing > minimoContext.cantidadReal,
+      unidadLabel: minimoContext.unidadLabel,
+      politica: producto.minimoComercialPolitica,
+    };
+  }
+
+  private normalizarMinimoComercialBase(
+    base: string | null | undefined,
+  ): MinimoComercialBase {
+    return base === 'pliegos_impresos' ? 'pliegos_impresos' : 'cantidad_comercial';
+  }
+
+  private formatCantidadComercial(value: number) {
+    return Number.isInteger(value) ? String(value) : value.toFixed(4);
+  }
+
+  private labelUnidadComercial(unidad: string) {
+    if (unidad === 'm2') return 'm²';
+    if (unidad === 'metro_lineal') return 'ml';
+    return 'u.';
   }
 
   private resolverMetrosLinealesDesdeNesting(
@@ -1150,6 +1540,7 @@ export class MotorUniversalService {
   }
 
   private async ejecutarPaso(
+    tenantId: string,
     paso: PasoCargado,
     jobContext: JobContext,
     errores: ErrorMotor[],
@@ -1247,7 +1638,7 @@ export class MotorUniversalService {
     //      se cae al fallback de m² crudos / cantidad directa.
     const slotPrincipal = paso.slots[0] ?? null;
     const materialPreliminar = slotPrincipal
-      ? await this.resolverMaterialSlot(slotPrincipal, jobContext, paso)
+      ? await this.resolverMaterialSlot(tenantId, slotPrincipal, jobContext, paso)
       : null;
 
     // d) NESTING (G-M1 — F.2.13): si el paso usa CALCULADO_POR_PASO y la familia
@@ -1262,7 +1653,7 @@ export class MotorUniversalService {
       this.debeAutocalcularNestingSiNoHayOutput(paso, jobContext) ||
       this.debeCalcularNestingLaminado(paso);
     if (debeCalcularNestingProductivo) {
-      nestingDispatch = runNestingForPaso(
+      nestingDispatch = await runNestingForPaso(
         paso,
         this.getJobContextParaNesting(paso, jobContext),
         materialPreliminar,
@@ -1304,6 +1695,22 @@ export class MotorUniversalService {
         costoTotal: 0,
       };
     }
+    if (
+      paso.familiaCodigo === 'impresion_por_hoja' &&
+      this.tienePliegoImpresionAutomatico(paso) &&
+      debeCalcularNestingProductivo &&
+      !nestingDispatch
+    ) {
+      errores.push(this.errorPliegoImpresionAutomaticoInvalido(paso));
+      return {
+        rutaPasoId: paso.rutaPasoId,
+        rutaPasoOrden: paso.rutaPasoOrden,
+        familiaCodigo: paso.familiaCodigo,
+        configPasoId: paso.configPasoId,
+        activado: true,
+        costoTotal: 0,
+      };
+    }
 
     // d.1) G-M2 — Look-ahead pre_prensa: si el paso es pre_prensa, busca el
     //      siguiente impresion_por_hoja, toma su material + máquina y corre
@@ -1316,7 +1723,7 @@ export class MotorUniversalService {
         paso,
         jobContext,
         pasosSiguientes,
-        (slot, jc) => this.resolverMaterialSlot(slot, jc),
+        (slot, jc) => this.resolverMaterialSlot(tenantId, slot, jc),
       );
     }
 
@@ -1372,6 +1779,7 @@ export class MotorUniversalService {
     //    compatibles (por_metro_lineal con shelf-rollo, por_unidad_productiva con
     //    grid-2d-single → pliegos).
     const materiales = await this.calcularMateriales(
+      tenantId,
       pasoConPerfil,
       jobContext,
       nestingDispatch,
@@ -1434,6 +1842,8 @@ export class MotorUniversalService {
             nestingDispatch,
             materiales,
           ),
+          pliegoImpresionSeleccionado:
+            nestingDispatch.pliegoImpresionSeleccionado,
           talonarioGrouping: nestingDispatch.talonarioGrouping,
         }
       : undefined;
@@ -2147,8 +2557,37 @@ export class MotorUniversalService {
     };
   }
 
+  private tienePliegoImpresionAutomatico(paso: PasoCargado): boolean {
+    if (paso.familiaCodigo !== 'impresion_por_hoja') return false;
+    const params = this.asRecord(paso.paramsPasoJson);
+    const nestingConfig = this.asRecord(params.nestingConfig);
+    const pliego = this.asRecord(nestingConfig.pliegoImpresion);
+    const modo = String(pliego.modo ?? pliego.mode ?? '').toLowerCase();
+    return modo === 'automatico' || modo === 'automatic';
+  }
+
+  private errorPliegoImpresionAutomaticoInvalido(
+    paso: PasoCargado,
+  ): ErrorMotor {
+    return {
+      codigo: 'pliego_impresion_automatico_sin_candidato_valido',
+      severidad: 'ERROR',
+      mensaje:
+        'Ningún pliego candidato admite las piezas con los márgenes configurados.',
+      rutaPasoId: paso.rutaPasoId,
+      rutaPasoOrden: paso.rutaPasoOrden,
+      familiaCodigo: paso.familiaCodigo,
+      contexto: {
+        configPasoId: paso.configPasoId,
+      },
+      sugerencia:
+        'Agregá un candidato más grande, activá candidatos válidos o revisá márgenes/separación del paso de impresión.',
+    };
+  }
+
   /** D.5 — Calcular materiales consumidos. F.2.5: soporta los 3 modos de selección. */
   private async calcularMateriales(
+    tenantId: string,
     paso: PasoCargado,
     jobContext: JobContext,
     nestingDispatch: NestingDispatchResult | null = null,
@@ -2172,6 +2611,7 @@ export class MotorUniversalService {
         continue;
       }
       const materialResuelto = await this.resolverMaterialSlot(
+        tenantId,
         slot,
         jobContext,
         paso,
@@ -2188,7 +2628,16 @@ export class MotorUniversalService {
       // Cantidad: depende de la fórmula. Si hay nesting, ajustamos a la
       // cantidad real con desperdicio.
       let cantidad = 0;
-      if (slot.formula === 'por_unidad_productiva') {
+      const cantidadPorBase = this.resolverCantidadSlotPorBase(
+        slot,
+        paso,
+        jobContext,
+        nestingDispatch,
+        materialResuelto,
+      );
+      if (cantidadPorBase !== null) {
+        cantidad = cantidadPorBase;
+      } else if (slot.formula === 'por_unidad_productiva') {
         // G-M9 fix (validación end-to-end 2026-04-25): la cantidad de
         // material por_unidad_productiva debe respetar el mecanismo del paso:
         //   - CALCULADO_POR_PASO con nesting → cantidadCalculada (pliegos).
@@ -2308,6 +2757,8 @@ export class MotorUniversalService {
 
       ejecutados.push({
         slotCodigo: slot.slotCodigo,
+        slotNombre: slot.slotNombre ?? null,
+        slotRol: slot.slotRol ?? null,
         materialVarianteId: materialResuelto.id,
         materialNombre: materialResuelto.sku,
         materialSku: materialResuelto.sku,
@@ -2897,6 +3348,7 @@ export class MotorUniversalService {
    *    (MENOR_COSTO / MAYOR_APROVECHAMIENTO / MENOR_CAPACIDAD_QUE_CUMPLA)
    */
   private async resolverMaterialSlot(
+    tenantId: string,
     slot: PasoCargado['slots'][number],
     jobContext: JobContext,
     /**
@@ -2933,7 +3385,7 @@ export class MotorUniversalService {
     if (slot.modoSeleccion === 'COMERCIAL_ELIGE') {
       return eleccionExplicita &&
         candidatoVarianteIds.includes(eleccionExplicita)
-        ? await this.cargarVariantePorId(eleccionExplicita)
+        ? await this.cargarVariantePorId(tenantId, eleccionExplicita)
         : null;
     }
 
@@ -2942,13 +3394,13 @@ export class MotorUniversalService {
         eleccionExplicita &&
         candidatoVarianteIds.includes(eleccionExplicita)
       ) {
-        return await this.cargarVariantePorId(eleccionExplicita);
+        return await this.cargarVariantePorId(tenantId, eleccionExplicita);
       }
 
       // Cargar todos los candidatos con su info
       const variantes = await Promise.all(
         candidatoVarianteIds.map((variantId) =>
-          this.cargarVariantePorId(variantId),
+          this.cargarVariantePorId(tenantId, variantId),
         ),
       );
       const validos = variantes.filter(
@@ -2971,13 +3423,15 @@ export class MotorUniversalService {
         // no aplica para ningún candidato (familia no soportada), caemos a la
         // heurística histórica (más ancho = mejor para rollos).
         if (paso) {
-          const evaluados = validos.map((v) => {
-            const dispatch = runNestingForPaso(paso, jobContext, {
-              id: v.id,
-              atributosVarianteJson: v.atributosVarianteJson ?? null,
-            });
-            return { v, aprovechamiento: dispatch?.aprovechamientoPct ?? -1 };
-          });
+          const evaluados = await Promise.all(
+            validos.map(async (v) => {
+              const dispatch = await runNestingForPaso(paso, jobContext, {
+                id: v.id,
+                atributosVarianteJson: v.atributosVarianteJson ?? null,
+              });
+              return { v, aprovechamiento: dispatch?.aprovechamientoPct ?? -1 };
+            }),
+          );
           const conNesting = evaluados.filter((e) => e.aprovechamiento >= 0);
           if (conNesting.length > 0) {
             conNesting.sort((a, b) => b.aprovechamiento - a.aprovechamiento);
@@ -3112,7 +3566,10 @@ export class MotorUniversalService {
   }
 
   /** Carga una variante de materia prima por ID (helper para resolución de materiales). */
-  private async cargarVariantePorId(variantId: string): Promise<{
+  private async cargarVariantePorId(
+    tenantId: string,
+    variantId: string,
+  ): Promise<{
     id: string;
     sku: string;
     nombreVariante?: string | null;
@@ -3126,8 +3583,9 @@ export class MotorUniversalService {
     /** G-M7: necesario para correr nesting con cada candidato. */
     atributosVarianteJson?: Record<string, unknown> | null;
   } | null> {
-    const v = await this.prisma.materiaPrimaVariante.findUnique({
-      where: { id: variantId },
+    // Scope obligatorio por tenant: la variante debe pertenecer al tenant.
+    const v = await this.prisma.materiaPrimaVariante.findFirst({
+      where: { id: variantId, tenantId },
       include: {
         materiaPrima: {
           select: {
@@ -3189,6 +3647,30 @@ export class MotorUniversalService {
       const m2Pieza = (p.anchoMm * p.altoMm) / 1_000_000;
       return acc + m2Pieza * p.cantidad;
     }, 0);
+  }
+
+  private calcularM2DesdePliegosImpresos(jobContext: JobContext): number {
+    const ctx = jobContext as Record<string, unknown>;
+    const pliegos = Number(ctx.pliegos_impresos ?? ctx.pliegos_calculados ?? 0);
+    const anchoMm = Number(ctx.pliego_impresion_ancho_mm ?? 0);
+    const altoMm = Number(ctx.pliego_impresion_alto_mm ?? 0);
+    if (
+      !Number.isFinite(pliegos) ||
+      pliegos <= 0 ||
+      !Number.isFinite(anchoMm) ||
+      anchoMm <= 0 ||
+      !Number.isFinite(altoMm) ||
+      altoMm <= 0
+    ) {
+      return 0;
+    }
+    return (pliegos * anchoMm * altoMm) / 1_000_000;
+  }
+
+  private esPlotterCorteSobreHojas(paso: PasoCargado): boolean {
+    if (paso.familiaCodigo !== 'plotter_corte') return false;
+    const detalle = this.asRecord(paso.perfil?.detalleJson);
+    return String(detalle.modoOperacion ?? '').toUpperCase() === 'HOJAS';
   }
 
   /** Metros lineales desde la lista de piezas (para fórmula por_metro_lineal). */
@@ -3431,6 +3913,10 @@ export class MotorUniversalService {
         paso.familiaCodigo === 'impresion_por_area' ||
         paso.familiaCodigo === 'plotter_corte'
       ) {
+        if (this.esPlotterCorteSobreHojas(paso)) {
+          const m2Pliegos = this.calcularM2DesdePliegosImpresos(jobContext);
+          if (m2Pliegos > 0) return m2Pliegos;
+        }
         return this.calcularM2DesdePiezas(jobContext);
       }
       return Number(jobContext.cantidad ?? 0);
@@ -3455,6 +3941,39 @@ export class MotorUniversalService {
     }
 
     return Number(jobContext.cantidad ?? 0);
+  }
+
+  private resolverCantidadSlotPorBase(
+    slot: SlotCargado,
+    paso: PasoCargado,
+    jobContext: JobContext,
+    nestingDispatch: NestingDispatchResult | null,
+    materialResuelto: {
+      atributosVarianteJson?: Record<string, unknown> | null;
+    } | null,
+  ): number | null {
+    if (!slot.cantidadBase) return null;
+
+    let base = 0;
+    if (slot.cantidadBase === 'cantidad_pedida') {
+      base = Number(jobContext.cantidad ?? 0);
+    } else if (slot.cantidadBase === 'cantidad_efectiva_paso') {
+      base = this.resolverCantidad(
+        paso,
+        jobContext,
+        nestingDispatch,
+        materialResuelto,
+      );
+    } else if (slot.cantidadBase === 'pliegos_impresos') {
+      base = Number(
+        jobContext.pliegos_impresos ?? jobContext.pliegos_calculados ?? 0,
+      );
+    } else {
+      return null;
+    }
+
+    const factor = Number(slot.cantidadFactor ?? 1);
+    return Math.max(0, base) * (Number.isFinite(factor) ? factor : 1);
   }
 
   private resolverCapacidadConversion(
@@ -3504,12 +4023,29 @@ export class MotorUniversalService {
         ? params.productivityQuantitySource
         : '';
 
+    if (
+      paso.familiaCodigo === 'montaje_sobre_sustrato' &&
+      (!source || source === 'cantidad' || source === 'cantidad_montaje')
+    ) {
+      return (
+        this.numeroPositivo(this.resolverCantidadMontajeParaTiempo(paso, jobContext)) ??
+        this.resolverCantidad(paso, jobContext, nestingDispatch, materialResuelto)
+      );
+    }
+
     if (!source || source === 'cantidad') {
       return this.resolverCantidad(
         paso,
         jobContext,
         nestingDispatch,
         materialResuelto,
+      );
+    }
+
+    if (source === 'cantidad_montaje') {
+      return (
+        this.numeroPositivo(this.resolverCantidadMontajeParaTiempo(paso, jobContext)) ??
+        this.resolverCantidad(paso, jobContext, nestingDispatch, materialResuelto)
       );
     }
 
@@ -3557,12 +4093,51 @@ export class MotorUniversalService {
       );
     }
 
+    if (source === 'perimetro_piezas_m') {
+      return (
+        this.numeroPositivo(jobContext.piezaPerimetroTotalM) ??
+        this.numeroPositivo(calcularPerimetroPiezasM(jobContext)) ??
+        this.resolverCantidad(
+          paso,
+          jobContext,
+          nestingDispatch,
+          materialResuelto,
+        )
+      );
+    }
+
     return this.resolverCantidad(
       paso,
       jobContext,
       nestingDispatch,
       materialResuelto,
     );
+  }
+
+  private resolverCantidadMontajeParaTiempo(
+    paso: PasoCargado,
+    jobContext: JobContext,
+  ): number {
+    const params = (paso.paramsPasoJson ?? {}) as Record<string, unknown>;
+    const fuente =
+      typeof params.fuentePiezasMontaje === 'string'
+        ? params.fuentePiezasMontaje
+        : 'piezas_jobcontext';
+
+    if (fuente === 'pliegos_impresos') {
+      return (
+        this.numeroPositivo((jobContext as Record<string, unknown>).pliegos_impresos) ??
+        this.numeroPositivo((jobContext as Record<string, unknown>).pliegos_calculados) ??
+        0
+      );
+    }
+
+    const piezas = jobContext.piezas ?? [];
+    if (piezas.length > 0) {
+      return piezas.reduce((acc, pieza) => acc + pieza.cantidad, 0);
+    }
+
+    return Number(jobContext.cantidad ?? 0);
   }
 
   private calcularTiempoRunPorProductividad(
@@ -4622,6 +5197,8 @@ export class MotorUniversalService {
         slots: cp.slotsMateriales.map((s) => ({
           id: s.id,
           slotCodigo: s.slotCodigo,
+          slotNombre: s.slotNombre,
+          slotRol: s.slotRol,
           modoSeleccion: s.modoSeleccion,
           criterioMotorAuto: s.criterioMotorAuto,
           criterioInputCampo: s.criterioInputCampo,
@@ -4639,6 +5216,11 @@ export class MotorUniversalService {
           })),
           estrategiaCosto: s.estrategiaCosto,
           formula: s.formula,
+          cantidadFactor:
+            s.cantidadFactor === null || s.cantidadFactor === undefined
+              ? null
+              : Number(s.cantidadFactor),
+          cantidadBase: s.cantidadBase,
           aplicaMultiCaras: s.aplicaMultiCaras,
           materialVariante: s.materialVariante
             ? {
@@ -4685,6 +5267,14 @@ export class MotorUniversalService {
       productoNombre: producto.nombre,
       unidadComercial: producto.unidadComercial,
       modoMedidas: producto.modoMedidas,
+      minimoComercialPolitica: producto.minimoComercialPolitica,
+      minimoComercialCantidad: producto.minimoComercialCantidad
+        ? Number(producto.minimoComercialCantidad)
+        : null,
+      minimoComercialBase:
+        producto.minimoComercialBase === 'pliegos_impresos'
+          ? 'pliegos_impresos'
+          : 'cantidad_comercial',
       medidaDefaultAnchoMm: producto.medidaDefaultAnchoMm
         ? Number(producto.medidaDefaultAnchoMm)
         : null,

@@ -56,7 +56,7 @@ export class MotorUniversalController {
    */
   @Post('cotizar-y-guardar')
   async cotizarYGuardar(
-    @Body() dto: CotizarDto & { cotizacionId?: string },
+    @Body() dto: CotizarDto,
     @Req() req: RequestWithAuth,
   ) {
     const tenantId = req.auth?.tenantId;

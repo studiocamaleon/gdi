@@ -152,6 +152,54 @@ function buildPasoImpresionPorHoja(plantilla = 'IMPRESORA_LASER') {
   };
 }
 
+function buildPasoPlotterCorte(modoOperacion: 'ROLLO' | 'HOJAS') {
+  return {
+    rutaPasoId: 'rp-plotter',
+    rutaPasoOrden: 1,
+    familiaCodigo: 'plotter_corte',
+    configPasoId: 'cp-plotter',
+    modoActivacion: 'OBLIGATORIO',
+    condicionActivacionJson: null,
+    modoTiempo: 'T-3',
+    mecanismoCantidad: 'CALCULADO_POR_PASO',
+    mecanismoCantidadConfigJson: null,
+    multiplicadoresActivos: [],
+    paramsPasoJson: {
+      nestingConfig: {
+        algorithm: 'auto',
+        allowRotation: false,
+      },
+    },
+    maquinaM1Id: 'm-plotter',
+    perfilM1Id: 'perfil-plotter',
+    setupOverrideMin: null,
+    cleanupOverrideMin: null,
+    tiempoFijoOverrideMin: null,
+    slots: [],
+    cargosDirectosPaso: [],
+    maquina: {
+      id: 'm-plotter',
+      codigo: 'PLOTTER',
+      nombre: 'Plotter',
+      plantilla: 'PLOTTER_DE_CORTE',
+      parametrosTecnicosJson: {
+        geometria: 'ROLLO',
+        margenesNoImprimiblesMm: { izq: 10, der: 10, sup: 10, inf: 10 },
+      },
+    },
+    perfil: {
+      id: 'perfil-plotter',
+      nombre: modoOperacion === 'HOJAS' ? 'Hoja' : 'Rollo',
+      tipoPerfil: 'corte',
+      productivityValue: 36,
+      productivityUnit: 'm2_h',
+      setupMin: 0,
+      cleanupMin: 0,
+      detalleJson: { modoOperacion },
+    },
+  };
+}
+
 function buildPasoAreaPlaca() {
   return {
     rutaPasoId: 'rp-area',
@@ -230,8 +278,8 @@ const materialPlaca = {
 };
 
 describe('runNestingForPaso rollo optimizado', () => {
-  it('ejecuta maxrects-rollo cuando se configura explicitamente', () => {
-    const result = runNestingForPaso(
+  it('ejecuta maxrects-rollo cuando se configura explicitamente', async () => {
+    const result = await runNestingForPaso(
       buildPaso('maxrects-rollo') as never,
       jobContext,
       material,
@@ -242,8 +290,8 @@ describe('runNestingForPaso rollo optimizado', () => {
     expect(result!.unidad).toBe('m_lineales');
   });
 
-  it('conserva shelf-rollo cuando se configura explicitamente', () => {
-    const result = runNestingForPaso(
+  it('conserva shelf-rollo cuando se configura explicitamente', async () => {
+    const result = await runNestingForPaso(
       buildPaso('shelf-rollo') as never,
       jobContext,
       material,
@@ -253,13 +301,13 @@ describe('runNestingForPaso rollo optimizado', () => {
     expect(result!.algorithm).toBe('shelf-rollo');
   });
 
-  it('en auto elige el menor largo consumido', () => {
-    const shelf = runNestingForPaso(
+  it('en auto elige el menor largo consumido', async () => {
+    const shelf = await runNestingForPaso(
       buildPaso('shelf-rollo') as never,
       jobContext,
       material,
     );
-    const auto = runNestingForPaso(
+    const auto = await runNestingForPaso(
       buildPaso('auto') as never,
       jobContext,
       material,
@@ -273,8 +321,8 @@ describe('runNestingForPaso rollo optimizado', () => {
 });
 
 describe('runNestingForPaso plastificado pouch', () => {
-  it('calcula piezas por pouch y pouches necesarios sin separación', () => {
-    const result = runNestingForPaso(
+  it('calcula piezas por pouch y pouches necesarios sin separación', async () => {
+    const result = await runNestingForPaso(
       buildPasoPouch(0) as never,
       {
         cantidad: 100,
@@ -291,8 +339,8 @@ describe('runNestingForPaso plastificado pouch', () => {
     expect(result!.visualConfig?.substrateLabel).toBe('Pouch');
   });
 
-  it('reduce la capacidad cuando hay separación entre piezas', () => {
-    const result = runNestingForPaso(
+  it('reduce la capacidad cuando hay separación entre piezas', async () => {
+    const result = await runNestingForPaso(
       buildPasoPouch(3) as never,
       {
         cantidad: 100,
@@ -306,8 +354,8 @@ describe('runNestingForPaso plastificado pouch', () => {
     expect(result!.cantidadCalculada).toBe(5);
   });
 
-  it('usa el margen no usable del pouch para descontar área útil', () => {
-    const sinMargen = runNestingForPaso(
+  it('usa el margen no usable del pouch para descontar área útil', async () => {
+    const sinMargen = await runNestingForPaso(
       buildPasoPouch(0) as never,
       {
         cantidad: 10,
@@ -321,7 +369,7 @@ describe('runNestingForPaso plastificado pouch', () => {
         },
       },
     );
-    const conMargen = runNestingForPaso(
+    const conMargen = await runNestingForPaso(
       buildPasoPouch(0) as never,
       {
         cantidad: 10,
@@ -340,8 +388,8 @@ describe('runNestingForPaso plastificado pouch', () => {
     expect(conMargen!.piezasPorPouch).toBe(2);
   });
 
-  it('permite rotación cuando mejora el aprovechamiento', () => {
-    const result = runNestingForPaso(
+  it('permite rotación cuando mejora el aprovechamiento', async () => {
+    const result = await runNestingForPaso(
       buildPasoPouch(0) as never,
       {
         cantidad: 100,
@@ -355,8 +403,8 @@ describe('runNestingForPaso plastificado pouch', () => {
     expect(result!.placements[0]?.rotated).toBe(true);
   });
 
-  it('devuelve null cuando la pieza no entra en el pouch', () => {
-    const result = runNestingForPaso(
+  it('devuelve null cuando la pieza no entra en el pouch', async () => {
+    const result = await runNestingForPaso(
       buildPasoPouch(0) as never,
       {
         cantidad: 1,
@@ -370,8 +418,8 @@ describe('runNestingForPaso plastificado pouch', () => {
 });
 
 describe('runNestingForPaso centrado visual de placements', () => {
-  it('activa el centrado solo para impresion laser por hoja', () => {
-    const result = runNestingForPaso(
+  it('activa el centrado solo para impresion laser por hoja', async () => {
+    const result = await runNestingForPaso(
       buildPasoImpresionPorHoja() as never,
       {
         cantidad: 100,
@@ -385,8 +433,8 @@ describe('runNestingForPaso centrado visual de placements', () => {
     expect(result!.visualConfig?.centerPlacements).toBe(true);
   });
 
-  it('no activa el centrado en impresion por area sobre placa', () => {
-    const result = runNestingForPaso(
+  it('no activa el centrado en impresion por area sobre placa', async () => {
+    const result = await runNestingForPaso(
       buildPasoAreaPlaca() as never,
       {
         cantidad: 4,
@@ -401,9 +449,45 @@ describe('runNestingForPaso centrado visual de placements', () => {
   });
 });
 
+describe('runNestingForPaso plotter de corte', () => {
+  it('no genera nesting cuando el perfil operativo trabaja sobre hojas', async () => {
+    const result = await runNestingForPaso(
+      buildPasoPlotterCorte('HOJAS') as never,
+      {
+        cantidad: 100,
+        piezas: [{ cantidad: 100, anchoMm: 30, altoMm: 30 }],
+      },
+      {
+        id: 'papel-a4',
+        atributosVarianteJson: { anchoMm: 210, altoMm: 297 },
+      },
+    );
+
+    expect(result).toBeNull();
+  });
+
+  it('mantiene nesting de rollo cuando el perfil operativo trabaja sobre rollo', async () => {
+    const result = await runNestingForPaso(
+      buildPasoPlotterCorte('ROLLO') as never,
+      {
+        cantidad: 100,
+        piezas: [{ cantidad: 100, anchoMm: 30, altoMm: 30 }],
+      },
+      {
+        id: 'vinilo-61',
+        atributosVarianteJson: { anchoMm: 610 },
+      },
+    );
+
+    expect(result).not.toBeNull();
+    expect(['shelf-rollo', 'maxrects-rollo']).toContain(result!.algorithm);
+    expect(result!.unidad).toBe('m_lineales');
+  });
+});
+
 describe('runNestingForPaso montaje sobre sustrato', () => {
-  it('calcula material de montaje en rollo usando pliegos impresos publicados', () => {
-    const result = runNestingForPaso(
+  it('calcula material de montaje en rollo usando pliegos impresos publicados', async () => {
+    const result = await runNestingForPaso(
       buildPasoMontaje('shelf-rollo', 'pliegos_impresos') as never,
       {
         cantidad: 10,
@@ -427,8 +511,8 @@ describe('runNestingForPaso montaje sobre sustrato', () => {
     expect(result!.consumedLengthMm).toBeGreaterThan(0);
   });
 
-  it('calcula material de montaje en placa sin tratar el ancho de placa como rollo', () => {
-    const result = runNestingForPaso(
+  it('calcula material de montaje en placa sin tratar el ancho de placa como rollo', async () => {
+    const result = await runNestingForPaso(
       buildPasoMontaje('auto') as never,
       {
         cantidad: 10,

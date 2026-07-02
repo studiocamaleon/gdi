@@ -38,6 +38,7 @@ import {
   calculateTalonarioGrouping,
   type TalonarioGroupingResult,
 } from '../productos-servicios/nesting/helpers/talonario-grouping';
+import { calculateSustratoToPliegoConversion } from '../productos-servicios/nesting/helpers/sustrato-to-pliego';
 import type {
   NestingResult,
   Placement,
@@ -46,6 +47,7 @@ import type {
 import {
   resolveNestingConfig,
   type NestingConfigResolved,
+  type PrintSheetCandidateConfig,
 } from './nesting-config';
 import type { PasoCargado, JobContext, NestingVisualConfig } from './tipos';
 
@@ -90,6 +92,18 @@ export interface NestingDispatchResult {
    * `aprovechar_pliego` vs `pose_completa` del paso.
    */
   talonarioGrouping?: TalonarioGroupingResult;
+  pliegoImpresionSeleccionado?: {
+    id: string;
+    nombre: string;
+    anchoMm: number;
+    altoMm: number;
+    criterio: 'menor_costo_sustrato';
+    candidatosEvaluados: number;
+    costoEstimadoMm2: number;
+    pliegosImpresion: number;
+    pliegosComprados: number;
+    aprovechamientoPct: number;
+  };
 }
 
 /** Material resuelto que el motor pasa al dispatcher (subset de SlotCargado). */
@@ -109,22 +123,25 @@ export interface MaterialResueltoParaNesting {
  *
  * En esos casos el motor sigue con su fallback (m² crudos / cantidad directa).
  */
-export function runNestingForPaso(
+export async function runNestingForPaso(
   paso: PasoCargado,
   jobContext: JobContext,
   materialResuelto: MaterialResueltoParaNesting | null,
-): NestingDispatchResult | null {
+): Promise<NestingDispatchResult | null> {
   const config = resolveNestingConfig(paso, jobContext, materialResuelto);
   // ─── Caso 1: gran formato por área ──────────────────────────────
   // Si la máquina/material trabajan en rollo usa shelf-rollo; si trabajan
   // sobre mesa/placa usa grid 2D multi. Esto permite que rígidos impresos
   // generen nesting en el paso productivo sin depender de pre-prensa.
   if (paso.familiaCodigo === 'impresion_por_area') {
-    return runImpresionPorArea(paso, jobContext, materialResuelto, config);
+    return await runImpresionPorArea(paso, jobContext, materialResuelto, config);
   }
 
   // ─── Caso 2: shelf-rollo (corte sobre rollo) ─────────────────────
   if (paso.familiaCodigo === 'plotter_corte') {
+    if (getPlotterModoOperacion(paso) === 'HOJAS') {
+      return null;
+    }
     return runShelfRollo(
       paso,
       jobContext,
@@ -147,7 +164,12 @@ export function runNestingForPaso(
   // Reusa los algoritmos existentes, pero permite que las piezas vengan
   // de la medida comercial o de outputs publicados por pasos anteriores.
   if (paso.familiaCodigo === 'montaje_sobre_sustrato') {
-    return runMontajeSobreSustrato(paso, jobContext, materialResuelto, config);
+    return await runMontajeSobreSustrato(
+      paso,
+      jobContext,
+      materialResuelto,
+      config,
+    );
   }
 
   // ─── Caso 6: grid 2D single/multi (digital sobre pliego) ─────────
@@ -159,16 +181,29 @@ export function runNestingForPaso(
   return null;
 }
 
+function getPlotterModoOperacion(paso: PasoCargado): string | null {
+  const detalle =
+    paso.perfil?.detalleJson &&
+    typeof paso.perfil.detalleJson === 'object' &&
+    !Array.isArray(paso.perfil.detalleJson)
+      ? (paso.perfil.detalleJson as Record<string, unknown>)
+      : null;
+  const modoOperacion = detalle?.modoOperacion;
+  return typeof modoOperacion === 'string'
+    ? modoOperacion.trim().toUpperCase()
+    : null;
+}
+
 // ────────────────────────────────────────────────────────────────────
 // Implementaciones
 // ────────────────────────────────────────────────────────────────────
 
-function runImpresionPorArea(
+async function runImpresionPorArea(
   paso: PasoCargado,
   jobContext: JobContext,
   materialResuelto: MaterialResueltoParaNesting | null,
   config: NestingConfigResolved,
-): NestingDispatchResult | null {
+): Promise<NestingDispatchResult | null> {
   if (config.algorithm === 'shelf-rollo') {
     return runShelfRollo(paso, jobContext, materialResuelto, config);
   }
@@ -179,7 +214,7 @@ function runImpresionPorArea(
     return runGrid2DMultiForArea(paso, jobContext, config);
   }
   if (config.algorithm === 'packingsolver-rectangle') {
-    return runPackingSolverRectangleForArea(paso, jobContext, config);
+    return await runPackingSolverRectangleForArea(paso, jobContext, config);
   }
 
   if (config.machineGeometry === 'ROLLO') {
@@ -191,11 +226,11 @@ function runImpresionPorArea(
   }
 
   if (config.machineGeometry === 'MESA_EXTENSORA') {
-    return runPackingSolverRectangleForArea(paso, jobContext, config);
+    return await runPackingSolverRectangleForArea(paso, jobContext, config);
   }
 
   if (config.sheetWidthMm && config.sheetHeightMm && !config.rollWidthMm) {
-    return runPackingSolverRectangleForArea(paso, jobContext, config);
+    return await runPackingSolverRectangleForArea(paso, jobContext, config);
   }
 
   return runShelfRollo(paso, jobContext, materialResuelto, config);
@@ -259,12 +294,12 @@ function runPlastificadoPouch(
   };
 }
 
-function runMontajeSobreSustrato(
+async function runMontajeSobreSustrato(
   paso: PasoCargado,
   jobContext: JobContext,
   materialResuelto: MaterialResueltoParaNesting | null,
   config: NestingConfigResolved,
-): NestingDispatchResult | null {
+): Promise<NestingDispatchResult | null> {
   const montajeContext = buildJobContextMontaje(paso, jobContext);
   if (!montajeContext) return null;
 
@@ -278,14 +313,14 @@ function runMontajeSobreSustrato(
     return runGrid2DMultiForArea(paso, montajeContext, config);
   }
   if (config.algorithm === 'packingsolver-rectangle') {
-    return runPackingSolverRectangleForArea(paso, montajeContext, config);
+    return await runPackingSolverRectangleForArea(paso, montajeContext, config);
   }
 
   if (isRollMaterial(materialResuelto?.atributosVarianteJson)) {
     return runShelfRollo(paso, montajeContext, materialResuelto, config);
   }
   if (config.sheetWidthMm && config.sheetHeightMm) {
-    return runPackingSolverRectangleForArea(paso, montajeContext, config);
+    return await runPackingSolverRectangleForArea(paso, montajeContext, config);
   }
   return null;
 }
@@ -675,17 +710,17 @@ function runGrid2DMultiForArea(
   };
 }
 
-function runPackingSolverRectangleForArea(
+async function runPackingSolverRectangleForArea(
   paso: PasoCargado,
   jobContext: JobContext,
   config: NestingConfigResolved,
-): NestingDispatchResult | null {
+): Promise<NestingDispatchResult | null> {
   const piezas = getPiezasParaNesting(jobContext);
   if (piezas.length === 0) return null;
   void paso;
   if (!config.sheetWidthMm || !config.sheetHeightMm) return null;
 
-  const result = nestPackingSolverRectangle(
+  const result = await nestPackingSolverRectangle(
     piezas.map((p, idx) => ({
       id: `pieza_${idx}`,
       widthMm: p.anchoMm,
@@ -1019,6 +1054,18 @@ function runGrid2DSingle(
   materialResuelto: MaterialResueltoParaNesting | null,
   config: NestingConfigResolved,
 ): NestingDispatchResult | null {
+  if (
+    paso.familiaCodigo === 'impresion_por_hoja' &&
+    config.printSheetMode === 'automatic'
+  ) {
+    return runGrid2DSingleAutoPrintSheet(
+      paso,
+      jobContext,
+      materialResuelto,
+      config,
+    );
+  }
+
   // Sustrato común a ambos modos.
   void materialResuelto;
   const sheetWidthMm = config.sheetWidthMm;
@@ -1113,6 +1160,123 @@ function runGrid2DSingle(
       centerPlacements: shouldCenterPlacementsForPaso(paso),
     }),
   };
+}
+
+function runGrid2DSingleAutoPrintSheet(
+  paso: PasoCargado,
+  jobContext: JobContext,
+  materialResuelto: MaterialResueltoParaNesting | null,
+  config: NestingConfigResolved,
+): NestingDispatchResult | null {
+  void materialResuelto;
+  const candidates = config.printSheetCandidates;
+  if (candidates.length === 0) return null;
+
+  const evaluated = candidates
+    .map((candidate) => {
+      const candidateConfig: NestingConfigResolved = {
+        ...config,
+        printSheetMode: 'fixed',
+        printSheetCandidates: [],
+        sheetWidthMm: candidate.anchoMm,
+        sheetHeightMm: candidate.altoMm,
+      };
+      const result = runGrid2DSingle(
+        paso,
+        jobContext,
+        materialResuelto,
+        candidateConfig,
+      );
+      if (!result || result.cantidadCalculada <= 0) return null;
+      const score = scorePrintSheetCandidate(candidate, result, config);
+      if (!score) return null;
+      return { candidate, result, score };
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null)
+    .sort((a, b) => {
+      if (a.score.costoEstimadoMm2 !== b.score.costoEstimadoMm2) {
+        return a.score.costoEstimadoMm2 - b.score.costoEstimadoMm2;
+      }
+      if (a.result.aprovechamientoPct !== b.result.aprovechamientoPct) {
+        return b.result.aprovechamientoPct - a.result.aprovechamientoPct;
+      }
+      return a.result.cantidadCalculada - b.result.cantidadCalculada;
+    });
+
+  const winner = evaluated[0];
+  if (!winner) return null;
+
+  return {
+    ...winner.result,
+    pliegoImpresionSeleccionado: {
+      id: winner.candidate.id,
+      nombre: winner.candidate.nombre,
+      anchoMm: winner.candidate.anchoMm,
+      altoMm: winner.candidate.altoMm,
+      criterio: 'menor_costo_sustrato',
+      candidatosEvaluados: evaluated.length,
+      costoEstimadoMm2: winner.score.costoEstimadoMm2,
+      pliegosImpresion: winner.result.cantidadCalculada,
+      pliegosComprados: winner.score.pliegosComprados,
+      aprovechamientoPct: winner.result.aprovechamientoPct,
+    },
+  };
+}
+
+function scorePrintSheetCandidate(
+  candidate: PrintSheetCandidateConfig,
+  result: NestingDispatchResult,
+  config: NestingConfigResolved,
+): { costoEstimadoMm2: number; pliegosComprados: number } | null {
+  const pliegosImpresion = result.cantidadCalculada;
+  if (!Number.isFinite(pliegosImpresion) || pliegosImpresion <= 0) return null;
+
+  const purchaseWidthMm = config.purchaseSheetWidthMm ?? 0;
+  const purchaseHeightMm = config.purchaseSheetHeightMm ?? 0;
+  if (purchaseWidthMm > 0 && purchaseHeightMm > 0) {
+    const pliegosPorSustrato = getPrintSheetsPerPurchaseSheet(
+      purchaseWidthMm,
+      purchaseHeightMm,
+      candidate.anchoMm,
+      candidate.altoMm,
+    );
+    if (pliegosPorSustrato <= 0) return null;
+    const conversion = calculateSustratoToPliegoConversion({
+      sustrato: { anchoMm: purchaseWidthMm, altoMm: purchaseHeightMm },
+      pliegoImpresion: { anchoMm: candidate.anchoMm, altoMm: candidate.altoMm },
+    });
+    const effectiveSheetsPerPurchase =
+      conversion.esDerivado && conversion.pliegosPorSustrato > 0
+        ? conversion.pliegosPorSustrato
+        : pliegosPorSustrato;
+    const pliegosComprados = Math.ceil(
+      pliegosImpresion / effectiveSheetsPerPurchase,
+    );
+    return {
+      pliegosComprados,
+      costoEstimadoMm2: pliegosComprados * purchaseWidthMm * purchaseHeightMm,
+    };
+  }
+
+  return {
+    pliegosComprados: pliegosImpresion,
+    costoEstimadoMm2: pliegosImpresion * candidate.anchoMm * candidate.altoMm,
+  };
+}
+
+function getPrintSheetsPerPurchaseSheet(
+  purchaseWidthMm: number,
+  purchaseHeightMm: number,
+  printWidthMm: number,
+  printHeightMm: number,
+) {
+  const direct =
+    Math.floor(purchaseWidthMm / printWidthMm) *
+    Math.floor(purchaseHeightMm / printHeightMm);
+  const rotated =
+    Math.floor(purchaseWidthMm / printHeightMm) *
+    Math.floor(purchaseHeightMm / printWidthMm);
+  return Math.max(0, direct, rotated);
 }
 
 /**
@@ -1315,7 +1479,7 @@ export async function runNestingForPrePrensa(
     ...proximoImpresionPorHoja,
   };
 
-  const baseResult = runNestingForPaso(pasoSintetico, jobContext, material);
+  const baseResult = await runNestingForPaso(pasoSintetico, jobContext, material);
   if (!baseResult) return null;
 
   // ─── Talonario-grouping (post-nesting) ──────────────────────────

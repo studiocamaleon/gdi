@@ -1465,7 +1465,7 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(result.cotizacion!.precio!.margenAplicadoPct).toBe(50);
   });
 
-  it('G-M1: dispatcher grid-2d-single funciona cuando se invoca directamente (unit test)', () => {
+  it('G-M1: dispatcher grid-2d-single funciona cuando se invoca directamente (unit test)', async () => {
     // Test unitario del dispatcher (sin DB) que verifica el caso grid-2d-single.
     // El seed actual de Tarjetas NO ejecuta nesting porque `pre_prensa` usa T-1
     // tiempo fijo y `impresion_por_hoja` usa HEREDAR_DEL_OUTPUT_CANONICO (depende
@@ -1510,7 +1510,7 @@ describe('MotorUniversalService — smoke tests', () => {
       piezas: [{ cantidad: 1000, anchoMm: 90, altoMm: 50 }],
     };
 
-    const r = runNestingForPaso(
+    const r = await runNestingForPaso(
       fakePaso as never,
       fakeJobContext,
       fakeMaterial,
@@ -1523,7 +1523,7 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(r!.placements.length).toBe(r!.piezasPorPliego);
   });
 
-  it('impresion_por_hoja usa el pliego de impresión configurado en vez del tamaño comprado', () => {
+  it('impresion_por_hoja usa el pliego de impresión configurado en vez del tamaño comprado', async () => {
     const fakePaso = {
       rutaPasoId: 'rp1',
       rutaPasoOrden: 1,
@@ -1562,7 +1562,7 @@ describe('MotorUniversalService — smoke tests', () => {
       atributosVarianteJson: { anchoMm: 320, largoMm: 460 },
     };
 
-    const r = runNestingForPaso(
+    const r = await runNestingForPaso(
       fakePaso as never,
       {
         cantidad: 100,
@@ -1584,6 +1584,138 @@ describe('MotorUniversalService — smoke tests', () => {
         heightMm: 287,
       },
     });
+  });
+
+  it('impresion_por_hoja automatico elige el candidato con menor costo estimado de sustrato', async () => {
+    const fakePaso = {
+      rutaPasoId: 'rp1',
+      rutaPasoOrden: 1,
+      familiaCodigo: 'impresion_por_hoja',
+      configPasoId: 'cp1',
+      modoActivacion: 'OBLIGATORIO',
+      condicionActivacionJson: null,
+      modoTiempo: 'T-3',
+      mecanismoCantidad: 'CALCULADO_POR_PASO',
+      mecanismoCantidadConfigJson: null,
+      multiplicadoresActivos: [],
+      paramsPasoJson: {
+        nestingConfig: {
+          pliegoImpresion: {
+            modo: 'automatico',
+            candidatos: [
+              { id: 'a4', nombre: 'A4', anchoMm: 210, altoMm: 297, activo: true },
+              {
+                id: 'sra3',
+                nombre: 'SRA3',
+                anchoMm: 320,
+                altoMm: 450,
+                activo: true,
+              },
+            ],
+          },
+        },
+      },
+      maquinaM1Id: null,
+      perfilM1Id: null,
+      setupOverrideMin: null,
+      cleanupOverrideMin: null,
+      tiempoFijoOverrideMin: null,
+      slots: [],
+      cargosDirectosPaso: [],
+      maquina: {
+        id: 'm1',
+        codigo: 'X',
+        nombre: 'X',
+        plantilla: 'IMPRESORA_LASER',
+        parametrosTecnicosJson: {
+          margenesNoImprimiblesMm: { izq: 5, der: 5, sup: 5, inf: 5 },
+        },
+      },
+    };
+    const fakeMaterial = {
+      id: 'mat1',
+      atributosVarianteJson: { anchoMm: 320, largoMm: 450 },
+    };
+
+    const r = await runNestingForPaso(
+      fakePaso as never,
+      {
+        cantidad: 100,
+        caras: 1 as const,
+        piezas: [{ cantidad: 100, anchoMm: 100, altoMm: 100 }],
+      },
+      fakeMaterial,
+    );
+
+    expect(r).not.toBeNull();
+    expect(r!.substrates[0]).toMatchObject({
+      kind: 'sheet',
+      widthMm: 320,
+      heightMm: 450,
+    });
+    expect(r!.pliegoImpresionSeleccionado).toMatchObject({
+      id: 'sra3',
+      nombre: 'SRA3',
+      candidatosEvaluados: 2,
+      criterio: 'menor_costo_sustrato',
+    });
+  });
+
+  it('impresion_por_hoja automatico devuelve null si ningun candidato admite la pieza', async () => {
+    const fakePaso = {
+      rutaPasoId: 'rp1',
+      rutaPasoOrden: 1,
+      familiaCodigo: 'impresion_por_hoja',
+      configPasoId: 'cp1',
+      modoActivacion: 'OBLIGATORIO',
+      condicionActivacionJson: null,
+      modoTiempo: 'T-3',
+      mecanismoCantidad: 'CALCULADO_POR_PASO',
+      mecanismoCantidadConfigJson: null,
+      multiplicadoresActivos: [],
+      paramsPasoJson: {
+        nestingConfig: {
+          pliegoImpresion: {
+            modo: 'automatico',
+            candidatos: [
+              { id: 'a5', nombre: 'A5', anchoMm: 148, altoMm: 210, activo: true },
+            ],
+          },
+        },
+      },
+      maquinaM1Id: null,
+      perfilM1Id: null,
+      setupOverrideMin: null,
+      cleanupOverrideMin: null,
+      tiempoFijoOverrideMin: null,
+      slots: [],
+      cargosDirectosPaso: [],
+      maquina: {
+        id: 'm1',
+        codigo: 'X',
+        nombre: 'X',
+        plantilla: 'IMPRESORA_LASER',
+        parametrosTecnicosJson: {
+          margenesNoImprimiblesMm: { izq: 5, der: 5, sup: 5, inf: 5 },
+        },
+      },
+    };
+    const fakeMaterial = {
+      id: 'mat1',
+      atributosVarianteJson: { anchoMm: 320, largoMm: 450 },
+    };
+
+    const r = await runNestingForPaso(
+      fakePaso as never,
+      {
+        cantidad: 1,
+        caras: 1 as const,
+        piezas: [{ cantidad: 1, anchoMm: 300, altoMm: 300 }],
+      },
+      fakeMaterial,
+    );
+
+    expect(r).toBeNull();
   });
 
   it('G-M1: dispatcher devuelve null para familia sin algoritmo (mantiene fallback)', async () => {
@@ -2394,7 +2526,7 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(outs.pliegos_calculados).toBe(tg.pliegosXCapa);
   });
 
-  it('v3.1 grid-2d-multi: jobContext con piezas de medidas distintas → multi-bin packing', () => {
+  it('v3.1 grid-2d-multi: jobContext con piezas de medidas distintas → multi-bin packing', async () => {
     // Test unitario del dispatcher multi (no requiere producto seed específico).
     const fakePaso = {
       rutaPasoId: 'rp1',
@@ -2440,7 +2572,7 @@ describe('MotorUniversalService — smoke tests', () => {
       ],
     };
 
-    const r = runNestingForPaso(
+    const r = await runNestingForPaso(
       fakePaso as never,
       fakeJobContext,
       fakeMaterial,
@@ -2453,7 +2585,7 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(r!.aprovechamientoPct).toBeGreaterThan(0);
   });
 
-  it('v3.2 impresion_por_area con mesa extensora usa nesting de placa para rígidos', () => {
+  it('v3.2 impresion_por_area con mesa extensora usa nesting de placa para rígidos', async () => {
     const fakePaso = {
       rutaPasoId: 'rp1',
       rutaPasoOrden: 1,
@@ -2498,7 +2630,7 @@ describe('MotorUniversalService — smoke tests', () => {
       ],
     };
 
-    const r = runNestingForPaso(
+    const r = await runNestingForPaso(
       fakePaso as never,
       fakeJobContext,
       fakeMaterial,
@@ -2529,7 +2661,7 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(r!.aprovechamientoPct).toBeLessThan(10);
   });
 
-  it('shelf-rollo paneliza sólo las piezas que no entran y conserva piezas normales', () => {
+  it('shelf-rollo paneliza sólo las piezas que no entran y conserva piezas normales', async () => {
     const fakePaso = {
       rutaPasoId: 'rp-rollo',
       rutaPasoOrden: 1,
@@ -2577,7 +2709,7 @@ describe('MotorUniversalService — smoke tests', () => {
         },
       },
     };
-    const r = runNestingForPaso(
+    const r = await runNestingForPaso(
       fakePaso as never,
       {
         cantidad: 1,
@@ -2601,7 +2733,7 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(r!.placements.filter((p) => p.panelIndex == null)).toHaveLength(2);
   });
 
-  it('shelf-rollo con dirección automática resuelve un eje concreto para panelizar', () => {
+  it('shelf-rollo con dirección automática resuelve un eje concreto para panelizar', async () => {
     const fakePaso = {
       rutaPasoId: 'rp-rollo-auto',
       rutaPasoOrden: 1,
@@ -2649,7 +2781,7 @@ describe('MotorUniversalService — smoke tests', () => {
         },
       },
     };
-    const r = runNestingForPaso(
+    const r = await runNestingForPaso(
       fakePaso as never,
       {
         cantidad: 1,
@@ -2666,7 +2798,7 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(r!.placements.filter((p) => p.panelIndex != null).length).toBe(2);
   });
 
-  it('shelf-rollo con dirección automática no paneliza piezas que entran enteras', () => {
+  it('shelf-rollo con dirección automática no paneliza piezas que entran enteras', async () => {
     const fakePaso = {
       rutaPasoId: 'rp-rollo-auto-mixto',
       rutaPasoOrden: 1,
@@ -2714,7 +2846,7 @@ describe('MotorUniversalService — smoke tests', () => {
         },
       },
     };
-    const r = runNestingForPaso(
+    const r = await runNestingForPaso(
       fakePaso as never,
       {
         cantidad: 1,
@@ -2743,7 +2875,7 @@ describe('MotorUniversalService — smoke tests', () => {
     });
   });
 
-  it('shelf-rollo con panelizado vertical automático conserva enteras las piezas que entran', () => {
+  it('shelf-rollo con panelizado vertical automático conserva enteras las piezas que entran', async () => {
     const fakePaso = {
       rutaPasoId: 'rp-rollo-vertical-mixto',
       rutaPasoOrden: 1,
@@ -2791,7 +2923,7 @@ describe('MotorUniversalService — smoke tests', () => {
         },
       },
     };
-    const r = runNestingForPaso(
+    const r = await runNestingForPaso(
       fakePaso as never,
       {
         cantidad: 1,
@@ -2820,7 +2952,7 @@ describe('MotorUniversalService — smoke tests', () => {
     });
   });
 
-  it('plotter_corte ignora panelizado aunque exista configuración accidental', () => {
+  it('plotter_corte ignora panelizado aunque exista configuración accidental', async () => {
     const fakePaso = {
       rutaPasoId: 'rp-plotter',
       rutaPasoOrden: 1,
@@ -2868,7 +3000,7 @@ describe('MotorUniversalService — smoke tests', () => {
         },
       },
     };
-    const r = runNestingForPaso(
+    const r = await runNestingForPaso(
       fakePaso as never,
       {
         cantidad: 1,
@@ -2880,7 +3012,7 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(r).toBeNull();
   });
 
-  it('v3.1 grid-2d-multi: piezas todas iguales → cae a single (más eficiente)', () => {
+  it('v3.1 grid-2d-multi: piezas todas iguales → cae a single (más eficiente)', async () => {
     const fakePaso = {
       rutaPasoId: 'rp1',
       rutaPasoOrden: 1,
@@ -2924,7 +3056,7 @@ describe('MotorUniversalService — smoke tests', () => {
       ],
     };
 
-    const r = runNestingForPaso(
+    const r = await runNestingForPaso(
       fakePaso as never,
       fakeJobContext,
       fakeMaterial,

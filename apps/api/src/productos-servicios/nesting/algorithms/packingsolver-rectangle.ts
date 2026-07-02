@@ -1,7 +1,13 @@
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { promisify } from 'node:util';
+
+// Ejecutar el solver externo sin bloquear el event loop de Node. `execFileSync`
+// congelaba el proceso entero (ninguna request, ni health checks) mientras el
+// binario corría hasta varios segundos por cotización.
+const execFileAsync = promisify(execFile);
 
 import type {
   NestingOptions,
@@ -52,11 +58,11 @@ interface CertificateRow {
  * reconstruimos el tamaño real de la pieza y mantenemos la separación como
  * espacio vacío entre placements.
  */
-export function nestPackingSolverRectangle<T = unknown>(
+export async function nestPackingSolverRectangle<T = unknown>(
   pieces: Piece<T>[],
   substrate: SheetSubstrate,
   options: PackingSolverRectangleOptions = {},
-): Grid2DMultiResult<T> | null {
+): Promise<Grid2DMultiResult<T> | null> {
   const binaryPath = resolveBinaryPath(options.binaryPath);
   if (!binaryPath) return null;
 
@@ -140,7 +146,7 @@ export function nestPackingSolverRectangle<T = unknown>(
       ].join('\n'),
     );
 
-    execFileSync(
+    await execFileAsync(
       binaryPath,
       [
         '--verbosity-level',
@@ -157,7 +163,7 @@ export function nestPackingSolverRectangle<T = unknown>(
         String(options.timeLimitSec ?? 2),
         '--only-write-at-the-end',
       ],
-      { stdio: 'pipe', timeout: Math.max(1, options.timeLimitSec ?? 2) * 1500 },
+      { timeout: Math.max(1, options.timeLimitSec ?? 2) * 1500 },
     );
 
     const rows = parseCsv(readFileSync(certificatePath, 'utf8'));
@@ -263,7 +269,7 @@ export function nestPackingSolverRectangle<T = unknown>(
       },
       perSubstrate,
     };
-    return compactResultWithOpenDimensionY({
+    return await compactResultWithOpenDimensionY({
       binaryPath,
       result: initialResult,
       substrate,
@@ -284,7 +290,7 @@ export function nestPackingSolverRectangle<T = unknown>(
   }
 }
 
-function compactResultWithOpenDimensionY<T>(input: {
+async function compactResultWithOpenDimensionY<T>(input: {
   binaryPath: string;
   result: Grid2DMultiResult<T>;
   substrate: SheetSubstrate;
@@ -297,7 +303,7 @@ function compactResultWithOpenDimensionY<T>(input: {
   sepVMm: number;
   allowRotation: boolean;
   timeLimitSec: number;
-}): Grid2DMultiResult<T> {
+}): Promise<Grid2DMultiResult<T>> {
   if (input.result.substrates.length === 0) return input.result;
 
   const compactedPlacements: Placement<T>[] = [];
@@ -307,7 +313,7 @@ function compactResultWithOpenDimensionY<T>(input: {
     const placements = input.result.placements.filter(
       (placement) => (placement.substrateIndex ?? 0) === substrateIndex,
     );
-    const compacted = solveOpenDimensionYForPlacements({
+    const compacted = await solveOpenDimensionYForPlacements({
       ...input,
       placements,
       substrateIndex,
@@ -330,13 +336,13 @@ function compactResultWithOpenDimensionY<T>(input: {
         }
       : input.result;
 
-  return rebalanceAcrossSubstrates({
+  return await rebalanceAcrossSubstrates({
     ...input,
     result: compactedResult,
   });
 }
 
-function rebalanceAcrossSubstrates<T>(input: {
+async function rebalanceAcrossSubstrates<T>(input: {
   binaryPath: string;
   result: Grid2DMultiResult<T>;
   substrate: SheetSubstrate;
@@ -349,7 +355,7 @@ function rebalanceAcrossSubstrates<T>(input: {
   sepVMm: number;
   allowRotation: boolean;
   timeLimitSec: number;
-}): Grid2DMultiResult<T> {
+}): Promise<Grid2DMultiResult<T>> {
   if (input.result.substrates.length <= 1) return input.result;
 
   let groups = groupPlacementsBySubstrate(input.result);
@@ -379,14 +385,14 @@ function rebalanceAcrossSubstrates<T>(input: {
             .filter((item) => item !== candidate)
             .map((item) => ({ ...item, substrateIndex: sourceIndex }));
 
-          const packedTarget = solveOpenDimensionYForPlacements({
+          const packedTarget = await solveOpenDimensionYForPlacements({
             ...input,
             placements: nextTargetInput,
             substrateIndex: targetIndex,
           });
           if (!packedTarget) continue;
 
-          const packedSource = solveOpenDimensionYForPlacements({
+          const packedSource = await solveOpenDimensionYForPlacements({
             ...input,
             placements: nextSourceInput,
             substrateIndex: sourceIndex,
@@ -445,7 +451,7 @@ function rebalanceAcrossSubstrates<T>(input: {
   };
 }
 
-function solveOpenDimensionYForPlacements<T>(input: {
+async function solveOpenDimensionYForPlacements<T>(input: {
   binaryPath: string;
   substrate: SheetSubstrate;
   marginLeftMm: number;
@@ -458,10 +464,10 @@ function solveOpenDimensionYForPlacements<T>(input: {
   timeLimitSec: number;
   placements: Placement<T>[];
   substrateIndex: number;
-}): {
+}): Promise<{
   placements: Placement<T>[];
   perSubstrate: { areaUtilMm2: number; consumedLengthMm: number };
-} | null {
+} | null> {
   if (input.placements.length === 0) {
     return { placements: [], perSubstrate: { areaUtilMm2: 0, consumedLengthMm: 0 } };
   }
@@ -520,7 +526,7 @@ function solveOpenDimensionYForPlacements<T>(input: {
       parametersPath,
       ['NAME,VALUE', 'objective,open-dimension-y'].join('\n'),
     );
-    execFileSync(
+    await execFileAsync(
       input.binaryPath,
       [
         '--verbosity-level',
@@ -538,7 +544,6 @@ function solveOpenDimensionYForPlacements<T>(input: {
         '--only-write-at-the-end',
       ],
       {
-        stdio: 'pipe',
         timeout: Math.max(1, input.timeLimitSec) * 1500,
       },
     );

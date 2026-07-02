@@ -35,7 +35,12 @@ export interface JobContext {
   /** Cantidad pedida (talonarios, tarjetas, etc.). */
   cantidad: number;
   /** Lista de piezas para nesting (gap H7 — multi-medida). */
-  piezas?: Array<{ cantidad: number; anchoMm: number; altoMm: number }>;
+  piezas?: Array<{
+    cantidad: number;
+    anchoMm: number;
+    altoMm: number;
+    perimetroMm?: number;
+  }>;
   /** Medidas custom cuando el producto permite medida personalizada (LIBRE o MIXTA). */
   medidaCustomMm?: { anchoMm: number; altoMm: number };
   /** Multiplicador caras (1 simple faz, 2 doble faz). */
@@ -60,6 +65,8 @@ export interface JobContext {
   zonaInstalacion?: string;
   /** Área total calculada desde las piezas comerciales. */
   piezaAreaTotalM2?: number;
+  /** Perímetro rectangular total de piezas en metros, útil para refilado/corte manual. */
+  piezaPerimetroTotalM?: number;
   /** Metros lineales comerciales o ingresados por el usuario. */
   metrosLineales?: number;
   metroLineal?: number;
@@ -99,10 +106,21 @@ export interface CotizacionResultado {
   /** Cantidad efectivamente producida (puede diferir de pedida en talonarios pose_completa). */
   cantidadEfectiva: number;
   cantidadPedida: number;
-  /** Cantidad comercial usada para precio y costo unitario comercial. */
+  /** Cantidad comercial real pedida, antes de aplicar mínimos de facturación. */
+  cantidadComercialReal: number;
+  /** Cantidad comercial usada para precio. Puede incluir mínimos de facturación. */
   cantidadComercialPricing: number;
   /** Unidad comercial fuente de la cantidad de pricing. */
   unidadComercialPricing: string;
+  minimoComercialAplicado?: {
+    base: 'cantidad_comercial' | 'pliegos_impresos';
+    cantidadMinima: number;
+    cantidadReal: number;
+    cantidadPricing: number;
+    aplicado: boolean;
+    unidadLabel: string;
+    politica: string;
+  } | null;
   /** Costos por bucket (a-g del molde). */
   costos: {
     tiempoTotal: number;
@@ -253,6 +271,19 @@ export interface NestingEjecutado {
   outputsCanonicos?: Record<string, unknown>;
   /** Overlay/resumen del costeo de sustrato asociado al nesting. */
   costingPreview?: NestingCostingPreview;
+  /** Selección automática de pliego, cuando el paso evaluó candidatos. */
+  pliegoImpresionSeleccionado?: {
+    id: string;
+    nombre: string;
+    anchoMm: number;
+    altoMm: number;
+    criterio: string;
+    candidatosEvaluados: number;
+    costoEstimadoMm2: number;
+    pliegosImpresion: number;
+    pliegosComprados: number;
+    aprovechamientoPct: number;
+  };
   /** v3.1: solo cuando se aplicó talonario-grouping (post-nesting). */
   talonarioGrouping?: {
     talonariosEfectivos: number;
@@ -325,6 +356,8 @@ export interface NestingCostingPreview {
 
 export interface MaterialEjecutado {
   slotCodigo: string;
+  slotNombre?: string | null;
+  slotRol?: string | null;
   materialVarianteId: string;
   /** Compatibilidad histórica: antes era el SKU. Se mantiene sin cambios. */
   materialNombre: string;
@@ -404,6 +437,9 @@ export interface ProductoCargado {
   productoNombre: string;
   unidadComercial: string;
   modoMedidas: 'FIJA' | 'LIBRE' | 'COMERCIAL_ELIGE' | 'MIXTA';
+  minimoComercialPolitica: string;
+  minimoComercialCantidad: number | null;
+  minimoComercialBase: string;
   /**
    * Medida default del producto (FIJA, COMERCIAL_ELIGE o MIXTA). Cuando
    * el comercial NO carga `piezas[]` ni `medidaCustomMm` en el JobContext, el
@@ -565,6 +601,8 @@ export interface ConsumibleMaquinaCargado {
 export interface SlotCargado {
   id: string;
   slotCodigo: string;
+  slotNombre?: string | null;
+  slotRol?: string | null;
   modoSeleccion: string;
   criterioMotorAuto?: string | null;
   criterioInputCampo?: string | null;
@@ -582,6 +620,8 @@ export interface SlotCargado {
   }>;
   estrategiaCosto: string;
   formula: string;
+  cantidadFactor?: number | string | null;
+  cantidadBase?: string | null;
   aplicaMultiCaras: boolean;
   /** Material concreto si HARDCODED (o el resuelto en runtime). */
   materialVariante?: {

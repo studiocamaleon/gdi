@@ -15,7 +15,7 @@ describe('nestPackingSolverRectangle', () => {
     rmSync(workdir, { recursive: true, force: true });
   });
 
-  it('traduce el certificado de PackingSolver al shape de placements del motor', () => {
+  it('traduce el certificado de PackingSolver al shape de placements del motor', async () => {
     const fakeBin = join(workdir, 'packingsolver_rectangle_fake.sh');
     writeFileSync(
       fakeBin,
@@ -36,7 +36,7 @@ describe('nestPackingSolverRectangle', () => {
     );
     chmodSync(fakeBin, 0o755);
 
-    const result = nestPackingSolverRectangle(
+    const result = await nestPackingSolverRectangle(
       [
         { id: 'pieza_0', widthMm: 1000, heightMm: 500, quantity: 1 },
         { id: 'pieza_1', widthMm: 1000, heightMm: 500, quantity: 1 },

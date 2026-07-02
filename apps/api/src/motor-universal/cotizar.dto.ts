@@ -23,6 +23,11 @@ export class PiezaJobContextDto {
   @IsNumber()
   @Min(0)
   altoMm!: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  perimetroMm?: number;
 }
 
 export class JobContextDto {
@@ -115,6 +120,10 @@ export class JobContextDto {
 
   @IsOptional()
   @IsNumber()
+  piezaPerimetroTotalM?: number;
+
+  @IsOptional()
+  @IsNumber()
   anchoMaterialMm?: number;
 
   @IsOptional()
@@ -140,4 +149,8 @@ export class CotizarDto {
   @IsOptional()
   @IsString()
   periodo?: string | null;
+
+  @IsOptional()
+  @IsUUID()
+  cotizacionId?: string;
 }
