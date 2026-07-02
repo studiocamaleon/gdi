@@ -46,3 +46,11 @@ next-env.d.ts
 
 # local sqlite scratch db
 dev.db
+
+# local runtime artifacts / scratch
+.tmp/
+.claude/
+apps/api/output.lp
+apps/api/*.lp
+backups/
+apps/api/scripts/*.baseline.json
