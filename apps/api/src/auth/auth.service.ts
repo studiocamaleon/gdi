@@ -1,10 +1,11 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
+import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import { Membership, Prisma, RolSistema } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { createHash, randomBytes } from 'crypto';
@@ -12,6 +13,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AcceptInvitationDto } from './dto/accept-invitation.dto';
 import { LoginDto } from './dto/login.dto';
 import { CurrentAuth, JwtPayload } from './auth.types';
+import { SessionCacheService } from './session-cache.service';
+
+// Hash dummy para igualar el tiempo de respuesta del login cuando el usuario
+// no existe (evita enumeración de usuarios por timing). Se calcula una vez.
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync('gdi-timing-guard', 10);
 
 type MembershipWithTenant = Membership & {
   tenant: {
@@ -27,7 +33,10 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly sessionCache: SessionCacheService,
   ) {}
+
+  private readonly logger = new Logger(AuthService.name);
 
   async login(payload: LoginDto) {
     const user = await this.prisma.user.findUnique({
@@ -51,6 +60,9 @@ export class AuthService {
     });
 
     if (!user?.passwordHash || !user.activo) {
+      // Comparación dummy: mismo costo que un login válido, para no revelar
+      // por timing si el email está registrado.
+      await bcrypt.compare(payload.password, DUMMY_PASSWORD_HASH);
       throw new UnauthorizedException('Credenciales invalidas.');
     }
 
@@ -83,6 +95,7 @@ export class AuthService {
       where: { id: auth.sessionId },
       data: { revokedAt: new Date() },
     });
+    this.sessionCache.invalidate(auth.sessionId);
   }
 
   async getInvitation(token: string) {
@@ -101,6 +114,22 @@ export class AuthService {
     const normalizedEmail = invitation.email.trim().toLowerCase();
 
     return this.prisma.$transaction(async (tx) => {
+      // Consumo atómico de la invitación (single-use). Si otra request en
+      // paralelo ya la aceptó, este updateMany afecta 0 filas y abortamos,
+      // evitando crear membership/sesión duplicadas por doble submit o replay.
+      const claimed = await tx.invitation.updateMany({
+        where: {
+          id: invitation.id,
+          acceptedAt: null,
+          revokedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+        data: { acceptedAt: new Date() },
+      });
+      if (claimed.count === 0) {
+        throw new BadRequestException('La invitacion ya fue utilizada.');
+      }
+
       let user =
         invitation.user ??
         (await tx.user.findUnique({
@@ -169,7 +198,6 @@ export class AuthService {
         where: { id: invitation.id },
         data: {
           userId: user.id,
-          acceptedAt: new Date(),
         },
       });
 
@@ -253,6 +281,9 @@ export class AuthService {
         currentMembershipId: membership.id,
       },
     });
+    // El token nuevo reusa el sessionId con otro tenant/membership: invalidar
+    // el cache para que la próxima request revalide contra la DB.
+    this.sessionCache.invalidate(auth.sessionId);
 
     const allMemberships = await this.prisma.membership.findMany({
       where: {
@@ -407,8 +438,10 @@ export class AuthService {
 
     const invitationUrl = `${process.env.FRONTEND_URL?.split(',')[0]?.trim() ?? 'http://localhost:3000'}/aceptar-invitacion?token=${rawToken}`;
 
-    console.info(
-      `[gdi-auth] Invitacion creada para ${normalizedEmail} (${invitation.id}): ${invitationUrl}`,
+    // No logueamos la URL/token en claro (cualquiera con acceso a logs podría
+    // aceptar la invitación). Solo id + email; el enlace se entrega por retorno.
+    this.logger.log(
+      `Invitacion creada para ${normalizedEmail} (${invitation.id})`,
     );
 
     return {
@@ -518,7 +551,10 @@ export class AuthService {
   private async issueToken(payload: JwtPayload) {
     return this.jwtService.signAsync(payload, {
       secret: process.env.JWT_SECRET,
-      expiresIn: '7d',
+      // Configurable por entorno; la sesión se re-valida contra la DB en cada
+      // request, así que un TTL corto es seguro de acortar en producción.
+      expiresIn: (process.env.JWT_EXPIRES_IN ??
+        '7d') as JwtSignOptions['expiresIn'],
     });
   }
 

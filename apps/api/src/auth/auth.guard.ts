@@ -9,6 +9,7 @@ import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { IS_PUBLIC_KEY } from './public.decorator';
 import { CurrentAuth, JwtPayload } from './auth.types';
+import { SessionCacheService } from './session-cache.service';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -16,6 +17,7 @@ export class AuthGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
+    private readonly sessionCache: SessionCacheService,
   ) {}
 
   async canActivate(context: ExecutionContext) {
@@ -49,6 +51,20 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException('Sesion invalida.');
     }
 
+    // Cache hit: evita el query con 3 joins. Requiere que el tenant/membership
+    // cacheados coincidan con el token (tras switch-tenant el token cambia y
+    // el cache se invalida, así que un mismatch fuerza revalidación en DB).
+    const cached = this.sessionCache.get(payload.sessionId);
+    if (
+      cached &&
+      cached.userId === payload.sub &&
+      cached.tenantId === payload.tenantId &&
+      cached.membershipId === payload.membershipId
+    ) {
+      request.auth = cached;
+      return true;
+    }
+
     const session = await this.prisma.authSession.findUnique({
       where: { id: payload.sessionId },
       include: {
@@ -72,7 +88,7 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException('Sesion expirada o revocada.');
     }
 
-    request.auth = {
+    const auth: CurrentAuth = {
       userId: payload.sub,
       sessionId: payload.sessionId,
       tenantId: payload.tenantId,
@@ -80,6 +96,9 @@ export class AuthGuard implements CanActivate {
       role: payload.role,
       email: payload.email,
     };
+
+    this.sessionCache.set(auth);
+    request.auth = auth;
 
     return true;
   }
