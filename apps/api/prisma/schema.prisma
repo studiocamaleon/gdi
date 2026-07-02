@@ -297,6 +297,7 @@ enum SubfamiliaMateriaPrima {
   PRIMER_SELLADOR
   ANILLADO_ENCUADERNACION
   TAPA_ENCUADERNACION
+  COMPONENTE_EDITORIAL
   IMAN_CERAMICO_FLEXIBLE
   FIJACION_AUXILIAR
   ACCESORIO_EXHIBIDOR_CARTON
@@ -1393,6 +1394,9 @@ model Producto {
   /// 'unidad' | 'm2' | 'metro_lineal'
   unidadComercial           String                            @default("unidad")
   modoMedidas               ModoMedidasProducto               @default(FIJA)
+  minimoComercialPolitica   String                            @default("NONE")
+  minimoComercialCantidad   Decimal?                          @db.Decimal(12, 4)
+  minimoComercialBase       String                            @default("cantidad_comercial")
   medidaDefaultAnchoMm      Decimal?                          @db.Decimal(12, 2)
   medidaDefaultAltoMm       Decimal?                          @db.Decimal(12, 2)
   medidasPredefinidasJson   Json?
@@ -1440,6 +1444,7 @@ model ProductoRutaAlternativa {
 
   @@index([tenantId, productoId, activo])
   @@index([tenantId, productoId, rutaId])
+  @@index([rutaId])
 }
 
 /// Configuración del producto para un paso específico de una ruta alternativa.
@@ -1486,6 +1491,8 @@ model ProductoConfigPaso {
   @@unique([tenantId, productoRutaAlternativaId, rutaPasoId])
   @@index([tenantId, productoRutaAlternativaId])
   @@index([tenantId, centroCostoId])
+  @@index([tenantId, maquinaM1Id])
+  @@index([tenantId, perfilM1Id])
 }
 
 model ProductoConfigPasoSlotMaterial {
@@ -1494,6 +1501,10 @@ model ProductoConfigPasoSlotMaterial {
   productoConfigPasoId  String                                    @db.Uuid
   /// Código del slot declarado por la familia (ej: 'sustrato_principal').
   slotCodigo            String
+  /// Nombre visible editable para slots libres/adicionales.
+  slotNombre            String?
+  /// Rol semántico del material: SUSTRATO | COMPONENTE | CONSUMIBLE | PACKAGING.
+  slotRol               String?
   /// 'HARDCODED' | 'COMERCIAL_ELIGE' | 'MOTOR_ELIGE_AUTO'.
   modoSeleccion         String
   /// 'MENOR_COSTO' | 'MAYOR_APROVECHAMIENTO' | 'MENOR_CAPACIDAD_QUE_CUMPLA'.
@@ -1505,6 +1516,10 @@ model ProductoConfigPasoSlotMaterial {
   estrategiaCosto       String                                    @default("simple")
   /// 'por_unidad_productiva' | 'por_m2' | 'por_pieza' | 'por_metro_lineal' | 'fijo'.
   formula               String                                    @default("por_unidad_productiva")
+  /// Multiplicador de consumo para componentes/accesorios adicionales.
+  cantidadFactor        Decimal?                                  @default(1) @db.Decimal(12, 4)
+  /// Base operativa para aplicar cantidadFactor.
+  cantidadBase          String?
   aplicaMultiCaras      Boolean                                   @default(false)
   activo                Boolean                                   @default(true)
   createdAt             DateTime                                  @default(now())
@@ -1691,6 +1706,8 @@ model Cotizacion {
 
   @@unique([tenantId, numero])
   @@index([tenantId, estado])
+  @@index([tenantId, createdAt])
+  @@index([tenantId, clienteId])
 }
 
 model CotizacionItem {
@@ -1730,6 +1747,7 @@ model CotizacionItem {
   producto                          Producto   @relation(fields: [productoId], references: [id])
 
   @@index([tenantId, cotizacionId])
+  @@index([tenantId, productoId])
 }
 
 // === TAB PRECIO V2 ===

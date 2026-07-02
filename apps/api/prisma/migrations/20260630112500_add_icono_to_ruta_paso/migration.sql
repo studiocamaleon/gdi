@@ -1,1 +1,0 @@
-ALTER TABLE "RutaPaso" ADD COLUMN "icono" TEXT NOT NULL DEFAULT 'Layout';
