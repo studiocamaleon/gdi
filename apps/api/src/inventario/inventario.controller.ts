@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import type { CurrentAuth } from '../auth/auth.types';
 import { CurrentSession } from '../auth/current-auth.decorator';
-import { PaginationDto } from '../common/dto/pagination.dto';
+import { ListMateriasPrimasQueryDto } from './dto/list-materias-primas-query.dto';
 import { InstallMaterialPresetDto } from './dto/install-material-preset.dto';
 import { UpdateVariantePrecioReferenciaDto } from './dto/update-variante-precio-referencia.dto';
 import { UpsertMateriaPrimaDto } from './dto/upsert-materia-prima.dto';
@@ -27,12 +27,11 @@ export class InventarioController {
   @Get()
   findAll(
     @CurrentSession() auth: CurrentAuth,
-    @Query() pagination: PaginationDto,
-    @Query('search') search?: string,
+    @Query() query: ListMateriasPrimasQueryDto,
   ) {
     return this.inventarioService.findAllMateriasPrimas(auth, {
-      pagination,
-      search: search?.trim() || undefined,
+      pagination: query,
+      search: query.search?.trim() || undefined,
     });
   }
 
