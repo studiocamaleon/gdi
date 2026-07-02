@@ -9,7 +9,9 @@ import {
   Put,
   Query,
 } from '@nestjs/common';
+import { RolSistema } from '@prisma/client';
 import { CurrentSession } from '../auth/current-auth.decorator';
+import { Roles } from '../auth/roles.decorator';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { InvitarAccesoDto } from './dto/invitar-acceso.dto';
 import { EmpleadosService } from './empleados.service';
@@ -51,6 +53,7 @@ export class EmpleadosController {
   }
 
   @Post(':id/invitar-acceso')
+  @Roles(RolSistema.ADMINISTRADOR)
   invitarAcceso(
     @CurrentSession() auth: CurrentAuth,
     @Param('id') id: string,
@@ -60,6 +63,7 @@ export class EmpleadosController {
   }
 
   @Delete(':id')
+  @Roles(RolSistema.ADMINISTRADOR)
   @HttpCode(204)
   async remove(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     await this.empleadosService.remove(auth, id);

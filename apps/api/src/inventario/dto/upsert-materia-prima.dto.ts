@@ -59,6 +59,7 @@ export enum SubfamiliaMateriaPrimaDto {
   primer_sellador = 'primer_sellador',
   anillado_encuadernacion = 'anillado_encuadernacion',
   tapa_encuadernacion = 'tapa_encuadernacion',
+  componente_editorial = 'componente_editorial',
   iman_ceramico_flexible = 'iman_ceramico_flexible',
   fijacion_auxiliar = 'fijacion_auxiliar',
   accesorio_exhibidor_carton = 'accesorio_exhibidor_carton',

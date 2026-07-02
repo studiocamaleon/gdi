@@ -24,23 +24,47 @@ export class RutasProduccionService {
       where: { tenantId, activo: true },
       orderBy: { nombre: 'asc' },
       include: {
-        pasos: {
-          orderBy: { orden: 'asc' },
-          select: {
-            id: true,
-            version: true,
-            orden: true,
-            familiaCodigo: true,
-            icono: true,
-          },
-        },
         _count: { select: { productosAlternativas: true } },
       },
     });
 
+    if (rutas.length === 0) return [];
+
+    // Traer SOLO los pasos de la versión actual de cada ruta (antes se cargaban
+    // los pasos de TODAS las versiones y se filtraba en memoria, creciendo sin
+    // límite con cada versión guardada).
+    const pasos = await this.prisma.rutaPaso.findMany({
+      where: {
+        tenantId,
+        OR: rutas.map((ruta) => ({
+          rutaId: ruta.id,
+          version: ruta.versionActual,
+        })),
+      },
+      orderBy: { orden: 'asc' },
+      select: {
+        id: true,
+        rutaId: true,
+        version: true,
+        orden: true,
+        familiaCodigo: true,
+        icono: true,
+      },
+    });
+
+    const pasosPorRuta = new Map<string, typeof pasos>();
+    for (const paso of pasos) {
+      const lista = pasosPorRuta.get(paso.rutaId) ?? [];
+      lista.push(paso);
+      pasosPorRuta.set(paso.rutaId, lista);
+    }
+
     return rutas.map((ruta) => ({
       ...ruta,
-      pasos: ruta.pasos.filter((paso) => paso.version === ruta.versionActual),
+      pasos: (pasosPorRuta.get(ruta.id) ?? []).map(({ rutaId, ...paso }) => {
+        void rutaId;
+        return paso;
+      }),
     }));
   }
 

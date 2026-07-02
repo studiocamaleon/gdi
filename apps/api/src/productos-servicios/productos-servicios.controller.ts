@@ -12,6 +12,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Request } from 'express';
+import { PaginationDto } from '../common/dto/pagination.dto';
 import { ProductosServiciosService } from './productos-servicios.service';
 import {
   ActualizarProductoDto,
@@ -59,12 +60,18 @@ export class ProductosServiciosController {
   @Get('productos')
   async listarProductos(
     @Req() req: RequestWithAuth,
+    @Query() pagination: PaginationDto,
     @Query('activo') activo?: string,
+    @Query('search') search?: string,
   ) {
     const tenantId = req.auth?.tenantId;
     if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
     const filtroActivo = activo === undefined ? undefined : activo !== 'false';
-    return this.service.listarProductos(tenantId, filtroActivo);
+    return this.service.listarProductos(tenantId, {
+      pagination,
+      activo: filtroActivo,
+      search: search?.trim() || undefined,
+    });
   }
 
   @Get('productos/:id')

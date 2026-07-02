@@ -8,7 +8,9 @@ import {
   Put,
   Query,
 } from '@nestjs/common';
+import { RolSistema } from '@prisma/client';
 import { CurrentSession } from '../auth/current-auth.decorator';
+import { Roles } from '../auth/roles.decorator';
 import { CostosService } from './costos.service';
 import { UpsertAreaCostoDto } from './dto/upsert-area-costo.dto';
 import { UpsertCentroCostoDto } from './dto/upsert-centro-costo.dto';
@@ -22,6 +24,7 @@ import { UpsertCentroRecursosMaquinariaDto } from './dto/upsert-centro-recursos-
 import { UpsertCentroConfiguracionPeriodoDto } from './dto/upsert-centro-configuracion-periodo.dto';
 
 @Controller('costos')
+@Roles(RolSistema.ADMINISTRADOR, RolSistema.SUPERVISOR)
 export class CostosController {
   constructor(private readonly costosService: CostosService) {}
 

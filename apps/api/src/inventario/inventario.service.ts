@@ -16,6 +16,10 @@ import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { randomUUID } from 'crypto';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  PaginationDto,
+  paginatedResponse,
+} from '../common/dto/pagination.dto';
 import { GetKardexQueryDto } from './dto/get-kardex-query.dto';
 import { GetStockQueryDto } from './dto/get-stock-query.dto';
 import {
@@ -54,23 +58,46 @@ type MateriaPrimaEntity = Prisma.MateriaPrimaGetPayload<{
 export class InventarioService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAllMateriasPrimas(auth: CurrentAuth) {
-    const items = await this.prisma.materiaPrima.findMany({
-      where: {
-        tenantId: auth.tenantId,
-      },
-      include: {
-        variantes: {
-          include: {
-            proveedorReferencia: true,
-          },
-          orderBy: [{ createdAt: 'asc' }],
-        },
-      },
-      orderBy: [{ nombre: 'asc' }],
-    });
+  async findAllMateriasPrimas(
+    auth: CurrentAuth,
+    opts: { pagination: PaginationDto; search?: string },
+  ) {
+    const { pagination, search } = opts;
+    const where: Prisma.MateriaPrimaWhereInput = {
+      tenantId: auth.tenantId,
+      ...(search
+        ? {
+            OR: [
+              { nombre: { contains: search, mode: 'insensitive' } },
+              { codigo: { contains: search, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    };
 
-    return items.map((item) => this.toResponse(item));
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.materiaPrima.findMany({
+        where,
+        include: {
+          variantes: {
+            include: {
+              proveedorReferencia: true,
+            },
+            orderBy: [{ createdAt: 'asc' }],
+          },
+        },
+        orderBy: [{ nombre: 'asc' }],
+        skip: pagination.skip,
+        take: pagination.limit,
+      }),
+      this.prisma.materiaPrima.count({ where }),
+    ]);
+
+    return paginatedResponse(
+      items.map((item) => this.toResponse(item)),
+      total,
+      pagination,
+    );
   }
 
   async findMateriaPrima(auth: CurrentAuth, id: string) {
@@ -78,11 +105,41 @@ export class InventarioService {
     return this.toResponse(item);
   }
 
+  /**
+   * Valida que todos los `proveedorReferenciaId` de las variantes existan y
+   * pertenezcan al tenant. Evita vincular (y filtrar) proveedores ajenos.
+   */
+  private async assertProveedoresDelTenant(
+    auth: CurrentAuth,
+    variantes: { proveedorReferenciaId?: string | null }[],
+    client: Prisma.TransactionClient | PrismaService = this.prisma,
+  ) {
+    const ids = Array.from(
+      new Set(
+        variantes
+          .map((variante) => variante.proveedorReferenciaId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    );
+    if (ids.length === 0) return;
+
+    const encontrados = await client.proveedor.findMany({
+      where: { tenantId: auth.tenantId, id: { in: ids } },
+      select: { id: true },
+    });
+    if (encontrados.length !== ids.length) {
+      throw new BadRequestException(
+        'Uno o mas proveedores referenciados no existen o no pertenecen a tu empresa.',
+      );
+    }
+  }
+
   async createMateriaPrima(auth: CurrentAuth, payload: UpsertMateriaPrimaDto) {
     const normalized = this.normalizePayload(payload);
 
     try {
       const created = await this.prisma.$transaction(async (tx) => {
+        await this.assertProveedoresDelTenant(auth, normalized.variantes, tx);
         const materiaPrima = await tx.materiaPrima.create({
           data: {
             tenantId: auth.tenantId,
@@ -167,6 +224,7 @@ export class InventarioService {
 
     try {
       await this.prisma.$transaction(async (tx) => {
+        await this.assertProveedoresDelTenant(auth, normalized.variantes, tx);
         await tx.materiaPrima.update({
           where: { id },
           data: {

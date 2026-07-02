@@ -195,7 +195,9 @@ export class ConfigPasosService {
           Prisma.JsonNull) as Prisma.InputJsonValue,
         nombreVisible: dto.nombreVisible?.trim() || null,
         maquinaM1Id: dto.maquinaM1Id ?? null,
-        perfilM1Id: dto.perfilM1Id ?? null,
+        // El perfil M-1 solo se valida (y tiene sentido) junto a su máquina.
+        // Sin maquinaM1Id no se persiste, para no guardar un perfil ajeno.
+        perfilM1Id: dto.maquinaM1Id ? (dto.perfilM1Id ?? null) : null,
         centroCostoId,
         setupOverrideMin:
           dto.setupOverrideMin != null
@@ -232,6 +234,8 @@ export class ConfigPasosService {
               tenantId,
               productoConfigPasoId: configPaso.id,
               slotCodigo: s.slotCodigo,
+              slotNombre: s.slotNombre ?? null,
+              slotRol: s.slotRol ?? null,
               modoSeleccion: s.modoSeleccion,
               criterioMotorAuto: s.criterioMotorAuto ?? null,
               criterioInputCampo: s.criterioInputCampo ?? null,
@@ -243,6 +247,11 @@ export class ConfigPasosService {
                 s.slotCodigo,
                 s.formula,
               ),
+              cantidadFactor:
+                s.cantidadFactor === null || s.cantidadFactor === undefined
+                  ? 1
+                  : s.cantidadFactor,
+              cantidadBase: s.cantidadBase ?? null,
               aplicaMultiCaras: s.aplicaMultiCaras ?? false,
               activo: true,
             },
@@ -462,6 +471,25 @@ export class ConfigPasosService {
     ]);
     const materiaById = new Map(materias.map((m) => [m.id, m]));
     const varianteById = new Map(variantes.map((v) => [v.id, v]));
+
+    // Scope por tenant obligatorio para TODO id referenciado, incluso en slots
+    // que luego saltean la validación de compatibilidad (no declarados o
+    // CONSUMIBLE_MAQUINA). Sin esto, un slotCodigo arbitrario permitiría
+    // persistir materiales/variantes de otro tenant y filtrarlos al leer.
+    for (const materiaId of materialIds) {
+      if (!materiaById.has(materiaId)) {
+        throw new BadRequestException(
+          'Una materia prima referenciada no existe o no pertenece a tu empresa.',
+        );
+      }
+    }
+    for (const variantId of variants.keys()) {
+      if (!varianteById.has(variantId)) {
+        throw new BadRequestException(
+          'Una variante referenciada no existe o no pertenece a tu empresa.',
+        );
+      }
+    }
     const compatible = (
       materia: {
         familia: string;

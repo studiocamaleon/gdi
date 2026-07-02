@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { PaginationDto } from '../common/dto/pagination.dto';
 import type {
   ActualizarProductoDto,
   CrearProductoDto,
@@ -42,8 +43,11 @@ export class ProductosServiciosService {
     private readonly validacion: ProductoValidacionService,
   ) {}
 
-  listarProductos(tenantId: string, activo?: boolean) {
-    return this.productos.listarProductos(tenantId, activo);
+  listarProductos(
+    tenantId: string,
+    opts: { pagination: PaginationDto; activo?: boolean; search?: string },
+  ) {
+    return this.productos.listarProductos(tenantId, opts);
   }
 
   listarCatalogoComercial() {

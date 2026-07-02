@@ -210,6 +210,44 @@ export class CargosDirectosProductoService {
 
     this.familias.assertFamiliaExiste(dto.familiaCodigo);
 
+    // Validar que las FK provistas pertenezcan al tenant (evita referencias
+    // cross-tenant a máquinas/perfiles/pasos de ruta ajenos).
+    if (dto.maquinaM1Id) {
+      const maquina = await this.prisma.maquina.findFirst({
+        where: { id: dto.maquinaM1Id, tenantId, activo: true },
+        include: {
+          perfilesOperativos: {
+            where: { activo: true },
+            select: { id: true },
+          },
+        },
+      });
+      if (!maquina) {
+        throw new BadRequestException(
+          'La máquina M-1 seleccionada no existe o no está activa.',
+        );
+      }
+      if (
+        dto.perfilM1Id &&
+        !maquina.perfilesOperativos.some((p) => p.id === dto.perfilM1Id)
+      ) {
+        throw new BadRequestException(
+          'El perfil M-1 no pertenece a la máquina seleccionada.',
+        );
+      }
+    }
+    if (dto.insertarDespuesDeRutaPasoId) {
+      const rutaPaso = await this.prisma.rutaPaso.findFirst({
+        where: { id: dto.insertarDespuesDeRutaPasoId, tenantId },
+        select: { id: true },
+      });
+      if (!rutaPaso) {
+        throw new BadRequestException(
+          'El paso de ruta indicado no existe o no pertenece a tu empresa.',
+        );
+      }
+    }
+
     let ordenInterno = dto.ordenInterno ?? 0;
     if (dto.ordenInterno === undefined) {
       const last = await this.prisma.productoPasoExtra.findFirst({
@@ -233,7 +271,7 @@ export class CargosDirectosProductoService {
         mecanismoCantidad: dto.mecanismoCantidad ?? null,
         paramsPasoJson: (dto.paramsPasoJson as never) ?? Prisma.JsonNull,
         maquinaM1Id: dto.maquinaM1Id ?? null,
-        perfilM1Id: dto.perfilM1Id ?? null,
+        perfilM1Id: dto.maquinaM1Id ? (dto.perfilM1Id ?? null) : null,
         activo: true,
       },
     });

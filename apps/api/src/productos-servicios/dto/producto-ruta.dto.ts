@@ -205,6 +205,14 @@ export class UpsertSlotMaterialDto {
   @IsString()
   slotCodigo!: string;
 
+  @IsOptional()
+  @IsString()
+  slotNombre?: string | null;
+
+  @IsOptional()
+  @IsString()
+  slotRol?: string | null;
+
   @IsString()
   modoSeleccion!: string;
 
@@ -237,6 +245,16 @@ export class UpsertSlotMaterialDto {
   @IsOptional()
   @IsString()
   formula?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  cantidadFactor?: number | null;
+
+  @IsOptional()
+  @IsString()
+  cantidadBase?: string | null;
 
   @IsOptional()
   @IsBoolean()

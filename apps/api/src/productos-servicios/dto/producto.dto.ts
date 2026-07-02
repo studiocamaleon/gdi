@@ -25,6 +25,17 @@ export enum ModoMedidasDto {
   MIXTA = 'MIXTA',
 }
 
+export enum MinimoComercialPoliticaDto {
+  NONE = 'NONE',
+  ADVERTIR_FACTURAR_MINIMO = 'ADVERTIR_FACTURAR_MINIMO',
+  BLOQUEAR = 'BLOQUEAR',
+}
+
+export enum MinimoComercialBaseDto {
+  cantidad_comercial = 'cantidad_comercial',
+  pliegos_impresos = 'pliegos_impresos',
+}
+
 export interface MedidaPredefinidaDto {
   id?: string;
   nombre?: string;
@@ -61,6 +72,19 @@ export class CrearProductoDto {
 
   @IsEnum(ModoMedidasDto)
   modoMedidas!: ModoMedidasDto;
+
+  @IsOptional()
+  @IsEnum(MinimoComercialPoliticaDto)
+  minimoComercialPolitica?: MinimoComercialPoliticaDto;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  minimoComercialCantidad?: number | null;
+
+  @IsOptional()
+  @IsEnum(MinimoComercialBaseDto)
+  minimoComercialBase?: MinimoComercialBaseDto;
 
   @IsOptional()
   @IsNumber()
@@ -107,6 +131,19 @@ export class ActualizarProductoDto {
   @IsOptional()
   @IsEnum(ModoMedidasDto)
   modoMedidas?: ModoMedidasDto;
+
+  @IsOptional()
+  @IsEnum(MinimoComercialPoliticaDto)
+  minimoComercialPolitica?: MinimoComercialPoliticaDto;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  minimoComercialCantidad?: number | null;
+
+  @IsOptional()
+  @IsEnum(MinimoComercialBaseDto)
+  minimoComercialBase?: MinimoComercialBaseDto;
 
   @IsOptional()
   @IsNumber()

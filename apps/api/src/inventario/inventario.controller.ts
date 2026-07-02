@@ -1,6 +1,16 @@
-import { Body, Controller, Get, Param, Patch, Post, Put } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
 import type { CurrentAuth } from '../auth/auth.types';
 import { CurrentSession } from '../auth/current-auth.decorator';
+import { PaginationDto } from '../common/dto/pagination.dto';
 import { InstallMaterialPresetDto } from './dto/install-material-preset.dto';
 import { UpdateVariantePrecioReferenciaDto } from './dto/update-variante-precio-referencia.dto';
 import { UpsertMateriaPrimaDto } from './dto/upsert-materia-prima.dto';
@@ -15,8 +25,15 @@ export class InventarioController {
   ) {}
 
   @Get()
-  findAll(@CurrentSession() auth: CurrentAuth) {
-    return this.inventarioService.findAllMateriasPrimas(auth);
+  findAll(
+    @CurrentSession() auth: CurrentAuth,
+    @Query() pagination: PaginationDto,
+    @Query('search') search?: string,
+  ) {
+    return this.inventarioService.findAllMateriasPrimas(auth, {
+      pagination,
+      search: search?.trim() || undefined,
+    });
   }
 
   @Get('biblioteca')

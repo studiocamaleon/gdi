@@ -6,6 +6,10 @@ import {
 import { Prisma } from '@prisma/client';
 import { buildModoColorOptionsFromProfiles } from './modo-color-comercial';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  PaginationDto,
+  paginatedResponse,
+} from '../common/dto/pagination.dto';
 import type {
   ActualizarProductoDto,
   CrearProductoDto,
@@ -25,26 +29,51 @@ type MedidaPredefinidaNormalizada = {
 export class ProductosService {
   constructor(private readonly prisma: PrismaService) {}
 
-  listarProductos(tenantId: string, activo?: boolean) {
-    return this.prisma.producto.findMany({
-      where: { tenantId, ...(activo !== undefined ? { activo } : {}) },
-      orderBy: { nombre: 'asc' },
-      include: {
-        subcategoriaComercial: {
-          include: { categoria: true },
-        },
-        rutasAlternativas: {
-          where: { activo: true },
-          select: {
-            id: true,
-            nombre: true,
-            esPreferida: true,
-            ruta: { select: { id: true, codigo: true, nombre: true } },
+  async listarProductos(
+    tenantId: string,
+    opts: { pagination: PaginationDto; activo?: boolean; search?: string },
+  ) {
+    const { pagination, activo, search } = opts;
+    const where: Prisma.ProductoWhereInput = {
+      tenantId,
+      ...(activo !== undefined ? { activo } : {}),
+      ...(search
+        ? {
+            OR: [
+              { nombre: { contains: search, mode: 'insensitive' } },
+              { codigo: { contains: search, mode: 'insensitive' } },
+              { descripcion: { contains: search, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    };
+
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.producto.findMany({
+        where,
+        orderBy: { nombre: 'asc' },
+        skip: pagination.skip,
+        take: pagination.limit,
+        include: {
+          subcategoriaComercial: {
+            include: { categoria: true },
           },
-          orderBy: { orden: 'asc' },
+          rutasAlternativas: {
+            where: { activo: true },
+            select: {
+              id: true,
+              nombre: true,
+              esPreferida: true,
+              ruta: { select: { id: true, codigo: true, nombre: true } },
+            },
+            orderBy: { orden: 'asc' },
+          },
         },
-      },
-    });
+      }),
+      this.prisma.producto.count({ where }),
+    ]);
+
+    return paginatedResponse(data, total, pagination);
   }
 
   async crearProducto(tenantId: string, dto: CrearProductoDto) {
@@ -73,6 +102,18 @@ export class ProductosService {
             descripcion: dto.descripcion ?? null,
             unidadComercial: dto.unidadComercial,
             modoMedidas: dto.modoMedidas,
+            minimoComercialPolitica: this.normalizarMinimoPolitica(
+              dto.minimoComercialPolitica,
+              dto.minimoComercialCantidad,
+            ),
+            minimoComercialCantidad: this.normalizarMinimoCantidad(
+              dto.minimoComercialPolitica,
+              dto.minimoComercialCantidad,
+            ),
+            minimoComercialBase: this.normalizarMinimoBase(
+              dto.minimoComercialPolitica,
+              dto.minimoComercialBase,
+            ),
             medidaDefaultAnchoMm: medidaDefault
               ? new Prisma.Decimal(medidaDefault.anchoMm)
               : null,
@@ -158,6 +199,29 @@ export class ProductosService {
       data.unidadComercial = dto.unidadComercial;
     }
     if (dto.modoMedidas !== undefined) data.modoMedidas = dto.modoMedidas;
+    if (
+      dto.minimoComercialPolitica !== undefined ||
+      dto.minimoComercialCantidad !== undefined ||
+      dto.minimoComercialBase !== undefined
+    ) {
+      const politica = this.normalizarMinimoPolitica(
+        dto.minimoComercialPolitica ?? existente.minimoComercialPolitica,
+        dto.minimoComercialCantidad !== undefined
+          ? dto.minimoComercialCantidad
+          : this.decimalToNumber(existente.minimoComercialCantidad),
+      );
+      data.minimoComercialPolitica = politica;
+      data.minimoComercialCantidad = this.normalizarMinimoCantidad(
+        politica,
+        dto.minimoComercialCantidad !== undefined
+          ? dto.minimoComercialCantidad
+          : this.decimalToNumber(existente.minimoComercialCantidad),
+      );
+      data.minimoComercialBase = this.normalizarMinimoBase(
+        politica,
+        dto.minimoComercialBase ?? existente.minimoComercialBase,
+      );
+    }
     if (touchedMedidas) {
       data.medidaDefaultAnchoMm = medidaDefault
         ? new Prisma.Decimal(medidaDefault.anchoMm)
@@ -259,6 +323,9 @@ export class ProductosService {
             descripcion: origen.descripcion,
             unidadComercial: origen.unidadComercial,
             modoMedidas: origen.modoMedidas,
+            minimoComercialPolitica: origen.minimoComercialPolitica,
+            minimoComercialCantidad: origen.minimoComercialCantidad,
+            minimoComercialBase: origen.minimoComercialBase,
             medidaDefaultAnchoMm: origen.medidaDefaultAnchoMm,
             medidaDefaultAltoMm: origen.medidaDefaultAltoMm,
             medidasPredefinidasJson: this.jsonOrNull(origen.medidasPredefinidasJson),
@@ -316,6 +383,8 @@ export class ProductosService {
                   tenantId,
                   productoConfigPasoId: configDuplicada.id,
                   slotCodigo: slot.slotCodigo,
+                  slotNombre: slot.slotNombre,
+                  slotRol: slot.slotRol,
                   modoSeleccion: slot.modoSeleccion,
                   criterioMotorAuto: slot.criterioMotorAuto,
                   criterioInputCampo: slot.criterioInputCampo,
@@ -323,6 +392,8 @@ export class ProductosService {
                   materialVarianteId: slot.materialVarianteId,
                   estrategiaCosto: slot.estrategiaCosto,
                   formula: slot.formula,
+                  cantidadFactor: slot.cantidadFactor,
+                  cantidadBase: slot.cantidadBase,
                   aplicaMultiCaras: slot.aplicaMultiCaras,
                   activo: slot.activo,
                 },
@@ -505,6 +576,42 @@ export class ProductosService {
     return value == null ? null : Number(value);
   }
 
+  private normalizarMinimoPolitica(
+    politica: string | null | undefined,
+    cantidad: number | null | undefined,
+  ) {
+    const normalized =
+      politica === 'ADVERTIR_FACTURAR_MINIMO' || politica === 'BLOQUEAR'
+        ? politica
+        : 'NONE';
+    const cantidadNumber = Number(cantidad ?? 0);
+    if (!Number.isFinite(cantidadNumber) || cantidadNumber <= 0) return 'NONE';
+    return normalized;
+  }
+
+  private normalizarMinimoCantidad(
+    politica: string | null | undefined,
+    cantidad: number | null | undefined,
+  ) {
+    if (politica !== 'ADVERTIR_FACTURAR_MINIMO' && politica !== 'BLOQUEAR') {
+      return null;
+    }
+    const cantidadNumber = Number(cantidad ?? 0);
+    return Number.isFinite(cantidadNumber) && cantidadNumber > 0
+      ? new Prisma.Decimal(cantidadNumber)
+      : null;
+  }
+
+  private normalizarMinimoBase(
+    politica: string | null | undefined,
+    base: string | null | undefined,
+  ) {
+    if (politica !== 'ADVERTIR_FACTURAR_MINIMO' && politica !== 'BLOQUEAR') {
+      return 'cantidad_comercial';
+    }
+    return base === 'pliegos_impresos' ? 'pliegos_impresos' : 'cantidad_comercial';
+  }
+
   private jsonToMedidas(value: Prisma.JsonValue | null): MedidaPredefinidaDto[] | null {
     return Array.isArray(value) ? (value as MedidaPredefinidaDto[]) : null;
   }
@@ -653,6 +760,28 @@ export class ProductosService {
                         sku: true,
                         nombreVariante: true,
                         precioReferencia: true,
+                        atributosVarianteJson: true,
+                        materiaPrima: {
+                          select: {
+                            id: true,
+                            codigo: true,
+                            nombre: true,
+                            familia: true,
+                            subfamilia: true,
+                            templateId: true,
+                            variantes: {
+                              where: { activo: true },
+                              select: {
+                                id: true,
+                                sku: true,
+                                nombreVariante: true,
+                                precioReferencia: true,
+                                atributosVarianteJson: true,
+                              },
+                              orderBy: { sku: 'asc' },
+                            },
+                          },
+                        },
                       },
                     },
                     candidatos: {
