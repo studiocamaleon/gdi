@@ -83,6 +83,7 @@ const subfamiliaMateriaPrimaLabels: Record<SubfamiliaMateriaPrima, string> = {
   primer_sellador: "Primer sellador",
   anillado_encuadernacion: "Anillado encuadernación",
   tapa_encuadernacion: "Tapa encuadernación",
+  componente_editorial: "Componente editorial / carpeta",
   iman_ceramico_flexible: "Imán cerámico/flexible",
   fijacion_auxiliar: "Fijación auxiliar",
   accesorio_exhibidor_carton: "Accesorio exhibidor cartón",

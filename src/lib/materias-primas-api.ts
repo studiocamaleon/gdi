@@ -11,8 +11,44 @@ import type {
   UpdateVariantePrecioReferenciaPayload,
 } from "@/lib/materias-primas";
 
-export async function getMateriasPrimas() {
-  return apiRequest<MateriaPrima[]>("/inventario/materias-primas");
+export interface MateriasPrimasListResponse {
+  data: MateriaPrima[];
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
+}
+
+/** Listado paginado (envelope) del backend. */
+export async function listMateriasPrimas(
+  params: { page?: number; limit?: number; search?: string } = {},
+): Promise<MateriasPrimasListResponse> {
+  const sp = new URLSearchParams();
+  if (params.page) sp.set("page", String(params.page));
+  if (params.limit) sp.set("limit", String(params.limit));
+  if (params.search?.trim()) sp.set("search", params.search.trim());
+  const qs = sp.toString();
+  return apiRequest<MateriasPrimasListResponse>(
+    `/inventario/materias-primas${qs ? `?${qs}` : ""}`,
+  );
+}
+
+/**
+ * Devuelve TODAS las materias primas (recorriendo páginas). El backend acota
+ * cada query por límite; los consumidores (panel, pickers) siguen recibiendo
+ * el array completo sin cambios.
+ */
+export async function getMateriasPrimas(): Promise<MateriaPrima[]> {
+  const limit = 200;
+  const all: MateriaPrima[] = [];
+  let page = 1;
+  for (;;) {
+    const res = await listMateriasPrimas({ page, limit });
+    all.push(...res.data);
+    if (page >= res.pages || res.data.length === 0) break;
+    page += 1;
+  }
+  return all;
 }
 
 export async function getMateriaPrimaById(id: string) {

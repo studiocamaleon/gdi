@@ -6,6 +6,7 @@ import {
   ArrowRightIcon,
   BriefcaseBusinessIcon,
   CheckIcon,
+  CircleAlertIcon,
   Grid2X2Icon,
   ListIcon,
   MinusIcon,
@@ -80,6 +81,9 @@ type CatalogProduct = {
   medidasMode: "fija" | "calculada";
   precioBase: number;
   precioConfigJson?: unknown;
+  minimoComercialPolitica: "NONE" | "ADVERTIR_FACTURAR_MINIMO" | "BLOQUEAR";
+  minimoComercialCantidad: number | null;
+  minimoComercialBase: "cantidad_comercial" | "pliegos_impresos";
   descripcion: string;
   specs: CatalogSpec[];
   adicionales: CatalogAdicional[];
@@ -501,6 +505,20 @@ function isConfigPasoAvailableForOptionalToggle(
     return evaluarJsonLogicBoolean(config.condicionActivacionJson, ruleContext, false);
   }
   return true;
+}
+
+function routeUsesCaras(
+  ruta: RutaAlternativaDetalle | null,
+  includeConfig: (config: ConfigPasoDetalle) => boolean,
+) {
+  return (
+    ruta?.configPasos.some(
+      (config) =>
+        includeConfig(config) &&
+        (config.multiplicadoresActivos.includes("caras") ||
+          config.slotsMateriales.some((slot) => slot.aplicaMultiCaras)),
+    ) ?? false
+  );
 }
 
 function mapSlotMaterial(
@@ -1204,6 +1222,9 @@ function mapProductoReal(producto: ProductoListItem | ProductoDetalle): CatalogP
       : "fija",
     precioBase: 0,
     precioConfigJson: producto.precioConfigJson,
+    minimoComercialPolitica: producto.minimoComercialPolitica ?? "NONE",
+    minimoComercialCantidad: Number(producto.minimoComercialCantidad ?? 0) || null,
+    minimoComercialBase: producto.minimoComercialBase ?? "cantidad_comercial",
     descripcion: producto.descripcion ?? categoria.nombre,
     specs: schema
       .filter((spec) => spec.visible)
@@ -1279,6 +1300,18 @@ function getCotizacionUnitario(cotizacion: CotizacionExitosa) {
     cotizacion.desglosePrecio?.precioBrutoUnitario ??
     cotizacion.precio?.precioUnitario ??
     cotizacion.costos.unitario
+  );
+}
+
+function getCotizacionCantidadReal(
+  cotizacion: CotizacionExitosa,
+  fallback: number,
+) {
+  return (
+    cotizacion.cantidadComercialReal ??
+    cotizacion.cantidadPedida ??
+    cotizacion.cantidadEfectiva ??
+    fallback
   );
 }
 
@@ -1475,6 +1508,11 @@ function buildJobContext(
           1_000_000,
       0,
     );
+    ctx.piezaPerimetroTotalM = piezasContexto.reduce((total, pieza) => {
+      const cantidadPieza = piezasUsanCantidadComercial ? qty : pieza.cantidad;
+      const perimetroMm = 2 * (pieza.anchoMm + pieza.altoMm);
+      return total + (cantidadPieza * perimetroMm) / 1000;
+    }, 0);
     if (piezasContexto.length === 1) {
       ctx.medidaCustomMm = {
         anchoMm: piezasContexto[0].anchoMm,
@@ -1604,6 +1642,77 @@ function calcularCantidadComercial(
   return qty;
 }
 
+function formatCommercialQuantity(value: number) {
+  return new Intl.NumberFormat("es-AR", {
+    maximumFractionDigits: 4,
+  }).format(value);
+}
+
+function getMinimumCommercialStatus(
+  product: CatalogProduct,
+  productoDetalle: ProductoDetalle | null,
+  config: MotorConfigState | undefined,
+  qty: number,
+  cotizacion?: CotizacionExitosa | null,
+) {
+  const minimo = product.minimoComercialCantidad;
+  if (
+    !product.real ||
+    product.minimoComercialPolitica === "NONE" ||
+    !minimo ||
+    minimo <= 0
+  ) {
+    return null;
+  }
+  if (product.minimoComercialBase === "pliegos_impresos") {
+    const aplicado = cotizacion?.minimoComercialAplicado;
+    if (aplicado?.base === "pliegos_impresos") {
+      const realLabel = `${formatCommercialQuantity(aplicado.cantidadReal)} ${aplicado.unidadLabel}`;
+      const minimoLabel = `${formatCommercialQuantity(aplicado.cantidadMinima)} ${aplicado.unidadLabel}`;
+      if (aplicado.politica === "BLOQUEAR" && aplicado.cantidadReal < aplicado.cantidadMinima) {
+        return {
+          kind: "blocked" as const,
+          message: `Se necesitan ${realLabel}, pero este producto requiere un mínimo de ${minimoLabel}.`,
+          cantidadReal: aplicado.cantidadReal,
+          minimo: aplicado.cantidadMinima,
+        };
+      }
+      if (aplicado.aplicado) {
+        return {
+          kind: "warning" as const,
+          message: `Se necesitan ${realLabel}, pero se cobrará el mínimo de ${minimoLabel}.`,
+          cantidadReal: aplicado.cantidadReal,
+          minimo: aplicado.cantidadMinima,
+        };
+      }
+      return null;
+    }
+    return {
+      kind: "info" as const,
+      message: `El mínimo de ${formatCommercialQuantity(minimo)} pliegos se verificará al cotizar porque depende del nesting.`,
+      cantidadReal: 0,
+      minimo,
+    };
+  }
+  const cantidadReal = calcularCantidadComercial(product, productoDetalle, config, qty);
+  if (cantidadReal >= minimo) return null;
+  const minimoLabel = `${formatCommercialQuantity(minimo)} ${product.unidad}`;
+  if (product.minimoComercialPolitica === "BLOQUEAR") {
+    return {
+      kind: "blocked" as const,
+      message: `Este producto requiere un mínimo de ${minimoLabel}.`,
+      cantidadReal,
+      minimo,
+    };
+  }
+  return {
+    kind: "warning" as const,
+    message: `Cantidad menor al mínimo comercial. Se cobrará como ${minimoLabel}.`,
+    cantidadReal,
+    minimo,
+  };
+}
+
 function buildPresentableSpecs(
   product: CatalogProduct,
   productoDetalle: ProductoDetalle | null,
@@ -1687,7 +1796,10 @@ function buildPresentableSpecs(
     setSpec("medidas", medidas);
     setSpec("formato_medidas", medidas);
   }
-  if (hasSpec("caras") || product.subcategoriaComercialCodigo === "tarjetas") {
+  const usaCaras = routeUsesCaras(rutaSeleccionada, (paso) =>
+    isConfigPasoVisibleForContext(paso, config, ruleContext),
+  );
+  if (usaCaras && hasSpec("caras")) {
     setSpec("caras", config.caras === 2 ? "Doble faz" : "Simple faz");
   }
   const modosColor = getModosColorComercial(
@@ -1823,6 +1935,10 @@ function buildItem(
     : Object.fromEntries(
         product.specs.map((spec) => [spec.key, specs[spec.key] ?? spec.def]),
       );
+  if (cotizacion.minimoComercialAplicado?.aplicado) {
+    const minimo = cotizacion.minimoComercialAplicado;
+    especificaciones.minimo_comercial = `Se necesitan ${formatCommercialQuantity(minimo.cantidadReal)} ${minimo.unidadLabel}; se cobra mínimo de ${formatCommercialQuantity(minimo.cantidadMinima)} ${minimo.unidadLabel}.`;
+  }
   const unidadMedida: UnidadPropuesta =
     product.unidad === "m²"
       ? "m2"
@@ -1836,22 +1952,15 @@ function buildItem(
   const total = getCotizacionTotal(cotizacion);
   const impuestoPorcentaje =
     subtotal > 0 ? (impuestoMonto / subtotal) * 100 : product.impuestoPct;
-  const cantidadComercial =
-    product.unidad === "ml"
-      ? cotizacion.cantidadComercialPricing ??
-        calcularCantidadComercial(
-          product,
-          options?.productoDetalle ?? null,
-          options?.motorConfig,
-          qty,
-        )
-      : cotizacion.cantidadComercialPricing ??
-        calcularCantidadComercial(
-          product,
-          options?.productoDetalle ?? null,
-          options?.motorConfig,
-          qty,
-        );
+  const cantidadComercial = getCotizacionCantidadReal(
+    cotizacion,
+    calcularCantidadComercial(
+      product,
+      options?.productoDetalle ?? null,
+      options?.motorConfig,
+      qty,
+    ),
+  );
   const jobContext = options
     ? buildJobContext(
         options.productoDetalle,
@@ -1871,6 +1980,18 @@ function buildItem(
     visible: shouldShowCommercialSpec(spec, especificaciones[spec.key], product, especificaciones),
     orden: (index + 1) * 10,
   }));
+  if (
+    hasUsefulSpecValue(especificaciones.minimo_comercial) &&
+    !atributosSchema.some((attr) => attr.key === "minimo_comercial")
+  ) {
+    atributosSchema.push({
+      key: "minimo_comercial",
+      label: "Mínimo comercial",
+      tipo: "text",
+      visible: true,
+      orden: 95,
+    });
+  }
   for (const key of ENRICHED_SPEC_ORDER) {
     if (!hasUsefulSpecValue(especificaciones[key])) continue;
     if (atributosSchema.some((attr) => attr.key === key)) continue;
@@ -2039,6 +2160,8 @@ function ApSelectStep({
   products,
   loadingProductId,
 }: SelectStepProps) {
+  const [activeIndex, setActiveIndex] = React.useState(0);
+  const activeResultRef = React.useRef<HTMLButtonElement | null>(null);
   const visibleRecientes = products.slice(0, 3);
   const families = React.useMemo(
     () => ["Todos", ...Array.from(new Set(products.map((product) => product.family)))],
@@ -2054,7 +2177,27 @@ function ApSelectStep({
       .toLowerCase()
       .includes(normalized);
   });
-  const uniqueFilteredProduct = filtered.length === 1 ? filtered[0] : null;
+  const activeProduct =
+    filtered.length > 0
+      ? filtered[Math.min(activeIndex, filtered.length - 1)]
+      : null;
+
+  React.useEffect(() => {
+    setActiveIndex(0);
+  }, [query, family]);
+
+  React.useEffect(() => {
+    if (activeIndex > filtered.length - 1) {
+      setActiveIndex(Math.max(0, filtered.length - 1));
+    }
+  }, [activeIndex, filtered.length]);
+
+  React.useEffect(() => {
+    activeResultRef.current?.scrollIntoView({
+      block: "nearest",
+      behavior: "smooth",
+    });
+  }, [activeIndex]);
 
   return (
     <>
@@ -2066,9 +2209,23 @@ function ApSelectStep({
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key !== "Enter" || !uniqueFilteredProduct) return;
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              setActiveIndex((current) =>
+                filtered.length === 0
+                  ? 0
+                  : Math.min(current + 1, filtered.length - 1),
+              );
+              return;
+            }
+            if (event.key === "ArrowUp") {
+              event.preventDefault();
+              setActiveIndex((current) => Math.max(current - 1, 0));
+              return;
+            }
+            if (event.key !== "Enter" || !activeProduct) return;
             event.preventDefault();
-            onPick(uniqueFilteredProduct);
+            onPick(activeProduct);
           }}
         />
         <span className="kbd">⌘K</span>
@@ -2132,11 +2289,14 @@ function ApSelectStep({
           </span>
         </div>
         <div className="ap-list">
-          {filtered.map((product) => (
+          {filtered.map((product, index) => (
             <button
               key={product.code}
+              ref={activeProduct?.code === product.code ? activeResultRef : null}
               type="button"
-              className={`ap-prod ${uniqueFilteredProduct?.code === product.code ? "is-keyboard-target" : ""}`}
+              className={`ap-prod ${activeProduct?.code === product.code ? "is-keyboard-target" : ""}`}
+              aria-selected={activeProduct?.code === product.code}
+              onMouseEnter={() => setActiveIndex(index)}
               onClick={() => onPick(product)}
             >
               <span className="ap-prod-main">
@@ -2309,6 +2469,9 @@ function ApConfigStep({
   const piezasUsanCantidadComercial = usaCantidadComercialParaPiezas(productoDetalle);
   const piezaFocusRefs = React.useRef<Record<string, HTMLInputElement | null>>({});
   const focusPiezaCantidadKey = React.useRef<string | null>(null);
+  const [piezaMeasureDrafts, setPiezaMeasureDrafts] = React.useState<
+    Record<string, { anchoCm?: string; altoCm?: string }>
+  >({});
 
   const updateMotorConfig = React.useCallback(
     (patch: Partial<MotorConfigState>) => {
@@ -2357,6 +2520,52 @@ function ApConfigStep({
     },
     [setMotorConfig],
   );
+
+  const getPiezaMeasureValue = React.useCallback(
+    (pieza: PiezaInput, field: "anchoCm" | "altoCm") => {
+      const draft = piezaMeasureDrafts[pieza.uiKey]?.[field];
+      if (draft !== undefined) return draft;
+      return formatCmInputFromMm(field === "anchoCm" ? pieza.anchoMm : pieza.altoMm);
+    },
+    [piezaMeasureDrafts],
+  );
+
+  const updatePiezaMeasure = React.useCallback(
+    (index: number, pieza: PiezaInput, field: "anchoCm" | "altoCm", value: string) => {
+      setPiezaMeasureDrafts((current) => ({
+        ...current,
+        [pieza.uiKey]: { ...current[pieza.uiKey], [field]: value },
+      }));
+      const normalized = value.trim().replace(",", ".");
+      if (normalized === "") {
+        updatePieza(index, { [field === "anchoCm" ? "anchoMm" : "altoMm"]: 0 });
+        return;
+      }
+      const parsed = Number.parseFloat(normalized);
+      if (Number.isFinite(parsed)) {
+        updatePieza(index, {
+          [field === "anchoCm" ? "anchoMm" : "altoMm"]: cmToMm(parsed),
+        });
+      }
+    },
+    [updatePieza],
+  );
+
+  const commitPiezaMeasure = React.useCallback((pieza: PiezaInput, field: "anchoCm" | "altoCm") => {
+    setPiezaMeasureDrafts((current) => {
+      const currentDraft = current[pieza.uiKey];
+      if (!currentDraft || currentDraft[field] === undefined) return current;
+      const nextDraft = { ...currentDraft };
+      delete nextDraft[field];
+      const next = { ...current };
+      if (nextDraft.anchoCm === undefined && nextDraft.altoCm === undefined) {
+        delete next[pieza.uiKey];
+      } else {
+        next[pieza.uiKey] = nextDraft;
+      }
+      return next;
+    });
+  }, []);
 
   const setOpcional = React.useCallback(
     (id: string, checked: boolean) => {
@@ -2847,15 +3056,7 @@ function ApConfigStep({
       </React.Fragment>
     );
   };
-  const usaCaras =
-    rutaSel?.configPasos.filter(isExecutableConfigPaso).some(
-      (config) =>
-        config.multiplicadoresActivos.includes("caras") ||
-        config.slotsMateriales.some((slot) => slot.aplicaMultiCaras),
-    ) ||
-    ["tarjetas", "volantes_folletos", "papeleria_comercial", "stickers_hoja"].includes(
-      product.subcategoriaComercialCodigo,
-    );
+  const usaCaras = routeUsesCaras(rutaSel, includeVisibleConfig);
   const esTalonario = product.subcategoriaComercialCodigo === "talonarios";
   const metroLinealConMedidasVariables = isMetroLinealConMedidasVariables(productoDetalle);
   const mostrarEditorPiezas = usaPiezasParaCotizar(productoDetalle, motorConfig);
@@ -2882,6 +3083,14 @@ function ApConfigStep({
       : [];
   const isAllowedQuantity =
     !usesExactPricingQuantities || exactPricingQuantities.includes(qty);
+  const minimoComercialStatus = getMinimumCommercialStatus(
+    product,
+    productoDetalle,
+    motorConfig,
+    qty,
+    cotizacionExitosa,
+  );
+  const isBlockedByMinimum = minimoComercialStatus?.kind === "blocked";
 
   const renderQuantityControl = () => {
     if (usesExactPricingQuantities) {
@@ -2993,13 +3202,13 @@ function ApConfigStep({
                 ref={(node) => {
                   if (options?.hideCantidad) piezaFocusRefs.current[pieza.uiKey] = node;
                 }}
-                type="number"
-                min="0"
-                step="0.1"
-                value={formatCmInputFromMm(pieza.anchoMm)}
+                type="text"
+                inputMode="decimal"
+                value={getPiezaMeasureValue(pieza, "anchoCm")}
                 onChange={(event) =>
-                  updatePieza(index, { anchoMm: cmToMm(parseDecimalInput(event.target.value)) })
+                  updatePiezaMeasure(index, pieza, "anchoCm", event.target.value)
                 }
+                onBlur={() => commitPiezaMeasure(pieza, "anchoCm")}
                 aria-label="Ancho en cm"
               />
               <span>cm</span>
@@ -3007,13 +3216,13 @@ function ApConfigStep({
             <span>x</span>
             <label className="ap-input-unit">
               <input
-                type="number"
-                min="0"
-                step="0.1"
-                value={formatCmInputFromMm(pieza.altoMm)}
+                type="text"
+                inputMode="decimal"
+                value={getPiezaMeasureValue(pieza, "altoCm")}
                 onChange={(event) =>
-                  updatePieza(index, { altoMm: cmToMm(parseDecimalInput(event.target.value)) })
+                  updatePiezaMeasure(index, pieza, "altoCm", event.target.value)
                 }
+                onBlur={() => commitPiezaMeasure(pieza, "altoCm")}
                 onKeyDown={(event) => {
                   if (event.key !== "Enter") return;
                   event.preventDefault();
@@ -3189,6 +3398,16 @@ function ApConfigStep({
                 <label>Cantidad</label>
                 {renderQuantityControl()}
               </div>
+              {minimoComercialStatus ? (
+                <div
+                  className={`ap-minimum-alert ${
+                    minimoComercialStatus.kind === "blocked" ? "is-blocked" : "is-warning"
+                  }`}
+                >
+                  <CircleAlertIcon />
+                  <span>{minimoComercialStatus.message}</span>
+                </div>
+              ) : null}
               </>
             )}
 
@@ -3363,10 +3582,22 @@ function ApConfigStep({
             ) : null}
           </div>
         ) : (
-          <div className="ap-spec ap-spec-wide">
-            <label>Cantidad</label>
-            {renderQuantityControl()}
-          </div>
+          <>
+            <div className="ap-spec ap-spec-wide">
+              <label>Cantidad</label>
+              {renderQuantityControl()}
+            </div>
+            {minimoComercialStatus ? (
+              <div
+                className={`ap-minimum-alert ${
+                  minimoComercialStatus.kind === "blocked" ? "is-blocked" : "is-warning"
+                }`}
+              >
+                <CircleAlertIcon />
+                <span>{minimoComercialStatus.message}</span>
+              </div>
+            ) : null}
+          </>
         )}
       </div>
 
@@ -3460,7 +3691,12 @@ function ApConfigStep({
             type="button"
             className="btn btn-primary"
             onClick={onCotizar}
-            disabled={cotizando || !productoDetalle || !isAllowedQuantity}
+            disabled={
+              cotizando ||
+              !productoDetalle ||
+              !isAllowedQuantity ||
+              isBlockedByMinimum
+            }
           >
             {cotizando ? "Cotizando..." : "Cotizar"}
           </button>
@@ -3637,6 +3873,10 @@ export function AgregarProductoSheet({
 
   const totals = product ? getTotals(product, qty, adi) : null;
   const cotizacionExitosa = getCotizacionExitosa(cotizacion);
+  const minimoComercialStatus = product
+    ? getMinimumCommercialStatus(product, productoDetalle, motorConfig, qty, cotizacionExitosa)
+    : null;
+  const isBlockedByMinimum = minimoComercialStatus?.kind === "blocked";
 
   React.useEffect(() => {
     if (!product) return;
@@ -3833,6 +4073,17 @@ export function AgregarProductoSheet({
         toast.error("Primero cotizá el producto para previsualizar el precio.");
         return;
       }
+      const minimumStatus = getMinimumCommercialStatus(
+        product,
+        productoDetalle,
+        motorConfig,
+        qty,
+        cotizacionExitosa,
+      );
+      if (minimumStatus?.kind === "blocked") {
+        toast.error(minimumStatus.message);
+        return;
+      }
       const rutaSel = getRutaSeleccionada(productoDetalle, motorConfig.rutaAlternativaId);
       const slotsParaReglas = getSlotsParaCotizacion(
         rutaSel,
@@ -4022,7 +4273,9 @@ export function AgregarProductoSheet({
                   type="button"
                   className="btn"
                   onClick={() => addCurrent(true)}
-                  disabled={product.real && (!cotizacionExitosa || cotizando)}
+                  disabled={
+                    product.real && (!cotizacionExitosa || cotizando || isBlockedByMinimum)
+                  }
                 >
                   Guardar y agregar otro
                 </button>
@@ -4031,7 +4284,7 @@ export function AgregarProductoSheet({
                 type="button"
                 className="btn btn-primary"
                 onClick={() => addCurrent(false)}
-                disabled={product.real && (!cotizacionExitosa || cotizando)}
+                disabled={product.real && (!cotizacionExitosa || cotizando || isBlockedByMinimum)}
               >
                 {isEditing ? <CheckIcon /> : <PlusIcon />}
                 {isEditing ? "Guardar cambios" : "Agregar a la OT"}

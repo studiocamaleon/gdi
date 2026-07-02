@@ -9,8 +9,10 @@ import {
   CheckIcon,
   Grid2X2Icon,
   PackageIcon,
+  PlusIcon,
   SaveIcon,
   StarIcon,
+  Trash2Icon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -47,6 +49,7 @@ import type {
   CatalogoFamilias,
   ProductoDetalle,
   RutaAlternativaDetalle,
+  SlotMaterialDetalle,
 } from "@/lib/productos-servicios";
 import {
   criterioMotorAutoLabels,
@@ -161,6 +164,11 @@ const T2_QUANTITY_SOURCE_OPTIONS = [
     description: "Respeta el mecanismo de cantidad configurado para el paso.",
   },
   {
+    value: "cantidad_montaje",
+    label: "Piezas/pliegos a montar",
+    description: "Usa la cantidad definida en Piezas a montar para calcular tiempo.",
+  },
+  {
     value: "area_piezas_m2",
     label: "Área calculada desde piezas",
     description: "Usa el área real de las medidas cargadas al cotizar.",
@@ -175,6 +183,11 @@ const T2_QUANTITY_SOURCE_OPTIONS = [
     label: "Metros lineales cotizados",
     description: "Usa los metros lineales comerciales del producto.",
   },
+  {
+    value: "perimetro_piezas_m",
+    label: "Perímetro total de piezas",
+    description: "Suma el perímetro rectangular de todas las piezas.",
+  },
 ];
 const T2_PRODUCTIVITY_UNIT_SUFFIX: Record<string, string> = {
   unidades_h: "unid./h",
@@ -186,6 +199,23 @@ const T2_BATCH_UNIT_SUFFIX: Record<string, string> = {
   m2_h: "m²",
   ml_h: "ml",
 };
+
+function getT2ProductivityUnitSuffix(unit: string, quantitySource: string) {
+  if (unit === "ml_h" && quantitySource === "perimetro_piezas_m") {
+    return "m perímetro/h";
+  }
+  return (
+    T2_PRODUCTIVITY_UNIT_SUFFIX[unit] ?? T2_PRODUCTIVITY_UNIT_SUFFIX.unidades_h
+  );
+}
+
+function getT2BatchUnitSuffix(unit: string, quantitySource: string) {
+  if (unit === "ml_h" && quantitySource === "perimetro_piezas_m") {
+    return "m perímetro";
+  }
+  return T2_BATCH_UNIT_SUFFIX[unit] ?? T2_BATCH_UNIT_SUFFIX.unidades_h;
+}
+
 function getDefaultT2ProductivityUnit(familiaCodigo?: string) {
   return familiaCodigo === "instalacion_in_situ" ? "m2_h" : "unidades_h";
 }
@@ -197,6 +227,9 @@ function getDefaultT2TimeCalculationMode(familiaCodigo?: string) {
 }
 
 function getDefaultT2QuantitySource(familiaCodigo?: string, unit?: string) {
+  if (familiaCodigo === "montaje_sobre_sustrato" && unit === "unidades_h") {
+    return "cantidad_montaje";
+  }
   if (unit === "unidades_h") return "cantidad";
   if (unit === "m2_h") return "area_piezas_m2";
   if (unit === "ml_h") return "metros_lineales";
@@ -204,13 +237,23 @@ function getDefaultT2QuantitySource(familiaCodigo?: string, unit?: string) {
   return "cantidad";
 }
 
-function getDefaultMecanismoCantidad(familiaCodigo?: string) {
+function getDefaultMecanismoCantidad(
+  familiaCodigo?: string,
+  mecanismosSoportados: string[] = [],
+) {
+  if (familiaCodigo === "impresion_por_hoja")
+    return "HEREDAR_DEL_OUTPUT_CANONICO";
   if (familiaCodigo === "corte_manual") return "HEREDAR_DEL_OUTPUT_CANONICO";
   if (familiaCodigo === "montaje_sobre_sustrato") return "CALCULADO_POR_PASO";
-  return null;
+  return mecanismosSoportados[0] ?? null;
 }
 
-function getT2QuantitySourceOptions(unit: string) {
+function getT2QuantitySourceOptions(unit: string, familiaCodigo?: string) {
+  if (familiaCodigo === "montaje_sobre_sustrato" && unit === "unidades_h") {
+    return T2_QUANTITY_SOURCE_OPTIONS.filter((option) =>
+      ["cantidad_montaje", "cantidad"].includes(option.value),
+    );
+  }
   if (unit === "m2_h") {
     return T2_QUANTITY_SOURCE_OPTIONS.filter((option) =>
       ["area_piezas_m2", "m2_instalados", "cantidad"].includes(option.value),
@@ -218,7 +261,9 @@ function getT2QuantitySourceOptions(unit: string) {
   }
   if (unit === "ml_h") {
     return T2_QUANTITY_SOURCE_OPTIONS.filter((option) =>
-      ["metros_lineales", "cantidad"].includes(option.value),
+      ["metros_lineales", "perimetro_piezas_m", "cantidad"].includes(
+        option.value,
+      ),
     );
   }
   return T2_QUANTITY_SOURCE_OPTIONS.filter(
@@ -226,50 +271,6 @@ function getT2QuantitySourceOptions(unit: string) {
   );
 }
 
-function formatT2Number(value: number, digits = 2) {
-  return new Intl.NumberFormat("es-AR", {
-    maximumFractionDigits: digits,
-    minimumFractionDigits: value % 1 === 0 ? 0 : 1,
-  }).format(value);
-}
-
-function getT2UnitLabel(unit: string, mode: "batch" | "productivity") {
-  if (unit === "m2_h") return "m²";
-  if (unit === "ml_h") return "ml";
-  return mode === "batch" ? "pliegos/unidades" : "pliegos/unidades";
-}
-
-function getT2TimeSummary({
-  timeCalculationMode,
-  productivityUnit,
-  productivityValue,
-  batchTimeMin,
-  batchSize,
-}: {
-  timeCalculationMode: string;
-  productivityUnit: string;
-  productivityValue: number | null;
-  batchTimeMin: number | null;
-  batchSize: number | null;
-}) {
-  const unitLabel = getT2UnitLabel(
-    productivityUnit,
-    timeCalculationMode === "batch_time" ? "batch" : "productivity",
-  );
-  if (timeCalculationMode === "batch_time") {
-    if (!batchTimeMin || !batchSize) {
-      return "Ejemplo: 2 pliegos cada 1 minuto. El motor calcula cantidad ÷ pliegos por lote × minutos.";
-    }
-    const hourly = (batchSize / batchTimeMin) * 60;
-    return `${formatT2Number(batchSize)} ${unitLabel} cada ${formatT2Number(
-      batchTimeMin,
-    )} min = ${formatT2Number(hourly)} ${unitLabel}/h.`;
-  }
-  if (!productivityValue) {
-    return "Ejemplo: 120 pliegos/unidades por hora. El motor calcula cantidad ÷ productividad.";
-  }
-  return `${formatT2Number(productivityValue)} ${unitLabel}/h.`;
-}
 const COSTING_STRATEGIES = [
   "simple",
   "m2-exact",
@@ -330,9 +331,9 @@ const PLIEGO_IMPRESION_PRESETS = [
   {
     value: "SRA3",
     label: "SRA3",
-    description: "320 × 450 mm",
-    anchoMm: 320,
-    altoMm: 450,
+    description: "325 × 475 mm",
+    anchoMm: 325,
+    altoMm: 475,
   },
   {
     value: "carta",
@@ -347,6 +348,13 @@ const PLIEGO_IMPRESION_PRESETS = [
     description: "216 × 356 mm",
     anchoMm: 216,
     altoMm: 356,
+  },
+  {
+    value: "automatico",
+    label: "Automático entre candidatos",
+    description: "El motor elige el mejor tamaño entre candidatos activos.",
+    anchoMm: null,
+    altoMm: null,
   },
   {
     value: "personalizado",
@@ -503,6 +511,17 @@ const SELECCION_MATERIAL_OPTIONS = optionsFromLabels(
   modoSeleccionMaterialLabels,
 );
 const FORMULA_OPTIONS = optionsFromLabels(FORMULAS, formulaConsumoLabels);
+const SLOT_ROL_OPTIONS: HumanSelectOption[] = [
+  { value: "COMPONENTE", label: "Componente" },
+  { value: "SUSTRATO", label: "Sustrato" },
+  { value: "CONSUMIBLE", label: "Consumible" },
+  { value: "PACKAGING", label: "Packaging" },
+];
+const CANTIDAD_BASE_SLOT_OPTIONS: HumanSelectOption[] = [
+  { value: "cantidad_pedida", label: "Cantidad pedida" },
+  { value: "cantidad_efectiva_paso", label: "Cantidad efectiva del paso" },
+  { value: "pliegos_impresos", label: "Pliegos impresos" },
+];
 const CRITERIO_AUTO_OPTIONS = optionsFromLabels(
   CRITERIOS_AUTO,
   criterioMotorAutoLabels,
@@ -675,6 +694,91 @@ function varianteOptionFromBusqueda(
   );
 }
 
+type PersistedSlotCandidate = {
+  materiaPrima: Pick<
+    MateriaPrimaBusquedaItem,
+    "id" | "codigo" | "nombre" | "familia" | "subfamilia" | "templateId"
+  >;
+  defaultVariante: {
+    id: string;
+    sku: string;
+    nombreVariante: string | null;
+    precioReferencia: string | null;
+    atributosVarianteJson?: Record<string, unknown> | null;
+  } | null;
+  variantes: Array<{
+    variante: {
+      id: string;
+      sku: string;
+      nombreVariante: string | null;
+      precioReferencia: string | null;
+      atributosVarianteJson?: Record<string, unknown> | null;
+    };
+  }>;
+};
+
+function getPersistedCandidateVariantLabel(
+  candidates: PersistedSlotCandidate[],
+  varianteId: string | null | undefined,
+) {
+  const resolved = getPersistedCandidateMaterialVariant(candidates, varianteId);
+  if (!resolved) return null;
+  const option = varianteOptionFromBusqueda(
+    resolved.materiaPrima,
+    resolved.variante,
+  );
+  return `${resolved.materiaPrima.nombre} · ${option.label}`;
+}
+
+function getPersistedCandidateMaterialVariant(
+  candidates: PersistedSlotCandidate[],
+  varianteId: string | null | undefined,
+) {
+  if (!varianteId) return null;
+  for (const candidate of candidates) {
+    const variante =
+      candidate.variantes.find((item) => item.variante.id === varianteId)
+        ?.variante ??
+      (candidate.defaultVariante?.id === varianteId
+        ? candidate.defaultVariante
+        : null);
+    if (!variante) continue;
+    const materiaPrima: MateriaPrimaBusquedaItem = {
+      ...candidate.materiaPrima,
+      tipoTecnico: "",
+      variantes: candidate.variantes.map((item) => item.variante),
+    };
+    return { materiaPrima, variante };
+  }
+  return null;
+}
+
+function materialVariantToBusquedaItem(
+  materialVariante: NonNullable<SlotMaterialDetalle["materialVariante"]>,
+): MateriaPrimaBusquedaItem {
+  return {
+    id: materialVariante.materiaPrima.id,
+    codigo: materialVariante.materiaPrima.codigo,
+    nombre: materialVariante.materiaPrima.nombre,
+    familia: materialVariante.materiaPrima.familia,
+    subfamilia: materialVariante.materiaPrima.subfamilia,
+    tipoTecnico: "",
+    templateId: materialVariante.materiaPrima.templateId,
+    variantes:
+      materialVariante.materiaPrima.variantes?.length
+        ? materialVariante.materiaPrima.variantes
+        : [
+            {
+              id: materialVariante.id,
+              sku: materialVariante.sku,
+              nombreVariante: materialVariante.nombreVariante,
+              precioReferencia: materialVariante.precioReferencia,
+              atributosVarianteJson: materialVariante.atributosVarianteJson,
+            },
+          ],
+  };
+}
+
 function getMaterialVariantAttributeDetails(
   mp: Pick<MateriaPrimaLookup, "nombre" | "codigo" | "templateId">,
   variante: VarianteLookup,
@@ -746,6 +850,21 @@ function slotNombre(
     familia?.slotsRequeridos.find((slot) => slot.codigo === slotCodigo)
       ?.nombre ?? humanizeCode(slotCodigo)
   );
+}
+
+function slotDisplayName(
+  slot: { slotCodigo: string; slotNombre?: string | null },
+  familia:
+    | {
+        slotsRequeridos: Array<{
+          codigo: string;
+          nombre: string;
+          tipo?: string;
+        }>;
+      }
+    | undefined,
+) {
+  return slot.slotNombre?.trim() || slotNombre(slot.slotCodigo, familia);
 }
 
 function isConsumibleMaquinaSlot(slot: {
@@ -1319,6 +1438,13 @@ function validateManualLayoutItem(input: {
 }
 
 function getPliegoPresetValue(pliegoImpresion: Record<string, unknown>) {
+  const modo =
+    typeof pliegoImpresion.modo === "string"
+      ? pliegoImpresion.modo
+      : typeof pliegoImpresion.mode === "string"
+        ? pliegoImpresion.mode
+        : "";
+  if (modo === "automatico" || modo === "automatic") return "automatico";
   const explicitPreset =
     typeof pliegoImpresion.preset === "string" ? pliegoImpresion.preset : null;
   if (
@@ -1334,6 +1460,36 @@ function getPliegoPresetValue(pliegoImpresion: Record<string, unknown>) {
     (preset) => preset.anchoMm === ancho && preset.altoMm === alto,
   );
   return match?.value ?? "personalizado";
+}
+
+function getPliegoCandidatos(pliegoImpresion: Record<string, unknown>) {
+  return Array.isArray(pliegoImpresion.candidatos)
+    ? (pliegoImpresion.candidatos as Array<Record<string, unknown>>)
+    : [];
+}
+
+function buildPliegoCandidateFromPreset(presetValue: string) {
+  const preset = PLIEGO_IMPRESION_PRESETS.find(
+    (item) => item.value === presetValue,
+  );
+  if (
+    !preset ||
+    preset.value === "materia_prima" ||
+    preset.value === "automatico" ||
+    preset.value === "personalizado" ||
+    !preset.anchoMm ||
+    !preset.altoMm
+  ) {
+    return null;
+  }
+  return {
+    id: `${preset.value}-${Date.now()}`,
+    preset: preset.value,
+    nombre: preset.label,
+    anchoMm: preset.anchoMm,
+    altoMm: preset.altoMm,
+    activo: true,
+  };
 }
 
 function readOptionalNumber(value: unknown): number | undefined {
@@ -1837,12 +1993,12 @@ function validarMateriales(
     if (slotDecl && isConsumibleMaquinaSlot(slotDecl)) continue;
     if (slot.modoSeleccion === "HARDCODED" && !slot.materialVarianteId) {
       errores.push(
-        `${slotNombre(slot.slotCodigo, familia)}: sin variante de material`,
+        `${slotDisplayName(slot, familia)}: sin variante de material`,
       );
     }
     if (slot.modoSeleccion === "MOTOR_ELIGE_AUTO" && !slot.criterioMotorAuto) {
       warnings.push(
-        `${slotNombre(slot.slotCodigo, familia)}: sin criterio del sistema`,
+        `${slotDisplayName(slot, familia)}: sin criterio del sistema`,
       );
     }
     if (
@@ -1851,7 +2007,7 @@ function validarMateriales(
       (slot.candidatos?.length ?? 0) === 0
     ) {
       errores.push(
-        `${slotNombre(slot.slotCodigo, familia)}: sin materiales candidatos`,
+        `${slotDisplayName(slot, familia)}: sin materiales candidatos`,
       );
     }
   }
@@ -1876,6 +2032,20 @@ function validarAvanzado(
   }
   if (familia?.codigo === "impresion_por_hoja" && cfg) {
     const pliegoImpresion = getPliegoImpresionConfig(cfg.paramsPasoJson);
+    const pliegoModo = getPliegoPresetValue(pliegoImpresion);
+    if (pliegoModo === "automatico") {
+      const candidatosValidos = getPliegoCandidatos(pliegoImpresion).filter(
+        (candidato) =>
+          candidato.activo !== false &&
+          Number(candidato.anchoMm) > 0 &&
+          Number(candidato.altoMm) > 0,
+      );
+      if (candidatosValidos.length === 0) {
+        errores.push(
+          "Pliego de impresión automático: agregá al menos un candidato activo con ancho y alto",
+        );
+      }
+    }
     const hasAncho =
       pliegoImpresion.anchoMm !== undefined &&
       pliegoImpresion.anchoMm !== null &&
@@ -2334,11 +2504,11 @@ export function ConfigPasosEditorView({
             ? familia.modosTiempoSoportados[0]
             : null),
         mecanismoCantidad:
-          existente?.mecanismoCantidad ??
-          getDefaultMecanismoCantidad(paso.familiaCodigo) ??
-          (familia?.mecanismosCantidadSoportados.length === 1
-            ? familia.mecanismosCantidadSoportados[0]
-            : null),
+          (existente?.mecanismoCantidad?.trim() || null) ??
+          getDefaultMecanismoCantidad(
+            paso.familiaCodigo,
+            familia?.mecanismosCantidadSoportados ?? [],
+          ),
         mecanismoCantidadConfigJson:
           (existente?.mecanismoCantidadConfigJson as
             Record<string, unknown> | null | undefined) ?? null,
@@ -2368,6 +2538,8 @@ export function ConfigPasosEditorView({
         slotsMateriales:
           existente?.slotsMateriales.map<UpsertSlotMaterialPayload>((s) => ({
             slotCodigo: s.slotCodigo,
+            slotNombre: s.slotNombre ?? null,
+            slotRol: (s.slotRol as UpsertSlotMaterialPayload["slotRol"]) ?? null,
             modoSeleccion: s.modoSeleccion as
               "HARDCODED" | "COMERCIAL_ELIGE" | "MOTOR_ELIGE_AUTO",
             criterioMotorAuto: s.criterioMotorAuto ?? null,
@@ -2380,6 +2552,11 @@ export function ConfigPasosEditorView({
             })),
             estrategiaCosto: s.estrategiaCosto,
             formula: s.formula,
+            cantidadFactor:
+              s.cantidadFactor === null || s.cantidadFactor === undefined
+                ? null
+                : Number(s.cantidadFactor),
+            cantidadBase: s.cantidadBase ?? null,
             aplicaMultiCaras: s.aplicaMultiCaras,
           })) ?? [],
       };
@@ -2420,6 +2597,8 @@ export function ConfigPasosEditorView({
     }
     return map;
   });
+  const [hardcodedMaterialSelections, setHardcodedMaterialSelections] =
+    React.useState<Record<string, string>>({});
 
   // JSON text por paso (sólo UI; al guardar se parsea de vuelta a objeto)
   const [jsonTexts] = React.useState<
@@ -2840,21 +3019,81 @@ export function ConfigPasosEditorView({
     );
     if (!preset || preset.value === "materia_prima") {
       updateNestingPliegoImpresion(rutaPasoId, {
+        modo: null,
         preset: null,
         anchoMm: null,
         altoMm: null,
       });
       return;
     }
+    if (preset.value === "automatico") {
+      updateNestingPliegoImpresion(rutaPasoId, {
+        modo: "automatico",
+        preset: "automatico",
+        anchoMm: null,
+        altoMm: null,
+      });
+      return;
+    }
     if (preset.value === "personalizado") {
-      updateNestingPliegoImpresion(rutaPasoId, { preset: "personalizado" });
+      updateNestingPliegoImpresion(rutaPasoId, {
+        modo: null,
+        preset: "personalizado",
+      });
       return;
     }
     updateNestingPliegoImpresion(rutaPasoId, {
+      modo: null,
       preset: preset.value,
       anchoMm: preset.anchoMm,
       altoMm: preset.altoMm,
     });
+  };
+
+  const updateNestingPliegoCandidato = (
+    rutaPasoId: string,
+    index: number,
+    patch: Record<string, unknown>,
+  ) => {
+    const cfg = configs[rutaPasoId];
+    const pliego = getPliegoImpresionConfig(cfg?.paramsPasoJson);
+    const candidatos = getPliegoCandidatos(pliego).map((item, itemIndex) =>
+      itemIndex === index ? { ...item, ...patch } : item,
+    );
+    updateNestingPliegoImpresion(rutaPasoId, { candidatos });
+  };
+
+  const addNestingPliegoCandidato = (
+    rutaPasoId: string,
+    presetValue = "A4",
+  ) => {
+    const cfg = configs[rutaPasoId];
+    const pliego = getPliegoImpresionConfig(cfg?.paramsPasoJson);
+    const current = getPliegoCandidatos(pliego);
+    const presetCandidate = buildPliegoCandidateFromPreset(presetValue);
+    const candidate =
+      presetCandidate ?? {
+        id: `personalizado-${Date.now()}`,
+        preset: "personalizado",
+        nombre: "Personalizado",
+        anchoMm: 0,
+        altoMm: 0,
+        activo: true,
+      };
+    updateNestingPliegoImpresion(rutaPasoId, {
+      modo: "automatico",
+      preset: "automatico",
+      candidatos: [...current, candidate],
+    });
+  };
+
+  const removeNestingPliegoCandidato = (rutaPasoId: string, index: number) => {
+    const cfg = configs[rutaPasoId];
+    const pliego = getPliegoImpresionConfig(cfg?.paramsPasoJson);
+    const candidatos = getPliegoCandidatos(pliego).filter(
+      (_, itemIndex) => itemIndex !== index,
+    );
+    updateNestingPliegoImpresion(rutaPasoId, { candidatos });
   };
 
   const updateStepParams = (
@@ -2956,6 +3195,41 @@ export function ConfigPasosEditorView({
         [rutaPasoId]: {
           ...cfg,
           slotsMateriales: [...(cfg.slotsMateriales ?? []), nuevoSlot],
+        },
+      };
+    });
+  };
+
+  const addSlotAdicional = (rutaPasoId: string) => {
+    setConfigs((prev) => {
+      const cfg = prev[rutaPasoId];
+      const slots = cfg.slotsMateriales ?? [];
+      const nextNumber =
+        slots.filter((slot) => slot.slotCodigo.startsWith("componente_"))
+          .length + 1;
+      let slotCodigo = `componente_${nextNumber}`;
+      let suffix = nextNumber;
+      while (slots.some((slot) => slot.slotCodigo === slotCodigo)) {
+        suffix += 1;
+        slotCodigo = `componente_${suffix}`;
+      }
+      const nuevoSlot: UpsertSlotMaterialPayload = {
+        slotCodigo,
+        slotNombre: `Componente ${suffix}`,
+        slotRol: "COMPONENTE",
+        modoSeleccion: "HARDCODED",
+        materialVarianteId: null,
+        estrategiaCosto: "simple",
+        formula: "por_pieza",
+        cantidadFactor: 1,
+        cantidadBase: "cantidad_pedida",
+        aplicaMultiCaras: false,
+      };
+      return {
+        ...prev,
+        [rutaPasoId]: {
+          ...cfg,
+          slotsMateriales: [...slots, nuevoSlot],
         },
       };
     });
@@ -3175,11 +3449,17 @@ export function ConfigPasosEditorView({
           typeof paramsPasoJson.productivityUnit === "string"
             ? paramsPasoJson.productivityUnit
             : getDefaultT2ProductivityUnit(familia?.codigo);
-        const sourceOptions = getT2QuantitySourceOptions(unit);
+        const sourceOptions = getT2QuantitySourceOptions(unit, familia?.codigo);
         const rawSource =
           typeof paramsPasoJson.productivityQuantitySource === "string"
             ? paramsPasoJson.productivityQuantitySource
             : getDefaultT2QuantitySource(familia?.codigo, unit);
+        const normalizedSource =
+          familia?.codigo === "montaje_sobre_sustrato" &&
+          unit === "unidades_h" &&
+          rawSource === "cantidad"
+            ? "cantidad_montaje"
+            : rawSource;
         const rawTimeMode =
           typeof paramsPasoJson.timeCalculationMode === "string"
             ? paramsPasoJson.timeCalculationMode
@@ -3192,9 +3472,9 @@ export function ConfigPasosEditorView({
             ? rawTimeMode
             : getDefaultT2TimeCalculationMode(familia?.codigo);
         paramsPasoJson.productivityQuantitySource = sourceOptions.some(
-          (option) => option.value === rawSource,
+          (option) => option.value === normalizedSource,
         )
-          ? rawSource
+          ? normalizedSource
           : getDefaultT2QuantitySource(familia?.codigo, unit);
       }
       if (Object.keys(nestingConfig).length > 0) {
@@ -3611,7 +3891,9 @@ export function ConfigPasosEditorView({
                     familia?.slotsRequeridos.filter(isConsumibleMaquinaSlot) ??
                     [];
                   const requiereMateriales =
-                    slotsManuales.length > 0 || slotsAutomaticos.length > 0;
+                    slotsManuales.length > 0 ||
+                    slotsAutomaticos.length > 0 ||
+                    Boolean(familia?.permiteSlotsAdicionales);
                   const noEjecutar = cfg.modoActivacion === "NO_EJECUTAR";
                   const cantidadRelevante =
                     !noEjecutar && requiereMecanismoCantidad(cfg, familia);
@@ -3652,31 +3934,35 @@ export function ConfigPasosEditorView({
                           familia?.codigo,
                           productivityUnit,
                         );
+                  const normalizedProductivityQuantitySourceRaw =
+                    familia?.codigo === "montaje_sobre_sustrato" &&
+                    productivityUnit === "unidades_h" &&
+                    productivityQuantitySourceRaw === "cantidad"
+                      ? "cantidad_montaje"
+                      : productivityQuantitySourceRaw;
                   const productivityQuantitySourceOptions =
-                    getT2QuantitySourceOptions(productivityUnit);
+                    getT2QuantitySourceOptions(
+                      productivityUnit,
+                      familia?.codigo,
+                    );
                   const productivityQuantitySource =
                     productivityQuantitySourceOptions.some(
                       (option) =>
-                        option.value === productivityQuantitySourceRaw,
+                        option.value === normalizedProductivityQuantitySourceRaw,
                     )
-                      ? productivityQuantitySourceRaw
+                      ? normalizedProductivityQuantitySourceRaw
                       : getDefaultT2QuantitySource(
                           familia?.codigo,
                           productivityUnit,
                         );
-                  const productivityUnitSuffix =
-                    T2_PRODUCTIVITY_UNIT_SUFFIX[productivityUnit] ??
-                    T2_PRODUCTIVITY_UNIT_SUFFIX.unidades_h;
-                  const batchUnitSuffix =
-                    T2_BATCH_UNIT_SUFFIX[productivityUnit] ??
-                    T2_BATCH_UNIT_SUFFIX.unidades_h;
-                  const t2TimeSummary = getT2TimeSummary({
-                    timeCalculationMode,
+                  const productivityUnitSuffix = getT2ProductivityUnitSuffix(
                     productivityUnit,
-                    productivityValue: productividadPropia ?? null,
-                    batchTimeMin: batchTimeMin ?? null,
-                    batchSize: batchSize ?? null,
-                  });
+                    productivityQuantitySource,
+                  );
+                  const batchUnitSuffix = getT2BatchUnitSuffix(
+                    productivityUnit,
+                    productivityQuantitySource,
+                  );
                   const soportaPasoManual =
                     familia?.relacionMaquinaSoportada.includes("M-0") ?? false;
                   const requiereMaquinaPrincipal =
@@ -3704,6 +3990,10 @@ export function ConfigPasosEditorView({
                   );
                   const pliegoImpresionEsPersonalizado =
                     pliegoImpresionPreset === "personalizado";
+                  const pliegoImpresionEsAutomatico =
+                    pliegoImpresionPreset === "automatico";
+                  const pliegoCandidatos =
+                    getPliegoCandidatos(pliegoImpresionConfig);
                   const nestingMargins = asRecord(nestingConfig.margins);
                   const nestingCosting = asRecord(nestingConfig.costing);
                   const nestingCostingStrategy =
@@ -4283,9 +4573,11 @@ export function ConfigPasosEditorView({
                                           />
                                         </div>
                                         <div className="space-y-1">
-                                          <span className="text-muted-foreground text-xs">
-                                            Tiempo fijo estimado
-                                          </span>
+                                          <LabelConTooltip
+                                            label="Tiempo fijo estimado"
+                                            tooltip="Si completás este campo, el motor usa ese tiempo y no calcula por ritmo."
+                                            iconSize="sm"
+                                          />
                                           <div className="flex items-center gap-2">
                                             <Input
                                               type="number"
@@ -4414,7 +4706,7 @@ export function ConfigPasosEditorView({
                                         )}
                                         <div className="space-y-1">
                                           <span className="text-muted-foreground text-xs">
-                                            Qué unidad estás midiendo
+                                            Unidad de productividad
                                           </span>
                                           <HumanSelect
                                             value={productivityUnit}
@@ -4439,49 +4731,46 @@ export function ConfigPasosEditorView({
                                             placeholder="Elegir unidad"
                                           />
                                         </div>
-                                        <div className="space-y-1">
-                                          <span className="text-muted-foreground text-xs">
-                                            Qué cantidad cronometra este paso
-                                          </span>
-                                          <HumanSelect
-                                            value={productivityQuantitySource}
-                                            onValueChange={(value) =>
-                                              updateStepParams(paso.id, {
-                                                productivityQuantitySource:
-                                                  value ||
-                                                  getDefaultT2QuantitySource(
-                                                    familia?.codigo,
-                                                    productivityUnit,
-                                                  ),
-                                              })
-                                            }
-                                            options={
-                                              productivityQuantitySourceOptions
-                                            }
-                                            placeholder="Elegir fuente"
-                                          />
-                                        </div>
+                                        {cantidadRelevante && (
+                                          <div className="space-y-1">
+                                            <span className="text-muted-foreground text-xs">
+                                              Cantidad operativa del paso
+                                            </span>
+                                            <HumanSelect
+                                              value={cfg.mecanismoCantidad ?? ""}
+                                              onValueChange={(v) =>
+                                                updateConfig(paso.id, {
+                                                  mecanismoCantidad: v || null,
+                                                })
+                                              }
+                                              options={opcionesCantidad}
+                                              placeholder="Elegir"
+                                            />
+                                          </div>
+                                        )}
                                       </div>
-                                      <span className="help">
-                                        {t2TimeSummary} Si completás tiempo fijo estimado, el motor usa ese tiempo y no calcula por ritmo.
-                                      </span>
                                     </div>
                                   )}
-                                  {cantidadRelevante && (
+                                  {mostrarProductividadPropia && (
                                     <div className="field">
                                       <LabelConTooltip
-                                        label="¿De dónde sale la cantidad?"
-                                        tooltip="Cómo el motor decide cuántas unidades produce este paso."
+                                        label="Calcular tiempo según"
+                                        tooltip="Define qué magnitud cronometra la productividad: cantidad efectiva, área, metros lineales o perímetro."
                                       />
                                       <HumanSelect
-                                        value={cfg.mecanismoCantidad ?? ""}
-                                        onValueChange={(v) =>
-                                          updateConfig(paso.id, {
-                                            mecanismoCantidad: v || null,
+                                        value={productivityQuantitySource}
+                                        onValueChange={(value) =>
+                                          updateStepParams(paso.id, {
+                                            productivityQuantitySource:
+                                              value ||
+                                              getDefaultT2QuantitySource(
+                                                familia?.codigo,
+                                                productivityUnit,
+                                              ),
                                           })
                                         }
-                                        options={opcionesCantidad}
-                                        placeholder="Elegir"
+                                        options={productivityQuantitySourceOptions}
+                                        placeholder="Elegir fuente"
                                       />
                                     </div>
                                   )}
@@ -5124,6 +5413,18 @@ export function ConfigPasosEditorView({
                                               </Button>
                                             );
                                           })}
+                                          {familia?.permiteSlotsAdicionales ? (
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              onClick={() =>
+                                                addSlotAdicional(paso.id)
+                                              }
+                                              className="h-7 text-xs"
+                                            >
+                                              + Agregar componente
+                                            </Button>
+                                          ) : null}
                                         </div>
                                       </div>
 
@@ -5157,7 +5458,9 @@ export function ConfigPasosEditorView({
                                         <p className="text-muted-foreground py-4 text-center text-xs italic">
                                           {slotsManuales.length > 0
                                             ? "Sin slots configurados. Agregá uno con los botones de arriba."
-                                            : "No hay materiales manuales para configurar en este paso."}
+                                            : familia?.permiteSlotsAdicionales
+                                              ? "Sin componentes configurados. Agregá uno con el botón de arriba."
+                                              : "No hay materiales manuales para configurar en este paso."}
                                         </p>
                                       )}
 
@@ -5168,6 +5471,7 @@ export function ConfigPasosEditorView({
                                               (sr) =>
                                                 sr.codigo === slot.slotCodigo,
                                             );
+                                          const esSlotAdicional = !slotDecl;
                                           if (
                                             slotDecl &&
                                             isConsumibleMaquinaSlot(slotDecl)
@@ -5188,22 +5492,66 @@ export function ConfigPasosEditorView({
                                           }
                                           const selectedCandidates =
                                             slot.candidatos ?? [];
-                                          const hardcodedMateria =
-                                            Object.values(
-                                              candidateMaterials,
-                                            ).find((materiaPrima) =>
-                                              materiaPrima.variantes.some(
-                                                (variante) =>
-                                                  variante.id ===
-                                                  slot.materialVarianteId,
-                                              ),
+                                          const slotUiKey = `${paso.id}:${slot.slotCodigo}:${slotIdx}`;
+                                          const persistedSlot =
+                                            configExistente?.slotsMateriales.find(
+                                              (storedSlot) =>
+                                                storedSlot.slotCodigo ===
+                                                slot.slotCodigo,
                                             );
+                                          const persistedHardcoded =
+                                            getPersistedCandidateMaterialVariant(
+                                              persistedSlot?.candidatos ?? [],
+                                              slot.materialVarianteId,
+                                            );
+                                          const storedMaterialVariante =
+                                            persistedSlot?.materialVariante ?? null;
+                                          const persistedMaterialVariante =
+                                            storedMaterialVariante?.id ===
+                                            slot.materialVarianteId
+                                              ? storedMaterialVariante
+                                              : null;
+                                          const persistedMaterialMateria =
+                                            persistedMaterialVariante
+                                              ? materialVariantToBusquedaItem(
+                                                  persistedMaterialVariante,
+                                                )
+                                              : null;
+                                          const selectedHardcodedMaterialId =
+                                            hardcodedMaterialSelections[
+                                              slotUiKey
+                                            ] ??
+                                            persistedMaterialMateria?.id ??
+                                            persistedHardcoded?.materiaPrima.id ??
+                                            null;
+                                          const hardcodedMateria =
+                                            Object.values(candidateMaterials).find(
+                                              (materiaPrima) =>
+                                                materiaPrima.variantes.some(
+                                                  (variante) =>
+                                                    variante.id ===
+                                                    slot.materialVarianteId,
+                                                ),
+                                            ) ??
+                                            (selectedHardcodedMaterialId
+                                              ? (candidateMaterials[
+                                                  selectedHardcodedMaterialId
+                                                ] ?? null)
+                                              : null) ??
+                                            persistedMaterialMateria ??
+                                            persistedHardcoded?.materiaPrima ??
+                                            null;
                                           const hardcodedVariante =
                                             hardcodedMateria?.variantes.find(
                                               (variante) =>
                                                 variante.id ===
                                                 slot.materialVarianteId,
-                                            );
+                                            ) ??
+                                            (persistedMaterialMateria
+                                              ?.variantes[0] ??
+                                              null) ??
+                                            persistedHardcoded?.variante ??
+                                            null;
                                           const hardcodedVarianteLabel =
                                             hardcodedMateria &&
                                             hardcodedVariante
@@ -5211,9 +5559,14 @@ export function ConfigPasosEditorView({
                                                   hardcodedMateria,
                                                   hardcodedVariante,
                                                 ).label
-                                              : slot.materialVarianteId
-                                                ? "Variante guardada"
-                                                : "Sin seleccionar";
+                                              : (getPersistedCandidateVariantLabel(
+                                                  persistedSlot?.candidatos ??
+                                                    [],
+                                                  slot.materialVarianteId,
+                                                ) ??
+                                                (slot.materialVarianteId
+                                                  ? slot.materialVarianteId
+                                                  : "Sin seleccionar"));
                                           return (
                                             <div
                                               key={slotIdx}
@@ -5224,10 +5577,7 @@ export function ConfigPasosEditorView({
                                                   variant="outline"
                                                   title={slot.slotCodigo}
                                                 >
-                                                  {slotNombre(
-                                                    slot.slotCodigo,
-                                                    familia,
-                                                  )}
+                                                  {slotDisplayName(slot, familia)}
                                                 </Badge>
                                                 <Button
                                                   variant="ghost"
@@ -5240,6 +5590,59 @@ export function ConfigPasosEditorView({
                                                   ×
                                                 </Button>
                                               </div>
+                                              {esSlotAdicional ? (
+                                                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                                                  <div className="space-y-1">
+                                                    <LabelConTooltip
+                                                      label="Nombre del componente"
+                                                      tooltip="Nombre operativo que identifica este componente o accesorio dentro del paso."
+                                                    />
+                                                    <Input
+                                                      value={
+                                                        slot.slotNombre ?? ""
+                                                      }
+                                                      onChange={(event) =>
+                                                        updateSlot(
+                                                          paso.id,
+                                                          slotIdx,
+                                                          {
+                                                            slotNombre:
+                                                              event.target
+                                                                .value || null,
+                                                          },
+                                                        )
+                                                      }
+                                                      placeholder="Ej. Portabanner, Solapa, Ojales"
+                                                      className="h-9 text-xs"
+                                                    />
+                                                  </div>
+                                                  <div className="space-y-1">
+                                                    <LabelConTooltip
+                                                      label="Rol"
+                                                      tooltip="Clasifica el material para mostrarlo y agruparlo correctamente en cotización y costos."
+                                                    />
+                                                    <HumanSelect
+                                                      value={
+                                                        slot.slotRol ??
+                                                        "COMPONENTE"
+                                                      }
+                                                      onValueChange={(v) =>
+                                                        updateSlot(
+                                                          paso.id,
+                                                          slotIdx,
+                                                          {
+                                                            slotRol:
+                                                              (v as UpsertSlotMaterialPayload["slotRol"]) ||
+                                                              "COMPONENTE",
+                                                          },
+                                                        )
+                                                      }
+                                                      options={SLOT_ROL_OPTIONS}
+                                                      triggerClassName="min-h-9 text-xs"
+                                                    />
+                                                  </div>
+                                                </div>
+                                              ) : null}
                                               <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
                                                 <div className="space-y-1">
                                                   <LabelConTooltip
@@ -5338,6 +5741,70 @@ export function ConfigPasosEditorView({
                                                   )}
                                                 </div>
                                               </div>
+                                              {esSlotAdicional ? (
+                                                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                                                  <div className="space-y-1">
+                                                    <LabelConTooltip
+                                                      label="Cantidad por base"
+                                                      tooltip="Multiplicador de consumo. Ej: 1 portabanner por pieza, 4 ojales por pieza."
+                                                    />
+                                                    <Input
+                                                      type="number"
+                                                      min="0"
+                                                      step="0.0001"
+                                                      value={
+                                                        slot.cantidadFactor ??
+                                                        1
+                                                      }
+                                                      onChange={(event) =>
+                                                        updateSlot(
+                                                          paso.id,
+                                                          slotIdx,
+                                                          {
+                                                            cantidadFactor:
+                                                              event.target
+                                                                .value === ""
+                                                                ? null
+                                                                : Number(
+                                                                    event
+                                                                      .target
+                                                                      .value,
+                                                                  ),
+                                                          },
+                                                        )
+                                                      }
+                                                      className="h-9 text-xs"
+                                                    />
+                                                  </div>
+                                                  <div className="space-y-1">
+                                                    <LabelConTooltip
+                                                      label="Base de consumo"
+                                                      tooltip="Cantidad operativa sobre la que se aplica el factor del componente."
+                                                    />
+                                                    <HumanSelect
+                                                      value={
+                                                        slot.cantidadBase ??
+                                                        "cantidad_pedida"
+                                                      }
+                                                      onValueChange={(v) =>
+                                                        updateSlot(
+                                                          paso.id,
+                                                          slotIdx,
+                                                          {
+                                                            cantidadBase:
+                                                              v ||
+                                                              "cantidad_pedida",
+                                                          },
+                                                        )
+                                                      }
+                                                      options={
+                                                        CANTIDAD_BASE_SLOT_OPTIONS
+                                                      }
+                                                      triggerClassName="min-h-9 text-xs"
+                                                    />
+                                                  </div>
+                                                </div>
+                                              ) : null}
                                               {slot.modoSeleccion ===
                                                 "HARDCODED" && (
                                                 <div className="space-y-2 rounded border bg-background p-3">
@@ -5365,14 +5832,25 @@ export function ConfigPasosEditorView({
                                                             materiaPrima,
                                                         }),
                                                       );
+                                                      setHardcodedMaterialSelections(
+                                                        (prev) => ({
+                                                          ...prev,
+                                                          [slotUiKey]:
+                                                            materiaPrima.id,
+                                                        }),
+                                                      );
                                                       updateSlot(
                                                         paso.id,
                                                         slotIdx,
                                                         {
                                                           materialVarianteId:
                                                             materiaPrima
-                                                              .variantes[0]
-                                                              ?.id ?? null,
+                                                              .variantes.length ===
+                                                            1
+                                                              ? (materiaPrima
+                                                                  .variantes[0]
+                                                                  ?.id ?? null)
+                                                              : null,
                                                         },
                                                       );
                                                     }}
@@ -5402,7 +5880,7 @@ export function ConfigPasosEditorView({
                                                             variante,
                                                           ),
                                                       )}
-                                                      placeholder="Elegir variante"
+                                                      placeholder="Elegir variante fija"
                                                       triggerClassName="min-h-8 text-xs"
                                                     />
                                                   ) : (
@@ -6092,6 +6570,248 @@ export function ConfigPasosEditorView({
                                               />
                                             </div>
                                           </div>
+                                          {pliegoImpresionEsAutomatico && (
+                                            <div className="space-y-2 rounded border border-dashed p-2">
+                                              <div className="flex items-center justify-between gap-2">
+                                                <span className="text-xs font-medium">
+                                                  Candidatos activos
+                                                </span>
+                                                <Button
+                                                  type="button"
+                                                  size="sm"
+                                                  variant="outline"
+                                                  className="h-7 gap-1 px-2 text-xs"
+                                                  onClick={() =>
+                                                    addNestingPliegoCandidato(
+                                                      paso.id,
+                                                      "A4",
+                                                    )
+                                                  }
+                                                >
+                                                  <PlusIcon className="h-3 w-3" />
+                                                  Agregar candidato
+                                                </Button>
+                                              </div>
+                                              {pliegoCandidatos.length === 0 ? (
+                                                <div className="rounded bg-muted/50 px-2 py-2 text-xs text-muted-foreground">
+                                                  Agregá al menos un tamaño para
+                                                  que el motor pueda comparar.
+                                                </div>
+                                              ) : (
+                                                <div className="space-y-2">
+                                                  {pliegoCandidatos.map(
+                                                    (candidato, index) => {
+                                                      const candidatoPreset =
+                                                        typeof candidato.preset ===
+                                                        "string"
+                                                          ? candidato.preset
+                                                          : "personalizado";
+                                                      return (
+                                                        <div
+                                                          key={`${candidato.id ?? index}-${index}`}
+                                                          className="grid grid-cols-1 gap-2 rounded border bg-background/80 p-2 md:grid-cols-[80px_1fr_120px_100px_100px_36px]"
+                                                        >
+                                                          <label className="flex items-center gap-2 text-xs">
+                                                            <input
+                                                              type="checkbox"
+                                                              checked={
+                                                                candidato.activo !==
+                                                                false
+                                                              }
+                                                              onChange={(e) =>
+                                                                updateNestingPliegoCandidato(
+                                                                  paso.id,
+                                                                  index,
+                                                                  {
+                                                                    activo:
+                                                                      e.target
+                                                                        .checked,
+                                                                  },
+                                                                )
+                                                              }
+                                                            />
+                                                            Activo
+                                                          </label>
+                                                          <div className="space-y-1">
+                                                            <Label className="text-[11px]">
+                                                              Nombre
+                                                            </Label>
+                                                            <Input
+                                                              value={String(
+                                                                candidato.nombre ??
+                                                                  "",
+                                                              )}
+                                                              onChange={(e) =>
+                                                                updateNestingPliegoCandidato(
+                                                                  paso.id,
+                                                                  index,
+                                                                  {
+                                                                    nombre:
+                                                                      e.target
+                                                                        .value,
+                                                                  },
+                                                                )
+                                                              }
+                                                              className="h-8 text-xs"
+                                                            />
+                                                          </div>
+                                                          <div className="space-y-1">
+                                                            <Label className="text-[11px]">
+                                                              Preset
+                                                            </Label>
+                                                            <HumanSelect
+                                                              value={
+                                                                PLIEGO_IMPRESION_PRESETS.some(
+                                                                  (preset) =>
+                                                                    preset.value ===
+                                                                    candidatoPreset,
+                                                                )
+                                                                  ? candidatoPreset
+                                                                  : "personalizado"
+                                                              }
+                                                              onValueChange={(v) => {
+                                                                const preset =
+                                                                  PLIEGO_IMPRESION_PRESETS.find(
+                                                                    (item) =>
+                                                                      item.value ===
+                                                                      v,
+                                                                  );
+                                                                if (
+                                                                  !preset ||
+                                                                  preset.value ===
+                                                                    "personalizado" ||
+                                                                  !preset.anchoMm ||
+                                                                  !preset.altoMm
+                                                                ) {
+                                                                  updateNestingPliegoCandidato(
+                                                                    paso.id,
+                                                                    index,
+                                                                    {
+                                                                      preset:
+                                                                        "personalizado",
+                                                                    },
+                                                                  );
+                                                                  return;
+                                                                }
+                                                                updateNestingPliegoCandidato(
+                                                                  paso.id,
+                                                                  index,
+                                                                  {
+                                                                    preset:
+                                                                      preset.value,
+                                                                    nombre:
+                                                                      preset.label,
+                                                                    anchoMm:
+                                                                      preset.anchoMm,
+                                                                    altoMm:
+                                                                      preset.altoMm,
+                                                                  },
+                                                                );
+                                                              }}
+                                                              options={PLIEGO_IMPRESION_OPTIONS.filter(
+                                                                (option) =>
+                                                                  ![
+                                                                    "materia_prima",
+                                                                    "automatico",
+                                                                  ].includes(
+                                                                    option.value,
+                                                                  ),
+                                                              )}
+                                                              triggerClassName="min-h-8 text-xs"
+                                                            />
+                                                          </div>
+                                                          <div className="space-y-1">
+                                                            <Label className="text-[11px]">
+                                                              Ancho mm
+                                                            </Label>
+                                                            <Input
+                                                              type="number"
+                                                              min={1}
+                                                              step={1}
+                                                              value={String(
+                                                                candidato.anchoMm ??
+                                                                  "",
+                                                              )}
+                                                              onChange={(e) =>
+                                                                updateNestingPliegoCandidato(
+                                                                  paso.id,
+                                                                  index,
+                                                                  {
+                                                                    preset:
+                                                                      "personalizado",
+                                                                    anchoMm:
+                                                                      e.target
+                                                                        .value ===
+                                                                      ""
+                                                                        ? ""
+                                                                        : Number(
+                                                                            e
+                                                                              .target
+                                                                              .value,
+                                                                          ),
+                                                                  },
+                                                                )
+                                                              }
+                                                              className="h-8 text-xs"
+                                                            />
+                                                          </div>
+                                                          <div className="space-y-1">
+                                                            <Label className="text-[11px]">
+                                                              Alto mm
+                                                            </Label>
+                                                            <Input
+                                                              type="number"
+                                                              min={1}
+                                                              step={1}
+                                                              value={String(
+                                                                candidato.altoMm ??
+                                                                  "",
+                                                              )}
+                                                              onChange={(e) =>
+                                                                updateNestingPliegoCandidato(
+                                                                  paso.id,
+                                                                  index,
+                                                                  {
+                                                                    preset:
+                                                                      "personalizado",
+                                                                    altoMm:
+                                                                      e.target
+                                                                        .value ===
+                                                                      ""
+                                                                        ? ""
+                                                                        : Number(
+                                                                            e
+                                                                              .target
+                                                                              .value,
+                                                                          ),
+                                                                  },
+                                                                )
+                                                              }
+                                                              className="h-8 text-xs"
+                                                            />
+                                                          </div>
+                                                          <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="self-end text-destructive"
+                                                            onClick={() =>
+                                                              removeNestingPliegoCandidato(
+                                                                paso.id,
+                                                                index,
+                                                              )
+                                                            }
+                                                          >
+                                                            <Trash2Icon className="h-4 w-4" />
+                                                          </Button>
+                                                        </div>
+                                                      );
+                                                    },
+                                                  )}
+                                                </div>
+                                              )}
+                                            </div>
+                                          )}
                                           <p className="text-muted-foreground text-xs">
                                             La imposición, el tiempo y los
                                             consumibles se calculan sobre este

@@ -140,6 +140,18 @@ function getCotizacionCantidadPrecio(
   );
 }
 
+function getCotizacionCantidadReal(
+  cotizacion: CotizacionExitosa,
+  itemCantidad: number,
+) {
+  return (
+    cotizacion.cantidadComercialReal ??
+    cotizacion.cantidadPedida ??
+    cotizacion.cantidadEfectiva ??
+    itemCantidad
+  );
+}
+
 function getCotizacionPasos(cotizacion: CotizacionExitosa) {
   return cotizacion.pasos
     .filter((paso) => paso.activado)
@@ -1151,6 +1163,23 @@ function getOptionalMaterialDetails(item: PropuestaItem, adicional: string) {
     }
   }
 
+  return Array.from(details).filter(Boolean);
+}
+
+function getComponentMaterialDetails(item: PropuestaItem) {
+  const details = new Set<string>();
+  for (const paso of item.cotizacion.pasos) {
+    if (!paso.activado) continue;
+    for (const material of paso.materiales ?? []) {
+      if (
+        material.tipoLineaCosto !== "MATERIAL" ||
+        material.slotRol !== "COMPONENTE"
+      ) {
+        continue;
+      }
+      details.add(getMaterialCommercialLabel(material));
+    }
+  }
   return Array.from(details).filter(Boolean);
 }
 
@@ -2228,7 +2257,8 @@ function CostosItemView({
     precioBruto > 0 ? (comisionesTotal / precioBruto) * 100 : 0;
   const impuestosPrecioPct =
     precioBruto > 0 ? (impuestosTotal / precioBruto) * 100 : 0;
-  const costoUnitario = item.cantidad > 0 ? costo / item.cantidad : 0;
+  const cantidadReal = getCotizacionCantidadReal(item.cotizacion, item.cantidad);
+  const costoUnitario = cantidadReal > 0 ? costo / cantidadReal : 0;
   const buckets = getCostBuckets(item);
   const cargosPaso = item.cotizacion.pasos
     .flatMap((paso) => paso.cargosDirectosPaso ?? [])
@@ -2473,6 +2503,10 @@ function ProductRow({
   const calculoPendiente = item.precioUnitario === 0 && item.total === 0;
   const margen =
     item.subtotal > 0 ? ((item.subtotal - costo) / item.subtotal) * 100 : 0;
+  const visibleAmounts = React.useMemo(
+    () => getItemOrderVisibleAmounts(item),
+    [item],
+  );
   const commercialPriceDetail = React.useMemo(
     () => buildCommercialPriceDetail(item),
     [item],
@@ -2486,6 +2520,10 @@ function ProductRow({
           getOptionalMaterialDetails(item, adicional),
         ]),
       ),
+    [item],
+  );
+  const componentMaterialDetails = React.useMemo(
+    () => getComponentMaterialDetails(item),
     [item],
   );
   const specs = item.atributosSchema
@@ -2519,7 +2557,6 @@ function ProductRow({
         <div className="prod">
           <div className="nm">{item.productoNombre}</div>
           <div className="cd">
-            <span className="code">{item.productoCodigo}</span>
             <span className="fam">
               {item.categoriaComercialNombre} ·{" "}
               {item.subcategoriaComercialNombre}
@@ -2531,13 +2568,13 @@ function ProductRow({
           <span className="u">{formatUnidad(item.unidadMedida)}</span>
         </div>
         <div className="num">
-          {calculoPendiente ? "A cotizar" : formatCurrency(item.subtotal)}
+          {calculoPendiente ? "A cotizar" : formatCurrency(visibleAmounts.subtotal)}
         </div>
         <div className="num">
-          {calculoPendiente ? "-" : formatCurrency(item.impuestoMonto)}
+          {calculoPendiente ? "-" : formatCurrency(visibleAmounts.impuestos)}
         </div>
         <div className="num total">
-          {calculoPendiente ? "Pendiente" : formatCurrency(item.total)}
+          {calculoPendiente ? "Pendiente" : formatCurrency(visibleAmounts.total)}
         </div>
         <span
           className="x"
@@ -2686,6 +2723,22 @@ function ProductRow({
                   </div>
                 </div>
 
+                {componentMaterialDetails.length > 0 ? (
+                  <div className="op-adicionales">
+                    <div className="op-adi-head">
+                      <PackageIcon />
+                      <span>Componentes</span>
+                    </div>
+                    <div className="op-chips">
+                      {componentMaterialDetails.map((detail) => (
+                        <span key={detail} className="adi-chip-detail">
+                          <span className="adi-chip">{detail}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
                 <div className="op-mini">
                   <div className="op-mini-row">
                     <span className="mlbl">Fecha estimada</span>
@@ -2754,10 +2807,7 @@ function calcularComisionesItems(items: PropuestaItem[]) {
     const desglose = item.cotizacion.desglosePrecio;
     if (!desglose) return acc;
 
-    const cantidad =
-      item.cotizacion.cantidadComercialPricing ??
-      item.cotizacion.cantidadEfectiva ??
-      item.cantidad;
+    const cantidad = getCotizacionCantidadPrecio(item.cotizacion, item.cantidad);
 
     return acc + desglose.totalComisiones * cantidad;
   }, 0);
@@ -2770,37 +2820,75 @@ type ImpuestoResumenLinea = {
   monto: number;
 };
 
+function getImpuestosItemResumen(item: PropuestaItem) {
+  const desglose = item.cotizacion.desglosePrecio;
+  const totalImpuestos = getCotizacionImpuestos(item.cotizacion);
+  const lineas: ImpuestoResumenLinea[] = [];
+  let ocultos = 0;
+
+  if (!desglose || totalImpuestos <= 0) {
+    return { visibles: lineas, ocultos };
+  }
+
+  const impuestos = desglose.impuestos ?? [];
+  const totalPct = impuestos.reduce(
+    (acc, impuesto) => acc + impuesto.porcentaje,
+    0,
+  );
+  if (totalPct <= 0) return { visibles: lineas, ocultos };
+
+  for (const impuesto of impuestos) {
+    const monto = totalImpuestos * (impuesto.porcentaje / totalPct);
+    if (impuesto.desglosarCliente === false) {
+      ocultos += monto;
+      continue;
+    }
+
+    lineas.push({
+      key: impuesto.catalogoId || impuesto.codigo || impuesto.nombre,
+      nombre: impuesto.nombre,
+      porcentaje: impuesto.porcentaje,
+      monto,
+    });
+  }
+
+  return { visibles: lineas, ocultos };
+}
+
+function roundVisibleCurrency(value: number) {
+  return Math.round(value);
+}
+
+function getItemOrderVisibleAmounts(item: PropuestaItem) {
+  const impuestosResumen = getImpuestosItemResumen(item);
+  const subtotal = roundVisibleCurrency(item.subtotal + impuestosResumen.ocultos);
+  const impuestos = roundVisibleCurrency(
+    Math.max(0, item.impuestoMonto - impuestosResumen.ocultos),
+  );
+  return {
+    subtotal,
+    impuestos,
+    total: roundVisibleCurrency(item.total),
+  };
+}
+
 function getImpuestosProductoResumen(items: PropuestaItem[]) {
   const lineas = new Map<string, ImpuestoResumenLinea>();
   let ocultos = 0;
 
   for (const item of items) {
-    const desglose = item.cotizacion.desglosePrecio;
-    const totalImpuestos = getCotizacionImpuestos(item.cotizacion);
-    if (!desglose || totalImpuestos <= 0) continue;
+    const resumenItem = getImpuestosItemResumen(item);
+    ocultos += resumenItem.ocultos;
 
-    const impuestos = desglose.impuestos ?? [];
-    const totalPct = impuestos.reduce(
-      (acc, impuesto) => acc + impuesto.porcentaje,
-      0,
-    );
-    if (totalPct <= 0) continue;
-
-    for (const impuesto of impuestos) {
-      const monto = totalImpuestos * (impuesto.porcentaje / totalPct);
-      if (impuesto.desglosarCliente === false) {
-        ocultos += monto;
-        continue;
-      }
-
-      const key = impuesto.catalogoId || impuesto.codigo || impuesto.nombre;
+    for (const impuesto of resumenItem.visibles) {
+      const key = impuesto.key;
       const current = lineas.get(key) ?? {
         key,
         nombre: impuesto.nombre,
         porcentaje: impuesto.porcentaje,
         monto: 0,
       };
-      current.monto += monto;
+      current.monto += impuesto.monto;
       lineas.set(key, current);
     }
   }
@@ -2914,11 +3002,19 @@ function ResumenBar({
   const resumen = calcularResumenOrden(items, cargosOrden);
   const impuestosProductoResumen = getImpuestosProductoResumen(items);
   const cargosImpuestos = resumen.cargosImpuestos;
-  const subtotal = resumen.subtotal + impuestosProductoResumen.ocultos;
-  const impuestosVisibles = Math.max(
-    0,
-    resumen.impuestos - impuestosProductoResumen.ocultos,
+  const productosVisibles = items.reduce(
+    (acc, item) => {
+      const amounts = getItemOrderVisibleAmounts(item);
+      return {
+        subtotal: acc.subtotal + amounts.subtotal,
+        impuestos: acc.impuestos + amounts.impuestos,
+        total: acc.total + amounts.total,
+      };
+    },
+    { subtotal: 0, impuestos: 0, total: 0 },
   );
+  const subtotal = productosVisibles.subtotal + resumen.cargosSubtotal;
+  const impuestosVisibles = productosVisibles.impuestos + cargosImpuestos;
   const costoTotal = items.reduce(
     (acc, item) => acc + calcularCostoTotal(item),
     0,
@@ -2927,7 +3023,7 @@ function ResumenBar({
   const cargosOrdenTotal = resumen.cargosSubtotal;
   const cargos = cargosItems + cargosOrdenTotal;
   const comisiones = calcularComisionesItems(items);
-  const totalConCargos = resumen.total;
+  const totalConCargos = productosVisibles.total + resumen.cargosTotal;
   const margen = subtotal > 0 ? ((subtotal - costoTotal) / subtotal) * 100 : 0;
   const impuestoLineas = [
     ...impuestosProductoResumen.visibles,
@@ -3451,6 +3547,16 @@ export function PropuestaFicha({
   const [fechaEstimada, setFechaEstimada] = React.useState(offsetDate(7));
   const [fechaCreacion] = React.useState(() => offsetDate(0));
   const fechaEstimadaInputRef = React.useRef<HTMLInputElement | null>(null);
+  const rowRefs = React.useRef(new Map<string, HTMLDivElement>());
+
+  const focusProductRow = React.useCallback((itemId: string) => {
+    window.requestAnimationFrame(() => {
+      rowRefs.current.get(itemId)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    });
+  }, []);
 
   const abrirAgregarProducto = React.useCallback(() => {
     setEditingItem(null);
@@ -3697,38 +3803,51 @@ export function PropuestaFicha({
             </div>
             <div className="orows">
               {items.map((item, index) => (
-                <ProductRow
+                <div
                   key={item.id}
-                  item={item}
-                  index={index}
-                  expanded={openIds.has(item.id)}
-                  onToggle={() => toggle(item.id)}
-                  onRemove={() =>
-                    setItems((current) =>
-                      current.filter((candidate) => candidate.id !== item.id),
-                    )
-                  }
-                  onEdit={() => {
-                    setEditingItem(item);
-                    setAddOpen(true);
+                  className="order-row-wrap"
+                  ref={(node) => {
+                    if (node) {
+                      rowRefs.current.set(item.id, node);
+                    } else {
+                      rowRefs.current.delete(item.id);
+                    }
                   }}
-                  onEditPanels={(targetItem, paso) => {
-                    setPanelEditor({ item: targetItem, paso });
-                  }}
-                  onChangeFechaEntrega={(fechaEntrega) => {
-                    setItems((current) =>
-                      current.map((candidate) =>
-                        candidate.id === item.id
-                          ? {
-                              ...candidate,
-                              fechaEntrega: fechaEntrega || fechaEstimada,
-                            }
-                          : candidate,
-                      ),
-                    );
-                  }}
-                  fechaEstimada={fechaEstimada}
-                />
+                >
+                  <ProductRow
+                    item={item}
+                    index={index}
+                    expanded={openIds.has(item.id)}
+                    onToggle={() => toggle(item.id)}
+                    onRemove={() =>
+                      setItems((current) =>
+                        current.filter(
+                          (candidate) => candidate.id !== item.id,
+                        ),
+                      )
+                    }
+                    onEdit={() => {
+                      setEditingItem(item);
+                      setAddOpen(true);
+                    }}
+                    onEditPanels={(targetItem, paso) => {
+                      setPanelEditor({ item: targetItem, paso });
+                    }}
+                    onChangeFechaEntrega={(fechaEntrega) => {
+                      setItems((current) =>
+                        current.map((candidate) =>
+                          candidate.id === item.id
+                            ? {
+                                ...candidate,
+                                fechaEntrega: fechaEntrega || fechaEstimada,
+                              }
+                            : candidate,
+                        ),
+                      );
+                    }}
+                    fechaEstimada={fechaEstimada}
+                  />
+                </div>
               ))}
             </div>
             <button
@@ -3848,9 +3967,10 @@ export function PropuestaFicha({
         editingItem={editingItem}
         onAddItem={(item) => {
           setItems((current) => [...current, item]);
-          setOpenIds((current) => new Set([...current, item.id]));
+          setOpenIds(new Set([item.id]));
           setAddOpen(false);
           setEditingItem(null);
+          focusProductRow(item.id);
         }}
         onSaveItem={(item) => {
           setItems((current) =>
@@ -3858,9 +3978,10 @@ export function PropuestaFicha({
               candidate.id === item.id ? item : candidate,
             ),
           );
-          setOpenIds((current) => new Set([...current, item.id]));
+          setOpenIds(new Set([item.id]));
           setAddOpen(false);
           setEditingItem(null);
+          focusProductRow(item.id);
         }}
       />
       <CargoOrdenSheet

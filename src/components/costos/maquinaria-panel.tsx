@@ -132,8 +132,8 @@ const PLOTTER_CORTE_PRODUCTIVITY_BY_COMPLEXITY: Record<
   number
 > = {
   simple: 36,
-  intermedio: 54,
-  complejo: 90,
+  intermedio: 15,
+  complejo: 6,
 };
 
 function normalizeCanal(value: unknown): ConsumibleCanal | null {

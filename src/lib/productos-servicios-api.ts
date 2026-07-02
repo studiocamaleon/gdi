@@ -13,14 +13,60 @@ import type {
   ProductoCategoriaComercial,
   ProductoDetalle,
   ProductoListItem,
+  MinimoComercialBase,
+  MinimoComercialPolitica,
   RutaListItem,
 } from "@/lib/productos-servicios";
 
+export interface ProductosListParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  activo?: boolean;
+}
+
+export interface ProductosListResponse {
+  data: ProductoListItem[];
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
+}
+
+function buildProductosPath(params: ProductosListParams = {}) {
+  const sp = new URLSearchParams();
+  if (params.page) sp.set("page", String(params.page));
+  if (params.limit) sp.set("limit", String(params.limit));
+  if (params.search?.trim()) sp.set("search", params.search.trim());
+  if (params.activo !== undefined) sp.set("activo", String(params.activo));
+  const qs = sp.toString();
+  return `/productos-servicios/productos${qs ? `?${qs}` : ""}`;
+}
+
+/** Listado paginado (envelope) para la tabla de catálogo. */
+export async function listProductos(
+  params: ProductosListParams = {},
+): Promise<ProductosListResponse> {
+  return apiRequest<ProductosListResponse>(buildProductosPath(params));
+}
+
+/**
+ * Devuelve TODOS los productos (recorriendo páginas). Para selectores/pickers
+ * que necesitan el catálogo completo; cada query queda acotada por el límite.
+ */
 export async function getProductos(
   activo?: boolean,
 ): Promise<ProductoListItem[]> {
-  const qs = activo === undefined ? "" : `?activo=${activo}`;
-  return apiRequest<ProductoListItem[]>(`/productos-servicios/productos${qs}`);
+  const limit = 200;
+  const all: ProductoListItem[] = [];
+  let page = 1;
+  for (;;) {
+    const res = await listProductos({ page, limit, activo });
+    all.push(...res.data);
+    if (page >= res.pages || res.data.length === 0) break;
+    page += 1;
+  }
+  return all;
 }
 
 export async function getProductoById(id: string): Promise<ProductoDetalle> {
@@ -63,6 +109,9 @@ export interface CrearProductoPayload {
   atributosComercialesJson?: Record<string, unknown>;
   unidadComercial: "unidad" | "m2" | "metro_lineal";
   modoMedidas: ModoMedidasProducto;
+  minimoComercialPolitica?: MinimoComercialPolitica;
+  minimoComercialCantidad?: number | null;
+  minimoComercialBase?: MinimoComercialBase;
   medidaDefaultAnchoMm?: number;
   medidaDefaultAltoMm?: number;
   medidasPredefinidasJson?: MedidaPredefinidaProducto[];
@@ -84,6 +133,9 @@ export interface ActualizarProductoPayload {
   atributosComercialesJson?: Record<string, unknown>;
   unidadComercial?: "unidad" | "m2" | "metro_lineal";
   modoMedidas?: ModoMedidasProducto;
+  minimoComercialPolitica?: MinimoComercialPolitica;
+  minimoComercialCantidad?: number | null;
+  minimoComercialBase?: MinimoComercialBase;
   medidaDefaultAnchoMm?: number | null;
   medidaDefaultAltoMm?: number | null;
   medidasPredefinidasJson?: MedidaPredefinidaProducto[] | null;
@@ -283,6 +335,8 @@ export async function eliminarProductoRutaAlt(rutaAltId: string) {
 
 export interface UpsertSlotMaterialPayload {
   slotCodigo: string;
+  slotNombre?: string | null;
+  slotRol?: "SUSTRATO" | "COMPONENTE" | "CONSUMIBLE" | "PACKAGING" | null;
   modoSeleccion: "HARDCODED" | "COMERCIAL_ELIGE" | "MOTOR_ELIGE_AUTO";
   criterioMotorAuto?: string | null;
   criterioInputCampo?: string | null;
@@ -296,6 +350,8 @@ export interface UpsertSlotMaterialPayload {
   }>;
   estrategiaCosto?: string;
   formula?: string;
+  cantidadFactor?: number | null;
+  cantidadBase?: string | null;
   aplicaMultiCaras?: boolean;
 }
 
@@ -696,6 +752,18 @@ export interface NestingViewerInput {
     wasteAreaMm2?: number;
     segmentAppliedPct?: number | null;
   };
+  pliegoImpresionSeleccionado?: {
+    id: string;
+    nombre: string;
+    anchoMm: number;
+    altoMm: number;
+    criterio: string;
+    candidatosEvaluados: number;
+    costoEstimadoMm2: number;
+    pliegosImpresion: number;
+    pliegosComprados: number;
+    aprovechamientoPct: number;
+  };
   /** v3.1: solo cuando se aplicó talonario-grouping. */
   talonarioGrouping?: {
     talonariosEfectivos: number;
@@ -719,7 +787,12 @@ export interface CotizarRequest {
     caras?: 1 | 2;
     tipoCopia?: 1 | 2 | 3;
     numerosXTalonario?: number;
-    piezas?: Array<{ cantidad: number; anchoMm: number; altoMm: number }>;
+    piezas?: Array<{
+      cantidad: number;
+      anchoMm: number;
+      altoMm: number;
+      perimetroMm?: number;
+    }>;
     medidaCustomMm?: { anchoMm: number; altoMm: number };
     tecnologia?: string;
     tintasAdicionales?: string[];
@@ -727,6 +800,7 @@ export interface CotizarRequest {
     distanciaKm?: number;
     m2_instalados?: number;
     piezaAreaTotalM2?: number;
+    piezaPerimetroTotalM?: number;
     metrosLineales?: number;
     metroLineal?: number;
     ml?: number;
@@ -757,8 +831,18 @@ export interface CotizarResponse {
     rutaNombre: string;
     cantidadEfectiva: number;
     cantidadPedida: number;
+    cantidadComercialReal?: number;
     cantidadComercialPricing?: number;
     unidadComercialPricing?: string;
+    minimoComercialAplicado?: {
+      base: MinimoComercialBase;
+      cantidadMinima: number;
+      cantidadReal: number;
+      cantidadPricing: number;
+      aplicado: boolean;
+      unidadLabel: string;
+      politica: MinimoComercialPolitica;
+    } | null;
     costos: {
       tiempoTotal: number;
       materialesTotal: number;
@@ -820,6 +904,8 @@ export interface CotizarResponse {
       };
       materiales?: Array<{
         slotCodigo: string;
+        slotNombre?: string | null;
+        slotRol?: string | null;
         materialVarianteId: string;
         materialNombre: string;
         materialSku: string;

@@ -81,7 +81,7 @@ export function UserTenantMenu({ currentUser }: UserTenantMenuProps) {
       const response = await switchTenant(tenantId);
 
       if (response.accessToken) {
-        setSessionToken(response.accessToken);
+        await setSessionToken(response.accessToken);
       }
 
       router.refresh();
@@ -93,7 +93,7 @@ export function UserTenantMenu({ currentUser }: UserTenantMenuProps) {
       try {
         await logout();
       } finally {
-        clearSessionToken();
+        await clearSessionToken();
         router.replace("/login");
         router.refresh();
       }

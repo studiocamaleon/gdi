@@ -49,7 +49,7 @@ export function AcceptInvitationForm({
         );
 
         if (response.accessToken) {
-          setSessionToken(response.accessToken);
+          await setSessionToken(response.accessToken);
         }
 
         router.replace("/");

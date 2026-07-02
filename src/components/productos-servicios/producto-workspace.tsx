@@ -45,6 +45,8 @@ import type {
   CargoDirectoCatalogo,
   CatalogoFamilias,
   MedidaPredefinidaProducto,
+  MinimoComercialPolitica,
+  MinimoComercialBase,
   ModoMedidasProducto,
   ProductoCategoriaComercial,
   ProductoDetalle,
@@ -392,6 +394,9 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
         producto.subcategoriaComercial?.codigo ?? "producto_a_medida",
       unidadComercial: producto.unidadComercial,
       modoMedidas: producto.modoMedidas,
+      minimoComercialPolitica: producto.minimoComercialPolitica ?? "NONE",
+      minimoComercialCantidad: producto.minimoComercialCantidad ?? "",
+      minimoComercialBase: producto.minimoComercialBase ?? "cantidad_comercial",
       medidas: getMedidasPredefinidas(producto),
       activo: producto.activo,
     }),
@@ -406,6 +411,17 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
   );
   const [unidadComercial, setUnidadComercial] = React.useState(producto.unidadComercial);
   const [modoMedidas, setModoMedidas] = React.useState<ModoMedidasProducto>(producto.modoMedidas);
+  const [minimoComercialPolitica, setMinimoComercialPolitica] =
+    React.useState<MinimoComercialPolitica>(
+      producto.minimoComercialPolitica ?? "NONE",
+    );
+  const [minimoComercialCantidad, setMinimoComercialCantidad] = React.useState(
+    producto.minimoComercialCantidad ?? "",
+  );
+  const [minimoComercialBase, setMinimoComercialBase] =
+    React.useState<MinimoComercialBase>(
+      producto.minimoComercialBase ?? "cantidad_comercial",
+    );
   const [medidas, setMedidas] = React.useState<MedidaPredefinidaProducto[]>(() =>
     getMedidasPredefinidas(producto),
   );
@@ -419,6 +435,13 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
       subcategoriaComercialCodigo,
       unidadComercial,
       modoMedidas,
+      minimoComercialPolitica,
+      minimoComercialCantidad:
+        minimoComercialPolitica === "NONE" ? "" : minimoComercialCantidad,
+      minimoComercialBase:
+        minimoComercialPolitica === "NONE"
+          ? "cantidad_comercial"
+          : minimoComercialBase,
       medidas: normalizarMedidasPorModo(modoMedidas, medidas),
       activo,
     }),
@@ -426,6 +449,9 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
       activo,
       descripcion,
       medidas,
+      minimoComercialCantidad,
+      minimoComercialBase,
+      minimoComercialPolitica,
       modoMedidas,
       nombre,
       subcategoriaComercialCodigo,
@@ -466,6 +492,14 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
       label: `${categoria.nombre} · ${subcategoria.nombre}`,
     })),
   );
+  const minimoUnidadLabel =
+    minimoComercialBase === "pliegos_impresos"
+      ? "pliegos"
+      : unidadComercial === "m2"
+      ? "m²"
+      : unidadComercial === "metro_lineal"
+        ? "ml"
+        : "u.";
 
   const guardar = async () => {
     if (!nombre.trim()) {
@@ -488,6 +522,15 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
           (producto.atributosComercialesJson as Record<string, unknown> | null) ?? {},
         unidadComercial: unidadComercial as "unidad" | "m2" | "metro_lineal",
         modoMedidas,
+        minimoComercialPolitica,
+        minimoComercialCantidad:
+          minimoComercialPolitica === "NONE"
+            ? null
+            : Number(minimoComercialCantidad) || null,
+        minimoComercialBase:
+          minimoComercialPolitica === "NONE"
+            ? "cantidad_comercial"
+            : minimoComercialBase,
         medidaDefaultAnchoMm: medidaDefault?.anchoMm ?? null,
         medidaDefaultAltoMm: medidaDefault?.altoMm ?? null,
         medidasPredefinidasJson: medidasNormalizadas,
@@ -499,6 +542,13 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
         subcategoriaComercialCodigo,
         unidadComercial,
         modoMedidas,
+        minimoComercialPolitica,
+        minimoComercialCantidad:
+          minimoComercialPolitica === "NONE" ? "" : minimoComercialCantidad,
+        minimoComercialBase:
+          minimoComercialPolitica === "NONE"
+            ? "cantidad_comercial"
+            : minimoComercialBase,
         medidas: medidasNormalizadas,
         activo,
       });
@@ -593,6 +643,82 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
           </div>
           {modoMedidasUsaPredefinidas(modoMedidas) && (
             <MedidasPredefinidasEditor medidas={medidas} onChange={setMedidas} />
+          )}
+          <div className="field">
+            <label>Mínimo comercial</label>
+            <div className="segmented" style={{ width: "100%" }}>
+              <button
+                type="button"
+                className={minimoComercialPolitica === "NONE" ? "on" : ""}
+                onClick={() => setMinimoComercialPolitica("NONE")}
+                style={{ flex: 1 }}
+              >
+                Sin mínimo
+              </button>
+              <button
+                type="button"
+                className={
+                  minimoComercialPolitica === "ADVERTIR_FACTURAR_MINIMO" ? "on" : ""
+                }
+                onClick={() => setMinimoComercialPolitica("ADVERTIR_FACTURAR_MINIMO")}
+                style={{ flex: 1 }}
+              >
+                Advertir
+              </button>
+              <button
+                type="button"
+                className={minimoComercialPolitica === "BLOQUEAR" ? "on" : ""}
+                onClick={() => setMinimoComercialPolitica("BLOQUEAR")}
+                style={{ flex: 1 }}
+              >
+                Bloquear
+              </button>
+            </div>
+            <span className="help">
+              Advertir cobra el mínimo solo en precio; la producción conserva la cantidad real.
+            </span>
+          </div>
+          {minimoComercialPolitica !== "NONE" && (
+            <>
+              <div className="field">
+                <label>Base del mínimo</label>
+                <div className="segmented" style={{ width: "100%" }}>
+                  <button
+                    type="button"
+                    className={minimoComercialBase === "cantidad_comercial" ? "on" : ""}
+                    onClick={() => setMinimoComercialBase("cantidad_comercial")}
+                    style={{ flex: 1 }}
+                  >
+                    Cantidad comercial
+                  </button>
+                  <button
+                    type="button"
+                    className={minimoComercialBase === "pliegos_impresos" ? "on" : ""}
+                    onClick={() => setMinimoComercialBase("pliegos_impresos")}
+                    style={{ flex: 1 }}
+                  >
+                    Pliegos impresos
+                  </button>
+                </div>
+                <span className="help">
+                  Pliegos impresos se calcula después del nesting de impresión por hoja.
+                </span>
+              </div>
+              <div className="field">
+                <label>Cantidad mínima</label>
+                <div className="input-with-unit">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.0001"
+                    value={minimoComercialCantidad}
+                    onChange={(event) => setMinimoComercialCantidad(event.target.value)}
+                    placeholder={minimoComercialBase === "pliegos_impresos" ? "3" : unidadComercial === "unidad" ? "100" : "1"}
+                  />
+                  <span>{minimoUnidadLabel}</span>
+                </div>
+              </div>
+            </>
           )}
         </div>
       </div>

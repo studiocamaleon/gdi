@@ -19,7 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { duplicarProducto } from "@/lib/productos-servicios-api";
+import { duplicarProducto, listProductos } from "@/lib/productos-servicios-api";
 import type { ProductoListItem } from "@/lib/productos-servicios";
 import {
   getLabel,
@@ -103,11 +103,23 @@ function CatalogSelect({
 
 export function ProductosServiciosTable({
   initialProductos,
+  initialTotal,
+  initialPages,
+  pageSize,
 }: {
   initialProductos: ProductoListItem[];
+  initialTotal: number;
+  initialPages: number;
+  pageSize: number;
 }) {
   const router = useRouter();
-  const productos = initialProductos;
+  // Datos de la página actual (server-driven). La búsqueda y el estado se
+  // resuelven en el servidor; unidad/subcategoría son facetas de esta página.
+  const [productos, setProductos] = React.useState(initialProductos);
+  const [total, setTotal] = React.useState(initialTotal);
+  const [pages, setPages] = React.useState(initialPages);
+  const [page, setPage] = React.useState(1);
+  const [loading, setLoading] = React.useState(false);
   const [search, setSearch] = React.useState("");
   const [filtroUnidad, setFiltroUnidad] = React.useState("");
   const [filtroSubcategoria, setFiltroSubcategoria] = React.useState("");
@@ -129,20 +141,48 @@ export function ProductosServiciosTable({
     return [{ value: "", label: "todas" }, ...Array.from(byCodigo.values())];
   }, [productos]);
 
+  // Facetas client-side sobre la página actual (unidad/subcategoría). La
+  // búsqueda por texto y el estado (activo/inactivo) los resuelve el servidor.
   const productosFiltrados = React.useMemo(() => {
-    const term = search.trim().toLowerCase();
     return productos.filter((p) => {
-      if (term) {
-        const haystack = `${p.codigo} ${p.nombre} ${p.descripcion ?? ""} ${p.subcategoriaComercial?.nombre ?? ""} ${p.subcategoriaComercial?.categoria.nombre ?? ""}`.toLowerCase();
-        if (!haystack.includes(term)) return false;
-      }
       if (filtroUnidad && p.unidadComercial !== filtroUnidad) return false;
-      if (filtroSubcategoria && p.subcategoriaComercial?.codigo !== filtroSubcategoria) return false;
-      if (filtroEstado === "activo" && !p.activo) return false;
-      if (filtroEstado === "inactivo" && p.activo) return false;
+      if (filtroSubcategoria && p.subcategoriaComercial?.codigo !== filtroSubcategoria)
+        return false;
       return true;
     });
-  }, [productos, search, filtroUnidad, filtroSubcategoria, filtroEstado]);
+  }, [productos, filtroUnidad, filtroSubcategoria]);
+
+  // Refetch server-side al cambiar búsqueda, estado o página (con debounce).
+  const mounted = React.useRef(false);
+  const reqId = React.useRef(0);
+  React.useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      return; // los datos iniciales ya vienen del server (SSR).
+    }
+    const id = ++reqId.current;
+    const activo =
+      filtroEstado === "activo"
+        ? true
+        : filtroEstado === "inactivo"
+          ? false
+          : undefined;
+    setLoading(true);
+    const timer = setTimeout(() => {
+      listProductos({ page, limit: pageSize, search, activo })
+        .then((res) => {
+          if (id !== reqId.current) return;
+          setProductos(res.data);
+          setTotal(res.total);
+          setPages(res.pages);
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (id === reqId.current) setLoading(false);
+        });
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [page, pageSize, search, filtroEstado]);
 
   const openProduct = (id: string) => {
     router.push(`/productos-servicios/${id}?tab=identidad`);
@@ -198,7 +238,7 @@ export function ProductosServiciosTable({
         <div className="title-block">
           <h1>Catálogo de productos</h1>
           <div className="sub">
-            {productos.length} productos cargados en el modelo universal por pasos.
+            {total} productos en el catálogo (modelo universal por pasos).
           </div>
         </div>
         <button className="btn">Importar</button>
@@ -208,7 +248,7 @@ export function ProductosServiciosTable({
         </Link>
       </div>
 
-      {productos.length === 0 ? (
+      {total === 0 && !search && !filtroEstado ? (
         <EstadoVacio
           titulo="Sin productos cargados"
           descripcion="Empezá creando tu primer producto desde el wizard, o ejecutá el seed para cargar los productos validados."
@@ -221,7 +261,10 @@ export function ProductosServiciosTable({
               <Ico.Search />
               <input
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setPage(1);
+                }}
                 placeholder="Buscar por código, nombre o descripción…"
               />
               <span className="kbd">/</span>
@@ -246,7 +289,10 @@ export function ProductosServiciosTable({
             <CatalogSelect
               label="Estado"
               value={filtroEstado}
-              onChange={setFiltroEstado}
+              onChange={(value) => {
+                setFiltroEstado(value);
+                setPage(1);
+              }}
               options={[
                 { value: "", label: "todos" },
                 { value: "activo", label: "activos" },
@@ -258,7 +304,10 @@ export function ProductosServiciosTable({
           <div className="card">
             <div className="card-head">
               <span className="title">Productos</span>
-              <span className="count">{productosFiltrados.length} de {productos.length}</span>
+              <span className="count">
+                {productosFiltrados.length} en esta página · {total} en total
+                {loading ? " · actualizando…" : ""}
+              </span>
               <div style={{ marginLeft: "auto", display: "flex", gap: 8, color: "var(--muted-text)" } as CSSProperties}>
                 <span style={{ fontSize: 12 }}>Ordenar por</span>
                 <div className="select" style={{ height: 28 } as CSSProperties}>
@@ -373,9 +422,28 @@ export function ProductosServiciosTable({
             )}
           </div>
 
-          <div style={{ marginTop: 14, color: "var(--muted-text)", fontSize: 12, display: "flex", justifyContent: "space-between" } as CSSProperties}>
-            <span>Mostrando {productosFiltrados.length} de {productos.length} productos</span>
-            <span>Última sincronización · hace 2 min</span>
+          <div style={{ marginTop: 14, color: "var(--muted-text)", fontSize: 12, display: "flex", alignItems: "center", justifyContent: "space-between" } as CSSProperties}>
+            <span>
+              Página {page} de {Math.max(1, pages)} · {total} productos
+            </span>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" } as CSSProperties}>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page <= 1 || loading}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                Anterior
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page >= pages || loading}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Siguiente
+              </Button>
+            </div>
           </div>
         </>
       )}

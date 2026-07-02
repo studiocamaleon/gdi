@@ -37,7 +37,7 @@ export function LoginForm() {
       const response = await login(email.trim(), password);
 
       if (response.accessToken) {
-        setSessionToken(response.accessToken);
+        await setSessionToken(response.accessToken);
       }
 
       await wait(220);

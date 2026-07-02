@@ -762,7 +762,7 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
     help: {
       summary: "Perfiles por tipoCorte + modoOperacion. El factor de complejidad ajusta la productividad m²/hora.",
       tips: [
-        "Simple usa 36 m²/h, Intermedio 54 m²/h y Complejo 90 m²/h.",
+        "Simple usa 36 m²/h, Intermedio 15 m²/h y Complejo 6 m²/h.",
         "Para multi-rollo, declarar feedReloadMin > 0.",
       ],
       examples: ["Skycut C24 para vinilo de rotulación"],

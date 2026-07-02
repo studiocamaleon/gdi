@@ -43,6 +43,7 @@ export type SubfamiliaMateriaPrima =
   | "primer_sellador"
   | "anillado_encuadernacion"
   | "tapa_encuadernacion"
+  | "componente_editorial"
   | "iman_ceramico_flexible"
   | "fijacion_auxiliar"
   | "accesorio_exhibidor_carton"

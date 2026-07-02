@@ -1,16 +1,5 @@
 export const SESSION_COOKIE_NAME = "gdi_access_token";
-const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
-
-function parseCookieValue(source: string, name: string) {
-  const parts = source.split(";").map((part) => part.trim());
-  const cookie = parts.find((part) => part.startsWith(`${name}=`));
-
-  if (!cookie) {
-    return null;
-  }
-
-  return decodeURIComponent(cookie.slice(name.length + 1));
-}
+export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 
 export async function getSessionToken() {
   if (typeof window === "undefined") {
@@ -19,21 +8,36 @@ export async function getSessionToken() {
     return cookieStore.get(SESSION_COOKIE_NAME)?.value ?? null;
   }
 
-  return parseCookieValue(document.cookie, SESSION_COOKIE_NAME);
+  // En el navegador la cookie es httpOnly (no legible por JS). El token se
+  // adjunta a las requests del lado servidor: en el proxy BFF (/api/backend)
+  // para llamadas del cliente, o directo en apiRequest para server components.
+  return null;
 }
 
-export function setSessionToken(token: string) {
-  if (typeof document === "undefined") {
+/**
+ * Persiste el token de sesión como cookie httpOnly. Como httpOnly no puede
+ * fijarse desde JS, delegamos en el route handler server-side /api/session.
+ */
+export async function setSessionToken(token: string) {
+  if (typeof window === "undefined") {
     return;
   }
 
-  document.cookie = `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; Max-Age=${COOKIE_MAX_AGE_SECONDS}; SameSite=Lax`;
+  const response = await fetch("/api/session", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+
+  if (!response.ok) {
+    throw new Error("No se pudo iniciar la sesión.");
+  }
 }
 
-export function clearSessionToken() {
-  if (typeof document === "undefined") {
+export async function clearSessionToken() {
+  if (typeof window === "undefined") {
     return;
   }
 
-  document.cookie = `${SESSION_COOKIE_NAME}=; Path=/; Max-Age=0; SameSite=Lax`;
+  await fetch("/api/session", { method: "DELETE" });
 }

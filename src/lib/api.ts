@@ -17,7 +17,9 @@ function getApiBaseUrl() {
     return process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? DEFAULT_API_URL;
   }
 
-  return process.env.NEXT_PUBLIC_API_URL ?? DEFAULT_API_URL;
+  // En el navegador vamos same-origin al proxy BFF, que adjunta el token
+  // desde la cookie httpOnly. El cliente nunca ve el token.
+  return "/api/backend";
 }
 
 export async function apiRequest<T>(
@@ -28,7 +30,10 @@ export async function apiRequest<T>(
   const headers = new Headers(init?.headers ?? {});
   headers.set("Content-Type", "application/json");
 
-  if (options?.auth !== false) {
+  // Del lado servidor adjuntamos el token directamente (leyendo la cookie
+  // httpOnly vía next/headers). Del lado cliente el token lo inyecta el proxy
+  // BFF, porque la cookie httpOnly no es accesible desde JS.
+  if (options?.auth !== false && typeof window === "undefined") {
     const token = await getSessionToken();
 
     if (token) {

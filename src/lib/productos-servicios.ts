@@ -19,6 +19,15 @@ export const unidadComercialProductoItems: Array<{
 export type ModoMedidasProducto =
   "FIJA" | "LIBRE" | "COMERCIAL_ELIGE" | "MIXTA";
 
+export type MinimoComercialPolitica =
+  | "NONE"
+  | "ADVERTIR_FACTURAR_MINIMO"
+  | "BLOQUEAR";
+
+export type MinimoComercialBase =
+  | "cantidad_comercial"
+  | "pliegos_impresos";
+
 export interface MedidaPredefinidaProducto {
   id: string;
   nombre: string;
@@ -86,6 +95,9 @@ export interface ProductoListItem {
   precioConfigJson: unknown;
   unidadComercial: string;
   modoMedidas: ModoMedidasProducto;
+  minimoComercialPolitica: MinimoComercialPolitica;
+  minimoComercialCantidad: string | null;
+  minimoComercialBase: MinimoComercialBase;
   activo: boolean;
   subcategoriaComercial: ProductoSubcategoriaComercial & {
     categoria: Omit<ProductoCategoriaComercial, "subcategorias">;
@@ -230,16 +242,36 @@ export interface ConfigPasoDetalle {
 export interface SlotMaterialDetalle {
   id: string;
   slotCodigo: string;
+  slotNombre: string | null;
+  slotRol: string | null;
   modoSeleccion: string;
   criterioMotorAuto: string | null;
   estrategiaCosto: string;
   formula: string;
+  cantidadFactor: string | number | null;
+  cantidadBase: string | null;
   aplicaMultiCaras: boolean;
   materialVariante: {
     id: string;
     sku: string;
     nombreVariante: string | null;
     precioReferencia: string | null;
+    atributosVarianteJson?: Record<string, unknown> | null;
+    materiaPrima: {
+      id: string;
+      codigo: string;
+      nombre: string;
+      familia: string;
+      subfamilia: string;
+      templateId: string;
+      variantes?: Array<{
+        id: string;
+        sku: string;
+        nombreVariante: string | null;
+        precioReferencia: string | null;
+        atributosVarianteJson?: Record<string, unknown> | null;
+      }>;
+    };
   } | null;
   candidatos: Array<{
     id: string;
@@ -327,6 +359,7 @@ export interface FamiliaListItem {
   mecanismosCantidadSoportados: string[];
   modosActivacionSoportados: string[];
   multiplicadoresSoportados: string[];
+  permiteSlotsAdicionales: boolean;
   slotsRequeridos: Array<{
     codigo: string;
     nombre: string;
