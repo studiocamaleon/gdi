@@ -134,6 +134,17 @@ function packAtContentHeight(
 ): GranFormatoCostosPreviewPlacement[] | null {
   if (contentHeightMm <= 0) return null;
 
+  // El rollo acota el ANCHO (printableWidthMm); el largo es libre. Una pieza
+  // solo entra si alguno de sus lados (el menor, si se permite rotar) cabe en
+  // el ancho útil. Sin este chequeo el packer podía ubicar piezas con overflow
+  // (aprovechamiento > 100%) en vez de rechazarlas.
+  for (const piece of orderedPieces) {
+    const ladoQueCruzaElAncho = input.permitirRotacion
+      ? Math.min(piece.widthMm, piece.heightMm)
+      : piece.widthMm;
+    if (ladoQueCruzaElAncho > input.printableWidthMm) return null;
+  }
+
   const packer = new MaxRectsPacker(
     input.printableWidthMm + input.separacionHorizontalMm,
     contentHeightMm + input.separacionVerticalMm,

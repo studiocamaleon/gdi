@@ -637,6 +637,7 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
             <label>Manejo de medidas</label>
             <div className="segmented" style={{ width: "100%" }}>
               <button type="button" className={modoMedidas === "FIJA" ? "on" : ""} onClick={() => setModoMedidas("FIJA")} style={{ flex: 1 }}>Fija</button>
+              <button type="button" className={modoMedidas === "LIBRE" ? "on" : ""} onClick={() => setModoMedidas("LIBRE")} style={{ flex: 1 }}>Libre</button>
               <button type="button" className={modoMedidas === "COMERCIAL_ELIGE" ? "on" : ""} onClick={() => setModoMedidas("COMERCIAL_ELIGE")} style={{ flex: 1 }}>Comercial elige</button>
               <button type="button" className={modoMedidas === "MIXTA" ? "on" : ""} onClick={() => setModoMedidas("MIXTA")} style={{ flex: 1 }}>Mixta</button>
           </div>

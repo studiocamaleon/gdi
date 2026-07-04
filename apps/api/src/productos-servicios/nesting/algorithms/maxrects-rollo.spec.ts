@@ -94,6 +94,34 @@ describe('evaluateGranFormatoMaxRectsRollLayout', () => {
     }
   });
 
+  it('rechaza (null) una pieza mas ancha que el rollo en ambas orientaciones', () => {
+    const result = evaluateGranFormatoMaxRectsRollLayout({
+      ...baseInput,
+      medidas: [{ anchoMm: 1500, altoMm: 1500, cantidad: 1 }],
+    });
+    // printableWidthMm = 1360; lado menor 1500 > 1360 → no entra.
+    expect(result).toBeNull();
+  });
+
+  it('acepta una pieza que solo entra rotada', () => {
+    const result = evaluateGranFormatoMaxRectsRollLayout({
+      ...baseInput,
+      medidas: [{ anchoMm: 2000, altoMm: 1000, cantidad: 1 }],
+    });
+    // lado menor 1000 <= 1360 → entra rotada.
+    expect(result).not.toBeNull();
+  });
+
+  it('rechaza (null) una pieza mas ancha que el rollo si no se permite rotar', () => {
+    const result = evaluateGranFormatoMaxRectsRollLayout({
+      ...baseInput,
+      permitirRotacion: false,
+      medidas: [{ anchoMm: 1500, altoMm: 800, cantidad: 1 }],
+    });
+    // ancho 1500 > 1360 y sin rotacion → no entra.
+    expect(result).toBeNull();
+  });
+
   it('mantiene metadata de panelizado', () => {
     const result = evaluateGranFormatoMaxRectsRollLayout({
       ...baseInput,

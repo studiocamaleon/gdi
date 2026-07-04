@@ -10,17 +10,28 @@ export async function getMaquina(id: string) {
   return apiRequest<Maquina>(`/maquinaria/${id}`);
 }
 
+// perfilOperativoNombre es estado de UI: el backend resuelve el perfil por
+// perfilOperativoId y rechaza campos no declarados (forbidNonWhitelisted).
+function toApiPayload(payload: MaquinaPayload): MaquinaPayload {
+  return {
+    ...payload,
+    consumibles: payload.consumibles.map(
+      ({ perfilOperativoNombre: _ignored, ...consumible }) => consumible,
+    ),
+  };
+}
+
 export async function createMaquina(payload: MaquinaPayload) {
   return apiRequest<Maquina>("/maquinaria", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify(toApiPayload(payload)),
   });
 }
 
 export async function updateMaquina(id: string, payload: MaquinaPayload) {
   return apiRequest<Maquina>(`/maquinaria/${id}`, {
     method: "PUT",
-    body: JSON.stringify(payload),
+    body: JSON.stringify(toApiPayload(payload)),
   });
 }
 

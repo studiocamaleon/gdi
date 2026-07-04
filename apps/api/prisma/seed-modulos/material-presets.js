@@ -298,22 +298,39 @@ const presets = [
     ],
     advertencias: [],
     ...sheetPresetMeta('obra'),
-    variantes: sheetVariants(
-      'OBRA',
-      ['A4', 'A3', 'SRA3', '65 x 95 cm'],
-      [75, 80, 90, 120],
-      {
+    variantes: [
+      // Blanco: medidas y gramajes estándar.
+      ...sheetVariants(
+        'OBRA',
+        ['A4', 'A3', 'SRA3', '65 x 95 cm'],
+        [75, 80, 90, 120],
+        {
+          material: 'Papel obra',
+          color: 'Blanco',
+          acabado: 'Mate',
+          recomendadas: new Set([
+            'A4-80',
+            'A3-80',
+            '65 x 95 cm-80',
+            '65 x 95 cm-90',
+          ]),
+        },
+      ),
+      // Blanco: medida 22 x 34 cm sólo en 75 g.
+      ...sheetVariants('OBRA', ['22 x 34 cm'], [75], {
         material: 'Papel obra',
         color: 'Blanco',
         acabado: 'Mate',
-        recomendadas: new Set([
-          'A4-80',
-          'A3-80',
-          '65 x 95 cm-80',
-          '65 x 95 cm-90',
-        ]),
-      },
-    ),
+        recomendadas: new Set(['22 x 34 cm-75']),
+      }),
+      // Color (genérico, cualquier color vale lo mismo): A4 y 22 x 34 cm, en
+      // 75 y 80 g (papelería a color típica).
+      ...sheetColorVariants('OBRA', ['A4', '22 x 34 cm'], [75, 80], ['Color'], {
+        material: 'Papel obra',
+        acabado: 'Mate',
+        recomendadas: new Set(['A4-75-Color', '22 x 34 cm-75-Color']),
+      }),
+    ],
   },
   {
     key: 'PAPEL_OBRA_AHUESADO',
@@ -483,12 +500,20 @@ const presets = [
     ],
     advertencias: [],
     ...sheetPresetMeta('autocopiativo_cb'),
-    variantes: sheetVariants('AUTO-CB', ['22 x 34 cm'], [56, 60], {
-      material: 'Autocopiativo CB',
-      color: 'Blanco',
-      acabado: 'Mate',
-      recomendadas: new Set(['22 x 34 cm-56']),
-    }),
+    variantes: [
+      // Color base (Blanco): SKU sin sufijo de color.
+      ...sheetVariants('AUTO-CB', ['22 x 34 cm'], [56, 60], {
+        material: 'Autocopiativo CB',
+        color: 'Blanco',
+        acabado: 'Mate',
+        recomendadas: new Set(['22 x 34 cm-56']),
+      }),
+      // Color (genérico): cualquier color no-blanco al mismo precio.
+      ...sheetColorVariants('AUTO-CB', ['22 x 34 cm'], [56, 60], ['Color'], {
+        material: 'Autocopiativo CB',
+        acabado: 'Mate',
+      }),
+    ],
   },
   {
     key: 'AUTOCOPIATIVO_CFB',
@@ -512,12 +537,20 @@ const presets = [
     ],
     advertencias: [],
     ...sheetPresetMeta('autocopiativo_cfb'),
-    variantes: sheetVariants('AUTO-CFB', ['22 x 34 cm'], [56, 60], {
-      material: 'Autocopiativo CFB',
-      color: 'Rosa',
-      acabado: 'Mate',
-      recomendadas: new Set(['22 x 34 cm-56']),
-    }),
+    variantes: [
+      // Color base (Blanco): SKU sin sufijo de color.
+      ...sheetVariants('AUTO-CFB', ['22 x 34 cm'], [56, 60], {
+        material: 'Autocopiativo CFB',
+        color: 'Blanco',
+        acabado: 'Mate',
+        recomendadas: new Set(['22 x 34 cm-56']),
+      }),
+      // Color (genérico): cualquier color no-blanco al mismo precio.
+      ...sheetColorVariants('AUTO-CFB', ['22 x 34 cm'], [56, 60], ['Color'], {
+        material: 'Autocopiativo CFB',
+        acabado: 'Mate',
+      }),
+    ],
   },
   {
     key: 'AUTOCOPIATIVO_CF',
@@ -541,12 +574,20 @@ const presets = [
     ],
     advertencias: [],
     ...sheetPresetMeta('autocopiativo_cf'),
-    variantes: sheetVariants('AUTO-CF', ['22 x 34 cm'], [56, 60], {
-      material: 'Autocopiativo CF',
-      color: 'Celeste',
-      acabado: 'Mate',
-      recomendadas: new Set(['22 x 34 cm-56']),
-    }),
+    variantes: [
+      // Color base (Blanco): SKU sin sufijo de color.
+      ...sheetVariants('AUTO-CF', ['22 x 34 cm'], [56, 60], {
+        material: 'Autocopiativo CF',
+        color: 'Blanco',
+        acabado: 'Mate',
+        recomendadas: new Set(['22 x 34 cm-56']),
+      }),
+      // Color (genérico): cualquier color no-blanco al mismo precio.
+      ...sheetColorVariants('AUTO-CF', ['22 x 34 cm'], [56, 60], ['Color'], {
+        material: 'Autocopiativo CF',
+        acabado: 'Mate',
+      }),
+    ],
   },
   {
     key: 'ADHESIVO_PAPEL',
@@ -2390,6 +2431,69 @@ function sheetVariants(prefix, formatos, gramajes, options) {
   return formatos.flatMap((formato) =>
     gramajes.map((gramaje) => vh(prefix, formato, gramaje, options)),
   );
+}
+
+// Sufijos de color para el SKU (el SKU base no lleva color). Las variantes de
+// color se generan como filas aparte para poder cargarles precio propio.
+// Es una función (hoisted) porque el array `presets` se evalúa antes que un const.
+function sheetColorCode(color) {
+  const codes = {
+    Blanco: 'BL',
+    Color: 'CO',
+    Amarillo: 'AM',
+    Celeste: 'CE',
+    Rosa: 'RO',
+    Verde: 'VE',
+    Marfil: 'MA',
+    Natural: 'NA',
+  };
+  return codes[color] ?? color.slice(0, 2).toUpperCase();
+}
+
+function sheetColorVariants(prefix, formatos, gramajes, colores, options) {
+  return colores.flatMap((color) =>
+    formatos.flatMap((formato) =>
+      gramajes.map((gramaje) =>
+        vhColor(prefix, formato, gramaje, color, options),
+      ),
+    ),
+  );
+}
+
+function vhColor(prefix, formato, gramaje, color, options) {
+  const size = sheetSizeCm(formato);
+  const acabado = options.acabado ?? 'Mate';
+  const acabadoCode = acabado.toUpperCase().startsWith('BR') ? 'B' : 'M';
+  const colorCode = sheetColorCode(color);
+  const recomendada = Boolean(
+    options.recomendadas?.has(`${formato}-${gramaje}-${color}`),
+  );
+  const sku = `${prefix}-${sheetSkuSize(formato)}-${gramaje}-${acabadoCode}-${colorCode}`;
+  return {
+    skuSugerido: sku,
+    nombreVarianteSugerido: `${formato} · ${gramaje} g/m² · ${options.material} · ${color}`,
+    formato,
+    espesor: null,
+    color,
+    recomendada,
+    atributosVarianteJson: {
+      formatoComercial: formato,
+      ancho: size.ancho,
+      alto: size.alto,
+      gramaje,
+      material: options.material,
+      color,
+      acabado,
+      anchoMm: Math.round(size.ancho * 10),
+      altoMm: Math.round(size.alto * 10),
+      largoMm: Math.round(size.alto * 10),
+      gramajeGr: gramaje,
+    },
+    unidadStock: UnidadMateriaPrima.HOJA,
+    unidadCompra: UnidadMateriaPrima.RESMA,
+    precioReferencia: null,
+    moneda: 'ARS',
+  };
 }
 
 function vh(prefix, formato, gramaje, options) {

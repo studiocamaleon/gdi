@@ -129,6 +129,7 @@ type StepId = (typeof STEPS)[number]["id"];
 
 const MODOS_MEDIDAS = [
   { value: "FIJA", label: "Fija" },
+  { value: "LIBRE", label: "Libre" },
   { value: "COMERCIAL_ELIGE", label: "Comercial elige" },
   { value: "MIXTA", label: "Mixta" },
 ];

@@ -4,6 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
   CirclePlusIcon,
+  DollarSignIcon,
   LibraryIcon,
   PencilIcon,
   ToggleLeftIcon,
@@ -209,6 +210,13 @@ export function MateriasPrimasPanel({ initialMateriasPrimas }: MateriasPrimasPan
               <Button onClick={() => setIsCreateOpen(true)}>
                 <CirclePlusIcon className="size-4" />
                 Nueva materia prima
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => router.push("/inventario/materias-primas/costos")}
+              >
+                <DollarSignIcon className="size-4" />
+                Editar costos
               </Button>
               <Button
                 variant="outline"

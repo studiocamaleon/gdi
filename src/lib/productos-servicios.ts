@@ -159,6 +159,7 @@ export interface ConfigPasoDetalle {
     codigo: string;
     nombre: string;
     plantilla: string;
+    anchoUtil?: number | string | null;
     parametrosTecnicosJson?: Record<string, unknown> | null;
     perfilesOperativos?: Array<{
       id: string;
@@ -218,6 +219,7 @@ export interface ConfigPasoDetalle {
       codigo: string;
       nombre: string;
       plantilla: string;
+      anchoUtil?: number | string | null;
       parametrosTecnicosJson?: Record<string, unknown> | null;
       perfilesOperativos?: Array<{
         id: string;

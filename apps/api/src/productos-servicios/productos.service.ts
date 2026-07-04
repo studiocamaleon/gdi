@@ -706,6 +706,7 @@ export class ProductosService {
                     codigo: true,
                     nombre: true,
                     plantilla: true,
+                    anchoUtil: true,
                     parametrosTecnicosJson: true,
                     centroCostoPrincipalId: true,
                     centroCostoPrincipal: {
@@ -841,6 +842,7 @@ export class ProductosService {
                         codigo: true,
                         nombre: true,
                         plantilla: true,
+                        anchoUtil: true,
                         parametrosTecnicosJson: true,
                         centroCostoPrincipalId: true,
                         centroCostoPrincipal: {

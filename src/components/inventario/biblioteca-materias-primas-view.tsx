@@ -32,6 +32,8 @@ type Draft = {
   lastMateriaPrimaId: string | null;
 };
 
+type InstallMode = "completar" | "separado";
+
 const BIco = {
   Library: (p: React.SVGProps<SVGSVGElement>) => (
     <svg
@@ -1252,23 +1254,55 @@ function Wizard({
   const router = useRouter();
   const [step, setStep] = React.useState(0);
   const [saving, setSaving] = React.useState(false);
+  // El mismo material canónico puede instalarse varias veces como copias
+  // separadas (ej: la misma tinta CMYK con precios distintos por máquina).
+  const yaInstalado = item.installState.status !== "not-installed";
+  const puedeCompletar = item.installState.status === "partial";
+  const [installMode, setInstallMode] = React.useState<InstallMode>(
+    puedeCompletar ? "completar" : "separado",
+  );
+  const separado = installMode === "separado";
   const [draft, setDraft] = React.useState<Draft>(() => ({
-    visibleName:
-      item.installState.visibleName ??
-      item.aliasDisponibles[1] ??
-      item.aliasDisponibles[0] ??
-      item.nombreCanonico,
+    visibleName: puedeCompletar
+      ? (item.installState.visibleName ??
+        item.aliasDisponibles[1] ??
+        item.aliasDisponibles[0] ??
+        item.nombreCanonico)
+      : (item.aliasDisponibles[1] ??
+        item.aliasDisponibles[0] ??
+        item.nombreCanonico),
     codigo: item.canonicalKey,
     descripcion: item.descripcionCorta,
     selectedVariantIds: new Set(
       item.variantes
-        .filter((variant) => variant.recomendada && !variant.instalada)
+        .filter(
+          (variant) =>
+            variant.recomendada && (!puedeCompletar || !variant.instalada),
+        )
         .map((variant) => variant.id),
     ),
     lastMateriaPrimaId: item.installState.materiaPrimaId,
   }));
+  // Al cambiar de modo reseteamos la selección a las recomendadas disponibles
+  // en ese modo (en "separado" todas cuentan; en "completar" solo las faltantes).
+  React.useEffect(() => {
+    setDraft((prev) => ({
+      ...prev,
+      selectedVariantIds: new Set(
+        item.variantes
+          .filter(
+            (variant) =>
+              variant.recomendada && (separado || !variant.instalada),
+          )
+          .map((variant) => variant.id),
+      ),
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [installMode]);
   const selectedVariants = item.variantes.filter(
-    (variant) => draft.selectedVariantIds.has(variant.id) && !variant.instalada,
+    (variant) =>
+      draft.selectedVariantIds.has(variant.id) &&
+      (separado || !variant.instalada),
   );
 
   const install = async () => {
@@ -1279,10 +1313,7 @@ function Wizard({
       aliasUsado: draft.visibleName,
       variantPresetIds: selectedVariants.map((variant) => variant.id),
       customVariants: [],
-      modoDuplicado:
-        item.installState.status === "partial"
-          ? "agregar_faltantes"
-          : "crear_separado",
+      modoDuplicado: separado ? "crear_separado" : "agregar_faltantes",
     };
     setSaving(true);
     try {
@@ -1340,16 +1371,30 @@ function Wizard({
         <Stepper current={step} onJump={setStep} />
         <div className="bm-sheet-body">
           {step === 0 && (
-            <StepNombre item={item} draft={draft} setDraft={setDraft} />
+            <StepNombre
+              item={item}
+              draft={draft}
+              setDraft={setDraft}
+              installMode={installMode}
+              setInstallMode={setInstallMode}
+              puedeCompletar={puedeCompletar}
+              yaInstalado={yaInstalado}
+            />
           )}
           {step === 1 && (
-            <StepVariantes item={item} draft={draft} setDraft={setDraft} />
+            <StepVariantes
+              item={item}
+              draft={draft}
+              setDraft={setDraft}
+              separado={separado}
+            />
           )}
           {step === 2 && (
             <StepPreview
               item={item}
               draft={draft}
               selectedVariants={selectedVariants}
+              separado={separado}
             />
           )}
           {step === 3 && (
@@ -1481,10 +1526,18 @@ function StepNombre({
   item,
   draft,
   setDraft,
+  installMode,
+  setInstallMode,
+  puedeCompletar,
+  yaInstalado,
 }: {
   item: MaterialPresetListItem;
   draft: Draft;
   setDraft: React.Dispatch<React.SetStateAction<Draft>>;
+  installMode: InstallMode;
+  setInstallMode: React.Dispatch<React.SetStateAction<InstallMode>>;
+  puedeCompletar: boolean;
+  yaInstalado: boolean;
 }) {
   const customMode = !item.aliasDisponibles.includes(draft.visibleName);
   return (
@@ -1492,6 +1545,45 @@ function StepNombre({
       <div className="bm-section">
         <CanonicalRecap item={item} />
       </div>
+      {yaInstalado && (
+        <div className="bm-section">
+          <div className="bm-section-head">
+            <div className="ttl">Ya tenés este material instalado</div>
+            <div className="sub">
+              {item.installState.visibleName
+                ? `Existe como «${item.installState.visibleName}». `
+                : ""}
+              Elegí qué querés hacer.
+            </div>
+          </div>
+          <div className="bm-mode-grid">
+            {puedeCompletar && (
+              <button
+                type="button"
+                className={`bm-mode ${installMode === "completar" ? "on" : ""}`}
+                onClick={() => setInstallMode("completar")}
+              >
+                <span className="bm-mode-title">Completar el existente</span>
+                <span className="bm-mode-sub">
+                  Agrega las variantes que falten a la materia prima ya
+                  instalada.
+                </span>
+              </button>
+            )}
+            <button
+              type="button"
+              className={`bm-mode ${installMode === "separado" ? "on" : ""}`}
+              onClick={() => setInstallMode("separado")}
+            >
+              <span className="bm-mode-title">Instalar copia separada</span>
+              <span className="bm-mode-sub">
+                Crea otra materia prima independiente (otro precio, proveedor o
+                máquina). El código y los SKU se ajustan para no repetirse.
+              </span>
+            </button>
+          </div>
+        </div>
+      )}
       <div className="bm-section">
         <div className="bm-section-head">
           <div className="ttl">Nombre visible en tu empresa</div>
@@ -1601,10 +1693,12 @@ function StepVariantes({
   item,
   draft,
   setDraft,
+  separado,
 }: {
   item: MaterialPresetListItem;
   draft: Draft;
   setDraft: React.Dispatch<React.SetStateAction<Draft>>;
+  separado: boolean;
 }) {
   const groups = React.useMemo(() => {
     const map = new Map<string, MaterialPresetVariant[]>();
@@ -1613,14 +1707,15 @@ function StepVariantes({
     }
     return Array.from(map.entries());
   }, [item.variantes]);
+  // En una copia separada ninguna variante está "ya instalada": es un material nuevo.
+  const disponible = (variant: MaterialPresetVariant) =>
+    separado || !variant.instalada;
   const selectedCount = item.variantes.filter(
-    (variant) => draft.selectedVariantIds.has(variant.id) && !variant.instalada,
+    (variant) => draft.selectedVariantIds.has(variant.id) && disponible(variant),
   ).length;
-  const totalAvailable = item.variantes.filter(
-    (variant) => !variant.instalada,
-  ).length;
+  const totalAvailable = item.variantes.filter(disponible).length;
   const toggle = (variant: MaterialPresetVariant) => {
-    if (variant.instalada) return;
+    if (!disponible(variant)) return;
     setDraft((draft) => {
       const next = new Set(draft.selectedVariantIds);
       if (next.has(variant.id)) next.delete(variant.id);
@@ -1633,9 +1728,7 @@ function StepVariantes({
       ...draft,
       selectedVariantIds: new Set(
         selected
-          ? item.variantes
-              .filter((variant) => !variant.instalada)
-              .map((variant) => variant.id)
+          ? item.variantes.filter(disponible).map((variant) => variant.id)
           : [],
       ),
     }));
@@ -1645,7 +1738,7 @@ function StepVariantes({
       ...draft,
       selectedVariantIds: new Set(
         item.variantes
-          .filter((variant) => variant.recomendada && !variant.instalada)
+          .filter((variant) => variant.recomendada && disponible(variant))
           .map((variant) => variant.id),
       ),
     }));
@@ -1681,12 +1774,15 @@ function StepVariantes({
               <span className="ct">{variants.length} variantes</span>
             </div>
             {variants.map((variant) => {
+              // En copia separada la variante instalada en otra materia prima
+              // no cuenta como bloqueada: es un material nuevo.
+              const bloqueada = variant.instalada && !separado;
               const checked =
-                variant.instalada || draft.selectedVariantIds.has(variant.id);
+                bloqueada || draft.selectedVariantIds.has(variant.id);
               return (
                 <button
                   key={variant.id}
-                  className={`bm-variant ${checked ? "checked" : ""} ${variant.instalada ? "installed" : ""}`}
+                  className={`bm-variant ${checked ? "checked" : ""} ${bloqueada ? "installed" : ""}`}
                   onClick={() => toggle(variant)}
                   type="button"
                 >
@@ -1694,7 +1790,7 @@ function StepVariantes({
                   <div className="bm-variant-info">
                     <div className="nm">
                       {variantDescriptor(item, variant)}
-                      {variant.recomendada && !variant.instalada && (
+                      {variant.recomendada && !bloqueada && (
                         <span className="rec">recom.</span>
                       )}
                     </div>
@@ -1702,7 +1798,7 @@ function StepVariantes({
                       SKU sugerido · {variant.skuSugerido}
                     </div>
                   </div>
-                  {variant.instalada ? (
+                  {bloqueada ? (
                     <span className="bm-variant-installed-tag">
                       ya instalada
                     </span>
@@ -1750,10 +1846,12 @@ function StepPreview({
   item,
   draft,
   selectedVariants,
+  separado,
 }: {
   item: MaterialPresetListItem;
   draft: Draft;
   selectedVariants: MaterialPresetVariant[];
+  separado: boolean;
 }) {
   return (
     <div className="bm-section">
@@ -1824,7 +1922,27 @@ function StepPreview({
           ))}
         </div>
       </div>
-      {item.installState.status === "partial" && (
+      {separado && item.installState.visibleName && (
+        <div className="bm-dup">
+          <div className="head">
+            <span>
+              <BIco.Sparkles />
+            </span>
+            <div>
+              <strong>
+                Se creará una materia prima separada de{" "}
+                {item.installState.visibleName}.
+              </strong>
+              <div>
+                Comparten el material canónico {item.nombreCanonico}, pero esta
+                copia tiene su propio código, SKU y precios. Los SKU se ajustan
+                con un sufijo para no repetirse.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {!separado && item.installState.status === "partial" && (
         <div className="bm-dup">
           <div className="head">
             <span>

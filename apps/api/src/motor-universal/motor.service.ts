@@ -37,6 +37,10 @@ import {
   runNestingForPrePrensa,
   type NestingDispatchResult,
 } from './nesting-dispatcher';
+import {
+  resolveNestingConfig,
+  type NestingConfigResolved,
+} from './nesting-config';
 import { calcularOutputsCanonicos } from './outputs-canonicos';
 import {
   getConsumableChannelFromDetail,
@@ -1712,6 +1716,46 @@ export class MotorUniversalService {
       };
     }
 
+    // d.0.1) impresión por área: si el nesting no produjo layout pese a tener
+    //   un sustrato resoluble (rollo o pliego con dimensiones), significa que
+    //   alguna pieza NO ENTRA (el panelizado está desactivado o no alcanza).
+    //   No debe cotizarse con el área cruda; se corta con error. Si no hay
+    //   sustrato resoluble se mantiene el fallback (material sin resolver).
+    if (
+      paso.familiaCodigo === 'impresion_por_area' &&
+      debeCalcularNestingProductivo &&
+      !nestingDispatch
+    ) {
+      const nestConfig = resolveNestingConfig(
+        paso,
+        this.getJobContextParaNesting(paso, jobContext),
+        materialPreliminar,
+      );
+      const anchoUtilRolloMm =
+        nestConfig.rollWidthMm != null
+          ? nestConfig.rollWidthMm -
+            nestConfig.margins.leftMm -
+            nestConfig.margins.rightMm
+          : null;
+      const tieneSustratoRollo = (anchoUtilRolloMm ?? 0) > 0;
+      const tieneSustratoPliego =
+        (nestConfig.sheetWidthMm ?? 0) > 0 &&
+        (nestConfig.sheetHeightMm ?? 0) > 0;
+      if (tieneSustratoRollo || tieneSustratoPliego) {
+        errores.push(
+          this.errorPiezaNoEntraEnSustrato(paso, jobContext, nestConfig),
+        );
+        return {
+          rutaPasoId: paso.rutaPasoId,
+          rutaPasoOrden: paso.rutaPasoOrden,
+          familiaCodigo: paso.familiaCodigo,
+          configPasoId: paso.configPasoId,
+          activado: true,
+          costoTotal: 0,
+        };
+      }
+    }
+
     // d.1) G-M2 — Look-ahead pre_prensa: si el paso es pre_prensa, busca el
     //      siguiente impresion_por_hoja, toma su material + máquina y corre
     //      grid-2d-single con info sintetizada. El resultado se usa solo para
@@ -2426,6 +2470,63 @@ export class MotorUniversalService {
           slot.slotCodigo === 'film' && slot.formula === 'por_metro_lineal',
       )
     );
+  }
+
+  private errorPiezaNoEntraEnSustrato(
+    paso: PasoCargado,
+    jobContext: JobContext,
+    config: NestingConfigResolved,
+  ): ErrorMotor {
+    const piezas = jobContext.piezas ?? [];
+    const anchoUtilRolloMm =
+      config.rollWidthMm != null
+        ? Math.max(
+            0,
+            config.rollWidthMm - config.margins.leftMm - config.margins.rightMm,
+          )
+        : null;
+    const esRollo = anchoUtilRolloMm != null && anchoUtilRolloMm > 0;
+    const limiteAnchoMm = esRollo
+      ? (anchoUtilRolloMm as number)
+      : (config.sheetWidthMm ?? 0);
+    const limiteAltoMm = esRollo ? null : (config.sheetHeightMm ?? null);
+
+    // Lado que restringe el encaje: con rotación permitida basta que el lado
+    // menor entre en el ancho útil; sin rotación es el ancho declarado.
+    const ladoRestrictivo = (p: { anchoMm: number; altoMm: number }) =>
+      config.allowRotation ? Math.min(p.anchoMm, p.altoMm) : p.anchoMm;
+    const piezaOfensora =
+      piezas
+        .filter((p) => ladoRestrictivo(p) > limiteAnchoMm)
+        .sort((a, b) => ladoRestrictivo(b) - ladoRestrictivo(a))[0] ??
+      piezas.sort((a, b) => ladoRestrictivo(b) - ladoRestrictivo(a))[0] ??
+      null;
+
+    const detalleSustrato = esRollo
+      ? `ancho útil del sustrato ${limiteAnchoMm}mm`
+      : `sustrato ${limiteAnchoMm}×${limiteAltoMm ?? '?'}mm`;
+    const detallePieza = piezaOfensora
+      ? `La pieza de ${piezaOfensora.anchoMm}×${piezaOfensora.altoMm}mm`
+      : 'Una de las piezas';
+
+    return {
+      codigo: 'pieza_no_entra_en_sustrato',
+      severidad: 'ERROR',
+      mensaje: `${detallePieza} no entra en el ${detalleSustrato}. Activá el panelizado para dividirla o elegí un sustrato más ancho.`,
+      rutaPasoId: paso.rutaPasoId,
+      rutaPasoOrden: paso.rutaPasoOrden,
+      familiaCodigo: paso.familiaCodigo,
+      contexto: {
+        limiteAnchoMm,
+        limiteAltoMm,
+        allowRotation: config.allowRotation,
+        panelizadoActivo: config.panelizado?.enabled ?? false,
+        piezaAnchoMm: piezaOfensora?.anchoMm ?? null,
+        piezaAltoMm: piezaOfensora?.altoMm ?? null,
+      },
+      sugerencia:
+        'Activá el panelizado en la configuración del paso para dividir la pieza, o usá un sustrato/rollo más ancho.',
+    };
   }
 
   private errorNestingLaminadoInvalido(

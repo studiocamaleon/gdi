@@ -214,7 +214,7 @@ export const materiaPrimaTemplatesV1: MateriaPrimaTemplateDef[] = [
       { key: "alto", label: "Alto", type: "number", unit: "cm", required: true },
       { key: "gramaje", label: "Gramaje", type: "number", unit: "g_m2", required: true },
       { key: "material", label: "Material", type: "text", required: true },
-      { key: "color", label: "Color", type: "text", options: ["Blanco", "Amarillo", "Rosa", "Celeste", "Verde", "Marfil"], required: false },
+      { key: "color", label: "Color", type: "text", options: ["Blanco", "Color"], required: false },
       { key: "acabado", label: "Acabado", type: "text", options: ["Brillo", "Mate"], required: true },
     ],
     dimensionesVariante: ["formatoComercial", "ancho", "alto", "gramaje", "material", "color", "acabado"],

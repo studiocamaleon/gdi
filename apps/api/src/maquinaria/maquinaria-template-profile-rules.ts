@@ -135,8 +135,10 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
 
   // ─── §10 PLOTTER_CAD ────────────────────────────────────────────
   // Discriminantes (detalle): tipoTrabajo (CAD|FOTO), calidad (DRAFT|NORMAL|ALTA).
+  // `colores` (opcional): modos de color admitidos (B/N, CMYK) para habilitar
+  // el selector de modo de color en las rutas.
   [PlantillaMaquinariaDto.plotter_cad]: buildRule({
-    detalleKeys: ['tipoTrabajo', 'calidad'],
+    detalleKeys: ['tipoTrabajo', 'calidad', 'colores'],
     requiredFieldKeys: [
       'nombre',
       'productivityValue',

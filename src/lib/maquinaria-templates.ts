@@ -443,6 +443,7 @@ function buildPlotterCadSections(): MaquinariaTemplateSection[] {
         field({ key: "feedReloadMin", label: "Cambio de rollo", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo entre rollos." }),
         field({ key: "tipoTrabajo", label: "Tipo de trabajo", scope: "perfil_operativo", kind: "select", required: true, options: tipoTrabajoCadOptions, description: "CAD (rápido, baja densidad) o FOTO (lento, alta densidad)." }),
         field({ key: "calidad", label: "Calidad", scope: "perfil_operativo", kind: "select", required: true, options: calidadCadOptions, description: "Borrador, normal o alta." }),
+        field({ key: "colores", label: "Modos de color admitidos", scope: "perfil_operativo", kind: "multiselect", options: coloresImpresorLaserOptions, description: "Modos comerciales que puede imprimir este perfil (B/N para planos, CMYK para color)." }),
       ],
     }),
     section({ id: "consumibles", title: "Consumibles", description: "Tinta CMYK por perfil.", fields: genericConsumableFields }),

@@ -1411,6 +1411,26 @@ function getSelectedLinearMaterialMetrics(
       };
     }
   }
+  // Fallback: si no hay un slot de material por metro lineal (ej: plotter CAD,
+  // impresión por área sobre rollo), el ancho lo aporta el rollo de la máquina
+  // de impresión (anchoUtil). El motor sintetiza la pieza = ancho útil × ml.
+  for (const configPaso of rutaSel?.configPasos ?? []) {
+    if (configPaso.rutaPaso.familiaCodigo !== "impresion_por_area") continue;
+    if (!includeConfig(configPaso)) continue;
+    const machine = getActiveMachineForConfig(configPaso, config);
+    const anchoRolloMm = getNumberFromUnknown(machine?.anchoUtil);
+    if (!anchoRolloMm || anchoRolloMm <= 0) continue;
+    const margins = getMachineMarginsMm(machine);
+    const usableWidthMm = Math.max(
+      0,
+      anchoRolloMm - margins.leftMm - margins.rightMm,
+    );
+    return {
+      materialWidthMm: anchoRolloMm,
+      usableWidthMm: usableWidthMm > 0 ? usableWidthMm : anchoRolloMm,
+      margins,
+    };
+  }
   return null;
 }
 

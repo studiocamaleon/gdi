@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import type { CurrentAuth } from '../auth/auth.types';
 import { CurrentSession } from '../auth/current-auth.decorator';
+import { BulkUpdateCostosDto } from './dto/bulk-update-costos.dto';
 import { ListMateriasPrimasQueryDto } from './dto/list-materias-primas-query.dto';
 import { InstallMaterialPresetDto } from './dto/install-material-preset.dto';
 import { UpdateVariantePrecioReferenciaDto } from './dto/update-variante-precio-referencia.dto';
@@ -55,6 +56,15 @@ export class InventarioController {
     @Body() payload: InstallMaterialPresetDto,
   ) {
     return this.bibliotecaService.instalar(auth, key, payload);
+  }
+
+  // Ruta literal antes de las rutas con :id para evitar ambigüedad de matcheo.
+  @Patch('costos')
+  bulkUpdateCostos(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() payload: BulkUpdateCostosDto,
+  ) {
+    return this.inventarioService.bulkUpdateCostos(auth, payload);
   }
 
   @Get(':id')

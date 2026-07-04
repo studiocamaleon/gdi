@@ -124,10 +124,32 @@ export class InventarioBibliotecaService {
         ? existingMaterials[0]
         : null;
 
+    // Cuando se crea una materia prima nueva (copia separada), el mismo preset
+    // puede instalarse varias veces con precios distintos (ej: la misma tinta
+    // CMYK para dos máquinas). El código y los SKUs sugeridos son únicos por
+    // tenant, así que los desambiguamos con un sufijo para no chocar con la
+    // copia ya instalada.
+    const esMaterialNuevo = !targetExisting;
+    const presetSkusBase = selectedVariants.map((variant) =>
+      variant.skuSugerido.trim(),
+    );
+    const skuSuffix = esMaterialNuevo
+      ? await this.resolveSkuSuffix(auth.tenantId, presetSkusBase)
+      : '';
+    const presetVariantSku = new Map(
+      selectedVariants.map((variant) => [
+        variant.id,
+        `${variant.skuSugerido.trim()}${skuSuffix}`,
+      ]),
+    );
+    const codigoFinal = esMaterialNuevo
+      ? await this.resolveCodigoDisponible(auth.tenantId, payload.codigo.trim())
+      : payload.codigo.trim();
+
     const selectedSkus = [
-      ...selectedVariants.map((variant) => variant.skuSugerido),
-      ...customVariants.map((variant) => variant.sku),
-    ].map((sku) => sku.trim());
+      ...presetVariantSku.values(),
+      ...customVariants.map((variant) => variant.sku.trim()),
+    ];
     await this.assertSkusDisponibles(
       auth.tenantId,
       selectedSkus,
@@ -146,7 +168,7 @@ export class InventarioBibliotecaService {
               canonicalMaterialName: preset.nombreCanonico,
               canonicalAliasUsado:
                 payload.aliasUsado?.trim() || payload.visibleName.trim(),
-              codigo: payload.codigo.trim(),
+              codigo: codigoFinal,
               nombre: payload.visibleName.trim(),
               descripcion:
                 payload.descripcion?.trim() || preset.descripcionCorta,
@@ -156,7 +178,9 @@ export class InventarioBibliotecaService {
               templateId: preset.templateId,
               unidadStock,
               unidadCompra,
-              esConsumible: false,
+              // Tintas y tóners deben quedar habilitados como consumible para
+              // aparecer en el selector de consumibles de las máquinas.
+              esConsumible: this.esPresetConsumible(preset.familia),
               esRepuesto: false,
               activo: true,
               atributosTecnicosJson: this.toInputJson(initialAttributes),
@@ -179,7 +203,7 @@ export class InventarioBibliotecaService {
               tenantId: auth.tenantId,
               materiaPrimaId: materiaPrima.id,
               materialPresetVarianteId: variant.id,
-              sku: variant.skuSugerido.trim(),
+              sku: presetVariantSku.get(variant.id) ?? variant.skuSugerido.trim(),
               nombreVariante: variant.nombreVarianteSugerido,
               activo: true,
               atributosVarianteJson: this.toInputJson(
@@ -313,6 +337,52 @@ export class InventarioBibliotecaService {
         })),
       };
     });
+  }
+
+  /**
+   * Las tintas y tóners (familia TINTA_COLORANTE) son consumibles de máquina;
+   * el resto de las familias (sustratos, films, imanes…) no. Alineado con el
+   * seed de materiales.
+   */
+  private esPresetConsumible(familia: FamiliaMateriaPrima) {
+    return familia === FamiliaMateriaPrima.TINTA_COLORANTE;
+  }
+
+  /**
+   * Devuelve el sufijo (""/"-2"/"-3"…) más chico que deja libres TODOS los SKUs
+   * base a la vez, para instalar una copia separada del mismo preset sin chocar
+   * con las variantes ya instaladas.
+   */
+  private async resolveSkuSuffix(tenantId: string, baseSkus: string[]) {
+    const skus = baseSkus.filter(Boolean);
+    if (skus.length === 0) return '';
+    for (let intento = 1; intento <= 999; intento += 1) {
+      const suffix = intento === 1 ? '' : `-${intento}`;
+      const candidatos = skus.map((sku) => `${sku}${suffix}`);
+      const ocupado = await this.prisma.materiaPrimaVariante.findFirst({
+        where: { tenantId, sku: { in: candidatos } },
+        select: { id: true },
+      });
+      if (!ocupado) return suffix;
+    }
+    throw new ConflictException(
+      'No se pudo generar SKUs únicos para la copia del material.',
+    );
+  }
+
+  /** Devuelve el primer código libre a partir del deseado (código, código-2…). */
+  private async resolveCodigoDisponible(tenantId: string, base: string) {
+    for (let intento = 1; intento <= 999; intento += 1) {
+      const candidato = intento === 1 ? base : `${base}-${intento}`;
+      const ocupado = await this.prisma.materiaPrima.findFirst({
+        where: { tenantId, codigo: candidato },
+        select: { id: true },
+      });
+      if (!ocupado) return candidato;
+    }
+    throw new ConflictException(
+      'No se pudo generar un código único para la copia del material.',
+    );
   }
 
   private async assertSkusDisponibles(

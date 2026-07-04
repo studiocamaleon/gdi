@@ -20,6 +20,7 @@ import {
   PaginationDto,
   paginatedResponse,
 } from '../common/dto/pagination.dto';
+import { BulkUpdateCostosDto } from './dto/bulk-update-costos.dto';
 import { GetKardexQueryDto } from './dto/get-kardex-query.dto';
 import { GetStockQueryDto } from './dto/get-stock-query.dto';
 import {
@@ -375,6 +376,102 @@ export class InventarioService {
     } catch (error) {
       this.handleWriteError(error);
     }
+  }
+
+  /**
+   * Edición masiva de costos: precios/moneda por variante y unidades por
+   * material, en una sola transacción. Pensado para la pantalla de "Editar
+   * costos" que carga precios de muchos materiales sin entrar uno por uno.
+   */
+  async bulkUpdateCostos(auth: CurrentAuth, payload: BulkUpdateCostosDto) {
+    const variantes = payload.variantes ?? [];
+    const materiales = payload.materiales ?? [];
+    if (variantes.length === 0 && materiales.length === 0) {
+      return { variantesActualizadas: 0, materialesActualizados: 0 };
+    }
+
+    // Validación de pertenencia al tenant (anti-IDOR) antes de escribir nada.
+    const varianteIds = Array.from(new Set(variantes.map((item) => item.id)));
+    if (varianteIds.length > 0) {
+      const owned = await this.prisma.materiaPrimaVariante.findMany({
+        where: { tenantId: auth.tenantId, id: { in: varianteIds } },
+        select: { id: true },
+      });
+      if (owned.length !== varianteIds.length) {
+        throw new NotFoundException(
+          'Una de las variantes no existe o no pertenece a tu empresa.',
+        );
+      }
+    }
+    const materialIds = Array.from(new Set(materiales.map((item) => item.id)));
+    if (materialIds.length > 0) {
+      const owned = await this.prisma.materiaPrima.findMany({
+        where: { tenantId: auth.tenantId, id: { in: materialIds } },
+        select: { id: true },
+      });
+      if (owned.length !== materialIds.length) {
+        throw new NotFoundException(
+          'Uno de los materiales no existe o no pertenece a tu empresa.',
+        );
+      }
+    }
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        for (const variante of variantes) {
+          const data: Prisma.MateriaPrimaVarianteUpdateInput = {};
+          if (variante.precioReferencia !== undefined) {
+            data.precioReferencia = this.toDecimal(
+              this.roundToScale(variante.precioReferencia),
+            );
+          }
+          if (variante.moneda?.trim()) {
+            data.moneda = variante.moneda.trim().toUpperCase();
+          }
+          if (variante.unidadStock) {
+            data.unidadStock = this.toPrismaEnum<UnidadMateriaPrima>(
+              variante.unidadStock,
+            );
+          }
+          if (variante.unidadCompra) {
+            data.unidadCompra = this.toPrismaEnum<UnidadMateriaPrima>(
+              variante.unidadCompra,
+            );
+          }
+          if (Object.keys(data).length === 0) continue;
+          await tx.materiaPrimaVariante.update({
+            where: { id: variante.id },
+            data,
+          });
+        }
+
+        for (const material of materiales) {
+          const data: Prisma.MateriaPrimaUpdateInput = {};
+          if (material.unidadStock) {
+            data.unidadStock = this.toPrismaEnum<UnidadMateriaPrima>(
+              material.unidadStock,
+            );
+          }
+          if (material.unidadCompra) {
+            data.unidadCompra = this.toPrismaEnum<UnidadMateriaPrima>(
+              material.unidadCompra,
+            );
+          }
+          if (Object.keys(data).length === 0) continue;
+          await tx.materiaPrima.update({
+            where: { id: material.id },
+            data,
+          });
+        }
+      });
+    } catch (error) {
+      this.handleWriteError(error);
+    }
+
+    return {
+      variantesActualizadas: variantes.length,
+      materialesActualizados: materiales.length,
+    };
   }
 
   async findAllAlmacenes(auth: CurrentAuth) {

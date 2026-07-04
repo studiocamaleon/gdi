@@ -104,9 +104,11 @@ describe('InventarioBibliotecaService', () => {
       },
       materiaPrima: {
         findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn().mockResolvedValue(null),
       },
       materiaPrimaVariante: {
         findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn().mockResolvedValue(null),
       },
       $transaction: jest.fn(async (callback) =>
         callback({
@@ -132,6 +134,7 @@ describe('InventarioBibliotecaService', () => {
         data: expect.objectContaining({
           subfamilia: SubfamiliaMateriaPrima.SUSTRATO_HOJA,
           templateId: 'sustrato_hoja_v1',
+          esConsumible: false,
           unidadStock: UnidadMateriaPrima.HOJA,
           unidadCompra: UnidadMateriaPrima.RESMA,
           atributosTecnicosJson: expect.objectContaining({
@@ -157,6 +160,118 @@ describe('InventarioBibliotecaService', () => {
             gramajeGr: 80,
           }),
         }),
+      }),
+    );
+  });
+
+  it('marca esConsumible al instalar tintas/toner (familia TINTA_COLORANTE)', async () => {
+    const createMateriaPrima = jest.fn().mockResolvedValue({ id: 'mp-tinta' });
+    const tintaVariant = {
+      ...sheetVariant,
+      id: 'variant-tinta-1',
+      skuSugerido: 'TINTA-ECO-C-1000ML',
+      unidadStock: UnidadMateriaPrima.LITRO,
+      unidadCompra: UnidadMateriaPrima.LITRO,
+    };
+    const tintaPreset = {
+      ...sheetPreset,
+      id: 'preset-tinta',
+      key: 'TINTA_ECOSOLVENTE_CMYK',
+      familia: FamiliaMateriaPrima.TINTA_COLORANTE,
+      subfamilia: SubfamiliaMateriaPrima.TINTA_IMPRESION,
+      templateId: 'tinta_impresion_v1',
+      variantes: [tintaVariant],
+    };
+    const prisma = {
+      materialPreset: {
+        findUnique: jest.fn().mockResolvedValue(tintaPreset),
+      },
+      materiaPrima: {
+        findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+      materiaPrimaVariante: {
+        findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+      $transaction: jest.fn(async (callback) =>
+        callback({
+          materiaPrima: { create: createMateriaPrima },
+          materiaPrimaVariante: { create: jest.fn().mockResolvedValue({}) },
+        }),
+      ),
+    };
+    const service = new InventarioBibliotecaService(prisma as never);
+
+    await service.instalar(auth, 'TINTA_ECOSOLVENTE_CMYK', {
+      visibleName: 'Tinta ecosolvente CMYK',
+      codigo: 'TINTA_ECOSOLVENTE_CMYK',
+      descripcion: 'Tinta CMYK.',
+      aliasUsado: 'Tinta eco',
+      variantPresetIds: [tintaVariant.id],
+      customVariants: [],
+      modoDuplicado: ModoDuplicadoMaterialPresetDto.crear_separado,
+    });
+
+    expect(createMateriaPrima).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ esConsumible: true }),
+      }),
+    );
+  });
+
+  it('instala una copia separada con codigo y SKU desambiguados si ya existen', async () => {
+    const createMateriaPrima = jest.fn().mockResolvedValue({ id: 'mp-2' });
+    const createVariante = jest.fn().mockResolvedValue({});
+    // El código base y el SKU base ya están ocupados (copia previa); recién el
+    // primer sufijo queda libre.
+    const codigoFindFirst = jest
+      .fn()
+      .mockResolvedValueOnce({ id: 'mp-1' })
+      .mockResolvedValueOnce(null);
+    const skuFindFirst = jest
+      .fn()
+      .mockResolvedValueOnce({ id: 'var-existente' })
+      .mockResolvedValue(null);
+    const prisma = {
+      materialPreset: {
+        findUnique: jest.fn().mockResolvedValue(sheetPreset),
+      },
+      materiaPrima: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'mp-1', variantes: [] }]),
+        findFirst: codigoFindFirst,
+      },
+      materiaPrimaVariante: {
+        findMany: jest.fn().mockResolvedValue([]),
+        findFirst: skuFindFirst,
+      },
+      $transaction: jest.fn(async (callback) =>
+        callback({
+          materiaPrima: { create: createMateriaPrima },
+          materiaPrimaVariante: { create: createVariante },
+        }),
+      ),
+    };
+    const service = new InventarioBibliotecaService(prisma as never);
+
+    await service.instalar(auth, 'PAPEL_OBRA', {
+      visibleName: 'Papel obra premium',
+      codigo: 'PAPEL_OBRA',
+      descripcion: 'Otra calidad/precio.',
+      aliasUsado: 'Bond',
+      variantPresetIds: [sheetVariant.id],
+      customVariants: [],
+      modoDuplicado: ModoDuplicadoMaterialPresetDto.crear_separado,
+    });
+
+    expect(createMateriaPrima).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ codigo: 'PAPEL_OBRA-2' }),
+      }),
+    );
+    expect(createVariante).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ sku: 'OBRA-A4-80-M-2' }),
       }),
     );
   });

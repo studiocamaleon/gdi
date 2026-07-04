@@ -8,6 +8,7 @@ import type {
 import type {
   MateriaPrima,
   MateriaPrimaPayload,
+  UnidadMateriaPrima,
   UpdateVariantePrecioReferenciaPayload,
 } from "@/lib/materias-primas";
 
@@ -101,6 +102,34 @@ export async function instalarBibliotecaMateriaPrima(
       body: JSON.stringify(payload),
     },
   );
+}
+
+export interface BulkUpdateCostosPayload {
+  variantes?: Array<{
+    id: string;
+    precioReferencia?: number;
+    moneda?: string;
+    unidadStock?: UnidadMateriaPrima;
+    unidadCompra?: UnidadMateriaPrima;
+  }>;
+  materiales?: Array<{
+    id: string;
+    unidadStock?: UnidadMateriaPrima;
+    unidadCompra?: UnidadMateriaPrima;
+  }>;
+}
+
+/** Edición masiva de costos (precios/unidades) en una sola llamada. */
+export async function bulkUpdateCostosMateriasPrimas(
+  payload: BulkUpdateCostosPayload,
+) {
+  return apiRequest<{
+    variantesActualizadas: number;
+    materialesActualizados: number;
+  }>("/inventario/materias-primas/costos", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function updateVariantePrecioReferencia(
