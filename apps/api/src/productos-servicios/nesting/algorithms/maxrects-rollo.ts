@@ -28,6 +28,8 @@ import {
 
 type PackedRectData = {
   piece: GranFormatoPiece;
+  /** La pieza se agregó al packer ya rotada (solo entraba rotada al ancho). */
+  prerotated?: boolean;
 };
 
 function resolvePanelAxisSummary(
@@ -159,10 +161,19 @@ function packAtContentHeight(
 
   for (const piece of orderedPieces) {
     if (piece.widthMm <= 0 || piece.heightMm <= 0) continue;
+    // La librería marca un rect como "oversized" si su ancho sin rotar excede
+    // el bin, SIN intentar la rotación. Las piezas que solo entran rotadas al
+    // ancho las agregamos ya rotadas nosotros.
+    const prerotated =
+      input.permitirRotacion &&
+      piece.widthMm > input.printableWidthMm &&
+      piece.heightMm <= input.printableWidthMm;
+    const addWidthMm = prerotated ? piece.heightMm : piece.widthMm;
+    const addHeightMm = prerotated ? piece.widthMm : piece.heightMm;
     packer.add(
-      piece.widthMm + input.separacionHorizontalMm,
-      piece.heightMm + input.separacionVerticalMm,
-      { piece } satisfies PackedRectData,
+      addWidthMm + input.separacionHorizontalMm,
+      addHeightMm + input.separacionVerticalMm,
+      { piece, prerotated } satisfies PackedRectData,
     );
   }
 
@@ -174,12 +185,16 @@ function packAtContentHeight(
     const packed = rect as unknown as {
       x: number;
       y: number;
+      width: number;
+      height: number;
       rot?: boolean;
       data?: PackedRectData;
     };
     const piece = packed.data?.piece;
     if (!piece) return null;
-    const rotated = packed.rot === true;
+    // Rotación neta = pre-rotación nuestra XOR rotación del packer. Usamos las
+    // dims reales de la pieza (no las del rect, que arrastran separaciones).
+    const rotated = (packed.data?.prerotated === true) !== (packed.rot === true);
     const widthMm = rotated ? piece.heightMm : piece.widthMm;
     const heightMm = rotated ? piece.widthMm : piece.heightMm;
     return toPlacement(
@@ -193,6 +208,21 @@ function packAtContentHeight(
   });
 
   if (placements.some((placement) => placement == null)) return null;
+
+  // La librería NO falla cuando un rect no entra en el bin: lo mete en un bin
+  // "oversized" sin rotar (ej: pieza 1460×900 en ancho útil 905 pasaba el
+  // chequeo previo porque su lado menor entra rotado, pero a esta altura de
+  // prueba la rotación tampoco cabía y quedaba colocada con overflow y
+  // aprovechamiento > 100%). Validamos que cada placement quede dentro del
+  // ancho útil y del largo probado; si no, esta altura no es válida.
+  const epsilonMm = 0.01;
+  const maxRightMm = input.marginLeftMm + input.printableWidthMm + epsilonMm;
+  const maxBottomMm = input.marginStartMm + contentHeightMm + epsilonMm;
+  for (const placement of placements as GranFormatoCostosPreviewPlacement[]) {
+    if (placement.centerXMm + placement.widthMm / 2 > maxRightMm) return null;
+    if (placement.centerYMm + placement.heightMm / 2 > maxBottomMm) return null;
+  }
+
   return placements as GranFormatoCostosPreviewPlacement[];
 }
 

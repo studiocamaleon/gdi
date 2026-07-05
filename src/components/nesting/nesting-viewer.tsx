@@ -113,6 +113,7 @@ function algorithmLabel(algorithm: NestingViewerInput["algorithm"]): string {
   const labels: Record<NestingViewerInput["algorithm"], string> = {
     "shelf-rollo": "Acomodo en rollo",
     "maxrects-rollo": "Acomodo optimizado en rollo",
+    "secuencial-rollo": "Acomodo secuencial en rollo",
     "grid-2d-single": "Acomodo en pliego",
     "grid-2d-multi": "Acomodo multi-placa",
     "packingsolver-rectangle": "Acomodo optimizado en placa",

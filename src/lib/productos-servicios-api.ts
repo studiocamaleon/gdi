@@ -667,6 +667,7 @@ export interface NestingViewerInput {
   algorithm:
     | "shelf-rollo"
     | "maxrects-rollo"
+    | "secuencial-rollo"
     | "grid-2d-single"
     | "grid-2d-multi"
     | "packingsolver-rectangle";

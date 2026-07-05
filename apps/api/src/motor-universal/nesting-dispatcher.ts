@@ -31,6 +31,7 @@ import {
   type GranFormatoMixedShelfLayoutResult,
 } from '../productos-servicios/nesting/algorithms/shelf-rollo';
 import { evaluateGranFormatoMaxRectsRollLayout } from '../productos-servicios/nesting/algorithms/maxrects-rollo';
+import { evaluateGranFormatoSequentialRollLayout } from '../productos-servicios/nesting/algorithms/secuencial-rollo';
 import { nestGrid2DSingle } from '../productos-servicios/nesting/algorithms/grid-2d-single';
 import { nestGrid2DMulti } from '../productos-servicios/nesting/algorithms/grid-2d-multi';
 import { nestPackingSolverRectangle } from '../productos-servicios/nesting/algorithms/packingsolver-rectangle';
@@ -58,6 +59,7 @@ export interface NestingDispatchResult {
   algorithm:
     | 'shelf-rollo'
     | 'maxrects-rollo'
+    | 'secuencial-rollo'
     | 'grid-2d-single'
     | 'grid-2d-multi'
     | 'packingsolver-rectangle';
@@ -376,7 +378,6 @@ function runShelfRollo(
   const piezas = jobContext.piezas ?? [];
   if (piezas.length === 0) return null;
 
-  void paso;
   void materialResuelto;
   const rollWidthMm = config.rollWidthMm;
   if (!rollWidthMm || rollWidthMm <= 0) return null;
@@ -410,17 +411,26 @@ function runShelfRollo(
     })),
   };
 
-  const shelfInputs = buildShelfInputsForPanelizado(baseShelfInput, config);
+  // Plotter CAD: imprime los planos de a uno, no combina piezas en el ancho
+  // del rollo. Cada pieza va en su propia fila; solo se optimiza la
+  // orientación para reducir el largo consumido (sin panelizado).
+  const esPlotterCad =
+    (paso.maquina?.plantilla ?? '').toLowerCase() === 'plotter_cad';
+  const shelfInputs = esPlotterCad
+    ? [baseShelfInput as EvaluateGranFormatoMixedShelfLayoutInput]
+    : buildShelfInputsForPanelizado(baseShelfInput, config);
   const rollCandidates = shelfInputs
     .map((shelfInput) =>
-      evaluateRollLayoutForConfiguredAlgorithm(shelfInput, config.algorithm),
+      esPlotterCad
+        ? evaluateSequentialRollCandidate(shelfInput)
+        : evaluateRollLayoutForConfiguredAlgorithm(shelfInput, config.algorithm),
     )
     .filter(
       (
         candidate,
       ): candidate is {
         result: GranFormatoMixedShelfLayoutResult;
-        algorithm: 'shelf-rollo' | 'maxrects-rollo';
+        algorithm: 'shelf-rollo' | 'maxrects-rollo' | 'secuencial-rollo';
       } => candidate != null,
     );
   const bestRollCandidate = chooseBestRollCandidate(rollCandidates);
@@ -567,6 +577,17 @@ function buildShelfInputsForPanelizado(
   }));
 }
 
+function evaluateSequentialRollCandidate(
+  shelfInput: EvaluateGranFormatoMixedShelfLayoutInput,
+): {
+  result: GranFormatoMixedShelfLayoutResult;
+  algorithm: 'secuencial-rollo';
+} | null {
+  const result = evaluateGranFormatoSequentialRollLayout(shelfInput);
+  if (!result) return null;
+  return { result, algorithm: 'secuencial-rollo' };
+}
+
 function evaluateRollLayoutForConfiguredAlgorithm(
   shelfInput: EvaluateGranFormatoMixedShelfLayoutInput,
   algorithm: NestingConfigResolved['algorithm'],
@@ -601,7 +622,7 @@ function evaluateRollLayoutForConfiguredAlgorithm(
 function chooseBestRollCandidate(
   candidates: Array<{
     result: GranFormatoMixedShelfLayoutResult;
-    algorithm: 'shelf-rollo' | 'maxrects-rollo';
+    algorithm: 'shelf-rollo' | 'maxrects-rollo' | 'secuencial-rollo';
   }>,
 ) {
   return (

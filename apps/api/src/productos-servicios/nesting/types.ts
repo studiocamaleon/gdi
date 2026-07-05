@@ -130,7 +130,8 @@ export type NestingAlgorithm =
   | 'grid-2d-multi'
   | 'packingsolver-rectangle'
   | 'maxrects-rollo'
-  | 'shelf-rollo';
+  | 'shelf-rollo'
+  | 'secuencial-rollo';
 
 export interface NestingMetrics {
   /** Solo grid-2d-single: cantidad de columnas resultantes. */

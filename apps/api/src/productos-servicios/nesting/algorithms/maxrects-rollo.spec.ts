@@ -110,6 +110,31 @@ describe('evaluateGranFormatoMaxRectsRollLayout', () => {
     });
     // lado menor 1000 <= 1360 → entra rotada.
     expect(result).not.toBeNull();
+    expect(result!.placements[0]!.rotated).toBe(true);
+    expect(result!.placements[0]!.widthMm).toBe(1000);
+  });
+
+  it('nunca coloca piezas con overflow del ancho útil (bin oversized)', () => {
+    // Regresión: 1460x900 en ancho útil 905 quedaba colocada SIN rotar
+    // (aprovechamiento > 100%) porque la librería la metía en un bin
+    // "oversized" en vez de rotarla. Debe salir rotada, dentro del ancho.
+    const result = evaluateGranFormatoMaxRectsRollLayout({
+      printableWidthMm: 905,
+      marginLeftMm: 7.5,
+      marginStartMm: 12.5,
+      marginEndMm: 12.5,
+      separacionHorizontalMm: 5,
+      separacionVerticalMm: 5,
+      permitirRotacion: true,
+      medidas: [{ anchoMm: 1460, altoMm: 900, cantidad: 1 }],
+    });
+    expect(result).not.toBeNull();
+    for (const placement of result!.placements) {
+      const rightMm = placement.centerXMm + placement.widthMm / 2;
+      expect(rightMm).toBeLessThanOrEqual(7.5 + 905 + 0.01);
+    }
+    expect(result!.placements[0]!.rotated).toBe(true);
+    expect(result!.consumedLengthMm).toBe(1485);
   });
 
   it('rechaza (null) una pieza mas ancha que el rollo si no se permite rotar', () => {

@@ -557,6 +557,9 @@ function getMachineTechnologyLabel(maquina: Maquina) {
       .replaceAll("_", " ")
       .toUpperCase();
   }
+  // Tecnologías fijas por plantilla (no se cargan en parametrosTecnicos).
+  if (maquina.plantilla === "impresora_laser") return "LÁSER";
+  if (maquina.plantilla === "plotter_cad") return "INKJET";
   return getGeometriaTrabajoMaquinaLabel(maquina.geometriaTrabajo);
 }
 

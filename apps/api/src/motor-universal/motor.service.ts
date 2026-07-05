@@ -1528,6 +1528,8 @@ export class MotorUniversalService {
     const normalized = plantilla?.toLowerCase();
     if (!normalized) return null;
     if (normalized === 'impresora_laser') return 'laser';
+    // Los plotters CAD son siempre inkjet (tecnología fija por plantilla).
+    if (normalized === 'plotter_cad') return 'inkjet';
     return null;
   }
 
@@ -2244,7 +2246,8 @@ export class MotorUniversalService {
         // multiplicando por el ancho útil del rollo (que viene en el sustrato).
         if (
           (nestingDispatch?.algorithm === 'shelf-rollo' ||
-            nestingDispatch?.algorithm === 'maxrects-rollo') &&
+            nestingDispatch?.algorithm === 'maxrects-rollo' ||
+            nestingDispatch?.algorithm === 'secuencial-rollo') &&
           paso.perfil?.productivityUnit === 'M2_H'
         ) {
           const ancho =
@@ -2371,7 +2374,8 @@ export class MotorUniversalService {
     const strategy =
       detail?.strategy ??
       (nestingDispatch.algorithm === 'shelf-rollo' ||
-      nestingDispatch.algorithm === 'maxrects-rollo'
+      nestingDispatch.algorithm === 'maxrects-rollo' ||
+      nestingDispatch.algorithm === 'secuencial-rollo'
         ? 'consumed-length'
         : materialPrincipal?.estrategiaCosto === 'simple'
           ? 'simple'
@@ -2792,7 +2796,8 @@ export class MotorUniversalService {
       } else if (slot.formula === 'por_metro_lineal') {
         if (
           (nestingDispatch?.algorithm === 'shelf-rollo' ||
-            nestingDispatch?.algorithm === 'maxrects-rollo') &&
+            nestingDispatch?.algorithm === 'maxrects-rollo' ||
+            nestingDispatch?.algorithm === 'secuencial-rollo') &&
           nestingDispatch.consumedLengthMm
         ) {
           cantidad = nestingDispatch.consumedLengthMm / 1000;

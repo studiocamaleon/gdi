@@ -45,6 +45,8 @@ export function getMachineTechnology(machine: MachineTechnologySource): Tecnolog
 
   const plantilla = typeof machine.plantilla === "string" ? machine.plantilla.toLowerCase() : "";
   if (plantilla === "impresora_laser") return "laser";
+  // Los plotters CAD son siempre inkjet (tecnología fija por plantilla).
+  if (plantilla === "plotter_cad") return "inkjet";
   return null;
 }
 

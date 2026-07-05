@@ -334,6 +334,7 @@ export function getMaquinaTecnologia(input: {
   }
   // 3. Default por plantilla (las únicas con tecnología fija).
   if (input.plantilla === "impresora_laser") return "laser";
+  if (input.plantilla === "plotter_cad") return "inkjet";
   return null;
 }
 
