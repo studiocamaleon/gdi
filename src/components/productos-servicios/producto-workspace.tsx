@@ -41,6 +41,10 @@ import {
   getCatalogoComercial,
   type LookupsConfigPaso,
 } from "@/lib/productos-servicios-api";
+import {
+  getHerramientaMedidasArchivo,
+  setHerramientaMedidasArchivo,
+} from "@/lib/producto-herramientas";
 import type {
   CargoDirectoCatalogo,
   CatalogoFamilias,
@@ -398,6 +402,9 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
       minimoComercialCantidad: producto.minimoComercialCantidad ?? "",
       minimoComercialBase: producto.minimoComercialBase ?? "cantidad_comercial",
       medidas: getMedidasPredefinidas(producto),
+      medidasDesdeArchivo: getHerramientaMedidasArchivo(
+        producto.atributosComercialesJson,
+      ).enabled,
       activo: producto.activo,
     }),
     [producto],
@@ -425,6 +432,9 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
   const [medidas, setMedidas] = React.useState<MedidaPredefinidaProducto[]>(() =>
     getMedidasPredefinidas(producto),
   );
+  const [medidasDesdeArchivo, setMedidasDesdeArchivo] = React.useState(
+    () => getHerramientaMedidasArchivo(producto.atributosComercialesJson).enabled,
+  );
   const [activo, setActivo] = React.useState(producto.activo);
   const [guardando, setGuardando] = React.useState(false);
 
@@ -443,12 +453,14 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
           ? "cantidad_comercial"
           : minimoComercialBase,
       medidas: normalizarMedidasPorModo(modoMedidas, medidas),
+      medidasDesdeArchivo,
       activo,
     }),
     [
       activo,
       descripcion,
       medidas,
+      medidasDesdeArchivo,
       minimoComercialCantidad,
       minimoComercialBase,
       minimoComercialPolitica,
@@ -518,8 +530,10 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
         nombre,
         descripcion: descripcion || undefined,
         subcategoriaComercialCodigo,
-        atributosComercialesJson:
-          (producto.atributosComercialesJson as Record<string, unknown> | null) ?? {},
+        atributosComercialesJson: setHerramientaMedidasArchivo(
+          producto.atributosComercialesJson as Record<string, unknown> | null,
+          medidasDesdeArchivo,
+        ),
         unidadComercial: unidadComercial as "unidad" | "m2" | "metro_lineal",
         modoMedidas,
         minimoComercialPolitica,
@@ -550,6 +564,7 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
             ? "cantidad_comercial"
             : minimoComercialBase,
         medidas: medidasNormalizadas,
+        medidasDesdeArchivo,
         activo,
       });
       toast.success("Identidad guardada");
@@ -645,6 +660,24 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
           {modoMedidasUsaPredefinidas(modoMedidas) && (
             <MedidasPredefinidasEditor medidas={medidas} onChange={setMedidas} />
           )}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, paddingTop: 6, borderTop: "1px solid var(--hairline)" }}>
+            <div>
+              <div style={{ fontWeight: 500, fontSize: 13 }}>Leer medidas desde PDF</div>
+              <div style={{ fontSize: 11.5, color: "var(--muted-text)" }}>
+                Al cotizar, permite adjuntar planos PDF y autocompletar las
+                medidas de cada pieza leyendo el tamaño de cada página. Ideal
+                para planos CAD.
+              </div>
+            </div>
+            <button
+              type="button"
+              className={`toggle ${medidasDesdeArchivo ? "on" : ""}`}
+              onClick={() => setMedidasDesdeArchivo((current) => !current)}
+              aria-pressed={medidasDesdeArchivo}
+            >
+              <span className="switch" />
+            </button>
+          </div>
           <div className="field">
             <label>Mínimo comercial</label>
             <div className="segmented" style={{ width: "100%" }}>

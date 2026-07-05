@@ -7,15 +7,20 @@ import {
   BriefcaseBusinessIcon,
   CheckIcon,
   CircleAlertIcon,
+  FileUpIcon,
   Grid2X2Icon,
   ListIcon,
   MinusIcon,
+  PaperclipIcon,
   PlusIcon,
   SearchIcon,
   StarIcon,
   XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
+
+import { getHerramientaMedidasArchivo } from "@/lib/producto-herramientas";
+import { leerMedidasPdf } from "@/lib/pdf-medidas";
 
 import {
   formatCurrency,
@@ -92,11 +97,20 @@ type CatalogProduct = {
   impuestoPct: number;
 };
 
+type PiezaOrigenArchivo = {
+  archivoNombre: string;
+  pagina: number;
+  totalPaginas: number;
+  anchoDetectadoMm: number;
+  altoDetectadoMm: number;
+};
+
 type PiezaInput = {
   uiKey: string;
   cantidad: number;
   anchoMm: number;
   altoMm: number;
+  origen?: PiezaOrigenArchivo;
 };
 
 type ModoCotizacionLineal = "nesting" | "directo";
@@ -120,6 +134,7 @@ type SlotMaterialCandidato = {
     variantId: string;
     label: string;
     description: string;
+    details: Array<{ label: string; value: string }>;
     sku: string;
     isFallbackLabel: boolean;
     sortEspesor: number | null;
@@ -192,6 +207,84 @@ const MODO_COLOR_LABELS: Record<string, string> = {
   "CMYK+blanco": "CMYK + Blanco",
   "CMYK+barniz": "CMYK + Barniz",
   "CMYK+blanco+barniz": "CMYK + Blanco + Barniz",
+};
+
+const MODO_COLOR_DESCRIPTIONS: Record<string, string> = {
+  SIN_IMPRESION: "Material en crudo",
+  BN: "1 tinta · escala de grises",
+  CMYK: "Full color · 4 tintas",
+  "CMYK+blanco": "Base blanca · sustratos oscuros o transp.",
+  "CMYK+barniz": "Reserva de barniz UV · brillo selectivo",
+  "CMYK+blanco+barniz": "Blanco de base + barniz selectivo",
+};
+
+const TECHNOLOGY_META: Record<
+  string,
+  { abbr: string; color: string; desc: string }
+> = {
+  uv: { abbr: "UV", color: "#6d4bd8", desc: "Rígidos y flexibles · seca al instante" },
+  eco_solvente: { abbr: "ES", color: "#2f8fd6", desc: "Vinilos y lonas · exterior" },
+  latex: { abbr: "LX", color: "#1f9d6b", desc: "Interior/exterior · sin olor" },
+  laser: { abbr: "LS", color: "#4a4a52", desc: "Papelería · corto tiraje" },
+  dtf_uv: { abbr: "DU", color: "#c9599a", desc: "Transfer sobre objetos" },
+  dtf_textil: { abbr: "DT", color: "#d9803a", desc: "Estampado en telas" },
+  sublimacion: { abbr: "SB", color: "#db2777", desc: "Sublimación sobre poliéster" },
+  inkjet: { abbr: "IJ", color: "#0ea5e9", desc: "Inyección de tinta" },
+};
+
+function getTechnologyMeta(value: string) {
+  return (
+    TECHNOLOGY_META[value] ?? {
+      abbr: value.slice(0, 2).toUpperCase() || "··",
+      color: "#4a4a52",
+      desc: "",
+    }
+  );
+}
+
+// Swatch visual del modo de color: material en crudo, escala de grises, o
+// grilla CMYK con indicadores opcionales de blanco (punto) y barniz (brillo).
+function renderModoColorSwatch(value: string) {
+  if (value === "SIN_IMPRESION") {
+    return <span className="ap-cmode none" aria-hidden="true" />;
+  }
+  if (value === "BN") {
+    return <span className="ap-cmode bw" aria-hidden="true" />;
+  }
+  if (value.startsWith("CMYK")) {
+    const hasWhite = value.includes("blanco");
+    const hasBarniz = value.includes("barniz");
+    return (
+      <span className="ap-cmode cmyk" aria-hidden="true">
+        <i className="c" />
+        <i className="m" />
+        <i className="y" />
+        <i className="k" />
+        {hasWhite ? <span className="wdot" /> : null}
+        {hasBarniz ? <span className="vsheen" /> : null}
+      </span>
+    );
+  }
+  return <span className="ap-cmode none" aria-hidden="true" />;
+}
+
+const CARAS_ICONS: Record<string, React.ReactNode> = {
+  "1": (
+    <svg className="ap-sheet-ico" viewBox="0 0 26 26" fill="none" aria-hidden="true">
+      <rect x="6" y="3" width="14" height="20" rx="2" fill="#fff" stroke="#14141a" strokeWidth="1.6" />
+      <line x1="9" y1="8" x2="17" y2="8" stroke="#14141a" strokeWidth="1.4" />
+      <line x1="9" y1="12" x2="17" y2="12" stroke="#b8b6b1" strokeWidth="1.4" />
+      <line x1="9" y1="16" x2="14" y2="16" stroke="#b8b6b1" strokeWidth="1.4" />
+    </svg>
+  ),
+  "2": (
+    <svg className="ap-sheet-ico" viewBox="0 0 26 26" fill="none" aria-hidden="true">
+      <rect x="3" y="5" width="13" height="18" rx="2" fill="#fff" stroke="#b8b6b1" strokeWidth="1.5" />
+      <rect x="10" y="3" width="13" height="18" rx="2" fill="#fff" stroke="#14141a" strokeWidth="1.6" />
+      <line x1="13" y1="8" x2="20" y2="8" stroke="#14141a" strokeWidth="1.4" />
+      <line x1="13" y1="12" x2="20" y2="12" stroke="#b8b6b1" strokeWidth="1.4" />
+    </svg>
+  ),
 };
 
 const ENRICHED_SPEC_LABELS: Record<string, string> = {
@@ -553,6 +646,7 @@ function mapSlotMaterial(
                   variantId: item.variante.id,
                   label: display.label,
                   description: display.description,
+                  details: display.details,
                   sku: display.fallbackCode,
                   isFallbackLabel: display.details.length === 0,
                   sortEspesor: getSlotMaterialVariantSortValue(variante),
@@ -1035,6 +1129,89 @@ function getVariantColorLabel(attrs: Record<string, unknown> | null | undefined)
 
 function candidateUsesColorThickness(candidate: SlotMaterialCandidato) {
   return candidate.variantes.some((variant) => variant.colorLabel && variant.espesorLabel);
+}
+
+type VariantCardDisplay = {
+  title: string;
+  specs: Array<{ label: string; value: string }>;
+};
+
+// Descompone las variantes de un candidato en: título (los atributos que
+// distinguen a una variante de sus hermanas — ej. "Brillante" vs "Mate") y
+// especificaciones compartidas (ej. Ancho/Largo del rollo). Genérico: sirve
+// para cualquier opcional con alternativas, no solo laminado.
+function describeCandidateVariants(
+  candidate: SlotMaterialCandidato,
+): Map<string, VariantCardDisplay> {
+  const valuesByLabel = new Map<string, Set<string>>();
+  for (const variant of candidate.variantes) {
+    for (const detail of variant.details) {
+      const set = valuesByLabel.get(detail.label) ?? new Set<string>();
+      set.add(detail.value);
+      valuesByLabel.set(detail.label, set);
+    }
+  }
+  const varyingLabels = new Set(
+    Array.from(valuesByLabel.entries())
+      .filter(([, values]) => values.size > 1)
+      .map(([label]) => label),
+  );
+  const cards = new Map<string, VariantCardDisplay>();
+  for (const variant of candidate.variantes) {
+    const distinguishing = variant.details.filter((detail) =>
+      varyingLabels.has(detail.label),
+    );
+    const shared = variant.details.filter(
+      (detail) => !varyingLabels.has(detail.label),
+    );
+    const title =
+      distinguishing.map((detail) => detail.value).join(" · ") || variant.label;
+    cards.set(variant.variantId, { title, specs: shared });
+  }
+  return cards;
+}
+
+function findSelectedCandidateVariant(
+  slot: SlotComercialElige,
+  config: Pick<MotorConfigState, "seleccionMaterial">,
+) {
+  const key = materialSelectionKey(slot.configPasoId, slot.slotCodigo);
+  const selected = config.seleccionMaterial[key] || defaultSlotCandidateId(slot) || "";
+  const candidate =
+    slot.candidatos.find((item) =>
+      item.variantes.some((variant) => variant.variantId === selected),
+    ) ??
+    slot.candidatos.find((item) => item.defaultVarianteId) ??
+    slot.candidatos[0] ??
+    null;
+  const variant =
+    candidate?.variantes.find((item) => item.variantId === selected) ??
+    candidate?.variantes.find(
+      (item) => item.variantId === candidate.defaultVarianteId,
+    ) ??
+    candidate?.variantes[0] ??
+    null;
+  return { candidate, variant };
+}
+
+// Resumen de una línea para el pie de la card del opcional:
+// "Laminado film BOPP · Brillante · 330 mm × 150 m".
+function describeSlotSelection(
+  slot: SlotComercialElige,
+  config: Pick<MotorConfigState, "seleccionMaterial">,
+): string | null {
+  const { candidate, variant } = findSelectedCandidateVariant(slot, config);
+  if (!candidate) return null;
+  const parts: string[] = [];
+  if (candidate.label) parts.push(candidate.label);
+  if (variant) {
+    const card = describeCandidateVariants(candidate).get(variant.variantId);
+    const specsText = (card?.specs ?? []).map((spec) => spec.value).join(" × ");
+    if (card?.title) parts.push(card.title);
+    if (specsText) parts.push(specsText);
+    if (!card?.title && !specsText) parts.push(variant.label);
+  }
+  return parts.length > 0 ? parts.join(" · ") : null;
 }
 
 function getSelectedMaterialSummaries(
@@ -1791,11 +1968,26 @@ function buildPresentableSpecs(
   const usaMedidasPersonalizadas =
     usaPiezasParaCotizar(productoDetalle, config) && config.piezas.length > 0;
   if (usaMedidasPersonalizadas) {
-    const medidas = Array.from(
-      new Set(
-        config.piezas.map((pieza) => formatMedidasCm(pieza.anchoMm, pieza.altoMm)),
-      ),
-    ).join("\n");
+    // Agrupamos por medida sumando cantidades para mostrar "N u. × ancho x alto".
+    // Sin esto, dos piezas del mismo tamaño (frecuente al leer varios PDF)
+    // colapsaban a una sola línea perdiendo la cantidad. La cantidad lleva
+    // "u." para que no se lea como una dimensión más ("100 × 2 × 2 cm").
+    // Espejo de buildJobContext: para productos por unidad la cantidad que
+    // cotiza el motor es la comercial (qty), no la de la fila de pieza.
+    const piezasUsanCantidadComercial = usaCantidadComercialParaPiezas(productoDetalle);
+    const grupos = new Map<string, number>();
+    for (const pieza of config.piezas) {
+      const medida = formatMedidasCm(pieza.anchoMm, pieza.altoMm);
+      const cantidad = piezasUsanCantidadComercial
+        ? qty
+        : Number.isFinite(pieza.cantidad)
+          ? pieza.cantidad
+          : 0;
+      grupos.set(medida, (grupos.get(medida) ?? 0) + cantidad);
+    }
+    const medidas = Array.from(grupos.entries())
+      .map(([medida, cantidad]) => `${cantidad.toLocaleString("es-AR")} u. × ${medida}`)
+      .join("\n");
     setSpec("medidas", medidas);
     setSpec("formato_medidas", medidas);
     setSpec("m2_medidas_instaladas", medidas);
@@ -2489,6 +2681,7 @@ function ApConfigStep({
   const piezasUsanCantidadComercial = usaCantidadComercialParaPiezas(productoDetalle);
   const piezaFocusRefs = React.useRef<Record<string, HTMLInputElement | null>>({});
   const focusPiezaCantidadKey = React.useRef<string | null>(null);
+  const planosInputRef = React.useRef<HTMLInputElement | null>(null);
   const [piezaMeasureDrafts, setPiezaMeasureDrafts] = React.useState<
     Record<string, { anchoCm?: string; altoCm?: string }>
   >({});
@@ -2537,6 +2730,69 @@ function ApConfigStep({
         ...current,
         piezas: current.piezas.filter((_, idx) => idx !== index),
       }));
+    },
+    [setMotorConfig],
+  );
+
+  const herramientaMedidasArchivo = React.useMemo(
+    () => getHerramientaMedidasArchivo(productoDetalle?.atributosComercialesJson),
+    [productoDetalle],
+  );
+  const [leyendoPlanos, setLeyendoPlanos] = React.useState(false);
+  const [arrastrandoPlanos, setArrastrandoPlanos] = React.useState(false);
+
+  const handleAdjuntarPlanos = React.useCallback(
+    async (files: FileList | File[]) => {
+      const lista = Array.from(files);
+      if (lista.length === 0) return;
+      setLeyendoPlanos(true);
+      try {
+        const resultados = await leerMedidasPdf(lista);
+        const nuevas: PiezaInput[] = [];
+        const errores: string[] = [];
+        for (const resultado of resultados) {
+          if (!resultado.ok) {
+            errores.push(`${resultado.archivoNombre}: ${resultado.error}`);
+            continue;
+          }
+          for (const pagina of resultado.paginas) {
+            nuevas.push({
+              uiKey: `pz-${Date.now()}-${Math.random()}`,
+              cantidad: 1,
+              anchoMm: pagina.anchoMm,
+              altoMm: pagina.altoMm,
+              origen: {
+                archivoNombre: pagina.archivoNombre,
+                pagina: pagina.pagina,
+                totalPaginas: pagina.totalPaginas,
+                anchoDetectadoMm: pagina.anchoMm,
+                altoDetectadoMm: pagina.altoMm,
+              },
+            });
+          }
+        }
+        if (nuevas.length > 0) {
+          setMotorConfig((current) => {
+            const previas = current.piezas.filter(
+              (pieza) => pieza.origen || pieza.anchoMm > 0 || pieza.altoMm > 0,
+            );
+            return {
+              ...current,
+              medidaPredefinidaId: "",
+              piezas: [...previas, ...nuevas],
+            };
+          });
+          const archivosOk = resultados.filter((resultado) => resultado.ok).length;
+          toast.success(
+            `${nuevas.length} ${nuevas.length === 1 ? "medida leída" : "medidas leídas"} de ${archivosOk} ${archivosOk === 1 ? "archivo" : "archivos"}`,
+          );
+        }
+        if (errores.length > 0) {
+          toast.error(errores.join(" · "));
+        }
+      } finally {
+        setLeyendoPlanos(false);
+      }
     },
     [setMotorConfig],
   );
@@ -2794,6 +3050,105 @@ function ApConfigStep({
     </div>
   );
 
+  const renderChoiceCards = (
+    name: string,
+    value: string,
+    options: Array<{
+      value: string;
+      label: string;
+      desc?: string;
+      glyph?: React.ReactNode;
+    }>,
+    onChange: (value: string) => void,
+    opts?: { columns?: 2 | 3; layout?: "row" | "tile" },
+  ) => {
+    const columns = opts?.columns ?? (options.length <= 2 ? 2 : 3);
+    const layout = opts?.layout ?? "row";
+    return (
+      <div
+        className={`ap-choice-grid ap-choice-grid-${columns} ap-choice-${layout}`}
+        role="radiogroup"
+        aria-label={name}
+      >
+        {options.map((option) => {
+          const selected = option.value === value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              className={`ap-choice ${selected ? "on" : ""}`}
+              role="radio"
+              aria-checked={selected}
+              aria-label={`${name}: ${option.label}`}
+              onClick={() => onChange(option.value)}
+            >
+              {option.glyph ? (
+                <span className="ap-choice-glyph">{option.glyph}</span>
+              ) : null}
+              <span className="ap-choice-txt">
+                <span className="ap-choice-nm">{option.label}</span>
+                {option.desc ? (
+                  <span className="ap-choice-desc">{option.desc}</span>
+                ) : null}
+              </span>
+              <span className="ap-choice-tick" aria-hidden="true" />
+            </button>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderMedidaCards = (
+    selectedId: string,
+    medidas: Array<{ id: string; nombre: string; anchoMm: number; altoMm: number }>,
+    onSelect: (id: string) => void,
+    allowCustom: boolean,
+  ) => (
+    <div className="ap-size-grid" role="radiogroup" aria-label="Medida">
+      {medidas.map((medida) => {
+        const size = formatMedidasCm(medida.anchoMm, medida.altoMm);
+        const rawLabel = medidaLabel(medida);
+        const isMmFallback = rawLabel.includes(" mm");
+        const name = isMmFallback ? size : rawLabel;
+        const real = isMmFallback ? null : size;
+        const selected = medida.id === selectedId;
+        return (
+          <button
+            key={medida.id}
+            type="button"
+            className={`ap-size ${selected ? "on" : ""}`}
+            role="radio"
+            aria-checked={selected}
+            aria-label={`Medida: ${name}`}
+            onClick={() => onSelect(medida.id)}
+          >
+            <span className="ap-size-name">{name}</span>
+            {real ? <span className="ap-size-real">{real}</span> : null}
+          </button>
+        );
+      })}
+      {allowCustom ? (
+        <button
+          type="button"
+          className={`ap-size ap-size-custom ${selectedId === CUSTOM_MEASURE_ID ? "on" : ""}`}
+          role="radio"
+          aria-checked={selectedId === CUSTOM_MEASURE_ID}
+          aria-label="Medida: a medida"
+          onClick={() => onSelect(CUSTOM_MEASURE_ID)}
+        >
+          <span className="ap-size-name">
+            <span className="ap-size-plus" aria-hidden="true">
+              +
+            </span>
+            A medida
+          </span>
+          <span className="ap-size-hint">Definir cm</span>
+        </button>
+      ) : null}
+    </div>
+  );
+
   const renderOptionList = (
     name: string,
     value: string,
@@ -2824,7 +3179,39 @@ function ApConfigStep({
     </div>
   );
 
-  const renderMaterialSelect = (slot: SlotComercialElige, options?: { showHint?: boolean }) => {
+  const renderFilmChips = (
+    slot: SlotComercialElige,
+    selectedMateriaPrimaId: string,
+    onSelect: (materiaPrimaId: string) => void,
+  ) => (
+    <div
+      className="ap-film-row"
+      role="radiogroup"
+      aria-label={humanizeCodigo(slot.slotCodigo)}
+    >
+      {slot.candidatos.map((candidate) => {
+        const on = candidate.materiaPrimaId === selectedMateriaPrimaId;
+        return (
+          <button
+            key={candidate.materiaPrimaId}
+            type="button"
+            className={`ap-film-chip ${on ? "on" : ""}`}
+            role="radio"
+            aria-checked={on}
+            onClick={() => onSelect(candidate.materiaPrimaId)}
+          >
+            <span className="ap-film-pip" aria-hidden="true" />
+            <span>{candidate.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  const renderMaterialSelect = (
+    slot: SlotComercialElige,
+    options?: { showHint?: boolean; collapseSingleCandidate?: boolean },
+  ) => {
     const key = materialSelectionKey(slot.configPasoId, slot.slotCodigo);
     const selected = motorConfig.seleccionMaterial[key] || defaultSlotCandidateId(slot) || "";
     const selectedCandidate =
@@ -2865,6 +3252,11 @@ function ApConfigStep({
       value: candidate.materiaPrimaId,
       label: candidate.label,
     }));
+    // Con un solo candidato el selector no ofrece elección: es ruido. En las
+    // cards de opcionales (donde el nombre ya está en el encabezado) lo
+    // colapsamos y dejamos solo las variantes.
+    const hideFilmSelector =
+      Boolean(options?.collapseSingleCandidate) && materialOptions.length === 1;
     return (
       <div
         className={`ap-spec ${
@@ -2875,20 +3267,22 @@ function ApConfigStep({
         }`}
         key={key}
       >
-        <label>{humanizeCodigo(slot.slotCodigo)}</label>
-        {materialOptions.length > 0 ? (
-          renderSegmentedControl(
-            humanizeCodigo(slot.slotCodigo),
-            selectedCandidate?.materiaPrimaId ?? "",
-            materialOptions,
-            selectMaterial,
-            true,
-            materialOptions.length > 2,
-          )
-        ) : (
-          <div className="ctrl-input">
-            <span>Sin materiales candidatos configurados</span>
-          </div>
+        {materialOptions.length === 0 ? (
+          <>
+            <label>{humanizeCodigo(slot.slotCodigo)}</label>
+            <div className="ctrl-input">
+              <span>Sin materiales candidatos configurados</span>
+            </div>
+          </>
+        ) : hideFilmSelector ? null : (
+          <>
+            <label>{humanizeCodigo(slot.slotCodigo)}</label>
+            {renderFilmChips(
+              slot,
+              selectedCandidate?.materiaPrimaId ?? "",
+              selectMaterial,
+            )}
+          </>
         )}
         {selectedCandidate && selectedCandidate.variantes.length > 1 ? (
           useAttributePicker ? (
@@ -2957,32 +3351,56 @@ function ApConfigStep({
           <div className="ap-variant-section">
             <div className="ap-variant-head">
               <span>Variante</span>
-              <small>{selectedCandidate.label}</small>
+              {hideFilmSelector ? null : <small>{selectedCandidate.label}</small>}
             </div>
             <div className="ap-variant-grid">
-              {selectedCandidate.variantes.map((variant) => {
-                const active = variant.variantId === selected;
-                const isDefault =
-                  variant.variantId === selectedCandidate.defaultVarianteId;
-                return (
-                  <button
-                    key={variant.variantId}
-                    type="button"
-                    className={`ap-variant-card ${active ? "active" : ""}`}
-                    onClick={() => setMaterial(key, variant.variantId)}
-                  >
-                    <span className="ap-variant-title">{variant.label}</span>
-                    {variant.isFallbackLabel ? (
-                      <span className="ap-variant-meta">
-                        Sin atributos descriptivos · {variant.sku}
+              {(() => {
+                const variantCards = describeCandidateVariants(selectedCandidate);
+                return selectedCandidate.variantes.map((variant) => {
+                  const active = variant.variantId === selected;
+                  const isDefault =
+                    variant.variantId === selectedCandidate.defaultVarianteId;
+                  const card = variantCards.get(variant.variantId);
+                  return (
+                    <button
+                      key={variant.variantId}
+                      type="button"
+                      className={`ap-variant-card ${active ? "active" : ""}`}
+                      role="radio"
+                      aria-checked={active}
+                      onClick={() => setMaterial(key, variant.variantId)}
+                    >
+                      <span className="ap-variant-top">
+                        <span className="ap-variant-pip" aria-hidden="true" />
+                        <span className="ap-variant-title">
+                          {card?.title ?? variant.label}
+                        </span>
+                        {isDefault ? (
+                          <span className="ap-variant-badge">Predeterminada</span>
+                        ) : null}
                       </span>
-                    ) : null}
-                    {isDefault ? (
-                      <span className="ap-variant-badge">Predeterminada</span>
-                    ) : null}
-                  </button>
-                );
-              })}
+                      {card && card.specs.length > 0 ? (
+                        <span className="ap-variant-specs">
+                          {card.specs.map((spec) => (
+                            <span className="ap-variant-spec" key={spec.label}>
+                              <span className="k">{spec.label}</span>
+                              <span className="v">{spec.value}</span>
+                            </span>
+                          ))}
+                        </span>
+                      ) : null}
+                      {variant.isFallbackLabel ? (
+                        <span className="ap-variant-meta">
+                          Sin atributos descriptivos · {variant.sku}
+                        </span>
+                      ) : null}
+                      {variant.missingPrice ? (
+                        <span className="ap-variant-alert">Sin precio cargado</span>
+                      ) : null}
+                    </button>
+                  );
+                });
+              })()}
             </div>
           </div>
           )
@@ -3110,7 +3528,6 @@ function ApConfigStep({
     qty,
     cotizacionExitosa,
   );
-  const isBlockedByMinimum = minimoComercialStatus?.kind === "blocked";
 
   const renderQuantityControl = () => {
     if (usesExactPricingQuantities) {
@@ -3195,10 +3612,15 @@ function ApConfigStep({
           <span>Alto</span>
           <span />
         </div>
-        {motorConfig.piezas.map((pieza, index) => (
+        {motorConfig.piezas.map((pieza, index) => {
+          const ajustada =
+            pieza.origen != null &&
+            (pieza.anchoMm !== pieza.origen.anchoDetectadoMm ||
+              pieza.altoMm !== pieza.origen.altoDetectadoMm);
+          return (
+          <React.Fragment key={pieza.uiKey}>
           <div
             className={`ap-pieza-row${options?.hideCantidad ? " ap-pieza-row-medidas" : ""}`}
-            key={pieza.uiKey}
           >
             {options?.hideCantidad ? null : (
               <>
@@ -3261,7 +3683,97 @@ function ApConfigStep({
               <XIcon />
             </button>
           </div>
-        ))}
+          {pieza.origen ? (
+            <div className="ap-pieza-origen">
+              <PaperclipIcon />
+              <span className="nm" title={pieza.origen.archivoNombre}>
+                {pieza.origen.archivoNombre}
+              </span>
+              {pieza.origen.totalPaginas > 1 ? (
+                <span className="pg">
+                  pág {pieza.origen.pagina}/{pieza.origen.totalPaginas}
+                </span>
+              ) : null}
+              {ajustada ? (
+                <span className="adj">· ajustada</span>
+              ) : (
+                <span className="det">
+                  · leída {formatCmFromMm(pieza.origen.anchoDetectadoMm)} ×{" "}
+                  {formatCmFromMm(pieza.origen.altoDetectadoMm)} cm
+                </span>
+              )}
+            </div>
+          ) : null}
+          </React.Fragment>
+          );
+        })}
+        {herramientaMedidasArchivo.enabled ? (
+          <div
+            className={`ap-planos-tool${arrastrandoPlanos ? " is-dragging" : ""}${leyendoPlanos ? " is-loading" : ""}`}
+            role="button"
+            tabIndex={0}
+            onClick={() => {
+              if (!leyendoPlanos) planosInputRef.current?.click();
+            }}
+            onKeyDown={(event) => {
+              if ((event.key === "Enter" || event.key === " ") && !leyendoPlanos) {
+                event.preventDefault();
+                planosInputRef.current?.click();
+              }
+            }}
+            onDragOver={(event) => {
+              event.preventDefault();
+              if (!arrastrandoPlanos) setArrastrandoPlanos(true);
+            }}
+            onDragEnter={(event) => {
+              event.preventDefault();
+              setArrastrandoPlanos(true);
+            }}
+            onDragLeave={(event) => {
+              if (
+                event.relatedTarget instanceof Node &&
+                event.currentTarget.contains(event.relatedTarget)
+              ) {
+                return;
+              }
+              setArrastrandoPlanos(false);
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              setArrastrandoPlanos(false);
+              if (event.dataTransfer.files?.length) {
+                handleAdjuntarPlanos(event.dataTransfer.files);
+              }
+            }}
+          >
+            <input
+              ref={planosInputRef}
+              type="file"
+              accept="application/pdf,.pdf"
+              multiple
+              className="ap-planos-input"
+              style={{ display: "none" }}
+              onChange={(event) => {
+                if (event.target.files) handleAdjuntarPlanos(event.target.files);
+                event.target.value = "";
+              }}
+            />
+            <div className="ap-planos-cta">
+              <FileUpIcon />
+              <span className="ap-planos-title">
+                {leyendoPlanos
+                  ? "Leyendo archivos…"
+                  : arrastrandoPlanos
+                    ? "Soltá los archivos para leer sus medidas"
+                    : "Adjuntar archivos para medir"}
+              </span>
+              <span className="ap-planos-hint">
+                Arrastrá los PDF acá o hacé clic. Cada página se agrega como una
+                fila con su medida.
+              </span>
+            </div>
+          </div>
+        ) : null}
         <button type="button" className="adi-add" onClick={addPieza}>
           <PlusIcon />
           Agregar pieza
@@ -3377,23 +3889,14 @@ function ApConfigStep({
                 {usaMedidaMixta || medidasPredefinidas.length > 1 ? (
                   <div className="ap-spec ap-spec-wide">
                     <label>Medida</label>
-                    {renderSegmentedControl(
-                      "Medida",
+                    {renderMedidaCards(
                       usaMedidaMixta && motorConfig.piezas.length > 0
                         ? CUSTOM_MEASURE_ID
                         : getSelectedPredefinedMeasure(
                             productoDetalle,
                             motorConfig.medidaPredefinidaId,
                           )?.id ?? "",
-                      [
-                        ...medidasPredefinidas.map((medida) => ({
-                          value: medida.id,
-                          label: formatMedidaPredefinidaSpec(medida),
-                        })),
-                        ...(usaMedidaMixta
-                          ? [{ value: CUSTOM_MEASURE_ID, label: "Personalizada" }]
-                          : []),
-                      ],
+                      medidasPredefinidas,
                       (value) => {
                         if (value === CUSTOM_MEASURE_ID) {
                           updateMotorConfig({
@@ -3407,7 +3910,7 @@ function ApConfigStep({
                         }
                         updateMotorConfig({ medidaPredefinidaId: value, piezas: [] });
                       },
-                      true,
+                      usaMedidaMixta,
                     )}
                   </div>
                 ) : null}
@@ -3432,18 +3935,27 @@ function ApConfigStep({
             )}
 
             {usaCaras ? (
-              <div className="ap-spec">
+              <div className="ap-spec ap-spec-wide">
                 <label>Caras</label>
-                {renderSegmentedControl(
+                {renderChoiceCards(
                   "Caras",
                   String(motorConfig.caras),
                   [
-                    { value: "1", label: "Simple faz" },
-                    { value: "2", label: "Doble faz" },
+                    {
+                      value: "1",
+                      label: "Simple faz",
+                      desc: "Impresión de un solo lado",
+                      glyph: CARAS_ICONS["1"],
+                    },
+                    {
+                      value: "2",
+                      label: "Doble faz",
+                      desc: "Frente y dorso",
+                      glyph: CARAS_ICONS["2"],
+                    },
                   ],
-                  (value) =>
-                    updateMotorConfig({ caras: Number(value) as 1 | 2 }),
-                  true,
+                  (value) => updateMotorConfig({ caras: Number(value) as 1 | 2 }),
+                  { columns: 2, layout: "row" },
                 )}
               </div>
             ) : null}
@@ -3493,30 +4005,49 @@ function ApConfigStep({
               const selectedTechnology =
                 paso.tecnologias.find((tech) => tech.value === selectedTechnologyValue) ??
                 null;
-              const techOptions = paso.tecnologias.map((tech) => ({
-                value: tech.value,
-                label: tech.label,
-                code: `${tech.candidatas.length} máquina${tech.candidatas.length === 1 ? "" : "s"}`,
-              }));
+              const techOptions = paso.tecnologias.map((tech) => {
+                const meta = getTechnologyMeta(tech.value);
+                return {
+                  value: tech.value,
+                  label: tech.label,
+                  desc:
+                    meta.desc ||
+                    `${tech.candidatas.length} máquina${tech.candidatas.length === 1 ? "" : "s"}`,
+                  glyph: (
+                    <span
+                      className="ap-tech-chip"
+                      style={{ background: meta.color }}
+                    >
+                      {meta.abbr}
+                    </span>
+                  ),
+                };
+              });
               const setTechnology = (technologyValue: string) => {
                 const tech = paso.tecnologias.find((item) => item.value === technologyValue);
                 const candidate = tech ? getPreferredCandidate(tech.candidatas) : null;
                 if (candidate) setMaquina(paso.configPasoId, candidate.maquinaId);
               };
               return (
-                <div className="ap-spec" key={paso.configPasoId}>
+                <div className="ap-spec ap-spec-wide" key={paso.configPasoId}>
                   <label>
                     {pasosConTecnologias.length === 1
                       ? "Tecnología de impresión"
                       : `${humanizeCodigo(paso.familiaCodigo)} · tecnología`}
                   </label>
-                  {renderSegmentedControl(
+                  {renderChoiceCards(
                     "Tecnología de impresión",
                     selectedTechnology?.value ?? "",
                     techOptions,
                     setTechnology,
-                    true,
+                    { columns: 3, layout: "tile" },
                   )}
+                  {selectedTechnology ? (
+                    <div className="ap-choice-caption">
+                      Seleccionada:{" "}
+                      <span className="mono">{selectedTechnology.label}</span>
+                    </div>
+                  ) : null}
                   {selectedTechnology && selectedTechnology.candidatas.length > 1 ? (
                     <select
                       className="ap-native-select"
@@ -3541,27 +4072,28 @@ function ApConfigStep({
                 modo.defaultMode ??
                 normalizeModoColor(modo.options[0]?.value) ??
                 "";
-              const modoOptions = modo.options.map((option) => ({
-                value: normalizeModoColor(option.value) ?? option.value,
-                label: option.label,
-              }));
+              const modoOptions = modo.options.map((option) => {
+                const optionValue = normalizeModoColor(option.value) ?? option.value;
+                return {
+                  value: optionValue,
+                  label: option.label,
+                  desc: MODO_COLOR_DESCRIPTIONS[optionValue],
+                  glyph: renderModoColorSwatch(optionValue),
+                };
+              });
               return (
-                <div
-                  className={`ap-spec ${modoOptions.length > 2 ? "ap-spec-wide" : ""}`}
-                  key={modo.configPasoId}
-                >
+                <div className="ap-spec ap-spec-wide" key={modo.configPasoId}>
                   <label>
                     {modosColorVisibles.length === 1
                       ? "Modo de color"
                       : `${humanizeCodigo(modo.familiaCodigo)} · color`}
                   </label>
-                  {renderSegmentedControl(
+                  {renderChoiceCards(
                     "Modo de color",
                     value,
                     modoOptions,
                     (nextValue) => setModoColor(modo.configPasoId, nextValue),
-                    true,
-                    modoOptions.length > 2,
+                    { columns: modoOptions.length <= 2 ? 2 : 3, layout: "row" },
                   )}
                 </div>
               );
@@ -3673,19 +4205,48 @@ function ApConfigStep({
               </div>
             </div>
             <div className="ap-optional-config-grid">
-              {opcionalesConfigurables.map(({ opcional, slots }) => (
-                <div className="ap-optional-config-card" key={opcional.code}>
-                  <div className="ap-optional-config-title">
-                    <span className="cb">
-                      <CheckIcon />
-                    </span>
-                    <span>{opcional.name}</span>
+              {opcionalesConfigurables.map(({ opcional, slots }) => {
+                const resumen = slots
+                  .map((slot) => describeSlotSelection(slot, motorConfig))
+                  .filter((item): item is string => Boolean(item));
+                return (
+                  <div className="ap-optional-config-card" key={opcional.code}>
+                    <div className="ap-optional-config-title">
+                      <span className="ttl">{opcional.name}</span>
+                      <span className="state">
+                        <span className="d" aria-hidden="true" />
+                        Configurado
+                      </span>
+                      <button
+                        type="button"
+                        className="quit"
+                        onClick={() => setOpcional(opcional.code, false)}
+                      >
+                        Quitar opcional
+                      </button>
+                    </div>
+                    <div className="ap-optional-config-fields">
+                      {slots.map((slot) =>
+                        renderMaterialSelect(slot, {
+                          showHint: false,
+                          collapseSingleCandidate: true,
+                        }),
+                      )}
+                    </div>
+                    {resumen.length > 0 ? (
+                      <div className="ap-optional-config-summary">
+                        <span className="lbl">Seleccionado:</span>
+                        {resumen.map((item, index) => (
+                          <React.Fragment key={item}>
+                            {index > 0 ? <span className="sep">/</span> : null}
+                            <span className="mono">{item}</span>
+                          </React.Fragment>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
-                  <div className="ap-optional-config-fields">
-                    {slots.map((slot) => renderMaterialSelect(slot, { showHint: false }))}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         ) : null}
@@ -3706,33 +4267,33 @@ function ApConfigStep({
       </div>
 
       {product.real ? (
-        <div className="ap-config-actions">
+        <div className="ap-config-actions ap-config-actions-auto">
+          <span>
+            El precio se calcula automáticamente al cambiar cantidad, medidas u
+            opcionales.
+          </span>
           <button
             type="button"
-            className="btn btn-primary"
+            className="ap-link"
             onClick={onCotizar}
-            disabled={
-              cotizando ||
-              !productoDetalle ||
-              !isAllowedQuantity ||
-              isBlockedByMinimum
-            }
+            disabled={cotizando || !productoDetalle || !isAllowedQuantity}
           >
-            {cotizando ? "Cotizando..." : "Cotizar"}
+            {cotizando ? "Calculando…" : "Recalcular"}
           </button>
-          <span>
-            Previsualizá el precio con los datos y opcionales seleccionados antes de
-            agregarlo a la OT.
-          </span>
         </div>
       ) : null}
 
       {product.real ? (
-        <div className="ap-summary">
+        <div className={`ap-summary${cotizando && cotizacionExitosa ? " is-updating" : ""}`}>
           <div className="ap-sum-head">
-            {cotizando ? "Calculando" : cotizacionExitosa ? "Detalle del cálculo" : "Precio"}
+            {cotizacionExitosa ? "Detalle del cálculo" : cotizando ? "Calculando" : "Precio"}
+            {cotizando && cotizacionExitosa ? (
+              <span className="ap-sum-updating" aria-live="polite">
+                actualizando…
+              </span>
+            ) : null}
           </div>
-          {cotizando ? (
+          {cotizando && !cotizacionExitosa ? (
             <div className="ap-empty ap-calculating" aria-live="polite" aria-busy="true">
               <div className="ap-calc-loader" aria-hidden="true">
                 <span />
@@ -3806,9 +4367,10 @@ function ApConfigStep({
             </>
           ) : (
             <div className="ap-empty">
-              <div className="ttl">Cotización pendiente</div>
+              <div className="ttl">Completá los datos para ver el precio</div>
               <div className="sub">
-                Tocá Cotizar para previsualizar el precio con el Motor Universal.
+                El precio se calcula automáticamente con el Motor Universal a medida
+                que cargás cantidad, medidas y opcionales.
               </div>
             </div>
           )}
@@ -3885,6 +4447,9 @@ export function AgregarProductoSheet({
   const [cotizando, setCotizando] = React.useState(false);
   const [cotizacionError, setCotizacionError] = React.useState<string | null>(null);
   const suppressNextCotizacionClear = React.useRef(false);
+  // Token de secuencia: descarta respuestas de cotizaciones que quedaron viejas
+  // (el usuario cambió algo mientras una estaba en vuelo).
+  const cotizacionSeqRef = React.useRef(0);
   const catalogProducts = React.useMemo(
     () => productos.map(mapProductoReal),
     [productos],
@@ -4025,15 +4590,6 @@ export function AgregarProductoSheet({
     );
   }, []);
 
-  React.useEffect(() => {
-    if (suppressNextCotizacionClear.current) {
-      suppressNextCotizacionClear.current = false;
-      return;
-    }
-    setCotizacion(null);
-    setCotizacionError(null);
-  }, [adi, motorConfig, product?.id, qty]);
-
   const cotizarActual = React.useCallback(async () => {
     if (!product?.real || !product.id || !productoDetalle) return;
     const coercedQty = coerceQtyToPricingOptions(qty, product);
@@ -4063,8 +4619,10 @@ export function AgregarProductoSheet({
       slotsComercialElige,
       includeVisibleConfig,
     );
+    const seq = ++cotizacionSeqRef.current;
     setCotizando(true);
-    setCotizacion(null);
+    // No limpiamos la cotización anterior: la mantenemos visible (atenuada)
+    // mientras llega la nueva, para evitar el salto/parpadeo del panel.
     setCotizacionError(null);
     try {
       const res = await cotizar({
@@ -4073,18 +4631,39 @@ export function AgregarProductoSheet({
         jobContext: jobContext as never,
         periodo: getCurrentPeriodo(),
       });
+      if (seq !== cotizacionSeqRef.current) return; // llegó una cotización más nueva
       setCotizacion(res);
       if (!res.exitoso) {
         setCotizacionError(res.errores[0]?.mensaje ?? "El motor no pudo cotizar este producto.");
       }
     } catch (error) {
+      if (seq !== cotizacionSeqRef.current) return;
       setCotizacionError(
         error instanceof Error ? error.message : "No se pudo conectar con el motor.",
       );
     } finally {
-      setCotizando(false);
+      if (seq === cotizacionSeqRef.current) setCotizando(false);
     }
   }, [motorConfig, product, productoDetalle, qty]);
+
+  // Cotización en tiempo real: al cambiar cantidad, medidas, opcionales o ruta
+  // se recotiza sola con un pequeño debounce (no hace falta apretar "Cotizar").
+  // Mantiene el precio anterior visible durante el debounce para que se sienta
+  // fluido, y `cotizacionSeqRef` descarta respuestas que quedaron viejas.
+  React.useEffect(() => {
+    if (step !== "config") return;
+    if (isBlockedByMinimum) return;
+    // Al hidratar un item existente conservamos la cotización guardada y no
+    // recotizamos hasta el primer cambio real del usuario.
+    if (suppressNextCotizacionClear.current) {
+      suppressNextCotizacionClear.current = false;
+      return;
+    }
+    const handle = setTimeout(() => {
+      void cotizarActual();
+    }, 450);
+    return () => clearTimeout(handle);
+  }, [cotizarActual, adi, step, isBlockedByMinimum]);
 
   const addCurrent = React.useCallback(
     (keepOpen: boolean) => {

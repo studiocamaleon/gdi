@@ -10821,32 +10821,94 @@
     line-height: 1.35;
   }
 
+  .ot-v1 .ap-film-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .ot-v1 .ap-film-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    color: var(--ink-2);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: -0.005em;
+    cursor: pointer;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-2);
+    transition:
+      border-color 0.12s ease,
+      box-shadow 0.12s ease,
+      color 0.12s ease;
+  }
+
+  .ot-v1 .ap-film-chip:hover {
+    border-color: var(--border-strong);
+  }
+
+  .ot-v1 .ap-film-chip.on {
+    color: var(--ink);
+    font-weight: 600;
+    border-color: var(--ink);
+    box-shadow: 0 0 0 1px var(--ink);
+  }
+
+  .ot-v1 .ap-film-pip {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    background: var(--surface);
+    border: 1.5px solid var(--border-strong);
+    border-radius: 50%;
+    transition:
+      border-color 0.12s ease,
+      background 0.12s ease;
+  }
+
+  .ot-v1 .ap-film-chip.on .ap-film-pip {
+    background: var(--ink);
+    border-color: var(--ink);
+  }
+
+  .ot-v1 .ap-film-chip.on .ap-film-pip::after {
+    content: "";
+    width: 5px;
+    height: 5px;
+    background: #fff;
+    border-radius: 50%;
+  }
+
   .ot-v1 .ap-variant-section {
     display: grid;
     gap: 8px;
-    padding: 10px;
-    background: #f7f7f8;
-    border: 1px solid var(--border);
-    border-radius: var(--r-2);
   }
 
   .ot-v1 .ap-variant-head {
     display: flex;
     gap: 8px;
     align-items: baseline;
-    justify-content: space-between;
   }
 
   .ot-v1 .ap-variant-head span {
-    color: var(--ink);
-    font-size: 12px;
-    font-weight: 700;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
   }
 
   .ot-v1 .ap-variant-head small {
     min-width: 0;
     overflow: hidden;
-    color: var(--muted);
+    color: var(--muted-2);
     font-size: 11px;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -10860,16 +10922,16 @@
 
   .ot-v1 .ap-variant-card {
     position: relative;
-    display: grid;
-    gap: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
     min-width: 0;
-    min-height: 56px;
-    padding: 10px 12px;
+    padding: 12px 14px;
     text-align: left;
     cursor: pointer;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: var(--r-2);
+    border-radius: var(--r-3);
     transition:
       border-color 0.12s ease,
       box-shadow 0.12s ease,
@@ -10877,36 +10939,93 @@
   }
 
   .ot-v1 .ap-variant-card:hover {
-    border-color: #c9c9cf;
+    border-color: var(--border-strong);
   }
 
   .ot-v1 .ap-variant-card.active {
     color: var(--ink);
-    background: #eeeeef;
+    background: var(--surface);
     border-color: var(--ink);
-    box-shadow:
-      inset 0 0 0 1px var(--ink),
-      0 1px 2px rgba(20, 20, 26, 0.06);
+    box-shadow: 0 0 0 1px var(--ink);
   }
 
-  .ot-v1 .ap-variant-card.active::before {
-    position: absolute;
-    top: 8px;
-    left: 8px;
+  .ot-v1 .ap-variant-top {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+  }
+
+  .ot-v1 .ap-variant-pip {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    background: var(--surface);
+    border: 1.5px solid var(--border-strong);
+    border-radius: 50%;
+    transition:
+      border-color 0.12s ease,
+      background 0.12s ease;
+  }
+
+  .ot-v1 .ap-variant-card.active .ap-variant-pip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--ink);
+    border-color: var(--ink);
+  }
+
+  .ot-v1 .ap-variant-card.active .ap-variant-pip::after {
+    content: "";
+    width: 6px;
+    height: 6px;
+    background: #fff;
+    border-radius: 50%;
   }
 
   .ot-v1 .ap-variant-title {
     min-width: 0;
     color: var(--ink);
-    font-size: 13px;
-    font-weight: 650;
-    line-height: 1.35;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
     overflow-wrap: anywhere;
     white-space: normal;
   }
 
+  .ot-v1 .ap-variant-specs {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding-left: 25px;
+  }
+
+  .ot-v1 .ap-variant-spec {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 12px;
+  }
+
+  .ot-v1 .ap-variant-spec .k {
+    flex: 0 0 auto;
+    min-width: 46px;
+    color: var(--muted);
+  }
+
+  .ot-v1 .ap-variant-spec .v {
+    color: var(--ink-2);
+    font-family: var(--font-mono);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0;
+  }
+
   .ot-v1 .ap-variant-meta {
     min-width: 0;
+    padding-left: 25px;
     overflow: hidden;
     color: var(--muted);
     font-size: 11px;
@@ -10915,20 +11034,30 @@
     white-space: nowrap;
   }
 
-  .ot-v1 .ap-variant-card.active .ap-variant-title,
-  .ot-v1 .ap-variant-card.active .ap-variant-meta {
-    color: var(--ink);
+  .ot-v1 .ap-variant-alert {
+    width: fit-content;
+    margin-left: 25px;
+    padding: 1px 7px;
+    color: var(--signal);
+    font-size: 10.5px;
+    font-weight: 600;
+    background: var(--signal-bg);
+    border-radius: 999px;
   }
 
   .ot-v1 .ap-variant-badge {
-    width: fit-content;
-    padding: 2px 6px;
-    color: var(--muted);
-    font-size: 10px;
-    font-weight: 650;
-    line-height: 1.2;
-    background: #f1f1f3;
-    border: 1px solid var(--border);
+    margin-left: auto;
+    padding: 1px 7px;
+    color: #1d4ed8;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    line-height: 1.4;
+    white-space: nowrap;
+    background: #eef2ff;
+    border: 1px solid #d3deff;
     border-radius: 999px;
   }
 
@@ -11106,7 +11235,9 @@
   }
 
   .ot-v1 .ap-specs-calculo .ap-segmented-single {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(120px, max-content);
+    width: fit-content;
+    max-width: 100%;
   }
 
   .ot-v1 .ap-segmented button {
@@ -11228,6 +11359,344 @@
     grid-column: 1 / -1;
   }
 
+  /* ── Choice cards: caras / modo de color / tecnología (v2) ── */
+  .ot-v1 .ap-choice-grid {
+    display: grid;
+    gap: 8px;
+  }
+
+  .ot-v1 .ap-choice-grid-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ot-v1 .ap-choice-grid-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  @media (max-width: 560px) {
+    .ot-v1 .ap-choice-grid-3 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 420px) {
+    .ot-v1 .ap-choice-grid-2,
+    .ot-v1 .ap-choice-grid-3 {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .ot-v1 .ap-choice {
+    position: relative;
+    text-align: left;
+    padding: 12px 13px;
+    font: inherit;
+    cursor: pointer;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-3);
+    transition:
+      border-color 0.12s ease,
+      box-shadow 0.12s ease;
+  }
+
+  .ot-v1 .ap-choice:hover {
+    border-color: var(--border-strong);
+  }
+
+  .ot-v1 .ap-choice.on {
+    border-color: var(--ink);
+    box-shadow: 0 0 0 1px var(--ink);
+  }
+
+  .ot-v1 .ap-choice-row .ap-choice {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+  }
+
+  .ot-v1 .ap-choice-tile .ap-choice {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    padding: 13px 13px 12px;
+  }
+
+  .ot-v1 .ap-choice-glyph {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .ot-v1 .ap-choice-tile .ap-choice-glyph {
+    align-self: flex-start;
+    justify-content: flex-start;
+  }
+
+  .ot-v1 .ap-choice-txt {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .ot-v1 .ap-choice-row .ap-choice-txt {
+    padding-right: 16px;
+  }
+
+  .ot-v1 .ap-choice-nm {
+    color: var(--ink);
+    font-size: 13.5px;
+    font-weight: 600;
+    letter-spacing: -0.008em;
+  }
+
+  .ot-v1 .ap-choice-desc {
+    margin-top: 1px;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+
+  .ot-v1 .ap-choice-tick {
+    position: absolute;
+    top: 9px;
+    right: 9px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 15px;
+    height: 15px;
+    border: 1.5px solid var(--border-strong);
+    border-radius: 50%;
+    transition:
+      border-color 0.12s ease,
+      background 0.12s ease;
+  }
+
+  .ot-v1 .ap-choice-tile .ap-choice-tick {
+    top: 10px;
+    right: 10px;
+  }
+
+  .ot-v1 .ap-choice.on .ap-choice-tick {
+    background: var(--ink);
+    border-color: var(--ink);
+  }
+
+  .ot-v1 .ap-choice.on .ap-choice-tick::after {
+    content: "";
+    width: 5px;
+    height: 5px;
+    background: #fff;
+    border-radius: 50%;
+  }
+
+  .ot-v1 .ap-sheet-ico {
+    display: block;
+    width: 26px;
+    height: 26px;
+  }
+
+  .ot-v1 .ap-tech-chip {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    color: #fff;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    border-radius: 8px;
+  }
+
+  .ot-v1 .ap-choice-caption {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 12px;
+    color: var(--muted-2);
+    font-size: 11.5px;
+  }
+
+  .ot-v1 .ap-choice-caption .mono {
+    color: var(--ink-2);
+    font-family: var(--font-mono);
+  }
+
+  .ot-v1 .ap-cmode {
+    position: relative;
+    flex: 0 0 auto;
+    overflow: hidden;
+    width: 26px;
+    height: 26px;
+    border: 1px solid var(--border-strong);
+    border-radius: 7px;
+  }
+
+  .ot-v1 .ap-cmode.none {
+    background: #fff;
+  }
+
+  .ot-v1 .ap-cmode.none::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      135deg,
+      transparent 46%,
+      var(--border-strong) 46%,
+      var(--border-strong) 54%,
+      transparent 54%
+    );
+  }
+
+  .ot-v1 .ap-cmode.bw {
+    background: linear-gradient(90deg, #1a1a1a 0%, #7a7a7a 50%, #ededed 100%);
+  }
+
+  .ot-v1 .ap-cmode.cmyk {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border: none;
+  }
+
+  .ot-v1 .ap-cmode.cmyk i {
+    display: block;
+  }
+
+  .ot-v1 .ap-cmode.cmyk .c {
+    background: #24b7c9;
+  }
+
+  .ot-v1 .ap-cmode.cmyk .m {
+    background: #d64a9e;
+  }
+
+  .ot-v1 .ap-cmode.cmyk .y {
+    background: #f4d03f;
+  }
+
+  .ot-v1 .ap-cmode.cmyk .k {
+    background: #1c1c1c;
+  }
+
+  .ot-v1 .ap-cmode .wdot {
+    position: absolute;
+    left: 2px;
+    bottom: 2px;
+    width: 9px;
+    height: 9px;
+    background: #fff;
+    border: 1px solid rgba(0, 0, 0, 0.35);
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.4);
+  }
+
+  .ot-v1 .ap-cmode .vsheen {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+      118deg,
+      rgba(255, 255, 255, 0.72) 0%,
+      rgba(255, 255, 255, 0) 34%,
+      rgba(255, 255, 255, 0) 60%,
+      rgba(255, 255, 255, 0.5) 82%
+    );
+  }
+
+  /* ── Medida: cards de tamaño (v2) ── */
+  .ot-v1 .ap-size-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  @media (max-width: 560px) {
+    .ot-v1 .ap-size-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  .ot-v1 .ap-size {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    min-height: 74px;
+    padding: 13px 14px 12px;
+    text-align: left;
+    font: inherit;
+    cursor: pointer;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-3);
+    transition:
+      border-color 0.12s ease,
+      box-shadow 0.12s ease;
+  }
+
+  .ot-v1 .ap-size:hover {
+    border-color: var(--border-strong);
+  }
+
+  .ot-v1 .ap-size.on {
+    border-color: var(--ink);
+    box-shadow: 0 0 0 1px var(--ink);
+  }
+
+  .ot-v1 .ap-size-name {
+    color: var(--ink);
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  .ot-v1 .ap-size-real {
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+  .ot-v1 .ap-size-custom .ap-size-name {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .ot-v1 .ap-size-plus {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 500;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+  }
+
+  .ot-v1 .ap-size-custom.on .ap-size-plus {
+    color: #fff;
+    background: var(--ink);
+    border-color: var(--ink);
+  }
+
+  .ot-v1 .ap-size-hint {
+    color: var(--muted);
+    font-size: 11px;
+  }
+
   .ot-v1 .ap-piezas {
     display: grid;
     gap: 8px;
@@ -11260,6 +11729,123 @@
 
   .ot-v1 .ap-pieza-row-medidas {
     grid-template-columns: minmax(80px, 1fr) auto minmax(80px, 1fr) 38px;
+  }
+
+  .ot-v1 .ap-pieza-origen {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+    margin-top: -3px;
+    padding-left: 2px;
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  .ot-v1 .ap-pieza-origen svg {
+    flex: 0 0 auto;
+    width: 12px;
+    height: 12px;
+    color: var(--muted-2);
+  }
+
+  .ot-v1 .ap-pieza-origen .nm {
+    max-width: 240px;
+    overflow: hidden;
+    color: var(--ink-2);
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ot-v1 .ap-pieza-origen .pg {
+    font-family: var(--font-mono);
+    color: var(--muted);
+  }
+
+  .ot-v1 .ap-pieza-origen .det {
+    color: var(--muted-2);
+  }
+
+  .ot-v1 .ap-pieza-origen .adj {
+    color: var(--signal);
+    font-weight: 500;
+  }
+
+  .ot-v1 .ap-planos-tool {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    margin-top: 4px;
+    padding: 18px 16px;
+    cursor: pointer;
+    background: var(--surface-2);
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--r-2);
+    transition:
+      border-color 0.12s ease,
+      background 0.12s ease;
+  }
+
+  .ot-v1 .ap-planos-tool:hover {
+    border-color: var(--ink-2);
+    background: var(--surface);
+  }
+
+  .ot-v1 .ap-planos-tool:focus-visible {
+    outline: none;
+    border-color: var(--ink);
+    box-shadow: 0 0 0 3px var(--surface-3, rgba(20, 20, 26, 0.08));
+  }
+
+  .ot-v1 .ap-planos-tool.is-dragging {
+    background: #edf0f5;
+    border-color: var(--ink);
+    border-style: solid;
+  }
+
+  .ot-v1 .ap-planos-tool.is-dragging * {
+    pointer-events: none;
+  }
+
+  .ot-v1 .ap-planos-tool.is-loading {
+    cursor: default;
+  }
+
+  .ot-v1 .ap-planos-tool input.ap-planos-input {
+    display: none;
+  }
+
+  /* dropzone de adjuntos para medición por PDF (v2) */
+  .ot-v1 .ap-planos-cta {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .ot-v1 .ap-planos-cta > svg {
+    width: 18px;
+    height: 18px;
+    margin-bottom: 2px;
+    color: var(--muted);
+  }
+
+  .ot-v1 .ap-planos-title {
+    color: var(--ink-2);
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .ot-v1 .ap-planos-tool:hover .ap-planos-title {
+    color: var(--ink);
+  }
+
+  .ot-v1 .ap-planos-hint {
+    color: var(--muted);
+    font-size: 11px;
   }
 
   .ot-v1 .ap-pieza-row > span {
@@ -11443,6 +12029,75 @@
     font-weight: 600;
   }
 
+  /* ── Adicionales como chips (Fase 2 · look Grafoprint) ──────────── */
+  /* Reemplaza la grilla de botones full-width por una fila de pastillas.
+     Inactivo = punteado gris; activo = verde con tilde. */
+  .ot-v1 .ap-adicionales {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .ot-v1 .ap-adicionales > div {
+    display: contents;
+  }
+  .ot-v1 .ap-adicionales .ap-adi {
+    width: auto;
+    min-height: 0;
+    gap: 6px;
+    padding: 5px 12px 5px 8px;
+    border-radius: 999px;
+    background: transparent;
+    border: 1px dashed var(--border-strong);
+    box-shadow: none;
+  }
+  .ot-v1 .ap-adicionales .ap-adi:hover {
+    border-color: var(--ink);
+  }
+  .ot-v1 .ap-adicionales .ap-adi.on {
+    background: var(--ok-bg);
+    border: 1px solid #cfe6d8;
+    box-shadow: none;
+  }
+  .ot-v1 .ap-adicionales .ap-adi .cb {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 15px;
+    height: 15px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--muted);
+    line-height: 1;
+  }
+  .ot-v1 .ap-adicionales .ap-adi .cb::after {
+    content: "+";
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .ot-v1 .ap-adicionales .ap-adi.on .cb {
+    display: inline-flex;
+    background: var(--ok);
+    color: #fff;
+  }
+  .ot-v1 .ap-adicionales .ap-adi.on .cb::after {
+    content: "✓";
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .ot-v1 .ap-adicionales .ap-adi .lb {
+    flex: 0 1 auto;
+    font-size: 12.5px;
+    white-space: nowrap;
+  }
+  .ot-v1 .ap-adicionales .ap-adi.on .lb {
+    color: var(--ok);
+  }
+  .ot-v1 .ap-adicionales .ap-adi .mt {
+    margin-left: 2px;
+  }
+
   .ot-v1 .ap-optional-configs {
     display: grid;
     gap: 10px;
@@ -11474,43 +12129,95 @@
   }
 
   .ot-v1 .ap-optional-config-card {
-    display: grid;
-    gap: 10px;
-    padding: 12px;
+    overflow: hidden;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: var(--r-2);
+    border-radius: var(--r-3);
+    box-shadow: var(--shadow-sm);
   }
 
   .ot-v1 .ap-optional-config-title {
     display: flex;
     align-items: center;
-    gap: 9px;
+    gap: 10px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--hairline);
+  }
+
+  .ot-v1 .ap-optional-config-title .ttl {
     color: var(--ink);
-    font-size: 13px;
-    font-weight: 700;
+    font-size: 13.5px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
   }
 
-  .ot-v1 .ap-optional-config-title .cb {
-    display: none;
-    flex: 0 0 auto;
+  .ot-v1 .ap-optional-config-title .state {
+    display: inline-flex;
     align-items: center;
-    justify-content: center;
-    width: 18px;
-    height: 18px;
-    color: #fff;
-    background: var(--ok);
-    border-radius: 5px;
+    gap: 5px;
+    padding: 2px 9px 2px 7px;
+    color: var(--ok);
+    font-size: 11px;
+    font-weight: 650;
+    background: var(--ok-bg);
+    border: 1px solid #cfe6d8;
+    border-radius: 999px;
   }
 
-  .ot-v1 .ap-optional-config-title .cb svg {
-    width: 12px;
-    height: 12px;
+  .ot-v1 .ap-optional-config-title .state .d {
+    width: 5px;
+    height: 5px;
+    background: var(--ok);
+    border-radius: 50%;
+  }
+
+  .ot-v1 .ap-optional-config-title .quit {
+    margin-left: auto;
+    padding: 4px 8px;
+    color: var(--muted);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    border-radius: var(--r-1);
+    transition:
+      color 0.12s ease,
+      background 0.12s ease;
+  }
+
+  .ot-v1 .ap-optional-config-title .quit:hover {
+    color: var(--ink);
+    background: var(--surface-2);
   }
 
   .ot-v1 .ap-optional-config-fields {
     display: grid;
-    gap: 10px;
+    gap: 16px;
+    padding: 14px;
+  }
+
+  .ot-v1 .ap-optional-config-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px;
+    padding: 10px 14px;
+    color: var(--muted);
+    font-size: 12px;
+    background: var(--surface-2);
+    border-top: 1px solid var(--hairline);
+  }
+
+  .ot-v1 .ap-optional-config-summary .mono {
+    color: var(--ink-2);
+    font-family: var(--font-mono);
+    font-weight: 500;
+    letter-spacing: 0;
+  }
+
+  .ot-v1 .ap-optional-config-summary .sep {
+    color: var(--muted-2);
   }
 
   .ot-v1 .ap-notas {
@@ -11545,6 +12252,21 @@
     min-width: 120px;
   }
 
+  .ot-v1 .ap-config-actions-auto {
+    justify-content: space-between;
+  }
+
+  .ot-v1 .ap-config-actions-auto .ap-link {
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .ot-v1 .ap-config-actions-auto .ap-link:disabled {
+    color: var(--muted);
+    cursor: default;
+    text-decoration: none;
+  }
+
   .ot-v1 .ap-summary {
     margin-top: 4px;
     overflow: hidden;
@@ -11554,6 +12276,10 @@
   }
 
   .ot-v1 .ap-sum-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
     padding: 10px 14px;
     color: var(--muted);
     font-size: 11px;
@@ -11562,6 +12288,49 @@
     text-transform: uppercase;
     background: var(--surface);
     border-bottom: 1px solid var(--border);
+  }
+
+  /* Indicador sutil mientras el motor recalcula sin ocultar el precio previo. */
+  .ot-v1 .ap-sum-updating {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: none;
+  }
+
+  .ot-v1 .ap-sum-updating::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: ap-sum-pulse 0.9s ease-in-out infinite;
+  }
+
+  @keyframes ap-sum-pulse {
+    0%,
+    100% {
+      opacity: 0.35;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+
+  /* El panel mantiene el precio anterior visible pero atenuado durante la
+     recotización, evitando el colapso/parpadeo del layout. */
+  .ot-v1 .ap-sum-grid,
+  .ot-v1 .ap-sum-margen {
+    transition: opacity 0.2s ease;
+  }
+
+  .ot-v1 .ap-summary.is-updating .ap-sum-grid,
+  .ot-v1 .ap-summary.is-updating .ap-sum-margen {
+    opacity: 0.45;
   }
 
   .ot-v1 .ap-sum-grid {
@@ -13373,8 +14142,7 @@
 .ot-v1 .ap-option-list button.active,
 .ot-v1 .ap-variant-card.active,
 .ot-v1 .ap-material-color.active,
-.ot-v1 .ap-material-thickness.active,
-.ot-v1 .ap-adi.on {
+.ot-v1 .ap-material-thickness.active {
   color: var(--ink) !important;
   background: #eeeeef !important;
   border-color: var(--ink) !important;
@@ -13395,9 +14163,7 @@
 .ot-v1 .ap-variant-card.active .ap-variant-title,
 .ot-v1 .ap-variant-card.active .ap-variant-meta,
 .ot-v1 .ap-material-color.active small,
-.ot-v1 .ap-material-thickness.active .ap-material-thickness-title,
-.ot-v1 .ap-adi.on .lb,
-.ot-v1 .ap-adi.on .mt {
+.ot-v1 .ap-material-thickness.active .ap-material-thickness-title {
   color: var(--ink) !important;
 }
 
