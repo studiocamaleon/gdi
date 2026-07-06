@@ -235,7 +235,9 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
   const pathname = usePathname();
   const activeKey = getActiveKey(pathname);
   const parentKey = getParentKey(activeKey);
-  const [expanded, setExpanded] = React.useState(() => new Set(["costos"]));
+  // Acordeón: un solo grupo abierto a la vez. Se abre el del módulo actual;
+  // al abrir otro, el anterior se colapsa.
+  const [openKey, setOpenKey] = React.useState<string | null>(() => parentKey ?? null);
   const planNombre = currentUser.tenantActual.suscripcion?.planNombre?.trim() || "Plan diamante";
   const diasRestantes = currentUser.tenantActual.suscripcion?.diasRestantes ?? 14;
   const suscripcionProgress = getSuscripcionProgress(diasRestantes);
@@ -245,27 +247,11 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
       return;
     }
 
-    setExpanded((prev) => {
-      if (prev.has(parentKey)) {
-        return prev;
-      }
-
-      const next = new Set(prev);
-      next.add(parentKey);
-      return next;
-    });
+    setOpenKey(parentKey);
   }, [parentKey]);
 
   const toggle = (key: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) {
-        next.delete(key);
-      } else {
-        next.add(key);
-      }
-      return next;
-    });
+    setOpenKey((prev) => (prev === key ? null : key));
   };
 
   return (
@@ -286,7 +272,7 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
         {NAV.map((item) => {
           const IconCmp = Ico[item.icon];
           const itemHasChildren = hasChildren(item);
-          const open = itemHasChildren && expanded.has(item.key);
+          const open = itemHasChildren && openKey === item.key;
           const isDirectActive = !itemHasChildren && activeKey === item.key;
 
           if (!itemHasChildren) {
