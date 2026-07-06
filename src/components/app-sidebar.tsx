@@ -160,6 +160,7 @@ const NAV: NavItem[] = [
     icon: "Factory",
     children: [
       { key: "tablero-produccion", label: "Tablero", href: "/produccion/tablero" },
+      { key: "simulador", label: "Simulador de impresión", href: "/produccion/simulador" },
       { key: "estaciones", label: "Estaciones", href: "/produccion/estaciones" },
     ],
   },

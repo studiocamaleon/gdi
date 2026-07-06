@@ -20,6 +20,7 @@ import {
   SaveIcon,
   SearchIcon,
   SquareIcon,
+  StarIcon,
   Trash2Icon,
   TriangleAlertIcon,
   UserIcon,
@@ -54,6 +55,7 @@ import { AgregarProductoSheet } from "@/components/comercial/agregar-producto-sh
 import { NestingViewer } from "@/components/nesting/nesting-viewer";
 import { listClientes } from "@/lib/clientes-api";
 import { getCurrentPeriodo } from "@/lib/costos";
+import { technologyCodeLabel } from "@/lib/maquinaria-tecnologias";
 
 type PropuestaFichaProps = {
   initialClientes: ClienteDetalle[];
@@ -1052,14 +1054,14 @@ function getMaterialVariantParts(material: MaterialCosteo) {
     push(color);
     push(getAttrText(attrs, ["material"]));
   } else if (kind === "film_transferencia") {
-    push(getAttrText(attrs, ["tecnologiaCompatible"]));
+    push(technologyCodeLabel(getAttrText(attrs, ["tecnologiaCompatible"])));
     if (micrones !== null) push(`${formatVariantNumber(micrones)} mic`);
   } else if (kind === "papel_transferencia") {
     if (gramaje !== null) push(`${formatVariantNumber(gramaje)} g/m²`);
     push(getAttrText(attrs, ["ladoImprimible", "tecnologiaCompatible"]));
   } else if (kind === "toner" || kind === "tinta_impresion") {
     push(color);
-    push(getAttrText(attrs, ["tecnologiaCompatible", "equipoCompatible"]));
+    push(technologyCodeLabel(getAttrText(attrs, ["tecnologiaCompatible", "equipoCompatible"])));
   } else {
     const commercialKeys = [
       "material",
@@ -1112,11 +1114,16 @@ function getMaterialCommercialLabel(material: MaterialCosteo) {
     material.materiaPrimaNombre?.trim() ||
     material.materialDisplayName?.trim() ||
     material.materialNombre;
-  const variant = getMaterialVariantOnlyLabel(material);
-  const normalizedVariant = normalizeSearchText(variant);
   const normalizedName = normalizeSearchText(materialName);
-  if (!variant || normalizedVariant === normalizedName) return materialName;
-  return `${materialName} · ${variant}`;
+  // Descartamos las partes de variante que ya están contenidas en el nombre
+  // del material (ej. "Film DTF textil" ya dice "DTF textil"): evita el
+  // "· DTF textil" redundante.
+  const parts = getMaterialVariantParts(material).filter((part) => {
+    const normalizedPart = normalizeSearchText(part);
+    return normalizedPart.length > 0 && !normalizedName.includes(normalizedPart);
+  });
+  if (parts.length === 0) return materialName;
+  return `${materialName} · ${parts.join(" · ")}`;
 }
 
 function getMainCommercialMaterial(item: PropuestaItem) {
@@ -2501,6 +2508,9 @@ function ProductRow({
   const fechaInputRef = React.useRef<HTMLInputElement | null>(null);
   const costo = calcularCostoTotal(item);
   const calculoPendiente = item.precioUnitario === 0 && item.total === 0;
+  const tienePrecioEspecial = Boolean(
+    item.cotizacion?.desglosePrecio?.precioEspecialCliente,
+  );
   const margen =
     item.subtotal > 0 ? ((item.subtotal - costo) / item.subtotal) * 100 : 0;
   const visibleAmounts = React.useMemo(
@@ -2555,7 +2565,18 @@ function ProductRow({
           />
         </span>
         <div className="prod">
-          <div className="nm">{item.productoNombre}</div>
+          <div className="nm">
+            {item.productoNombre}
+            {tienePrecioEspecial ? (
+              <span
+                className="op-especial"
+                title="Cotizado con el precio especial configurado para el cliente de la orden."
+              >
+                <StarIcon aria-hidden="true" />
+                Precio especial
+              </span>
+            ) : null}
+          </div>
           <div className="cd">
             <span className="fam">
               {item.categoriaComercialNombre} ·{" "}
@@ -2573,7 +2594,7 @@ function ProductRow({
         <div className="num">
           {calculoPendiente ? "-" : formatCurrency(visibleAmounts.impuestos)}
         </div>
-        <div className="num total">
+        <div className={`num total${tienePrecioEspecial ? " especial" : ""}`}>
           {calculoPendiente ? "Pendiente" : formatCurrency(visibleAmounts.total)}
         </div>
         <span
@@ -3015,16 +3036,11 @@ function ResumenBar({
   );
   const subtotal = productosVisibles.subtotal + resumen.cargosSubtotal;
   const impuestosVisibles = productosVisibles.impuestos + cargosImpuestos;
-  const costoTotal = items.reduce(
-    (acc, item) => acc + calcularCostoTotal(item),
-    0,
-  );
   const cargosItems = calcularCargosDirectosItems(items);
   const cargosOrdenTotal = resumen.cargosSubtotal;
   const cargos = cargosItems + cargosOrdenTotal;
   const comisiones = calcularComisionesItems(items);
   const totalConCargos = productosVisibles.total + resumen.cargosTotal;
-  const margen = subtotal > 0 ? ((subtotal - costoTotal) / subtotal) * 100 : 0;
   const impuestoLineas = [
     ...impuestosProductoResumen.visibles,
     ...(cargosImpuestos > 0
@@ -3126,25 +3142,6 @@ function ResumenBar({
       </div>
 
       <div className="rbar-foot">
-        <div className="rbar-margen">
-          <div className="m-head">
-            <span className="m-lbl">Margen bruto estimado</span>
-            <span className={`m-val ${margen < 25 ? "warn" : ""}`}>
-              {margen.toFixed(1)}%
-            </span>
-          </div>
-          <div className="m-track">
-            <span
-              style={{
-                width: `${Math.min(100, Math.max(0, margen))}%`,
-              }}
-            />
-          </div>
-          <div className="m-foot">
-            <span>Costo motor</span>
-            <span className="mono">{formatCurrency(costoTotal)}</span>
-          </div>
-        </div>
         <div className="rbar-actions">
           <button type="button" className="btn">
             <SaveIcon />
@@ -3565,19 +3562,116 @@ export function PropuestaFicha({
   }, []);
 
   // Al cambiar el cliente con productos ya cargados, los precios de esos items
-  // quedaron calculados sin (o con otro) cliente: los precios especiales por
-  // cliente recién aplican al recotizar. Avisamos para que el comercial los
-  // reedite si corresponde.
+  // quedaron calculados sin (o con otro) cliente. Recotizamos todos en masa
+  // para que apliquen los precios especiales del cliente nuevo (o vuelvan al
+  // estándar). Cada fila se actualiza al llegar su resultado; un token de lote
+  // descarta resultados viejos si el cliente cambia de nuevo en el medio.
+  const [recotizandoIds, setRecotizandoIds] = React.useState<Set<string>>(
+    () => new Set(),
+  );
+  const recotizacionBatchRef = React.useRef(0);
   const prevClienteIdRef = React.useRef(clienteId);
+  // Ref con los items actuales para que el batch no dependa del array (evita
+  // re-disparos del efecto por cada actualización progresiva).
+  const itemsRef = React.useRef(items);
+  itemsRef.current = items;
+
+  const recotizarItemsPorCliente = React.useCallback(
+    async (targetClienteId: string) => {
+      const batch = ++recotizacionBatchRef.current;
+      const recotizables = itemsRef.current.filter(
+        (item) => item.jobContext && item.motorCodigo,
+      );
+      const omitidos = itemsRef.current.length - recotizables.length;
+      if (recotizables.length === 0) return;
+
+      setRecotizandoIds(new Set(recotizables.map((item) => item.id)));
+      let exitosos = 0;
+      let conEspecial = 0;
+      let fallidos = 0;
+
+      await Promise.all(
+        recotizables.map(async (item) => {
+          try {
+            const request = {
+              rutaAlternativaId: item.rutaAlternativaId ?? null,
+              jobContext: item.jobContext as never,
+              clienteId: targetClienteId || null,
+              periodo: getCurrentPeriodo(),
+            };
+            const response = item.cotizacionItemId
+              ? await recotizarCotizacionItem(item.cotizacionItemId, request)
+              : {
+                  result: await cotizar({
+                    productoId: item.motorCodigo,
+                    ...request,
+                  }),
+                };
+            if (batch !== recotizacionBatchRef.current) return;
+            if (response.result.exitoso && response.result.cotizacion) {
+              const cotizacion = response.result.cotizacion;
+              exitosos += 1;
+              if (cotizacion.desglosePrecio?.precioEspecialCliente) {
+                conEspecial += 1;
+              }
+              setItems((current) =>
+                current.map((candidate) =>
+                  candidate.id === item.id
+                    ? applyCotizacionToItem(
+                        candidate,
+                        cotizacion,
+                        item.jobContext as Record<string, unknown>,
+                      )
+                    : candidate,
+                ),
+              );
+            } else {
+              fallidos += 1;
+            }
+          } catch {
+            if (batch !== recotizacionBatchRef.current) return;
+            fallidos += 1;
+          } finally {
+            if (batch === recotizacionBatchRef.current) {
+              setRecotizandoIds((current) => {
+                const next = new Set(current);
+                next.delete(item.id);
+                return next;
+              });
+            }
+          }
+        }),
+      );
+
+      if (batch !== recotizacionBatchRef.current) return;
+      const partes: string[] = [];
+      if (exitosos > 0) {
+        partes.push(
+          `${exitosos} producto${exitosos === 1 ? "" : "s"} recotizado${exitosos === 1 ? "" : "s"} con el cliente seleccionado` +
+            (conEspecial > 0
+              ? ` (${conEspecial} con precio especial)`
+              : ""),
+        );
+      }
+      if (fallidos > 0) {
+        partes.push(`${fallidos} no se pudieron recotizar y conservan su precio`);
+      }
+      if (omitidos > 0) {
+        partes.push(`${omitidos} sin datos para recotizar`);
+      }
+      if (partes.length > 0) {
+        (fallidos > 0 ? toast.warning : toast.success)(partes.join(" · ") + ".");
+      }
+    },
+    [],
+  );
+
   React.useEffect(() => {
     if (prevClienteIdRef.current === clienteId) return;
     prevClienteIdRef.current = clienteId;
-    if (items.length === 0) return;
-    toast.info(
-      "Cambiaste el cliente: los productos ya agregados conservan su precio. Editalos para recotizar con los precios de este cliente.",
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clienteId]);
+    if (itemsRef.current.length === 0) return;
+    void recotizarItemsPorCliente(clienteId);
+  }, [clienteId, recotizarItemsPorCliente]);
 
   React.useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -3817,11 +3911,19 @@ export function PropuestaFicha({
               <span className="num">Total</span>
               <span className="x" />
             </div>
+            {recotizandoIds.size > 0 ? (
+              <div className="orden-recotizando" role="status" aria-live="polite">
+                <span className="spin" aria-hidden="true" />
+                Recotizando {recotizandoIds.size}{" "}
+                {recotizandoIds.size === 1 ? "producto" : "productos"} con los
+                precios del cliente seleccionado…
+              </div>
+            ) : null}
             <div className="orows">
               {items.map((item, index) => (
                 <div
                   key={item.id}
-                  className="order-row-wrap"
+                  className={`order-row-wrap${recotizandoIds.has(item.id) ? " is-requoting" : ""}`}
                   ref={(node) => {
                     if (node) {
                       rowRefs.current.set(item.id, node);

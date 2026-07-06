@@ -54,3 +54,16 @@ export function machineTechnologyLabel(machine: MachineTechnologySource) {
   const technology = getMachineTechnology(machine);
   return technology ? TECHNOLOGY_LABELS.get(technology) ?? technology : "Sin tecnología";
 }
+
+/**
+ * Etiqueta legible de un código de tecnología suelto (ej. `dtf_textil` →
+ * "DTF textil"). Si el código no es una tecnología conocida devuelve el
+ * texto tal cual (podría ser un nombre de equipo compatible), para no
+ * mutilar valores que no son tecnologías.
+ */
+export function technologyCodeLabel(value: unknown): string {
+  if (typeof value !== "string" || !value.trim()) return "";
+  const normalized = normalizeMachineTechnology(value);
+  if (normalized) return TECHNOLOGY_LABELS.get(normalized) ?? normalized;
+  return value.trim();
+}
