@@ -165,6 +165,7 @@ export interface ConfigPasoDetalle {
     parametrosTecnicosJson?: Record<string, unknown> | null;
     perfilesOperativos?: Array<{
       id: string;
+      nombre?: string;
       activo?: boolean;
       tipoPerfil?: string | null;
       detalleJson?: Record<string, unknown> | null;

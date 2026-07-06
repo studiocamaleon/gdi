@@ -4671,6 +4671,40 @@ export class MotorUniversalService {
 
     const ctx = jobContext as unknown as Record<string, unknown>;
 
+    // ─── 0. Override explícito del comercial ────────────────────────
+    // `perfilSeleccionado_${configPasoId}` (o rutaPasoId): el comercial
+    // eligió un perfil concreto en la OT ("Modificar perfil de impresión").
+    // Gana a toda resolución automática — es una decisión técnica explícita.
+    // Sólo aplica si el perfil pertenece a la máquina activa y es compatible.
+    const perfilOverrideId =
+      (typeof ctx[`perfilSeleccionado_${paso.configPasoId}`] === 'string'
+        ? (ctx[`perfilSeleccionado_${paso.configPasoId}`] as string)
+        : null) ??
+      (typeof ctx[`perfilSeleccionado_${paso.rutaPasoId}`] === 'string'
+        ? (ctx[`perfilSeleccionado_${paso.rutaPasoId}`] as string)
+        : null);
+    if (perfilOverrideId) {
+      const elegido = perfilesDisponibles.find(
+        (perfil) => perfil.id === perfilOverrideId,
+      );
+      if (elegido) {
+        if (elegido.id === paso.perfilM1Id) return null; // ya es el default
+        return {
+          id: elegido.id,
+          nombre: elegido.nombre,
+          tipoPerfil: elegido.tipoPerfil,
+          productivityValue: elegido.productivityValue,
+          productivityUnit: elegido.productivityUnit ?? null,
+          setupMin: elegido.setupMin,
+          cleanupMin: elegido.cleanupMin,
+          feedReloadMin: elegido.feedReloadMin,
+          detalleJson: elegido.detalleJson,
+        };
+      }
+      // Override inválido (perfil de otra máquina / inactivo): se ignora y
+      // sigue la resolución automática.
+    }
+
     // ─── 1. Modo de color comercial por paso ────────────────────────
     const modoColor = this.resolverModoColorComercial(paso, jobContext);
     if (modoColor) {

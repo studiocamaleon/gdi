@@ -19026,3 +19026,34 @@ textarea.est-input {
 
 /* ps-sync 1783371384 */
 /* ps-fix-toggle 1783372966 */
+
+@layer components {
+  /* Disclosure "Modificar perfil de impresión" en el sheet de agregar producto */
+  .ap-perfil-avanzado {
+    margin-top: 8px;
+  }
+
+  .ap-perfil-avanzado summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--muted-text);
+    font-size: 12px;
+    cursor: pointer;
+    list-style: none;
+    text-decoration: underline dotted;
+    text-underline-offset: 3px;
+  }
+
+  .ap-perfil-avanzado summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .ap-perfil-avanzado summary:hover {
+    color: var(--ink);
+  }
+
+  .ap-perfil-avanzado[open] summary {
+    margin-bottom: 8px;
+  }
+}

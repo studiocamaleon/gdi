@@ -174,6 +174,7 @@ type MotorConfigState = {
   opcionalesActivados: Record<string, boolean>;
   seleccionMaterial: Record<string, string>;
   seleccionMaquina: Record<string, string>;
+  seleccionPerfil: Record<string, string>;
   seleccionModoColor: Record<string, string>;
   modoCotizacionLineal: ModoCotizacionLineal;
   zonaInstalacion: string;
@@ -326,6 +327,7 @@ const DEFAULT_MOTOR_CONFIG: MotorConfigState = {
   opcionalesActivados: {},
   seleccionMaterial: {},
   seleccionMaquina: {},
+  seleccionPerfil: {},
   seleccionModoColor: {},
   modoCotizacionLineal: "nesting",
   zonaInstalacion: "CABA",
@@ -1843,6 +1845,12 @@ function buildJobContext(
     if (maquinaId) ctx[`maquinaSeleccionada_${configPasoId}`] = maquinaId;
   }
 
+  // Override explícito de perfil de impresión elegido por el comercial
+  // ("Modificar perfil"). El motor lo valida contra la máquina activa.
+  for (const [configPasoId, perfilId] of Object.entries(config.seleccionPerfil)) {
+    if (perfilId) ctx[`perfilSeleccionado_${configPasoId}`] = perfilId;
+  }
+
   const rutaSel = getRutaSeleccionada(productoDetalle, config.rutaAlternativaId);
   const tecnologiasActivas = new Set<string>();
   for (const configPaso of rutaSel?.configPasos ?? []) {
@@ -2351,6 +2359,17 @@ function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
       .filter(([key, value]) => key.startsWith("modoColor_") && typeof value === "string")
       .map(([key, value]) => [key.replace("modoColor_", ""), value as string]),
   );
+  const seleccionPerfil = Object.fromEntries(
+    Object.entries(ctx)
+      .filter(
+        ([key, value]) =>
+          key.startsWith("perfilSeleccionado_") && typeof value === "string",
+      )
+      .map(([key, value]) => [
+        key.replace("perfilSeleccionado_", ""),
+        value as string,
+      ]),
+  );
   const piezasRaw = Array.isArray(ctx.piezas) ? ctx.piezas : [];
   const piezas = piezasRaw
     .map((pieza, index) => {
@@ -2398,6 +2417,7 @@ function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
         .map(([key, value]) => [key, value as string]),
     ),
     seleccionMaquina,
+    seleccionPerfil,
     seleccionModoColor,
     modoCotizacionLineal:
       typeof ctx.modoCotizacionLineal === "string" &&
@@ -3066,26 +3086,57 @@ function ApConfigStep({
 
   const setMaquina = React.useCallback(
     (configPasoId: string, value: string) => {
-      setMotorConfig((current) => ({
-        ...current,
-        seleccionMaquina: {
-          ...current.seleccionMaquina,
-          [configPasoId]: value,
-        },
-      }));
+      setMotorConfig((current) => {
+        // Al cambiar de máquina se descarta el override de perfil del paso:
+        // el perfil pertenece a la máquina anterior.
+        const seleccionPerfil = { ...current.seleccionPerfil };
+        if (current.seleccionMaquina[configPasoId] !== value) {
+          delete seleccionPerfil[configPasoId];
+        }
+        return {
+          ...current,
+          seleccionMaquina: {
+            ...current.seleccionMaquina,
+            [configPasoId]: value,
+          },
+          seleccionPerfil,
+        };
+      });
+    },
+    [setMotorConfig],
+  );
+
+  const setPerfil = React.useCallback(
+    (configPasoId: string, value: string) => {
+      setMotorConfig((current) => {
+        const seleccionPerfil = { ...current.seleccionPerfil };
+        if (value) seleccionPerfil[configPasoId] = value;
+        else delete seleccionPerfil[configPasoId];
+        return { ...current, seleccionPerfil };
+      });
     },
     [setMotorConfig],
   );
 
   const setModoColor = React.useCallback(
     (configPasoId: string, value: string) => {
-      setMotorConfig((current) => ({
-        ...current,
-        seleccionModoColor: {
-          ...current.seleccionModoColor,
-          [configPasoId]: normalizeModoColor(value) ?? value,
-        },
-      }));
+      setMotorConfig((current) => {
+        // Al cambiar el modo de color se descarta el override de perfil del
+        // paso: el perfil elegido pertenecía al modo anterior.
+        const seleccionPerfil = { ...current.seleccionPerfil };
+        const next = normalizeModoColor(value) ?? value;
+        if (current.seleccionModoColor[configPasoId] !== next) {
+          delete seleccionPerfil[configPasoId];
+        }
+        return {
+          ...current,
+          seleccionModoColor: {
+            ...current.seleccionModoColor,
+            [configPasoId]: next,
+          },
+          seleccionPerfil,
+        };
+      });
     },
     [setMotorConfig],
   );
@@ -4118,12 +4169,6 @@ function ApConfigStep({
                     setTechnology,
                     { columns: 3, layout: "tile" },
                   )}
-                  {selectedTechnology ? (
-                    <div className="ap-choice-caption">
-                      Seleccionada:{" "}
-                      <span className="mono">{selectedTechnology.label}</span>
-                    </div>
-                  ) : null}
                   {selectedTechnology && selectedTechnology.candidatas.length > 1 ? (
                     <select
                       className="ap-native-select"
@@ -4171,6 +4216,74 @@ function ApConfigStep({
                     (nextValue) => setModoColor(modo.configPasoId, nextValue),
                     { columns: modoOptions.length <= 2 ? 2 : 3, layout: "row" },
                   )}
+                  {(() => {
+                    // Avanzado: override explícito del perfil de impresión.
+                    // Sólo lista perfiles de la máquina activa que matchean el
+                    // modo de color elegido (option.perfilIds); el motor
+                    // resuelve automático salvo decisión técnica del comercial.
+                    const config = rutaSel?.configPasos.find(
+                      (item) => item.id === modo.configPasoId,
+                    );
+                    if (!config) return null;
+                    const candidataActiva = getActiveCandidateForConfig(
+                      config,
+                      motorConfig,
+                    );
+                    const maquinaActiva =
+                      candidataActiva?.maquina ?? config.maquinaM1;
+                    const opcionModo = modo.options.find(
+                      (option) =>
+                        (normalizeModoColor(option.value) ?? option.value) ===
+                        value,
+                    );
+                    const idsModo = new Set(opcionModo?.perfilIds ?? []);
+                    const perfilesDelModo = (
+                      maquinaActiva?.perfilesOperativos ?? []
+                    ).filter(
+                      (perfil) =>
+                        perfil.activo !== false &&
+                        perfil.nombre &&
+                        idsModo.has(perfil.id),
+                    );
+                    if (perfilesDelModo.length < 2) return null;
+                    const perfilDefaultId =
+                      candidataActiva?.perfilDefaultId ??
+                      config.perfilM1?.id ??
+                      null;
+                    const overrideActual =
+                      motorConfig.seleccionPerfil[modo.configPasoId] ?? "";
+                    const perfilOverride = perfilesDelModo.find(
+                      (perfil) => perfil.id === overrideActual,
+                    );
+                    return (
+                      <details className="ap-perfil-avanzado">
+                        <summary>
+                          {perfilOverride
+                            ? `Perfil de impresión: ${perfilOverride.nombre} (modificado)`
+                            : "Modificar perfil de impresión"}
+                        </summary>
+                        <select
+                          className="ap-native-select"
+                          value={overrideActual}
+                          onChange={(event) =>
+                            setPerfil(modo.configPasoId, event.target.value)
+                          }
+                        >
+                          <option value="">
+                            Automático (recomendado)
+                          </option>
+                          {perfilesDelModo.map((perfil) => (
+                            <option key={perfil.id} value={perfil.id}>
+                              {perfil.nombre}
+                              {perfilDefaultId === perfil.id
+                                ? " · default"
+                                : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </details>
+                    );
+                  })()}
                 </div>
               );
             })}

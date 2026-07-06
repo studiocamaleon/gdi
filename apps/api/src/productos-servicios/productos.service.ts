@@ -735,6 +735,7 @@ export class ProductosService {
                       where: { activo: true },
                       select: {
                         id: true,
+                        nombre: true,
                         activo: true,
                         tipoPerfil: true,
                         detalleJson: true,
@@ -856,6 +857,7 @@ export class ProductosService {
                           where: { activo: true },
                           select: {
                             id: true,
+                            nombre: true,
                             activo: true,
                             tipoPerfil: true,
                             detalleJson: true,
