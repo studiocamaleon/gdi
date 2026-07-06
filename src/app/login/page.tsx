@@ -31,7 +31,7 @@ export default async function LoginPage() {
         <LoginConstellation />
         <div className="eyebrow">
           <span className="rule" />
-          MOTOR DE COTIZACIÓN PARA GRÁFICAS
+          GRÁFICA DIGITAL INTELIGENTE
         </div>
 
         <h2 className="quote">
@@ -51,7 +51,7 @@ export default async function LoginPage() {
           </span>
           <div>
             <div className="word">grafoprint</div>
-            <div className="tagline">motor de cotización · industria gráfica</div>
+            <div className="tagline">gráfica digital inteligente</div>
           </div>
         </div>
 

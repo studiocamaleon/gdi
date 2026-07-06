@@ -2557,9 +2557,7 @@ function ApSelectStep({
                 <span className={`ap-fam-dot tipo-${familyColor(product.family)}`} />
                 <span className="lb">
                   <span className="nm">{product.name}</span>
-                  <span className="cd">
-                    {product.code} · {product.family}
-                  </span>
+                  <span className="cd">{product.family}</span>
                 </span>
                 {loadingProductId === product.id ? (
                   <span className="ap-section-hint">Cargando</span>
@@ -2592,7 +2590,6 @@ function ApSelectStep({
             >
               <span className="ap-prod-main">
                 <span className="ap-prod-head">
-                  <span className="code">{product.code}</span>
                   <span className={`tipo-chip tipo-${familyColor(product.family)}`}>
                     <span className="d" />
                     {product.family}

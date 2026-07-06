@@ -92,7 +92,7 @@ function Brand() {
       </div>
       <div>
         <div className="wordmark">grafoprint</div>
-        <div className="org">motor de cotización</div>
+        <div className="org">gráfica digital inteligente</div>
       </div>
     </div>
   );
