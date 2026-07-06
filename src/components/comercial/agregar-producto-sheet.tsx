@@ -577,6 +577,82 @@ function isExecutableConfigPaso(
   return config.rutaPaso.activo && config.modoActivacion !== "NO_EJECUTAR";
 }
 
+/**
+ * M-2 en extras — un paso extra como ConfigPasoDetalle sintético, para que
+ * toda la lógica del sheet (tecnologías, modo color, opcionales, condicionales)
+ * lo trate igual que un paso normal. Clave: id = extra.id, así el override
+ * `maquinaSeleccionada_${configPasoId}` y `opcionalesActivados[id]` matchean
+ * las claves que el motor resuelve para extras.
+ */
+function pasoExtraToSyntheticConfig(
+  ruta: RutaAlternativaDetalle,
+  extra: NonNullable<RutaAlternativaDetalle["pasosExtras"]>[number],
+): ConfigPasoDetalle {
+  // Orden pseudo-fraccional: intercala el extra después del paso referenciado
+  // (null = antes de todos), respetando ordenInterno entre extras hermanos.
+  const baseOrden = extra.insertarDespuesDeRutaPasoId
+    ? (ruta.ruta.pasos.find((p) => p.id === extra.insertarDespuesDeRutaPasoId)
+        ?.orden ?? ruta.ruta.pasos.length)
+    : 0;
+  return {
+    id: extra.id,
+    rutaPasoId: extra.id,
+    rutaPaso: {
+      id: extra.id,
+      orden: baseOrden + (extra.ordenInterno + 1) / 1000,
+      familiaCodigo: extra.familiaCodigo,
+      activo: extra.activo,
+    },
+    modoActivacion: extra.modoActivacion,
+    condicionActivacionJson: extra.condicionActivacionJson,
+    modoTiempo: extra.modoTiempo,
+    mecanismoCantidad: extra.mecanismoCantidad,
+    mecanismoCantidadConfigJson: extra.mecanismoCantidadConfigJson,
+    multiplicadoresActivos: extra.multiplicadoresActivos ?? [],
+    paramsPasoJson: extra.paramsPasoJson,
+    nombreVisible: extra.nombreVisible,
+    maquinaM1: extra.maquinaM1 ?? null,
+    perfilM1: extra.perfilM1 ?? null,
+    centroCosto: extra.centroCosto
+      ? {
+          id: extra.centroCosto.id,
+          codigo: extra.centroCosto.codigo,
+          nombre: extra.centroCosto.nombre,
+          unidadBaseFutura: extra.centroCosto.unidadBaseFutura ?? "",
+        }
+      : null,
+    slotsMateriales: [],
+    maquinasCandidatas: extra.maquinasCandidatas ?? [],
+    cargosDirectosPaso: [],
+  };
+}
+
+/**
+ * Suma a cada ruta alternativa sus pasos extras activos como configPasos
+ * sintéticos (ordenados por posición). Se aplica al setear productoDetalle,
+ * así todos los consumidores del sheet ven extras y pasos normales uniformes.
+ */
+function augmentDetalleConPasosExtras(
+  detalle: ProductoDetalle,
+): ProductoDetalle {
+  return {
+    ...detalle,
+    rutasAlternativas: detalle.rutasAlternativas.map((ruta) => {
+      const extras = (ruta.pasosExtras ?? []).filter((extra) => extra.activo);
+      if (extras.length === 0) return ruta;
+      const sinteticos = extras.map((extra) =>
+        pasoExtraToSyntheticConfig(ruta, extra),
+      );
+      return {
+        ...ruta,
+        configPasos: [...ruta.configPasos, ...sinteticos].sort(
+          (a, b) => a.rutaPaso.orden - b.rutaPaso.orden,
+        ),
+      };
+    }),
+  };
+}
+
 function isConfigPasoVisibleForContext(
   config: ConfigPasoDetalle,
   motorConfig: MotorConfigState,
@@ -932,6 +1008,7 @@ function getPasosConTecnologias(
       .map((config) => ({
         configPasoId: config.id,
         familiaCodigo: config.rutaPaso.familiaCodigo,
+        nombreVisible: config.nombreVisible ?? null,
         tecnologias: Array.from(
           (config.maquinasCandidatas ?? []).reduce((map, candidate) => {
             const value = getCandidateTechnology(candidate);
@@ -4035,7 +4112,7 @@ function ApConfigStep({
                   <label>
                     {pasosConTecnologias.length === 1
                       ? "Tecnología de impresión"
-                      : `${humanizeCodigo(paso.familiaCodigo)} · tecnología`}
+                      : `${paso.nombreVisible?.trim() || humanizeCodigo(paso.familiaCodigo)} · tecnología`}
                   </label>
                   {renderChoiceCards(
                     "Tecnología de impresión",
@@ -4496,7 +4573,9 @@ export function AgregarProductoSheet({
       if (baseProduct?.real && baseProduct.id) {
         setLoadingProductId(baseProduct.id);
         try {
-          detalle = await getProductoById(baseProduct.id);
+          detalle = augmentDetalleConPasosExtras(
+            await getProductoById(baseProduct.id),
+          );
           nextProduct = mapProductoReal(detalle);
         } catch {
           toast.error("No pude cargar el producto para editarlo.");
@@ -4556,7 +4635,7 @@ export function AgregarProductoSheet({
     if (picked.real && picked.id) {
       setLoadingProductId(picked.id);
       try {
-        detalle = await getProductoById(picked.id);
+        detalle = augmentDetalleConPasosExtras(await getProductoById(picked.id));
         next = mapProductoReal(detalle);
       } catch {
         toast.error("No pude cargar los opcionales completos del producto.");

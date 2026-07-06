@@ -428,7 +428,9 @@ export class ActualizarPasoExtraDto {
 
   @IsOptional()
   @IsArray()
-  configMaquinasCandidatasJson?: Record<string, unknown>[];
+  @ValidateNested({ each: true })
+  @Type(() => PasoExtraMaquinaCandidataDto)
+  configMaquinasCandidatasJson?: PasoExtraMaquinaCandidataDto[];
 
   @IsOptional()
   @IsBoolean()
@@ -453,4 +455,32 @@ export class PasoExtraCargoDirectoDto {
   @IsOptional()
   @IsObject()
   configOverrideJson?: Record<string, unknown> | null;
+}
+
+/**
+ * Máquina candidata M-2 de un paso extra (embebida). Mismo shape que
+ * UpsertMaquinaCandidataDto; el motor y el detalle del producto hidratan
+ * la máquina/perfiles por id en cada lectura.
+ */
+export class PasoExtraMaquinaCandidataDto {
+  @IsUUID()
+  maquinaId!: string;
+
+  @IsOptional()
+  @IsUUID()
+  perfilDefaultId?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  modoColorAllowedModes?: string[];
+
+  @IsOptional()
+  @IsBoolean()
+  esPreferida?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  orden?: number;
 }

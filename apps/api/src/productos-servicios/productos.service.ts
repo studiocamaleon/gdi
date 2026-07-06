@@ -881,7 +881,14 @@ export class ProductosService {
               select: { id: true, codigo: true, nombre: true, plantilla: true },
             },
             perfilM1: { select: { id: true, nombre: true } },
-            centroCosto: { select: { id: true, codigo: true, nombre: true } },
+            centroCosto: {
+              select: {
+                id: true,
+                codigo: true,
+                nombre: true,
+                unidadBaseFutura: true,
+              },
+            },
           },
         },
         cargosDirectosCotizacion: {
@@ -890,6 +897,14 @@ export class ProductosService {
       },
     });
     if (!producto) throw new NotFoundException(`Producto ${id} no encontrado`);
+
+    // M-2 en extras: hidratar las candidatas embebidas (ids → máquinas con
+    // perfiles) para que editor y cotizador las consuman con el mismo shape
+    // que las candidatas de configPasos.
+    const pasoExtraCandidatas = await this.hydratePasoExtraCandidatas(
+      tenantId,
+      producto.pasosExtras,
+    );
 	    return {
 	      ...producto,
 	      rutasAlternativas: producto.rutasAlternativas.map((rutaAlt) => ({
@@ -901,9 +916,12 @@ export class ProductosService {
 	          ),
 	        },
 	        // G-F3: extras de ESTA ruta alternativa (scope por ruta).
-	        pasosExtras: producto.pasosExtras.filter(
-	          (pe) => pe.rutaAlternativaId === rutaAlt.id,
-	        ),
+	        pasosExtras: producto.pasosExtras
+	          .filter((pe) => pe.rutaAlternativaId === rutaAlt.id)
+	          .map((pe) => ({
+	            ...pe,
+	            maquinasCandidatas: pasoExtraCandidatas.get(pe.id) ?? [],
+	          })),
 	        configPasos: rutaAlt.configPasos.map((configPaso) => ({
 	          ...configPaso,
 	          modoColorOptions: this.buildModoColorOptions(configPaso),
@@ -920,6 +938,108 @@ export class ProductosService {
 	        })),
 	      })),
 	    };
+	  }
+
+	  /**
+	   * M-2 en extras — hidrata `configMaquinasCandidatasJson` (sólo ids) de cada
+	   * paso extra a candidatas con máquina + perfiles + modoColorOptions, con el
+	   * mismo shape que las candidatas de ProductoConfigPaso. Devuelve un mapa
+	   * pasoExtraId → candidatas (preferida primero). Descarta candidatas cuya
+	   * máquina no exista o esté inactiva.
+	   */
+	  private async hydratePasoExtraCandidatas(
+	    tenantId: string,
+	    pasosExtras: Array<{
+	      id: string;
+	      paramsPasoJson: Prisma.JsonValue | null;
+	      configMaquinasCandidatasJson: Prisma.JsonValue | null;
+	    }>,
+	  ) {
+	    type CandidataJson = {
+	      maquinaId?: string;
+	      perfilDefaultId?: string | null;
+	      modoColorAllowedModes?: string[];
+	      esPreferida?: boolean;
+	      orden?: number;
+	    };
+	    const parse = (json: Prisma.JsonValue | null): CandidataJson[] =>
+	      Array.isArray(json) ? (json as CandidataJson[]) : [];
+
+	    const maquinaIds = new Set<string>();
+	    for (const pe of pasosExtras) {
+	      for (const c of parse(pe.configMaquinasCandidatasJson)) {
+	        if (c.maquinaId) maquinaIds.add(c.maquinaId);
+	      }
+	    }
+	    const maquinas =
+	      maquinaIds.size === 0
+	        ? []
+	        : await this.prisma.maquina.findMany({
+	            where: { tenantId, id: { in: [...maquinaIds] }, activo: true },
+	            select: {
+	              id: true,
+	              codigo: true,
+	              nombre: true,
+	              plantilla: true,
+	              anchoUtil: true,
+	              parametrosTecnicosJson: true,
+	              centroCostoPrincipalId: true,
+	              centroCostoPrincipal: {
+	                select: { id: true, codigo: true, nombre: true },
+	              },
+	              perfilesOperativos: {
+	                where: { activo: true },
+	                select: {
+	                  id: true,
+	                  nombre: true,
+	                  activo: true,
+	                  tipoPerfil: true,
+	                  detalleJson: true,
+	                },
+	              },
+	            },
+	          });
+	    const maquinaMap = new Map(maquinas.map((m) => [m.id, m]));
+
+	    return new Map(
+	      pasosExtras.map((pe) => {
+	        const candidatas = parse(pe.configMaquinasCandidatasJson)
+	          .flatMap((c, i) => {
+	            const maquina = c.maquinaId
+	              ? maquinaMap.get(c.maquinaId)
+	              : undefined;
+	            if (!maquina) return [];
+	            const perfilDefault = c.perfilDefaultId
+	              ? (maquina.perfilesOperativos.find(
+	                  (p) => p.id === c.perfilDefaultId,
+	                ) ?? null)
+	              : null;
+	            return [
+	              {
+	                id: `${pe.id}:cand:${i}`,
+	                maquinaId: maquina.id,
+	                perfilDefaultId: c.perfilDefaultId ?? null,
+	                modoColorAllowedModes: c.modoColorAllowedModes ?? [],
+	                modoColorOptions: this.buildModoColorOptionsForProfiles(
+	                  maquina.perfilesOperativos,
+	                  pe.paramsPasoJson,
+	                  c.modoColorAllowedModes,
+	                ),
+	                esPreferida: c.esPreferida ?? false,
+	                orden: c.orden ?? i,
+	                perfilDefault,
+	                maquina,
+	              },
+	            ];
+	          })
+	          .sort(
+	            (a, b) =>
+	              Number(b.esPreferida) - Number(a.esPreferida) ||
+	              a.orden - b.orden,
+	          );
+	        return [pe.id, candidatas] as const;
+	      }),
+	    );
 	  }
 
 	  private buildModoColorOptions(configPaso: {

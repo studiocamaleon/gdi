@@ -563,7 +563,8 @@ export interface ActualizarPasoExtraPayload {
     condicionActivacionJson?: Record<string, unknown> | null;
     configOverrideJson?: Record<string, unknown> | null;
   }>;
-  configMaquinasCandidatasJson?: Record<string, unknown>[];
+  /** M-2: candidatas del extra (mismo shape que en pasos normales). */
+  configMaquinasCandidatasJson?: UpsertMaquinaCandidataPayload[];
   activo?: boolean;
 }
 

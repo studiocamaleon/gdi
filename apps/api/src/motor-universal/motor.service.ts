@@ -102,6 +102,14 @@ interface PasoExtraCargoJson {
   configOverrideJson?: unknown;
 }
 
+interface PasoExtraCandidataJson {
+  maquinaId: string;
+  perfilDefaultId?: string | null;
+  modoColorAllowedModes?: string[];
+  esPreferida?: boolean;
+  orden?: number;
+}
+
 type MinimoComercialBase = 'cantidad_comercial' | 'pliegos_impresos';
 
 type MinimoComercialContext = {
@@ -5555,13 +5563,68 @@ export class MotorUniversalService {
       : [];
     const catalogoMap = new Map(catalogos.map((c) => [c.id, c]));
 
+    // M-2 en extras: las candidatas viven en configMaquinasCandidatasJson
+    // (sólo ids). Hidratamos las máquinas referenciadas en una sola query,
+    // con el mismo include que la M-1 (perfiles + consumibles + centro).
+    const candidataMaquinaIds = new Set<string>();
+    for (const row of rows) {
+      for (const c of this.parsePasoExtraCandidatas(
+        row.configMaquinasCandidatasJson,
+      )) {
+        if (c.maquinaId) candidataMaquinaIds.add(c.maquinaId);
+      }
+    }
+    const candidataMaquinas = candidataMaquinaIds.size
+      ? await this.prisma.maquina.findMany({
+          where: {
+            tenantId,
+            id: { in: [...candidataMaquinaIds] },
+            activo: true,
+          },
+          include: {
+            centroCostoPrincipal: { select: { id: true, nombre: true } },
+            perfilesOperativos: true,
+            consumibles: {
+              where: { activo: true },
+              include: {
+                materiaPrimaVariante: {
+                  include: {
+                    materiaPrima: {
+                      select: {
+                        nombre: true,
+                        unidadStock: true,
+                        templateId: true,
+                        tipoTecnico: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        })
+      : [];
+    const candidataMaquinaMap = new Map(
+      candidataMaquinas.map((m) => [m.id, m]),
+    );
+
     return Promise.all(
       rows.map(async (row) => ({
-        paso: await this.mapPasoExtraToPasoCargado(row, tenantId, catalogoMap),
+        paso: await this.mapPasoExtraToPasoCargado(
+          row,
+          tenantId,
+          catalogoMap,
+          candidataMaquinaMap,
+        ),
         insertarDespuesDeRutaPasoId: row.insertarDespuesDeRutaPasoId,
         ordenInterno: row.ordenInterno,
       })),
     );
+  }
+
+  /** Parseo defensivo de configMaquinasCandidatasJson de un paso extra. */
+  private parsePasoExtraCandidatas(json: unknown): PasoExtraCandidataJson[] {
+    return Array.isArray(json) ? (json as PasoExtraCandidataJson[]) : [];
   }
 
   /** Parseo defensivo de configSlotsMaterialesJson de un paso extra. */
@@ -5609,6 +5672,31 @@ export class MotorUniversalService {
       string,
       { id: string; codigo: string; nombre: string; modoCalculo: string; configJson: unknown }
     >,
+    candidataMaquinaMap: Map<
+      string,
+      Prisma.MaquinaGetPayload<{
+        include: {
+          centroCostoPrincipal: { select: { id: true; nombre: true } };
+          perfilesOperativos: true;
+          consumibles: {
+            include: {
+              materiaPrimaVariante: {
+                include: {
+                  materiaPrima: {
+                    select: {
+                      nombre: true;
+                      unidadStock: true;
+                      templateId: true;
+                      tipoTecnico: true;
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      }>
+    >,
   ): Promise<PasoCargado> {
     const maquina = row.maquinaM1;
     const perfil = row.perfilM1;
@@ -5617,6 +5705,11 @@ export class MotorUniversalService {
       row.id,
       row.configCargosDirectosJson,
       catalogoMap,
+    );
+    const maquinasCandidatas = this.buildCandidatasPasoExtra(
+      row.id,
+      row.configMaquinasCandidatasJson,
+      candidataMaquinaMap,
     );
     return {
       // El extra no tiene RutaPaso ni ConfigPaso: usamos su propio id como
@@ -5703,12 +5796,118 @@ export class MotorUniversalService {
         feedReloadMin: p.feedReloadMin ? Number(p.feedReloadMin) : null,
         detalleJson: p.detalleJson,
       })),
-      // M-2 (máquinas candidatas) en extras: diferido. Los extras usan M-1 o
-      // centro de costo manual; el multi-tecnología queda para más adelante.
-      maquinasCandidatas: [],
+      maquinasCandidatas,
       slots,
       cargosDirectosPaso,
     };
+  }
+
+  /**
+   * M-2 en extras — reconstruye las `maquinasCandidatas` de un paso extra
+   * desde su `configMaquinasCandidatasJson` + las máquinas hidratadas.
+   * Mismo shape que las candidatas normalizadas de ProductoConfigPaso, así
+   * `resolverMaquinaM2` opera idéntico (preferida primero, override del
+   * comercial vía `maquinaSeleccionada_${extraId}`). Descarta candidatas
+   * cuya máquina no exista o esté inactiva.
+   */
+  private buildCandidatasPasoExtra(
+    pasoExtraId: string,
+    json: unknown,
+    candidataMaquinaMap: Map<
+      string,
+      Prisma.MaquinaGetPayload<{
+        include: {
+          centroCostoPrincipal: { select: { id: true; nombre: true } };
+          perfilesOperativos: true;
+          consumibles: {
+            include: {
+              materiaPrimaVariante: {
+                include: {
+                  materiaPrima: {
+                    select: {
+                      nombre: true;
+                      unidadStock: true;
+                      templateId: true;
+                      tipoTecnico: true;
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      }>
+    >,
+  ): NonNullable<PasoCargado['maquinasCandidatas']> {
+    const toPerfil = (p: {
+      id: string;
+      nombre: string;
+      tipoPerfil: string | null;
+      activo: boolean;
+      productivityValue: Prisma.Decimal | null;
+      productivityUnit: string | null;
+      setupMin: Prisma.Decimal | null;
+      cleanupMin: Prisma.Decimal | null;
+      feedReloadMin: Prisma.Decimal | null;
+      detalleJson: unknown;
+    }) => ({
+      id: p.id,
+      nombre: p.nombre,
+      tipoPerfil: p.tipoPerfil,
+      activo: p.activo,
+      productivityValue: p.productivityValue
+        ? Number(p.productivityValue)
+        : null,
+      productivityUnit: p.productivityUnit,
+      setupMin: p.setupMin ? Number(p.setupMin) : null,
+      cleanupMin: p.cleanupMin ? Number(p.cleanupMin) : null,
+      feedReloadMin: p.feedReloadMin ? Number(p.feedReloadMin) : null,
+      detalleJson: p.detalleJson,
+    });
+
+    return this.parsePasoExtraCandidatas(json)
+      .flatMap((c, i) => {
+        const maquina = candidataMaquinaMap.get(c.maquinaId);
+        if (!maquina) return [];
+        const perfilDefault = c.perfilDefaultId
+          ? (maquina.perfilesOperativos.find(
+              (p) => p.id === c.perfilDefaultId,
+            ) ?? null)
+          : null;
+        return [
+          {
+            id: `${pasoExtraId}:cand:${i}`,
+            maquinaId: c.maquinaId,
+            perfilDefaultId: c.perfilDefaultId ?? null,
+            esPreferida: c.esPreferida ?? false,
+            orden: c.orden ?? i,
+            maquina: {
+              id: maquina.id,
+              codigo: maquina.codigo,
+              nombre: maquina.nombre,
+              plantilla: maquina.plantilla,
+              anchoUtil: maquina.anchoUtil ? Number(maquina.anchoUtil) : null,
+              centroCostoPrincipalId: maquina.centroCostoPrincipalId,
+              centroCostoPrincipalNombre:
+                maquina.centroCostoPrincipal?.nombre ?? null,
+              parametrosTecnicosJson:
+                maquina.parametrosTecnicosJson as Record<
+                  string,
+                  unknown
+                > | null,
+              consumibles: maquina.consumibles.map((con) =>
+                this.toConsumibleCargado(con),
+              ),
+            },
+            perfilesOperativos: maquina.perfilesOperativos.map(toPerfil),
+            perfilDefault: perfilDefault ? toPerfil(perfilDefault) : null,
+          },
+        ];
+      })
+      .sort(
+        (a, b) =>
+          Number(b.esPreferida) - Number(a.esPreferida) || a.orden - b.orden,
+      );
   }
 
   /**

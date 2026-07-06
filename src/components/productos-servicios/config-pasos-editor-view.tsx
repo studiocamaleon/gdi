@@ -969,7 +969,14 @@ function buildExtraConfigDraft(
     slotsMateriales: Array.isArray(extra.configSlotsMaterialesJson)
       ? (extra.configSlotsMaterialesJson as UpsertConfigPasoPayload["slotsMateriales"])
       : [],
-    maquinasCandidatas: [],
+    // M-2: candidatas persistidas en configMaquinasCandidatasJson (mismo shape).
+    maquinasCandidatas: normalizeMaquinasCandidatas(
+      Array.isArray(extra.configMaquinasCandidatasJson)
+        ? (extra.configMaquinasCandidatasJson as NonNullable<
+            UpsertConfigPasoPayload["maquinasCandidatas"]
+          >)
+        : [],
+    ),
   };
 }
 
@@ -3614,8 +3621,8 @@ export function ConfigPasosEditorView({
         Object.keys(paramsPasoJson).length > 0 ? paramsPasoJson : null;
       if (extraGuardar) {
         // Paso extra: mismo config computado, persistido vía el endpoint de
-        // pasos-extras. Slots se guardan embebidos en configSlotsMaterialesJson
-        // (sub-fase 3); candidatas M-2 quedan diferidas.
+        // pasos-extras. Slots y candidatas M-2 se guardan embebidos en
+        // configSlotsMaterialesJson / configMaquinasCandidatasJson.
         await actualizarPasoExtra(rutaPasoId, {
           nombreVisible: cfgActual.nombreVisible ?? null,
           modoActivacion: cfgActual.modoActivacion ?? undefined,
@@ -3634,6 +3641,7 @@ export function ConfigPasosEditorView({
           cleanupOverrideMin: cfgActual.cleanupOverrideMin ?? null,
           tiempoFijoOverrideMin: cfgActual.tiempoFijoOverrideMin ?? null,
           configSlotsMaterialesJson: cfgActual.slotsMateriales ?? [],
+          configMaquinasCandidatasJson: cfgActual.maquinasCandidatas ?? [],
         });
       } else {
         await upsertConfigPaso(rutaAlternativa.id, {
@@ -3782,16 +3790,16 @@ export function ConfigPasosEditorView({
     }
     return ids;
   }, [rutaAlternativa.ruta.pasos, pasosExtras]);
+  // Navegación sobre la secuencia unificada (pasos base + extras en posición).
   const goPrev = () => {
-    const prev = rutaAlternativa.ruta.pasos[Math.max(0, activeIdx - 1)];
-    if (prev) setActivePasoId(prev.id);
+    const i = pasosUnificados.indexOf(activePasoId);
+    const prev = pasosUnificados[Math.max(0, i - 1)];
+    if (prev) setActivePasoId(prev);
   };
   const goNext = () => {
-    const next =
-      rutaAlternativa.ruta.pasos[
-        Math.min(rutaAlternativa.ruta.pasos.length - 1, activeIdx + 1)
-      ];
-    if (next) setActivePasoId(next.id);
+    const i = pasosUnificados.indexOf(activePasoId);
+    const next = pasosUnificados[Math.min(pasosUnificados.length - 1, i + 1)];
+    if (next) setActivePasoId(next);
   };
 
   return (
@@ -4483,8 +4491,7 @@ export function ConfigPasosEditorView({
                                 fontSize: 12,
                               }}
                             >
-                              Paso {idx + 1} de{" "}
-                              {rutaAlternativa.ruta.pasos.length}
+                              Paso {idx + 1} de {pasosUnificados.length}
                             </span>
                             {!noEjecutar ? (
                               <span
@@ -4558,9 +4565,7 @@ export function ConfigPasosEditorView({
                             className="btn"
                             type="button"
                             onClick={goNext}
-                            disabled={
-                              idx === rutaAlternativa.ruta.pasos.length - 1
-                            }
+                            disabled={idx === pasosUnificados.length - 1}
                           >
                             Siguiente →
                           </button>
@@ -5132,7 +5137,7 @@ export function ConfigPasosEditorView({
                                           />
                                         </div>
                                       ) : null}
-                                      {soportaM2 && !esExtra ? (
+                                      {soportaM2 ? (
                                         <div className="field md:col-span-full">
                                           <LabelConTooltip
                                             label="Tecnologías / máquinas candidatas"

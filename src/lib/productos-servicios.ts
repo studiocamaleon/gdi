@@ -344,6 +344,8 @@ export interface PasoExtra {
   configSlotsMaterialesJson?: unknown;
   configMaquinasCandidatasJson?: unknown;
   configCargosDirectosJson?: unknown;
+  /** M-2: candidatas hidratadas por el detalle (mismo shape que configPasos). */
+  maquinasCandidatas?: ConfigPasoDetalle["maquinasCandidatas"];
   activo: boolean;
   maquinaM1?: {
     id: string;
@@ -352,7 +354,12 @@ export interface PasoExtra {
     plantilla: string;
   } | null;
   perfilM1?: { id: string; nombre: string } | null;
-  centroCosto?: { id: string; codigo: string; nombre: string } | null;
+  centroCosto?: {
+    id: string;
+    codigo: string;
+    nombre: string;
+    unidadBaseFutura?: string;
+  } | null;
 }
 
 // ============================================================================
