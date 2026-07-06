@@ -12290,6 +12290,32 @@
     border-bottom: 1px solid var(--border);
   }
 
+  /* Chip que avisa que rige un precio especial configurado para el cliente (v2). */
+  .ot-v1 .ap-sum-especial {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+    padding: 2px 8px;
+    color: #1f6e43;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: none;
+    background: #e5f4eb;
+    border: 1px solid #bfe3cd;
+    border-radius: 999px;
+  }
+
+  .ot-v1 .ap-sum-especial svg {
+    width: 10px;
+    height: 10px;
+  }
+
+  .ot-v1 .ap-sum-especial + .ap-sum-updating {
+    margin-left: 8px;
+  }
+
   /* Indicador sutil mientras el motor recalcula sin ocultar el precio previo. */
   .ot-v1 .ap-sum-updating {
     display: inline-flex;

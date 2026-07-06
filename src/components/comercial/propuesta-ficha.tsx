@@ -3564,6 +3564,21 @@ export function PropuestaFicha({
     setAddOpen(true);
   }, []);
 
+  // Al cambiar el cliente con productos ya cargados, los precios de esos items
+  // quedaron calculados sin (o con otro) cliente: los precios especiales por
+  // cliente recién aplican al recotizar. Avisamos para que el comercial los
+  // reedite si corresponde.
+  const prevClienteIdRef = React.useRef(clienteId);
+  React.useEffect(() => {
+    if (prevClienteIdRef.current === clienteId) return;
+    prevClienteIdRef.current = clienteId;
+    if (items.length === 0) return;
+    toast.info(
+      "Cambiaste el cliente: los productos ya agregados conservan su precio. Editalos para recotizar con los precios de este cliente.",
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clienteId]);
+
   React.useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
@@ -3627,6 +3642,7 @@ export function PropuestaFicha({
       const request = {
         rutaAlternativaId: item.rutaAlternativaId ?? null,
         jobContext: nextJobContext as never,
+        clienteId: clienteId || null,
         periodo: getCurrentPeriodo(),
       };
       const response = item.cotizacionItemId
@@ -3963,6 +3979,7 @@ export function PropuestaFicha({
           if (!open) setEditingItem(null);
         }}
         productos={initialProductos}
+        clienteId={clienteId || null}
         fechaEntregaDefault={fechaEstimada}
         editingItem={editingItem}
         onAddItem={(item) => {

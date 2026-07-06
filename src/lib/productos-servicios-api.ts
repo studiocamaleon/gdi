@@ -783,6 +783,8 @@ export interface NestingViewerInput {
 export interface CotizarRequest {
   productoId: string;
   rutaAlternativaId?: string | null;
+  /** Cliente de la OT: habilita el override de precios especiales por cliente. */
+  clienteId?: string | null;
   jobContext: {
     cantidad: number;
     caras?: 1 | 2;
@@ -812,7 +814,6 @@ export interface CotizarRequest {
     slotMateriales?: Record<string, string>;
     [key: string]: unknown;
   };
-  clienteId?: string | null;
   periodo?: string | null;
 }
 

@@ -190,6 +190,8 @@ type AgregarProductoSheetProps = {
   onAddItem: (item: PropuestaItem) => void;
   editingItem?: PropuestaItem | null;
   onSaveItem?: (item: PropuestaItem) => void;
+  /** Cliente seleccionado en la OT: activa precios especiales por cliente. */
+  clienteId?: string | null;
 };
 
 const ZONAS_VIATICO = [
@@ -4287,6 +4289,12 @@ function ApConfigStep({
         <div className={`ap-summary${cotizando && cotizacionExitosa ? " is-updating" : ""}`}>
           <div className="ap-sum-head">
             {cotizacionExitosa ? "Detalle del cálculo" : cotizando ? "Calculando" : "Precio"}
+            {cotizacionExitosa?.desglosePrecio?.precioEspecialCliente ? (
+              <span className="ap-sum-especial" title="Este producto tiene un precio especial configurado para el cliente de la orden.">
+                <StarIcon aria-hidden="true" />
+                Precio especial del cliente
+              </span>
+            ) : null}
             {cotizando && cotizacionExitosa ? (
               <span className="ap-sum-updating" aria-live="polite">
                 actualizando…
@@ -4430,6 +4438,7 @@ export function AgregarProductoSheet({
   onAddItem,
   editingItem = null,
   onSaveItem,
+  clienteId = null,
 }: AgregarProductoSheetProps) {
   const [step, setStep] = React.useState<"select" | "config">("select");
   const [product, setProduct] = React.useState<CatalogProduct | null>(null);
@@ -4629,6 +4638,7 @@ export function AgregarProductoSheet({
         productoId: product.id,
         rutaAlternativaId: motorConfig.rutaAlternativaId || null,
         jobContext: jobContext as never,
+        clienteId,
         periodo: getCurrentPeriodo(),
       });
       if (seq !== cotizacionSeqRef.current) return; // llegó una cotización más nueva
@@ -4644,7 +4654,7 @@ export function AgregarProductoSheet({
     } finally {
       if (seq === cotizacionSeqRef.current) setCotizando(false);
     }
-  }, [motorConfig, product, productoDetalle, qty]);
+  }, [clienteId, motorConfig, product, productoDetalle, qty]);
 
   // Cotización en tiempo real: al cambiar cantidad, medidas, opcionales o ruta
   // se recotiza sola con un pequeño debounce (no hace falta apretar "Cotizar").
