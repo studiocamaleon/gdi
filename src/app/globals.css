@@ -17920,6 +17920,7 @@ textarea.est-input {
 
   /* ── Toggle switch ──────────────────────────────────────────────── */
   .pasos-sections .ps-toggle {
+    position: relative;
     display: inline-flex;
     align-items: center;
     gap: 10px;
@@ -18951,6 +18952,7 @@ textarea.est-input {
 
   /* ── Checkbox inline (multiplicar por caras) ────────────────────── */
   .pasos-sections .ps-multi {
+    position: relative;
     display: inline-flex;
     align-items: center;
     gap: 9px;
@@ -19023,3 +19025,4 @@ textarea.est-input {
 /* ps-redesign sync 1783370841 */
 
 /* ps-sync 1783371384 */
+/* ps-fix-toggle 1783372966 */

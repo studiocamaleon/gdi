@@ -4576,7 +4576,7 @@ export function ConfigPasosEditorView({
                               : "horizontal",
                           `${resolvedPanelOverlap} mm solape`,
                           resolvedPanelMaxWidth > 0
-                            ? `${resolvedPanelMaxWidth} mm máx.`
+                            ? `${formatNumber(resolvedPanelMaxWidth / 10)} cm máx.`
                             : "máx. ancho imprimible",
                         ].join(" · ")
                       : "";
@@ -7589,35 +7589,58 @@ export function ConfigPasosEditorView({
                                               <div className="space-y-1">
                                                 <LabelConTooltip
                                                   label="Ancho máx. por panel"
-                                                  tooltip="Límite físico de cada panel en milímetros. Si queda en 0, el motor usa el ancho útil del rollo. Valores menores a 300 mm se tratan como 0 para evitar paneles demasiado angostos."
+                                                  tooltip="Límite físico de cada panel en centímetros. Si queda en 0, el motor usa el ancho útil del rollo. Valores menores a 30 cm se tratan como 0 para evitar paneles demasiado angostos."
                                                   iconSize="sm"
                                                 />
                                                 <div className="ps-inp">
+                                                  {/* Se edita en cm y se guarda en mm (patrón de los
+                                                      márgenes). El valor crudo se muestra mientras se
+                                                      edita; la regla "<30 cm se trata como 0" se aplica
+                                                      al salir del campo (blur), no por keystroke — si
+                                                      no, es imposible tipear un valor. */}
                                                   <Input
                                                     type="number"
                                                     min={0}
-                                                    step={1}
-                                                    value={String(
-                                                      resolvedPanelMaxWidth,
+                                                    step={0.5}
+                                                    value={mmToCmInput(
+                                                      getResolvedNestingNumber(
+                                                        panelizadoConfig.maxPanelWidthMm,
+                                                        undefined,
+                                                        0,
+                                                      ),
                                                     )}
                                                     onChange={(e) =>
                                                       updateNestingPanelizado(
                                                         paso.id,
                                                         {
                                                           maxPanelWidthMm:
-                                                            e.target.value ===
-                                                            ""
-                                                              ? 0
-                                                              : Number(
-                                                                  e.target
-                                                                    .value,
-                                                                ),
+                                                            cmInputToMm(
+                                                              e.target.value,
+                                                            ) ?? 0,
                                                         },
                                                       )
                                                     }
+                                                    onBlur={(e) => {
+                                                      const valorMm =
+                                                        (cmInputToMm(
+                                                          e.target.value,
+                                                        ) ?? 0);
+                                                      if (
+                                                        valorMm > 0 &&
+                                                        valorMm <
+                                                          MIN_PANEL_MAX_WIDTH_MM
+                                                      ) {
+                                                        updateNestingPanelizado(
+                                                          paso.id,
+                                                          {
+                                                            maxPanelWidthMm: 0,
+                                                          },
+                                                        );
+                                                      }
+                                                    }}
                                                   />
                                                   <span className="ps-u">
-                                                    mm
+                                                    cm
                                                   </span>
                                                 </div>
                                               </div>
