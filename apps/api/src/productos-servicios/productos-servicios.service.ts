@@ -11,6 +11,7 @@ import type {
   DuplicarRutaDto,
 } from './dto/ruta.dto';
 import type {
+  ActualizarPasoExtraDto,
   ActualizarProductoRutaAlternativaDto,
   AgregarPasoExtraDto,
   CrearProductoRutaAlternativaDto,
@@ -225,6 +226,14 @@ export class ProductosServiciosService {
     dto: AgregarPasoExtraDto,
   ) {
     return this.cargos.agregarPasoExtra(tenantId, productoId, dto);
+  }
+
+  actualizarPasoExtra(
+    tenantId: string,
+    pasoExtraId: string,
+    dto: ActualizarPasoExtraDto,
+  ) {
+    return this.cargos.actualizarPasoExtra(tenantId, pasoExtraId, dto);
   }
 
   eliminarPasoExtra(tenantId: string, pasoExtraId: string) {

@@ -521,14 +521,50 @@ export async function desasociarCargoPaso(asociacionId: string) {
 
 export interface AgregarPasoExtraPayload {
   familiaCodigo: string;
+  /** Ruta alternativa del producto a la que aplica (scope por ruta). */
+  rutaAlternativaId?: string | null;
   insertarDespuesDeRutaPasoId?: string | null;
   ordenInterno?: number;
   modoActivacion?: "OBLIGATORIO" | "OPCIONAL" | "CONDICIONAL";
+  condicionActivacionJson?: Record<string, unknown> | null;
   modoTiempo?: "T-1" | "T-2" | "T-3" | "T-4";
   mecanismoCantidad?: "DIRECT_FROM_JOBCONTEXT" | "CONVERSION";
   paramsPasoJson?: Record<string, unknown>;
   maquinaM1Id?: string;
   perfilM1Id?: string;
+  centroCostoId?: string;
+}
+
+/** Campos actualizables de un paso extra (PATCH — sólo se aplican los presentes). */
+export interface ActualizarPasoExtraPayload {
+  insertarDespuesDeRutaPasoId?: string | null;
+  ordenInterno?: number;
+  nombreVisible?: string | null;
+  /** OBLIGATORIO | OPCIONAL | CONDICIONAL | NO_EJECUTAR. */
+  modoActivacion?: string;
+  condicionActivacionJson?: Record<string, unknown> | null;
+  /** T-1 | T-2 | T-3 | T-4. */
+  modoTiempo?: string;
+  mecanismoCantidad?: string;
+  mecanismoCantidadConfigJson?: Record<string, unknown> | null;
+  multiplicadoresActivos?: string[];
+  paramsPasoJson?: Record<string, unknown>;
+  maquinaM1Id?: string | null;
+  perfilM1Id?: string | null;
+  centroCostoId?: string | null;
+  setupOverrideMin?: number | null;
+  cleanupOverrideMin?: number | null;
+  tiempoFijoOverrideMin?: number | null;
+  /** Sub-fase 3: slots de material del extra (mismo shape que pasos normales). */
+  configSlotsMaterialesJson?: UpsertSlotMaterialPayload[];
+  configCargosDirectosJson?: Array<{
+    cargoDirectoCatalogoId: string;
+    modoActivacion: string;
+    condicionActivacionJson?: Record<string, unknown> | null;
+    configOverrideJson?: Record<string, unknown> | null;
+  }>;
+  configMaquinasCandidatasJson?: Record<string, unknown>[];
+  activo?: boolean;
 }
 
 export async function agregarPasoExtra(
@@ -539,6 +575,20 @@ export async function agregarPasoExtra(
     `/productos-servicios/productos/${productoId}/pasos-extras`,
     {
       method: "POST",
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+}
+
+export async function actualizarPasoExtra(
+  pasoExtraId: string,
+  payload: ActualizarPasoExtraPayload,
+) {
+  return apiRequest(
+    `/productos-servicios/productos/pasos-extras/${pasoExtraId}`,
+    {
+      method: "PATCH",
       body: JSON.stringify(payload),
       headers: { "Content-Type": "application/json" },
     },

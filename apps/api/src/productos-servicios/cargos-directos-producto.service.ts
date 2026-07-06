@@ -5,7 +5,10 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import type { AgregarPasoExtraDto } from './dto/producto-ruta.dto';
+import type {
+  ActualizarPasoExtraDto,
+  AgregarPasoExtraDto,
+} from './dto/producto-ruta.dto';
 import type {
   ActualizarCargoDirectoDto,
   AsociarCargoCotizacionDto,
@@ -213,28 +216,7 @@ export class CargosDirectosProductoService {
     // Validar que las FK provistas pertenezcan al tenant (evita referencias
     // cross-tenant a máquinas/perfiles/pasos de ruta ajenos).
     if (dto.maquinaM1Id) {
-      const maquina = await this.prisma.maquina.findFirst({
-        where: { id: dto.maquinaM1Id, tenantId, activo: true },
-        include: {
-          perfilesOperativos: {
-            where: { activo: true },
-            select: { id: true },
-          },
-        },
-      });
-      if (!maquina) {
-        throw new BadRequestException(
-          'La máquina M-1 seleccionada no existe o no está activa.',
-        );
-      }
-      if (
-        dto.perfilM1Id &&
-        !maquina.perfilesOperativos.some((p) => p.id === dto.perfilM1Id)
-      ) {
-        throw new BadRequestException(
-          'El perfil M-1 no pertenece a la máquina seleccionada.',
-        );
-      }
+      await this.assertMaquinaPerfil(tenantId, dto.maquinaM1Id, dto.perfilM1Id);
     }
     if (dto.insertarDespuesDeRutaPasoId) {
       const rutaPaso = await this.prisma.rutaPaso.findFirst({
@@ -247,11 +229,27 @@ export class CargosDirectosProductoService {
         );
       }
     }
+    if (dto.rutaAlternativaId) {
+      await this.assertRutaAlternativaDelProducto(
+        tenantId,
+        productoId,
+        dto.rutaAlternativaId,
+      );
+    }
+    if (dto.centroCostoId) {
+      await this.assertCentroCosto(tenantId, dto.centroCostoId);
+    }
 
+    // ordenInterno se calcula por ruta alternativa (el orden es dentro del
+    // flujo de esa ruta), no global al producto.
     let ordenInterno = dto.ordenInterno ?? 0;
     if (dto.ordenInterno === undefined) {
       const last = await this.prisma.productoPasoExtra.findFirst({
-        where: { productoId, tenantId },
+        where: {
+          productoId,
+          tenantId,
+          rutaAlternativaId: dto.rutaAlternativaId ?? null,
+        },
         orderBy: { ordenInterno: 'desc' },
       });
       ordenInterno = (last?.ordenInterno ?? 0) + 1;
@@ -261,6 +259,7 @@ export class CargosDirectosProductoService {
       data: {
         tenantId,
         productoId,
+        rutaAlternativaId: dto.rutaAlternativaId ?? null,
         familiaCodigo: dto.familiaCodigo,
         insertarDespuesDeRutaPasoId: dto.insertarDespuesDeRutaPasoId ?? null,
         ordenInterno,
@@ -272,8 +271,113 @@ export class CargosDirectosProductoService {
         paramsPasoJson: (dto.paramsPasoJson as never) ?? Prisma.JsonNull,
         maquinaM1Id: dto.maquinaM1Id ?? null,
         perfilM1Id: dto.maquinaM1Id ? (dto.perfilM1Id ?? null) : null,
+        // Centro de costo sólo aplica si el paso NO tiene máquina.
+        centroCostoId: dto.maquinaM1Id ? null : (dto.centroCostoId ?? null),
         activo: true,
       },
+    });
+  }
+
+  async actualizarPasoExtra(
+    tenantId: string,
+    pasoExtraId: string,
+    dto: ActualizarPasoExtraDto,
+  ) {
+    const existente = await this.prisma.productoPasoExtra.findFirst({
+      where: { id: pasoExtraId, tenantId },
+    });
+    if (!existente)
+      throw new NotFoundException(`Paso extra ${pasoExtraId} no encontrado`);
+
+    // La máquina efectiva tras el patch (para validar perfil y limpiar centro).
+    const maquinaEfectiva =
+      dto.maquinaM1Id !== undefined ? dto.maquinaM1Id : existente.maquinaM1Id;
+    if (dto.maquinaM1Id) {
+      await this.assertMaquinaPerfil(tenantId, dto.maquinaM1Id, dto.perfilM1Id);
+    }
+    if (dto.insertarDespuesDeRutaPasoId) {
+      const rutaPaso = await this.prisma.rutaPaso.findFirst({
+        where: { id: dto.insertarDespuesDeRutaPasoId, tenantId },
+        select: { id: true },
+      });
+      if (!rutaPaso) {
+        throw new BadRequestException(
+          'El paso de ruta indicado no existe o no pertenece a tu empresa.',
+        );
+      }
+    }
+    if (dto.centroCostoId) {
+      await this.assertCentroCosto(tenantId, dto.centroCostoId);
+    }
+
+    const data: Prisma.ProductoPasoExtraUpdateInput = {};
+    if (dto.insertarDespuesDeRutaPasoId !== undefined)
+      data.insertarDespuesDeRutaPasoId = dto.insertarDespuesDeRutaPasoId;
+    if (dto.ordenInterno !== undefined) data.ordenInterno = dto.ordenInterno;
+    if (dto.nombreVisible !== undefined)
+      data.nombreVisible = dto.nombreVisible;
+    if (dto.modoActivacion !== undefined)
+      data.modoActivacion = dto.modoActivacion;
+    if (dto.condicionActivacionJson !== undefined)
+      data.condicionActivacionJson =
+        (dto.condicionActivacionJson as never) ?? Prisma.JsonNull;
+    if (dto.modoTiempo !== undefined) data.modoTiempo = dto.modoTiempo;
+    if (dto.mecanismoCantidad !== undefined)
+      data.mecanismoCantidad = dto.mecanismoCantidad;
+    if (dto.mecanismoCantidadConfigJson !== undefined)
+      data.mecanismoCantidadConfigJson =
+        (dto.mecanismoCantidadConfigJson as never) ?? Prisma.JsonNull;
+    if (dto.multiplicadoresActivos !== undefined)
+      data.multiplicadoresActivos = dto.multiplicadoresActivos;
+    if (dto.paramsPasoJson !== undefined)
+      data.paramsPasoJson = (dto.paramsPasoJson as never) ?? Prisma.JsonNull;
+    if (dto.setupOverrideMin !== undefined)
+      data.setupOverrideMin = dto.setupOverrideMin;
+    if (dto.cleanupOverrideMin !== undefined)
+      data.cleanupOverrideMin = dto.cleanupOverrideMin;
+    if (dto.tiempoFijoOverrideMin !== undefined)
+      data.tiempoFijoOverrideMin = dto.tiempoFijoOverrideMin;
+    if (dto.maquinaM1Id !== undefined)
+      data.maquinaM1 = dto.maquinaM1Id
+        ? { connect: { id: dto.maquinaM1Id } }
+        : { disconnect: true };
+    if (dto.perfilM1Id !== undefined || dto.maquinaM1Id !== undefined) {
+      const perfilEfectivo = maquinaEfectiva
+        ? dto.perfilM1Id !== undefined
+          ? dto.perfilM1Id
+          : existente.perfilM1Id
+        : null;
+      data.perfilM1 = perfilEfectivo
+        ? { connect: { id: perfilEfectivo } }
+        : { disconnect: true };
+    }
+    // Centro de costo sólo si no hay máquina efectiva.
+    if (dto.centroCostoId !== undefined || dto.maquinaM1Id !== undefined) {
+      const centroEfectivo = maquinaEfectiva
+        ? null
+        : dto.centroCostoId !== undefined
+          ? dto.centroCostoId
+          : existente.centroCostoId;
+      data.centroCosto = centroEfectivo
+        ? { connect: { id: centroEfectivo } }
+        : { disconnect: true };
+    }
+    // Sub-fase 3 — config inline embebida (slots / cargos / candidatas). Se
+    // guarda tal cual (ids); el motor la hidrata y scopea por tenant en cotización.
+    if (dto.configSlotsMaterialesJson !== undefined)
+      data.configSlotsMaterialesJson =
+        (dto.configSlotsMaterialesJson as never) ?? Prisma.JsonNull;
+    if (dto.configCargosDirectosJson !== undefined)
+      data.configCargosDirectosJson =
+        (dto.configCargosDirectosJson as never) ?? Prisma.JsonNull;
+    if (dto.configMaquinasCandidatasJson !== undefined)
+      data.configMaquinasCandidatasJson =
+        (dto.configMaquinasCandidatasJson as never) ?? Prisma.JsonNull;
+    if (dto.activo !== undefined) data.activo = dto.activo;
+
+    return this.prisma.productoPasoExtra.update({
+      where: { id: pasoExtraId },
+      data,
     });
   }
 
@@ -284,5 +388,58 @@ export class CargosDirectosProductoService {
     if (!existente)
       throw new NotFoundException(`Paso extra ${pasoExtraId} no encontrado`);
     return this.prisma.productoPasoExtra.delete({ where: { id: pasoExtraId } });
+  }
+
+  // ── Validaciones compartidas ────────────────────────────────────────
+
+  private async assertMaquinaPerfil(
+    tenantId: string,
+    maquinaId: string,
+    perfilId?: string | null,
+  ) {
+    const maquina = await this.prisma.maquina.findFirst({
+      where: { id: maquinaId, tenantId, activo: true },
+      include: {
+        perfilesOperativos: { where: { activo: true }, select: { id: true } },
+      },
+    });
+    if (!maquina) {
+      throw new BadRequestException(
+        'La máquina M-1 seleccionada no existe o no está activa.',
+      );
+    }
+    if (perfilId && !maquina.perfilesOperativos.some((p) => p.id === perfilId)) {
+      throw new BadRequestException(
+        'El perfil M-1 no pertenece a la máquina seleccionada.',
+      );
+    }
+  }
+
+  private async assertRutaAlternativaDelProducto(
+    tenantId: string,
+    productoId: string,
+    rutaAlternativaId: string,
+  ) {
+    const ruta = await this.prisma.productoRutaAlternativa.findFirst({
+      where: { id: rutaAlternativaId, tenantId, productoId },
+      select: { id: true },
+    });
+    if (!ruta) {
+      throw new BadRequestException(
+        'La ruta alternativa indicada no existe o no pertenece a este producto.',
+      );
+    }
+  }
+
+  private async assertCentroCosto(tenantId: string, centroCostoId: string) {
+    const centro = await this.prisma.centroCosto.findFirst({
+      where: { id: centroCostoId, tenantId },
+      select: { id: true },
+    });
+    if (!centro) {
+      throw new BadRequestException(
+        'El centro de costo indicado no existe o no pertenece a tu empresa.',
+      );
+    }
   }
 }

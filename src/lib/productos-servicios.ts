@@ -132,6 +132,8 @@ export interface RutaAlternativaDetalle {
     pasos: Array<RutaPaso>;
   };
   configPasos: Array<ConfigPasoDetalle>;
+  /** G-F3: pasos extras inline de esta ruta (no de la ruta base reusable). */
+  pasosExtras?: Array<PasoExtra>;
 }
 
 export interface RutaPaso {
@@ -320,9 +322,37 @@ export interface CargoCotizacionDetalle {
 
 export interface PasoExtra {
   id: string;
+  rutaAlternativaId: string | null;
+  insertarDespuesDeRutaPasoId: string | null;
   ordenInterno: number;
   familiaCodigo: string;
+  nombreVisible: string | null;
   modoActivacion: string | null;
+  condicionActivacionJson: unknown;
+  modoTiempo: string | null;
+  mecanismoCantidad: string | null;
+  mecanismoCantidadConfigJson: unknown;
+  multiplicadoresActivos: string[];
+  paramsPasoJson: unknown;
+  maquinaM1Id: string | null;
+  perfilM1Id: string | null;
+  centroCostoId: string | null;
+  setupOverrideMin: string | null;
+  cleanupOverrideMin: string | null;
+  tiempoFijoOverrideMin: string | null;
+  /** Sub-fase 3: config inline embebida (slots / candidatas / cargos). */
+  configSlotsMaterialesJson?: unknown;
+  configMaquinasCandidatasJson?: unknown;
+  configCargosDirectosJson?: unknown;
+  activo: boolean;
+  maquinaM1?: {
+    id: string;
+    codigo: string;
+    nombre: string;
+    plantilla: string;
+  } | null;
+  perfilM1?: { id: string; nombre: string } | null;
+  centroCosto?: { id: string; codigo: string; nombre: string } | null;
 }
 
 // ============================================================================

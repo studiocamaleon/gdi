@@ -25,6 +25,7 @@ import {
   DuplicarRutaDto,
 } from './dto/ruta.dto';
 import {
+  ActualizarPasoExtraDto,
   ActualizarProductoRutaAlternativaDto,
   AgregarPasoExtraDto,
   CrearProductoRutaAlternativaDto,
@@ -381,6 +382,17 @@ export class ProductosServiciosController {
     const tenantId = req.auth?.tenantId;
     if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
     return this.service.agregarPasoExtra(tenantId, productoId, dto);
+  }
+
+  @Patch('productos/pasos-extras/:pasoExtraId')
+  async actualizarPasoExtra(
+    @Req() req: RequestWithAuth,
+    @Param('pasoExtraId') pasoExtraId: string,
+    @Body() dto: ActualizarPasoExtraDto,
+  ) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    return this.service.actualizarPasoExtra(tenantId, pasoExtraId, dto);
   }
 
   @Delete('productos/pasos-extras/:pasoExtraId')

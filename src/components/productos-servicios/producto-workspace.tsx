@@ -24,7 +24,6 @@ import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { HumanSelect } from "@/components/ui/human-select";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { PasosExtrasPanel } from "@/components/productos-servicios/pasos-extras-panel";
 import { TabPrecioCompleto } from "@/components/productos-servicios/tab-precio-completo";
 import {
   precioConfigKey,
@@ -1028,19 +1027,14 @@ function RutasTab({
           <div className="body">
             <h2>Pasos extras inline <span style={{ color: "var(--muted-text)", fontWeight: 400, fontFamily: "var(--font-mono)", fontSize: 12, whiteSpace: "nowrap" }}>(G-F3)</span></h2>
             <div className="helptext">
-              Pasos puntuales que solo este producto necesita y no forman parte de la ruta reusable. Útil para casos únicos.
+              Pasos puntuales que solo este producto necesita, sin crear una ruta
+              nueva. Ahora se configuran <strong>por ruta</strong>, desde el editor de
+              pasos: abrí <em>Configurar pasos</em> de una ruta y usá “＋ Agregar paso
+              extra” para posicionarlo en el flujo, elegir cuándo se aplica
+              (condicional con regla), su máquina o centro de costo y el tiempo.
             </div>
           </div>
         </div>
-        {catalogoFamilias ? (
-          <PasosExtrasPanel
-            productoId={producto.id}
-            pasosExtras={producto.pasosExtras}
-            catalogoFamilias={catalogoFamilias}
-          />
-        ) : (
-          <SectionMissing title="No se pudo cargar el catálogo de familias para pasos extras." />
-        )}
       </div>
     </>
   );

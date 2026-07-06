@@ -289,6 +289,11 @@ export class AgregarPasoExtraDto {
   @IsNotEmpty()
   familiaCodigo!: string;
 
+  /** Ruta alternativa del producto a la que aplica el extra (scope por ruta). */
+  @IsOptional()
+  @IsUUID()
+  rutaAlternativaId?: string | null;
+
   @IsOptional()
   @IsUUID()
   insertarDespuesDeRutaPasoId?: string | null;
@@ -325,4 +330,127 @@ export class AgregarPasoExtraDto {
   @IsOptional()
   @IsUUID()
   perfilM1Id?: string;
+
+  /** Centro de costo para pasos manuales sin máquina. */
+  @IsOptional()
+  @IsUUID()
+  centroCostoId?: string;
+}
+
+/**
+ * Actualización de un paso extra existente. Todos los campos opcionales:
+ * sólo se aplican los presentes (PATCH). `condicionActivacionJson: null`
+ * limpia la regla.
+ */
+export class ActualizarPasoExtraDto {
+  @IsOptional()
+  @IsUUID()
+  insertarDespuesDeRutaPasoId?: string | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  ordenInterno?: number;
+
+  @IsOptional()
+  @IsString()
+  nombreVisible?: string | null;
+
+  @IsOptional()
+  @IsString()
+  modoActivacion?: string;
+
+  @IsOptional()
+  @IsObject()
+  condicionActivacionJson?: Record<string, unknown> | null;
+
+  @IsOptional()
+  @IsString()
+  modoTiempo?: string;
+
+  @IsOptional()
+  @IsString()
+  mecanismoCantidad?: string;
+
+  @IsOptional()
+  @IsObject()
+  mecanismoCantidadConfigJson?: Record<string, unknown> | null;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  multiplicadoresActivos?: string[];
+
+  @IsOptional()
+  @IsObject()
+  paramsPasoJson?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsUUID()
+  maquinaM1Id?: string | null;
+
+  @IsOptional()
+  @IsUUID()
+  perfilM1Id?: string | null;
+
+  @IsOptional()
+  @IsUUID()
+  centroCostoId?: string | null;
+
+  @IsOptional()
+  @IsNumber()
+  setupOverrideMin?: number | null;
+
+  @IsOptional()
+  @IsNumber()
+  cleanupOverrideMin?: number | null;
+
+  @IsOptional()
+  @IsNumber()
+  tiempoFijoOverrideMin?: number | null;
+
+  /**
+   * Sub-fase 3 — config inline embebida del paso extra. Slots reutilizan el
+   * mismo shape que los pasos normales; los cargos referencian ids de catálogo.
+   * Enviar `[]` limpia el arreglo.
+   */
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => UpsertSlotMaterialDto)
+  configSlotsMaterialesJson?: UpsertSlotMaterialDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PasoExtraCargoDirectoDto)
+  configCargosDirectosJson?: PasoExtraCargoDirectoDto[];
+
+  @IsOptional()
+  @IsArray()
+  configMaquinasCandidatasJson?: Record<string, unknown>[];
+
+  @IsOptional()
+  @IsBoolean()
+  activo?: boolean;
+}
+
+/**
+ * Cargo directo a nivel paso de un paso extra (embebido). Referencia el
+ * catálogo por id; el motor hidrata nombre/modoCalculo/configJson en cotización.
+ */
+export class PasoExtraCargoDirectoDto {
+  @IsUUID()
+  cargoDirectoCatalogoId!: string;
+
+  @IsString()
+  modoActivacion!: string;
+
+  @IsOptional()
+  @IsObject()
+  condicionActivacionJson?: Record<string, unknown> | null;
+
+  @IsOptional()
+  @IsObject()
+  configOverrideJson?: Record<string, unknown> | null;
 }

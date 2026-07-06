@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/sheet";
 import { RuleBuilder } from "@/components/productos-servicios/rule-builder";
 import {
+  actualizarPasoExtra,
   buscarMateriasPrimasConfigPaso,
   upsertConfigPaso,
   type LookupsConfigPaso,
@@ -47,10 +48,12 @@ import {
 } from "@/lib/productos-servicios-api";
 import type {
   CatalogoFamilias,
+  PasoExtra,
   ProductoDetalle,
   RutaAlternativaDetalle,
   SlotMaterialDetalle,
 } from "@/lib/productos-servicios";
+import { PasoExtraEditor } from "@/components/productos-servicios/paso-extra-editor";
 import {
   criterioMotorAutoLabels,
   formulaConsumoLabels,
@@ -922,6 +925,71 @@ function stripNestingConfig(value: Record<string, unknown> | null | undefined) {
   const rest = { ...value };
   delete rest.nestingConfig;
   return Object.keys(rest).length > 0 ? rest : null;
+}
+
+// G-F3 sub-fase 2 — borrador de config para un paso extra (mismo shape que
+// un config-paso, para reusar el panel). Slots/candidatas quedan vacíos hasta
+// la sub-fase 3 (se persisten aparte en el JSON embebido del extra).
+function buildExtraConfigDraft(
+  extra: PasoExtra,
+  familia: CatalogoFamilias["familias"][number] | undefined,
+): UpsertConfigPasoPayload {
+  const num = (v: string | null) => (v != null ? Number(v) : null);
+  return {
+    rutaPasoId: extra.id,
+    modoActivacion:
+      extra.modoActivacion ?? familia?.modoActivacionDefault ?? "OBLIGATORIO",
+    condicionActivacionJson:
+      (extra.condicionActivacionJson as Record<string, unknown> | null) ?? null,
+    modoTiempo:
+      extra.modoTiempo ??
+      (familia?.modosTiempoSoportados.length === 1
+        ? familia.modosTiempoSoportados[0]
+        : null),
+    mecanismoCantidad:
+      (extra.mecanismoCantidad?.trim() || null) ??
+      getDefaultMecanismoCantidad(
+        extra.familiaCodigo,
+        familia?.mecanismosCantidadSoportados ?? [],
+      ),
+    mecanismoCantidadConfigJson:
+      (extra.mecanismoCantidadConfigJson as Record<string, unknown> | null) ??
+      null,
+    multiplicadoresActivos: extra.multiplicadoresActivos ?? [],
+    paramsPasoJson:
+      (extra.paramsPasoJson as Record<string, unknown> | null) ?? null,
+    nombreVisible: extra.nombreVisible ?? null,
+    maquinaM1Id: extra.maquinaM1Id ?? null,
+    perfilM1Id: extra.perfilM1Id ?? null,
+    centroCostoId: extra.maquinaM1Id ? null : (extra.centroCostoId ?? null),
+    setupOverrideMin: num(extra.setupOverrideMin),
+    cleanupOverrideMin: num(extra.cleanupOverrideMin),
+    tiempoFijoOverrideMin: num(extra.tiempoFijoOverrideMin),
+    // Sub-fase 3: slots persistidos en configSlotsMaterialesJson (mismo shape).
+    slotsMateriales: Array.isArray(extra.configSlotsMaterialesJson)
+      ? (extra.configSlotsMaterialesJson as UpsertConfigPasoPayload["slotsMateriales"])
+      : [],
+    maquinasCandidatas: [],
+  };
+}
+
+function buildExtraJsonText(extra: PasoExtra): {
+  params: string;
+  mecanismo: string;
+} {
+  return {
+    params: jsonToText(
+      stripNestingConfig(
+        extra.paramsPasoJson as Record<string, unknown> | null | undefined,
+      ),
+    ),
+    mecanismo: jsonToText(
+      extra.mecanismoCantidadConfigJson as
+        | Record<string, unknown>
+        | null
+        | undefined,
+    ),
+  };
 }
 
 function getNestingConfig(params: Record<string, unknown> | null | undefined) {
@@ -2561,6 +2629,13 @@ export function ConfigPasosEditorView({
           })) ?? [],
       };
     }
+    // G-F3 sub-fase 2 — borradores para los pasos extras (mismo panel).
+    for (const extra of rutaAlternativa.pasosExtras ?? []) {
+      initial[extra.id] = buildExtraConfigDraft(
+        extra,
+        familiasMap.get(extra.familiaCodigo),
+      );
+    }
     return initial;
   });
   const [candidateMaterials, setCandidateMaterials] = React.useState<
@@ -2601,7 +2676,7 @@ export function ConfigPasosEditorView({
     React.useState<Record<string, string>>({});
 
   // JSON text por paso (sólo UI; al guardar se parsea de vuelta a objeto)
-  const [jsonTexts] = React.useState<
+  const [jsonTexts, setJsonTexts] = React.useState<
     Record<string, { params: string; mecanismo: string }>
   >(() => {
     const map: Record<string, { params: string; mecanismo: string }> = {};
@@ -2618,6 +2693,9 @@ export function ConfigPasosEditorView({
             Record<string, unknown> | null | undefined,
         ),
       };
+    }
+    for (const extra of rutaAlternativa.pasosExtras ?? []) {
+      map[extra.id] = buildExtraJsonText(extra);
     }
     return map;
   });
@@ -2639,6 +2717,41 @@ export function ConfigPasosEditorView({
   const [activePasoId, setActivePasoId] = React.useState(
     () => rutaAlternativa.ruta.pasos[0]?.id ?? "",
   );
+  // G-F3: paso extra en edición. "new" = alta; PasoExtra = edición; null = panel base.
+  const [editingExtra, setEditingExtra] = React.useState<
+    PasoExtra | "new" | null
+  >(null);
+  const pasosExtras = rutaAlternativa.pasosExtras ?? [];
+  // Sync: un extra creado después del mount (o traído por refresh) necesita su
+  // borrador en `configs`/`jsonTexts` para poder editarse en el panel.
+  React.useEffect(() => {
+    setConfigs((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const extra of pasosExtras) {
+        if (!next[extra.id]) {
+          next[extra.id] = buildExtraConfigDraft(
+            extra,
+            familiasMap.get(extra.familiaCodigo),
+          );
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+    setJsonTexts((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const extra of pasosExtras) {
+        if (!next[extra.id]) {
+          next[extra.id] = buildExtraJsonText(extra);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rutaAlternativa.pasosExtras]);
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
   const [panelEditorPasoId, setPanelEditorPasoId] = React.useState<
     string | null
@@ -3330,8 +3443,13 @@ export function ConfigPasosEditorView({
   const guardarPaso = async (rutaPasoId: string) => {
     // Parsear JSONs antes de guardar
     const jsonText = jsonTexts[rutaPasoId];
+    const extraGuardar = pasosExtras.find((e) => e.id === rutaPasoId) ?? null;
     const paso = rutaAlternativa.ruta.pasos.find((p) => p.id === rutaPasoId);
-    const familia = paso ? familiasMap.get(paso.familiaCodigo) : undefined;
+    const familiaCodigoGuardar =
+      extraGuardar?.familiaCodigo ?? paso?.familiaCodigo;
+    const familia = familiaCodigoGuardar
+      ? familiasMap.get(familiaCodigoGuardar)
+      : undefined;
     const noEjecutar = configs[rutaPasoId].modoActivacion === "NO_EJECUTAR";
     const cantidadRelevante =
       !noEjecutar && requiereMecanismoCantidad(configs[rutaPasoId], familia);
@@ -3400,8 +3518,7 @@ export function ConfigPasosEditorView({
         maquinaGuardada,
         configExistente,
         ["impresion_por_hoja", "impresion_por_area"].includes(
-          rutaAlternativa.ruta.pasos.find((paso) => paso.id === rutaPasoId)
-            ?.familiaCodigo ?? "",
+          familiaCodigoGuardar ?? "",
         ),
       );
       const modoColorAllowed = Array.isArray(modoColorConfigRaw.allowedModes)
@@ -3486,19 +3603,48 @@ export function ConfigPasosEditorView({
       ) {
         paramsPasoJson.modoColorConfig = modoColorConfigClean;
       }
-      await upsertConfigPaso(rutaAlternativa.id, {
-        ...configs[rutaPasoId],
-        centroCostoId: configs[rutaPasoId].maquinaM1Id
-          ? null
-          : (configs[rutaPasoId].centroCostoId ?? null),
-        condicionActivacionJson,
-        mecanismoCantidad: cantidadRelevante
-          ? configs[rutaPasoId].mecanismoCantidad
-          : null,
-        paramsPasoJson:
-          Object.keys(paramsPasoJson).length > 0 ? paramsPasoJson : null,
-        mecanismoCantidadConfigJson: mecanismoRes.value,
-      });
+      const cfgActual = configs[rutaPasoId];
+      const centroCostoIdEfectivo = cfgActual.maquinaM1Id
+        ? null
+        : (cfgActual.centroCostoId ?? null);
+      const mecanismoCantidadEfectivo = cantidadRelevante
+        ? (cfgActual.mecanismoCantidad ?? null)
+        : null;
+      const paramsPasoJsonEfectivo =
+        Object.keys(paramsPasoJson).length > 0 ? paramsPasoJson : null;
+      if (extraGuardar) {
+        // Paso extra: mismo config computado, persistido vía el endpoint de
+        // pasos-extras. Slots se guardan embebidos en configSlotsMaterialesJson
+        // (sub-fase 3); candidatas M-2 quedan diferidas.
+        await actualizarPasoExtra(rutaPasoId, {
+          nombreVisible: cfgActual.nombreVisible ?? null,
+          modoActivacion: cfgActual.modoActivacion ?? undefined,
+          condicionActivacionJson,
+          modoTiempo: cfgActual.modoTiempo ?? undefined,
+          mecanismoCantidad: mecanismoCantidadEfectivo ?? undefined,
+          mecanismoCantidadConfigJson: mecanismoRes.value ?? null,
+          multiplicadoresActivos: cfgActual.multiplicadoresActivos ?? [],
+          paramsPasoJson: paramsPasoJsonEfectivo ?? undefined,
+          maquinaM1Id: cfgActual.maquinaM1Id ?? null,
+          perfilM1Id: cfgActual.maquinaM1Id
+            ? (cfgActual.perfilM1Id ?? null)
+            : null,
+          centroCostoId: centroCostoIdEfectivo,
+          setupOverrideMin: cfgActual.setupOverrideMin ?? null,
+          cleanupOverrideMin: cfgActual.cleanupOverrideMin ?? null,
+          tiempoFijoOverrideMin: cfgActual.tiempoFijoOverrideMin ?? null,
+          configSlotsMaterialesJson: cfgActual.slotsMateriales ?? [],
+        });
+      } else {
+        await upsertConfigPaso(rutaAlternativa.id, {
+          ...cfgActual,
+          centroCostoId: centroCostoIdEfectivo,
+          condicionActivacionJson,
+          mecanismoCantidad: mecanismoCantidadEfectivo,
+          paramsPasoJson: paramsPasoJsonEfectivo,
+          mecanismoCantidadConfigJson: mecanismoRes.value,
+        });
+      }
       setSavedConfigSnapshots((prev) => ({
         ...prev,
         [rutaPasoId]: configSnapshot(configs[rutaPasoId]),
@@ -3598,8 +3744,44 @@ export function ConfigPasosEditorView({
   const doneCount = stepSummaries.filter(
     ({ summary }) => summary.status === "done",
   ).length;
-  const activePaso =
-    rutaAlternativa.ruta.pasos[activeIdx] ?? rutaAlternativa.ruta.pasos[0];
+  // G-F3 sub-fase 2 — el paso activo puede ser un paso base o un paso extra.
+  // Para el panel de config los tratamos igual (mismo borrador `configs`).
+  const activeExtra = pasosExtras.find((e) => e.id === activePasoId) ?? null;
+  const activePaso = activeExtra
+    ? {
+        id: activeExtra.id,
+        orden: 0,
+        familiaCodigo: activeExtra.familiaCodigo,
+        icono: null,
+        activo: activeExtra.activo,
+      }
+    : (rutaAlternativa.ruta.pasos.find((p) => p.id === activePasoId) ??
+      rutaAlternativa.ruta.pasos[0]);
+  // Secuencia unificada (base + extras por posición) para numerar el display.
+  const pasosUnificados = React.useMemo(() => {
+    const alInicio = pasosExtras
+      .filter((e) => e.insertarDespuesDeRutaPasoId == null)
+      .sort((a, b) => a.ordenInterno - b.ordenInterno);
+    const despues = new Map<string, typeof pasosExtras>();
+    for (const e of pasosExtras) {
+      if (e.insertarDespuesDeRutaPasoId == null) continue;
+      const arr = despues.get(e.insertarDespuesDeRutaPasoId) ?? [];
+      arr.push(e);
+      despues.set(e.insertarDespuesDeRutaPasoId, arr);
+    }
+    const ids: string[] = alInicio.map((e) => e.id);
+    for (const bp of [...rutaAlternativa.ruta.pasos].sort(
+      (a, b) => a.orden - b.orden,
+    )) {
+      ids.push(bp.id);
+      for (const e of (despues.get(bp.id) ?? []).sort(
+        (a, b) => a.ordenInterno - b.ordenInterno,
+      )) {
+        ids.push(e.id);
+      }
+    }
+    return ids;
+  }, [rutaAlternativa.ruta.pasos, pasosExtras]);
   const goPrev = () => {
     const prev = rutaAlternativa.ruta.pasos[Math.max(0, activeIdx - 1)];
     if (prev) setActivePasoId(prev.id);
@@ -3662,7 +3844,10 @@ export function ConfigPasosEditorView({
                   type="button"
                   key={paso.id}
                   className={`paso-item ${summary.status} ${summary.optional ? "optional" : ""} ${paso.id === activePasoId ? "active" : ""}`}
-                  onClick={() => setActivePasoId(paso.id)}
+                  onClick={() => {
+                    setActivePasoId(paso.id);
+                    setEditingExtra(null);
+                  }}
                 >
                   <span className="ix">
                     {summary.skipped ? (
@@ -3692,6 +3877,47 @@ export function ConfigPasosEditorView({
               );
             })}
           </div>
+          {/* G-F3 — Pasos extras inline de esta ruta */}
+          <div className="pasos-extras-side">
+            <div className="pe-side-head">Pasos extras</div>
+            {pasosExtras.map((pe) => {
+              const fam = familiasMap.get(pe.familiaCodigo);
+              const activo = editingExtra !== "new" && pe.id === activePasoId;
+              const nombre =
+                configs[pe.id]?.nombreVisible?.trim() ||
+                fam?.nombre ||
+                pe.familiaCodigo;
+              return (
+                <button
+                  type="button"
+                  key={pe.id}
+                  className={`paso-item extra ${activo ? "active" : ""}`}
+                  onClick={() => {
+                    setActivePasoId(pe.id);
+                    setEditingExtra(null);
+                  }}
+                >
+                  <span className="ix">+</span>
+                  <span className="body">
+                    <span className="ttl">{nombre}</span>
+                    <span className="sub">
+                      {pe.maquinaM1?.nombre ??
+                        pe.centroCosto?.nombre ??
+                        "Sin recurso"}
+                    </span>
+                  </span>
+                  <span className="status">Extra</span>
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              className={`pe-add-btn ${editingExtra === "new" ? "active" : ""}`}
+              onClick={() => setEditingExtra("new")}
+            >
+              + Agregar paso extra
+            </button>
+          </div>
           <div className="kbd-panel">
             <span className="kbd-hint">
               Navegar pasos con <span className="k">↑</span>{" "}
@@ -3701,6 +3927,39 @@ export function ConfigPasosEditorView({
         </aside>
 
         <main className="editor-main">
+          {/* G-F3: el alta mínima (familia + posición) usa un form aparte; la
+              configuración del extra usa el mismo panel que los demás pasos. */}
+          {editingExtra === "new" ? (
+            <PasoExtraEditor
+              productoId={producto.id}
+              rutaAlternativa={rutaAlternativa}
+              catalogoFamilias={catalogoFamilias}
+              lookups={lookups}
+              includeMeasureFields={
+                producto.modoMedidas === "LIBRE" ||
+                producto.modoMedidas === "MIXTA"
+              }
+              ruleExtraFields={technologyRuleFields}
+              extra={null}
+              onSaved={() => {
+                setEditingExtra(null);
+                router.refresh();
+              }}
+              onCreated={(creado) => {
+                // Recién creado (mínimo): lo seleccionamos para configurarlo
+                // con el panel completo, y refrescamos para traerlo del server.
+                setActivePasoId(creado.id);
+                setEditingExtra(null);
+                router.refresh();
+              }}
+              onDeleted={() => {
+                setEditingExtra(null);
+                router.refresh();
+              }}
+              onCancel={() => setEditingExtra(null)}
+            />
+          ) : (
+          <>
           <div className="mini-graph">
             {rutaAlternativa.ruta.pasos.map((paso, idx) => {
               const summary = getPasoSummary(paso);
@@ -3713,7 +3972,10 @@ export function ConfigPasosEditorView({
                   <button
                     type="button"
                     className={`mn ${summary.status} ${summary.optional ? "optional" : ""} ${paso.id === activePasoId ? "active" : ""}`}
-                    onClick={() => setActivePasoId(paso.id)}
+                    onClick={() => {
+                    setActivePasoId(paso.id);
+                    setEditingExtra(null);
+                  }}
                     title={pasoLabel}
                   >
                     <span className="d">
@@ -3744,13 +4006,11 @@ export function ConfigPasosEditorView({
             })}
           </div>
 
-          {activePaso
-            ? rutaAlternativa.ruta.pasos
-                .filter((paso) => paso.id === activePaso.id)
+          {activePaso && configs[activePaso.id]
+            ? [activePaso]
                 .map((paso) => {
-                  const idx = rutaAlternativa.ruta.pasos.findIndex(
-                    (item) => item.id === paso.id,
-                  );
+                  const idx = pasosUnificados.indexOf(paso.id);
+                  const esExtra = Boolean(activeExtra);
                   const familia = familiasMap.get(paso.familiaCodigo);
                   const cfg = configs[paso.id];
                   const pasoLabel =
@@ -4872,7 +5132,7 @@ export function ConfigPasosEditorView({
                                           />
                                         </div>
                                       ) : null}
-                                      {soportaM2 ? (
+                                      {soportaM2 && !esExtra ? (
                                         <div className="field md:col-span-full">
                                           <LabelConTooltip
                                             label="Tecnologías / máquinas candidatas"
@@ -5341,6 +5601,7 @@ export function ConfigPasosEditorView({
                               )}
 
                             {/* ── TAB MATERIALES ───────────────────────────────────── */}
+                            {/* Sub-fase 3: los extras persisten slots en configSlotsMaterialesJson. */}
                             {familia && (
                               <section className="section-block open">
                                 <div className="sb-head">
@@ -7324,6 +7585,8 @@ export function ConfigPasosEditorView({
                   );
                 })
             : null}
+          </>
+          )}
         </main>
       </div>
     </div>

@@ -874,7 +874,16 @@ export class ProductosService {
           },
           orderBy: { orden: 'asc' },
         },
-        pasosExtras: { orderBy: { ordenInterno: 'asc' } },
+        pasosExtras: {
+          orderBy: { ordenInterno: 'asc' },
+          include: {
+            maquinaM1: {
+              select: { id: true, codigo: true, nombre: true, plantilla: true },
+            },
+            perfilM1: { select: { id: true, nombre: true } },
+            centroCosto: { select: { id: true, codigo: true, nombre: true } },
+          },
+        },
         cargosDirectosCotizacion: {
           include: { cargoDirectoCatalogo: true },
         },
@@ -891,6 +900,10 @@ export class ProductosService {
 	            (paso) => paso.version === rutaAlt.rutaVersion,
 	          ),
 	        },
+	        // G-F3: extras de ESTA ruta alternativa (scope por ruta).
+	        pasosExtras: producto.pasosExtras.filter(
+	          (pe) => pe.rutaAlternativaId === rutaAlt.id,
+	        ),
 	        configPasos: rutaAlt.configPasos.map((configPaso) => ({
 	          ...configPaso,
 	          modoColorOptions: this.buildModoColorOptions(configPaso),

@@ -7016,6 +7016,76 @@
     box-shadow: inset 2px 0 0 var(--ink);
   }
 
+  /* G-F3 — sección de pasos extras en el sidebar */
+  .editor-side .pasos-extras-side {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px 8px 10px;
+    border-top: 1px solid var(--hairline);
+  }
+
+  .editor-side .pe-side-head {
+    padding: 8px 10px 4px;
+    color: var(--muted-text);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .editor-side .paso-item.extra .ix {
+    border-style: dashed;
+    border-color: var(--signal);
+    color: var(--signal);
+    font-weight: 700;
+  }
+
+  .editor-side .paso-item.extra .status {
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--signal);
+    background: var(--signal-bg);
+    border: 1px solid #f2d9c9;
+    padding: 1px 6px;
+    border-radius: 999px;
+  }
+
+  .editor-side .pe-add-btn {
+    margin-top: 4px;
+    padding: 8px 10px;
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--r-2);
+    background: transparent;
+    color: var(--ink-2);
+    font-size: 12.5px;
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+    transition:
+      background 0.12s ease,
+      border-color 0.12s ease;
+  }
+
+  .editor-side .pe-add-btn:hover {
+    background: var(--surface-2);
+    border-color: var(--ink-2);
+  }
+
+  .editor-side .pe-add-btn.active {
+    border-style: solid;
+    border-color: var(--ink);
+    background: var(--surface-2);
+    color: var(--ink);
+  }
+
+  .editor-main .paso-extra-editor {
+    max-width: 760px;
+    padding: 8px 4px;
+  }
+
   .editor-side .paso-item .ix {
     display: inline-flex;
     align-items: center;
@@ -17652,3 +17722,5 @@ textarea.est-input {
 }
 
 /* sim sync 1783314316 */
+
+/* pe-editor sync 1783356876 */

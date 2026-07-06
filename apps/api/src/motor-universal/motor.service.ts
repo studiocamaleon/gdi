@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { FAMILIAS } from '../productos-servicios/pasos/familias';
 import type { FamiliaCodigo } from '../productos-servicios/pasos/types';
@@ -66,6 +67,40 @@ const FAMILIAS_IMPRESION = new Set([
   'impresion_por_area',
   'impresion_por_hoja',
 ]);
+
+/**
+ * Sub-fase 3 — shapes del config embebido de un paso extra. Espejan el draft
+ * que envía el editor (mismos campos que UpsertSlotMaterialDto / cargo de paso),
+ * guardando sólo ids: el motor hidrata variantes/catálogos en cotización.
+ */
+interface PasoExtraSlotJson {
+  slotCodigo: string;
+  slotNombre?: string | null;
+  slotRol?: string | null;
+  modoSeleccion: string;
+  criterioMotorAuto?: string | null;
+  criterioInputCampo?: string | null;
+  criterioMaterialCampo?: string | null;
+  materialVarianteId?: string | null;
+  candidatos?: Array<{
+    materiaPrimaId: string;
+    defaultVarianteId?: string | null;
+    orden?: number;
+    varianteIds?: string[];
+  }>;
+  estrategiaCosto?: string;
+  formula?: string;
+  cantidadFactor?: number | string | null;
+  cantidadBase?: string | null;
+  aplicaMultiCaras?: boolean;
+}
+
+interface PasoExtraCargoJson {
+  cargoDirectoCatalogoId: string;
+  modoActivacion: string;
+  condicionActivacionJson?: unknown;
+  configOverrideJson?: unknown;
+}
 
 type MinimoComercialBase = 'cantidad_comercial' | 'pliegos_impresos';
 
@@ -5367,6 +5402,19 @@ export class MotorUniversalService {
       };
     });
 
+    // G-F3 — Pasos extras inline: pasos puntuales de ESTA ruta alternativa del
+    // producto (no de la ruta base reusable). Se cargan aparte y se insertan en
+    // la secuencia según `insertarDespuesDeRutaPasoId` + `ordenInterno`.
+    const pasosExtras = await this.cargarPasosExtras(
+      tenantId,
+      producto.id,
+      rutaAlt.id,
+    );
+    const pasosConExtras =
+      pasosExtras.length > 0
+        ? this.insertarPasosExtras(pasos, pasosExtras)
+        : pasos;
+
     return {
       productoId: producto.id,
       productoCodigo: producto.codigo,
@@ -5393,7 +5441,7 @@ export class MotorUniversalService {
       rutaId: rutaAlt.ruta.id,
       rutaCodigo: rutaAlt.ruta.codigo,
       rutaNombre: rutaAlt.ruta.nombre,
-      pasos,
+      pasos: pasosConExtras,
       cargosDirectosCotizacion: producto.cargosDirectosCotizacion.map((c) => ({
         id: c.id,
         cargoDirectoCatalogoId: c.cargoDirectoCatalogoId,
@@ -5438,5 +5486,372 @@ export class MotorUniversalService {
         return parsed;
       })
       .filter((item): item is SnapshotPaso => item !== null);
+  }
+
+  // ==========================================================================
+  // G-F3 — PASOS EXTRAS INLINE
+  // ==========================================================================
+
+  /**
+   * Carga los pasos extras activos de una ruta alternativa (con su máquina,
+   * perfil y centro de costo) y los mapea a `PasoCargado` con metadata de
+   * posición. Los extras viven en el producto pero se resuelven por ruta.
+   */
+  private async cargarPasosExtras(
+    tenantId: string,
+    productoId: string,
+    rutaAlternativaId: string,
+  ): Promise<
+    Array<{
+      paso: PasoCargado;
+      insertarDespuesDeRutaPasoId: string | null;
+      ordenInterno: number;
+    }>
+  > {
+    const rows = await this.prisma.productoPasoExtra.findMany({
+      where: { tenantId, productoId, rutaAlternativaId, activo: true },
+      orderBy: { ordenInterno: 'asc' },
+      include: {
+        maquinaM1: {
+          include: {
+            centroCostoPrincipal: { select: { id: true, nombre: true } },
+            perfilesOperativos: true,
+            consumibles: {
+              where: { activo: true },
+              include: {
+                materiaPrimaVariante: {
+                  include: {
+                    materiaPrima: {
+                      select: {
+                        nombre: true,
+                        unidadStock: true,
+                        templateId: true,
+                        tipoTecnico: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        perfilM1: true,
+        centroCosto: { select: { id: true, codigo: true, nombre: true } },
+      },
+    });
+
+    // Sub-fase 3: los cargos de paso de un extra viven en configCargosDirectosJson
+    // (sólo ids). Hidratamos los catálogos referenciados en una sola query.
+    const cargoCatalogoIds = new Set<string>();
+    for (const row of rows) {
+      for (const c of this.parsePasoExtraCargos(row.configCargosDirectosJson)) {
+        if (c.cargoDirectoCatalogoId) cargoCatalogoIds.add(c.cargoDirectoCatalogoId);
+      }
+    }
+    const catalogos = cargoCatalogoIds.size
+      ? await this.prisma.cargoDirectoCatalogo.findMany({
+          where: { tenantId, id: { in: [...cargoCatalogoIds] }, activo: true },
+        })
+      : [];
+    const catalogoMap = new Map(catalogos.map((c) => [c.id, c]));
+
+    return Promise.all(
+      rows.map(async (row) => ({
+        paso: await this.mapPasoExtraToPasoCargado(row, tenantId, catalogoMap),
+        insertarDespuesDeRutaPasoId: row.insertarDespuesDeRutaPasoId,
+        ordenInterno: row.ordenInterno,
+      })),
+    );
+  }
+
+  /** Parseo defensivo de configSlotsMaterialesJson de un paso extra. */
+  private parsePasoExtraSlots(json: unknown): PasoExtraSlotJson[] {
+    return Array.isArray(json) ? (json as PasoExtraSlotJson[]) : [];
+  }
+
+  /** Parseo defensivo de configCargosDirectosJson de un paso extra. */
+  private parsePasoExtraCargos(json: unknown): PasoExtraCargoJson[] {
+    return Array.isArray(json) ? (json as PasoExtraCargoJson[]) : [];
+  }
+
+  /** Mapea un ProductoPasoExtra (con includes) al shape `PasoCargado`. */
+  private async mapPasoExtraToPasoCargado(
+    row: Prisma.ProductoPasoExtraGetPayload<{
+      include: {
+        maquinaM1: {
+          include: {
+            centroCostoPrincipal: { select: { id: true; nombre: true } };
+            perfilesOperativos: true;
+            consumibles: {
+              include: {
+                materiaPrimaVariante: {
+                  include: {
+                    materiaPrima: {
+                      select: {
+                        nombre: true;
+                        unidadStock: true;
+                        templateId: true;
+                        tipoTecnico: true;
+                      };
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+        perfilM1: true;
+        centroCosto: { select: { id: true; codigo: true; nombre: true } };
+      };
+    }>,
+    tenantId: string,
+    catalogoMap: Map<
+      string,
+      { id: string; codigo: string; nombre: string; modoCalculo: string; configJson: unknown }
+    >,
+  ): Promise<PasoCargado> {
+    const maquina = row.maquinaM1;
+    const perfil = row.perfilM1;
+    const slots = await this.buildSlotsPasoExtra(tenantId, row.id, row.configSlotsMaterialesJson);
+    const cargosDirectosPaso = this.buildCargosPasoExtra(
+      row.id,
+      row.configCargosDirectosJson,
+      catalogoMap,
+    );
+    return {
+      // El extra no tiene RutaPaso ni ConfigPaso: usamos su propio id como
+      // identificador sintético (único) para overrides/snapshots/tecnología.
+      rutaPasoId: row.id,
+      rutaPasoOrden: 0, // se renumera al insertar en la secuencia final
+      familiaCodigo: row.familiaCodigo,
+      nombreVisible: row.nombreVisible,
+      configPasoId: row.id,
+      modoActivacion: row.modoActivacion,
+      condicionActivacionJson: row.condicionActivacionJson,
+      modoTiempo: row.modoTiempo,
+      mecanismoCantidad: row.mecanismoCantidad,
+      mecanismoCantidadConfigJson: row.mecanismoCantidadConfigJson,
+      multiplicadoresActivos: row.multiplicadoresActivos,
+      paramsPasoJson: row.paramsPasoJson,
+      maquinaM1Id: row.maquinaM1Id,
+      perfilM1Id: row.perfilM1Id,
+      centroCostoId: row.maquinaM1Id ? null : row.centroCostoId,
+      setupOverrideMin: row.setupOverrideMin
+        ? Number(row.setupOverrideMin)
+        : null,
+      cleanupOverrideMin: row.cleanupOverrideMin
+        ? Number(row.cleanupOverrideMin)
+        : null,
+      tiempoFijoOverrideMin: row.tiempoFijoOverrideMin
+        ? Number(row.tiempoFijoOverrideMin)
+        : null,
+      maquina: maquina
+        ? {
+            id: maquina.id,
+            codigo: maquina.codigo,
+            nombre: maquina.nombre,
+            plantilla: maquina.plantilla,
+            anchoUtil: maquina.anchoUtil ? Number(maquina.anchoUtil) : null,
+            centroCostoPrincipalId: maquina.centroCostoPrincipalId,
+            centroCostoPrincipalNombre:
+              maquina.centroCostoPrincipal?.nombre ?? null,
+            parametrosTecnicosJson: maquina.parametrosTecnicosJson as Record<
+              string,
+              unknown
+            > | null,
+            consumibles: maquina.consumibles.map((c) =>
+              this.toConsumibleCargado(c),
+            ),
+          }
+        : undefined,
+      perfil: perfil
+        ? {
+            id: perfil.id,
+            nombre: perfil.nombre,
+            tipoPerfil: perfil.tipoPerfil,
+            productivityValue: perfil.productivityValue
+              ? Number(perfil.productivityValue)
+              : null,
+            productivityUnit: perfil.productivityUnit,
+            setupMin: perfil.setupMin ? Number(perfil.setupMin) : null,
+            cleanupMin: perfil.cleanupMin ? Number(perfil.cleanupMin) : null,
+            feedReloadMin: perfil.feedReloadMin
+              ? Number(perfil.feedReloadMin)
+              : null,
+            detalleJson: perfil.detalleJson,
+          }
+        : undefined,
+      centroCosto:
+        !row.maquinaM1Id && row.centroCosto
+          ? {
+              id: row.centroCosto.id,
+              codigo: row.centroCosto.codigo,
+              nombre: row.centroCosto.nombre,
+            }
+          : undefined,
+      perfilesDisponibles: maquina?.perfilesOperativos.map((p) => ({
+        id: p.id,
+        nombre: p.nombre,
+        tipoPerfil: p.tipoPerfil,
+        activo: p.activo,
+        productivityValue: p.productivityValue
+          ? Number(p.productivityValue)
+          : null,
+        productivityUnit: p.productivityUnit,
+        setupMin: p.setupMin ? Number(p.setupMin) : null,
+        cleanupMin: p.cleanupMin ? Number(p.cleanupMin) : null,
+        feedReloadMin: p.feedReloadMin ? Number(p.feedReloadMin) : null,
+        detalleJson: p.detalleJson,
+      })),
+      // M-2 (máquinas candidatas) en extras: diferido. Los extras usan M-1 o
+      // centro de costo manual; el multi-tecnología queda para más adelante.
+      maquinasCandidatas: [],
+      slots,
+      cargosDirectosPaso,
+    };
+  }
+
+  /**
+   * Sub-fase 3 — reconstruye los `SlotCargado[]` de un paso extra desde su
+   * `configSlotsMaterialesJson`. Para HARDCODED hidrata la variante concreta
+   * (precio/atributos) por id; los candidatos se hidratan on-demand en
+   * `resolverMaterialSlot` durante la cotización.
+   */
+  private async buildSlotsPasoExtra(
+    tenantId: string,
+    pasoExtraId: string,
+    json: unknown,
+  ): Promise<SlotCargado[]> {
+    const slotsJson = this.parsePasoExtraSlots(json);
+    return Promise.all(
+      slotsJson.map(async (s, i) => {
+        const materialVariante =
+          s.modoSeleccion === 'HARDCODED' && s.materialVarianteId
+            ? ((await this.cargarVariantePorId(tenantId, s.materialVarianteId)) ??
+              undefined)
+            : undefined;
+        return {
+          id: `${pasoExtraId}:slot:${i}`,
+          slotCodigo: s.slotCodigo,
+          slotNombre: s.slotNombre ?? null,
+          slotRol: s.slotRol ?? null,
+          modoSeleccion: s.modoSeleccion,
+          criterioMotorAuto: s.criterioMotorAuto ?? null,
+          criterioInputCampo: s.criterioInputCampo ?? null,
+          criterioMaterialCampo: s.criterioMaterialCampo ?? null,
+          materialVarianteId: s.materialVarianteId ?? null,
+          candidatos: (s.candidatos ?? []).map((c, ci) => ({
+            id: `${pasoExtraId}:slot:${i}:cand:${ci}`,
+            materiaPrimaId: c.materiaPrimaId,
+            defaultVarianteId: c.defaultVarianteId ?? null,
+            orden: c.orden ?? ci,
+            variantes: (c.varianteIds ?? []).map((vid, vi) => ({
+              varianteId: vid,
+              orden: vi,
+            })),
+          })),
+          estrategiaCosto: s.estrategiaCosto ?? 'AUTO',
+          formula: s.formula ?? '',
+          cantidadFactor:
+            s.cantidadFactor === undefined ? null : s.cantidadFactor,
+          cantidadBase: s.cantidadBase ?? null,
+          aplicaMultiCaras: s.aplicaMultiCaras ?? false,
+          materialVariante,
+        };
+      }),
+    );
+  }
+
+  /**
+   * Sub-fase 3 — reconstruye los `CargoPasoCargado[]` de un paso extra desde su
+   * `configCargosDirectosJson`, usando el catálogo ya hidratado. Descarta
+   * cargos cuyo catálogo no exista/esté inactivo.
+   */
+  private buildCargosPasoExtra(
+    pasoExtraId: string,
+    json: unknown,
+    catalogoMap: Map<
+      string,
+      { id: string; codigo: string; nombre: string; modoCalculo: string; configJson: unknown }
+    >,
+  ): CargoPasoCargado[] {
+    return this.parsePasoExtraCargos(json).flatMap((c, i) => {
+      const cat = catalogoMap.get(c.cargoDirectoCatalogoId);
+      if (!cat) return [];
+      return [
+        {
+          id: `${pasoExtraId}:cargo:${i}`,
+          cargoDirectoCatalogoId: c.cargoDirectoCatalogoId,
+          modoActivacion: c.modoActivacion,
+          condicionActivacionJson: c.condicionActivacionJson ?? null,
+          configOverrideJson: c.configOverrideJson ?? null,
+          catalogo: {
+            codigo: cat.codigo,
+            nombre: cat.nombre,
+            modoCalculo: cat.modoCalculo,
+            configJson: cat.configJson,
+          },
+        },
+      ];
+    });
+  }
+
+  /**
+   * Inserta los pasos extras en la secuencia de pasos base según su posición
+   * (`insertarDespuesDeRutaPasoId`: null = al inicio; UUID = después de ese
+   * RutaPaso) y `ordenInterno`. Renumera `rutaPasoOrden` 1..N sobre la
+   * secuencia final (es sólo display/output, no afecta la ejecución).
+   */
+  private insertarPasosExtras(
+    pasos: PasoCargado[],
+    extras: Array<{
+      paso: PasoCargado;
+      insertarDespuesDeRutaPasoId: string | null;
+      ordenInterno: number;
+    }>,
+  ): PasoCargado[] {
+    const porOrden = (
+      a: { ordenInterno: number },
+      b: { ordenInterno: number },
+    ) => a.ordenInterno - b.ordenInterno;
+
+    const alInicio = extras
+      .filter((e) => e.insertarDespuesDeRutaPasoId == null)
+      .sort(porOrden);
+    const despuesDe = new Map<
+      string,
+      Array<(typeof extras)[number]>
+    >();
+    for (const e of extras) {
+      if (e.insertarDespuesDeRutaPasoId == null) continue;
+      const arr = despuesDe.get(e.insertarDespuesDeRutaPasoId) ?? [];
+      arr.push(e);
+      despuesDe.set(e.insertarDespuesDeRutaPasoId, arr);
+    }
+
+    const rutaPasoIdsPresentes = new Set(pasos.map((p) => p.rutaPasoId));
+    const resultado: PasoCargado[] = [];
+    resultado.push(...alInicio.map((e) => e.paso));
+    for (const paso of pasos) {
+      resultado.push(paso);
+      const extrasDelPaso = despuesDe.get(paso.rutaPasoId);
+      if (extrasDelPaso) {
+        resultado.push(...[...extrasDelPaso].sort(porOrden).map((e) => e.paso));
+      }
+    }
+    // Defensa: extras que apuntan a un RutaPaso que no está en esta ruta
+    // (no debería pasar con scope por ruta) se agregan al final.
+    for (const e of extras) {
+      const ref = e.insertarDespuesDeRutaPasoId;
+      if (ref != null && !rutaPasoIdsPresentes.has(ref)) {
+        resultado.push(e.paso);
+      }
+    }
+
+    // Renumerar orden de display 1..N.
+    resultado.forEach((paso, index) => {
+      paso.rutaPasoOrden = index + 1;
+    });
+    return resultado;
   }
 }
