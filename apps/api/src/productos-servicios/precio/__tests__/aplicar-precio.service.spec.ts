@@ -21,6 +21,34 @@ describe('AplicarPrecioService', () => {
     nombre: 'IVA 21%',
     porcentaje: 21,
     orden: 0,
+    baseCalculo: 'NETO',
+    traslado: 'POR_FUERA',
+  };
+  const iibb3: ImpuestoSnapshot = {
+    catalogoId: 'imp-iibb-3',
+    codigo: 'iibb',
+    nombre: 'IIBB 3%',
+    porcentaje: 3,
+    orden: 1,
+    baseCalculo: 'NETO',
+    traslado: 'POR_DENTRO',
+  };
+  const cheque12: ImpuestoSnapshot = {
+    catalogoId: 'imp-cheque-12',
+    codigo: 'cheque',
+    nombre: 'Imp. débito/crédito 1,2%',
+    porcentaje: 1.2,
+    orden: 2,
+    baseCalculo: 'BRUTO_COBRADO',
+    traslado: 'POR_DENTRO',
+  };
+  /** Snapshot viejo, sin baseCalculo/traslado → default POR_DENTRO/NETO. */
+  const impuestoLegacy21: ImpuestoSnapshot = {
+    catalogoId: 'imp-legacy-21',
+    codigo: 'legacy_21',
+    nombre: 'Impuesto legacy 21%',
+    porcentaje: 21,
+    orden: 0,
   };
   const comisVend5: ComisionSnapshot = {
     catalogoId: 'com-vend-5',
@@ -258,18 +286,22 @@ describe('AplicarPrecioService', () => {
   // Aplicación de comisiones e impuestos sobre el precio base
   // ════════════════════════════════════════════════════════════════════
 
-  describe('comisiones e impuestos', () => {
-    it('margen objetivo 50% + IVA 21% preserva el margen sobre precio final', () => {
+  describe('comisiones e impuestos (modelo por base, normativa AR)', () => {
+    it('IVA 21% POR_FUERA: se agrega al neto y no toca el margen', () => {
       const r = service.aplicar(baseInput({ impuestos: [iva21] }));
-      expect(r.desglose.precioBase).toBe(272.42);
-      expect(r.precioNetoUnitario).toBe(272.42);
-      expect(r.precioBrutoUnitario).toBe(344.83);
-      expect(r.desglose.totalImpuestos).toBe(72.41);
+      // neto = 100/(1−0,50) = 200; IVA = 42; bruto = 242
+      expect(r.precioNetoUnitario).toBe(200);
+      expect(r.precioBrutoUnitario).toBe(242);
+      expect(r.desglose.totalImpuestos).toBe(42);
+      expect(r.desglose.precioBase).toBe(200);
       expect(r.desglose.margenEfectivoPct).toBe(50);
+      expect(r.precioNetoTotal).toBe(2000);
+      expect(r.precioBrutoTotal).toBe(2420);
     });
 
-    it('margen objetivo 50% + comisión vendedor 5% preserva margen', () => {
+    it('margen objetivo 50% + comisión vendedor 5% preserva margen (sobre el neto)', () => {
       const r = service.aplicar(baseInput({ comisiones: [comisVend5] }));
+      // neto = 100/(1−0,55) = 222,22
       expect(r.desglose.totalComisiones).toBe(11.11);
       expect(r.desglose.precioBase).toBe(211.11);
       expect(r.precioNetoUnitario).toBe(222.22);
@@ -277,30 +309,168 @@ describe('AplicarPrecioService', () => {
       expect(r.desglose.margenEfectivoPct).toBe(50);
     });
 
-    it('margen objetivo 50% + IVA 21% + comisión 5% preserva margen', () => {
+    it('margen 50% + IVA 21% + comisión 5%: comisión por dentro del neto, IVA por fuera', () => {
       const r = service.aplicar(
         baseInput({ impuestos: [iva21], comisiones: [comisVend5] }),
       );
-      expect(r.desglose.totalComisiones).toBe(20.83);
-      expect(r.desglose.totalImpuestos).toBe(87.5);
-      expect(r.desglose.precioBase).toBe(308.34);
-      expect(r.precioNetoUnitario).toBe(329.17);
-      expect(r.precioBrutoUnitario).toBe(416.67);
+      // neto = 100/(1−0,50−0,05) = 222,22; IVA = 46,67; bruto = 268,89
+      expect(r.precioNetoUnitario).toBe(222.22);
+      expect(r.precioBrutoUnitario).toBe(268.89);
+      expect(r.desglose.totalComisiones).toBe(11.11);
+      expect(r.desglose.totalImpuestos).toBe(46.67);
+      expect(r.desglose.precioBase).toBe(211.11);
       expect(r.desglose.margenEfectivoPct).toBe(50);
     });
 
-    it('múltiples impuestos suman su porcentaje', () => {
-      const ingresosBrutos = {
-        ...iva21,
-        codigo: 'iibb',
-        nombre: 'IIBB 3%',
-        porcentaje: 3,
+    it('IIBB 3% POR_DENTRO sobre neto: gross-up como costo, no infla el bruto vía IVA', () => {
+      const r = service.aplicar(baseInput({ impuestos: [iva21, iibb3] }));
+      // neto = 100/(1−0,50−0,03) = 212,77; IVA = 44,68; bruto = 257,45
+      expect(r.precioNetoUnitario).toBe(212.77);
+      expect(r.precioBrutoUnitario).toBe(257.45);
+      // impuestos = IVA 44,68 + IIBB 6,38 (3% del neto)
+      expect(r.desglose.totalImpuestos).toBe(51.06);
+      expect(r.desglose.precioBase).toBe(206.39);
+      expect(r.desglose.margenEfectivoPct).toBe(50);
+    });
+
+    it('imp. al cheque 1,2% sobre BRUTO_COBRADO: se convierte a equivalente-neto ×(1+IVA)', () => {
+      const r = service.aplicar(
+        baseInput({
+          precioConfig: {
+            metodoCalculo: 'por_margen',
+            detalle: { marginPct: 30 },
+          },
+          impuestos: [iva21, cheque12],
+        }),
+      );
+      // carga interna = 1,2% × 1,21 = 1,452% → neto = 100/(1−0,30−0,01452) = 145,88
+      expect(r.precioNetoUnitario).toBe(145.88);
+      // IVA = 30,63; bruto = 176,51; cheque = 1,2% × 176,51 = 2,12
+      expect(r.precioBrutoUnitario).toBe(176.51);
+      expect(r.desglose.totalImpuestos).toBe(32.75);
+      expect(r.desglose.precioBase).toBe(143.76);
+      expect(r.desglose.margenEfectivoPct).toBe(30);
+    });
+
+    it('snapshot legacy sin baseCalculo/traslado se comporta POR_DENTRO/NETO', () => {
+      const r = service.aplicar(baseInput({ impuestos: [impuestoLegacy21] }));
+      // neto = 100/(1−0,50−0,21) = 344,83; sin impuestos por fuera → bruto = neto
+      expect(r.precioNetoUnitario).toBe(344.83);
+      expect(r.precioBrutoUnitario).toBe(344.83);
+      expect(r.desglose.totalImpuestos).toBe(72.41);
+      expect(r.desglose.precioBase).toBe(272.42);
+      expect(r.desglose.margenEfectivoPct).toBe(50);
+    });
+
+    it('comisión de pasarela 4% sobre BRUTO_COBRADO: equivalente-neto ×(1+IVA)', () => {
+      const pasarela4: ComisionSnapshot = {
+        catalogoId: 'com-mp-4',
+        codigo: 'mp_4',
+        nombre: 'Mercado Pago 4%',
+        porcentaje: 4,
+        orden: 0,
+        baseCalculo: 'BRUTO_COBRADO',
       };
       const r = service.aplicar(
-        baseInput({ impuestos: [iva21, ingresosBrutos] }),
+        baseInput({
+          precioConfig: {
+            metodoCalculo: 'por_margen',
+            detalle: { marginPct: 30 },
+          },
+          impuestos: [iva21],
+          comisiones: [pasarela4],
+        }),
       );
-      expect(r.desglose.totalImpuestos).toBe(92.31);
-      expect(r.precioBrutoUnitario).toBe(384.62);
+      // carga interna = 4% × 1,21 = 4,84% → neto = 100/(1−0,30−0,0484) = 153,47
+      expect(r.precioNetoUnitario).toBe(153.47);
+      // IVA = 32,23; bruto = 185,70; comisión = 4% × 185,70 = 7,43
+      expect(r.precioBrutoUnitario).toBe(185.7);
+      expect(r.desglose.totalComisiones).toBe(7.43);
+      expect(r.desglose.precioBase).toBe(146.04);
+      expect(r.desglose.margenEfectivoPct).toBe(30);
+    });
+
+    it('comisión vendedor (NETO) + pasarela (BRUTO_COBRADO) conviven', () => {
+      const pasarela4: ComisionSnapshot = {
+        catalogoId: 'com-mp-4',
+        codigo: 'mp_4',
+        nombre: 'Mercado Pago 4%',
+        porcentaje: 4,
+        orden: 1,
+        baseCalculo: 'BRUTO_COBRADO',
+      };
+      const r = service.aplicar(
+        baseInput({
+          precioConfig: {
+            metodoCalculo: 'por_margen',
+            detalle: { marginPct: 30 },
+          },
+          impuestos: [iva21],
+          comisiones: [comisVend5, pasarela4],
+        }),
+      );
+      // carga interna = 5% + 4%×1,21 = 9,84% → neto = 100/(1−0,30−0,0984) = 166,22
+      expect(r.precioNetoUnitario).toBe(166.22);
+      // comisiones = neto×5% + bruto×4% = 8,31 + 8,05 = 16,36
+      expect(r.desglose.totalComisiones).toBe(16.36);
+      expect(r.desglose.margenEfectivoPct).toBe(30);
+    });
+
+    it('rechaza POR_FUERA con base BRUTO_COBRADO (no tiene sentido)', () => {
+      const invalido: ImpuestoSnapshot = {
+        ...iva21,
+        baseCalculo: 'BRUTO_COBRADO',
+      };
+      expect(() =>
+        service.aplicar(baseInput({ impuestos: [invalido] })),
+      ).toThrow(BadRequestException);
+    });
+  });
+
+  describe('precio fijo e IVA por fuera (precioIncluyeIva)', () => {
+    it('default: el precio configurado incluye IVA → neto = precio / 1,21', () => {
+      const r = service.aplicar(
+        baseInput({
+          precioConfig: {
+            metodoCalculo: 'precio_fijo',
+            detalle: { price: 121 },
+          },
+          impuestos: [iva21],
+        }),
+      );
+      expect(r.precioNetoUnitario).toBe(100);
+      expect(r.precioBrutoUnitario).toBe(121);
+      expect(r.desglose.totalImpuestos).toBe(21);
+    });
+
+    it('precioIncluyeIva=false: el precio configurado es el neto', () => {
+      const r = service.aplicar(
+        baseInput({
+          precioConfig: {
+            metodoCalculo: 'precio_fijo',
+            detalle: { price: 100, precioIncluyeIva: false },
+          },
+          impuestos: [iva21],
+        }),
+      );
+      expect(r.precioNetoUnitario).toBe(100);
+      expect(r.precioBrutoUnitario).toBe(121);
+    });
+
+    it('precio_fijo_para_margen_minimo compara netos (price con IVA vs piso)', () => {
+      const r = service.aplicar(
+        baseInput({
+          costoUnitario: 100,
+          precioConfig: {
+            metodoCalculo: 'precio_fijo_para_margen_minimo',
+            detalle: { price: 121, minimumMarginPct: 30 },
+          },
+          impuestos: [iva21],
+        }),
+      );
+      // neto del price = 100; piso = 100/(1−0,30) = 142,86 → gana el piso
+      expect(r.precioNetoUnitario).toBe(142.86);
+      expect(r.precioBrutoUnitario).toBe(172.86);
     });
   });
 

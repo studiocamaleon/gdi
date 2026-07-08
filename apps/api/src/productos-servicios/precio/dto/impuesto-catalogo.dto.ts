@@ -1,5 +1,6 @@
 import {
   IsBoolean,
+  IsIn,
   IsNotEmpty,
   IsNumber,
   IsObject,
@@ -10,6 +11,10 @@ import {
   Max,
   Min,
 } from 'class-validator';
+
+const BASES_CALCULO = ['NETO', 'BRUTO_COBRADO'] as const;
+const TRASLADOS = ['POR_FUERA', 'POR_DENTRO'] as const;
+const ALCANCES = ['PRODUCTO', 'TENANT'] as const;
 
 export class CrearImpuestoCatalogoDto {
   @IsString()
@@ -28,6 +33,21 @@ export class CrearImpuestoCatalogoDto {
   @Max(100)
   porcentaje!: number;
 
+  /** NETO (default) | BRUTO_COBRADO (ej. imp. al cheque). */
+  @IsOptional()
+  @IsIn(BASES_CALCULO)
+  baseCalculo?: (typeof BASES_CALCULO)[number];
+
+  /** POR_FUERA (IVA: se agrega y discrimina) | POR_DENTRO (default: costo embebido). */
+  @IsOptional()
+  @IsIn(TRASLADOS)
+  traslado?: (typeof TRASLADOS)[number];
+
+  /** PRODUCTO (default: se asocia por producto) | TENANT (aplica a todo el tenant). */
+  @IsOptional()
+  @IsIn(ALCANCES)
+  alcance?: (typeof ALCANCES)[number];
+
   @IsOptional()
   @IsObject()
   detalleJson?: Record<string, unknown>;
@@ -44,6 +64,18 @@ export class ActualizarImpuestoCatalogoDto {
   @Min(0)
   @Max(100)
   porcentaje?: number;
+
+  @IsOptional()
+  @IsIn(BASES_CALCULO)
+  baseCalculo?: (typeof BASES_CALCULO)[number];
+
+  @IsOptional()
+  @IsIn(TRASLADOS)
+  traslado?: (typeof TRASLADOS)[number];
+
+  @IsOptional()
+  @IsIn(ALCANCES)
+  alcance?: (typeof ALCANCES)[number];
 
   @IsOptional()
   @IsObject()

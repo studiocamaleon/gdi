@@ -1227,6 +1227,16 @@ model ProductoImpuestoCatalogo {
   codigo             String
   nombre             String
   porcentaje         Float
+  /// Base de cálculo del %: NETO (precio sin IVA) | BRUTO_COBRADO (total factura con
+  /// impuestos por fuera incluidos, ej. impuesto al débito/crédito bancario).
+  baseCalculo        String                     @default("NETO")
+  /// POR_FUERA: se agrega al neto y se discrimina al cliente (IVA).
+  /// POR_DENTRO: costo embebido en el neto vía gross-up (IIBB, imp. al cheque).
+  traslado           String                     @default("POR_DENTRO")
+  /// PRODUCTO: se asocia producto por producto (ej. IVA con alícuota según producto).
+  /// TENANT: aplica a todas las cotizaciones del tenant sin asociación explícita
+  /// (ej. IIBB, imp. al cheque — son de la empresa, no del producto).
+  alcance            String                     @default("PRODUCTO")
   detalleJson        Json?
   activo             Boolean                    @default(true)
   createdAt          DateTime                   @default(now())
@@ -1236,6 +1246,7 @@ model ProductoImpuestoCatalogo {
 
   @@unique([tenantId, codigo])
   @@index([tenantId, nombre, activo])
+  @@index([tenantId, alcance, activo])
 }
 
 model ProductoComisionCatalogo {
@@ -1244,6 +1255,9 @@ model ProductoComisionCatalogo {
   codigo             String
   nombre             String
   porcentaje         Float
+  /// Base de cálculo del %: NETO (comisión de vendedor, sobre el precio sin IVA)
+  /// | BRUTO_COBRADO (comisión de pasarela de pago/tarjeta, sobre lo cobrado con IVA).
+  baseCalculo        String                     @default("NETO")
   detalleJson        Json?
   activo             Boolean                    @default(true)
   createdAt          DateTime                   @default(now())

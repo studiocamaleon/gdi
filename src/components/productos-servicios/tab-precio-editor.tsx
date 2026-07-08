@@ -146,6 +146,14 @@ export function TabPrecioEditor({ value, onChange, unidadComercial }: Props) {
     metodo === "fijado_por_cantidad" ||
     metodo === "fijo_con_margen_variable";
 
+  // Métodos donde el usuario escribe un PRECIO (no un margen): ahí importa si
+  // ese precio es final con IVA incluido o neto sin IVA.
+  const usaPrecioConfigurado =
+    metodo === "precio_fijo" ||
+    metodo === "precio_fijo_para_margen_minimo" ||
+    metodo === "variable_por_cantidad" ||
+    metodo === "fijado_por_cantidad";
+
   const [tiers, setTiers] = React.useState<TierBase[]>(() => tiersFromDetalle(metodo, detalle));
   const didMountTiers = React.useRef(false);
 
@@ -246,7 +254,8 @@ export function TabPrecioEditor({ value, onChange, unidadComercial }: Props) {
             onChange={(e) => updateDetalleField("marginPct", Number(e.target.value))}
           />
           <p className="text-muted-foreground text-xs">
-            Calcula el precio necesario para preservar ese margen sobre el precio final.
+            Calcula el precio neto (sin IVA) necesario para preservar ese margen,
+            descontando los costos impositivos internos y comisiones.
           </p>
         </div>
       )}
@@ -285,6 +294,30 @@ export function TabPrecioEditor({ value, onChange, unidadComercial }: Props) {
             automáticamente.
           </p>
         </div>
+      )}
+
+      {usaPrecioConfigurado && (
+        <label className="flex items-start gap-3 rounded-md border p-3 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={(detalle.precioIncluyeIva ?? true) !== false}
+            onChange={(e) =>
+              onChange({
+                metodoCalculo: metodo,
+                detalle: { ...detalle, precioIncluyeIva: e.target.checked },
+              })
+            }
+          />
+          <span className="space-y-1">
+            <span className="block font-medium">El precio incluye IVA</span>
+            <span className="text-muted-foreground block text-xs">
+              Activado: el precio cargado es el total final (el neto se obtiene
+              dividiendo por 1 + IVA). Desactivado: el precio cargado es el neto
+              sin IVA y el IVA se suma aparte.
+            </span>
+          </span>
+        </label>
       )}
 
       {/* MÉTODOS POR TRAMOS */}

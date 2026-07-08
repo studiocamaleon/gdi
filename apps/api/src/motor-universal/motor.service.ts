@@ -1035,32 +1035,57 @@ export class MotorUniversalService {
       }
     }
 
-    // 3. Impuestos y comisiones aplicados (con sus catálogos para snapshot)
-    const [impuestosAplicados, comisionesAplicadas] = await Promise.all([
-      this.prisma.productoImpuestoAplicado.findMany({
-        where: { tenantId: args.tenantId, productoId: args.productoId },
-        include: { impuestoCatalogo: true },
-        orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
-      }),
-      this.prisma.productoComisionAplicada.findMany({
-        where: { tenantId: args.tenantId, productoId: args.productoId },
-        include: { comisionCatalogo: true },
-        orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
-      }),
-    ]);
+    // 3. Impuestos y comisiones aplicados (con sus catálogos para snapshot).
+    //    Además de los asociados al producto, entran los de alcance TENANT
+    //    (IIBB, imp. al cheque): son de la empresa y aplican a toda cotización
+    //    sin asociación explícita por producto.
+    const [impuestosAplicados, comisionesAplicadas, impuestosTenant] =
+      await Promise.all([
+        this.prisma.productoImpuestoAplicado.findMany({
+          where: { tenantId: args.tenantId, productoId: args.productoId },
+          include: { impuestoCatalogo: true },
+          orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
+        }),
+        this.prisma.productoComisionAplicada.findMany({
+          where: { tenantId: args.tenantId, productoId: args.productoId },
+          include: { comisionCatalogo: true },
+          orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
+        }),
+        this.prisma.productoImpuestoCatalogo.findMany({
+          where: { tenantId: args.tenantId, alcance: 'TENANT', activo: true },
+          orderBy: { nombre: 'asc' },
+        }),
+      ]);
+
+    const toImpuestoSnapshot = (
+      catalogo: (typeof impuestosTenant)[number],
+      orden: number,
+    ): PrecioImpuestoSnapshot => ({
+      catalogoId: catalogo.id,
+      codigo: catalogo.codigo,
+      nombre: catalogo.nombre,
+      porcentaje: catalogo.porcentaje,
+      orden,
+      baseCalculo:
+        catalogo.baseCalculo === 'BRUTO_COBRADO' ? 'BRUTO_COBRADO' : 'NETO',
+      traslado:
+        catalogo.traslado === 'POR_FUERA' ? 'POR_FUERA' : 'POR_DENTRO',
+      desglosarCliente: this.getDesglosarImpuestoCliente(catalogo.detalleJson),
+    });
 
     const impuestosSnapshot: PrecioImpuestoSnapshot[] = impuestosAplicados.map(
-      (ia) => ({
-        catalogoId: ia.impuestoCatalogo.id,
-        codigo: ia.impuestoCatalogo.codigo,
-        nombre: ia.impuestoCatalogo.nombre,
-        porcentaje: ia.impuestoCatalogo.porcentaje,
-        orden: ia.orden,
-        desglosarCliente: this.getDesglosarImpuestoCliente(
-          ia.impuestoCatalogo.detalleJson,
-        ),
-      }),
+      (ia) => toImpuestoSnapshot(ia.impuestoCatalogo, ia.orden),
     );
+    // Merge de los TENANT no asociados explícitamente (dedupe por catálogo).
+    const catalogosYaAplicados = new Set(
+      impuestosSnapshot.map((i) => i.catalogoId),
+    );
+    for (const catalogo of impuestosTenant) {
+      if (catalogosYaAplicados.has(catalogo.id)) continue;
+      impuestosSnapshot.push(
+        toImpuestoSnapshot(catalogo, impuestosSnapshot.length),
+      );
+    }
     const comisionesSnapshot: PrecioComisionSnapshot[] =
       comisionesAplicadas.map((ca) => ({
         catalogoId: ca.comisionCatalogo.id,
@@ -1068,6 +1093,10 @@ export class MotorUniversalService {
         nombre: ca.comisionCatalogo.nombre,
         porcentaje: ca.comisionCatalogo.porcentaje,
         orden: ca.orden,
+        baseCalculo:
+          ca.comisionCatalogo.baseCalculo === 'BRUTO_COBRADO'
+            ? 'BRUTO_COBRADO'
+            : 'NETO',
       }));
 
     // 4. Aplicar

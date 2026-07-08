@@ -1,5 +1,6 @@
 import {
   IsBoolean,
+  IsIn,
   IsNotEmpty,
   IsNumber,
   IsObject,
@@ -10,6 +11,8 @@ import {
   Max,
   Min,
 } from 'class-validator';
+
+const BASES_CALCULO = ['NETO', 'BRUTO_COBRADO'] as const;
 
 export class CrearComisionCatalogoDto {
   @IsString()
@@ -27,6 +30,11 @@ export class CrearComisionCatalogoDto {
   @Min(0)
   @Max(100)
   porcentaje!: number;
+
+  /** NETO (default: vendedor) | BRUTO_COBRADO (pasarela de pago/tarjeta). */
+  @IsOptional()
+  @IsIn(BASES_CALCULO)
+  baseCalculo?: (typeof BASES_CALCULO)[number];
 
   /**
    * Forma esperada (preserva semántica del modelo viejo):
@@ -48,6 +56,10 @@ export class ActualizarComisionCatalogoDto {
   @Min(0)
   @Max(100)
   porcentaje?: number;
+
+  @IsOptional()
+  @IsIn(BASES_CALCULO)
+  baseCalculo?: (typeof BASES_CALCULO)[number];
 
   @IsOptional()
   @IsObject()

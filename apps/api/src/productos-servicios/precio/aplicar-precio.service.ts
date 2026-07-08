@@ -9,9 +9,34 @@ import {
   DetallePrecioFijo,
   DetallePrecioFijoParaMargenMinimo,
   DetalleVariablePorCantidad,
+  ImpuestoSnapshot,
   MetodoPrecio,
   PrecioConfig,
 } from './aplicar-precio.types';
+
+/**
+ * Cargas impositivas/comerciales normalizadas para el cálculo.
+ * Ver docs de `ImpuestoBaseCalculo` / `ImpuestoTraslado`.
+ */
+interface CargasNormalizadas {
+  /** % de impuestos POR_FUERA (IVA): se agregan al neto y se discriminan. */
+  porFueraPct: number;
+  /** % de costos POR_DENTRO con base NETO (IIBB). */
+  internosNetoPct: number;
+  /** % de costos POR_DENTRO con base BRUTO_COBRADO (imp. al cheque). */
+  internosBrutoPct: number;
+  /** % de comisiones con base NETO (vendedor). */
+  comisionesNetoPct: number;
+  /** % de comisiones con base BRUTO_COBRADO (pasarela de pago/tarjeta). */
+  comisionesBrutoPct: number;
+  /** 1 + porFueraPct/100 — factor neto→bruto. */
+  factorPorFuera: number;
+  /**
+   * Carga interna total expresada como % del NETO, para el gross-up:
+   * (internosNeto + comisionesNeto) + (internosBruto + comisionesBruto)×factorPorFuera.
+   */
+  cargaInternaNetoPct: number;
+}
 
 /**
  * Servicio principal del Tab Precio: aplica método de cálculo + impuestos +
@@ -24,14 +49,24 @@ import {
  *   - El caller resuelve el override por cliente ANTES de llamar (decide
  *     qué `precioConfig` usar). Acá sólo se persiste el snapshot.
  *
- * Convenciones de cálculo:
- *   - Los porcentajes de margen son margen objetivo sobre el precio final,
- *     no recargo sobre costo.
- *   - Impuestos y comisiones se tratan como porcentajes del precio final,
- *     preservando la semántica comercial previa al refactor.
- *   - Para un margen m, impuestos i y comisiones c:
- *       precioFinal = costo / (1 - m - i - c)
- *   - Si la suma de porcentajes llega a 100%, el precio no es calculable.
+ * Modelo de cálculo (normativa AR, rediseño 2026-07-08):
+ *   - El PRECIO NETO es la base: margen y costos internos se definen sobre él.
+ *   - Impuestos POR_FUERA (IVA): se AGREGAN al neto y se discriminan.
+ *       bruto = neto × (1 + iva%)
+ *   - Impuestos POR_DENTRO (IIBB, cheque): son costos reales de la empresa,
+ *     se embeben en el neto vía gross-up. IIBB usa base NETO; el impuesto al
+ *     cheque usa base BRUTO_COBRADO (lo acreditado incluye IVA), por lo que su
+ *     % se convierte a equivalente-neto multiplicando por (1 + iva%).
+ *   - Comisiones: costos embebidos igual que los impuestos internos. Base NETO
+ *     (vendedor) o BRUTO_COBRADO (pasarela de pago: su % aplica sobre lo
+ *     cobrado con IVA, se convierte a equivalente-neto ×(1+iva%)).
+ *   - Para margen m, costos internos ci y comisiones c (todos % del neto):
+ *       neto  = costo / (1 − m − ci − c)
+ *       bruto = neto × (1 + iva%)
+ *   - Métodos de precio fijo: `detalle.precioIncluyeIva` (default true) define
+ *     si el precio configurado es el total factura (se divide por 1+iva%) o
+ *     directamente el neto.
+ *   - Si la suma de porcentajes sobre el neto llega a 100%, no es calculable.
  */
 @Injectable()
 export class AplicarPrecioService {
@@ -40,35 +75,39 @@ export class AplicarPrecioService {
   aplicar(input: AplicarPrecioInput): AplicarPrecioOutput {
     this.validarInput(input);
 
-    const totalComisionesPct = this.sumarPorcentajes(
-      input.comisiones.map((c) => c.porcentaje),
-    );
-    const totalImpuestosPct = this.sumarPorcentajes(
-      input.impuestos.map((i) => i.porcentaje),
-    );
+    const cargas = this.normalizarCargas(input.impuestos, input.comisiones);
 
-    const precioFinal = this.calcularPrecioFinal(
+    const neto = this.calcularNeto(
       input.precioConfig,
       input.costoUnitario,
       input.cantidad,
-      totalImpuestosPct,
-      totalComisionesPct,
+      cargas,
     );
 
-    const totalComisiones = redondear((precioFinal * totalComisionesPct) / 100);
-    const totalImpuestos = redondear((precioFinal * totalImpuestosPct) / 100);
-    const precioBase = redondear(
-      precioFinal - totalComisiones - totalImpuestos,
+    const impuestosPorFuera = redondear((neto * cargas.porFueraPct) / 100);
+    const brutoUnitario = redondear(neto + impuestosPorFuera);
+    const netoUnitario = redondear(neto);
+
+    const costosInternos = redondear(
+      (neto * cargas.internosNetoPct) / 100 +
+        (brutoUnitario * cargas.internosBrutoPct) / 100,
     );
-    const netoUnitario = redondear(precioFinal - totalImpuestos);
-    const brutoUnitario = redondear(precioFinal);
+    const totalComisiones = redondear(
+      (neto * cargas.comisionesNetoPct) / 100 +
+        (brutoUnitario * cargas.comisionesBrutoPct) / 100,
+    );
+    const totalImpuestos = redondear(impuestosPorFuera + costosInternos);
+    const precioBase = redondear(neto - costosInternos - totalComisiones);
 
     const precioNetoTotal = redondear(netoUnitario * input.cantidad);
     const precioBrutoTotal = redondear(brutoUnitario * input.cantidad);
 
     const margenEfectivoPct =
-      brutoUnitario > 0
-        ? redondear(((precioBase - input.costoUnitario) / brutoUnitario) * 100, 2)
+      netoUnitario > 0
+        ? redondear(
+            ((precioBase - input.costoUnitario) / netoUnitario) * 100,
+            2,
+          )
         : 0;
 
     return {
@@ -91,33 +130,89 @@ export class AplicarPrecioService {
     };
   }
 
-  // ── Métodos de cálculo del precio base ──────────────────────────────
+  // ── Normalización de cargas ──────────────────────────────────────────
 
-  private calcularPrecioFinal(
+  private normalizarCargas(
+    impuestos: ImpuestoSnapshot[],
+    comisiones: AplicarPrecioInput['comisiones'],
+  ): CargasNormalizadas {
+    let porFueraPct = 0;
+    let internosNetoPct = 0;
+    let internosBrutoPct = 0;
+
+    for (const imp of impuestos) {
+      const traslado = imp.traslado ?? 'POR_DENTRO';
+      const base = imp.baseCalculo ?? 'NETO';
+      if (traslado === 'POR_FUERA') {
+        if (base !== 'NETO') {
+          throw new BadRequestException(
+            `Impuesto "${imp.codigo}": un impuesto POR_FUERA (tipo IVA) solo puede calcularse sobre el NETO.`,
+          );
+        }
+        porFueraPct += imp.porcentaje;
+      } else if (base === 'BRUTO_COBRADO') {
+        internosBrutoPct += imp.porcentaje;
+      } else {
+        internosNetoPct += imp.porcentaje;
+      }
+    }
+
+    let comisionesNetoPct = 0;
+    let comisionesBrutoPct = 0;
+    for (const com of comisiones) {
+      if ((com.baseCalculo ?? 'NETO') === 'BRUTO_COBRADO') {
+        comisionesBrutoPct += com.porcentaje;
+      } else {
+        comisionesNetoPct += com.porcentaje;
+      }
+    }
+
+    const factorPorFuera = 1 + porFueraPct / 100;
+    const cargaInternaNetoPct =
+      internosNetoPct +
+      comisionesNetoPct +
+      (internosBrutoPct + comisionesBrutoPct) * factorPorFuera;
+
+    return {
+      porFueraPct,
+      internosNetoPct,
+      internosBrutoPct,
+      comisionesNetoPct,
+      comisionesBrutoPct,
+      factorPorFuera,
+      cargaInternaNetoPct,
+    };
+  }
+
+  // ── Métodos de cálculo del precio NETO ───────────────────────────────
+
+  private calcularNeto(
     config: PrecioConfig,
     costo: number,
     cantidad: number,
-    impuestosPct: number,
-    comisionesPct: number,
+    cargas: CargasNormalizadas,
   ): number {
     switch (config.metodoCalculo) {
       case 'por_margen':
         return this.porMargen(
           config.detalle as unknown as DetallePorMargen,
           costo,
-          impuestosPct,
-          comisionesPct,
+          cargas,
         );
 
       case 'precio_fijo':
-        return this.precioFijo(config.detalle as unknown as DetallePrecioFijo);
+        return this.netoDesdePrecioConfigurado(
+          this.precioFijo(config.detalle as unknown as DetallePrecioFijo),
+          config,
+          cargas,
+        );
 
       case 'precio_fijo_para_margen_minimo':
         return this.precioFijoParaMargenMinimo(
           config.detalle as unknown as DetallePrecioFijoParaMargenMinimo,
+          config,
           costo,
-          impuestosPct,
-          comisionesPct,
+          cargas,
         );
 
       case 'margen_variable':
@@ -125,20 +220,27 @@ export class AplicarPrecioService {
           config.detalle as unknown as DetalleMargenVariable,
           costo,
           cantidad,
-          impuestosPct,
-          comisionesPct,
+          cargas,
         );
 
       case 'variable_por_cantidad':
-        return this.variablePorCantidad(
-          config.detalle as unknown as DetalleVariablePorCantidad,
-          cantidad,
+        return this.netoDesdePrecioConfigurado(
+          this.variablePorCantidad(
+            config.detalle as unknown as DetalleVariablePorCantidad,
+            cantidad,
+          ),
+          config,
+          cargas,
         );
 
       case 'fijado_por_cantidad':
-        return this.fijadoPorCantidad(
-          config.detalle as unknown as DetalleFijadoPorCantidad,
-          cantidad,
+        return this.netoDesdePrecioConfigurado(
+          this.fijadoPorCantidad(
+            config.detalle as unknown as DetalleFijadoPorCantidad,
+            cantidad,
+          ),
+          config,
+          cargas,
         );
 
       case 'fijo_con_margen_variable':
@@ -146,8 +248,7 @@ export class AplicarPrecioService {
           config.detalle as unknown as DetalleFijoConMargenVariable,
           costo,
           cantidad,
-          impuestosPct,
-          comisionesPct,
+          cargas,
         );
 
       default:
@@ -157,22 +258,32 @@ export class AplicarPrecioService {
     }
   }
 
-  /** Precio final necesario para preservar margen objetivo. */
+  /**
+   * Convierte un precio configurado a NETO según `detalle.precioIncluyeIva`
+   * (default true: el precio de lista configurado es el total factura, con
+   * los impuestos por fuera adentro → neto = precio / (1 + iva%)).
+   */
+  private netoDesdePrecioConfigurado(
+    precioConfigurado: number,
+    config: PrecioConfig,
+    cargas: CargasNormalizadas,
+  ): number {
+    const incluyeIva = (config.detalle?.precioIncluyeIva ?? true) !== false;
+    return redondear(
+      incluyeIva ? precioConfigurado / cargas.factorPorFuera : precioConfigurado,
+    );
+  }
+
+  /** Neto necesario para preservar margen objetivo sobre el neto. */
   private porMargen(
     detalle: DetallePorMargen,
     costo: number,
-    impuestosPct: number,
-    comisionesPct: number,
+    cargas: CargasNormalizadas,
   ): number {
     if (typeof detalle.marginPct !== 'number') {
       throw new BadRequestException('por_margen requiere `marginPct`');
     }
-    return this.precioDesdeMargenObjetivo(
-      costo,
-      detalle.marginPct,
-      impuestosPct,
-      comisionesPct,
-    );
+    return this.netoDesdeMargenObjetivo(costo, detalle.marginPct, cargas);
   }
 
   /** precio = price (config). */
@@ -183,12 +294,12 @@ export class AplicarPrecioService {
     return redondear(detalle.price);
   }
 
-  /** precio = max(price, precio necesario para preservar margen mínimo). */
+  /** neto = max(neto del price, neto necesario para preservar margen mínimo). */
   private precioFijoParaMargenMinimo(
     detalle: DetallePrecioFijoParaMargenMinimo,
+    config: PrecioConfig,
     costo: number,
-    impuestosPct: number,
-    comisionesPct: number,
+    cargas: CargasNormalizadas,
   ): number {
     if (
       typeof detalle.price !== 'number' ||
@@ -198,13 +309,17 @@ export class AplicarPrecioService {
         'precio_fijo_para_margen_minimo requiere `price` y `minimumMarginPct`',
       );
     }
-    const piso = this.precioDesdeMargenObjetivo(
+    const netoPrice = this.netoDesdePrecioConfigurado(
+      detalle.price,
+      config,
+      cargas,
+    );
+    const piso = this.netoDesdeMargenObjetivo(
       costo,
       detalle.minimumMarginPct,
-      impuestosPct,
-      comisionesPct,
+      cargas,
     );
-    return redondear(Math.max(detalle.price, piso));
+    return redondear(Math.max(netoPrice, piso));
   }
 
   /** Tramos por rango: el primer `quantityUntil >= cantidad` define el margen. */
@@ -212,8 +327,7 @@ export class AplicarPrecioService {
     detalle: DetalleMargenVariable,
     costo: number,
     cantidad: number,
-    impuestosPct: number,
-    comisionesPct: number,
+    cargas: CargasNormalizadas,
   ): number {
     if (!Array.isArray(detalle.tiers) || detalle.tiers.length === 0) {
       throw new BadRequestException(
@@ -226,12 +340,7 @@ export class AplicarPrecioService {
     );
     const tramo =
       tiers.find((t) => cantidad <= t.quantityUntil) ?? tiers[tiers.length - 1];
-    return this.precioDesdeMargenObjetivo(
-      costo,
-      tramo.marginPct,
-      impuestosPct,
-      comisionesPct,
-    );
+    return this.netoDesdeMargenObjetivo(costo, tramo.marginPct, cargas);
   }
 
   /** Tramos por rango con precio fijo. */
@@ -272,13 +381,12 @@ export class AplicarPrecioService {
     return redondear(tramo.price);
   }
 
-  /** Cantidades exactas con margen objetivo sobre precio final. */
+  /** Cantidades exactas con margen objetivo sobre el neto. */
   private fijoConMargenVariable(
     detalle: DetalleFijoConMargenVariable,
     costo: number,
     cantidad: number,
-    impuestosPct: number,
-    comisionesPct: number,
+    cargas: CargasNormalizadas,
   ): number {
     if (!Array.isArray(detalle.tiers) || detalle.tiers.length === 0) {
       throw new BadRequestException(
@@ -292,34 +400,29 @@ export class AplicarPrecioService {
         `fijo_con_margen_variable: cantidad ${cantidad} no permitida. Válidas: ${cantidadesValidas}`,
       );
     }
-    return this.precioDesdeMargenObjetivo(
-      costo,
-      tramo.marginPct,
-      impuestosPct,
-      comisionesPct,
-    );
+    return this.netoDesdeMargenObjetivo(costo, tramo.marginPct, cargas);
   }
 
-  private precioDesdeMargenObjetivo(
+  /**
+   * Gross-up sobre el neto: margen objetivo + costos internos + comisiones,
+   * todos definidos como % del neto.
+   *   neto = costo / (1 − margen% − cargaInterna%)
+   */
+  private netoDesdeMargenObjetivo(
     costo: number,
     margenPct: number,
-    impuestosPct: number,
-    comisionesPct: number,
+    cargas: CargasNormalizadas,
   ): number {
     if (!Number.isFinite(margenPct) || margenPct < 0) {
       throw new BadRequestException('marginPct debe ser número >= 0');
     }
-    const tasaTotal = (margenPct + impuestosPct + comisionesPct) / 100;
+    const tasaTotal = (margenPct + cargas.cargaInternaNetoPct) / 100;
     if (tasaTotal >= 1) {
       throw new BadRequestException(
-        'La suma de margen objetivo, impuestos y comisiones debe ser menor al 100% del precio final.',
+        'La suma de margen objetivo, costos impositivos internos y comisiones debe ser menor al 100% del precio neto.',
       );
     }
     return redondear(costo / (1 - tasaTotal));
-  }
-
-  private sumarPorcentajes(valores: number[]): number {
-    return valores.reduce((acc, val) => acc + val, 0);
   }
 
   // ── Validaciones ────────────────────────────────────────────────────

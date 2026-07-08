@@ -919,6 +919,10 @@ export interface CotizarResponse {
         nombre: string;
         porcentaje: number;
         orden: number;
+        /** NETO | BRUTO_COBRADO (default NETO). */
+        baseCalculo?: string;
+        /** POR_FUERA (IVA, se agrega al neto) | POR_DENTRO (default: embebido). */
+        traslado?: string;
         desglosarCliente?: boolean;
       }>;
       comisiones: Array<{
@@ -927,6 +931,8 @@ export interface CotizarResponse {
         nombre: string;
         porcentaje: number;
         orden: number;
+        /** NETO (vendedor) | BRUTO_COBRADO (pasarela de pago). */
+        baseCalculo?: string;
       }>;
       precioEspecialCliente: {
         precioEspecialId: string;
@@ -1057,11 +1063,21 @@ export async function recotizarCotizacionItem(
 
 // ── Catálogo de Impuestos del tenant ────────────────────────────────────────────
 
+export type ImpuestoBaseCalculo = "NETO" | "BRUTO_COBRADO";
+export type ImpuestoTraslado = "POR_FUERA" | "POR_DENTRO";
+export type ImpuestoAlcance = "PRODUCTO" | "TENANT";
+
 export interface ImpuestoCatalogoItem {
   id: string;
   codigo: string;
   nombre: string;
   porcentaje: number;
+  /** NETO (IVA, IIBB) | BRUTO_COBRADO (imp. al cheque). */
+  baseCalculo: ImpuestoBaseCalculo;
+  /** POR_FUERA (IVA: se agrega y discrimina) | POR_DENTRO (costo embebido). */
+  traslado: ImpuestoTraslado;
+  /** PRODUCTO (se asocia por producto) | TENANT (aplica a todo el tenant). */
+  alcance: ImpuestoAlcance;
   detalleJson: unknown | null;
   activo: boolean;
   _count?: { productosAplicados: number };
@@ -1071,12 +1087,18 @@ export interface CrearImpuestoCatalogoPayload {
   codigo: string;
   nombre: string;
   porcentaje: number;
+  baseCalculo?: ImpuestoBaseCalculo;
+  traslado?: ImpuestoTraslado;
+  alcance?: ImpuestoAlcance;
   detalleJson?: Record<string, unknown>;
 }
 
 export interface ActualizarImpuestoCatalogoPayload {
   nombre?: string;
   porcentaje?: number;
+  baseCalculo?: ImpuestoBaseCalculo;
+  traslado?: ImpuestoTraslado;
+  alcance?: ImpuestoAlcance;
   detalleJson?: Record<string, unknown>;
   activo?: boolean;
 }
@@ -1139,6 +1161,8 @@ export interface ComisionCatalogoItem {
   codigo: string;
   nombre: string;
   porcentaje: number;
+  /** NETO (vendedor, sobre el precio sin IVA) | BRUTO_COBRADO (pasarela, sobre lo cobrado). */
+  baseCalculo: ImpuestoBaseCalculo;
   detalleJson: unknown | null;
   activo: boolean;
   _count?: { productosAplicados: number };
@@ -1148,12 +1172,14 @@ export interface CrearComisionCatalogoPayload {
   codigo: string;
   nombre: string;
   porcentaje: number;
+  baseCalculo?: ImpuestoBaseCalculo;
   detalleJson?: Record<string, unknown>;
 }
 
 export interface ActualizarComisionCatalogoPayload {
   nombre?: string;
   porcentaje?: number;
+  baseCalculo?: ImpuestoBaseCalculo;
   detalleJson?: Record<string, unknown>;
   activo?: boolean;
 }

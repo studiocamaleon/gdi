@@ -72,6 +72,12 @@ export interface PrecioCatalogoItem {
   codigo: string;
   nombre: string;
   porcentaje: number;
+  /** Solo impuestos: NETO | BRUTO_COBRADO. */
+  baseCalculo?: string;
+  /** Solo impuestos: POR_FUERA | POR_DENTRO. */
+  traslado?: string;
+  /** Solo impuestos: PRODUCTO | TENANT. */
+  alcance?: string;
   detalleJson: unknown | null;
   activo: boolean;
   _count?: { productosAplicados: number };
@@ -81,14 +87,61 @@ interface CrearPrecioCatalogoPayload {
   codigo: string;
   nombre: string;
   porcentaje: number;
+  baseCalculo?: "NETO" | "BRUTO_COBRADO";
+  traslado?: "POR_FUERA" | "POR_DENTRO";
+  alcance?: "PRODUCTO" | "TENANT";
   detalleJson?: Record<string, unknown>;
 }
 
 interface ActualizarPrecioCatalogoPayload {
   nombre?: string;
   porcentaje?: number;
+  baseCalculo?: "NETO" | "BRUTO_COBRADO";
+  traslado?: "POR_FUERA" | "POR_DENTRO";
+  alcance?: "PRODUCTO" | "TENANT";
   detalleJson?: Record<string, unknown>;
   activo?: boolean;
+}
+
+/**
+ * Los 3 comportamientos válidos de un impuesto (combinación traslado + base).
+ * POR_FUERA sólo tiene sentido sobre el NETO, así que se ofrecen como un
+ * único selector en vez de dos campos que permitan combos inválidos.
+ */
+const COMPORTAMIENTOS_IMPUESTO = [
+  {
+    value: "por_fuera_neto",
+    traslado: "POR_FUERA",
+    baseCalculo: "NETO",
+    label: "Se agrega al precio (IVA)",
+    hint: "Se calcula sobre el neto, se suma al total y se discrimina en la factura. No participa del margen.",
+    badge: "IVA / por fuera",
+  },
+  {
+    value: "por_dentro_neto",
+    traslado: "POR_DENTRO",
+    baseCalculo: "NETO",
+    label: "Costo sobre el neto (IIBB)",
+    hint: "Costo real de la empresa: se embebe en el precio neto vía gross-up. No se muestra al cliente.",
+    badge: "s/ neto",
+  },
+  {
+    value: "por_dentro_bruto",
+    traslado: "POR_DENTRO",
+    baseCalculo: "BRUTO_COBRADO",
+    label: "Costo sobre lo cobrado (imp. al cheque)",
+    hint: "Costo sobre el total acreditado (incluye IVA), como el impuesto al débito/crédito bancario.",
+    badge: "s/ cobrado",
+  },
+] as const;
+
+type ComportamientoImpuesto =
+  (typeof COMPORTAMIENTOS_IMPUESTO)[number]["value"];
+
+function getComportamiento(item: PrecioCatalogoItem): ComportamientoImpuesto {
+  if (item.traslado === "POR_FUERA") return "por_fuera_neto";
+  if (item.baseCalculo === "BRUTO_COBRADO") return "por_dentro_bruto";
+  return "por_dentro_neto";
 }
 
 export type PrecioCatalogoTipo = "impuestos" | "comisiones";
@@ -132,7 +185,7 @@ const ADAPTERS: Record<PrecioCatalogoTipo, PrecioCatalogoAdapter> = {
     placeholderNombre: "IVA 21%",
     placeholderDetalleJson: '{"jurisdiccion": "AR", "categoria": "general"}',
     tooltipPorcentaje:
-      "Porcentaje del impuesto que se aplica sobre el subtotal (precio + comisiones).",
+      "Porcentaje del impuesto. Sobre qué base se aplica lo define el Comportamiento: sobre el neto (IVA, IIBB) o sobre el total cobrado (imp. al cheque).",
     tooltipDetalleJson:
       "Metadata adicional del impuesto (jurisdicción, categoría AFIP, código fiscal, etc.). El motor no usa este campo, queda como referencia para reportes y exportaciones.",
     crear: crearImpuestoCatalogo,
@@ -148,7 +201,7 @@ const ADAPTERS: Record<PrecioCatalogoTipo, PrecioCatalogoAdapter> = {
     placeholderNombre: "Comisión vendedor 5%",
     placeholderDetalleJson: '{"tipo": "vendedor", "empleadoId": null}',
     tooltipPorcentaje:
-      "Porcentaje de la comisión que se aplica sobre el precio base. Las comisiones se suman al precio antes de calcular impuestos.",
+      "Porcentaje de la comisión sobre el precio neto (sin IVA). Se embebe en el precio como un costo más.",
     tooltipDetalleJson:
       "Metadata del esquema (tipo: 'vendedor' o 'financiera', empleadoId asignado, condiciones especiales, etc.). El motor no usa este campo directamente.",
     crear: crearComisionCatalogo,
@@ -180,6 +233,14 @@ export function PrecioCatalogoManager({ initialItems, tipo }: Props) {
   const [porcentaje, setPorcentaje] = React.useState("");
   const [detalleJsonStr, setDetalleJsonStr] = React.useState("");
   const [desglosarCliente, setDesglosarCliente] = React.useState(true);
+  const [comportamiento, setComportamiento] =
+    React.useState<ComportamientoImpuesto>("por_dentro_neto");
+  const [alcance, setAlcance] = React.useState<"PRODUCTO" | "TENANT">(
+    "PRODUCTO",
+  );
+  const [baseComision, setBaseComision] = React.useState<
+    "NETO" | "BRUTO_COBRADO"
+  >("NETO");
 
   const Icono = adapter.icono;
 
@@ -190,6 +251,9 @@ export function PrecioCatalogoManager({ initialItems, tipo }: Props) {
     setPorcentaje("");
     setDetalleJsonStr("");
     setDesglosarCliente(true);
+    setComportamiento("por_dentro_neto");
+    setAlcance("PRODUCTO");
+    setBaseComision("NETO");
     setOpenSheet(true);
   };
 
@@ -202,6 +266,9 @@ export function PrecioCatalogoManager({ initialItems, tipo }: Props) {
       item.detalleJson ? JSON.stringify(item.detalleJson, null, 2) : "",
     );
     setDesglosarCliente(getDesglosarCliente(item.detalleJson));
+    setComportamiento(getComportamiento(item));
+    setAlcance(item.alcance === "TENANT" ? "TENANT" : "PRODUCTO");
+    setBaseComision(item.baseCalculo === "BRUTO_COBRADO" ? "BRUTO_COBRADO" : "NETO");
     setOpenSheet(true);
   };
 
@@ -235,11 +302,26 @@ export function PrecioCatalogoManager({ initialItems, tipo }: Props) {
         return;
       }
 
+      const comportamientoDef =
+        tipo === "impuestos"
+          ? COMPORTAMIENTOS_IMPUESTO.find((c) => c.value === comportamiento)
+          : undefined;
+      const camposImpuesto = comportamientoDef
+        ? {
+            traslado: comportamientoDef.traslado,
+            baseCalculo: comportamientoDef.baseCalculo,
+            alcance,
+          }
+        : tipo === "comisiones"
+          ? { baseCalculo: baseComision }
+          : {};
+
       if (editando) {
         await adapter.actualizar(editando.id, {
           nombre,
           porcentaje: porcentajeNum,
           detalleJson,
+          ...camposImpuesto,
         });
         toast.success(
           `${capitalizar(adapter.entidadSingular)} "${nombre}" actualizado`,
@@ -250,6 +332,7 @@ export function PrecioCatalogoManager({ initialItems, tipo }: Props) {
           nombre,
           porcentaje: porcentajeNum,
           detalleJson,
+          ...camposImpuesto,
         });
         toast.success(
           `${capitalizar(adapter.entidadSingular)} "${nombre}" creado`,
@@ -354,26 +437,159 @@ export function PrecioCatalogoManager({ initialItems, tipo }: Props) {
                 />
               </div>
               {tipo === "impuestos" ? (
-                <label className="flex items-start gap-3 rounded-md border p-3 text-sm">
-                  <input
-                    type="checkbox"
-                    className="mt-1"
-                    checked={desglosarCliente}
-                    onChange={(event) =>
-                      setDesglosarCliente(event.target.checked)
-                    }
-                  />
-                  <span className="space-y-1">
-                    <span className="block font-medium">
-                      Desglosar al cliente
+                <>
+                  <div className="space-y-2">
+                    <Label>Comportamiento *</Label>
+                    <div className="space-y-2">
+                      {COMPORTAMIENTOS_IMPUESTO.map((opcion) => (
+                        <label
+                          key={opcion.value}
+                          className={`flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm ${
+                            comportamiento === opcion.value
+                              ? "border-foreground"
+                              : ""
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="comportamiento-impuesto"
+                            className="mt-1"
+                            checked={comportamiento === opcion.value}
+                            onChange={() => setComportamiento(opcion.value)}
+                          />
+                          <span className="space-y-1">
+                            <span className="block font-medium">
+                              {opcion.label}
+                            </span>
+                            <span className="text-muted-foreground block text-xs">
+                              {opcion.hint}
+                            </span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Alcance *</Label>
+                    <div className="flex gap-2">
+                      <label
+                        className={`flex flex-1 cursor-pointer items-start gap-3 rounded-md border p-3 text-sm ${
+                          alcance === "PRODUCTO" ? "border-foreground" : ""
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="alcance-impuesto"
+                          className="mt-1"
+                          checked={alcance === "PRODUCTO"}
+                          onChange={() => setAlcance("PRODUCTO")}
+                        />
+                        <span className="space-y-1">
+                          <span className="block font-medium">Por producto</span>
+                          <span className="text-muted-foreground block text-xs">
+                            Se asocia producto por producto (ej. IVA con
+                            alícuota según el producto).
+                          </span>
+                        </span>
+                      </label>
+                      <label
+                        className={`flex flex-1 cursor-pointer items-start gap-3 rounded-md border p-3 text-sm ${
+                          alcance === "TENANT" ? "border-foreground" : ""
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="alcance-impuesto"
+                          className="mt-1"
+                          checked={alcance === "TENANT"}
+                          onChange={() => setAlcance("TENANT")}
+                        />
+                        <span className="space-y-1">
+                          <span className="block font-medium">
+                            Toda la empresa
+                          </span>
+                          <span className="text-muted-foreground block text-xs">
+                            Aplica a todas las cotizaciones sin asociarlo (ej.
+                            IIBB, imp. al cheque).
+                          </span>
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                  <label className="flex items-start gap-3 rounded-md border p-3 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={desglosarCliente}
+                      onChange={(event) =>
+                        setDesglosarCliente(event.target.checked)
+                      }
+                    />
+                    <span className="space-y-1">
+                      <span className="block font-medium">
+                        Desglosar al cliente
+                      </span>
+                      <span className="text-muted-foreground block text-xs">
+                        Si está desactivado, el impuesto se incluye dentro del
+                        subtotal visible y no aparece como línea separada en el
+                        resumen financiero.
+                      </span>
                     </span>
-                    <span className="text-muted-foreground block text-xs">
-                      Si está desactivado, el impuesto se incluye dentro del
-                      subtotal visible y no aparece como línea separada en el
-                      resumen financiero.
-                    </span>
-                  </span>
-                </label>
+                  </label>
+                </>
+              ) : null}
+              {tipo === "comisiones" ? (
+                <div className="space-y-2">
+                  <Label>Base de cálculo *</Label>
+                  <div className="flex gap-2">
+                    <label
+                      className={`flex flex-1 cursor-pointer items-start gap-3 rounded-md border p-3 text-sm ${
+                        baseComision === "NETO" ? "border-foreground" : ""
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="base-comision"
+                        className="mt-1"
+                        checked={baseComision === "NETO"}
+                        onChange={() => setBaseComision("NETO")}
+                      />
+                      <span className="space-y-1">
+                        <span className="block font-medium">
+                          Sobre el neto (vendedor)
+                        </span>
+                        <span className="text-muted-foreground block text-xs">
+                          % sobre el precio sin IVA. Típico para comisiones de
+                          venta.
+                        </span>
+                      </span>
+                    </label>
+                    <label
+                      className={`flex flex-1 cursor-pointer items-start gap-3 rounded-md border p-3 text-sm ${
+                        baseComision === "BRUTO_COBRADO"
+                          ? "border-foreground"
+                          : ""
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="base-comision"
+                        className="mt-1"
+                        checked={baseComision === "BRUTO_COBRADO"}
+                        onChange={() => setBaseComision("BRUTO_COBRADO")}
+                      />
+                      <span className="space-y-1">
+                        <span className="block font-medium">
+                          Sobre lo cobrado (pasarela)
+                        </span>
+                        <span className="text-muted-foreground block text-xs">
+                          % sobre el total cobrado con IVA. Típico para Mercado
+                          Pago, tarjetas, etc.
+                        </span>
+                      </span>
+                    </label>
+                  </div>
+                </div>
               ) : null}
               <div className="space-y-2">
                 <LabelConTooltip
@@ -442,7 +658,10 @@ export function PrecioCatalogoManager({ initialItems, tipo }: Props) {
                 <TableRow>
                   <TableHead>Nombre</TableHead>
                   <TableHead className="text-right">%</TableHead>
+                  {tipo === "impuestos" ? <TableHead>Tipo</TableHead> : null}
+                  {tipo === "impuestos" ? <TableHead>Alcance</TableHead> : null}
                   {tipo === "impuestos" ? <TableHead>Cliente</TableHead> : null}
+                  {tipo === "comisiones" ? <TableHead>Base</TableHead> : null}
                   <TableHead className="text-center">
                     Productos que lo usan
                   </TableHead>
@@ -461,6 +680,28 @@ export function PrecioCatalogoManager({ initialItems, tipo }: Props) {
                     </TableCell>
                     {tipo === "impuestos" ? (
                       <TableCell>
+                        <Badge variant="outline">
+                          {COMPORTAMIENTOS_IMPUESTO.find(
+                            (c) => c.value === getComportamiento(item),
+                          )?.badge ?? "s/ neto"}
+                        </Badge>
+                      </TableCell>
+                    ) : null}
+                    {tipo === "impuestos" ? (
+                      <TableCell>
+                        <Badge
+                          variant={
+                            item.alcance === "TENANT" ? "default" : "outline"
+                          }
+                        >
+                          {item.alcance === "TENANT"
+                            ? "Toda la empresa"
+                            : "Por producto"}
+                        </Badge>
+                      </TableCell>
+                    ) : null}
+                    {tipo === "impuestos" ? (
+                      <TableCell>
                         <Badge
                           variant={
                             getDesglosarCliente(item.detalleJson)
@@ -471,6 +712,15 @@ export function PrecioCatalogoManager({ initialItems, tipo }: Props) {
                           {getDesglosarCliente(item.detalleJson)
                             ? "Desglosado"
                             : "Oculto"}
+                        </Badge>
+                      </TableCell>
+                    ) : null}
+                    {tipo === "comisiones" ? (
+                      <TableCell>
+                        <Badge variant="outline">
+                          {item.baseCalculo === "BRUTO_COBRADO"
+                            ? "s/ cobrado"
+                            : "s/ neto"}
                         </Badge>
                       </TableCell>
                     ) : null}

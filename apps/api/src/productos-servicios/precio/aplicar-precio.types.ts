@@ -81,12 +81,24 @@ export interface DetalleFijoConMargenVariable {
 
 // ── Inputs / Outputs del servicio ───────────────────────────────────
 
+/** Base sobre la que se calcula el % del impuesto. */
+export type ImpuestoBaseCalculo = 'NETO' | 'BRUTO_COBRADO';
+/**
+ * POR_FUERA: se agrega al neto y se discrimina al cliente (IVA).
+ * POR_DENTRO: costo embebido en el neto vía gross-up (IIBB, imp. al cheque).
+ */
+export type ImpuestoTraslado = 'POR_FUERA' | 'POR_DENTRO';
+
 export interface ImpuestoSnapshot {
   catalogoId: string;
   codigo: string;
   nombre: string;
   porcentaje: number;
   orden: number;
+  /** Default NETO (compat con snapshots previos al modelo por base). */
+  baseCalculo?: ImpuestoBaseCalculo;
+  /** Default POR_DENTRO (compat con snapshots previos al modelo por base). */
+  traslado?: ImpuestoTraslado;
   desglosarCliente?: boolean;
 }
 
@@ -96,6 +108,12 @@ export interface ComisionSnapshot {
   nombre: string;
   porcentaje: number;
   orden: number;
+  /**
+   * NETO (default): comisión de vendedor, % sobre el precio sin IVA.
+   * BRUTO_COBRADO: comisión de pasarela de pago/tarjeta, % sobre lo cobrado
+   * (incluye IVA) — se convierte a equivalente-neto igual que el imp. al cheque.
+   */
+  baseCalculo?: ImpuestoBaseCalculo;
 }
 
 export interface PrecioEspecialClienteSnapshot {
@@ -125,20 +143,23 @@ export interface AplicarPrecioInput {
 }
 
 export interface DesglosePrecio {
-  /** Precio base neto: costo + margen objetivo, sin impuestos ni comisiones. */
+  /** Porción del neto que queda para la empresa: neto − costos impositivos internos − comisiones. */
   precioBase: number;
-  /** Suma de impuestos aplicados (en unidades monetarias). */
+  /**
+   * Suma monetaria de TODOS los impuestos (por fuera + internos), por unidad.
+   * Los por fuera (IVA) además son la diferencia bruto − neto.
+   */
   totalImpuestos: number;
-  /** Suma de comisiones aplicadas. */
+  /** Suma de comisiones aplicadas (% sobre el neto), por unidad. */
   totalComisiones: number;
-  /** Margen bruto logrado (% sobre precio final antes de impuestos). */
+  /** Margen efectivo logrado: (precioBase − costo) / neto × 100. */
   margenEfectivoPct: number;
 }
 
 export interface AplicarPrecioOutput {
-  /** Precio neto unitario (precioBase + comisiones — sin impuestos). */
+  /** Precio NETO fiscal unitario (base imponible del IVA; sin impuestos por fuera). */
   precioNetoUnitario: number;
-  /** Precio bruto unitario (precioBase + comisiones + impuestos). */
+  /** Precio bruto unitario = neto + impuestos por fuera (total factura). */
   precioBrutoUnitario: number;
   /** Precio neto total (× cantidad). */
   precioNetoTotal: number;
