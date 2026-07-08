@@ -1801,6 +1801,27 @@ export class MotorUniversalService {
       }
     }
 
+    // d.0.2) montaje sobre sustrato: si debía nestear y no produjo layout, NO
+    //   seguir en silencio (quedaría cotizado con la cantidad cruda, sin plan de
+    //   montaje). Causa típica: la fuente de piezas configurada no está
+    //   disponible (ej. `fuentePiezasMontaje='pliegos_impresos'` cuando la
+    //   impresión previa es en rollo y no publica pliegos).
+    if (
+      paso.familiaCodigo === 'montaje_sobre_sustrato' &&
+      debeCalcularNestingProductivo &&
+      !nestingDispatch
+    ) {
+      errores.push(this.errorMontajeSinNesting(paso, jobContext));
+      return {
+        rutaPasoId: paso.rutaPasoId,
+        rutaPasoOrden: paso.rutaPasoOrden,
+        familiaCodigo: paso.familiaCodigo,
+        configPasoId: paso.configPasoId,
+        activado: true,
+        costoTotal: 0,
+      };
+    }
+
     // d.1) G-M2 — Look-ahead pre_prensa: si el paso es pre_prensa, busca el
     //      siguiente impresion_por_hoja, toma su material + máquina y corre
     //      grid-2d-single con info sintetizada. El resultado se usa solo para
@@ -2573,6 +2594,51 @@ export class MotorUniversalService {
       },
       sugerencia:
         'Activá el panelizado en la configuración del paso para dividir la pieza, o usá un sustrato/rollo más ancho.',
+    };
+  }
+
+  private errorMontajeSinNesting(
+    paso: PasoCargado,
+    jobContext: JobContext,
+  ): ErrorMotor {
+    const params =
+      paso.paramsPasoJson && typeof paso.paramsPasoJson === 'object'
+        ? (paso.paramsPasoJson as Record<string, unknown>)
+        : {};
+    const fuente =
+      typeof params.fuentePiezasMontaje === 'string'
+        ? params.fuentePiezasMontaje
+        : 'piezas_jobcontext';
+    const ctx = jobContext as Record<string, unknown>;
+    const hayPliegos =
+      Number(ctx.pliegos_impresos ?? ctx.pliegos_calculados ?? 0) > 0;
+
+    if (fuente === 'pliegos_impresos' && !hayPliegos) {
+      return {
+        codigo: 'montaje_sin_pliegos_para_montar',
+        severidad: 'ERROR',
+        mensaje:
+          'El montaje toma las piezas de "Pliegos impresos", pero el paso de impresión previo no publicó pliegos (imprime en rollo/por área). Cambiá la fuente de piezas del montaje a "Piezas del job".',
+        rutaPasoId: paso.rutaPasoId,
+        rutaPasoOrden: paso.rutaPasoOrden,
+        familiaCodigo: paso.familiaCodigo,
+        contexto: { fuentePiezasMontaje: fuente },
+        sugerencia:
+          'En la config del paso de montaje, seteá "Fuente de piezas" en "Piezas del job", o asegurate de que el paso previo imprima sobre pliegos.',
+      };
+    }
+
+    return {
+      codigo: 'montaje_sin_nesting',
+      severidad: 'ERROR',
+      mensaje:
+        'El montaje sobre material no pudo calcular el nesting: no encontró piezas para montar ni un sustrato con dimensiones. Revisá el material del montaje y la fuente de piezas.',
+      rutaPasoId: paso.rutaPasoId,
+      rutaPasoOrden: paso.rutaPasoOrden,
+      familiaCodigo: paso.familiaCodigo,
+      contexto: { fuentePiezasMontaje: fuente },
+      sugerencia:
+        'Verificá que el paso de montaje tenga un sustrato con medidas y una fuente de piezas válida.',
     };
   }
 

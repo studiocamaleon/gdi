@@ -907,6 +907,10 @@ export class ProductosService {
       tenantId,
       producto.pasosExtras,
     );
+    const pasoExtraSlots = await this.hydratePasoExtraSlots(
+      tenantId,
+      producto.pasosExtras,
+    );
 	    return {
 	      ...producto,
 	      rutasAlternativas: producto.rutasAlternativas.map((rutaAlt) => ({
@@ -923,6 +927,7 @@ export class ProductosService {
 	          .map((pe) => ({
 	            ...pe,
 	            maquinasCandidatas: pasoExtraCandidatas.get(pe.id) ?? [],
+            slotsMateriales: pasoExtraSlots.get(pe.id) ?? [],
 	          })),
 	        configPasos: rutaAlt.configPasos.map((configPaso) => ({
 	          ...configPaso,
@@ -1043,6 +1048,195 @@ export class ProductosService {
 	      }),
 	    );
 	  }
+
+  /**
+   * G-F4 en extras — hidrata `configSlotsMaterialesJson` (sólo ids) de cada paso
+   * extra a `slotsMateriales` con el MISMO shape que los slots de
+   * ProductoConfigPaso (candidatos → materiaPrima + variantes hidratadas, y
+   * `materialVariante` para HARDCODED). Sin esto, el sheet de cotización no
+   * puede renderizar el picker de material del extra (incl. COMERCIAL_ELIGE).
+   * Devuelve un mapa pasoExtraId → slotsMateriales[].
+   */
+  private async hydratePasoExtraSlots(
+    tenantId: string,
+    pasosExtras: Array<{
+      id: string;
+      configSlotsMaterialesJson: Prisma.JsonValue | null;
+    }>,
+  ) {
+    type CandidatoJson = {
+      materiaPrimaId?: string;
+      defaultVarianteId?: string | null;
+      orden?: number;
+      varianteIds?: string[];
+    };
+    type SlotJson = {
+      slotCodigo?: string;
+      slotNombre?: string | null;
+      slotRol?: string | null;
+      modoSeleccion?: string;
+      criterioMotorAuto?: string | null;
+      estrategiaCosto?: string;
+      formula?: string;
+      cantidadFactor?: string | number | null;
+      cantidadBase?: string | null;
+      aplicaMultiCaras?: boolean;
+      materialVarianteId?: string | null;
+      candidatos?: CandidatoJson[];
+    };
+    const parse = (json: Prisma.JsonValue | null): SlotJson[] =>
+      Array.isArray(json) ? (json as SlotJson[]) : [];
+
+    const materiaPrimaIds = new Set<string>();
+    const varianteIds = new Set<string>();
+    for (const pe of pasosExtras) {
+      for (const s of parse(pe.configSlotsMaterialesJson)) {
+        if (s.materialVarianteId) varianteIds.add(s.materialVarianteId);
+        for (const c of s.candidatos ?? []) {
+          if (c.materiaPrimaId) materiaPrimaIds.add(c.materiaPrimaId);
+          if (c.defaultVarianteId) varianteIds.add(c.defaultVarianteId);
+          for (const vid of c.varianteIds ?? []) varianteIds.add(vid);
+        }
+      }
+    }
+
+    const variantes =
+      varianteIds.size === 0
+        ? []
+        : await this.prisma.materiaPrimaVariante.findMany({
+            where: { id: { in: [...varianteIds] }, materiaPrima: { tenantId } },
+            select: {
+              id: true,
+              sku: true,
+              nombreVariante: true,
+              precioReferencia: true,
+              atributosVarianteJson: true,
+              materiaPrimaId: true,
+            },
+          });
+    const varianteMap = new Map(variantes.map((v) => [v.id, v]));
+    for (const v of variantes) materiaPrimaIds.add(v.materiaPrimaId);
+
+    const materiaPrimas =
+      materiaPrimaIds.size === 0
+        ? []
+        : await this.prisma.materiaPrima.findMany({
+            where: { tenantId, id: { in: [...materiaPrimaIds] } },
+            select: {
+              id: true,
+              codigo: true,
+              nombre: true,
+              familia: true,
+              subfamilia: true,
+              templateId: true,
+              variantes: {
+                where: { activo: true },
+                select: {
+                  id: true,
+                  sku: true,
+                  nombreVariante: true,
+                  precioReferencia: true,
+                  atributosVarianteJson: true,
+                },
+                orderBy: { sku: 'asc' },
+              },
+            },
+          });
+    const mpMap = new Map(materiaPrimas.map((mp) => [mp.id, mp]));
+
+    return new Map(
+      pasosExtras.map((pe) => {
+        const slots = parse(pe.configSlotsMaterialesJson).map((s, i) => {
+          const materialVariante = s.materialVarianteId
+            ? (varianteMap.get(s.materialVarianteId) ?? null)
+            : null;
+          const mvMateriaPrima = materialVariante
+            ? (mpMap.get(materialVariante.materiaPrimaId) ?? null)
+            : null;
+          return {
+            id: `${pe.id}:slot:${i}`,
+            slotCodigo: s.slotCodigo ?? '',
+            slotNombre: s.slotNombre ?? null,
+            slotRol: s.slotRol ?? null,
+            modoSeleccion: s.modoSeleccion ?? 'HARDCODED',
+            criterioMotorAuto: s.criterioMotorAuto ?? null,
+            estrategiaCosto: s.estrategiaCosto ?? 'AUTO',
+            formula: s.formula ?? '',
+            cantidadFactor: s.cantidadFactor ?? null,
+            cantidadBase: s.cantidadBase ?? null,
+            aplicaMultiCaras: s.aplicaMultiCaras ?? false,
+            materialVariante:
+              materialVariante && mvMateriaPrima
+                ? {
+                    id: materialVariante.id,
+                    sku: materialVariante.sku,
+                    nombreVariante: materialVariante.nombreVariante,
+                    precioReferencia: materialVariante.precioReferencia,
+                    atributosVarianteJson: materialVariante.atributosVarianteJson,
+                    materiaPrima: {
+                      id: mvMateriaPrima.id,
+                      codigo: mvMateriaPrima.codigo,
+                      nombre: mvMateriaPrima.nombre,
+                      familia: mvMateriaPrima.familia,
+                      subfamilia: mvMateriaPrima.subfamilia,
+                      templateId: mvMateriaPrima.templateId,
+                      variantes: mvMateriaPrima.variantes,
+                    },
+                  }
+                : null,
+            candidatos: (s.candidatos ?? []).flatMap((c, ci) => {
+              const mp = c.materiaPrimaId ? mpMap.get(c.materiaPrimaId) : undefined;
+              if (!mp) return [];
+              const defaultVariante = c.defaultVarianteId
+                ? (varianteMap.get(c.defaultVarianteId) ?? null)
+                : null;
+              return [
+                {
+                  id: `${pe.id}:slot:${i}:cand:${ci}`,
+                  materiaPrimaId: c.materiaPrimaId as string,
+                  defaultVarianteId: c.defaultVarianteId ?? null,
+                  orden: c.orden ?? ci,
+                  materiaPrima: {
+                    id: mp.id,
+                    codigo: mp.codigo,
+                    nombre: mp.nombre,
+                    familia: mp.familia,
+                    subfamilia: mp.subfamilia,
+                    templateId: mp.templateId,
+                  },
+                  defaultVariante: defaultVariante
+                    ? {
+                        id: defaultVariante.id,
+                        sku: defaultVariante.sku,
+                        nombreVariante: defaultVariante.nombreVariante,
+                        precioReferencia: defaultVariante.precioReferencia,
+                      }
+                    : null,
+                  variantes: (c.varianteIds ?? []).flatMap((vid) => {
+                    const v = varianteMap.get(vid);
+                    return v
+                      ? [
+                          {
+                            variante: {
+                              id: v.id,
+                              sku: v.sku,
+                              nombreVariante: v.nombreVariante,
+                              precioReferencia: v.precioReferencia,
+                              atributosVarianteJson: v.atributosVarianteJson,
+                            },
+                          },
+                        ]
+                      : [];
+                  }),
+                },
+              ];
+            }),
+          };
+        });
+        return [pe.id, slots] as const;
+      }),
+    );
+  }
 
 	  private buildModoColorOptions(configPaso: {
 	    paramsPasoJson?: Prisma.JsonValue | null;

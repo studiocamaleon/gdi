@@ -347,6 +347,8 @@ export interface PasoExtra {
   configCargosDirectosJson?: unknown;
   /** M-2: candidatas hidratadas por el detalle (mismo shape que configPasos). */
   maquinasCandidatas?: ConfigPasoDetalle["maquinasCandidatas"];
+  /** G-F4: slots de material hidratados por el detalle (mismo shape que configPasos). */
+  slotsMateriales?: ConfigPasoDetalle["slotsMateriales"];
   activo: boolean;
   maquinaM1?: {
     id: string;
