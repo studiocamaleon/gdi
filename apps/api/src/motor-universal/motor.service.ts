@@ -1681,6 +1681,19 @@ export class MotorUniversalService {
       : this.resolverPerfil(pasoConMaquina, jobContext);
     paso = pasoConMaquina; // todo lo siguiente usa el paso con máquina resuelta
 
+    // c.0) DOBLE FAZ — si el sustrato de este paso se duplica (aplicaMultiCaras),
+    //   el paso procesa `cantidad × caras` piezas reales (cara + contracara). A
+    //   partir de acá trabajamos con un JobContext del paso con las cantidades
+    //   duplicadas y `caras=1`, para que el nesting (incl. la elección de rollo),
+    //   el material y el tiempo salgan de las piezas reales SIN contar doble por
+    //   los multiplicadores escalares de caras. El perfil (doble faz) ya se
+    //   resolvió arriba con las caras originales. El precio comercial NO se ve
+    //   afectado (usa la cantidad original, fuera de este método).
+    const carasProcesadas = this.carasProcesadasPaso(paso, jobContext);
+    if (carasProcesadas > 1) {
+      jobContext = this.duplicarJobContextPorCaras(jobContext, carasProcesadas);
+    }
+
     // c.1) RESOLVER MATERIAL PRELIMINAR (necesario para el nesting de pliegos
     //      o rollos: el algoritmo necesita conocer las dimensiones del sustrato).
     //      Si el slot principal no se puede resolver, el dispatcher devuelve null y
@@ -3035,6 +3048,66 @@ export class MotorUniversalService {
       paso.familiaCodigo === 'impresion_por_hoja' &&
       slotCodigo === 'sustrato_principal'
     );
+  }
+
+  /**
+   * Factor de caras que debe procesar el paso de impresión cuando el sustrato
+   * se duplica por doble faz. Doble faz = se imprime cara y contracara como
+   * piezas separadas, así que el paso procesa `cantidad × caras` piezas.
+   *
+   * Devuelve 1 salvo que el slot del sustrato (slot 0, el que se nestea) tenga
+   * `aplicaMultiCaras` activo y `jobContext.caras > 1` — misma condición que el
+   * costeo de material usa para su ×caras (F.2.6).
+   */
+  private carasProcesadasPaso(
+    paso: PasoCargado,
+    jobContext: JobContext,
+  ): number {
+    const caras =
+      typeof jobContext.caras === 'number' && jobContext.caras > 0
+        ? jobContext.caras
+        : 1;
+    if (caras <= 1) return 1;
+    const slot = paso.slots?.[0];
+    if (!slot) return 1;
+    const aplica =
+      slot.aplicaMultiCaras &&
+      !this.ignoraCarasEnMaterial(paso, slot.slotCodigo);
+    return aplica ? caras : 1;
+  }
+
+  /**
+   * Devuelve un JobContext "del paso" con las cantidades de TRABAJO duplicadas
+   * por `caras` (piezas, cantidad, área y perímetro totales) y `caras` puesto en
+   * 1. Así todo lo que depende de las piezas impresas —nesting (incl. elección
+   * de rollo), material y tiempo— trabaja sobre las piezas reales (ej. 20 en vez
+   * de 10), y los multiplicadores escalares de caras (material F.2.6, tiempo,
+   * tinta = área × caras) quedan neutralizados (×1) para no contar doble.
+   *
+   * NO se usa para el precio comercial (que sigue con la cantidad original,
+   * fuera de `ejecutarPaso`): solo afecta el costo/tiempo internos del paso.
+   */
+  private duplicarJobContextPorCaras(
+    jobContext: JobContext,
+    caras: number,
+  ): JobContext {
+    if (caras <= 1) return jobContext;
+    const jc = jobContext as Record<string, unknown>;
+    const dup: Record<string, unknown> = { ...jc, caras: 1 };
+    if (typeof jc.cantidad === 'number') dup.cantidad = jc.cantidad * caras;
+    if (Array.isArray(jc.piezas)) {
+      dup.piezas = (jc.piezas as Array<Record<string, unknown>>).map((p) => ({
+        ...p,
+        cantidad:
+          typeof p.cantidad === 'number' ? p.cantidad * caras : p.cantidad,
+      }));
+    }
+    for (const campo of ['piezaAreaTotalM2', 'piezaPerimetroTotalM'] as const) {
+      if (typeof jc[campo] === 'number') {
+        dup[campo] = (jc[campo] as number) * caras;
+      }
+    }
+    return dup as JobContext;
   }
 
   private ajustarCantidadSustratoComprado(
