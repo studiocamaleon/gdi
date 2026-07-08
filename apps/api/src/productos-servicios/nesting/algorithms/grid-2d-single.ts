@@ -39,6 +39,12 @@ function calcGrid(
   sepHMm: number,
   sepVMm: number,
 ): GridDimensions {
+  // Guarda contra piezas sin medida (0 o negativa): sin este corte,
+  // `(area + sep) / (0 + 0)` da Infinity y el doble loop de placements
+  // empuja copias sin límite hasta agotar la memoria del proceso (OOM).
+  if (pieceWidthMm <= 0 || pieceHeightMm <= 0) {
+    return { columnas: 0, filas: 0 };
+  }
   if (areaWidthMm < pieceWidthMm || areaHeightMm < pieceHeightMm) {
     return { columnas: 0, filas: 0 };
   }
@@ -105,6 +111,36 @@ export function nestGrid2DSingle<T = unknown>(
   const placedWidthMm = useRotated ? piece.heightMm : piece.widthMm;
   const placedHeightMm = useRotated ? piece.widthMm : piece.heightMm;
   const count = best.columnas * best.filas;
+
+  // Red de seguridad: una pieza válida pero minúscula (medida casi nula)
+  // produce una grilla enorme cuyo doble loop de placements puede agotar la
+  // memoria. Un rígido real jamás acomoda >100k piezas por placa; si se
+  // supera, tratamos la medida como inválida (0 piezas) en vez de tumbar la API.
+  const MAX_PIEZAS_POR_SUSTRATO = 100_000;
+  if (!Number.isFinite(count) || count > MAX_PIEZAS_POR_SUSTRATO) {
+    return {
+      algorithm: 'grid-2d-single',
+      substrates: [
+        {
+          kind: 'sheet',
+          count: 1,
+          widthMm: substrate.widthMm,
+          heightMm: substrate.heightMm,
+        },
+      ],
+      placements: [],
+      metrics: {
+        columnas: 0,
+        filas: 0,
+        rotada: false,
+        piezasPorSustrato: 0,
+        aprovechamientoPct: 0,
+        areaUtilMm2: 0,
+        areaTotalMm2: substrate.widthMm * substrate.heightMm,
+        largoConsumidoMm: 0,
+      },
+    };
+  }
 
   const placements: Placement<T>[] = [];
   for (let row = 0; row < best.filas; row++) {
