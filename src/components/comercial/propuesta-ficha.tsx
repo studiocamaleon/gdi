@@ -2631,29 +2631,44 @@ function ProductRow({
           : item.especificaciones[attr.key] ?? "A definir",
     }));
 
-  // Bloque "Montaje": material del sustrato sobre el que se monta (ej. PVC
-  // espumado · 3 mm). Se inserta justo después de "Material" para que se lean
-  // juntos los materiales que componen el producto.
+  // Materiales que componen el producto: el principal (sustrato impreso) y el
+  // de montaje. Se muestran SIEMPRE que existan en la cotización, aunque el
+  // `atributosSchema` del producto no los declare (algunos productos no tienen
+  // el atributo "material" en su schema, pero el dato viaja igual en la
+  // cotización). El de montaje va justo después del principal.
   const specs = (() => {
-    if (
-      !montajeSustrato ||
-      montajeSustrato.materialVarianteId === mainMaterial?.materialVarianteId
-    ) {
-      return specsBase;
+    const arr = [...specsBase];
+
+    // 1. Material principal: si el schema no generó una fila de material pero
+    //    la cotización sí resolvió uno, lo insertamos sintéticamente (tras
+    //    "Medidas" para respetar el orden Medidas · Material · …).
+    let materialIdx = arr.findIndex((spec) => isMaterialSpecKey("", spec.lbl));
+    if (materialIdx < 0 && mainMaterial) {
+      const medidasIdx = arr.findIndex((spec) =>
+        spec.lbl.toLowerCase().includes("medida"),
+      );
+      materialIdx = medidasIdx >= 0 ? medidasIdx + 1 : 0;
+      arr.splice(materialIdx, 0, {
+        lbl: "Material",
+        val: getMaterialCommercialLabel(mainMaterial),
+      });
     }
-    const montajeSpec = {
-      lbl: "Montaje",
-      val: getMaterialCommercialLabel(montajeSustrato),
-    };
-    const materialIdx = specsBase.findIndex((spec) =>
-      isMaterialSpecKey("", spec.lbl),
-    );
-    if (materialIdx < 0) return [...specsBase, montajeSpec];
-    return [
-      ...specsBase.slice(0, materialIdx + 1),
-      montajeSpec,
-      ...specsBase.slice(materialIdx + 1),
-    ];
+
+    // 2. Montaje: material del sustrato sobre el que se monta (ej. Imán,
+    //    PVC espumado · 3 mm), justo después del principal.
+    if (
+      montajeSustrato &&
+      montajeSustrato.materialVarianteId !== mainMaterial?.materialVarianteId
+    ) {
+      const montajeSpec = {
+        lbl: "Montaje",
+        val: getMaterialCommercialLabel(montajeSustrato),
+      };
+      if (materialIdx >= 0) arr.splice(materialIdx + 1, 0, montajeSpec);
+      else arr.push(montajeSpec);
+    }
+
+    return arr;
   })();
 
   return (
