@@ -2281,13 +2281,21 @@ function CostosItemView({
   const comisionesTotal = desglosePrecio
     ? desglosePrecio.totalComisiones * cantidadPrecio
     : 0;
-  const impuestosTotal = getCotizacionImpuestos(item.cotizacion);
+  // Incluye impuestos por fuera (IVA) + costos impositivos internos (IIBB,
+  // cheque): así costo + margen + comisiones + impuestos = precio bruto.
+  const impuestosTotal = desglosePrecio
+    ? desglosePrecio.totalImpuestos * cantidadPrecio
+    : getCotizacionImpuestos(item.cotizacion);
   const margenPrecioMonto = precioBaseTotal - costo;
+  // Costo, margen y comisiones se expresan sobre el NETO (sin IVA): es la
+  // base sobre la que se configura el margen del Tab Precio — así "margen 40%"
+  // configurado se lee 40% acá (y no 33% como cuando se dividía por el bruto,
+  // que incluye el IVA y no es ingreso).
   const margenPrecioPct =
-    precioBruto > 0 ? (margenPrecioMonto / precioBruto) * 100 : 0;
-  const costoPrecioPct = precioBruto > 0 ? (costo / precioBruto) * 100 : 0;
+    precioNeto > 0 ? (margenPrecioMonto / precioNeto) * 100 : 0;
+  const costoPrecioPct = precioNeto > 0 ? (costo / precioNeto) * 100 : 0;
   const comisionesPrecioPct =
-    precioBruto > 0 ? (comisionesTotal / precioBruto) * 100 : 0;
+    precioNeto > 0 ? (comisionesTotal / precioNeto) * 100 : 0;
   const impuestosPrecioPct =
     precioBruto > 0 ? (impuestosTotal / precioBruto) * 100 : 0;
   const cantidadReal = getCotizacionCantidadReal(item.cotizacion, item.cantidad);
@@ -2325,58 +2333,123 @@ function CostosItemView({
     );
   }
 
+  // ── Cascada del precio: cada fila suma hacia abajo hasta el precio de venta.
+  //    costo (materiales + centro de costo + cargos) + impuestos internos +
+  //    comisiones + margen = precio neto; neto + IVA = precio de venta.
+  const costosInternosTotal = Math.max(
+    0,
+    precioNeto - precioBaseTotal - comisionesTotal,
+  );
+  const ivaTotal = Math.max(0, precioBruto - precioNeto);
+  const impuestosInternosNombres = (desglosePrecio?.impuestos ?? [])
+    .filter((impuesto) => (impuesto.traslado ?? "POR_DENTRO") !== "POR_FUERA")
+    .map((impuesto) => impuesto.nombre)
+    .join(" + ");
+  const impuestosPorFueraNombres = (desglosePrecio?.impuestos ?? [])
+    .filter((impuesto) => impuesto.traslado === "POR_FUERA")
+    .map((impuesto) => `${impuesto.nombre} ${impuesto.porcentaje}%`)
+    .join(" + ");
+
+  const pctDelNeto = (monto: number) =>
+    precioNeto > 0
+      ? `${((monto / precioNeto) * 100).toLocaleString("es-AR", {
+          maximumFractionDigits: 1,
+        })}%`
+      : "—";
+  const TIPO_POR_BUCKET: Record<string, string> = {
+    materiales: "Materia prima",
+    "centro-costo": "Centro de costo",
+    cargos: "Cargo directo",
+  };
+  // Filas punto por punto: todo lo que compone el precio neto (suma 100%).
+  const filasNeto: Array<{
+    key: string;
+    label: string;
+    hint?: string;
+    tipo: string;
+    monto: number;
+    warn?: boolean;
+  }> = [
+    ...buckets.map((bucket) => ({
+      key: bucket.key,
+      label: bucket.label,
+      tipo: TIPO_POR_BUCKET[bucket.key] ?? "Costo",
+      monto: bucket.amount,
+    })),
+    ...(costosInternosTotal > 0
+      ? [
+          {
+            key: "impuestos-internos",
+            label: impuestosInternosNombres || "Impuestos internos",
+            hint: "ya incluidos en el precio, no se muestran al cliente",
+            tipo: "Impuesto",
+            monto: costosInternosTotal,
+          },
+        ]
+      : []),
+    ...(comisionesTotal > 0
+      ? [
+          {
+            key: "comisiones",
+            label: "Comisiones",
+            tipo: "Comisión",
+            monto: comisionesTotal,
+          },
+        ]
+      : []),
+    {
+      key: "margen",
+      label: "Margen",
+      tipo: "Rentabilidad",
+      monto: margenPrecioMonto,
+      warn: margenPrecioPct < 25,
+    },
+  ];
+
   return (
     <div className="op-costs">
-      <div className="cost-hero">
-        <div className="cost-metric primary">
-          <span>Costo operativo</span>
-          <strong>{formatCurrency(costo)}</strong>
-          <small>
-            {costoPrecioPct.toFixed(0)}% del precio · Costo por{" "}
-            {formatUnidad(item.unidadMedida)}: {formatCurrency(costoUnitario)} ·{" "}
-            Cantidad: {formatCantidadItem(item)}{" "}
-            {formatUnidad(item.unidadMedida)}
-          </small>
+      <div className="cost-waterfall">
+        {filasNeto.map((fila) => (
+          <div className="cw-row" key={fila.key}>
+            <span className="cw-label">
+              {fila.label}
+              {fila.hint ? <small>{fila.hint}</small> : null}
+            </span>
+            <span className="cw-tipo">{fila.tipo}</span>
+            <span className="cw-pct">{pctDelNeto(fila.monto)}</span>
+            <span className={`cw-amount ${fila.warn ? "cw-margen warn" : ""}`}>
+              {formatCurrency(fila.monto)}
+            </span>
+          </div>
+        ))}
+        <div className="cw-row cw-subtotal">
+          <span className="cw-label">Precio neto (sin IVA)</span>
+          <span className="cw-tipo" />
+          <span className="cw-pct">100%</span>
+          <span className="cw-amount">{formatCurrency(precioNeto)}</span>
         </div>
-        <div className="cost-metric">
-          <span>Margen bruto</span>
-          <strong className={margenPrecioPct < 25 ? "warn" : ""}>
-            {formatCurrency(margenPrecioMonto)}
-          </strong>
-          <small>{margenPrecioPct.toFixed(0)}% del precio</small>
+        {ivaTotal > 0 ? (
+          <div className="cw-row">
+            <span className="cw-label">
+              {impuestosPorFueraNombres || "IVA"}
+              <small>se agrega al neto y se discrimina en factura</small>
+            </span>
+            <span className="cw-tipo">Impuesto</span>
+            <span className="cw-pct">+ {pctDelNeto(ivaTotal)}</span>
+            <span className="cw-amount">+ {formatCurrency(ivaTotal)}</span>
+          </div>
+        ) : null}
+        <div className="cw-row cw-total">
+          <span className="cw-label">Precio de venta</span>
+          <span className="cw-tipo" />
+          <span className="cw-pct" />
+          <span className="cw-amount">{formatCurrency(precioBruto)}</span>
         </div>
-        <div className="cost-metric">
-          <span>Comisiones</span>
-          <strong>{formatCurrency(comisionesTotal)}</strong>
-          <small>{comisionesPrecioPct.toFixed(0)}% del precio</small>
-        </div>
-        <div className="cost-metric">
-          <span>Impuestos</span>
-          <strong>{formatCurrency(impuestosTotal)}</strong>
-          <small>{impuestosPrecioPct.toFixed(0)}% del precio</small>
-        </div>
-      </div>
-
-      <div className="cost-section">
-        <div className="cost-title">Composición del costo</div>
-        <div className="cost-bars">
-          {buckets.map((bucket) => {
-            const pct = costo > 0 ? (bucket.amount / costo) * 100 : 0;
-            return (
-              <div className="cost-bar-row" key={bucket.key}>
-                <div className="cost-bar-meta">
-                  <span>{bucket.label}</span>
-                  <strong>{formatCurrency(bucket.amount)}</strong>
-                </div>
-                <div className="cost-bar-track">
-                  <span
-                    style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
-                  />
-                </div>
-                <div className="cost-bar-pct">{pct.toFixed(0)}%</div>
-              </div>
-            );
-          })}
+        <div className="cw-foot">
+          Costo de producción: {formatCurrency(costo)} (
+          {costoPrecioPct.toFixed(0)}% del neto) ·{" "}
+          {formatCurrency(costoUnitario)} por {formatUnidad(item.unidadMedida)}{" "}
+          · {formatCantidadItem(item)} {formatUnidad(item.unidadMedida)}
         </div>
       </div>
 
@@ -2904,23 +2977,22 @@ type ImpuestoResumenLinea = {
 
 function getImpuestosItemResumen(item: PropuestaItem) {
   const desglose = item.cotizacion.desglosePrecio;
-  const totalImpuestos = getCotizacionImpuestos(item.cotizacion);
   const lineas: ImpuestoResumenLinea[] = [];
   let ocultos = 0;
 
-  if (!desglose || totalImpuestos <= 0) {
+  if (!desglose) {
     return { visibles: lineas, ocultos };
   }
 
-  const impuestos = desglose.impuestos ?? [];
-  const totalPct = impuestos.reduce(
-    (acc, impuesto) => acc + impuesto.porcentaje,
-    0,
-  );
-  if (totalPct <= 0) return { visibles: lineas, ocultos };
-
-  for (const impuesto of impuestos) {
-    const monto = totalImpuestos * (impuesto.porcentaje / totalPct);
+  // Solo los impuestos POR_FUERA (IVA) son líneas que se agregan al neto y
+  // pueden mostrarse/ocultarse al cliente: su monto es % del neto. Los
+  // POR_DENTRO (IIBB, imp. al cheque) son costos ya embebidos en el precio
+  // neto — nunca se listan ni ajustan el subtotal.
+  const netoTotal = desglose.precioNetoTotal ?? 0;
+  for (const impuesto of desglose.impuestos ?? []) {
+    if ((impuesto.traslado ?? "POR_DENTRO") !== "POR_FUERA") continue;
+    const monto = netoTotal * (impuesto.porcentaje / 100);
+    if (monto <= 0) continue;
     if (impuesto.desglosarCliente === false) {
       ocultos += monto;
       continue;
