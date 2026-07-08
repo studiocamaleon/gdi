@@ -623,7 +623,7 @@ function pasoExtraToSyntheticConfig(
           unidadBaseFutura: extra.centroCosto.unidadBaseFutura ?? "",
         }
       : null,
-    slotsMateriales: [],
+    slotsMateriales: extra.slotsMateriales ?? [],
     maquinasCandidatas: extra.maquinasCandidatas ?? [],
     cargosDirectosPaso: [],
   };
@@ -1621,6 +1621,81 @@ function usaCantidadComercialParaPiezas(productoDetalle: ProductoDetalle | null)
     modoMedidasPermitePersonalizada(productoDetalle.modoMedidas) &&
     !isMetroLinealConMedidasVariables(productoDetalle)
   );
+}
+
+/**
+ * `true` cuando el producto cotiza por piezas con medida personalizada pero
+ * todavía no hay una medida válida ingresada (ancho/alto <= 0).
+ *
+ * La cotización en tiempo real NO debe dispararse en este estado: enviar una
+ * pieza 0×0 al motor de nesting de rígidos hace que la grilla se calcule como
+ * `área / 0` → columnas/filas infinitas → el motor agota la memoria (OOM) y
+ * tumba la API. Con medida predefinida seleccionada las dimensiones vienen de
+ * ahí (válidas), así que ese caso no bloquea.
+ */
+function medidasPersonalizadasIncompletas(
+  productoDetalle: ProductoDetalle | null,
+  config: MotorConfigState,
+): boolean {
+  if (!usaPiezasParaCotizar(productoDetalle, config)) return false;
+  const medidaPredefinida = getSelectedPredefinedMeasure(
+    productoDetalle,
+    config.medidaPredefinidaId,
+  );
+  if (medidaPredefinida) return false;
+  if (config.piezas.length === 0) return true;
+  return config.piezas.some(
+    (pieza) => !(pieza.anchoMm > 0) || !(pieza.altoMm > 0),
+  );
+}
+
+/**
+ * Muestra de color aproximada a partir del nombre de la variante. El backend
+ * hoy sólo nos da el `colorLabel` (texto), no un hex, así que mapeamos los
+ * colores frecuentes de sustratos a una muestra visual y caemos a un gris
+ * neutro con aro para lo desconocido. `ring` agrega un borde interno para que
+ * los colores muy claros (blanco, crema) no se pierdan contra el fondo.
+ */
+const SUBSTRATE_SWATCHES: Array<{ match: RegExp; background: string; ring?: boolean }> = [
+  {
+    match: /transparente|cristal|clear|incoloro/i,
+    background:
+      "repeating-conic-gradient(#dedede 0% 25%, #ffffff 0% 50%) 50% / 8px 8px",
+    ring: true,
+  },
+  { match: /blanc|white/i, background: "#fafafa", ring: true },
+  { match: /negr|black/i, background: "#1c1c1e" },
+  { match: /gris|gray|grey|plom/i, background: "#9aa0a6" },
+  { match: /plat|silver|alumini/i, background: "linear-gradient(135deg,#e2e2e4,#b7b9bd)", ring: true },
+  { match: /dorad|\boro\b|gold/i, background: "linear-gradient(135deg,#e8cf8a,#c8a13a)" },
+  { match: /roj|red|bordo|granate/i, background: "#d93636" },
+  { match: /azul|blue|celeste/i, background: "#2f6fe0" },
+  { match: /verde|green/i, background: "#1f9d57" },
+  { match: /amarill|yellow/i, background: "#e6b800" },
+  { match: /naranj|orange/i, background: "#e2712b" },
+  { match: /beige|crema|marfil|ivory|hueso/i, background: "#efe7d6", ring: true },
+  { match: /madera|wood|roble|nogal/i, background: "linear-gradient(135deg,#c8a06a,#9c6b3a)" },
+];
+
+function substrateColorSwatch(label: string | null): { background: string; ring: boolean } {
+  const name = (label ?? "").trim();
+  if (name) {
+    for (const entry of SUBSTRATE_SWATCHES) {
+      if (entry.match.test(name)) {
+        return { background: entry.background, ring: entry.ring ?? false };
+      }
+    }
+  }
+  return { background: "#cfccc6", ring: true };
+}
+
+/** Sigla corta para el chip del sustrato: respeta siglas ya en mayúsculas (PVC, MDF). */
+function materialChipInitials(label: string): string {
+  const cleaned = label.replace(/[^0-9A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]/g, " ").trim();
+  if (!cleaned) return "—";
+  const firstWord = cleaned.split(/\s+/)[0];
+  if (/^[A-Z0-9]{2,4}$/.test(firstWord)) return firstWord.slice(0, 4);
+  return firstWord.slice(0, 3).toUpperCase();
 }
 
 function getCotizacionPasos(cotizacion: CotizacionExitosa): PasoProduccionPropuesta[] {
@@ -2836,6 +2911,8 @@ function ApConfigStep({
   );
   const [leyendoPlanos, setLeyendoPlanos] = React.useState(false);
   const [arrastrandoPlanos, setArrastrandoPlanos] = React.useState(false);
+  // Slot cuyo desplegable de material está abierto (selector tipo lista).
+  const [openMaterialSlot, setOpenMaterialSlot] = React.useState<string | null>(null);
 
   const handleAdjuntarPlanos = React.useCallback(
     async (files: FileList | File[]) => {
@@ -3306,34 +3383,108 @@ function ApConfigStep({
     </div>
   );
 
+  const renderMaterialCardInner = (
+    candidate: SlotMaterialCandidato,
+    trailing: React.ReactNode,
+  ) => {
+    const variantCount = candidate.variantes.length;
+    return (
+      <>
+        <span className="ap-mat-badge" aria-hidden="true">
+          {materialChipInitials(candidate.label)}
+        </span>
+        <span className="ap-mat-text">
+          <span className="ap-mat-name">{candidate.label}</span>
+          {variantCount > 1 ? (
+            <span className="ap-mat-meta">{variantCount} variantes</span>
+          ) : null}
+        </span>
+        {trailing}
+      </>
+    );
+  };
+
   const renderFilmChips = (
     slot: SlotComercialElige,
     selectedMateriaPrimaId: string,
     onSelect: (materiaPrimaId: string) => void,
-  ) => (
-    <div
-      className="ap-film-row"
-      role="radiogroup"
-      aria-label={humanizeCodigo(slot.slotCodigo)}
-    >
-      {slot.candidatos.map((candidate) => {
-        const on = candidate.materiaPrimaId === selectedMateriaPrimaId;
-        return (
-          <button
-            key={candidate.materiaPrimaId}
-            type="button"
-            className={`ap-film-chip ${on ? "on" : ""}`}
-            role="radio"
-            aria-checked={on}
-            onClick={() => onSelect(candidate.materiaPrimaId)}
+  ) => {
+    const slotKey = materialSelectionKey(slot.configPasoId, slot.slotCodigo);
+    const open = openMaterialSlot === slotKey;
+    const selectedCandidate =
+      slot.candidatos.find(
+        (candidate) => candidate.materiaPrimaId === selectedMateriaPrimaId,
+      ) ?? slot.candidatos[0];
+    if (!selectedCandidate) return null;
+
+    // Un solo candidato: tarjeta informativa, sin desplegable.
+    if (slot.candidatos.length === 1) {
+      return (
+        <div className="ap-mat-select">
+          <div className="ap-mat-card is-static">
+            {renderMaterialCardInner(selectedCandidate, null)}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className={`ap-mat-select ${open ? "is-open" : ""}`}>
+        <button
+          type="button"
+          className="ap-mat-card ap-mat-trigger"
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          onClick={() => setOpenMaterialSlot(open ? null : slotKey)}
+        >
+          {renderMaterialCardInner(
+            selectedCandidate,
+            <svg
+              className="ap-mat-chev"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.7"
+              aria-hidden="true"
+            >
+              <path d="M6 9l6 6 6-6" />
+            </svg>,
+          )}
+        </button>
+        {open ? (
+          <div
+            className="ap-mat-list"
+            role="radiogroup"
+            aria-label={humanizeCodigo(slot.slotCodigo)}
           >
-            <span className="ap-film-pip" aria-hidden="true" />
-            <span>{candidate.label}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
+            {slot.candidatos.map((candidate) => {
+              const on = candidate.materiaPrimaId === selectedCandidate.materiaPrimaId;
+              return (
+                <button
+                  key={candidate.materiaPrimaId}
+                  type="button"
+                  className={`ap-mat-card ap-mat-option ${on ? "on" : ""}`}
+                  role="radio"
+                  aria-checked={on}
+                  onClick={() => {
+                    onSelect(candidate.materiaPrimaId);
+                    setOpenMaterialSlot(null);
+                  }}
+                >
+                  {renderMaterialCardInner(
+                    candidate,
+                    <span className="ap-mat-radio" aria-hidden="true" />,
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
 
   const renderMaterialSelect = (
     slot: SlotComercialElige,
@@ -3415,37 +3566,54 @@ function ApConfigStep({
           useAttributePicker ? (
             <div className="ap-material-attrs">
               <div className="ap-material-attr-block">
-                <div className="ap-material-attr-label">Color</div>
-                <div className="ap-material-color-row">
+                <div className="ap-material-attr-label">
+                  Color
+                  <span className="ap-sub-count">
+                    {colorOptions.length}{" "}
+                    {colorOptions.length === 1 ? "disponible" : "disponibles"}
+                  </span>
+                </div>
+                <div className="ap-sub-swatches" role="radiogroup" aria-label="Color">
                   {colorOptions.map((color) => {
                     const firstVariantForColor = selectedCandidate.variantes.find(
                       (variant) => (variant.colorLabel || "Sin color") === color,
                     );
                     const active = selectedColor === color;
-                    const count = selectedCandidate.variantes.filter(
-                      (variant) => (variant.colorLabel || "Sin color") === color,
-                    ).length;
+                    const swatch = substrateColorSwatch(
+                      color === "Sin color" ? null : color,
+                    );
                     return (
                       <button
                         key={color}
                         type="button"
-                        className={`ap-material-color ${active ? "active" : ""}`}
+                        className={`ap-sub-swatch ${active ? "on" : ""}`}
+                        role="radio"
+                        aria-checked={active}
                         onClick={() => {
                           if (firstVariantForColor) {
                             setMaterial(key, firstVariantForColor.variantId);
                           }
                         }}
                       >
+                        <span
+                          className={`ap-sub-swatch-dot ${swatch.ring ? "ring" : ""}`}
+                          style={{ background: swatch.background }}
+                          aria-hidden="true"
+                        />
                         <span>{color}</span>
-                        <small>{count}</small>
                       </button>
                     );
                   })}
                 </div>
               </div>
               <div className="ap-material-attr-block">
-                <div className="ap-material-attr-label">Espesor</div>
-                <div className="ap-material-thickness-grid">
+                <div className="ap-material-attr-label">
+                  Espesor
+                  {selectedColor && selectedColor !== "Sin color" ? (
+                    <span className="ap-sub-count">{selectedColor}</span>
+                  ) : null}
+                </div>
+                <div className="ap-sub-thicks" role="radiogroup" aria-label="Espesor">
                   {variantsBySelectedColor.map((variant) => {
                     const active = variant.variantId === selected;
                     const isDefault =
@@ -3454,19 +3622,20 @@ function ApConfigStep({
                       <button
                         key={variant.variantId}
                         type="button"
-                        className={`ap-material-thickness ${active ? "active" : ""}`}
+                        className={`ap-sub-thick ${active ? "on" : ""}`}
+                        role="radio"
+                        aria-checked={active}
                         onClick={() => setMaterial(key, variant.variantId)}
                       >
-                        <span className="ap-material-thickness-title">
+                        <span className="ap-sub-thick-radio" aria-hidden="true" />
+                        <span className="ap-sub-thick-name">
                           {variant.espesorLabel ?? variant.label}
                           {isDefault ? (
-                            <StarIcon className="ap-material-default-star" aria-label="Predeterminado" />
+                            <span className="ap-sub-rec">Recomendado</span>
                           ) : null}
                         </span>
                         {variant.missingPrice ? (
-                          <span className="ap-material-price-alert">
-                            Sin precio cargado
-                          </span>
+                          <span className="ap-material-price-alert">Sin precio</span>
                         ) : null}
                       </button>
                     );
@@ -4790,6 +4959,13 @@ export function AgregarProductoSheet({
 
   const cotizarActual = React.useCallback(async () => {
     if (!product?.real || !product.id || !productoDetalle) return;
+    // No cotizar mientras falten medidas válidas: enviar una pieza 0×0 al
+    // motor de rígidos provoca un OOM que tumba la API. Cortamos antes de
+    // marcar "Cotizando" para que el estado quede a la espera de la medida.
+    if (medidasPersonalizadasIncompletas(productoDetalle, motorConfig)) {
+      setCotizando(false);
+      return;
+    }
     const coercedQty = coerceQtyToPricingOptions(qty, product);
     if (coercedQty !== qty) {
       setQty(coercedQty);
