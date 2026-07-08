@@ -1153,6 +1153,32 @@ function isMaterialSpecKey(key: string, label: string) {
   return normalized === "material" || normalized.includes(" material");
 }
 
+function isEspesorSpecKey(key: string, label: string) {
+  return normalizeSearchText(`${key} ${label}`).includes("espesor");
+}
+
+/**
+ * Material del SUSTRATO sobre el que se monta el producto, cuando la ruta tiene
+ * un paso de montaje sobre sustrato (`montaje_sobre_sustrato`). Es el segundo
+ * material que compone el producto (ej. el PVC espumado bajo el vinilo). Se
+ * muestra en su propio bloque "Montaje" para que quede claro sobre qué se monta
+ * (hoy solo se veía su espesor suelto, sin decir de qué material).
+ */
+function getMontajeSustratoMaterial(item: PropuestaItem): MaterialCosteo | null {
+  const montajePaso = item.cotizacion.pasos.find(
+    (paso) =>
+      paso.activado && paso.familiaCodigo === "montaje_sobre_sustrato",
+  );
+  if (!montajePaso) return null;
+  const sustrato = (montajePaso.materiales ?? []).find((material) => {
+    if (material.tipoLineaCosto !== "MATERIAL") return false;
+    const rol = normalizeSearchText(material.slotRol ?? "");
+    const slot = normalizeSearchText(material.slotCodigo ?? "");
+    return rol.includes("sustrato") || slot.includes("sustrato");
+  });
+  return sustrato ?? null;
+}
+
 function getOptionalMaterialDetails(item: PropuestaItem, adicional: string) {
   const adicionalNorm = normalizeSearchText(adicional);
   const details = new Set<string>();
@@ -2522,6 +2548,10 @@ function ProductRow({
     [item],
   );
   const mainMaterial = React.useMemo(() => getMainCommercialMaterial(item), [item]);
+  const montajeSustrato = React.useMemo(
+    () => getMontajeSustratoMaterial(item),
+    [item],
+  );
   const optionalMaterialDetails = React.useMemo(
     () =>
       new Map(
@@ -2536,13 +2566,19 @@ function ProductRow({
     () => getComponentMaterialDetails(item),
     [item],
   );
-  const specs = item.atributosSchema
+  const specsBase = item.atributosSchema
     .filter(
       (attr) =>
         attr.visible &&
         !["tipo_pieza", "tipoPieza", "tipo_de_pieza"].includes(attr.key),
     )
     .filter((attr) => !isDuplicateModoColorSpec(item, attr.key))
+    // Con sustrato de montaje, el espesor pertenece a ESE material y se muestra
+    // dentro del bloque "Montaje" (con su nombre); quitamos el ESPESOR suelto
+    // para no dejar un "3 mm" huérfano que no dice de qué material es.
+    .filter(
+      (attr) => !(montajeSustrato && isEspesorSpecKey(attr.key, attr.label)),
+    )
     .sort((a, b) => a.orden - b.orden)
     .map((attr) => ({
       lbl: attr.label,
@@ -2551,6 +2587,31 @@ function ProductRow({
           ? getMaterialCommercialLabel(mainMaterial)
           : item.especificaciones[attr.key] ?? "A definir",
     }));
+
+  // Bloque "Montaje": material del sustrato sobre el que se monta (ej. PVC
+  // espumado · 3 mm). Se inserta justo después de "Material" para que se lean
+  // juntos los materiales que componen el producto.
+  const specs = (() => {
+    if (
+      !montajeSustrato ||
+      montajeSustrato.materialVarianteId === mainMaterial?.materialVarianteId
+    ) {
+      return specsBase;
+    }
+    const montajeSpec = {
+      lbl: "Montaje",
+      val: getMaterialCommercialLabel(montajeSustrato),
+    };
+    const materialIdx = specsBase.findIndex((spec) =>
+      isMaterialSpecKey("", spec.lbl),
+    );
+    if (materialIdx < 0) return [...specsBase, montajeSpec];
+    return [
+      ...specsBase.slice(0, materialIdx + 1),
+      montajeSpec,
+      ...specsBase.slice(materialIdx + 1),
+    ];
+  })();
 
   return (
     <div className={`oprow ${expanded ? "open" : ""}`}>
