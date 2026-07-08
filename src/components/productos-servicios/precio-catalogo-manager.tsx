@@ -393,7 +393,7 @@ export function PrecioCatalogoManager({ initialItems, tipo }: Props) {
                   : `Crear un nuevo ${adapter.entidadSingular} en el catálogo del tenant.`}
               </SheetDescription>
             </SheetHeader>
-            <div className="space-y-4 px-4">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4">
               <div className="space-y-2">
                 <Label htmlFor="codigo">Código *</Label>
                 <Input

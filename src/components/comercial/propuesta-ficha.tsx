@@ -142,18 +142,6 @@ function getCotizacionCantidadPrecio(
   );
 }
 
-function getCotizacionCantidadReal(
-  cotizacion: CotizacionExitosa,
-  itemCantidad: number,
-) {
-  return (
-    cotizacion.cantidadComercialReal ??
-    cotizacion.cantidadPedida ??
-    cotizacion.cantidadEfectiva ??
-    itemCantidad
-  );
-}
-
 function getCotizacionPasos(cotizacion: CotizacionExitosa) {
   return cotizacion.pasos
     .filter((paso) => paso.activado)
@@ -2281,25 +2269,13 @@ function CostosItemView({
   const comisionesTotal = desglosePrecio
     ? desglosePrecio.totalComisiones * cantidadPrecio
     : 0;
-  // Incluye impuestos por fuera (IVA) + costos impositivos internos (IIBB,
-  // cheque): así costo + margen + comisiones + impuestos = precio bruto.
-  const impuestosTotal = desglosePrecio
-    ? desglosePrecio.totalImpuestos * cantidadPrecio
-    : getCotizacionImpuestos(item.cotizacion);
   const margenPrecioMonto = precioBaseTotal - costo;
-  // Costo, margen y comisiones se expresan sobre el NETO (sin IVA): es la
-  // base sobre la que se configura el margen del Tab Precio — así "margen 40%"
-  // configurado se lee 40% acá (y no 33% como cuando se dividía por el bruto,
-  // que incluye el IVA y no es ingreso).
+  // El margen se expresa sobre el NETO (sin IVA): es la base sobre la que se
+  // configura el margen del Tab Precio — así "margen 40%" configurado se lee
+  // 40% acá (y no 33% como cuando se dividía por el bruto, que incluye el IVA
+  // y no es ingreso).
   const margenPrecioPct =
     precioNeto > 0 ? (margenPrecioMonto / precioNeto) * 100 : 0;
-  const costoPrecioPct = precioNeto > 0 ? (costo / precioNeto) * 100 : 0;
-  const comisionesPrecioPct =
-    precioNeto > 0 ? (comisionesTotal / precioNeto) * 100 : 0;
-  const impuestosPrecioPct =
-    precioBruto > 0 ? (impuestosTotal / precioBruto) * 100 : 0;
-  const cantidadReal = getCotizacionCantidadReal(item.cotizacion, item.cantidad);
-  const costoUnitario = cantidadReal > 0 ? costo / cantidadReal : 0;
   const buckets = getCostBuckets(item);
   const cargosPaso = item.cotizacion.pasos
     .flatMap((paso) => paso.cargosDirectosPaso ?? [])
@@ -2444,12 +2420,6 @@ function CostosItemView({
           <span className="cw-tipo" />
           <span className="cw-pct" />
           <span className="cw-amount">{formatCurrency(precioBruto)}</span>
-        </div>
-        <div className="cw-foot">
-          Costo de producción: {formatCurrency(costo)} (
-          {costoPrecioPct.toFixed(0)}% del neto) ·{" "}
-          {formatCurrency(costoUnitario)} por {formatUnidad(item.unidadMedida)}{" "}
-          · {formatCantidadItem(item)} {formatUnidad(item.unidadMedida)}
         </div>
       </div>
 

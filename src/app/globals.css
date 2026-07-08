@@ -1708,13 +1708,6 @@
     white-space: nowrap;
   }
 
-  .cost-waterfall .cw-foot {
-    padding: 8px 0 2px;
-    color: var(--muted);
-    font-size: 11.5px;
-    border-top: 1px solid var(--hairline);
-  }
-
   @media (max-width: 720px) {
     .cost-waterfall .cw-row {
       grid-template-columns: minmax(0, 1fr) 64px 110px;
