@@ -1049,10 +1049,10 @@
     opacity: 0.55;
   }
 
+  /* Card contenedora: arriba la grilla de specs cortas, debajo las largas
+     como filas plenas (fuera de la grilla, así auto-fit puede estirar las
+     celdas de arriba a todo el ancho). */
   .op-specs {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 0;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--r-2);
@@ -1060,19 +1060,30 @@
     margin-bottom: 12px;
   }
 
-  @media (max-width: 1000px) {
-    .op-specs {
-      grid-template-columns: repeat(2, 1fr);
-    }
+  .op-specs .op-specs-grid {
+    display: grid;
+    /* auto-fit: las celdas existentes se reparten todo el ancho disponible;
+       en pantallas angostas bajan de a filas que también se estiran. */
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 1px;
   }
 
   .op-specs .spec {
     padding: 12px 14px;
-    border-right: 1px solid var(--hairline);
+    background: var(--surface);
+    box-shadow:
+      -1px 0 0 var(--hairline),
+      0 -1px 0 var(--hairline);
     display: flex;
     flex-direction: column;
     gap: 3px;
     min-width: 0;
+  }
+
+  /* Specs con valor largo (caras/modo de color por paso): fila completa
+     debajo de la grilla, así el texto respira a lo ancho. */
+  .op-specs > .spec.spec-long {
+    box-shadow: 0 -1px 0 var(--hairline);
   }
 
   .op-specs .spec-head {
@@ -1081,10 +1092,6 @@
     justify-content: space-between;
     gap: 8px;
     min-width: 0;
-  }
-
-  .op-specs .spec:last-child {
-    border-right: none;
   }
 
   .op-specs .spec .lbl {
@@ -1133,6 +1140,27 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  /* Valores largos (caras por paso, modo color por paso): envolver en vez
+     de truncar con ellipsis. */
+  .op-specs .spec .val.wrap {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+  }
+
+  .op-specs .spec .val.wrap .op-color-mode-value,
+  .op-specs .spec .val.wrap .op-caras-value {
+    align-items: flex-start;
+  }
+
+  .op-specs .spec .val.wrap .op-color-mode-value > .op-color-dots,
+  .op-specs .spec .val.wrap .op-caras-value > svg {
+    flex: 0 0 auto;
+    margin-top: 2px;
   }
 
   .op-specs .spec .val.multi {

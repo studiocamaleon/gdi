@@ -2819,8 +2819,16 @@ function ProductRow({
 
           {innerTab === "specs" ? (
             <>
-              <div className="op-specs">
-                {specs.map((spec) => {
+              {(() => {
+                // Cortas: grilla compacta que se estira al ancho (auto-fit).
+                // Largas (caras/modo de color por paso): filas plenas debajo,
+                // FUERA de la grilla — un span 1/-1 dentro impediría que
+                // auto-fit colapse las columnas vacías de la fila de arriba.
+                const esLarga = (spec: (typeof specs)[number]) =>
+                  spec.val.length > 40;
+                const cortas = specs.filter((spec) => !esLarga(spec));
+                const largas = specs.filter(esLarga);
+                const renderSpec = (spec: (typeof specs)[number]) => {
                   const isMedidasSpec = spec.lbl
                     .toLowerCase()
                     .includes("medida");
@@ -2832,7 +2840,7 @@ function ProductRow({
                     <div
                       className={`spec ${isMedidasSpec ? "with-action" : ""} ${
                         isModoColorSpec ? "color-mode-spec" : ""
-                      }`}
+                      } ${esLarga(spec) ? "spec-long" : ""}`}
                       key={spec.lbl}
                     >
                       <div className="spec-head">
@@ -2862,7 +2870,15 @@ function ProductRow({
                           </button>
                         ) : null}
                       </div>
-                      <div className={`val ${isMedidasSpec ? "multi" : ""}`}>
+                      <div
+                        className={`val ${isMedidasSpec ? "multi" : ""} ${
+                          isModoColorSpec ||
+                          isCarasSpec ||
+                          spec.val.length > 28
+                            ? "wrap"
+                            : ""
+                        }`}
+                      >
                         {isModoColorSpec ? (
                           <ModoColorSpecValue value={spec.val} />
                         ) : isCarasSpec ? (
@@ -2873,8 +2889,18 @@ function ProductRow({
                       </div>
                     </div>
                   );
-                })}
-              </div>
+                };
+                return (
+                  <div className="op-specs">
+                    {cortas.length > 0 ? (
+                      <div className="op-specs-grid">
+                        {cortas.map(renderSpec)}
+                      </div>
+                    ) : null}
+                    {largas.map(renderSpec)}
+                  </div>
+                );
+              })()}
 
               {priceDetailOpen && !calculoPendiente ? (
                 <CommercialPriceDetailPanel
