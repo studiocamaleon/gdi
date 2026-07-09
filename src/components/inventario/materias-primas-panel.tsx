@@ -7,6 +7,7 @@ import {
   DollarSignIcon,
   LibraryIcon,
   PencilIcon,
+  SearchIcon,
   ToggleLeftIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -119,10 +120,18 @@ function buildCodigoBase(nombre: string) {
   return `MP-${normalized || "ITEM"}-${suffix}`;
 }
 
+function normalizarBusqueda(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
 export function MateriasPrimasPanel({ initialMateriasPrimas }: MateriasPrimasPanelProps) {
   const router = useRouter();
   const [materiasPrimas, setMateriasPrimas] = React.useState(initialMateriasPrimas);
   const [mostrarOcultas, setMostrarOcultas] = React.useState(false);
+  const [busqueda, setBusqueda] = React.useState("");
   const [isSaving, setIsSaving] = React.useState(false);
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
   const [nombreNuevo, setNombreNuevo] = React.useState("");
@@ -131,13 +140,27 @@ export function MateriasPrimasPanel({ initialMateriasPrimas }: MateriasPrimasPan
     () => materiaPrimaTemplatesV1.find((template) => template.id === templateNuevo) ?? null,
     [templateNuevo],
   );
-  const materiasPrimasVisibles = React.useMemo(
-    () =>
-      mostrarOcultas
-        ? materiasPrimas
-        : materiasPrimas.filter((materiaPrima) => materiaPrima.activo),
-    [materiasPrimas, mostrarOcultas],
-  );
+  const materiasPrimasVisibles = React.useMemo(() => {
+    const base = mostrarOcultas
+      ? materiasPrimas
+      : materiasPrimas.filter((materiaPrima) => materiaPrima.activo);
+    const query = normalizarBusqueda(busqueda.trim());
+    if (!query) return base;
+    return base.filter((materiaPrima) => {
+      const haystack = [
+        materiaPrima.nombre,
+        materiaPrima.canonicalMaterialName ?? "",
+        materiaPrima.codigo,
+        ...materiaPrima.variantes.map((variante) => variante.sku),
+        ...materiaPrima.variantes.map(
+          (variante) => variante.nombreVariante ?? "",
+        ),
+      ];
+      return haystack.some((value) =>
+        normalizarBusqueda(value).includes(query),
+      );
+    });
+  }, [materiasPrimas, mostrarOcultas, busqueda]);
 
   const handleCreate = async () => {
     const nombre = nombreNuevo.trim();
@@ -203,6 +226,15 @@ export function MateriasPrimasPanel({ initialMateriasPrimas }: MateriasPrimasPan
           <div className="flex flex-wrap items-center justify-between gap-3">
             <CardTitle>Catálogo de materias primas</CardTitle>
             <div className="flex items-center gap-3">
+              <div className="relative">
+                <SearchIcon className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
+                <Input
+                  value={busqueda}
+                  onChange={(event) => setBusqueda(event.target.value)}
+                  placeholder="Buscar por nombre, código o SKU..."
+                  className="w-64 pl-8"
+                />
+              </div>
               <div className="flex items-center gap-2 rounded-md border px-3 py-1.5">
                 <span className="text-xs text-muted-foreground">Mostrar ocultas</span>
                 <Switch checked={mostrarOcultas} onCheckedChange={setMostrarOcultas} />
@@ -246,7 +278,9 @@ export function MateriasPrimasPanel({ initialMateriasPrimas }: MateriasPrimasPan
                   <TableCell colSpan={6} className="text-muted-foreground">
                     {materiasPrimas.length === 0
                       ? "Todavía no hay materias primas cargadas."
-                      : "No hay materias primas activas para mostrar."}
+                      : busqueda.trim()
+                        ? `Sin resultados para "${busqueda.trim()}".`
+                        : "No hay materias primas activas para mostrar."}
                   </TableCell>
                 </TableRow>
               ) : (

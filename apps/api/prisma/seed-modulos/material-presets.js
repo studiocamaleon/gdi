@@ -663,6 +663,96 @@ const presets = [
     ),
   },
   {
+    key: 'PAPEL_OPP',
+    nombreCanonico: 'Papel OPP',
+    descripcionCorta:
+      'Láminas de OPP en hojas para tapas y terminación de blocks, talonarios, anotadores y encuadernados. Lisos, metalizados y holográficos.',
+    iconKind: 'film',
+    aliasDisponibles: [
+      'Papel OPP',
+      'OPP',
+      'Polipropileno biorientado',
+      'OPP holográfico',
+      'OPP metalizado',
+      'Lámina OPP',
+    ],
+    usosRecomendados: ['emblocado', 'encuadernacion', 'terminacion_editorial'],
+    procesosCompatibles: [
+      'trabajo_manual',
+      'terminacion_editorial',
+      'guillotina',
+    ],
+    advertencias: [],
+    ...sheetPresetMeta('opp'),
+    variantes: oppVariants(),
+  },
+  {
+    key: 'CARTON_EMBLOCADO',
+    nombreCanonico: 'Cartón para emblocado',
+    descripcionCorta:
+      'Cartón gris rígido para contratapa de blocks, anotadores y talonarios. Se consume por pila de emblocado (1 cartón del tamaño del pliego por pila).',
+    iconKind: 'layered',
+    aliasDisponibles: [
+      'Cartón para emblocado',
+      'Cartón gris',
+      'Cartón contratapa',
+      'Cartón de fondo',
+      'Cartón piedra',
+    ],
+    usosRecomendados: ['emblocado', 'talonarios', 'anotadores'],
+    procesosCompatibles: ['trabajo_manual', 'guillotina'],
+    advertencias: [],
+    familia: FamiliaMateriaPrima.TERMINACION_EDITORIAL,
+    subfamilia: SubfamiliaMateriaPrima.COMPONENTE_EDITORIAL,
+    tipoTecnico: 'carton_emblocado',
+    templateId: 'componente_editorial_hoja_v1',
+    variantes: cartonEmblocadoVariants(),
+  },
+  {
+    key: 'GANCHO_EMBLOCADO',
+    nombreCanonico: 'Ganchos de emblocado',
+    descripcionCorta:
+      'Ganchos metálicos para colgar blocks y calendarios emblocados. Distintas medidas, se compran por caja de 1000 unidades.',
+    iconKind: 'plastic',
+    aliasDisponibles: [
+      'Gancho de emblocado',
+      'Gancho calendario',
+      'Percha de calendario',
+      'Gancho metálico',
+      'Varilla de calendario',
+    ],
+    usosRecomendados: ['emblocado', 'calendarios', 'anotadores'],
+    procesosCompatibles: ['trabajo_manual'],
+    advertencias: [],
+    familia: FamiliaMateriaPrima.TERMINACION_EDITORIAL,
+    subfamilia: SubfamiliaMateriaPrima.COMPONENTE_EDITORIAL,
+    tipoTecnico: 'gancho_emblocado',
+    templateId: 'componente_editorial_v1',
+    variantes: ganchoEmblocadoVariants(),
+  },
+  {
+    key: 'BROCHE_ABROCHADO',
+    nombreCanonico: 'Broches para abrochado',
+    descripcionCorta:
+      'Broches metálicos para abrochadoras de escritorio y de golpe (talonarios, blocks, cuadernillos). Medida calibre/pata, caja x 1000.',
+    iconKind: 'plastic',
+    aliasDisponibles: [
+      'Broches',
+      'Grapas',
+      'Broches para abrochadora',
+      'Ganchitos',
+      'Staples',
+    ],
+    usosRecomendados: ['abrochado', 'talonarios', 'cuadernillos'],
+    procesosCompatibles: ['trabajo_manual', 'terminacion_editorial'],
+    advertencias: [],
+    familia: FamiliaMateriaPrima.TERMINACION_EDITORIAL,
+    subfamilia: SubfamiliaMateriaPrima.COMPONENTE_EDITORIAL,
+    tipoTecnico: 'broche_abrochado',
+    templateId: 'componente_editorial_v1',
+    variantes: brocheVariants(),
+  },
+  {
     key: 'VINILO_ADHESIVO_IMPRIMIBLE_BLANCO',
     nombreCanonico: 'Vinilo adhesivo imprimible blanco',
     descripcionCorta:
@@ -2542,8 +2632,161 @@ function sheetSizeCm(formato) {
     '50 x 70 cm': { ancho: 50, alto: 70 },
     '65 x 45 cm': { ancho: 65, alto: 45 },
     '22 x 34 cm': { ancho: 22, alto: 34 },
+    '33 x 48 cm': { ancho: 33, alto: 48 },
   };
   return sizes[formato];
+}
+
+// Papel OPP en hojas 33 x 48 cm: colores lisos, metalizados y holográficos.
+// Holográficos y transparente solo brillo; blanco y metalizados en mate y
+// brillo (la instalación es selectiva, se eligen solo las que se usan).
+function oppVariants() {
+  const colores = [
+    { color: 'Blanco', code: 'BL', acabados: ['Mate', 'Brillo'] },
+    { color: 'Transparente', code: 'TR', acabados: ['Brillo'] },
+    { color: 'Holográfico estándar', code: 'HOLO', acabados: ['Brillo'] },
+    { color: 'Holográfico oro', code: 'HOLO-ORO', acabados: ['Brillo'] },
+    { color: 'Holográfico mosaico', code: 'HOLO-MOS', acabados: ['Brillo'] },
+    { color: 'Metalizado oro', code: 'MET-ORO', acabados: ['Mate', 'Brillo'] },
+    { color: 'Metalizado plata', code: 'MET-PLA', acabados: ['Mate', 'Brillo'] },
+  ];
+  const recomendadas = new Set(['Blanco-Brillo', 'Transparente-Brillo']);
+  return colores.flatMap(({ color, code, acabados }) =>
+    acabados.map((acabado) => ({
+      skuSugerido: `OPP-33X48-${code}-${acabado === 'Brillo' ? 'B' : 'M'}`,
+      nombreVarianteSugerido: `33 x 48 cm · OPP ${color} · ${acabado}`,
+      formato: '33 x 48 cm',
+      espesor: null,
+      color,
+      recomendada: recomendadas.has(`${color}-${acabado}`),
+      atributosVarianteJson: {
+        formatoComercial: '33 x 48 cm',
+        ancho: 33,
+        alto: 48,
+        material: 'Papel OPP',
+        color,
+        acabado,
+        anchoMm: 330,
+        altoMm: 480,
+        largoMm: 480,
+      },
+      unidadStock: UnidadMateriaPrima.HOJA,
+      unidadCompra: UnidadMateriaPrima.PACK,
+      precioReferencia: null,
+      moneda: 'ARS',
+    })),
+  );
+}
+
+// Cartón gris para contratapa de emblocado: se consume 1 por pila (base
+// de cantidad 'talonario_pilas' en el paso manual).
+function cartonEmblocadoVariants() {
+  const formatos = ['22 x 34 cm', 'A4'];
+  const recomendadas = new Set(['22 x 34 cm']);
+  return formatos.map((formato) => {
+    const size = sheetSizeCm(formato);
+    return {
+      skuSugerido: `CARTEMB-${sheetSkuSize(formato)}`,
+      nombreVarianteSugerido: `${formato} · Cartón gris para emblocado`,
+      formato,
+      espesor: null,
+      color: 'Gris',
+      recomendada: recomendadas.has(formato),
+      atributosVarianteJson: {
+        formatoComercial: formato,
+        ancho: size.ancho,
+        alto: size.alto,
+        material: 'Cartón gris',
+        color: 'Gris',
+        anchoMm: Math.round(size.ancho * 10),
+        altoMm: Math.round(size.alto * 10),
+        largoMm: Math.round(size.alto * 10),
+      },
+      unidadStock: UnidadMateriaPrima.HOJA,
+      unidadCompra: UnidadMateriaPrima.PACK,
+      precioReferencia: null,
+      moneda: 'ARS',
+    };
+  });
+}
+
+// Broches metálicos: medida calibre/pata (ej. 23/10 = calibre 23, pata 10 mm).
+// Calibre 20 para emblocado (abrochadora de golpe), 23 heavy duty, 26/24 de
+// escritorio. `hojasDesde/hojasHasta` = rango de hojas que abrocha cada
+// medida (sirve para lógica de selección por altura de pila).
+function brocheVariants() {
+  // [calibre, pataMm, unidadesPorCaja, hojasDesde, hojasHasta]
+  const medidas = [
+    // Serie 20 — emblocado (rangos del proveedor).
+    [20, 6, 2000, 5, 20],
+    [20, 8, 2000, 20, 40],
+    [20, 10, 1000, 40, 60],
+    [20, 12, 1000, 60, 80],
+    [20, 15, 1000, 90, 110],
+    [20, 18, 1000, 110, 130],
+    [20, 20, 1000, 130, 150],
+    // Escritorio y heavy duty (rangos estándar de catálogo).
+    [26, 6, 1000, 2, 20],
+    [24, 6, 1000, 2, 30],
+    [24, 8, 1000, 30, 50],
+    [23, 8, 1000, 20, 50],
+    [23, 10, 1000, 40, 70],
+    [23, 13, 1000, 70, 100],
+    [23, 15, 1000, 90, 120],
+    [23, 20, 1000, 140, 170],
+  ];
+  const recomendadas = new Set(['20/6', '20/10', '26/6']);
+  return medidas.map(([calibre, pataMm, unidadesPorCaja, hojasDesde, hojasHasta]) => {
+    const medida = `${calibre}/${pataMm}`;
+    return {
+      skuSugerido: `BROCHE-${calibre}-${pataMm}-X${unidadesPorCaja}`,
+      nombreVarianteSugerido: `Broche ${medida} · ${hojasDesde}-${hojasHasta} hojas · caja x ${unidadesPorCaja}`,
+      formato: medida,
+      espesor: null,
+      color: 'Plateado',
+      recomendada: recomendadas.has(medida),
+      atributosVarianteJson: {
+        medida,
+        calibre,
+        largoPataMm: pataMm,
+        hojasDesde,
+        hojasHasta,
+        unidadesPorCaja,
+        material: 'Alambre metálico',
+      },
+      unidadStock: UnidadMateriaPrima.UNIDAD,
+      unidadCompra: UnidadMateriaPrima.CAJA,
+      precioReferencia: null,
+      moneda: 'ARS',
+    };
+  });
+}
+
+// Ganchos metálicos de emblocado: distintas medidas, caja x 1000.
+function ganchoEmblocadoVariants() {
+  const medidasCm = [7.5, 10, 12, 15, 20, 25, 33];
+  return medidasCm.map((medidaCm) => {
+    const largoMm = Math.round(medidaCm * 10);
+    return {
+      skuSugerido: `GANCHO-EMB-${largoMm}MM-X1000`,
+      nombreVarianteSugerido: `Gancho ${formatNumber(medidaCm)} cm · caja x 1000`,
+      formato: `${formatNumber(medidaCm)} cm`,
+      espesor: null,
+      color: 'Plateado',
+      recomendada: false,
+      atributosVarianteJson: {
+        medida: `${formatNumber(medidaCm)} cm`,
+        medidaCm,
+        largoMm,
+        unidadesPorCaja: 1000,
+        material: 'Alambre metálico',
+      },
+      unidadStock: UnidadMateriaPrima.UNIDAD,
+      unidadCompra: UnidadMateriaPrima.CAJA,
+      precioReferencia: null,
+      moneda: 'ARS',
+    };
+  });
 }
 
 function sheetSkuSize(formato) {

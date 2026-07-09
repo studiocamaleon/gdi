@@ -797,6 +797,53 @@ export const materiaPrimaTemplatesV1: MateriaPrimaTemplateDef[] = [
     },
   },
   {
+    id: "componente_editorial_v1",
+    nombre: "Componente editorial",
+    descripcion:
+      "Insumos de terminación editorial y emblocado por unidad: ganchos, broches y piezas compradas.",
+    familia: "terminacion_editorial",
+    subfamilia: "componente_editorial",
+    tipoTecnico: "componente_editorial",
+    unidadStock: "unidad",
+    unidadCompra: "caja",
+    camposTecnicos: [
+      { key: "material", label: "Material", type: "text", required: true },
+      { key: "medida", label: "Medida", type: "text", optional: true },
+      { key: "unidadesPorCaja", label: "Unidades por caja", type: "number", optional: true },
+    ],
+    dimensionesVariante: [
+      "medida",
+      "hojasDesde",
+      "hojasHasta",
+      "unidadesPorCaja",
+      "material",
+      "color",
+    ],
+    requiredAtributos: ["material"],
+    atributosIniciales: {
+      material: "alambre metálico",
+    },
+  },
+  {
+    id: "componente_editorial_hoja_v1",
+    nombre: "Componente editorial en hoja",
+    descripcion:
+      "Componentes de emblocado que se compran en hojas/pliegos: cartón de contratapa, láminas de terminación.",
+    familia: "terminacion_editorial",
+    subfamilia: "componente_editorial",
+    tipoTecnico: "componente_editorial_hoja",
+    unidadStock: "hoja",
+    unidadCompra: "pack",
+    camposTecnicos: [
+      { key: "material", label: "Material", type: "text", required: true },
+    ],
+    dimensionesVariante: ["formatoComercial", "ancho", "alto", "color"],
+    requiredAtributos: ["material"],
+    atributosIniciales: {
+      material: "cartón gris",
+    },
+  },
+  {
     id: "argolla_llavero_accesorio_v1",
     nombre: "Argolla llavero",
     descripcion: "Herrajes para llaveros promocionales",

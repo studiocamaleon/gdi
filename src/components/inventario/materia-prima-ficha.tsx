@@ -237,6 +237,13 @@ function setLegacyNumber(
   attrs[key] = Math.round(parsed * multiplier * 1000) / 1000;
 }
 
+// Templates cuyo alta de variantes se comporta como pliego/hoja: selector de
+// formato comercial + ancho/alto en cm sincronizados con anchoMm/largoMm.
+const SHEET_LIKE_TEMPLATE_IDS = new Set([
+  "sustrato_hoja_v1",
+  "componente_editorial_hoja_v1",
+]);
+
 function normalizeVarianteAtributos(
   attrs: Record<string, unknown>,
   templateId?: string,
@@ -244,7 +251,7 @@ function normalizeVarianteAtributos(
   const normalized = { ...attrs };
   const normalizedTemplateId = getMateriaPrimaTemplate(templateId ?? "")?.id;
 
-  if (normalizedTemplateId === "sustrato_hoja_v1") {
+  if (SHEET_LIKE_TEMPLATE_IDS.has(normalizedTemplateId ?? "")) {
     setNumberIfMissing(normalized, "ancho", normalized.anchoMm, 10);
     setNumberIfMissing(normalized, "alto", normalized.largoMm ?? normalized.altoMm, 10);
     setNumberIfMissing(normalized, "gramaje", normalized.gramajeGr);
@@ -416,7 +423,7 @@ function buildPayload(
       }
     }
     const normalizedTemplateId = getMateriaPrimaTemplate(form.templateId)?.id;
-    if (normalizedTemplateId === "sustrato_hoja_v1") {
+    if (SHEET_LIKE_TEMPLATE_IDS.has(normalizedTemplateId ?? "")) {
       setLegacyNumber(normalized, "anchoMm", normalized.ancho, 10);
       setLegacyNumber(normalized, "altoMm", normalized.alto, 10);
       setLegacyNumber(normalized, "largoMm", normalized.alto, 10);
@@ -870,7 +877,7 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
   };
 
   const isSustratoHojaDimensionLocked = (variante: LocalVariante, key: string) => {
-    if (template?.id !== "sustrato_hoja_v1") return false;
+    if (!SHEET_LIKE_TEMPLATE_IDS.has(template?.id ?? "")) return false;
     if (key !== "ancho" && key !== "alto") return false;
     if (customFormatoModeByVariante[variante.id] === true) return false;
     return Boolean(findFormatoHojaPreset(variante));
@@ -1212,7 +1219,8 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                         <TableRow key={variante.id}>
                           {varianteColumns.map((key) => (
                             <TableCell key={`${variante.id}-${key}`}>
-                              {template?.id === "sustrato_hoja_v1" && key === "formatoComercial" ? (
+                              {SHEET_LIKE_TEMPLATE_IDS.has(template?.id ?? "") &&
+                              key === "formatoComercial" ? (
                                 (() => {
                                   const currentValue = getVarianteAtributo(variante, key);
                                   const currentPreset = findFormatoHojaPreset(variante);
