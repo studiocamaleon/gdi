@@ -161,6 +161,9 @@ type ModoColorComercial = {
     value: string;
     label: string;
     perfilIds: string[];
+    /** Máquina asociada al modo (candidatas M-2): elegir el modo la activa. */
+    maquinaId?: string;
+    maquinaNombre?: string;
   }>;
   defaultMode?: string;
 };
@@ -929,6 +932,38 @@ function getModoColorOptionsForConfig(
   config: ConfigPasoDetalle,
   motorConfig?: Pick<MotorConfigState, "seleccionMaquina">,
 ) {
+  const candidatas = config.maquinasCandidatas ?? [];
+  if (candidatas.length > 0 && motorConfig) {
+    // Unión de modos sobre TODAS las candidatas: el modo de color es la
+    // decisión visible y la máquina viene implícita en la opción elegida
+    // (elegir "Color" en la C8003 no requiere cambiar de máquina a mano).
+    // Orden FIJO (preferida primero, luego el orden de las candidatas) para
+    // que las cards no se reordenen al seleccionar.
+    const preferida = getPreferredCandidate(candidatas);
+    const ordenadas = [
+      ...(preferida ? [preferida] : []),
+      ...candidatas.filter((candidate) => candidate !== preferida),
+    ];
+    const union = new Map<
+      string,
+      { value: string; label: string; perfilIds: string[]; maquinaId: string; maquinaNombre: string }
+    >();
+    for (const candidate of ordenadas) {
+      const derived = buildModoColorOptionsFromCandidate(candidate).length
+        ? buildModoColorOptionsFromCandidate(candidate)
+        : (candidate.modoColorOptions ?? []);
+      for (const option of derived) {
+        const key = normalizeModoColor(option.value) ?? option.value;
+        if (union.has(key)) continue;
+        union.set(key, {
+          ...option,
+          maquinaId: candidate.maquinaId,
+          maquinaNombre: candidate.maquina.nombre,
+        });
+      }
+    }
+    if (union.size > 0) return Array.from(union.values());
+  }
   const activeCandidate = motorConfig
     ? getActiveCandidateForConfig(config, motorConfig)
     : null;
@@ -4345,6 +4380,20 @@ function ApConfigStep({
               const selectedTechnology =
                 paso.tecnologias.find((tech) => tech.value === selectedTechnologyValue) ??
                 null;
+              // Si el selector de modo de color de este paso ya trae la máquina
+              // en cada opción, la elección de máquina es implícita: no hace
+              // falta ni el selector de tecnología (cuando hay una sola) ni el
+              // dropdown de máquina.
+              const modoManejaMaquina = modosColorVisibles.some(
+                (modo) =>
+                  modo.configPasoId === paso.configPasoId &&
+                  modo.options.some((option) => option.maquinaId),
+              );
+              const mostrarTecnologia = paso.tecnologias.length > 1;
+              const mostrarDropdownMaquina =
+                !modoManejaMaquina &&
+                (selectedTechnology?.candidatas.length ?? 0) > 1;
+              if (!mostrarTecnologia && !mostrarDropdownMaquina) return null;
               const techOptions = paso.tecnologias.map((tech) => {
                 const meta = getTechnologyMeta(tech.value);
                 return {
@@ -4368,21 +4417,29 @@ function ApConfigStep({
                 const candidate = tech ? getPreferredCandidate(tech.candidatas) : null;
                 if (candidate) setMaquina(paso.configPasoId, candidate.maquinaId);
               };
+              const labelPaso =
+                paso.nombreVisible?.trim() || humanizeCodigo(paso.familiaCodigo);
               return (
                 <div className="ap-spec ap-spec-wide" key={paso.configPasoId}>
                   <label>
-                    {pasosConTecnologias.length === 1
-                      ? "Tecnología de impresión"
-                      : `${paso.nombreVisible?.trim() || humanizeCodigo(paso.familiaCodigo)} · tecnología`}
+                    {mostrarTecnologia
+                      ? pasosConTecnologias.length === 1
+                        ? "Tecnología de impresión"
+                        : `${labelPaso} · tecnología`
+                      : pasosConTecnologias.length === 1
+                        ? "Máquina"
+                        : `${labelPaso} · máquina`}
                   </label>
-                  {renderChoiceCards(
-                    "Tecnología de impresión",
-                    selectedTechnology?.value ?? "",
-                    techOptions,
-                    setTechnology,
-                    { columns: 3, layout: "tile" },
-                  )}
-                  {selectedTechnology && selectedTechnology.candidatas.length > 1 ? (
+                  {mostrarTecnologia
+                    ? renderChoiceCards(
+                        "Tecnología de impresión",
+                        selectedTechnology?.value ?? "",
+                        techOptions,
+                        setTechnology,
+                        { columns: 3, layout: "tile" },
+                      )
+                    : null}
+                  {mostrarDropdownMaquina && selectedTechnology ? (
                     <select
                       className="ap-native-select"
                       value={selectedId}
@@ -4406,15 +4463,36 @@ function ApConfigStep({
                 modo.defaultMode ??
                 normalizeModoColor(modo.options[0]?.value) ??
                 "";
+              // Si los modos vienen de máquinas distintas, la card muestra la
+              // máquina asociada y elegir el modo también activa esa máquina.
+              const maquinasEnOpciones = new Set(
+                modo.options
+                  .map((option) => option.maquinaId)
+                  .filter((id): id is string => Boolean(id)),
+              );
+              const multiMaquina = maquinasEnOpciones.size > 1;
               const modoOptions = modo.options.map((option) => {
                 const optionValue = normalizeModoColor(option.value) ?? option.value;
                 return {
                   value: optionValue,
                   label: option.label,
-                  desc: MODO_COLOR_DESCRIPTIONS[optionValue],
+                  desc:
+                    multiMaquina && option.maquinaNombre
+                      ? option.maquinaNombre
+                      : MODO_COLOR_DESCRIPTIONS[optionValue],
                   glyph: renderModoColorSwatch(optionValue),
                 };
               });
+              const seleccionarModo = (nextValue: string) => {
+                const opcion = modo.options.find(
+                  (option) =>
+                    (normalizeModoColor(option.value) ?? option.value) === nextValue,
+                );
+                if (opcion?.maquinaId) {
+                  setMaquina(modo.configPasoId, opcion.maquinaId);
+                }
+                setModoColor(modo.configPasoId, nextValue);
+              };
               return (
                 <div className="ap-spec ap-spec-wide" key={modo.configPasoId}>
                   <label>
@@ -4426,7 +4504,7 @@ function ApConfigStep({
                     "Modo de color",
                     value,
                     modoOptions,
-                    (nextValue) => setModoColor(modo.configPasoId, nextValue),
+                    seleccionarModo,
                     { columns: modoOptions.length <= 2 ? 2 : 3, layout: "row" },
                   )}
                   {(() => {
