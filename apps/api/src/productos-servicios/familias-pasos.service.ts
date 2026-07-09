@@ -42,6 +42,7 @@ export class FamiliasPasosService {
           modosActivacionSoportados: MODOS_ACTIVACION_UNIVERSALES,
           multiplicadoresSoportados: f.multiplicadoresSoportados,
           slotsRequeridos: f.slotsRequeridos,
+          permiteSlotsAdicionales: f.permiteSlotsAdicionales,
           plantillasCompatibles: f.plantillasCompatibles,
           inputsRequeridos: f.inputsRequeridos,
           outputsCanonicos: f.outputsCanonicos,
