@@ -2992,8 +2992,9 @@ export class MotorUniversalService {
       const aplicaMultiCaras = slot.aplicaMultiCaras && !ignoraCaras;
 
       // F.2.6 — multi-caras (legacy flag)
-      if (aplicaMultiCaras && typeof jobContext.caras === 'number') {
-        cantidad *= jobContext.caras;
+      if (aplicaMultiCaras) {
+        const carasSlot = this.carasEfectivasPaso(paso, jobContext);
+        if (carasSlot > 1) cantidad *= carasSlot;
       }
       // F.2.6 — multiplicadores activos
       if (
@@ -3140,10 +3141,7 @@ export class MotorUniversalService {
     paso: PasoCargado,
     jobContext: JobContext,
   ): number {
-    const caras =
-      typeof jobContext.caras === 'number' && jobContext.caras > 0
-        ? jobContext.caras
-        : 1;
+    const caras = this.carasEfectivasPaso(paso, jobContext);
     if (caras <= 1) return 1;
     const slot = paso.slots?.[0];
     if (!slot) return 1;
@@ -3151,6 +3149,26 @@ export class MotorUniversalService {
       slot.aplicaMultiCaras &&
       !this.ignoraCarasEnMaterial(paso, slot.slotCodigo);
     return aplica ? caras : 1;
+  }
+
+  /**
+   * Caras que procesa ESTE paso: el override por paso del comercial
+   * (`caras_<configPasoId>`, UI avanzada "caras por paso") gana sobre la
+   * elección global (`jobContext.caras`). Permite, por ej., un talonario
+   * con el original doble faz y el duplicado simple.
+   */
+  private carasEfectivasPaso(
+    paso: PasoCargado,
+    jobContext: JobContext,
+  ): number {
+    const ctx = jobContext as Record<string, unknown>;
+    const override = Number(
+      ctx[`caras_${paso.configPasoId}`] ?? ctx[`caras_${paso.rutaPasoId}`] ?? 0,
+    );
+    if (override === 1 || override === 2) return override;
+    return typeof jobContext.caras === 'number' && jobContext.caras > 0
+      ? jobContext.caras
+      : 1;
   }
 
   /**
@@ -3171,6 +3189,11 @@ export class MotorUniversalService {
     if (caras <= 1) return jobContext;
     const jc = jobContext as Record<string, unknown>;
     const dup: Record<string, unknown> = { ...jc, caras: 1 };
+    // Neutralizar también los overrides por paso (`caras_<configPasoId>`):
+    // las cantidades ya quedaron duplicadas, un override en 2 contaría doble.
+    for (const key of Object.keys(dup)) {
+      if (key.startsWith('caras_')) dup[key] = 1;
+    }
     if (typeof jc.cantidad === 'number') dup.cantidad = jc.cantidad * caras;
     if (Array.isArray(jc.piezas)) {
       dup.piezas = (jc.piezas as Array<Record<string, unknown>>).map((p) => ({
@@ -3694,6 +3717,11 @@ export class MotorUniversalService {
   }
 
   private resolverCarasConsumible(paso: PasoCargado, jobContext: JobContext) {
+    const ctx = jobContext as Record<string, unknown>;
+    const override = Number(
+      ctx[`caras_${paso.configPasoId}`] ?? ctx[`caras_${paso.rutaPasoId}`] ?? 0,
+    );
+    if (override === 1 || override === 2) return override;
     if (typeof jobContext.caras === 'number' && jobContext.caras > 0) {
       return jobContext.caras;
     }
@@ -4960,15 +4988,36 @@ export class MotorUniversalService {
     // ─── 1. Modo de color comercial por paso ────────────────────────
     const modoColor = this.resolverModoColorComercial(paso, jobContext);
     if (modoColor) {
+      // Entre los perfiles que matchean el modo de color, preferir el que
+      // coincide con las caras del paso (ej. "B/N Doble faz" 45ppm vs
+      // "B/N Simple" 90ppm). Sin señal de caras, comportamiento histórico.
+      const tieneSenalCaras =
+        paso.familiaCodigo === 'impresion_por_hoja' &&
+        (typeof jobContext.caras === 'number' ||
+          (jobContext as Record<string, unknown>)[
+            `caras_${paso.configPasoId}`
+          ] !== undefined);
+      const buscarDoble =
+        tieneSenalCaras && this.carasEfectivasPaso(paso, jobContext) === 2;
+      const matchesCaras = (perfil: { nombre: string; detalleJson?: unknown }) =>
+        !tieneSenalCaras || this.perfilEsDobleFaz(perfil) === buscarDoble;
       const perfilActual =
         perfilesDisponibles.find((perfil) => perfil.id === paso.perfilM1Id) ??
         paso.perfil;
-      if (modoColorMatchesPerfil(perfilActual, modoColor)) {
+      if (
+        modoColorMatchesPerfil(perfilActual, modoColor) &&
+        (!perfilActual || matchesCaras(perfilActual))
+      ) {
         return null;
       }
-      const candidato = perfilesDisponibles.find((perfil) =>
-        modoColorMatchesPerfil(perfil, modoColor),
-      );
+      const candidato =
+        perfilesDisponibles.find(
+          (perfil) =>
+            modoColorMatchesPerfil(perfil, modoColor) && matchesCaras(perfil),
+        ) ??
+        perfilesDisponibles.find((perfil) =>
+          modoColorMatchesPerfil(perfil, modoColor),
+        );
       if (candidato && candidato.id !== paso.perfilM1Id) {
         return {
           id: candidato.id,
@@ -5049,17 +5098,15 @@ export class MotorUniversalService {
     // detecta el legacy `detalle.dobleFaz === true` y nombre del perfil.
     if (
       paso.familiaCodigo === 'impresion_por_hoja' &&
-      typeof jobContext.caras === 'number'
+      (typeof jobContext.caras === 'number' ||
+        (jobContext as Record<string, unknown>)[
+          `caras_${paso.configPasoId}`
+        ] !== undefined)
     ) {
-      const buscarDoble = jobContext.caras === 2;
+      const buscarDoble = this.carasEfectivasPaso(paso, jobContext) === 2;
       const candidato = perfilesDisponibles.find((p) => {
         if (!p.activo) return false;
-        const detalle = (p.detalleJson ?? {}) as Record<string, unknown>;
-        const esDobleFaz =
-          detalle.caras === 'DOBLE_FAZ' ||
-          detalle.dobleFaz === true ||
-          /doble/i.test(p.nombre);
-        return buscarDoble ? esDobleFaz : !esDobleFaz;
+        return this.perfilEsDobleFaz(p) === buscarDoble;
       });
       if (candidato && candidato.id !== paso.perfilM1Id) {
         return {
@@ -5078,6 +5125,25 @@ export class MotorUniversalService {
 
     // No hubo cambio
     return null;
+  }
+
+  /**
+   * v3.0 (doc §5): discriminante canónico `detalle.caras` ('SIMPLE_FAZ' |
+   * 'DOBLE_FAZ'); retro-compat con `detalle.dobleFaz` y nombre del perfil.
+   */
+  private perfilEsDobleFaz(perfil: {
+    nombre: string;
+    detalleJson?: unknown;
+  }): boolean {
+    const detalle =
+      perfil.detalleJson && typeof perfil.detalleJson === 'object'
+        ? (perfil.detalleJson as Record<string, unknown>)
+        : {};
+    return (
+      detalle.caras === 'DOBLE_FAZ' ||
+      detalle.dobleFaz === true ||
+      /doble/i.test(perfil.nombre)
+    );
   }
 
   /**
@@ -5213,7 +5279,10 @@ export class MotorUniversalService {
     }
     let resultado = cantidadBase;
     for (const codigoMult of paso.multiplicadoresActivos) {
-      const valor = (jobContext as Record<string, unknown>)[codigoMult];
+      const valor =
+        codigoMult === 'caras'
+          ? this.carasEfectivasPaso(paso, jobContext)
+          : (jobContext as Record<string, unknown>)[codigoMult];
       if (typeof valor === 'number' && valor > 0) {
         resultado *= valor;
       }

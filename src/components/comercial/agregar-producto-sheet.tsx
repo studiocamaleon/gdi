@@ -172,6 +172,8 @@ type MotorConfigState = {
   rutaAlternativaId: string;
   medidaPredefinidaId: string;
   caras: 1 | 2;
+  /** Avanzado: override de caras por paso (`caras_<configPasoId>` al motor). */
+  carasPorPaso: Record<string, 1 | 2>;
   tipoCopia: 1 | 2 | 3;
   numerosXTalonario: number;
   piezas: PiezaInput[];
@@ -329,6 +331,7 @@ const DEFAULT_MOTOR_CONFIG: MotorConfigState = {
   rutaAlternativaId: "",
   medidaPredefinidaId: "",
   caras: 1,
+  carasPorPaso: {},
   tipoCopia: 1,
   numerosXTalonario: 50,
   piezas: [],
@@ -1872,6 +1875,15 @@ function buildJobContext(
     opcionalesActivados: config.opcionalesActivados,
     medidaModo: usaMedidaPersonalizadaReal ? "personalizada" : "predefinida",
   };
+  // Avanzado: caras por paso — el override gana sobre `caras` global en el
+  // motor solo para ese paso (ej. original doble faz, duplicado simple).
+  for (const [configPasoId, carasPaso] of Object.entries(
+    config.carasPorPaso ?? {},
+  )) {
+    if (carasPaso === 1 || carasPaso === 2) {
+      ctx[`caras_${configPasoId}`] = carasPaso;
+    }
+  }
   const materialLinealMetrics =
     cotizaLinealDirecto
       ? getSelectedLinearMaterialMetrics(
@@ -2244,7 +2256,34 @@ function buildPresentableSpecs(
     // Se muestra siempre que el producto use caras (aunque el schema no declare
     // el atributo): `setSpec` lo habilita porque "caras" está en
     // ENRICHED_SPEC_LABELS, y el item lo surfacea como spec "Faz".
-    setSpec("caras", config.caras === 2 ? "Doble faz" : "Simple faz");
+    // Con overrides por paso (avanzado), el detalle por paso reemplaza al
+    // global para que producción sepa qué copia va doble faz.
+    const overrides = Object.entries(config.carasPorPaso ?? {}).filter(
+      ([, caras]) => caras === 1 || caras === 2,
+    );
+    const overridesDistintos = overrides.filter(
+      ([, caras]) => caras !== config.caras,
+    );
+    if (overridesDistintos.length > 0) {
+      const detallePorPaso = rutaSeleccionada?.configPasos
+        .filter((paso) =>
+          overrides.some(([configPasoId]) => configPasoId === paso.id),
+        )
+        .map((paso) => {
+          const caras = config.carasPorPaso[paso.id];
+          const nombre =
+            paso.nombreVisible?.trim() ||
+            humanizeCodigo(paso.rutaPaso.familiaCodigo);
+          return `${nombre}: ${caras === 2 ? "doble" : "simple"} faz`;
+        });
+      const resto = `Resto: ${config.caras === 2 ? "doble" : "simple"} faz`;
+      setSpec(
+        "caras",
+        [...(detallePorPaso ?? []), resto].join(" · "),
+      );
+    } else {
+      setSpec("caras", config.caras === 2 ? "Doble faz" : "Simple faz");
+    }
   }
   const modosColor = getModosColorComercial(
     rutaSeleccionada,
@@ -3865,6 +3904,30 @@ function ApConfigStep({
     );
   };
   const usaCaras = routeUsesCaras(rutaSel, includeVisibleConfig);
+  // Avanzado "caras por paso": pasos visibles que reaccionan a caras. Solo
+  // tiene sentido ofrecer el override cuando hay más de uno.
+  const pasosConCaras = React.useMemo(
+    () =>
+      rutaSel?.configPasos.filter(
+        (config) =>
+          isExecutableConfigPaso(config) &&
+          includeVisibleConfig(config) &&
+          (config.multiplicadoresActivos.includes("caras") ||
+            config.slotsMateriales.some((slot) => slot.aplicaMultiCaras)),
+      ) ?? [],
+    [rutaSel, includeVisibleConfig],
+  );
+  const setCarasPaso = (configPasoId: string, value: string) => {
+    setMotorConfig((prev) => {
+      const next = { ...prev.carasPorPaso };
+      if (value === "1" || value === "2") {
+        next[configPasoId] = Number(value) as 1 | 2;
+      } else {
+        delete next[configPasoId];
+      }
+      return { ...prev, carasPorPaso: next };
+    });
+  };
   // El bloque de copias (tipo de copia + hojas por talonario) se muestra si el
   // producto es de subcategoría "talonarios" O si su ruta realmente usa
   // `tipoCopia` (algún talonario está en otra subcategoría, ej. papelería).
@@ -4332,6 +4395,50 @@ function ApConfigStep({
                   (value) => updateMotorConfig({ caras: Number(value) as 1 | 2 }),
                   { columns: 2, layout: "row" },
                 )}
+                {pasosConCaras.length > 1 ? (
+                  <details className="ap-perfil-avanzado">
+                    <summary>
+                      {Object.keys(motorConfig.carasPorPaso).length > 0
+                        ? "Caras por paso (modificado)"
+                        : "Definir caras por paso"}
+                    </summary>
+                    {pasosConCaras.map((configPaso) => {
+                      const nombre =
+                        configPaso.nombreVisible?.trim() ||
+                        humanizeCodigo(configPaso.rutaPaso.familiaCodigo);
+                      const override =
+                        motorConfig.carasPorPaso[configPaso.id] ?? "";
+                      return (
+                        <div
+                          key={configPaso.id}
+                          className="mt-2 flex items-center justify-between gap-3"
+                        >
+                          <span className="min-w-0 truncate text-xs">
+                            {nombre}
+                          </span>
+                          <select
+                            className="ap-native-select"
+                            style={{ maxWidth: 220 }}
+                            value={String(override)}
+                            onChange={(event) =>
+                              setCarasPaso(configPaso.id, event.target.value)
+                            }
+                          >
+                            <option value="">
+                              Global (
+                              {motorConfig.caras === 2
+                                ? "doble faz"
+                                : "simple faz"}
+                              )
+                            </option>
+                            <option value="1">Simple faz</option>
+                            <option value="2">Doble faz</option>
+                          </select>
+                        </div>
+                      );
+                    })}
+                  </details>
+                ) : null}
               </div>
             ) : null}
 
