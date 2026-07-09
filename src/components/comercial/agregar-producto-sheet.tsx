@@ -154,6 +154,7 @@ type MachineMarginsMm = {
 type ModoColorComercial = {
   configPasoId: string;
   familiaCodigo: string;
+  nombreVisible: string | null;
   modoActivacion: string | null;
   condicionActivacionJson: unknown;
   options: Array<{
@@ -294,6 +295,8 @@ const ENRICHED_SPEC_LABELS: Record<string, string> = {
   medidas: "Medidas",
   formato_medidas: "Medidas",
   material: "Material",
+  caras: "Caras",
+  tipo_copia: "Copias",
   espesor: "Espesor",
   espesor_material: "Espesor",
   tecnologia: "Tecnología",
@@ -305,6 +308,8 @@ const ENRICHED_SPEC_LABELS: Record<string, string> = {
 const ENRICHED_SPEC_ORDER = [
   "medidas",
   "material",
+  "caras",
+  "tipo_copia",
   "espesor",
   "tecnologia",
   "modo_color",
@@ -694,6 +699,32 @@ function routeUsesCaras(
   );
 }
 
+function condicionRefiereTipoCopia(condicion: unknown): boolean {
+  if (!condicion) return false;
+  return JSON.stringify(condicion).includes("tipoCopia");
+}
+
+/**
+ * `true` si la ruta usa `tipoCopia` para activar pasos o multiplicar cantidad
+ * (algún paso con `tipoCopia` en multiplicadoresActivos, o una condición de
+ * activación que referencia `tipoCopia`). Es la forma robusta de saber si
+ * corresponde el selector — no depende de que el producto esté en la
+ * subcategoría "talonarios".
+ */
+function routeUsesTipoCopia(
+  ruta: RutaAlternativaDetalle | null,
+  includeConfig: (config: ConfigPasoDetalle) => boolean,
+) {
+  return (
+    ruta?.configPasos.some(
+      (config) =>
+        includeConfig(config) &&
+        (config.multiplicadoresActivos.includes("tipoCopia") ||
+          condicionRefiereTipoCopia(config.condicionActivacionJson)),
+    ) ?? false
+  );
+}
+
 function mapSlotMaterial(
   config: RutaAlternativaDetalle["configPasos"][number],
   slot: RutaAlternativaDetalle["configPasos"][number]["slotsMateriales"][number],
@@ -983,6 +1014,7 @@ function getModosColorComercial(
         const modo: ModoColorComercial = {
           configPasoId: config.id,
           familiaCodigo: config.rutaPaso.familiaCodigo,
+          nombreVisible: config.nombreVisible ?? null,
           modoActivacion: config.modoActivacion,
           condicionActivacionJson: config.condicionActivacionJson,
           options,
@@ -2173,7 +2205,10 @@ function buildPresentableSpecs(
   const usaCaras = routeUsesCaras(rutaSeleccionada, (paso) =>
     isConfigPasoVisibleForContext(paso, config, ruleContext),
   );
-  if (usaCaras && hasSpec("caras")) {
+  if (usaCaras) {
+    // Se muestra siempre que el producto use caras (aunque el schema no declare
+    // el atributo): `setSpec` lo habilita porque "caras" está en
+    // ENRICHED_SPEC_LABELS, y el item lo surfacea como spec "Faz".
     setSpec("caras", config.caras === 2 ? "Doble faz" : "Simple faz");
   }
   const modosColor = getModosColorComercial(
@@ -2197,7 +2232,7 @@ function buildPresentableSpecs(
         modo.options.find((option) => normalizeModoColor(option.value) === value)?.label ??
         value;
       return modosColor.length > 1
-        ? `${humanizeCodigo(modo.familiaCodigo)}: ${label}`
+        ? `${modo.nombreVisible?.trim() || humanizeCodigo(modo.familiaCodigo)}: ${label}`
         : label;
     })
     .filter((value): value is string => Boolean(value));
@@ -2213,7 +2248,11 @@ function buildPresentableSpecs(
     setSpec("tecnologia_proceso", proceso);
     setSpec("proceso", proceso);
   }
-  if (product.subcategoriaComercialCodigo === "talonarios") {
+  const usaTipoCopia = routeUsesTipoCopia(
+    rutaSeleccionada,
+    isExecutableConfigPaso,
+  );
+  if (product.subcategoriaComercialCodigo === "talonarios" || usaTipoCopia) {
     const tipoCopia =
       config.tipoCopia === 1
         ? "Simple"
@@ -3791,7 +3830,12 @@ function ApConfigStep({
     );
   };
   const usaCaras = routeUsesCaras(rutaSel, includeVisibleConfig);
-  const esTalonario = product.subcategoriaComercialCodigo === "talonarios";
+  // El bloque de copias (tipo de copia + hojas por talonario) se muestra si el
+  // producto es de subcategoría "talonarios" O si su ruta realmente usa
+  // `tipoCopia` (algún talonario está en otra subcategoría, ej. papelería).
+  const esTalonario =
+    product.subcategoriaComercialCodigo === "talonarios" ||
+    routeUsesTipoCopia(rutaSel, isExecutableConfigPaso);
   const metroLinealConMedidasVariables = isMetroLinealConMedidasVariables(productoDetalle);
   const mostrarEditorPiezas = usaPiezasParaCotizar(productoDetalle, motorConfig);
   const mostrarMaterialLinealDirecto =
@@ -4376,7 +4420,7 @@ function ApConfigStep({
                   <label>
                     {modosColorVisibles.length === 1
                       ? "Modo de color"
-                      : `${humanizeCodigo(modo.familiaCodigo)} · color`}
+                      : `${modo.nombreVisible?.trim() || humanizeCodigo(modo.familiaCodigo)} · color`}
                   </label>
                   {renderChoiceCards(
                     "Modo de color",

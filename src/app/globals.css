@@ -1154,6 +1154,20 @@
     min-width: 0;
   }
 
+  .op-caras-value {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    color: var(--ink);
+  }
+
+  .op-caras-ico {
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+  }
+
   .op-color-dots {
     display: inline-flex;
     align-items: center;

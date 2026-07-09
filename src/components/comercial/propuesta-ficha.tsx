@@ -217,6 +217,31 @@ function ModoColorSpecValue({ value }: { value: string }) {
   );
 }
 
+/** Valor de la spec "Caras" con el mismo ícono que el sheet (simple / doble faz). */
+function CarasSpecValue({ value }: { value: string }) {
+  const doble = normalizeSearchText(value).includes("doble");
+  return (
+    <span className="op-caras-value">
+      {doble ? (
+        <svg className="op-caras-ico" viewBox="0 0 26 26" fill="none" aria-hidden="true">
+          <rect x="3" y="5" width="13" height="18" rx="2" fill="var(--surface,#fff)" stroke="var(--muted,#b8b6b1)" strokeWidth="1.5" />
+          <rect x="10" y="3" width="13" height="18" rx="2" fill="var(--surface,#fff)" stroke="currentColor" strokeWidth="1.6" />
+          <line x1="13" y1="8" x2="20" y2="8" stroke="currentColor" strokeWidth="1.4" />
+          <line x1="13" y1="12" x2="20" y2="12" stroke="var(--muted,#b8b6b1)" strokeWidth="1.4" />
+        </svg>
+      ) : (
+        <svg className="op-caras-ico" viewBox="0 0 26 26" fill="none" aria-hidden="true">
+          <rect x="6" y="3" width="14" height="20" rx="2" fill="var(--surface,#fff)" stroke="currentColor" strokeWidth="1.6" />
+          <line x1="9" y1="8" x2="17" y2="8" stroke="currentColor" strokeWidth="1.4" />
+          <line x1="9" y1="12" x2="17" y2="12" stroke="var(--muted,#b8b6b1)" strokeWidth="1.4" />
+          <line x1="9" y1="16" x2="14" y2="16" stroke="var(--muted,#b8b6b1)" strokeWidth="1.4" />
+        </svg>
+      )}
+      <span>{value}</span>
+    </span>
+  );
+}
+
 function applyCotizacionToItem(
   item: PropuestaItem,
   cotizacion: CotizacionExitosa,
@@ -1143,6 +1168,21 @@ function isMaterialSpecKey(key: string, label: string) {
 
 function isEspesorSpecKey(key: string, label: string) {
   return normalizeSearchText(`${key} ${label}`).includes("espesor");
+}
+
+function isFazSpecKey(key: string, label: string) {
+  const n = normalizeSearchText(`${key} ${label}`);
+  return n.includes("caras") || n.includes("faz");
+}
+
+/**
+ * Doble faz seleccionado al cotizar. `jobContext.caras === 2` solo ocurre en
+ * productos que soportan doble faz (el selector solo aparece ahí), así que es
+ * señal confiable. Devuelve 2 (doble faz), 1 (simple) o null si no aplica.
+ */
+function getCarasItem(item: PropuestaItem): number | null {
+  const caras = Number((item.jobContext as Record<string, unknown> | undefined)?.caras);
+  return caras === 2 ? 2 : caras === 1 ? 1 : null;
 }
 
 /**
@@ -2668,6 +2708,14 @@ function ProductRow({
       else arr.push(montajeSpec);
     }
 
+    // 3. Faz: si es doble faz, mostrarlo siempre (aunque el schema no declare
+    //    el atributo "caras"). El dato viaja en jobContext.caras. Si el schema
+    //    ya lo trae, no duplicamos.
+    const caras = getCarasItem(item);
+    if (caras === 2 && !arr.some((spec) => isFazSpecKey("", spec.lbl))) {
+      arr.push({ lbl: "Caras", val: "Doble faz" });
+    }
+
     return arr;
   })();
 
@@ -2779,6 +2827,7 @@ function ProductRow({
                   const isModoColorSpec = spec.lbl
                     .toLowerCase()
                     .includes("modo de color");
+                  const isCarasSpec = spec.lbl.toLowerCase() === "caras";
                   return (
                     <div
                       className={`spec ${isMedidasSpec ? "with-action" : ""} ${
@@ -2816,6 +2865,8 @@ function ProductRow({
                       <div className={`val ${isMedidasSpec ? "multi" : ""}`}>
                         {isModoColorSpec ? (
                           <ModoColorSpecValue value={spec.val} />
+                        ) : isCarasSpec ? (
+                          <CarasSpecValue value={spec.val} />
                         ) : (
                           spec.val
                         )}
