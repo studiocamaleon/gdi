@@ -341,6 +341,60 @@ describe('resolveNestingConfig', () => {
     });
   });
 
+  it('origen de costo: default derivado, por_candidato solo si se declara', () => {
+    const base = paso({ familiaCodigo: 'impresion_por_hoja' });
+    expect(
+      resolveNestingConfig(base, jobContext, null).printSheetCostSource,
+    ).toBe('derivado');
+
+    const config = resolveNestingConfig(
+      paso({
+        familiaCodigo: 'impresion_por_hoja',
+        paramsPasoJson: {
+          nestingConfig: {
+            pliegoImpresion: {
+              modo: 'automatico',
+              origenCosto: 'por_candidato',
+              candidatos: [
+                {
+                  id: 'a4',
+                  nombre: 'A4',
+                  anchoMm: 210,
+                  altoMm: 297,
+                  materiaPrimaVarianteId: 'variante-a4',
+                },
+                { id: 'sra3', nombre: 'SRA3', anchoMm: 325, altoMm: 475 },
+              ],
+            },
+          },
+        },
+      }),
+      jobContext,
+      { atributosVarianteJson: { anchoMm: 320, largoMm: 460 } },
+    );
+
+    expect(config.printSheetMode).toBe('automatic');
+    expect(config.printSheetCostSource).toBe('por_candidato');
+    expect(config.printSheetCandidates).toHaveLength(2);
+    expect(config.printSheetCandidates[0].materiaPrimaVarianteId).toBe(
+      'variante-a4',
+    );
+    expect(config.printSheetCandidates[1].materiaPrimaVarianteId).toBeNull();
+  });
+
+  it('expone el precio de la MP del slot para el score derivado en $', () => {
+    const config = resolveNestingConfig(
+      paso({ familiaCodigo: 'impresion_por_hoja' }),
+      jobContext,
+      {
+        atributosVarianteJson: { anchoMm: 320, largoMm: 460 },
+        precioReferencia: 250,
+      },
+    );
+
+    expect(config.purchaseSheetPrecio).toBe(250);
+  });
+
   it('ignora ancho máximo de panel legacy demasiado chico', () => {
     const config = resolveNestingConfig(
       paso({

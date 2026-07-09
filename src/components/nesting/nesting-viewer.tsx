@@ -301,6 +301,7 @@ export function NestingViewer({
 
       <NestingFooter result={result} />
       <NestingOutputsSummary outputs={result.outputsCanonicos} />
+      <PliegoSeleccionadoBanner seleccion={result.pliegoImpresionSeleccionado} />
       <TalonarioGrouping grouping={result.talonarioGrouping} />
     </section>
   );
@@ -892,6 +893,47 @@ function NestingFooter({ result }: { result: NestingViewerInput }) {
   );
 }
 
+function PliegoSeleccionadoBanner({
+  seleccion,
+}: {
+  seleccion?: NestingViewerInput["pliegoImpresionSeleccionado"];
+}) {
+  if (!seleccion) return null;
+  const criterioLabel: Record<string, string> = {
+    menor_costo_sustrato: "menor costo de sustrato (derivado)",
+    menor_costo_real: "menor costo real de materia prima",
+  };
+  const esCostoReal = seleccion.criterio === "menor_costo_real";
+  return (
+    <div className="flex flex-wrap gap-3 border-t border-sky-200 bg-sky-50 px-4 py-2 text-xs text-sky-900">
+      <span className="font-semibold">Pliego automático</span>
+      <span>
+        ganador: {seleccion.nombre} ({formatMm(seleccion.anchoMm)} ×{" "}
+        {formatMm(seleccion.altoMm)})
+      </span>
+      <span>{seleccion.candidatosEvaluados} candidato(s) evaluados</span>
+      <span>
+        {seleccion.pliegosImpresion} pliegos impresión →{" "}
+        {seleccion.pliegosComprados} comprados
+      </span>
+      {seleccion.materiaPrima ? (
+        <span>
+          MP: {seleccion.materiaPrima.nombre} ({seleccion.materiaPrima.sku})
+          {seleccion.materiaPrima.precioReferencia != null
+            ? ` · $${seleccion.materiaPrima.precioReferencia}`
+            : ""}
+        </span>
+      ) : null}
+      {esCostoReal ? (
+        <span>costo estimado: ${Math.round(seleccion.costoEstimadoMm2)}</span>
+      ) : null}
+      <span>
+        criterio: {criterioLabel[seleccion.criterio] ?? seleccion.criterio}
+      </span>
+    </div>
+  );
+}
+
 function TalonarioGrouping({
   grouping,
 }: {
@@ -899,9 +941,8 @@ function TalonarioGrouping({
 }) {
   if (!grouping) return null;
   const modoIncompletoLabel: Record<string, string> = {
-    PERMITIR: "permite incompletos",
-    DESCARTAR: "descarta incompletos",
-    REDONDEAR_ARRIBA: "redondea hacia arriba",
+    aprovechar_pliego: "aprovechar papel (acomodado manual)",
+    pose_completa: "pose completa (desperdicio en impares)",
   };
 
   return (
@@ -909,8 +950,8 @@ function TalonarioGrouping({
       <span className="font-semibold">Talonario</span>
       <span>{grouping.talonariosEfectivos}/{grouping.talonariosPedidos} efectivos</span>
       <span>{grouping.gruposCompletos} grupo(s) + {grouping.talonariosResiduo} residuo</span>
-      <span>{grouping.pliegosXCapa} pliegos × capa</span>
-      {grouping.pliegosDesperdicio > 0 ? <span>{grouping.pliegosDesperdicio} pliegos desperdicio</span> : null}
+      <span>{grouping.pliegosXCapa} pliegos × copia</span>
+      {grouping.posesDesperdicio > 0 ? <span>{grouping.posesDesperdicio} poses vacías</span> : null}
       <span>modo: {modoIncompletoLabel[grouping.modoIncompleto] ?? grouping.modoIncompleto}</span>
     </div>
   );

@@ -25,11 +25,26 @@ export interface NestingPanelizadoConfig {
   manualLayout?: Record<string, unknown> | null;
 }
 
+/** Materia prima propia de un candidato de pliego (modo 'por_candidato'). */
+export interface PrintSheetCandidateMaterial {
+  varianteId: string;
+  sku: string;
+  nombre: string;
+  precioReferencia: number | null;
+  /** Medidas del sustrato comprado; null → se asume igual al candidato. */
+  anchoMm: number | null;
+  altoMm: number | null;
+}
+
 export interface PrintSheetCandidateConfig {
   id: string;
   nombre: string;
   anchoMm: number;
   altoMm: number;
+  /** Modo 'por_candidato': variante de MP propia declarada en el modelador. */
+  materiaPrimaVarianteId: string | null;
+  /** Enriquecido en runtime (precio real para el score). */
+  materiaPrima?: PrintSheetCandidateMaterial | null;
 }
 
 const MIN_PANEL_MAX_WIDTH_MM = 300;
@@ -52,9 +67,17 @@ export interface NestingConfigResolved {
   sheetWidthMm: number | null;
   sheetHeightMm: number | null;
   printSheetMode: 'fixed' | 'automatic';
+  /**
+   * Origen del costo al comparar candidatos de pliego:
+   *  - 'derivado' (default): proxy por área comprada de la MP única del slot.
+   *  - 'por_candidato': precio real de la MP propia de cada candidato.
+   */
+  printSheetCostSource: 'derivado' | 'por_candidato';
   printSheetCandidates: PrintSheetCandidateConfig[];
   purchaseSheetWidthMm: number | null;
   purchaseSheetHeightMm: number | null;
+  /** Precio de referencia de la MP del slot (para score en $ del derivado). */
+  purchaseSheetPrecio: number | null;
   machineGeometry: string | null;
   costing: NestingCostingConfig;
   panelizado: NestingPanelizadoConfig;
@@ -62,6 +85,7 @@ export interface NestingConfigResolved {
 
 export interface MaterialResueltoParaNestingConfig {
   atributosVarianteJson?: Record<string, unknown> | null;
+  precioReferencia?: number | null;
 }
 
 const COSTING_STRATEGIES = new Set([
@@ -272,6 +296,10 @@ export function resolveNestingConfig(
       'automatic'
       ? 'automatic'
       : 'fixed';
+  const printSheetCostSource =
+    paso.familiaCodigo === 'impresion_por_hoja'
+      ? normalizePrintSheetCostSource(pliegoImpresionConfig.origenCosto)
+      : 'derivado';
   const printSheetCandidates =
     paso.familiaCodigo === 'impresion_por_hoja'
       ? normalizePrintSheetCandidates(pliegoImpresionConfig.candidatos)
@@ -314,9 +342,11 @@ export function resolveNestingConfig(
       purchaseSheetHeightMm ??
       readNumber(maqParams.largoMesaMm),
     printSheetMode,
+    printSheetCostSource,
     printSheetCandidates,
     purchaseSheetWidthMm,
     purchaseSheetHeightMm,
+    purchaseSheetPrecio: readNumber(materialResuelto?.precioReferencia),
     machineGeometry: geometry,
     costing: {
       strategy,
@@ -471,6 +501,17 @@ function normalizePrintSheetMode(...values: unknown[]) {
   return 'fixed';
 }
 
+function normalizePrintSheetCostSource(
+  value: unknown,
+): 'derivado' | 'por_candidato' {
+  if (typeof value !== 'string') return 'derivado';
+  const normalized = value.trim().toLowerCase();
+  return normalized === 'por_candidato' ||
+    normalized === 'materia_prima_por_candidato'
+    ? 'por_candidato'
+    : 'derivado';
+}
+
 function normalizePrintSheetCandidates(value: unknown): PrintSheetCandidateConfig[] {
   if (!Array.isArray(value)) return [];
   return value
@@ -490,7 +531,12 @@ function normalizePrintSheetCandidates(value: unknown): PrintSheetCandidateConfi
           : typeof record.label === 'string' && record.label.trim()
             ? record.label.trim()
             : `${anchoMm} × ${altoMm} mm`;
-      return { id, nombre, anchoMm, altoMm };
+      const materiaPrimaVarianteId =
+        typeof record.materiaPrimaVarianteId === 'string' &&
+        record.materiaPrimaVarianteId.trim()
+          ? record.materiaPrimaVarianteId.trim()
+          : null;
+      return { id, nombre, anchoMm, altoMm, materiaPrimaVarianteId };
     })
     .filter((item): item is PrintSheetCandidateConfig => item !== null);
 }

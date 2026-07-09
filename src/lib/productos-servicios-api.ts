@@ -811,10 +811,18 @@ export interface NestingViewerInput {
     altoMm: number;
     criterio: string;
     candidatosEvaluados: number;
+    /** Área comprada (mm²) en 'menor_costo_sustrato'; $ en 'menor_costo_real'. */
     costoEstimadoMm2: number;
     pliegosImpresion: number;
     pliegosComprados: number;
     aprovechamientoPct: number;
+    /** Origen de costo 'por_candidato': MP propia del candidato ganador. */
+    materiaPrima?: {
+      varianteId: string;
+      sku: string;
+      nombre: string;
+      precioReferencia: number | null;
+    };
   };
   /** v3.1: solo cuando se aplicó talonario-grouping. */
   talonarioGrouping?: {
@@ -825,7 +833,7 @@ export interface NestingViewerInput {
     gruposCompletos: number;
     talonariosResiduo: number;
     pliegosXCapa: number;
-    pliegosDesperdicio: number;
+    posesDesperdicio: number;
     numerosXTalonario: number;
     modoIncompleto: string;
   };

@@ -49,6 +49,7 @@ import {
   resolveNestingConfig,
   type NestingConfigResolved,
   type PrintSheetCandidateConfig,
+  type PrintSheetCandidateMaterial,
 } from './nesting-config';
 import type { PasoCargado, JobContext, NestingVisualConfig } from './tipos';
 
@@ -99,12 +100,24 @@ export interface NestingDispatchResult {
     nombre: string;
     anchoMm: number;
     altoMm: number;
-    criterio: 'menor_costo_sustrato';
+    /**
+     * 'menor_costo_sustrato': proxy por área comprada (origen derivado).
+     * 'menor_costo_real': $ reales de la MP de cada candidato.
+     */
+    criterio: 'menor_costo_sustrato' | 'menor_costo_real';
     candidatosEvaluados: number;
+    /** Área comprada (mm²) en derivado; $ reales en por_candidato. */
     costoEstimadoMm2: number;
     pliegosImpresion: number;
     pliegosComprados: number;
     aprovechamientoPct: number;
+    /** Solo 'por_candidato': MP propia del candidato ganador. */
+    materiaPrima?: {
+      varianteId: string;
+      sku: string;
+      nombre: string;
+      precioReferencia: number | null;
+    };
   };
 }
 
@@ -113,6 +126,19 @@ export interface MaterialResueltoParaNesting {
   id: string;
   /** Atributos: anchoMm (rollo o pliego), largoMm (pliego), largoRolloMm (rollo). */
   atributosVarianteJson?: Record<string, unknown> | null;
+  precioReferencia?: number | null;
+}
+
+/** Hooks async que el motor puede inyectar al dispatcher. */
+export interface NestingDispatchOpts {
+  /**
+   * Carga la MP propia de un candidato de pliego (modo 'por_candidato').
+   * Sin este hook los candidatos con MP declarada no se enriquecen y el
+   * score cae al derivado.
+   */
+  loadPrintSheetMaterial?: (
+    varianteId: string,
+  ) => Promise<PrintSheetCandidateMaterial | null>;
 }
 
 /**
@@ -129,8 +155,30 @@ export async function runNestingForPaso(
   paso: PasoCargado,
   jobContext: JobContext,
   materialResuelto: MaterialResueltoParaNesting | null,
+  opts?: NestingDispatchOpts,
 ): Promise<NestingDispatchResult | null> {
   const config = resolveNestingConfig(paso, jobContext, materialResuelto);
+
+  // Modo 'por_candidato': enriquecer los candidatos de pliego con su MP
+  // propia (precio real) antes de despachar. Sin loader, el score cae al
+  // derivado (candidatos sin materiaPrima).
+  if (
+    config.printSheetMode === 'automatic' &&
+    config.printSheetCostSource === 'por_candidato' &&
+    opts?.loadPrintSheetMaterial
+  ) {
+    const loader = opts.loadPrintSheetMaterial;
+    config.printSheetCandidates = await Promise.all(
+      config.printSheetCandidates.map(async (candidate) =>
+        candidate.materiaPrimaVarianteId
+          ? {
+              ...candidate,
+              materiaPrima: await loader(candidate.materiaPrimaVarianteId),
+            }
+          : candidate,
+      ),
+    );
+  }
   // ─── Caso 1: gran formato por área ──────────────────────────────
   // Si la máquina/material trabajan en rollo usa shelf-rollo; si trabajan
   // sobre mesa/placa usa grid 2D multi. Esto permite que rígidos impresos
@@ -1193,6 +1241,7 @@ function runGrid2DSingleAutoPrintSheet(
   const candidates = config.printSheetCandidates;
   if (candidates.length === 0) return null;
 
+  const porCandidato = config.printSheetCostSource === 'por_candidato';
   const evaluated = candidates
     .map((candidate) => {
       const candidateConfig: NestingConfigResolved = {
@@ -1209,14 +1258,16 @@ function runGrid2DSingleAutoPrintSheet(
         candidateConfig,
       );
       if (!result || result.cantidadCalculada <= 0) return null;
-      const score = scorePrintSheetCandidate(candidate, result, config);
+      const score = porCandidato
+        ? scorePrintSheetCandidateRealCost(candidate, result, config)
+        : scorePrintSheetCandidate(candidate, result, config);
       if (!score) return null;
       return { candidate, result, score };
     })
     .filter((item): item is NonNullable<typeof item> => item !== null)
     .sort((a, b) => {
-      if (a.score.costoEstimadoMm2 !== b.score.costoEstimadoMm2) {
-        return a.score.costoEstimadoMm2 - b.score.costoEstimadoMm2;
+      if (a.score.costo !== b.score.costo) {
+        return a.score.costo - b.score.costo;
       }
       if (a.result.aprovechamientoPct !== b.result.aprovechamientoPct) {
         return b.result.aprovechamientoPct - a.result.aprovechamientoPct;
@@ -1227,6 +1278,7 @@ function runGrid2DSingleAutoPrintSheet(
   const winner = evaluated[0];
   if (!winner) return null;
 
+  const materiaPrimaGanadora = winner.score.materiaPrima;
   return {
     ...winner.result,
     pliegoImpresionSeleccionado: {
@@ -1234,12 +1286,22 @@ function runGrid2DSingleAutoPrintSheet(
       nombre: winner.candidate.nombre,
       anchoMm: winner.candidate.anchoMm,
       altoMm: winner.candidate.altoMm,
-      criterio: 'menor_costo_sustrato',
+      criterio: porCandidato ? 'menor_costo_real' : 'menor_costo_sustrato',
       candidatosEvaluados: evaluated.length,
-      costoEstimadoMm2: winner.score.costoEstimadoMm2,
+      costoEstimadoMm2: winner.score.costo,
       pliegosImpresion: winner.result.cantidadCalculada,
       pliegosComprados: winner.score.pliegosComprados,
       aprovechamientoPct: winner.result.aprovechamientoPct,
+      ...(materiaPrimaGanadora
+        ? {
+            materiaPrima: {
+              varianteId: materiaPrimaGanadora.varianteId,
+              sku: materiaPrimaGanadora.sku,
+              nombre: materiaPrimaGanadora.nombre,
+              precioReferencia: materiaPrimaGanadora.precioReferencia,
+            },
+          }
+        : {}),
     },
   };
 }
@@ -1248,7 +1310,11 @@ function scorePrintSheetCandidate(
   candidate: PrintSheetCandidateConfig,
   result: NestingDispatchResult,
   config: NestingConfigResolved,
-): { costoEstimadoMm2: number; pliegosComprados: number } | null {
+): {
+  costo: number;
+  pliegosComprados: number;
+  materiaPrima?: PrintSheetCandidateMaterial;
+} | null {
   const pliegosImpresion = result.cantidadCalculada;
   if (!Number.isFinite(pliegosImpresion) || pliegosImpresion <= 0) return null;
 
@@ -1275,13 +1341,67 @@ function scorePrintSheetCandidate(
     );
     return {
       pliegosComprados,
-      costoEstimadoMm2: pliegosComprados * purchaseWidthMm * purchaseHeightMm,
+      costo: pliegosComprados * purchaseWidthMm * purchaseHeightMm,
     };
   }
 
   return {
     pliegosComprados: pliegosImpresion,
-    costoEstimadoMm2: pliegosImpresion * candidate.anchoMm * candidate.altoMm,
+    costo: pliegosImpresion * candidate.anchoMm * candidate.altoMm,
+  };
+}
+
+/**
+ * Score en $ reales (origen de costo 'por_candidato').
+ *
+ * Con MP propia: pliegos comprados de ESA MP (1:1 si la MP ya es del tamaño
+ * del candidato; derivación si es más grande) × su precio de referencia.
+ * Sin MP propia: cae al derivado del slot, convertido a $ con el precio de
+ * la MP del slot para que compita en la misma unidad.
+ *
+ * Devuelve null (candidato no comparable) si falta el precio necesario o el
+ * candidato no sale de su sustrato.
+ */
+function scorePrintSheetCandidateRealCost(
+  candidate: PrintSheetCandidateConfig,
+  result: NestingDispatchResult,
+  config: NestingConfigResolved,
+): {
+  costo: number;
+  pliegosComprados: number;
+  materiaPrima?: PrintSheetCandidateMaterial;
+} | null {
+  const pliegosImpresion = result.cantidadCalculada;
+  if (!Number.isFinite(pliegosImpresion) || pliegosImpresion <= 0) return null;
+
+  const materiaPrima = candidate.materiaPrima;
+  if (materiaPrima) {
+    const precio = Number(materiaPrima.precioReferencia ?? 0);
+    if (!Number.isFinite(precio) || precio <= 0) return null;
+    const sustratoAnchoMm = materiaPrima.anchoMm ?? candidate.anchoMm;
+    const sustratoAltoMm = materiaPrima.altoMm ?? candidate.altoMm;
+    const pliegosPorSustrato = getPrintSheetsPerPurchaseSheet(
+      sustratoAnchoMm,
+      sustratoAltoMm,
+      candidate.anchoMm,
+      candidate.altoMm,
+    );
+    if (pliegosPorSustrato <= 0) return null;
+    const pliegosComprados = Math.ceil(pliegosImpresion / pliegosPorSustrato);
+    return {
+      costo: pliegosComprados * precio,
+      pliegosComprados,
+      materiaPrima,
+    };
+  }
+
+  const precioSlot = Number(config.purchaseSheetPrecio ?? 0);
+  if (!Number.isFinite(precioSlot) || precioSlot <= 0) return null;
+  const derivado = scorePrintSheetCandidate(candidate, result, config);
+  if (!derivado) return null;
+  return {
+    costo: derivado.pliegosComprados * precioSlot,
+    pliegosComprados: derivado.pliegosComprados,
   };
 }
 
@@ -1480,6 +1600,7 @@ export async function runNestingForPrePrensa(
     slot: PasoCargado['slots'][number],
     jc: JobContext,
   ) => Promise<MaterialResueltoParaNesting | null>,
+  opts?: NestingDispatchOpts,
 ): Promise<NestingDispatchResult | null> {
   if (paso.familiaCodigo !== 'pre_prensa') return null;
 
@@ -1500,7 +1621,12 @@ export async function runNestingForPrePrensa(
     ...proximoImpresionPorHoja,
   };
 
-  const baseResult = await runNestingForPaso(pasoSintetico, jobContext, material);
+  const baseResult = await runNestingForPaso(
+    pasoSintetico,
+    jobContext,
+    material,
+    opts,
+  );
   if (!baseResult) return null;
 
   // ─── Talonario-grouping (post-nesting) ──────────────────────────
@@ -1557,6 +1683,110 @@ function aplicarTalonarioGroupingSiCorresponde(
     ...baseResult,
     cantidadCalculada: grouping.pliegosXCapa,
     talonarioGrouping: grouping,
+    ...buildTalonarioVisualPatch(baseResult, grouping, jobContext),
+  };
+}
+
+/**
+ * Reconstruye la parte visual del nesting (substrates + placements +
+ * aprovechamiento) para que el dibujo muestre cómo se cotizó realmente el
+ * talonario, en vez de la imposición base (que ignora el grouping):
+ *  - Los grupos completos van como pliegos llenos (P poses).
+ *  - El residuo va como un sustrato aparte: con `pose_completa` muestra las
+ *    poses usadas y el espacio vacío (desperdicio); con `aprovechar_pliego`
+ *    los pliegos del residuo también van llenos (comparten números), salvo
+ *    el último si sobran poses.
+ * Devuelve {} (sin tocar el visual base) si falta información de geometría.
+ */
+function buildTalonarioVisualPatch(
+  baseResult: NestingDispatchResult,
+  grouping: ReturnType<typeof calculateTalonarioGrouping>,
+  jobContext: JobContext,
+): Partial<NestingDispatchResult> {
+  const sheet = baseResult.substrates[0];
+  if (!sheet || sheet.kind !== 'sheet') return {};
+  const P = grouping.posesXPliego;
+  const N = grouping.numerosXTalonario;
+  if (P <= 0 || grouping.pliegosXCapa <= 0) return {};
+
+  // Layout de un pliego lleno (P poses). El base solo trae min(cantidad, P)
+  // poses; si faltan, lo regeneramos con la misma geometría.
+  let fullPlacements = baseResult.placements.filter(
+    (p) => (p.substrateIndex ?? 0) === 0,
+  );
+  if (fullPlacements.length !== P) {
+    const vc = baseResult.visualConfig;
+    const pieza = getPiezasParaNesting(jobContext)[0];
+    if (!vc || !pieza) return {};
+    const layout = buildSingleSizeMixedLayout({
+      pieceId: 'pieza_0',
+      pieceWidthMm: pieza.anchoMm,
+      pieceHeightMm: pieza.altoMm,
+      quantity: P,
+      substrateWidthMm: sheet.widthMm,
+      substrateHeightMm: sheet.heightMm,
+      margins: vc.margins,
+      separationHMm: vc.spacing.horizontalMm,
+      separationVMm: vc.spacing.verticalMm,
+      allowRotation: vc.allowRotation,
+    });
+    if (!layout || layout.placements.length < P) return {};
+    fullPlacements = layout.placements;
+  }
+
+  // Bloques de pliegos homogéneos: cuántos pliegos y cuántas poses usa cada uno.
+  const bloques: Array<{ count: number; poses: number }> = [];
+  const pliegosGrupos = grouping.gruposCompletos * N;
+  if (grouping.talonariosResiduo === 0) {
+    bloques.push({ count: grouping.pliegosXCapa, poses: P });
+  } else if (grouping.modoIncompleto === 'pose_completa') {
+    if (pliegosGrupos > 0) bloques.push({ count: pliegosGrupos, poses: P });
+    bloques.push({ count: N, poses: grouping.talonariosResiduo });
+  } else {
+    const pliegosResiduo = grouping.pliegosXCapa - pliegosGrupos;
+    const llenos =
+      pliegosGrupos +
+      (grouping.posesDesperdicio > 0 ? pliegosResiduo - 1 : pliegosResiduo);
+    if (llenos > 0) bloques.push({ count: llenos, poses: P });
+    if (grouping.posesDesperdicio > 0) {
+      bloques.push({ count: 1, poses: P - grouping.posesDesperdicio });
+    }
+  }
+
+  const substrates = bloques.map((b) => ({
+    kind: 'sheet' as const,
+    count: b.count,
+    widthMm: sheet.widthMm,
+    heightMm: sheet.heightMm,
+  }));
+  const placements = bloques.flatMap((b, idx) =>
+    fullPlacements.slice(0, b.poses).map((p, i) => ({
+      ...p,
+      pieceId: `pose_${idx}_${i}`,
+      substrateIndex: idx,
+    })),
+  );
+
+  // Aprovechamiento real: descuenta las poses vacías del desperdicio.
+  const posesUsadas = grouping.pliegosXCapa * P - grouping.posesDesperdicio;
+  const piezaW = fullPlacements[0].widthMm;
+  const piezaH = fullPlacements[0].heightMm;
+  const areaUtilMm2 = posesUsadas * piezaW * piezaH;
+  const areaTotalMm2 = grouping.pliegosXCapa * sheet.widthMm * sheet.heightMm;
+
+  return {
+    substrates,
+    placements,
+    piezasAcomodadas: posesUsadas,
+    aprovechamientoPct:
+      areaTotalMm2 > 0
+        ? Math.round((areaUtilMm2 / areaTotalMm2) * 10000) / 100
+        : baseResult.aprovechamientoPct,
+    metricasRaw: {
+      ...baseResult.metricasRaw,
+      areaUtilMm2,
+      areaTotalMm2,
+    },
   };
 }
 

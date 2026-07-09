@@ -2517,10 +2517,18 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(tg.modoIncompleto).toBe('aprovechar_pliego');
     expect(tg.posesXPliego).toBeGreaterThan(0);
     expect(tg.pliegosXCapa).toBeGreaterThan(0);
-    // Con aprovechar_pliego: residuo se imprime con poses vacías → desperdicio>0.
-    if (tg.talonariosResiduo > 0) {
-      expect(tg.pliegosDesperdicio).toBeGreaterThan(0);
-    }
+    // Grupos completos consumen N pliegos cada uno; el residuo comparte
+    // pliego entre sus números (aprovechar_pliego): ⌈residuo×N/P⌉ extra.
+    const esperado =
+      tg.gruposCompletos * tg.numerosXTalonario +
+      (tg.talonariosResiduo > 0
+        ? Math.ceil(
+            (tg.talonariosResiduo * tg.numerosXTalonario) / tg.posesXPliego,
+          )
+        : 0);
+    expect(tg.pliegosXCapa).toBe(esperado);
+    // Desperdicio en poses: lo que sobra de los pliegos del residuo.
+    expect(tg.posesDesperdicio).toBeLessThan(tg.posesXPliego);
     // pliegos_calculados publicado debe coincidir con pliegosXCapa.
     const outs = prePrensa!.outputsCanonicos as Record<string, unknown>;
     expect(outs.pliegos_calculados).toBe(tg.pliegosXCapa);

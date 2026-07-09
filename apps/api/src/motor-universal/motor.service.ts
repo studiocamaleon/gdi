@@ -41,6 +41,7 @@ import {
 import {
   resolveNestingConfig,
   type NestingConfigResolved,
+  type PrintSheetCandidateMaterial,
 } from './nesting-config';
 import { calcularOutputsCanonicos } from './outputs-canonicos';
 import {
@@ -1748,6 +1749,10 @@ export class MotorUniversalService {
         paso,
         this.getJobContextParaNesting(paso, jobContext),
         materialPreliminar,
+        {
+          loadPrintSheetMaterial: (varianteId) =>
+            this.cargarPrintSheetMaterial(tenantId, varianteId),
+        },
       );
     }
     if (
@@ -1876,6 +1881,10 @@ export class MotorUniversalService {
         jobContext,
         pasosSiguientes,
         (slot, jc) => this.resolverMaterialSlot(tenantId, slot, jc),
+        {
+          loadPrintSheetMaterial: (varianteId) =>
+            this.cargarPrintSheetMaterial(tenantId, varianteId),
+        },
       );
     }
 
@@ -2866,13 +2875,13 @@ export class MotorUniversalService {
       if (automaticSlotCodes.has(slot.slotCodigo)) {
         continue;
       }
-      const materialResuelto = await this.resolverMaterialSlot(
+      const materialSlot = await this.resolverMaterialSlot(
         tenantId,
         slot,
         jobContext,
         paso,
       );
-      if (!materialResuelto) {
+      if (!materialSlot) {
         if (slot.modoSeleccion === 'COMERCIAL_ELIGE') {
           errores.push(
             this.errorMaterialComercialRequerido(slot, paso, jobContext),
@@ -2880,6 +2889,18 @@ export class MotorUniversalService {
         }
         continue;
       }
+      // Origen de costo 'por_candidato': si el pliego automático eligió un
+      // candidato con MP propia, el sustrato se costea con ESA variante
+      // (precio real) y no con la MP fija del slot. La variante viaja en el
+      // dispatch del propio paso o, en rutas con pre_prensa (HEREDAR), por
+      // el output canónico `pliego_impresion_mp_variante_id`.
+      const materialResuelto = await this.resolverMateriaPrimaDeCandidato(
+        tenantId,
+        slot,
+        materialSlot,
+        nestingDispatch,
+        jobContext,
+      );
 
       // Cantidad: depende de la fórmula. Si hay nesting, ajustamos a la
       // cantidad real con desperdicio.
@@ -3067,6 +3088,33 @@ export class MotorUniversalService {
     );
 
     return ejecutados;
+  }
+
+  /**
+   * Origen de costo 'por_candidato' — si el pliego automático eligió un
+   * candidato con MP propia, devuelve ESA variante para costear el sustrato
+   * principal. Si no aplica (modo derivado, otro slot, o la variante no se
+   * puede cargar), devuelve el material del slot sin tocar.
+   */
+  private async resolverMateriaPrimaDeCandidato<
+    T extends { id: string },
+  >(
+    tenantId: string,
+    slot: PasoCargado['slots'][number],
+    materialSlot: T,
+    nestingDispatch: NestingDispatchResult | null,
+    jobContext: JobContext,
+  ): Promise<T | NonNullable<Awaited<ReturnType<MotorUniversalService['cargarVariantePorId']>>>> {
+    if (slot.slotCodigo !== 'sustrato_principal') return materialSlot;
+    const ctx = jobContext as Record<string, unknown>;
+    const varianteId =
+      nestingDispatch?.pliegoImpresionSeleccionado?.materiaPrima?.varianteId ??
+      (typeof ctx.pliego_impresion_mp_variante_id === 'string'
+        ? ctx.pliego_impresion_mp_variante_id
+        : null);
+    if (!varianteId || varianteId === materialSlot.id) return materialSlot;
+    const variante = await this.cargarVariantePorId(tenantId, varianteId);
+    return variante ?? materialSlot;
   }
 
   private ignoraCarasEnMaterial(
@@ -3928,6 +3976,34 @@ export class MotorUniversalService {
       // Variante puede tener override; sino hereda de la materia prima padre.
       unidadStock: v.unidadStock ?? v.materiaPrima?.unidadStock ?? null,
       atributosVarianteJson: attrs,
+    };
+  }
+
+  /**
+   * Carga la MP propia de un candidato de pliego (origen de costo
+   * 'por_candidato') en el shape que espera el dispatcher para el score.
+   */
+  private async cargarPrintSheetMaterial(
+    tenantId: string,
+    varianteId: string,
+  ): Promise<PrintSheetCandidateMaterial | null> {
+    const variante = await this.cargarVariantePorId(tenantId, varianteId);
+    if (!variante) return null;
+    const attrs = variante.atributosVarianteJson ?? {};
+    const leerMm = (...values: unknown[]) => {
+      for (const value of values) {
+        const n = Number(value);
+        if (Number.isFinite(n) && n > 0) return n;
+      }
+      return null;
+    };
+    return {
+      varianteId: variante.id,
+      sku: variante.sku,
+      nombre: this.getMaterialDisplayName(variante),
+      precioReferencia: variante.precioReferencia,
+      anchoMm: leerMm(attrs.anchoMm, attrs.widthMm),
+      altoMm: leerMm(attrs.largoMm, attrs.altoMm, attrs.heightMm),
     };
   }
 

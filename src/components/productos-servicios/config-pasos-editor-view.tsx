@@ -136,6 +136,26 @@ const MONTAJE_SOURCE_OPTIONS = [
       "Usa pliegos_impresos y el tamaño de pliego publicado por impresión.",
   },
 ];
+const TALONARIO_MODE_OPTIONS = [
+  {
+    value: "off",
+    label: "No es talonario",
+    description:
+      "El paso calcula pliegos de forma estándar, sin agrupar por talonario.",
+  },
+  {
+    value: "aprovechar_pliego",
+    label: "Aprovechar papel",
+    description:
+      "El talonario suelto comparte pliego entre sus propios números: mínimo papel, pero producción debe cortar y acomodar ese bloque a mano.",
+  },
+  {
+    value: "pose_completa",
+    label: "Pose completa",
+    description:
+      "El talonario suelto se imprime con poses vacías: sale apilado listo para abrochar y cortar, a costa de desperdiciar papel en cantidades impares.",
+  },
+];
 const T2_PRODUCTIVITY_UNIT_OPTIONS = [
   {
     value: "unidades_h",
@@ -377,6 +397,20 @@ const PLIEGO_IMPRESION_OPTIONS = PLIEGO_IMPRESION_PRESETS.map((preset) => ({
   label: preset.label,
   description: preset.description,
 }));
+const PLIEGO_ORIGEN_COSTO_OPTIONS = [
+  {
+    value: "derivado",
+    label: "Derivado de la materia prima",
+    description:
+      "Todos los tamaños se cortan de la materia prima del paso: el costo de cada candidato es proporcional al área que usa.",
+  },
+  {
+    value: "por_candidato",
+    label: "Materia prima por candidato",
+    description:
+      "Cada tamaño se compra ya cortado: asignale su materia prima y el motor compara los precios reales.",
+  },
+];
 const PANEL_AXIS_OPTIONS = optionsFromLabels(
   ["automatic", "vertical", "horizontal"],
   {
@@ -1613,6 +1647,23 @@ function getPliegoCandidatos(pliegoImpresion: Record<string, unknown>) {
     : [];
 }
 
+function getPliegoOrigenCosto(
+  pliegoImpresion: Record<string, unknown>,
+): "derivado" | "por_candidato" {
+  return pliegoImpresion.origenCosto === "por_candidato"
+    ? "por_candidato"
+    : "derivado";
+}
+
+function getCandidatoMateriaPrimaVarianteId(
+  candidato: Record<string, unknown>,
+): string | null {
+  return typeof candidato.materiaPrimaVarianteId === "string" &&
+    candidato.materiaPrimaVarianteId.trim()
+    ? candidato.materiaPrimaVarianteId
+    : null;
+}
+
 function buildPliegoCandidateFromPreset(presetValue: string) {
   const preset = PLIEGO_IMPRESION_PRESETS.find(
     (item) => item.value === presetValue,
@@ -2245,6 +2296,16 @@ function validarAvanzado(
           "Pliego de impresión automático: agregá al menos un candidato activo con ancho y alto",
         );
       }
+      if (getPliegoOrigenCosto(pliegoImpresion) === "por_candidato") {
+        const sinMateriaPrima = candidatosValidos.filter(
+          (candidato) => !getCandidatoMateriaPrimaVarianteId(candidato),
+        );
+        if (sinMateriaPrima.length > 0) {
+          warnings.push(
+            `Origen de costo por candidato: ${sinMateriaPrima.length} candidato(s) sin materia prima asignada van a competir con el costo derivado del material del paso`,
+          );
+        }
+      }
     }
     const hasAncho =
       pliegoImpresion.anchoMm !== undefined &&
@@ -2806,6 +2867,14 @@ export function ConfigPasosEditorView({
   });
   const [hardcodedMaterialSelections, setHardcodedMaterialSelections] =
     React.useState<Record<string, string>>({});
+  // Picker de MP por candidato de pliego (origen de costo 'por_candidato'):
+  // qué fila tiene el buscador abierto y la materia elegida a medio resolver
+  // (cuando tiene varias variantes). Key: `${pasoId}:${indexCandidato}`.
+  const [mpPickerCandidatoAbierto, setMpPickerCandidatoAbierto] =
+    React.useState<string | null>(null);
+  const [mpMateriaPorCandidato, setMpMateriaPorCandidato] = React.useState<
+    Record<string, MateriaPrimaBusquedaItem>
+  >({});
 
   // JSON text por paso (sólo UI; al guardar se parsea de vuelta a objeto)
   const [jsonTexts, setJsonTexts] = React.useState<
@@ -4387,6 +4456,23 @@ export function ConfigPasosEditorView({
                     pliegoImpresionPreset === "automatico";
                   const pliegoCandidatos =
                     getPliegoCandidatos(pliegoImpresionConfig);
+                  const pliegoOrigenCosto = getPliegoOrigenCosto(
+                    pliegoImpresionConfig,
+                  );
+                  const pliegoPorCandidato =
+                    pliegoImpresionEsAutomatico &&
+                    pliegoOrigenCosto === "por_candidato";
+                  const sustratoCompatibilidad =
+                    familia?.slotsRequeridos?.find(
+                      (slot) => slot.codigo === "sustrato_principal",
+                    )?.compatibilidadMaterial;
+                  const variantesLookup = lookups.materiasPrimas.flatMap(
+                    (materia) =>
+                      materia.variantes.map((variante) => ({
+                        materia,
+                        variante,
+                      })),
+                  );
                   const nestingMargins = asRecord(nestingConfig.margins);
                   const nestingCosting = asRecord(nestingConfig.costing);
                   const nestingCostingStrategy =
@@ -5184,6 +5270,28 @@ export function ConfigPasosEditorView({
                                         }
                                         options={MONTAJE_SOURCE_OPTIONS}
                                         placeholder="Elegir origen"
+                                      />
+                                    </div>
+                                  )}
+                                  {familia?.codigo === "pre_prensa" && (
+                                    <div className="field">
+                                      <LabelConTooltip
+                                        label="Modo talonario"
+                                        tooltip="Para talonarios: agrupa los talonarios de a N poses por pliego (mismo número lado a lado, sale apilado en orden) y define qué hacer con los talonarios sueltos que no completan el pliego: compartirlo entre sus números (menos papel, más armado manual) o imprimirlos con poses vacías (más papel, listo para abrochar)."
+                                      />
+                                      <HumanSelect
+                                        value={String(
+                                          paramsPaso.modoTalonarioIncompleto ??
+                                            "off",
+                                        )}
+                                        onValueChange={(value) =>
+                                          updateStepParams(paso.id, {
+                                            modoTalonarioIncompleto:
+                                              value === "off" ? null : value,
+                                          })
+                                        }
+                                        options={TALONARIO_MODE_OPTIONS}
+                                        placeholder="Elegir modo"
                                       />
                                     </div>
                                   )}
@@ -7153,6 +7261,31 @@ export function ConfigPasosEditorView({
                                           </div>
                                           {pliegoImpresionEsAutomatico && (
                                             <div className="ps-compact space-y-2 rounded-[10px] border border-dashed p-3">
+                                              <div className="space-y-1">
+                                                <LabelConTooltip
+                                                  label="Origen del costo"
+                                                  tooltip="Cómo se costea cada candidato al compararlos: derivado (todos salen de la materia prima del paso, costo proporcional al área) o materia prima por candidato (cada tamaño se compra ya cortado con su precio real)."
+                                                />
+                                                <HumanSelect
+                                                  value={pliegoOrigenCosto}
+                                                  onValueChange={(value) =>
+                                                    updateNestingPliegoImpresion(
+                                                      paso.id,
+                                                      {
+                                                        origenCosto:
+                                                          value ===
+                                                          "por_candidato"
+                                                            ? "por_candidato"
+                                                            : "derivado",
+                                                      },
+                                                    )
+                                                  }
+                                                  options={
+                                                    PLIEGO_ORIGEN_COSTO_OPTIONS
+                                                  }
+                                                  triggerClassName="min-h-8 text-xs"
+                                                />
+                                              </div>
                                               <div className="flex items-center justify-between gap-2">
                                                 <span className="text-xs font-medium">
                                                   Candidatos activos
@@ -7187,10 +7320,31 @@ export function ConfigPasosEditorView({
                                                         "string"
                                                           ? candidato.preset
                                                           : "personalizado";
+                                                      const candidatoKey = `${paso.id}:${index}`;
+                                                      const candidatoMpVarianteId =
+                                                        getCandidatoMateriaPrimaVarianteId(
+                                                          candidato,
+                                                        );
+                                                      const candidatoMpLookup =
+                                                        candidatoMpVarianteId
+                                                          ? variantesLookup.find(
+                                                              (item) =>
+                                                                item.variante
+                                                                  .id ===
+                                                                candidatoMpVarianteId,
+                                                            )
+                                                          : undefined;
+                                                      const candidatoMpMateria =
+                                                        mpMateriaPorCandidato[
+                                                          candidatoKey
+                                                        ];
                                                       return (
                                                         <div
                                                           key={`${candidato.id ?? index}-${index}`}
-                                                          className="grid grid-cols-1 gap-2 rounded border bg-background/80 p-2 md:grid-cols-[80px_1fr_120px_100px_100px_36px]"
+                                                          className="space-y-2 rounded border bg-background/80 p-2"
+                                                        >
+                                                        <div
+                                                          className="grid grid-cols-1 gap-2 md:grid-cols-[80px_1fr_120px_100px_100px_36px]"
                                                         >
                                                           <label className="flex items-center gap-2 text-xs">
                                                             <input
@@ -7385,6 +7539,240 @@ export function ConfigPasosEditorView({
                                                           >
                                                             <Trash2Icon className="h-4 w-4" />
                                                           </Button>
+                                                        </div>
+                                                        {pliegoPorCandidato && (
+                                                          <div className="space-y-2 border-t border-dashed pt-2">
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                              <span className="text-muted-foreground text-[11px] font-medium">
+                                                                Materia prima
+                                                                propia
+                                                              </span>
+                                                              {candidatoMpVarianteId ? (
+                                                                <span className="ps-spec-chip">
+                                                                  {candidatoMpLookup
+                                                                    ? `${candidatoMpLookup.materia.nombre} · ${candidatoMpLookup.variante.sku}`
+                                                                    : typeof candidato.materiaPrimaSku ===
+                                                                        "string"
+                                                                      ? candidato.materiaPrimaSku
+                                                                      : "Variante seleccionada"}
+                                                                  {candidatoMpLookup
+                                                                    ?.variante
+                                                                    .precioReferencia
+                                                                    ? ` · $${Number(candidatoMpLookup.variante.precioReferencia)}`
+                                                                    : ""}
+                                                                </span>
+                                                              ) : (
+                                                                <span className="text-muted-foreground text-[11px]">
+                                                                  Sin asignar:
+                                                                  compite con el
+                                                                  costo derivado
+                                                                  del material
+                                                                  del paso.
+                                                                </span>
+                                                              )}
+                                                              <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                variant="outline"
+                                                                className="h-6 px-2 text-[11px]"
+                                                                onClick={() =>
+                                                                  setMpPickerCandidatoAbierto(
+                                                                    mpPickerCandidatoAbierto ===
+                                                                      candidatoKey
+                                                                      ? null
+                                                                      : candidatoKey,
+                                                                  )
+                                                                }
+                                                              >
+                                                                {candidatoMpVarianteId
+                                                                  ? "Cambiar"
+                                                                  : "Elegir"}
+                                                              </Button>
+                                                              {candidatoMpVarianteId && (
+                                                                <Button
+                                                                  type="button"
+                                                                  size="sm"
+                                                                  variant="ghost"
+                                                                  className="text-destructive h-6 px-2 text-[11px]"
+                                                                  onClick={() => {
+                                                                    updateNestingPliegoCandidato(
+                                                                      paso.id,
+                                                                      index,
+                                                                      {
+                                                                        materiaPrimaVarianteId:
+                                                                          null,
+                                                                        materiaPrimaSku:
+                                                                          null,
+                                                                      },
+                                                                    );
+                                                                    setMpMateriaPorCandidato(
+                                                                      (prev) => {
+                                                                        const next =
+                                                                          {
+                                                                            ...prev,
+                                                                          };
+                                                                        delete next[
+                                                                          candidatoKey
+                                                                        ];
+                                                                        return next;
+                                                                      },
+                                                                    );
+                                                                  }}
+                                                                >
+                                                                  Quitar
+                                                                </Button>
+                                                              )}
+                                                            </div>
+                                                            {mpPickerCandidatoAbierto ===
+                                                              candidatoKey && (
+                                                              <div className="space-y-2">
+                                                                <MaterialSearchSelect
+                                                                  compatibilidad={
+                                                                    sustratoCompatibilidad
+                                                                  }
+                                                                  placeholder="Buscar materia prima para este candidato..."
+                                                                  selectedIds={
+                                                                    candidatoMpLookup
+                                                                      ? [
+                                                                          candidatoMpLookup
+                                                                            .materia
+                                                                            .id,
+                                                                        ]
+                                                                      : []
+                                                                  }
+                                                                  onSelect={(
+                                                                    materiaPrima,
+                                                                  ) => {
+                                                                    if (
+                                                                      materiaPrima
+                                                                        .variantes
+                                                                        .length ===
+                                                                      1
+                                                                    ) {
+                                                                      const variante =
+                                                                        materiaPrima
+                                                                          .variantes[0];
+                                                                      updateNestingPliegoCandidato(
+                                                                        paso.id,
+                                                                        index,
+                                                                        {
+                                                                          materiaPrimaVarianteId:
+                                                                            variante.id,
+                                                                          materiaPrimaSku:
+                                                                            variante.sku,
+                                                                        },
+                                                                      );
+                                                                      setMpPickerCandidatoAbierto(
+                                                                        null,
+                                                                      );
+                                                                      setMpMateriaPorCandidato(
+                                                                        (
+                                                                          prev,
+                                                                        ) => {
+                                                                          const next =
+                                                                            {
+                                                                              ...prev,
+                                                                            };
+                                                                          delete next[
+                                                                            candidatoKey
+                                                                          ];
+                                                                          return next;
+                                                                        },
+                                                                      );
+                                                                      return;
+                                                                    }
+                                                                    setMpMateriaPorCandidato(
+                                                                      (
+                                                                        prev,
+                                                                      ) => ({
+                                                                        ...prev,
+                                                                        [candidatoKey]:
+                                                                          materiaPrima,
+                                                                      }),
+                                                                    );
+                                                                  }}
+                                                                />
+                                                                {candidatoMpMateria &&
+                                                                  candidatoMpMateria
+                                                                    .variantes
+                                                                    .length >
+                                                                    1 && (
+                                                                    <div className="space-y-1">
+                                                                      <Label className="text-[11px]">
+                                                                        Variante
+                                                                        de{" "}
+                                                                        {
+                                                                          candidatoMpMateria.nombre
+                                                                        }
+                                                                      </Label>
+                                                                      <HumanSelect
+                                                                        value=""
+                                                                        onValueChange={(
+                                                                          varianteId,
+                                                                        ) => {
+                                                                          const variante =
+                                                                            candidatoMpMateria.variantes.find(
+                                                                              (
+                                                                                item,
+                                                                              ) =>
+                                                                                item.id ===
+                                                                                varianteId,
+                                                                            );
+                                                                          if (
+                                                                            !variante
+                                                                          )
+                                                                            return;
+                                                                          updateNestingPliegoCandidato(
+                                                                            paso.id,
+                                                                            index,
+                                                                            {
+                                                                              materiaPrimaVarianteId:
+                                                                                variante.id,
+                                                                              materiaPrimaSku:
+                                                                                variante.sku,
+                                                                            },
+                                                                          );
+                                                                          setMpPickerCandidatoAbierto(
+                                                                            null,
+                                                                          );
+                                                                          setMpMateriaPorCandidato(
+                                                                            (
+                                                                              prev,
+                                                                            ) => {
+                                                                              const next =
+                                                                                {
+                                                                                  ...prev,
+                                                                                };
+                                                                              delete next[
+                                                                                candidatoKey
+                                                                              ];
+                                                                              return next;
+                                                                            },
+                                                                          );
+                                                                        }}
+                                                                        options={candidatoMpMateria.variantes.map(
+                                                                          (
+                                                                            variante,
+                                                                          ) => ({
+                                                                            value:
+                                                                              variante.id,
+                                                                            label:
+                                                                              variante.nombreVariante?.trim() ||
+                                                                              variante.sku,
+                                                                            description:
+                                                                              variante.precioReferencia
+                                                                                ? `$${Number(variante.precioReferencia)} · ${variante.sku}`
+                                                                                : variante.sku,
+                                                                          }),
+                                                                        )}
+                                                                        placeholder="Elegir variante"
+                                                                      />
+                                                                    </div>
+                                                                  )}
+                                                              </div>
+                                                            )}
+                                                          </div>
+                                                        )}
                                                         </div>
                                                       );
                                                     },

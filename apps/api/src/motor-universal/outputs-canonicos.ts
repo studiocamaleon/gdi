@@ -177,6 +177,16 @@ function computeOutput(
     return (sheet.widthMm * sheet.heightMm) / 1_000_000;
   }
 
+  if (key === 'pliego_impresion_mp_variante_id') {
+    // MP propia del candidato ganador (origen de costo 'por_candidato').
+    // La publica pre_prensa para que el paso de impresión (HEREDAR) costee
+    // el sustrato con la variante real y no con la MP fija del slot.
+    return (
+      nestingDispatch?.pliegoImpresionSeleccionado?.materiaPrima?.varianteId ??
+      null
+    );
+  }
+
   if (key === 'm2_calculados') {
     if (
       nestingDispatch?.algorithm === 'shelf-rollo' ||
