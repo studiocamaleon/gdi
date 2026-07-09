@@ -951,6 +951,7 @@ function TalonarioGrouping({
       <span>{grouping.talonariosEfectivos}/{grouping.talonariosPedidos} efectivos</span>
       <span>{grouping.gruposCompletos} grupo(s) + {grouping.talonariosResiduo} residuo</span>
       <span>{grouping.pliegosXCapa} pliegos × copia</span>
+      {grouping.pilas ? <span>{grouping.pilas} pila(s)</span> : null}
       {grouping.posesDesperdicio > 0 ? <span>{grouping.posesDesperdicio} poses vacías</span> : null}
       <span>modo: {modoIncompletoLabel[grouping.modoIncompleto] ?? grouping.modoIncompleto}</span>
     </div>

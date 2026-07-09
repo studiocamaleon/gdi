@@ -46,6 +46,12 @@ export type TalonarioGroupingResult = {
   talonariosResiduo: number;
   /** Pliegos necesarios POR CAPA/COPIA (se multiplica × copias para total) */
   pliegosXCapa: number;
+  /**
+   * Pilas de pliegos que se abrochan/cortan juntas (grupos completos + 1 si
+   * hay residuo). Base para insumos por pila, ej. el cartón de contratapa
+   * (1 cartón del tamaño del pliego por pila → P contratapas al cortar).
+   */
+  pilas: number;
   /** Poses vacías (desperdicio de papel, en poses) */
   posesDesperdicio: number;
   /** Número de hojas/números por talonario */
@@ -73,6 +79,7 @@ export function calculateTalonarioGrouping(
       gruposCompletos: 0,
       talonariosResiduo: 0,
       pliegosXCapa: 0,
+      pilas: 0,
       posesDesperdicio: 0,
       numerosXTalonario,
       modoIncompleto: modoTalonarioIncompleto,
@@ -111,6 +118,7 @@ export function calculateTalonarioGrouping(
     gruposCompletos,
     talonariosResiduo,
     pliegosXCapa,
+    pilas: gruposCompletos + (talonariosResiduo > 0 ? 1 : 0),
     posesDesperdicio,
     numerosXTalonario,
     modoIncompleto: modoTalonarioIncompleto,

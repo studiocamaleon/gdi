@@ -177,6 +177,13 @@ function computeOutput(
     return (sheet.widthMm * sheet.heightMm) / 1_000_000;
   }
 
+  if (key === 'talonario_pilas') {
+    // Pilas de pliegos que se abrochan/cortan juntas (talonario grouping).
+    // Base de cantidad para insumos por pila (ej. cartón de contratapa) en
+    // pasos posteriores (abrochado/corte) vía cantidadBase='talonario_pilas'.
+    return nestingDispatch?.talonarioGrouping?.pilas ?? null;
+  }
+
   if (key === 'pliego_impresion_mp_variante_id') {
     // MP propia del candidato ganador (origen de costo 'por_candidato').
     // La publica pre_prensa para que el paso de impresión (HEREDAR) costee

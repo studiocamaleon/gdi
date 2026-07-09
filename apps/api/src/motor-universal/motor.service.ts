@@ -4361,6 +4361,14 @@ export class MotorUniversalService {
       base = Number(
         jobContext.pliegos_impresos ?? jobContext.pliegos_calculados ?? 0,
       );
+    } else if (slot.cantidadBase === 'talonario_pilas') {
+      // Pilas del talonario grouping: publicadas por pre_prensa como output
+      // canónico; fallback al dispatch del propio paso si lo tuviera.
+      base = Number(
+        (jobContext as Record<string, unknown>).talonario_pilas ??
+          nestingDispatch?.talonarioGrouping?.pilas ??
+          0,
+      );
     } else {
       return null;
     }

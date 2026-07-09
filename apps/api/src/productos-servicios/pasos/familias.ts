@@ -231,6 +231,7 @@ const pre_prensa: DefinicionFamilia = {
     'pliego_impresion_alto_mm',
     'pliego_impresion_area_m2',
     'pliego_impresion_mp_variante_id',
+    'talonario_pilas',
   ],
   validaciones: [
     {

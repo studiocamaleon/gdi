@@ -833,6 +833,8 @@ export interface NestingViewerInput {
     gruposCompletos: number;
     talonariosResiduo: number;
     pliegosXCapa: number;
+    /** Pilas que se abrochan/cortan juntas (base de insumos por pila). */
+    pilas?: number;
     posesDesperdicio: number;
     numerosXTalonario: number;
     modoIncompleto: string;

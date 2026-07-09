@@ -563,6 +563,23 @@ const CANTIDAD_BASE_SLOT_OPTIONS: HumanSelectOption[] = [
   { value: "cantidad_pedida", label: "Cantidad pedida" },
   { value: "cantidad_efectiva_paso", label: "Cantidad efectiva del paso" },
   { value: "pliegos_impresos", label: "Pliegos impresos" },
+  {
+    value: "talonario_pilas",
+    label: "Pilas de talonario",
+    description:
+      "Pliegos apilados que se abrochan/cortan juntos (requiere modo talonario en pre-prensa). Ej: 1 cartón de contratapa por pila.",
+  },
+];
+// Para slots de insumo declarados por la familia: el default es respetar la
+// fórmula del consumo; elegir una base la reemplaza por base × factor.
+const CANTIDAD_BASE_SLOT_OPTIONS_INSUMO: HumanSelectOption[] = [
+  {
+    value: "formula",
+    label: "Según fórmula del consumo",
+    description:
+      "Usa \"¿Cómo se calcula el consumo?\" tal cual (comportamiento default).",
+  },
+  ...CANTIDAD_BASE_SLOT_OPTIONS,
 ];
 const CRITERIO_AUTO_OPTIONS = optionsFromLabels(
   CRITERIOS_AUTO,
@@ -6398,17 +6415,58 @@ export function ConfigPasosEditorView({
                                                   )}
                                                 </div>
                                               </div>
-                                              {esSlotAdicional ? (
+                                              {esSlotAdicional ||
+                                              slotDecl?.tipo ===
+                                                "INSUMO_PASO" ? (
                                                 <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                                                   <div className="space-y-1">
                                                     <LabelConTooltip
+                                                      label="Base de consumo"
+                                                      tooltip="Cantidad operativa sobre la que se aplica el factor. Ej: broches por talonario (cantidad pedida), cartón por pila de talonario."
+                                                    />
+                                                    <HumanSelect
+                                                      value={
+                                                        slot.cantidadBase ??
+                                                        (esSlotAdicional
+                                                          ? "cantidad_pedida"
+                                                          : "formula")
+                                                      }
+                                                      onValueChange={(v) =>
+                                                        updateSlot(
+                                                          paso.id,
+                                                          slotIdx,
+                                                          {
+                                                            cantidadBase:
+                                                              v === "formula"
+                                                                ? null
+                                                                : v ||
+                                                                  (esSlotAdicional
+                                                                    ? "cantidad_pedida"
+                                                                    : null),
+                                                          },
+                                                        )
+                                                      }
+                                                      options={
+                                                        esSlotAdicional
+                                                          ? CANTIDAD_BASE_SLOT_OPTIONS
+                                                          : CANTIDAD_BASE_SLOT_OPTIONS_INSUMO
+                                                      }
+                                                      triggerClassName="min-h-9 text-xs"
+                                                    />
+                                                  </div>
+                                                  <div className="space-y-1">
+                                                    <LabelConTooltip
                                                       label="Cantidad por base"
-                                                      tooltip="Multiplicador de consumo. Ej: 1 portabanner por pieza, 4 ojales por pieza."
+                                                      tooltip="Multiplicador de consumo. Ej: 2 broches por talonario, 4 ojales por pieza."
                                                     />
                                                     <Input
                                                       type="number"
                                                       min="0"
                                                       step="0.0001"
+                                                      disabled={
+                                                        !esSlotAdicional &&
+                                                        !slot.cantidadBase
+                                                      }
                                                       value={
                                                         slot.cantidadFactor ??
                                                         1
@@ -6431,33 +6489,6 @@ export function ConfigPasosEditorView({
                                                         )
                                                       }
                                                       className="h-9 text-xs"
-                                                    />
-                                                  </div>
-                                                  <div className="space-y-1">
-                                                    <LabelConTooltip
-                                                      label="Base de consumo"
-                                                      tooltip="Cantidad operativa sobre la que se aplica el factor del componente."
-                                                    />
-                                                    <HumanSelect
-                                                      value={
-                                                        slot.cantidadBase ??
-                                                        "cantidad_pedida"
-                                                      }
-                                                      onValueChange={(v) =>
-                                                        updateSlot(
-                                                          paso.id,
-                                                          slotIdx,
-                                                          {
-                                                            cantidadBase:
-                                                              v ||
-                                                              "cantidad_pedida",
-                                                          },
-                                                        )
-                                                      }
-                                                      options={
-                                                        CANTIDAD_BASE_SLOT_OPTIONS
-                                                      }
-                                                      triggerClassName="min-h-9 text-xs"
                                                     />
                                                   </div>
                                                 </div>
