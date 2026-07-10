@@ -1148,6 +1148,41 @@ export const materiaPrimaTemplatesV1: MateriaPrimaTemplateDef[] = [
     },
   },
   {
+    id: "almohadilla_escritorio_v1",
+    nombre: "Almohadilla de escritorio",
+    descripcion:
+      "Tampón de escritorio para sellos manuales (entintado externo), por tamaño y color de tinta.",
+    familia: "sellos",
+    subfamilia: "almohadilla_tinta",
+    tipoTecnico: "almohadilla_escritorio",
+    unidadStock: "unidad",
+    unidadCompra: "unidad",
+    camposTecnicos: [
+      { key: "marca", label: "Marca", type: "text", options: ["Trodat", "Colop", "Nykon", "Otro"], required: true },
+      { key: "referencia", label: "Referencia", type: "text", required: true },
+      { key: "ancho", label: "Ancho", type: "number", unit: "cm", required: true },
+      { key: "alto", label: "Alto", type: "number", unit: "cm", required: true },
+      { key: "colorTinta", label: "Color de tinta", type: "text", options: ["Negro", "Azul", "Rojo", "Verde", "Neutro"], required: true },
+      { key: "uso", label: "Uso", type: "text", options: ["Escritorio", "Dactilar"], optional: true },
+    ],
+    dimensionesVariante: ["referencia", "ancho", "alto", "colorTinta", "uso"],
+    requiredAtributos: ["marca", "referencia", "ancho", "alto", "colorTinta"],
+    atributosIniciales: {
+      marca: "Trodat",
+      referencia: "N9052",
+      ancho: 11,
+      alto: 7,
+      colorTinta: "Negro",
+      uso: "Escritorio",
+    },
+    defaults: {
+      esConsumible: true,
+      esRepuesto: false,
+      lockEsConsumible: false,
+      lockEsRepuesto: false,
+    },
+  },
+  {
     id: "goma_laserable_v1",
     nombre: "Goma laserable",
     descripcion:

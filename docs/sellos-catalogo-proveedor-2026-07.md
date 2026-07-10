@@ -4,8 +4,9 @@
 con la cuenta del tenant. **Fecha:** 2026-07-10.
 **Resultado:** biblioteca de materias primas poblada con el catálogo real —
 8 presets de líneas Trodat (75 modelos con medidas) + goma laserable Trodat
-(6 tipos) + **accesorios: 63 repuestos de almohadilla por modelo y 6 tintas**
-(subfamilia `ALMOHADILLA_TINTA`, relevados 2026-07-10). Precios de lista del
+(6 tipos) + **accesorios: 63 repuestos de almohadilla por modelo, 6 tintas y 16
+almohadillas de escritorio** (subfamilia `ALMOHADILLA_TINTA`, relevados
+2026-07-10). Precios de lista del
 proveedor como `precioReferencia` (ARS 2026-07). Los presets genéricos de
 Colop y Nykon fueron retirados a pedido del usuario (se re-relevarán con
 fuente real).
@@ -164,10 +165,14 @@ códigos compartidos: verificar contra la tabla oficial Trodat.
 7011 botellita 28 ml en Negro/Azul/Rojo/Verde/Violeta ($4.900 c/u) y 7750 para
 telas Negra 28 ml ($9.000).
 
-### Relevados pero NO cargados (decidir si interesan)
-- **Almohadillas de escritorio** (tampones de oficina, no son "por modelo"):
-  N9051 9×5 cm (5 colores, $4.400), N9052 11×7 cm (4, $4.700), N9053 16×9 cm
-  (4, $10.700), N9054 21×14,8 cm (2, $16.500), dactilar 9094 ($6.700).
+### Almohadillas de escritorio (`TRODAT_ALMOHADILLAS_ESCRITORIO`, 16)
+Tampones de oficina, plantilla `almohadilla_escritorio_v1` (referencia,
+tamaño, color de tinta): N9051 9×5 cm (Negro/Azul/Rojo/Verde/Neutro, $4.400),
+N9052 11×7 cm (4 colores, $4.700), N9053 16×9 cm (4, $10.700), N9054
+21×14,8 cm (Negro/Neutro, $16.500) y dactilar 9094 Negro ($6.700 — el
+proveedor no publica su medida; completarla al instalar).
+
+### Relevados pero NO cargados
 - **Repuestos Goldring** (3, para sellos con bolígrafo — línea no relevada).
 - **Kit Stamp n' Stick 4911** (ya excluido como producto terminado).
 

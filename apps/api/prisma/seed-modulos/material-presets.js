@@ -2306,6 +2306,39 @@ const presets = [
       vtintaSello('TINTA-7750-NEGRO', '7750', 'Negro', 28, 'Telas', 9000, false),
     ],
   },
+  {
+    key: 'TRODAT_ALMOHADILLAS_ESCRITORIO',
+    nombreCanonico: 'Almohadillas de escritorio Trodat',
+    descripcionCorta:
+      'Tampones de escritorio Trodat para sellos manuales (N9051–N9054) y almohadilla dactilar 9094, por tamaño y color de tinta.',
+    iconKind: 'stamp',
+    aliasDisponibles: ['Trodat', 'Tampón', 'Almohadilla de escritorio', 'N9052'],
+    usosRecomendados: ['sellos_oficina', 'sellos_comerciales'],
+    procesosCompatibles: [],
+    advertencias: [
+      'La dactilar 9094 no publica medidas en el proveedor: completarlas al instalar.',
+      'Precios de referencia del proveedor Sellos Multicolor (2026-07).',
+    ],
+    ...almohadillaEscritorioPresetMeta(),
+    variantes: [
+      ['ALM-N9051-NEGRO', 'N9051', 9, 5, 'Negro', 'Escritorio', 4400, true],
+      ['ALM-N9051-AZUL', 'N9051', 9, 5, 'Azul', 'Escritorio', 4400, false],
+      ['ALM-N9051-ROJO', 'N9051', 9, 5, 'Rojo', 'Escritorio', 4400, false],
+      ['ALM-N9051-VERDE', 'N9051', 9, 5, 'Verde', 'Escritorio', 4400, false],
+      ['ALM-N9051-NEUTRO', 'N9051', 9, 5, 'Neutro', 'Escritorio', 4400, false],
+      ['ALM-N9052-NEGRO', 'N9052', 11, 7, 'Negro', 'Escritorio', 4700, true],
+      ['ALM-N9052-AZUL', 'N9052', 11, 7, 'Azul', 'Escritorio', 4700, false],
+      ['ALM-N9052-ROJO', 'N9052', 11, 7, 'Rojo', 'Escritorio', 4700, false],
+      ['ALM-N9052-NEUTRO', 'N9052', 11, 7, 'Neutro', 'Escritorio', 4700, false],
+      ['ALM-N9053-NEGRO', 'N9053', 16, 9, 'Negro', 'Escritorio', 10700, false],
+      ['ALM-N9053-AZUL', 'N9053', 16, 9, 'Azul', 'Escritorio', 10700, false],
+      ['ALM-N9053-ROJO', 'N9053', 16, 9, 'Rojo', 'Escritorio', 10700, false],
+      ['ALM-N9053-NEUTRO', 'N9053', 16, 9, 'Neutro', 'Escritorio', 10700, false],
+      ['ALM-N9054-NEGRO', 'N9054', 21, 14.8, 'Negro', 'Escritorio', 16500, false],
+      ['ALM-N9054-NEUTRO', 'N9054', 21, 14.8, 'Neutro', 'Escritorio', 16500, false],
+      ['ALM-9094-DACTILAR', '9094', null, null, 'Negro', 'Dactilar', 6700, false],
+    ].map(valmohadillaEscritorio),
+  },
 ];
 
 function acrilicoVariants() {
@@ -2502,6 +2535,41 @@ function repuestoAlmohadillaPreset({ key, nombreCanonico, descripcionCorta, alia
     ],
     ...almohadillaSelloPresetMeta(),
     variantes: repuestos.map(vrepuestoAlmohadilla),
+  };
+}
+
+function almohadillaEscritorioPresetMeta() {
+  return {
+    familia: FamiliaMateriaPrima.SELLOS,
+    subfamilia: SubfamiliaMateriaPrima.ALMOHADILLA_TINTA,
+    tipoTecnico: 'almohadilla_escritorio',
+    templateId: 'almohadilla_escritorio_v1',
+  };
+}
+
+// Tampón de escritorio (catálogo Trodat del proveedor, 2026-07).
+// fila: [sku, referencia, ancho cm|null, alto cm|null, colorTinta, uso, precioARS, recomendada]
+function valmohadillaEscritorio([sku, referencia, ancho, alto, colorTinta, uso, precio, recomendada]) {
+  const medida = ancho && alto ? ` (${ancho}×${alto} cm)` : '';
+  return {
+    skuSugerido: sku,
+    nombreVarianteSugerido: `Trodat ${referencia}${medida} · ${colorTinta}${uso === 'Dactilar' ? ' · dactilar' : ''}`,
+    formato: ancho && alto ? `${ancho}×${alto} cm` : 'Sin medida publicada',
+    espesor: null,
+    color: colorTinta,
+    recomendada: recomendada === true,
+    atributosVarianteJson: {
+      marca: 'Trodat',
+      referencia,
+      ...(ancho ? { ancho } : {}),
+      ...(alto ? { alto } : {}),
+      colorTinta,
+      uso,
+    },
+    unidadStock: UnidadMateriaPrima.UNIDAD,
+    unidadCompra: UnidadMateriaPrima.UNIDAD,
+    precioReferencia: precio ?? null,
+    moneda: 'ARS',
   };
 }
 
