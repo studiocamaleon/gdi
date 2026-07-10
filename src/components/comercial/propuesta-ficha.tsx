@@ -1208,6 +1208,19 @@ function getCarasItem(item: PropuestaItem): number | null {
 }
 
 /**
+ * Copias del talonario (`jobContext.tipoCopia`: 1 simple, 2 duplicado,
+ * 3 triplicado). El nesting del ítem representa UNA copia — cada paso de
+ * impresión (original/duplicado/triplicado) repite el mismo acomodo — así que
+ * el consumo total de pliegos es el del nesting × copias.
+ */
+function getCopiasItem(item: PropuestaItem): number {
+  const copias = Number(
+    (item.jobContext as Record<string, unknown> | undefined)?.tipoCopia,
+  );
+  return copias === 2 || copias === 3 ? copias : 1;
+}
+
+/**
  * Material del SUSTRATO sobre el que se monta el producto, cuando la ruta tiene
  * un paso de montaje sobre sustrato (`montaje_sobre_sustrato`). Es el segundo
  * material que compone el producto (ej. el PVC espumado bajo el vinilo). Se
@@ -1611,6 +1624,7 @@ function ProduccionItemView({
                 ) : null}
                 <NestingViewer
                   result={activeNestingTab.paso.nestingResult!}
+                  copias={getCopiasItem(item)}
                   costingDetails={activeNestingTab.paso.materiales ?? []}
                   maxPx={
                     activeNestingTab.paso.nestingResult?.substrates[0]?.kind ===

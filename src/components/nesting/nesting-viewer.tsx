@@ -6,6 +6,12 @@ import { cn } from "@/lib/utils";
 
 export interface NestingViewerProps {
   result: NestingViewerInput;
+  /**
+   * Copias del talonario (1 = simple, 2 = duplicado, 3 = triplicado). El
+   * nesting representa UNA copia: los pasos de impresión repiten el mismo
+   * acomodo, así que el consumo total del ítem es cantidadCalculada × copias.
+   */
+  copias?: number;
   costingDetails?: Array<{
     materialNombre: string;
     cantidad: number;
@@ -187,8 +193,15 @@ function usePieceGroups(placements: NestingViewerInput["placements"]) {
   }, [placements]);
 }
 
+function copiasLabel(copias: number) {
+  if (copias === 2) return "original + duplicado";
+  if (copias === 3) return "original + duplicado + triplicado";
+  return `${copias} copias`;
+}
+
 export function NestingViewer({
   result,
+  copias = 1,
   costingDetails = [],
   maxPx = 560,
   showLabels = true,
@@ -254,11 +267,19 @@ export function NestingViewer({
             .map((p) => `${p.count} × ${p.label}`)
             .join(" · ")}
         />
-        <StatBlock
-          label={result.unidad === "m_lineales" ? "Largo consumido" : "Cantidad calculada"}
-          value={`${formatNumber(result.cantidadCalculada, 2)} ${labelUnidad(result.unidad)}`}
-          hint={result.consumedLengthMm ? `Rollo: ${formatMm(result.consumedLengthMm)}` : undefined}
-        />
+        {copias > 1 ? (
+          <StatBlock
+            label="Cantidad calculada"
+            value={`${formatNumber(result.cantidadCalculada * copias, 2)} ${labelUnidad(result.unidad)}`}
+            hint={`${formatNumber(result.cantidadCalculada, 2)} por copia × ${copias} (${copiasLabel(copias)})`}
+          />
+        ) : (
+          <StatBlock
+            label={result.unidad === "m_lineales" ? "Largo consumido" : "Cantidad calculada"}
+            value={`${formatNumber(result.cantidadCalculada, 2)} ${labelUnidad(result.unidad)}`}
+            hint={result.consumedLengthMm ? `Rollo: ${formatMm(result.consumedLengthMm)}` : undefined}
+          />
+        )}
         <StatBlock
           label="Área útil"
           value={areaUtilMm2 > 0 ? formatM2(areaUtilMm2) : "-"}
@@ -302,7 +323,7 @@ export function NestingViewer({
       <NestingFooter result={result} />
       <NestingOutputsSummary outputs={result.outputsCanonicos} />
       <PliegoSeleccionadoBanner seleccion={result.pliegoImpresionSeleccionado} />
-      <TalonarioGrouping grouping={result.talonarioGrouping} />
+      <TalonarioGrouping grouping={result.talonarioGrouping} copias={copias} />
     </section>
   );
 }
@@ -936,8 +957,10 @@ function PliegoSeleccionadoBanner({
 
 function TalonarioGrouping({
   grouping,
+  copias = 1,
 }: {
   grouping?: NestingViewerInput["talonarioGrouping"];
+  copias?: number;
 }) {
   if (!grouping) return null;
   const modoIncompletoLabel: Record<string, string> = {
@@ -950,7 +973,12 @@ function TalonarioGrouping({
       <span className="font-semibold">Talonario</span>
       <span>{grouping.talonariosEfectivos}/{grouping.talonariosPedidos} efectivos</span>
       <span>{grouping.gruposCompletos} grupo(s) + {grouping.talonariosResiduo} residuo</span>
-      <span>{grouping.pliegosXCapa} pliegos × copia</span>
+      <span>
+        {grouping.pliegosXCapa} pliegos × copia
+        {copias > 1
+          ? ` · ${copias} copias → ${grouping.pliegosXCapa * copias} pliegos en total`
+          : ""}
+      </span>
       {grouping.pilas ? <span>{grouping.pilas} pila(s)</span> : null}
       {grouping.posesDesperdicio > 0 ? <span>{grouping.posesDesperdicio} poses vacías</span> : null}
       <span>modo: {modoIncompletoLabel[grouping.modoIncompleto] ?? grouping.modoIncompleto}</span>
