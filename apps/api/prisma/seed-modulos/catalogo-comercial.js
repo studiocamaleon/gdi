@@ -69,6 +69,13 @@ const SCHEMAS = {
     ['horas_estimadas', 'Horas estimadas'],
     ['entregable', 'Entregable'],
   ],
+  sello: [
+    ['modelo_sello', 'Marca y modelo'],
+    ['tamano_polimero', 'Tamaño de polímero'],
+    ['lineas_texto', 'Líneas de texto'],
+    ['color_tinta', 'Color de tinta'],
+    ['texto_grabado', 'Texto a grabar'],
+  ],
 };
 
 function schema(template) {
@@ -92,6 +99,7 @@ const CATEGORIAS_COMERCIALES = [
   ['terminaciones_postproduccion', 'Terminaciones y postproducción', 'Laminados, barnices, plegados, perforados y modificaciones.'],
   ['carteleria_montaje', 'Cartelería estructural, luminosos e instalación', 'Estructuras, luminosos, montaje e instalación en sitio.'],
   ['servicios_logistica', 'Servicios profesionales, logística y custom', 'Diseño, pruebas, toma de medidas, envío y productos a medida.'],
+  ['sellos', 'Sellos', 'Sellos automáticos y manuales fabricados con goma grabada a láser.'],
 ].map(([codigo, nombre, descripcion], index) => ({
   codigo,
   nombre,
@@ -146,6 +154,8 @@ const SUBCATEGORIAS_COMERCIALES = [
   ['servicios_logistica', 'toma_medidas', 'Toma de medidas', 'Visitas para medición, relevamiento y evaluación técnica.', 'instalacion'],
   ['servicios_logistica', 'envio_despacho', 'Envío y despacho', 'Envío, logística, flete, cadetería y despacho.', 'instalacion'],
   ['servicios_logistica', 'producto_a_medida', 'Producto a medida', 'Producto custom o pendiente de clasificación comercial.', 'servicio'],
+  ['sellos', 'sellos_automaticos', 'Sellos automáticos', 'Sellos autoentintables (Trodat Printy, Professional, etc.) con goma grabada a láser.', 'sello'],
+  ['sellos', 'sellos_manuales', 'Sellos manuales', 'Sellos con mango de madera o plástico, usan almohadilla aparte.', 'sello'],
 ].map(([categoriaCodigo, codigo, nombre, descripcion, schemaCodigo], index, all) => ({
   categoriaCodigo,
   codigo,
