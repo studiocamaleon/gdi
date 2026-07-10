@@ -2009,26 +2009,6 @@ const presets = [
       recomendadas: new Set(['clear']),
     }),
   }),
-  {
-    key: 'COLOP_PRINTER',
-    nombreCanonico: 'Colop Printer (automáticos)',
-    descripcionCorta:
-      'Sellos autoentintables Colop línea Printer. Cada modelo define el tamaño de polímero y las líneas de texto que admite.',
-    iconKind: 'stamp',
-    aliasDisponibles: ['Colop', 'Printer', 'Sello automático Colop'],
-    usosRecomendados: ['sellos_oficina', 'sellos_comerciales'],
-    procesosCompatibles: ['grabado_laser', 'montaje_sobre_sustrato'],
-    advertencias: [
-      'Verificar líneas de texto según cuerpo de letra; los valores son referencia con tipografía estándar.',
-    ],
-    ...selloAutoPresetMeta(),
-    variantes: [
-      vsello('COLOP-PRINTER-20', 'Colop', 'Printer 20', 38, 14, 4, false),
-      vsello('COLOP-PRINTER-30', 'Colop', 'Printer 30', 47, 18, 5, true),
-      vsello('COLOP-PRINTER-40', 'Colop', 'Printer 40', 59, 23, 6, true),
-      vsello('COLOP-PRINTER-50', 'Colop', 'Printer 50', 69, 30, 7, false),
-    ],
-  },
   selloLineaTrodatPreset({
     key: 'TRODAT_PRINTY_40',
     nombreCanonico: 'Trodat Printy 4.0',
@@ -2173,22 +2153,6 @@ const presets = [
     ],
   }),
   {
-    key: 'NYKON_AUTOMATICO',
-    nombreCanonico: 'Nykon (automáticos)',
-    descripcionCorta:
-      'Sellos autoentintables Nykon. Ajustar modelo, tamaño de polímero y líneas de texto al instalar.',
-    iconKind: 'stamp',
-    aliasDisponibles: ['Nykon', 'Sello automático Nykon'],
-    usosRecomendados: ['sellos_oficina', 'sellos_comerciales'],
-    procesosCompatibles: ['grabado_laser', 'montaje_sobre_sustrato'],
-    advertencias: ['Preset genérico: validar medidas reales del modelo al instalar.'],
-    ...selloAutoPresetMeta(),
-    variantes: [
-      vsello('NYKON-N30', 'Nykon', 'N30', 47, 18, 5, true),
-      vsello('NYKON-N40', 'Nykon', 'N40', 59, 23, 6, false),
-    ],
-  },
-  {
     key: 'SELLO_MANUAL_MADERA',
     nombreCanonico: 'Sello manual con mango de madera',
     descripcionCorta:
@@ -2227,6 +2191,119 @@ const presets = [
       vgoma('GOMA-TRODAT-OLIO-23', 'Olio tinta indeleble', 2.3, 210, 297, 35000, false),
       vgoma('GOMA-TRODAT-CLASICA-15', 'Clásica bolígrafos', 1.5, 210, 297, 24000, false),
       vgoma('GOMA-TRODAT-AERO-50', 'Aero bolsas', 5, 210, 297, 57500, false),
+    ],
+  },
+  repuestoAlmohadillaPreset({
+    key: 'TRODAT_REPUESTOS_PRINTY',
+    nombreCanonico: 'Repuestos de almohadilla Trodat Printy',
+    descripcionCorta:
+      'Almohadillas de recambio por modelo para las líneas Printy 4.0, Clásicos y Eco (código 6/<modelo>).',
+    alias: ['Repuesto almohadilla', 'Almohadilla Printy', '6/4911'],
+    // [sku, códigoRepuesto, modeloCompatible, colorTinta, precioARS, recomendada]
+    repuestos: [
+      ['REP-6-3638-NEGRO', '6/3638', 'Printy Eco 3638', 'Negro', 3500, false],
+      ['REP-6-3642-NEGRO', '6/3642', 'Printy Eco 3642', 'Negro', 2400, false],
+      ['REP-6-3911-NEGRO', '6/3911', 'Printy Eco 3911', 'Negro', 2200, true],
+      ['REP-6-3912-NEGRO', '6/3912', 'Printy Eco 3912', 'Negro', 2600, true],
+      ['REP-6-3913-NEGRO', '6/3913', 'Printy Eco 3913', 'Negro', 3300, false],
+      ['REP-6-3915-NEGRO', '6/3915', 'Printy Eco 3915', 'Negro', 2900, false],
+      ['REP-6-3927-NEGRO', '6/3927', 'Printy Eco 3927', 'Negro', 3600, false],
+      ['REP-6-44055-MCI', '6/44055', 'Printy 44055', 'MCI', 17600, false],
+      ['REP-6-46040-MCI', '6/46040', 'Printy 46040', 'MCI', 14900, false],
+      ['REP-6-46045-MCI', '6/46045', 'Printy 46145', 'MCI', 17800, false],
+      ['REP-6-46050-NEGRO', '6/46050', 'Printy 46050', 'Negro', 10500, false],
+      ['REP-6-4630-MCI', '6/4630', 'Printy 4630', 'MCI', 10800, false],
+      ['REP-6-4630-NEGRO', '6/4630', 'Printy 4630', 'Negro', 5500, false],
+      ['REP-6-4630-NEUTRO', '6/4630', 'Printy 4630', 'Neutro', 5500, false],
+      ['REP-6-4850-NEGRO', '6/4850', 'Printy fechador 4850', 'Negro', 4300, false],
+      ['REP-6-4910-NEGRO', '6/4910', 'Printy 4910', 'Negro', 4300, false],
+      ['REP-6-4911-NEGRO', '6/4911', 'Printy 4911', 'Negro', 4300, true],
+      ['REP-6-4911-NEGRO-CM', '6/4911 Clothing Marker', 'Trodat 4911 Stamp n Stick', 'Negro', 7900, false],
+      ['REP-6-4911-NEUTRO', '6/4911', 'Printy 4911', 'Neutro', 4300, false],
+      ['REP-6-4911-NEUTRO-ESP', '6/4911 Esponja', 'Printy 4911', 'Neutro', 4300, false],
+      ['REP-6-4912-MCI', '6/4912', 'Printy 4912', 'MCI', 9500, false],
+      ['REP-6-4912-NEGRO', '6/4912', 'Printy 4912', 'Negro', 4800, true],
+      ['REP-6-4912-NEUTRO', '6/4912', 'Printy 4912', 'Neutro', 4800, false],
+      ['REP-6-4913-MCI', '6/4913', 'Printy 4913', 'MCI', 10900, false],
+      ['REP-6-4913-NEGRO', '6/4913', 'Printy 4913', 'Negro', 5600, true],
+      ['REP-6-4913-NEUTRO', '6/4913', 'Printy 4913', 'Neutro', 5700, false],
+      ['REP-6-4915-MCI', '6/4915', 'Printy 4915', 'MCI', 14500, false],
+      ['REP-6-4915-NEGRO', '6/4915', 'Printy 4915', 'Negro', 7000, false],
+      ['REP-6-4916-NEGRO', '6/4916', 'Printy 4916', 'Negro', 6400, false],
+      ['REP-6-4922-NEGRO', '6/4922', 'Printy 4922', 'Negro', 4900, false],
+      ['REP-6-4923-NEGRO', '6/4923', 'Printy 4923', 'Negro', 5600, false],
+      ['REP-6-4924-NEGRO', '6/4924', 'Printy 4924', 'Negro', 7500, false],
+      ['REP-6-4924-NEUTRO', '6/4924', 'Printy 4924', 'Neutro', 7500, false],
+      ['REP-6-4925-MCI', '6/4925', 'Printy 4925', 'MCI', 15600, false],
+      ['REP-6-4926-NEGRO', '6/4926', 'Printy 4926', 'Negro', 8700, false],
+      ['REP-6-4926-NEUTRO', '6/4926', 'Printy 4926', 'Neutro', 8700, false],
+      ['REP-6-4927-BICOLOR', '6/4927', 'Printy 4927', 'Bicolor', 13800, false],
+      ['REP-6-4927-NEGRO', '6/4927', 'Printy 4927', 'Negro', 7900, false],
+      ['REP-6-4927-NEUTRO', '6/4927', 'Printy 4927', 'Neutro', 7900, false],
+      ['REP-6-4928-MCI', '6/4928', 'Printy 4928', 'MCI', 15600, false],
+      ['REP-6-4928-NEGRO', '6/4928', 'Printy 4928', 'Negro', 7900, false],
+      ['REP-6-4928-NEUTRO', '6/4928', 'Printy 4928', 'Neutro', 7900, false],
+      ['REP-6-4929-MCI', '6/4929', 'Printy 4929', 'MCI', 14000, false],
+      ['REP-6-4929-NEGRO', '6/4929', 'Printy 4929', 'Negro', 7100, false],
+      ['REP-6-4929-NEUTRO', '6/4929', 'Printy 4929', 'Neutro', 7100, false],
+    ],
+  }),
+  repuestoAlmohadillaPreset({
+    key: 'TRODAT_REPUESTOS_PROFESSIONAL',
+    nombreCanonico: 'Repuestos de almohadilla Trodat Professional',
+    descripcionCorta:
+      'Almohadillas de recambio para la línea Professional (códigos 6/5x).',
+    alias: ['Repuesto almohadilla Professional'],
+    repuestos: [
+      ['REP-6-15-MCI', '6/15', 'Professional 5215 / 5415', 'MCI', 10200, false],
+      ['REP-6-50-MCI', '6/50', null, 'MCI', 5200, false],
+      ['REP-6-511-MCI', '6/511', 'Professional 5211 / 54110', 'MCI', 23000, false],
+      ['REP-6-511-NEUTRO', '6/511', 'Professional 5211 / 54110', 'Neutro', 12600, false],
+      ['REP-6-53-MCI', '6/53', 'Professional 5203', 'MCI', 5200, true],
+      ['REP-6-55-MCI', '6/55', 'Professional 5205', 'MCI', 7000, false],
+      ['REP-6-56-MCI', '6/56', 'Professional 5206 / 5460 / 5558', 'MCI', 6000, true],
+      ['REP-6-56-NEGRO', '6/56', 'Professional 5206 / 5460 / 5558', 'Negro', 6000, false],
+      ['REP-6-56-2-BICOLOR', '6/56/2', 'Professional 5206 / 5460', 'Bicolor', 10500, false],
+      ['REP-6-57-MCI', '6/57', 'Professional 5207 / 5470 / 5474', 'MCI', 7400, false],
+      ['REP-6-58-MCI', '6/58', 'Professional 5208 / 5480', 'MCI', 10800, false],
+      ['REP-6-58-NEGRO', '6/58', 'Professional 5208 / 5480', 'Negro', 10800, false],
+    ],
+  }),
+  repuestoAlmohadillaPreset({
+    key: 'TRODAT_REPUESTOS_MOBILE_POCKET',
+    nombreCanonico: 'Repuestos de almohadilla Trodat Mobile / Pocket Printy',
+    descripcionCorta:
+      'Almohadillas de recambio para los sellos de bolsillo Mobile Printy y Pocket Printy.',
+    alias: ['Repuesto almohadilla Mobile Printy', 'Repuesto almohadilla Pocket'],
+    repuestos: [
+      ['REP-6-9411-NEGRO', '6/9411', 'Mobile Printy 9411', 'Negro', 4300, true],
+      ['REP-6-9412-MCI', '6/9412', 'Mobile Printy 9412', 'MCI', 9500, false],
+      ['REP-6-9412-NEGRO', '6/9412', 'Mobile Printy 9412', 'Negro', 5000, true],
+      ['REP-6-9430-NEGRO', '6/9430', 'Mobile Printy 9430', 'Negro', 5500, false],
+      ['REP-6-9430-NEUTRO', '6/9430', 'Mobile Printy 9430', 'Neutro', 10800, false],
+      ['REP-6-9511-NEGRO', '6/9511', 'Pocket Printy 9511', 'Negro', 4300, false],
+    ],
+  }),
+  {
+    key: 'TRODAT_TINTAS',
+    nombreCanonico: 'Tintas Trodat para sellos',
+    descripcionCorta:
+      'Tintas de recarga Trodat en botellita para almohadillas de sellos (7011 general, 7750 telas).',
+    iconKind: 'stamp',
+    aliasDisponibles: ['Tinta Trodat', 'Tinta 7011', 'Tinta para sellos'],
+    usosRecomendados: ['sellos_oficina', 'sellos_comerciales'],
+    procesosCompatibles: [],
+    advertencias: [
+      'Precios de referencia del proveedor Sellos Multicolor (2026-07).',
+    ],
+    ...tintaSelloPresetMeta(),
+    variantes: [
+      vtintaSello('TINTA-7011-NEGRO', '7011', 'Negro', 28, 'General', 4900, true),
+      vtintaSello('TINTA-7011-AZUL', '7011', 'Azul', 28, 'General', 4900, true),
+      vtintaSello('TINTA-7011-ROJO', '7011', 'Rojo', 28, 'General', 4900, false),
+      vtintaSello('TINTA-7011-VERDE', '7011', 'Verde', 28, 'General', 4900, false),
+      vtintaSello('TINTA-7011-VIOLETA', '7011', 'Violeta', 28, 'General', 4900, false),
+      vtintaSello('TINTA-7750-NEGRO', '7750', 'Negro', 28, 'Telas', 9000, false),
     ],
   },
 ];
@@ -2367,31 +2444,91 @@ function gomaLaserablePresetMeta() {
   };
 }
 
-// Variante de sello automático: el tamaño de polímero y las líneas de texto son
-// propiedades del modelo (Colop Printer 30 → 47×18 mm, 5 líneas).
-function vsello(sku, marca, modelo, anchoPolimero, altoPolimero, lineasTexto, recomendada) {
+function almohadillaSelloPresetMeta() {
+  return {
+    familia: FamiliaMateriaPrima.SELLOS,
+    subfamilia: SubfamiliaMateriaPrima.ALMOHADILLA_TINTA,
+    tipoTecnico: 'almohadilla_sello',
+    templateId: 'almohadilla_sello_v1',
+  };
+}
+
+function tintaSelloPresetMeta() {
+  return {
+    familia: FamiliaMateriaPrima.SELLOS,
+    subfamilia: SubfamiliaMateriaPrima.ALMOHADILLA_TINTA,
+    tipoTecnico: 'tinta_sello',
+    templateId: 'tinta_sello_v1',
+  };
+}
+
+// Repuesto de almohadilla por modelo (catálogo Trodat del proveedor Sellos
+// Multicolor, 2026-07). fila: [sku, códigoRepuesto, modeloCompatible|null,
+// colorTinta, precioARS, recomendada]. "Neutro" = sin entintar; "MCI" =
+// almohadilla de alto rendimiento Trodat.
+function vrepuestoAlmohadilla([sku, codigoRepuesto, modeloCompatible, colorTinta, precio, recomendada]) {
   return {
     skuSugerido: sku,
-    nombreVarianteSugerido: `${marca} ${modelo} · ${anchoPolimero}×${altoPolimero} mm · ${lineasTexto} líneas`,
-    formato: `${anchoPolimero}×${altoPolimero} mm`,
+    nombreVarianteSugerido: `${codigoRepuesto} · ${colorTinta}${modeloCompatible ? ` (${modeloCompatible})` : ''}`,
+    formato: codigoRepuesto,
     espesor: null,
-    color: 'Estándar',
-    recomendada,
+    color: colorTinta,
+    recomendada: recomendada === true,
     atributosVarianteJson: {
-      marca,
-      modelo,
-      anchoPolimero,
-      altoPolimero,
-      lineasTexto,
-      forma: 'Rectangular',
+      marca: 'Trodat',
+      codigoRepuesto,
+      ...(modeloCompatible ? { modeloCompatible } : {}),
+      colorTinta,
     },
     unidadStock: UnidadMateriaPrima.UNIDAD,
     unidadCompra: UnidadMateriaPrima.UNIDAD,
-    precioReferencia: null,
+    precioReferencia: precio ?? null,
     moneda: 'ARS',
   };
 }
 
+function repuestoAlmohadillaPreset({ key, nombreCanonico, descripcionCorta, alias, repuestos }) {
+  return {
+    key,
+    nombreCanonico,
+    descripcionCorta,
+    iconKind: 'stamp',
+    aliasDisponibles: ['Trodat', ...alias],
+    usosRecomendados: ['sellos_oficina', 'sellos_comerciales'],
+    procesosCompatibles: [],
+    advertencias: [
+      'Compatibilidad por código Trodat (6/<modelo>); verificar contra la tabla oficial en códigos compartidos.',
+      'Precios de referencia del proveedor Sellos Multicolor (2026-07).',
+    ],
+    ...almohadillaSelloPresetMeta(),
+    variantes: repuestos.map(vrepuestoAlmohadilla),
+  };
+}
+
+function vtintaSello(sku, referencia, colorTinta, volumen, uso, precio, recomendada) {
+  return {
+    skuSugerido: sku,
+    nombreVarianteSugerido: `Trodat ${referencia} ${colorTinta} · ${volumen} ml${uso === 'Telas' ? ' · telas' : ''}`,
+    formato: `${volumen} ml`,
+    espesor: null,
+    color: colorTinta,
+    recomendada: recomendada === true,
+    atributosVarianteJson: {
+      marca: 'Trodat',
+      referencia,
+      colorTinta,
+      volumen,
+      uso,
+    },
+    unidadStock: UnidadMateriaPrima.UNIDAD,
+    unidadCompra: UnidadMateriaPrima.UNIDAD,
+    precioReferencia: precio ?? null,
+    moneda: 'ARS',
+  };
+}
+
+// Variante de sello automático: el tamaño de polímero y las líneas de texto son
+// propiedades del modelo (Colop Printer 30 → 47×18 mm, 5 líneas).
 function vselloManual(sku, marca, modelo, anchoPolimero, altoPolimero, lineasTexto, material, recomendada) {
   return {
     skuSugerido: sku,
