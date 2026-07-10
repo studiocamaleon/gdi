@@ -1554,8 +1554,12 @@ function ProduccionItemView({
           {pasosActivos.map((paso, index) => {
             const title =
               paso.nombreVisible?.trim() || humanizeCodigo(paso.familiaCodigo);
+            const esTiempoManual =
+              paso.tiempo?.origenTiempo === "manual_comercial";
             const detail = paso.tiempo
-              ? `${formatTiempoPaso(paso)} · ${getCentroCostoLabel(paso)}`
+              ? `${formatTiempoPaso(paso)}${
+                  esTiempoManual ? " (estimado por el comercial)" : ""
+                } · ${getCentroCostoLabel(paso)}`
               : getCentroCostoLabel(paso);
             return (
               <div className="production-step" key={`${title}-${index}`}>
@@ -2546,6 +2550,14 @@ function CostosItemView({
                                 humanizeCodigo(paso.familiaCodigo)}
                             </span>
                           </span>
+                          {paso.tiempo?.origenTiempo === "manual_comercial" ? (
+                            <span
+                              className="cost-chip"
+                              title="El tiempo de este paso lo estimó el comercial al cotizar; no sale del cálculo del motor."
+                            >
+                              ⏱ estimado por el comercial
+                            </span>
+                          ) : null}
                         </div>
                       </td>
                       <td>

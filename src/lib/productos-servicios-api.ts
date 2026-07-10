@@ -970,6 +970,8 @@ export interface CotizarResponse {
         centroCostoNombre?: string | null;
         tarifaHora: number;
         costo: number;
+        /** "manual_comercial" cuando el comercial estimó el tiempo al cotizar. */
+        origenTiempo?: "manual_comercial" | "calculado";
       };
       materiales?: Array<{
         slotCodigo: string;
