@@ -161,8 +161,10 @@ hay dos caminos:
 Familia SELLOS
 ├── subfamilia SELLOS_AUTOMATICOS   → template sello_automatico_v1
 ├── subfamilia SELLOS_MANUALES      → template sello_manual_v1
-└── subfamilia GOMA_LASERABLE       → template goma_laserable_v1
-    (ALMOHADILLA_TINTA → fase 2, junto a la investigación de accesorios)
+├── subfamilia GOMA_LASERABLE       → template goma_laserable_v1
+└── subfamilia ALMOHADILLA_TINTA    → templates almohadilla_sello_v1 y
+    tinta_sello_v1 (implementada 2026-07-10 con el relevamiento de accesorios
+    del proveedor — ver docs/sellos-catalogo-proveedor-2026-07.md)
 ```
 
 Ventajas: la biblioteca agrupa todo lo de sellos junto (Colop/Trodat/Nykon como

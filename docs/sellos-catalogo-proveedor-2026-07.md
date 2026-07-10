@@ -4,7 +4,11 @@
 con la cuenta del tenant. **Fecha:** 2026-07-10.
 **Resultado:** biblioteca de materias primas poblada con el catálogo real —
 8 presets de líneas Trodat (75 modelos con medidas) + goma laserable Trodat
-(6 tipos). Precios de lista del proveedor como `precioReferencia` (ARS 2026-07).
+(6 tipos) + **accesorios: 63 repuestos de almohadilla por modelo y 6 tintas**
+(subfamilia `ALMOHADILLA_TINTA`, relevados 2026-07-10). Precios de lista del
+proveedor como `precioReferencia` (ARS 2026-07). Los presets genéricos de
+Colop y Nykon fueron retirados a pedido del usuario (se re-relevarán con
+fuente real).
 
 > `lineasTexto` es **estimación** (≈ alto de placa / 4 mm, redondeado hacia
 > arriba) — el proveedor no publica líneas por modelo. Ajustar al instalar si
@@ -120,16 +124,52 @@ $50.000 · 5480 68×47 $103.000
 
 ## Otras categorías del proveedor (para fases siguientes)
 
-- **Almohadillas y tintas** + **Repuestos de almohadilla**: existen como
-  categorías propias — es la fuente para la fase 2 (accesorios/almohadillas por
-  modelo, subfamilia `ALMOHADILLA_TINTA` propuesta en
-  `docs/sellos-investigacion-y-diseno.md`).
+- ~~Almohadillas y tintas + Repuestos de almohadilla~~ → **RELEVADO E
+  IMPLEMENTADO** (ver sección "Accesorios" más abajo).
 - **Fotopolímero** (Instaplate A5–A8, i50, insumos de insolación): tecnología
   alternativa de fabricación de clichés (insolación UV, no láser). Si algún día
   se fabrica con fotopolímero, es otra subfamilia + otra ruta.
 - **Sellos fechadores y numeradores**, **sellos con bolígrafo**, **sellos de
   madera** (cuerpos manuales reales del proveedor), **sellos en seco**,
   **imprentillas**: categorías no relevadas en detalle en esta pasada.
+
+---
+
+## Accesorios relevados (2026-07-10) — cargados en la biblioteca
+
+Subfamilia nueva **`ALMOHADILLA_TINTA`** (familia SELLOS), plantillas
+`almohadilla_sello_v1` (repuesto por modelo: código, modelo compatible, color)
+y `tinta_sello_v1` (referencia, color, volumen, uso). Se instalan como
+**consumibles**.
+
+### Repuestos de almohadilla Trodat Printy (`TRODAT_REPUESTOS_PRINTY`, 45)
+Códigos `6/<modelo>` para Printy 4.0 / Clásicos / Eco: 6/3638, 6/3642, 6/3911,
+6/3912, 6/3913, 6/3915, 6/3927 (Eco, Negro, $2.200–3.600); 6/4910–6/4931
+(Negro/Neutro/MCI, $4.300–15.600); redondos 6/4630, 6/46040, 6/46045, 6/46050
+($5.500–17.800); ovalado 6/44055 MCI ($17.600); fechador 6/4850 ($4.300);
+especiales 6/4911 Clothing Marker ($7.900) y 6/4911 Neutro Esponja. Colores:
+Negro, Neutro (sin entintar), MCI (alto rendimiento), Bicolor.
+El sitio listaba 47 con 2 duplicados exactos → 45 únicos.
+
+### Repuestos Trodat Professional (`TRODAT_REPUESTOS_PROFESSIONAL`, 12)
+6/15 (5215/5415), 6/50, 6/511 (5211/54110), 6/53 (5203), 6/55 (5205), 6/56
+(5206/5460/5558), 6/56/2 bicolor, 6/57 (5207/5470/5474), 6/58 (5208/5480) —
+MCI/Negro/Neutro, $5.200–23.000. El mapeo código→modelos es referencia en
+códigos compartidos: verificar contra la tabla oficial Trodat.
+
+### Repuestos Mobile / Pocket Printy (`TRODAT_REPUESTOS_MOBILE_POCKET`, 6)
+6/9411, 6/9412 (Negro/MCI), 6/9430 (Negro/Neutro), 6/9511 — $4.300–10.800.
+
+### Tintas Trodat (`TRODAT_TINTAS`, 6)
+7011 botellita 28 ml en Negro/Azul/Rojo/Verde/Violeta ($4.900 c/u) y 7750 para
+telas Negra 28 ml ($9.000).
+
+### Relevados pero NO cargados (decidir si interesan)
+- **Almohadillas de escritorio** (tampones de oficina, no son "por modelo"):
+  N9051 9×5 cm (5 colores, $4.400), N9052 11×7 cm (4, $4.700), N9053 16×9 cm
+  (4, $10.700), N9054 21×14,8 cm (2, $16.500), dactilar 9094 ($6.700).
+- **Repuestos Goldring** (3, para sellos con bolígrafo — línea no relevada).
+- **Kit Stamp n' Stick 4911** (ya excluido como producto terminado).
 
 ## Notas de implementación
 
@@ -138,7 +178,8 @@ $50.000 · 5480 68×47 $103.000
   `selloLineaTrodatPreset`/`vselloTrodat` (estimador `lineasTextoEstimadas`).
 - El preset genérico `TRODAT_PRINTY` (4 modelos inventados) fue **reemplazado**
   por `TRODAT_PRINTY_40` con el catálogo real; se eliminó de la base dev.
-- `COLOP_PRINTER` y `NYKON_AUTOMATICO` quedaron como estaban (el proveedor
-  relevado solo vende Trodat); validar esos datos cuando haya fuente real.
+- `COLOP_PRINTER` y `NYKON_AUTOMATICO` (genéricos inventados al inicio) fueron
+  **retirados** del seed y de la base el 2026-07-10 a pedido del usuario; se
+  volverán a cargar cuando haya una fuente real de Colop/Nykon.
 - Los precios son **de lista del proveedor logueado** al 2026-07 — sirven como
   `precioReferencia`, no como costo garantizado.
