@@ -180,7 +180,10 @@ export class InventarioBibliotecaService {
               unidadCompra,
               // Tintas y tóners deben quedar habilitados como consumible para
               // aparecer en el selector de consumibles de las máquinas.
-              esConsumible: this.esPresetConsumible(preset.familia),
+              esConsumible: this.esPresetConsumible(
+                preset.familia,
+                preset.subfamilia,
+              ),
               esRepuesto: false,
               activo: true,
               atributosTecnicosJson: this.toInputJson(initialAttributes),
@@ -340,12 +343,19 @@ export class InventarioBibliotecaService {
   }
 
   /**
-   * Las tintas y tóners (familia TINTA_COLORANTE) son consumibles de máquina;
-   * el resto de las familias (sustratos, films, imanes…) no. Alineado con el
-   * seed de materiales.
+   * Las tintas y tóners (familia TINTA_COLORANTE) son consumibles de máquina,
+   * y las almohadillas/tintas de sellos (SELLOS/ALMOHADILLA_TINTA) son
+   * consumibles del sello; el resto de las familias (sustratos, films,
+   * imanes…) no. Alineado con el seed de materiales.
    */
-  private esPresetConsumible(familia: FamiliaMateriaPrima) {
-    return familia === FamiliaMateriaPrima.TINTA_COLORANTE;
+  private esPresetConsumible(
+    familia: FamiliaMateriaPrima,
+    subfamilia: SubfamiliaMateriaPrima,
+  ) {
+    return (
+      familia === FamiliaMateriaPrima.TINTA_COLORANTE ||
+      subfamilia === SubfamiliaMateriaPrima.ALMOHADILLA_TINTA
+    );
   }
 
   /**

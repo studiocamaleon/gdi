@@ -123,6 +123,7 @@ const subfamiliaMateriaPrimaItems: Array<{ value: SubfamiliaMateriaPrima; label:
   { value: "sellos_automaticos", label: "Sellos automáticos" },
   { value: "sellos_manuales", label: "Sellos manuales" },
   { value: "goma_laserable", label: "Goma laserable" },
+  { value: "almohadilla_tinta", label: "Almohadillas y tintas" },
 ];
 
 function getLabel<T extends string>(

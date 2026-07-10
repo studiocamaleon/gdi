@@ -80,6 +80,7 @@ export enum SubfamiliaMateriaPrimaDto {
   sellos_automaticos = 'sellos_automaticos',
   sellos_manuales = 'sellos_manuales',
   goma_laserable = 'goma_laserable',
+  almohadilla_tinta = 'almohadilla_tinta',
 }
 
 export enum UnidadMateriaPrimaDto {

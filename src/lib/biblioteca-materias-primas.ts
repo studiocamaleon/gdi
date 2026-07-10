@@ -158,4 +158,9 @@ export const bibliotecaFamilias: Record<
     key: "goma_laserable",
     parent: "sellos",
   },
+  almohadilla_tinta: {
+    nm: "Almohadillas y tintas",
+    key: "almohadilla_tinta",
+    parent: "sellos",
+  },
 };

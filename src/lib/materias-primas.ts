@@ -63,7 +63,8 @@ export type SubfamiliaMateriaPrima =
   | "consumible_instalacion"
   | "sellos_automaticos"
   | "sellos_manuales"
-  | "goma_laserable";
+  | "goma_laserable"
+  | "almohadilla_tinta";
 
 export type UnidadMateriaPrima =
   | "unidad"

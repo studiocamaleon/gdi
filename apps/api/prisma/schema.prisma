@@ -318,6 +318,7 @@ enum SubfamiliaMateriaPrima {
   SELLOS_AUTOMATICOS
   SELLOS_MANUALES
   GOMA_LASERABLE
+  ALMOHADILLA_TINTA
 }
 
 enum UnidadMateriaPrima {

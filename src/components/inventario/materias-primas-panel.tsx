@@ -105,6 +105,7 @@ const subfamiliaMateriaPrimaLabels: Record<SubfamiliaMateriaPrima, string> = {
   sellos_automaticos: "Sellos automáticos",
   sellos_manuales: "Sellos manuales",
   goma_laserable: "Goma laserable",
+  almohadilla_tinta: "Almohadillas y tintas",
 };
 
 type MateriasPrimasPanelProps = {

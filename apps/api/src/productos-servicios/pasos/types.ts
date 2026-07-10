@@ -197,7 +197,8 @@ export type SubfamiliaMateriaPrimaCompat =
   | 'CONSUMIBLE_INSTALACION'
   | 'SELLOS_AUTOMATICOS'
   | 'SELLOS_MANUALES'
-  | 'GOMA_LASERABLE';
+  | 'GOMA_LASERABLE'
+  | 'ALMOHADILLA_TINTA';
 
 export interface CompatibilidadMaterialSlot {
   familiasMateriaPrima?: FamiliaMateriaPrimaCompat[];
