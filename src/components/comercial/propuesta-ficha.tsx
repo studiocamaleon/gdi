@@ -1026,7 +1026,10 @@ function getCommercialMaterialKind(material: MaterialCosteo) {
   return "generico";
 }
 
-function getMaterialVariantParts(material: MaterialCosteo) {
+function getMaterialVariantParts(
+  material: MaterialCosteo,
+  options?: { incluirFormato?: boolean },
+) {
   const attrs = material.atributosVarianteJson ?? {};
   const kind = getCommercialMaterialKind(material);
   const parts: string[] = [];
@@ -1046,6 +1049,7 @@ function getMaterialVariantParts(material: MaterialCosteo) {
   ]);
 
   if (kind === "sustrato_hoja") {
+    if (options?.incluirFormato) push(getAttrText(attrs, ["formatoComercial"]));
     if (gramaje !== null) push(`${formatVariantNumber(gramaje)} g/m²`);
     push(acabado);
     if (color && normalizeSearchText(color) !== "blanco") push(color);
@@ -1120,7 +1124,10 @@ function getMaterialVariantOnlyLabel(material: MaterialCosteo) {
     : material.materialDisplayName || material.materialNombre;
 }
 
-function getMaterialCommercialLabel(material: MaterialCosteo) {
+function getMaterialCommercialLabel(
+  material: MaterialCosteo,
+  options?: { incluirFormato?: boolean },
+) {
   const attrs = material.atributosVarianteJson ?? {};
   const materialName =
     asDisplayText(attrs.material) ||
@@ -1131,12 +1138,27 @@ function getMaterialCommercialLabel(material: MaterialCosteo) {
   // Descartamos las partes de variante que ya están contenidas en el nombre
   // del material (ej. "Film DTF textil" ya dice "DTF textil"): evita el
   // "· DTF textil" redundante.
-  const parts = getMaterialVariantParts(material).filter((part) => {
+  const parts = getMaterialVariantParts(material, options).filter((part) => {
     const normalizedPart = normalizeSearchText(part);
     return normalizedPart.length > 0 && !normalizedName.includes(normalizedPart);
   });
   if (parts.length === 0) return materialName;
   return `${materialName} · ${parts.join(" · ")}`;
+}
+
+// Nombre para los desgloses de costos: si la variante tiene nombre curado (o el
+// consumible trae el canal, ej. "Negro · Toner..."), se respeta. Si el display
+// cayó al nombre de la materia prima (variante sin nombre), se completa con los
+// atributos que identifican la variante costeada (formato, gramaje, acabado…).
+function getMaterialCosteoLabel(material: MaterialCosteo) {
+  const base =
+    material.materialDisplayName?.trim() || material.materialNombre?.trim();
+  const esNombreCurado =
+    base &&
+    base !== material.materiaPrimaNombre?.trim() &&
+    base !== material.materialSku;
+  if (esNombreCurado) return base;
+  return getMaterialCommercialLabel(material, { incluirFormato: true });
 }
 
 function getMainCommercialMaterial(item: PropuestaItem) {
@@ -1407,9 +1429,7 @@ function MaterialesPasoTable({ materiales }: { materiales: MaterialCosteo[] }) {
               key={`${material.slotCodigo}-${material.materialVarianteId}-${index}`}
             >
               <td>
-                <strong>
-                  {material.materialDisplayName || material.materialNombre}
-                </strong>
+                <strong>{getMaterialCosteoLabel(material)}</strong>
               </td>
               <td>
                 <span className="cost-chip">
@@ -2092,11 +2112,7 @@ function buildCommercialPriceDetail(
     (paso) => paso.materiales ?? [],
   )) {
     if (material.costoTotal <= 0) continue;
-    const nombre =
-      material.materialDisplayName?.trim() ||
-      material.materialNombre?.trim() ||
-      material.materiaPrimaNombre?.trim() ||
-      "Material";
+    const nombre = getMaterialCosteoLabel(material) || "Material";
     const key = `${nombre}-${material.unidad}`;
     const current = materialesMap.get(key) ?? {
       key,
