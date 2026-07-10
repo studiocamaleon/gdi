@@ -14,13 +14,22 @@ import {
   PaperclipIcon,
   PlusIcon,
   SearchIcon,
+  StampIcon,
   StarIcon,
   XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { getHerramientaMedidasArchivo } from "@/lib/producto-herramientas";
+import {
+  getHerramientaMedidasArchivo,
+  getHerramientaEditorSello,
+} from "@/lib/producto-herramientas";
 import { leerMedidasPdf } from "@/lib/pdf-medidas";
+import {
+  SelloEditorSheet,
+  type DisenoSello,
+  type SelloEditorModel,
+} from "@/components/comercial/sello-editor-sheet";
 
 import {
   formatCurrency,
@@ -143,6 +152,13 @@ type SlotMaterialCandidato = {
     anchoMm: number | null;
     colorLabel: string | null;
     missingPrice: boolean;
+    /** Modelo del sello si la variante es un cuerpo de sello (para el editor). */
+    sello: {
+      nombre: string;
+      widthMm: number;
+      heightMm: number;
+      lineasMax: number;
+    } | null;
   }>;
 };
 
@@ -180,6 +196,8 @@ type MotorConfigState = {
    * sugerido del paso; null = el comercial vació el input (sin valor).
    */
   tiempoManualPorPaso: Record<string, number | null>;
+  /** Diseño del sello (texto/tipografía) del configurador; null si no aplica. */
+  disenoSello: DisenoSello | null;
   tipoCopia: 1 | 2 | 3;
   numerosXTalonario: number;
   piezas: PiezaInput[];
@@ -339,6 +357,7 @@ const DEFAULT_MOTOR_CONFIG: MotorConfigState = {
   caras: 1,
   carasPorPaso: {},
   tiempoManualPorPaso: {},
+  disenoSello: null,
   tipoCopia: 1,
   numerosXTalonario: 50,
   piezas: [],
@@ -787,6 +806,10 @@ function mapSlotMaterial(
                     item.variante.atributosVarianteJson,
                   ),
                   missingPrice: Number(item.variante.precioReferencia ?? 0) <= 0,
+                  sello: getSelloModelDeVariante(
+                    item.variante.atributosVarianteJson,
+                    display.label,
+                  ),
                 };
               }),
             ),
@@ -1329,6 +1352,30 @@ function getVariantThicknessLabel(attrs: Record<string, unknown> | null | undefi
 function getVariantWidthLabel(attrs: Record<string, unknown> | null | undefined) {
   const value = getVariantWidthMm(attrs);
   return value ? `${formatNumberForSpec(value / 10)} cm` : null;
+}
+
+/**
+ * Modelo del cuerpo del sello a partir de los atributos de su variante
+ * (anchoPolimero × altoPolimero + lineasTexto). Devuelve null si no es un sello.
+ */
+function getSelloModelDeVariante(
+  attrs: Record<string, unknown> | null | undefined,
+  fallbackNombre: string,
+): { nombre: string; widthMm: number; heightMm: number; lineasMax: number } | null {
+  if (!attrs) return null;
+  const num = (v: unknown) => {
+    const n = typeof v === "string" ? Number(v.replace(",", ".")) : Number(v);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+  const w = num(attrs.anchoPolimero);
+  const h = num(attrs.altoPolimero);
+  const lineas = num(attrs.lineasTexto);
+  if (w === null || h === null || lineas === null) return null;
+  const modelo =
+    typeof attrs.modelo === "string" && attrs.modelo.trim()
+      ? attrs.modelo.trim()
+      : fallbackNombre;
+  return { nombre: modelo, widthMm: w, heightMm: h, lineasMax: Math.round(lineas) };
 }
 
 function getVariantWidthMm(attrs: Record<string, unknown> | null | undefined) {
@@ -2171,6 +2218,12 @@ function buildJobContext(
     ctx.modoColorPorPaso = modoColorPorPaso;
   }
 
+  // Diseño del sello (configurador): viaja como dato de producción, no afecta el
+  // costeo. Se refleja también en especificaciones para la ficha/OT.
+  if (config.disenoSello) {
+    ctx.disenoSello = config.disenoSello;
+  }
+
   // Tiempo estimado por el comercial (docs/tiempo-manual-por-paso-diseno.md):
   // minutos por paso. Sin valor efectivo no se manda la clave y el motor
   // calcula el paso como siempre.
@@ -2747,6 +2800,10 @@ function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
     medidaPredefinidaId,
     caras: Number(ctx.caras) === 2 ? 2 : 1,
     tiempoManualPorPaso,
+    disenoSello:
+      ctx.disenoSello && typeof ctx.disenoSello === "object"
+        ? (ctx.disenoSello as DisenoSello)
+        : null,
     tipoCopia:
       Number(ctx.tipoCopia) === 3 ? 3 : Number(ctx.tipoCopia) === 2 ? 2 : 1,
     numerosXTalonario:
@@ -3072,6 +3129,20 @@ function ApConfigStep({
   const slotsMaterialesPrincipales = slotsComercialElige.filter(
     (slot) => slot.modoActivacion !== "OPCIONAL",
   );
+  // Configurador de sello: activo si el producto tiene la herramienta y hay un
+  // cuerpo de sello elegido (variante con tamaño de polímero + líneas de texto).
+  const editorSelloHabilitado = getHerramientaEditorSello(
+    productoDetalle?.atributosComercialesJson,
+  ).enabled;
+  const selloModel: SelloEditorModel | null = React.useMemo(() => {
+    if (!editorSelloHabilitado) return null;
+    for (const slot of slotsComercialElige) {
+      const { variant } = findSelectedCandidateVariant(slot, motorConfig);
+      if (variant?.sello) return variant.sello;
+    }
+    return null;
+  }, [editorSelloHabilitado, slotsComercialElige, motorConfig]);
+  const [selloEditorAbierto, setSelloEditorAbierto] = React.useState(false);
   const slotsMaterialesOpcionalesPorPaso = React.useMemo(
     () => getSlotsOpcionalesPorPaso(slotsComercialElige),
     [slotsComercialElige],
@@ -4935,6 +5006,43 @@ function ApConfigStep({
             )}
 
             {slotsMaterialesGenerales.map((slot) => renderMaterialSelect(slot))}
+
+            {editorSelloHabilitado && selloModel ? (
+              <div className="ap-spec ap-spec-wide">
+                <label>Diseño del sello</label>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => setSelloEditorAbierto(true)}
+                >
+                  <StampIcon />
+                  {motorConfig.disenoSello
+                    ? "Editar diseño del sello"
+                    : "Diseñar sello"}
+                </button>
+                {motorConfig.disenoSello ? (
+                  <div className="ap-optional-config-summary">
+                    <span className="lbl">Diseño:</span>
+                    <span className="mono">
+                      {motorConfig.disenoSello.lineas
+                        .map((l) => l.text.trim())
+                        .filter(Boolean)
+                        .join(" · ") || "sin texto"}
+                    </span>
+                  </div>
+                ) : null}
+                <SelloEditorSheet
+                  open={selloEditorAbierto}
+                  onOpenChange={setSelloEditorAbierto}
+                  model={selloModel}
+                  tipoLabel={product.subcategoriaComercialNombre}
+                  initial={motorConfig.disenoSello}
+                  onSave={(diseno) =>
+                    setMotorConfig((prev) => ({ ...prev, disenoSello: diseno }))
+                  }
+                />
+              </div>
+            ) : null}
 
             {necesitaInstalacion ? (
               <>
