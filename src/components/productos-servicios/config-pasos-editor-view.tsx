@@ -185,6 +185,18 @@ const T2_TIME_CALCULATION_MODE_OPTIONS = [
     description: "Ejemplo: 2 pliegos cada 1 minuto.",
   },
 ];
+const TIEMPO_MANUAL_UNIDAD_OPTIONS = [
+  {
+    value: "min",
+    label: "Minutos",
+    description: "El comercial carga el tiempo en minutos (típico: láser).",
+  },
+  {
+    value: "h",
+    label: "Horas",
+    description: "El comercial carga el tiempo en horas (típico: diseño).",
+  },
+];
 const T2_QUANTITY_SOURCE_OPTIONS = [
   {
     value: "cantidad",
@@ -1146,6 +1158,17 @@ function getModoColorConfig(
   params: Record<string, unknown> | null | undefined,
 ) {
   return asRecord(asRecord(params).modoColorConfig);
+}
+
+/**
+ * Config de tiempo manual por paso (`paramsPasoJson.tiempoManual`).
+ * Ver docs/tiempo-manual-por-paso-diseno.md: el comercial estima el tiempo
+ * al cotizar y el motor lo usa como runMin (gana sobre cualquier modoTiempo).
+ */
+function getTiempoManualConfig(
+  params: Record<string, unknown> | null | undefined,
+) {
+  return asRecord(asRecord(params).tiempoManual);
 }
 
 function normalizeModoColor(value: unknown) {
@@ -2217,9 +2240,12 @@ function validarBasico(
       typeof params.campoHorasJobContext === "string"
         ? params.campoHorasJobContext.trim()
         : "";
+    const tiempoManualHabilitado =
+      asRecord(params.tiempoManual).habilitado === true;
     if (
       !horasEstimadas &&
       !campoHoras &&
+      !tiempoManualHabilitado &&
       (modoCalculo === "batch_time"
         ? !batchTimeMin || !batchSize
         : !productividad)
@@ -3487,6 +3513,43 @@ export function ConfigPasosEditorView({
     });
   };
 
+  const updateTiempoManualConfig = (
+    rutaPasoId: string,
+    patch: Record<string, unknown>,
+  ) => {
+    setConfigs((prev) => {
+      const cfg = prev[rutaPasoId];
+      const params = asRecord(cfg.paramsPasoJson);
+      const current = getTiempoManualConfig(params);
+      const nextConfig = { ...current, ...patch };
+      for (const key of Object.keys(nextConfig)) {
+        const value = nextConfig[key];
+        if (
+          value === "" ||
+          value === null ||
+          value === undefined ||
+          (typeof value === "number" && !Number.isFinite(value))
+        ) {
+          delete nextConfig[key];
+        }
+      }
+      const nextParams =
+        nextConfig.habilitado === true
+          ? { ...params, tiempoManual: nextConfig }
+          : Object.fromEntries(
+              Object.entries(params).filter(([key]) => key !== "tiempoManual"),
+            );
+      return {
+        ...prev,
+        [rutaPasoId]: {
+          ...cfg,
+          paramsPasoJson:
+            Object.keys(nextParams).length > 0 ? nextParams : null,
+        },
+      };
+    });
+  };
+
   const updateSlot = (
     rutaPasoId: string,
     slotIdx: number,
@@ -4452,6 +4515,16 @@ export function ConfigPasosEditorView({
                   const mostrarOverridesTiempo =
                     mostrarSetupCleanupOverrides || mostrarTiempoFijoOverride;
                   const nestingConfig = getNestingConfig(cfg.paramsPasoJson);
+                  const tiempoManualConfig = getTiempoManualConfig(
+                    cfg.paramsPasoJson,
+                  );
+                  const tiempoManualHabilitado =
+                    tiempoManualConfig.habilitado === true;
+                  const tiempoManualUnidad =
+                    tiempoManualConfig.unidadInput === "h" ? "h" : "min";
+                  const tiempoManualDefaultMin = readOptionalNumber(
+                    tiempoManualConfig.defaultMin,
+                  );
                   const modoColorConfig = getModoColorConfig(
                     cfg.paramsPasoJson,
                   );
@@ -5312,6 +5385,214 @@ export function ConfigPasosEditorView({
                                       />
                                     </div>
                                   )}
+                                  <div className="field md:col-span-full">
+                                    <LabelConTooltip
+                                      label="Tiempo estimado por el comercial"
+                                      tooltip="El comercial ingresa el tiempo de este paso al cotizar (ej. diseño gráfico complejo, minutos de láser según el RIP). El valor ingresado define el tiempo del paso y reemplaza el cálculo del modo de tiempo; setup y cleanup de máquina se suman igual."
+                                      iconSize="sm"
+                                    />
+                                    <label className="flex items-start gap-2 rounded-md border bg-white px-3 py-2 text-xs">
+                                      <input
+                                        className="mt-0.5"
+                                        type="checkbox"
+                                        checked={tiempoManualHabilitado}
+                                        onChange={(e) =>
+                                          updateTiempoManualConfig(paso.id, {
+                                            habilitado: e.target.checked,
+                                          })
+                                        }
+                                      />
+                                      <span className="space-y-0.5">
+                                        <span className="block font-medium text-foreground">
+                                          El comercial estima el tiempo al
+                                          cotizar
+                                        </span>
+                                        <span className="block text-muted-foreground">
+                                          Muestra un input de tiempo en el
+                                          cotizador. Sin valor ingresado, el
+                                          paso se calcula como siempre.
+                                        </span>
+                                      </span>
+                                    </label>
+                                    {tiempoManualHabilitado && (
+                                      <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
+                                        <div className="space-y-1">
+                                          <span className="text-muted-foreground text-xs">
+                                            Unidad del input
+                                          </span>
+                                          <HumanSelect
+                                            value={tiempoManualUnidad}
+                                            onValueChange={(value) =>
+                                              updateTiempoManualConfig(
+                                                paso.id,
+                                                {
+                                                  unidadInput:
+                                                    value === "h" ? "h" : "min",
+                                                },
+                                              )
+                                            }
+                                            options={
+                                              TIEMPO_MANUAL_UNIDAD_OPTIONS
+                                            }
+                                            placeholder="Elegir unidad"
+                                          />
+                                        </div>
+                                        <div className="space-y-1">
+                                          <LabelConTooltip
+                                            label="Valor sugerido"
+                                            tooltip="Valor inicial del input en el cotizador, siempre en minutos. El comercial lo ajusta solo cuando el trabajo lo amerita."
+                                            iconSize="sm"
+                                          />
+                                          <div className="flex items-center gap-2">
+                                            <Input
+                                              type="number"
+                                              min={0}
+                                              step={1}
+                                              value={
+                                                tiempoManualDefaultMin ?? ""
+                                              }
+                                              onChange={(e) =>
+                                                updateTiempoManualConfig(
+                                                  paso.id,
+                                                  {
+                                                    defaultMin:
+                                                      e.target.value === ""
+                                                        ? null
+                                                        : Number(
+                                                            e.target.value,
+                                                          ),
+                                                  },
+                                                )
+                                              }
+                                              placeholder="Opcional"
+                                            />
+                                            <span className="text-muted-foreground whitespace-nowrap text-xs">
+                                              min
+                                            </span>
+                                          </div>
+                                        </div>
+                                        <div className="space-y-1">
+                                          <span className="text-muted-foreground text-xs">
+                                            Mínimo permitido (min)
+                                          </span>
+                                          <Input
+                                            type="number"
+                                            min={0}
+                                            step={1}
+                                            value={
+                                              readOptionalNumber(
+                                                tiempoManualConfig.minMin,
+                                              ) ?? ""
+                                            }
+                                            onChange={(e) =>
+                                              updateTiempoManualConfig(
+                                                paso.id,
+                                                {
+                                                  minMin:
+                                                    e.target.value === ""
+                                                      ? null
+                                                      : Number(e.target.value),
+                                                },
+                                              )
+                                            }
+                                            placeholder="Opcional"
+                                          />
+                                        </div>
+                                        <div className="space-y-1">
+                                          <span className="text-muted-foreground text-xs">
+                                            Máximo permitido (min)
+                                          </span>
+                                          <Input
+                                            type="number"
+                                            min={0}
+                                            step={1}
+                                            value={
+                                              readOptionalNumber(
+                                                tiempoManualConfig.maxMin,
+                                              ) ?? ""
+                                            }
+                                            onChange={(e) =>
+                                              updateTiempoManualConfig(
+                                                paso.id,
+                                                {
+                                                  maxMin:
+                                                    e.target.value === ""
+                                                      ? null
+                                                      : Number(e.target.value),
+                                                },
+                                              )
+                                            }
+                                            placeholder="Opcional"
+                                          />
+                                        </div>
+                                        <div className="space-y-1 md:col-span-full">
+                                          <span className="text-muted-foreground text-xs">
+                                            Etiqueta del input
+                                          </span>
+                                          <Input
+                                            type="text"
+                                            value={
+                                              typeof tiempoManualConfig.etiqueta ===
+                                              "string"
+                                                ? tiempoManualConfig.etiqueta
+                                                : ""
+                                            }
+                                            onChange={(e) =>
+                                              updateTiempoManualConfig(
+                                                paso.id,
+                                                {
+                                                  etiqueta:
+                                                    e.target.value || null,
+                                                },
+                                              )
+                                            }
+                                            placeholder={`Ej. "Tiempo estimado de ${(cfg.nombreVisible?.trim() || familia?.nombre || "trabajo").toLowerCase()}"`}
+                                          />
+                                        </div>
+                                        <label className="flex items-start gap-2 rounded-md border bg-white px-3 py-2 text-xs md:col-span-full">
+                                          <input
+                                            className="mt-0.5"
+                                            type="checkbox"
+                                            checked={
+                                              tiempoManualConfig.obligatorio ===
+                                              true
+                                            }
+                                            onChange={(e) =>
+                                              updateTiempoManualConfig(
+                                                paso.id,
+                                                {
+                                                  obligatorio:
+                                                    e.target.checked || null,
+                                                },
+                                              )
+                                            }
+                                          />
+                                          <span className="space-y-0.5">
+                                            <span className="block font-medium text-foreground">
+                                              Obligatorio
+                                            </span>
+                                            <span className="block text-muted-foreground">
+                                              No se puede agregar el producto a
+                                              la OT sin ingresar el tiempo
+                                              (típico: corte láser).
+                                            </span>
+                                          </span>
+                                        </label>
+                                        {tiempoManualConfig.obligatorio ===
+                                          true &&
+                                          tiempoManualDefaultMin == null && (
+                                            <div className="text-amber-700 text-xs md:col-span-full">
+                                              Sin valor sugerido, la cotización
+                                              queda bloqueada hasta que el
+                                              comercial ingrese el tiempo. Es
+                                              el comportamiento esperado para
+                                              pasos tipo láser — confirmá que
+                                              es lo que querés.
+                                            </div>
+                                          )}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             </section>
