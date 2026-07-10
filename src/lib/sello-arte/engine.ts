@@ -167,7 +167,9 @@ export function svgSello(layout: SelloLayout, opts: { negative?: boolean } = {})
   const paths = layout.lineas
     .map((l) => `<path d="${cmdsToSvgD(lineaPathCommands(l))}" fill="${fg}"/>`)
     .join("");
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}mm" height="${h}mm"><rect width="${w}" height="${h}" fill="${bg}"/>${paths}</svg>`;
+  // Sin width/height: el contenedor define el tamaño (viewBox en mm mantiene la
+  // proporción real de la matriz). Para exportar un SVG a archivo, añadir dims.
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet"><rect width="${w}" height="${h}" fill="${bg}"/>${paths}</svg>`;
 }
 
 const MM_TO_PT = 72 / 25.4;
