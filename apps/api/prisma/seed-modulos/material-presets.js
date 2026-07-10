@@ -2029,26 +2029,149 @@ const presets = [
       vsello('COLOP-PRINTER-50', 'Colop', 'Printer 50', 69, 30, 7, false),
     ],
   },
-  {
-    key: 'TRODAT_PRINTY',
-    nombreCanonico: 'Trodat Printy (automáticos)',
+  selloLineaTrodatPreset({
+    key: 'TRODAT_PRINTY_40',
+    nombreCanonico: 'Trodat Printy 4.0',
     descripcionCorta:
-      'Sellos autoentintables Trodat línea Printy. Cada modelo define el tamaño de polímero y las líneas de texto que admite.',
-    iconKind: 'stamp',
-    aliasDisponibles: ['Trodat', 'Printy', 'Sello automático Trodat'],
-    usosRecomendados: ['sellos_oficina', 'sellos_comerciales'],
-    procesosCompatibles: ['grabado_laser', 'montaje_sobre_sustrato'],
-    advertencias: [
-      'Verificar líneas de texto según cuerpo de letra; los valores son referencia con tipografía estándar.',
+      'Sellos autoentintables Trodat línea Printy 4.0: rectangulares, redondos, ovalados y fechadores con placa de texto.',
+    alias: ['Printy', 'Printy 4.0', 'Sello automático Trodat'],
+    modelos: [
+      ['TRODAT-4910', 'Printy 4910', 26, 9, 'Rectangular', 6000, false],
+      ['TRODAT-4911', 'Printy 4911', 38, 14, 'Rectangular', 6100, true],
+      ['TRODAT-4912', 'Printy 4912', 47, 18, 'Rectangular', 7300, true],
+      ['TRODAT-4913', 'Printy 4913', 58, 22, 'Rectangular', 11000, true],
+      ['TRODAT-4914', 'Printy 4914', 64, 26, 'Rectangular', 22500, false],
+      ['TRODAT-4915', 'Printy 4915', 70, 25, 'Rectangular', 26500, true],
+      ['TRODAT-4916', 'Printy 4916', 70, 10, 'Rectangular', 19000, false],
+      ['TRODAT-4918', 'Printy 4918', 75, 15, 'Rectangular', 21500, false],
+      ['TRODAT-4921', 'Printy 4921', 12, 12, 'Rectangular', 11500, false],
+      ['TRODAT-4922', 'Printy 4922', 20, 20, 'Rectangular', 16000, false],
+      ['TRODAT-4923', 'Printy 4923', 30, 30, 'Rectangular', 19000, false],
+      ['TRODAT-4924', 'Printy 4924', 40, 40, 'Rectangular', 51200, false],
+      ['TRODAT-4925', 'Printy 4925', 82, 25, 'Rectangular', 50300, false],
+      ['TRODAT-4926', 'Printy 4926', 75, 38, 'Rectangular', 32000, false],
+      ['TRODAT-4927', 'Printy 4927', 60, 40, 'Rectangular', 29500, false],
+      ['TRODAT-4928', 'Printy 4928', 60, 33, 'Rectangular', 49300, false],
+      ['TRODAT-4929', 'Printy 4929', 50, 30, 'Rectangular', 46300, false],
+      ['TRODAT-4931', 'Printy 4931', 70, 30, 'Rectangular', 26500, false],
+      ['TRODAT-4941', 'Printy 4941', 41, 24, 'Rectangular', 22000, false],
+      ['TRODAT-46019', 'Printy 46019', 19, 19, 'Redondo', 28100, false],
+      ['TRODAT-46025', 'Printy 46025', 25, 25, 'Redondo', 31000, false],
+      ['TRODAT-4630', 'Printy 4630', 30, 30, 'Redondo', 35100, true],
+      ['TRODAT-46040', 'Printy 46040', 40, 40, 'Redondo', 21800, false],
+      ['TRODAT-4642', 'Printy 4642', 42, 42, 'Redondo', 32000, false],
+      ['TRODAT-46050', 'Printy 46050 (sin almohadilla)', 50, 50, 'Redondo', 23000, false],
+      ['TRODAT-44045', 'Printy 44045', 45, 30, 'Ovalado', 32500, false],
+      ['TRODAT-44055', 'Printy 44055', 55, 35, 'Ovalado', 37500, false],
+      ['TRODAT-46130', 'Printy fechador 46130', 30, 30, 'Redondo', 26000, false],
+      ['TRODAT-46140', 'Printy fechador 46140', 40, 40, 'Redondo', 36000, false],
+      ['TRODAT-46145', 'Printy fechador 46145', 45, 45, 'Redondo', 45000, false],
+      ['TRODAT-4726', 'Printy fechador 4726', 75, 38, 'Rectangular', 46000, false],
+      ['TRODAT-4727', 'Printy fechador 4727', 60, 40, 'Rectangular', 29500, false],
+      ['TRODAT-4729', 'Printy fechador 4729', 50, 30, 'Rectangular', 37500, false],
+      ['TRODAT-4750', 'Printy fechador 4750', 41, 24, 'Rectangular', 34000, false],
+      ['TRODAT-4850', 'Printy fechador 4850', 25, 5, 'Rectangular', 20000, false],
     ],
-    ...selloAutoPresetMeta(),
-    variantes: [
-      vsello('TRODAT-4911', 'Trodat', 'Printy 4911', 38, 14, 4, true),
-      vsello('TRODAT-4912', 'Trodat', 'Printy 4912', 47, 18, 5, true),
-      vsello('TRODAT-4913', 'Trodat', 'Printy 4913', 58, 22, 6, false),
-      vsello('TRODAT-4915', 'Trodat', 'Printy 4915', 70, 25, 7, false),
+  }),
+  selloLineaTrodatPreset({
+    key: 'TRODAT_PRINTY_CLASICOS',
+    nombreCanonico: 'Trodat Printy Clásicos',
+    descripcionCorta:
+      'Sellos autoentintables Trodat línea Printy clásica (generación anterior a 4.0).',
+    alias: ['Printy Clásico', 'Printy clásicos'],
+    modelos: [
+      ['TRODAT-4910-CL', 'Printy 4910 Clásico', 26, 9, 'Rectangular', 4300, false],
+      ['TRODAT-4911-CL', 'Printy 4911 Clásico', 38, 14, 'Rectangular', 4800, true],
+      ['TRODAT-4912-CL', 'Printy 4912 Clásico', 47, 18, 'Rectangular', 6000, true],
+      ['TRODAT-4913-CL', 'Printy 4913 Clásico', 58, 23, 'Rectangular', 17700, false],
+      ['TRODAT-4724', 'Printy fechador 4724', 40, 40, 'Rectangular', 35000, false],
     ],
-  },
+  }),
+  selloLineaTrodatPreset({
+    key: 'TRODAT_PRINTY_ECO',
+    nombreCanonico: 'Trodat Printy Eco',
+    descripcionCorta:
+      'Sellos autoentintables Trodat línea Eco (económica, plástico reciclado).',
+    alias: ['Printy Eco', 'Línea Eco'],
+    modelos: [
+      ['TRODAT-3911', 'Printy Eco 3911', 38, 14, 'Rectangular', 3700, true],
+      ['TRODAT-3912', 'Printy Eco 3912', 47, 18, 'Rectangular', 5400, true],
+      ['TRODAT-3913', 'Printy Eco 3913', 58, 22, 'Rectangular', 6800, false],
+      ['TRODAT-3915', 'Printy Eco 3915', 70, 25, 'Rectangular', 10500, false],
+      ['TRODAT-3927', 'Printy Eco 3927', 60, 40, 'Rectangular', 17000, false],
+      ['TRODAT-3445', 'Printy Eco 3445', 45, 30, 'Ovalado', 19000, false],
+      ['TRODAT-3638', 'Printy Eco 3638', 38, 38, 'Redondo', 16000, false],
+      ['TRODAT-3642', 'Printy Eco 3642', 42, 42, 'Redondo', 18000, false],
+    ],
+  }),
+  selloLineaTrodatPreset({
+    key: 'TRODAT_MICRO_PRINTY',
+    nombreCanonico: 'Trodat Micro Printy',
+    descripcionCorta: 'Sellos redondos compactos de bolsillo Trodat Micro Printy.',
+    alias: ['Micro Printy'],
+    modelos: [
+      ['TRODAT-9330', 'Micro Printy 9330', 30, 30, 'Redondo', 13000, true],
+      ['TRODAT-9342', 'Micro Printy 9342', 42, 42, 'Redondo', 16000, false],
+    ],
+  }),
+  selloLineaTrodatPreset({
+    key: 'TRODAT_MOBILE_PRINTY',
+    nombreCanonico: 'Trodat Mobile Printy',
+    descripcionCorta: 'Sellos de bolsillo Trodat Mobile Printy.',
+    alias: ['Mobile Printy', 'Sello de bolsillo'],
+    modelos: [
+      ['TRODAT-9411', 'Mobile Printy 9411', 38, 14, 'Rectangular', 603, true],
+      ['TRODAT-9412', 'Mobile Printy 9412', 47, 18, 'Rectangular', 804, true],
+      ['TRODAT-9430', 'Mobile Printy 9430', 30, 30, 'Redondo', 808, false],
+    ],
+  }),
+  selloLineaTrodatPreset({
+    key: 'TRODAT_POCKET_PRINTY',
+    nombreCanonico: 'Trodat Pocket Printy',
+    descripcionCorta: 'Sello de bolsillo plano Trodat Pocket Printy.',
+    alias: ['Pocket Printy'],
+    modelos: [
+      ['TRODAT-9511', 'Pocket Printy 9511', 38, 14, 'Rectangular', 6900, true],
+    ],
+  }),
+  selloLineaTrodatPreset({
+    key: 'TRODAT_IMPRINT',
+    nombreCanonico: 'Imprint by Trodat',
+    descripcionCorta: 'Línea económica Imprint by Trodat.',
+    alias: ['Imprint'],
+    modelos: [
+      ['TRODAT-8910', 'Imprint 8910', 26, 9, 'Rectangular', 5100, false],
+      ['TRODAT-8911', 'Imprint 8911', 38, 14, 'Rectangular', 5300, true],
+      ['TRODAT-8912', 'Imprint 8912', 47, 18, 'Rectangular', 6700, true],
+    ],
+  }),
+  selloLineaTrodatPreset({
+    key: 'TRODAT_PROFESSIONAL',
+    nombreCanonico: 'Trodat Professional',
+    descripcionCorta:
+      'Sellos autoentintables de estructura metálica Trodat Professional, formatos grandes y fechadores/numeradores con placa.',
+    alias: ['Professional', 'Línea Professional'],
+    modelos: [
+      ['TRODAT-5203', 'Professional 5203', 49, 28, 'Rectangular', 24000, true],
+      ['TRODAT-5204', 'Professional 5204', 56, 26, 'Rectangular', 25500, false],
+      ['TRODAT-5205', 'Professional 5205', 68, 24, 'Rectangular', 28000, false],
+      ['TRODAT-5206', 'Professional 5206', 56, 33, 'Rectangular', 48800, false],
+      ['TRODAT-5207', 'Professional 5207', 60, 40, 'Rectangular', 57000, false],
+      ['TRODAT-5208', 'Professional 5208', 68, 47, 'Rectangular', 71200, false],
+      ['TRODAT-5211', 'Professional 5211', 85, 55, 'Rectangular', 42000, false],
+      ['TRODAT-5212', 'Professional 5212', 116, 70, 'Rectangular', 44000, false],
+      ['TRODAT-5215', 'Professional 5215', 45, 45, 'Redondo', 38000, false],
+      ['TRODAT-5558', 'Professional numerador 5558', 56, 33, 'Rectangular', 82000, false],
+      ['TRODAT-54110', 'Professional fechador 54110', 85, 55, 'Rectangular', 62000, false],
+      ['TRODAT-5415', 'Professional fechador 5415', 45, 45, 'Redondo', 48000, false],
+      ['TRODAT-5431', 'Professional fechador 5431', 41, 24, 'Rectangular', 39000, false],
+      ['TRODAT-5440', 'Professional fechador 5440', 48, 28, 'Rectangular', 44000, false],
+      ['TRODAT-5460', 'Professional fechador 5460', 56, 33, 'Rectangular', 47000, false],
+      ['TRODAT-5470', 'Professional fechador 5470', 60, 40, 'Rectangular', 50000, false],
+      ['TRODAT-5474', 'Professional fechador 5474', 60, 40, 'Rectangular', 50000, false],
+      ['TRODAT-5480', 'Professional fechador 5480', 68, 47, 'Rectangular', 103000, false],
+    ],
+  }),
   {
     key: 'NYKON_AUTOMATICO',
     nombreCanonico: 'Nykon (automáticos)',
@@ -2084,19 +2207,26 @@ const presets = [
   },
   {
     key: 'GOMA_LASERABLE',
-    nombreCanonico: 'Goma laserable',
+    nombreCanonico: 'Goma laserable Trodat',
     descripcionCorta:
-      'Plancha de goma/fotopolímero para grabar con láser y cortar al tamaño del sello. Se consume por área.',
+      'Hoja de goma para grabar el cliché del sello con láser CO2. Tipos según tinta/uso. Se consume por área.',
     iconKind: 'stamp',
-    aliasDisponibles: ['Goma laser', 'Caucho laserable', 'Fotopolímero', 'Laser rubber'],
+    aliasDisponibles: ['Goma laser', 'Caucho laserable', 'Laser rubber', 'Goma Trodat'],
     usosRecomendados: ['fabricacion_sellos'],
     procesosCompatibles: ['grabado_laser'],
-    advertencias: ['Usar solo en láser CO2; verificar espesor compatible con la máquina.'],
+    advertencias: [
+      'Usar solo en láser CO2; verificar espesor compatible con la máquina.',
+      'Medidas de hoja de referencia (A4): verificar el formato real de la hoja del proveedor.',
+      'Precios de referencia del proveedor Sellos Multicolor (2026-07).',
+    ],
     ...gomaLaserablePresetMeta(),
     variantes: [
-      vgoma('GOMA-LASER-A4-23-R', 'Rojo', 2.3, 210, 297, true),
-      vgoma('GOMA-LASER-A5-23-R', 'Rojo', 2.3, 148, 210, true),
-      vgoma('GOMA-LASER-A4-23-V', 'Verde', 2.3, 210, 297, false),
+      vgoma('GOMA-TRODAT-CLASICA-23', 'Clásica', 2.3, 210, 297, 23000, true),
+      vgoma('GOMA-TRODAT-AERO-23', 'Aero sin olor', 2.3, 210, 297, 29700, true),
+      vgoma('GOMA-TRODAT-TEMPO-23', 'Tempo rápida', 2.3, 210, 297, 27000, false),
+      vgoma('GOMA-TRODAT-OLIO-23', 'Olio tinta indeleble', 2.3, 210, 297, 35000, false),
+      vgoma('GOMA-TRODAT-CLASICA-15', 'Clásica bolígrafos', 1.5, 210, 297, 24000, false),
+      vgoma('GOMA-TRODAT-AERO-50', 'Aero bolsas', 5, 210, 297, 57500, false),
     ],
   },
 ];
@@ -2286,25 +2416,81 @@ function vselloManual(sku, marca, modelo, anchoPolimero, altoPolimero, lineasTex
   };
 }
 
-// Variante de goma laserable: plancha por color/espesor/formato, consumo por área.
-function vgoma(sku, color, espesor, ancho, alto, recomendada) {
+// Variante de goma laserable: plancha por tipo/espesor/formato, consumo por área.
+// Datos reales del proveedor Sellos Multicolor (Trodat, relevado 2026-07).
+function vgoma(sku, tipoGoma, espesor, ancho, alto, precio, recomendada) {
   return {
     skuSugerido: sku,
-    nombreVarianteSugerido: `${color} · ${espesor} mm · ${ancho}×${alto} mm`,
+    nombreVarianteSugerido: `Trodat ${tipoGoma} · ${espesor} mm`,
     formato: `${ancho}×${alto} mm`,
     espesor,
-    color,
+    color: 'Estándar',
     recomendada,
     atributosVarianteJson: {
-      color,
+      marca: 'Trodat',
+      tipoGoma,
+      color: 'Estándar',
       espesor,
       ancho,
       alto,
     },
     unidadStock: UnidadMateriaPrima.HOJA,
     unidadCompra: UnidadMateriaPrima.HOJA,
-    precioReferencia: null,
+    precioReferencia: precio ?? null,
     moneda: 'ARS',
+  };
+}
+
+// ── Líneas de sellos Trodat — catálogo relevado del proveedor Sellos
+// Multicolor (sellosmulticolor.com.ar, 2026-07). Las medidas son la placa de
+// polímero/impresión de cada modelo. `lineasTexto` es una ESTIMACIÓN
+// (≈ alto / 4 mm, redondeado hacia arriba) para tipografía estándar — el
+// modelador puede ajustarla al instalar.
+function lineasTextoEstimadas(altoMm) {
+  return Math.max(1, Math.ceil(altoMm / 4));
+}
+
+// fila de modelo: [sku, modelo, ancho, alto, forma, precioARS, recomendada]
+function vselloTrodat([sku, modelo, ancho, alto, forma, precio, recomendada]) {
+  const lineasTexto = lineasTextoEstimadas(alto);
+  const medida = forma === 'Redondo' ? `Ø${ancho} mm` : `${ancho}×${alto} mm`;
+  return {
+    skuSugerido: sku,
+    nombreVarianteSugerido: `Trodat ${modelo} · ${medida} · ${lineasTexto} líneas`,
+    formato: medida,
+    espesor: null,
+    color: 'Estándar',
+    recomendada: recomendada === true,
+    atributosVarianteJson: {
+      marca: 'Trodat',
+      modelo,
+      anchoPolimero: ancho,
+      altoPolimero: alto,
+      lineasTexto,
+      forma,
+    },
+    unidadStock: UnidadMateriaPrima.UNIDAD,
+    unidadCompra: UnidadMateriaPrima.UNIDAD,
+    precioReferencia: precio ?? null,
+    moneda: 'ARS',
+  };
+}
+
+function selloLineaTrodatPreset({ key, nombreCanonico, descripcionCorta, alias, modelos }) {
+  return {
+    key,
+    nombreCanonico,
+    descripcionCorta,
+    iconKind: 'stamp',
+    aliasDisponibles: ['Trodat', ...alias],
+    usosRecomendados: ['sellos_oficina', 'sellos_comerciales'],
+    procesosCompatibles: ['grabado_laser', 'montaje_sobre_sustrato'],
+    advertencias: [
+      'Líneas de texto estimadas (≈ alto de placa / 4 mm): verificar según cuerpo de letra.',
+      'Precios de referencia del proveedor Sellos Multicolor (2026-07).',
+    ],
+    ...selloAutoPresetMeta(),
+    variantes: modelos.map(vselloTrodat),
   };
 }
 
