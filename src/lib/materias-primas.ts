@@ -13,7 +13,8 @@ export type FamiliaMateriaPrima =
   | "pop_exhibidor"
   | "herraje_accesorio"
   | "adhesivo_tecnico"
-  | "packing_instalacion";
+  | "packing_instalacion"
+  | "sellos";
 
 export type SubfamiliaMateriaPrima =
   | "sustrato_hoja"
@@ -59,7 +60,10 @@ export type SubfamiliaMateriaPrima =
   | "velcro_cierre_tecnico"
   | "embalaje_proteccion"
   | "etiquetado_identificacion"
-  | "consumible_instalacion";
+  | "consumible_instalacion"
+  | "sellos_automaticos"
+  | "sellos_manuales"
+  | "goma_laserable";
 
 export type UnidadMateriaPrima =
   | "unidad"
@@ -176,6 +180,7 @@ export const familiaMateriaPrimaItems: Array<{
   { value: "herraje_accesorio", label: "Herraje y accesorio" },
   { value: "adhesivo_tecnico", label: "Adhesivo tecnico" },
   { value: "packing_instalacion", label: "Packing e instalacion" },
+  { value: "sellos", label: "Sellos" },
 ];
 
 export const unidadMateriaPrimaItems: Array<{

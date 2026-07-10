@@ -120,6 +120,9 @@ const subfamiliaMateriaPrimaItems: Array<{ value: SubfamiliaMateriaPrima; label:
   { value: "embalaje_proteccion", label: "Embalaje/protección" },
   { value: "etiquetado_identificacion", label: "Etiquetado/identificación" },
   { value: "consumible_instalacion", label: "Consumible instalación" },
+  { value: "sellos_automaticos", label: "Sellos automáticos" },
+  { value: "sellos_manuales", label: "Sellos manuales" },
+  { value: "goma_laserable", label: "Goma laserable" },
 ];
 
 function getLabel<T extends string>(

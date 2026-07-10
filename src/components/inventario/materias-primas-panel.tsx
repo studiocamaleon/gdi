@@ -102,6 +102,9 @@ const subfamiliaMateriaPrimaLabels: Record<SubfamiliaMateriaPrima, string> = {
   embalaje_proteccion: "Embalaje/protección",
   etiquetado_identificacion: "Etiquetado/identificación",
   consumible_instalacion: "Consumible instalación",
+  sellos_automaticos: "Sellos automáticos",
+  sellos_manuales: "Sellos manuales",
+  goma_laserable: "Goma laserable",
 };
 
 type MateriasPrimasPanelProps = {

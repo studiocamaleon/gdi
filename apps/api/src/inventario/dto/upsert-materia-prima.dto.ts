@@ -29,6 +29,7 @@ export enum FamiliaMateriaPrimaDto {
   herraje_accesorio = 'herraje_accesorio',
   adhesivo_tecnico = 'adhesivo_tecnico',
   packing_instalacion = 'packing_instalacion',
+  sellos = 'sellos',
 }
 
 export enum SubfamiliaMateriaPrimaDto {
@@ -76,6 +77,9 @@ export enum SubfamiliaMateriaPrimaDto {
   embalaje_proteccion = 'embalaje_proteccion',
   etiquetado_identificacion = 'etiquetado_identificacion',
   consumible_instalacion = 'consumible_instalacion',
+  sellos_automaticos = 'sellos_automaticos',
+  sellos_manuales = 'sellos_manuales',
+  goma_laserable = 'goma_laserable',
 }
 
 export enum UnidadMateriaPrimaDto {
