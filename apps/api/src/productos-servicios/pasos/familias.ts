@@ -45,6 +45,7 @@ const MP = {
       'METAL_ESTRUCTURA',
       'POP_EXHIBIDOR',
       'HERRAJE_ACCESORIO',
+      'SELLOS',
     ],
     subfamiliasMateriaPrima: [
       'SUSTRATO_RIGIDO',
@@ -52,6 +53,7 @@ const MP = {
       'CHAPA_METALICA',
       'SEMIELABORADO_POP',
       'ARGOLLA_LLAVERO_ACCESORIO',
+      'GOMA_LASERABLE',
     ],
   },
   filmTransfer: {

@@ -147,7 +147,8 @@ export type FamiliaMateriaPrimaCompat =
   | 'POP_EXHIBIDOR'
   | 'HERRAJE_ACCESORIO'
   | 'ADHESIVO_TECNICO'
-  | 'PACKING_INSTALACION';
+  | 'PACKING_INSTALACION'
+  | 'SELLOS';
 
 export type SubfamiliaMateriaPrimaCompat =
   | 'SUSTRATO_HOJA'
@@ -193,7 +194,10 @@ export type SubfamiliaMateriaPrimaCompat =
   | 'VELCRO_CIERRE_TECNICO'
   | 'EMBALAJE_PROTECCION'
   | 'ETIQUETADO_IDENTIFICACION'
-  | 'CONSUMIBLE_INSTALACION';
+  | 'CONSUMIBLE_INSTALACION'
+  | 'SELLOS_AUTOMATICOS'
+  | 'SELLOS_MANUALES'
+  | 'GOMA_LASERABLE';
 
 export interface CompatibilidadMaterialSlot {
   familiasMateriaPrima?: FamiliaMateriaPrimaCompat[];
