@@ -43,6 +43,8 @@ import {
 import {
   getHerramientaMedidasArchivo,
   setHerramientaMedidasArchivo,
+  getHerramientaEditorSello,
+  setHerramientaEditorSello,
 } from "@/lib/producto-herramientas";
 import type {
   CargoDirectoCatalogo,
@@ -404,6 +406,9 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
       medidasDesdeArchivo: getHerramientaMedidasArchivo(
         producto.atributosComercialesJson,
       ).enabled,
+      editorSello: getHerramientaEditorSello(
+        producto.atributosComercialesJson,
+      ).enabled,
       activo: producto.activo,
     }),
     [producto],
@@ -434,6 +439,9 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
   const [medidasDesdeArchivo, setMedidasDesdeArchivo] = React.useState(
     () => getHerramientaMedidasArchivo(producto.atributosComercialesJson).enabled,
   );
+  const [editorSello, setEditorSello] = React.useState(
+    () => getHerramientaEditorSello(producto.atributosComercialesJson).enabled,
+  );
   const [activo, setActivo] = React.useState(producto.activo);
   const [guardando, setGuardando] = React.useState(false);
 
@@ -453,11 +461,13 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
           : minimoComercialBase,
       medidas: normalizarMedidasPorModo(modoMedidas, medidas),
       medidasDesdeArchivo,
+      editorSello,
       activo,
     }),
     [
       activo,
       descripcion,
+      editorSello,
       medidas,
       medidasDesdeArchivo,
       minimoComercialCantidad,
@@ -529,9 +539,12 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
         nombre,
         descripcion: descripcion || undefined,
         subcategoriaComercialCodigo,
-        atributosComercialesJson: setHerramientaMedidasArchivo(
-          producto.atributosComercialesJson as Record<string, unknown> | null,
-          medidasDesdeArchivo,
+        atributosComercialesJson: setHerramientaEditorSello(
+          setHerramientaMedidasArchivo(
+            producto.atributosComercialesJson as Record<string, unknown> | null,
+            medidasDesdeArchivo,
+          ),
+          editorSello,
         ),
         unidadComercial: unidadComercial as "unidad" | "m2" | "metro_lineal",
         modoMedidas,
@@ -564,6 +577,7 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
             : minimoComercialBase,
         medidas: medidasNormalizadas,
         medidasDesdeArchivo,
+        editorSello,
         activo,
       });
       toast.success("Identidad guardada");
@@ -673,6 +687,24 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
               className={`toggle ${medidasDesdeArchivo ? "on" : ""}`}
               onClick={() => setMedidasDesdeArchivo((current) => !current)}
               aria-pressed={medidasDesdeArchivo}
+            >
+              <span className="switch" />
+            </button>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, paddingTop: 6, borderTop: "1px solid var(--hairline)" }}>
+            <div>
+              <div style={{ fontWeight: 500, fontSize: 13 }}>Editor de sello</div>
+              <div style={{ fontSize: 11.5, color: "var(--muted-text)" }}>
+                Al cotizar, habilita el botón “Diseñar sello”: el comercial carga
+                el texto por línea según el cuerpo elegido, elige tipografía y
+                genera los archivos de grabado (EPS positivo y negativo).
+              </div>
+            </div>
+            <button
+              type="button"
+              className={`toggle ${editorSello ? "on" : ""}`}
+              onClick={() => setEditorSello((current) => !current)}
+              aria-pressed={editorSello}
             >
               <span className="switch" />
             </button>
