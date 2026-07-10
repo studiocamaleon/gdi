@@ -32,6 +32,7 @@ import type {
   CargoPasoCargado,
   NestingEjecutado,
   NestingCostingPreview,
+  TiempoManualConfig,
 } from './tipos';
 import {
   runNestingForPaso,
@@ -2264,14 +2265,28 @@ export class MotorUniversalService {
   ): NonNullable<PasoEjecutado['tiempo']> {
     const modoTiempo = paso.modoTiempo ?? 'T-1';
 
+    // Tiempo manual del comercial (docs/tiempo-manual-por-paso-diseno.md):
+    // gana sobre cualquier modoTiempo. Es una estimación ABSOLUTA del trabajo
+    // (los multiplicadores no aplican) y reemplaza al tiempoFijo del paso para
+    // no contar doble; setup/cleanup se suman igual porque preparar la máquina
+    // no depende del trabajo puntual.
+    const tiempoManualMin = this.resolverTiempoManualMin(
+      paso,
+      jobContext,
+      errores,
+    );
+
     // Setup, cleanup, tiempoFijo: jerarquía override > perfil > familia > 0
     const setupMin = paso.setupOverrideMin ?? paso.perfil?.setupMin ?? 0;
     const cleanupMin = paso.cleanupOverrideMin ?? paso.perfil?.cleanupMin ?? 0;
-    const tiempoFijoMin = paso.tiempoFijoOverrideMin ?? 0;
+    const tiempoFijoMin =
+      tiempoManualMin != null ? 0 : (paso.tiempoFijoOverrideMin ?? 0);
 
     let runMin = 0;
 
-    if (modoTiempo === 'T-1') {
+    if (tiempoManualMin != null) {
+      runMin = tiempoManualMin;
+    } else if (modoTiempo === 'T-1') {
       // Fijo: solo el tiempoFijo cuenta
       runMin = 0;
     } else if (modoTiempo === 'T-2') {
@@ -2449,7 +2464,55 @@ export class MotorUniversalService {
       centroCostoNombre: centroCosto.nombre,
       tarifaHora,
       costo,
+      ...(tiempoManualMin != null
+        ? { origenTiempo: 'manual_comercial' as const }
+        : {}),
     };
+  }
+
+  /**
+   * Tiempo manual del paso (docs/tiempo-manual-por-paso-diseno.md): si el paso
+   * habilita `paramsPasoJson.tiempoManual`, lee los minutos que el comercial
+   * ingresó en `jobContext.tiempoManualMin_<configPasoId>`.
+   *
+   * Devuelve null cuando no aplica o no hay valor válido (> 0) — el paso cae
+   * al cálculo estándar de su modoTiempo. Si el config lo marca `obligatorio`
+   * y falta el valor, emite `tiempo_manual_requerido` (corta la cotización);
+   * el sheet bloquea antes, esto es defensa en profundidad.
+   */
+  private resolverTiempoManualMin(
+    paso: PasoCargado,
+    jobContext: JobContext,
+    errores: ErrorMotor[],
+  ): number | null {
+    const params = (paso.paramsPasoJson ?? {}) as Record<string, unknown>;
+    const config = params.tiempoManual as TiempoManualConfig | undefined;
+    if (!config || typeof config !== 'object' || config.habilitado !== true) {
+      return null;
+    }
+
+    const clave = `tiempoManualMin_${paso.configPasoId}`;
+    const valor = Number((jobContext as Record<string, unknown>)[clave]);
+    if (Number.isFinite(valor) && valor > 0) {
+      return valor;
+    }
+
+    if (config.obligatorio === true) {
+      const nombrePaso =
+        paso.nombreVisible?.trim() || this.humanizarCodigo(paso.familiaCodigo);
+      errores.push({
+        codigo: 'tiempo_manual_requerido',
+        severidad: 'ERROR',
+        mensaje: `El paso ${nombrePaso} requiere que el comercial ingrese el tiempo estimado.`,
+        rutaPasoId: paso.rutaPasoId,
+        rutaPasoOrden: paso.rutaPasoOrden,
+        familiaCodigo: paso.familiaCodigo,
+        contexto: { configPasoId: paso.configPasoId, clave },
+        sugerencia:
+          'Ingresá el tiempo estimado del paso en el cotizador antes de agregar el producto.',
+      });
+    }
+    return null;
   }
 
   private resolveCentroCostoPaso(paso: PasoCargado): {

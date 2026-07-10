@@ -79,8 +79,36 @@ export interface JobContext {
   slotMateriales?: Record<string, string>;
   /** Configuración runtime de cada paso (key = configPasoId). */
   configPasoRuntime?: Record<string, Record<string, unknown>>;
-  /** Cualquier otro campo dinámico que el comercial cargue. */
+  /**
+   * Cualquier otro campo dinámico que el comercial cargue. Claves con
+   * namespace por paso: `modoColor_<configPasoId>`, `caras_<configPasoId>`,
+   * `maquinaSeleccionada_<configPasoId>`, `tiempoManualMin_<configPasoId>`
+   * (minutos estimados por el comercial — ver TiempoManualConfig).
+   */
   [key: string]: unknown;
+}
+
+/**
+ * Config de tiempo manual por paso (`paramsPasoJson.tiempoManual`).
+ * Ver docs/tiempo-manual-por-paso-diseno.md: el comercial estima el tiempo
+ * del paso al cotizar (diseño gráfico, corte láser) y el valor viaja en
+ * `jobContext.tiempoManualMin_<configPasoId>` (SIEMPRE en minutos; la unidad
+ * del input es solo presentación). Gana sobre cualquier modoTiempo.
+ */
+export interface TiempoManualConfig {
+  habilitado: boolean;
+  /** true = sin valor ingresado la cotización corta con `tiempo_manual_requerido`. */
+  obligatorio?: boolean;
+  /** Unidad de PRESENTACIÓN del input del comercial. Interno siempre minutos. */
+  unidadInput?: 'min' | 'h';
+  /** Valor inicial del input, en minutos. */
+  defaultMin?: number | null;
+  /** Cota inferior del input, en minutos (valida el sheet). */
+  minMin?: number | null;
+  /** Cota superior del input, en minutos (valida el sheet). */
+  maxMin?: number | null;
+  /** Label del input en el cotizador (default: nombre del paso). */
+  etiqueta?: string | null;
 }
 
 // ============================================================================
@@ -208,6 +236,11 @@ export interface PasoEjecutado {
     /** Tarifa horaria del centro de costo aplicada. */
     tarifaHora?: number;
     costo: number;
+    /**
+     * Origen del tiempo del paso: `manual_comercial` cuando el comercial lo
+     * estimó al cotizar (tiempo manual). Ausente = calculado por el motor.
+     */
+    origenTiempo?: 'manual_comercial' | 'calculado';
   };
   /** Materiales consumidos (si activado). */
   materiales?: MaterialEjecutado[];
