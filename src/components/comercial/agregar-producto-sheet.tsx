@@ -174,6 +174,12 @@ type MotorConfigState = {
   caras: 1 | 2;
   /** Avanzado: override de caras por paso (`caras_<configPasoId>` al motor). */
   carasPorPaso: Record<string, 1 | 2>;
+  /**
+   * Tiempo estimado por el comercial por paso, en MINUTOS
+   * (`tiempoManualMin_<configPasoId>` al motor). Ausente = usar el valor
+   * sugerido del paso; null = el comercial vació el input (sin valor).
+   */
+  tiempoManualPorPaso: Record<string, number | null>;
   tipoCopia: 1 | 2 | 3;
   numerosXTalonario: number;
   piezas: PiezaInput[];
@@ -332,6 +338,7 @@ const DEFAULT_MOTOR_CONFIG: MotorConfigState = {
   medidaPredefinidaId: "",
   caras: 1,
   carasPorPaso: {},
+  tiempoManualPorPaso: {},
   tipoCopia: 1,
   numerosXTalonario: 50,
   piezas: [],
@@ -1064,6 +1071,122 @@ function getModosColorComercial(
   );
 }
 
+/**
+ * Pasos de la ruta que piden tiempo estimado por el comercial
+ * (`paramsPasoJson.tiempoManual`, docs/tiempo-manual-por-paso-diseno.md).
+ * El valor viaja al motor como `tiempoManualMin_<configPasoId>` (minutos).
+ */
+type TiempoManualComercial = {
+  configPasoId: string;
+  familiaCodigo: string;
+  nombreVisible: string | null;
+  modoActivacion: string | null;
+  obligatorio: boolean;
+  unidadInput: "min" | "h";
+  defaultMin: number | null;
+  minMin: number | null;
+  maxMin: number | null;
+  etiqueta: string | null;
+};
+
+function getTiemposManualesComercial(
+  ruta: RutaAlternativaDetalle | null,
+  includeConfig: (config: ConfigPasoDetalle) => boolean = () => true,
+) {
+  const positiveOrNull = (value: unknown) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  };
+  return (
+    ruta?.configPasos
+      .filter(isExecutableConfigPaso)
+      .filter(includeConfig)
+      .map((config) => {
+        const params = (config.paramsPasoJson ?? {}) as Record<string, unknown>;
+        const tiempoManual = params.tiempoManual as
+          | Record<string, unknown>
+          | undefined;
+        if (
+          !tiempoManual ||
+          typeof tiempoManual !== "object" ||
+          tiempoManual.habilitado !== true
+        ) {
+          return null;
+        }
+        const item: TiempoManualComercial = {
+          configPasoId: config.id,
+          familiaCodigo: config.rutaPaso.familiaCodigo,
+          nombreVisible: config.nombreVisible ?? null,
+          modoActivacion: config.modoActivacion,
+          obligatorio: tiempoManual.obligatorio === true,
+          unidadInput: tiempoManual.unidadInput === "h" ? "h" : "min",
+          defaultMin: positiveOrNull(tiempoManual.defaultMin),
+          minMin: positiveOrNull(tiempoManual.minMin),
+          maxMin: positiveOrNull(tiempoManual.maxMin),
+          etiqueta:
+            typeof tiempoManual.etiqueta === "string" &&
+            tiempoManual.etiqueta.trim()
+              ? tiempoManual.etiqueta.trim()
+              : null,
+        };
+        return item;
+      })
+      .filter((item): item is TiempoManualComercial => item !== null) ?? []
+  );
+}
+
+/**
+ * Minutos efectivos del paso: lo que tocó el comercial gana; si no tocó nada,
+ * aplica el valor sugerido del paso; input vaciado (null) = sin valor.
+ */
+function getTiempoManualEfectivoMin(
+  item: TiempoManualComercial,
+  config: Pick<MotorConfigState, "tiempoManualPorPaso">,
+) {
+  const raw = config.tiempoManualPorPaso[item.configPasoId];
+  if (raw === undefined) return item.defaultMin;
+  return typeof raw === "number" && Number.isFinite(raw) && raw > 0
+    ? raw
+    : null;
+}
+
+function getTiempoManualError(
+  item: TiempoManualComercial,
+  config: Pick<MotorConfigState, "tiempoManualPorPaso">,
+) {
+  const nombre =
+    item.etiqueta ||
+    `${item.nombreVisible?.trim() || humanizeCodigo(item.familiaCodigo)} · tiempo estimado`;
+  const efectivo = getTiempoManualEfectivoMin(item, config);
+  if (efectivo == null) {
+    return item.obligatorio
+      ? `Ingresá "${nombre}" para poder agregar el producto.`
+      : null;
+  }
+  const formatear = (minutos: number) =>
+    item.unidadInput === "h" ? `${minutos / 60} h` : `${minutos} min`;
+  if (item.minMin != null && efectivo < item.minMin) {
+    return `"${nombre}" debe ser al menos ${formatear(item.minMin)}.`;
+  }
+  if (item.maxMin != null && efectivo > item.maxMin) {
+    return `"${nombre}" no puede superar ${formatear(item.maxMin)}.`;
+  }
+  return null;
+}
+
+/** Primer error de tiempo manual entre los pasos visibles (null = todo OK). */
+function getTiempoManualBloqueo(
+  ruta: RutaAlternativaDetalle | null,
+  includeConfig: (config: ConfigPasoDetalle) => boolean,
+  config: MotorConfigState,
+) {
+  for (const item of getTiemposManualesComercial(ruta, includeConfig)) {
+    const error = getTiempoManualError(item, config);
+    if (error) return error;
+  }
+  return null;
+}
+
 function getCandidateTechnology(candidate: MaquinaCandidataComercial) {
   return getMachineTechnology(candidate.maquina) ?? "sin_tecnologia";
 }
@@ -1484,7 +1607,10 @@ function getOpcionales(
           if (configAvailable) {
             opcionales.set(config.id, {
               code: config.id,
-              name: humanizeCodigo(config.rutaPaso.familiaCodigo),
+              // Nombre manual del modelador; el código de familia es fallback.
+              name:
+                config.nombreVisible?.trim() ||
+                humanizeCodigo(config.rutaPaso.familiaCodigo),
               descripcion: "Paso productivo opcional.",
               origen: "paso",
               configPasoId: config.id,
@@ -2045,6 +2171,24 @@ function buildJobContext(
     ctx.modoColorPorPaso = modoColorPorPaso;
   }
 
+  // Tiempo estimado por el comercial (docs/tiempo-manual-por-paso-diseno.md):
+  // minutos por paso. Sin valor efectivo no se manda la clave y el motor
+  // calcula el paso como siempre.
+  const tiemposManuales = getTiemposManualesComercial(
+    rutaSel,
+    includeConfig,
+  ).filter(
+    (item) =>
+      item.modoActivacion !== "OPCIONAL" ||
+      Boolean(config.opcionalesActivados[item.configPasoId]),
+  );
+  for (const item of tiemposManuales) {
+    const efectivo = getTiempoManualEfectivoMin(item, config);
+    if (efectivo != null) {
+      ctx[`tiempoManualMin_${item.configPasoId}`] = efectivo;
+    }
+  }
+
   return ctx;
 }
 
@@ -2558,6 +2702,19 @@ function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
         value as string,
       ]),
   );
+  const tiempoManualPorPaso = Object.fromEntries(
+    Object.entries(ctx)
+      .filter(
+        ([key, value]) =>
+          key.startsWith("tiempoManualMin_") &&
+          Number.isFinite(Number(value)) &&
+          Number(value) > 0,
+      )
+      .map(([key, value]) => [
+        key.replace("tiempoManualMin_", ""),
+        Number(value),
+      ]),
+  );
   const piezasRaw = Array.isArray(ctx.piezas) ? ctx.piezas : [];
   const piezas = piezasRaw
     .map((pieza, index) => {
@@ -2589,6 +2746,7 @@ function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
     rutaAlternativaId: item.rutaAlternativaId ?? "",
     medidaPredefinidaId,
     caras: Number(ctx.caras) === 2 ? 2 : 1,
+    tiempoManualPorPaso,
     tipoCopia:
       Number(ctx.tipoCopia) === 3 ? 3 : Number(ctx.tipoCopia) === 2 ? 2 : 1,
     numerosXTalonario:
@@ -2918,20 +3076,46 @@ function ApConfigStep({
     () => getSlotsOpcionalesPorPaso(slotsComercialElige),
     [slotsComercialElige],
   );
+  // Pasos con tiempo estimado por el comercial (visibles según ruta/opcionales).
+  const tiemposManualesComercial = React.useMemo(
+    () => getTiemposManualesComercial(rutaSel, includeVisibleConfig),
+    [rutaSel, includeVisibleConfig],
+  );
+  const tiemposManualesPorConfigPaso = React.useMemo(
+    () =>
+      new Map(
+        tiemposManualesComercial.map((item) => [item.configPasoId, item]),
+      ),
+    [tiemposManualesComercial],
+  );
+  // Los inputs de tiempo de pasos NO opcionales van con los datos del producto;
+  // los de pasos opcionales se configuran en la card del opcional activado.
+  const tiemposManualesPrincipales = tiemposManualesComercial.filter(
+    (item) => item.modoActivacion !== "OPCIONAL",
+  );
   const opcionalesConfigurables = React.useMemo(
     () =>
       opcionalesRuta
         .map((opcional) => ({
           opcional,
           slots: slotsMaterialesOpcionalesPorPaso.get(opcional.code) ?? [],
+          tiempoManual: opcional.configPasoId
+            ? (tiemposManualesPorConfigPaso.get(opcional.configPasoId) ?? null)
+            : null,
         }))
         .filter(
           (item) =>
             product.real &&
             adi.includes(item.opcional.code) &&
-            item.slots.length > 0,
+            (item.slots.length > 0 || item.tiempoManual !== null),
         ),
-    [adi, opcionalesRuta, product.real, slotsMaterialesOpcionalesPorPaso],
+    [
+      adi,
+      opcionalesRuta,
+      product.real,
+      slotsMaterialesOpcionalesPorPaso,
+      tiemposManualesPorConfigPaso,
+    ],
   );
   const pasosConTecnologias = React.useMemo(
     () => getPasosConTecnologias(rutaSel, includeVisibleConfig),
@@ -3928,6 +4112,66 @@ function ApConfigStep({
       return { ...prev, carasPorPaso: next };
     });
   };
+  const setTiempoManualPaso = (configPasoId: string, rawValue: string, unidad: "min" | "h") => {
+    setMotorConfig((prev) => {
+      const parsed = Number(rawValue.replace(",", "."));
+      const minutos =
+        rawValue.trim() !== "" && Number.isFinite(parsed) && parsed > 0
+          ? unidad === "h"
+            ? parsed * 60
+            : parsed
+          : null;
+      return {
+        ...prev,
+        tiempoManualPorPaso: {
+          ...prev.tiempoManualPorPaso,
+          [configPasoId]: minutos,
+        },
+      };
+    });
+  };
+  const renderTiempoManualField = (tiempoPaso: TiempoManualComercial) => {
+    const nombrePaso =
+      tiempoPaso.nombreVisible?.trim() ||
+      humanizeCodigo(tiempoPaso.familiaCodigo);
+    const label = tiempoPaso.etiqueta || `${nombrePaso} · tiempo estimado`;
+    const unidadLabel = tiempoPaso.unidadInput === "h" ? "horas" : "min";
+    const efectivoMin = getTiempoManualEfectivoMin(tiempoPaso, motorConfig);
+    const displayValue =
+      efectivoMin == null
+        ? ""
+        : tiempoPaso.unidadInput === "h"
+          ? efectivoMin / 60
+          : efectivoMin;
+    const error = getTiempoManualError(tiempoPaso, motorConfig);
+    return (
+      <div className="ap-spec" key={`tiempo-${tiempoPaso.configPasoId}`}>
+        <label>
+          {label} ({unidadLabel})
+        </label>
+        <input
+          type="number"
+          min={0}
+          step={tiempoPaso.unidadInput === "h" ? 0.25 : 1}
+          value={displayValue}
+          placeholder={tiempoPaso.obligatorio ? "Requerido" : "Automático"}
+          onChange={(event) =>
+            setTiempoManualPaso(
+              tiempoPaso.configPasoId,
+              event.target.value,
+              tiempoPaso.unidadInput,
+            )
+          }
+        />
+        {error ? (
+          <div className="ap-minimum-alert is-blocked">
+            <CircleAlertIcon />
+            <span>{error}</span>
+          </div>
+        ) : null}
+      </div>
+    );
+  };
   // El bloque de copias (tipo de copia + hojas por talonario) se muestra si el
   // producto es de subcategoría "talonarios" O si su ruta realmente usa
   // `tipoCopia` (algún talonario está en otra subcategoría, ej. papelería).
@@ -4686,6 +4930,10 @@ function ApConfigStep({
               );
             })}
 
+            {tiemposManualesPrincipales.map((tiempoPaso) =>
+              renderTiempoManualField(tiempoPaso),
+            )}
+
             {slotsMaterialesGenerales.map((slot) => renderMaterialSelect(slot))}
 
             {necesitaInstalacion ? (
@@ -4792,17 +5040,20 @@ function ApConfigStep({
               </div>
             </div>
             <div className="ap-optional-config-grid">
-              {opcionalesConfigurables.map(({ opcional, slots }) => {
+              {opcionalesConfigurables.map(({ opcional, slots, tiempoManual }) => {
                 const resumen = slots
                   .map((slot) => describeSlotSelection(slot, motorConfig))
                   .filter((item): item is string => Boolean(item));
+                const tiempoPendiente = Boolean(
+                  tiempoManual && getTiempoManualError(tiempoManual, motorConfig),
+                );
                 return (
                   <div className="ap-optional-config-card" key={opcional.code}>
                     <div className="ap-optional-config-title">
                       <span className="ttl">{opcional.name}</span>
                       <span className="state">
                         <span className="d" aria-hidden="true" />
-                        Configurado
+                        {tiempoPendiente ? "Falta el tiempo" : "Configurado"}
                       </span>
                       <button
                         type="button"
@@ -4819,6 +5070,9 @@ function ApConfigStep({
                           collapseSingleCandidate: true,
                         }),
                       )}
+                      {tiempoManual
+                        ? renderTiempoManualField(tiempoManual)
+                        : null}
                     </div>
                     {resumen.length > 0 ? (
                       <div className="ap-optional-config-summary">
@@ -5056,6 +5310,33 @@ export function AgregarProductoSheet({
     ? getMinimumCommercialStatus(product, productoDetalle, motorConfig, qty, cotizacionExitosa)
     : null;
   const isBlockedByMinimum = minimoComercialStatus?.kind === "blocked";
+  // Tiempo estimado por el comercial: bloquea el alta si un paso obligatorio
+  // quedó sin valor o si el valor está fuera del rango configurado. El error
+  // puntual se muestra inline junto al input del paso.
+  const tiempoManualBloqueo = React.useMemo(() => {
+    if (!product?.real || !productoDetalle) return null;
+    const rutaSel = getRutaSeleccionada(
+      productoDetalle,
+      motorConfig.rutaAlternativaId,
+    );
+    const slotsParaReglas = getSlotsParaCotizacion(
+      rutaSel,
+      productoDetalle,
+      motorConfig,
+    );
+    const ruleContext = buildJobContext(
+      productoDetalle,
+      motorConfig,
+      qty,
+      slotsParaReglas,
+    );
+    return getTiempoManualBloqueo(
+      rutaSel,
+      (config) => isConfigPasoVisibleForContext(config, motorConfig, ruleContext),
+      motorConfig,
+    );
+  }, [motorConfig, product, productoDetalle, qty]);
+  const isBlockedByTiempoManual = Boolean(tiempoManualBloqueo);
 
   React.useEffect(() => {
     if (!product) return;
@@ -5287,6 +5568,10 @@ export function AgregarProductoSheet({
         toast.error(minimumStatus.message);
         return;
       }
+      if (tiempoManualBloqueo) {
+        toast.error(tiempoManualBloqueo);
+        return;
+      }
       const rutaSel = getRutaSeleccionada(productoDetalle, motorConfig.rutaAlternativaId);
       const slotsParaReglas = getSlotsParaCotizacion(
         rutaSel,
@@ -5348,6 +5633,7 @@ export function AgregarProductoSheet({
       qty,
       notaProduccion,
       specs,
+      tiempoManualBloqueo,
     ],
   );
 
@@ -5477,7 +5763,11 @@ export function AgregarProductoSheet({
                   className="btn"
                   onClick={() => addCurrent(true)}
                   disabled={
-                    product.real && (!cotizacionExitosa || cotizando || isBlockedByMinimum)
+                    product.real &&
+                    (!cotizacionExitosa ||
+                      cotizando ||
+                      isBlockedByMinimum ||
+                      isBlockedByTiempoManual)
                   }
                 >
                   Guardar y agregar otro
@@ -5487,7 +5777,13 @@ export function AgregarProductoSheet({
                 type="button"
                 className="btn btn-primary"
                 onClick={() => addCurrent(false)}
-                disabled={product.real && (!cotizacionExitosa || cotizando || isBlockedByMinimum)}
+                disabled={
+                  product.real &&
+                  (!cotizacionExitosa ||
+                    cotizando ||
+                    isBlockedByMinimum ||
+                    isBlockedByTiempoManual)
+                }
               >
                 {isEditing ? <CheckIcon /> : <PlusIcon />}
                 {isEditing ? "Guardar cambios" : "Agregar a la OT"}
