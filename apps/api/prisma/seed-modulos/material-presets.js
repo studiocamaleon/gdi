@@ -2009,6 +2009,96 @@ const presets = [
       recomendadas: new Set(['clear']),
     }),
   }),
+  {
+    key: 'COLOP_PRINTER',
+    nombreCanonico: 'Colop Printer (automáticos)',
+    descripcionCorta:
+      'Sellos autoentintables Colop línea Printer. Cada modelo define el tamaño de polímero y las líneas de texto que admite.',
+    iconKind: 'stamp',
+    aliasDisponibles: ['Colop', 'Printer', 'Sello automático Colop'],
+    usosRecomendados: ['sellos_oficina', 'sellos_comerciales'],
+    procesosCompatibles: ['grabado_laser', 'montaje_sobre_sustrato'],
+    advertencias: [
+      'Verificar líneas de texto según cuerpo de letra; los valores son referencia con tipografía estándar.',
+    ],
+    ...selloAutoPresetMeta(),
+    variantes: [
+      vsello('COLOP-PRINTER-20', 'Colop', 'Printer 20', 38, 14, 4, false),
+      vsello('COLOP-PRINTER-30', 'Colop', 'Printer 30', 47, 18, 5, true),
+      vsello('COLOP-PRINTER-40', 'Colop', 'Printer 40', 59, 23, 6, true),
+      vsello('COLOP-PRINTER-50', 'Colop', 'Printer 50', 69, 30, 7, false),
+    ],
+  },
+  {
+    key: 'TRODAT_PRINTY',
+    nombreCanonico: 'Trodat Printy (automáticos)',
+    descripcionCorta:
+      'Sellos autoentintables Trodat línea Printy. Cada modelo define el tamaño de polímero y las líneas de texto que admite.',
+    iconKind: 'stamp',
+    aliasDisponibles: ['Trodat', 'Printy', 'Sello automático Trodat'],
+    usosRecomendados: ['sellos_oficina', 'sellos_comerciales'],
+    procesosCompatibles: ['grabado_laser', 'montaje_sobre_sustrato'],
+    advertencias: [
+      'Verificar líneas de texto según cuerpo de letra; los valores son referencia con tipografía estándar.',
+    ],
+    ...selloAutoPresetMeta(),
+    variantes: [
+      vsello('TRODAT-4911', 'Trodat', 'Printy 4911', 38, 14, 4, true),
+      vsello('TRODAT-4912', 'Trodat', 'Printy 4912', 47, 18, 5, true),
+      vsello('TRODAT-4913', 'Trodat', 'Printy 4913', 58, 22, 6, false),
+      vsello('TRODAT-4915', 'Trodat', 'Printy 4915', 70, 25, 7, false),
+    ],
+  },
+  {
+    key: 'NYKON_AUTOMATICO',
+    nombreCanonico: 'Nykon (automáticos)',
+    descripcionCorta:
+      'Sellos autoentintables Nykon. Ajustar modelo, tamaño de polímero y líneas de texto al instalar.',
+    iconKind: 'stamp',
+    aliasDisponibles: ['Nykon', 'Sello automático Nykon'],
+    usosRecomendados: ['sellos_oficina', 'sellos_comerciales'],
+    procesosCompatibles: ['grabado_laser', 'montaje_sobre_sustrato'],
+    advertencias: ['Preset genérico: validar medidas reales del modelo al instalar.'],
+    ...selloAutoPresetMeta(),
+    variantes: [
+      vsello('NYKON-N30', 'Nykon', 'N30', 47, 18, 5, true),
+      vsello('NYKON-N40', 'Nykon', 'N40', 59, 23, 6, false),
+    ],
+  },
+  {
+    key: 'SELLO_MANUAL_MADERA',
+    nombreCanonico: 'Sello manual con mango de madera',
+    descripcionCorta:
+      'Sello tradicional: goma grabada montada sobre mango de madera. Usa almohadilla aparte.',
+    iconKind: 'stamp',
+    aliasDisponibles: ['Sello de madera', 'Sello manual', 'Sello con mango'],
+    usosRecomendados: ['sellos_artesanales', 'sellos_comerciales'],
+    procesosCompatibles: ['grabado_laser', 'montaje_sobre_sustrato'],
+    advertencias: [],
+    ...selloManualPresetMeta(),
+    variantes: [
+      vselloManual('SELLO-MAD-3030', 'Genérica', 'Mango madera 30 mm', 30, 30, 3, 'Madera', true),
+      vselloManual('SELLO-MAD-4040', 'Genérica', 'Mango madera 40 mm', 40, 40, 4, 'Madera', true),
+      vselloManual('SELLO-MAD-6040', 'Genérica', 'Mango madera 60×40 mm', 60, 40, 5, 'Madera', false),
+    ],
+  },
+  {
+    key: 'GOMA_LASERABLE',
+    nombreCanonico: 'Goma laserable',
+    descripcionCorta:
+      'Plancha de goma/fotopolímero para grabar con láser y cortar al tamaño del sello. Se consume por área.',
+    iconKind: 'stamp',
+    aliasDisponibles: ['Goma laser', 'Caucho laserable', 'Fotopolímero', 'Laser rubber'],
+    usosRecomendados: ['fabricacion_sellos'],
+    procesosCompatibles: ['grabado_laser'],
+    advertencias: ['Usar solo en láser CO2; verificar espesor compatible con la máquina.'],
+    ...gomaLaserablePresetMeta(),
+    variantes: [
+      vgoma('GOMA-LASER-A4-23-R', 'Rojo', 2.3, 210, 297, true),
+      vgoma('GOMA-LASER-A5-23-R', 'Rojo', 2.3, 148, 210, true),
+      vgoma('GOMA-LASER-A4-23-V', 'Verde', 2.3, 210, 297, false),
+    ],
+  },
 ];
 
 function acrilicoVariants() {
@@ -2117,6 +2207,104 @@ function imanPresetMeta(tipoTecnico, templateId) {
     subfamilia: SubfamiliaMateriaPrima.IMAN_CERAMICO_FLEXIBLE,
     tipoTecnico,
     templateId,
+  };
+}
+
+function selloAutoPresetMeta() {
+  return {
+    familia: FamiliaMateriaPrima.SELLOS,
+    subfamilia: SubfamiliaMateriaPrima.SELLOS_AUTOMATICOS,
+    tipoTecnico: 'sello_automatico',
+    templateId: 'sello_automatico_v1',
+  };
+}
+
+function selloManualPresetMeta() {
+  return {
+    familia: FamiliaMateriaPrima.SELLOS,
+    subfamilia: SubfamiliaMateriaPrima.SELLOS_MANUALES,
+    tipoTecnico: 'sello_manual',
+    templateId: 'sello_manual_v1',
+  };
+}
+
+function gomaLaserablePresetMeta() {
+  return {
+    familia: FamiliaMateriaPrima.SELLOS,
+    subfamilia: SubfamiliaMateriaPrima.GOMA_LASERABLE,
+    tipoTecnico: 'goma_laserable',
+    templateId: 'goma_laserable_v1',
+  };
+}
+
+// Variante de sello automático: el tamaño de polímero y las líneas de texto son
+// propiedades del modelo (Colop Printer 30 → 47×18 mm, 5 líneas).
+function vsello(sku, marca, modelo, anchoPolimero, altoPolimero, lineasTexto, recomendada) {
+  return {
+    skuSugerido: sku,
+    nombreVarianteSugerido: `${marca} ${modelo} · ${anchoPolimero}×${altoPolimero} mm · ${lineasTexto} líneas`,
+    formato: `${anchoPolimero}×${altoPolimero} mm`,
+    espesor: null,
+    color: 'Estándar',
+    recomendada,
+    atributosVarianteJson: {
+      marca,
+      modelo,
+      anchoPolimero,
+      altoPolimero,
+      lineasTexto,
+      forma: 'Rectangular',
+    },
+    unidadStock: UnidadMateriaPrima.UNIDAD,
+    unidadCompra: UnidadMateriaPrima.UNIDAD,
+    precioReferencia: null,
+    moneda: 'ARS',
+  };
+}
+
+function vselloManual(sku, marca, modelo, anchoPolimero, altoPolimero, lineasTexto, material, recomendada) {
+  return {
+    skuSugerido: sku,
+    nombreVarianteSugerido: `${modelo} · ${anchoPolimero}×${altoPolimero} mm · ${lineasTexto} líneas`,
+    formato: `${anchoPolimero}×${altoPolimero} mm`,
+    espesor: null,
+    color: 'Estándar',
+    recomendada,
+    atributosVarianteJson: {
+      marca,
+      modelo,
+      anchoPolimero,
+      altoPolimero,
+      lineasTexto,
+      forma: 'Rectangular',
+      material,
+    },
+    unidadStock: UnidadMateriaPrima.UNIDAD,
+    unidadCompra: UnidadMateriaPrima.UNIDAD,
+    precioReferencia: null,
+    moneda: 'ARS',
+  };
+}
+
+// Variante de goma laserable: plancha por color/espesor/formato, consumo por área.
+function vgoma(sku, color, espesor, ancho, alto, recomendada) {
+  return {
+    skuSugerido: sku,
+    nombreVarianteSugerido: `${color} · ${espesor} mm · ${ancho}×${alto} mm`,
+    formato: `${ancho}×${alto} mm`,
+    espesor,
+    color,
+    recomendada,
+    atributosVarianteJson: {
+      color,
+      espesor,
+      ancho,
+      alto,
+    },
+    unidadStock: UnidadMateriaPrima.HOJA,
+    unidadCompra: UnidadMateriaPrima.HOJA,
+    precioReferencia: null,
+    moneda: 'ARS',
   };
 }
 

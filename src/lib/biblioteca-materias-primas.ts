@@ -143,4 +143,19 @@ export const bibliotecaFamilias: Record<
     key: "iman_ceramico_flexible",
     parent: "magnetico_fijacion",
   },
+  sellos_automaticos: {
+    nm: "Sellos automáticos",
+    key: "sellos_automaticos",
+    parent: "sellos",
+  },
+  sellos_manuales: {
+    nm: "Sellos manuales",
+    key: "sellos_manuales",
+    parent: "sellos",
+  },
+  goma_laserable: {
+    nm: "Goma laserable",
+    key: "goma_laserable",
+    parent: "sellos",
+  },
 };
