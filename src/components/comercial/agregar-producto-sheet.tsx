@@ -833,6 +833,32 @@ function getSlotsComercialElige(
   );
 }
 
+// Resuelve el modelo de sello (tamaño de polímero + líneas) para el editor.
+// Prioriza el cuerpo elegido por el comercial; si el producto tiene el cuerpo
+// fijo (HARDCODED / MOTOR_ELIGE_AUTO) lo lee del material resuelto del slot.
+function getSelloModelDeRuta(
+  ruta: RutaAlternativaDetalle | null,
+  slotsComercialElige: SlotComercialElige[],
+  config: MotorConfigState,
+  includeConfig: (config: ConfigPasoDetalle) => boolean = () => true,
+): SelloEditorModel | null {
+  for (const slot of slotsComercialElige) {
+    const { variant } = findSelectedCandidateVariant(slot, config);
+    if (variant?.sello) return variant.sello;
+  }
+  const configPasos = ruta?.configPasos.filter(isExecutableConfigPaso).filter(includeConfig) ?? [];
+  for (const configPaso of configPasos) {
+    for (const slot of configPaso.slotsMateriales) {
+      const sello = getSelloModelDeVariante(
+        slot.materialVariante?.atributosVarianteJson,
+        slot.materialVariante?.nombreVariante ?? slot.slotNombre ?? "Sello",
+      );
+      if (sello) return sello;
+    }
+  }
+  return null;
+}
+
 function getSlotsMaterialesLinealDirecto(
   ruta: RutaAlternativaDetalle | null,
   includeConfig: (config: ConfigPasoDetalle) => boolean = () => true,
@@ -3136,12 +3162,13 @@ function ApConfigStep({
   ).enabled;
   const selloModel: SelloEditorModel | null = React.useMemo(() => {
     if (!editorSelloHabilitado) return null;
-    for (const slot of slotsComercialElige) {
-      const { variant } = findSelectedCandidateVariant(slot, motorConfig);
-      if (variant?.sello) return variant.sello;
-    }
-    return null;
-  }, [editorSelloHabilitado, slotsComercialElige, motorConfig]);
+    return getSelloModelDeRuta(
+      rutaSel,
+      slotsComercialElige,
+      motorConfig,
+      includeVisibleConfig,
+    );
+  }, [editorSelloHabilitado, rutaSel, slotsComercialElige, motorConfig, includeVisibleConfig]);
   const [selloEditorAbierto, setSelloEditorAbierto] = React.useState(false);
   const slotsMaterialesOpcionalesPorPaso = React.useMemo(
     () => getSlotsOpcionalesPorPaso(slotsComercialElige),
