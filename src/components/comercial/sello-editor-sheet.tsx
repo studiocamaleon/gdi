@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Sheet, SheetContent } from "@/components/ui/sheet";
 import {
   layoutSello,
   svgSello,
@@ -117,6 +116,19 @@ export function SelloEditorSheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, model?.nombre, model?.lineasMax]);
 
+  // Escape cierra sólo el editor; se captura antes de que burbujee al listener
+  // de Escape del sheet padre (que si no, cerraría también la cotización).
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      onOpenChange(false);
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [open, onOpenChange]);
+
   const engineModel: SelloModel | null = model
     ? { widthMm: model.widthMm, heightMm: model.heightMm, lineasMax: model.lineasMax }
     : null;
@@ -181,26 +193,27 @@ export function SelloEditorSheet({
     onOpenChange(false);
   };
 
+  if (!open) return null;
+
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="left"
-        className="w-full gap-0 border-r p-0 sm:!max-w-[820px]"
+    <>
+      <div
+        className={styles.overlay}
+        onMouseDown={() => onOpenChange(false)}
+      />
+      <div
+        className={styles.panel}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Configurar sello"
       >
         <div className={styles.root}>
           <div className={styles.sheet}>
-            {/* header */}
+            {/* barra superior mínima: sólo cerrar (el modelo se ve abajo) */}
             <div className={styles.shTop}>
-              <div>
-                <div className={styles.shEyebrow}>
-                  <StampIcon />
-                  Comercial · Diseño del sello
-                </div>
-                <h1>Configurar sello</h1>
-                <div className={styles.desc}>
-                  Cargá el texto de cada línea, elegí una tipografía y generá los
-                  archivos de producción.
-                </div>
+              <div className={styles.shEyebrow}>
+                <StampIcon />
+                Diseño del sello
               </div>
               <button
                 className={styles.xClose}
@@ -434,7 +447,7 @@ export function SelloEditorSheet({
             </div>
           </div>
         </div>
-      </SheetContent>
-    </Sheet>
+      </div>
+    </>
   );
 }
