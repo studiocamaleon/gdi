@@ -468,11 +468,19 @@ export class MotorUniversalService {
     this.enriquecerJobContextConTecnologias(producto.pasos, jobContext);
 
     // 1b. Cargar tarifas horarias publicadas para el período (F.2.10)
+    // Incluye los centros de las máquinas candidatas M-2: si el comercial
+    // elige una candidata cuyo centro difiere del de la M-1, la tarifa de
+    // ese centro también tiene que estar en el mapa (G-F2).
     const periodo = input.periodo ?? this.getPeriodoActual();
     const centroIds = Array.from(
       new Set(
         producto.pasos
-          .map((p) => this.resolveCentroCostoPaso(p).id)
+          .flatMap((p) => [
+            this.resolveCentroCostoPaso(p).id,
+            ...(p.maquinasCandidatas ?? []).map(
+              (mc) => mc.maquina?.centroCostoPrincipalId ?? null,
+            ),
+          ])
           .filter((id): id is string => Boolean(id)),
       ),
     );
