@@ -92,6 +92,8 @@ export const bibliotecaUses: Record<string, { nm: string; code: string }> = {
   etiquetas: { nm: "Etiquetas", code: "Etiquetas" },
   stickers: { nm: "Stickers", code: "Stickers" },
   packaging: { nm: "Packaging", code: "Packaging" },
+  exhibidores_pop: { nm: "Exhibidores / POP", code: "Exhibidores" },
+  via_publica: { nm: "Vía pública", code: "Vía pública" },
 };
 
 export const bibliotecaFamilias: Record<
@@ -162,5 +164,10 @@ export const bibliotecaFamilias: Record<
     nm: "Almohadillas y tintas",
     key: "almohadilla_tinta",
     parent: "sellos",
+  },
+  portabanner_estructura: {
+    nm: "Portabanners",
+    key: "portabanner_estructura",
+    parent: "pop_exhibidor",
   },
 };

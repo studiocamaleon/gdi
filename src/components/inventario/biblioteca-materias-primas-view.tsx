@@ -2233,6 +2233,14 @@ function variantDescriptor(
       .filter(Boolean)
       .join(" · ");
   }
+  if (item.templateId === "portabanner_estructura_v1") {
+    const attrs = variant.atributosVariante;
+    const tipo = stringAttr(attrs, "tipoPortabanner");
+    const linea = stringAttr(attrs, "linea");
+    return [tipo, linea && linea !== "Estándar" ? `línea ${linea.toLowerCase()}` : null]
+      .filter(Boolean)
+      .join(" · ");
+  }
   return [
     variant.espesor ? `${formatNumber(variant.espesor)} mm` : null,
     variant.color,

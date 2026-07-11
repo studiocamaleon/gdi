@@ -2339,6 +2339,57 @@ const presets = [
       ['ALM-9094-DACTILAR', '9094', null, null, 'Negro', 'Dactilar', 6700, false],
     ].map(valmohadillaEscritorio),
   },
+  portabannerPreset({
+    key: 'PORTABANNER_TENSORES',
+    nombreCanonico: 'Portabanner de tensores',
+    descripcionCorta:
+      'Estructuras de tensores (varillas) para banner colgante: simple, doble, vertical, tres y cuatro tensores, en línea estándar y económica.',
+    alias: ['Portabanner', 'Tensor', 'Portabanner de varillas'],
+    filas: [
+      ['PB-TS-60X150', 'Tensor simple', 'Tensor simple', 60, 150, 'Estándar', true],
+      ['PB-TS-90X190', 'Tensor simple', 'Tensor simple', 90, 190, 'Estándar', true],
+      ['PB-TS-ECO-90X190', 'Tensor simple (Eco)', 'Tensor simple', 90, 190, 'Económica', false],
+      ['PB-DT-90X190', 'Doble tensor', 'Doble tensor', 90, 190, 'Estándar', true],
+      ['PB-DT-ECO-90X190', 'Doble tensor (Eco)', 'Doble tensor', 90, 190, 'Económica', false],
+      ['PB-DT-VERT-150X200', 'Doble tensor vertical', 'Doble tensor vertical', 150, 200, 'Estándar', false],
+      ['PB-3T-200X200', 'Tres tensores', 'Tres tensores', 200, 200, 'Estándar', false],
+      ['PB-3T-ECO-200X200', 'Tres tensores (Eco)', 'Tres tensores', 200, 200, 'Económica', false],
+      ['PB-4T-300X200', 'Cuatro tensores', 'Cuatro tensores', 300, 200, 'Estándar', false],
+      ['PB-4T-ECO-300X200', 'Cuatro tensores (Eco)', 'Cuatro tensores', 300, 200, 'Económica', false],
+    ],
+  }),
+  portabannerPreset({
+    key: 'PORTABANNER_ROLLUP',
+    nombreCanonico: 'Portabanner Roll-Up',
+    descripcionCorta:
+      'Estructura roll-up autoenrollable con base de aluminio y bolso de transporte.',
+    alias: ['Roll-Up', 'Rollup', 'Banner enrollable'],
+    filas: [
+      ['PB-ROLLUP-85X200', 'Roll-Up', 'Roll-Up', 85, 200, 'Estándar', true],
+    ],
+  }),
+  portabannerPreset({
+    key: 'PORTABANNER_FLY_DROP',
+    nombreCanonico: 'Fly / Drop banner',
+    descripcionCorta:
+      'Estructuras con mástil flexible para banners tipo vela y gota (fly banner, drop banner).',
+    alias: ['Fly banner', 'Drop banner', 'Bandera vela', 'Bandera gota', 'Potencia'],
+    filas: [
+      ['PB-FLY-50X260', 'Fly banner', 'Fly banner', 50, 260, 'Estándar', true],
+      ['PB-DROP-60X250', 'Drop banner', 'Drop banner', 60, 250, 'Estándar', false],
+      ['PB-DROP-GOTA-85X240', 'Drop banner (gota)', 'Drop banner gota', 85, 240, 'Estándar', false],
+    ],
+  }),
+  portabannerPreset({
+    key: 'PORTABANNER_BASE_CRUZ',
+    nombreCanonico: 'Soporte base cruz',
+    descripcionCorta:
+      'Base cruz plegable para fly/drop banner y mástiles de vía pública.',
+    alias: ['Base cruz', 'Soporte cruz', 'Pie cruz'],
+    filas: [
+      ['PB-BASE-CRUZ', 'Base cruz', 'Base cruz', null, null, 'Estándar', false],
+    ],
+  }),
 ];
 
 function acrilicoVariants() {
@@ -2492,6 +2543,59 @@ function tintaSelloPresetMeta() {
     subfamilia: SubfamiliaMateriaPrima.ALMOHADILLA_TINTA,
     tipoTecnico: 'tinta_sello',
     templateId: 'tinta_sello_v1',
+  };
+}
+
+function portabannerPresetMeta() {
+  return {
+    familia: FamiliaMateriaPrima.POP_EXHIBIDOR,
+    subfamilia: SubfamiliaMateriaPrima.PORTABANNER_ESTRUCTURA,
+    tipoTecnico: 'portabanner',
+    templateId: 'portabanner_estructura_v1',
+  };
+}
+
+// Estructura portabanner. fila: [sku, nombre, tipoPortabanner, ancho cm|null,
+// alto cm|null, linea, recomendada]. La medida es la del banner de referencia
+// del fabricante: NO condiciona la lona, que se define en el producto/ruta.
+// Sin precio de lista: se completa manualmente al instalar.
+function vportabanner([sku, nombre, tipoPortabanner, ancho, alto, linea, recomendada]) {
+  const medida = ancho && alto ? `${ancho}×${alto} cm` : 'Sin medida';
+  return {
+    skuSugerido: sku,
+    nombreVarianteSugerido: ancho && alto ? `${nombre} · ${medida}` : nombre,
+    formato: medida,
+    espesor: null,
+    color: 'Estándar',
+    recomendada: recomendada === true,
+    atributosVarianteJson: {
+      tipoPortabanner,
+      ...(ancho ? { ancho } : {}),
+      ...(alto ? { alto } : {}),
+      linea,
+    },
+    unidadStock: UnidadMateriaPrima.UNIDAD,
+    unidadCompra: UnidadMateriaPrima.UNIDAD,
+    precioReferencia: null,
+    moneda: 'ARS',
+  };
+}
+
+function portabannerPreset({ key, nombreCanonico, descripcionCorta, alias, filas }) {
+  return {
+    key,
+    nombreCanonico,
+    descripcionCorta,
+    iconKind: 'banner',
+    aliasDisponibles: alias,
+    usosRecomendados: ['exhibidores_pop', 'via_publica'],
+    procesosCompatibles: ['ensamble_estructural'],
+    advertencias: [
+      'La medida es la del banner de referencia del fabricante: no condiciona la lona, que se define en el producto.',
+      'Sin precio de lista cargado: completar el precio del proveedor al instalar.',
+    ],
+    ...portabannerPresetMeta(),
+    variantes: filas.map(vportabanner),
   };
 }
 
