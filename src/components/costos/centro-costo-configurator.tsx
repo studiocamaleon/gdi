@@ -527,6 +527,7 @@ export function CentroCostoConfigurator({
     React.useState<CentroCostoCapacidadPayload>({
       diasPorMes: 22,
       horasPorDia: 8,
+      porcentajeNoProductivo: 0,
       overrideManualCapacidad: undefined,
     });
   const [draftTariff, setDraftTariff] = React.useState<number | null>(null);
@@ -625,21 +626,25 @@ export function CentroCostoConfigurator({
     [],
   );
 
-  const capacidadTeorica =
+  const horasBaseMes =
     (capacityForm.diasPorMes || 0) * (capacityForm.horasPorDia || 0);
-  const capacidadAutoHoraHombre = resourcesForm
+  const esHoraHombre = baseForm?.unidadBaseFutura === "hora_hombre";
+  const capacidadHoraHombre = resourcesForm
     .filter(
       (resource) => resource.activo && resource.tipoRecurso === "empleado",
     )
     .reduce(
       (total, resource) =>
-        total + capacidadTeorica * ((resource.porcentajeAsignacion ?? 0) / 100),
+        total + horasBaseMes * ((resource.porcentajeAsignacion ?? 0) / 100),
       0,
     );
-  const capacidadAutomatica =
-    baseForm?.unidadBaseFutura === "hora_hombre"
-        ? capacidadAutoHoraHombre
-        : capacidadTeorica;
+  // Teórica = techo del centro. Para hora-hombre escala con la dotación (suma
+  // de horas-hombre asignadas); para máquina/otros es el turno base.
+  const capacidadTeorica = esHoraHombre ? capacidadHoraHombre : horasBaseMes;
+  // Práctica automática = teórica descontando el tiempo no productivo.
+  const factorProductivo =
+    Math.max(0, 100 - (capacityForm.porcentajeNoProductivo ?? 0)) / 100;
+  const capacidadAutomatica = capacidadTeorica * factorProductivo;
   const capacidadPractica =
     capacityForm.overrideManualCapacidad !== undefined &&
     Number.isFinite(capacityForm.overrideManualCapacidad)
@@ -819,12 +824,15 @@ export function CentroCostoConfigurator({
           ? {
               diasPorMes: detail.capacidad.diasPorMes,
               horasPorDia: detail.capacidad.horasPorDia,
+              porcentajeNoProductivo:
+                detail.capacidad.porcentajeNoProductivo ?? 0,
               overrideManualCapacidad:
                 detail.capacidad.overrideManualCapacidad ?? undefined,
             }
           : {
               diasPorMes: 22,
               horasPorDia: 8,
+              porcentajeNoProductivo: 0,
               overrideManualCapacidad: undefined,
             },
       );
@@ -1015,6 +1023,8 @@ export function CentroCostoConfigurator({
           setCapacityForm({
             diasPorMes: detail.capacidad.diasPorMes,
             horasPorDia: detail.capacidad.horasPorDia,
+            porcentajeNoProductivo:
+              detail.capacidad.porcentajeNoProductivo ?? 0,
             overrideManualCapacidad:
               detail.capacidad.overrideManualCapacidad ?? undefined,
           });
@@ -2986,13 +2996,14 @@ export function CentroCostoConfigurator({
             <CardHeader>
               <CardTitle>¿Cuántas horas reales trabaja al mes?</CardTitle>
               <CardDescription>
-                La capacidad práctica se define desde días y horas reales del
-                mes. Si ya conocés el total exacto, podés cargar una capacidad
-                manual.
+                La capacidad teórica sale de días y horas (para hora-hombre,
+                escala con la dotación). La práctica le descuenta el % de tiempo
+                no productivo. Si ya conocés el total exacto, podés cargar una
+                capacidad manual que tiene prioridad.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-5">
-              <FieldGroup className="grid gap-4 lg:grid-cols-3">
+              <FieldGroup className="grid gap-4 lg:grid-cols-4">
                 <Field>
                   <FieldLabel>Días por mes</FieldLabel>
                   <Input
@@ -3020,6 +3031,23 @@ export function CentroCostoConfigurator({
                     }
                   />
                   <FieldDescription>Ejemplo: 8</FieldDescription>
+                </Field>
+                <Field>
+                  <FieldLabel>% no productivo</FieldLabel>
+                  <Input
+                    inputMode="decimal"
+                    value={String(capacityForm.porcentajeNoProductivo ?? 0)}
+                    onChange={(event) =>
+                      setCapacityForm((current) => ({
+                        ...current,
+                        porcentajeNoProductivo: Number(event.target.value) || 0,
+                      }))
+                    }
+                  />
+                  <FieldDescription>
+                    Descansos, setup, ausentismo… (ej. 18). Se descuenta de la
+                    teórica.
+                  </FieldDescription>
                 </Field>
                 <Field>
                   <FieldLabel>Capacidad manual</FieldLabel>

@@ -224,6 +224,9 @@ export class CostosMapper {
       unidadBase: this.fromPrismaUnidadBase(capacidad.unidadBase),
       diasPorMes: this.decimalToNumber(capacidad.diasPorMes),
       horasPorDia: this.decimalToNumber(capacidad.horasPorDia),
+      porcentajeNoProductivo: this.decimalToNumber(
+        capacidad.porcentajeNoProductivo,
+      ),
       capacidadTeorica: this.decimalToNumber(capacidad.capacidadTeorica),
       capacidadPractica: this.decimalToNumber(capacidad.capacidadPractica),
       overrideManualCapacidad: capacidad.overrideManualCapacidad

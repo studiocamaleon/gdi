@@ -184,7 +184,7 @@ export class CostosConfiguracionPeriodoService {
           unidadBase: centro.unidadBaseFutura,
           diasPorMes: capacidad.diasPorMes,
           horasPorDia: capacidad.horasPorDia,
-          porcentajeNoProductivo: new Prisma.Decimal(0),
+          porcentajeNoProductivo: capacidad.porcentajeNoProductivo,
           capacidadTeorica: capacidad.capacidadTeorica,
           capacidadPractica: capacidad.capacidadPractica,
           overrideManualCapacidad: capacidad.overrideManualCapacidad,
@@ -193,7 +193,7 @@ export class CostosConfiguracionPeriodoService {
           unidadBase: centro.unidadBaseFutura,
           diasPorMes: capacidad.diasPorMes,
           horasPorDia: capacidad.horasPorDia,
-          porcentajeNoProductivo: new Prisma.Decimal(0),
+          porcentajeNoProductivo: capacidad.porcentajeNoProductivo,
           capacidadTeorica: capacidad.capacidadTeorica,
           capacidadPractica: capacidad.capacidadPractica,
           overrideManualCapacidad: capacidad.overrideManualCapacidad,
@@ -401,7 +401,7 @@ export class CostosConfiguracionPeriodoService {
         unidadBase: centro.unidadBaseFutura,
         diasPorMes: capacidad.diasPorMes,
         horasPorDia: capacidad.horasPorDia,
-        porcentajeNoProductivo: new Prisma.Decimal(0),
+        porcentajeNoProductivo: capacidad.porcentajeNoProductivo,
         capacidadTeorica: capacidad.capacidadTeorica,
         capacidadPractica: capacidad.capacidadPractica,
         overrideManualCapacidad: capacidad.overrideManualCapacidad,
@@ -410,7 +410,7 @@ export class CostosConfiguracionPeriodoService {
         unidadBase: centro.unidadBaseFutura,
         diasPorMes: capacidad.diasPorMes,
         horasPorDia: capacidad.horasPorDia,
-        porcentajeNoProductivo: new Prisma.Decimal(0),
+        porcentajeNoProductivo: capacidad.porcentajeNoProductivo,
         capacidadTeorica: capacidad.capacidadTeorica,
         capacidadPractica: capacidad.capacidadPractica,
         overrideManualCapacidad: capacidad.overrideManualCapacidad,
@@ -781,7 +781,6 @@ export class CostosConfiguracionPeriodoService {
     const diasPorMes = new Prisma.Decimal(payload.diasPorMes);
     const horasPorDia = new Prisma.Decimal(payload.horasPorDia);
     const horasBaseMes = diasPorMes.mul(horasPorDia);
-    const capacidadTeorica = horasBaseMes;
     const capacidadHoraHombre = recursos
       .filter(
         (recurso) => recurso.tipoRecurso === TipoRecursoCentroCosto.EMPLEADO,
@@ -793,19 +792,36 @@ export class CostosConfiguracionPeriodoService {
           horasBaseMes.mul(porcentaje).div(new Prisma.Decimal(100)),
         );
       }, new Prisma.Decimal(0));
-    const capacidadAuto =
+    // Capacidad teórica = techo del centro. Para HORA_HOMBRE escala con la
+    // dotación (suma de horas-hombre asignadas); para máquina/otros es el turno
+    // base (días × horas).
+    const capacidadTeorica =
       unidadBase === UnidadBaseCentroCosto.HORA_HOMBRE
-          ? capacidadHoraHombre
-          : capacidadTeorica;
+        ? capacidadHoraHombre
+        : horasBaseMes;
+    // % de tiempo no productivo → factor productivo aplicado a la teórica.
+    let porcentajeNoProductivo = new Prisma.Decimal(
+      payload.porcentajeNoProductivo ?? 0,
+    );
+    if (porcentajeNoProductivo.lt(0)) {
+      porcentajeNoProductivo = new Prisma.Decimal(0);
+    } else if (porcentajeNoProductivo.gt(100)) {
+      porcentajeNoProductivo = new Prisma.Decimal(100);
+    }
+    const factorProductivo = new Prisma.Decimal(100)
+      .minus(porcentajeNoProductivo)
+      .div(new Prisma.Decimal(100));
+    const capacidadAutomatica = capacidadTeorica.mul(factorProductivo);
     const overrideManualCapacidad =
       payload.overrideManualCapacidad === undefined
         ? null
         : new Prisma.Decimal(payload.overrideManualCapacidad);
-    const capacidadPractica = overrideManualCapacidad ?? capacidadAuto;
+    const capacidadPractica = overrideManualCapacidad ?? capacidadAutomatica;
 
     return {
       diasPorMes,
       horasPorDia,
+      porcentajeNoProductivo,
       capacidadTeorica,
       capacidadPractica,
       overrideManualCapacidad,

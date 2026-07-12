@@ -175,6 +175,7 @@ export type CentroCostoCapacidad = {
   unidadBase: UnidadBaseCentroCosto;
   diasPorMes: number;
   horasPorDia: number;
+  porcentajeNoProductivo: number;
   capacidadTeorica: number;
   capacidadPractica: number;
   overrideManualCapacidad: number | null;
@@ -305,6 +306,7 @@ export type CentroCostoComponenteCostoPayload = {
 export type CentroCostoCapacidadPayload = {
   diasPorMes: number;
   horasPorDia: number;
+  porcentajeNoProductivo?: number;
   overrideManualCapacidad?: number;
 };
 
