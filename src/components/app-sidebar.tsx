@@ -6,6 +6,8 @@ import { toast } from "sonner";
 
 import { type CurrentUser } from "@/lib/auth";
 import { NavLink } from "@/components/navigation/nav-link";
+import { hasChildren, NAV, type NavItem } from "@/components/navigation/nav-items";
+import { useSidebar } from "@/components/ui/sidebar";
 
 type AppSidebarProps = {
   currentUser: CurrentUser;
@@ -84,13 +86,13 @@ const LogoNodes = ({ size = 22 }: { size?: number }) => (
   </svg>
 );
 
-function Brand() {
+function Brand({ collapsed = false }: { collapsed?: boolean }) {
   return (
-    <div className="side-brand">
+    <div className="side-brand" title={collapsed ? "grafoprint" : undefined}>
       <div className="mark">
         <LogoNodes size={31} />
       </div>
-      <div>
+      <div className="brand-text">
         <div className="wordmark">grafoprint</div>
         <div className="org">gráfica digital inteligente</div>
       </div>
@@ -98,89 +100,24 @@ function Brand() {
   );
 }
 
-type NavChild = {
-  key: string;
-  label: string;
-  href: string;
-};
-
-type NavItem =
-  | {
-      key: string;
-      label: string;
-      icon: keyof typeof Ico;
-      href: string;
-      children?: never;
-    }
-  | {
-      key: string;
-      label: string;
-      icon: keyof typeof Ico;
-      children: NavChild[];
-      href?: never;
-    };
-
-const NAV: NavItem[] = [
-  { key: "panel", label: "Panel general", icon: "Grid", href: "/" },
-  {
-    key: "comercial",
-    label: "Comercial",
-    icon: "Briefcase",
-    children: [
-      { key: "crear-propuesta", label: "Crear propuesta", href: "/comercial/crear-propuesta" },
-    ],
-  },
-  {
-    key: "registros",
-    label: "Registros",
-    icon: "Users",
-    children: [
-      { key: "clientes", label: "Clientes", href: "/clientes" },
-      { key: "proveedores", label: "Proveedores", href: "/proveedores" },
-      { key: "empleados", label: "Empleados", href: "/empleados" },
-    ],
-  },
-  {
-    key: "costos",
-    label: "Costos",
-    icon: "Coin",
-    children: [
-      { key: "centros", label: "Centros de costo", href: "/costos/centros-de-costo" },
-      { key: "maquinaria", label: "Maquinaria", href: "/costos/maquinaria" },
-      { key: "rutas", label: "Rutas de producción", href: "/productos-servicios/rutas" },
-      { key: "catalogo", label: "Catálogo de productos", href: "/productos-servicios" },
-      { key: "cargos", label: "Cargos directos", href: "/productos-servicios/cargos-directos" },
-      { key: "impuestos", label: "Impuestos", href: "/productos-servicios/impuestos-catalogo" },
-      { key: "comisiones", label: "Comisiones", href: "/productos-servicios/comisiones-catalogo" },
-    ],
-  },
-  {
-    key: "produccion",
-    label: "Producción",
-    icon: "Factory",
-    children: [
-      { key: "tablero-produccion", label: "Tablero", href: "/produccion/tablero" },
-      { key: "simulador", label: "Simulador de impresión", href: "/produccion/simulador" },
-      { key: "estaciones", label: "Estaciones", href: "/produccion/estaciones" },
-    ],
-  },
-  {
-    key: "inventario",
-    label: "Inventario",
-    icon: "Cube",
-    children: [
-      { key: "materiales", label: "Materiales", href: "/inventario/materias-primas" },
-      { key: "movimientos", label: "Movimientos", href: "/inventario/movimientos" },
-    ],
-  },
-];
-
 function matchesRoute(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function hasChildren(item: NavItem): item is Extract<NavItem, { children: NavChild[] }> {
-  return Array.isArray(item.children);
+// Resalta en negrita el tramo del texto que coincide con la búsqueda.
+function highlightMatch(text: string, q: string): React.ReactNode {
+  if (!q) return text;
+  const idx = text.toLowerCase().indexOf(q);
+  if (idx === -1) return text;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <strong style={{ fontWeight: 700, color: "var(--side-ink)" }}>
+        {text.slice(idx, idx + q.length)}
+      </strong>
+      {text.slice(idx + q.length)}
+    </>
+  );
 }
 
 function getActiveKey(pathname: string) {
@@ -242,6 +179,31 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
   const planNombre = currentUser.tenantActual.suscripcion?.planNombre?.trim() || "Plan diamante";
   const diasRestantes = currentUser.tenantActual.suscripcion?.diasRestantes ?? 14;
   const suscripcionProgress = getSuscripcionProgress(diasRestantes);
+  const { state, setOpen } = useSidebar();
+  const collapsed = state === "collapsed";
+  const [query, setQuery] = React.useState("");
+  const q = query.trim().toLowerCase();
+  const filtering = q.length > 0;
+
+  // Navegación filtrada en vivo por el buscador del sidebar. Al filtrar, los
+  // grupos con hijos que matchean se muestran expandidos.
+  const filteredNav = React.useMemo<NavItem[]>(() => {
+    if (!filtering) return NAV;
+    const match = (label: string) => label.toLowerCase().includes(q);
+    const result: NavItem[] = [];
+    for (const item of NAV) {
+      if (!hasChildren(item)) {
+        if (match(item.label)) result.push(item);
+        continue;
+      }
+      const grupoMatch = match(item.label);
+      const children = item.children.filter(
+        (child) => grupoMatch || match(child.label),
+      );
+      if (children.length > 0) result.push({ ...item, children });
+    }
+    return result;
+  }, [filtering, q]);
 
   React.useEffect(() => {
     if (!parentKey) {
@@ -255,25 +217,66 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
     setOpenKey((prev) => (prev === key ? null : key));
   };
 
-  return (
-    <aside className="side">
-      <Brand />
+  // En modo colapsado no hay lugar para desplegar hijos: al tocar un grupo se
+  // expande el sidebar y se abre ese grupo.
+  const onGroupClick = (key: string) => {
+    if (collapsed) {
+      setOpen(true);
+      setOpenKey(key);
+    } else {
+      toggle(key);
+    }
+  };
 
-      <button
-        type="button"
-        className="side-search"
-        onClick={() => toast.info("Búsqueda global disponible próximamente.")}
-      >
-        <Ico.Search />
-        <span>Buscar…</span>
-        <span className="kbd">⌘K</span>
-      </button>
+  return (
+    <aside className={`side${collapsed ? " collapsed" : ""}`} data-collapsed={collapsed}>
+      <Brand collapsed={collapsed} />
+
+      {collapsed ? (
+        <button
+          type="button"
+          className="side-search collapsed"
+          onClick={() => setOpen(true)}
+          title="Buscar"
+          aria-label="Buscar"
+        >
+          <Ico.Search />
+        </button>
+      ) : (
+        <div className="side-search">
+          <Ico.Search />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                setQuery("");
+                event.currentTarget.blur();
+              }
+            }}
+            placeholder="Buscar…"
+            aria-label="Buscar en el menú"
+            style={{
+              flex: 1,
+              minWidth: 0,
+              background: "transparent",
+              border: "none",
+              outline: "none",
+              color: "var(--side-ink)",
+              font: "inherit",
+              fontSize: "13.75px",
+            }}
+          />
+        </div>
+      )}
 
       <nav className="side-nav">
-        {NAV.map((item) => {
+        {filteredNav.map((item) => {
           const IconCmp = Ico[item.icon];
           const itemHasChildren = hasChildren(item);
-          const open = itemHasChildren && openKey === item.key;
+          // Al filtrar, los grupos se muestran expandidos; sino, acordeón.
+          const open = itemHasChildren && (filtering || openKey === item.key);
           const isDirectActive = !itemHasChildren && activeKey === item.key;
 
           if (!itemHasChildren) {
@@ -281,10 +284,13 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
               <NavLink
                 key={item.key}
                 href={item.href}
+                title={item.label}
                 className={`nav-item ${isDirectActive ? "active" : ""}`}
               >
                 <span className="ico"><IconCmp /></span>
-                <span className="label">{item.label}</span>
+                <span className="label">
+                  {filtering ? highlightMatch(item.label, q) : item.label}
+                </span>
               </NavLink>
             );
           }
@@ -293,15 +299,18 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
             <React.Fragment key={item.key}>
               <button
                 type="button"
+                title={item.label}
                 className={`nav-item ${open ? "expanded" : ""}`}
-                onClick={() => toggle(item.key)}
+                onClick={() => onGroupClick(item.key)}
               >
                 <span className="ico"><IconCmp /></span>
-                <span className="label">{item.label}</span>
+                <span className="label">
+                  {filtering ? highlightMatch(item.label, q) : item.label}
+                </span>
                 <Ico.Chev className="chev" />
               </button>
 
-              {open ? (
+              {open && !collapsed ? (
                 <div className="nav-children">
                   {item.children.map((child) => (
                     <NavLink
@@ -309,7 +318,9 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
                       href={child.href}
                       className={`nav-child ${activeKey === child.key ? "active" : ""}`}
                     >
-                      <span>{child.label}</span>
+                      <span>
+                        {filtering ? highlightMatch(child.label, q) : child.label}
+                      </span>
                     </NavLink>
                   ))}
                 </div>
@@ -317,6 +328,18 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
             </React.Fragment>
           );
         })}
+
+        {filtering && filteredNav.length === 0 ? (
+          <div
+            style={{
+              padding: "10px 12px",
+              fontSize: 12.5,
+              color: "var(--side-muted)",
+            }}
+          >
+            Sin resultados para “{query}”.
+          </div>
+        ) : null}
       </nav>
 
       <button
