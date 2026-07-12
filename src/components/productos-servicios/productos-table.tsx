@@ -53,6 +53,35 @@ const Ico = {
   ),
 };
 
+// Resalta con marcador las palabras de la búsqueda dentro del texto.
+function highlightMatch(text: string, query: string): React.ReactNode {
+  const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return text;
+  const escaped = tokens.map((token) =>
+    token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+  );
+  const regex = new RegExp(`(${escaped.join("|")})`, "gi");
+  const tokenSet = new Set(tokens);
+  return text.split(regex).map((part, index) =>
+    part && tokenSet.has(part.toLowerCase()) ? (
+      <span
+        key={index}
+        style={{
+          background: "rgba(255, 106, 43, 0.22)",
+          color: "inherit",
+          borderRadius: "3px",
+          padding: "0 1px",
+          boxShadow: "0 0 0 1px rgba(255, 106, 43, 0.28)",
+        }}
+      >
+        {part}
+      </span>
+    ) : (
+      part
+    ),
+  );
+}
+
 function CatalogSelect({
   label,
   value,
@@ -260,12 +289,13 @@ export function ProductosServiciosTable({
             <div className="search">
               <Ico.Search />
               <input
+                autoFocus
                 value={search}
                 onChange={(event) => {
                   setSearch(event.target.value);
                   setPage(1);
                 }}
-                placeholder="Buscar por código, nombre o descripción…"
+                placeholder="Buscar por nombre o código…"
               />
               <span className="kbd">/</span>
             </div>
@@ -344,7 +374,9 @@ export function ProductosServiciosTable({
                       return (
                         <tr key={p.id} onClick={() => openProduct(p.id)}>
                         <td>
-                          <div className="name">{p.nombre}</div>
+                          <div className="name">
+                            {highlightMatch(p.nombre, search)}
+                          </div>
                           <div className="desc">{p.descripcion ?? ""}</div>
                         </td>
                         <td>

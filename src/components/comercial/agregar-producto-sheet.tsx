@@ -407,6 +407,34 @@ function familyColor(family: string) {
   );
 }
 
+// Resalta en negrita las palabras de la búsqueda dentro del texto.
+function highlightMatch(text: string, tokens: string[]): React.ReactNode {
+  if (tokens.length === 0) return text;
+  const escaped = tokens.map((token) =>
+    token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+  );
+  const regex = new RegExp(`(${escaped.join("|")})`, "gi");
+  const tokenSet = new Set(tokens);
+  return text.split(regex).map((part, index) =>
+    part && tokenSet.has(part.toLowerCase()) ? (
+      <span
+        key={index}
+        style={{
+          background: "rgba(255, 106, 43, 0.22)",
+          color: "inherit",
+          borderRadius: "3px",
+          padding: "0 1px",
+          boxShadow: "0 0 0 1px rgba(255, 106, 43, 0.28)",
+        }}
+      >
+        {part}
+      </span>
+    ) : (
+      part
+    ),
+  );
+}
+
 function ApAtomMode({ mode }: { mode: CatalogProduct["cobro"] }) {
   return mode === "Por m²" ? <Grid2X2Icon /> : <ListIcon />;
 }
@@ -2908,14 +2936,14 @@ function ApSelectStep({
     [products],
   );
 
+  // Busca por título (y código), no por el texto descriptivo. Cada palabra de
+  // la consulta debe estar presente (AND).
+  const queryTokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const filtered = products.filter((product) => {
     if (family !== "Todos" && product.family !== family) return false;
-    if (!query) return true;
-    const normalized = query.toLowerCase();
-    return [product.code, product.name, product.descripcion]
-      .join(" ")
-      .toLowerCase()
-      .includes(normalized);
+    if (queryTokens.length === 0) return true;
+    const haystack = `${product.code} ${product.name}`.toLowerCase();
+    return queryTokens.every((token) => haystack.includes(token));
   });
   const activeProduct =
     filtered.length > 0
@@ -2945,7 +2973,7 @@ function ApSelectStep({
         <SearchIcon />
         <input
           autoFocus
-          placeholder="Buscar por código, nombre o descripción..."
+          placeholder="Buscar por nombre o código..."
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={(event) => {
@@ -3044,7 +3072,9 @@ function ApSelectStep({
                     {product.family}
                   </span>
                 </span>
-                <span className="ap-prod-name">{product.name}</span>
+                <span className="ap-prod-name">
+                  {highlightMatch(product.name, queryTokens)}
+                </span>
                 <span className="ap-prod-desc">{product.descripcion}</span>
               </span>
               <span className="ap-prod-meta">

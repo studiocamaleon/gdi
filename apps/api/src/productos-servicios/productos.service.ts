@@ -37,12 +37,12 @@ export class ProductosService {
     const where: Prisma.ProductoWhereInput = {
       tenantId,
       ...(activo !== undefined ? { activo } : {}),
+      // Búsqueda por título (nombre) y código, no por la descripción.
       ...(search
         ? {
             OR: [
               { nombre: { contains: search, mode: 'insensitive' } },
               { codigo: { contains: search, mode: 'insensitive' } },
-              { descripcion: { contains: search, mode: 'insensitive' } },
             ],
           }
         : {}),
