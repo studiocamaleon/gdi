@@ -2420,10 +2420,30 @@ function CostosItemView({
   const margenContribucionMonto = precioNeto - costosVariablesTotal;
   const margenContribucionPct =
     precioNeto > 0 ? (margenContribucionMonto / precioNeto) * 100 : 0;
-  const impuestosInternosNombres = (desglosePrecio?.impuestos ?? [])
+  // Impuestos internos desglosados uno por uno (IIBB sobre NETO, cheque sobre
+  // BRUTO_COBRADO). La suma da costosInternosTotal; el último absorbe el
+  // residuo de redondeo para que el waterfall siga sumando exacto.
+  const impuestosInternos = (desglosePrecio?.impuestos ?? [])
     .filter((impuesto) => (impuesto.traslado ?? "POR_DENTRO") !== "POR_FUERA")
-    .map((impuesto) => impuesto.nombre)
-    .join(" + ");
+    .slice()
+    .sort((a, b) => a.orden - b.orden);
+  let internosAcumulado = 0;
+  const impuestosInternosFilas = impuestosInternos.map((impuesto, index) => {
+    const base =
+      (impuesto.baseCalculo ?? "NETO") === "BRUTO_COBRADO"
+        ? precioBruto
+        : precioNeto;
+    const monto =
+      index === impuestosInternos.length - 1
+        ? costosInternosTotal - internosAcumulado
+        : (base * impuesto.porcentaje) / 100;
+    internosAcumulado += monto;
+    return {
+      key: `imp-${impuesto.codigo}`,
+      nombre: impuesto.nombre,
+      monto,
+    };
+  });
   const impuestosPorFueraNombres = (desglosePrecio?.impuestos ?? [])
     .filter((impuesto) => impuesto.traslado === "POR_FUERA")
     .map((impuesto) => `${impuesto.nombre} ${impuesto.porcentaje}%`)
@@ -2477,17 +2497,25 @@ function CostosItemView({
         },
       ];
     }),
-    ...(costosInternosTotal > 0
-      ? [
-          {
-            key: "impuestos-internos",
-            label: impuestosInternosNombres || "Impuestos internos",
-            hint: "ya incluidos en el precio, no se muestran al cliente",
-            tipo: "Impuesto",
-            monto: costosInternosTotal,
-          },
-        ]
-      : []),
+    ...(impuestosInternosFilas.length > 0
+      ? impuestosInternosFilas.map((fila) => ({
+          key: fila.key,
+          label: fila.nombre,
+          hint: "ya incluido en el precio, no se muestra al cliente",
+          tipo: "Impuesto",
+          monto: fila.monto,
+        }))
+      : costosInternosTotal > 0
+        ? [
+            {
+              key: "impuestos-internos",
+              label: "Impuestos internos",
+              hint: "ya incluidos en el precio, no se muestran al cliente",
+              tipo: "Impuesto",
+              monto: costosInternosTotal,
+            },
+          ]
+        : []),
     ...(comisionesTotal > 0
       ? [
           {
