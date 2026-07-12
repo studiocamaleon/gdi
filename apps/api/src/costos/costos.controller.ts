@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -107,6 +108,11 @@ export class CostosController {
   @Patch('centros-costo/:id/toggle')
   toggleCentro(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.costosService.toggleCentro(auth, id);
+  }
+
+  @Delete('centros-costo/:id')
+  eliminarCentro(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
+    return this.costosService.eliminarCentro(auth, id);
   }
 
   @Get('centros-costo/:id/configuracion')

@@ -93,6 +93,13 @@ export async function toggleCentroCosto(id: string) {
   });
 }
 
+export async function eliminarCentroCosto(id: string) {
+  return apiRequest<{ id: string; eliminado: boolean }>(
+    `/costos/centros-costo/${id}`,
+    { method: "DELETE" },
+  );
+}
+
 export async function getCentroCostoConfiguracion(id: string, periodo: string) {
   return apiRequest<CentroCostoConfiguracionDetalle>(
     `/costos/centros-costo/${id}/configuracion?periodo=${encodeURIComponent(periodo)}`,

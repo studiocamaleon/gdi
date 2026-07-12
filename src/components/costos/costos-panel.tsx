@@ -7,6 +7,7 @@ import {
   FolderTreeIcon,
   PencilIcon,
   PlusIcon,
+  PowerIcon,
   RefreshCcwIcon,
   SlidersHorizontalIcon,
   Trash2Icon,
@@ -18,6 +19,7 @@ import {
   createAreaCosto,
   createCentroCosto,
   createPlanta,
+  eliminarCentroCosto,
   getAreasCosto,
   getCentrosCosto,
   getPlantas,
@@ -377,6 +379,27 @@ export function CostosPanel({
       } catch (error) {
         toast.error(
           error instanceof Error ? error.message : "No se pudo cambiar el centro.",
+        );
+      }
+    });
+  };
+
+  const handleEliminarCentro = (centro: CentroCosto) => {
+    const confirmado = window.confirm(
+      `¿Eliminar definitivamente el centro "${centro.nombre}"?\n\n` +
+        "Se borran también sus tarifas y recursos de cada período. " +
+        "Esta acción no se puede deshacer.",
+    );
+    if (!confirmado) return;
+    startSaving(async () => {
+      try {
+        await eliminarCentroCosto(centro.id);
+        toast.success(`Centro "${centro.nombre}" eliminado.`);
+        reloadAll();
+        setConfiguracionRefreshKey((current) => current + 1);
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : "No se pudo eliminar el centro.",
         );
       }
     });
@@ -1241,6 +1264,15 @@ export function CostosPanel({
                                 title={centro.activo ? "Inactivar" : "Activar"}
                                 aria-label={`${centro.activo ? "Inactivar" : "Activar"} ${centro.nombre}`}
                                 onClick={() => handleToggleCentro(centro.id)}
+                              >
+                                <PowerIcon />
+                              </button>
+                              <button
+                                type="button"
+                                className="icon-btn"
+                                title="Eliminar"
+                                aria-label={`Eliminar ${centro.nombre}`}
+                                onClick={() => handleEliminarCentro(centro)}
                               >
                                 <Trash2Icon />
                               </button>

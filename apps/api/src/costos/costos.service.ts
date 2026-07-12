@@ -69,6 +69,10 @@ export class CostosService {
     return this.catalogo.toggleCentro(auth, id);
   }
 
+  eliminarCentro(auth: CurrentAuth, id: string) {
+    return this.catalogo.eliminarCentro(auth, id);
+  }
+
   getCentroConfiguracion(auth: CurrentAuth, id: string, periodo: string) {
     return this.configuracion.getCentroConfiguracion(auth, id, periodo);
   }

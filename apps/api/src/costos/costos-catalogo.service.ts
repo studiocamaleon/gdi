@@ -225,6 +225,36 @@ export class CostosCatalogoService {
     });
   }
 
+  async eliminarCentro(auth: CurrentAuth, id: string) {
+    const centro = await this.validaciones.findCentroOrThrow(auth, id);
+
+    // Bloqueamos el borrado si el centro está en uso: máquinas o pasos lo
+    // apuntan (FK SetNull) y quedarían sin centro → romperían el costeo.
+    // Las tarifas/recursos/componentes/capacidad de período se borran en
+    // cascada (onDelete: Cascade en el schema), así que no bloquean.
+    const [maquinas, configPasos, pasosExtra] = await Promise.all([
+      this.prisma.maquina.count({ where: { centroCostoPrincipalId: id } }),
+      this.prisma.productoConfigPaso.count({ where: { centroCostoId: id } }),
+      this.prisma.productoPasoExtra.count({ where: { centroCostoId: id } }),
+    ]);
+
+    const referencias: string[] = [];
+    if (maquinas > 0) referencias.push(`${maquinas} máquina(s)`);
+    if (configPasos > 0) referencias.push(`${configPasos} paso(s) de producto`);
+    if (pasosExtra > 0) referencias.push(`${pasosExtra} paso(s) extra`);
+
+    if (referencias.length > 0) {
+      throw new ConflictException(
+        `No se puede eliminar "${centro.nombre}": lo usan ${referencias.join(
+          ', ',
+        )}. Reasigná esas referencias o desactivá el centro en su lugar.`,
+      );
+    }
+
+    await this.prisma.centroCosto.delete({ where: { id } });
+    return { id, eliminado: true };
+  }
+
   private handleWriteError(
     error: unknown,
     entity: 'planta' | 'area' | 'centro',
