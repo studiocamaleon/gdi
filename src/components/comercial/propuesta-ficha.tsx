@@ -1394,11 +1394,24 @@ function getVisibleCostSteps(pasos: PasoCosteo[]) {
   return pasos.filter((paso) => paso.activado || paso.costoTotal > 0);
 }
 
+function formatMinutos(min: number) {
+  return `${min.toLocaleString("es-AR", { maximumFractionDigits: 1 })} min`;
+}
+
+// Costo de máquina/proceso del paso (tarifa sin mano de obra × todo el tiempo).
+// Fallback a `costo` para cotizaciones viejas sin el desglose.
+function getCostoMaquinaPaso(paso: PasoCosteo) {
+  return paso.tiempo?.costoMaquina ?? paso.tiempo?.costo ?? 0;
+}
+
+// Costo de mano de obra del paso (setup + cleanup en pasos con máquina).
+function getCostoManoObraPaso(paso: PasoCosteo) {
+  return paso.tiempo?.costoManoObra ?? 0;
+}
+
 function formatTiempoPaso(paso: PasoCosteo) {
   if (!paso.tiempo) return "-";
-  return `${paso.tiempo.totalMin.toLocaleString("es-AR", {
-    maximumFractionDigits: 1,
-  })} min`;
+  return formatMinutos(paso.tiempo.totalMin);
 }
 
 function formatTarifaCentroCosto(paso: PasoCosteo) {
@@ -2351,6 +2364,10 @@ function CostosItemView({
   const margenPrecioPct =
     precioNeto > 0 ? (margenPrecioMonto / precioNeto) * 100 : 0;
   const buckets = getCostBuckets(item);
+  const centroManoObraTotal = item.cotizacion.pasos.reduce(
+    (acc, paso) => acc + getCostoManoObraPaso(paso),
+    0,
+  );
   const cargosPaso = item.cotizacion.pasos
     .flatMap((paso) => paso.cargosDirectosPaso ?? [])
     .filter((cargo) => cargo.monto > 0);
@@ -2391,6 +2408,18 @@ function CostosItemView({
     precioNeto - precioBaseTotal - comisionesTotal,
   );
   const ivaTotal = Math.max(0, precioBruto - precioNeto);
+  // Margen de contribución = Precio neto − costos variables. Variables (decisión
+  // del usuario): materiales + cargos + impuestos internos + comisiones. El
+  // centro de costo (máquina + mano de obra) es estructura fija que la
+  // contribución cubre → MC = centro de costo + margen.
+  const costosVariablesTotal =
+    item.cotizacion.costos.materialesTotal +
+    item.cotizacion.costos.cargosDirectosTotal +
+    costosInternosTotal +
+    comisionesTotal;
+  const margenContribucionMonto = precioNeto - costosVariablesTotal;
+  const margenContribucionPct =
+    precioNeto > 0 ? (margenContribucionMonto / precioNeto) * 100 : 0;
   const impuestosInternosNombres = (desglosePrecio?.impuestos ?? [])
     .filter((impuesto) => (impuesto.traslado ?? "POR_DENTRO") !== "POR_FUERA")
     .map((impuesto) => impuesto.nombre)
@@ -2420,12 +2449,34 @@ function CostosItemView({
     monto: number;
     warn?: boolean;
   }> = [
-    ...buckets.map((bucket) => ({
-      key: bucket.key,
-      label: bucket.label,
-      tipo: TIPO_POR_BUCKET[bucket.key] ?? "Costo",
-      monto: bucket.amount,
-    })),
+    ...buckets.flatMap((bucket) => {
+      // Desdoblar el centro de costo en máquina vs. mano de obra si hay MO.
+      // manoObra se toma de los pasos; máquina = resto, para que sumen el total.
+      if (bucket.key === "centro-costo" && centroManoObraTotal > 0) {
+        return [
+          {
+            key: "centro-maquina",
+            label: "Centro · Máquina",
+            tipo: "Centro de costo",
+            monto: bucket.amount - centroManoObraTotal,
+          },
+          {
+            key: "centro-mano-obra",
+            label: "Centro · Mano de obra",
+            tipo: "Mano de obra",
+            monto: centroManoObraTotal,
+          },
+        ];
+      }
+      return [
+        {
+          key: bucket.key,
+          label: bucket.label,
+          tipo: TIPO_POR_BUCKET[bucket.key] ?? "Costo",
+          monto: bucket.amount,
+        },
+      ];
+    }),
     ...(costosInternosTotal > 0
       ? [
           {
@@ -2497,6 +2548,65 @@ function CostosItemView({
         </div>
       </div>
 
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 20,
+          marginTop: 12,
+          padding: "14px 16px",
+          border: "1px solid var(--border)",
+          borderRadius: 12,
+          background: "rgba(62, 207, 142, 0.07)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 4,
+            minWidth: 0,
+          }}
+        >
+          <span style={{ fontWeight: 650, color: "var(--ink)" }}>
+            Margen de contribución
+          </span>
+          <span
+            style={{
+              fontSize: 11.5,
+              lineHeight: 1.4,
+              color: "var(--muted)",
+              maxWidth: "60ch",
+            }}
+          >
+            Indicador de gestión — no forma parte de la composición del precio.
+            Precio neto − costos variables (materiales, cargos, impuestos
+            internos, comisiones). Es lo que queda para cubrir la estructura
+            fija (centro de costo) y dejar ganancia.
+          </span>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-end",
+            gap: 2,
+            flex: "0 0 auto",
+          }}
+        >
+          <span style={{ fontSize: 18, fontWeight: 700, color: "var(--ink)" }}>
+            {formatCurrency(margenContribucionMonto)}
+          </span>
+          <span style={{ fontSize: 12, color: "var(--muted)" }}>
+            {margenContribucionPct.toLocaleString("es-AR", {
+              maximumFractionDigits: 1,
+            })}
+            % del neto
+          </span>
+        </div>
+      </div>
+
       <div className="cost-section">
         <div className="cost-title">Desglose por paso</div>
         <div className="cost-steps-table-wrap">
@@ -2505,7 +2615,8 @@ function CostosItemView({
               <tr>
                 <th>Paso</th>
                 <th>Centro de costo</th>
-                <th className="num">Tiempo</th>
+                <th className="num">Máquina</th>
+                <th className="num">Mano de obra</th>
                 <th className="num">Materiales</th>
                 <th className="num">Cargos</th>
                 <th className="num">Total</th>
@@ -2516,7 +2627,6 @@ function CostosItemView({
                 const stepKey = `${paso.rutaPasoOrden}-${paso.familiaCodigo}`;
                 const materialesTotal = sumMaterialesPaso(paso);
                 const cargosTotal = sumCargosPaso(paso);
-                const centroCostoTotal = paso.tiempo?.costo ?? 0;
                 const puedeExpandir =
                   paso.activado &&
                   (Boolean(paso.tiempo) ||
@@ -2569,8 +2679,27 @@ function CostosItemView({
                       <td className="num">
                         {paso.tiempo ? (
                           <>
-                            <strong>{formatCurrency(centroCostoTotal)}</strong>
-                            <span>{formatTiempoPaso(paso)}</span>
+                            <strong>
+                              {formatCurrency(getCostoMaquinaPaso(paso))}
+                            </strong>
+                            <span>{formatMinutos(paso.tiempo.totalMin)}</span>
+                          </>
+                        ) : (
+                          <span>-</span>
+                        )}
+                      </td>
+                      <td className="num">
+                        {paso.tiempo && getCostoManoObraPaso(paso) > 0 ? (
+                          <>
+                            <strong>
+                              {formatCurrency(getCostoManoObraPaso(paso))}
+                            </strong>
+                            <span>
+                              {formatMinutos(
+                                paso.tiempo.minutosOperario ??
+                                  paso.tiempo.totalMin,
+                              )}
+                            </span>
                           </>
                         ) : (
                           <span>-</span>
@@ -2592,7 +2721,7 @@ function CostosItemView({
                     </tr>
                     {puedeExpandir && expanded ? (
                       <tr className="cost-step-detail-row">
-                        <td colSpan={6}>
+                        <td colSpan={7}>
                           <PasoCostDetail paso={paso} />
                         </td>
                       </tr>
