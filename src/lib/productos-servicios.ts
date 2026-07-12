@@ -197,6 +197,7 @@ export interface ConfigPasoDetalle {
   setupOverrideMin?: number | null;
   cleanupOverrideMin?: number | null;
   tiempoFijoOverrideMin?: number | null;
+  dotacionOperarios?: number | null;
   slotsMateriales: Array<SlotMaterialDetalle>;
   /** G-F2: candidatas M-2; cuando length > 1 el cotizador muestra Select de override. */
   maquinasCandidatas?: Array<{

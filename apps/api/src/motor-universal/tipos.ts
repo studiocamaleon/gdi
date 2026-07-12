@@ -242,6 +242,8 @@ export interface PasoEjecutado {
      * tiempoFijo (no el run autónomo); en pasos sin máquina = totalMin.
      */
     minutosOperario?: number;
+    /** Operarios que ocupa el paso (multiplica el costo de mano de obra). */
+    dotacionOperarios?: number;
     /** Costo de máquina (tarifa sin MO × totalMin). */
     costoMaquina?: number;
     /** Costo de mano de obra (tarifaManoObra × minutosOperario). */
@@ -533,6 +535,8 @@ export interface PasoCargado {
   setupOverrideMin: number | null;
   cleanupOverrideMin: number | null;
   tiempoFijoOverrideMin: number | null;
+  /** Operarios que ocupa el paso; multiplica el costo de mano de obra. */
+  dotacionOperarios?: number | null;
   /** Detalles de la máquina (cargados del JOIN). */
   maquina?: {
     id: string;

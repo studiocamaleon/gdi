@@ -208,6 +208,7 @@ export class ProductoRutasService {
             setupOverrideMin: config.setupOverrideMin,
             cleanupOverrideMin: config.cleanupOverrideMin,
             tiempoFijoOverrideMin: config.tiempoFijoOverrideMin,
+            dotacionOperarios: config.dotacionOperarios,
             activo: config.activo,
           },
         });

@@ -373,6 +373,7 @@ export class ProductosService {
                 setupOverrideMin: config.setupOverrideMin,
                 cleanupOverrideMin: config.cleanupOverrideMin,
                 tiempoFijoOverrideMin: config.tiempoFijoOverrideMin,
+                dotacionOperarios: config.dotacionOperarios,
                 activo: config.activo,
               },
             });

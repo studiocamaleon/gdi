@@ -1503,6 +1503,10 @@ model ProductoConfigPaso {
   setupOverrideMin            Decimal?                             @db.Decimal(12, 2)
   cleanupOverrideMin          Decimal?                             @db.Decimal(12, 2)
   tiempoFijoOverrideMin       Decimal?                             @db.Decimal(12, 2)
+  /// Cantidad de operarios que ocupa el paso. Multiplica SOLO el costo de mano
+  /// de obra (no el de máquina): un paso a 2 personas consume el doble de
+  /// horas-hombre. Ver docs/hora-hombre-setup-cleanup-diseno.md
+  dotacionOperarios           Int                                  @default(1)
   activo                      Boolean                              @default(true)
   createdAt                   DateTime                             @default(now())
   updatedAt                   DateTime                             @updatedAt

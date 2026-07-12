@@ -2473,8 +2473,13 @@ export class MotorUniversalService {
     const minutosOperario = tieneMaquina
       ? setupMin + cleanupMin + tiempoFijoMin
       : totalMin;
+    // Dotación: un paso a N operarios consume N× las horas-hombre. Multiplica
+    // sólo la mano de obra; la máquina es una sola sin importar cuántos la
+    // atienden. Ver docs/hora-hombre-setup-cleanup-diseno.md
+    const dotacionOperarios = Math.max(1, Math.round(paso.dotacionOperarios ?? 1));
     const costoMaquina = (totalMin / 60) * tarifaMaquina;
-    const costoManoObra = (minutosOperario / 60) * tarifaManoObra;
+    const costoManoObra =
+      (minutosOperario / 60) * tarifaManoObra * dotacionOperarios;
     const costo = costoMaquina + costoManoObra;
 
     return {
@@ -2488,6 +2493,7 @@ export class MotorUniversalService {
       tarifaHora,
       tarifaManoObra,
       minutosOperario,
+      dotacionOperarios,
       costoMaquina,
       costoManoObra,
       costo,
@@ -5664,6 +5670,7 @@ export class MotorUniversalService {
         tiempoFijoOverrideMin: cp.tiempoFijoOverrideMin
           ? Number(cp.tiempoFijoOverrideMin)
           : null,
+        dotacionOperarios: cp.dotacionOperarios ?? 1,
         maquina: cp.maquinaM1
           ? {
               id: cp.maquinaM1.id,
@@ -6183,6 +6190,7 @@ export class MotorUniversalService {
       tiempoFijoOverrideMin: row.tiempoFijoOverrideMin
         ? Number(row.tiempoFijoOverrideMin)
         : null,
+      // Los pasos extra no tienen dotación configurable → 1 (default del motor).
       maquina: maquina
         ? {
             id: maquina.id,

@@ -379,6 +379,7 @@ export interface UpsertConfigPasoPayload {
   setupOverrideMin?: number | null;
   cleanupOverrideMin?: number | null;
   tiempoFijoOverrideMin?: number | null;
+  dotacionOperarios?: number;
   slotsMateriales?: UpsertSlotMaterialPayload[];
   maquinasCandidatas?: UpsertMaquinaCandidataPayload[];
 }

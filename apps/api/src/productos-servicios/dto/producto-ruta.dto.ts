@@ -189,6 +189,12 @@ export class UpsertProductoConfigPasoDto {
   tiempoFijoOverrideMin?: number | null;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  dotacionOperarios?: number;
+
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => UpsertSlotMaterialDto)

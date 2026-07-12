@@ -2829,6 +2829,7 @@ export function ConfigPasosEditorView({
         setupOverrideMin: existente?.setupOverrideMin ?? null,
         cleanupOverrideMin: existente?.cleanupOverrideMin ?? null,
         tiempoFijoOverrideMin: existente?.tiempoFijoOverrideMin ?? null,
+        dotacionOperarios: existente?.dotacionOperarios ?? 1,
         maquinasCandidatas: normalizeMaquinasCandidatas(
           existente?.maquinasCandidatas?.map((candidata, index) => ({
             maquinaId: candidata.maquinaId,
@@ -5109,6 +5110,34 @@ export function ConfigPasosEditorView({
                                       />
                                     </div>
                                   )}
+                                  <div className="field">
+                                    <LabelConTooltip
+                                      label={
+                                        <>
+                                          Operarios{" "}
+                                          <span className="hint">dotación</span>
+                                        </>
+                                      }
+                                      tooltip="Cuántas personas ocupa el paso. Multiplica sólo el costo de mano de obra (un paso a 2 personas consume el doble de horas-hombre); la máquina no cambia."
+                                      iconSize="sm"
+                                    />
+                                    <Input
+                                      type="number"
+                                      min={1}
+                                      step={1}
+                                      value={cfg.dotacionOperarios ?? 1}
+                                      onChange={(e) =>
+                                        updateConfig(paso.id, {
+                                          dotacionOperarios: Math.max(
+                                            1,
+                                            Math.round(
+                                              Number(e.target.value) || 1,
+                                            ),
+                                          ),
+                                        })
+                                      }
+                                    />
+                                  </div>
                                   {mostrarProductividadPropia && (
                                     <div className="field md:col-span-full">
                                       <LabelConTooltip

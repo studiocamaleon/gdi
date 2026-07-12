@@ -20,6 +20,7 @@ type TiempoPaso = {
   tarifaHora?: number;
   tarifaManoObra?: number;
   minutosOperario?: number;
+  dotacionOperarios?: number;
   costoMaquina?: number;
   costoManoObra?: number;
   costo: number;
@@ -138,5 +139,31 @@ describe('Motor — mano de obra en setup/cleanup, no en el run de máquina', ()
 
     expect(t.costo).toBeCloseTo((75 / 60) * 6000);
     expect(t.costoManoObra).toBe(0);
+  });
+
+  it('dotación: N operarios multiplican sólo la mano de obra, no la máquina', () => {
+    const paso = pasoBase({
+      maquina: {
+        id: 'maq-1',
+        codigo: 'M1',
+        nombre: 'Impresora',
+        plantilla: 'PLANA',
+        centroCostoPrincipalId: 'cc-maq',
+        centroCostoPrincipalNombre: 'Impresión',
+      },
+      dotacionOperarios: 2,
+    });
+    const tarifas = new Map<string, unknown>([
+      ['cc-maq', { tarifa: 6000, manoObra: 2000 }], // máquina = 4000/h
+    ]);
+
+    const t = calcular(paso, tarifas);
+
+    expect(t.dotacionOperarios).toBe(2);
+    // Máquina sin cambios: 75 min × 4000/h.
+    expect(t.costoMaquina).toBeCloseTo((75 / 60) * 4000);
+    // Mano de obra × 2: setup+cleanup (15 min) × 2000/h × 2 operarios.
+    expect(t.costoManoObra).toBeCloseTo((15 / 60) * 2000 * 2);
+    expect(t.costo).toBeCloseTo(6000);
   });
 });

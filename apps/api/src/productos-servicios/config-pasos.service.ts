@@ -211,6 +211,7 @@ export class ConfigPasosService {
           dto.tiempoFijoOverrideMin != null
             ? new Prisma.Decimal(dto.tiempoFijoOverrideMin)
             : null,
+        dotacionOperarios: Math.max(1, Math.round(dto.dotacionOperarios ?? 1)),
         activo: true,
       };
 
