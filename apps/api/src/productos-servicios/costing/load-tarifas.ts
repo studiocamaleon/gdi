@@ -19,7 +19,18 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { EstadoTarifaCentroCostoPeriodo } from '@prisma/client';
 
-export type TarifaByCentroId = Map<string, Prisma.Decimal>;
+/**
+ * Tarifa de un centro de costo desdoblada: la tarifa total (mezclada) y la
+ * componente de mano de obra (SUELDOS + CARGAS). El motor usa `manoObra` para
+ * cobrar la hora hombre sólo sobre setup/cleanup y no sobre el runtime de la
+ * máquina. Ver docs/hora-hombre-setup-cleanup-diseno.md
+ */
+export interface TarifaCentro {
+  tarifa: Prisma.Decimal;
+  manoObra: Prisma.Decimal;
+}
+
+export type TarifaByCentroId = Map<string, TarifaCentro>;
 
 export interface LoadTarifasInput {
   tenantId: string;
@@ -55,8 +66,14 @@ export async function loadTarifasHorarias(
     select: {
       centroCostoId: true,
       tarifaCalculada: true,
+      tarifaManoObra: true,
     },
   });
 
-  return new Map(tarifas.map((t) => [t.centroCostoId, t.tarifaCalculada]));
+  return new Map(
+    tarifas.map((t) => [
+      t.centroCostoId,
+      { tarifa: t.tarifaCalculada, manoObra: t.tarifaManoObra },
+    ]),
+  );
 }

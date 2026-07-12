@@ -856,6 +856,11 @@ model CentroCostoTarifaPeriodo {
   costoMensualTotal Decimal                        @db.Decimal(12, 2)
   capacidadPractica Decimal                        @db.Decimal(12, 2)
   tarifaCalculada   Decimal                        @db.Decimal(12, 2)
+  /// Componente de mano de obra (SUELDOS + CARGAS) del centro, mensual y su
+  /// tarifa horaria. Permite cobrar la hora hombre sólo sobre setup/cleanup y no
+  /// sobre el runtime de la máquina. Ver docs/hora-hombre-setup-cleanup-diseno.md
+  costoMensualManoObra Decimal                     @default(0) @db.Decimal(12, 2)
+  tarifaManoObra    Decimal                        @default(0) @db.Decimal(12, 2)
   estado            EstadoTarifaCentroCostoPeriodo
   resumenJson       Json
   createdAt         DateTime                       @default(now())

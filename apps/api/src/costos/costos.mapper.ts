@@ -239,6 +239,8 @@ export class CostosMapper {
       costoMensualTotal: this.decimalToNumber(tarifa.costoMensualTotal),
       capacidadPractica: this.decimalToNumber(tarifa.capacidadPractica),
       tarifaCalculada: this.decimalToNumber(tarifa.tarifaCalculada),
+      costoMensualManoObra: this.decimalToNumber(tarifa.costoMensualManoObra),
+      tarifaManoObra: this.decimalToNumber(tarifa.tarifaManoObra),
       estado: this.fromPrismaEstadoTarifa(tarifa.estado),
       resumen: tarifa.resumenJson,
       createdAt: tarifa.createdAt.toISOString(),

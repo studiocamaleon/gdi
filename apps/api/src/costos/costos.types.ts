@@ -37,6 +37,9 @@ export type TarifaSnapshot = {
   costoMensualTotal: Prisma.Decimal;
   capacidadPractica: Prisma.Decimal;
   tarifaCalculada: Prisma.Decimal;
+  /** Mano de obra (SUELDOS + CARGAS): mensual y tarifa horaria del centro. */
+  costoMensualManoObra: Prisma.Decimal;
+  tarifaManoObra: Prisma.Decimal;
   advertencias: string[];
   validaParaPublicar: boolean;
   resumenJson: Prisma.JsonObject;

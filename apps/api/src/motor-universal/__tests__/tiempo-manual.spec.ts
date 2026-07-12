@@ -78,7 +78,9 @@ function calcular(
   errores: ErrorMotor[] = [],
 ) {
   const service = createService();
-  const tarifas = new Map<string, unknown>([['cc-manual', TARIFA_HORA]]);
+  const tarifas = new Map<string, unknown>([
+    ['cc-manual', { tarifa: TARIFA_HORA, manoObra: 0 }],
+  ]);
   return service.calcularTiempo(paso, jobContext, errores, tarifas, '2026-07');
 }
 

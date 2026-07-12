@@ -2420,11 +2420,15 @@ export class MotorUniversalService {
     //   1. Centro de costo principal de la máquina.
     //   2. Centro de costo manual del paso cuando no hay máquina.
     let tarifaHora = 0;
+    let tarifaManoObra = 0;
     const centroCosto = this.resolveCentroCostoPaso(paso);
     if (centroCosto.id) {
-      const tarifaDecimal = tarifasMap.get(centroCosto.id);
-      if (tarifaDecimal != null) {
-        tarifaHora = Number(tarifaDecimal);
+      const tarifaCentro = tarifasMap.get(centroCosto.id) as
+        | { tarifa: unknown; manoObra: unknown }
+        | undefined;
+      if (tarifaCentro != null) {
+        tarifaHora = Number(tarifaCentro.tarifa);
+        tarifaManoObra = Number(tarifaCentro.manoObra);
       }
     }
 
@@ -2460,7 +2464,18 @@ export class MotorUniversalService {
           'Calculá y publicá la tarifa del centro de costo para el período antes de cotizar.',
       });
     }
-    const costo = (totalMin / 60) * tarifaHora;
+    // Desdoblado de la tarifa (docs/hora-hombre-setup-cleanup-diseno.md):
+    // la máquina se cobra sobre todo el tiempo ocupado; la mano de obra sólo
+    // sobre setup + cleanup + tiempoFijo en pasos con máquina (no el run
+    // autónomo). En pasos sin máquina el operario hace el run → cobra todo.
+    const tieneMaquina = paso.maquina?.centroCostoPrincipalId != null;
+    const tarifaMaquina = Math.max(0, tarifaHora - tarifaManoObra);
+    const minutosOperario = tieneMaquina
+      ? setupMin + cleanupMin + tiempoFijoMin
+      : totalMin;
+    const costoMaquina = (totalMin / 60) * tarifaMaquina;
+    const costoManoObra = (minutosOperario / 60) * tarifaManoObra;
+    const costo = costoMaquina + costoManoObra;
 
     return {
       setupMin,
@@ -2471,6 +2486,10 @@ export class MotorUniversalService {
       centroCostoId: centroCosto.id,
       centroCostoNombre: centroCosto.nombre,
       tarifaHora,
+      tarifaManoObra,
+      minutosOperario,
+      costoMaquina,
+      costoManoObra,
       costo,
       ...(tiempoManualMin != null
         ? { origenTiempo: 'manual_comercial' as const }

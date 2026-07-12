@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  CategoriaComponenteCostoCentro,
   EstadoTarifaCentroCostoPeriodo,
   ImputacionPreferidaCentroCosto,
   Prisma,
@@ -54,6 +55,8 @@ export class CostosTarifasService {
         costoMensualTotal: snapshot.costoMensualTotal,
         capacidadPractica: snapshot.capacidadPractica,
         tarifaCalculada: snapshot.tarifaCalculada,
+        costoMensualManoObra: snapshot.costoMensualManoObra,
+        tarifaManoObra: snapshot.tarifaManoObra,
         estado: EstadoTarifaCentroCostoPeriodo.BORRADOR,
         resumenJson: snapshot.resumenJson,
       },
@@ -61,6 +64,8 @@ export class CostosTarifasService {
         costoMensualTotal: snapshot.costoMensualTotal,
         capacidadPractica: snapshot.capacidadPractica,
         tarifaCalculada: snapshot.tarifaCalculada,
+        costoMensualManoObra: snapshot.costoMensualManoObra,
+        tarifaManoObra: snapshot.tarifaManoObra,
         resumenJson: snapshot.resumenJson,
       },
     });
@@ -99,6 +104,8 @@ export class CostosTarifasService {
         costoMensualTotal: snapshot.costoMensualTotal,
         capacidadPractica: snapshot.capacidadPractica,
         tarifaCalculada: snapshot.tarifaCalculada,
+        costoMensualManoObra: snapshot.costoMensualManoObra,
+        tarifaManoObra: snapshot.tarifaManoObra,
         estado: EstadoTarifaCentroCostoPeriodo.BORRADOR,
         resumenJson: snapshot.resumenJson,
       },
@@ -106,6 +113,8 @@ export class CostosTarifasService {
         costoMensualTotal: snapshot.costoMensualTotal,
         capacidadPractica: snapshot.capacidadPractica,
         tarifaCalculada: snapshot.tarifaCalculada,
+        costoMensualManoObra: snapshot.costoMensualManoObra,
+        tarifaManoObra: snapshot.tarifaManoObra,
         resumenJson: snapshot.resumenJson,
       },
     });
@@ -126,6 +135,8 @@ export class CostosTarifasService {
         costoMensualTotal: snapshot.costoMensualTotal,
         capacidadPractica: snapshot.capacidadPractica,
         tarifaCalculada: snapshot.tarifaCalculada,
+        costoMensualManoObra: snapshot.costoMensualManoObra,
+        tarifaManoObra: snapshot.tarifaManoObra,
         estado: EstadoTarifaCentroCostoPeriodo.PUBLICADA,
         resumenJson: snapshot.resumenJson,
       },
@@ -133,6 +144,8 @@ export class CostosTarifasService {
         costoMensualTotal: snapshot.costoMensualTotal,
         capacidadPractica: snapshot.capacidadPractica,
         tarifaCalculada: snapshot.tarifaCalculada,
+        costoMensualManoObra: snapshot.costoMensualManoObra,
+        tarifaManoObra: snapshot.tarifaManoObra,
         resumenJson: snapshot.resumenJson,
       },
     });
@@ -179,6 +192,16 @@ export class CostosTarifasService {
       (acc, item) => acc.plus(item.importeMensual),
       new Prisma.Decimal(0),
     );
+    // Mano de obra = SUELDOS + CARGAS. Se persiste aparte para poder cobrar la
+    // hora hombre sólo sobre setup/cleanup en el motor (no sobre el runtime de
+    // máquina). Ver docs/hora-hombre-setup-cleanup-diseno.md
+    const MANO_OBRA_CATEGORIAS = new Set<CategoriaComponenteCostoCentro>([
+      CategoriaComponenteCostoCentro.SUELDOS,
+      CategoriaComponenteCostoCentro.CARGAS,
+    ]);
+    const costoMensualManoObra = centro.componentesCostoPeriodo
+      .filter((item) => MANO_OBRA_CATEGORIAS.has(item.categoria))
+      .reduce((acc, item) => acc.plus(item.importeMensual), new Prisma.Decimal(0));
     const costoMensualMaquinaria = centro.recursos
       .filter(
         (recurso) =>
@@ -233,6 +256,10 @@ export class CostosTarifasService {
       costoMensualTotalConReparto.gt(0) && capacidadPractica.gt(0)
         ? costoMensualTotalConReparto.div(capacidadPractica)
         : new Prisma.Decimal(0);
+    const tarifaManoObra =
+      costoMensualManoObra.gt(0) && capacidadPractica.gt(0)
+        ? costoMensualManoObra.div(capacidadPractica)
+        : new Prisma.Decimal(0);
     const tarifaDirectaSinReparto =
       costoMensualTotal.gt(0) && capacidadPractica.gt(0)
         ? costoMensualTotal.div(capacidadPractica)
@@ -250,6 +277,8 @@ export class CostosTarifasService {
       costoMensualTotal: costoMensualTotalConReparto,
       capacidadPractica,
       tarifaCalculada,
+      costoMensualManoObra,
+      tarifaManoObra,
       advertencias,
       validaParaPublicar,
       resumenJson: {
@@ -283,6 +312,9 @@ export class CostosTarifasService {
         ),
         capacidadPractica: this.mapper.decimalToNumber(capacidadPractica),
         tarifaCalculada: this.mapper.decimalToNumber(tarifaCalculada),
+        costoMensualManoObra:
+          this.mapper.decimalToNumber(costoMensualManoObra),
+        tarifaManoObra: this.mapper.decimalToNumber(tarifaManoObra),
         advertencias,
       },
     };
