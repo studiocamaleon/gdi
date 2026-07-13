@@ -5,18 +5,21 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeftIcon,
+  BanknoteIcon,
   CheckIcon,
   CircleAlertIcon,
+  CirclePlusIcon,
   CogIcon,
   CopyIcon,
   Edit3Icon,
+  FootprintsIcon,
   GitBranchIcon,
   PlusIcon,
-  ReceiptIcon,
   SaveIcon,
   StarIcon,
   TagIcon,
   Trash2Icon,
+  WrenchIcon,
   XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -68,7 +71,13 @@ import {
   modoCalculoCargoLabels,
 } from "@/lib/labels-humanos";
 
-export type ProductoWorkspaceTab = "identidad" | "rutas" | "pasos" | "cargos" | "pricing";
+export type ProductoWorkspaceTab =
+  | "identidad"
+  | "rutas"
+  | "pasos"
+  | "cargos"
+  | "herramientas"
+  | "pricing";
 
 interface Props {
   producto: ProductoDetalle;
@@ -225,9 +234,10 @@ const TABS: Array<{
 }> = [
   { id: "identidad", label: "Identidad", icon: TagIcon },
   { id: "rutas", label: "Rutas", icon: GitBranchIcon },
-  { id: "pasos", label: "Configurar pasos", icon: CogIcon },
-  { id: "cargos", label: "Cargos", icon: ReceiptIcon },
-  { id: "pricing", label: "Pricing", icon: SaveIcon },
+  { id: "pasos", label: "Pasos", icon: FootprintsIcon },
+  { id: "cargos", label: "Cargos", icon: CirclePlusIcon },
+  { id: "herramientas", label: "Herramientas", icon: WrenchIcon },
+  { id: "pricing", label: "Pricing", icon: BanknoteIcon },
 ];
 
 function tabValidaciones(producto: ProductoDetalle): Record<ProductoWorkspaceTab, ValidacionTab> {
@@ -252,6 +262,7 @@ function tabValidaciones(producto: ProductoDetalle): Record<ProductoWorkspaceTab
         ? { estado: "warning", label: "Incompleto" }
         : { estado: "ok", label: "Completo" },
     cargos: { estado: "ok", label: "Opcional" },
+    herramientas: { estado: "ok", label: "Opcional" },
     pricing: precioConfig?.metodoCalculo
       ? { estado: "ok", label: "Completo" }
       : { estado: "error", label: "Falta método" },
@@ -259,24 +270,30 @@ function tabValidaciones(producto: ProductoDetalle): Record<ProductoWorkspaceTab
 }
 
 function EstadoBadge({ estado, label }: ValidacionTab) {
-  if (estado === "ok") {
-    return (
-      <span className="status">
-        <CheckIcon className="size-3" />
-        {label}
-      </span>
-    );
-  }
-  if (estado === "warning") {
-    return (
-      <span className="status">
-        {label}
-      </span>
-    );
-  }
+  const Icon =
+    estado === "ok"
+      ? CheckIcon
+      : estado === "warning"
+        ? CircleAlertIcon
+        : CircleAlertIcon;
+  const color =
+    estado === "ok"
+      ? "var(--ok)"
+      : estado === "warning"
+        ? "var(--warning, #d97706)"
+        : "var(--danger, #dc2626)";
   return (
-    <span className="status">
-      {label}
+    <span
+      className="status"
+      title={label}
+      aria-label={label}
+      style={{
+        background: "transparent",
+        padding: 0,
+        color,
+      }}
+    >
+      <Icon className="size-4" />
     </span>
   );
 }
@@ -340,7 +357,14 @@ export function ProductoWorkspace({
         </div>
 
         <Tabs value={activeTab} onValueChange={(value) => irATab(value as ProductoWorkspaceTab)}>
-          <div className="wiz-tabs">
+          <div
+            className="wiz-tabs"
+            style={{
+              gridTemplateColumns: "none",
+              gridAutoFlow: "column",
+              gridAutoColumns: "minmax(0, 1fr)",
+            }}
+          >
             {TABS.map((tab) => {
               const Icon = tab.icon;
               return (
@@ -381,6 +405,7 @@ export function ProductoWorkspace({
               catalogoCargos={catalogoCargos}
             />
           )}
+          {activeTab === "herramientas" && <HerramientasTab producto={producto} />}
           {activeTab === "pricing" && <PricingTab producto={producto} />}
         </TabsContent>
       </Tabs>
@@ -403,12 +428,6 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
       minimoComercialCantidad: producto.minimoComercialCantidad ?? "",
       minimoComercialBase: producto.minimoComercialBase ?? "cantidad_comercial",
       medidas: getMedidasPredefinidas(producto),
-      medidasDesdeArchivo: getHerramientaMedidasArchivo(
-        producto.atributosComercialesJson,
-      ).enabled,
-      editorSello: getHerramientaEditorSello(
-        producto.atributosComercialesJson,
-      ).enabled,
       activo: producto.activo,
     }),
     [producto],
@@ -436,12 +455,6 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
   const [medidas, setMedidas] = React.useState<MedidaPredefinidaProducto[]>(() =>
     getMedidasPredefinidas(producto),
   );
-  const [medidasDesdeArchivo, setMedidasDesdeArchivo] = React.useState(
-    () => getHerramientaMedidasArchivo(producto.atributosComercialesJson).enabled,
-  );
-  const [editorSello, setEditorSello] = React.useState(
-    () => getHerramientaEditorSello(producto.atributosComercialesJson).enabled,
-  );
   const [activo, setActivo] = React.useState(producto.activo);
   const [guardando, setGuardando] = React.useState(false);
 
@@ -460,16 +473,12 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
           ? "cantidad_comercial"
           : minimoComercialBase,
       medidas: normalizarMedidasPorModo(modoMedidas, medidas),
-      medidasDesdeArchivo,
-      editorSello,
       activo,
     }),
     [
       activo,
       descripcion,
-      editorSello,
       medidas,
-      medidasDesdeArchivo,
       minimoComercialCantidad,
       minimoComercialBase,
       minimoComercialPolitica,
@@ -539,13 +548,6 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
         nombre,
         descripcion: descripcion || undefined,
         subcategoriaComercialCodigo,
-        atributosComercialesJson: setHerramientaEditorSello(
-          setHerramientaMedidasArchivo(
-            producto.atributosComercialesJson as Record<string, unknown> | null,
-            medidasDesdeArchivo,
-          ),
-          editorSello,
-        ),
         unidadComercial: unidadComercial as "unidad" | "m2" | "metro_lineal",
         modoMedidas,
         minimoComercialPolitica,
@@ -576,8 +578,6 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
             ? "cantidad_comercial"
             : minimoComercialBase,
         medidas: medidasNormalizadas,
-        medidasDesdeArchivo,
-        editorSello,
         activo,
       });
       toast.success("Identidad guardada");
@@ -673,42 +673,6 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
           {modoMedidasUsaPredefinidas(modoMedidas) && (
             <MedidasPredefinidasEditor medidas={medidas} onChange={setMedidas} />
           )}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, paddingTop: 6, borderTop: "1px solid var(--hairline)" }}>
-            <div>
-              <div style={{ fontWeight: 500, fontSize: 13 }}>Leer medidas desde PDF</div>
-              <div style={{ fontSize: 11.5, color: "var(--muted-text)" }}>
-                Al cotizar, permite adjuntar planos PDF y autocompletar las
-                medidas de cada pieza leyendo el tamaño de cada página. Ideal
-                para planos CAD.
-              </div>
-            </div>
-            <button
-              type="button"
-              className={`toggle ${medidasDesdeArchivo ? "on" : ""}`}
-              onClick={() => setMedidasDesdeArchivo((current) => !current)}
-              aria-pressed={medidasDesdeArchivo}
-            >
-              <span className="switch" />
-            </button>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, paddingTop: 6, borderTop: "1px solid var(--hairline)" }}>
-            <div>
-              <div style={{ fontWeight: 500, fontSize: 13 }}>Editor de sello</div>
-              <div style={{ fontSize: 11.5, color: "var(--muted-text)" }}>
-                Al cotizar, habilita el botón “Diseñar sello”: el comercial carga
-                el texto por línea según el cuerpo elegido, elige tipografía y
-                genera los archivos de grabado (EPS positivo y negativo).
-              </div>
-            </div>
-            <button
-              type="button"
-              className={`toggle ${editorSello ? "on" : ""}`}
-              onClick={() => setEditorSello((current) => !current)}
-              aria-pressed={editorSello}
-            >
-              <span className="switch" />
-            </button>
-          </div>
           <div className="field">
             <label>Mínimo comercial</label>
             <div className="segmented" style={{ width: "100%" }}>
@@ -1168,7 +1132,11 @@ function PasosTab({
                     style={{ cursor: "pointer" }}
                   >
                     <div className="dot">{index + 1}</div>
-                    <div className="ttl">{familia?.nombre ?? paso.familiaCodigo}</div>
+                    <div className="ttl">
+                      {config?.nombreVisible?.trim() ||
+                        familia?.nombre ||
+                        paso.familiaCodigo}
+                    </div>
                     <div className="sub">{machine}</div>
                   </Link>
                 );
@@ -1358,6 +1326,137 @@ function CargosTab({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function HerramientaToggle({
+  titulo,
+  descripcion,
+  enabled,
+  onToggle,
+}: {
+  titulo: string;
+  descripcion: string;
+  enabled: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 16,
+        paddingTop: 14,
+        borderTop: "1px solid var(--hairline)",
+      }}
+    >
+      <div style={{ maxWidth: 620 }}>
+        <div style={{ fontWeight: 500, fontSize: 13 }}>{titulo}</div>
+        <div style={{ fontSize: 11.5, color: "var(--muted-text)", marginTop: 2 }}>
+          {descripcion}
+        </div>
+      </div>
+      <button
+        type="button"
+        className={`toggle ${enabled ? "on" : ""}`}
+        onClick={onToggle}
+        aria-pressed={enabled}
+      >
+        <span className="switch" />
+      </button>
+    </div>
+  );
+}
+
+function HerramientasTab({ producto }: { producto: ProductoDetalle }) {
+  const router = useRouter();
+  const inicial = React.useMemo(
+    () => ({
+      medidasDesdeArchivo: getHerramientaMedidasArchivo(
+        producto.atributosComercialesJson,
+      ).enabled,
+      editorSello: getHerramientaEditorSello(producto.atributosComercialesJson)
+        .enabled,
+    }),
+    [producto],
+  );
+  const [medidasDesdeArchivo, setMedidasDesdeArchivo] = React.useState(
+    inicial.medidasDesdeArchivo,
+  );
+  const [editorSello, setEditorSello] = React.useState(inicial.editorSello);
+  const [persistido, setPersistido] = React.useState(inicial);
+  const [guardando, setGuardando] = React.useState(false);
+  const dirty =
+    medidasDesdeArchivo !== persistido.medidasDesdeArchivo ||
+    editorSello !== persistido.editorSello;
+
+  const guardar = async () => {
+    setGuardando(true);
+    try {
+      await actualizarProducto(producto.id, {
+        atributosComercialesJson: setHerramientaEditorSello(
+          setHerramientaMedidasArchivo(
+            producto.atributosComercialesJson as Record<string, unknown> | null,
+            medidasDesdeArchivo,
+          ),
+          editorSello,
+        ),
+      });
+      setPersistido({ medidasDesdeArchivo, editorSello });
+      toast.success("Herramientas guardadas");
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error guardando");
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <div className="wiz-cols">
+      <div className="wiz-section">
+        <div className="wiz-section-head">
+          <div className="body">
+            <h2>Herramientas del producto</h2>
+            <div className="helptext">
+              Funciones opcionales que se habilitan al cotizar este producto.
+              Iremos sumando más con el tiempo.
+            </div>
+          </div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <HerramientaToggle
+            titulo="Leer medidas desde PDF"
+            descripcion="Al cotizar, permite adjuntar planos PDF y autocompletar las medidas de cada pieza leyendo el tamaño de cada página. Ideal para planos CAD."
+            enabled={medidasDesdeArchivo}
+            onToggle={() => setMedidasDesdeArchivo((current) => !current)}
+          />
+          <HerramientaToggle
+            titulo="Editor de sello"
+            descripcion="Al cotizar, habilita el botón “Diseñar sello”: el comercial carga el texto por línea según el cuerpo elegido, elige tipografía y genera los archivos de grabado (EPS positivo y negativo)."
+            enabled={editorSello}
+            onToggle={() => setEditorSello((current) => !current)}
+          />
+        </div>
+      </div>
+      {(dirty || guardando) && (
+        <div className="save-sticky-footer">
+          <div className="pricing-sticky-footer-copy">
+            Hay cambios sin guardar en herramientas.
+          </div>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={guardar}
+            disabled={guardando}
+          >
+            <SaveIcon className="mr-2 size-4" />
+            {guardando ? "Guardando..." : "Guardar cambios"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

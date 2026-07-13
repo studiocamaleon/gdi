@@ -90,6 +90,7 @@ function normalizarTab(value: string | undefined): ProductoWorkspaceTab {
     value === "rutas" ||
     value === "pasos" ||
     value === "cargos" ||
+    value === "herramientas" ||
     value === "pricing"
   ) {
     return value;
