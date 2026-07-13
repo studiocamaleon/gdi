@@ -395,7 +395,18 @@ export function EstacionesPanel({ initialEstaciones }: { initialEstaciones?: Est
   };
 
   return (
-    <div className="est-page">
+    <div
+      className="est-page"
+      style={{
+        flex: 1,
+        minHeight: 0,
+        overflowY: "auto",
+        width: "auto",
+        maxWidth: "none",
+        margin: 0,
+        padding: "28px 32px 40px",
+      }}
+    >
       <div className="page-head">
         <div className="title-block">
           <h1>Estaciones</h1>

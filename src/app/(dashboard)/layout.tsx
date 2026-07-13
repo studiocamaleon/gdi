@@ -37,9 +37,12 @@ export default async function DashboardLayout({
 
   return (
     <NavigationFeedbackProvider>
-      <SidebarProvider defaultOpen>
+      <SidebarProvider
+        defaultOpen
+        style={{ height: "100dvh", overflow: "hidden" }}
+      >
         <AppSidebar currentUser={currentUser} />
-        <SidebarInset className="main">
+        <SidebarInset className="main" style={{ minHeight: 0 }}>
           <header className="topbar">
             <SidebarTrigger className="icon-btn" />
             <div className="ml-auto">
@@ -47,7 +50,12 @@ export default async function DashboardLayout({
             </div>
           </header>
 
-          <main className="gp-main flex flex-1">{children}</main>
+          <main
+            className="gp-main flex flex-1"
+            style={{ minHeight: 0, overflowY: "auto" }}
+          >
+            {children}
+          </main>
         </SidebarInset>
       </SidebarProvider>
     </NavigationFeedbackProvider>
