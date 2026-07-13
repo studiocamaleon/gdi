@@ -18,12 +18,16 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
+  CalculatorIcon,
   CheckCircle2Icon,
   ChevronDownIcon,
   ChevronRightIcon,
   CircleIcon,
   CopyIcon,
+  MapPinIcon,
   PlusIcon,
+  PrinterIcon,
+  SlidersHorizontalIcon,
   Trash2Icon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -561,6 +565,24 @@ function getMachineTechnologyLabel(maquina: Maquina) {
   if (maquina.plantilla === "impresora_laser") return "LÁSER";
   if (maquina.plantilla === "plotter_cad") return "INKJET";
   return getGeometriaTrabajoMaquinaLabel(maquina.geometriaTrabajo);
+}
+
+// Color del punto de la tecnología (chip de la card).
+function getMachineTechColor(maquina: Maquina) {
+  const tech = getMachineTechnologyLabel(maquina).toUpperCase();
+  if (tech.includes("DTF") && tech.includes("UV")) return "#3b74f0";
+  if (tech.includes("DTF")) return "#8b5cf6";
+  if (tech.includes("SOLVENTE") || tech.includes("ECOSOLVENTE")) return "#0d9488";
+  if (tech.includes("UV")) return "#7c3aed";
+  if (tech.includes("INKJET") || tech.includes("LATEX")) return "#0ea5e9";
+  return "var(--ink, #14141a)";
+}
+
+// Separa "33 cm" → { num: "33", unit: "cm" } para el estilo de spec.
+function splitSpecValue(value: string) {
+  const idx = value.indexOf(" ");
+  if (idx === -1) return { num: value, unit: "" };
+  return { num: value.slice(0, idx), unit: value.slice(idx + 1) };
 }
 
 function getMachineSummarySpecs(maquina: Maquina) {
@@ -1478,13 +1500,18 @@ export function MaquinariaPanel({
               {groupedMaquinas.map(({ template, machines }) => (
                 <section key={template.id} className="py-3 first:pt-0 last:pb-0">
                   <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2">
-                    <div className="min-w-0">
-                      <h2 className="text-sm font-semibold leading-tight">
-                        {template.label}
-                      </h2>
-                      <p className="text-muted-foreground text-xs">
-                        {getMachineSectionFamilyLabel(template.family)}
-                      </p>
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-muted/30 text-muted-foreground">
+                        <PrinterIcon size={18} />
+                      </span>
+                      <div className="min-w-0">
+                        <h2 className="text-sm font-semibold leading-tight">
+                          {template.label}
+                        </h2>
+                        <p className="text-muted-foreground text-xs">
+                          {getMachineSectionFamilyLabel(template.family)}
+                        </p>
+                      </div>
                     </div>
                     <span className="tag">{machines.length}</span>
                   </div>
@@ -1505,60 +1532,75 @@ export function MaquinariaPanel({
                           }}
                           className="group flex min-h-[190px] flex-col rounded-lg border border-border/70 bg-background p-4 text-left shadow-sm transition hover:border-primary/40 hover:shadow-md"
                         >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <h3 className="truncate text-sm font-semibold leading-tight">
-                                {m.nombre}
-                              </h3>
-                              <p className="mt-1 truncate text-xs text-muted-foreground">
+                          <div className="flex items-start gap-3">
+                            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-muted/30 text-muted-foreground">
+                              <PrinterIcon size={18} />
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-start justify-between gap-2">
+                                <h3 className="truncate text-sm font-semibold leading-tight">
+                                  {m.nombre}
+                                </h3>
+                                <span
+                                  className={m.estado === "activa" ? "tag ok shrink-0" : "tag muted shrink-0"}
+                                  title={`código: ${m.estado}`}
+                                >
+                                  <span className="d" />
+                                  {getEstadoMaquinaLabel(m.estado)}
+                                </span>
+                              </div>
+                              <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
                                 {makeModel || m.codigo}
                               </p>
                             </div>
-                            <span
-                              className={m.estado === "activa" ? "tag ok shrink-0" : "tag muted shrink-0"}
-                              title={`código: ${m.estado}`}
-                            >
-                              <span className="d" />
-                              {getEstadoMaquinaLabel(m.estado)}
+                          </div>
+
+                          <div className="mt-3 flex items-center justify-between gap-2">
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/20 px-2.5 py-1 text-[11px] font-medium">
+                              <span
+                                className="size-1.5 rounded-full"
+                                style={{ backgroundColor: getMachineTechColor(m) }}
+                              />
+                              {getMachineTechnologyLabel(m)}
+                            </span>
+                            <span className="inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+                              <MapPinIcon size={13} className="shrink-0" />
+                              <span className="truncate">
+                                {m.plantaNombre || "Sin planta"}
+                              </span>
                             </span>
                           </div>
 
-                          <div className="mt-4 grid grid-cols-2 gap-2">
-                            <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
-                              <p className="text-[11px] text-muted-foreground">Tecnología</p>
-                              <p className="mt-1 truncate text-sm font-medium">
-                                {getMachineTechnologyLabel(m)}
-                              </p>
-                            </div>
-                            <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
-                              <p className="text-[11px] text-muted-foreground">Planta</p>
-                              <p className="mt-1 truncate text-sm font-medium">
-                                {m.plantaNombre || "Sin planta"}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="mt-3 grid grid-cols-2 gap-2">
+                          <div className="mt-4 flex flex-wrap gap-x-6 gap-y-3">
                             {specs.length > 0 ? (
-                              specs.map((spec) => (
-                                <div key={spec.label} className="min-w-0">
-                                  <p className="text-[11px] text-muted-foreground">
-                                    {spec.label}
-                                  </p>
-                                  <p className="truncate text-sm font-medium">
-                                    {spec.value}
-                                  </p>
-                                </div>
-                              ))
+                              specs.map((spec) => {
+                                const { num, unit } = splitSpecValue(spec.value);
+                                return (
+                                  <div key={spec.label} className="min-w-0">
+                                    <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                      {spec.label}
+                                    </p>
+                                    <p className="mt-0.5 text-sm font-semibold leading-none">
+                                      {num}
+                                      {unit ? (
+                                        <span className="ml-0.5 text-[11px] font-normal text-muted-foreground">
+                                          {unit}
+                                        </span>
+                                      ) : null}
+                                    </p>
+                                  </div>
+                                );
+                              })
                             ) : (
-                              <p className="col-span-2 text-xs text-muted-foreground">
+                              <p className="text-xs text-muted-foreground">
                                 Sin capacidades cargadas
                               </p>
                             )}
                           </div>
 
-                          <div className="mt-auto flex items-center justify-between gap-3 pt-4">
-                            <span className="text-xs text-muted-foreground">
+                          <div className="mt-auto flex items-center justify-between gap-3 border-t border-border/60 pt-3">
+                            <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                              <SlidersHorizontalIcon size={13} className="shrink-0" />
                               {m.perfilesOperativos.length} perfil
                               {m.perfilesOperativos.length === 1 ? "" : "es"}
                             </span>
@@ -1921,6 +1963,180 @@ interface ConsumiblesImpresionProps {
   loadingMaterias: boolean;
 }
 
+// Área de una hoja A4 en m² (0,210 × 0,297).
+const A4_AREA_M2 = 0.21 * 0.297;
+
+/**
+ * Calculadora de consumo de tóner: convierte el rendimiento del fabricante
+ * (páginas ISO a cierta cobertura) al consumo real en g/m² a la cobertura que
+ * elija el usuario (ISO o full-color ~40%). Ver docs de investigación de
+ * cobertura. El resultado se aplica a los 4 canales CMYK.
+ */
+function CalculadoraTonerGm2({ onApply }: { onApply: (gm2: number) => void }) {
+  const [abierta, setAbierta] = React.useState(false);
+  const [gramos, setGramos] = React.useState("");
+  const [rendimiento, setRendimiento] = React.useState("");
+  const [coberturaIso, setCoberturaIso] = React.useState("5");
+  const [modo, setModo] = React.useState<"iso" | "full">("full");
+  const [coberturaFull, setCoberturaFull] = React.useState("40");
+
+  const g = Number(gramos);
+  const rend = Number(rendimiento);
+  const covIso = Number(coberturaIso);
+  const covTarget = modo === "iso" ? covIso : Number(coberturaFull);
+
+  const valido =
+    Number.isFinite(g) &&
+    g > 0 &&
+    Number.isFinite(rend) &&
+    rend > 0 &&
+    Number.isFinite(covIso) &&
+    covIso > 0 &&
+    Number.isFinite(covTarget) &&
+    covTarget > 0;
+
+  // Rendimiento y consumo son lineales con la cobertura (aprox. de industria).
+  const rendEsperado = valido ? rend * (covIso / covTarget) : 0;
+  const consumoGm2 = valido ? (g / rend) * (covTarget / covIso) / A4_AREA_M2 : 0;
+  const consumoRedondeado = Number(consumoGm2.toFixed(2));
+
+  return (
+    <div className="rounded-md border bg-muted/20">
+      <button
+        type="button"
+        onClick={() => setAbierta((v) => !v)}
+        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left"
+      >
+        <span className="flex items-center gap-2 text-sm font-medium">
+          <CalculatorIcon size={15} className="text-muted-foreground" />
+          Calculadora de consumo (g/m²)
+        </span>
+        <ChevronDownIcon
+          size={15}
+          className={`text-muted-foreground transition-transform ${abierta ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {abierta ? (
+        <div className="space-y-3 border-t px-3 pb-3 pt-3">
+          <p className="text-xs text-muted-foreground">
+            El fabricante mide el rendimiento a baja cobertura ISO (~5% por
+            color). En full-color real (folletería, fotos) la cobertura ronda el
+            40% por color y el consumo se dispara. Cargá los datos del tóner y
+            aplicá el resultado a los 4 canales CMYK.
+          </p>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Gramos netos de la botella</Label>
+              <Input
+                type="number"
+                min={0}
+                step={1}
+                value={gramos}
+                onChange={(e) => setGramos(e.target.value)}
+                placeholder="ej: 600"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Rendimiento ISO (páginas A4)</Label>
+              <Input
+                type="number"
+                min={0}
+                step={1}
+                value={rendimiento}
+                onChange={(e) => setRendimiento(e.target.value)}
+                placeholder="ej: 33000"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Cobertura ISO del fabricante (%)</Label>
+              <Input
+                type="number"
+                min={0}
+                step={0.25}
+                value={coberturaIso}
+                onChange={(e) => setCoberturaIso(e.target.value)}
+                placeholder="5"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-xs">Cobertura a calcular</Label>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex overflow-hidden rounded-md border">
+                <button
+                  type="button"
+                  onClick={() => setModo("iso")}
+                  className={`px-3 py-1.5 text-xs ${modo === "iso" ? "bg-primary text-primary-foreground" : "bg-background"}`}
+                >
+                  ISO ({covIso || 0}%)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModo("full")}
+                  className={`px-3 py-1.5 text-xs ${modo === "full" ? "bg-primary text-primary-foreground" : "bg-background"}`}
+                >
+                  Full-color
+                </button>
+              </div>
+              {modo === "full" ? (
+                <div className="inline-flex items-center gap-1">
+                  <Input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={coberturaFull}
+                    onChange={(e) => setCoberturaFull(e.target.value)}
+                    className="h-8 w-20"
+                  />
+                  <span className="text-xs text-muted-foreground">% por color</span>
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-2 rounded-md border bg-background p-3 sm:grid-cols-2">
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                Rendimiento esperado
+              </div>
+              <div className="text-lg font-semibold">
+                {valido ? Math.round(rendEsperado).toLocaleString("es-AR") : "—"}
+                <span className="ml-1 text-xs font-normal text-muted-foreground">
+                  pág A4
+                </span>
+              </div>
+            </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                Consumo de tóner
+              </div>
+              <div className="text-lg font-semibold">
+                {valido ? consumoRedondeado.toLocaleString("es-AR") : "—"}
+                <span className="ml-1 text-xs font-normal text-muted-foreground">
+                  g/m²
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            disabled={!valido}
+            onClick={() => onApply(consumoRedondeado)}
+            className="btn btn-primary h-8 w-full text-xs disabled:opacity-50"
+          >
+            Usar {valido ? `${consumoRedondeado} g/m²` : "el valor"} en los 4
+            canales CMYK
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function ConsumiblesImpresionEditor({
   form,
   setForm,
@@ -2024,6 +2240,27 @@ function ConsumiblesImpresionEditor({
               {requiredChannelsForLaserMachine(form, perfiles).length === 1 ? "" : "es"}
             </Badge>
           </div>
+
+          <CalculadoraTonerGm2
+            onApply={(gm2) => {
+              const cmyk: ConsumibleCanal[] = [
+                "cian",
+                "magenta",
+                "amarillo",
+                "negro",
+              ];
+              const objetivo = requiredChannelsForLaserMachine(
+                form,
+                perfiles,
+              ).filter((canal) => cmyk.includes(canal));
+              objetivo.forEach((canal) =>
+                upsertConsumible(null, canal, { consumoBase: gm2 }),
+              );
+              toast.success(
+                `Consumo ${gm2} g/m² aplicado a ${objetivo.length} canal${objetivo.length === 1 ? "" : "es"} CMYK`,
+              );
+            }}
+          />
 
           <div className="space-y-2">
             {requiredChannelsForLaserMachine(form, perfiles).map((canal) => {
