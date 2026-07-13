@@ -885,6 +885,34 @@ const presets = [
     }),
   },
   {
+    key: 'TELA_BANDERA',
+    nombreCanonico: 'Tela de bandera',
+    descripcionCorta:
+      'Tela de poliéster para banderas, flags publicitarios y wind banners. Liviana, con buena caída; impresión por sublimación o directa.',
+    iconKind: 'banner',
+    aliasDisponibles: [
+      'Tela de bandera',
+      'Tela bandera',
+      'Bandera',
+      'Tela para banderas',
+      'Poliéster bandera',
+      'Flag',
+      'Wind banner',
+      'Tela flag',
+      'Tela sublimable',
+    ],
+    usosRecomendados: ['lonas_banners', 'rollups_displays', 'pop_signage'],
+    procesosCompatibles: ['impresion_directa_uv', 'corte_digital'],
+    advertencias: [],
+    ...rollPresetMeta('tela_bandera'),
+    variantes: rollVariants('TELA-BANDERA', [1.52], {
+      largo: 50,
+      acabado: 'Bandera',
+      color: 'Blanco',
+      recomendadas: new Set([1.52]),
+    }),
+  },
+  {
     key: 'LONA_FRONTLIT',
     nombreCanonico: 'Lona frontlit',
     descripcionCorta:
