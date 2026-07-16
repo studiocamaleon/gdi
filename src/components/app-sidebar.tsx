@@ -53,6 +53,13 @@ const Ico = {
       <path d="M7 16h2M11 16h2M15 16h2" />
     </svg>
   ),
+  Wallet: (props: IconProps) => (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M20 7H5a2 2 0 0 1 0-4h13v4" />
+      <path d="M4 5v14a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1" />
+      <path d="M16 13.5h.5" />
+    </svg>
+  ),
   Cube: (props: IconProps) => (
     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
       <path d="M12 3 21 7.5v9L12 21 3 16.5v-9Z" />
