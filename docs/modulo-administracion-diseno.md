@@ -58,10 +58,29 @@ Hoy NO existen datos fiscales (verificado en schema):
 | `Proveedor` | `cuit String?`, `condicionFiscal String?` |
 | Tenant (nueva tabla `ConfiguracionFiscal`) | cuit, razonSocial, condicionFiscal, nº IIBB, domicilio fiscal, puntos de venta habilitados, `proveedorFacturacion` ('manual' \| 'tusfacturas'), referencia de credenciales (nunca el secreto en claro; env/secret store) |
 
-**Selección automática de letra** (matriz emisor→receptor):
-RI→RI/mono = **A** · RI→CF/exento = **B** · monotributo/exento→cualquiera =
-**C** · RI nuevo/perfil riesgo→RI = **M** · exportación = **E**. Con
-provider TFA, la condición del receptor se valida contra padrón por CUIT.
+**Selección automática de letra** (matriz emisor→receptor). Implementada y
+testeada en `apps/api/src/administracion/letra-comprobante.ts`; fuente:
+[ARCA, régimen general](https://www.afip.gob.ar/facturacion/regimen-general/comprobantes.asp).
+
+| receptor ↓ / emisor → | RI | Monotributo | Exento |
+|---|---|---|---|
+| Responsable Inscripto | **A** | C | C |
+| Monotributo | **A** | C | C |
+| Exento | **B** | C | C |
+| Consumidor final | **B** | C | C |
+| Exterior (exportación) | **E** | E | E |
+
+> **Corrección (2026-07-16): la clase M ya no existe.** La RG 5762/2025 la
+> abrogó desde el 01/12/2025. Quien no acredita solvencia patrimonial emite
+> igual una **A con leyenda** ("PAGO EN CBU INFORMADA" u "OPERACIÓN SUJETA A
+> RETENCIÓN"), así que la leyenda es un atributo del emisor
+> (`ConfiguracionFiscal.leyendaFacturaA`) y no una letra aparte. Ojo que
+> varias fuentes secundarias siguen diciendo que RI→Monotributo es B: la
+> fuente oficial dice **A**.
+
+Una **A exige CUIT del receptor** (`bloqueoEmision`): sin él ARCA rechaza la
+emisión. Con provider TFA, la condición del receptor se valida contra padrón
+por CUIT.
 
 ## 4. Modelo de datos (Prisma, convenciones del schema actual)
 
