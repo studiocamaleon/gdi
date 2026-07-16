@@ -116,7 +116,9 @@ export interface InvoicingProvider {
    * herramienta de reconciliación: distingue "nunca llegó" de "se emitió
    * y no me enteré".
    */
-  consultarPorReferencia(idempotencyKey: string): Promise<EmitirResultado | null>;
+  consultarPorReferencia(
+    idempotencyKey: string,
+  ): Promise<EmitirResultado | null>;
 
   /** Último número autorizado por ARCA para (punto de venta, tipo, letra). */
   ultimoNumero(

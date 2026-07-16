@@ -10,10 +10,7 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
-import {
-  CONDICIONES_EMISOR,
-  LEYENDAS_A,
-} from '../letra-comprobante';
+import { CONDICIONES_EMISOR, LEYENDAS_A } from '../letra-comprobante';
 
 export const PROVEEDORES_FACTURACION = ['manual', 'tusfacturas'] as const;
 export const MODALIDADES_PUNTO_VENTA = [
@@ -28,7 +25,9 @@ export class UpsertConfiguracionFiscalDto {
   razonSocial: string;
 
   @IsString()
-  @Matches(/^[\d-]+$/, { message: 'El CUIT sólo puede tener números y guiones' })
+  @Matches(/^[\d-]+$/, {
+    message: 'El CUIT sólo puede tener números y guiones',
+  })
   cuit: string;
 
   @IsIn(CONDICIONES_EMISOR as unknown as string[], {

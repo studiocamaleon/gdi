@@ -434,6 +434,9 @@ model Tenant {
   valores                                          Valor[]
   configuracionFiscal                              ConfiguracionFiscal?
   puntosVenta                                      PuntoVenta[]
+  comprobantes                                     Comprobante[]
+  comprobanteContadores                            ComprobanteContador[]
+  cobroImputaciones                                CobroImputacion[]
 }
 
 model User {
@@ -536,6 +539,7 @@ model Cliente {
   ordenesTrabajo      OrdenTrabajo[]                    @relation("OrdenTrabajoCliente")
   cobros              Cobro[]
   valores             Valor[]
+  comprobantes        Comprobante[]
 
   @@unique([tenantId, nombre])
   @@index([tenantId, nombre])
@@ -1877,6 +1881,7 @@ model OrdenTrabajo {
   eventos            OrdenTrabajoEvento[]
   cobros             Cobro[]
   movimientosFondos  MovimientoFondos[]
+  comprobantes       Comprobante[]
 
   @@unique([tenantId, numero])
   @@index([tenantId, estado])
@@ -2069,6 +2074,7 @@ model Cobro {
   retenciones               RetencionPercepcion[]
   movimientos               MovimientoFondos[]
   valores                   Valor[]
+  imputaciones              CobroImputacion[]
 
   @@index([tenantId, ordenId])
   @@index([tenantId, clienteId])
@@ -2208,7 +2214,116 @@ model PuntoVenta {
   updatedAt             DateTime            @updatedAt
   tenant                Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   configuracionFiscal   ConfiguracionFiscal @relation(fields: [configuracionFiscalId], references: [id], onDelete: Cascade)
+  comprobantes          Comprobante[]
+  contadores            ComprobanteContador[]
 
   @@unique([tenantId, numero])
   @@index([tenantId, activo])
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Administración · Comprobantes (etapa C2)
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Comprobante fiscal (factura / NC / ND). La letra sale de la matriz
+/// emisor×receptor (letra-comprobante.ts) y se congela al crear.
+model Comprobante {
+  id                  String              @id @default(uuid()) @db.Uuid
+  tenantId            String              @db.Uuid
+  /// 'factura' | 'nota_credito' | 'nota_debito'
+  tipo                String
+  /// 'A' | 'B' | 'C' | 'E'
+  letra               String              @db.VarChar(1)
+  puntoVentaId        String              @db.Uuid
+  /// Número dentro de (punto de venta, tipo, letra). Null mientras es
+  /// borrador: se asigna recién al emitir, con el contador atómico.
+  numero              Int?
+  fecha               DateTime            @db.Date
+  clienteId           String?             @db.Uuid
+  ordenId             String?             @db.Uuid
+  /// Datos del receptor congelados al crear: si el cliente después cambia
+  /// de CUIT o de condición, el comprobante emitido NO cambia.
+  receptorSnapshot    Json
+  /// [{ descripcion, cantidad, precioUnitarioSinIva, alicuotaIva, ... }]
+  itemsJson           Json
+  netoGravado         Decimal             @db.Decimal(14, 2)
+  /// [{ alicuota, base, monto }] — la A las discrimina; B/C/E no.
+  ivaPorAlicuota      Json
+  ivaTotal            Decimal             @default(0) @db.Decimal(14, 2)
+  total               Decimal             @db.Decimal(14, 2)
+  moneda              String              @default("ARS")
+  cotizacion          Decimal?            @db.Decimal(14, 4)
+  /// 'borrador' | 'emitido' | 'rechazado' | 'anulado'
+  estado              String              @default("borrador")
+  cae                 String?
+  caeVencimiento      DateTime?
+  /// Condición de venta y vencimiento: el aging de deudores depende de esto.
+  condicionVenta      String?
+  vencimiento         DateTime?           @db.Date
+  /// Leyenda RG 5762/2025 en las A ('PAGO EN CBU INFORMADA'…).
+  leyenda             String?
+  /// Errores de ARCA. Llegan como TEXTO LIBRE: no hay tabla pública de
+  /// códigos, así que se guardan crudos para auditar.
+  rechazoJson         Json?
+  /// Respuesta cruda del provider (auditoría).
+  providerRaw         Json?
+  /// Clave anti-duplicado: se persiste ANTES de llamar al provider. Ante
+  /// un timeout se consulta por ella, nunca se reintenta a ciegas —
+  /// ningún provider garantiza idempotencia.
+  idempotencyKey      String              @unique
+  /// Saldo pendiente de cobro (total − imputaciones). Denormalizado, se
+  /// mantiene en la misma transacción que las imputaciones.
+  saldoPendiente      Decimal             @default(0) @db.Decimal(14, 2)
+  /// Para NC/ND: el comprobante que corrigen.
+  comprobanteOrigenId String?             @db.Uuid
+  anuladoEl           DateTime?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  puntoVenta          PuntoVenta          @relation(fields: [puntoVentaId], references: [id], onDelete: Restrict)
+  cliente             Cliente?            @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  orden               OrdenTrabajo?       @relation(fields: [ordenId], references: [id], onDelete: SetNull)
+  comprobanteOrigen   Comprobante?        @relation("ComprobanteCorrige", fields: [comprobanteOrigenId], references: [id], onDelete: SetNull)
+  correcciones        Comprobante[]       @relation("ComprobanteCorrige")
+  imputaciones        CobroImputacion[]
+
+  @@unique([tenantId, puntoVentaId, tipo, letra, numero])
+  @@index([tenantId, estado])
+  @@index([tenantId, clienteId])
+  @@index([tenantId, ordenId])
+  @@index([tenantId, vencimiento])
+}
+
+/// Numeración atómica por (punto de venta, tipo, letra) — mismo patrón que
+/// OrdenTrabajoContador. ARCA exige numeración correlativa sin huecos.
+model ComprobanteContador {
+  tenantId     String     @db.Uuid
+  puntoVentaId String     @db.Uuid
+  tipo         String
+  letra        String     @db.VarChar(1)
+  ultimo       Int        @default(0)
+  tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  puntoVenta   PuntoVenta @relation(fields: [puntoVentaId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, puntoVentaId, tipo, letra])
+}
+
+/// Aplica un cobro a un comprobante. Un cobro sin imputaciones es un
+/// anticipo a cuenta; la suma de imputaciones nunca supera ni al cobro ni
+/// al saldo del comprobante.
+model CobroImputacion {
+  id            String      @id @default(uuid()) @db.Uuid
+  tenantId      String      @db.Uuid
+  cobroId       String      @db.Uuid
+  comprobanteId String      @db.Uuid
+  monto         Decimal     @db.Decimal(14, 2)
+  createdAt     DateTime    @default(now())
+
+  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cobro         Cobro       @relation(fields: [cobroId], references: [id], onDelete: Cascade)
+  comprobante   Comprobante @relation(fields: [comprobanteId], references: [id], onDelete: Cascade)
+
+  @@unique([cobroId, comprobanteId])
+  @@index([tenantId, comprobanteId])
 }

@@ -50,8 +50,7 @@ describe('letraComprobante — matriz emisor × receptor', () => {
   }
 
   it('cubre las 15 combinaciones posibles', () => {
-    const total =
-      Object.keys(MATRIZ).length * CONDICIONES_RECEPTOR.length;
+    const total = Object.keys(MATRIZ).length * CONDICIONES_RECEPTOR.length;
     expect(total).toBe(15);
   });
 });

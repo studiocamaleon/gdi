@@ -132,7 +132,11 @@ export class ConfiguracionFiscalService {
     await this.puntoVentaOrThrow(auth, id);
 
     const duplicado = await this.prisma.puntoVenta.findFirst({
-      where: { tenantId: auth.tenantId, numero: payload.numero, id: { not: id } },
+      where: {
+        tenantId: auth.tenantId,
+        numero: payload.numero,
+        id: { not: id },
+      },
       select: { id: true },
     });
     if (duplicado) {

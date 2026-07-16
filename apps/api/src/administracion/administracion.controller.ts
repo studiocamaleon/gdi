@@ -15,8 +15,15 @@ import { MetodosPagoService } from './metodos-pago.service';
 import { CobrosService } from './cobros.service';
 import { TesoreriaService } from './tesoreria.service';
 import { ConfiguracionFiscalService } from './configuracion-fiscal.service';
+import { ComprobantesService } from './comprobantes.service';
+import { ImputacionesService } from './imputaciones.service';
 import { UpsertMetodoPagoDto } from './dto/metodo-pago.dto';
 import { CrearCobroDto } from './dto/cobro.dto';
+import {
+  CargarCaeDto,
+  CrearComprobanteDto,
+  ImputarCobroDto,
+} from './dto/comprobante.dto';
 import {
   UpsertConfiguracionFiscalDto,
   UpsertPuntoVentaDto,
@@ -35,7 +42,95 @@ export class AdministracionController {
     private readonly cobrosService: CobrosService,
     private readonly tesoreriaService: TesoreriaService,
     private readonly configuracionFiscalService: ConfiguracionFiscalService,
+    private readonly comprobantesService: ComprobantesService,
+    private readonly imputacionesService: ImputacionesService,
   ) {}
+
+  // ── Comprobantes ─────────────────────────────────────────────────────
+
+  @Get('comprobantes')
+  listarComprobantes(
+    @CurrentSession() auth: CurrentAuth,
+    @Query('estado') estado?: string,
+    @Query('tipo') tipo?: string,
+    @Query('clienteId') clienteId?: string,
+    @Query('q') q?: string,
+  ) {
+    return this.comprobantesService.listar(auth, {
+      estado,
+      tipo,
+      clienteId,
+      q,
+    });
+  }
+
+  @Get('comprobantes/:id')
+  obtenerComprobante(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+  ) {
+    return this.comprobantesService.obtener(auth, id);
+  }
+
+  @Post('comprobantes')
+  crearComprobante(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() body: CrearComprobanteDto,
+  ) {
+    return this.comprobantesService.crear(auth, body);
+  }
+
+  @Post('comprobantes/:id/emitir')
+  emitirComprobante(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+  ) {
+    return this.comprobantesService.emitir(auth, id);
+  }
+
+  @Post('comprobantes/:id/cae')
+  cargarCae(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() body: CargarCaeDto,
+  ) {
+    return this.comprobantesService.cargarCae(auth, id, body);
+  }
+
+  @Delete('comprobantes/:id')
+  descartarComprobante(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+  ) {
+    return this.comprobantesService.descartar(auth, id);
+  }
+
+  // ── Imputaciones ─────────────────────────────────────────────────────
+
+  @Get('clientes/:clienteId/comprobantes-pendientes')
+  comprobantesPendientes(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('clienteId') clienteId: string,
+  ) {
+    return this.imputacionesService.pendientesDeCliente(auth, clienteId);
+  }
+
+  @Post('cobros/:id/imputaciones')
+  imputarCobro(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() body: ImputarCobroDto,
+  ) {
+    return this.imputacionesService.imputar(auth, id, body);
+  }
+
+  @Delete('imputaciones/:id')
+  quitarImputacion(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+  ) {
+    return this.imputacionesService.quitar(auth, id);
+  }
 
   // ── Configuración fiscal del emisor ──────────────────────────────────
 
