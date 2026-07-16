@@ -92,6 +92,9 @@ export interface ProductoListItem {
   medidaDefaultAnchoMm: string | null;
   medidaDefaultAltoMm: string | null;
   medidasPredefinidasJson: MedidaPredefinidaProducto[] | null;
+  /** Personalizaciones (áreas de decoración) con medida propia. Raw JSON: usar
+   *  getPersonalizaciones() de producto-personalizaciones.ts para parsear. */
+  personalizacionesJson: unknown;
   precioConfigJson: unknown;
   unidadComercial: string;
   modoMedidas: ModoMedidasProducto;

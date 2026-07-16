@@ -115,6 +115,7 @@ export interface CrearProductoPayload {
   medidaDefaultAnchoMm?: number;
   medidaDefaultAltoMm?: number;
   medidasPredefinidasJson?: MedidaPredefinidaProducto[];
+  personalizacionesJson?: Record<string, unknown>[];
   precioConfigJson?: Record<string, unknown>;
 }
 
@@ -139,6 +140,7 @@ export interface ActualizarProductoPayload {
   medidaDefaultAnchoMm?: number | null;
   medidaDefaultAltoMm?: number | null;
   medidasPredefinidasJson?: MedidaPredefinidaProducto[] | null;
+  personalizacionesJson?: Record<string, unknown>[] | null;
   precioConfigJson?: Record<string, unknown>;
   activo?: boolean;
 }

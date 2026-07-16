@@ -85,6 +85,7 @@ export class ProductosService {
       medidas: dto.medidasPredefinidasJson,
       anchoDefault: dto.medidaDefaultAnchoMm,
       altoDefault: dto.medidaDefaultAltoMm,
+      unidadComercial: dto.unidadComercial,
     });
     const medidaDefault = medidas.find((medida) => medida.esDefault);
     const codigoManual = dto.codigo?.trim();
@@ -124,6 +125,8 @@ export class ProductosService {
               medidas.length > 0
                 ? (medidas as Prisma.InputJsonValue)
                 : Prisma.JsonNull,
+            personalizacionesJson: (dto.personalizacionesJson ??
+              Prisma.JsonNull) as Prisma.InputJsonValue,
             precioConfigJson: (dto.precioConfigJson ??
               Prisma.JsonNull) as Prisma.InputJsonValue,
             atributosComercialesJson: (dto.atributosComercialesJson ??
@@ -184,6 +187,7 @@ export class ProductosService {
             dto.medidaDefaultAltoMm !== undefined
               ? dto.medidaDefaultAltoMm
               : this.decimalToNumber(existente.medidaDefaultAltoMm),
+          unidadComercial: dto.unidadComercial ?? existente.unidadComercial,
         })
       : [];
     const medidaDefault = medidas.find((medida) => medida.esDefault);
@@ -233,6 +237,10 @@ export class ProductosService {
         medidas.length > 0
           ? (medidas as Prisma.InputJsonValue)
           : Prisma.JsonNull;
+    }
+    if (dto.personalizacionesJson !== undefined) {
+      data.personalizacionesJson = (dto.personalizacionesJson ??
+        Prisma.JsonNull) as Prisma.InputJsonValue;
     }
     if (dto.precioConfigJson !== undefined) {
       data.precioConfigJson = dto.precioConfigJson as Prisma.InputJsonValue;
@@ -329,6 +337,7 @@ export class ProductosService {
             medidaDefaultAnchoMm: origen.medidaDefaultAnchoMm,
             medidaDefaultAltoMm: origen.medidaDefaultAltoMm,
             medidasPredefinidasJson: this.jsonOrNull(origen.medidasPredefinidasJson),
+            personalizacionesJson: this.jsonOrNull(origen.personalizacionesJson),
             precioConfigJson: this.jsonOrNull(origen.precioConfigJson),
             atributosComercialesJson: this.jsonOrNull(origen.atributosComercialesJson),
             activo: dto.activo ?? false,
@@ -622,6 +631,7 @@ export class ProductosService {
     medidas?: MedidaPredefinidaDto[] | null;
     anchoDefault?: number | null;
     altoDefault?: number | null;
+    unidadComercial?: string | null;
   }): MedidaPredefinidaNormalizada[] {
     if (input.modoMedidas === 'LIBRE') return [];
 
@@ -640,7 +650,14 @@ export class ProductosService {
             ]
           : [];
 
-    if (input.modoMedidas === 'FIJA' && fuente.length === 0) {
+    // Los productos por unidad (merchandising comprado: taza, remera) pueden no
+    // tener medida: se cotizan por unidad y la estampa la maneja la
+    // personalización. Ver docs/productos-comprados-merchandising-diseno.md
+    if (
+      input.modoMedidas === 'FIJA' &&
+      fuente.length === 0 &&
+      input.unidadComercial !== 'unidad'
+    ) {
       throw new BadRequestException(
         'Los productos con medida fija deben tener al menos una medida predefinida.',
       );

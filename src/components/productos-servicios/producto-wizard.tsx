@@ -369,6 +369,21 @@ export function ProductoWizard({
           ],
   );
   const [activo, setActivo] = React.useState(productoExistente?.activo ?? true);
+  // Producto por unidad sin medida (merchandising comprado: taza, remera). Se
+  // persiste como modoMedidas FIJA + medidas vacías; el motor cotiza por unidad
+  // y la estampa la maneja la personalización.
+  // Ver docs/productos-comprados-merchandising-diseno.md
+  const [sinMedida, setSinMedida] = React.useState<boolean>(() =>
+    productoExistente
+      ? (productoExistente.modoMedidas ?? "FIJA") === "FIJA" &&
+        getMedidasPredefinidas(productoExistente).length === 0
+      : false,
+  );
+
+  // "Sin medida" solo aplica a productos por unidad; si cambia a m²/ml, se apaga.
+  React.useEffect(() => {
+    if (unidadComercial !== "unidad" && sinMedida) setSinMedida(false);
+  }, [unidadComercial, sinMedida]);
 
   // Estado de step 5 — Precio
   const [precioPersistido, setPrecioPersistido] = React.useState<TabPrecioConfig>(
@@ -442,9 +457,12 @@ export function ProductoWizard({
       toast.error(valIdentidad.errores[0]);
       return;
     }
-    const medidasNormalizadas = normalizarMedidasPorModo(modoMedidas, medidas);
+    const modoMedidasEfectivo = sinMedida ? "FIJA" : modoMedidas;
+    const medidasNormalizadas = sinMedida
+      ? []
+      : normalizarMedidasPorModo(modoMedidas, medidas);
     const medidaDefault = medidasNormalizadas.find((medida) => medida.esDefault);
-    if (modoMedidas === "FIJA" && !medidaDefault) {
+    if (!sinMedida && modoMedidas === "FIJA" && !medidaDefault) {
       toast.error("Agregá al menos una medida predefinida.");
       return;
     }
@@ -457,7 +475,7 @@ export function ProductoWizard({
         atributosComercialesJson:
           (productoExistente?.atributosComercialesJson as Record<string, unknown> | null) ?? {},
         unidadComercial: unidadComercial as "unidad" | "m2" | "metro_lineal",
-        modoMedidas,
+        modoMedidas: modoMedidasEfectivo,
         medidaDefaultAnchoMm: medidaDefault?.anchoMm,
         medidaDefaultAltoMm: medidaDefault?.altoMm,
         medidasPredefinidasJson: medidasNormalizadas,
@@ -484,7 +502,10 @@ export function ProductoWizard({
   // ── Step 5: guardar precio ────────────────────────────────────────
   const guardarPrecio = async () => {
     if (!productoExistente) return;
-    const medidasNormalizadas = normalizarMedidasPorModo(modoMedidas, medidas);
+    const modoMedidasEfectivo = sinMedida ? "FIJA" : modoMedidas;
+    const medidasNormalizadas = sinMedida
+      ? []
+      : normalizarMedidasPorModo(modoMedidas, medidas);
     const medidaDefault = medidasNormalizadas.find((medida) => medida.esDefault);
     setGuardandoStep(true);
     try {
@@ -495,7 +516,7 @@ export function ProductoWizard({
         atributosComercialesJson:
           (productoExistente?.atributosComercialesJson as Record<string, unknown> | null) ?? {},
         unidadComercial: unidadComercial as "unidad" | "m2" | "metro_lineal",
-        modoMedidas,
+        modoMedidas: modoMedidasEfectivo,
         medidaDefaultAnchoMm: medidaDefault?.anchoMm,
         medidaDefaultAltoMm: medidaDefault?.altoMm,
         medidasPredefinidasJson: medidasNormalizadas,
@@ -630,6 +651,8 @@ export function ProductoWizard({
               setUnidadComercial={setUnidadComercial}
               modoMedidas={modoMedidas}
               setModoMedidas={setModoMedidas}
+              sinMedida={sinMedida}
+              setSinMedida={setSinMedida}
               medidas={medidas}
               setMedidas={setMedidas}
               activo={activo}
@@ -742,6 +765,8 @@ interface StepIdentidadProps {
   setUnidadComercial: (v: string) => void;
   modoMedidas: ModoMedidasProducto;
   setModoMedidas: (v: ModoMedidasProducto) => void;
+  sinMedida: boolean;
+  setSinMedida: (v: boolean) => void;
   medidas: MedidaPredefinidaProducto[];
   setMedidas: (v: MedidaPredefinidaProducto[]) => void;
   activo: boolean;
@@ -851,21 +876,49 @@ function StepIdentidad(props: StepIdentidadProps) {
               id="unidad"
             />
           </div>
-          <div className="space-y-2">
-            <LabelConTooltip
-              label="Manejo de medidas"
-              htmlFor="modoMedidas"
-              tooltip={getLabel(modoMedidasLabels, props.modoMedidas).descripcion}
-              ejemplo={getLabel(modoMedidasLabels, props.modoMedidas).ejemplo}
-            />
-            <HumanSelect
-              value={props.modoMedidas}
-              onValueChange={(v) => props.setModoMedidas((v || "FIJA") as ModoMedidasProducto)}
-              options={MODOS_MEDIDAS.map((it) => optionFromLabel(it.value, modoMedidasLabels))}
-              id="modoMedidas"
-            />
-          </div>
-          {modoMedidasUsaPredefinidas(props.modoMedidas) && (
+          {props.unidadComercial === "unidad" && (
+            <div className="space-y-2">
+              <LabelConTooltip
+                label="¿El producto tiene medida?"
+                htmlFor="sinMedida"
+                tooltip="Los productos comprados por unidad (tazas, remeras, lapiceras) no tienen medida propia: se cotizan por unidad y la estampa la maneja la personalización. Elegí «Sin medida» para ellos."
+              />
+              <HumanSelect
+                value={props.sinMedida ? "sin" : "con"}
+                onValueChange={(v) => props.setSinMedida(v === "sin")}
+                options={[
+                  {
+                    value: "con",
+                    label: "Con medida",
+                    description: "El producto tiene una medida física (ej. tarjeta 90×50 mm).",
+                  },
+                  {
+                    value: "sin",
+                    label: "Sin medida (por unidad)",
+                    description: "Merchandising comprado: taza, remera, lapicera. Se cotiza por unidad.",
+                  },
+                ]}
+                id="sinMedida"
+              />
+            </div>
+          )}
+          {!props.sinMedida && (
+            <div className="space-y-2">
+              <LabelConTooltip
+                label="Manejo de medidas"
+                htmlFor="modoMedidas"
+                tooltip={getLabel(modoMedidasLabels, props.modoMedidas).descripcion}
+                ejemplo={getLabel(modoMedidasLabels, props.modoMedidas).ejemplo}
+              />
+              <HumanSelect
+                value={props.modoMedidas}
+                onValueChange={(v) => props.setModoMedidas((v || "FIJA") as ModoMedidasProducto)}
+                options={MODOS_MEDIDAS.map((it) => optionFromLabel(it.value, modoMedidasLabels))}
+                id="modoMedidas"
+              />
+            </div>
+          )}
+          {!props.sinMedida && modoMedidasUsaPredefinidas(props.modoMedidas) && (
             <MedidasPredefinidasWizard
               medidas={props.medidas}
               onChange={props.setMedidas}

@@ -115,6 +115,16 @@ export const bibliotecaFamilias: Record<
     key: "sustrato_rollo_flexible",
     parent: "sustrato",
   },
+  objeto_promocional_base: {
+    nm: "Objetos promocionales",
+    key: "objeto_promocional_base",
+    parent: "sustrato",
+  },
+  textil_indumentaria: {
+    nm: "Textil / indumentaria",
+    key: "textil_indumentaria",
+    parent: "sustrato",
+  },
   tinta_impresion: {
     nm: "Tinta impresión",
     key: "tinta_impresion",

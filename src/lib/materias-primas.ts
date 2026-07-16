@@ -55,6 +55,7 @@ export type SubfamiliaMateriaPrima =
   | "portabanner_estructura"
   | "sistema_colgado_montaje"
   | "perfil_bastidor_textil"
+  | "textil_indumentaria"
   | "cinta_doble_faz_tecnica"
   | "adhesivo_liquido_estructural"
   | "velcro_cierre_tecnico"
@@ -123,6 +124,8 @@ export type MateriaPrima = {
   unidadCompra: UnidadMateriaPrima;
   esConsumible: boolean;
   esRepuesto: boolean;
+  /** true = blank comprado para reventa/decoración (taza, remera), no insumo. */
+  esProductoBase?: boolean;
   activo: boolean;
   atributosTecnicos: Record<string, unknown>;
   variantes: MateriaPrimaVariante[];
@@ -142,6 +145,7 @@ export type MateriaPrimaPayload = {
   unidadCompra: UnidadMateriaPrima;
   esConsumible: boolean;
   esRepuesto: boolean;
+  esProductoBase?: boolean;
   activo: boolean;
   atributosTecnicos: Record<string, unknown>;
   variantes: Array<{

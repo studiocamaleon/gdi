@@ -71,6 +71,7 @@ export enum SubfamiliaMateriaPrimaDto {
   portabanner_estructura = 'portabanner_estructura',
   sistema_colgado_montaje = 'sistema_colgado_montaje',
   perfil_bastidor_textil = 'perfil_bastidor_textil',
+  textil_indumentaria = 'textil_indumentaria',
   cinta_doble_faz_tecnica = 'cinta_doble_faz_tecnica',
   adhesivo_liquido_estructural = 'adhesivo_liquido_estructural',
   velcro_cierre_tecnico = 'velcro_cierre_tecnico',
@@ -191,6 +192,10 @@ export class UpsertMateriaPrimaDto {
 
   @IsBoolean()
   esRepuesto: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  esProductoBase?: boolean;
 
   @IsBoolean()
   activo: boolean;

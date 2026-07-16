@@ -101,6 +101,10 @@ export class CrearProductoDto {
   medidasPredefinidasJson?: MedidaPredefinidaDto[];
 
   @IsOptional()
+  @IsArray()
+  personalizacionesJson?: Record<string, unknown>[];
+
+  @IsOptional()
   @IsObject()
   precioConfigJson?: Record<string, unknown>;
 
@@ -158,6 +162,10 @@ export class ActualizarProductoDto {
   @IsOptional()
   @IsArray()
   medidasPredefinidasJson?: MedidaPredefinidaDto[] | null;
+
+  @IsOptional()
+  @IsArray()
+  personalizacionesJson?: Record<string, unknown>[] | null;
 
   @IsOptional()
   @IsObject()

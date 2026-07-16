@@ -38,8 +38,10 @@ export type MateriaPrimaTemplateDef = {
   defaults?: {
     esConsumible?: boolean;
     esRepuesto?: boolean;
+    esProductoBase?: boolean;
     lockEsConsumible?: boolean;
     lockEsRepuesto?: boolean;
+    lockEsProductoBase?: boolean;
   };
 };
 
@@ -1208,6 +1210,75 @@ export const materiaPrimaTemplatesV1: MateriaPrimaTemplateDef[] = [
       alto: 297,
     },
   },
+  {
+    id: "objeto_promocional_base_v1",
+    nombre: "Objeto promocional (blank)",
+    descripcion:
+      "Artículo comprado por unidad para decorar (taza, botella, mousepad, cuaderno). No es un insumo de producción: su costo entra por unidad. La medida de la estampa la maneja la personalización, no este material. Ver docs/productos-comprados-merchandising-diseno.md",
+    familia: "sustrato",
+    subfamilia: "objeto_promocional_base",
+    tipoTecnico: "objeto_promocional_base",
+    unidadStock: "unidad",
+    unidadCompra: "unidad",
+    camposTecnicos: [
+      { key: "categoria", label: "Categoría", type: "text", options: ["Drinkware", "Escritura", "Oficina", "Tecnología", "Llavería", "Hogar y bazar", "Bolsos y estuches", "Escolar", "Salud", "Automotor", "Regalería"], required: true },
+      { key: "tipoObjeto", label: "Tipo de objeto", type: "text", options: ["Taza", "Botella", "Termo", "Vaso", "Mate", "Mousepad", "Llavero", "Lapicera", "Cuaderno", "Agenda", "Posavasos", "Otro"], required: true },
+      { key: "material", label: "Material", type: "text", options: ["Cerámica", "Vidrio", "Plástico", "Metal", "Acero inoxidable", "Aluminio", "Madera", "Silicona", "Otro"], required: true },
+      { key: "capacidad", label: "Capacidad", type: "number", unit: "ml", optional: true },
+      { key: "color", label: "Color", type: "text", optional: true },
+      { key: "modelo", label: "Modelo/Descripción", type: "text", optional: true },
+    ],
+    dimensionesVariante: ["tipoObjeto", "material", "color", "modelo", "capacidad"],
+    requiredAtributos: ["categoria", "tipoObjeto", "material"],
+    atributosIniciales: {
+      categoria: "Drinkware",
+      tipoObjeto: "Taza",
+      material: "Cerámica",
+      capacidad: 350,
+      color: "Blanco",
+    },
+    defaults: {
+      esConsumible: false,
+      esRepuesto: false,
+      esProductoBase: true,
+      lockEsProductoBase: true,
+    },
+  },
+  {
+    id: "textil_indumentaria_v1",
+    nombre: "Textil / indumentaria (blank)",
+    descripcion:
+      "Prenda comprada por unidad para estampar/bordar (remera, buzo, gorra, tote bag). Se compra por unidad; talle y color son variantes, normalmente al mismo precio. La estampa la maneja la personalización. Ver docs/productos-comprados-merchandising-diseno.md",
+    familia: "sustrato",
+    subfamilia: "textil_indumentaria",
+    tipoTecnico: "textil_indumentaria",
+    unidadStock: "unidad",
+    unidadCompra: "unidad",
+    camposTecnicos: [
+      { key: "categoria", label: "Categoría", type: "text", options: ["Remeras", "Camisas y chombas", "Buzos y abrigo", "Camperas", "Gorras y sombreros", "Bolsos de tela", "Indumentaria de trabajo", "Bebé y niños", "Deportivo", "Hogar textil", "Accesorios"], required: true },
+      { key: "tipoPrenda", label: "Tipo de prenda", type: "text", options: ["Remera", "Remera manga larga", "Musculosa", "Chomba", "Camisa", "Buzo canguro", "Buzo cerrado", "Campera", "Gorra", "Tote bag", "Otro"], required: true },
+      { key: "material", label: "Material", type: "text", options: ["Algodón", "Poliéster", "Mixta (poly/algodón)", "Frisa", "Piqué", "Otro"], required: true },
+      { key: "color", label: "Color", type: "text", required: true },
+      { key: "talle", label: "Talle", type: "text", options: ["Único", "XS", "S", "M", "L", "XL", "XXL", "XXXL"], required: true },
+      { key: "gramaje", label: "Gramaje", type: "number", unit: "g_m2", optional: true },
+      { key: "marca", label: "Marca", type: "text", optional: true },
+    ],
+    dimensionesVariante: ["tipoPrenda", "material", "color", "talle", "gramaje", "marca"],
+    requiredAtributos: ["categoria", "tipoPrenda", "material", "color", "talle"],
+    atributosIniciales: {
+      categoria: "Remeras",
+      tipoPrenda: "Remera",
+      material: "Algodón",
+      color: "Blanco",
+      talle: "M",
+    },
+    defaults: {
+      esConsumible: false,
+      esRepuesto: false,
+      esProductoBase: true,
+      lockEsProductoBase: true,
+    },
+  },
 ];
 
 export const materiaPrimaTemplatesMap = new Map(
@@ -1261,7 +1332,9 @@ export function getMateriaPrimaTemplateAvailability(templateId: string) {
   return {
     esConsumible: template?.defaults?.esConsumible ?? false,
     esRepuesto: template?.defaults?.esRepuesto ?? false,
+    esProductoBase: template?.defaults?.esProductoBase ?? false,
     lockEsConsumible: template?.defaults?.lockEsConsumible ?? false,
     lockEsRepuesto: template?.defaults?.lockEsRepuesto ?? false,
+    lockEsProductoBase: template?.defaults?.lockEsProductoBase ?? false,
   };
 }

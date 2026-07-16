@@ -986,6 +986,7 @@ export function BibliotecaMateriasPrimasView({ initialItems }: Props) {
   const [items, setItems] = React.useState(initialItems);
   const [query, setQuery] = React.useState("");
   const [familyFilter, setFamilyFilter] = React.useState("all");
+  const [categoriaFilter, setCategoriaFilter] = React.useState("all");
   const [statusFilter, setStatusFilter] = React.useState("all");
   const [wizardKey, setWizardKey] = React.useState<string | null>(null);
   const selectedItem =
@@ -997,6 +998,20 @@ export function BibliotecaMateriasPrimasView({ initialItems }: Props) {
       label: bibliotecaFamilias[key]?.nm ?? key,
     }));
   }, [items]);
+  // Categoría (rubro) de un blank de merchandising/textil: vive en la primera
+  // variante (atributosVariante.categoria). Vacío para el resto de materiales.
+  const itemCategoria = React.useCallback((item: MaterialPresetListItem) => {
+    const raw = item.variantes[0]?.atributosVariante?.categoria;
+    return typeof raw === "string" ? raw : "";
+  }, []);
+  const categoriaOptions = React.useMemo(() => {
+    const set = new Set<string>();
+    for (const item of items) {
+      const cat = itemCategoria(item);
+      if (cat) set.add(cat);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "es"));
+  }, [items, itemCategoria]);
   const counts = {
     all: items.length,
     installed: items.filter(
@@ -1012,6 +1027,8 @@ export function BibliotecaMateriasPrimasView({ initialItems }: Props) {
     const q = query.trim().toLowerCase();
     if (q && !hay.includes(q)) return false;
     if (familyFilter !== "all" && item.subfamilia !== familyFilter)
+      return false;
+    if (categoriaFilter !== "all" && itemCategoria(item) !== categoriaFilter)
       return false;
     if (statusFilter === "installed")
       return item.installState.status !== "not-installed";
@@ -1098,6 +1115,24 @@ export function BibliotecaMateriasPrimasView({ initialItems }: Props) {
             </select>
             <BIco.ChevDn />
           </div>
+          {categoriaOptions.length > 0 ? (
+            <div className="bm-filter">
+              <span className="lbl">Categoría</span>
+              <select
+                value={categoriaFilter}
+                onChange={(event) => setCategoriaFilter(event.target.value)}
+                aria-label="Filtrar por categoría / rubro"
+              >
+                <option value="all">Todas</option>
+                {categoriaOptions.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+              <BIco.ChevDn />
+            </div>
+          ) : null}
           <div className="bm-filter">
             <span className="lbl">Uso</span>
             <span className="v">Todos</span>

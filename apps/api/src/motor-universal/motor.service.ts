@@ -3042,24 +3042,30 @@ export class MotorUniversalService {
       } else if (slot.formula === 'fijo') {
         cantidad = 1;
       } else if (slot.formula === 'por_m2') {
-        const areaPliegoImpresion = this.calcularM2DesdePliegoImpresion(
-          paso,
-          jobContext,
-          nestingDispatch,
-        );
-        if (areaPliegoImpresion > 0) {
-          cantidad = areaPliegoImpresion;
-        } else if (nestingDispatch?.substrates?.length) {
-          // Cobra por m² consumidos del sustrato, incluyendo desperdicio:
-          // rollo = largo consumido × ancho; placa/pliego = placas × ancho × alto.
-          cantidad = nestingDispatch.substrates.reduce((acc, sub) => {
-            if (sub.kind === 'roll') {
-              return acc + (sub.lengthMm * sub.widthMm) / 1_000_000;
-            }
-            return acc + (sub.count * sub.widthMm * sub.heightMm) / 1_000_000;
-          }, 0);
+        const areaPersonalizacion = this.areaPersonalizacionM2(paso, jobContext);
+        if (areaPersonalizacion !== null) {
+          // El slot decora una personalización: su área es la de la estampa/film.
+          cantidad = areaPersonalizacion;
         } else {
-          cantidad = this.calcularM2DesdePiezas(jobContext);
+          const areaPliegoImpresion = this.calcularM2DesdePliegoImpresion(
+            paso,
+            jobContext,
+            nestingDispatch,
+          );
+          if (areaPliegoImpresion > 0) {
+            cantidad = areaPliegoImpresion;
+          } else if (nestingDispatch?.substrates?.length) {
+            // Cobra por m² consumidos del sustrato, incluyendo desperdicio:
+            // rollo = largo consumido × ancho; placa/pliego = placas × ancho × alto.
+            cantidad = nestingDispatch.substrates.reduce((acc, sub) => {
+              if (sub.kind === 'roll') {
+                return acc + (sub.lengthMm * sub.widthMm) / 1_000_000;
+              }
+              return acc + (sub.count * sub.widthMm * sub.heightMm) / 1_000_000;
+            }, 0);
+          } else {
+            cantidad = this.calcularM2DesdePiezas(jobContext);
+          }
         }
       } else if (slot.formula === 'por_metro_lineal') {
         if (
@@ -3721,6 +3727,54 @@ export class MotorUniversalService {
     return (preferGlobal ? (global ?? scoped) : (scoped ?? global)) ?? null;
   }
 
+  /**
+   * Si el paso toma su medida de una personalización (paramsPasoJson.fuenteMedida
+   * = 'personalizacion:<codigo>'), devuelve su área en m² del jobContext
+   * (personalizacion_<codigo>_areaM2). Devuelve null si el paso usa la medida
+   * global del producto (comportamiento por defecto).
+   * Ver docs/personalizaciones-diseno.md
+   */
+  private areaPersonalizacionM2(
+    paso: PasoCargado,
+    jobContext: JobContext,
+  ): number | null {
+    const params = paso.paramsPasoJson;
+    if (!params || typeof params !== 'object' || Array.isArray(params)) {
+      return null;
+    }
+    const rec = params as Record<string, unknown>;
+    const PREFIX = 'personalizacion:';
+    // Multi-selección (nuevo): array de códigos que este paso imprime/costea
+    // JUNTOS (ej. varias estampas en un mismo DTF). El área es la SUMA.
+    const codigos: string[] = [];
+    if (Array.isArray(rec.fuenteMedidaPersonalizaciones)) {
+      for (const c of rec.fuenteMedidaPersonalizaciones) {
+        if (typeof c === 'string' && c.trim()) codigos.push(c.trim());
+      }
+    }
+    // Legacy: single string 'personalizacion:<codigo>'.
+    if (codigos.length === 0) {
+      const fuente = rec.fuenteMedida;
+      if (typeof fuente === 'string' && fuente.startsWith(PREFIX)) {
+        const c = fuente.slice(PREFIX.length).trim();
+        if (c) codigos.push(c);
+      }
+    }
+    if (codigos.length === 0) return null;
+    // El paso está marcado con personalización(es): usamos la suma de sus áreas
+    // (0 si todavía no hay medidas cargadas), NO caemos al área global.
+    let total = 0;
+    for (const codigo of codigos) {
+      const area = Number(
+        (jobContext as Record<string, unknown>)[
+          `personalizacion_${codigo}_areaM2`
+        ],
+      );
+      if (Number.isFinite(area) && area > 0) total += area;
+    }
+    return total;
+  }
+
   private calcularAreaImpresaConsumiblesM2(
     paso: PasoCargado,
     jobContext: JobContext,
@@ -3731,6 +3785,11 @@ export class MotorUniversalService {
       atributosVarianteJson?: Record<string, unknown> | null;
     } | null,
   ) {
+    // Prioridad máxima: si el paso decora una personalización, su área es la de
+    // la personalización (film DTF), no el área global del producto.
+    const areaPersonalizacion = this.areaPersonalizacionM2(paso, jobContext);
+    if (areaPersonalizacion !== null) return areaPersonalizacion;
+
     if (nestingDispatch?.substrates?.length) {
       const area = nestingDispatch.substrates.reduce((acc, sub) => {
         if (sub.kind === 'roll') {
@@ -4547,6 +4606,17 @@ export class MotorUniversalService {
       typeof params.productivityQuantitySource === 'string'
         ? params.productivityQuantitySource
         : '';
+
+    // Si el paso decora una personalización y su productividad es por área, la
+    // magnitud es el área de esa personalización (film DTF), no las piezas
+    // globales del producto. Ver docs/personalizaciones-diseno.md
+    const areaPersonalizacion = this.areaPersonalizacionM2(paso, jobContext);
+    if (
+      areaPersonalizacion !== null &&
+      (source === 'area_piezas_m2' || source === 'm2_instalados')
+    ) {
+      return areaPersonalizacion;
+    }
 
     if (
       paso.familiaCodigo === 'montaje_sobre_sustrato' &&

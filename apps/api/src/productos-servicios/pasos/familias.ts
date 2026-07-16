@@ -37,7 +37,11 @@ const MP = {
   },
   sustratoPieza: {
     familiasMateriaPrima: ['SUSTRATO'],
-    subfamiliasMateriaPrima: ['SUSTRATO_RIGIDO', 'OBJETO_PROMOCIONAL_BASE'],
+    subfamiliasMateriaPrima: [
+      'SUSTRATO_RIGIDO',
+      'OBJETO_PROMOCIONAL_BASE',
+      'TEXTIL_INDUMENTARIA',
+    ],
   },
   sustratoGrabable: {
     familiasMateriaPrima: [
@@ -62,7 +66,7 @@ const MP = {
   },
   textil: {
     familiasMateriaPrima: ['SUSTRATO'],
-    subfamiliasMateriaPrima: ['OBJETO_PROMOCIONAL_BASE'],
+    subfamiliasMateriaPrima: ['OBJETO_PROMOCIONAL_BASE', 'TEXTIL_INDUMENTARIA'],
   },
   laminadoFilm: {
     familiasMateriaPrima: ['TRANSFERENCIA_LAMINACION'],
@@ -480,9 +484,14 @@ const aplicacion_transfer: DefinicionFamilia = {
   codigo: 'aplicacion_transfer',
   nombre: 'Aplicación de transfer (DTF, DTG)',
   categoria: 'produccion_impresion',
-  descripcion: 'Aplica film transfer impreso a textil con plancha térmica.',
-  relacionMaquinaSoportada: ['M-1'],
-  modosTiempoSoportados: ['T-3'],
+  descripcion:
+    'Aplica film/transfer impreso al sustrato. Con plancha/máquina (DTG, DTF textil) o manual (DTF UV sobre objetos: tazas, botellas).',
+  // Soporta ambas: manual (M-0, ej. DTF UV a mano) y con máquina (M-1, ej. DTG
+  // con plancha). El modelador elige por paso.
+  relacionMaquinaSoportada: ['M-0', 'M-1'],
+  // T-2 = productividad propia (manual, ej. X piezas/h a mano); T-3 = del perfil
+  // de la máquina. El modelador elige según sea manual o con máquina.
+  modosTiempoSoportados: ['T-2', 'T-3'],
   mecanismosCantidadSoportados: [
     'DIRECT_FROM_JOBCONTEXT',
     'HEREDAR_DEL_OUTPUT_CANONICO',
@@ -493,24 +502,31 @@ const aplicacion_transfer: DefinicionFamilia = {
   slotsRequeridos: [
     {
       codigo: 'textil',
-      nombre: 'Textil base',
+      nombre: 'Sustrato / objeto base',
       tipo: 'SUSTRATO',
       requerido: true,
-      compatibilidadMaterial: MP.textil,
+      // Acepta prenda (remera), objeto (taza/botella) o rígido. Su costo entra
+      // por unidad (formula por_pieza).
+      compatibilidadMaterial: MP.sustratoPieza,
     },
     {
       codigo: 'film_transfer',
-      nombre: 'Film transfer impreso',
+      nombre: 'Film transfer impreso (comprado listo)',
       tipo: 'INSUMO_PASO',
-      requerido: true,
+      // OPCIONAL: solo se completa si se compra el transfer ya impreso. Si el
+      // film se imprime en un paso previo (impresion_por_area con tecnologia
+      // DTF_UV/DTF_TEXTIL), su costo ya está ahí — dejar este slot vacío para no
+      // duplicarlo.
+      requerido: false,
       compatibilidadMaterial: MP.filmTransfer,
     },
   ],
   permiteSlotsAdicionales: false,
   // v3.0: la impresión del FILM DTF la hace IMPRESORA_GRAN_FORMATO_POR_AREA
   // con tecnologia=DTF_UV o DTF_TEXTIL (paso anterior). Esta familia es la
-  // APLICACIÓN del transfer, hecha con plancha térmica (sin plantilla
-  // específica modelada todavía — pendiente).
+  // APLICACIÓN del transfer al sustrato/objeto — con plancha (M-1) o manual
+  // (M-0, ej. DTF UV sobre tazas). El film ya viene costeado del paso previo,
+  // por eso el slot de film es opcional.
   plantillasCompatibles: [],
   inputsRequeridos: ['cantidad'],
   outputsCanonicos: ['piezas_aplicadas'],

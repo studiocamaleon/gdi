@@ -66,6 +66,12 @@ import {
   normalizeMedidasDraft,
 } from "@/lib/producto-medidas";
 import {
+  getPersonalizaciones,
+  normalizePersonalizaciones,
+  nuevaPersonalizacion,
+  type PersonalizacionProducto,
+} from "@/lib/producto-personalizaciones";
+import {
   getLabel,
   modoActivacionLabels,
   modoCalculoCargoLabels,
@@ -223,6 +229,152 @@ function MedidasPredefinidasEditor({
         La medida con estrella se usa por defecto al cotizar y mantiene la compatibilidad
         con el motor.
       </span>
+    </div>
+  );
+}
+
+function PersonalizacionesEditor({
+  personalizaciones,
+  onChange,
+}: {
+  personalizaciones: PersonalizacionProducto[];
+  onChange: (next: PersonalizacionProducto[]) => void;
+}) {
+  const update = (id: string, patch: Partial<PersonalizacionProducto>) =>
+    onChange(
+      personalizaciones.map((p) => (p.id === id ? { ...p, ...patch } : p)),
+    );
+  const remove = (id: string) =>
+    onChange(personalizaciones.filter((p) => p.id !== id));
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {personalizaciones.length === 0 ? (
+        <div style={{ fontSize: 12.5, color: "var(--muted-text)" }}>
+          Todavía sin personalizaciones. Agregá una para que su medida maneje el
+          costo del material/paso de decoración (ej. la impresión DTF).
+        </div>
+      ) : null}
+      {personalizaciones.map((p, index) => (
+        <div
+          key={p.id}
+          style={{
+            border: "1px solid var(--border)",
+            borderRadius: "var(--r-2)",
+            padding: 12,
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input
+              type="text"
+              value={p.nombre}
+              onChange={(event) => update(p.id, { nombre: event.target.value })}
+              placeholder={`Personalización ${index + 1} (ej. Impresión DTF, Frente)`}
+              style={{ flex: 1 }}
+              aria-label={`Nombre de la personalización ${index + 1}`}
+            />
+            <button
+              type="button"
+              className="icon-action danger"
+              onClick={() => remove(p.id)}
+              title="Eliminar personalización"
+            >
+              <Trash2Icon size={13} />
+            </button>
+          </div>
+          <div className="field">
+            <label>Medida</label>
+            <div className="segmented" style={{ width: "100%" }}>
+              <button
+                type="button"
+                className={p.modoMedida === "FIJA" ? "on" : ""}
+                onClick={() => update(p.id, { modoMedida: "FIJA" })}
+                style={{ flex: 1 }}
+              >
+                Predefinida
+              </button>
+              <button
+                type="button"
+                className={p.modoMedida === "CLIENTE" ? "on" : ""}
+                onClick={() => update(p.id, { modoMedida: "CLIENTE" })}
+                style={{ flex: 1 }}
+              >
+                La ingresa el cliente
+              </button>
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div className="field">
+              <label>
+                {p.modoMedida === "FIJA" ? "Ancho (mm)" : "Ancho sugerido (mm)"}
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={p.anchoMm || ""}
+                onChange={(event) =>
+                  update(p.id, { anchoMm: Number(event.target.value) || 0 })
+                }
+                placeholder="Ancho mm"
+              />
+            </div>
+            <div className="field">
+              <label>
+                {p.modoMedida === "FIJA" ? "Alto (mm)" : "Alto sugerido (mm)"}
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={p.altoMm || ""}
+                onChange={(event) =>
+                  update(p.id, { altoMm: Number(event.target.value) || 0 })
+                }
+                placeholder="Alto mm"
+              />
+            </div>
+          </div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+            }}
+          >
+            <div>
+              <div style={{ fontWeight: 500, fontSize: 13 }}>Obligatoria</div>
+              <div style={{ fontSize: 11.5, color: "var(--muted-text)" }}>
+                Si está apagada, el comercial la activa al cotizar (opcional).
+              </div>
+            </div>
+            <button
+              type="button"
+              className={`toggle ${p.obligatoria ? "on" : ""}`}
+              onClick={() => update(p.id, { obligatoria: !p.obligatoria })}
+              aria-pressed={p.obligatoria}
+            >
+              <span className="switch" />
+            </button>
+          </div>
+        </div>
+      ))}
+      <button
+        type="button"
+        className="btn btn-ghost btn-sm"
+        style={{ alignSelf: "flex-start" }}
+        onClick={() =>
+          onChange([
+            ...personalizaciones,
+            nuevaPersonalizacion(personalizaciones.length),
+          ])
+        }
+      >
+        <PlusIcon />
+        Agregar personalización
+      </button>
     </div>
   );
 }
@@ -428,6 +580,10 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
       minimoComercialCantidad: producto.minimoComercialCantidad ?? "",
       minimoComercialBase: producto.minimoComercialBase ?? "cantidad_comercial",
       medidas: getMedidasPredefinidas(producto),
+      sinMedida:
+        (producto.modoMedidas ?? "FIJA") === "FIJA" &&
+        getMedidasPredefinidas(producto).length === 0,
+      personalizaciones: getPersonalizaciones(producto.personalizacionesJson),
       activo: producto.activo,
     }),
     [producto],
@@ -455,7 +611,20 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
   const [medidas, setMedidas] = React.useState<MedidaPredefinidaProducto[]>(() =>
     getMedidasPredefinidas(producto),
   );
+  const [personalizaciones, setPersonalizaciones] = React.useState<
+    PersonalizacionProducto[]
+  >(() => getPersonalizaciones(producto.personalizacionesJson));
   const [activo, setActivo] = React.useState(producto.activo);
+  // Producto por unidad sin medida (merchandising: taza, remera). Se persiste
+  // como FIJA + medidas vacías. Ver docs/productos-comprados-merchandising-diseno.md
+  const [sinMedida, setSinMedida] = React.useState<boolean>(
+    () =>
+      (producto.modoMedidas ?? "FIJA") === "FIJA" &&
+      getMedidasPredefinidas(producto).length === 0,
+  );
+  React.useEffect(() => {
+    if (unidadComercial !== "unidad" && sinMedida) setSinMedida(false);
+  }, [unidadComercial, sinMedida]);
   const [guardando, setGuardando] = React.useState(false);
 
   const identidadActual = React.useMemo(
@@ -464,7 +633,7 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
       descripcion,
       subcategoriaComercialCodigo,
       unidadComercial,
-      modoMedidas,
+      modoMedidas: sinMedida ? "FIJA" : modoMedidas,
       minimoComercialPolitica,
       minimoComercialCantidad:
         minimoComercialPolitica === "NONE" ? "" : minimoComercialCantidad,
@@ -472,13 +641,17 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
         minimoComercialPolitica === "NONE"
           ? "cantidad_comercial"
           : minimoComercialBase,
-      medidas: normalizarMedidasPorModo(modoMedidas, medidas),
+      medidas: sinMedida ? [] : normalizarMedidasPorModo(modoMedidas, medidas),
+      sinMedida,
+      personalizaciones: normalizePersonalizaciones(personalizaciones),
       activo,
     }),
     [
       activo,
       descripcion,
       medidas,
+      sinMedida,
+      personalizaciones,
       minimoComercialCantidad,
       minimoComercialBase,
       minimoComercialPolitica,
@@ -493,6 +666,9 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
       ...identidadPersistida,
       medidas:
         normalizarMedidasPorModo(identidadPersistida.modoMedidas, identidadPersistida.medidas),
+      personalizaciones: normalizePersonalizaciones(
+        identidadPersistida.personalizaciones,
+      ),
     }),
     [identidadPersistida],
   );
@@ -536,12 +712,16 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
       toast.error("Falta nombre");
       return;
     }
-    const medidasNormalizadas = normalizarMedidasPorModo(modoMedidas, medidas);
+    const modoMedidasEfectivo = sinMedida ? "FIJA" : modoMedidas;
+    const medidasNormalizadas = sinMedida
+      ? []
+      : normalizarMedidasPorModo(modoMedidas, medidas);
     const medidaDefault = medidasNormalizadas.find((medida) => medida.esDefault);
-    if (modoMedidas === "FIJA" && !medidaDefault) {
+    if (!sinMedida && modoMedidas === "FIJA" && !medidaDefault) {
       toast.error("Agregá al menos una medida predefinida.");
       return;
     }
+    const personalizacionesNormalizadas = normalizePersonalizaciones(personalizaciones);
     setGuardando(true);
     try {
       await actualizarProducto(producto.id, {
@@ -549,7 +729,7 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
         descripcion: descripcion || undefined,
         subcategoriaComercialCodigo,
         unidadComercial: unidadComercial as "unidad" | "m2" | "metro_lineal",
-        modoMedidas,
+        modoMedidas: modoMedidasEfectivo,
         minimoComercialPolitica,
         minimoComercialCantidad:
           minimoComercialPolitica === "NONE"
@@ -562,6 +742,8 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
         medidaDefaultAnchoMm: medidaDefault?.anchoMm ?? null,
         medidaDefaultAltoMm: medidaDefault?.altoMm ?? null,
         medidasPredefinidasJson: medidasNormalizadas,
+        personalizacionesJson:
+          personalizacionesNormalizadas as unknown as Record<string, unknown>[],
         activo,
       });
       setIdentidadPersistida({
@@ -569,7 +751,7 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
         descripcion,
         subcategoriaComercialCodigo,
         unidadComercial,
-        modoMedidas,
+        modoMedidas: modoMedidasEfectivo,
         minimoComercialPolitica,
         minimoComercialCantidad:
           minimoComercialPolitica === "NONE" ? "" : minimoComercialCantidad,
@@ -578,6 +760,8 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
             ? "cantidad_comercial"
             : minimoComercialBase,
         medidas: medidasNormalizadas,
+        sinMedida,
+        personalizaciones: personalizacionesNormalizadas,
         activo,
       });
       toast.success("Identidad guardada");
@@ -661,16 +845,28 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
               <button type="button" className={unidadComercial === "metro_lineal" ? "on" : ""} onClick={() => setUnidadComercial("metro_lineal")} style={{ flex: 1 }}>Por metro lineal</button>
             </div>
           </div>
-          <div className="field">
-            <label>Manejo de medidas</label>
-            <div className="segmented" style={{ width: "100%" }}>
-              <button type="button" className={modoMedidas === "FIJA" ? "on" : ""} onClick={() => setModoMedidas("FIJA")} style={{ flex: 1 }}>Fija</button>
-              <button type="button" className={modoMedidas === "LIBRE" ? "on" : ""} onClick={() => setModoMedidas("LIBRE")} style={{ flex: 1 }}>Libre</button>
-              <button type="button" className={modoMedidas === "COMERCIAL_ELIGE" ? "on" : ""} onClick={() => setModoMedidas("COMERCIAL_ELIGE")} style={{ flex: 1 }}>Comercial elige</button>
-              <button type="button" className={modoMedidas === "MIXTA" ? "on" : ""} onClick={() => setModoMedidas("MIXTA")} style={{ flex: 1 }}>Mixta</button>
-          </div>
-          </div>
-          {modoMedidasUsaPredefinidas(modoMedidas) && (
+          {unidadComercial === "unidad" && (
+            <div className="field">
+              <label>¿El producto tiene medida?</label>
+              <div className="segmented" style={{ width: "100%" }}>
+                <button type="button" className={!sinMedida ? "on" : ""} onClick={() => setSinMedida(false)} style={{ flex: 1 }}>Con medida</button>
+                <button type="button" className={sinMedida ? "on" : ""} onClick={() => setSinMedida(true)} style={{ flex: 1 }}>Sin medida (por unidad)</button>
+              </div>
+              <div className="helptext">Merchandising comprado (taza, remera, lapicera) va «sin medida»: se cotiza por unidad y la estampa la maneja la personalización.</div>
+            </div>
+          )}
+          {!sinMedida && (
+            <div className="field">
+              <label>Manejo de medidas</label>
+              <div className="segmented" style={{ width: "100%" }}>
+                <button type="button" className={modoMedidas === "FIJA" ? "on" : ""} onClick={() => setModoMedidas("FIJA")} style={{ flex: 1 }}>Fija</button>
+                <button type="button" className={modoMedidas === "LIBRE" ? "on" : ""} onClick={() => setModoMedidas("LIBRE")} style={{ flex: 1 }}>Libre</button>
+                <button type="button" className={modoMedidas === "COMERCIAL_ELIGE" ? "on" : ""} onClick={() => setModoMedidas("COMERCIAL_ELIGE")} style={{ flex: 1 }}>Comercial elige</button>
+                <button type="button" className={modoMedidas === "MIXTA" ? "on" : ""} onClick={() => setModoMedidas("MIXTA")} style={{ flex: 1 }}>Mixta</button>
+              </div>
+            </div>
+          )}
+          {!sinMedida && modoMedidasUsaPredefinidas(modoMedidas) && (
             <MedidasPredefinidasEditor medidas={medidas} onChange={setMedidas} />
           )}
           <div className="field">
@@ -751,6 +947,25 @@ function IdentidadTab({ producto }: { producto: ProductoDetalle }) {
           )}
         </div>
       </div>
+
+      <div className="wiz-section">
+        <div className="wiz-section-head">
+          <div className="body">
+            <h2>Personalizaciones</h2>
+            <div className="helptext">
+              Áreas de decoración con medida propia (ej. la impresión DTF de una
+              taza o remera). La medida de cada personalización maneja el costo de
+              su material y proceso, aparte de la medida del producto base. Luego,
+              en <em>Pasos</em>, indicás qué paso alimenta cada personalización.
+            </div>
+          </div>
+        </div>
+        <PersonalizacionesEditor
+          personalizaciones={personalizaciones}
+          onChange={setPersonalizaciones}
+        />
+      </div>
+
       {(dirty || guardando) && (
         <div className="save-sticky-footer">
           <div className="pricing-sticky-footer-copy">Hay cambios sin guardar en identidad.</div>

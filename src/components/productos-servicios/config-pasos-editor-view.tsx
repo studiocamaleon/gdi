@@ -58,6 +58,10 @@ import type {
   RutaAlternativaDetalle,
   SlotMaterialDetalle,
 } from "@/lib/productos-servicios";
+import {
+  FUENTE_MEDIDA_PERSONALIZACION_PREFIX,
+  getPersonalizaciones,
+} from "@/lib/producto-personalizaciones";
 import { PasoExtraEditor } from "@/components/productos-servicios/paso-extra-editor";
 import {
   criterioMotorAutoLabels,
@@ -2761,6 +2765,11 @@ export function ConfigPasosEditorView({
     () => new Map(catalogoFamilias.familias.map((f) => [f.codigo, f])),
     [catalogoFamilias],
   );
+  // Personalizaciones del producto: un paso puede tomar su medida de una de ellas.
+  const personalizaciones = React.useMemo(
+    () => getPersonalizaciones(producto.personalizacionesJson),
+    [producto.personalizacionesJson],
+  );
   const technologyRuleFields = React.useMemo<RuleFieldDefinition[]>(
     () =>
       rutaAlternativa.ruta.pasos.flatMap((rutaPaso) => {
@@ -5138,6 +5147,123 @@ export function ConfigPasosEditorView({
                                       }
                                     />
                                   </div>
+                                  {personalizaciones.length > 0 &&
+                                    (() => {
+                                      const params = asRecord(
+                                        cfg.paramsPasoJson,
+                                      );
+                                      const legacy =
+                                        typeof params.fuenteMedida === "string" &&
+                                        params.fuenteMedida.startsWith(
+                                          FUENTE_MEDIDA_PERSONALIZACION_PREFIX,
+                                        )
+                                          ? [
+                                              params.fuenteMedida.slice(
+                                                FUENTE_MEDIDA_PERSONALIZACION_PREFIX.length,
+                                              ),
+                                            ]
+                                          : [];
+                                      const seleccionadas = Array.isArray(
+                                        params.fuenteMedidaPersonalizaciones,
+                                      )
+                                        ? (
+                                            params.fuenteMedidaPersonalizaciones as unknown[]
+                                          ).filter(
+                                            (c): c is string =>
+                                              typeof c === "string",
+                                          )
+                                        : legacy;
+                                      const toggle = (
+                                        codigo: string,
+                                        checked: boolean,
+                                      ) => {
+                                        const next = checked
+                                          ? [...seleccionadas, codigo]
+                                          : seleccionadas.filter(
+                                              (c) => c !== codigo,
+                                            );
+                                        updateStepParams(paso.id, {
+                                          fuenteMedidaPersonalizaciones:
+                                            next.length ? next : undefined,
+                                          fuenteMedida: "",
+                                        });
+                                      };
+                                      return (
+                                        <div className="field">
+                                          <LabelConTooltip
+                                            label={
+                                              <>
+                                                Fuente de medida{" "}
+                                                <span className="hint">
+                                                  personalización
+                                                </span>
+                                              </>
+                                            }
+                                            tooltip="Elegí qué estampas imprime/costea este paso. Si se imprimen juntas (ej. varias estampas en un mismo DTF), marcá todas: el paso suma sus áreas. Sin ninguna marcada, usa la medida global del producto."
+                                            iconSize="sm"
+                                          />
+                                          <div
+                                            style={{
+                                              display: "flex",
+                                              flexDirection: "column",
+                                              gap: 6,
+                                              border: "1px solid var(--hairline, #e5e7eb)",
+                                              borderRadius: 8,
+                                              padding: "8px 10px",
+                                            }}
+                                          >
+                                            {personalizaciones.map((p) => (
+                                              <label
+                                                key={p.codigo}
+                                                style={{
+                                                  display: "flex",
+                                                  alignItems: "center",
+                                                  gap: 8,
+                                                  cursor: "pointer",
+                                                  fontSize: 13,
+                                                }}
+                                              >
+                                                <input
+                                                  type="checkbox"
+                                                  checked={seleccionadas.includes(
+                                                    p.codigo,
+                                                  )}
+                                                  onChange={(e) =>
+                                                    toggle(
+                                                      p.codigo,
+                                                      e.target.checked,
+                                                    )
+                                                  }
+                                                />
+                                                <span style={{ fontWeight: 500 }}>
+                                                  {p.nombre}
+                                                </span>
+                                                <span
+                                                  style={{
+                                                    color: "var(--muted, #6b7280)",
+                                                    fontSize: 11,
+                                                  }}
+                                                >
+                                                  {p.modoMedida === "FIJA"
+                                                    ? `${p.anchoMm}×${p.altoMm} mm (fija)`
+                                                    : "medida del cliente"}
+                                                </span>
+                                              </label>
+                                            ))}
+                                          </div>
+                                          <div
+                                            className="hint"
+                                            style={{ marginTop: 4 }}
+                                          >
+                                            {seleccionadas.length === 0
+                                              ? "Sin estampas marcadas → usa la medida del producto (global)."
+                                              : seleccionadas.length > 1
+                                                ? `Se costean juntas: el paso suma las ${seleccionadas.length} áreas.`
+                                                : "El paso costea el área de esa estampa."}
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
                                   {mostrarProductividadPropia && (
                                     <div className="field md:col-span-full">
                                       <LabelConTooltip

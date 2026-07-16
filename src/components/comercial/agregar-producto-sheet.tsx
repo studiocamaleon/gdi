@@ -62,6 +62,12 @@ import {
 import { evaluarJsonLogicBoolean } from "@/lib/json-logic";
 import { getMachineTechnology, machineTechnologyLabel } from "@/lib/maquinaria-tecnologias";
 import { getCurrentPeriodo } from "@/lib/costos";
+import {
+  getPersonalizaciones,
+  personalizacionAreaKey,
+  personalizacionAreaM2,
+  type PersonalizacionProducto,
+} from "@/lib/producto-personalizaciones";
 
 type CatalogSpec = {
   key: string;
@@ -146,6 +152,7 @@ type SlotMaterialCandidato = {
     details: Array<{ label: string; value: string }>;
     sku: string;
     isFallbackLabel: boolean;
+    atributosVarianteJson?: Record<string, unknown> | null;
     sortEspesor: number | null;
     espesorLabel: string | null;
     anchoLabel: string | null;
@@ -209,6 +216,16 @@ type MotorConfigState = {
   modoCotizacionLineal: ModoCotizacionLineal;
   zonaInstalacion: string;
   m2Instalados: number;
+  /**
+   * Estado por personalización (área de decoración con medida propia). La clave
+   * es el `codigo` de la personalización. Para FIJA la medida es la del producto
+   * (no editable); para CLIENTE el comercial la ingresa. `activa` gobierna las
+   * opcionales. Ver docs/personalizaciones-diseno.md
+   */
+  personalizaciones: Record<
+    string,
+    { activa: boolean; anchoMm: number; altoMm: number }
+  >;
 };
 
 type CotizacionExitosa = CotizacionPropuestaSnapshot;
@@ -332,6 +349,14 @@ const ENRICHED_SPEC_LABELS: Record<string, string> = {
   tecnologia_proceso: "Tecnología",
   proceso: "Proceso",
   modo_color: "Modo de color",
+  // Blanks comprados (merchandising / textil): nutren la OT con el producto base
+  // y su variante. Ver docs/ot-merchandising-info-diseno.md
+  producto_tipo: "Tipo de producto",
+  producto_base: "Producto base",
+  talle: "Talle",
+  color_prenda: "Color",
+  material_base: "Material base",
+  personalizaciones: "Estampas",
 };
 
 const ENRICHED_SPEC_ORDER = [
@@ -369,6 +394,7 @@ const DEFAULT_MOTOR_CONFIG: MotorConfigState = {
   modoCotizacionLineal: "nesting",
   zonaInstalacion: "CABA",
   m2Instalados: 0,
+  personalizaciones: {},
 };
 
 const CUSTOM_MEASURE_ID = "__custom_measure__";
@@ -820,6 +846,8 @@ function mapSlotMaterial(
                   details: display.details,
                   sku: display.fallbackCode,
                   isFallbackLabel: display.details.length === 0,
+                  atributosVarianteJson:
+                    item.variante.atributosVarianteJson ?? null,
                   sortEspesor: getSlotMaterialVariantSortValue(variante),
                   espesorLabel: getVariantThicknessLabel(
                     item.variante.atributosVarianteJson,
@@ -2064,6 +2092,28 @@ function getSelectedLinearMaterialMetrics(
   return null;
 }
 
+/**
+ * Estado efectivo de una personalización combinando la definición del producto
+ * con lo que el comercial cargó en el sheet. Para FIJA la medida es siempre la
+ * del producto; para CLIENTE se toma la del comercial (con la del producto como
+ * sugerencia). `activa` respeta el toggle salvo que sea obligatoria.
+ */
+function personalizacionEstadoEfectivo(
+  p: PersonalizacionProducto,
+  config: MotorConfigState,
+): { activa: boolean; anchoMm: number; altoMm: number } {
+  const estado = config.personalizaciones?.[p.codigo];
+  const activa = p.obligatoria ? true : estado?.activa ?? false;
+  if (p.modoMedida === "FIJA") {
+    return { activa, anchoMm: p.anchoMm, altoMm: p.altoMm };
+  }
+  return {
+    activa,
+    anchoMm: estado?.anchoMm ?? p.anchoMm,
+    altoMm: estado?.altoMm ?? p.altoMm,
+  };
+}
+
 function buildJobContext(
   productoDetalle: ProductoDetalle | null,
   config: MotorConfigState,
@@ -2134,6 +2184,23 @@ function buildJobContext(
         ]
       : [];
 
+  // Producto sin medida propia (merchandising: taza, remera): la "pieza" que se
+  // produce/imprime ES la estampa de la personalización. Sintetiza piezas desde
+  // las personalizaciones activas para que un paso de impresión por área tenga
+  // qué nestear/costear/validar (requires_piezas). Ver
+  // docs/productos-comprados-merchandising-diseno.md
+  const piezasDesdePersonalizaciones = getPersonalizaciones(
+    productoDetalle?.personalizacionesJson,
+  )
+    .map((p) => personalizacionEstadoEfectivo(p, config))
+    .filter((estado) => estado.activa && estado.anchoMm > 0 && estado.altoMm > 0)
+    .map((estado, index) => ({
+      uiKey: `pers-pieza-${index}`,
+      cantidad: cantidadTrabajo,
+      anchoMm: estado.anchoMm,
+      altoMm: estado.altoMm,
+    }));
+
   const piezasContexto =
     usaMedidaPersonalizadaReal
       ? config.piezas
@@ -2148,6 +2215,8 @@ function buildJobContext(
               altoMm: medidaPredefinida.altoMm,
             },
           ]
+      : piezasDesdePersonalizaciones.length > 0
+        ? piezasDesdePersonalizaciones
         : [];
 
   if (piezasContexto.length > 0) {
@@ -2294,6 +2363,39 @@ function buildJobContext(
     if (efectivo != null) {
       ctx[`tiempoManualMin_${item.configPasoId}`] = efectivo;
     }
+  }
+
+  // Personalizaciones (áreas de decoración con medida propia): publican el área
+  // TOTAL en m² bajo `personalizacion_<codigo>_areaM2` para que el paso marcado
+  // con `fuenteMedida` la use en vez de la medida global. Área total = medida ×
+  // cantidad de unidades (una personalización por unidad producida). Solo las
+  // activas; las opcionales inactivas no emiten clave (el paso da 0).
+  // Ver docs/personalizaciones-diseno.md
+  const personalizaciones = getPersonalizaciones(
+    productoDetalle?.personalizacionesJson,
+  );
+  if (personalizaciones.length > 0) {
+    const detalles: Array<{
+      codigo: string;
+      nombre: string;
+      anchoMm: number;
+      altoMm: number;
+      areaM2: number;
+    }> = [];
+    for (const p of personalizaciones) {
+      const estado = personalizacionEstadoEfectivo(p, config);
+      if (!estado.activa) continue;
+      const areaM2 = personalizacionAreaM2(estado, cantidadTrabajo);
+      ctx[personalizacionAreaKey(p.codigo)] = areaM2;
+      detalles.push({
+        codigo: p.codigo,
+        nombre: p.nombre,
+        anchoMm: estado.anchoMm,
+        altoMm: estado.altoMm,
+        areaM2,
+      });
+    }
+    if (detalles.length > 0) ctx.personalizaciones = detalles;
   }
 
   return ctx;
@@ -2567,11 +2669,91 @@ function buildPresentableSpecs(
     base.modo_color = selectedModoColorLabels.join(" · ");
   }
   const processLabels = getProcessLabels(rutaSeleccionada, config, ruleContext);
-  if (processLabels.length > 0) {
-    const proceso = processLabels.join(" / ");
-    setSpec("tecnologia", proceso);
-    setSpec("tecnologia_proceso", proceso);
-    setSpec("proceso", proceso);
+  const tecnologiaLabel = processLabels.length > 0 ? processLabels.join(" / ") : "";
+  if (tecnologiaLabel) {
+    setSpec("tecnologia", tecnologiaLabel);
+    setSpec("tecnologia_proceso", tecnologiaLabel);
+    setSpec("proceso", tecnologiaLabel);
+  }
+
+  // Blank comprado (merchandising / textil): nutre la OT con el producto base y
+  // su variante (talle/color/material) + las estampas. El blank se detecta por
+  // sus atributos de variante (tipoPrenda/tipoObjeto/categoria) en cualquier slot
+  // HARDCODED o elegido. Ver docs/ot-merchandising-info-diseno.md
+  const esBlankAttrs = (
+    attrs: Record<string, unknown> | null | undefined,
+  ): attrs is Record<string, unknown> =>
+    Boolean(
+      attrs &&
+        typeof attrs === "object" &&
+        (typeof attrs.tipoPrenda === "string" ||
+          typeof attrs.tipoObjeto === "string"),
+    );
+  const blankAttrsCandidatos: Array<
+    Record<string, unknown> | null | undefined
+  > = [
+    // Slots HARDCODED (material fijo del paso).
+    ...(rutaSeleccionada?.configPasos ?? [])
+      .filter((paso) => isConfigPasoVisibleForContext(paso, config, ruleContext))
+      .flatMap((paso) => paso.slotsMateriales)
+      .map((slot) => slot.materialVariante?.atributosVarianteJson),
+    // Slots COMERCIAL_ELIGE: el comercial eligió la variante al cotizar (vive en
+    // config.seleccionMaterial, no en el paso). Ej: la remera/talle/color.
+    ...slotsComercialElige.map((slot) => {
+      const key = materialSelectionKey(slot.configPasoId, slot.slotCodigo);
+      const selected =
+        config.seleccionMaterial[key] || defaultSlotCandidateId(slot);
+      if (!selected) return undefined;
+      for (const cand of slot.candidatos) {
+        const variante = cand.variantes.find((v) => v.variantId === selected);
+        if (variante) return variante.atributosVarianteJson;
+      }
+      return undefined;
+    }),
+  ];
+  const blankVariante = blankAttrsCandidatos.find(esBlankAttrs);
+  if (blankVariante) {
+    const readStr = (k: string) =>
+      typeof blankVariante[k] === "string"
+        ? (blankVariante[k] as string).trim()
+        : "";
+    const esTextil = Boolean(readStr("tipoPrenda"));
+    const tipo = readStr("tipoPrenda") || readStr("tipoObjeto");
+    const categoria = readStr("categoria");
+    const material = readStr("material");
+    const color = readStr("color");
+    const talle = readStr("talle");
+    if (categoria || tipo) {
+      setSpec(
+        "producto_tipo",
+        `${esTextil ? "Textil" : "Objeto"}${categoria ? ` · ${categoria}` : ""}`,
+      );
+    }
+    if (tipo) {
+      setSpec(
+        "producto_base",
+        `${tipo}${material ? ` ${material.toLowerCase()}` : ""}`,
+      );
+    }
+    if (talle && talle.toLowerCase() !== "único") setSpec("talle", talle);
+    if (color) setSpec("color_prenda", color);
+    if (material) setSpec("material_base", material);
+  }
+
+  // Estampas (personalizaciones activas): nombre · medida · técnica.
+  const personalizacionesFicha = getPersonalizaciones(
+    productoDetalle?.personalizacionesJson,
+  )
+    .map((p) => ({ p, estado: personalizacionEstadoEfectivo(p, config) }))
+    .filter(
+      ({ estado }) => estado.activa && estado.anchoMm > 0 && estado.altoMm > 0,
+    )
+    .map(({ p, estado }) => {
+      const medida = formatMedidasCm(estado.anchoMm, estado.altoMm);
+      return `${p.nombre} · ${medida}${tecnologiaLabel ? ` · ${tecnologiaLabel}` : ""}`;
+    });
+  if (personalizacionesFicha.length > 0) {
+    setSpec("personalizaciones", personalizacionesFicha.join("\n"));
   }
   const usaTipoCopia = routeUsesTipoCopia(
     rutaSeleccionada,
@@ -2848,6 +3030,25 @@ function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
     medidaModo === "personalizada" ||
     (!medidaModo && !medidaPredefinidaId && piezas.length > 0);
 
+  // Personalizaciones guardadas: reconstruye el estado por código desde el
+  // detalle publicado en el jobContext (activa=true porque solo se guardaron las
+  // emitidas). Las medidas se restauran; las opcionales no listadas quedan en su
+  // default (obligatoria=activa) al leer el producto.
+  const personalizacionesGuardadas = Array.isArray(ctx.personalizaciones)
+    ? (ctx.personalizaciones as Array<Record<string, unknown>>).reduce<
+        MotorConfigState["personalizaciones"]
+      >((acc, raw) => {
+        const codigo = typeof raw.codigo === "string" ? raw.codigo : "";
+        if (!codigo) return acc;
+        acc[codigo] = {
+          activa: true,
+          anchoMm: Number(raw.anchoMm) || 0,
+          altoMm: Number(raw.altoMm) || 0,
+        };
+        return acc;
+      }, {})
+    : {};
+
   return {
     ...DEFAULT_MOTOR_CONFIG,
     rutaAlternativaId: item.rutaAlternativaId ?? "",
@@ -2889,6 +3090,7 @@ function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
       Number.isFinite(Number(ctx.m2_instalados)) && Number(ctx.m2_instalados) > 0
         ? Number(ctx.m2_instalados)
         : DEFAULT_MOTOR_CONFIG.m2Instalados,
+    personalizaciones: personalizacionesGuardadas,
   };
 }
 
@@ -3285,6 +3487,32 @@ function ApConfigStep({
   const updateMotorConfig = React.useCallback(
     (patch: Partial<MotorConfigState>) => {
       setMotorConfig((current) => ({ ...current, ...patch }));
+    },
+    [setMotorConfig],
+  );
+
+  const personalizaciones = React.useMemo(
+    () => getPersonalizaciones(productoDetalle?.personalizacionesJson),
+    [productoDetalle],
+  );
+
+  const updatePersonalizacion = React.useCallback(
+    (
+      p: PersonalizacionProducto,
+      patch: Partial<{ activa: boolean; anchoMm: number; altoMm: number }>,
+    ) => {
+      setMotorConfig((current) => {
+        const previo =
+          current.personalizaciones[p.codigo] ??
+          personalizacionEstadoEfectivo(p, current);
+        return {
+          ...current,
+          personalizaciones: {
+            ...current.personalizaciones,
+            [p.codigo]: { ...previo, ...patch },
+          },
+        };
+      });
     },
     [setMotorConfig],
   );
@@ -4811,6 +5039,152 @@ function ApConfigStep({
                     })}
                   </details>
                 ) : null}
+              </div>
+            ) : null}
+
+            {personalizaciones.length > 0 ? (
+              <div className="ap-spec ap-spec-wide">
+                <div className="ap-pers-sechead">
+                  <label>Personalización</label>
+                  <span className="ap-pers-counter">
+                    <b>
+                      {
+                        personalizaciones.filter(
+                          (p) =>
+                            personalizacionEstadoEfectivo(p, motorConfig)
+                              .activa,
+                        ).length
+                      }
+                    </b>{" "}
+                    de {personalizaciones.length} incluidas
+                  </span>
+                </div>
+                <div className="ap-personalizaciones">
+                  {personalizaciones.map((p) => {
+                    const estado = personalizacionEstadoEfectivo(p, motorConfig);
+                    const esCliente = p.modoMedida === "CLIENTE";
+                    const toggle = p.obligatoria
+                      ? undefined
+                      : () =>
+                          updatePersonalizacion(p, { activa: !estado.activa });
+                    return (
+                      <div
+                        key={p.id}
+                        className={`ap-pers-item${estado.activa ? " on" : ""}`}
+                      >
+                        <div
+                          className="ap-pers-head"
+                          onClick={toggle}
+                          data-toggleable={toggle ? "true" : undefined}
+                        >
+                          <span className="ap-pers-ico" aria-hidden="true">
+                            <StampIcon />
+                          </span>
+                          <div className="ap-pers-txt">
+                            <div className="ap-pers-nombre">
+                              {p.nombre}
+                              {!esCliente ? (
+                                <span className="ap-pers-badge">
+                                  Medida fija
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="ap-pers-meta">
+                              {estado.activa ? (
+                                <>
+                                  Medida{" "}
+                                  <span className="measured">
+                                    {formatCmFromMm(estado.anchoMm)} ×{" "}
+                                    {formatCmFromMm(estado.altoMm)} cm
+                                  </span>
+                                </>
+                              ) : (
+                                "No incluida en esta orden"
+                              )}
+                            </div>
+                          </div>
+                          <div className="ap-pers-toggle">
+                            <span className="state-lbl">
+                              {p.obligatoria ? "Incluida" : "Incluir"}
+                            </span>
+                            {!p.obligatoria ? (
+                              <button
+                                type="button"
+                                className="ap-pers-switch"
+                                role="switch"
+                                aria-checked={estado.activa}
+                                aria-label={`Incluir ${p.nombre}`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  toggle?.();
+                                }}
+                              />
+                            ) : null}
+                          </div>
+                        </div>
+                        {esCliente ? (
+                          <div
+                            className="ap-pers-body-wrap"
+                            aria-hidden={!estado.activa}
+                          >
+                            <div className="ap-pers-body-inner">
+                              <div className="ap-pers-body">
+                                <div className="cap">Medida de la estampa</div>
+                                <div className="ap-pers-measure-row">
+                                  <label className="ap-pers-dim">
+                                    <span className="dim-cap">Ancho</span>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="0.1"
+                                      tabIndex={estado.activa ? undefined : -1}
+                                      value={
+                                        estado.anchoMm
+                                          ? estado.anchoMm / 10
+                                          : ""
+                                      }
+                                      onChange={(event) =>
+                                        updatePersonalizacion(p, {
+                                          anchoMm:
+                                            (Number(event.target.value) || 0) *
+                                            10,
+                                        })
+                                      }
+                                      aria-label="Ancho de la personalización en cm"
+                                    />
+                                    <span className="unit">cm</span>
+                                  </label>
+                                  <span className="x">×</span>
+                                  <label className="ap-pers-dim">
+                                    <span className="dim-cap">Alto</span>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="0.1"
+                                      tabIndex={estado.activa ? undefined : -1}
+                                      value={
+                                        estado.altoMm ? estado.altoMm / 10 : ""
+                                      }
+                                      onChange={(event) =>
+                                        updatePersonalizacion(p, {
+                                          altoMm:
+                                            (Number(event.target.value) || 0) *
+                                            10,
+                                        })
+                                      }
+                                      aria-label="Alto de la personalización en cm"
+                                    />
+                                    <span className="unit">cm</span>
+                                  </label>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             ) : null}
 

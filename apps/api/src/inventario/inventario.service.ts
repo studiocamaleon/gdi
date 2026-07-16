@@ -141,10 +141,18 @@ export class InventarioService {
     try {
       const created = await this.prisma.$transaction(async (tx) => {
         await this.assertProveedoresDelTenant(auth, normalized.variantes, tx);
+        // Código libre: permite crear otro material con el mismo nombre (ej.
+        // "Vinilo impreso" de otra marca) sin chocar — mismo criterio que la
+        // biblioteca (código, código-2, código-3…).
+        const codigo = await this.nextCodigoDisponible(
+          tx,
+          auth.tenantId,
+          normalized.codigo,
+        );
         const materiaPrima = await tx.materiaPrima.create({
           data: {
             tenantId: auth.tenantId,
-            codigo: normalized.codigo,
+            codigo,
             nombre: normalized.nombre,
             descripcion: normalized.descripcion,
             familia: this.toPrismaEnum<FamiliaMateriaPrima>(normalized.familia),
@@ -161,6 +169,7 @@ export class InventarioService {
             ),
             esConsumible: normalized.esConsumible,
             esRepuesto: normalized.esRepuesto,
+            esProductoBase: normalized.esProductoBase,
             activo: normalized.activo,
             atributosTecnicosJson: this.toInputJson(
               normalized.atributosTecnicos,
@@ -246,6 +255,7 @@ export class InventarioService {
             ),
             esConsumible: normalized.esConsumible,
             esRepuesto: normalized.esRepuesto,
+            esProductoBase: normalized.esProductoBase,
             activo: normalized.activo,
             atributosTecnicosJson: this.toInputJson(
               normalized.atributosTecnicos,
@@ -1372,6 +1382,7 @@ export class InventarioService {
       unidadCompra,
       esConsumible: payload.esConsumible,
       esRepuesto: payload.esRepuesto,
+      esProductoBase: payload.esProductoBase ?? false,
       activo: payload.activo,
       atributosTecnicos: payload.atributosTecnicos,
       variantes,
@@ -1396,6 +1407,7 @@ export class InventarioService {
       unidadCompra: this.normalizeInventoryUnit(this.toApiEnum(item.unidadCompra)),
       esConsumible: item.esConsumible,
       esRepuesto: item.esRepuesto,
+      esProductoBase: item.esProductoBase,
       activo: item.activo,
       atributosTecnicos: item.atributosTecnicosJson,
       variantes: item.variantes.map((variante) => ({
@@ -1433,6 +1445,23 @@ export class InventarioService {
 
   private toInputJson(value: Record<string, unknown>): Prisma.InputJsonValue {
     return value as Prisma.InputJsonValue;
+  }
+
+  /** Primer código libre a partir del deseado (código, código-2, código-3…). */
+  private async nextCodigoDisponible(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    base: string,
+  ): Promise<string> {
+    for (let intento = 1; intento <= 999; intento += 1) {
+      const candidato = intento === 1 ? base : `${base}-${intento}`;
+      const ocupado = await tx.materiaPrima.findFirst({
+        where: { tenantId, codigo: candidato },
+        select: { id: true },
+      });
+      if (!ocupado) return candidato;
+    }
+    return `${base}-${Date.now()}`;
   }
 
   private handleWriteError(error: unknown): never {

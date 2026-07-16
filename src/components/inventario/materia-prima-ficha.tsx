@@ -176,6 +176,7 @@ type FormState = {
   unidadCompra: UnidadMateriaPrima;
   esConsumible: boolean;
   esRepuesto: boolean;
+  esProductoBase: boolean;
   activo: boolean;
   atributosTecnicosTexto: string;
   variantes: LocalVariante[];
@@ -381,6 +382,7 @@ function mapMateriaPrimaToForm(materiaPrima: MateriaPrima): FormState {
     unidadCompra: materiaPrima.unidadCompra,
     esConsumible: materiaPrima.esConsumible,
     esRepuesto: materiaPrima.esRepuesto,
+    esProductoBase: materiaPrima.esProductoBase ?? false,
     activo: materiaPrima.activo,
     atributosTecnicosTexto: JSON.stringify(materiaPrima.atributosTecnicos ?? {}, null, 2),
     variantes:
@@ -488,6 +490,7 @@ function buildPayload(
     unidadCompra: form.unidadCompra,
     esConsumible: form.esConsumible,
     esRepuesto: form.esRepuesto,
+    esProductoBase: form.esProductoBase,
     activo: form.activo,
     atributosTecnicos: parseJsonField(form.atributosTecnicosTexto, {}),
     variantes: form.variantes
@@ -664,14 +667,23 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
         next.esConsumible = templateAvailability.esConsumible;
         changed = true;
       }
+      if (
+        templateAvailability.lockEsProductoBase &&
+        prev.esProductoBase !== templateAvailability.esProductoBase
+      ) {
+        next.esProductoBase = templateAvailability.esProductoBase;
+        changed = true;
+      }
 
       return changed ? next : prev;
     });
   }, [
     templateAvailability.esConsumible,
     templateAvailability.esRepuesto,
+    templateAvailability.esProductoBase,
     templateAvailability.lockEsConsumible,
     templateAvailability.lockEsRepuesto,
+    templateAvailability.lockEsProductoBase,
   ]);
 
   React.useEffect(() => {

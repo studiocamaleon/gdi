@@ -185,6 +185,7 @@ export class InventarioBibliotecaService {
                 preset.subfamilia,
               ),
               esRepuesto: false,
+              esProductoBase: this.esPresetProductoBase(preset.subfamilia),
               activo: true,
               atributosTecnicosJson: this.toInputJson(initialAttributes),
             },
@@ -355,6 +356,18 @@ export class InventarioBibliotecaService {
     return (
       familia === FamiliaMateriaPrima.TINTA_COLORANTE ||
       subfamilia === SubfamiliaMateriaPrima.ALMOHADILLA_TINTA
+    );
+  }
+
+  /**
+   * Blanks comprados para reventa/decoración (objetos promocionales y textiles):
+   * se marcan esProductoBase para distinguirlos de los insumos de producción.
+   * Ver docs/productos-comprados-merchandising-diseno.md
+   */
+  private esPresetProductoBase(subfamilia: SubfamiliaMateriaPrima) {
+    return (
+      subfamilia === SubfamiliaMateriaPrima.OBJETO_PROMOCIONAL_BASE ||
+      subfamilia === SubfamiliaMateriaPrima.TEXTIL_INDUMENTARIA
     );
   }
 
