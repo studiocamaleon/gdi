@@ -146,6 +146,73 @@ export function letraComprobante(
   };
 }
 
+// ── Aging / cuenta corriente (etapa C) ─────────────────────────────────
+
+export const TRAMOS_AGING = [
+  "a_vencer",
+  "d0_30",
+  "d31_60",
+  "d61_90",
+  "d90_mas",
+] as const;
+export type TramoAging = (typeof TRAMOS_AGING)[number];
+
+export const TRAMO_AGING_LABELS: Record<TramoAging, string> = {
+  a_vencer: "A vencer",
+  d0_30: "0-30 días",
+  d31_60: "31-60",
+  d61_90: "61-90",
+  d90_mas: "+90",
+};
+
+/** Color por tramo: cuanto más viejo, más rojo (como el diseño). */
+export const TRAMO_AGING_COLOR: Record<TramoAging, string> = {
+  a_vencer: "var(--ok)",
+  d0_30: "var(--warn)",
+  d31_60: "#d97706",
+  d61_90: "var(--signal)",
+  d90_mas: "var(--danger)",
+};
+
+export type Aging = Record<TramoAging, number>;
+
+export type MovimientoCuentaCorriente = {
+  id: string;
+  fecha: string;
+  tipo: "fa" | "nc" | "nd" | "cobro";
+  sigla: string;
+  descripcion: string;
+  debe: number;
+  haber: number;
+  saldo: number;
+  comprobanteId?: string;
+  cobroId?: string;
+  imputaciones?: Array<{ nombre: string; monto: number; resto?: boolean }>;
+};
+
+export type CuentaCorriente = {
+  cliente: {
+    id: string;
+    nombre: string;
+    razonSocial: string | null;
+    cuit: string | null;
+    condicionFiscal: string;
+    limiteCredito: number | null;
+    vendedor: string | null;
+  };
+  /** Positivo = el cliente debe. */
+  saldo: number;
+  comprobantesPendientes: number;
+  /** null cuando no se definió límite de crédito. */
+  usoLimitePct: number | null;
+  excedido: boolean;
+  excedente: number;
+  aging: Aging;
+  agingTotal: number;
+  /** Del más nuevo al más viejo, con saldo corrido. */
+  movimientos: MovimientoCuentaCorriente[];
+};
+
 // ── Comprobantes (etapa C) ─────────────────────────────────────────────
 
 export const COMPROBANTE_TIPOS = [

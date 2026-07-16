@@ -25590,3 +25590,657 @@ textarea.est-input {
 }
 
 /* fin ports administración · comprobantes (touch — recompilación Turbopack) */
+
+/* ───────────────────────────────────────────────────────────────────────
+   Administración · Cuenta corriente — port 1:1 del diseño Grafo V2
+   (admin/Cuenta corriente.html). Prefijo acc-.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.acc-page {
+  --info: #1d4ed8;
+  --info-bg: #eef2ff;
+  --warn: #a16207;
+  --danger: #b91c1c;
+  --danger-bg: #fef2f2;
+  font-size: 13.5px;
+  letter-spacing: -0.005em;
+  font-feature-settings: "ss01", "cv11";
+}
+
+.acc-wrap {
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.acc-page .btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+.acc-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted-text);
+  font-size: 12.5px;
+  font-weight: 500;
+  margin-bottom: 14px;
+}
+
+.acc-crumb svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* header */
+.acc-head {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-4);
+  padding: 22px 24px;
+  margin-bottom: 18px;
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr;
+  gap: 24px;
+  align-items: center;
+}
+
+.acc-cli .nm {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.acc-cli .meta {
+  font-size: 12.5px;
+  color: var(--muted-text);
+  margin-top: 3px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.acc-cli .cond {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+.acc-saldo {
+  border-left: 1px solid var(--hairline);
+  padding-left: 24px;
+}
+
+.acc-saldo .l {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-text);
+  font-weight: 600;
+}
+
+.acc-saldo .v {
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  margin-top: 3px;
+  color: var(--signal);
+}
+
+.acc-saldo .v.ok {
+  color: var(--ok);
+}
+
+.acc-saldo .s {
+  font-size: 12px;
+  color: var(--muted-text);
+  margin-top: 3px;
+}
+
+.acc-limit .l {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-text);
+  font-weight: 600;
+  display: flex;
+  justify-content: space-between;
+}
+
+.acc-limit .l .pct {
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+}
+
+.acc-limit-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  margin: 8px 0 6px;
+  position: relative;
+}
+
+.acc-limit-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s;
+}
+
+.acc-limit .nums {
+  font-size: 12px;
+  color: var(--muted-text);
+  font-family: var(--font-mono);
+}
+
+.acc-limit .nums b {
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
+.acc-limit .sin-limite {
+  font-size: 12px;
+  color: var(--muted-text-2);
+  margin-top: 6px;
+}
+
+.acc-limit .sin-limite a {
+  color: var(--info);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.acc-limit-alert {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--danger);
+  background: var(--danger-bg);
+  border: 1px solid #f4c9c9;
+  border-radius: var(--r-2);
+  padding: 6px 9px;
+}
+
+.acc-limit-alert svg {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+
+.acc-actions-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.acc-actions-bar .sp {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+
+/* ledger */
+.acc-ledger {
+  border: 1px solid var(--border);
+  border-radius: var(--r-4);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.acc-lg-tr {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) 130px 130px 140px;
+  align-items: center;
+  gap: 14px;
+  padding: 0 18px;
+}
+
+.acc-lg-th {
+  height: 42px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-text);
+  font-weight: 600;
+}
+
+.acc-lg-th .r,
+.acc-lg-row .r {
+  text-align: right;
+}
+
+.acc-lg-row {
+  min-height: 54px;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 13px;
+}
+
+.acc-lg-row.clickable {
+  cursor: pointer;
+}
+
+.acc-lg-row.clickable:hover {
+  background: var(--surface-2);
+}
+
+.acc-lg-fecha {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--muted-text);
+}
+
+.acc-lg-concept {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.acc-lg-chev {
+  width: 14px;
+  height: 14px;
+  color: var(--muted-text-2);
+  transition: transform 0.15s;
+  flex-shrink: 0;
+}
+
+.acc-lg-row.open .acc-lg-chev {
+  transform: rotate(90deg);
+}
+
+.acc-lg-tipo {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 5px;
+  flex-shrink: 0;
+}
+
+.acc-lg-tipo.t-fa {
+  background: var(--info-bg);
+  color: var(--info);
+}
+
+.acc-lg-tipo.t-nc {
+  background: var(--signal-bg);
+  color: var(--signal);
+}
+
+.acc-lg-tipo.t-cobro {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+
+.acc-lg-tipo.t-ant {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.acc-lg-desc {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acc-lg-debe,
+.acc-lg-haber {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.acc-lg-debe {
+  color: var(--ink-2);
+}
+
+.acc-lg-haber {
+  color: var(--ok);
+}
+
+.acc-lg-saldo {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.acc-lg-dim {
+  color: var(--muted-text-2);
+}
+
+.acc-lg-exp {
+  grid-column: 1/-1;
+  padding: 0 18px 14px 48px;
+}
+
+.acc-imp-mini {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-3);
+  padding: 12px 14px;
+}
+
+.acc-imp-mini .t {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-text);
+  font-weight: 600;
+  margin-bottom: 9px;
+}
+
+.acc-imp-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+  font-size: 12.5px;
+}
+
+.acc-imp-line .n {
+  font-family: var(--font-mono);
+  color: var(--info);
+  font-weight: 500;
+}
+
+.acc-imp-line .m {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.acc-imp-line.rest {
+  border-top: 1px dashed var(--border);
+  margin-top: 6px;
+  padding-top: 9px;
+  color: var(--warn);
+}
+
+.acc-imp-line.rest .n {
+  color: var(--warn);
+}
+
+.acc-imp-line.rest svg {
+  color: var(--warn);
+}
+
+.acc-lg-foot {
+  display: flex;
+  justify-content: space-between;
+  padding: 13px 18px;
+  background: var(--surface-2);
+  border-top: 1px solid var(--border);
+  font-weight: 600;
+}
+
+.acc-lg-foot .v {
+  font-family: var(--font-mono);
+  color: var(--signal);
+}
+
+.acc-vacio {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--muted-text);
+  font-size: 13px;
+}
+
+/* modal */
+.acc-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 20, 26, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  opacity: 0;
+  pointer-events: none;
+  transition: 0.18s;
+  padding: 20px;
+}
+
+.acc-backdrop.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.acc-modal {
+  background: var(--surface);
+  border-radius: var(--r-4);
+  width: min(560px, 96vw);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-pop);
+  transform: scale(0.97);
+  transition: transform 0.18s;
+  position: relative;
+}
+
+.acc-backdrop.show .acc-modal {
+  transform: none;
+}
+
+.acc-modal-head {
+  padding: 18px 22px 15px;
+  border-bottom: 1px solid var(--border);
+}
+
+.acc-modal-head h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.acc-modal-head .s {
+  font-size: 12.5px;
+  color: var(--muted-text);
+  margin-top: 2px;
+}
+
+.acc-modal-x {
+  position: absolute;
+  top: 16px;
+  right: 18px;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  display: grid;
+  place-items: center;
+  color: var(--muted-text);
+  cursor: pointer;
+}
+
+.acc-modal-x svg {
+  width: 16px;
+  height: 16px;
+}
+
+.acc-modal-body {
+  padding: 16px 22px;
+  overflow-y: auto;
+}
+
+/* ───────────────────────────────────────────────────────────────────────
+   Imputación dentro del formulario de cobro — el diseño la tiene como
+   modal aparte (admin/Cuenta corriente.html), pero acá vive plegada en
+   "Aplicado a → Contra factura", que es donde ya se elige el destino.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.arc-imp-th {
+  display: grid;
+  grid-template-columns: 24px 1fr 110px 120px;
+  gap: 10px;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted-text-2);
+  font-weight: 600;
+  padding: 0 2px 8px;
+}
+
+.arc-imp-th .r {
+  text-align: right;
+}
+
+.arc-imp-row {
+  display: grid;
+  grid-template-columns: 24px 1fr 110px 120px;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 2px;
+  border-top: 1px solid var(--hairline);
+}
+
+.arc-imp-cb {
+  width: 19px;
+  height: 19px;
+  border-radius: 5px;
+  border: 1.5px solid var(--border-strong);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  background: var(--surface);
+  padding: 0;
+}
+
+.arc-imp-cb.on {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+
+.arc-imp-cb svg {
+  width: 12px;
+  height: 12px;
+}
+
+.arc-imp-cmp .n {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 12.5px;
+}
+
+.arc-imp-cmp .d {
+  font-size: 11px;
+  color: var(--muted-text);
+}
+
+.arc-imp-cmp .d.venc {
+  color: var(--danger);
+  font-weight: 500;
+}
+
+.arc-imp-saldo {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--muted-text);
+}
+
+.arc-imp-monto {
+  position: relative;
+}
+
+.arc-imp-monto input {
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  text-align: right;
+  font-weight: 600;
+}
+
+.arc-imp-monto input:disabled {
+  background: var(--surface-2);
+  color: var(--muted-text-2);
+}
+
+.arc-imp-monto input:focus {
+  outline: none;
+  border-color: var(--ink-2);
+}
+
+.arc-imp-prog {
+  margin-top: 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-3);
+  padding: 13px 15px;
+}
+
+.arc-imp-prog .bar {
+  height: 9px;
+  border-radius: 999px;
+  background: #e7e5e2;
+  overflow: hidden;
+  display: flex;
+  margin: 9px 0;
+}
+
+.arc-imp-prog .bar .used {
+  background: var(--ok);
+  height: 100%;
+  transition: width 0.2s;
+}
+
+.arc-imp-prog .legend {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.arc-imp-prog .legend .k {
+  color: var(--muted-text);
+}
+
+.arc-imp-prog .legend .v {
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.arc-imp-prog .legend .v.rest {
+  color: var(--warn);
+}
+
+.arc-imp-prog .anticipo-note {
+  font-size: 11.5px;
+  color: var(--muted-text);
+  margin-top: 8px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.arc-imp-prog .anticipo-note svg {
+  width: 13px;
+  height: 13px;
+  color: var(--warn);
+  flex-shrink: 0;
+}
+
+/* fin ports administración · cuenta corriente (touch — Turbopack) */

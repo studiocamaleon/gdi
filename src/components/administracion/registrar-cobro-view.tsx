@@ -10,8 +10,12 @@ import {
   CobroFormulario,
   type CobroDraft,
 } from "@/components/administracion/cobro-formulario";
-import type { CuentaFondosResumen, MetodoPago } from "@/lib/administracion";
-import { crearCobro } from "@/lib/administracion-api";
+import type {
+  ComprobantePendiente,
+  CuentaFondosResumen,
+  MetodoPago,
+} from "@/lib/administracion";
+import { crearCobro, imputarCobro } from "@/lib/administracion-api";
 
 const fmt = (n: number) => "$" + Math.round(n).toLocaleString("es-AR");
 
@@ -29,10 +33,12 @@ export function RegistrarCobroView({
   orden,
   metodos,
   cuentas,
+  pendientes,
 }: {
   orden: OrdenContexto;
   metodos: MetodoPago[];
   cuentas: CuentaFondosResumen[];
+  pendientes: ComprobantePendiente[];
 }) {
   const router = useRouter();
   const saldo = Math.max(0, orden.total - orden.cobradoBruto);
@@ -41,16 +47,36 @@ export function RegistrarCobroView({
   const submit = async (draft: CobroDraft) => {
     setGuardando(true);
     try {
-      await crearCobro({
+      const cobro = await crearCobro({
         ...draft.payload,
         ordenId: orden.id,
         clienteId: orden.clienteId ?? undefined,
       });
-      toast.success(
-        draft.payload.valor
-          ? "Valor en cartera registrado."
-          : `Cobro de ${fmt(draft.payload.montoBruto)} registrado.`,
-      );
+
+      // El cobro ya existe: si una imputación falla, se avisa cuál en vez de
+      // dejar el cobro a medio aplicar en silencio.
+      const fallidas: string[] = [];
+      for (const imp of draft.imputaciones) {
+        try {
+          await imputarCobro(cobro.id, imp);
+        } catch (error) {
+          fallidas.push(
+            error instanceof Error ? error.message : "error desconocido",
+          );
+        }
+      }
+      if (fallidas.length > 0) {
+        toast.error(
+          `El cobro se registró, pero ${fallidas.length} imputación${fallidas.length === 1 ? "" : "es"} falló: ${fallidas.join(" · ")}. Aplicalo desde la cuenta corriente.`,
+          { duration: 10000 },
+        );
+      } else {
+        toast.success(
+          draft.payload.valor
+            ? "Valor en cartera registrado."
+            : `Cobro de ${fmt(draft.payload.montoBruto)} registrado.`,
+        );
+      }
       router.push(`/produccion/ordenes/${orden.id}`);
     } catch (error) {
       toast.error(
@@ -108,6 +134,7 @@ export function RegistrarCobroView({
           saldo={saldo}
           metodos={metodos}
           cuentas={cuentas}
+          pendientes={pendientes}
           guardando={guardando}
           onSubmit={(draft) => void submit(draft)}
           cancelHref={`/produccion/ordenes/${orden.id}`}

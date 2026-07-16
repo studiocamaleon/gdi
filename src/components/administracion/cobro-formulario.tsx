@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import {
   RETENCION_REGIMENES,
   RETENCION_REGIMEN_LABELS,
+  type ComprobantePendiente,
   type CuentaFondosResumen,
   type MetodoPago,
 } from "@/lib/administracion";
@@ -57,6 +58,8 @@ type RetLinea = {
  */
 export type CobroDraft = {
   payload: Omit<CrearCobroPayload, "ordenId" | "clienteId">;
+  /** Comprobantes a los que aplicar el cobro. Vacío = anticipo a cuenta. */
+  imputaciones: Array<{ comprobanteId: string; monto: number }>;
   metodoNombre: string;
   metodoTipo: string;
   cuentaDestinoNombre: string;
@@ -90,6 +93,7 @@ export function CobroFormulario({
   saldo,
   metodos,
   cuentas,
+  pendientes = [],
   guardando,
   submitLabelCheque = "Registrar valor en cartera",
   submitLabel = "Registrar cobro",
@@ -100,6 +104,8 @@ export function CobroFormulario({
   saldo: number;
   metodos: MetodoPago[];
   cuentas: CuentaFondosResumen[];
+  /** Comprobantes del cliente con saldo. Sin ellos no hay "contra factura". */
+  pendientes?: ComprobantePendiente[];
   guardando: boolean;
   submitLabel?: string;
   submitLabelCheque?: string;
@@ -118,6 +124,10 @@ export function CobroFormulario({
   const [cuentaId, setCuentaId] = React.useState<string | null>(null);
   const [retOpen, setRetOpen] = React.useState(false);
   const [rets, setRets] = React.useState<RetLinea[]>([]);
+  const [contraFactura, setContraFactura] = React.useState(false);
+  const [imputaciones, setImputaciones] = React.useState<Record<string, string>>(
+    {},
+  );
   const [chq, setChq] = React.useState({
     numero: "",
     banco: BANCOS[0],
@@ -145,6 +155,34 @@ export function CobroFormulario({
     setComEdit(null);
     setCuentaId(null);
   };
+
+  // Se imputa el BRUTO: la comisión del método es un costo nuestro, no algo
+  // que el cliente deje de deber.
+  const totalImputado = contraFactura
+    ? Object.values(imputaciones).reduce((s, v) => s + (Number(v) || 0), 0)
+    : 0;
+  const sinImputar = Math.max(0, bruto - totalImputado);
+  const excedeImputacion = totalImputado > bruto + 0.001;
+
+  /**
+   * Al tildar propone el mínimo entre lo que falta del cobro y el saldo del
+   * comprobante: el caso normal es cancelar la factura sin pasarse.
+   */
+  const toggleImputacion = (p: ComprobantePendiente) =>
+    setImputaciones((prev) => {
+      const next = { ...prev };
+      if (next[p.id] !== undefined) {
+        delete next[p.id];
+        return next;
+      }
+      const yaImputado = Object.entries(prev).reduce(
+        (s, [, v]) => s + (Number(v) || 0),
+        0,
+      );
+      const disponibleCobro = Math.max(0, bruto - yaImputado);
+      next[p.id] = String(Math.min(p.saldo, disponibleCobro) || 0);
+      return next;
+    });
 
   const addRet = () => {
     setRetOpen(true);
@@ -182,7 +220,21 @@ export function CobroFormulario({
       toast.error("Cargá el número del cheque/echeq.");
       return;
     }
+    if (excedeImputacion) {
+      toast.error(
+        "Estás imputando más de lo que entra en el cobro. Ajustá los montos.",
+      );
+      return;
+    }
     onSubmit({
+      imputaciones: contraFactura
+        ? Object.entries(imputaciones)
+            .map(([comprobanteId, v]) => ({
+              comprobanteId,
+              monto: Number(v) || 0,
+            }))
+            .filter((i) => i.monto > 0)
+        : [],
       payload: {
         fecha,
         metodoPagoId: metodo.id,
@@ -411,25 +463,125 @@ export function CobroFormulario({
         <div className="arc-card-sec">
           <div className="arc-sec-t">Aplicado a</div>
           <div className="arc-radio-row">
-            <button type="button" className="arc-radio-chip on">
+            <button
+              type="button"
+              className={`arc-radio-chip ${!contraFactura ? "on" : ""}`}
+              onClick={() => setContraFactura(false)}
+            >
               Anticipo (a cuenta)
             </button>
             <button
               type="button"
-              className="arc-radio-chip"
-              disabled
-              title="Disponible cuando emitas comprobantes (próxima etapa)"
+              className={`arc-radio-chip ${contraFactura ? "on" : ""}`}
+              onClick={() => setContraFactura(true)}
+              disabled={pendientes.length === 0}
+              title={
+                pendientes.length === 0
+                  ? "Este cliente no tiene comprobantes con saldo pendiente"
+                  : undefined
+              }
             >
               Contra factura
             </button>
           </div>
-          <div
-            className="arc-auto-note"
-            style={{ marginTop: 12, marginBottom: 0 }}
-          >
-            <InfoIcon />
-            Seña a cuenta de la orden, sin comprobante asociado todavía.
-          </div>
+
+          {!contraFactura ? (
+            <div
+              className="arc-auto-note"
+              style={{ marginTop: 12, marginBottom: 0 }}
+            >
+              <InfoIcon />
+              {pendientes.length === 0
+                ? "Sin comprobantes con saldo: el cobro queda a cuenta."
+                : "Seña a cuenta, sin imputar a ningún comprobante."}
+            </div>
+          ) : (
+            <div style={{ marginTop: 14 }}>
+              <div className="arc-imp-th">
+                <span />
+                <span>Comprobante pendiente</span>
+                <span className="r">Saldo</span>
+                <span className="r">Imputar</span>
+              </div>
+              {pendientes.map((p) => {
+                const sel = imputaciones[p.id] !== undefined;
+                return (
+                  <div key={p.id} className="arc-imp-row">
+                    <button
+                      type="button"
+                      className={`arc-imp-cb ${sel ? "on" : ""}`}
+                      onClick={() => toggleImputacion(p)}
+                      aria-label={`Imputar a ${p.numeroCompleto}`}
+                    >
+                      {sel ? <CheckIcon /> : null}
+                    </button>
+                    <div className="arc-imp-cmp">
+                      <div className="n">{p.numeroCompleto}</div>
+                      <div className={`d ${p.vencida ? "venc" : ""}`}>
+                        {p.fecha}
+                        {p.vencimiento ? ` · vence ${p.vencimiento}` : ""}
+                        {p.vencida ? " · vencida" : ""}
+                      </div>
+                    </div>
+                    <span className="arc-imp-saldo">{fmt(p.saldo)}</span>
+                    <div className="arc-imp-monto">
+                      <input
+                        type="number"
+                        disabled={!sel}
+                        value={sel ? imputaciones[p.id] : ""}
+                        onChange={(e) =>
+                          setImputaciones((prev) => ({
+                            ...prev,
+                            [p.id]: e.target.value,
+                          }))
+                        }
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="arc-imp-prog">
+                <div className="legend">
+                  <span className="k">Imputado</span>
+                  <span className="v">
+                    {fmt(totalImputado)} de {fmt(bruto)}
+                  </span>
+                </div>
+                <div className="bar">
+                  <div
+                    className="used"
+                    style={{
+                      width:
+                        (bruto > 0
+                          ? Math.min(100, (totalImputado / bruto) * 100)
+                          : 0) + "%",
+                    }}
+                  />
+                </div>
+                <div className="legend">
+                  <span className="k">Sin imputar</span>
+                  <span className={`v ${sinImputar > 0 ? "rest" : ""}`}>
+                    {fmt(sinImputar)}
+                  </span>
+                </div>
+                {sinImputar > 0 ? (
+                  <div className="anticipo-note">
+                    <InfoIcon />
+                    Lo que quede sin imputar ({fmt(sinImputar)}) sigue siendo{" "}
+                    <b style={{ margin: "0 3px" }}>anticipo a cuenta</b> del
+                    cliente.
+                  </div>
+                ) : null}
+                {excedeImputacion ? (
+                  <div className="anticipo-note" style={{ color: "var(--danger)" }}>
+                    <InfoIcon />
+                    Estás imputando más de lo que entra en el cobro.
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="arc-card-sec">

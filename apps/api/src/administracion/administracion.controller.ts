@@ -17,6 +17,7 @@ import { TesoreriaService } from './tesoreria.service';
 import { ConfiguracionFiscalService } from './configuracion-fiscal.service';
 import { ComprobantesService } from './comprobantes.service';
 import { ImputacionesService } from './imputaciones.service';
+import { CuentaCorrienteService } from './cuenta-corriente.service';
 import { UpsertMetodoPagoDto } from './dto/metodo-pago.dto';
 import { CrearCobroDto } from './dto/cobro.dto';
 import {
@@ -44,7 +45,18 @@ export class AdministracionController {
     private readonly configuracionFiscalService: ConfiguracionFiscalService,
     private readonly comprobantesService: ComprobantesService,
     private readonly imputacionesService: ImputacionesService,
+    private readonly cuentaCorrienteService: CuentaCorrienteService,
   ) {}
+
+  // ── Cuenta corriente ─────────────────────────────────────────────────
+
+  @Get('clientes/:clienteId/cuenta-corriente')
+  cuentaCorriente(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('clienteId') clienteId: string,
+  ) {
+    return this.cuentaCorrienteService.obtener(auth, clienteId);
+  }
 
   // ── Comprobantes ─────────────────────────────────────────────────────
 

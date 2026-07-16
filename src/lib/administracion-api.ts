@@ -8,6 +8,7 @@ import type {
   ComprobanteTipo,
   CondicionFiscalEmisor,
   ConfiguracionFiscal,
+  CuentaCorriente,
   CuentaFondos,
   CuentaFondosResumen,
   LeyendaA,
@@ -146,6 +147,14 @@ export async function descartarComprobante(
   id: string,
 ): Promise<{ ok: boolean }> {
   return apiRequest(`/administracion/comprobantes/${id}`, { method: "DELETE" });
+}
+
+// ── Cuenta corriente ───────────────────────────────────────────────────
+
+export async function getCuentaCorriente(
+  clienteId: string,
+): Promise<CuentaCorriente> {
+  return apiRequest(`/administracion/clientes/${clienteId}/cuenta-corriente`);
 }
 
 // ── Imputaciones ───────────────────────────────────────────────────────
