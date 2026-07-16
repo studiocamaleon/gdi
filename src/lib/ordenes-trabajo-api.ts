@@ -132,3 +132,16 @@ export async function quitarOrdenItem(
     { method: "DELETE" },
   );
 }
+
+export async function cambiarEstadoOrdenTrabajo(
+  id: string,
+  payload: {
+    estado: "pendiente" | "produccion" | "finalizada" | "entregada";
+    progresoPct?: number;
+  },
+): Promise<OrdenTrabajoDetalle> {
+  return apiRequest<OrdenTrabajoDetalle>(`/ordenes-trabajo/${id}/estado`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}

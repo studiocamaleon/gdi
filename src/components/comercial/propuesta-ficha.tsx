@@ -44,6 +44,7 @@ import {
 } from "@/lib/productos-servicios-api";
 import {
   agregarOrdenItem,
+  cambiarEstadoOrdenTrabajo,
   crearOrdenTrabajo,
   editarOrdenItem,
   editarOrdenTrabajo,
@@ -93,6 +94,11 @@ type PropuestaFichaProps = {
    * Sin `orden`, es la ficha de creación de siempre.
    */
   orden?: OrdenTrabajoDetalle;
+  /**
+   * True sólo al aterrizar desde el flujo de emisión (?emitida=1): muestra
+   * el tag "RECIÉN EMITIDA" en esta visita y limpia el param de la URL.
+   */
+  recienEmitida?: boolean;
 };
 
 type OrdenTab =
@@ -3650,6 +3656,8 @@ export function ResumenBar({
   fechaCreacion,
   onEmitir,
   emitiendo = false,
+  onGuardarBorrador,
+  guardandoBorrador = false,
   readOnly = false,
 }: {
   items: PropuestaItem[];
@@ -3660,6 +3668,8 @@ export function ResumenBar({
   /** Ausente en modo lectura (OT emitida): sin acciones de guardado/emisión. */
   onEmitir?: () => void;
   emitiendo?: boolean;
+  onGuardarBorrador?: () => void;
+  guardandoBorrador?: boolean;
   readOnly?: boolean;
 }) {
   const resumen = calcularResumenOrden(items, cargosOrden);
@@ -3786,9 +3796,14 @@ export function ResumenBar({
       {readOnly ? null : (
       <div className="rbar-foot">
         <div className="rbar-actions">
-          <button type="button" className="btn">
+          <button
+            type="button"
+            className="btn"
+            onClick={tipo === "orden" ? onGuardarBorrador : undefined}
+            disabled={guardandoBorrador || emitiendo || items.length === 0}
+          >
             <SaveIcon />
-            Guardar borrador
+            {guardandoBorrador ? "Guardando…" : "Guardar borrador"}
           </button>
           <button
             type="button"
@@ -4243,16 +4258,9 @@ function vendedorOrdenNombre(orden: OrdenTrabajoDetalle) {
 }
 
 /**
- * NUEVA = emitida hace menos de 24h corridas y todavía pendiente (cuando el
- * taller la agarra deja de ser "nueva"). Decisión 2026-07-16.
+ * Nota badge NUEVA: vive en el LISTADO (ordenes-trabajo-view, 24h+pendiente).
+ * En el detalle, "RECIÉN EMITIDA" es de sesión: sólo al llegar de emitir.
  */
-function esOrdenNueva(orden: OrdenTrabajoDetalle) {
-  if (orden.estado !== "pendiente") return false;
-  const creada = new Date(orden.creadaEl).getTime();
-  if (Number.isNaN(creada)) return false;
-  return Date.now() - creada < 24 * 60 * 60 * 1000;
-}
-
 type SnapshotResumenOrden = {
   producto?: { id?: string; codigo?: string; nombre?: string };
   ruta?: { nombre?: string; alternativa?: string | null };
@@ -4439,8 +4447,18 @@ export function PropuestaFicha({
   initialCargosDirectos = [],
   currentUser = null,
   orden,
+  recienEmitida = false,
 }: PropuestaFichaProps) {
   const modoOrden = Boolean(orden);
+  // Tag "RECIÉN EMITIDA": sólo en la visita inmediata a la emisión (llegada
+  // con ?emitida=1, o al emitir un borrador acá mismo). El param se limpia
+  // de la URL para que un refresh/compartir no lo arrastre.
+  const [mostrarRecienEmitida, setMostrarRecienEmitida] =
+    React.useState(recienEmitida);
+  React.useEffect(() => {
+    if (!recienEmitida) return;
+    window.history.replaceState(null, "", window.location.pathname);
+  }, [recienEmitida]);
   const [tipo, setTipo] = React.useState<TipoPropuesta>("orden_trabajo");
   const ordenTipo = tipoMap[tipo];
   const [tab, setTab] = React.useState<OrdenTab>("productos");
@@ -4767,6 +4785,43 @@ export function PropuestaFicha({
     };
   }, [cambiosSinGuardar]);
 
+  /**
+   * Emitir un borrador guardado (borrador → pendiente): la salida comercial
+   * del borrador. Las transiciones de producción (pendiente en adelante)
+   * llegan con el Tablero — no van desde acá.
+   */
+  const [emitiendoBorrador, setEmitiendoBorrador] = React.useState(false);
+  const emitirBorrador = React.useCallback(async () => {
+    if (!orden) return;
+    if (!orden.clienteId) {
+      toast.error(
+        "Asigná un cliente antes de emitir (Editar orden → Cliente).",
+      );
+      return;
+    }
+    if (!orden.fechaEntrega || orden.fechaEntrega < offsetDate(0)) {
+      toast.error(
+        "Definí una fecha de entrega vigente antes de emitir (Editar orden → Fecha).",
+      );
+      return;
+    }
+    setEmitiendoBorrador(true);
+    try {
+      await cambiarEstadoOrdenTrabajo(orden.id, { estado: "pendiente" });
+      toast.success(`${orden.numero} emitida al taller.`);
+      setMostrarRecienEmitida(true);
+      router.refresh();
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudo emitir la orden.",
+      );
+    } finally {
+      setEmitiendoBorrador(false);
+    }
+  }, [orden, router]);
+
   const descartarYSalir = React.useCallback(() => {
     if (!navPendiente) return;
     const destino = navPendiente;
@@ -4796,10 +4851,69 @@ export function PropuestaFicha({
   }, []);
 
   /**
-   * Emitir OT: persiste el snapshot de cada item (cotizar-y-guardar,
-   * encadenando la misma Cotizacion) y crea la OrdenTrabajo en estado
-   * `pendiente`. El overlay muestra el número real cuando el backend lo
-   * asigna; al cerrar navega al detalle en Producción → Órdenes.
+   * Persiste el snapshot de cada item (cotizar-y-guardar, encadenando la
+   * misma Cotizacion). Los que ya se guardaron (recotizaciones) conservan
+   * su cotizacionItemId. Compartido por Emitir OT y Guardar borrador.
+   */
+  const persistirSnapshotsItems = React.useCallback(async () => {
+    let cotizacionId: string | undefined;
+    const itemsConSnapshot: Array<{
+      item: PropuestaItem;
+      cotizacionItemId?: string;
+    }> = [];
+    for (const item of items) {
+      if (item.cotizacionItemId) {
+        itemsConSnapshot.push({
+          item,
+          cotizacionItemId: item.cotizacionItemId,
+        });
+        continue;
+      }
+      if (!item.motorCodigo || !item.jobContext) {
+        // Item sin motor (no debería pasar hoy): va sin snapshot y la OT
+        // usa el fallback "sin detalle".
+        itemsConSnapshot.push({ item });
+        continue;
+      }
+      const response = await cotizarYGuardar({
+        productoId: item.motorCodigo,
+        rutaAlternativaId: item.rutaAlternativaId ?? null,
+        jobContext: item.jobContext as never,
+        clienteId: clienteId || null,
+        periodo: getCurrentPeriodo(),
+        cotizacionId,
+      });
+      if (!response.result.exitoso) {
+        throw new Error(
+          response.result.errores?.[0]?.mensaje ??
+            `No se pudo guardar la cotización de ${item.productoNombre}.`,
+        );
+      }
+      cotizacionId = response.cotizacionId ?? cotizacionId;
+      itemsConSnapshot.push({
+        item,
+        cotizacionItemId: response.cotizacionItemId,
+      });
+    }
+    return { itemsConSnapshot, cotizacionId };
+  }, [items, clienteId]);
+
+  /** Fecha comprometida: la más tardía entre items y la estimada global. */
+  const fechaEntregaOrden = React.useCallback(
+    () =>
+      items.reduce(
+        (max, item) =>
+          item.fechaEntrega && item.fechaEntrega > max
+            ? item.fechaEntrega
+            : max,
+        fechaEstimada,
+      ),
+    [items, fechaEstimada],
+  );
+
+  /**
+   * Emitir OT: snapshots + OrdenTrabajo en `pendiente`. El overlay muestra
+   * el número real cuando el backend lo asigna; al cerrar navega al detalle.
    */
   const emitirOrden = React.useCallback(async () => {
     if (items.length === 0) {
@@ -4812,13 +4926,7 @@ export function PropuestaFicha({
       );
       return;
     }
-    // Fecha comprometida de la orden: la más tardía entre las de los items y
-    // la estimada global. No puede ser pasada.
-    const fechaEntrega = items.reduce(
-      (max, item) =>
-        item.fechaEntrega && item.fechaEntrega > max ? item.fechaEntrega : max,
-      fechaEstimada,
-    );
+    const fechaEntrega = fechaEntregaOrden();
     if (fechaEntrega < offsetDate(0)) {
       toast.error(
         "La fecha de entrega no puede ser anterior a hoy. Revisá la fecha estimada.",
@@ -4829,51 +4937,8 @@ export function PropuestaFicha({
     setEmisionNumero(null);
     emisionOrdenIdRef.current = null;
     try {
-      // 1. Snapshot por item: los que ya se guardaron (recotizaciones)
-      //    conservan su cotizacionItemId; el resto se persiste ahora,
-      //    encadenando todos en la misma Cotizacion.
-      let cotizacionId: string | undefined;
-      const itemsConSnapshot: Array<{
-        item: PropuestaItem;
-        cotizacionItemId?: string;
-      }> = [];
-      for (const item of items) {
-        if (item.cotizacionItemId) {
-          itemsConSnapshot.push({
-            item,
-            cotizacionItemId: item.cotizacionItemId,
-          });
-          continue;
-        }
-        if (!item.motorCodigo || !item.jobContext) {
-          // Item sin motor (no debería pasar hoy): va sin snapshot y la OT
-          // usa el fallback "sin detalle".
-          itemsConSnapshot.push({ item });
-          continue;
-        }
-        const response = await cotizarYGuardar({
-          productoId: item.motorCodigo,
-          rutaAlternativaId: item.rutaAlternativaId ?? null,
-          jobContext: item.jobContext as never,
-          clienteId: clienteId || null,
-          periodo: getCurrentPeriodo(),
-          cotizacionId,
-        });
-        if (!response.result.exitoso) {
-          throw new Error(
-            response.result.errores?.[0]?.mensaje ??
-              `No se pudo guardar la cotización de ${item.productoNombre}.`,
-          );
-        }
-        cotizacionId = response.cotizacionId ?? cotizacionId;
-        itemsConSnapshot.push({
-          item,
-          cotizacionItemId: response.cotizacionItemId,
-        });
-      }
-
-      // 2. Crear la OT con la proyección visible de cada item (mismas filas
-      //    de specs que muestra la ficha) + montos visibles del resumen.
+      const { itemsConSnapshot, cotizacionId } =
+        await persistirSnapshotsItems();
       const resumen = calcularResumenOrden(items, cargosOrden);
       const orden = await crearOrdenTrabajo({
         clienteId: clienteId || undefined,
@@ -4897,13 +4962,73 @@ export function PropuestaFicha({
           : "No se pudo emitir la orden de trabajo.",
       );
     }
-  }, [items, cargosOrden, clienteId, canalVenta, fechaEstimada]);
+  }, [
+    items,
+    cargosOrden,
+    clienteId,
+    canalVenta,
+    persistirSnapshotsItems,
+    fechaEntregaOrden,
+  ]);
 
   const finalizarEmision = React.useCallback(() => {
     const ordenId = emisionOrdenIdRef.current;
     setEmitiendo(false);
-    if (ordenId) router.push(`/produccion/ordenes/${ordenId}`);
+    // ?emitida=1 → el detalle muestra el tag "RECIÉN EMITIDA" sólo en esta
+    // llegada (la ficha limpia el param al montar).
+    if (ordenId) router.push(`/produccion/ordenes/${ordenId}?emitida=1`);
   }, [router]);
+
+  /**
+   * Guardar borrador: misma persistencia que emitir (snapshots + OT) pero
+   * en estado `borrador` — sin exigir cliente ni fecha (se completan antes
+   * de emitir). Navega al borrador para seguir trabajándolo desde ahí.
+   */
+  const [guardandoBorrador, setGuardandoBorrador] = React.useState(false);
+  const guardarBorrador = React.useCallback(async () => {
+    if (items.length === 0) {
+      toast.error("Agregá al menos un producto antes de guardar el borrador.");
+      return;
+    }
+    setGuardandoBorrador(true);
+    try {
+      const { itemsConSnapshot, cotizacionId } =
+        await persistirSnapshotsItems();
+      const resumen = calcularResumenOrden(items, cargosOrden);
+      const fechaEntrega = fechaEntregaOrden();
+      const orden = await crearOrdenTrabajo({
+        clienteId: clienteId || undefined,
+        cotizacionId,
+        estado: "borrador",
+        fechaEntrega: fechaEntrega || undefined,
+        canalVenta,
+        cargosDirectos: resumen.cargosTotal,
+        items: itemsConSnapshot.map(({ item, cotizacionItemId }) =>
+          itemToOrdenItemPayload(item, cotizacionItemId),
+        ),
+      });
+      toast.success(
+        `Borrador ${orden.numero} guardado. Seguí trabajándolo desde acá.`,
+      );
+      router.push(`/produccion/ordenes/${orden.id}`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudo guardar el borrador.",
+      );
+    } finally {
+      setGuardandoBorrador(false);
+    }
+  }, [
+    items,
+    cargosOrden,
+    clienteId,
+    canalVenta,
+    persistirSnapshotsItems,
+    fechaEntregaOrden,
+    router,
+  ]);
 
   // Al cambiar el cliente con productos ya cargados, los precios de esos items
   // quedaron calculados sin (o con otro) cliente. Recotizamos todos en masa
@@ -5173,7 +5298,7 @@ export function PropuestaFicha({
                 {orden.numero}
               </span>
               <EstadoOtBadge estado={orden.estado} />
-              {esOrdenNueva(orden) ? (
+              {mostrarRecienEmitida ? (
                 <span className="otd-new-tag-lg">RECIÉN EMITIDA</span>
               ) : null}
             </h1>
@@ -5241,14 +5366,27 @@ export function PropuestaFicha({
                   </button>
                 </>
               ) : (
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => setEditandoOrden(true)}
-                >
-                  <Edit3Icon />
-                  Editar orden
-                </button>
+                <>
+                  {orden.estado === "borrador" ? (
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => void emitirBorrador()}
+                      disabled={emitiendoBorrador}
+                    >
+                      <CheckIcon />
+                      {emitiendoBorrador ? "Emitiendo…" : "Emitir OT"}
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => setEditandoOrden(true)}
+                  >
+                    <Edit3Icon />
+                    Editar orden
+                  </button>
+                </>
               )}
             </div>
           ) : null}
@@ -5629,6 +5767,8 @@ export function PropuestaFicha({
             fechaCreacion={fechaCreacion}
             onEmitir={emitirOrden}
             emitiendo={emitiendo}
+            onGuardarBorrador={() => void guardarBorrador()}
+            guardandoBorrador={guardandoBorrador}
             readOnly={modoOrden}
           />
         ) : null}

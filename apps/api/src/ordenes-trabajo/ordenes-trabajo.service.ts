@@ -824,9 +824,16 @@ export class OrdenesTrabajoService {
     const desde = orden.estado as OrdenTrabajoEstado;
     const hacia = payload.estado as OrdenTrabajoEstado;
     this.validarTransicion(desde, hacia);
-    // Salir de borrador (a cualquier estado) es emitir: exige cliente.
+    // Salir de borrador (a cualquier estado) es emitir: exige cliente y
+    // fecha de entrega vigente, igual que la emisión directa.
     if (desde === 'borrador') {
       this.validarEmision(hacia, orden.clienteId);
+      this.validarFechaEntregaEmision(
+        hacia,
+        orden.fechaEntrega
+          ? orden.fechaEntrega.toISOString().slice(0, 10)
+          : null,
+      );
     }
 
     const progresoPct =
