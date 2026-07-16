@@ -181,6 +181,24 @@ export function CostosPanel({
     [plantas],
   );
 
+  // Totales de la tabla de centros: suma sólo valores numéricos publicados,
+  // con los mismos fallbacks que usa cada fila (base ?? publicada, etc.).
+  const totalesCentros = React.useMemo(() => {
+    const sumar = (getValor: (centro: CentroCosto) => number | null) =>
+      centros.reduce((acc, centro) => {
+        const valor = getValor(centro);
+        return typeof valor === "number" && Number.isFinite(valor)
+          ? acc + valor
+          : acc;
+      }, 0);
+    return {
+      horas: sumar((c) => c.ultimaCapacidadPractica),
+      tarifaPublicada: sumar((c) => c.ultimaTarifaBase ?? c.ultimaTarifaPublicada),
+      absorbido: sumar((c) => c.ultimaTarifaAbsorbida),
+      tarifaTotal: sumar((c) => c.ultimaTarifaTotal ?? c.ultimaTarifaPublicada),
+    };
+  }, [centros]);
+
   const areaLabelById = React.useMemo(
     () => new Map(areas.map((area) => [area.id, area.nombre])),
     [areas],
@@ -1282,6 +1300,30 @@ export function CostosPanel({
                       );
                     })}
                   </tbody>
+                  <tfoot>
+                    <tr className="centros-totales-row">
+                      <td colSpan={5}>
+                        Total · {centros.length}{" "}
+                        {centros.length === 1 ? "centro" : "centros"}
+                      </td>
+                      <td className="right numeric">
+                        {new Intl.NumberFormat("es-AR", {
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 2,
+                        }).format(totalesCentros.horas)}
+                      </td>
+                      <td className="right numeric">
+                        {formatMoneyOrDash(totalesCentros.tarifaPublicada) ?? "—"}
+                      </td>
+                      <td className="right numeric muted-value">
+                        {formatMoneyOrDash(totalesCentros.absorbido) ?? "—"}
+                      </td>
+                      <td className="right numeric strong-value">
+                        {formatMoneyOrDash(totalesCentros.tarifaTotal) ?? "—"}
+                      </td>
+                      <td className="right sticky-right" />
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
 

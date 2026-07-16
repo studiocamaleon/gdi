@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
-import { Geist_Mono, Inter } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import "./globals.css";
 
-const inter = Inter({
+// Geist en todo el sistema: es la sans de los diseños de referencia
+// (claude.ai/design Grafo V2). Antes era Inter, que difería en chips,
+// números y letterforms respecto de los mockups.
+const geist = Geist({
   subsets: ["latin"],
   variable: "--font-sans",
 });
@@ -26,7 +29,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es" className={cn("font-sans", inter.variable)}>
+    <html lang="es" className={cn("font-sans", geist.variable)}>
       <body className={`${geistMono.variable} antialiased`}>
         <TooltipProvider>
           {children}

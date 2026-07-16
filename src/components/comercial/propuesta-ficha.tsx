@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowLeftIcon,
   BriefcaseBusinessIcon,
@@ -15,6 +16,7 @@ import {
   FactoryIcon,
   FileIcon,
   FolderIcon,
+  HistoryIcon,
   PackageIcon,
   PlusIcon,
   SaveIcon,
@@ -36,9 +38,30 @@ import type {
 } from "@/lib/productos-servicios";
 import {
   cotizar,
+  cotizarYGuardar,
   recotizarCotizacionItem,
   type NestingViewerInput,
 } from "@/lib/productos-servicios-api";
+import {
+  agregarOrdenItem,
+  crearOrdenTrabajo,
+  editarOrdenItem,
+  editarOrdenTrabajo,
+  quitarOrdenItem,
+} from "@/lib/ordenes-trabajo-api";
+import {
+  ORDEN_TRABAJO_ESTADOS,
+  ORDEN_TRABAJO_FLOW,
+  formatFechaOrden,
+  type OrdenTrabajoDetalle,
+  type OrdenTrabajoProducto,
+} from "@/lib/ordenes-trabajo";
+import { EstadoOtBadge } from "@/components/produccion/ordenes-trabajo-view";
+import {
+  EVENTO_ICONOS,
+  PagosTab,
+  formatEventoFecha,
+} from "@/components/produccion/orden-trabajo-detalle-view";
 import {
   calcularCostoTotal,
   calcularResumen,
@@ -50,6 +73,7 @@ import {
   type PropuestaCargoDirecto,
   type PropuestaItem,
   type TipoPropuesta,
+  type UnidadPropuesta,
 } from "@/lib/propuestas";
 import { AgregarProductoSheet } from "@/components/comercial/agregar-producto-sheet";
 import { NestingViewer } from "@/components/nesting/nesting-viewer";
@@ -58,13 +82,25 @@ import { getCurrentPeriodo } from "@/lib/costos";
 import { technologyCodeLabel } from "@/lib/maquinaria-tecnologias";
 
 type PropuestaFichaProps = {
-  initialClientes: ClienteDetalle[];
-  initialProductos: ProductoListItem[];
-  initialCargosDirectos: CargoDirectoCatalogo[];
-  currentUser: CurrentUser | null;
+  initialClientes?: ClienteDetalle[];
+  initialProductos?: ProductoListItem[];
+  initialCargosDirectos?: CargoDirectoCatalogo[];
+  currentUser?: CurrentUser | null;
+  /**
+   * Modo orden: la MISMA ficha renderiza una OT ya persistida (solo lectura,
+   * rehidratada desde los snapshots) con número, estado, flujo e historial.
+   * Sin `orden`, es la ficha de creación de siempre.
+   */
+  orden?: OrdenTrabajoDetalle;
 };
 
-type OrdenTab = "productos" | "produccion" | "pagos" | "archivos" | "costos";
+type OrdenTab =
+  | "productos"
+  | "produccion"
+  | "pagos"
+  | "archivos"
+  | "costos"
+  | "historial";
 type InnerTab = "specs" | "costos" | "produccion";
 type PasoCosteo = CotizacionPropuestaSnapshot["pasos"][number];
 type MaterialCosteo = NonNullable<PasoCosteo["materiales"]>[number];
@@ -142,7 +178,7 @@ function getCotizacionCantidadPrecio(
   );
 }
 
-function getCotizacionPasos(cotizacion: CotizacionExitosa) {
+export function getCotizacionPasos(cotizacion: CotizacionExitosa) {
   return cotizacion.pasos
     .filter((paso) => paso.activado)
     .map((paso) => ({
@@ -595,10 +631,13 @@ function OrdenTabs({
   value,
   onChange,
   count,
+  historialCount,
 }: {
   value: OrdenTab;
   onChange: (value: OrdenTab) => void;
   count: number;
+  /** Presente sólo en modo orden: agrega el tab Historial. */
+  historialCount?: number;
 }) {
   const tabs: Array<{
     key: OrdenTab;
@@ -611,6 +650,16 @@ function OrdenTabs({
     { key: "pagos", label: "Pagos", icon: <CreditCardIcon /> },
     { key: "archivos", label: "Archivos", count: 2, icon: <FolderIcon /> },
     { key: "costos", label: "Costos", icon: <CircleDollarSignIcon /> },
+    ...(historialCount !== undefined
+      ? [
+          {
+            key: "historial" as const,
+            label: "Historial",
+            count: historialCount,
+            icon: <HistoryIcon />,
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -1509,7 +1558,8 @@ function ProduccionItemView({
 }: {
   item: PropuestaItem;
   calculoPendiente: boolean;
-  onEditPanels: (paso: PanelEditorPaso) => void;
+  /** Ausente en modo lectura: el layout de paneles no se puede editar. */
+  onEditPanels?: (paso: PanelEditorPaso) => void;
 }) {
   const pasosCosteoActivos = getVisibleCostSteps(item.cotizacion.pasos);
   const pasosActivos = pasosCosteoActivos;
@@ -1627,7 +1677,7 @@ function ProduccionItemView({
             ) : null}
             {activeNestingTab ? (
               <div className="production-nesting" key={activeNestingTab.key}>
-                {isPanelEditableStep(activeNestingTab.paso) ? (
+                {onEditPanels && isPanelEditableStep(activeNestingTab.paso) ? (
                   <div className="mb-3 flex justify-end">
                     <button
                       type="button"
@@ -2790,64 +2840,17 @@ function CostosItemView({
   );
 }
 
-function ProductRow({
-  item,
-  index,
-  expanded,
-  onToggle,
-  onRemove,
-  onEdit,
-  onEditPanels,
-  onChangeFechaEntrega,
-  fechaEstimada,
-}: {
-  item: PropuestaItem;
-  index: number;
-  expanded: boolean;
-  onToggle: () => void;
-  onRemove: () => void;
-  onEdit: () => void;
-  onEditPanels: (item: PropuestaItem, paso: PanelEditorPaso) => void;
-  onChangeFechaEntrega: (fechaEntrega: string) => void;
-  fechaEstimada: string;
-}) {
-  const [innerTab, setInnerTab] = React.useState<InnerTab>("specs");
-  const [priceDetailOpen, setPriceDetailOpen] = React.useState(false);
-  const fechaInputRef = React.useRef<HTMLInputElement | null>(null);
-  const costo = calcularCostoTotal(item);
-  const calculoPendiente = item.precioUnitario === 0 && item.total === 0;
-  const tienePrecioEspecial = Boolean(
-    item.cotizacion?.desglosePrecio?.precioEspecialCliente,
-  );
-  const margen =
-    item.subtotal > 0 ? ((item.subtotal - costo) / item.subtotal) * 100 : 0;
-  const visibleAmounts = React.useMemo(
-    () => getItemOrderVisibleAmounts(item),
-    [item],
-  );
-  const commercialPriceDetail = React.useMemo(
-    () => buildCommercialPriceDetail(item),
-    [item],
-  );
-  const mainMaterial = React.useMemo(() => getMainCommercialMaterial(item), [item]);
-  const montajeSustrato = React.useMemo(
-    () => getMontajeSustratoMaterial(item),
-    [item],
-  );
-  const optionalMaterialDetails = React.useMemo(
-    () =>
-      new Map(
-        item.adicionales.map((adicional) => [
-          adicional,
-          getOptionalMaterialDetails(item, adicional),
-        ]),
-      ),
-    [item],
-  );
-  const componentMaterialDetails = React.useMemo(
-    () => getComponentMaterialDetails(item),
-    [item],
-  );
+/**
+ * Specs visibles del item (las mismas filas que muestra la ficha). También
+ * son la proyección `specs` que persiste el item de la OT al emitir — la OT
+ * muestra exactamente lo que el comercial vio al armarla.
+ */
+function buildOrdenItemSpecs(
+  item: PropuestaItem,
+): Array<{ lbl: string; val: string }> {
+  const mainMaterial = getMainCommercialMaterial(item);
+  const montajeSustrato = getMontajeSustratoMaterial(item);
+
   const specsBase = item.atributosSchema
     .filter(
       (attr) =>
@@ -2870,53 +2873,134 @@ function ProductRow({
           : item.especificaciones[attr.key] ?? "A definir",
     }));
 
-  // Materiales que componen el producto: el principal (sustrato impreso) y el
-  // de montaje. Se muestran SIEMPRE que existan en la cotización, aunque el
-  // `atributosSchema` del producto no los declare (algunos productos no tienen
-  // el atributo "material" en su schema, pero el dato viaja igual en la
-  // cotización). El de montaje va justo después del principal.
-  const specs = (() => {
-    const arr = [...specsBase];
+  const arr = [...specsBase];
 
-    // 1. Material principal: si el schema no generó una fila de material pero
-    //    la cotización sí resolvió uno, lo insertamos sintéticamente (tras
-    //    "Medidas" para respetar el orden Medidas · Material · …).
-    let materialIdx = arr.findIndex((spec) => isMaterialSpecKey("", spec.lbl));
-    if (materialIdx < 0 && mainMaterial) {
-      const medidasIdx = arr.findIndex((spec) =>
-        spec.lbl.toLowerCase().includes("medida"),
-      );
-      materialIdx = medidasIdx >= 0 ? medidasIdx + 1 : 0;
-      arr.splice(materialIdx, 0, {
-        lbl: "Material",
-        val: getMaterialCommercialLabel(mainMaterial),
-      });
-    }
+  // 1. Material principal: si el schema no generó una fila de material pero
+  //    la cotización sí resolvió uno, lo insertamos sintéticamente (tras
+  //    "Medidas" para respetar el orden Medidas · Material · …).
+  let materialIdx = arr.findIndex((spec) => isMaterialSpecKey("", spec.lbl));
+  if (materialIdx < 0 && mainMaterial) {
+    const medidasIdx = arr.findIndex((spec) =>
+      spec.lbl.toLowerCase().includes("medida"),
+    );
+    materialIdx = medidasIdx >= 0 ? medidasIdx + 1 : 0;
+    arr.splice(materialIdx, 0, {
+      lbl: "Material",
+      val: getMaterialCommercialLabel(mainMaterial),
+    });
+  }
 
-    // 2. Montaje: material del sustrato sobre el que se monta (ej. Imán,
-    //    PVC espumado · 3 mm), justo después del principal.
+  // 2. Montaje: material del sustrato sobre el que se monta (ej. Imán,
+  //    PVC espumado · 3 mm), justo después del principal.
+  if (
+    montajeSustrato &&
+    montajeSustrato.materialVarianteId !== mainMaterial?.materialVarianteId
+  ) {
+    const montajeSpec = {
+      lbl: "Montaje",
+      val: getMaterialCommercialLabel(montajeSustrato),
+    };
+    if (materialIdx >= 0) arr.splice(materialIdx + 1, 0, montajeSpec);
+    else arr.push(montajeSpec);
+  }
+
+  // 3. Faz: si es doble faz, mostrarlo siempre (aunque el schema no declare
+  //    el atributo "caras"). El dato viaja en jobContext.caras. Si el schema
+  //    ya lo trae, no duplicamos.
+  const caras = getCarasItem(item);
+  if (caras === 2 && !arr.some((spec) => isFazSpecKey("", spec.lbl))) {
+    arr.push({ lbl: "Caras", val: "Doble faz" });
+  }
+
+  // 4. Blank comprado (merchandising / textil): producto base + variante
+  //    (talle/color/material) al frente, y las estampas al final. Se muestran
+  //    aunque el schema del producto no los declare — el dato viaja en la
+  //    cotización. Ver docs/ot-merchandising-info-diseno.md
+  const identityRows: Array<{ lbl: string; val: string }> = [];
+  for (const [key, lbl] of [
+    ["producto_tipo", "Tipo de producto"],
+    ["producto_base", "Producto base"],
+    ["talle", "Talle"],
+    ["color_prenda", "Color"],
+    ["material_base", "Material base"],
+  ] as const) {
+    const val = item.especificaciones[key]?.trim();
     if (
-      montajeSustrato &&
-      montajeSustrato.materialVarianteId !== mainMaterial?.materialVarianteId
+      val &&
+      !arr.some((spec) => spec.lbl.toLowerCase() === lbl.toLowerCase())
     ) {
-      const montajeSpec = {
-        lbl: "Montaje",
-        val: getMaterialCommercialLabel(montajeSustrato),
-      };
-      if (materialIdx >= 0) arr.splice(materialIdx + 1, 0, montajeSpec);
-      else arr.push(montajeSpec);
+      identityRows.push({ lbl, val });
     }
+  }
+  if (identityRows.length > 0) arr.unshift(...identityRows);
+  const estampas = item.especificaciones.personalizaciones?.trim();
+  if (estampas && !arr.some((spec) => spec.lbl.toLowerCase() === "estampas")) {
+    arr.push({ lbl: "Estampas", val: estampas });
+  }
 
-    // 3. Faz: si es doble faz, mostrarlo siempre (aunque el schema no declare
-    //    el atributo "caras"). El dato viaja en jobContext.caras. Si el schema
-    //    ya lo trae, no duplicamos.
-    const caras = getCarasItem(item);
-    if (caras === 2 && !arr.some((spec) => isFazSpecKey("", spec.lbl))) {
-      arr.push({ lbl: "Caras", val: "Doble faz" });
-    }
+  return arr;
+}
 
-    return arr;
-  })();
+export function ProductRow({
+  item,
+  index,
+  expanded,
+  onToggle,
+  onRemove,
+  onEdit,
+  onEditPanels,
+  onChangeFechaEntrega,
+  fechaEstimada,
+  readOnly = false,
+}: {
+  item: PropuestaItem;
+  index: number;
+  expanded: boolean;
+  onToggle: () => void;
+  /** Ausentes en modo lectura (OT emitida): la fila no se puede mutar. */
+  onRemove?: () => void;
+  onEdit?: () => void;
+  onEditPanels?: (item: PropuestaItem, paso: PanelEditorPaso) => void;
+  onChangeFechaEntrega?: (fechaEntrega: string) => void;
+  fechaEstimada: string;
+  readOnly?: boolean;
+}) {
+  const [innerTab, setInnerTab] = React.useState<InnerTab>("specs");
+  const [priceDetailOpen, setPriceDetailOpen] = React.useState(false);
+  const fechaInputRef = React.useRef<HTMLInputElement | null>(null);
+  const costo = calcularCostoTotal(item);
+  const calculoPendiente = item.precioUnitario === 0 && item.total === 0;
+  const tienePrecioEspecial = Boolean(
+    item.cotizacion?.desglosePrecio?.precioEspecialCliente,
+  );
+  const margen =
+    item.subtotal > 0 ? ((item.subtotal - costo) / item.subtotal) * 100 : 0;
+  const visibleAmounts = React.useMemo(
+    () => getItemOrderVisibleAmounts(item),
+    [item],
+  );
+  const commercialPriceDetail = React.useMemo(
+    () => buildCommercialPriceDetail(item),
+    [item],
+  );
+  const optionalMaterialDetails = React.useMemo(
+    () =>
+      new Map(
+        item.adicionales.map((adicional) => [
+          adicional,
+          getOptionalMaterialDetails(item, adicional),
+        ]),
+      ),
+    [item],
+  );
+  const componentMaterialDetails = React.useMemo(
+    () => getComponentMaterialDetails(item),
+    [item],
+  );
+  // Specs visibles (schema + filas sintéticas de materiales/faz/blank):
+  // extraídas a buildOrdenItemSpecs para que la emisión de OT persista
+  // exactamente estas mismas filas.
+  const specs = React.useMemo(() => buildOrdenItemSpecs(item), [item]);
 
   return (
     <div className={`oprow ${expanded ? "open" : ""}`}>
@@ -2963,25 +3047,29 @@ function ProductRow({
         <div className={`num total${tienePrecioEspecial ? " especial" : ""}`}>
           {calculoPendiente ? "Pendiente" : formatCurrency(visibleAmounts.total)}
         </div>
-        <span
-          className="x"
-          role="button"
-          tabIndex={0}
-          onClick={(event) => {
-            event.stopPropagation();
-            onRemove();
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
+        {!onRemove ? (
+          <span className="x" aria-hidden="true" />
+        ) : (
+          <span
+            className="x"
+            role="button"
+            tabIndex={0}
+            onClick={(event) => {
               event.stopPropagation();
               onRemove();
-            }
-          }}
-          title="Quitar producto"
-        >
-          <Trash2Icon />
-        </span>
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                event.stopPropagation();
+                onRemove();
+              }
+            }}
+            title="Quitar producto"
+          >
+            <Trash2Icon />
+          </span>
+        )}
       </button>
 
       {expanded ? (
@@ -3010,10 +3098,12 @@ function ProductRow({
                 Produccion
               </button>
             </div>
-            <button type="button" className="btn-link" onClick={onEdit}>
-              <Edit3Icon />
-              Editar especificaciones
-            </button>
+            {onEdit ? (
+              <button type="button" className="btn-link" onClick={onEdit}>
+                <Edit3Icon />
+                Editar especificaciones
+              </button>
+            ) : null}
           </div>
 
           {innerTab === "specs" ? (
@@ -3035,6 +3125,9 @@ function ProductRow({
                     .toLowerCase()
                     .includes("modo de color");
                   const isCarasSpec = spec.lbl.toLowerCase() === "caras";
+                  // "Estampas": una personalización por línea (multilínea, como
+                  // "Medidas"). Ver docs/ot-merchandising-info-diseno.md
+                  const isEstampasSpec = spec.lbl.toLowerCase() === "estampas";
                   return (
                     <div
                       className={`spec ${isMedidasSpec ? "with-action" : ""} ${
@@ -3070,7 +3163,9 @@ function ProductRow({
                         ) : null}
                       </div>
                       <div
-                        className={`val ${isMedidasSpec ? "multi" : ""} ${
+                        className={`val ${
+                          isMedidasSpec || isEstampasSpec ? "multi" : ""
+                        } ${
                           isModoColorSpec ||
                           isCarasSpec ||
                           spec.val.length > 28
@@ -3158,17 +3253,23 @@ function ProductRow({
                 <div className="op-mini">
                   <div className="op-mini-row">
                     <span className="mlbl">Fecha estimada</span>
-                    <input
-                      ref={fechaInputRef}
-                      className="op-date-input"
-                      type="date"
-                      value={item.fechaEntrega ?? fechaEstimada}
-                      onClick={() => fechaInputRef.current?.showPicker?.()}
-                      onChange={(event) =>
-                        onChangeFechaEntrega(event.target.value)
-                      }
-                      aria-label={`Fecha estimada de ${item.productoNombre}`}
-                    />
+                    {readOnly ? (
+                      <span className="mval mono">
+                        {item.fechaEntrega ?? fechaEstimada}
+                      </span>
+                    ) : (
+                      <input
+                        ref={fechaInputRef}
+                        className="op-date-input"
+                        type="date"
+                        value={item.fechaEntrega ?? fechaEstimada}
+                        onClick={() => fechaInputRef.current?.showPicker?.()}
+                        onChange={(event) =>
+                          onChangeFechaEntrega?.(event.target.value)
+                        }
+                        aria-label={`Fecha estimada de ${item.productoNombre}`}
+                      />
+                    )}
                   </div>
                 </div>
               </div>
@@ -3187,7 +3288,9 @@ function ProductRow({
             <ProduccionItemView
               item={item}
               calculoPendiente={calculoPendiente}
-              onEditPanels={(paso) => onEditPanels(item, paso)}
+              onEditPanels={
+                readOnly ? undefined : (paso) => onEditPanels?.(item, paso)
+              }
             />
           ) : null}
         </div>
@@ -3401,18 +3504,162 @@ function calcularResumenOrden(
   };
 }
 
-function ResumenBar({
+/**
+ * Overlay de emisión (diseño Grafo V2 · ordenes.jsx): pasos animados mientras
+ * corre la emisión real; el check final aparece recién cuando llega el número
+ * de OT asignado por el backend (`numero != null`).
+ */
+function EmitOverlay({
+  numero,
+  onDone,
+}: {
+  numero: string | null;
+  onDone: () => void;
+}) {
+  const [phase, setPhase] = React.useState(0);
+  // 0: guardando · 1: asignando Nº · 2: notificando taller · 3: listo · 4: salir
+  const STEPS = [
+    "Guardando cotización",
+    "Asignando número de OT",
+    "Notificando al taller",
+  ];
+
+  React.useEffect(() => {
+    const timers = [
+      setTimeout(() => setPhase((p) => Math.max(p, 1)), 620),
+      setTimeout(() => setPhase((p) => Math.max(p, 2)), 1240),
+    ];
+    return () => timers.forEach(clearTimeout);
+  }, []);
+
+  // onDone vive en un ref para que el efecto dependa SÓLO de `numero`: si
+  // dependiera de `phase`, el cleanup al pasar a fase 3 cancelaría los timers
+  // de salida y la redirección nunca dispararía (bug del overlay "clavado").
+  const onDoneRef = React.useRef(onDone);
+  React.useEffect(() => {
+    onDoneRef.current = onDone;
+  }, [onDone]);
+
+  React.useEffect(() => {
+    if (numero === null) return;
+    const timers = [
+      setTimeout(() => setPhase(3), 400),
+      setTimeout(() => setPhase(4), 1900),
+      setTimeout(() => onDoneRef.current(), 2300),
+    ];
+    return () => timers.forEach(clearTimeout);
+  }, [numero]);
+
+  const done = phase >= 3;
+
+  return (
+    <div className={`emit-overlay ${phase >= 4 ? "leaving" : ""}`}>
+      <div className="emit-card">
+        <div className={`emit-seal ${done ? "done" : ""}`}>
+          <span className="ring r1" />
+          <span className="ring r2" />
+          <span className="ring r3" />
+          {done
+            ? Array.from({ length: 12 }).map((_, i) => (
+                <span
+                  key={i}
+                  className="spark"
+                  style={
+                    {
+                      "--a": `${i * 30}deg`,
+                      "--d": `${(i % 3) * 0.05}s`,
+                    } as React.CSSProperties
+                  }
+                />
+              ))
+            : null}
+          <svg className="emit-check" viewBox="0 0 52 52" width="82" height="82">
+            <circle
+              className="ec-circle"
+              cx="26"
+              cy="26"
+              r="23"
+              fill="none"
+              strokeWidth="2.5"
+            />
+            <path
+              className="ec-tick"
+              fill="none"
+              strokeWidth="3.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M15 27 L23 34 L38 18"
+            />
+          </svg>
+        </div>
+
+        <div className="emit-body">
+          {!done ? (
+            <>
+              <div className="emit-title">Emitiendo orden de trabajo…</div>
+              <div className="emit-steps">
+                {STEPS.map((lbl, i) => {
+                  const state = phase > i ? "ok" : phase === i ? "run" : "wait";
+                  return (
+                    <div key={i} className={`emit-step ${state}`}>
+                      <span className="es-dot">
+                        {state === "ok" ? (
+                          <svg
+                            width="11"
+                            height="11"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="3.4"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M5 13l4 4L19 7" />
+                          </svg>
+                        ) : state === "run" ? (
+                          <span className="es-spin" />
+                        ) : null}
+                      </span>
+                      <span className="es-lbl">{lbl}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            <div className="emit-success">
+              <div className="emit-title">¡Orden emitida!</div>
+              <div className="emit-nro">{numero}</div>
+              <div className="emit-note">
+                Enviada al taller · visible en Producción → Órdenes
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ResumenBar({
   items,
   cargosOrden,
   tipo,
   fechaEstimada,
   fechaCreacion,
+  onEmitir,
+  emitiendo = false,
+  readOnly = false,
 }: {
   items: PropuestaItem[];
   cargosOrden: PropuestaCargoDirecto[];
   tipo: "orden" | "presupuesto";
   fechaEstimada: string;
   fechaCreacion: string;
+  /** Ausente en modo lectura (OT emitida): sin acciones de guardado/emisión. */
+  onEmitir?: () => void;
+  emitiendo?: boolean;
+  readOnly?: boolean;
 }) {
   const resumen = calcularResumenOrden(items, cargosOrden);
   const impuestosProductoResumen = getImpuestosProductoResumen(items);
@@ -3535,17 +3782,23 @@ function ResumenBar({
         </div>
       </div>
 
+      {readOnly ? null : (
       <div className="rbar-foot">
         <div className="rbar-actions">
           <button type="button" className="btn">
             <SaveIcon />
             Guardar borrador
           </button>
-          <button type="button" className="btn btn-primary">
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={emitiendo || items.length === 0}
+            onClick={tipo === "orden" ? onEmitir : undefined}
+          >
             {tipo === "orden" ? (
               <>
                 <CheckIcon />
-                Emitir OT
+                {emitiendo ? "Emitiendo…" : "Emitir OT"}
               </>
             ) : (
               <>
@@ -3556,6 +3809,7 @@ function ResumenBar({
           </button>
         </div>
       </div>
+      )}
     </div>
   );
 }
@@ -3909,19 +4163,311 @@ function CargoOrdenSheet({
   );
 }
 
+/* ─────────── Rehidratación (modo orden) ───────────
+   OrdenTrabajoProducto → PropuestaItem: la OT emitida se muestra con esta
+   misma ficha. Specs persistidas → schema sintético (mismas filas que vio el
+   comercial); pasos/costos desde el snapshot del CotizacionItem. Sin snapshot
+   (OT histórica) la fila degrada con gracia: specs sí, costos vacíos. */
+
+function unidadDesdeCorta(cantidadUnidad: string): UnidadPropuesta {
+  if (cantidadUnidad === "m²") return "m2";
+  if (cantidadUnidad === "ml") return "metro_lineal";
+  return "unidad";
+}
+
+/**
+ * Proyección persistible de un item (misma forma que usa la emisión): montos
+ * visibles + specs curadas. Compartida entre emitir, agregar y editar item.
+ */
+function itemToOrdenItemPayload(
+  item: PropuestaItem,
+  cotizacionItemId: string | undefined,
+) {
+  const amounts = getItemOrderVisibleAmounts(item);
+  return {
+    cotizacionItemId,
+    codigo: item.productoCodigo,
+    nombre: item.productoNombre,
+    familia:
+      item.subcategoriaComercialNombre ||
+      item.categoriaComercialNombre ||
+      "—",
+    categoriaComercial: item.categoriaComercialNombre,
+    subcategoriaComercial: item.subcategoriaComercialNombre,
+    cantidad: item.cantidad,
+    cantidadUnidad: formatUnidad(item.unidadMedida),
+    subtotal: amounts.subtotal,
+    impuestos: amounts.impuestos,
+    total: amounts.total,
+    specs: buildOrdenItemSpecs(item).map((spec) => ({
+      etiqueta: spec.lbl,
+      valor: spec.val,
+    })),
+    adicionales: item.adicionales,
+  };
+}
+
+/**
+ * Campos editables según estado — espejo de camposEditables() del backend.
+ * borrador/pendiente: datos comerciales; produccion: fecha y observaciones;
+ * finalizada/entregada: nada.
+ */
+function camposEditablesOrden(
+  estado: OrdenTrabajoDetalle["estado"],
+): Set<string> {
+  switch (estado) {
+    case "borrador":
+    case "pendiente":
+      return new Set([
+        "clienteId",
+        "vendedorEmpleadoId",
+        "canalVenta",
+        "fechaEntrega",
+        "observaciones",
+      ]);
+    case "produccion":
+      return new Set(["fechaEntrega", "observaciones"]);
+    default:
+      return new Set();
+  }
+}
+
+/** Vendedor visible: el asignado, o quien emitió (primer evento de emisión). */
+function vendedorOrdenNombre(orden: OrdenTrabajoDetalle) {
+  if (orden.vendedorNombre && orden.vendedorNombre !== "—") {
+    return orden.vendedorNombre;
+  }
+  const emisor = orden.eventos.find((ev) => ev.tipo === "emision");
+  return emisor?.usuarioNombre ?? "—";
+}
+
+/**
+ * NUEVA = emitida hace menos de 24h corridas y todavía pendiente (cuando el
+ * taller la agarra deja de ser "nueva"). Decisión 2026-07-16.
+ */
+function esOrdenNueva(orden: OrdenTrabajoDetalle) {
+  if (orden.estado !== "pendiente") return false;
+  const creada = new Date(orden.creadaEl).getTime();
+  if (Number.isNaN(creada)) return false;
+  return Date.now() - creada < 24 * 60 * 60 * 1000;
+}
+
+type SnapshotResumenOrden = {
+  producto?: { id?: string; codigo?: string; nombre?: string };
+  ruta?: { nombre?: string; alternativa?: string | null };
+  ejecucion?: {
+    cantidadEfectiva?: number;
+    cantidadPedida?: number;
+    cantidadComercialReal?: number;
+    cantidadComercialPricing?: number;
+    unidadComercialPricing?: string;
+    minimoComercialAplicado?: unknown;
+    costos?: CotizacionPropuestaSnapshot["costos"];
+  };
+};
+
+type SnapshotTrazabilidadOrden = {
+  pasos?: CotizacionPropuestaSnapshot["pasos"];
+  cargosDirectosCotizacion?: CotizacionPropuestaSnapshot["cargosDirectosCotizacion"];
+};
+
+function rehidratarOrdenItem(
+  producto: OrdenTrabajoProducto,
+  index: number,
+): PropuestaItem {
+  const snap = producto.snapshot ?? null;
+  const resumen = (snap?.resumen ?? null) as SnapshotResumenOrden | null;
+  const trazabilidad = (snap?.trazabilidad ??
+    null) as SnapshotTrazabilidadOrden | null;
+
+  const costosVacios = {
+    tiempoTotal: 0,
+    materialesTotal: 0,
+    cargosDirectosTotal: 0,
+    total: snap?.costoTotal ?? 0,
+    unitario: snap?.costoUnitario ?? 0,
+  } as CotizacionPropuestaSnapshot["costos"];
+
+  const impuestosSnapshot = snap?.precioSnapshots.impuestos;
+  const comisionesSnapshot = snap?.precioSnapshots.comisiones;
+
+  // Reconstrucción del desglose de precio con la MISMA matemática de
+  // AplicarPrecioService, a partir de lo persistido: neto (subtotal), bruto
+  // (precioUnitario/Total), costo, y los snapshots de impuestos/comisiones
+  // (con traslado y base de cálculo). Sin esto, el waterfall de Costos
+  // muestra márgenes absurdos (precioBase=0 ⇒ margen = −costo).
+  const cantidadPricing =
+    resumen?.ejecucion?.cantidadComercialPricing ?? producto.cantidad;
+  const netoUnit =
+    cantidadPricing > 0 ? producto.subtotal / cantidadPricing : 0;
+  const brutoUnit =
+    snap?.precioUnitario ??
+    (cantidadPricing > 0 ? producto.total / cantidadPricing : 0);
+  const impuestosLista = (
+    Array.isArray(impuestosSnapshot) ? impuestosSnapshot : []
+  ) as Array<{
+    porcentaje?: number;
+    traslado?: string;
+    baseCalculo?: string;
+  }>;
+  const comisionesLista = (
+    Array.isArray(comisionesSnapshot) ? comisionesSnapshot : []
+  ) as Array<{ porcentaje?: number; baseCalculo?: string }>;
+  let internosNetoPct = 0;
+  let internosBrutoPct = 0;
+  for (const impuesto of impuestosLista) {
+    if ((impuesto.traslado ?? "POR_DENTRO") === "POR_FUERA") continue;
+    if ((impuesto.baseCalculo ?? "NETO") === "BRUTO_COBRADO") {
+      internosBrutoPct += impuesto.porcentaje ?? 0;
+    } else {
+      internosNetoPct += impuesto.porcentaje ?? 0;
+    }
+  }
+  let comisionesNetoPct = 0;
+  let comisionesBrutoPct = 0;
+  for (const comision of comisionesLista) {
+    if ((comision.baseCalculo ?? "NETO") === "BRUTO_COBRADO") {
+      comisionesBrutoPct += comision.porcentaje ?? 0;
+    } else {
+      comisionesNetoPct += comision.porcentaje ?? 0;
+    }
+  }
+  const costosInternosUnit =
+    (netoUnit * internosNetoPct) / 100 + (brutoUnit * internosBrutoPct) / 100;
+  const comisionesUnit =
+    (netoUnit * comisionesNetoPct) / 100 +
+    (brutoUnit * comisionesBrutoPct) / 100;
+  const precioBaseUnit = netoUnit - costosInternosUnit - comisionesUnit;
+  const costoUnit = snap?.costoUnitario ?? 0;
+  const margenEfectivoPct =
+    netoUnit > 0 ? ((precioBaseUnit - costoUnit) / netoUnit) * 100 : 0;
+  const totalImpuestosUnit = Math.max(0, brutoUnit - netoUnit) + costosInternosUnit;
+
+  const cotizacion = {
+    productoId: snap?.productoId ?? producto.codigo,
+    productoNombre: producto.nombre,
+    rutaAlternativaId: snap?.rutaAlternativaId ?? null,
+    rutaNombre:
+      resumen?.ruta?.alternativa ?? resumen?.ruta?.nombre ?? "Ruta estándar",
+    cantidadEfectiva: resumen?.ejecucion?.cantidadEfectiva ?? producto.cantidad,
+    cantidadPedida: resumen?.ejecucion?.cantidadPedida ?? producto.cantidad,
+    cantidadComercialReal:
+      resumen?.ejecucion?.cantidadComercialReal ?? producto.cantidad,
+    cantidadComercialPricing:
+      resumen?.ejecucion?.cantidadComercialPricing ?? producto.cantidad,
+    unidadComercialPricing:
+      resumen?.ejecucion?.unidadComercialPricing ??
+      unidadDesdeCorta(producto.cantidadUnidad),
+    minimoComercialAplicado:
+      (resumen?.ejecucion
+        ?.minimoComercialAplicado as CotizacionPropuestaSnapshot["minimoComercialAplicado"]) ??
+      null,
+    costos: resumen?.ejecucion?.costos ?? costosVacios,
+    pasos: trazabilidad?.pasos ?? [],
+    cargosDirectosCotizacion: trazabilidad?.cargosDirectosCotizacion ?? [],
+    desglosePrecio: snap
+      ? ({
+          precioConfig:
+            (snap.precioSnapshots.precioConfig as NonNullable<
+              CotizacionPropuestaSnapshot["desglosePrecio"]
+            >["precioConfig"]) ?? null,
+          impuestos: Array.isArray(impuestosSnapshot) ? impuestosSnapshot : [],
+          comisiones: Array.isArray(comisionesSnapshot)
+            ? comisionesSnapshot
+            : [],
+          precioEspecialCliente:
+            (snap.precioSnapshots.precioEspecialCliente as never) ?? null,
+          precioBase: precioBaseUnit,
+          totalComisiones: comisionesUnit,
+          totalImpuestos: totalImpuestosUnit,
+          margenEfectivoPct,
+          precioNetoUnitario: netoUnit,
+          precioBrutoUnitario: brutoUnit,
+          precioNetoTotal: producto.subtotal,
+          precioBrutoTotal: snap.precioTotal ?? producto.total,
+        } as NonNullable<CotizacionPropuestaSnapshot["desglosePrecio"]>)
+      : undefined,
+  } as CotizacionPropuestaSnapshot;
+
+  return {
+    // Id REAL del OrdenTrabajoItem (para editar/quitar); fallback sintético
+    // sólo para órdenes previas al campo.
+    id: producto.id ?? `ot-item-${index}`,
+    cotizacionItemId: producto.cotizacionItemId ?? undefined,
+    productoNombre: producto.nombre,
+    productoCodigo: producto.codigo,
+    motorCodigo: snap?.productoId ?? "",
+    categoriaComercialCodigo: "",
+    // Órdenes viejas (pre categoriaComercial persistida) caen a `familia`.
+    categoriaComercialNombre: producto.categoriaComercial || producto.familia,
+    subcategoriaComercialCodigo: "",
+    subcategoriaComercialNombre:
+      producto.subcategoriaComercial || producto.familia,
+    unidadMedida: unidadDesdeCorta(producto.cantidadUnidad),
+    cantidad: producto.cantidad,
+    precioUnitario:
+      producto.cantidad > 0 ? producto.total / producto.cantidad : 0,
+    subtotal: producto.subtotal,
+    impuestoPorcentaje:
+      producto.subtotal > 0
+        ? (producto.impuestos / producto.subtotal) * 100
+        : 0,
+    impuestoMonto: producto.impuestos,
+    total: producto.total,
+    especificaciones: Object.fromEntries(
+      producto.specs.map((spec, i) => [`spec_${i}`, spec.valor]),
+    ),
+    atributosSchema: producto.specs.map((spec, i) => ({
+      key: `spec_${i}`,
+      label: spec.etiqueta,
+      tipo: "text",
+      visible: true,
+      orden: i,
+    })),
+    cotizacion,
+    pasos: trazabilidad?.pasos ? getCotizacionPasos(cotizacion) : [],
+    adicionales: producto.adicionales,
+    rutaAlternativaId: snap?.rutaAlternativaId ?? null,
+    jobContext: (snap?.jobContext as Record<string, unknown>) ?? undefined,
+  };
+}
+
 export function PropuestaFicha({
-  initialClientes,
-  initialProductos,
-  initialCargosDirectos,
-  currentUser,
+  initialClientes = [],
+  initialProductos = [],
+  initialCargosDirectos = [],
+  currentUser = null,
+  orden,
 }: PropuestaFichaProps) {
+  const modoOrden = Boolean(orden);
   const [tipo, setTipo] = React.useState<TipoPropuesta>("orden_trabajo");
   const ordenTipo = tipoMap[tipo];
   const [tab, setTab] = React.useState<OrdenTab>("productos");
   const [openIds, setOpenIds] = React.useState<Set<string>>(() => new Set());
-  const [items, setItems] = React.useState<PropuestaItem[]>([]);
+  const [items, setItems] = React.useState<PropuestaItem[]>(() =>
+    orden ? orden.productos.map(rehidratarOrdenItem) : [],
+  );
   const [cargosOrden, setCargosOrden] = React.useState<PropuestaCargoDirecto[]>(
-    [],
+    () =>
+      orden && orden.cargosDirectos > 0
+        ? [
+            {
+              id: "ot-cargos",
+              cargoDirectoCatalogoId: "",
+              codigoSnapshot: "cargos_orden",
+              nombreSnapshot: "Cargos directos de la orden",
+              modoCalculoSnapshot: "MONTO_FIJO_PLANO",
+              configSnapshot: {},
+              baseCalculo: 0,
+              montoNeto: orden.cargosDirectos,
+              impuestoPorcentaje: 0,
+              impuestoMonto: 0,
+              total: orden.cargosDirectos,
+              detalle: "Persistido al emitir la orden",
+              createdAt: orden.creadaEl,
+            },
+          ]
+        : [],
   );
   const [addOpen, setAddOpen] = React.useState(false);
   const [cargoOpen, setCargoOpen] = React.useState(false);
@@ -3933,10 +4479,185 @@ export function PropuestaFicha({
     paso: PanelEditorPaso;
   } | null>(null);
   const [panelSaving, setPanelSaving] = React.useState(false);
-  const [clienteId, setClienteId] = React.useState("");
-  const [canalVenta, setCanalVenta] = React.useState("mostrador");
-  const [fechaEstimada, setFechaEstimada] = React.useState(offsetDate(7));
-  const [fechaCreacion] = React.useState(() => offsetDate(0));
+  const [clienteId, setClienteId] = React.useState(orden?.clienteId ?? "");
+  const [canalVenta, setCanalVenta] = React.useState(
+    orden?.canalVenta ?? "mostrador",
+  );
+  const [fechaEstimada, setFechaEstimada] = React.useState(
+    () => orden?.fechaEntrega ?? offsetDate(7),
+  );
+  const [fechaCreacion] = React.useState(() =>
+    orden ? orden.creadaEl.slice(0, 10) : offsetDate(0),
+  );
+  const router = useRouter();
+  const [emitiendo, setEmitiendo] = React.useState(false);
+  const [emisionNumero, setEmisionNumero] = React.useState<string | null>(null);
+  const emisionOrdenIdRef = React.useRef<string | null>(null);
+  const [editandoOrden, setEditandoOrden] = React.useState(false);
+  const [guardandoEdicion, setGuardandoEdicion] = React.useState(false);
+  const camposEdicion = React.useMemo(
+    () =>
+      orden && editandoOrden
+        ? camposEditablesOrden(orden.estado)
+        : new Set<string>(),
+    [orden, editandoOrden],
+  );
+  /** En modo orden, si el campo NO está en edición se muestra estático. */
+  const campoEditable = React.useCallback(
+    (campo: string) => !orden || camposEdicion.has(campo),
+    [orden, camposEdicion],
+  );
+
+  /** Items tocables sólo antes de que el taller arranque (espejo backend). */
+  const puedeTocarItems =
+    !!orden && (orden.estado === "borrador" || orden.estado === "pendiente");
+  /**
+   * Una sola puerta de edición: los items (agregar/editar/quitar) sólo se
+   * habilitan DENTRO del modo "Editar orden", igual que los field-cards.
+   */
+  const itemsEnEdicion = puedeTocarItems && editandoOrden;
+
+  // Tras persistir un cambio de items, router.refresh() trae la orden nueva:
+  // resincronizamos el estado local rehidratando desde los productos.
+  React.useEffect(() => {
+    if (!orden) return;
+    setItems(orden.productos.map(rehidratarOrdenItem));
+  }, [orden]);
+
+  /**
+   * Persiste alta/edición de un item de la OT: primero el snapshot del
+   * cotizador (recotizar si ya existía, cotizar-y-guardar si es nuevo,
+   * encadenado a la Cotizacion de origen), después la proyección del item.
+   */
+  const persistirItemOrden = React.useCallback(
+    async (item: PropuestaItem, modo: "agregar" | "editar") => {
+      if (!orden) return;
+      try {
+        if (!item.motorCodigo || !item.jobContext) {
+          throw new Error(
+            "El producto no tiene datos de cotización para persistir.",
+          );
+        }
+        const request = {
+          rutaAlternativaId: item.rutaAlternativaId ?? null,
+          jobContext: item.jobContext as never,
+          clienteId: clienteId || null,
+          periodo: getCurrentPeriodo(),
+        };
+        let cotizacionItemId = item.cotizacionItemId;
+        if (cotizacionItemId) {
+          const respuesta = await recotizarCotizacionItem(
+            cotizacionItemId,
+            request,
+          );
+          if (!respuesta.result.exitoso) {
+            throw new Error(
+              respuesta.result.errores?.[0]?.mensaje ??
+                "No se pudo recotizar el producto.",
+            );
+          }
+        } else {
+          const respuesta = await cotizarYGuardar({
+            productoId: item.motorCodigo,
+            ...request,
+            cotizacionId: orden.cotizacionId ?? undefined,
+          });
+          if (!respuesta.result.exitoso) {
+            throw new Error(
+              respuesta.result.errores?.[0]?.mensaje ??
+                "No se pudo guardar la cotización del producto.",
+            );
+          }
+          cotizacionItemId = respuesta.cotizacionItemId;
+        }
+        const payload = itemToOrdenItemPayload(item, cotizacionItemId);
+        if (modo === "agregar") {
+          await agregarOrdenItem(orden.id, payload);
+          toast.success(
+            "Producto agregado a la orden. Quedó registrado en el historial.",
+          );
+        } else {
+          await editarOrdenItem(orden.id, item.id, payload);
+          toast.success(
+            "Producto actualizado. El cambio quedó registrado en el historial.",
+          );
+        }
+        router.refresh();
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "No se pudo guardar el producto en la orden.",
+        );
+      }
+    },
+    [orden, clienteId, router],
+  );
+
+  const quitarItemDeOrden = React.useCallback(
+    async (item: PropuestaItem) => {
+      if (!orden) return;
+      const confirmado = window.confirm(
+        `¿Quitar "${item.productoNombre}" de la orden ${orden.numero}? El cambio queda registrado en el historial.`,
+      );
+      if (!confirmado) return;
+      try {
+        await quitarOrdenItem(orden.id, item.id);
+        toast.success("Producto quitado de la orden.");
+        router.refresh();
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "No se pudo quitar el producto.",
+        );
+      }
+    },
+    [orden, router],
+  );
+
+  const cancelarEdicion = React.useCallback(() => {
+    if (!orden) return;
+    setClienteId(orden.clienteId ?? "");
+    setCanalVenta(orden.canalVenta ?? "mostrador");
+    setFechaEstimada(orden.fechaEntrega ?? orden.creadaEl.slice(0, 10));
+    setEditandoOrden(false);
+  }, [orden]);
+
+  const guardarEdicion = React.useCallback(async () => {
+    if (!orden) return;
+    const payload: Record<string, string> = {};
+    if (clienteId && clienteId !== (orden.clienteId ?? "")) {
+      payload.clienteId = clienteId;
+    }
+    if (canalVenta !== (orden.canalVenta ?? "mostrador")) {
+      payload.canalVenta = canalVenta;
+    }
+    if (fechaEstimada && fechaEstimada !== (orden.fechaEntrega ?? "")) {
+      payload.fechaEntrega = fechaEstimada;
+    }
+    if (Object.keys(payload).length === 0) {
+      setEditandoOrden(false);
+      return;
+    }
+    setGuardandoEdicion(true);
+    try {
+      await editarOrdenTrabajo(orden.id, payload);
+      toast.success(
+        "Orden actualizada. Los cambios quedaron registrados en el historial.",
+      );
+      setEditandoOrden(false);
+      router.refresh();
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudo guardar la edición de la orden.",
+      );
+    } finally {
+      setGuardandoEdicion(false);
+    }
+  }, [orden, clienteId, canalVenta, fechaEstimada, router]);
   const fechaEstimadaInputRef = React.useRef<HTMLInputElement | null>(null);
   const rowRefs = React.useRef(new Map<string, HTMLDivElement>());
 
@@ -3954,6 +4675,116 @@ export function PropuestaFicha({
     setTab("productos");
     setAddOpen(true);
   }, []);
+
+  /**
+   * Emitir OT: persiste el snapshot de cada item (cotizar-y-guardar,
+   * encadenando la misma Cotizacion) y crea la OrdenTrabajo en estado
+   * `pendiente`. El overlay muestra el número real cuando el backend lo
+   * asigna; al cerrar navega al detalle en Producción → Órdenes.
+   */
+  const emitirOrden = React.useCallback(async () => {
+    if (items.length === 0) {
+      toast.error("Agregá al menos un producto antes de emitir la orden.");
+      return;
+    }
+    if (!clienteId) {
+      toast.error(
+        "Asigná un cliente antes de emitir la orden de trabajo al taller.",
+      );
+      return;
+    }
+    // Fecha comprometida de la orden: la más tardía entre las de los items y
+    // la estimada global. No puede ser pasada.
+    const fechaEntrega = items.reduce(
+      (max, item) =>
+        item.fechaEntrega && item.fechaEntrega > max ? item.fechaEntrega : max,
+      fechaEstimada,
+    );
+    if (fechaEntrega < offsetDate(0)) {
+      toast.error(
+        "La fecha de entrega no puede ser anterior a hoy. Revisá la fecha estimada.",
+      );
+      return;
+    }
+    setEmitiendo(true);
+    setEmisionNumero(null);
+    emisionOrdenIdRef.current = null;
+    try {
+      // 1. Snapshot por item: los que ya se guardaron (recotizaciones)
+      //    conservan su cotizacionItemId; el resto se persiste ahora,
+      //    encadenando todos en la misma Cotizacion.
+      let cotizacionId: string | undefined;
+      const itemsConSnapshot: Array<{
+        item: PropuestaItem;
+        cotizacionItemId?: string;
+      }> = [];
+      for (const item of items) {
+        if (item.cotizacionItemId) {
+          itemsConSnapshot.push({
+            item,
+            cotizacionItemId: item.cotizacionItemId,
+          });
+          continue;
+        }
+        if (!item.motorCodigo || !item.jobContext) {
+          // Item sin motor (no debería pasar hoy): va sin snapshot y la OT
+          // usa el fallback "sin detalle".
+          itemsConSnapshot.push({ item });
+          continue;
+        }
+        const response = await cotizarYGuardar({
+          productoId: item.motorCodigo,
+          rutaAlternativaId: item.rutaAlternativaId ?? null,
+          jobContext: item.jobContext as never,
+          clienteId: clienteId || null,
+          periodo: getCurrentPeriodo(),
+          cotizacionId,
+        });
+        if (!response.result.exitoso) {
+          throw new Error(
+            response.result.errores?.[0]?.mensaje ??
+              `No se pudo guardar la cotización de ${item.productoNombre}.`,
+          );
+        }
+        cotizacionId = response.cotizacionId ?? cotizacionId;
+        itemsConSnapshot.push({
+          item,
+          cotizacionItemId: response.cotizacionItemId,
+        });
+      }
+
+      // 2. Crear la OT con la proyección visible de cada item (mismas filas
+      //    de specs que muestra la ficha) + montos visibles del resumen.
+      const resumen = calcularResumenOrden(items, cargosOrden);
+      const orden = await crearOrdenTrabajo({
+        clienteId: clienteId || undefined,
+        cotizacionId,
+        estado: "pendiente",
+        fechaEntrega,
+        canalVenta,
+        cargosDirectos: resumen.cargosTotal,
+        items: itemsConSnapshot.map(({ item, cotizacionItemId }) =>
+          itemToOrdenItemPayload(item, cotizacionItemId),
+        ),
+      });
+
+      emisionOrdenIdRef.current = orden.id;
+      setEmisionNumero(orden.numero);
+    } catch (error) {
+      setEmitiendo(false);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudo emitir la orden de trabajo.",
+      );
+    }
+  }, [items, cargosOrden, clienteId, canalVenta, fechaEstimada]);
+
+  const finalizarEmision = React.useCallback(() => {
+    const ordenId = emisionOrdenIdRef.current;
+    setEmitiendo(false);
+    if (ordenId) router.push(`/produccion/ordenes/${ordenId}`);
+  }, [router]);
 
   // Al cambiar el cliente con productos ya cargados, los precios de esos items
   // quedaron calculados sin (o con otro) cliente. Recotizamos todos en masa
@@ -4061,11 +4892,12 @@ export function PropuestaFicha({
   );
 
   React.useEffect(() => {
+    if (modoOrden) return; // la orden persistida no se recotiza al vuelo
     if (prevClienteIdRef.current === clienteId) return;
     prevClienteIdRef.current = clienteId;
     if (itemsRef.current.length === 0) return;
     void recotizarItemsPorCliente(clienteId);
-  }, [clienteId, recotizarItemsPorCliente]);
+  }, [modoOrden, clienteId, recotizarItemsPorCliente]);
 
   React.useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -4185,112 +5017,258 @@ export function PropuestaFicha({
     <section className="ot-v1 flex flex-1 flex-col p-4 md:p-6">
       <div className="orden-head">
         <div className="left">
-          <Link className="back-link" href="/">
-            <ArrowLeftIcon />
-            Volver
-          </Link>
-          <div className="eyebrow">
-            <BriefcaseBusinessIcon />
-            Comercial
-          </div>
-          <h1>
-            Nueva {ordenTipo === "orden" ? "orden de trabajo" : "propuesta"}
-            <span className="status-chip">
-              <span className="d" />
-              Borrador
-            </span>
-          </h1>
+          {modoOrden ? (
+            <nav className="orden-breadcrumb" aria-label="Ubicación">
+              <span className="bc-item">
+                <FactoryIcon />
+                Producción
+              </span>
+              <span className="bc-sep">›</span>
+              <Link className="bc-item bc-link" href="/produccion/ordenes">
+                <ArrowLeftIcon />
+                Órdenes de trabajo
+              </Link>
+            </nav>
+          ) : (
+            <>
+              <Link className="back-link" href="/">
+                <ArrowLeftIcon />
+                Volver
+              </Link>
+              <div className="eyebrow">
+                <BriefcaseBusinessIcon />
+                Comercial
+              </div>
+            </>
+          )}
+          {orden ? (
+            <h1
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                flexWrap: "wrap",
+              }}
+            >
+              <span style={{ fontFamily: "var(--font-mono)" }}>
+                {orden.numero}
+              </span>
+              <EstadoOtBadge estado={orden.estado} />
+              {esOrdenNueva(orden) ? (
+                <span className="otd-new-tag-lg">RECIÉN EMITIDA</span>
+              ) : null}
+            </h1>
+          ) : (
+            <h1>
+              Nueva {ordenTipo === "orden" ? "orden de trabajo" : "propuesta"}
+              <span className="status-chip">
+                <span className="d" />
+                Borrador
+              </span>
+            </h1>
+          )}
           <div className="sub">
-            {ordenTipo === "orden"
-              ? "Confirma productos, especificaciones y pagos para emitir la OT al taller."
-              : "Arma la propuesta para enviar al cliente antes de confirmar la OT."}
+            {orden
+              ? `${orden.clienteNombre}${orden.resumen ? ` · ${orden.resumen}` : ""}`
+              : ordenTipo === "orden"
+                ? "Confirma productos, especificaciones y pagos para emitir la OT al taller."
+                : "Arma la propuesta para enviar al cliente antes de confirmar la OT."}
           </div>
         </div>
         <div className="right">
           <div className="orden-meta">
             <span className="meta-row">
               <span className="ml">Nº</span>
-              <span className="mv mono">OT-2026-0184</span>
+              <span className="mv mono">
+                {orden ? orden.numero : "Se asigna al emitir"}
+              </span>
             </span>
             <span className="meta-row">
-              <span className="ml">Creado</span>
-              <span className="mv">hoy · 02:04</span>
+              <span className="ml">{modoOrden ? "Emitida" : "Creado"}</span>
+              <span className="mv mono">
+                {orden ? formatFechaOrden(orden.creadaEl) : "hoy"}
+              </span>
             </span>
           </div>
-          <OrdenSegmented
-            value={ordenTipo}
-            onChange={(value) => setTipo(fromOrdenTipo(value))}
-          />
+          {!modoOrden ? (
+            <OrdenSegmented
+              value={ordenTipo}
+              onChange={(value) => setTipo(fromOrdenTipo(value))}
+            />
+          ) : orden && camposEditablesOrden(orden.estado).size > 0 ? (
+            <div style={{ display: "flex", gap: 8 }}>
+              {editandoOrden ? (
+                <>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={cancelarEdicion}
+                    disabled={guardandoEdicion}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={guardarEdicion}
+                    disabled={guardandoEdicion}
+                  >
+                    <CheckIcon />
+                    {guardandoEdicion ? "Guardando…" : "Guardar cambios"}
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => setEditandoOrden(true)}
+                >
+                  <Edit3Icon />
+                  Editar orden
+                </button>
+              )}
+            </div>
+          ) : null}
         </div>
       </div>
 
+      {orden ? (
+        <div className="otd-flow" style={{ marginBottom: 18 }}>
+          {ORDEN_TRABAJO_FLOW.map((k, i) => {
+            const e = ORDEN_TRABAJO_ESTADOS[k];
+            const curIdx = ORDEN_TRABAJO_FLOW.indexOf(orden.estado);
+            const st = i < curIdx ? "past" : i === curIdx ? "cur" : "future";
+            return (
+              <React.Fragment key={k}>
+                <div className={`otd-fstage ${st}`}>
+                  <span
+                    className="fs-dot"
+                    style={st !== "future" ? { background: e.dot } : {}}
+                  />
+                  <span
+                    className="fs-lbl"
+                    style={st === "cur" ? { color: e.fg } : {}}
+                  >
+                    {e.label}
+                  </span>
+                </div>
+                {i < ORDEN_TRABAJO_FLOW.length - 1 ? (
+                  <span className={`otd-fline ${i < curIdx ? "on" : ""}`} />
+                ) : null}
+              </React.Fragment>
+            );
+          })}
+        </div>
+      ) : null}
+
       <div className="orden-form">
         <FieldCard label="Cliente" icon={<UserIcon />}>
-          <ClienteCombobox
-            value={clienteId}
-            onChange={setClienteId}
-            initialClientes={initialClientes}
-          />
+          {campoEditable("clienteId") ? (
+            <ClienteCombobox
+              value={clienteId}
+              onChange={setClienteId}
+              initialClientes={initialClientes}
+            />
+          ) : (
+            <div className="ctrl-input">
+              <span>{orden?.clienteNombre}</span>
+            </div>
+          )}
         </FieldCard>
 
         <FieldCard label="Vendedor" icon={<UserIcon />}>
           <div className="ctrl-input has-avatar">
-            <span className="av-sm">
-              {(currentUser?.nombreCompleto ?? currentUser?.email ?? "US")
-                .slice(0, 2)
-                .toUpperCase()}
-            </span>
-            <span>
-              {currentUser?.nombreCompleto ??
-                currentUser?.email ??
-                "Usuario actual"}
-            </span>
+            {orden ? (
+              <>
+                <span className="av-sm">
+                  {vendedorOrdenNombre(orden).slice(0, 2).toUpperCase()}
+                </span>
+                <span>{vendedorOrdenNombre(orden)}</span>
+              </>
+            ) : (
+              <>
+                <span className="av-sm">
+                  {(currentUser?.nombreCompleto ?? currentUser?.email ?? "US")
+                    .slice(0, 2)
+                    .toUpperCase()}
+                </span>
+                <span>
+                  {currentUser?.nombreCompleto ??
+                    currentUser?.email ??
+                    "Usuario actual"}
+                </span>
+              </>
+            )}
           </div>
         </FieldCard>
 
         <FieldCard label="Canal de venta" icon={<PackageIcon />}>
-          <CanalVentaSelect value={canalVenta} onChange={setCanalVenta} />
+          {campoEditable("canalVenta") ? (
+            <CanalVentaSelect value={canalVenta} onChange={setCanalVenta} />
+          ) : (
+            <div className="ctrl-input">
+              <span>
+                {CANALES_VENTA.find((canal) => canal.value === canalVenta)
+                  ?.label ?? "Mostrador"}
+              </span>
+            </div>
+          )}
         </FieldCard>
 
         <FieldCard
-          label="Fecha estimada"
+          label={modoOrden ? "Fecha de entrega" : "Fecha estimada"}
           icon={<CalendarIcon />}
           hint="Entrega"
         >
-          <div className="ctrl-input">
-            <input
-              ref={fechaEstimadaInputRef}
-              type="date"
-              value={fechaEstimada}
-              onClick={() => fechaEstimadaInputRef.current?.showPicker?.()}
-              onChange={(event) => setFechaEstimada(event.target.value)}
-              aria-label="Fecha estimada"
-            />
-          </div>
+          {campoEditable("fechaEntrega") ? (
+            <div className="ctrl-input">
+              <input
+                ref={fechaEstimadaInputRef}
+                type="date"
+                value={fechaEstimada}
+                onClick={() => fechaEstimadaInputRef.current?.showPicker?.()}
+                onChange={(event) => setFechaEstimada(event.target.value)}
+                aria-label="Fecha de entrega"
+              />
+            </div>
+          ) : (
+            <div className="ctrl-input">
+              <span>{formatFechaOrden(orden?.fechaEntrega ?? null)}</span>
+            </div>
+          )}
         </FieldCard>
       </div>
 
       <div className="orden-main-full">
         <div className="orden-tabs-row">
-          <OrdenTabs value={tab} onChange={setTab} count={items.length} />
-          <div className="orden-actions">
-            <button
-              type="button"
-              className="btn"
-              onClick={() => setCargoOpen(true)}
-            >
-              <CircleDollarSignIcon />
-              Agregar cargo
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={abrirAgregarProducto}
-            >
-              <PlusIcon />
-              Agregar producto
-            </button>
-          </div>
+          <OrdenTabs
+            value={tab}
+            onChange={setTab}
+            count={items.length}
+            historialCount={orden ? orden.eventos.length : undefined}
+          />
+          {!modoOrden || itemsEnEdicion ? (
+            <div className="orden-actions">
+              {!modoOrden ? (
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => setCargoOpen(true)}
+                >
+                  <CircleDollarSignIcon />
+                  Agregar cargo
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={abrirAgregarProducto}
+              >
+                <PlusIcon />
+                Agregar producto
+              </button>
+            </div>
+          ) : null}
         </div>
 
         {tab === "productos" ? (
@@ -4331,17 +5309,31 @@ export function PropuestaFicha({
                     index={index}
                     expanded={openIds.has(item.id)}
                     onToggle={() => toggle(item.id)}
-                    onRemove={() =>
-                      setItems((current) =>
-                        current.filter(
-                          (candidate) => candidate.id !== item.id,
-                        ),
-                      )
+                    onRemove={
+                      modoOrden
+                        ? itemsEnEdicion
+                          ? () => void quitarItemDeOrden(item)
+                          : undefined
+                        : () =>
+                            setItems((current) =>
+                              current.filter(
+                                (candidate) => candidate.id !== item.id,
+                              ),
+                            )
                     }
-                    onEdit={() => {
-                      setEditingItem(item);
-                      setAddOpen(true);
-                    }}
+                    onEdit={
+                      modoOrden
+                        ? itemsEnEdicion && item.jobContext && item.motorCodigo
+                          ? () => {
+                              setEditingItem(item);
+                              setAddOpen(true);
+                            }
+                          : undefined
+                        : () => {
+                            setEditingItem(item);
+                            setAddOpen(true);
+                          }
+                    }
                     onEditPanels={(targetItem, paso) => {
                       setPanelEditor({ item: targetItem, paso });
                     }}
@@ -4358,19 +5350,22 @@ export function PropuestaFicha({
                       );
                     }}
                     fechaEstimada={fechaEstimada}
+                    readOnly={modoOrden}
                   />
                 </div>
               ))}
             </div>
-            <button
-              type="button"
-              className="orden-add-ghost"
-              onClick={abrirAgregarProducto}
-            >
-              <PlusIcon />
-              Agregar otro producto a la{" "}
-              {ordenTipo === "orden" ? "orden" : "propuesta"}
-            </button>
+            {!modoOrden || itemsEnEdicion ? (
+              <button
+                type="button"
+                className="orden-add-ghost"
+                onClick={abrirAgregarProducto}
+              >
+                <PlusIcon />
+                Agregar otro producto a la{" "}
+                {modoOrden || ordenTipo === "orden" ? "orden" : "propuesta"}
+              </button>
+            ) : null}
           </div>
         ) : null}
 
@@ -4383,14 +5378,16 @@ export function PropuestaFicha({
                   Aplicados al total general con snapshot del catálogo.
                 </div>
               </div>
-              <button
-                type="button"
-                className="btn"
-                onClick={() => setCargoOpen(true)}
-              >
-                <PlusIcon />
-                Agregar cargo
-              </button>
+              {!modoOrden ? (
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => setCargoOpen(true)}
+                >
+                  <PlusIcon />
+                  Agregar cargo
+                </button>
+              ) : null}
             </div>
             <div className="orden-cargos-list">
               {cargosOrden.map((cargo) => (
@@ -4412,20 +5409,22 @@ export function PropuestaFicha({
                     <span>Total</span>
                     <strong>{formatCurrency(cargo.total)}</strong>
                   </div>
-                  <button
-                    type="button"
-                    className="icon-btn"
-                    onClick={() =>
-                      setCargosOrden((current) =>
-                        current.filter(
-                          (candidate) => candidate.id !== cargo.id,
-                        ),
-                      )
-                    }
-                    aria-label={`Eliminar cargo ${cargo.nombreSnapshot}`}
-                  >
-                    <Trash2Icon />
-                  </button>
+                  {!modoOrden ? (
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      onClick={() =>
+                        setCargosOrden((current) =>
+                          current.filter(
+                            (candidate) => candidate.id !== cargo.id,
+                          ),
+                        )
+                      }
+                      aria-label={`Eliminar cargo ${cargo.nombreSnapshot}`}
+                    >
+                      <Trash2Icon />
+                    </button>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -4439,10 +5438,16 @@ export function PropuestaFicha({
           />
         ) : null}
         {tab === "pagos" ? (
-          <EmptyTab
-            title="Plan de pagos"
-            description="Configura anticipo, condiciones y vencimientos antes de emitir."
-          />
+          orden ? (
+            <div className="otd-page" style={{ padding: 0 }}>
+              <PagosTab pago={orden.pago} total={orden.total} />
+            </div>
+          ) : (
+            <EmptyTab
+              title="Plan de pagos"
+              description="Configura anticipo, condiciones y vencimientos antes de emitir."
+            />
+          )
         ) : null}
         {tab === "archivos" ? (
           <EmptyTab
@@ -4456,6 +5461,41 @@ export function PropuestaFicha({
             description={`Desglose de maquinas, materiales y mano de obra para los ${items.length} productos.`}
           />
         ) : null}
+        {tab === "historial" && orden ? (
+          <div className="otd-card">
+            <div className="otd-card-head">
+              <span className="ttl">
+                Historial <span className="ct">{orden.eventos.length}</span>
+              </span>
+            </div>
+            {orden.eventos.length === 0 ? (
+              <div className="otd-noprod">Sin eventos registrados.</div>
+            ) : (
+              <div className="otd-timeline">
+                {orden.eventos.map((ev, i) => {
+                  const { Icono, tone } =
+                    EVENTO_ICONOS[ev.tipo] ?? EVENTO_ICONOS.nota;
+                  return (
+                    <div key={i} className={`otd-ev ${tone ?? ""}`}>
+                      <span className="otd-ev-ico">
+                        <Icono />
+                      </span>
+                      <div className="otd-ev-body">
+                        <div className="otd-ev-txt">{ev.descripcion}</div>
+                        <div className="otd-ev-meta">
+                          <span className="mono">
+                            {formatEventoFecha(ev.fecha)}
+                          </span>{" "}
+                          · {ev.usuarioNombre}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : null}
 
         {tab === "productos" ? (
           <ResumenBar
@@ -4464,9 +5504,16 @@ export function PropuestaFicha({
             tipo={ordenTipo}
             fechaEstimada={fechaEstimada}
             fechaCreacion={fechaCreacion}
+            onEmitir={emitirOrden}
+            emitiendo={emitiendo}
+            readOnly={modoOrden}
           />
         ) : null}
       </div>
+
+      {emitiendo ? (
+        <EmitOverlay numero={emisionNumero} onDone={finalizarEmision} />
+      ) : null}
 
       <AgregarProductoSheet
         open={addOpen}
@@ -4479,7 +5526,14 @@ export function PropuestaFicha({
         fechaEntregaDefault={fechaEstimada}
         editingItem={editingItem}
         onAddItem={(item) => {
-          setItems((current) => [...current, item]);
+          if (modoOrden) {
+            // Optimista: la fila aparece ya; el refresh la reemplaza por la
+            // versión persistida (o el toast avisa si falló).
+            setItems((current) => [...current, item]);
+            void persistirItemOrden(item, "agregar");
+          } else {
+            setItems((current) => [...current, item]);
+          }
           setOpenIds(new Set([item.id]));
           setAddOpen(false);
           setEditingItem(null);
@@ -4491,6 +5545,9 @@ export function PropuestaFicha({
               candidate.id === item.id ? item : candidate,
             ),
           );
+          if (modoOrden) {
+            void persistirItemOrden(item, "editar");
+          }
           setOpenIds(new Set([item.id]));
           setAddOpen(false);
           setEditingItem(null);

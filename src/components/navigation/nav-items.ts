@@ -98,6 +98,11 @@ export const NAV: NavItem[] = [
     label: "Producción",
     icon: "Factory",
     children: [
+      {
+        key: "ordenes-trabajo",
+        label: "Órdenes de trabajo",
+        href: "/produccion/ordenes",
+      },
       { key: "tablero-produccion", label: "Tablero", href: "/produccion/tablero" },
       {
         key: "simulador",

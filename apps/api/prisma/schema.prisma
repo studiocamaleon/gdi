@@ -309,6 +309,7 @@ enum SubfamiliaMateriaPrima {
   PORTABANNER_ESTRUCTURA
   SISTEMA_COLGADO_MONTAJE
   PERFIL_BASTIDOR_TEXTIL
+  TEXTIL_INDUMENTARIA
   CINTA_DOBLE_FAZ_TECNICA
   ADHESIVO_LIQUIDO_ESTRUCTURAL
   VELCRO_CIERRE_TECNICO
@@ -421,6 +422,10 @@ model Tenant {
   productosPreciosEspecialesClientesV2             ProductoPrecioEspecialClienteV2[]
   productosImpuestosAplicados                      ProductoImpuestoAplicado[]
   productosComisionesAplicadas                     ProductoComisionAplicada[]
+  ordenesTrabajo                                   OrdenTrabajo[]
+  ordenTrabajoItems                                OrdenTrabajoItem[]
+  ordenTrabajoEventos                              OrdenTrabajoEvento[]
+  ordenTrabajoContadores                           OrdenTrabajoContador[]
 }
 
 model User {
@@ -435,6 +440,7 @@ model User {
   authSessions   AuthSession[]
   invitations    Invitation[]
   empleados      Empleado[]
+  ordenTrabajoEventos OrdenTrabajoEvento[]
 }
 
 model Membership {
@@ -511,6 +517,7 @@ model Cliente {
   // === Modelo Universal V2 ===
   cotizacionesV2      Cotizacion[]                      @relation("CotizacionV2Cliente")
   preciosEspecialesV2 ProductoPrecioEspecialClienteV2[] @relation("ProductoPrecioEspecialClienteV2Cliente")
+  ordenesTrabajo      OrdenTrabajo[]                    @relation("OrdenTrabajoCliente")
 
   @@unique([tenantId, nombre])
   @@index([tenantId, nombre])
@@ -537,28 +544,29 @@ model Proveedor {
 }
 
 model Empleado {
-  id                    String               @id @default(uuid()) @db.Uuid
-  tenantId              String               @db.Uuid
-  userId                String?              @db.Uuid
-  nombreCompleto        String
-  emailPrincipal        String
-  telefonoCodigo        String
-  telefonoNumero        String
-  sector                String
-  ocupacion             String?
-  sexo                  SexoEmpleado?
-  fechaIngreso          DateTime             @db.Date
-  fechaNacimiento       DateTime?            @db.Date
-  comisionesHabilitadas Boolean              @default(false)
-  createdAt             DateTime             @default(now())
-  updatedAt             DateTime             @updatedAt
-  tenant                Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user                  User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
-  direcciones           EmpleadoDireccion[]
-  comisiones            EmpleadoComision[]
-  centrosACargo         CentroCosto[]        @relation("CentroCostoResponsable")
-  invitations           Invitation[]
-  recursosCentroCosto   CentroCostoRecurso[] @relation("CentroCostoRecursoEmpleado")
+  id                     String               @id @default(uuid()) @db.Uuid
+  tenantId               String               @db.Uuid
+  userId                 String?              @db.Uuid
+  nombreCompleto         String
+  emailPrincipal         String
+  telefonoCodigo         String
+  telefonoNumero         String
+  sector                 String
+  ocupacion              String?
+  sexo                   SexoEmpleado?
+  fechaIngreso           DateTime             @db.Date
+  fechaNacimiento        DateTime?            @db.Date
+  comisionesHabilitadas  Boolean              @default(false)
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  tenant                 Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user                   User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+  direcciones            EmpleadoDireccion[]
+  comisiones             EmpleadoComision[]
+  centrosACargo          CentroCosto[]        @relation("CentroCostoResponsable")
+  invitations            Invitation[]
+  recursosCentroCosto    CentroCostoRecurso[] @relation("CentroCostoRecursoEmpleado")
+  ordenesTrabajoVendidas OrdenTrabajo[]       @relation("OrdenTrabajoVendedor")
 
   @@index([tenantId, nombreCompleto])
   @@index([tenantId, sector])
@@ -849,24 +857,24 @@ model CentroCostoCapacidadPeriodo {
 }
 
 model CentroCostoTarifaPeriodo {
-  id                String                         @id @default(uuid()) @db.Uuid
-  tenantId          String                         @db.Uuid
-  centroCostoId     String                         @db.Uuid
-  periodo           String
-  costoMensualTotal Decimal                        @db.Decimal(12, 2)
-  capacidadPractica Decimal                        @db.Decimal(12, 2)
-  tarifaCalculada   Decimal                        @db.Decimal(12, 2)
+  id                   String                         @id @default(uuid()) @db.Uuid
+  tenantId             String                         @db.Uuid
+  centroCostoId        String                         @db.Uuid
+  periodo              String
+  costoMensualTotal    Decimal                        @db.Decimal(12, 2)
+  capacidadPractica    Decimal                        @db.Decimal(12, 2)
+  tarifaCalculada      Decimal                        @db.Decimal(12, 2)
   /// Componente de mano de obra (SUELDOS + CARGAS) del centro, mensual y su
   /// tarifa horaria. Permite cobrar la hora hombre sólo sobre setup/cleanup y no
   /// sobre el runtime de la máquina. Ver docs/hora-hombre-setup-cleanup-diseno.md
-  costoMensualManoObra Decimal                     @default(0) @db.Decimal(12, 2)
-  tarifaManoObra    Decimal                        @default(0) @db.Decimal(12, 2)
-  estado            EstadoTarifaCentroCostoPeriodo
-  resumenJson       Json
-  createdAt         DateTime                       @default(now())
-  updatedAt         DateTime                       @updatedAt
-  tenant            Tenant                         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  centroCosto       CentroCosto                    @relation(fields: [centroCostoId], references: [id], onDelete: Cascade)
+  costoMensualManoObra Decimal                        @default(0) @db.Decimal(12, 2)
+  tarifaManoObra       Decimal                        @default(0) @db.Decimal(12, 2)
+  estado               EstadoTarifaCentroCostoPeriodo
+  resumenJson          Json
+  createdAt            DateTime                       @default(now())
+  updatedAt            DateTime                       @updatedAt
+  tenant               Tenant                         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  centroCosto          CentroCosto                    @relation(fields: [centroCostoId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, centroCostoId, periodo, estado])
   @@index([tenantId, centroCostoId, periodo])
@@ -1050,6 +1058,10 @@ model MateriaPrima {
   unidadCompra                             UnidadMateriaPrima
   esConsumible                             Boolean                                   @default(false)
   esRepuesto                               Boolean                                   @default(false)
+  /**
+   * true = artículo comprado para reventa/decoración (blank: taza, remera), no insumo de producción. Su costo entra por unidad (slot por_pieza). Ver docs/productos-comprados-merchandising-diseno.md
+   */
+  esProductoBase                           Boolean                                   @default(false)
   activo                                   Boolean                                   @default(true)
   atributosTecnicosJson                    Json
   createdAt                                DateTime                                  @default(now())
@@ -1427,6 +1439,10 @@ model Producto {
   medidaDefaultAnchoMm      Decimal?                          @db.Decimal(12, 2)
   medidaDefaultAltoMm       Decimal?                          @db.Decimal(12, 2)
   medidasPredefinidasJson   Json?
+  /// Personalizaciones (áreas de decoración) con medida propia: cada una maneja
+  /// el costo del film/paso de esa personalización, aparte de la medida base.
+  /// Ver docs/personalizaciones-diseno.md
+  personalizacionesJson     Json?
   /// Configuración del Tab Precio (preservado del modelo viejo).
   precioConfigJson          Json?
   atributosComercialesJson  Json?
@@ -1625,16 +1641,16 @@ model ProductoConfigPasoMaquinaCandidata {
 /// Pasos extras puntuales que un producto agrega a su ruta sin formar parte del esqueleto reusable.
 /// Inline al producto (sub-tema 07 §4): no son reusables.
 model ProductoPasoExtra {
-  id                           String   @id @default(uuid()) @db.Uuid
-  tenantId                     String   @db.Uuid
-  productoId                   String   @db.Uuid
+  id                           String                   @id @default(uuid()) @db.Uuid
+  tenantId                     String                   @db.Uuid
+  productoId                   String                   @db.Uuid
   /// Ruta alternativa del producto a la que aplica el extra. El paso extra sólo
   /// afecta ESTA ruta de ESTE producto, nunca la ruta base reusable ni a otros
   /// productos. Nullable por compat con registros previos (backfill/limpieza).
-  rutaAlternativaId            String?  @db.Uuid
+  rutaAlternativaId            String?                  @db.Uuid
   /// null = al inicio del flujo. UUID = después de ese RutaPaso.
-  insertarDespuesDeRutaPasoId  String?  @db.Uuid
-  ordenInterno                 Int      @default(0)
+  insertarDespuesDeRutaPasoId  String?                  @db.Uuid
+  ordenInterno                 Int                      @default(0)
   familiaCodigo                String
   /// Nombre visible del paso (mismo rol que en ProductoConfigPaso).
   nombreVisible                String?
@@ -1643,31 +1659,31 @@ model ProductoPasoExtra {
   modoTiempo                   String?
   mecanismoCantidad            String?
   mecanismoCantidadConfigJson  Json?
-  multiplicadoresActivos       String[] @default([])
+  multiplicadoresActivos       String[]                 @default([])
   /// Overrides de tiempo (mismo rol que en ProductoConfigPaso).
-  setupOverrideMin             Decimal? @db.Decimal(12, 2)
-  cleanupOverrideMin           Decimal? @db.Decimal(12, 2)
-  tiempoFijoOverrideMin        Decimal? @db.Decimal(12, 2)
+  setupOverrideMin             Decimal?                 @db.Decimal(12, 2)
+  cleanupOverrideMin           Decimal?                 @db.Decimal(12, 2)
+  tiempoFijoOverrideMin        Decimal?                 @db.Decimal(12, 2)
   paramsPasoJson               Json?
-  maquinaM1Id                  String?  @db.Uuid
-  perfilM1Id                   String?  @db.Uuid
+  maquinaM1Id                  String?                  @db.Uuid
+  perfilM1Id                   String?                  @db.Uuid
   /// Centro de costo para pasos manuales sin máquina (mismo rol que en
   /// ProductoConfigPaso). Con máquina, el centro sale del centroCostoPrincipal.
-  centroCostoId                String?  @db.Uuid
+  centroCostoId                String?                  @db.Uuid
   /// Configuración inline (slots, candidatas, cargos) — embebido por simplicidad
   /// en pasos extras. Si crece mucho, migrar a tablas en el futuro.
   configSlotsMaterialesJson    Json?
   configMaquinasCandidatasJson Json?
   configCargosDirectosJson     Json?
-  activo                       Boolean  @default(true)
-  createdAt                    DateTime @default(now())
-  updatedAt                    DateTime @updatedAt
-  tenant                       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  producto                     Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  activo                       Boolean                  @default(true)
+  createdAt                    DateTime                 @default(now())
+  updatedAt                    DateTime                 @updatedAt
+  tenant                       Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  producto                     Producto                 @relation(fields: [productoId], references: [id], onDelete: Cascade)
   rutaAlternativa              ProductoRutaAlternativa? @relation(fields: [rutaAlternativaId], references: [id], onDelete: Cascade)
-  maquinaM1                    Maquina?                @relation("ProductoPasoExtraMaquinaM1", fields: [maquinaM1Id], references: [id])
-  perfilM1                     MaquinaPerfilOperativo? @relation("ProductoPasoExtraPerfilM1", fields: [perfilM1Id], references: [id])
-  centroCosto                  CentroCosto?            @relation("ProductoPasoExtraCentroCostoManual", fields: [centroCostoId], references: [id], onDelete: SetNull)
+  maquinaM1                    Maquina?                 @relation("ProductoPasoExtraMaquinaM1", fields: [maquinaM1Id], references: [id])
+  perfilM1                     MaquinaPerfilOperativo?  @relation("ProductoPasoExtraPerfilM1", fields: [perfilM1Id], references: [id])
+  centroCosto                  CentroCosto?             @relation("ProductoPasoExtraCentroCostoManual", fields: [centroCostoId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, productoId, activo])
   @@index([tenantId, rutaAlternativaId, activo])
@@ -1753,6 +1769,7 @@ model Cotizacion {
   tenant                       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   cliente                      Cliente?         @relation("CotizacionV2Cliente", fields: [clienteId], references: [id])
   items                        CotizacionItem[]
+  ordenesTrabajo               OrdenTrabajo[]
 
   @@unique([tenantId, numero])
   @@index([tenantId, estado])
@@ -1761,20 +1778,20 @@ model Cotizacion {
 }
 
 model CotizacionItem {
-  id                                String     @id @default(uuid()) @db.Uuid
-  tenantId                          String     @db.Uuid
-  cotizacionId                      String     @db.Uuid
-  productoId                        String     @db.Uuid
-  rutaAlternativaId                 String?    @db.Uuid
-  cantidad                          Decimal    @db.Decimal(14, 2)
+  id                                String             @id @default(uuid()) @db.Uuid
+  tenantId                          String             @db.Uuid
+  cotizacionId                      String             @db.Uuid
+  productoId                        String             @db.Uuid
+  rutaAlternativaId                 String?            @db.Uuid
+  cantidad                          Decimal            @db.Decimal(14, 2)
   /// Inputs del comercial al cotizar (ya normalizados).
   jobContextJson                    Json
   /// Snapshot completo: ruta + producto + materiales + valores + cargos (sub-tema 07 §7).
   snapshotJson                      Json
-  costoUnitario                     Decimal?   @db.Decimal(14, 2)
-  costoTotal                        Decimal?   @db.Decimal(14, 2)
-  precioUnitario                    Decimal?   @db.Decimal(14, 2)
-  precioTotal                       Decimal?   @db.Decimal(14, 2)
+  costoUnitario                     Decimal?           @db.Decimal(14, 2)
+  costoTotal                        Decimal?           @db.Decimal(14, 2)
+  precioUnitario                    Decimal?           @db.Decimal(14, 2)
+  precioTotal                       Decimal?           @db.Decimal(14, 2)
   /// Trazabilidad por bucket (a-g del molde).
   trazabilidadJson                  Json?
   /// === Snapshots inmutables del Tab Precio al momento de cotizar (Sprint 5.a) ===
@@ -1790,14 +1807,128 @@ model CotizacionItem {
   /// Si aplicó override por cliente: copia de ProductoPrecioEspecialClienteV2.configJson
   /// + metadata { precioEspecialId, clienteId, descripcion }. Null si se usó precio standard.
   precioEspecialClienteSnapshotJson Json?
-  createdAt                         DateTime   @default(now())
-  updatedAt                         DateTime   @updatedAt
-  tenant                            Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  cotizacion                        Cotizacion @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
-  producto                          Producto   @relation(fields: [productoId], references: [id])
+  createdAt                         DateTime           @default(now())
+  updatedAt                         DateTime           @updatedAt
+  tenant                            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cotizacion                        Cotizacion         @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
+  producto                          Producto           @relation(fields: [productoId], references: [id])
+  ordenTrabajoItems                 OrdenTrabajoItem[]
 
   @@index([tenantId, cotizacionId])
   @@index([tenantId, productoId])
+}
+
+// === ÓRDENES DE TRABAJO ===
+// La OT es una entidad distinta del presupuesto (Cotizacion): se emite al
+// taller, progresa por estados y se entrega. El item referencia el snapshot
+// completo vía cotizacionItemId y persiste sólo la proyección visible.
+// Ver docs/ordenes-trabajo-persistencia-diseno.md
+
+model OrdenTrabajo {
+  id                 String               @id @default(uuid()) @db.Uuid
+  tenantId           String               @db.Uuid
+  /// "OT-2026-0184" — asignado al crear vía OrdenTrabajoContador.
+  numero             String
+  clienteId          String?              @db.Uuid
+  vendedorEmpleadoId String?              @db.Uuid
+  /// Presupuesto de origen (si vino del cotizador).
+  cotizacionId       String?              @db.Uuid
+  /// 'borrador' | 'pendiente' | 'produccion' | 'finalizada' | 'entregada'.
+  estado             String               @default("borrador")
+  fechaEmision       DateTime?
+  fechaEntrega       DateTime?            @db.Date
+  observaciones      String?
+  /// 'mostrador' | 'web' | 'vendedor_externo' | 'telefono'.
+  canalVenta         String?
+  /// Denormalizados para el listado; la fuente de verdad es items/snapshot.
+  subtotal           Decimal?             @db.Decimal(14, 2)
+  impuestos          Decimal?             @db.Decimal(14, 2)
+  cargosDirectos     Decimal?             @db.Decimal(14, 2)
+  total              Decimal?             @db.Decimal(14, 2)
+  /// Avance 0-100 informado por producción; null = sin dato.
+  progresoPct        Int?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  tenant             Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cliente            Cliente?             @relation("OrdenTrabajoCliente", fields: [clienteId], references: [id])
+  vendedor           Empleado?            @relation("OrdenTrabajoVendedor", fields: [vendedorEmpleadoId], references: [id])
+  cotizacion         Cotizacion?          @relation(fields: [cotizacionId], references: [id])
+  items              OrdenTrabajoItem[]
+  eventos            OrdenTrabajoEvento[]
+
+  @@unique([tenantId, numero])
+  @@index([tenantId, estado])
+  @@index([tenantId, createdAt])
+  @@index([tenantId, clienteId])
+}
+
+model OrdenTrabajoItem {
+  id               String          @id @default(uuid()) @db.Uuid
+  tenantId         String          @db.Uuid
+  ordenId          String          @db.Uuid
+  /// FK al snapshot completo (ruta + pasos + materiales + valores). Las
+  /// secciones futuras de Costos/Producción por item leen de ahí.
+  /// Null = OT manual/histórica sin cotización.
+  cotizacionItemId String?         @db.Uuid
+  codigo           String
+  nombre           String
+  /// Etiqueta corta legada (subcategoría). Preferir los dos campos de abajo.
+  familia          String
+  /// Categoría/subcategoría comercial tal como se ven al crear la orden
+  /// ("Gran formato flexible" / "Vinilos impresos").
+  categoriaComercial    String     @default("")
+  subcategoriaComercial String     @default("")
+  cantidad         Decimal         @db.Decimal(14, 2)
+  cantidadUnidad   String
+  subtotal         Decimal         @db.Decimal(14, 2)
+  impuestos        Decimal         @db.Decimal(14, 2)
+  total            Decimal         @db.Decimal(14, 2)
+  /// Proyección visible: [{ etiqueta, valor }].
+  specsJson        Json?
+  /// string[] de adicionales incluidos.
+  adicionalesJson  Json?
+  ordenIndice      Int             @default(0)
+  createdAt        DateTime        @default(now())
+  tenant           Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orden            OrdenTrabajo    @relation(fields: [ordenId], references: [id], onDelete: Cascade)
+  cotizacionItem   CotizacionItem? @relation(fields: [cotizacionItemId], references: [id])
+
+  @@index([tenantId, ordenId])
+}
+
+model OrdenTrabajoEvento {
+  id            String       @id @default(uuid()) @db.Uuid
+  tenantId      String       @db.Uuid
+  ordenId       String       @db.Uuid
+  fecha         DateTime     @default(now())
+  /// 'emision' | 'numero_asignado' | 'borrador' | 'productos' | 'estado' |
+  /// 'modificacion' | 'nota'.
+  tipo          String
+  descripcion   String
+  /// Nombre visible del actor (snapshot; el FK real es usuarioId).
+  usuarioNombre String
+  /// FK real al usuario que ejecutó la acción; null para eventos de sistema.
+  usuarioId     String?      @db.Uuid
+  /// Diff estructurado para auditoría: { campo, antes, despues } u otros
+  /// payloads según tipo. La descripción es el texto humano.
+  datosJson     Json?
+  /// 'usuario' | 'sistema' (a futuro: 'api').
+  origen        String       @default("usuario")
+  tenant        Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orden         OrdenTrabajo @relation(fields: [ordenId], references: [id], onDelete: Cascade)
+  usuario       User?        @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, ordenId, fecha])
+}
+
+/// Contador atómico para numeración OT-AAAA-NNNN por tenant/año.
+model OrdenTrabajoContador {
+  tenantId String @db.Uuid
+  anio     Int
+  ultimo   Int    @default(0)
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, anio])
 }
 
 // === TAB PRECIO V2 ===
