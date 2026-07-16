@@ -58,6 +58,10 @@ import {
   type OrdenTrabajoProducto,
 } from "@/lib/ordenes-trabajo";
 import { ConfirmacionSalida } from "@/components/ui/confirmacion-salida";
+import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
+import type { CobroDraft } from "@/components/administracion/cobro-formulario";
+import { PagosStagingTab } from "@/components/comercial/pagos-staging-tab";
+import { crearCobro } from "@/lib/administracion-api";
 import { EstadoOtBadge } from "@/components/produccion/ordenes-trabajo-view";
 import {
   EVENTO_ICONOS,
@@ -4462,6 +4466,12 @@ export function PropuestaFicha({
   const [tipo, setTipo] = React.useState<TipoPropuesta>("orden_trabajo");
   const ordenTipo = tipoMap[tipo];
   const [tab, setTab] = React.useState<OrdenTab>("productos");
+  // Cobros en staging (sólo creación): se registran todos al emitir la OT,
+  // como los items. El backend rechaza cobros sobre borradores, así que
+  // guardar borrador NO los persiste (se avisa con modal).
+  const [cobrosStaged, setCobrosStaged] = React.useState<CobroDraft[]>([]);
+  const [confirmBorradorConCobros, setConfirmBorradorConCobros] =
+    React.useState(false);
   const [openIds, setOpenIds] = React.useState<Set<string>>(() => new Set());
   const [items, setItems] = React.useState<PropuestaItem[]>(() =>
     orden ? orden.productos.map(rehidratarOrdenItem) : [],
@@ -4487,6 +4497,10 @@ export function PropuestaFicha({
             },
           ]
         : [],
+  );
+  const totalPropuesta = React.useMemo(
+    () => calcularResumenOrden(items, cargosOrden).total,
+    [items, cargosOrden],
   );
   const [addOpen, setAddOpen] = React.useState(false);
   const [cargoOpen, setCargoOpen] = React.useState(false);
@@ -4953,6 +4967,34 @@ export function PropuestaFicha({
       });
 
       emisionOrdenIdRef.current = orden.id;
+
+      // Cobros staged: se registran contra la orden recién emitida, en el
+      // mismo acto. Si alguno falla la orden ya existe — se avisa cuáles
+      // quedaron sin registrar (se cargan desde la pestaña Pagos de la OT).
+      if (cobrosStaged.length > 0) {
+        const fallidos: string[] = [];
+        for (const draft of cobrosStaged) {
+          try {
+            await crearCobro({
+              ...draft.payload,
+              ordenId: orden.id,
+              clienteId: clienteId || undefined,
+            });
+          } catch (error) {
+            fallidos.push(
+              `${draft.metodoNombre} $${Math.round(draft.payload.montoBruto).toLocaleString("es-AR")}` +
+                (error instanceof Error ? ` (${error.message})` : ""),
+            );
+          }
+        }
+        if (fallidos.length > 0) {
+          toast.error(
+            `La orden se emitió, pero ${fallidos.length} cobro${fallidos.length === 1 ? "" : "s"} no se ${fallidos.length === 1 ? "pudo" : "pudieron"} registrar: ${fallidos.join(" · ")}. Cargalos desde la pestaña Pagos de la orden.`,
+            { duration: 10000 },
+          );
+        }
+      }
+
       setEmisionNumero(orden.numero);
     } catch (error) {
       setEmitiendo(false);
@@ -4967,6 +5009,7 @@ export function PropuestaFicha({
     cargosOrden,
     clienteId,
     canalVenta,
+    cobrosStaged,
     persistirSnapshotsItems,
     fechaEntregaOrden,
   ]);
@@ -4991,6 +5034,7 @@ export function PropuestaFicha({
       return;
     }
     setGuardandoBorrador(true);
+    setConfirmBorradorConCobros(false);
     try {
       const { itemsConSnapshot, cotizacionId } =
         await persistirSnapshotsItems();
@@ -5701,13 +5745,28 @@ export function PropuestaFicha({
         {tab === "pagos" ? (
           orden ? (
             <div className="otd-page" style={{ padding: 0 }}>
-              <PagosTab pago={orden.pago} total={orden.total} />
+              <PagosTab
+                pago={orden.pago}
+                total={orden.total}
+                ordenId={orden.id}
+                puedeCobrar={orden.estado !== "borrador"}
+              />
             </div>
           ) : (
-            <EmptyTab
-              title="Plan de pagos"
-              description="Configura anticipo, condiciones y vencimientos antes de emitir."
-            />
+            <div className="otd-page" style={{ padding: 0 }}>
+              <PagosStagingTab
+                total={totalPropuesta}
+                cobros={cobrosStaged}
+                onAgregar={(draft) =>
+                  setCobrosStaged((prev) => [...prev, draft])
+                }
+                onQuitar={(index) =>
+                  setCobrosStaged((prev) =>
+                    prev.filter((_, i) => i !== index),
+                  )
+                }
+              />
+            </div>
           )
         ) : null}
         {tab === "archivos" ? (
@@ -5767,7 +5826,11 @@ export function PropuestaFicha({
             fechaCreacion={fechaCreacion}
             onEmitir={emitirOrden}
             emitiendo={emitiendo}
-            onGuardarBorrador={() => void guardarBorrador()}
+            onGuardarBorrador={() =>
+              cobrosStaged.length > 0
+                ? setConfirmBorradorConCobros(true)
+                : void guardarBorrador()
+            }
             guardandoBorrador={guardandoBorrador}
             readOnly={modoOrden}
           />
@@ -5787,6 +5850,20 @@ export function PropuestaFicha({
         }
         onDescartarYSalir={descartarYSalir}
         onSeguirEditando={() => setNavPendiente(null)}
+      />
+
+      <ConfirmacionDestructiva
+        open={confirmBorradorConCobros}
+        onOpenChange={setConfirmBorradorConCobros}
+        titulo="El borrador no guarda los cobros"
+        descripcion={`Tenés ${cobrosStaged.length} cobro${cobrosStaged.length === 1 ? "" : "s"} cargado${cobrosStaged.length === 1 ? "" : "s"} en la pestaña Pagos. Los cobros se registran recién al emitir la orden: un borrador no puede recibir plata.`}
+        impacto={[
+          "El borrador se guarda con productos, cliente y condiciones.",
+          "Los cobros cargados se descartan (volvé a cargarlos al emitir).",
+        ]}
+        requiereTipear={false}
+        accionLabel="Guardar borrador igualmente"
+        onConfirmar={() => guardarBorrador()}
       />
 
       <AgregarProductoSheet
