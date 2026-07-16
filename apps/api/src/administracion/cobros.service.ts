@@ -27,8 +27,7 @@ export class CobrosService {
   }) {
     const comisionMonto = (input.montoBruto * input.comisionPctAplicada) / 100;
     const comisionIvaMonto = (comisionMonto * input.ivaComisionPct) / 100;
-    const netoAcreditado =
-      input.montoBruto - comisionMonto - comisionIvaMonto;
+    const netoAcreditado = input.montoBruto - comisionMonto - comisionIvaMonto;
     const disponibleReal = netoAcreditado - input.retencionesTotal;
     const r = (n: number) => Math.round(n * 100) / 100;
     return {
@@ -79,8 +78,10 @@ export class CobrosService {
           })
         : null,
     ]);
-    if (!metodo) throw new NotFoundException('No se encontró el método de pago.');
-    if (!cuenta) throw new NotFoundException('No se encontró la cuenta destino.');
+    if (!metodo)
+      throw new NotFoundException('No se encontró el método de pago.');
+    if (!cuenta)
+      throw new NotFoundException('No se encontró la cuenta destino.');
     if (payload.ordenId && !orden) {
       throw new NotFoundException('No se encontró la orden.');
     }
@@ -112,15 +113,13 @@ export class CobrosService {
     });
 
     const fecha = new Date(payload.fecha);
-    const acreditaInmediato =
-      !esCheque && metodo.plazoAcreditacionDias === 0;
+    const acreditaInmediato = !esCheque && metodo.plazoAcreditacionDias === 0;
     const fechaAcreditacionEstimada = esCheque
       ? payload.valor?.fechaPago
         ? new Date(payload.valor.fechaPago)
         : null
       : new Date(
-          fecha.getTime() +
-            metodo.plazoAcreditacionDias * 24 * 60 * 60 * 1000,
+          fecha.getTime() + metodo.plazoAcreditacionDias * 24 * 60 * 60 * 1000,
         );
     const periodoFiscal = payload.fecha.slice(0, 7);
     const clienteId = payload.clienteId ?? orden?.clienteId ?? null;
@@ -201,9 +200,7 @@ export class CobrosService {
           cuentaId: cuenta.id,
           fecha,
           monto: cifras.netoAcreditado,
-          concepto: orden
-            ? `Cobro ${orden.numero}`
-            : 'Cobro registrado',
+          concepto: orden ? `Cobro ${orden.numero}` : 'Cobro registrado',
           cobroId: cobro.id,
           ordenId: orden?.id ?? null,
         });
