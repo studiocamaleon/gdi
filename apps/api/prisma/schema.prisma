@@ -515,6 +515,14 @@ model Cliente {
   telefonoCodigo      String
   telefonoNumero      String
   paisCodigo          String                            @db.VarChar(2)
+  // === Datos fiscales (módulo Administración) ===
+  /// CUIT/CUIL sin guiones (11 dígitos) o null si no lo tenemos todavía.
+  cuit                String?                           @db.VarChar(11)
+  /// 'RI' | 'monotributo' | 'exento' | 'consumidor_final' | 'exterior'.
+  /// Define la letra del comprobante junto con la condición del emisor.
+  condicionFiscal     String                            @default("consumidor_final")
+  /// Tope de deuda en cta. cte. (null = sin límite definido).
+  limiteCredito       Decimal?                          @db.Decimal(14, 2)
   createdAt           DateTime                          @default(now())
   updatedAt           DateTime                          @updatedAt
   tenant              Tenant                            @relation(fields: [tenantId], references: [id], onDelete: Cascade)

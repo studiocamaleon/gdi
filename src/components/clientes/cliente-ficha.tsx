@@ -16,12 +16,16 @@ import {
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import { createCliente, updateCliente } from "@/lib/clientes-api";
 import {
+  CONDICIONES_FISCALES,
+  CONDICION_FISCAL_LABELS,
   ClienteContacto,
   ClienteDetalle,
   ClienteDireccion,
   ClientePayload,
+  CondicionFiscal,
   TipoDireccion,
   latamCountries,
+  requiereCuit,
 } from "@/lib/clientes";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -63,11 +67,19 @@ type ClienteFichaProps = {
 type DatosGeneralesState = {
   nombre: string;
   razonSocial: string;
+  cuit: string;
+  condicionFiscal: CondicionFiscal;
+  limiteCredito: string;
   telefonoCodigo: string;
   telefonoNumero: string;
   email: string;
   pais: string;
 };
+
+const condicionFiscalItems = CONDICIONES_FISCALES.map((value) => ({
+  label: CONDICION_FISCAL_LABELS[value],
+  value,
+}));
 
 const countryItems = latamCountries.map((country) => ({
   label: `${country.flag} ${country.name}`,
@@ -108,6 +120,12 @@ function buildPayload(
   return {
     nombre: datosGenerales.nombre.trim(),
     razonSocial: datosGenerales.razonSocial.trim() || undefined,
+    cuit: datosGenerales.cuit.replace(/\D/g, "") || undefined,
+    condicionFiscal: datosGenerales.condicionFiscal,
+    limiteCredito:
+      datosGenerales.limiteCredito.trim() === ""
+        ? null
+        : Number(datosGenerales.limiteCredito),
     email: datosGenerales.email.trim(),
     pais: datosGenerales.pais.trim(),
     telefonoCodigo: datosGenerales.telefonoCodigo.trim(),
@@ -194,6 +212,10 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
   const [datosGenerales, setDatosGenerales] = React.useState<DatosGeneralesState>({
     nombre: cliente.nombre,
     razonSocial: cliente.razonSocial,
+    cuit: cliente.cuit,
+    condicionFiscal: cliente.condicionFiscal,
+    limiteCredito:
+      cliente.limiteCredito === null ? "" : String(cliente.limiteCredito),
     telefonoCodigo: cliente.telefonoCodigo,
     telefonoNumero: cliente.telefonoNumero,
     email: cliente.email,
@@ -446,6 +468,87 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                 }
                 placeholder="Ej. Cafe del Centro SRL"
               />
+            </Field>
+
+            <Field>
+              <FieldLabel htmlFor="cliente-condicion-fiscal">
+                Condicion fiscal
+              </FieldLabel>
+              <Select
+                items={condicionFiscalItems}
+                value={datosGenerales.condicionFiscal}
+                onValueChange={(value) => {
+                  if (!value) {
+                    return;
+                  }
+
+                  setDatosGenerales((current) => ({
+                    ...current,
+                    condicionFiscal: value as CondicionFiscal,
+                  }));
+                }}
+              >
+                <SelectTrigger id="cliente-condicion-fiscal" className="w-full">
+                  <SelectValue placeholder="Selecciona la condicion" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {condicionFiscalItems.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <FieldDescription>
+                Define la letra del comprobante al facturarle.
+              </FieldDescription>
+            </Field>
+
+            <Field>
+              <FieldLabel htmlFor="cliente-cuit">
+                CUIT{" "}
+                {requiereCuit(datosGenerales.condicionFiscal) ? "" : "(opcional)"}
+              </FieldLabel>
+              <Input
+                id="cliente-cuit"
+                inputMode="numeric"
+                value={datosGenerales.cuit}
+                onChange={(event) =>
+                  setDatosGenerales((current) => ({
+                    ...current,
+                    cuit: event.target.value,
+                  }))
+                }
+                placeholder="30-71234567-8"
+              />
+              <FieldDescription>
+                {requiereCuit(datosGenerales.condicionFiscal)
+                  ? "Un Responsable Inscripto necesita CUIT para recibir Factura A."
+                  : "Con o sin guiones. Se valida el digito verificador."}
+              </FieldDescription>
+            </Field>
+
+            <Field>
+              <FieldLabel htmlFor="cliente-limite-credito">
+                Limite de credito (opcional)
+              </FieldLabel>
+              <Input
+                id="cliente-limite-credito"
+                inputMode="numeric"
+                value={datosGenerales.limiteCredito}
+                onChange={(event) =>
+                  setDatosGenerales((current) => ({
+                    ...current,
+                    limiteCredito: event.target.value.replace(/[^\d.]/g, ""),
+                  }))
+                }
+                placeholder="Sin limite"
+              />
+              <FieldDescription>
+                Tope de deuda en cuenta corriente. Vacio = sin limite.
+              </FieldDescription>
             </Field>
 
             <Field>

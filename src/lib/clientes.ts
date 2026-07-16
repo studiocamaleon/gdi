@@ -29,10 +29,50 @@ export type ClienteDireccion = {
   principal: boolean;
 };
 
+/**
+ * Condición fiscal del receptor (AR). Junto con la del emisor define la
+ * letra del comprobante — ver docs/modulo-administracion-diseno.md.
+ * Espejo de CONDICIONES_FISCALES del API.
+ */
+export const CONDICIONES_FISCALES = [
+  "RI",
+  "monotributo",
+  "exento",
+  "consumidor_final",
+  "exterior",
+] as const;
+
+export type CondicionFiscal = (typeof CONDICIONES_FISCALES)[number];
+
+export const CONDICION_FISCAL_LABELS: Record<CondicionFiscal, string> = {
+  RI: "Responsable Inscripto",
+  monotributo: "Monotributo",
+  exento: "Exento",
+  consumidor_final: "Consumidor final",
+  exterior: "Exterior (exportación)",
+};
+
+/** Sólo un RI puede recibir Factura A, y para eso necesita CUIT. */
+export function requiereCuit(condicion: CondicionFiscal): boolean {
+  return condicion === "RI";
+}
+
+/** "30712345678" → "30-71234567-8" (para mostrar). */
+export function formatCuit(cuit: string): string {
+  const digitos = cuit.replace(/\D/g, "");
+  if (digitos.length !== 11) return cuit;
+  return `${digitos.slice(0, 2)}-${digitos.slice(2, 10)}-${digitos.slice(10)}`;
+}
+
 export type ClienteDetalle = {
   id: string;
   nombre: string;
   razonSocial: string;
+  /** CUIT sin guiones (11 dígitos) o "" si no está cargado. */
+  cuit: string;
+  condicionFiscal: CondicionFiscal;
+  /** Tope de deuda en cta. cte.; null = sin límite definido. */
+  limiteCredito: number | null;
   contacto: string;
   email: string;
   ciudad: string;
@@ -46,6 +86,9 @@ export type ClienteDetalle = {
 export type ClientePayload = {
   nombre: string;
   razonSocial?: string;
+  cuit?: string;
+  condicionFiscal?: CondicionFiscal;
+  limiteCredito?: number | null;
   email: string;
   pais: string;
   telefonoCodigo: string;
@@ -97,6 +140,9 @@ export function createEmptyCliente(): ClienteDetalle {
     id: "",
     nombre: "",
     razonSocial: "",
+    cuit: "",
+    condicionFiscal: "consumidor_final",
+    limiteCredito: null,
     contacto: "",
     email: "",
     ciudad: "",
