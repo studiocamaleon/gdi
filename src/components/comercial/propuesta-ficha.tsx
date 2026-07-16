@@ -56,6 +56,7 @@ import {
   type OrdenTrabajoDetalle,
   type OrdenTrabajoProducto,
 } from "@/lib/ordenes-trabajo";
+import { ConfirmacionSalida } from "@/components/ui/confirmacion-salida";
 import { EstadoOtBadge } from "@/components/produccion/ordenes-trabajo-view";
 import {
   EVENTO_ICONOS,
@@ -4514,118 +4515,62 @@ export function PropuestaFicha({
   /**
    * Una sola puerta de edición: los items (agregar/editar/quitar) sólo se
    * habilitan DENTRO del modo "Editar orden", igual que los field-cards.
+   * TODO es staging local — nada pega en la base hasta "Guardar cambios".
    */
   const itemsEnEdicion = puedeTocarItems && editandoOrden;
 
-  // Tras persistir un cambio de items, router.refresh() trae la orden nueva:
-  // resincronizamos el estado local rehidratando desde los productos.
+  /** Ids reales de los items persistidos (para diferenciar altas locales). */
+  const persistedItemIds = React.useMemo(
+    () =>
+      new Set(
+        (orden?.productos ?? [])
+          .map((producto) => producto.id)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    [orden],
+  );
+  /** Items persistidos que fueron editados en el staging actual. */
+  const [editadosIds, setEditadosIds] = React.useState<Set<string>>(
+    () => new Set(),
+  );
+
+  // Tras guardar, router.refresh() trae la orden nueva y resincronizamos
+  // rehidratando. Nunca durante la edición (pisaría el staging) ni al salir
+  // de edición sin datos nuevos (flashearía el estado viejo hasta el
+  // refresh) — sólo cuando la orden del server realmente cambió.
+  const ordenSyncRef = React.useRef(orden);
   React.useEffect(() => {
     if (!orden) return;
+    const ordenCambio = ordenSyncRef.current !== orden;
+    ordenSyncRef.current = orden;
+    if (editandoOrden || !ordenCambio) return;
     setItems(orden.productos.map(rehidratarOrdenItem));
-  }, [orden]);
+  }, [orden, editandoOrden]);
 
-  /**
-   * Persiste alta/edición de un item de la OT: primero el snapshot del
-   * cotizador (recotizar si ya existía, cotizar-y-guardar si es nuevo,
-   * encadenado a la Cotizacion de origen), después la proyección del item.
-   */
-  const persistirItemOrden = React.useCallback(
-    async (item: PropuestaItem, modo: "agregar" | "editar") => {
-      if (!orden) return;
-      try {
-        if (!item.motorCodigo || !item.jobContext) {
-          throw new Error(
-            "El producto no tiene datos de cotización para persistir.",
-          );
-        }
-        const request = {
-          rutaAlternativaId: item.rutaAlternativaId ?? null,
-          jobContext: item.jobContext as never,
-          clienteId: clienteId || null,
-          periodo: getCurrentPeriodo(),
-        };
-        let cotizacionItemId = item.cotizacionItemId;
-        if (cotizacionItemId) {
-          const respuesta = await recotizarCotizacionItem(
-            cotizacionItemId,
-            request,
-          );
-          if (!respuesta.result.exitoso) {
-            throw new Error(
-              respuesta.result.errores?.[0]?.mensaje ??
-                "No se pudo recotizar el producto.",
-            );
-          }
-        } else {
-          const respuesta = await cotizarYGuardar({
-            productoId: item.motorCodigo,
-            ...request,
-            cotizacionId: orden.cotizacionId ?? undefined,
-          });
-          if (!respuesta.result.exitoso) {
-            throw new Error(
-              respuesta.result.errores?.[0]?.mensaje ??
-                "No se pudo guardar la cotización del producto.",
-            );
-          }
-          cotizacionItemId = respuesta.cotizacionItemId;
-        }
-        const payload = itemToOrdenItemPayload(item, cotizacionItemId);
-        if (modo === "agregar") {
-          await agregarOrdenItem(orden.id, payload);
-          toast.success(
-            "Producto agregado a la orden. Quedó registrado en el historial.",
-          );
-        } else {
-          await editarOrdenItem(orden.id, item.id, payload);
-          toast.success(
-            "Producto actualizado. El cambio quedó registrado en el historial.",
-          );
-        }
-        router.refresh();
-      } catch (error) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : "No se pudo guardar el producto en la orden.",
-        );
-      }
-    },
-    [orden, clienteId, router],
-  );
+  /** Cambios de items en staging (altas, ediciones y bajas pendientes). */
+  const cambiosItems = React.useMemo(() => {
+    if (!orden || !editandoOrden) {
+      return { agregados: [], editados: [], quitados: [], total: 0 };
+    }
+    const idsActuales = new Set(items.map((item) => item.id));
+    const agregados = items.filter((item) => !persistedItemIds.has(item.id));
+    const editados = items.filter(
+      (item) => persistedItemIds.has(item.id) && editadosIds.has(item.id),
+    );
+    const quitados = orden.productos.filter(
+      (producto) => producto.id && !idsActuales.has(producto.id),
+    );
+    return {
+      agregados,
+      editados,
+      quitados,
+      total: agregados.length + editados.length + quitados.length,
+    };
+  }, [orden, editandoOrden, items, persistedItemIds, editadosIds]);
 
-  const quitarItemDeOrden = React.useCallback(
-    async (item: PropuestaItem) => {
-      if (!orden) return;
-      const confirmado = window.confirm(
-        `¿Quitar "${item.productoNombre}" de la orden ${orden.numero}? El cambio queda registrado en el historial.`,
-      );
-      if (!confirmado) return;
-      try {
-        await quitarOrdenItem(orden.id, item.id);
-        toast.success("Producto quitado de la orden.");
-        router.refresh();
-      } catch (error) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : "No se pudo quitar el producto.",
-        );
-      }
-    },
-    [orden, router],
-  );
-
-  const cancelarEdicion = React.useCallback(() => {
-    if (!orden) return;
-    setClienteId(orden.clienteId ?? "");
-    setCanalVenta(orden.canalVenta ?? "mostrador");
-    setFechaEstimada(orden.fechaEntrega ?? orden.creadaEl.slice(0, 10));
-    setEditandoOrden(false);
-  }, [orden]);
-
-  const guardarEdicion = React.useCallback(async () => {
-    if (!orden) return;
+  /** Cambios de datos comerciales (field-cards) sin guardar. */
+  const cambiosFields = React.useMemo(() => {
+    if (!orden || !editandoOrden) return {} as Record<string, string>;
     const payload: Record<string, string> = {};
     if (clienteId && clienteId !== (orden.clienteId ?? "")) {
       payload.clienteId = clienteId;
@@ -4636,28 +4581,202 @@ export function PropuestaFicha({
     if (fechaEstimada && fechaEstimada !== (orden.fechaEntrega ?? "")) {
       payload.fechaEntrega = fechaEstimada;
     }
-    if (Object.keys(payload).length === 0) {
-      setEditandoOrden(false);
-      return;
-    }
-    setGuardandoEdicion(true);
-    try {
-      await editarOrdenTrabajo(orden.id, payload);
-      toast.success(
-        "Orden actualizada. Los cambios quedaron registrados en el historial.",
-      );
-      setEditandoOrden(false);
-      router.refresh();
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "No se pudo guardar la edición de la orden.",
-      );
-    } finally {
-      setGuardandoEdicion(false);
-    }
-  }, [orden, clienteId, canalVenta, fechaEstimada, router]);
+    return payload;
+  }, [orden, editandoOrden, clienteId, canalVenta, fechaEstimada]);
+
+  const cambiosSinGuardar =
+    cambiosItems.total + Object.keys(cambiosFields).length;
+
+  /**
+   * Persiste alta/edición de un item: primero el snapshot del cotizador
+   * (recotizar si ya existía, cotizar-y-guardar encadenado a la Cotizacion
+   * de origen si es nuevo), después la proyección. Lanza en error — el
+   * guardado en lote decide qué reportar.
+   */
+  const persistirItemOrden = React.useCallback(
+    async (item: PropuestaItem, modo: "agregar" | "editar") => {
+      if (!orden) return;
+      if (!item.motorCodigo || !item.jobContext) {
+        throw new Error(
+          `"${item.productoNombre}" no tiene datos de cotización para persistir.`,
+        );
+      }
+      const request = {
+        rutaAlternativaId: item.rutaAlternativaId ?? null,
+        jobContext: item.jobContext as never,
+        clienteId: clienteId || null,
+        periodo: getCurrentPeriodo(),
+      };
+      let cotizacionItemId = item.cotizacionItemId;
+      if (cotizacionItemId) {
+        const respuesta = await recotizarCotizacionItem(
+          cotizacionItemId,
+          request,
+        );
+        if (!respuesta.result.exitoso) {
+          throw new Error(
+            respuesta.result.errores?.[0]?.mensaje ??
+              `No se pudo recotizar "${item.productoNombre}".`,
+          );
+        }
+      } else {
+        const respuesta = await cotizarYGuardar({
+          productoId: item.motorCodigo,
+          ...request,
+          cotizacionId: orden.cotizacionId ?? undefined,
+        });
+        if (!respuesta.result.exitoso) {
+          throw new Error(
+            respuesta.result.errores?.[0]?.mensaje ??
+              `No se pudo guardar la cotización de "${item.productoNombre}".`,
+          );
+        }
+        cotizacionItemId = respuesta.cotizacionItemId;
+      }
+      const payload = itemToOrdenItemPayload(item, cotizacionItemId);
+      if (modo === "agregar") {
+        await agregarOrdenItem(orden.id, payload);
+      } else {
+        await editarOrdenItem(orden.id, item.id, payload);
+      }
+    },
+    [orden, clienteId],
+  );
+
+  /** Baja en staging: sólo saca la fila local; el DELETE va en Guardar. */
+  const quitarItemDeOrden = React.useCallback((item: PropuestaItem) => {
+    setItems((current) =>
+      current.filter((candidate) => candidate.id !== item.id),
+    );
+    setEditadosIds((prev) => {
+      if (!prev.has(item.id)) return prev;
+      const next = new Set(prev);
+      next.delete(item.id);
+      return next;
+    });
+  }, []);
+
+  const cancelarEdicion = React.useCallback(() => {
+    if (!orden) return;
+    // Descarta TODO el staging: field-cards e items vuelven a lo persistido.
+    setClienteId(orden.clienteId ?? "");
+    setCanalVenta(orden.canalVenta ?? "mostrador");
+    setFechaEstimada(orden.fechaEntrega ?? orden.creadaEl.slice(0, 10));
+    setItems(orden.productos.map(rehidratarOrdenItem));
+    setEditadosIds(new Set());
+    setEditandoOrden(false);
+  }, [orden]);
+
+  /**
+   * Commit en lote del staging: bajas → ediciones → altas de items, y al
+   * final los datos comerciales. Cada operación genera su evento de
+   * auditoría en el backend. Ante un error se recarga la orden para
+   * reflejar exactamente lo que alcanzó a aplicarse.
+   */
+  const guardarEdicion = React.useCallback(
+    async (opciones?: { destino?: string }) => {
+      if (!orden) return;
+      const destino = opciones?.destino;
+      if (cambiosSinGuardar === 0) {
+        setEditandoOrden(false);
+        if (destino) router.push(destino);
+        return;
+      }
+      setGuardandoEdicion(true);
+      try {
+        for (const producto of cambiosItems.quitados) {
+          await quitarOrdenItem(orden.id, producto.id!);
+        }
+        for (const item of cambiosItems.editados) {
+          await persistirItemOrden(item, "editar");
+        }
+        for (const item of cambiosItems.agregados) {
+          await persistirItemOrden(item, "agregar");
+        }
+        if (Object.keys(cambiosFields).length > 0) {
+          await editarOrdenTrabajo(orden.id, cambiosFields);
+        }
+        toast.success(
+          `Orden actualizada: ${cambiosSinGuardar} cambio${
+            cambiosSinGuardar === 1 ? "" : "s"
+          } registrado${cambiosSinGuardar === 1 ? "" : "s"} en el historial.`,
+        );
+        setEditadosIds(new Set());
+        setEditandoOrden(false);
+        setNavPendiente(null);
+        if (destino) {
+          router.push(destino);
+        } else {
+          router.refresh();
+        }
+      } catch (error) {
+        // Ante error NO navegamos: recargamos para reflejar lo aplicado y el
+        // usuario decide desde la ficha.
+        toast.error(
+          (error instanceof Error
+            ? error.message
+            : "No se pudieron guardar todos los cambios.") +
+            " Se recargó la orden para reflejar lo aplicado.",
+        );
+        setEditadosIds(new Set());
+        setEditandoOrden(false);
+        setNavPendiente(null);
+        router.refresh();
+      } finally {
+        setGuardandoEdicion(false);
+      }
+    },
+    [
+      orden,
+      cambiosSinGuardar,
+      cambiosItems,
+      cambiosFields,
+      persistirItemOrden,
+      router,
+    ],
+  );
+
+  // Guard de navegación con cambios sin guardar: los clicks a links internos
+  // (sidebar, breadcrumb) se interceptan y abren el modal del sistema con
+  // guardar/descartar/seguir. El cierre o recarga de la pestaña usa el aviso
+  // nativo del navegador (beforeunload no admite UI propia).
+  const [navPendiente, setNavPendiente] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (cambiosSinGuardar === 0) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    const onClickCapture = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+        return;
+      const anchor = (event.target as HTMLElement).closest?.("a[href]");
+      if (!anchor) return;
+      const href = anchor.getAttribute("href");
+      if (!href || href.startsWith("#")) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setNavPendiente(href);
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    document.addEventListener("click", onClickCapture, true);
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      document.removeEventListener("click", onClickCapture, true);
+    };
+  }, [cambiosSinGuardar]);
+
+  const descartarYSalir = React.useCallback(() => {
+    if (!navPendiente) return;
+    const destino = navPendiente;
+    setNavPendiente(null);
+    // El staging vive en estado local: navegar lo descarta solo. Reseteamos
+    // igual para que el guard no reintercepte durante la transición.
+    setEditadosIds(new Set());
+    setEditandoOrden(false);
+    router.push(destino);
+  }, [navPendiente, router]);
   const fechaEstimadaInputRef = React.useRef<HTMLInputElement | null>(null);
   const rowRefs = React.useRef(new Map<string, HTMLDivElement>());
 
@@ -5110,11 +5229,15 @@ export function PropuestaFicha({
                   <button
                     type="button"
                     className="btn btn-primary"
-                    onClick={guardarEdicion}
+                    onClick={() => void guardarEdicion()}
                     disabled={guardandoEdicion}
                   >
                     <CheckIcon />
-                    {guardandoEdicion ? "Guardando…" : "Guardar cambios"}
+                    {guardandoEdicion
+                      ? "Guardando…"
+                      : cambiosSinGuardar > 0
+                        ? `Guardar cambios (${cambiosSinGuardar})`
+                        : "Guardar cambios"}
                   </button>
                 </>
               ) : (
@@ -5312,7 +5435,7 @@ export function PropuestaFicha({
                     onRemove={
                       modoOrden
                         ? itemsEnEdicion
-                          ? () => void quitarItemDeOrden(item)
+                          ? () => quitarItemDeOrden(item)
                           : undefined
                         : () =>
                             setItems((current) =>
@@ -5515,6 +5638,17 @@ export function PropuestaFicha({
         <EmitOverlay numero={emisionNumero} onDone={finalizarEmision} />
       ) : null}
 
+      <ConfirmacionSalida
+        open={navPendiente !== null}
+        cambios={cambiosSinGuardar}
+        guardando={guardandoEdicion}
+        onGuardarYSalir={() =>
+          void guardarEdicion({ destino: navPendiente ?? undefined })
+        }
+        onDescartarYSalir={descartarYSalir}
+        onSeguirEditando={() => setNavPendiente(null)}
+      />
+
       <AgregarProductoSheet
         open={addOpen}
         onOpenChange={(open) => {
@@ -5526,14 +5660,9 @@ export function PropuestaFicha({
         fechaEntregaDefault={fechaEstimada}
         editingItem={editingItem}
         onAddItem={(item) => {
-          if (modoOrden) {
-            // Optimista: la fila aparece ya; el refresh la reemplaza por la
-            // versión persistida (o el toast avisa si falló).
-            setItems((current) => [...current, item]);
-            void persistirItemOrden(item, "agregar");
-          } else {
-            setItems((current) => [...current, item]);
-          }
+          // En modo orden es staging: la fila queda local y el POST real va
+          // recién en "Guardar cambios".
+          setItems((current) => [...current, item]);
           setOpenIds(new Set([item.id]));
           setAddOpen(false);
           setEditingItem(null);
@@ -5545,8 +5674,9 @@ export function PropuestaFicha({
               candidate.id === item.id ? item : candidate,
             ),
           );
-          if (modoOrden) {
-            void persistirItemOrden(item, "editar");
+          if (modoOrden && persistedItemIds.has(item.id)) {
+            // Marca el item persistido como editado en el staging.
+            setEditadosIds((prev) => new Set(prev).add(item.id));
           }
           setOpenIds(new Set([item.id]));
           setAddOpen(false);
