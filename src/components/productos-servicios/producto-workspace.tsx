@@ -25,6 +25,7 @@ import {
 import { toast } from "sonner";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import { HumanSelect } from "@/components/ui/human-select";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { TabPrecioCompleto } from "@/components/productos-servicios/tab-precio-completo";
@@ -996,6 +997,7 @@ function RutasTab({
   const [duplicandoRutaId, setDuplicandoRutaId] = React.useState<string | null>(null);
   const [nuevaRutaId, setNuevaRutaId] = React.useState("");
   const [nuevoNombre, setNuevoNombre] = React.useState("");
+  const [rutaAQuitar, setRutaAQuitar] = React.useState<{ id: string; nombre: string } | null>(null);
   const yaUsadas = new Set(producto.rutasAlternativas.map((ra) => ra.ruta.id));
   const rutasParaAgregar = rutasDisponibles.filter((ruta) => !yaUsadas.has(ruta.id));
 
@@ -1073,15 +1075,8 @@ function RutasTab({
     }
   };
 
-  const quitarRuta = async (rutaAltId: string, nombre: string) => {
-    if (!confirm(`¿Quitar la ruta "${nombre}" de este producto?`)) return;
-    try {
-      await eliminarProductoRutaAlt(rutaAltId);
-      toast.success("Ruta quitada del producto");
-      router.refresh();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error");
-    }
+  const quitarRuta = (rutaAltId: string, nombre: string) => {
+    setRutaAQuitar({ id: rutaAltId, nombre });
   };
 
   return (
@@ -1247,6 +1242,29 @@ function RutasTab({
           </div>
         </div>
       </div>
+
+      <ConfirmacionDestructiva
+        open={rutaAQuitar !== null}
+        onOpenChange={(open) => {
+          if (!open) setRutaAQuitar(null);
+        }}
+        titulo="Quitar ruta"
+        descripcion={`¿Quitar la ruta "${rutaAQuitar?.nombre ?? ""}" de este producto?`}
+        nombreItem={rutaAQuitar?.nombre}
+        requiereTipear={false}
+        accionLabel="Quitar ruta"
+        onConfirmar={async () => {
+          if (!rutaAQuitar) return;
+          try {
+            await eliminarProductoRutaAlt(rutaAQuitar.id);
+            toast.success("Ruta quitada del producto");
+            router.refresh();
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Error");
+          }
+          setRutaAQuitar(null);
+        }}
+      />
     </>
   );
 }
@@ -1385,6 +1403,7 @@ function CargosTab({
   const [cargoSeleccionado, setCargoSeleccionado] = React.useState("");
   const [modoActivacion, setModoActivacion] = React.useState<(typeof MODOS_CARGO)[number]>("OPCIONAL");
   const [guardando, setGuardando] = React.useState(false);
+  const [cargoAQuitar, setCargoAQuitar] = React.useState<{ id: string; nombre: string } | null>(null);
 
   const yaAsociados = new Set(
     producto.cargosDirectosCotizacion.map((cargo) => cargo.cargoDirectoCatalogo.codigo),
@@ -1413,15 +1432,8 @@ function CargosTab({
     }
   };
 
-  const quitar = async (id: string, nombre: string) => {
-    if (!confirm(`¿Quitar el cargo "${nombre}" de este producto?`)) return;
-    try {
-      await desasociarCargoCotizacion(id);
-      toast.success("Cargo desasociado");
-      router.refresh();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error");
-    }
+  const quitar = (id: string, nombre: string) => {
+    setCargoAQuitar({ id, nombre });
   };
 
   return (
@@ -1541,6 +1553,29 @@ function CargosTab({
           </div>
         )}
       </div>
+
+      <ConfirmacionDestructiva
+        open={cargoAQuitar !== null}
+        onOpenChange={(open) => {
+          if (!open) setCargoAQuitar(null);
+        }}
+        titulo="Quitar cargo"
+        descripcion={`¿Quitar el cargo "${cargoAQuitar?.nombre ?? ""}" de este producto?`}
+        nombreItem={cargoAQuitar?.nombre}
+        requiereTipear={false}
+        accionLabel="Quitar cargo"
+        onConfirmar={async () => {
+          if (!cargoAQuitar) return;
+          try {
+            await desasociarCargoCotizacion(cargoAQuitar.id);
+            toast.success("Cargo desasociado");
+            router.refresh();
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Error");
+          }
+          setCargoAQuitar(null);
+        }}
+      />
     </div>
   );
 }

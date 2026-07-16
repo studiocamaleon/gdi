@@ -34,6 +34,7 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import {
   Card,
   CardContent,
@@ -1144,6 +1145,7 @@ export function MaquinariaPanel({
   const [openSection, setOpenSection] = React.useState<string | null>("capacidades_fisicas");
   const [materiasPrimas, setMateriasPrimas] = React.useState<MateriaPrima[]>([]);
   const [loadingMaterias, setLoadingMaterias] = React.useState(false);
+  const [maquinaADesactivar, setMaquinaADesactivar] = React.useState<Maquina | null>(null);
 
   const template: MaquinariaTemplateDefinition | null = React.useMemo(
     () => getMaquinariaTemplate(form.plantilla),
@@ -1430,15 +1432,8 @@ export function MaquinariaPanel({
     }
   };
 
-  const handleDesactivar = async (maquina: Maquina) => {
-    if (!confirm(`¿Desactivar "${maquina.nombre}"? (no se elimina, queda inactiva)`)) return;
-    try {
-      const updated = await toggleMaquina(maquina.id);
-      setMaquinas((prev) => prev.map((m) => (m.id === maquina.id ? updated : m)));
-      toast.success("Máquina desactivada");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error");
-    }
+  const handleDesactivar = (maquina: Maquina) => {
+    setMaquinaADesactivar(maquina);
   };
 
   return (
@@ -1949,6 +1944,31 @@ export function MaquinariaPanel({
           </div>
         </SheetContent>
       </Sheet>
+
+      <ConfirmacionDestructiva
+        open={maquinaADesactivar !== null}
+        onOpenChange={(open) => {
+          if (!open) setMaquinaADesactivar(null);
+        }}
+        titulo="Desactivar máquina"
+        descripcion={`¿Desactivar "${maquinaADesactivar?.nombre ?? ""}"? (no se elimina, queda inactiva)`}
+        nombreItem={maquinaADesactivar?.nombre}
+        requiereTipear={false}
+        accionLabel="Desactivar"
+        onConfirmar={async () => {
+          if (!maquinaADesactivar) return;
+          try {
+            const updated = await toggleMaquina(maquinaADesactivar.id);
+            setMaquinas((prev) =>
+              prev.map((m) => (m.id === maquinaADesactivar.id ? updated : m)),
+            );
+            toast.success("Máquina desactivada");
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Error");
+          }
+          setMaquinaADesactivar(null);
+        }}
+      />
     </div>
   );
 }

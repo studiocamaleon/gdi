@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import { HumanSelect, optionFromLabel } from "@/components/ui/human-select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -54,6 +55,7 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
   const router = useRouter();
   const [guardando, setGuardando] = React.useState(false);
   const [eliminando, setEliminando] = React.useState(false);
+  const [confirmandoEliminar, setConfirmandoEliminar] = React.useState(false);
 
   const [nombre, setNombre] = React.useState(productoExistente?.nombre ?? "");
   const [descripcion, setDescripcion] = React.useState(productoExistente?.descripcion ?? "");
@@ -141,11 +143,14 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
     }
   };
 
-  const handleEliminar = async () => {
+  const handleEliminar = () => {
     if (!productoExistente) return;
-    if (!confirm(`¿Eliminar "${productoExistente.nombre}"?\nSi tiene cotizaciones se marcará como inactivo en vez de borrar.`)) {
-      return;
-    }
+    setConfirmandoEliminar(true);
+  };
+
+  const confirmarEliminar = async () => {
+    if (!productoExistente) return;
+    setConfirmandoEliminar(false);
     setEliminando(true);
     try {
       await eliminarProducto(productoExistente.id);
@@ -342,6 +347,20 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
           {guardando ? "Guardando..." : modo === "crear" ? "Crear producto" : "Guardar cambios"}
         </Button>
       </div>
+
+      <ConfirmacionDestructiva
+        open={confirmandoEliminar}
+        onOpenChange={(open) => {
+          if (!open) setConfirmandoEliminar(false);
+        }}
+        titulo="Eliminar producto"
+        descripcion={`¿Eliminar "${productoExistente?.nombre ?? ""}"?`}
+        impacto={["Si tiene cotizaciones se marcará como inactivo en vez de borrar."]}
+        nombreItem={productoExistente?.nombre}
+        requiereTipear={false}
+        accionLabel="Eliminar"
+        onConfirmar={confirmarEliminar}
+      />
     </div>
   );
 }

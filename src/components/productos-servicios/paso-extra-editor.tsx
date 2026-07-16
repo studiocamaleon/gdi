@@ -15,6 +15,7 @@ import { Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
@@ -97,6 +98,7 @@ export function PasoExtraEditor({
     [catalogoFamilias],
   );
 
+  const [confirmandoEliminar, setConfirmandoEliminar] = React.useState(false);
   const [familiaCodigo, setFamiliaCodigo] = React.useState(
     extra?.familiaCodigo ?? "",
   );
@@ -286,9 +288,14 @@ export function PasoExtraEditor({
     }
   };
 
-  const handleEliminar = async () => {
+  const handleEliminar = () => {
     if (!extra) return;
-    if (!confirm("¿Eliminar este paso extra?")) return;
+    setConfirmandoEliminar(true);
+  };
+
+  const confirmarEliminar = async () => {
+    if (!extra) return;
+    setConfirmandoEliminar(false);
     setBorrando(true);
     try {
       await eliminarPasoExtra(extra.id);
@@ -521,6 +528,18 @@ export function PasoExtraEditor({
               : "Guardar cambios"}
         </Button>
       </div>
+
+      <ConfirmacionDestructiva
+        open={confirmandoEliminar}
+        onOpenChange={(open) => {
+          if (!open) setConfirmandoEliminar(false);
+        }}
+        titulo="Eliminar paso extra"
+        descripcion="¿Eliminar este paso extra?"
+        requiereTipear={false}
+        accionLabel="Eliminar"
+        onConfirmar={confirmarEliminar}
+      />
     </div>
   );
 }

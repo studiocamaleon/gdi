@@ -49,6 +49,7 @@ import {
 import { EmpleadoDetalle } from "@/lib/empleados";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import { CentroCostoConfigurator } from "@/components/costos/centro-costo-configurator";
 import {
   Card,
@@ -161,6 +162,7 @@ export function CostosPanel({
   const [centros, setCentros] = React.useState(initialCentros);
   const [activeTab, setActiveTab] = React.useState("plantas");
   const [selectedCentro, setSelectedCentro] = React.useState<CentroCosto | null>(null);
+  const [centroAEliminar, setCentroAEliminar] = React.useState<CentroCosto | null>(null);
   const [isConfiguratorOpen, setIsConfiguratorOpen] = React.useState(false);
   const [configuracionRefreshKey, setConfiguracionRefreshKey] = React.useState(0);
   const [editingPlantaId, setEditingPlantaId] = React.useState<string | null>(null);
@@ -403,24 +405,7 @@ export function CostosPanel({
   };
 
   const handleEliminarCentro = (centro: CentroCosto) => {
-    const confirmado = window.confirm(
-      `¿Eliminar definitivamente el centro "${centro.nombre}"?\n\n` +
-        "Se borran también sus tarifas y recursos de cada período. " +
-        "Esta acción no se puede deshacer.",
-    );
-    if (!confirmado) return;
-    startSaving(async () => {
-      try {
-        await eliminarCentroCosto(centro.id);
-        toast.success(`Centro "${centro.nombre}" eliminado.`);
-        reloadAll();
-        setConfiguracionRefreshKey((current) => current + 1);
-      } catch (error) {
-        toast.error(
-          error instanceof Error ? error.message : "No se pudo eliminar el centro.",
-        );
-      }
-    });
+    setCentroAEliminar(centro);
   };
 
   return (
@@ -1364,6 +1349,38 @@ export function CostosPanel({
         refreshKey={configuracionRefreshKey}
         onConfigured={async () => {
           reloadAll();
+        }}
+      />
+      <ConfirmacionDestructiva
+        open={centroAEliminar !== null}
+        onOpenChange={(open) => {
+          if (!open) setCentroAEliminar(null);
+        }}
+        titulo="Eliminar centro de costo"
+        descripcion={`¿Eliminar definitivamente el centro "${centroAEliminar?.nombre ?? ""}"?`}
+        impacto={[
+          "Se borran también sus tarifas y recursos de cada período.",
+          "Esta acción no se puede deshacer.",
+        ]}
+        nombreItem={centroAEliminar?.nombre}
+        requiereTipear={false}
+        accionLabel="Eliminar"
+        onConfirmar={() => {
+          if (!centroAEliminar) return;
+          const centro = centroAEliminar;
+          setCentroAEliminar(null);
+          startSaving(async () => {
+            try {
+              await eliminarCentroCosto(centro.id);
+              toast.success(`Centro "${centro.nombre}" eliminado.`);
+              reloadAll();
+              setConfiguracionRefreshKey((current) => current + 1);
+            } catch (error) {
+              toast.error(
+                error instanceof Error ? error.message : "No se pudo eliminar el centro.",
+              );
+            }
+          });
         }}
       />
     </div>

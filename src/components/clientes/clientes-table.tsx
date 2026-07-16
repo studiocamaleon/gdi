@@ -30,6 +30,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -75,6 +76,7 @@ export function ClientesTable({ initialClientes }: ClientesTableProps) {
   const { startNavigation } = useNavigationFeedback();
   const [clientes, setClientes] = React.useState(initialClientes);
   const [search, setSearch] = React.useState("");
+  const [confirmandoEliminar, setConfirmandoEliminar] = React.useState(false);
   const [selectedClientes, setSelectedClientes] = React.useState<Set<string>>(
     new Set(),
   );
@@ -151,14 +153,11 @@ export function ClientesTable({ initialClientes }: ClientesTableProps) {
       return;
     }
 
-    const confirmed = window.confirm(
-      `Se eliminaran ${selectedRows.length} cliente(s). Esta accion no se puede deshacer.`,
-    );
+    setConfirmandoEliminar(true);
+  };
 
-    if (!confirmed) {
-      return;
-    }
-
+  const confirmarEliminarSeleccion = () => {
+    setConfirmandoEliminar(false);
     startDeleteTransition(async () => {
       await Promise.all(selectedRows.map((cliente) => deleteCliente(cliente.id)));
       setClientes((current) =>
@@ -368,6 +367,18 @@ export function ClientesTable({ initialClientes }: ClientesTableProps) {
           <TablePagination total={total} page={page} pageSize={pageSize} onPageChange={setPage} />
         </CardContent>
       </Card>
+
+      <ConfirmacionDestructiva
+        open={confirmandoEliminar}
+        onOpenChange={(open) => {
+          if (!open) setConfirmandoEliminar(false);
+        }}
+        titulo="Eliminar clientes"
+        descripcion={`Se eliminaran ${selectedRows.length} cliente(s). Esta accion no se puede deshacer.`}
+        requiereTipear={false}
+        accionLabel="Eliminar"
+        onConfirmar={confirmarEliminarSeleccion}
+      />
     </div>
   );
 }
