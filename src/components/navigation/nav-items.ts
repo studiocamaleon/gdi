@@ -128,6 +128,11 @@ export const NAV: NavItem[] = [
         label: "Métodos de pago",
         href: "/administracion/metodos-pago",
       },
+      {
+        key: "datos-fiscales",
+        label: "Datos fiscales",
+        href: "/administracion/datos-fiscales",
+      },
     ],
   },
   {

@@ -12,6 +12,7 @@ import {
 } from '@prisma/client';
 import { CurrentAuth } from '../auth/auth.types';
 import { paginatedResponse } from '../common/dto/pagination.dto';
+import { cuitValido } from '../common/cuit';
 import { PrismaService } from '../prisma/prisma.service';
 import { ClienteContactoDto } from './dto/contacto.dto';
 import { ClienteDireccionDto, TipoDireccionDto } from './dto/direccion.dto';
@@ -22,21 +23,6 @@ type ClienteCompleto = Cliente & {
   contactos: ClienteContacto[];
   direcciones: ClienteDireccion[];
 };
-
-/**
- * Valida un CUIT/CUIL argentino: 11 dígitos + dígito verificador (módulo 11).
- * Un CUIT inválido hace que ARCA rechace el comprobante al emitir, así que
- * conviene frenarlo acá y no cuando ya es tarde.
- */
-function cuitValido(cuit: string): boolean {
-  if (!/^\d{11}$/.test(cuit)) return false;
-  const pesos = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
-  const digitos = cuit.split('').map(Number);
-  const suma = pesos.reduce((acc, peso, i) => acc + peso * digitos[i], 0);
-  const resto = suma % 11;
-  const verificador = resto === 0 ? 0 : resto === 1 ? 9 : 11 - resto;
-  return verificador === digitos[10];
-}
 
 @Injectable()
 export class ClientesService {

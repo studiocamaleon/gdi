@@ -432,6 +432,8 @@ model Tenant {
   cobros                                           Cobro[]
   retencionesPercepciones                          RetencionPercepcion[]
   valores                                          Valor[]
+  configuracionFiscal                              ConfiguracionFiscal?
+  puntosVenta                                      PuntoVenta[]
 }
 
 model User {
@@ -2152,4 +2154,61 @@ model ProductoPrecioEspecialClienteV2 {
 
   @@unique([tenantId, productoId, clienteId])
   @@index([tenantId, clienteId])
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Administración · Configuración fiscal del emisor (etapa C)
+// Ver docs/modulo-administracion-diseno.md
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Datos fiscales del tenant como EMISOR. Junto con la condición del
+/// receptor definen la letra del comprobante (ver letra-comprobante.ts).
+/// Uno por tenant.
+model ConfiguracionFiscal {
+  id                   String       @id @default(uuid()) @db.Uuid
+  tenantId             String       @unique @db.Uuid
+  razonSocial          String
+  /// CUIT del emisor, 11 dígitos sin guiones.
+  cuit                 String       @db.VarChar(11)
+  /// 'RI' | 'monotributo' | 'exento'. Un consumidor final no emite.
+  condicionFiscal      String       @default("RI")
+  /// Nº de inscripción en Ingresos Brutos (o convenio multilateral).
+  ingresosBrutos       String?
+  domicilioFiscal      String?
+  inicioActividades    DateTime?
+  /// Leyenda obligatoria en las facturas A cuando ARCA no reconoce
+  /// solvencia patrimonial — reemplaza a la vieja factura M desde la
+  /// RG 5762/2025: 'PAGO EN CBU INFORMADA' | 'OPERACIÓN SUJETA A RETENCIÓN'.
+  leyendaFacturaA      String?
+  /// 'manual' | 'tusfacturas'. Las credenciales del proveedor NO viven
+  /// acá: se configuran en el módulo de Integraciones.
+  proveedorFacturacion String       @default("manual")
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  tenant               Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  puntosVenta          PuntoVenta[]
+
+  @@index([tenantId])
+}
+
+/// Punto de venta habilitado en ARCA. La numeración de comprobantes es
+/// por (punto de venta, tipo, letra).
+model PuntoVenta {
+  id                    String              @id @default(uuid()) @db.Uuid
+  tenantId              String              @db.Uuid
+  configuracionFiscalId String              @db.Uuid
+  /// Número que asignó ARCA (se muestra con 4 dígitos: 0001).
+  numero                Int
+  nombre                String
+  /// 'web_services' (factura electrónica por API) | 'portal' (ARCA web) |
+  /// 'talonario' (preimpreso). Sólo web_services puede emitir por provider.
+  modalidad             String              @default("web_services")
+  activo                Boolean             @default(true)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  tenant                Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  configuracionFiscal   ConfiguracionFiscal @relation(fields: [configuracionFiscalId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, numero])
+  @@index([tenantId, activo])
 }

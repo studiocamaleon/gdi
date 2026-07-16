@@ -1,10 +1,12 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
   Post,
+  Put,
   Query,
 } from '@nestjs/common';
 import { CurrentSession } from '../auth/current-auth.decorator';
@@ -12,8 +14,14 @@ import type { CurrentAuth } from '../auth/auth.types';
 import { MetodosPagoService } from './metodos-pago.service';
 import { CobrosService } from './cobros.service';
 import { TesoreriaService } from './tesoreria.service';
+import { ConfiguracionFiscalService } from './configuracion-fiscal.service';
 import { UpsertMetodoPagoDto } from './dto/metodo-pago.dto';
 import { CrearCobroDto } from './dto/cobro.dto';
+import {
+  UpsertConfiguracionFiscalDto,
+  UpsertPuntoVentaDto,
+} from './dto/configuracion-fiscal.dto';
+import type { CondicionFiscalReceptor } from './letra-comprobante';
 import {
   ArqueoDto,
   TransferenciaDto,
@@ -26,7 +34,56 @@ export class AdministracionController {
     private readonly metodosPagoService: MetodosPagoService,
     private readonly cobrosService: CobrosService,
     private readonly tesoreriaService: TesoreriaService,
+    private readonly configuracionFiscalService: ConfiguracionFiscalService,
   ) {}
+
+  // ── Configuración fiscal del emisor ──────────────────────────────────
+
+  @Get('configuracion-fiscal')
+  obtenerConfiguracionFiscal(@CurrentSession() auth: CurrentAuth) {
+    return this.configuracionFiscalService.obtener(auth);
+  }
+
+  @Put('configuracion-fiscal')
+  guardarConfiguracionFiscal(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() body: UpsertConfiguracionFiscalDto,
+  ) {
+    return this.configuracionFiscalService.guardar(auth, body);
+  }
+
+  @Get('configuracion-fiscal/letra')
+  letraSugerida(
+    @CurrentSession() auth: CurrentAuth,
+    @Query('receptor') receptor: CondicionFiscalReceptor,
+  ) {
+    return this.configuracionFiscalService.letraPara(auth, receptor);
+  }
+
+  @Post('puntos-venta')
+  crearPuntoVenta(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() body: UpsertPuntoVentaDto,
+  ) {
+    return this.configuracionFiscalService.crearPuntoVenta(auth, body);
+  }
+
+  @Patch('puntos-venta/:id')
+  actualizarPuntoVenta(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() body: UpsertPuntoVentaDto,
+  ) {
+    return this.configuracionFiscalService.actualizarPuntoVenta(auth, id, body);
+  }
+
+  @Delete('puntos-venta/:id')
+  eliminarPuntoVenta(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+  ) {
+    return this.configuracionFiscalService.eliminarPuntoVenta(auth, id);
+  }
 
   // ── Tesorería ────────────────────────────────────────────────────────
 

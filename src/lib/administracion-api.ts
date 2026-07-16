@@ -1,13 +1,80 @@
 import { apiRequest } from "@/lib/api";
 import type {
   Cobro,
+  CondicionFiscalEmisor,
+  ConfiguracionFiscal,
   CuentaFondos,
   CuentaFondosResumen,
+  LeyendaA,
   MetodoPago,
   MetodoPagoTipo,
+  ModalidadPuntoVenta,
   MovimientoFondos,
+  ProveedorFacturacion,
+  PuntoVenta,
   TesoreriaKpis,
 } from "@/lib/administracion";
+
+// ── Configuración fiscal ───────────────────────────────────────────────
+
+export type GuardarConfiguracionFiscalPayload = {
+  razonSocial: string;
+  cuit: string;
+  condicionFiscal: CondicionFiscalEmisor;
+  ingresosBrutos?: string;
+  domicilioFiscal?: string;
+  inicioActividades?: string;
+  leyendaFacturaA?: LeyendaA | null;
+  proveedorFacturacion?: ProveedorFacturacion;
+};
+
+/** null si el tenant todavía no configuró sus datos fiscales. */
+export async function getConfiguracionFiscal(): Promise<ConfiguracionFiscal | null> {
+  return apiRequest<ConfiguracionFiscal | null>(
+    "/administracion/configuracion-fiscal",
+  );
+}
+
+export async function guardarConfiguracionFiscal(
+  payload: GuardarConfiguracionFiscalPayload,
+): Promise<ConfiguracionFiscal> {
+  return apiRequest("/administracion/configuracion-fiscal", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export type UpsertPuntoVentaPayload = {
+  numero: number;
+  nombre: string;
+  modalidad?: ModalidadPuntoVenta;
+  activo?: boolean;
+};
+
+export async function crearPuntoVenta(
+  payload: UpsertPuntoVentaPayload,
+): Promise<PuntoVenta> {
+  return apiRequest("/administracion/puntos-venta", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function actualizarPuntoVenta(
+  id: string,
+  payload: UpsertPuntoVentaPayload,
+): Promise<PuntoVenta> {
+  return apiRequest(`/administracion/puntos-venta/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function eliminarPuntoVenta(id: string): Promise<{ ok: boolean }> {
+  return apiRequest(`/administracion/puntos-venta/${id}`, {
+    method: "DELETE",
+  });
+}
 
 export type UpsertMetodoPagoPayload = {
   nombre: string;
