@@ -79,9 +79,7 @@ export function calcularAging(
 }
 
 export function totalAging(aging: Aging): number {
-  return (
-    Math.round(TRAMOS_AGING.reduce((s, t) => s + aging[t], 0) * 100) / 100
-  );
+  return Math.round(TRAMOS_AGING.reduce((s, t) => s + aging[t], 0) * 100) / 100;
 }
 
 /** Lo vencido hace más de 60 días: el KPI de riesgo del diseño. */

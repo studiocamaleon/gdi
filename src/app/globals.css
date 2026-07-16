@@ -26244,3 +26244,412 @@ textarea.est-input {
 }
 
 /* fin ports administración · cuenta corriente (touch — Turbopack) */
+
+/* ───────────────────────────────────────────────────────────────────────
+   Administración · Aging de deudores — port 1:1 del diseño Grafo V2
+   (admin/Deudores.html). Prefijo ade-. La intensidad de cada celda se
+   calcula en JS (colorCeldaAging), como en el diseño.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.ade-page {
+  --info: #1d4ed8;
+  --warn: #a16207;
+  --danger: #b91c1c;
+  font-size: 13.5px;
+  letter-spacing: -0.005em;
+  font-feature-settings: "ss01", "cv11";
+}
+
+.ade-wrap {
+  max-width: 1240px;
+  margin: 0 auto;
+}
+
+.ade-page .btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+.ade-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.ade-head h1 {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.ade-head .sub {
+  color: var(--muted-text);
+  font-size: 13.5px;
+  margin-top: 3px;
+}
+
+.ade-head .right {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+
+/* tarjetas por tramo */
+.ade-buckets {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr) 1.1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.ade-bkt {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-4);
+  padding: 14px 16px;
+  position: relative;
+  overflow: hidden;
+}
+
+.ade-bkt::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+}
+
+.ade-bkt .l {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-text);
+  font-weight: 600;
+}
+
+.ade-bkt .v {
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  margin-top: 4px;
+  line-height: 1.1;
+}
+
+.ade-bkt .s {
+  font-size: 11px;
+  color: var(--muted-text-2);
+  margin-top: 3px;
+}
+
+.ade-bkt.b0::before {
+  background: var(--ok);
+}
+
+.ade-bkt.b1::before {
+  background: var(--warn);
+}
+
+.ade-bkt.b2::before {
+  background: #d97706;
+}
+
+.ade-bkt.b3::before {
+  background: var(--signal);
+}
+
+.ade-bkt.b4::before {
+  background: var(--danger);
+}
+
+.ade-bkt.total {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}
+
+.ade-bkt.total .l {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.ade-bkt.total .v {
+  color: #fff;
+}
+
+.ade-bkt.total .s {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* toolbar */
+.ade-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.ade-search {
+  position: relative;
+  min-width: 280px;
+}
+
+.ade-search svg {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 15px;
+  height: 15px;
+  color: var(--muted-text-2);
+}
+
+.ade-search input {
+  width: 100%;
+  padding: 8px 11px 8px 33px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+  background: var(--surface);
+  font: inherit;
+  font-size: 13px;
+}
+
+.ade-search input:focus {
+  outline: none;
+  border-color: var(--ink-2);
+}
+
+.ade-seg {
+  display: flex;
+  gap: 2px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+  padding: 2px;
+  margin-left: auto;
+}
+
+.ade-seg button {
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted-text);
+  cursor: pointer;
+}
+
+.ade-seg button.on {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+
+/* matriz */
+.ade-mtx {
+  border: 1px solid var(--border);
+  border-radius: var(--r-4);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.ade-mtx-tr {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) repeat(5, 1fr) 1.1fr;
+  align-items: stretch;
+}
+
+.ade-mtx-th {
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.ade-mtx-th > span {
+  padding: 11px 14px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted-text);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+}
+
+.ade-mtx-th > span.r {
+  justify-content: flex-end;
+}
+
+.ade-mtx-row {
+  border-bottom: 1px solid var(--hairline);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.ade-mtx-row:last-of-type {
+  border-bottom: none;
+}
+
+.ade-mtx-row:hover {
+  background: var(--surface-2);
+}
+
+.ade-mtx-cli {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  justify-content: center;
+  min-width: 0;
+}
+
+.ade-mtx-cli .nm {
+  font-weight: 600;
+  font-size: 13.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ade-mtx-cli .sub {
+  font-size: 11.5px;
+  color: var(--muted-text-2);
+  font-family: var(--font-mono);
+}
+
+.ade-cell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 12px 14px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 13px;
+  position: relative;
+  border-left: 1px solid var(--hairline);
+}
+
+.ade-cell.zero {
+  color: var(--muted-text-2);
+  font-weight: 400;
+}
+
+.ade-cell.tot {
+  border-left: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: 13.5px;
+}
+
+.ade-mtx-foot {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) repeat(5, 1fr) 1.1fr;
+  background: var(--ink);
+  color: #fff;
+  font-weight: 600;
+}
+
+.ade-mtx-foot .lbl {
+  padding: 13px 14px;
+  display: flex;
+  align-items: center;
+  font-size: 12.5px;
+}
+
+.ade-mtx-foot .ade-cell {
+  color: #fff;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+}
+
+.ade-mtx-foot .ade-cell.tot {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ade-sin-resultados {
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--muted-text);
+  font-size: 13px;
+}
+
+/* leyenda */
+.ade-legend {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 14px;
+  font-size: 12px;
+  color: var(--muted-text);
+  flex-wrap: wrap;
+}
+
+.ade-legend .it {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ade-legend .sw {
+  width: 22px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+}
+
+.ade-legend .grad {
+  width: 120px;
+  height: 12px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #fff, var(--danger));
+  border: 1px solid var(--border);
+}
+
+/* empty */
+.ade-empty {
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-4);
+  background: var(--surface);
+  padding: 56px 32px;
+  text-align: center;
+  max-width: 520px;
+  margin: 8px auto;
+}
+
+.ade-empty .ico {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  display: grid;
+  place-items: center;
+  margin: 0 auto 16px;
+  color: var(--muted-text);
+}
+
+.ade-empty .ico svg {
+  width: 24px;
+  height: 24px;
+}
+
+.ade-empty h3 {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.ade-empty p {
+  margin: 0 auto;
+  color: var(--muted-text);
+  max-width: 340px;
+  font-size: 13px;
+}
+
+/* fin ports administración · deudores (touch — Turbopack) */

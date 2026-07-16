@@ -9,6 +9,7 @@ import type {
   CondicionFiscalEmisor,
   ConfiguracionFiscal,
   CuentaCorriente,
+  FilaDeudor,
   CuentaFondos,
   CuentaFondosResumen,
   LeyendaA,
@@ -155,6 +156,11 @@ export async function getCuentaCorriente(
   clienteId: string,
 ): Promise<CuentaCorriente> {
   return apiRequest(`/administracion/clientes/${clienteId}/cuenta-corriente`);
+}
+
+/** Matriz de aging por cliente. Sólo trae clientes con saldo. */
+export async function getDeudores(): Promise<FilaDeudor[]> {
+  return apiRequest("/administracion/deudores");
 }
 
 // ── Imputaciones ───────────────────────────────────────────────────────

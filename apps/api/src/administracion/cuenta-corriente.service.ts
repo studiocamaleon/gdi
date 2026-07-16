@@ -1,7 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
-import { calcularAging, totalAging, type ComprobanteAging } from './aging';
+import {
+  calcularAging,
+  totalAging,
+  vencidoGrave,
+  type ComprobanteAging,
+} from './aging';
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const iso = (d: Date) => d.toISOString().slice(0, 10);
@@ -22,6 +27,67 @@ const iso = (d: Date) => d.toISOString().slice(0, 10);
 @Injectable()
 export class CuentaCorrienteService {
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Matriz de deudores: un cliente por fila con su saldo repartido en los
+   * tramos de antigüedad.
+   *
+   * Sólo entran comprobantes EMITIDOS con saldo pendiente: un borrador no
+   * es deuda y uno cobrado tampoco. Un cliente que quedó en cero no
+   * aparece — la matriz es de deudores, no de clientes.
+   */
+  async deudores(auth: CurrentAuth) {
+    const comprobantes = await this.prisma.comprobante.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        estado: 'emitido',
+        saldoPendiente: { gt: 0 },
+        clienteId: { not: null },
+      },
+      select: {
+        clienteId: true,
+        vencimiento: true,
+        saldoPendiente: true,
+        cliente: { select: { nombre: true, cuit: true } },
+      },
+    });
+
+    const hoy = new Date();
+    const porCliente = new Map<
+      string,
+      { nombre: string; cuit: string | null; comps: ComprobanteAging[] }
+    >();
+
+    for (const c of comprobantes) {
+      if (!c.clienteId) continue;
+      const acc = porCliente.get(c.clienteId) ?? {
+        nombre: c.cliente?.nombre ?? 'Sin cliente',
+        cuit: c.cliente?.cuit ?? null,
+        comps: [],
+      };
+      acc.comps.push({
+        vencimiento: c.vencimiento,
+        saldo: Number(c.saldoPendiente),
+      });
+      porCliente.set(c.clienteId, acc);
+    }
+
+    const filas = [...porCliente.entries()].map(([clienteId, v]) => {
+      const aging = calcularAging(v.comps, hoy);
+      return {
+        clienteId,
+        nombre: v.nombre,
+        cuit: v.cuit,
+        aging,
+        total: totalAging(aging),
+        /** Vencido hace más de 60 días: el criterio de riesgo del diseño. */
+        vencido: vencidoGrave(aging),
+      };
+    });
+
+    filas.sort((a, b) => b.total - a.total);
+    return filas;
+  }
 
   async obtener(auth: CurrentAuth, clienteId: string) {
     const cliente = await this.prisma.cliente.findFirst({
@@ -118,10 +184,7 @@ export class CuentaCorrienteService {
 
     for (const co of cobros) {
       const bruto = Number(co.montoBruto);
-      const imputado = co.imputaciones.reduce(
-        (s, i) => s + Number(i.monto),
-        0,
-      );
+      const imputado = co.imputaciones.reduce((s, i) => s + Number(i.monto), 0);
       const sinImputar = r2(bruto - imputado);
       const imputaciones = co.imputaciones.map((i) => ({
         nombre: nombreComp(i.comprobante),

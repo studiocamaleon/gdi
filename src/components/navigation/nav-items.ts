@@ -129,6 +129,11 @@ export const NAV: NavItem[] = [
         href: "/administracion/comprobantes",
       },
       {
+        key: "deudores",
+        label: "Deudores",
+        href: "/administracion/deudores",
+      },
+      {
         key: "metodos-pago",
         label: "Métodos de pago",
         href: "/administracion/metodos-pago",

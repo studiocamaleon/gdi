@@ -50,6 +50,11 @@ export class AdministracionController {
 
   // ── Cuenta corriente ─────────────────────────────────────────────────
 
+  @Get('deudores')
+  deudores(@CurrentSession() auth: CurrentAuth) {
+    return this.cuentaCorrienteService.deudores(auth);
+  }
+
   @Get('clientes/:clienteId/cuenta-corriente')
   cuentaCorriente(
     @CurrentSession() auth: CurrentAuth,

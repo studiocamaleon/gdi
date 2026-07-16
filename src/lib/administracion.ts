@@ -176,6 +176,60 @@ export const TRAMO_AGING_COLOR: Record<TramoAging, string> = {
 
 export type Aging = Record<TramoAging, number>;
 
+export type FilaDeudor = {
+  clienteId: string;
+  nombre: string;
+  cuit: string | null;
+  aging: Aging;
+  total: number;
+  /** Vencido hace más de 60 días. */
+  vencido: number;
+};
+
+/**
+ * Intensidad del heatmap: cuanto más grande el saldo dentro de su columna,
+ * más saturada la celda; y cuanto más viejo el tramo, más rojo. Espejo del
+ * cálculo del diseño (admin/Deudores.html).
+ */
+const HUE_TRAMO: Record<TramoAging, string> = {
+  a_vencer: "150,60%",
+  d0_30: "40,75%",
+  d31_60: "32,80%",
+  d61_90: "20,80%",
+  d90_mas: "0,72%",
+};
+
+const ORDEN_TRAMO: Record<TramoAging, number> = {
+  a_vencer: 0,
+  d0_30: 1,
+  d31_60: 2,
+  d61_90: 3,
+  d90_mas: 4,
+};
+
+export function colorCeldaAging(
+  tramo: TramoAging,
+  valor: number,
+  maxColumna: number,
+): string {
+  if (valor <= 0) return "transparent";
+  const idx = ORDEN_TRAMO[tramo];
+  const t = maxColumna > 0 ? Math.min(1, valor / maxColumna) : 0;
+  const luz = 96 - t * (idx >= 3 ? 52 : idx >= 1 ? 40 : 34);
+  return `hsl(${HUE_TRAMO[tramo]},${luz}%)`;
+}
+
+export function colorTextoAging(
+  tramo: TramoAging,
+  valor: number,
+  maxColumna: number,
+): string {
+  if (valor <= 0) return "var(--muted-text-2)";
+  const idx = ORDEN_TRAMO[tramo];
+  const t = maxColumna > 0 ? valor / maxColumna : 0;
+  return t > 0.55 && idx >= 3 ? "#fff" : "var(--ink)";
+}
+
 export type MovimientoCuentaCorriente = {
   id: string;
   fecha: string;
