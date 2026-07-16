@@ -1,6 +1,11 @@
 import { apiRequest } from "@/lib/api";
 import type {
   Cobro,
+  Comprobante,
+  ComprobanteDetalle,
+  ComprobanteItem,
+  ComprobantePendiente,
+  ComprobanteTipo,
   CondicionFiscalEmisor,
   ConfiguracionFiscal,
   CuentaFondos,
@@ -74,6 +79,97 @@ export async function eliminarPuntoVenta(id: string): Promise<{ ok: boolean }> {
   return apiRequest(`/administracion/puntos-venta/${id}`, {
     method: "DELETE",
   });
+}
+
+// ── Comprobantes ───────────────────────────────────────────────────────
+
+export async function getComprobantes(params?: {
+  estado?: string;
+  tipo?: string;
+  clienteId?: string;
+  q?: string;
+}): Promise<Comprobante[]> {
+  const search = new URLSearchParams();
+  if (params?.estado) search.set("estado", params.estado);
+  if (params?.tipo) search.set("tipo", params.tipo);
+  if (params?.clienteId) search.set("clienteId", params.clienteId);
+  if (params?.q) search.set("q", params.q);
+  const query = search.toString();
+  return apiRequest(`/administracion/comprobantes${query ? `?${query}` : ""}`);
+}
+
+export async function getComprobante(id: string): Promise<ComprobanteDetalle> {
+  return apiRequest(`/administracion/comprobantes/${id}`);
+}
+
+export type CrearComprobantePayload = {
+  tipo: ComprobanteTipo;
+  puntoVentaId: string;
+  clienteId?: string;
+  ordenId?: string;
+  fecha?: string;
+  items?: ComprobanteItem[];
+  moneda?: "ARS" | "USD";
+  cotizacion?: number;
+  condicionVenta?: string;
+  diasVencimiento?: number;
+  comprobanteOrigenId?: string;
+};
+
+export async function crearComprobante(
+  payload: CrearComprobantePayload,
+): Promise<Comprobante> {
+  return apiRequest("/administracion/comprobantes", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function emitirComprobante(id: string): Promise<Comprobante> {
+  return apiRequest(`/administracion/comprobantes/${id}/emitir`, {
+    method: "POST",
+  });
+}
+
+/** Provider manual: el CAE lo saca el usuario del portal de ARCA. */
+export async function cargarCae(
+  id: string,
+  payload: { cae: string; caeVencimiento: string },
+): Promise<Comprobante> {
+  return apiRequest(`/administracion/comprobantes/${id}/cae`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function descartarComprobante(
+  id: string,
+): Promise<{ ok: boolean }> {
+  return apiRequest(`/administracion/comprobantes/${id}`, { method: "DELETE" });
+}
+
+// ── Imputaciones ───────────────────────────────────────────────────────
+
+export async function getComprobantesPendientes(
+  clienteId: string,
+): Promise<ComprobantePendiente[]> {
+  return apiRequest(
+    `/administracion/clientes/${clienteId}/comprobantes-pendientes`,
+  );
+}
+
+export async function imputarCobro(
+  cobroId: string,
+  payload: { comprobanteId: string; monto: number },
+): Promise<{ id: string; cobroSinImputar: number }> {
+  return apiRequest(`/administracion/cobros/${cobroId}/imputaciones`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function quitarImputacion(id: string): Promise<{ ok: boolean }> {
+  return apiRequest(`/administracion/imputaciones/${id}`, { method: "DELETE" });
 }
 
 export type UpsertMetodoPagoPayload = {

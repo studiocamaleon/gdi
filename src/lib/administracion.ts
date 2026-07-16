@@ -4,6 +4,8 @@
  * Ver docs/modulo-administracion-diseno.md
  */
 
+import { formatCuit } from "@/lib/clientes";
+
 // ── Configuración fiscal del emisor (etapa C) ──────────────────────────
 
 /** Un consumidor final no emite comprobantes. */
@@ -141,6 +143,148 @@ export function letraComprobante(
     motivo: `El receptor es ${RECEPTOR_LABELS[receptor] ?? receptor} → corresponde Factura B, IVA incluido en el precio.`,
     discriminaIva: false,
     exenta: false,
+  };
+}
+
+// ── Comprobantes (etapa C) ─────────────────────────────────────────────
+
+export const COMPROBANTE_TIPOS = [
+  "factura",
+  "nota_credito",
+  "nota_debito",
+] as const;
+export type ComprobanteTipo = (typeof COMPROBANTE_TIPOS)[number];
+
+/** Sigla del badge, como en el diseño. */
+export const COMPROBANTE_TIPO_SIGLA: Record<ComprobanteTipo, string> = {
+  factura: "FA",
+  nota_credito: "NC",
+  nota_debito: "ND",
+};
+
+export const COMPROBANTE_TIPO_LABELS: Record<ComprobanteTipo, string> = {
+  factura: "Factura",
+  nota_credito: "Nota de crédito",
+  nota_debito: "Nota de débito",
+};
+
+export const COMPROBANTE_ESTADOS = [
+  "borrador",
+  "emitido",
+  "rechazado",
+  "anulado",
+] as const;
+export type ComprobanteEstado = (typeof COMPROBANTE_ESTADOS)[number];
+
+export const COMPROBANTE_ESTADO_LABELS: Record<ComprobanteEstado, string> = {
+  borrador: "Borrador",
+  emitido: "Emitido",
+  rechazado: "Rechazado",
+  anulado: "Anulado",
+};
+
+export const CONDICIONES_VENTA = [
+  "contado",
+  "cuenta_corriente",
+  "transferencia",
+  "tarjeta",
+  "otra",
+] as const;
+export type CondicionVenta = (typeof CONDICIONES_VENTA)[number];
+
+export const CONDICION_VENTA_LABELS: Record<CondicionVenta, string> = {
+  contado: "Contado",
+  cuenta_corriente: "Cuenta corriente",
+  transferencia: "Transferencia",
+  tarjeta: "Tarjeta",
+  otra: "Otra",
+};
+
+export type ComprobanteItem = {
+  descripcion: string;
+  cantidad: number;
+  precioUnitarioSinIva: number;
+  alicuotaIva: number | "exento" | "no_gravado";
+  bonificacionPct?: number;
+};
+
+export type IvaPorAlicuota = {
+  alicuota: number;
+  base: number;
+  monto: number;
+};
+
+export type Comprobante = {
+  id: string;
+  tipo: ComprobanteTipo;
+  letra: LetraComprobante;
+  puntoVentaNumero: string;
+  numero: number | null;
+  /** "A 0001-00000123". */
+  numeroCompleto: string;
+  fecha: string;
+  clienteNombre: string;
+  clienteCuit: string | null;
+  ordenId: string | null;
+  ordenNumero: string | null;
+  items: ComprobanteItem[];
+  netoGravado: number;
+  ivaPorAlicuota: IvaPorAlicuota[];
+  ivaTotal: number;
+  total: number;
+  moneda: string;
+  cotizacion: number | null;
+  estado: ComprobanteEstado;
+  cae: string | null;
+  caeVencimiento: string | null;
+  condicionVenta: string | null;
+  vencimiento: string | null;
+  leyenda: string | null;
+  /** Errores de ARCA: llegan como texto libre, no hay tabla de códigos. */
+  rechazo: { errores: string[] } | null;
+  saldoPendiente: number;
+  comprobanteOrigenId: string | null;
+};
+
+export type CobroImputado = {
+  id: string;
+  cobroId: string;
+  fecha: string;
+  metodoNombre: string;
+  cuentaNombre: string;
+  monto: number;
+};
+
+export type ComprobanteDetalle = Comprobante & {
+  cobrosImputados: CobroImputado[];
+};
+
+export type ComprobantePendiente = {
+  id: string;
+  numeroCompleto: string;
+  tipo: ComprobanteTipo;
+  fecha: string;
+  vencimiento: string | null;
+  vencida: boolean;
+  total: number;
+  saldo: number;
+};
+
+/** CUIT con guiones, o "—" cuando el receptor no tiene (consumidor final). */
+export function formatCuitODash(cuit: string | null): string {
+  return cuit ? formatCuit(cuit) : "—";
+}
+
+/** "Con CAE" es distinto de "Emitido": el CAE puede cargarse después. */
+export function estadoVisual(c: Pick<Comprobante, "estado" | "cae">): {
+  clave: string;
+  label: string;
+} {
+  if (c.estado === "emitido" && c.cae) return { clave: "cae", label: "Con CAE" };
+  if (c.estado === "emitido") return { clave: "emitido", label: "Sin CAE" };
+  return {
+    clave: c.estado,
+    label: COMPROBANTE_ESTADO_LABELS[c.estado] ?? c.estado,
   };
 }
 
