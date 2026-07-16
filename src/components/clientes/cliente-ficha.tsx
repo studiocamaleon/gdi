@@ -367,7 +367,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
   };
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+    <div className="flex-1 min-h-0 space-y-6 overflow-y-auto p-4 md:p-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex flex-col gap-3">
           <Button

@@ -363,7 +363,7 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
   };
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-6">
+    <div className="flex-1 min-h-0 space-y-6 overflow-y-auto p-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Cargos directos</h1>

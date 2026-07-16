@@ -73,7 +73,7 @@ export function ProductoDetalleView({ producto }: { producto: ProductoDetalle })
   const modoMedidasLbl = getLabel(modoMedidasLabels, producto.modoMedidas);
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-6">
+    <div className="flex-1 min-h-0 space-y-6 overflow-y-auto p-6">
       {/* Header */}
       <div className="flex flex-col gap-2">
         <Link

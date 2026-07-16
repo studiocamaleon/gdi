@@ -216,7 +216,7 @@ export function ClientesTable({ initialClientes }: ClientesTableProps) {
   };
 
   return (
-    <div className="flex flex-1 flex-col p-4 md:p-6">
+    <div className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6">
       <Card className="rounded-2xl border-border/70 shadow-sm">
         <CardHeader className="gap-4 border-b border-border/70">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
