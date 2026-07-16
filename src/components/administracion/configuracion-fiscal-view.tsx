@@ -23,6 +23,7 @@ import {
   type CondicionFiscalEmisor,
   type ConfiguracionFiscal,
   type LeyendaA,
+  type ProveedorFacturacion,
   type ModalidadPuntoVenta,
   type PuntoVenta,
 } from "@/lib/administracion";
@@ -45,6 +46,7 @@ type FormState = {
   domicilioFiscal: string;
   inicioActividades: string;
   leyendaFacturaA: LeyendaA | "";
+  proveedorFacturacion: ProveedorFacturacion;
 };
 
 function estadoInicial(config: ConfiguracionFiscal | null): FormState {
@@ -56,6 +58,7 @@ function estadoInicial(config: ConfiguracionFiscal | null): FormState {
     domicilioFiscal: config?.domicilioFiscal ?? "",
     inicioActividades: config?.inicioActividades ?? "",
     leyendaFacturaA: config?.leyendaFacturaA ?? "",
+    proveedorFacturacion: config?.proveedorFacturacion ?? "manual",
   };
 }
 
@@ -98,6 +101,7 @@ export function ConfiguracionFiscalView({
         domicilioFiscal: form.domicilioFiscal || undefined,
         inicioActividades: form.inicioActividades || undefined,
         leyendaFacturaA: esRI ? form.leyendaFacturaA || null : null,
+        proveedorFacturacion: form.proveedorFacturacion,
       });
       toast.success("Datos fiscales guardados.");
       router.refresh();
@@ -493,12 +497,51 @@ export function ConfiguracionFiscalView({
             </div>
 
             <div className="arc-card-sec">
+              <div className="arc-sec-t">
+                Cómo se pide el CAE
+                <span className="n">
+                  {initialConfig?.proveedorFacturacion === "afipsdk"
+                    ? "automático"
+                    : "a mano"}
+                </span>
+              </div>
+              <div className="arc-field" style={{ marginBottom: 12 }}>
+                <select
+                  value={form.proveedorFacturacion}
+                  onChange={(e) =>
+                    set(
+                      "proveedorFacturacion",
+                      e.target.value as ProveedorFacturacion,
+                    )
+                  }
+                >
+                  <option value="manual">
+                    Manual — emito en el portal de ARCA y cargo el CAE acá
+                  </option>
+                  <option value="afipsdk">
+                    Automático — Grafo le pide el CAE a ARCA
+                  </option>
+                </select>
+              </div>
               <div className="arc-auto-note" style={{ marginBottom: 0 }}>
                 <BuildingIcon />
-                Los comprobantes se emiten con provider{" "}
-                <b style={{ margin: "0 4px", color: "var(--ink-2)" }}>manual</b>{" "}
-                (el CAE se carga a mano). La conexión con TusFacturasApp se
-                configura en Integraciones.
+                {form.proveedorFacturacion === "afipsdk" ? (
+                  <span>
+                    Al emitir, Grafo le pide el número y el CAE a ARCA. En este
+                    entorno de desarrollo va contra{" "}
+                    <b style={{ color: "var(--ink-2)" }}>homologación</b>: los
+                    comprobantes son reales en formato pero{" "}
+                    <b style={{ color: "var(--signal)" }}>
+                      no tienen validez fiscal
+                    </b>
+                    .
+                  </span>
+                ) : (
+                  <span>
+                    El comprobante se numera con nuestro contador y queda sin
+                    CAE; lo cargás a mano desde el detalle.
+                  </span>
+                )}
               </div>
             </div>
           </div>

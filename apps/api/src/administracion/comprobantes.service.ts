@@ -21,8 +21,10 @@ import {
   type LeyendaA,
 } from './letra-comprobante';
 import { ManualProvider } from './invoicing/manual.provider';
+import { AfipSdkProvider } from './invoicing/afip-sdk.provider';
 import type {
   ComprobanteItemProvider,
+  InvoicingProvider,
   LetraProvider,
 } from './invoicing/invoicing-provider';
 import {
@@ -83,7 +85,19 @@ export class ComprobantesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly manualProvider: ManualProvider,
+    private readonly afipSdkProvider: AfipSdkProvider,
   ) {}
+
+  /**
+   * Qué provider usa el tenant. Si pide AFIP SDK pero falta el token, cae
+   * al manual en vez de romper: mejor emitir sin CAE que no emitir.
+   */
+  private resolverProvider(proveedor: string | undefined): InvoicingProvider {
+    if (proveedor === 'afipsdk' && this.afipSdkProvider.disponible) {
+      return this.afipSdkProvider;
+    }
+    return this.manualProvider;
+  }
 
   async listar(
     auth: CurrentAuth,
@@ -266,11 +280,13 @@ export class ComprobantesService {
   }
 
   /**
-   * Emite: asigna número con el contador atómico y llama al provider.
+   * Emite: resuelve el número y le pide el CAE al provider.
    *
-   * El número se toma DENTRO de la transacción para que dos emisiones
-   * simultáneas no compartan número — ARCA exige numeración correlativa
-   * sin huecos ni repetidos.
+   * Sobre el número: con provider manual manda nuestro contador atómico, y
+   * se toma DENTRO de una transacción para que dos emisiones simultáneas no
+   * lo compartan. Pero cuando hay integración **manda ARCA**: su contador es
+   * la fuente de verdad y el nuestro se sincroniza, porque ARCA rechaza
+   * cualquier número que no sea correlativo al último que autorizó.
    */
   async emitir(auth: CurrentAuth, id: string) {
     const comprobante = await this.prisma.comprobante.findFirst({
@@ -286,29 +302,54 @@ export class ComprobantesService {
       );
     }
 
+    const config = await this.prisma.configuracionFiscal.findUnique({
+      where: { tenantId: auth.tenantId },
+      select: { cuit: true, proveedorFacturacion: true },
+    });
+    const provider = this.resolverProvider(config?.proveedorFacturacion);
+    const emisorCuit = config?.cuit ?? null;
+
+    // ¿Hasta dónde numeró ARCA? Si contesta, su número manda.
+    let ultimoArca: number | null = null;
+    if (provider.codigo !== 'manual' && emisorCuit) {
+      ultimoArca = await provider.ultimoNumero(
+        comprobante.puntoVenta.numero,
+        comprobante.tipo as ComprobanteTipo,
+        comprobante.letra as LetraProvider,
+        emisorCuit,
+      );
+    }
+
     const numero = await this.prisma.$transaction(async (tx) => {
+      const clave = {
+        tenantId: auth.tenantId,
+        puntoVentaId: comprobante.puntoVentaId,
+        tipo: comprobante.tipo,
+        letra: comprobante.letra,
+      };
       const contador = await tx.comprobanteContador.upsert({
-        where: {
-          tenantId_puntoVentaId_tipo_letra: {
-            tenantId: auth.tenantId,
-            puntoVentaId: comprobante.puntoVentaId,
-            tipo: comprobante.tipo,
-            letra: comprobante.letra,
-          },
-        },
-        create: {
-          tenantId: auth.tenantId,
-          puntoVentaId: comprobante.puntoVentaId,
-          tipo: comprobante.tipo,
-          letra: comprobante.letra,
-          ultimo: 1,
-        },
+        where: { tenantId_puntoVentaId_tipo_letra: clave },
+        create: { ...clave, ultimo: 1 },
         update: { ultimo: { increment: 1 } },
       });
-      return contador.ultimo;
+      if (ultimoArca === null) return contador.ultimo;
+
+      // ARCA manda: sincronizamos nuestro contador con el suyo para no
+      // volver a pedirle un número que ya usó.
+      const siguienteArca = ultimoArca + 1;
+      if (siguienteArca !== contador.ultimo) {
+        await tx.comprobanteContador.update({
+          where: { tenantId_puntoVentaId_tipo_letra: clave },
+          data: { ultimo: siguienteArca },
+        });
+      }
+      return siguienteArca;
     });
 
-    const resultado = await this.manualProvider.emitir({
+    const resultado = await provider.emitir({
+      emisorCuit,
+      netoGravado: Number(comprobante.netoGravado),
+      ivaTotal: Number(comprobante.ivaTotal),
       idempotencyKey: comprobante.idempotencyKey,
       tipo: comprobante.tipo as ComprobanteTipo,
       letra: comprobante.letra as LetraProvider,

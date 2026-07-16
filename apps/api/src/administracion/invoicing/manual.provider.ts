@@ -47,7 +47,7 @@ export class ManualProvider implements InvoicingProvider {
    * Sin servicio externo no hay nada que reconciliar: lo que sabemos del
    * comprobante ya está en nuestra base.
    */
-  consultarPorReferencia(): Promise<EmitirResultado | null> {
+  consultarEmitido(): Promise<EmitirResultado | null> {
     return Promise.resolve(null);
   }
 

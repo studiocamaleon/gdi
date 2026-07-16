@@ -8,6 +8,7 @@ import { ComprobantesService } from './comprobantes.service';
 import { ImputacionesService } from './imputaciones.service';
 import { CuentaCorrienteService } from './cuenta-corriente.service';
 import { ManualProvider } from './invoicing/manual.provider';
+import { AfipSdkProvider } from './invoicing/afip-sdk.provider';
 
 @Module({
   controllers: [AdministracionController],
@@ -20,6 +21,7 @@ import { ManualProvider } from './invoicing/manual.provider';
     ImputacionesService,
     CuentaCorrienteService,
     ManualProvider,
+    AfipSdkProvider,
   ],
 })
 export class AdministracionModule {}

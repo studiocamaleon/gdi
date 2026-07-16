@@ -42,7 +42,8 @@ export const MODALIDAD_PUNTO_VENTA_LABELS: Record<ModalidadPuntoVenta, string> =
     talonario: "Talonario preimpreso",
   };
 
-export const PROVEEDORES_FACTURACION = ["manual", "tusfacturas"] as const;
+/** "manual" = el CAE se carga a mano. "afipsdk" = se lo pedimos a ARCA. */
+export const PROVEEDORES_FACTURACION = ["manual", "afipsdk"] as const;
 export type ProveedorFacturacion = (typeof PROVEEDORES_FACTURACION)[number];
 
 export type PuntoVenta = {

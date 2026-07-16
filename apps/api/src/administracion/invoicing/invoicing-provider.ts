@@ -1,24 +1,23 @@
 /**
  * Contrato con el servicio que le pide el CAE a ARCA.
  *
- * La forma de esta interfaz está dictada por tres restricciones REALES que
- * salieron de investigar TusFacturasApp (16/07/2026), y que cualquier
- * proveedor que integremos va a compartir porque son de ARCA, no del
- * intermediario:
+ * La forma de esta interfaz está dictada por restricciones REALES, no del
+ * intermediario. Las tres primeras salieron de investigar TusFacturasApp;
+ * la cuarta apareció recién al emitir de verdad contra ARCA (2026-07-16):
  *
- * 1. NO HAY IDEMPOTENCIA. TusFacturasApp lo dice con todas las letras: el
- *    `external_reference` "debe ser único" pero "no realiza ese control".
- *    Reintentar a ciegas tras un timeout EMITE UNA SEGUNDA FACTURA FISCAL.
- *    Por eso `emitir` recibe una `idempotencyKey` que sale de nuestro
- *    Comprobante y existe `consultarPorReferencia`: ante la duda se
- *    consulta, nunca se reintenta.
- * 2. LA EMISIÓN PUEDE SER ASINCRÓNICA. La respuesta sincrónica puede tardar
- *    más de 1m30s, y la doc recomienda encolar + webhook por resiliencia a
- *    las caídas de ARCA. Por eso el resultado contempla `en_cola`: el CAE
- *    puede no venir en la misma llamada.
+ * 1. NO HAY IDEMPOTENCIA. Reintentar a ciegas tras un timeout EMITE UNA
+ *    SEGUNDA FACTURA FISCAL. Ante la duda se consulta, nunca se reintenta.
+ * 2. LA EMISIÓN PUEDE SER ASINCRÓNICA: el CAE puede no venir en la misma
+ *    llamada. Por eso el resultado contempla `en_cola`.
  * 3. NO EXISTE "ANULAR". En Argentina un comprobante emitido se anula
  *    emitiendo una nota de crédito que lo referencia. Por eso no hay
  *    método `anular`: es otro `emitir` con `asociados`.
+ * 4. LA NUMERACIÓN LA MANDA ARCA, no nosotros. Nuestro contador sirve
+ *    mientras no hay integración, pero al emitir de verdad el número tiene
+ *    que salir de `ultimoNumero() + 1` o ARCA rechaza por correlatividad.
+ *    Y como ARCA no conoce nuestra clave de idempotencia, la reconciliación
+ *    va por (punto de venta, tipo, número) — el dato que asignamos ANTES de
+ *    llamar. De ahí `consultarEmitido`.
  */
 
 export type LetraProvider = 'A' | 'B' | 'C' | 'E';
@@ -49,8 +48,10 @@ export type EmitirInput = {
   idempotencyKey: string;
   tipo: 'factura' | 'nota_credito' | 'nota_debito';
   letra: LetraProvider;
+  /** CUIT del emisor (11 dígitos). Con delegación, es el del TENANT. */
+  emisorCuit?: string | null;
   puntoVenta: number;
-  /** null → que lo asigne el provider. Con número explícito, ARCA valida duplicados. */
+  /** Ya resuelto: ARCA exige correlatividad, no lo asigna el provider. */
   numero: number | null;
   fecha: string;
   receptor: {
@@ -63,6 +64,9 @@ export type EmitirInput = {
   items: ComprobanteItemProvider[];
   moneda: 'ARS' | 'USD';
   cotizacion?: number;
+  /** Ya calculados por totales-comprobante.ts: el provider no recalcula. */
+  netoGravado?: number;
+  ivaTotal?: number;
   total: number;
   condicionVenta?: string;
   vencimiento?: string | null;
@@ -107,24 +111,33 @@ export interface InvoicingProvider {
 
   /**
    * Pide el CAE. NUNCA reintentar a ciegas ante un error de red: primero
-   * `consultarPorReferencia(idempotencyKey)`.
+   * `consultarEmitido(...)`.
    */
   emitir(input: EmitirInput): Promise<EmitirResultado>;
 
   /**
-   * Estado de un comprobante por nuestra clave de idempotencia. Es la
-   * herramienta de reconciliación: distingue "nunca llegó" de "se emitió
-   * y no me enteré".
+   * Estado de un comprobante ya enviado. Es la herramienta de
+   * reconciliación: distingue "nunca llegó" de "se emitió y no me enteré".
+   * Va por número porque es lo único que ARCA conoce de nosotros: nuestra
+   * clave de idempotencia no viaja.
    */
-  consultarPorReferencia(
-    idempotencyKey: string,
+  consultarEmitido(
+    puntoVenta: number,
+    tipo: EmitirInput['tipo'],
+    letra: LetraProvider,
+    numero: number,
+    cuitEmisor?: string,
   ): Promise<EmitirResultado | null>;
 
-  /** Último número autorizado por ARCA para (punto de venta, tipo, letra). */
+  /**
+   * Último número autorizado por ARCA para (punto de venta, tipo, letra).
+   * null = el provider no lleva numeración y manda nuestro contador.
+   */
   ultimoNumero(
     puntoVenta: number,
     tipo: EmitirInput['tipo'],
     letra: LetraProvider,
+    cuitEmisor?: string,
   ): Promise<number | null>;
 
   /** Condición fiscal del receptor según el padrón. null si no se puede consultar. */
