@@ -14,6 +14,20 @@ export async function getFamiliasPasos() {
   return apiRequest<FamiliaPasoCatalogo[]>("/produccion/familias-pasos");
 }
 
+/**
+ * Mediana histórica de duración real por familia de pasos (fallback de la
+ * cola en horas del tablero; sólo familias con muestras suficientes).
+ */
+export type DuracionFamilia = {
+  familiaCodigo: string;
+  medianaMin: number;
+  muestras: number;
+};
+
+export async function getDuracionesFamilias() {
+  return apiRequest<DuracionFamilia[]>("/produccion/duraciones-familias");
+}
+
 export async function createEstacion(payload: EstacionPayload) {
   return apiRequest<Estacion>("/produccion/estaciones", {
     method: "POST",

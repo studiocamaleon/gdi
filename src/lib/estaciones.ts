@@ -31,6 +31,150 @@ export function etapaDeEstacion(key: string) {
   return ETAPAS_ESTACION.find((entry) => entry.key === key) ?? ETAPAS_ESTACION[0];
 }
 
+// ── Calendario semanal operativo ─────────────────────────────────────────
+// Espejo del backend (apps/api/src/produccion/calendario.ts). Una franja
+// desde/hasta ("HH:MM") por día; null = no se trabaja ese día.
+// Ver docs/capacidad-estaciones-diseno.md D2.
+
+export const DIAS_SEMANA = ["lun", "mar", "mie", "jue", "vie", "sab", "dom"] as const;
+
+export type DiaSemana = (typeof DIAS_SEMANA)[number];
+
+export type CalendarioDia = { desde: string; hasta: string };
+
+export type CalendarioEstacion = {
+  dias: Record<DiaSemana, CalendarioDia | null>;
+};
+
+export const DIAS_SEMANA_LABEL: Record<DiaSemana, string> = {
+  lun: "L",
+  mar: "Ma",
+  mie: "Mi",
+  jue: "J",
+  vie: "V",
+  sab: "S",
+  dom: "D",
+};
+
+/** Default del form de creación: L–V 9:00–18:00 (el caso común en dos clicks). */
+export function calendarioDefault(): CalendarioEstacion {
+  const franja = { desde: "09:00", hasta: "18:00" };
+  return {
+    dias: { lun: { ...franja }, mar: { ...franja }, mie: { ...franja }, jue: { ...franja }, vie: { ...franja }, sab: null, dom: null },
+  };
+}
+
+/** "08:00" → "8:00" (sin cero inicial, para labels compactos). */
+function horaCorta(hora: string) {
+  return hora.startsWith("0") ? hora.slice(1) : hora;
+}
+
+/**
+ * Label compacto del calendario: agrupa días consecutivos con la misma
+ * franja — "L–V 8:00–18:00 · S 9:00–13:00". null si no hay calendario.
+ */
+export function etiquetaCalendario(calendario: CalendarioEstacion | null | undefined): string | null {
+  if (!calendario) return null;
+  const grupos: Array<{ desdeDia: DiaSemana; hastaDia: DiaSemana; franja: CalendarioDia }> = [];
+  for (const dia of DIAS_SEMANA) {
+    const franja = calendario.dias[dia];
+    if (!franja) continue;
+    const previo = grupos[grupos.length - 1];
+    const contiguo =
+      previo &&
+      DIAS_SEMANA.indexOf(dia) === DIAS_SEMANA.indexOf(previo.hastaDia) + 1 &&
+      previo.franja.desde === franja.desde &&
+      previo.franja.hasta === franja.hasta;
+    if (contiguo) previo.hastaDia = dia;
+    else grupos.push({ desdeDia: dia, hastaDia: dia, franja });
+  }
+  if (grupos.length === 0) return null;
+  return grupos
+    .map((grupo) => {
+      const dias =
+        grupo.desdeDia === grupo.hastaDia
+          ? DIAS_SEMANA_LABEL[grupo.desdeDia]
+          : `${DIAS_SEMANA_LABEL[grupo.desdeDia]}–${DIAS_SEMANA_LABEL[grupo.hastaDia]}`;
+      return `${dias} ${horaCorta(grupo.franja.desde)}–${horaCorta(grupo.franja.hasta)}`;
+    })
+    .join(" · ");
+}
+
+/** Índice Date.getDay() (0 = domingo) → clave del calendario. */
+const JS_DIA: DiaSemana[] = ["dom", "lun", "mar", "mie", "jue", "vie", "sab"];
+
+/** "HH:MM" → minutos desde medianoche. */
+function minutosDesdeMedianoche(hora: string) {
+  const [hh, mm] = hora.split(":").map(Number);
+  return hh * 60 + mm;
+}
+
+/** Duración de una franja en minutos. */
+function minutosDeFranja(franja: CalendarioDia) {
+  return minutosDesdeMedianoche(franja.hasta) - minutosDesdeMedianoche(franja.desde);
+}
+
+/**
+ * Capacidad del día más largo del calendario, en minutos-persona (franja ×
+ * puestos). Escala la LoadBar del tablero: "un día lleno" = barra llena.
+ */
+export function capacidadDiariaMaxMin(
+  calendario: CalendarioEstacion | null | undefined,
+  puestos: number,
+): number | null {
+  if (!calendario) return null;
+  let max = 0;
+  for (const dia of DIAS_SEMANA) {
+    const franja = calendario.dias[dia];
+    if (franja) max = Math.max(max, minutosDeFranja(franja));
+  }
+  return max > 0 ? max * Math.max(1, puestos) : null;
+}
+
+/**
+ * Proyección de la cola en JORNADAS operativas, caminando el calendario
+ * desde `desde` (D7 de capacidad-estaciones-diseno.md): hoy aporta sólo lo
+ * que queda de su franja, los días inactivos no aportan, y cada día suma su
+ * fracción consumida contra la capacidad completa de ese día. Los puestos
+ * multiplican. null = sin calendario o cola que no se vacía en el horizonte.
+ */
+export function proyectarColaDias(
+  calendario: CalendarioEstacion | null | undefined,
+  colaMin: number,
+  puestos: number,
+  desde: Date = new Date(),
+): number | null {
+  if (!calendario) return null;
+  if (colaMin <= 0) return 0;
+  const puestosEfectivos = Math.max(1, puestos);
+  let restante = colaMin;
+  let dias = 0;
+  for (let i = 0; i < 365; i += 1) {
+    const fecha = new Date(desde.getFullYear(), desde.getMonth(), desde.getDate() + i);
+    const franja = calendario.dias[JS_DIA[fecha.getDay()]];
+    if (!franja) continue;
+    const capacidadDia = minutosDeFranja(franja) * puestosEfectivos;
+    let disponibles = capacidadDia;
+    if (i === 0) {
+      const ahora = desde.getHours() * 60 + desde.getMinutes();
+      const arranque = Math.max(ahora, minutosDesdeMedianoche(franja.desde));
+      disponibles = Math.max(0, minutosDesdeMedianoche(franja.hasta) - arranque) * puestosEfectivos;
+    }
+    if (disponibles <= 0) continue;
+    const consumo = Math.min(restante, disponibles);
+    dias += consumo / capacidadDia;
+    restante -= consumo;
+    if (restante <= 0) return dias;
+  }
+  return null;
+}
+
+/** "1,8 d" (coma decimal; sin decimales desde 10 jornadas). */
+export function etiquetaDias(dias: number): string {
+  const valor = dias >= 10 ? `${Math.round(dias)}` : `${Math.round(dias * 10) / 10}`.replace(".", ",");
+  return `${valor} d`;
+}
+
 export type EstacionEmpleadoRef = {
   id: string;
   nombreCompleto: string;
@@ -57,10 +201,10 @@ export type Estacion = {
   etapa: string;
   /** Clave del set de iconos del tablero (Printer, Cut, Shield, …). */
   icono: string | null;
-  /** Pasos que pueden ejecutarse en paralelo (carga real del tablero). */
+  /** PUESTOS de trabajo simultáneos: multiplican las horas del calendario. */
   capacidadConcurrente: number;
-  /** Horario operativo, texto libre informativo. */
-  horario: string | null;
+  /** Calendario semanal operativo; null = sin proyección de cola en días. */
+  calendario: CalendarioEstacion | null;
   /** Códigos de familias de pasos asignadas. */
   familias: string[];
   empleados: EstacionEmpleadoRef[];
@@ -76,7 +220,7 @@ export type EstacionPayload = {
   etapa: string;
   icono?: string;
   capacidadConcurrente?: number;
-  horario?: string;
+  calendario?: CalendarioEstacion | null;
   /** Reemplazo completo de las tres listas. */
   familias: string[];
   empleadoIds: string[];
@@ -104,7 +248,7 @@ export function createEmptyEstacion(): EstacionPayload {
     etapa: "preprensa",
     icono: "Tool",
     capacidadConcurrente: 1,
-    horario: "",
+    calendario: calendarioDefault(),
     familias: [],
     empleadoIds: [],
     maquinaIds: [],
