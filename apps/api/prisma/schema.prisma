@@ -1074,10 +1074,14 @@ model Estacion {
   etapa                String             @default("preprensa")
   /// Clave del set de iconos del tablero (Printer, Cut, Shield, …).
   icono                String?
-  /// Pasos que pueden ejecutarse en paralelo (carga real del tablero).
+  /// PUESTOS de trabajo simultáneos: multiplican las horas del calendario
+  /// (capacidad en tiempo), NO son denominador de conteo de pasos.
+  /// Ver docs/capacidad-estaciones-diseno.md D4.
   capacidadConcurrente Int                @default(1)
-  /// Horario operativo, texto libre informativo ("8 a 18 hs").
-  horario              String?
+  /// Calendario semanal operativo (D2). Shape validado en el service:
+  /// { dias: { lun: { desde: "08:00", hasta: "18:00" } | null, …, dom: null } }
+  /// null = sin calendario (el tablero no proyecta la cola en días).
+  calendarioJson       Json?
   activo               Boolean            @default(true)
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt

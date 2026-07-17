@@ -4,12 +4,26 @@ import {
   ConflictException,
   BadRequestException,
 } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import type { UpsertEstacionDto } from './dto/upsert-estacion.dto';
 import { FAMILIAS } from '../productos-servicios/pasos/familias';
 import type { FamiliaCodigo } from '../productos-servicios/pasos/types';
+import { parseCalendario, type CalendarioEstacion } from './calendario';
+
+/**
+ * Mínimo de pasos hechos por familia para publicar su mediana histórica:
+ * no se proyecta cola sobre anécdota (D6 de capacidad-estaciones-diseno.md).
+ */
+const MIN_MUESTRAS_MEDIANA = 3;
+
+/** Serializa el calendario validado para la columna Json nullable. */
+function calendarioAJson(calendario: CalendarioEstacion | null) {
+  return calendario === null
+    ? Prisma.DbNull
+    : (calendario as unknown as Prisma.InputJsonValue);
+}
 
 function isUniqueConstraintError(error: unknown) {
   return (
@@ -99,6 +113,39 @@ export class ProduccionService {
       categoria: familia.categoria,
       visibleEnSelector: familia.visibleEnSelector !== false,
       estaciones: porFamilia.get(familia.codigo) ?? [],
+    }));
+  }
+
+  /**
+   * Mediana histórica de duración REAL por familia de pasos (fallback de
+   * `duracionEstimadaMin` para la cola del tablero, D6 del doc de capacidad):
+   * completadoEl − iniciadoEl de los pasos `hecho` del tenant, sólo familias
+   * con muestras suficientes. Mediana y no promedio: resiste el paso que
+   * quedó abierto un fin de semana.
+   */
+  async findDuracionesFamilias(auth: CurrentAuth) {
+    const rows = await this.prisma.$queryRaw<
+      Array<{ familiaCodigo: string; medianaMin: number; muestras: number }>
+    >`
+      SELECT "familiaCodigo",
+             percentile_cont(0.5) WITHIN GROUP (
+               ORDER BY EXTRACT(EPOCH FROM ("completadoEl" - "iniciadoEl")) / 60.0
+             ) AS "medianaMin",
+             COUNT(*)::int AS "muestras"
+      FROM "OrdenTrabajoItemPaso"
+      WHERE "tenantId" = ${auth.tenantId}::uuid
+        AND "estado" = 'hecho'
+        AND "iniciadoEl" IS NOT NULL
+        AND "completadoEl" IS NOT NULL
+        AND "completadoEl" > "iniciadoEl"
+      GROUP BY "familiaCodigo"
+      HAVING COUNT(*) >= ${MIN_MUESTRAS_MEDIANA}
+      ORDER BY "familiaCodigo" ASC
+    `;
+    return rows.map((row) => ({
+      familiaCodigo: row.familiaCodigo,
+      medianaMin: Math.round(Number(row.medianaMin) * 10) / 10,
+      muestras: Number(row.muestras),
     }));
   }
 
@@ -251,7 +298,7 @@ export class ProduccionService {
             etapa: payload.etapa ?? 'preprensa',
             icono: payload.icono?.trim() || null,
             capacidadConcurrente: payload.capacidadConcurrente ?? 1,
-            horario: payload.horario?.trim() || null,
+            calendarioJson: calendarioAJson(parseCalendario(payload.calendario)),
           },
         });
         await this.sincronizarListas(tx, auth, estacion.id, listas);
@@ -291,7 +338,11 @@ export class ProduccionService {
             icono: payload.icono?.trim() || null,
             capacidadConcurrente:
               payload.capacidadConcurrente ?? existing.capacidadConcurrente,
-            horario: payload.horario?.trim() || null,
+            // undefined = no tocar; null explícito = borrar el calendario.
+            calendarioJson:
+              payload.calendario === undefined
+                ? undefined
+                : calendarioAJson(parseCalendario(payload.calendario)),
           },
         });
         await this.sincronizarListas(tx, auth, id, listas);
@@ -355,7 +406,7 @@ export class ProduccionService {
       etapa: item.etapa,
       icono: item.icono,
       capacidadConcurrente: item.capacidadConcurrente,
-      horario: item.horario,
+      calendario: (item.calendarioJson as CalendarioEstacion | null) ?? null,
       familias: item.familias.map((fila) => fila.familiaCodigo),
       empleados: item.empleados.map((fila) => ({
         id: fila.empleado.id,

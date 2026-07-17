@@ -28,6 +28,15 @@ export class ProduccionController {
     return this.service.findFamiliasPasos(auth);
   }
 
+  /**
+   * Mediana histórica de duración real por familia (fallback de la cola en
+   * horas del tablero). Ver docs/capacidad-estaciones-diseno.md D6.
+   */
+  @Get('duraciones-familias')
+  findDuracionesFamilias(@CurrentSession() auth: CurrentAuth) {
+    return this.service.findDuracionesFamilias(auth);
+  }
+
   @Post('estaciones')
   createEstacion(
     @CurrentSession() auth: CurrentAuth,

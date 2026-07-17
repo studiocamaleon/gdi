@@ -4,6 +4,7 @@ import {
   IsBoolean,
   IsIn,
   IsInt,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -12,6 +13,7 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
+import type { CalendarioEstacion } from '../calendario';
 
 /** Etapas productivas FIJAS del taller (ordenan las vistas operativas). */
 export const ETAPAS_ESTACION = [
@@ -50,17 +52,20 @@ export class UpsertEstacionDto {
   @MaxLength(40)
   icono?: string;
 
-  /** Pasos que pueden ejecutarse en paralelo. */
+  /** PUESTOS de trabajo simultáneos (multiplican horas del calendario). */
   @IsOptional()
   @IsInt()
   @Min(1)
   @Max(99)
   capacidadConcurrente?: number;
 
+  /**
+   * Calendario semanal operativo; el shape fino lo valida el service con
+   * parseCalendario (formato HH:MM, desde < hasta, días conocidos).
+   */
   @IsOptional()
-  @IsString()
-  @MaxLength(120)
-  horario?: string;
+  @IsObject()
+  calendario?: CalendarioEstacion | null;
 
   /**
    * Reemplazo COMPLETO de las tres listas: el form edita el conjunto.
