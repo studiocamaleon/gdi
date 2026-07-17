@@ -457,6 +457,7 @@ model User {
   invitations         Invitation[]
   empleados           Empleado[]
   ordenTrabajoEventos OrdenTrabajoEvento[]
+  pasosEnMesa         OrdenTrabajoItemPaso[] @relation("PasosEnMesa")
 }
 
 model Membership {
@@ -2050,15 +2051,20 @@ model OrdenTrabajoItemPaso {
   motivoBloqueo       String?
   iniciadoEl          DateTime?
   completadoEl        DateTime?
+  /// Usuario que tomó el paso a SU mesa de trabajo (vista Por estación del
+  /// tablero): reclamo visible para todos, persistente entre sesiones.
+  mesaUsuarioId       String?          @db.Uuid
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
   tenant              Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   orden               OrdenTrabajo     @relation(fields: [ordenId], references: [id], onDelete: Cascade)
   item                OrdenTrabajoItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  mesaUsuario         User?            @relation("PasosEnMesa", fields: [mesaUsuarioId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, ordenId])
   @@index([tenantId, itemId])
   @@index([tenantId, estado])
+  @@index([tenantId, mesaUsuarioId])
 }
 
 model OrdenTrabajoEvento {

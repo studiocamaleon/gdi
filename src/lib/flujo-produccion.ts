@@ -415,6 +415,8 @@ export function estimarDemoraNuevos({
         motivoBloqueo: null,
         iniciadoEl: null,
         completadoEl: null,
+        mesaEsMia: false,
+        mesaUsuarioNombre: null,
       })),
     }));
 

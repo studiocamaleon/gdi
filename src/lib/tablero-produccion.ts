@@ -31,6 +31,10 @@ export type TableroPasoData = {
   /** ISO datetime o null. */
   iniciadoEl: string | null;
   completadoEl: string | null;
+  /** El paso está en MI mesa de trabajo (reclamo persistente por usuario). */
+  mesaEsMia: boolean;
+  /** Quién lo tiene en su mesa (para el resto del taller); null = nadie. */
+  mesaUsuarioNombre: string | null;
 };
 
 export type TableroItemData = {

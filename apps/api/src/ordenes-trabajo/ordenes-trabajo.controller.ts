@@ -19,6 +19,7 @@ import {
   EditarOrdenTrabajoDto,
 } from './dto/crear-orden-trabajo.dto';
 import { AccionPasoOrdenTrabajoDto } from './dto/accion-paso.dto';
+import { MesaPasoDto } from './dto/mesa-paso.dto';
 import { Public } from '../auth/public.decorator';
 
 @Controller('ordenes-trabajo')
@@ -48,6 +49,16 @@ export class OrdenesTrabajoController {
   @Get('tablero')
   tablero(@CurrentSession() auth: CurrentAuth) {
     return this.ordenesTrabajoService.tablero(auth);
+  }
+
+  /** Tomar/soltar un paso de MI mesa de trabajo (vista Por estación). */
+  @Patch('tablero/pasos/:pasoId/mesa')
+  mesaPaso(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('pasoId') pasoId: string,
+    @Body() payload: MesaPasoDto,
+  ) {
+    return this.ordenesTrabajoService.mesaPaso(auth, pasoId, payload.en);
   }
 
   @Get(':id')
