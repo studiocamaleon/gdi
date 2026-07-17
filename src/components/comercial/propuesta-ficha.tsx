@@ -4528,6 +4528,18 @@ export function PropuestaFicha({
   const emisionOrdenIdRef = React.useRef<string | null>(null);
   const [editandoOrden, setEditandoOrden] = React.useState(false);
   const [guardandoEdicion, setGuardandoEdicion] = React.useState(false);
+  const [trackCopiado, setTrackCopiado] = React.useState(false);
+
+  // Copia el link público de seguimiento del cliente (/track/<token>).
+  const publicToken = orden?.publicToken ?? null;
+  const compartirSeguimiento = React.useCallback(() => {
+    if (!publicToken) return;
+    const url = `${window.location.origin}/track/${publicToken}`;
+    void navigator.clipboard?.writeText(url).then(() => {
+      setTrackCopiado(true);
+      window.setTimeout(() => setTrackCopiado(false), 2000);
+    });
+  }, [publicToken]);
   const camposEdicion = React.useMemo(
     () =>
       orden && editandoOrden
@@ -5420,6 +5432,17 @@ export function PropuestaFicha({
                     >
                       <CheckIcon />
                       {emitiendoBorrador ? "Emitiendo…" : "Emitir OT"}
+                    </button>
+                  ) : null}
+                  {publicToken ? (
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={compartirSeguimiento}
+                      title="Copiar el link público de seguimiento para el cliente"
+                    >
+                      {trackCopiado ? <CheckIcon /> : <ExternalLinkIcon />}
+                      {trackCopiado ? "Link copiado" : "Compartir seguimiento"}
                     </button>
                   ) : null}
                   <button

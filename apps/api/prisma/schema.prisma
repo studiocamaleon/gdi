@@ -402,6 +402,8 @@ model Tenant {
   productosImpuestosCatalogo                       ProductoImpuestoCatalogo[]
   productosComisionesCatalogo                      ProductoComisionCatalogo[]
   estaciones                                       Estacion[]
+  estacionFamilias                                 EstacionFamilia[]
+  estacionEmpleados                                EstacionEmpleado[]
   // === Modelo Universal V2 (Fase F.1.2) ===
   rutas                                            Ruta[]
   rutaPasos                                        RutaPaso[]
@@ -424,6 +426,7 @@ model Tenant {
   productosComisionesAplicadas                     ProductoComisionAplicada[]
   ordenesTrabajo                                   OrdenTrabajo[]
   ordenTrabajoItems                                OrdenTrabajoItem[]
+  ordenTrabajoItemPasos                            OrdenTrabajoItemPaso[]
   ordenTrabajoEventos                              OrdenTrabajoEvento[]
   ordenTrabajoContadores                           OrdenTrabajoContador[]
   cuentasFondos                                    CuentaFondos[]
@@ -591,6 +594,7 @@ model Empleado {
   invitations            Invitation[]
   recursosCentroCosto    CentroCostoRecurso[] @relation("CentroCostoRecursoEmpleado")
   ordenesTrabajoVendidas OrdenTrabajo[]       @relation("OrdenTrabajoVendedor")
+  estaciones             EstacionEmpleado[]
 
   @@index([tenantId, nombreCompleto])
   @@index([tenantId, sector])
@@ -916,6 +920,9 @@ model Maquina {
   numeroSerie                  String?
   plantaId                     String                               @db.Uuid
   centroCostoPrincipalId       String?                              @db.Uuid
+  /// Estación de trabajo donde vive la máquina (una sola). Independiente del
+  /// centro de costo: costeo y piso de taller son ejes distintos.
+  estacionId                   String?                              @db.Uuid
   estado                       EstadoMaquina                        @default(ACTIVA)
   estadoConfiguracion          EstadoConfiguracionMaquina           @default(BORRADOR)
   geometriaTrabajo             GeometriaTrabajoMaquina
@@ -939,6 +946,7 @@ model Maquina {
   tenant                       Tenant                               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   planta                       Planta                               @relation(fields: [plantaId], references: [id], onDelete: Cascade)
   centroCostoPrincipal         CentroCosto?                         @relation("MaquinaCentroCostoPrincipal", fields: [centroCostoPrincipalId], references: [id], onDelete: SetNull)
+  estacion                     Estacion?                            @relation(fields: [estacionId], references: [id], onDelete: SetNull)
   perfilesOperativos           MaquinaPerfilOperativo[]
   consumibles                  MaquinaConsumible[]
   componentesDesgaste          MaquinaComponenteDesgaste[]
@@ -954,6 +962,7 @@ model Maquina {
   @@index([tenantId, plantaId, activo])
   @@index([tenantId, estado])
   @@index([tenantId, centroCostoPrincipalId])
+  @@index([tenantId, estacionId])
 }
 
 /// Perfil operativo de una máquina. Modelo universal alineado a doc §5–§13:
@@ -1050,18 +1059,68 @@ model MaquinaComponenteDesgaste {
   @@index([tenantId, materiaPrimaVarianteId, activo])
 }
 
+/// Estación de trabajo del taller: agrupa familias de pasos (qué se hace),
+/// máquinas (con qué) y empleados habilitados (quiénes). El paso llega a su
+/// estación por la FAMILIA (una familia vive en una sola estación).
+/// Ver docs/estaciones-diseno.md
 model Estacion {
-  id          String   @id @default(uuid()) @db.Uuid
-  tenantId    String   @db.Uuid
-  nombre      String
-  descripcion String?
-  activo      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id                   String             @id @default(uuid()) @db.Uuid
+  tenantId             String             @db.Uuid
+  nombre               String
+  descripcion          String?
+  /// Etapa productiva FIJA del catálogo ('preprensa' | 'impresion' |
+  /// 'postprensa' | 'terminaciones' | 'instalacion' | 'qa-despacho').
+  /// Ordena y agrupa las estaciones en las vistas operativas.
+  etapa                String             @default("preprensa")
+  /// Clave del set de iconos del tablero (Printer, Cut, Shield, …).
+  icono                String?
+  /// Pasos que pueden ejecutarse en paralelo (carga real del tablero).
+  capacidadConcurrente Int                @default(1)
+  /// Horario operativo, texto libre informativo ("8 a 18 hs").
+  horario              String?
+  activo               Boolean            @default(true)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  tenant               Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  familias             EstacionFamilia[]
+  empleados            EstacionEmpleado[]
+  maquinas             Maquina[]
 
   @@unique([tenantId, nombre])
   @@index([tenantId, activo])
+}
+
+/// Familia de pasos asignada a una estación. Una familia puede estar en
+/// varias estaciones SÓLO si tienen máquinas (filtran por máquina; son
+/// disjuntas porque una máquina vive en una sola estación); a lo sumo una
+/// estación general (sin máquinas) por familia — lo valida el service, el
+/// paso siempre resuelve a UNA estación. Ver docs/estaciones-diseno.md D1.
+model EstacionFamilia {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @db.Uuid
+  estacionId    String   @db.Uuid
+  /// FamiliaCodigo del catálogo fijo (productos-servicios/pasos/familias).
+  familiaCodigo String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  estacion      Estacion @relation(fields: [estacionId], references: [id], onDelete: Cascade)
+
+  @@unique([estacionId, familiaCodigo])
+  @@index([tenantId, familiaCodigo])
+  @@index([tenantId, estacionId])
+}
+
+/// Empleado habilitado para trabajar en una estación (N:M).
+model EstacionEmpleado {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @db.Uuid
+  estacionId String   @db.Uuid
+  empleadoId String   @db.Uuid
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  estacion   Estacion @relation(fields: [estacionId], references: [id], onDelete: Cascade)
+  empleado   Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+
+  @@unique([estacionId, empleadoId])
+  @@index([tenantId, empleadoId])
 }
 
 model MateriaPrima {
@@ -1871,6 +1930,10 @@ model OrdenTrabajo {
   total              Decimal?             @db.Decimal(14, 2)
   /// Avance 0-100 informado por producción; null = sin dato.
   progresoPct        Int?
+  /// Token aleatorio url-safe del link PÚBLICO de seguimiento del cliente
+  /// (grafoprint.com.ar/track/<token>). Se genera al emitir la OT (salir de
+  /// borrador); null = todavía no compartible. Ver docs/tracking-publico-diseno.md
+  publicToken        String?              @unique
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
   tenant             Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -1878,6 +1941,7 @@ model OrdenTrabajo {
   vendedor           Empleado?            @relation("OrdenTrabajoVendedor", fields: [vendedorEmpleadoId], references: [id])
   cotizacion         Cotizacion?          @relation(fields: [cotizacionId], references: [id])
   items              OrdenTrabajoItem[]
+  pasos              OrdenTrabajoItemPaso[]
   eventos            OrdenTrabajoEvento[]
   cobros             Cobro[]
   movimientosFondos  MovimientoFondos[]
@@ -1919,8 +1983,48 @@ model OrdenTrabajoItem {
   tenant                Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   orden                 OrdenTrabajo    @relation(fields: [ordenId], references: [id], onDelete: Cascade)
   cotizacionItem        CotizacionItem? @relation(fields: [cotizacionItemId], references: [id])
+  pasos                 OrdenTrabajoItemPaso[]
 
   @@index([tenantId, ordenId])
+}
+
+/// Paso de producción de un item de OT: la unidad de trabajo del Tablero.
+/// Se materializa al EMITIR la orden desde `trazabilidadJson.pasos` del
+/// snapshot del cotizador (sólo pasos activados). El snapshot sigue siendo
+/// inmutable; acá vive el estado de EJECUCIÓN en el taller.
+/// Ver docs/tablero-produccion-conexion-diseno.md
+model OrdenTrabajoItemPaso {
+  id                  String           @id @default(uuid()) @db.Uuid
+  tenantId            String           @db.Uuid
+  ordenId             String           @db.Uuid
+  itemId              String           @db.Uuid
+  /// Posición del paso en la ruta del item (orden topológico del snapshot).
+  indice              Int
+  /// rutaPasoId del PasoEjecutado de origen (trazar contra el snapshot).
+  rutaPasoId          String?
+  familiaCodigo       String
+  /// Categoría de alto nivel de la familia (agrupa la vista Por estación).
+  categoriaFamilia    String
+  /// Nombre operativo visible ("Impresión digital frente").
+  nombre              String
+  /// Centro de costo que tarifó el paso — proxy de "estación" en fase 1.
+  centroCostoId       String?          @db.Uuid
+  centroCostoNombre   String?
+  duracionEstimadaMin Decimal?         @db.Decimal(10, 2)
+  /// 'pendiente' | 'en_curso' | 'hecho' | 'bloqueado'.
+  estado              String           @default("pendiente")
+  motivoBloqueo       String?
+  iniciadoEl          DateTime?
+  completadoEl        DateTime?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  tenant              Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orden               OrdenTrabajo     @relation(fields: [ordenId], references: [id], onDelete: Cascade)
+  item                OrdenTrabajoItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, ordenId])
+  @@index([tenantId, itemId])
+  @@index([tenantId, estado])
 }
 
 model OrdenTrabajoEvento {

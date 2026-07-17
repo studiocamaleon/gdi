@@ -94,6 +94,7 @@ export type OrdenTrabajoEventoTipo =
   | "item_agregado"
   | "item_modificado"
   | "item_quitado"
+  | "paso"
   | "nota";
 
 export type OrdenTrabajoEvento = {
@@ -200,9 +201,25 @@ export type OrdenTrabajoDetalle = OrdenTrabajoListItem & {
   canalVenta: string | null;
   /** Cargos directos a nivel orden (viático, flete…). */
   cargosDirectos: number;
+  /** Token del link público de seguimiento del cliente (/track/<token>). */
+  publicToken: string | null;
   productos: OrdenTrabajoProducto[];
   eventos: OrdenTrabajoEvento[];
   pago: OrdenTrabajoPago | null;
+};
+
+/**
+ * KPIs y contadores del listado, calculados por el BACKEND sobre el tenant
+ * completo. Antes se derivaban de las filas cargadas y mentían en cuanto
+ * había más órdenes que el límite de la página.
+ */
+export type OrdenesTrabajoStats = {
+  porEstado: Record<OrdenTrabajoEstado, number>;
+  totalOrdenes: number;
+  activas: number;
+  valorEnCurso: number;
+  proximasEntregar: number;
+  emitidasHoy: number;
 };
 
 /** Progreso derivado del estado cuando producción no informa un valor real. */
@@ -267,6 +284,7 @@ export function getMockOrdenDetalle(id: string): OrdenTrabajoDetalle | null {
       observaciones: null,
       canalVenta: null,
       cargosDirectos: 0,
+      publicToken: null,
       productos: [],
       eventos: [],
       pago: null,
@@ -278,6 +296,7 @@ export function getMockOrdenDetalle(id: string): OrdenTrabajoDetalle | null {
     observaciones: null,
     canalVenta: "mostrador",
     cargosDirectos: 8500,
+    publicToken: null,
     productos: [
       {
         codigo: "TAR-001",

@@ -5,7 +5,13 @@
  * Unitario sin DB: transiciones de estado y progreso derivado.
  */
 import { BadRequestException } from '@nestjs/common';
-import { OrdenesTrabajoService } from '../ordenes-trabajo.service';
+import {
+  OrdenesTrabajoService,
+  ordenSeFinaliza,
+  pasoEjecutable,
+  pasoReabrible,
+  TRANSICIONES_PASO,
+} from '../ordenes-trabajo.service';
 import {
   progresoEfectivo,
   type OrdenTrabajoEstado,
@@ -38,11 +44,14 @@ describe('OrdenesTrabajoService — validarTransicion', () => {
     ['entregada', 'borrador'],
   ];
 
-  it.each(casosInvalidos)('%s → %s se rechaza (flujo sólo avanza)', (desde, hacia) => {
-    expect(() => svc().validarTransicion(desde, hacia)).toThrow(
-      BadRequestException,
-    );
-  });
+  it.each(casosInvalidos)(
+    '%s → %s se rechaza (flujo sólo avanza)',
+    (desde, hacia) => {
+      expect(() => svc().validarTransicion(desde, hacia)).toThrow(
+        BadRequestException,
+      );
+    },
+  );
 
   it('mismo estado se rechaza', () => {
     expect(() => svc().validarTransicion('produccion', 'produccion')).toThrow(
@@ -52,10 +61,7 @@ describe('OrdenesTrabajoService — validarTransicion', () => {
 
   it('estado desconocido se rechaza', () => {
     expect(() =>
-      svc().validarTransicion(
-        'cancelada' as OrdenTrabajoEstado,
-        'entregada',
-      ),
+      svc().validarTransicion('cancelada' as OrdenTrabajoEstado, 'entregada'),
     ).toThrow(BadRequestException);
   });
 });
@@ -205,6 +211,167 @@ describe('progresoEfectivo', () => {
   it('finalizada/entregada → 100 siempre', () => {
     expect(progresoEfectivo('finalizada', null)).toBe(100);
     expect(progresoEfectivo('entregada', 60)).toBe(100);
+  });
+});
+
+describe('OrdenesTrabajoService — pasosDesdeTrazabilidad (Tablero)', () => {
+  // Método privado: se accede por índice para testear el mapeo puro sin DB.
+  const pasosDesde = (trazabilidad: unknown) =>
+    (
+      svc() as unknown as {
+        pasosDesdeTrazabilidad: (
+          tenantId: string,
+          ordenId: string,
+          itemId: string,
+          trazabilidad: unknown,
+        ) => Array<Record<string, unknown>>;
+      }
+    ).pasosDesdeTrazabilidad('t-1', 'o-1', 'i-1', trazabilidad);
+
+  const pasoTraz = (extra: Record<string, unknown> = {}) => ({
+    rutaPasoId: 'rp-1',
+    rutaPasoOrden: 1,
+    familiaCodigo: 'impresion_por_hoja',
+    nombreVisible: 'Impresión digital frente',
+    activado: true,
+    tiempo: {
+      totalMin: 42.5,
+      centroCostoId: 'a2c1e6d0-0000-0000-0000-000000000009',
+      centroCostoNombre: 'IMP-001 · HP Indigo',
+    },
+    ...extra,
+  });
+
+  it('sólo materializa pasos activados, con índice consecutivo', () => {
+    const pasos = pasosDesde({
+      pasos: [
+        pasoTraz(),
+        pasoTraz({ activado: false, razonNoActivado: 'no obligatorio' }),
+        pasoTraz({ familiaCodigo: 'corte_guillotina', nombreVisible: null }),
+      ],
+    });
+    expect(pasos).toHaveLength(2);
+    expect(pasos.map((p) => p.indice)).toEqual([0, 1]);
+  });
+
+  it('toma nombre visible, centro de costo y duración del snapshot', () => {
+    const [paso] = pasosDesde({ pasos: [pasoTraz()] });
+    expect(paso).toMatchObject({
+      tenantId: 't-1',
+      ordenId: 'o-1',
+      itemId: 'i-1',
+      nombre: 'Impresión digital frente',
+      familiaCodigo: 'impresion_por_hoja',
+      categoriaFamilia: 'produccion_impresion',
+      centroCostoNombre: 'IMP-001 · HP Indigo',
+      duracionEstimadaMin: 42.5,
+    });
+  });
+
+  it('sin nombre visible cae al nombre de la familia del catálogo', () => {
+    const [paso] = pasosDesde({
+      pasos: [pasoTraz({ nombreVisible: '   ' })],
+    });
+    expect(paso.nombre).toBeTruthy();
+    expect(paso.nombre).not.toBe('impresion_por_hoja');
+  });
+
+  it('familia desconocida no rompe: cae a operaciones manuales', () => {
+    const [paso] = pasosDesde({
+      pasos: [pasoTraz({ familiaCodigo: 'familia_inventada' })],
+    });
+    expect(paso.categoriaFamilia).toBe('operaciones_manuales');
+  });
+
+  it('paso manual sin tiempo/centro queda sin estación ni duración', () => {
+    const [paso] = pasosDesde({
+      pasos: [pasoTraz({ tiempo: undefined })],
+    });
+    expect(paso.centroCostoId).toBeNull();
+    expect(paso.centroCostoNombre).toBeNull();
+    expect(paso.duracionEstimadaMin).toBeNull();
+  });
+
+  it('trazabilidad ausente o malformada → sin pasos', () => {
+    expect(pasosDesde(null)).toEqual([]);
+    expect(pasosDesde({})).toEqual([]);
+    expect(pasosDesde({ pasos: 'corrupto' })).toEqual([]);
+  });
+});
+
+describe('TRANSICIONES_PASO (acciones del Tablero)', () => {
+  it('iniciar sólo desde pendiente', () => {
+    expect(TRANSICIONES_PASO.iniciar.desde).toEqual(['pendiente']);
+  });
+
+  it('completar desde pendiente o en curso (atajo de taller)', () => {
+    expect(TRANSICIONES_PASO.completar.desde).toEqual([
+      'pendiente',
+      'en_curso',
+    ]);
+  });
+
+  it('bloquear nunca desde hecho ni bloqueado', () => {
+    expect(TRANSICIONES_PASO.bloquear.desde).not.toContain('hecho');
+    expect(TRANSICIONES_PASO.bloquear.desde).not.toContain('bloqueado');
+  });
+
+  it('desbloquear sólo desde bloqueado y reabrir sólo desde hecho', () => {
+    expect(TRANSICIONES_PASO.desbloquear.desde).toEqual(['bloqueado']);
+    expect(TRANSICIONES_PASO.reabrir.desde).toEqual(['hecho']);
+  });
+});
+
+describe('secuencia de la ruta — pasoEjecutable / pasoReabrible', () => {
+  const ruta = (...estados: string[]) =>
+    estados.map((estado, indice) => ({ indice, estado }));
+
+  it('el primer paso siempre está listo', () => {
+    expect(pasoEjecutable(ruta('pendiente', 'pendiente'), 0)).toBe(true);
+  });
+
+  it('un paso está listo sólo si TODOS los anteriores están hechos', () => {
+    expect(pasoEjecutable(ruta('hecho', 'pendiente', 'pendiente'), 1)).toBe(
+      true,
+    );
+    expect(pasoEjecutable(ruta('hecho', 'pendiente', 'pendiente'), 2)).toBe(
+      false,
+    );
+    expect(pasoEjecutable(ruta('en_curso', 'pendiente'), 1)).toBe(false);
+    expect(pasoEjecutable(ruta('bloqueado', 'pendiente'), 1)).toBe(false);
+  });
+
+  it('reabrir sólo el último hecho, con nada posterior arrancado', () => {
+    expect(pasoReabrible(ruta('hecho', 'pendiente', 'pendiente'), 0)).toBe(
+      true,
+    );
+    expect(pasoReabrible(ruta('hecho', 'hecho', 'pendiente'), 0)).toBe(false);
+    expect(pasoReabrible(ruta('hecho', 'hecho', 'pendiente'), 1)).toBe(true);
+    expect(pasoReabrible(ruta('hecho', 'en_curso', 'pendiente'), 0)).toBe(
+      false,
+    );
+    expect(pasoReabrible(ruta('hecho', 'bloqueado'), 0)).toBe(false);
+  });
+});
+
+describe('auto-finalización — ordenSeFinaliza', () => {
+  it('completar el último paso pendiente finaliza la OT', () => {
+    expect(ordenSeFinaliza('completar', 4, 4)).toBe(true);
+  });
+
+  it('completar un paso intermedio no finaliza (quedan pasos)', () => {
+    expect(ordenSeFinaliza('completar', 4, 3)).toBe(false);
+  });
+
+  it('sólo la acción completar finaliza; el resto nunca', () => {
+    expect(ordenSeFinaliza('iniciar', 4, 4)).toBe(false);
+    expect(ordenSeFinaliza('bloquear', 4, 4)).toBe(false);
+    expect(ordenSeFinaliza('reabrir', 4, 4)).toBe(false);
+    expect(ordenSeFinaliza('desbloquear', 4, 4)).toBe(false);
+  });
+
+  it('una OT sin pasos materializados no se auto-finaliza', () => {
+    expect(ordenSeFinaliza('completar', 0, 0)).toBe(false);
   });
 });
 

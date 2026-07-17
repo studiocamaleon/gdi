@@ -1,8 +1,13 @@
 import { apiRequest } from "@/lib/api";
 import type {
+  OrdenesTrabajoStats,
   OrdenTrabajoDetalle,
   OrdenTrabajoListItem,
 } from "@/lib/ordenes-trabajo";
+import type {
+  TableroItemData,
+  TableroPasoAccion,
+} from "@/lib/tablero-produccion";
 
 /**
  * Cliente API de Órdenes de Trabajo. El backend implementa el contrato de
@@ -48,19 +53,24 @@ type PaginatedResponse<T> = {
   pages: number;
 };
 
+export type OrdenesTrabajoListado =
+  PaginatedResponse<OrdenTrabajoListItem> & {
+    stats: OrdenesTrabajoStats;
+  };
+
 export async function getOrdenesTrabajo(params?: {
   estado?: string;
   q?: string;
   page?: number;
   limit?: number;
-}): Promise<PaginatedResponse<OrdenTrabajoListItem>> {
+}): Promise<OrdenesTrabajoListado> {
   const search = new URLSearchParams();
   if (params?.estado) search.set("estado", params.estado);
   if (params?.q) search.set("q", params.q);
   if (params?.page) search.set("page", String(params.page));
   if (params?.limit) search.set("limit", String(params.limit));
   const query = search.toString();
-  return apiRequest<PaginatedResponse<OrdenTrabajoListItem>>(
+  return apiRequest<OrdenesTrabajoListado>(
     `/ordenes-trabajo${query ? `?${query}` : ""}`,
   );
 }
@@ -130,6 +140,26 @@ export async function quitarOrdenItem(
   return apiRequest<OrdenTrabajoDetalle>(
     `/ordenes-trabajo/${ordenId}/items/${itemId}`,
     { method: "DELETE" },
+  );
+}
+
+/** Dataset completo del Tablero: items de órdenes activas con sus pasos. */
+export async function getTableroProduccion(): Promise<{
+  items: TableroItemData[];
+}> {
+  return apiRequest<{ items: TableroItemData[] }>("/ordenes-trabajo/tablero");
+}
+
+/** Acción de ejecución sobre un paso; devuelve el item re-proyectado. */
+export async function accionPasoProduccion(
+  ordenId: string,
+  itemId: string,
+  pasoId: string,
+  payload: { accion: TableroPasoAccion; motivo?: string },
+): Promise<TableroItemData> {
+  return apiRequest<TableroItemData>(
+    `/ordenes-trabajo/${ordenId}/items/${itemId}/pasos/${pasoId}`,
+    { method: "PATCH", body: JSON.stringify(payload) },
   );
 }
 

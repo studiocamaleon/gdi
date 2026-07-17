@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Put, Patch, Body, Param } from '@nestjs/common';
+import {
+  Controller,
+  Delete,
+  Get,
+  Post,
+  Put,
+  Patch,
+  Body,
+  Param,
+} from '@nestjs/common';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
 import { ProduccionService } from './produccion.service';
@@ -11,6 +20,12 @@ export class ProduccionController {
   @Get('estaciones')
   findEstaciones(@CurrentSession() auth: CurrentAuth) {
     return this.service.findEstaciones(auth);
+  }
+
+  /** Catálogo de familias de pasos + qué estación tiene tomada cada una. */
+  @Get('familias-pasos')
+  findFamiliasPasos(@CurrentSession() auth: CurrentAuth) {
+    return this.service.findFamiliasPasos(auth);
   }
 
   @Post('estaciones')
@@ -33,5 +48,10 @@ export class ProduccionController {
   @Patch('estaciones/:id/toggle')
   toggleEstacion(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.service.toggleEstacion(auth, id);
+  }
+
+  @Delete('estaciones/:id')
+  deleteEstacion(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
+    return this.service.deleteEstacion(auth, id);
   }
 }
