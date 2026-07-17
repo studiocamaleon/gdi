@@ -37,5 +37,5 @@ export default async function TrackPage({
     );
   }
 
-  return <TrackingView data={data} />;
+  return <TrackingView token={token} initialData={data} />;
 }

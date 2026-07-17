@@ -8,11 +8,15 @@ import {
   estadoNarrativo,
   estadoPill,
   fechaLarga,
+  getTrackingPublico,
   haceCuanto,
   type TrackingItem,
   type TrackingPaso,
   type TrackingPublico,
 } from "@/lib/tracking";
+
+/** Cada cuánto se sincroniza el avance con la planta (sin recargar). */
+const POLL_MS = 15000;
 
 // ── Iconos (set mínimo, calcado del diseño) ──────────────────────────────
 
@@ -232,7 +236,47 @@ function pasoFamilia(item: TrackingItem): string {
 
 // ── Vista principal ──────────────────────────────────────────────────────
 
-export function TrackingView({ data }: { data: TrackingPublico }) {
+export function TrackingView({
+  token,
+  initialData,
+}: {
+  token: string;
+  initialData: TrackingPublico;
+}) {
+  // Avance EN VIVO: re-consulta la planta cada POLL_MS sin recargar. Se pausa
+  // con la pestaña oculta y refresca al volver al foco. Ante error de red
+  // conserva el último estado (no parpadea la página).
+  const [data, setData] = React.useState(initialData);
+  const [sincronizando, setSincronizando] = React.useState(false);
+
+  React.useEffect(() => {
+    let vivo = true;
+    const refrescar = async () => {
+      if (document.hidden) return;
+      setSincronizando(true);
+      try {
+        const fresh = await getTrackingPublico(token);
+        if (vivo) setData(fresh);
+      } catch {
+        // Se conserva el último estado.
+      } finally {
+        if (vivo) setSincronizando(false);
+      }
+    };
+    const id = window.setInterval(refrescar, POLL_MS);
+    const onFocus = () => {
+      if (!document.hidden) void refrescar();
+    };
+    document.addEventListener("visibilitychange", onFocus);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      vivo = false;
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onFocus);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [token]);
+
   const unItem = data.items.length === 1;
   // Abrimos el item en producción; si no hay, el primero.
   const abiertoInicial = React.useMemo(() => {
@@ -273,7 +317,7 @@ export function TrackingView({ data }: { data: TrackingPublico }) {
 
       <div className="t-live-strip">
         <span className="live-dot" />
-        <span>Sincronizado con planta</span>
+        <span>{sincronizando ? "Sincronizando con planta…" : "En vivo · sincronizado con planta"}</span>
         <span className="upd">{ultimaAct ? `act. ${haceCuanto(ultimaAct)}` : "en vivo"}</span>
       </div>
 
