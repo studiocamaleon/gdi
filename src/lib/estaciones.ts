@@ -17,6 +17,11 @@ export type EstacionMaquinaRef = {
   id: string;
   codigo: string;
   nombre: string;
+  /**
+   * Centro de costo principal de la máquina: el vínculo real paso→máquina
+   * (la trazabilidad del paso guarda centroCostoId, no maquinaId).
+   */
+  centroCostoId: string | null;
 };
 
 export type Estacion = {
@@ -51,14 +56,17 @@ export type EstacionPayload = {
   maquinaIds: string[];
 };
 
-/** Fila del catálogo de familias con su dueña actual (para el picker). */
+/**
+ * Fila del catálogo de familias con sus dueñas actuales (para el picker).
+ * Una familia puede estar en varias estaciones si tienen máquinas (filtran);
+ * a lo sumo una estación general (sin máquinas) por familia.
+ */
 export type FamiliaPasoCatalogo = {
   codigo: string;
   nombre: string;
   categoria: string;
   visibleEnSelector: boolean;
-  estacionId: string | null;
-  estacionNombre: string | null;
+  estaciones: Array<{ id: string; nombre: string; conMaquinas: boolean }>;
 };
 
 export function createEmptyEstacion(): EstacionPayload {

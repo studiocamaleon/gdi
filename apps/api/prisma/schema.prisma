@@ -1086,9 +1086,11 @@ model Estacion {
   @@index([tenantId, activo])
 }
 
-/// Familia de pasos asignada a una estación. El unique por tenant garantiza
-/// que una familia viva en UNA sola estación: todo paso tiene a lo sumo una
-/// estación, sin ambigüedad de ruteo.
+/// Familia de pasos asignada a una estación. Una familia puede estar en
+/// varias estaciones SÓLO si tienen máquinas (filtran por máquina; son
+/// disjuntas porque una máquina vive en una sola estación); a lo sumo una
+/// estación general (sin máquinas) por familia — lo valida el service, el
+/// paso siempre resuelve a UNA estación. Ver docs/estaciones-diseno.md D1.
 model EstacionFamilia {
   id            String   @id @default(uuid()) @db.Uuid
   tenantId      String   @db.Uuid
@@ -1098,7 +1100,8 @@ model EstacionFamilia {
   tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   estacion      Estacion @relation(fields: [estacionId], references: [id], onDelete: Cascade)
 
-  @@unique([tenantId, familiaCodigo])
+  @@unique([estacionId, familiaCodigo])
+  @@index([tenantId, familiaCodigo])
   @@index([tenantId, estacionId])
 }
 

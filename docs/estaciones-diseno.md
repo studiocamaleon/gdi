@@ -37,11 +37,21 @@ FamiliaPaso (catálogo fijo) ──N:1── Estacion ──1:N── Maquina
 
 ## 3. Decisiones
 
-- **D1 — La FAMILIA es la clave de ruteo paso→estación.** Una familia vive en
-  **una sola estación** (unique por tenant): así todo paso tiene a lo sumo una
-  estación, sin ambigüedad. El picker muestra las familias ya tomadas por otra
-  estación como deshabilitadas (con la dueña visible); la DB lo garantiza con
-  constraint y la API devuelve 409 con el nombre de la estación en conflicto.
+- **D1 — Familia + máquinas rutean el paso a UNA estación.** (Refinada
+  2026-07-17: las máquinas son FILTROS.) El paso llega por su familia; si la
+  estación tiene máquinas, sólo recibe los pasos que usan esas máquinas (el
+  vínculo real es `paso.centroCostoId` = centro de costo principal de alguna
+  máquina de la estación — la trazabilidad no guarda maquinaId, y en este
+  modelo el centro identifica la máquina o el grupo de máquinas idénticas).
+  Reglas de consistencia:
+  - Una familia puede estar en VARIAS estaciones **sólo si tienen máquinas**
+    (como una máquina vive en una sola estación, son disjuntas solas).
+  - A lo sumo **una estación general** (sin máquinas) por familia: el
+    catch-all de los pasos que no matchean ninguna máquina. Dos generales con
+    la misma familia → 409 con la dueña.
+  - Resolución por paso: estación cuya máquina matchea > estación general >
+    paso sin centro con única candidata > **"Sin estación"**. Determinista:
+    un paso nunca aparece en dos estaciones.
 - **D2 — Una máquina está EN una estación** (FK nullable `estacionId` en
   `Maquina`, SetNull al borrar la estación). Asignar en B una máquina que
   estaba en A la **mueve** (la UI lo avisa). El `centroCostoPrincipalId` no se
@@ -57,9 +67,11 @@ FamiliaPaso (catálogo fijo) ──N:1── Estacion ──1:N── Maquina
   `horario` (texto libre informativo). El "tiempo promedio por paso" del mock
   NO se persiste: se deriva de `duracionEstimadaMin` de los pasos reales
   cuando haga falta. `icono` sí se persiste (lenguaje visual del tablero).
-- **D6 — El tablero agrupa por estación real.** `paso.familiaCodigo` →
-  estación ACTIVA que tenga esa familia. Pasos con familia sin estación (o de
-  estación inactiva) caen al bucket **"Sin estación"** con CTA a configurar.
+- **D6 — El tablero agrupa por estación real.** Resolución de D1
+  (`resolverEstacionDePaso`): familia + filtro de máquinas vía el centro de
+  costo del paso. Pasos sin estación resuelta (familia sin asignar, máquina
+  que no matchea sin estación general, o estación inactiva) caen al bucket
+  **"Sin estación"** con CTA a configurar.
   El centro de costo queda como dato informativo del paso (banner del sheet),
   ya no agrupa. Sin estaciones configuradas, la vista muestra el estado vacío
   con CTA (no vuelve al proxy: sería tener dos verdades).
@@ -90,7 +102,9 @@ model Estacion {
 
 model EstacionFamilia {
   id, tenantId, estacionId, familiaCodigo
-  @@unique([tenantId, familiaCodigo])   // ← una familia, una estación
+  @@unique([estacionId, familiaCodigo]) // sin duplicados dentro de la estación
+  // La regla "a lo sumo una estación general por familia" la valida el
+  // service (depende de si la estación tiene máquinas).
 }
 
 model EstacionEmpleado {
@@ -111,7 +125,8 @@ type Estacion = {
   icono: string | null; capacidadConcurrente: number; horario: string | null;
   familias: string[];                      // códigos
   empleados: Array<{ id: string; nombreCompleto: string; sector: string }>;
-  maquinas: Array<{ id: string; codigo: string; nombre: string }>;
+  maquinas: Array<{ id: string; codigo: string; nombre: string;
+                    centroCostoId: string | null }>; // vínculo paso→máquina
   createdAt: string; updatedAt: string;
 };
 ```
@@ -121,12 +136,15 @@ type Estacion = {
 (reemplazo completo de las tres listas — el form edita el conjunto).
 `DELETE /produccion/estaciones/:id` nuevo.
 `GET /produccion/familias-pasos` →
-`Array<{ codigo, nombre, categoria, estacionId | null, estacionNombre | null }>`.
+`Array<{ codigo, nombre, categoria, estaciones: [{ id, nombre, conMaquinas }] }>`.
 
 ## 6. Casos borde
 
-- Familia tomada por otra estación → 409 con nombre de la dueña (y la UI la
-  muestra deshabilitada de antemano).
+- Dos estaciones generales (sin máquinas) con la misma familia → 409 con la
+  dueña; la UI deshabilita el chip mientras el borrador no tenga máquinas.
+- Paso con máquina que no matchea ninguna estación de su familia y sin
+  estación general → "Sin estación" (el filtro es estricto, como pidió el
+  usuario).
 - Máquina que ya estaba en otra estación → se mueve (aviso en el picker).
 - Estación inactivada con trabajo vivo → sus pasos caen a "Sin estación";
   reactivarla los recupera (mapeo en lectura, D7).

@@ -257,28 +257,41 @@ function StationForm({
           </section>
 
           <section className="est-section">
-            <div className="est-section-head"><span className="num">02</span><div><div className="ttl">Familias de pasos</div><div className="sub">Qué tipo de trabajo se ejecuta acá. Una familia vive en UNA sola estación: es la clave que rutea cada paso del tablero.</div></div></div>
+            <div className="est-section-head"><span className="num">02</span><div><div className="ttl">Familias de pasos</div><div className="sub">Qué tipo de trabajo se ejecuta acá: la clave que rutea cada paso del tablero. Una familia puede repetirse entre estaciones CON máquinas (las máquinas filtran); a lo sumo una estación general (sin máquinas) por familia.</div></div></div>
             {familiasPorCategoria.map((cat) => (
               <div key={cat.key} className="est-field">
                 <label>{cat.nm}</label>
                 <div className="multi-chips">
                   {cat.items.map((familia) => {
                     const seleccionada = draft.familias.includes(familia.codigo);
-                    const tomadaPorOtra = Boolean(
-                      familia.estacionId && familia.estacionId !== initial?.id,
-                    );
+                    const otras = familia.estaciones.filter((entry) => entry.id !== initial?.id);
+                    const generalAjena = otras.find((entry) => !entry.conMaquinas);
+                    // Bloqueada sólo si ELEGIRLA crearía dos estaciones
+                    // generales con la misma familia (ruteo ambiguo).
+                    const bloqueada =
+                      !seleccionada && Boolean(generalAjena) && draft.maquinaIds.length === 0;
+                    const tag =
+                      otras.length > 0
+                        ? `en ${otras[0].nombre}${otras.length > 1 ? ` +${otras.length - 1}` : ""}`
+                        : null;
                     return (
                       <button
                         key={familia.codigo}
                         type="button"
-                        className={`m-chip ${seleccionada ? "on" : ""} ${tomadaPorOtra ? "taken" : ""}`}
-                        disabled={tomadaPorOtra}
-                        title={tomadaPorOtra ? `Ya asignada a "${familia.estacionNombre}"` : familia.codigo}
+                        className={`m-chip ${seleccionada ? "on" : ""} ${bloqueada ? "taken" : ""}`}
+                        disabled={bloqueada}
+                        title={
+                          bloqueada
+                            ? `Ya está en la estación general "${generalAjena?.nombre}". Asigná máquinas a esta estación para repartir la familia por máquina.`
+                            : otras.length > 0
+                              ? `También en: ${otras.map((entry) => entry.nombre).join(", ")}`
+                              : familia.codigo
+                        }
                         onClick={() => toggleLista("familias", familia.codigo)}
                       >
                         {seleccionada ? <CheckIcon /> : null}
                         <span className="nm">{familia.nombre}</span>
-                        {tomadaPorOtra ? <span className="en-tag">en {familia.estacionNombre}</span> : null}
+                        {tag ? <span className="en-tag">{tag}</span> : null}
                       </button>
                     );
                   })}
@@ -343,7 +356,7 @@ function StationForm({
             </div>
           </section>
 
-          <div className="est-tip"><CogIcon /><span>Los pasos del Tablero llegan a esta estación por su <strong>familia</strong>. El tiempo estimado por paso sale de la ruta real de cada item, no se configura acá.</span></div>
+          <div className="est-tip"><CogIcon /><span>Los pasos del Tablero llegan a esta estación por su <strong>familia</strong>; si la estación tiene <strong>máquinas</strong>, sólo recibe los pasos que usan esas máquinas. El tiempo estimado por paso sale de la ruta real de cada item, no se configura acá.</span></div>
         </div>
 
         <div className="sheet-foot est-foot">

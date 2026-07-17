@@ -45,7 +45,7 @@ import {
   itemIniciado,
   itemTerminado,
   lineaEstado,
-  mapaFamiliaEstacion,
+  resolverEstacionDePaso,
   pasoActivo,
   pasoActual,
   pasoReabrible,
@@ -814,16 +814,16 @@ function ordenarTareas(tasks: StationTask[]): StationTask[] {
  * estación", con sus tareas activas. La ruta es secuencial, así que acá
  * entra únicamente el paso listo para hacerse de cada item (el primero, o
  * con todos los anteriores hechos): los futuros no son trabajo de nadie
- * todavía. El paso llega a su estación por la FAMILIA.
+ * todavía. El paso llega a su estación por la FAMILIA, y las máquinas de la
+ * estación FILTRAN (ver resolverEstacionDePaso).
  */
 function buildStationsModel(items: ItemView[], estaciones: Estacion[]) {
-  const mapa = mapaFamiliaEstacion(estaciones);
   const tareas = new Map<string, StationTask[]>();
 
   for (const item of items) {
     for (const step of item.steps) {
       if (!pasoActivo(item.data, step.paso)) continue;
-      const estacion = mapa.get(step.paso.familiaCodigo);
+      const estacion = resolverEstacionDePaso(estaciones, step.paso);
       const key = estacion?.id ?? SIN_ESTACION_KEY;
       const lista = tareas.get(key) ?? [];
       lista.push({

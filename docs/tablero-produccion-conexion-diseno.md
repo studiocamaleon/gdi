@@ -83,8 +83,8 @@ muerto de una iteración anterior; los modos son items/estación/kanban).
 - **D4 — Estación (fase 1) = centro de costo.** ~~La vista "Por estación"
   agrupa pasos activos por `centroCostoNombre`.~~ **Superada 2026-07-17 por
   las estaciones reales** (docs/estaciones-diseno.md): el paso llega a su
-  estación por la FAMILIA (`mapaFamiliaEstacion`); familias sin estación →
-  bucket "Sin estación". El centro de costo quedó como dato informativo del
+  estación por la FAMILIA con las máquinas como filtro
+  (`resolverEstacionDePaso`); lo no resuelto → bucket "Sin estación". El centro de costo quedó como dato informativo del
   paso.
 - **D5 — Qué órdenes entran al tablero.** `pendiente` + `produccion`.
   Borradores no se emitieron; finalizadas/entregadas ya no son trabajo vivo.

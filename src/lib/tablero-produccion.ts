@@ -258,20 +258,44 @@ export function etiquetaMomento(iso: string | null): string | null {
   return `${dd}/${mm} ${hh}:${mi}`;
 }
 
+type EstacionRuteo = {
+  id: string;
+  activo: boolean;
+  familias: string[];
+  maquinas: Array<{ centroCostoId: string | null }>;
+};
+
 /**
- * Mapa familia → estación real (sólo estaciones ACTIVAS): el ruteo del
- * tablero. Un paso cuya familia no está en ninguna estación activa cae al
- * bucket "Sin estación".
+ * Ruteo paso → estación (estaciones ACTIVAS): el paso llega por su FAMILIA,
+ * y las máquinas de la estación son FILTROS — si la estación tiene máquinas,
+ * sólo recibe los pasos que usan esas máquinas (vía el centro de costo del
+ * paso, que identifica la máquina). Resolución determinista:
+ *   1. estación con la familia cuya máquina matchea el centro del paso;
+ *   2. estación general (con la familia y sin máquinas);
+ *   3. paso manual (sin centro) con única candidata;
+ *   4. sin estación (null).
  */
-export function mapaFamiliaEstacion<T extends { activo: boolean; familias: string[] }>(
+export function resolverEstacionDePaso<T extends EstacionRuteo>(
   estaciones: T[],
-): Map<string, T> {
-  const mapa = new Map<string, T>();
-  for (const estacion of estaciones) {
-    if (!estacion.activo) continue;
-    for (const familia of estacion.familias) mapa.set(familia, estacion);
+  paso: Pick<TableroPasoData, "familiaCodigo" | "centroCostoId">,
+): T | null {
+  const candidatas = estaciones.filter(
+    (estacion) => estacion.activo && estacion.familias.includes(paso.familiaCodigo),
+  );
+  if (candidatas.length === 0) return null;
+
+  if (paso.centroCostoId) {
+    const porMaquina = candidatas.find((estacion) =>
+      estacion.maquinas.some((maquina) => maquina.centroCostoId === paso.centroCostoId),
+    );
+    if (porMaquina) return porMaquina;
   }
-  return mapa;
+
+  const general = candidatas.find((estacion) => estacion.maquinas.length === 0);
+  if (general) return general;
+
+  if (!paso.centroCostoId && candidatas.length === 1) return candidatas[0];
+  return null;
 }
 
 /** Clave del bucket de pasos sin estación asignada. */

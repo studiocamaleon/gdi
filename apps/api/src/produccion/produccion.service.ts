@@ -29,7 +29,14 @@ const ESTACION_INCLUDE = {
     },
   },
   maquinas: {
-    select: { id: true, codigo: true, nombre: true },
+    // centroCostoPrincipalId es el vínculo real paso→máquina: la
+    // trazabilidad del paso guarda centroCostoId, no maquinaId.
+    select: {
+      id: true,
+      codigo: true,
+      nombre: true,
+      centroCostoPrincipalId: true,
+    },
     orderBy: { codigo: 'asc' as const },
   },
 } satisfies Prisma.EstacionInclude;
@@ -62,18 +69,36 @@ export class ProduccionService {
   async findFamiliasPasos(auth: CurrentAuth) {
     const asignadas = await this.prisma.estacionFamilia.findMany({
       where: { tenantId: auth.tenantId },
-      include: { estacion: { select: { id: true, nombre: true } } },
+      include: {
+        estacion: {
+          select: {
+            id: true,
+            nombre: true,
+            maquinas: { select: { id: true }, take: 1 },
+          },
+        },
+      },
+      orderBy: { estacion: { nombre: 'asc' } },
     });
-    const porFamilia = new Map(
-      asignadas.map((fila) => [fila.familiaCodigo, fila.estacion]),
-    );
+    const porFamilia = new Map<
+      string,
+      Array<{ id: string; nombre: string; conMaquinas: boolean }>
+    >();
+    for (const fila of asignadas) {
+      const lista = porFamilia.get(fila.familiaCodigo) ?? [];
+      lista.push({
+        id: fila.estacion.id,
+        nombre: fila.estacion.nombre,
+        conMaquinas: fila.estacion.maquinas.length > 0,
+      });
+      porFamilia.set(fila.familiaCodigo, lista);
+    }
     return Object.values(FAMILIAS).map((familia) => ({
       codigo: familia.codigo,
       nombre: familia.nombre,
       categoria: familia.categoria,
       visibleEnSelector: familia.visibleEnSelector !== false,
-      estacionId: porFamilia.get(familia.codigo)?.id ?? null,
-      estacionNombre: porFamilia.get(familia.codigo)?.nombre ?? null,
+      estaciones: porFamilia.get(familia.codigo) ?? [],
     }));
   }
 
@@ -100,7 +125,11 @@ export class ProduccionService {
       );
     }
 
-    if (familias.length > 0) {
+    // Una familia puede repetirse entre estaciones CON máquinas (filtran por
+    // máquina y son disjuntas), pero a lo sumo hay UNA estación general (sin
+    // máquinas) por familia: dos generales serían ruteo ambiguo (D1 del doc).
+    const payloadEsGeneral = maquinaIds.length === 0;
+    if (familias.length > 0 && payloadEsGeneral) {
       const tomadas = await this.prisma.estacionFamilia.findMany({
         where: {
           tenantId: auth.tenantId,
@@ -109,17 +138,24 @@ export class ProduccionService {
             ? { estacionId: { not: exceptoEstacionId } }
             : {}),
         },
-        include: { estacion: { select: { nombre: true } } },
+        include: {
+          estacion: {
+            select: { nombre: true, maquinas: { select: { id: true }, take: 1 } },
+          },
+        },
       });
-      if (tomadas.length > 0) {
-        const detalle = tomadas
+      const generales = tomadas.filter(
+        (fila) => fila.estacion.maquinas.length === 0,
+      );
+      if (generales.length > 0) {
+        const detalle = generales
           .map(
             (fila) =>
               `${FAMILIAS[fila.familiaCodigo as FamiliaCodigo]?.nombre ?? fila.familiaCodigo} (en "${fila.estacion.nombre}")`,
           )
           .join(' · ');
         throw new ConflictException(
-          `Una familia de pasos vive en una sola estación. Ya asignadas: ${detalle}.`,
+          `Sólo puede haber una estación general (sin máquinas) por familia. Ya asignadas a otra estación general: ${detalle}. Asigná máquinas a esta estación para repartir la familia por máquina.`,
         );
       }
     }
@@ -323,7 +359,12 @@ export class ProduccionService {
         nombreCompleto: fila.empleado.nombreCompleto,
         sector: fila.empleado.sector,
       })),
-      maquinas: item.maquinas,
+      maquinas: item.maquinas.map((maquina) => ({
+        id: maquina.id,
+        codigo: maquina.codigo,
+        nombre: maquina.nombre,
+        centroCostoId: maquina.centroCostoPrincipalId,
+      })),
       createdAt: item.createdAt.toISOString(),
       updatedAt: item.updatedAt.toISOString(),
     };
