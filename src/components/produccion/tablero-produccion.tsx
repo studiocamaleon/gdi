@@ -24,6 +24,7 @@ import {
   PrinterIcon,
   ScissorsIcon,
   SearchIcon,
+  SquareDashedIcon,
   ShieldCheckIcon,
   TruckIcon,
   UnlockIcon,
@@ -1102,7 +1103,7 @@ function TaskCard({
           <button type="button" className="sta-btn primary" onClick={(event) => { event.stopPropagation(); onOpen(task.item.id); }}>Ver detalles</button>
         </div>
       </div>
-      {dragHint ? <div className="sta-task-hint">Movete tareas a tu mesa para ordenar tu trabajo del día.</div> : null}
+      {dragHint ? <div className="sta-task-hint">Arrastrá esta tarea a Mesa de trabajo o Pendientes.</div> : null}
     </div>
   );
 }
@@ -1199,7 +1200,7 @@ function StationDetail({
         <div className="sta-col mesa-col">
           <div className="sta-col-head"><span className="dot mesa" /><span className="ttl">Mi mesa de trabajo</span><span className="ct"><strong>{mesaTasks.length}</strong> pasos</span></div>
           <div className={`sta-col-body ${mesaTasks.length === 0 ? "empty-mesa" : ""}`}>
-            {mesaTasks.length === 0 ? <div className="sta-mesa-empty"><BoxIcon /><div className="ttl">Movete tareas acá para trabajar en ellas</div><div className="sub">Las tareas pasan a tu mesa cuando las tomás de la fila compartida.</div></div> : null}
+            {mesaTasks.length === 0 ? <div className="sta-mesa-empty"><div className="ic"><SquareDashedIcon /></div><div className="ttl">Arrastrá tareas acá para trabajar en ellas</div><div className="sub">Las tareas pasan a tu mesa cuando las tomás de la fila compartida.</div></div> : null}
             {visibleMesa.map((task, index) => <TaskCard key={taskId(task)} task={task} inMesa onMoveToMesa={toggleMesa} onOpen={onOpen} dragHint={index === 0 && filter !== "mesa"} />)}
           </div>
         </div>

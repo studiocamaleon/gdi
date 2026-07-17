@@ -13063,7 +13063,7 @@ body {
     0 1px 2px rgba(20, 20, 26, 0.06) !important;
 }
 
-/* Tablero de producción — adaptadores de la app (shell, sheet base, kanban propio) (touch 4) */
+/* Tablero de producción — adaptadores de la app (shell, sheet base, kanban propio) (touch 6) */
 
 /* En el diseño las páginas viven dentro de .content (padding 28px 32px
    40px + scroll); el shell de la app no envuelve así: el canvas va acá.
@@ -13706,16 +13706,23 @@ body {
   border-right: 1px solid var(--border);
 }
 
-.tablero-produccion .mesa-col .sta-col-head {
-  background: var(--surface);
-}
-
-.tablero-produccion .sta-mesa-empty,
-.tablero-produccion .sta-shared-empty,
 .tablero-produccion .empty-results {
   padding: 42px 20px;
   color: var(--muted-text);
   text-align: center;
+}
+
+/* Icono del empty de la mesa: centrado en su propia línea, como el diseño. */
+.tablero-produccion .sta-mesa-empty .ic {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 10px;
+  color: var(--muted-text-2);
+}
+
+.tablero-produccion .sta-mesa-empty .ic svg {
+  width: 28px;
+  height: 28px;
 }
 
 .tablero-produccion .sta-task.in-mesa::before {
