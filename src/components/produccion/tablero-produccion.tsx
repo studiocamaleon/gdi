@@ -87,6 +87,8 @@ type PriorityFilter = "all" | TableroPrioridad;
 type KanbanBucketKey = "not-started" | "today" | "delayed" | "active";
 
 const DEFAULT_BOARD_MODE: Mode = "items";
+/** Refresco en vivo del dataset (mismo ritmo que el tracking público). */
+const POLL_TABLERO_MS = 15000;
 const BOARD_MODE_STORAGE_KEY = "grafoprint:produccion:tablero-default-mode:v1";
 const BOARD_MODE_LABELS: Record<Mode, string> = {
   items: "Por items",
@@ -153,6 +155,60 @@ function iniciales(nombre: string): string {
     .slice(0, 2)
     .map((parte) => parte[0]?.toUpperCase() ?? "")
     .join("");
+}
+
+// ── Ventana progresiva (performance con listas grandes) ──────────────────
+// Las columnas y listas renderizan una VENTANA del dataset — que ya viene
+// ordenado por urgencia: sobre la card nº 800 nadie opera — y un sentinel
+// con IntersectionObserver monta más al acercarse al fondo. El DOM queda
+// acotado sin importar cuántos items haya; los datos completos siguen en
+// memoria, así stats y contadores son exactos. Si el día de mañana el
+// PAYLOAD del poll pesa (>~500 items), la etapa siguiente es ETag/304 en
+// GET /tablero; la virtualización con librería recién con miles reales.
+
+const VENTANA_INICIAL = 30;
+const VENTANA_PASO = 30;
+
+function useVentanaProgresiva(total: number) {
+  const [limite, setLimite] = React.useState(VENTANA_INICIAL);
+  const sentinelRef = React.useRef<HTMLDivElement | null>(null);
+  const expandir = React.useCallback(() => setLimite((actual) => actual + VENTANA_PASO), []);
+
+  React.useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node) return;
+    // Se re-observa tras cada expansión: si el sentinel sigue en viewport,
+    // encadena la siguiente hasta que sale de la ventana visible.
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) expandir();
+      },
+      { rootMargin: "600px 0px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [limite, total, expandir]);
+
+  return { limite, sentinelRef, expandir, hayMas: total > limite };
+}
+
+function VentanaSentinel({
+  mostrando,
+  total,
+  expandir,
+  sentinelRef,
+}: {
+  mostrando: number;
+  total: number;
+  expandir: () => void;
+  sentinelRef: React.RefObject<HTMLDivElement | null>;
+}) {
+  return (
+    <div ref={sentinelRef} className="ventana-sentinel">
+      <span>Mostrando {mostrando} de {total}</span>
+      <button type="button" onClick={expandir}>Mostrar más</button>
+    </div>
+  );
 }
 
 // ── View-model: derivados de presentación por item ───────────────────────
@@ -328,7 +384,8 @@ function EtaLine({ item, eta }: { item: ItemView; eta: SimulacionItem | undefine
   );
 }
 
-function ItemRow({ item, eta, onOpen }: { item: ItemView; eta: SimulacionItem | undefined; onOpen: (id: string) => void }) {
+// Memo: misma razón que KanbanCard — ver el comentario de la ventana.
+const ItemRow = React.memo(function ItemRow({ item, eta, onOpen }: { item: ItemView; eta: SimulacionItem | undefined; onOpen: (id: string) => void }) {
   const cssRow =
     `tab-row priority-${item.priority}` +
     (item.blocked ? " blocked" : "") +
@@ -377,7 +434,7 @@ function ItemRow({ item, eta, onOpen }: { item: ItemView; eta: SimulacionItem | 
       </div>
     </button>
   );
-}
+});
 
 function FiltersBar({
   filters,
@@ -1496,7 +1553,10 @@ function kanbanStepIcon(item: ItemView) {
   return <IconCmp />;
 }
 
-function KanbanCard({ item, onOpen }: { item: ItemView; onOpen: (id: string) => void }) {
+// Memo: con listas grandes, tipear en el buscador o abrir un sheet no
+// re-renderiza las cards cuyos props no cambiaron (los ItemView son
+// estables entre renders de UI: se rearman sólo cuando cambian los datos).
+const KanbanCard = React.memo(function KanbanCard({ item, onOpen }: { item: ItemView; onOpen: (id: string) => void }) {
   const step = item.currentStep;
 
   return (
@@ -1522,6 +1582,33 @@ function KanbanCard({ item, onOpen }: { item: ItemView; onOpen: (id: string) => 
         <span className="op"><span className="mini-av">{iniciales(item.vendedor)}</span>{item.vendedor.split(" ")[0]}</span>
       </div>
     </button>
+  );
+});
+
+/** Columna del Kanban con ventana progresiva propia (DOM acotado). */
+function KanbanColumn({
+  column,
+  onOpen,
+}: {
+  column: { key: KanbanBucketKey; title: string; description: string; items: ItemView[] };
+  onOpen: (id: string) => void;
+}) {
+  const { limite, sentinelRef, expandir, hayMas } = useVentanaProgresiva(column.items.length);
+  return (
+    <section className={`kan-col kan-${column.key}`}>
+      <div className="kan-col-head">
+        <div>
+          <h2>{column.title}</h2>
+          <p>{column.description}</p>
+        </div>
+        <span>{column.items.length}</span>
+      </div>
+      <div className="kan-col-body">
+        {column.items.length === 0 ? <div className="kan-empty">No hay items en esta columna.</div> : null}
+        {column.items.slice(0, limite).map((item) => <KanbanCard key={item.id} item={item} onOpen={onOpen} />)}
+        {hayMas ? <VentanaSentinel mostrando={limite} total={column.items.length} expandir={expandir} sentinelRef={sentinelRef} /> : null}
+      </div>
+    </section>
   );
 }
 
@@ -1550,21 +1637,27 @@ function KanbanView({ items, onOpen }: { items: ItemView[]; onOpen: (id: string)
 
   return (
     <div className="kanban-board" aria-label="Kanban de producción">
-      {grouped.map((column) => (
-        <section key={column.key} className={`kan-col kan-${column.key}`}>
-          <div className="kan-col-head">
-            <div>
-              <h2>{column.title}</h2>
-              <p>{column.description}</p>
-            </div>
-            <span>{column.items.length}</span>
-          </div>
-          <div className="kan-col-body">
-            {column.items.length === 0 ? <div className="kan-empty">No hay items en esta columna.</div> : null}
-            {column.items.map((item) => <KanbanCard key={item.id} item={item} onOpen={onOpen} />)}
-          </div>
-        </section>
-      ))}
+      {grouped.map((column) => <KanbanColumn key={column.key} column={column} onOpen={onOpen} />)}
+    </div>
+  );
+}
+
+/** Lista "Por items" con ventana progresiva (DOM acotado con miles). */
+function ItemsList({
+  items,
+  sim,
+  onOpen,
+}: {
+  items: ItemView[];
+  sim: ResultadoSimulacion;
+  onOpen: (id: string) => void;
+}) {
+  const { limite, sentinelRef, expandir, hayMas } = useVentanaProgresiva(items.length);
+  return (
+    <div className="tab-board">
+      {items.slice(0, limite).map((item) => <ItemRow key={item.id} item={item} eta={sim.porItem.get(item.id)} onOpen={onOpen} />)}
+      {items.length === 0 ? <div className="empty-results">No hay items que coincidan con los filtros.</div> : null}
+      {hayMas ? <VentanaSentinel mostrando={limite} total={items.length} expandir={expandir} sentinelRef={sentinelRef} /> : null}
     </div>
   );
 }
@@ -1595,6 +1688,53 @@ export function TableroProduccion({
     const savedMode = readStoredBoardMode();
     setDefaultMode(savedMode);
     setMode(savedMode);
+  }, []);
+
+  // ── Tablero EN VIVO: lo que hace otro operario aparece sin recargar ────
+  // Polling del dataset (es chico) cada POLL_TABLERO_MS, pausado con la
+  // pestaña oculta y refrescado al volver al foco. Dos protecciones que el
+  // tracking público no necesita: no se aplica un snapshot con mutaciones
+  // propias EN VUELO (pisaría el update optimista) ni durante un DRAG (el
+  // re-render reemplaza la card arrastrada y corta el drop).
+  const mutacionesRef = React.useRef(0);
+  const dragActivoRef = React.useRef(false);
+  const ultimoSnapshotRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    let vivo = true;
+    const refrescar = async () => {
+      if (document.hidden || mutacionesRef.current > 0 || dragActivoRef.current) return;
+      try {
+        const { items: frescos } = await getTableroProduccion();
+        if (!vivo || mutacionesRef.current > 0 || dragActivoRef.current) return;
+        const snapshot = JSON.stringify(frescos);
+        if (snapshot === ultimoSnapshotRef.current) return; // sin cambios: ni un re-render
+        ultimoSnapshotRef.current = snapshot;
+        setItems(frescos);
+      } catch {
+        // Error de red: se conserva el último estado (no parpadea).
+      }
+    };
+    const id = window.setInterval(() => void refrescar(), POLL_TABLERO_MS);
+    const onFocus = () => {
+      if (!document.hidden) void refrescar();
+    };
+    const onDragStart = () => { dragActivoRef.current = true; };
+    const onDragEnd = () => { dragActivoRef.current = false; };
+    document.addEventListener("visibilitychange", onFocus);
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("dragstart", onDragStart);
+    window.addEventListener("dragend", onDragEnd);
+    window.addEventListener("drop", onDragEnd);
+    return () => {
+      vivo = false;
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onFocus);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("dragstart", onDragStart);
+      window.removeEventListener("dragend", onDragEnd);
+      window.removeEventListener("drop", onDragEnd);
+    };
   }, []);
 
   React.useEffect(() => {
@@ -1663,14 +1803,17 @@ export function TableroProduccion({
     async (item: ItemView, paso: TableroPasoData, accion: TableroPasoAccion, motivo?: string) => {
       setBusy(true);
       setError(null);
+      mutacionesRef.current += 1;
       try {
         const actualizado = await accionPasoProduccion(item.data.ordenId, item.id, paso.id, { accion, motivo });
         setItems((current) => current.map((entry) => (entry.id === actualizado.id ? actualizado : entry)));
         const { items: refrescados } = await getTableroProduccion();
         setItems(refrescados);
+        ultimoSnapshotRef.current = JSON.stringify(refrescados);
       } catch (err) {
         setError(err instanceof Error ? err.message : "No se pudo ejecutar la acción.");
       } finally {
+        mutacionesRef.current -= 1;
         setBusy(false);
       }
     },
@@ -1684,6 +1827,7 @@ export function TableroProduccion({
    */
   const handleMesa = React.useCallback(async (pasoId: string, en: boolean) => {
     const previo = items;
+    mutacionesRef.current += 1;
     setItems((current) =>
       current.map((item) => ({
         ...item,
@@ -1700,6 +1844,8 @@ export function TableroProduccion({
     } catch (err) {
       setItems(previo);
       setError(err instanceof Error ? err.message : "No se pudo mover el paso.");
+    } finally {
+      mutacionesRef.current -= 1;
     }
   }, [items]);
 
@@ -1755,8 +1901,8 @@ export function TableroProduccion({
       <div className="tab-page">
         <div className="page-head">
           <div className="title-block">
-            <h1>Tablero de producción</h1>
-            <div className="sub">Items de las órdenes emitidas, con su ruta real de pasos. Click en un item para ver el detalle y ejecutar acciones.</div>
+            <h1>Tablero de producción en tiempo real</h1>
+            <div className="sub">Items de las órdenes emitidas, con su ruta real de pasos. Se actualiza solo, sin recargar. Click en un item para ver el detalle y ejecutar acciones.</div>
           </div>
         </div>
 
@@ -1815,10 +1961,7 @@ export function TableroProduccion({
             {mode === "items" ? (
               <>
                 <FiltersBar filters={filters} setFilters={setFilters} counts={counts} />
-                <div className="tab-board">
-                  {filtered.map((item) => <ItemRow key={item.id} item={item} eta={sim.porItem.get(item.id)} onOpen={setSelectedId} />)}
-                  {filtered.length === 0 ? <div className="empty-results">No hay items que coincidan con los filtros.</div> : null}
-                </div>
+                <ItemsList items={filtered} sim={sim} onOpen={setSelectedId} />
               </>
             ) : null}
             {mode === "estacion" ? <ByStationView items={views} estaciones={estaciones} medianas={medianas} noLaborables={noLaborables} llegadasHoyMin={llegadasHoyMin} onMesa={handleMesa} onOpen={setSelectedId} /> : null}
