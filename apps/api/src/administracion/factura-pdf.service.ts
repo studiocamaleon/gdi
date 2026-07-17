@@ -1,4 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import QRCode from 'qrcode';
@@ -21,9 +23,11 @@ type Documento = Awaited<
  * Vive en el server y no en el navegador porque el mismo PDF va a tener que
  * salir por mail al cliente, sin que nadie apriete un botón.
  *
- * Tipografía: Helvetica, la que jsPDF trae embebida. El diseño usa Geist,
- * pero next/font sólo deja woff2 y jsPDF necesita TTF; incrustarla es
- * posible y está anotado como pendiente. El layout sí es el del diseño.
+ * Tipografía: Geist incrustada, la misma que usa la app, así que el PDF se
+ * ve como el sistema. Los TTF viven en ./fonts (ver su README): next/font
+ * sólo expone woff2 y jsPDF necesita TTF. Si por lo que sea no se pueden
+ * leer, cae a Helvetica y lo avisa — un comprobante feo es mejor que
+ * ninguno.
  */
 
 const MARGEN = 14;
@@ -36,6 +40,30 @@ const MUTED2: [number, number, number] = [146, 146, 155];
 const HAIRLINE: [number, number, number] = [239, 236, 232];
 const BORDE: [number, number, number] = [212, 210, 205];
 const INFO: [number, number, number] = [29, 78, 216];
+
+/**
+ * Geist, cargada una vez. nest-cli copia los .ttf a dist manteniendo la
+ * estructura, así que __dirname sirve tanto con ts-node como compilado.
+ */
+let geistCache: { regular: string; bold: string } | null | undefined;
+
+function cargarGeist(log: Logger): { regular: string; bold: string } | null {
+  if (geistCache !== undefined) return geistCache;
+  try {
+    const dir = join(__dirname, 'invoicing', 'fonts');
+    geistCache = {
+      regular: readFileSync(join(dir, 'Geist-Regular.ttf')).toString('base64'),
+      bold: readFileSync(join(dir, 'Geist-Bold.ttf')).toString('base64'),
+    };
+  } catch (e) {
+    log.warn(
+      `No pude cargar Geist para el PDF (${e instanceof Error ? e.message : e}). ` +
+        'El comprobante sale en Helvetica.',
+    );
+    geistCache = null;
+  }
+  return geistCache;
+}
 
 const money = (n: number) =>
   '$' +
@@ -52,9 +80,14 @@ const fecha = (iso: string | null) => {
 
 @Injectable()
 export class FacturaPdfService {
+  private readonly log = new Logger(FacturaPdfService.name);
+  /** 'Geist' si se pudo incrustar; si no, la Helvetica de jsPDF. */
+  private familia = 'helvetica';
+
   async generar(doc: Documento): Promise<Buffer> {
     const pdf = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
-    pdf.setFont('helvetica', 'normal');
+    this.registrarFuente(pdf);
+    pdf.setFont(this.familia, 'normal');
 
     let y = MARGEN;
     y = this.bandaSuperior(pdf, doc, y);
@@ -65,6 +98,20 @@ export class FacturaPdfService {
     this.autorizacion(pdf, doc, await this.qrDataUrl(doc.qrUrl), y);
 
     return Buffer.from(pdf.output('arraybuffer'));
+  }
+
+  /** Incrusta Geist en el documento. Sin ella, jsPDF usa su Helvetica. */
+  private registrarFuente(pdf: jsPDF) {
+    const geist = cargarGeist(this.log);
+    if (!geist) {
+      this.familia = 'helvetica';
+      return;
+    }
+    pdf.addFileToVFS('Geist-Regular.ttf', geist.regular);
+    pdf.addFont('Geist-Regular.ttf', 'Geist', 'normal');
+    pdf.addFileToVFS('Geist-Bold.ttf', geist.bold);
+    pdf.addFont('Geist-Bold.ttf', 'Geist', 'bold');
+    this.familia = 'Geist';
   }
 
   /** El QR va como PNG: jsPDF no dibuja SVG. */
@@ -87,12 +134,12 @@ export class FacturaPdfService {
 
     // ── Emisor
     pdf
-      .setFont('helvetica', 'bold')
+      .setFont(this.familia, 'bold')
       .setFontSize(13)
       .setTextColor(...INK);
     pdf.text(d.emisor.razonSocial, MARGEN, y + 4);
 
-    pdf.setFont('helvetica', 'normal').setFontSize(7.5);
+    pdf.setFont(this.familia, 'normal').setFontSize(7.5);
     let yy = y + 11;
     const fila = (k: string, v: string | null) => {
       if (!v) return;
@@ -112,12 +159,12 @@ export class FacturaPdfService {
     pdf.setDrawColor(...INK).setLineWidth(0.5);
     pdf.roundedRect(xLetra, y, anchoLetra, 18, 1.5, 1.5, 'S');
     pdf
-      .setFont('helvetica', 'bold')
+      .setFont(this.familia, 'bold')
       .setFontSize(24)
       .setTextColor(...INK);
     pdf.text(d.letra, xLetra + anchoLetra / 2, y + 10, { align: 'center' });
     pdf
-      .setFont('helvetica', 'normal')
+      .setFont(this.familia, 'normal')
       .setFontSize(6.5)
       .setTextColor(...MUTED);
     pdf.text(`COD. ${d.codigoArca}`, xLetra + anchoLetra / 2, y + 15, {
@@ -126,14 +173,14 @@ export class FacturaPdfService {
 
     // ── Comprobante
     pdf
-      .setFont('helvetica', 'bold')
+      .setFont(this.familia, 'bold')
       .setFontSize(12)
       .setTextColor(...INK);
     pdf.text(d.tipoLabel, xComp, y + 4);
     pdf.setFontSize(10);
     pdf.text(`${d.puntoVenta} - ${d.numero}`, xComp, y + 10);
 
-    pdf.setFont('helvetica', 'normal').setFontSize(7.5);
+    pdf.setFont(this.familia, 'normal').setFontSize(7.5);
     let yc = y + 16;
     const filaC = (k: string, v: string) => {
       pdf.setTextColor(...MUTED);
@@ -155,7 +202,7 @@ export class FacturaPdfService {
   private receptor(pdf: jsPDF, d: Documento, y0: number): number {
     let y = y0;
     pdf
-      .setFont('helvetica', 'bold')
+      .setFont(this.familia, 'bold')
       .setFontSize(6.5)
       .setTextColor(...MUTED);
     pdf.text('RECEPTOR', MARGEN, y);
@@ -170,9 +217,9 @@ export class FacturaPdfService {
       v: string,
       destacado = false,
     ) => {
-      pdf.setFont('helvetica', 'normal').setTextColor(...MUTED);
+      pdf.setFont(this.familia, 'normal').setTextColor(...MUTED);
       pdf.text(k, x, yy);
-      pdf.setFont('helvetica', destacado ? 'bold' : 'normal');
+      pdf.setFont(this.familia, destacado ? 'bold' : 'normal');
       pdf.setTextColor(...(destacado ? INFO : INK));
       pdf.text(v, x + 30, yy);
     };
@@ -192,14 +239,14 @@ export class FacturaPdfService {
   private condiciones(pdf: jsPDF, d: Documento, y0: number): number {
     const y = y0;
     pdf.setFontSize(8);
-    pdf.setFont('helvetica', 'normal').setTextColor(...MUTED);
+    pdf.setFont(this.familia, 'normal').setTextColor(...MUTED);
     pdf.text('Condición de venta', MARGEN, y);
-    pdf.setFont('helvetica', 'bold').setTextColor(...INK);
+    pdf.setFont(this.familia, 'bold').setTextColor(...INK);
     pdf.text(d.condicionVenta, MARGEN + 28, y);
 
-    pdf.setFont('helvetica', 'normal').setTextColor(...MUTED);
+    pdf.setFont(this.familia, 'normal').setTextColor(...MUTED);
     pdf.text('Moneda', MARGEN + 90, y);
-    pdf.setFont('helvetica', 'bold').setTextColor(...INK);
+    pdf.setFont(this.familia, 'bold').setTextColor(...INK);
     pdf.text(d.moneda, MARGEN + 104, y);
 
     pdf.setDrawColor(...HAIRLINE).setLineWidth(0.2);
@@ -247,7 +294,7 @@ export class FacturaPdfService {
       margin: { left: MARGEN, right: MARGEN },
       theme: 'plain',
       styles: {
-        font: 'helvetica',
+        font: this.familia,
         fontSize: 8,
         cellPadding: { top: 2, bottom: 2, left: 2, right: 2 },
         textColor: INK,
@@ -297,7 +344,7 @@ export class FacturaPdfService {
       pdf.setDrawColor(...BORDE).setLineWidth(0.2);
       pdf.roundedRect(MARGEN, y - 3, 78, alto, 1, 1, 'S');
       pdf
-        .setFont('helvetica', 'bold')
+        .setFont(this.familia, 'bold')
         .setFontSize(6.5)
         .setTextColor(...INK);
       const titulo = pdf.splitTextToSize(
@@ -308,9 +355,9 @@ export class FacturaPdfService {
       let yl = y + 1 + titulo.length * 3 + 2;
       pdf.setFontSize(7.5);
       const filaT = (k: string, v: number) => {
-        pdf.setFont('helvetica', 'normal').setTextColor(...MUTED);
+        pdf.setFont(this.familia, 'normal').setTextColor(...MUTED);
         pdf.text(k, MARGEN + 3, yl);
-        pdf.setFont('helvetica', 'bold').setTextColor(...INK);
+        pdf.setFont(this.familia, 'bold').setTextColor(...INK);
         pdf.text(money(v), MARGEN + 75, yl, { align: 'right' });
         yl += 4;
       };
@@ -318,12 +365,12 @@ export class FacturaPdfService {
       filaT('Otros Impuestos Nac. Indirectos', d.otrosImpuestosIndirectos ?? 0);
     } else if (d.otrosTributos.length > 0) {
       pdf
-        .setFont('helvetica', 'bold')
+        .setFont(this.familia, 'bold')
         .setFontSize(6.5)
         .setTextColor(...MUTED);
       pdf.text('OTROS TRIBUTOS', MARGEN, y);
       let yl = y + 5;
-      pdf.setFont('helvetica', 'normal').setFontSize(7.5);
+      pdf.setFont(this.familia, 'normal').setFontSize(7.5);
       for (const t of d.otrosTributos) {
         pdf.setTextColor(...MUTED);
         pdf.text(t.descripcion, MARGEN, yl);
@@ -337,7 +384,7 @@ export class FacturaPdfService {
     pdf.setFontSize(8);
     const filaTot = (k: string, v: string, sangria = false) => {
       pdf
-        .setFont('helvetica', 'normal')
+        .setFont(this.familia, 'normal')
         .setTextColor(...(sangria ? MUTED2 : MUTED));
       pdf.text(k, xTot + (sangria ? 4 : 0), y);
       pdf.setTextColor(...INK);
@@ -361,7 +408,7 @@ export class FacturaPdfService {
     pdf.line(xTot, y, ANCHO - MARGEN, y);
     y += 5;
     pdf
-      .setFont('helvetica', 'bold')
+      .setFont(this.familia, 'bold')
       .setFontSize(10)
       .setTextColor(...INK);
     pdf.text('Total', xTot, y);
@@ -395,7 +442,7 @@ export class FacturaPdfService {
 
     const xc = MARGEN + ladoQr + 8;
     pdf
-      .setFont('helvetica', 'bold')
+      .setFont(this.familia, 'bold')
       .setFontSize(6.5)
       .setTextColor(...MUTED);
     pdf.text(
@@ -408,7 +455,7 @@ export class FacturaPdfService {
     pdf.text('CAE N°', xc, y + 9);
     pdf.text('VENCIMIENTO DEL CAE', xc + 46, y + 9);
     pdf
-      .setFont('helvetica', 'bold')
+      .setFont(this.familia, 'bold')
       .setFontSize(11)
       .setTextColor(...INK);
     pdf.text(d.cae ?? '—', xc, y + 14);
@@ -420,13 +467,13 @@ export class FacturaPdfService {
       pdf.setDrawColor(...HAIRLINE).setLineWidth(0.2);
       pdf.line(xc, yl - 3, ANCHO - MARGEN, yl - 3);
       pdf
-        .setFont('helvetica', 'bold')
+        .setFont(this.familia, 'bold')
         .setFontSize(6)
         .setTextColor(...MUTED);
       pdf.text('LEYENDAS', xc, yl);
       yl += 3.5;
       pdf
-        .setFont('helvetica', 'normal')
+        .setFont(this.familia, 'normal')
         .setFontSize(6.5)
         .setTextColor(...INK);
       for (const l of d.leyendas) {
