@@ -701,6 +701,17 @@ function ItemDetailSheet({
     };
   }, [ordenId]);
 
+  // Esc cierra el sheet (sólo mientras hay un item abierto).
+  const abierto = Boolean(item);
+  React.useEffect(() => {
+    if (!abierto) return undefined;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [abierto, onClose]);
+
   if (!item) return null;
 
   const totalSteps = item.steps.length;
