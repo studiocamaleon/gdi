@@ -127,6 +127,7 @@ function Stepper({ label, value, min, step, unit, help, onChange }: { label: str
 
 function StationForm({
   initial,
+  etapaInicial,
   familias,
   empleados,
   maquinas,
@@ -138,6 +139,7 @@ function StationForm({
   onDelete,
 }: {
   initial?: Estacion;
+  etapaInicial?: string;
   familias: FamiliaPasoCatalogo[];
   empleados: EmpleadoRef[];
   maquinas: MaquinaRef[];
@@ -163,7 +165,7 @@ function StationForm({
           empleadoIds: initial.empleados.map((entry) => entry.id),
           maquinaIds: initial.maquinas.map((entry) => entry.id),
         }
-      : createEmptyEstacion(),
+      : { ...createEmptyEstacion(), ...(etapaInicial ? { etapa: etapaInicial } : {}) },
   );
   const update = (patch: Partial<EstacionPayload>) => setDraft((current) => ({ ...current, ...patch }));
   const toggleLista = (key: "familias" | "empleadoIds" | "maquinaIds", val: string) => {
@@ -210,7 +212,13 @@ function StationForm({
               <label>Etapa <span className="req">·</span></label>
               <div className="etapa-picker">
                 {ETAPAS_ESTACION.map((entry) => (
-                  <button key={entry.key} type="button" className={`etapa-chip ${draft.etapa === entry.key ? "on" : ""}`} onClick={() => update({ etapa: entry.key })}>
+                  <button
+                    key={entry.key}
+                    type="button"
+                    className={`etapa-chip ${draft.etapa === entry.key ? "on" : ""}`}
+                    onClick={() => update({ etapa: entry.key })}
+                    style={draft.etapa === entry.key ? { borderColor: entry.color, boxShadow: `inset 3px 0 0 ${entry.color}` } : undefined}
+                  >
                     <span className="num">{String(entry.order).padStart(2, "0")}</span><span className="nm">{entry.nm}</span>
                   </button>
                 ))}
@@ -415,6 +423,7 @@ export function EstacionesPanel({
   const [items, setItems] = React.useState(initialEstaciones);
   const [familias, setFamilias] = React.useState(initialFamilias);
   const [sheet, setSheet] = React.useState<"new" | Estacion | null>(null);
+  const [nuevaEtapa, setNuevaEtapa] = React.useState<string | undefined>(undefined);
   const [aEliminar, setAEliminar] = React.useState<Estacion | null>(null);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -476,22 +485,14 @@ export function EstacionesPanel({
   return (
     <div
       className="est-page"
-      style={{
-        flex: 1,
-        minHeight: 0,
-        overflowY: "auto",
-        width: "auto",
-        maxWidth: "none",
-        margin: 0,
-        padding: "28px 32px 40px",
-      }}
+      style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "28px 32px 40px" }}
     >
       <div className="page-head">
         <div className="title-block">
           <h1>Estaciones</h1>
           <div className="sub">Configurá las estaciones de tu taller: familias de pasos (rutean el tablero), máquinas, empleados y capacidad.</div>
         </div>
-        <button type="button" className="btn btn-primary" onClick={() => setSheet("new")}><PlusIcon />Nueva estación</button>
+        <button type="button" className="btn btn-primary" onClick={() => { setNuevaEtapa(undefined); setSheet("new"); }}><PlusIcon />Nueva estación</button>
       </div>
 
       <div className="est-toolbar">
@@ -515,6 +516,10 @@ export function EstacionesPanel({
           <div className="est-group-head"><span className="dot" style={{ background: cat.color }} /><h3>{cat.nm}</h3><span className="rule" /><span className="ct">{groupItems.length} estación{groupItems.length === 1 ? "" : "es"}</span></div>
           <div className="est-group-grid">
             {groupItems.map((est) => <EstacionCard key={est.id} est={est} onEdit={setSheet} />)}
+            <button type="button" className="est-add-card" onClick={() => { setNuevaEtapa(cat.key); setSheet("new"); }}>
+              <PlusIcon />
+              <span>Nueva estación en {cat.nm}</span>
+            </button>
           </div>
         </section>
       ))}
@@ -524,7 +529,7 @@ export function EstacionesPanel({
           <div className="ic"><FactoryIcon /></div>
           <div className="ttl">Todavía no hay estaciones</div>
           <div className="sub">Creá las estaciones de tu taller y asignales familias de pasos: el Tablero va a agrupar el trabajo por ellas.</div>
-          <button type="button" className="btn btn-primary" onClick={() => setSheet("new")}><PlusIcon />Nueva estación</button>
+          <button type="button" className="btn btn-primary" onClick={() => { setNuevaEtapa(undefined); setSheet("new"); }}><PlusIcon />Nueva estación</button>
         </div>
       ) : filtered.length === 0 ? (
         <div className="est-empty">
@@ -534,8 +539,9 @@ export function EstacionesPanel({
 
       {sheet ? (
         <StationForm
-          key={sheet === "new" ? "new" : sheet.id}
+          key={sheet === "new" ? `new-${nuevaEtapa ?? "def"}` : sheet.id}
           initial={sheet === "new" ? undefined : sheet}
+          etapaInicial={sheet === "new" ? nuevaEtapa : undefined}
           familias={familias}
           empleados={empleados}
           maquinas={maquinas}
