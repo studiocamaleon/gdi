@@ -9,7 +9,6 @@ import {
   BookOpenIcon,
   BoxIcon,
   CheckIcon,
-  ChevronDownIcon,
   ChevronRightIcon,
   CircleDotIcon,
   ClockIcon,
@@ -67,7 +66,18 @@ import type {
   OrdenTrabajoDetalle,
   OrdenTrabajoEvento,
 } from "@/lib/ordenes-trabajo";
-import { ETAPAS_ESTACION, etapaDeEstacion, type Estacion } from "@/lib/estaciones";
+import {
+  capacidadDiariaMaxMin,
+  ETAPAS_ESTACION,
+  etapaDeEstacion,
+  etiquetaCalendario,
+  etiquetaDias,
+  proyectarColaDias,
+  type CalendarioEstacion,
+  type Estacion,
+} from "@/lib/estaciones";
+import type { DuracionFamilia } from "@/lib/estaciones-api";
+import { etiquetaEta, simularFlujo, type ResultadoSimulacion, type SimulacionItem } from "@/lib/flujo-produccion";
 
 type IconComponent = React.ComponentType<React.SVGProps<SVGSVGElement>>;
 type Mode = "items" | "estacion" | "kanban";
@@ -292,7 +302,32 @@ function RouteStrip({ steps, compact = false }: { steps: StepView[]; compact?: b
 
 // ── Vista Por items ──────────────────────────────────────────────────────
 
-function ItemRow({ item, onOpen }: { item: ItemView; onOpen: (id: string) => void }) {
+/**
+ * "fin ≈ mar 22" bajo la entrega (Fase 2b): la simulación de flujo contra
+ * las colas reales. ROJO + "no llega" si la ETA supera la fecha de entrega
+ * — la señal del vendedor ANTES de que el retraso exista. "~" = corrió con
+ * supuestos (estación sin calendario o bloqueo asumido como destrabado).
+ */
+function EtaLine({ item, eta }: { item: ItemView; eta: SimulacionItem | undefined }) {
+  if (!eta || item.finished) return null;
+  if (eta.sinEstimar) return <span className="eta-line none">fin sin estimar</span>;
+  if (!eta.finEstimado) return null;
+  const fin = eta.finEstimado;
+  const finClave = `${fin.getFullYear()}-${String(fin.getMonth() + 1).padStart(2, "0")}-${String(fin.getDate()).padStart(2, "0")}`;
+  const late = item.data.fechaEntrega ? finClave > item.data.fechaEntrega.slice(0, 10) : false;
+  const aprox = eta.parcial || eta.asumeDesbloqueo;
+  const motivo = [eta.parcial ? "estación sin calendario en la ruta" : null, eta.asumeDesbloqueo ? "asume desbloqueo inmediato" : null]
+    .filter(Boolean)
+    .join(" · ");
+  return (
+    <span className={`eta-line ${late ? "late" : ""}`} title={motivo || undefined}>
+      fin {aprox ? "~" : "≈"} {etiquetaEta(fin)}
+      {late ? " · no llega" : ""}
+    </span>
+  );
+}
+
+function ItemRow({ item, eta, onOpen }: { item: ItemView; eta: SimulacionItem | undefined; onOpen: (id: string) => void }) {
   const cssRow =
     `tab-row priority-${item.priority}` +
     (item.blocked ? " blocked" : "") +
@@ -325,6 +360,7 @@ function ItemRow({ item, onOpen }: { item: ItemView; onOpen: (id: string) => voi
         <div className={`tab-due ${item.delayed && !item.blocked ? "delayed" : ""}`}>
           <span className="due-label">{item.dueLabel}</span>
           <span className="due-in">{item.dueIn === "Hoy" ? "vence hoy" : `${item.dueIn} restantes`}</span>
+          <EtaLine item={item} eta={eta} />
         </div>
         <div className="tab-assigned" title={`Estación actual: ${item.station}`}>
           <span className="av">{item.stationIcon ? React.createElement(getStepIcon(item.stationIcon)) : <FactoryIcon />}</span>
@@ -820,8 +856,11 @@ type StationInfo = {
   key: string;
   nm: string;
   icono: string | null;
-  /** Pasos concurrentes configurados; null para el bucket "Sin estación". */
+  /** Puestos de trabajo configurados; null para el bucket "Sin estación". */
   capacidad: number | null;
+  /** Calendario semanal (proyecta la cola en días); null = sin horario. */
+  calendario: CalendarioEstacion | null;
+  /** Label derivado del calendario ("L–V 8:00–18:00"); null = sin horario. */
   horario: string | null;
   /** Etapa productiva fija elegida en la estación (null = sin estación). */
   etapa: string | null;
@@ -838,6 +877,15 @@ type StationTask = {
   urgent: boolean;
 };
 
+/**
+ * Paso FUTURO de un item vivo: pendiente, no activo todavía. Va a caer en
+ * su estación cuando avance la secuencia — es la "carga en camino" (D10).
+ */
+type IncomingTask = {
+  item: ItemView;
+  step: StepView;
+};
+
 function ordenarTareas(tasks: StationTask[]): StationTask[] {
   return tasks.sort((a, b) => {
     const aw = (a.isBlocked ? 0 : 1) + (a.overdue ? 0 : 2) + (a.isCurrent ? 1 : 4);
@@ -848,31 +896,41 @@ function ordenarTareas(tasks: StationTask[]): StationTask[] {
 
 /**
  * Modelo de la vista: las estaciones ACTIVAS configuradas + el bucket "Sin
- * estación", con sus tareas activas. La ruta es secuencial, así que acá
- * entra únicamente el paso listo para hacerse de cada item (el primero, o
- * con todos los anteriores hechos): los futuros no son trabajo de nadie
- * todavía. El paso llega a su estación por la FAMILIA, y las máquinas de la
+ * estación", con sus tareas activas (la COLA: el paso listo de cada item)
+ * y sus pasos EN CAMINO (futuros pendientes de items vivos, que caerán acá
+ * cuando avance la secuencia — D10, se muestran aparte, nunca sumados a la
+ * cola). El paso llega a su estación por la FAMILIA, y las máquinas de la
  * estación FILTRAN (ver resolverEstacionDePaso).
  */
 function buildStationsModel(items: ItemView[], estaciones: Estacion[]) {
   const tareas = new Map<string, StationTask[]>();
+  const entrantes = new Map<string, IncomingTask[]>();
 
   for (const item of items) {
     for (const step of item.steps) {
-      if (!pasoActivo(item.data, step.paso)) continue;
+      if (pasoActivo(item.data, step.paso)) {
+        const estacion = resolverEstacionDePaso(estaciones, step.paso);
+        const key = estacion?.id ?? SIN_ESTACION_KEY;
+        const lista = tareas.get(key) ?? [];
+        lista.push({
+          item,
+          step,
+          isCurrent: step.status === "current",
+          isBlocked: step.status === "blocked",
+          isPending: step.status === "pending",
+          overdue: item.delayed && step.status !== "blocked",
+          urgent: item.priority === "urgent" || (item.delayed && step.status !== "blocked") || step.status === "blocked",
+        });
+        tareas.set(key, lista);
+        continue;
+      }
+      // Futuro = pendiente no activo (los hechos ya no son carga).
+      if (step.paso.estado !== "pendiente") continue;
       const estacion = resolverEstacionDePaso(estaciones, step.paso);
       const key = estacion?.id ?? SIN_ESTACION_KEY;
-      const lista = tareas.get(key) ?? [];
-      lista.push({
-        item,
-        step,
-        isCurrent: step.status === "current",
-        isBlocked: step.status === "blocked",
-        isPending: step.status === "pending",
-        overdue: item.delayed && step.status !== "blocked",
-        urgent: item.priority === "urgent" || (item.delayed && step.status !== "blocked") || step.status === "blocked",
-      });
-      tareas.set(key, lista);
+      const lista = entrantes.get(key) ?? [];
+      lista.push({ item, step });
+      entrantes.set(key, lista);
     }
   }
   for (const lista of tareas.values()) ordenarTareas(lista);
@@ -884,38 +942,84 @@ function buildStationsModel(items: ItemView[], estaciones: Estacion[]) {
       nm: estacion.nombre,
       icono: estacion.icono,
       capacidad: estacion.capacidadConcurrente,
-      horario: estacion.horario,
+      calendario: estacion.calendario,
+      horario: etiquetaCalendario(estacion.calendario),
       etapa: estacion.etapa,
       sinEstacion: false,
     }));
-  if (tareas.has(SIN_ESTACION_KEY)) {
+  if (tareas.has(SIN_ESTACION_KEY) || entrantes.has(SIN_ESTACION_KEY)) {
     stations.push({
       key: SIN_ESTACION_KEY,
       nm: "Sin estación",
       icono: null,
       capacidad: null,
+      calendario: null,
       horario: null,
       etapa: null,
       sinEstacion: true,
     });
   }
 
-  return { stations, tareas };
+  return { stations, tareas, entrantes };
 }
 
 function taskId(task: StationTask) {
   return task.step.paso.id;
 }
 
-function computeStationStats(tasks: StationTask[]) {
+/**
+ * Duración estimada del paso para la cola: la propia del snapshot, o la
+ * mediana histórica de su familia (D6 del doc de capacidad). null = sin
+ * estimar (suma 0 a la cola y se señala aparte, sin inventar defaults).
+ */
+function duracionDeTask(task: { step: StepView }, medianas: Map<string, number>): number | null {
+  const propia = task.step.paso.duracionEstimadaMin;
+  if (propia != null && propia > 0) return propia;
+  return medianas.get(task.step.paso.familiaCodigo) ?? null;
+}
+
+function computeStationStats(
+  tasks: StationTask[],
+  incoming: IncomingTask[],
+  medianas: Map<string, number>,
+) {
   const blocked = tasks.filter((task) => task.isBlocked).length;
   const urgent = tasks.filter((task) => task.urgent && !task.isBlocked).length;
   const pending = tasks.length - blocked - urgent;
+  const enCurso = tasks.filter((task) => task.isCurrent).length;
   const minDias = tasks.reduce<number | null>((min, task) => {
     const dias = task.item.dueDays;
     if (dias === null) return min;
     return min === null ? dias : Math.min(min, dias);
   }, null);
+
+  // Cola en MINUTOS (incluye bloqueados: el trabajo no desaparece), con los
+  // segmentos de la LoadBar ponderados por horas, no por conteo (doc §6).
+  let colaMin = 0;
+  let sinEstimar = 0;
+  let pendingMin = 0;
+  let urgentMin = 0;
+  let blockedMin = 0;
+  for (const task of tasks) {
+    const duracion = duracionDeTask(task, medianas);
+    if (duracion == null) {
+      sinEstimar += 1;
+      continue;
+    }
+    colaMin += duracion;
+    if (task.isBlocked) blockedMin += duracion;
+    else if (task.urgent) urgentMin += duracion;
+    else pendingMin += duracion;
+  }
+
+  // Carga EN CAMINO (D10): pasos futuros de items vivos que caerán acá.
+  // Se informa aparte de la cola, nunca sumada como si llegara ya (D11).
+  let entranteMin = 0;
+  for (const task of incoming) {
+    const duracion = duracionDeTask(task, medianas);
+    if (duracion == null) sinEstimar += 1;
+    else entranteMin += duracion;
+  }
 
   return {
     tasks,
@@ -923,6 +1027,14 @@ function computeStationStats(tasks: StationTask[]) {
     pending,
     urgent,
     blocked,
+    enCurso,
+    colaMin,
+    sinEstimar,
+    pendingMin,
+    urgentMin,
+    blockedMin,
+    entranteMin,
+    entranteCount: incoming.length,
     minDias,
     oldestBlocked: tasks.find((task) => task.isBlocked),
   };
@@ -934,8 +1046,8 @@ function fmtDiasEntrega(dias: number) {
   return `${dias}d`;
 }
 
-function LoadBar({ pending, urgent, blocked, max }: { pending: number; urgent: number; blocked: number; max: number }) {
-  const total = pending + urgent + blocked;
+function LoadBar({ pending, urgent, blocked, incoming = 0, max }: { pending: number; urgent: number; blocked: number; incoming?: number; max: number }) {
+  const total = pending + urgent + blocked + incoming;
   if (max === 0 || total === 0) return <div className="load-bar"><div className="track" /></div>;
   const width = (value: number) => `${Math.min(100, (value / max) * 100)}%`;
   return (
@@ -944,6 +1056,7 @@ function LoadBar({ pending, urgent, blocked, max }: { pending: number; urgent: n
         {pending > 0 ? <span className="seg pending" style={{ width: width(pending) }} /> : null}
         {urgent > 0 ? <span className="seg urgent" style={{ width: width(urgent) }} /> : null}
         {blocked > 0 ? <span className="seg blocked" style={{ width: width(blocked) }} /> : null}
+        {incoming > 0 ? <span className="seg incoming" style={{ width: width(incoming) }} /> : null}
       </div>
     </div>
   );
@@ -958,16 +1071,35 @@ function stationIcon(station: StationInfo) {
 function StationCard({
   station,
   stats,
+  hoyMin = 0,
   onSelect,
 }: {
   station: StationInfo;
   stats: ReturnType<typeof computeStationStats>;
+  /** De lo en camino, minutos que la simulación estima que llegan HOY. */
+  hoyMin?: number;
   onSelect: (stationKey: string) => void;
 }) {
   const etapa = station.etapa ? etapaDeEstacion(station.etapa) : null;
   const tone = stats.blocked > 0 ? "block" : stats.urgent > 0 ? "urgent" : "ok";
-  // Carga REAL: pasos activos sobre la capacidad concurrente configurada.
-  const loadPct = station.capacidad ? Math.round((stats.total / station.capacidad) * 100) : null;
+  // Carga en TIEMPO (doc §6): ocupación instantánea (en curso/puestos) +
+  // cola en horas + jornadas caminando el calendario. El % por conteo murió.
+  const colaLabel = stats.colaMin > 0 ? etiquetaDuracion(stats.colaMin) : null;
+  const dias =
+    station.capacidad != null && stats.colaMin > 0
+      ? proyectarColaDias(station.calendario, stats.colaMin, station.capacidad)
+      : null;
+  const entranteLabel = stats.entranteMin > 0 ? etiquetaDuracion(stats.entranteMin) : null;
+  const cargaPartes = [
+    station.capacidad != null ? `${stats.enCurso}/${station.capacidad} puestos` : null,
+    colaLabel ? `cola ${colaLabel}` : null,
+    // "≈ 0 d" para colas de minutos es ruido: sólo desde 0,1 jornadas.
+    dias != null && dias >= 0.05 ? `≈ ${etiquetaDias(dias)}` : null,
+    entranteLabel ? `+${entranteLabel} en camino${hoyMin > 0 ? ` (${etiquetaDuracion(hoyMin)} hoy)` : ""}` : null,
+  ].filter(Boolean);
+  // La barra escala contra UN DÍA lleno de la estación; sin calendario, la
+  // carga presente la llena (no hay vara de tiempo contra la cual medir).
+  const barMax = capacidadDiariaMaxMin(station.calendario, station.capacidad ?? 1) ?? Math.max(stats.colaMin + stats.entranteMin, 1);
 
   return (
     <button type="button" className={`sta-card tone-${tone}`} onClick={() => onSelect(station.key)}>
@@ -982,13 +1114,15 @@ function StationCard({
         <div className="lh">
           <span className="num">{stats.total}</span>
           <span className="lbl">pasos activos</span>
-          {loadPct != null ? <span className="pct">{loadPct}% de capacidad</span> : null}
+          {cargaPartes.length > 0 ? <span className="pct">{cargaPartes.join(" · ")}</span> : null}
         </div>
-        <LoadBar pending={stats.pending} urgent={stats.urgent} blocked={stats.blocked} max={Math.max(station.capacidad ?? 0, stats.total)} />
+        <LoadBar pending={stats.pendingMin} urgent={stats.urgentMin} blocked={stats.blockedMin} incoming={stats.entranteMin} max={barMax} />
         <div className="sta-card-segs">
           {stats.pending > 0 ? <span className="seg-lbl"><span className="dot pending" />{stats.pending} pendientes</span> : null}
           {stats.urgent > 0 ? <span className="seg-lbl"><span className="dot urgent" />{stats.urgent} urgente{stats.urgent > 1 ? "s" : ""}</span> : null}
           {stats.blocked > 0 ? <span className="seg-lbl"><span className="dot blocked" />{stats.blocked} bloqueado{stats.blocked > 1 ? "s" : ""}</span> : null}
+          {stats.entranteCount > 0 ? <span className="seg-lbl"><span className="dot incoming" />{stats.entranteCount} en camino</span> : null}
+          {stats.sinEstimar > 0 ? <span className="seg-lbl"><span className="dot none" />{stats.sinEstimar} sin estimar</span> : null}
         </div>
       </div>
       <div className="sta-card-signals">
@@ -1003,19 +1137,29 @@ function StationCard({
 function StationGrid({
   items,
   estaciones,
+  medianas,
+  llegadasHoyMin,
   onSelect,
 }: {
   items: ItemView[];
   estaciones: Estacion[];
+  medianas: Map<string, number>;
+  llegadasHoyMin: Map<string, number>;
   onSelect: (stationKey: string) => void;
 }) {
-  const { stations, tareas } = buildStationsModel(items, estaciones);
-  const allStats = stations.map((station) => ({ station, stats: computeStationStats(tareas.get(station.key) ?? []) }));
+  const { stations, tareas, entrantes } = buildStationsModel(items, estaciones);
+  const allStats = stations.map((station) => ({
+    station,
+    stats: computeStationStats(tareas.get(station.key) ?? [], entrantes.get(station.key) ?? [], medianas),
+  }));
   const totalActive = allStats.reduce((acc, entry) => acc + entry.stats.total, 0);
+  const totalEntrante = allStats.reduce((acc, entry) => acc + entry.stats.entranteCount, 0);
   const blockedTotal = allStats.reduce((acc, entry) => acc + entry.stats.blocked, 0);
   const urgentTotal = allStats.reduce((acc, entry) => acc + entry.stats.urgent, 0);
-  const active = allStats.filter((entry) => entry.stats.total > 0 && !entry.station.sinEstacion);
-  const idle = allStats.filter((entry) => entry.stats.total === 0);
+  // Una estación sin cola pero CON carga en camino muestra card igual (D12):
+  // es exactamente la que el vendedor necesita ver antes de prometer.
+  const active = allStats.filter((entry) => (entry.stats.total > 0 || entry.stats.entranteCount > 0) && !entry.station.sinEstacion);
+  const idle = allStats.filter((entry) => entry.stats.total === 0 && entry.stats.entranteCount === 0);
   const sinEstacion = allStats.find((entry) => entry.station.sinEstacion);
   const byEtapa = ETAPAS_ESTACION.map((etapa) => ({
     ...etapa,
@@ -1027,13 +1171,14 @@ function StationGrid({
   return (
     <div className="sta-grid-wrap">
       <div className="sta-toolbar">
-        <div className="sta-select"><span className="lbl">Todas las estaciones</span><ChevronDownIcon /></div>
         <div className="sta-toolbar-stats">
           <span className="stat"><strong>{totalActive}</strong>pasos activos</span>
+          {totalEntrante > 0 ? <><span className="sep">·</span><span className="stat"><strong>{totalEntrante}</strong>en camino</span></> : null}
           <span className="sep">·</span>
           <span className="stat"><strong>{active.length}</strong>de {stations.filter((s) => !s.sinEstacion).length} estaciones con trabajo</span>
           {blockedTotal > 0 ? <><span className="sep">·</span><span className="stat warn"><strong>{blockedTotal}</strong>bloqueado{blockedTotal > 1 ? "s" : ""}</span></> : null}
           {urgentTotal > 0 ? <><span className="sep">·</span><span className="stat amber"><strong>{urgentTotal}</strong>urgente{urgentTotal > 1 ? "s" : ""}</span></> : null}
+          {sinEstacion && sinEstacion.stats.total > 0 ? <><span className="sep">·</span><span className="stat danger"><strong>{sinEstacion.stats.total}</strong>sin estación</span></> : null}
         </div>
         <Link className="sta-toolbar-cta" href="/produccion/estaciones"><CogIcon /><span>Configurar estaciones</span></Link>
       </div>
@@ -1055,7 +1200,7 @@ function StationGrid({
               <span className="ct"><strong>{catTotal}</strong> pasos · {category.items.length} {category.items.length === 1 ? "estación" : "estaciones"}</span>
             </div>
             <div className="sta-grid">
-              {category.items.map(({ station, stats }) => <StationCard key={station.key} station={station} stats={stats} onSelect={onSelect} />)}
+              {category.items.map(({ station, stats }) => <StationCard key={station.key} station={station} stats={stats} hoyMin={llegadasHoyMin.get(station.key) ?? 0} onSelect={onSelect} />)}
             </div>
           </section>
         );
@@ -1069,7 +1214,7 @@ function StationGrid({
             <span className="ct"><strong>{sinEstacion.stats.total}</strong> pasos · <Link href="/produccion/estaciones">asignar familias</Link></span>
           </div>
           <div className="sta-grid">
-            <StationCard station={sinEstacion.station} stats={sinEstacion.stats} onSelect={onSelect} />
+            <StationCard station={sinEstacion.station} stats={sinEstacion.stats} hoyMin={llegadasHoyMin.get(sinEstacion.station.key) ?? 0} onSelect={onSelect} />
           </div>
         </section>
       ) : null}
@@ -1138,19 +1283,32 @@ function TaskCard({
 function StationDetail({
   items,
   estaciones,
+  medianas,
   stationKey,
   onBack,
   onOpen,
 }: {
   items: ItemView[];
   estaciones: Estacion[];
+  medianas: Map<string, number>;
   stationKey: string;
   onBack: () => void;
   onOpen: (id: string) => void;
 }) {
-  const { stations, tareas } = buildStationsModel(items, estaciones);
+  const { stations, tareas, entrantes } = buildStationsModel(items, estaciones);
   const station = stations.find((entry) => entry.key === stationKey);
   const tasks = tareas.get(stationKey) ?? [];
+  const stats = computeStationStats(tasks, entrantes.get(stationKey) ?? [], medianas);
+  const diasCola =
+    station && station.capacidad != null && stats.colaMin > 0
+      ? proyectarColaDias(station.calendario, stats.colaMin, station.capacidad)
+      : null;
+  // Rango honesto (D12): el calendario caminado dos veces — sólo la cola,
+  // y cola + lo en camino (cota superior si todo lo conocido llegara).
+  const diasTotal =
+    station && station.capacidad != null && stats.entranteMin > 0
+      ? proyectarColaDias(station.calendario, stats.colaMin + stats.entranteMin, station.capacidad)
+      : null;
   const [mesa, setMesa] = React.useState(() => new Set<string>());
   const [filter, setFilter] = React.useState("todos");
   const etapa = station?.etapa ? etapaDeEstacion(station.etapa) : null;
@@ -1175,8 +1333,6 @@ function StationDetail({
     visibleShared = sharedTasks.filter((task) => task.urgent);
     visibleMesa = mesaTasks.filter((task) => task.urgent);
   }
-  const showing = filter === "mesa" ? mesaTasks.length : visibleShared.length + visibleMesa.length;
-
   return (
     <div className="sta-detail">
       <div className="sta-detail-head">
@@ -1188,7 +1344,7 @@ function StationDetail({
               {station?.sinEstacion
                 ? "Pasos cuya familia no está asignada a ninguna estación activa"
                 : estacionConfig?.descripcion ||
-                  [etapa?.nm, estacionConfig?.horario].filter(Boolean).join(" · ") ||
+                  [etapa?.nm, etiquetaCalendario(estacionConfig?.calendario)].filter(Boolean).join(" · ") ||
                   "Estación del taller"}
             </p>
             <div className="actions">
@@ -1200,15 +1356,27 @@ function StationDetail({
       </div>
 
       <div className="sta-detail-kpis">
-        {/* Capacidad fusionada: "2/3" — el diseño tiene exactamente 5 cards. */}
-        <div className={`kpi ${station?.capacidad && tasks.length > station.capacidad ? "warm" : ""}`}>
-          <div className="k">Total activos</div>
-          <div className="v">{station?.capacidad ? `${tasks.length}/${station.capacidad}` : tasks.length}</div>
+        {/* Ocupación instantánea (en curso/puestos) — el diseño tiene exactamente 5 cards. */}
+        <div className={`kpi ${station?.capacidad && stats.enCurso >= station.capacidad ? "warm" : ""}`}>
+          <div className="k">En curso</div>
+          <div className="v">{station?.capacidad ? `${stats.enCurso}/${station.capacidad}` : stats.enCurso}</div>
         </div>
         <div className={`kpi ${mesa.size > 0 ? "ok" : "warn"}`}><div className="k">Mi mesa de trabajo</div><div className="v">{mesa.size}</div></div>
         <div className="kpi cool"><div className="k">Pendientes</div><div className="v">{tasks.filter((task) => task.isPending).length}</div></div>
         <div className={`kpi ${tasks.some((task) => task.urgent) ? "warm" : ""}`}><div className="k">Urgentes</div><div className="v">{tasks.filter((task) => task.urgent).length}</div></div>
-        <div className="kpi"><div className="k">Mostrando</div><div className="v">{showing}</div></div>
+        <div className="kpi">
+          <div className="k">
+            {diasTotal != null && diasTotal >= 0.05
+              ? `Cola · ≈ ${etiquetaDias(Math.max(diasCola ?? 0, 0))} · hasta ${etiquetaDias(diasTotal)}`
+              : diasCola != null && diasCola >= 0.05
+                ? `Cola · ≈ ${etiquetaDias(diasCola)}`
+                : "Cola estimada"}
+          </div>
+          <div className="v">
+            {stats.colaMin > 0 ? etiquetaDuracion(stats.colaMin) : stats.entranteMin > 0 ? "0 min" : "—"}
+            {stats.entranteMin > 0 ? <span className="kpi-extra"> +{etiquetaDuracion(stats.entranteMin)} en camino</span> : null}
+          </div>
+        </div>
       </div>
 
       <div className="sta-detail-filters">
@@ -1247,15 +1415,19 @@ function StationDetail({
 function ByStationView({
   items,
   estaciones,
+  medianas,
+  llegadasHoyMin,
   onOpen,
 }: {
   items: ItemView[];
   estaciones: Estacion[];
+  medianas: Map<string, number>;
+  llegadasHoyMin: Map<string, number>;
   onOpen: (id: string) => void;
 }) {
   const [stationKey, setStationKey] = React.useState<string | null>(null);
-  if (stationKey) return <StationDetail items={items} estaciones={estaciones} stationKey={stationKey} onBack={() => setStationKey(null)} onOpen={onOpen} />;
-  return <StationGrid items={items} estaciones={estaciones} onSelect={setStationKey} />;
+  if (stationKey) return <StationDetail items={items} estaciones={estaciones} medianas={medianas} stationKey={stationKey} onBack={() => setStationKey(null)} onOpen={onOpen} />;
+  return <StationGrid items={items} estaciones={estaciones} medianas={medianas} llegadasHoyMin={llegadasHoyMin} onSelect={setStationKey} />;
 }
 
 // ── Kanban ───────────────────────────────────────────────────────────────
@@ -1309,9 +1481,20 @@ function KanbanView({ items, onOpen }: { items: ItemView[]; onOpen: (id: string)
     { key: "delayed", title: "Con retraso", description: "Entrega vencida" },
     { key: "active", title: "En curso", description: "Avanzando sin retraso" },
   ];
+  // Dentro de cada columna, de la entrega más próxima a la más lejana (los
+  // vencidos van primero por ser lo más urgente); sin fecha, al final. Mismo
+  // criterio que la vista "Por items".
+  const porEntrega = (a: ItemView, b: ItemView) => {
+    if (a.dueDays === null && b.dueDays === null) return 0;
+    if (a.dueDays === null) return 1;
+    if (b.dueDays === null) return -1;
+    return a.dueDays - b.dueDays;
+  };
   const grouped = columns.map((column) => ({
     ...column,
-    items: items.filter((item) => getKanbanBucket(item) === column.key),
+    items: items
+      .filter((item) => getKanbanBucket(item) === column.key)
+      .sort(porEntrega),
   }));
 
   return (
@@ -1340,9 +1523,11 @@ function KanbanView({ items, onOpen }: { items: ItemView[]; onOpen: (id: string)
 export function TableroProduccion({
   initialItems,
   estaciones,
+  duracionesFamilias,
 }: {
   initialItems: TableroItemData[];
   estaciones: Estacion[];
+  duracionesFamilias: DuracionFamilia[];
 }) {
   const [items, setItems] = React.useState<TableroItemData[]>(initialItems);
   const [mode, setMode] = React.useState<Mode>(DEFAULT_BOARD_MODE);
@@ -1384,6 +1569,31 @@ export function TableroProduccion({
     () => items.map((item) => buildItemView(item, estaciones)),
     [items, estaciones],
   );
+
+  /** familiaCodigo → mediana histórica en minutos (fallback de la cola). */
+  const medianas = React.useMemo(
+    () => new Map(duracionesFamilias.map((entry) => [entry.familiaCodigo, entry.medianaMin])),
+    [duracionesFamilias],
+  );
+
+  /** Simulación de flujo (fase 2b): ETA por item + llegadas por estación. */
+  const sim = React.useMemo<ResultadoSimulacion>(
+    () => simularFlujo({ items, estaciones, medianas }),
+    [items, estaciones, medianas],
+  );
+
+  /** Minutos de carga en camino que LLEGAN HOY, por estación. */
+  const llegadasHoyMin = React.useMemo(() => {
+    const resultado = new Map<string, number>();
+    const hoy = new Date().toDateString();
+    for (const [key, lista] of sim.llegadasPorEstacion) {
+      const minutosHoy = lista
+        .filter((llegada) => llegada.llegada.toDateString() === hoy)
+        .reduce((acc, llegada) => acc + llegada.duracionMin, 0);
+      if (minutosHoy > 0) resultado.set(key, minutosHoy);
+    }
+    return resultado;
+  }, [sim]);
 
   /**
    * Acción sobre un paso: el backend devuelve el item re-proyectado, pero
@@ -1521,12 +1731,12 @@ export function TableroProduccion({
               <>
                 <FiltersBar filters={filters} setFilters={setFilters} counts={counts} />
                 <div className="tab-board">
-                  {filtered.map((item) => <ItemRow key={item.id} item={item} onOpen={setSelectedId} />)}
+                  {filtered.map((item) => <ItemRow key={item.id} item={item} eta={sim.porItem.get(item.id)} onOpen={setSelectedId} />)}
                   {filtered.length === 0 ? <div className="empty-results">No hay items que coincidan con los filtros.</div> : null}
                 </div>
               </>
             ) : null}
-            {mode === "estacion" ? <ByStationView items={views} estaciones={estaciones} onOpen={setSelectedId} /> : null}
+            {mode === "estacion" ? <ByStationView items={views} estaciones={estaciones} medianas={medianas} llegadasHoyMin={llegadasHoyMin} onOpen={setSelectedId} /> : null}
             {mode === "kanban" ? (
               <>
                 <FiltersBar filters={filters} setFilters={setFilters} counts={counts} />

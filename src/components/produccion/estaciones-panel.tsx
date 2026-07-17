@@ -28,8 +28,12 @@ import {
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import {
   createEmptyEstacion,
+  DIAS_SEMANA,
   ETAPAS_ESTACION,
   etapaDeEstacion,
+  etiquetaCalendario,
+  type CalendarioEstacion,
+  type DiaSemana,
   type Estacion,
   type EstacionPayload,
   type FamiliaPasoCatalogo,
@@ -125,9 +129,121 @@ function Stepper({ label, value, min, step, unit, help, onChange }: { label: str
   );
 }
 
+// ── Editor del calendario semanal ────────────────────────────────────────
+
+const DIA_NOMBRE: Record<DiaSemana, string> = {
+  lun: "Lunes",
+  mar: "Martes",
+  mie: "Miércoles",
+  jue: "Jueves",
+  vie: "Viernes",
+  sab: "Sábado",
+  dom: "Domingo",
+};
+
+/** Calendario con los 7 días inactivos (base para editar desde cero). */
+function calendarioVacio(): CalendarioEstacion {
+  return { dias: { lun: null, mar: null, mie: null, jue: null, vie: null, sab: null, dom: null } };
+}
+
+/** Franjas activas con desde >= hasta (bloquean el guardado con aviso). */
+function diasInvalidos(calendario: CalendarioEstacion | null): DiaSemana[] {
+  if (!calendario) return [];
+  return DIAS_SEMANA.filter((dia) => {
+    const franja = calendario.dias[dia];
+    return franja !== null && franja.desde >= franja.hasta;
+  });
+}
+
+/**
+ * Editor semanal: toggle por día + franja desde/hasta. Al activar un día
+ * hereda la franja del último día activo anterior (o 9–18). "Copiar
+ * horarios de:" pisa el calendario del borrador con el de otra estación
+ * (sólo el calendario; los puestos no se copian) — acción de cliente pura.
+ */
+function CalendarioEditor({
+  value,
+  onChange,
+  fuentes,
+}: {
+  value: CalendarioEstacion | null;
+  onChange: (calendario: CalendarioEstacion | null) => void;
+  fuentes: Estacion[];
+}) {
+  const calendario = value ?? calendarioVacio();
+  const invalidos = new Set(diasInvalidos(calendario));
+
+  const setDia = (dia: DiaSemana, franja: { desde: string; hasta: string } | null) => {
+    onChange({ dias: { ...calendario.dias, [dia]: franja } });
+  };
+
+  const toggleDia = (dia: DiaSemana) => {
+    if (calendario.dias[dia]) {
+      setDia(dia, null);
+      return;
+    }
+    // Hereda la franja del día activo anterior: cargar L y activar M-V sale gratis.
+    const previos = DIAS_SEMANA.slice(0, DIAS_SEMANA.indexOf(dia)).reverse();
+    const heredada = previos.map((previo) => calendario.dias[previo]).find(Boolean);
+    setDia(dia, heredada ? { ...heredada } : { desde: "09:00", hasta: "18:00" });
+  };
+
+  const copiables = fuentes.filter((estacion) => estacion.calendario !== null);
+
+  return (
+    <div className="cal-editor">
+      <div className="cal-editor-head">
+        <label>Calendario operativo</label>
+        {copiables.length > 0 ? (
+          <select
+            className="cal-copy"
+            value=""
+            onChange={(event) => {
+              const fuente = copiables.find((estacion) => estacion.id === event.target.value);
+              if (fuente?.calendario) onChange({ dias: { ...fuente.calendario.dias } });
+            }}
+          >
+            <option value="" disabled>Copiar horarios de…</option>
+            {copiables.map((estacion) => (
+              <option key={estacion.id} value={estacion.id}>{estacion.nombre} — {etiquetaCalendario(estacion.calendario)}</option>
+            ))}
+          </select>
+        ) : null}
+      </div>
+      <div className="cal-rows">
+        {DIAS_SEMANA.map((dia) => {
+          const franja = calendario.dias[dia];
+          return (
+            <div key={dia} className={`cal-row ${franja ? "on" : ""} ${invalidos.has(dia) ? "invalid" : ""}`}>
+              <button type="button" className="cal-day" onClick={() => toggleDia(dia)} aria-pressed={franja !== null}>
+                <span className="dot" />{DIA_NOMBRE[dia]}
+              </button>
+              {franja ? (
+                <div className="cal-times">
+                  <input type="time" value={franja.desde} onChange={(event) => setDia(dia, { ...franja, desde: event.target.value })} />
+                  <span className="sep">–</span>
+                  <input type="time" value={franja.hasta} onChange={(event) => setDia(dia, { ...franja, hasta: event.target.value })} />
+                </div>
+              ) : (
+                <span className="cal-off">No se trabaja</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div className={`help ${invalidos.size > 0 ? "err" : ""}`}>
+        {invalidos.size > 0
+          ? `Revisá ${[...invalidos].map((dia) => DIA_NOMBRE[dia]).join(", ")}: "desde" debe ser anterior a "hasta".`
+          : "Horas disponibles para proyectar la cola del tablero en días."}
+      </div>
+    </div>
+  );
+}
+
 function StationForm({
   initial,
   etapaInicial,
+  estaciones,
   familias,
   empleados,
   maquinas,
@@ -140,6 +256,8 @@ function StationForm({
 }: {
   initial?: Estacion;
   etapaInicial?: string;
+  /** Todas las estaciones (fuentes de "Copiar horarios de:"). */
+  estaciones: Estacion[];
   familias: FamiliaPasoCatalogo[];
   empleados: EmpleadoRef[];
   maquinas: MaquinaRef[];
@@ -160,7 +278,7 @@ function StationForm({
           etapa: initial.etapa,
           icono: initial.icono ?? "Tool",
           capacidadConcurrente: initial.capacidadConcurrente,
-          horario: initial.horario ?? "",
+          calendario: initial.calendario,
           familias: initial.familias,
           empleadoIds: initial.empleados.map((entry) => entry.id),
           maquinaIds: initial.maquinas.map((entry) => entry.id),
@@ -177,7 +295,9 @@ function StationForm({
     });
   };
 
-  const valid = draft.nombre.trim().length > 0;
+  const valid =
+    draft.nombre.trim().length > 0 &&
+    diasInvalidos(draft.calendario ?? null).length === 0;
   const etapa = etapaDeEstacion(draft.etapa);
 
   // Familias agrupadas por categoría; las tomadas por OTRA estación se
@@ -345,15 +465,13 @@ function StationForm({
           </section>
 
           <section className="est-section">
-            <div className="est-section-head"><span className="num">04</span><div><div className="ttl">Capacidad y planificación</div><div className="sub">Para calcular la carga real de la estación en el tablero.</div></div></div>
-            <div className="est-grid-2">
-              <Stepper label="Pasos concurrentes" value={draft.capacidadConcurrente ?? 1} min={1} step={1} onChange={(value) => update({ capacidadConcurrente: value })} help="Cuántos pasos pueden trabajarse en paralelo." />
-              <div className="est-field">
-                <label>Horario operativo</label>
-                <input className="est-input" value={draft.horario ?? ""} onChange={(event) => update({ horario: event.target.value })} placeholder="8 a 18 hs" />
-                <div className="help">Informativo, para alertas y entregas.</div>
-              </div>
-            </div>
+            <div className="est-section-head"><span className="num">04</span><div><div className="ttl">Capacidad y planificación</div><div className="sub">Puestos y calendario: la cola del tablero se mide en horas.</div></div></div>
+            <Stepper label="Puestos de trabajo" value={draft.capacidadConcurrente ?? 1} min={1} step={1} onChange={(value) => update({ capacidadConcurrente: value })} help="Cuántos pasos avanzan EN PARALELO de verdad (2 mesas con 2 operarios = 2). Una impresora es 1, aunque tenga cola." />
+            <CalendarioEditor
+              value={draft.calendario ?? null}
+              onChange={(calendario) => update({ calendario })}
+              fuentes={estaciones.filter((estacion) => estacion.id !== initial?.id && estacion.activo)}
+            />
           </section>
 
           <div className="est-tip"><CogIcon /><span>Los pasos del Tablero llegan a esta estación por su <strong>familia</strong>; si la estación tiene <strong>máquinas</strong>, sólo recibe los pasos que usan esas máquinas. El tiempo estimado por paso sale de la ruta real de cada item, no se configura acá.</span></div>
@@ -392,11 +510,11 @@ function EstacionCard({
         <Stat label="Familias" value={est.familias.length} />
         <Stat label="Máquinas" value={est.maquinas.length} />
         <Stat label="Empleados" value={est.empleados.length} />
-        <Stat label="Capacidad" value={est.capacidadConcurrente} />
+        <Stat label="Puestos" value={est.capacidadConcurrente} />
       </div>
       <div className="est-card-foot">
         <span className={`est-status ${est.activo ? "ok" : "off"}`}><span className="dot" />{est.activo ? "Activa" : "Inactiva"}</span>
-        {est.horario ? <span className="est-card-id">{est.horario}</span> : null}
+        {etiquetaCalendario(est.calendario) ? <span className="est-card-id">{etiquetaCalendario(est.calendario)}</span> : null}
         {est.familias.length === 0 ? <span className="est-tasks">Sin familias: no recibe pasos</span> : null}
       </div>
     </button>
@@ -542,6 +660,7 @@ export function EstacionesPanel({
           key={sheet === "new" ? `new-${nuevaEtapa ?? "def"}` : sheet.id}
           initial={sheet === "new" ? undefined : sheet}
           etapaInicial={sheet === "new" ? nuevaEtapa : undefined}
+          estaciones={items}
           familias={familias}
           empleados={empleados}
           maquinas={maquinas}

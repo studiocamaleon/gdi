@@ -7,6 +7,7 @@ import {
   ArrowLeftIcon,
   BriefcaseBusinessIcon,
   CalendarIcon,
+  ClockIcon,
   CheckIcon,
   ChevronRightIcon,
   CircleDollarSignIcon,
@@ -48,8 +49,17 @@ import {
   crearOrdenTrabajo,
   editarOrdenItem,
   editarOrdenTrabajo,
+  getTableroProduccion,
   quitarOrdenItem,
 } from "@/lib/ordenes-trabajo-api";
+import { getDuracionesFamilias, getEstaciones } from "@/lib/estaciones-api";
+import type { Estacion } from "@/lib/estaciones";
+import type { TableroItemData } from "@/lib/tablero-produccion";
+import {
+  estimarDemoraNuevos,
+  etiquetaEta,
+  type SimulacionItem,
+} from "@/lib/flujo-produccion";
 import {
   ORDEN_TRABAJO_ESTADOS,
   ORDEN_TRABAJO_FLOW,
@@ -2952,10 +2962,38 @@ function buildOrdenItemSpecs(
   return arr;
 }
 
+/**
+ * Lectura de una ETA simulada contra la fecha elegida: "≈ mar 21/07" (o
+ * "~" si corrió con supuestos) + si queda DESPUÉS de la fecha prometida.
+ */
+function describirEta(
+  eta: SimulacionItem | null | undefined,
+  fechaElegida: string | null,
+): { etiqueta: string; tarde: boolean; aprox: boolean; motivo: string } | null {
+  if (!eta || !eta.finEstimado) return null;
+  const fin = eta.finEstimado;
+  const finClave = `${fin.getFullYear()}-${String(fin.getMonth() + 1).padStart(2, "0")}-${String(fin.getDate()).padStart(2, "0")}`;
+  const aprox = eta.parcial || eta.asumeDesbloqueo || eta.sinEstimar;
+  const motivo = [
+    eta.parcial ? "estación sin calendario en la ruta" : null,
+    eta.asumeDesbloqueo ? "asume que lo bloqueado se destraba ya" : null,
+    eta.sinEstimar ? "hay pasos sin tiempo estimado" : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  return {
+    etiqueta: `${aprox ? "~" : "≈"} ${etiquetaEta(fin)}`,
+    tarde: fechaElegida ? finClave > fechaElegida.slice(0, 10) : false,
+    aprox,
+    motivo,
+  };
+}
+
 export function ProductRow({
   item,
   index,
   expanded,
+  etaSistema,
   onToggle,
   onRemove,
   onEdit,
@@ -2967,6 +3005,8 @@ export function ProductRow({
   item: PropuestaItem;
   index: number;
   expanded: boolean;
+  /** ETA simulada del item contra las colas del taller (fase 3); null = sin dato. */
+  etaSistema?: SimulacionItem | null;
   onToggle: () => void;
   /** Ausentes en modo lectura (OT emitida): la fila no se puede mutar. */
   onRemove?: () => void;
@@ -3282,6 +3322,22 @@ export function ProductRow({
                       />
                     )}
                   </div>
+                  {(() => {
+                    const eta = describirEta(etaSistema, item.fechaEntrega ?? fechaEstimada);
+                    if (!eta) return null;
+                    return (
+                      <div className="op-mini-row">
+                        <span className="mlbl">Sistema estima</span>
+                        <span
+                          className={`mval mono ${eta.tarde ? "eta-tarde" : ""}`}
+                          title={eta.motivo || "Simulado contra las colas actuales del taller"}
+                        >
+                          {eta.etiqueta}
+                          {eta.tarde ? " · después de la fecha" : ""}
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             </>
@@ -4522,6 +4578,73 @@ export function PropuestaFicha({
   const [fechaCreacion] = React.useState(() =>
     orden ? orden.creadaEl.slice(0, 10) : offsetDate(0),
   );
+
+  // ── Demora estimada por el sistema (fase 3, simulación de flujo) ──────
+  // Sólo en creación/borrador: una orden emitida ya está EN las colas del
+  // tablero — volver a simularla la contaría dos veces (D10 del doc).
+  const conDemoraSistema = !orden || orden.estado === "borrador";
+  const [colasTaller, setColasTaller] = React.useState<{
+    enCola: TableroItemData[];
+    estaciones: Estacion[];
+    medianas: Map<string, number>;
+  } | null>(null);
+  React.useEffect(() => {
+    if (!conDemoraSistema) return;
+    let vigente = true;
+    void Promise.all([
+      getTableroProduccion(),
+      getEstaciones(),
+      getDuracionesFamilias(),
+    ])
+      .then(([tablero, estaciones, duraciones]) => {
+        if (!vigente) return;
+        setColasTaller({
+          enCola: tablero.items,
+          estaciones,
+          medianas: new Map(duraciones.map((d) => [d.familiaCodigo, d.medianaMin])),
+        });
+      })
+      .catch(() => {
+        // Sin datos de colas no hay sugerencia; la ficha sigue funcionando.
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [conDemoraSistema]);
+
+  /** ETA por item de la ficha, simulada contra las colas reales de HOY. */
+  const demoraPorItem = React.useMemo(() => {
+    if (!conDemoraSistema || !colasTaller || items.length === 0) return null;
+    const nuevos = items.map((item) => ({
+      id: item.id,
+      pasos: (item.cotizacion?.pasos ?? [])
+        .filter((paso) => paso.activado)
+        .map((paso) => ({
+          familiaCodigo: paso.familiaCodigo || "trabajo_manual",
+          centroCostoId: paso.tiempo?.centroCostoId ?? null,
+          duracionMin: paso.tiempo?.totalMin ?? null,
+          nombre: paso.nombreVisible ?? undefined,
+        })),
+    }));
+    return estimarDemoraNuevos({ nuevos, ...colasTaller });
+  }, [conDemoraSistema, colasTaller, items]);
+
+  /** ETA de la ORDEN completa = el item que termina último. */
+  const demoraOrden = React.useMemo<SimulacionItem | null>(() => {
+    if (!demoraPorItem || demoraPorItem.size === 0) return null;
+    let fin: Date | null = null;
+    let sinEstimar = false;
+    let parcial = false;
+    let asumeDesbloqueo = false;
+    for (const eta of demoraPorItem.values()) {
+      if (eta.sinEstimar || eta.finEstimado === null) sinEstimar = true;
+      else if (fin === null || eta.finEstimado > fin) fin = eta.finEstimado;
+      parcial ||= eta.parcial;
+      asumeDesbloqueo ||= eta.asumeDesbloqueo;
+    }
+    return { finEstimado: fin, sinEstimar, parcial, asumeDesbloqueo };
+  }, [demoraPorItem]);
+
   const router = useRouter();
   const [emitiendo, setEmitiendo] = React.useState(false);
   const [emisionNumero, setEmisionNumero] = React.useState<string | null>(null);
@@ -5564,6 +5687,22 @@ export function PropuestaFicha({
               <span>{formatFechaOrden(orden?.fechaEntrega ?? null)}</span>
             </div>
           )}
+          {(() => {
+            const eta = describirEta(demoraOrden, fechaEstimada);
+            if (!eta) return null;
+            return (
+              <div
+                className={`eta-sugerida ${eta.tarde ? "tarde" : ""}`}
+                title={eta.motivo || "Simulado contra las colas actuales del taller"}
+              >
+                <ClockIcon />
+                <span>
+                  El taller la terminaría <strong>{eta.etiqueta}</strong>
+                  {eta.tarde ? " — después de la fecha elegida" : ""}
+                </span>
+              </div>
+            );
+          })()}
         </FieldCard>
       </div>
 
@@ -5636,6 +5775,7 @@ export function PropuestaFicha({
                     item={item}
                     index={index}
                     expanded={openIds.has(item.id)}
+                    etaSistema={demoraPorItem?.get(item.id) ?? null}
                     onToggle={() => toggle(item.id)}
                     onRemove={
                       modoOrden
