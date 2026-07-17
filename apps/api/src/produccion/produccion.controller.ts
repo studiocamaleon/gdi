@@ -45,6 +45,12 @@ export class ProduccionController {
     return this.service.simulador(auth);
   }
 
+  /** Cola real del simulador de impresión LÁSER (por hoja, en frontera). */
+  @Get('simulador-laser')
+  simuladorLaser(@CurrentSession() auth: CurrentAuth) {
+    return this.service.simuladorLaser(auth);
+  }
+
   // ── Configuración de producción (margen de la ETA sugerida) ───────────
 
   @Get('configuracion')

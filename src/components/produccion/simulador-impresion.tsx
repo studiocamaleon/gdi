@@ -712,6 +712,7 @@ export function SimuladorImpresion({ initialData }: { initialData: SimuladorData
     materials.filter((m) => m.tech === tk).reduce((acc, m) => acc + (jobsByMat.get(m.key)?.length ?? 0), 0);
 
   return (
+    <div className="sim-scroll">
     <div className="sim-page">
       <div className="sim-head">
         <div className="left">
@@ -807,6 +808,7 @@ export function SimuladorImpresion({ initialData }: { initialData: SimuladorData
           </div>
         </>
       )}
+    </div>
     </div>
   );
 }
