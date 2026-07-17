@@ -305,10 +305,9 @@ function ItemRow({ item, onOpen }: { item: ItemView; onOpen: (id: string) => voi
           {item.priority !== "normal" ? <span className={`prio-pill prio-${item.priority}`}>{priorityLabel(item.priority)}</span> : null}
         </div>
         <div className="tab-row-product">{item.product}</div>
+        {/* Sólo el cliente: el detalle del producto vive en el sheet. */}
         <div className="tab-row-spec">
           <span className="cust">{item.customer}</span>
-          <span className="sep">·</span>
-          <span className="spec">{item.spec}</span>
         </div>
       </div>
 
