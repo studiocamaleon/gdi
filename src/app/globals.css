@@ -27298,3 +27298,63 @@ textarea.est-input {
     display: block !important;
   }
 }
+
+/* ───────────────────────────────────────────────────────────────────────
+   Datos fiscales · tira "qué letra vas a emitir". No viene de un diseño:
+   muestra en vivo, por cada condición de cliente, qué letra saldría según
+   la matriz de ARCA. Tiene estilos propios y no reusa .apm-calc-step, que
+   es de la simulación de las 3 cifras y no lleva el renglón del IVA.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.apm-letras {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 8px;
+}
+
+.apm-letra-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-3);
+  background: var(--surface-2);
+  padding: 10px 12px;
+}
+
+.apm-letra-card .big {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 16px;
+  background: var(--info-bg);
+  color: var(--info);
+  border: 1px solid #dbe4fb;
+}
+
+.apm-letra-card .txt {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.apm-letra-card .cond {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+  line-height: 1.25;
+}
+
+.apm-letra-card .iva {
+  font-size: 10.5px;
+  color: var(--muted-text);
+  line-height: 1.25;
+}
+
+/* fin tira de letras (touch — Turbopack) */

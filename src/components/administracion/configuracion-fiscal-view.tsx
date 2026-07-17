@@ -319,7 +319,7 @@ export function ConfiguracionFiscalView({
                 Qué letra vas a emitir{" "}
                 <span className="n">según la condición de cada cliente</span>
               </div>
-              <div className="apm-calc-flow" style={{ flexWrap: "wrap" }}>
+              <div className="apm-letras">
                 {CONDICIONES_FISCALES.map((receptor) => {
                   const r = letraComprobante(
                     form.condicionFiscal,
@@ -327,26 +327,19 @@ export function ConfiguracionFiscalView({
                     form.leyendaFacturaA || null,
                   );
                   return (
-                    <div
-                      key={receptor}
-                      className="apm-cf-step"
-                      style={{ minWidth: 128 }}
-                    >
-                      <span className="l">
-                        {CONDICION_FISCAL_LABELS[receptor]}
-                      </span>
-                      <span
-                        className="v"
-                        style={{ fontSize: 22, color: "var(--info)" }}
-                      >
-                        {r.letra}
-                      </span>
-                      <span className="s">
-                        {r.exenta
-                          ? "sin IVA"
-                          : r.discriminaIva
-                            ? "IVA discriminado"
-                            : "IVA incluido"}
+                    <div key={receptor} className="apm-letra-card">
+                      <span className="big">{r.letra}</span>
+                      <span className="txt">
+                        <span className="cond">
+                          {CONDICION_FISCAL_LABELS[receptor]}
+                        </span>
+                        <span className="iva">
+                          {r.exenta
+                            ? "sin IVA"
+                            : r.discriminaIva
+                              ? "IVA discriminado"
+                              : "IVA incluido"}
+                        </span>
                       </span>
                     </div>
                   );
