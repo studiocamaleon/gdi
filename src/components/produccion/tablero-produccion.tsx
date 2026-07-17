@@ -9,7 +9,6 @@ import {
   BookOpenIcon,
   BoxIcon,
   CheckIcon,
-  ChevronDownIcon,
   ChevronRightIcon,
   CircleDotIcon,
   ClockIcon,
@@ -1027,13 +1026,13 @@ function StationGrid({
   return (
     <div className="sta-grid-wrap">
       <div className="sta-toolbar">
-        <div className="sta-select"><span className="lbl">Todas las estaciones</span><ChevronDownIcon /></div>
         <div className="sta-toolbar-stats">
           <span className="stat"><strong>{totalActive}</strong>pasos activos</span>
           <span className="sep">·</span>
           <span className="stat"><strong>{active.length}</strong>de {stations.filter((s) => !s.sinEstacion).length} estaciones con trabajo</span>
           {blockedTotal > 0 ? <><span className="sep">·</span><span className="stat warn"><strong>{blockedTotal}</strong>bloqueado{blockedTotal > 1 ? "s" : ""}</span></> : null}
           {urgentTotal > 0 ? <><span className="sep">·</span><span className="stat amber"><strong>{urgentTotal}</strong>urgente{urgentTotal > 1 ? "s" : ""}</span></> : null}
+          {sinEstacion && sinEstacion.stats.total > 0 ? <><span className="sep">·</span><span className="stat danger"><strong>{sinEstacion.stats.total}</strong>sin estación</span></> : null}
         </div>
         <Link className="sta-toolbar-cta" href="/produccion/estaciones"><CogIcon /><span>Configurar estaciones</span></Link>
       </div>
@@ -1309,9 +1308,20 @@ function KanbanView({ items, onOpen }: { items: ItemView[]; onOpen: (id: string)
     { key: "delayed", title: "Con retraso", description: "Entrega vencida" },
     { key: "active", title: "En curso", description: "Avanzando sin retraso" },
   ];
+  // Dentro de cada columna, de la entrega más próxima a la más lejana (los
+  // vencidos van primero por ser lo más urgente); sin fecha, al final. Mismo
+  // criterio que la vista "Por items".
+  const porEntrega = (a: ItemView, b: ItemView) => {
+    if (a.dueDays === null && b.dueDays === null) return 0;
+    if (a.dueDays === null) return 1;
+    if (b.dueDays === null) return -1;
+    return a.dueDays - b.dueDays;
+  };
   const grouped = columns.map((column) => ({
     ...column,
-    items: items.filter((item) => getKanbanBucket(item) === column.key),
+    items: items
+      .filter((item) => getKanbanBucket(item) === column.key)
+      .sort(porEntrega),
   }));
 
   return (

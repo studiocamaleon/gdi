@@ -15899,6 +15899,10 @@ body {
 }
 .tablero-produccion .sta-toolbar-stats .stat.warn strong { color: var(--signal); }
 .tablero-produccion .sta-toolbar-stats .stat.amber strong { color: #c08025; }
+/* Pasos sin estación: rojo fuerte (número + label) para que salte a la vista. */
+.tablero-produccion .sta-toolbar-stats .stat.danger,
+.tablero-produccion .sta-toolbar-stats .stat.danger strong { color: var(--signal); }
+.tablero-produccion .sta-toolbar-stats .stat.danger { font-weight: 600; }
 .tablero-produccion .sta-toolbar-stats .sep { color: var(--muted-text-2); }
 /* ─── Alert strip ─── */
 .tablero-produccion .sta-alerts {
