@@ -32,7 +32,6 @@ import {
 } from "lucide-react";
 
 import {
-  CATEGORIAS_FAMILIA,
   codigoVisibleItem,
   etiquetaDuracion,
   etiquetaEntrega,
@@ -66,7 +65,7 @@ import type {
   OrdenTrabajoDetalle,
   OrdenTrabajoEvento,
 } from "@/lib/ordenes-trabajo";
-import type { Estacion } from "@/lib/estaciones";
+import { ETAPAS_ESTACION, etapaDeEstacion, type Estacion } from "@/lib/estaciones";
 
 type IconComponent = React.ComponentType<React.SVGProps<SVGSVGElement>>;
 type Mode = "items" | "estacion" | "kanban";
@@ -786,8 +785,8 @@ type StationInfo = {
   /** Pasos concurrentes configurados; null para el bucket "Sin estación". */
   capacidad: number | null;
   horario: string | null;
-  /** Derivada de las tareas presentes (para agrupar por etapa). */
-  categoria: string | null;
+  /** Etapa productiva fija elegida en la estación (null = sin estación). */
+  etapa: string | null;
   sinEstacion: boolean;
 };
 
@@ -848,7 +847,7 @@ function buildStationsModel(items: ItemView[], estaciones: Estacion[]) {
       icono: estacion.icono,
       capacidad: estacion.capacidadConcurrente,
       horario: estacion.horario,
-      categoria: tareas.get(estacion.id)?.[0]?.step.paso.categoriaFamilia ?? null,
+      etapa: estacion.etapa,
       sinEstacion: false,
     }));
   if (tareas.has(SIN_ESTACION_KEY)) {
@@ -858,7 +857,7 @@ function buildStationsModel(items: ItemView[], estaciones: Estacion[]) {
       icono: null,
       capacidad: null,
       horario: null,
-      categoria: null,
+      etapa: null,
       sinEstacion: true,
     });
   }
@@ -927,7 +926,7 @@ function StationCard({
   stats: ReturnType<typeof computeStationStats>;
   onSelect: (stationKey: string) => void;
 }) {
-  const categoria = CATEGORIAS_FAMILIA.find((entry) => entry.key === station.categoria);
+  const etapa = station.etapa ? etapaDeEstacion(station.etapa) : null;
   const tone = stats.blocked > 0 ? "block" : stats.urgent > 0 ? "urgent" : "ok";
   // Carga REAL: pasos activos sobre la capacidad concurrente configurada.
   const loadPct = station.capacidad ? Math.round((stats.total / station.capacidad) * 100) : null;
@@ -938,7 +937,7 @@ function StationCard({
         <span className="sta-card-ico">{stationIcon(station)}</span>
         <div className="sta-card-titles">
           <div className="nm">{station.nm}</div>
-          <div className="desc">{station.sinEstacion ? "Familias sin estación asignada" : categoria?.nm ?? "Estación del taller"}</div>
+          <div className="desc">{station.sinEstacion ? "Familias sin estación asignada" : etapa?.nm ?? "Estación del taller"}</div>
         </div>
       </div>
       <div className="sta-card-load">
@@ -980,12 +979,12 @@ function StationGrid({
   const active = allStats.filter((entry) => entry.stats.total > 0 && !entry.station.sinEstacion);
   const idle = allStats.filter((entry) => entry.stats.total === 0);
   const sinEstacion = allStats.find((entry) => entry.station.sinEstacion);
-  const byCategory = CATEGORIAS_FAMILIA.map((category) => ({
-    ...category,
+  const byEtapa = ETAPAS_ESTACION.map((etapa) => ({
+    ...etapa,
     items: active
-      .filter(({ station }) => station.categoria === category.key)
+      .filter(({ station }) => station.etapa === etapa.key)
       .sort((a, b) => b.stats.blocked - a.stats.blocked || b.stats.urgent - a.stats.urgent || b.stats.total - a.stats.total),
-  })).filter((category) => category.items.length > 0);
+  })).filter((etapa) => etapa.items.length > 0);
 
   return (
     <div className="sta-grid-wrap">
@@ -1008,7 +1007,7 @@ function StationGrid({
         </div>
       ) : null}
 
-      {byCategory.map((category) => {
+      {byEtapa.map((category) => {
         const catTotal = category.items.reduce((acc, entry) => acc + entry.stats.total, 0);
         return (
           <section key={category.key} className="sta-cat">
@@ -1116,7 +1115,7 @@ function StationDetail({
   const tasks = tareas.get(stationKey) ?? [];
   const [mesa, setMesa] = React.useState(() => new Set<string>());
   const [filter, setFilter] = React.useState("todos");
-  const categoria = CATEGORIAS_FAMILIA.find((entry) => entry.key === station?.categoria);
+  const etapa = station?.etapa ? etapaDeEstacion(station.etapa) : null;
   const estacionConfig = estaciones.find((entry) => entry.id === stationKey);
 
   const toggleMesa = (id: string) => {
@@ -1150,7 +1149,7 @@ function StationDetail({
             <p>
               {station?.sinEstacion
                 ? "Pasos cuya familia no está asignada a ninguna estación activa"
-                : [categoria?.nm, estacionConfig?.horario].filter(Boolean).join(" · ") || "Estación del taller"}
+                : [etapa?.nm, estacionConfig?.horario].filter(Boolean).join(" · ") || "Estación del taller"}
             </p>
             <div className="actions">
               <button type="button" className="sta-btn ghost" onClick={onBack}><ArrowLeftIcon />Ver todas las estaciones</button>

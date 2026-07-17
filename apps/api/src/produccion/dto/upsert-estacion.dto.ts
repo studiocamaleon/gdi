@@ -2,6 +2,7 @@ import {
   ArrayMaxSize,
   IsArray,
   IsBoolean,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -11,6 +12,18 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
+
+/** Etapas productivas FIJAS del taller (ordenan las vistas operativas). */
+export const ETAPAS_ESTACION = [
+  'preprensa',
+  'impresion',
+  'postprensa',
+  'terminaciones',
+  'instalacion',
+  'qa-despacho',
+] as const;
+
+export type EtapaEstacion = (typeof ETAPAS_ESTACION)[number];
 
 export class UpsertEstacionDto {
   @IsString()
@@ -25,6 +38,11 @@ export class UpsertEstacionDto {
 
   @IsBoolean()
   activo: boolean;
+
+  /** Etapa productiva fija (default 'preprensa'). */
+  @IsOptional()
+  @IsIn(ETAPAS_ESTACION)
+  etapa?: EtapaEstacion;
 
   /** Clave del set de iconos del tablero (Printer, Cut, Shield, …). */
   @IsOptional()

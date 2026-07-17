@@ -27,8 +27,9 @@ import {
 
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import {
-  categoriaDeEstacion,
   createEmptyEstacion,
+  ETAPAS_ESTACION,
+  etapaDeEstacion,
   type Estacion,
   type EstacionPayload,
   type FamiliaPasoCatalogo,
@@ -98,26 +99,6 @@ function iconEl(icon: string | null | undefined) {
   return <IconCmp />;
 }
 
-/** Color por categoría (mismo lenguaje que las etapas del diseño). */
-const CATEGORIA_COLORES: Record<string, string> = {
-  servicios_profesionales: "#1d4ed8",
-  pre_prensa: "#1d4ed8",
-  produccion_impresion: "#14141a",
-  corte_y_formado: "#92929b",
-  terminaciones: "#c08025",
-  encuadernacion_armado: "#c08025",
-  estructural_montaje: "#4a4a52",
-  operaciones_manuales: "#16794a",
-  logistica_instalacion: "#c2410c",
-};
-
-const SIN_CONFIGURAR = "sin-configurar";
-
-function categoriaLabel(key: string | null): string {
-  if (!key || key === SIN_CONFIGURAR) return "Sin configurar";
-  return CATEGORIAS_FAMILIA.find((entry) => entry.key === key)?.nm ?? key;
-}
-
 function iniciales(nombre: string): string {
   return nombre
     .split(/\s+/)
@@ -174,6 +155,7 @@ function StationForm({
           nombre: initial.nombre,
           descripcion: initial.descripcion,
           activo: initial.activo,
+          etapa: initial.etapa,
           icono: initial.icono ?? "Tool",
           capacidadConcurrente: initial.capacidadConcurrente,
           horario: initial.horario ?? "",
@@ -194,8 +176,7 @@ function StationForm({
   };
 
   const valid = draft.nombre.trim().length > 0;
-  const categoria = categoriaDeEstacion({ familias: draft.familias }, familias);
-  const color = CATEGORIA_COLORES[categoria ?? ""] ?? "#92929b";
+  const etapa = etapaDeEstacion(draft.etapa);
 
   // Familias agrupadas por categoría; las tomadas por OTRA estación se
   // muestran deshabilitadas con la dueña (una familia, una estación).
@@ -213,18 +194,29 @@ function StationForm({
       <div className="sheet-backdrop est-sheet-backdrop" onClick={onCancel} />
       <div className="sheet est-sheet" role="dialog" aria-modal="true">
         <div className="sheet-head est-sheet-head">
-          <div className="head-icon" style={{ background: color }}>{iconEl(draft.icono)}</div>
+          <div className="head-icon" style={{ background: etapa.color }}>{iconEl(draft.icono)}</div>
           <div className="body">
             <div className="eyebrow">{initial ? "Editar estación" : "Nueva estación"}</div>
             <h2>{draft.nombre.trim() || (initial ? initial.nombre : "Estación sin nombre")}</h2>
-            <div className="sub">{categoriaLabel(categoria)} · la etapa se deriva de las familias asignadas</div>
+            <div className="sub">{etapa.nm} · {etapa.desc}</div>
           </div>
           <span className="close" onClick={onCancel}><XIcon /></span>
         </div>
 
         <div className="sheet-body est-form">
           <section className="est-section">
-            <div className="est-section-head"><span className="num">01</span><div><div className="ttl">Identidad</div><div className="sub">Nombre interno de la estación en el taller.</div></div></div>
+            <div className="est-section-head"><span className="num">01</span><div><div className="ttl">Identidad</div><div className="sub">Nombre interno y la etapa productiva a la que pertenece.</div></div></div>
+            <div className="est-field">
+              <label>Etapa <span className="req">·</span></label>
+              <div className="etapa-picker">
+                {ETAPAS_ESTACION.map((entry) => (
+                  <button key={entry.key} type="button" className={`etapa-chip ${draft.etapa === entry.key ? "on" : ""}`} onClick={() => update({ etapa: entry.key })}>
+                    <span className="num">{String(entry.order).padStart(2, "0")}</span><span className="nm">{entry.nm}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="help">Fija por el sistema · ordena las estaciones en las vistas operativas.</div>
+            </div>
 
             <div className="est-grid-2">
               <div className="est-field">
@@ -298,7 +290,7 @@ function StationForm({
                 </div>
               </div>
             ))}
-            {draft.familias.length > 0 ? <div className="help">{draft.familias.length} familia(s) asignada(s) · etapa derivada: {categoriaLabel(categoria)}.</div> : <div className="help">Sin familias, esta estación no recibe pasos del tablero.</div>}
+            {draft.familias.length > 0 ? <div className="help">{draft.familias.length} familia(s) asignada(s).</div> : <div className="help">Sin familias, esta estación no recibe pasos del tablero.</div>}
           </section>
 
           <section className="est-section">
@@ -375,20 +367,17 @@ function StationForm({
 
 function EstacionCard({
   est,
-  catalogo,
   onEdit,
 }: {
   est: Estacion;
-  catalogo: FamiliaPasoCatalogo[];
   onEdit: (station: Estacion) => void;
 }) {
-  const categoria = categoriaDeEstacion(est, catalogo);
-  const color = CATEGORIA_COLORES[categoria ?? ""] ?? "#92929b";
+  const etapa = etapaDeEstacion(est.etapa);
   return (
     <button type="button" className={`est-card ${!est.activo ? "inactive" : ""}`} onClick={() => onEdit(est)}>
       <div className="est-card-head">
-        <span className="est-card-ico" style={{ background: color }}>{iconEl(est.icono)}</span>
-        <div className="est-card-titles"><div className="nm">{est.nombre}</div><div className="desc">{est.descripcion || categoriaLabel(categoria)}</div></div>
+        <span className="est-card-ico" style={{ background: etapa.color }}>{iconEl(est.icono)}</span>
+        <div className="est-card-titles"><div className="nm">{est.nombre}</div><div className="desc">{est.descripcion || etapa.nm}</div></div>
         <span className="est-card-edit"><PencilIcon /></span>
       </div>
       <div className="est-card-stats">
@@ -448,8 +437,7 @@ export function EstacionesPanel({
   }, []);
 
   const filtered = items.filter((entry) => {
-    const categoria = categoriaDeEstacion(entry, familias) ?? SIN_CONFIGURAR;
-    if (filterCategoria !== "all" && categoria !== filterCategoria) return false;
+    if (filterCategoria !== "all" && entry.etapa !== filterCategoria) return false;
     if (query) {
       const haystack = `${entry.nombre} ${entry.descripcion}`.toLowerCase();
       if (!haystack.includes(query.toLowerCase())) return false;
@@ -457,18 +445,10 @@ export function EstacionesPanel({
     return true;
   });
 
-  const gruposBase = [
-    ...CATEGORIAS_FAMILIA,
-    { key: SIN_CONFIGURAR, nm: "Sin configurar" },
-  ];
-  const grouped = gruposBase
-    .map((cat) => ({
-      cat,
-      items: filtered.filter(
-        (item) => (categoriaDeEstacion(item, familias) ?? SIN_CONFIGURAR) === cat.key,
-      ),
-    }))
-    .filter((group) => group.items.length > 0);
+  const grouped = ETAPAS_ESTACION.map((cat) => ({
+    cat,
+    items: filtered.filter((item) => item.etapa === cat.key),
+  })).filter((group) => group.items.length > 0);
 
   const handleSave = async (draft: EstacionPayload) => {
     setSaving(true);
@@ -522,8 +502,8 @@ export function EstacionesPanel({
         </div>
         <div className="est-etapa-filter">
           <button type="button" className={filterCategoria === "all" ? "on" : ""} onClick={() => setFilterCategoria("all")}>Todas <span className="ct">{items.length}</span></button>
-          {gruposBase.map((cat) => {
-            const count = items.filter((item) => (categoriaDeEstacion(item, familias) ?? SIN_CONFIGURAR) === cat.key).length;
+          {ETAPAS_ESTACION.map((cat) => {
+            const count = items.filter((item) => item.etapa === cat.key).length;
             if (count === 0) return null;
             return <button key={cat.key} type="button" className={filterCategoria === cat.key ? "on" : ""} onClick={() => setFilterCategoria(cat.key)}>{cat.nm}<span className="ct">{count}</span></button>;
           })}
@@ -532,9 +512,9 @@ export function EstacionesPanel({
 
       {grouped.map(({ cat, items: groupItems }) => (
         <section key={cat.key} className="est-group">
-          <div className="est-group-head"><span className="dot" style={{ background: CATEGORIA_COLORES[cat.key] ?? "#92929b" }} /><h3>{cat.nm}</h3><span className="rule" /><span className="ct">{groupItems.length} estación{groupItems.length === 1 ? "" : "es"}</span></div>
+          <div className="est-group-head"><span className="dot" style={{ background: cat.color }} /><h3>{cat.nm}</h3><span className="rule" /><span className="ct">{groupItems.length} estación{groupItems.length === 1 ? "" : "es"}</span></div>
           <div className="est-group-grid">
-            {groupItems.map((est) => <EstacionCard key={est.id} est={est} catalogo={familias} onEdit={setSheet} />)}
+            {groupItems.map((est) => <EstacionCard key={est.id} est={est} onEdit={setSheet} />)}
           </div>
         </section>
       ))}

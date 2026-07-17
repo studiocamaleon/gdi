@@ -7,6 +7,30 @@
  * Ver docs/estaciones-diseno.md
  */
 
+/**
+ * Etapas productivas FIJAS del taller: se elige una por estación y ordenan
+ * las vistas operativas (panel y tablero). Espejo del backend
+ * (ETAPAS_ESTACION en upsert-estacion.dto.ts).
+ */
+export const ETAPAS_ESTACION: Array<{
+  key: string;
+  nm: string;
+  desc: string;
+  order: number;
+  color: string;
+}> = [
+  { key: "preprensa", nm: "Pre-prensa", desc: "Diseño, verificación de archivos, CTP y planchas", order: 1, color: "#1d4ed8" },
+  { key: "impresion", nm: "Impresión", desc: "Offset, digital, ploteo y gran formato", order: 2, color: "#14141a" },
+  { key: "postprensa", nm: "Post-prensa", desc: "Secado, estabilización, refilado preliminar", order: 3, color: "#92929b" },
+  { key: "terminaciones", nm: "Terminaciones", desc: "Laminado, troquel, corte, plegado, encuadernación, armado", order: 4, color: "#c08025" },
+  { key: "instalacion", nm: "Instalación", desc: "Instalación en obra, montaje en sitio", order: 5, color: "#16794a" },
+  { key: "qa-despacho", nm: "QA & Despacho", desc: "Control de calidad, empaque, retiro y flete", order: 6, color: "#c2410c" },
+];
+
+export function etapaDeEstacion(key: string) {
+  return ETAPAS_ESTACION.find((entry) => entry.key === key) ?? ETAPAS_ESTACION[0];
+}
+
 export type EstacionEmpleadoRef = {
   id: string;
   nombreCompleto: string;
@@ -29,6 +53,8 @@ export type Estacion = {
   nombre: string;
   descripcion: string;
   activo: boolean;
+  /** Etapa productiva fija (clave de ETAPAS_ESTACION). */
+  etapa: string;
   /** Clave del set de iconos del tablero (Printer, Cut, Shield, …). */
   icono: string | null;
   /** Pasos que pueden ejecutarse en paralelo (carga real del tablero). */
@@ -47,6 +73,7 @@ export type EstacionPayload = {
   nombre: string;
   descripcion?: string;
   activo: boolean;
+  etapa: string;
   icono?: string;
   capacidadConcurrente?: number;
   horario?: string;
@@ -74,6 +101,7 @@ export function createEmptyEstacion(): EstacionPayload {
     nombre: "",
     descripcion: "",
     activo: true,
+    etapa: "preprensa",
     icono: "Tool",
     capacidadConcurrente: 1,
     horario: "",
@@ -83,28 +111,3 @@ export function createEmptyEstacion(): EstacionPayload {
   };
 }
 
-/**
- * Categoría visible de la estación, DERIVADA de sus familias (la
- * mayoritaria). Sin familias → null ("Sin configurar").
- */
-export function categoriaDeEstacion(
-  estacion: Pick<Estacion, "familias">,
-  catalogo: FamiliaPasoCatalogo[],
-): string | null {
-  if (estacion.familias.length === 0) return null;
-  const porCategoria = new Map<string, number>();
-  for (const codigo of estacion.familias) {
-    const familia = catalogo.find((entry) => entry.codigo === codigo);
-    if (!familia) continue;
-    porCategoria.set(familia.categoria, (porCategoria.get(familia.categoria) ?? 0) + 1);
-  }
-  let mejor: string | null = null;
-  let mejorCount = 0;
-  for (const [categoria, count] of porCategoria) {
-    if (count > mejorCount) {
-      mejor = categoria;
-      mejorCount = count;
-    }
-  }
-  return mejor;
-}

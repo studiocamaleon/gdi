@@ -58,10 +58,13 @@ FamiliaPaso (catálogo fijo) ──N:1── Estacion ──1:N── Maquina
   toca: costeo y piso de taller son ejes independientes.
 - **D3 — Empleados N:M** (`EstacionEmpleado`): un operario puede estar
   habilitado en varias estaciones.
-- **D4 — La categoría/etapa se DERIVA de las familias** asignadas (la
-  categoría mayoritaria; sin familias → "Sin configurar"). No hay campo
-  "etapa" manual: no puede divergir del contenido real de la estación. El
-  orden de secciones es el orden del catálogo de categorías.
+- **D4 — La ETAPA es FIJA y se elige por estación.** (Corregida 2026-07-17
+  a pedido del usuario: la derivación por familias quedó descartada.)
+  Catálogo fijo de 6 etapas productivas — Pre-prensa, Impresión, Post-prensa,
+  Terminaciones, Instalación, QA & Despacho — con orden y color; campo
+  `etapa` en `Estacion` (default `preprensa`), picker en el form, y agrupa/
+  ordena las vistas operativas (panel y tablero). Espejo front en
+  `ETAPAS_ESTACION` (src/lib/estaciones.ts), validación @IsIn en el DTO.
 - **D5 — Capacidad y planificación (fase 1)**: `capacidadConcurrente` (pasos
   en paralelo, para % de carga REAL del tablero: activos/capacidad) y
   `horario` (texto libre informativo). El "tiempo promedio por paso" del mock

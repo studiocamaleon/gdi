@@ -1068,6 +1068,10 @@ model Estacion {
   tenantId             String             @db.Uuid
   nombre               String
   descripcion          String?
+  /// Etapa productiva FIJA del catálogo ('preprensa' | 'impresion' |
+  /// 'postprensa' | 'terminaciones' | 'instalacion' | 'qa-despacho').
+  /// Ordena y agrupa las estaciones en las vistas operativas.
+  etapa                String             @default("preprensa")
   /// Clave del set de iconos del tablero (Printer, Cut, Shield, …).
   icono                String?
   /// Pasos que pueden ejecutarse en paralelo (carga real del tablero).

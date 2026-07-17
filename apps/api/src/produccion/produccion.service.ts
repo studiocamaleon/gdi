@@ -248,6 +248,7 @@ export class ProduccionService {
             nombre: payload.nombre.trim(),
             descripcion: payload.descripcion?.trim() || null,
             activo: payload.activo ?? true,
+            etapa: payload.etapa ?? 'preprensa',
             icono: payload.icono?.trim() || null,
             capacidadConcurrente: payload.capacidadConcurrente ?? 1,
             horario: payload.horario?.trim() || null,
@@ -286,6 +287,7 @@ export class ProduccionService {
             nombre: payload.nombre.trim(),
             descripcion: payload.descripcion?.trim() || null,
             activo: payload.activo,
+            etapa: payload.etapa ?? existing.etapa,
             icono: payload.icono?.trim() || null,
             capacidadConcurrente:
               payload.capacidadConcurrente ?? existing.capacidadConcurrente,
@@ -350,6 +352,7 @@ export class ProduccionService {
       nombre: item.nombre,
       descripcion: item.descripcion ?? '',
       activo: item.activo,
+      etapa: item.etapa,
       icono: item.icono,
       capacidadConcurrente: item.capacidadConcurrente,
       horario: item.horario,
