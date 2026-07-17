@@ -9,6 +9,7 @@ import {
   BookOpenIcon,
   BoxIcon,
   CheckIcon,
+  ChevronDownIcon,
   ChevronRightIcon,
   CircleDotIcon,
   ClockIcon,
@@ -998,7 +999,7 @@ function StationGrid({
   return (
     <div className="sta-grid-wrap">
       <div className="sta-toolbar">
-        <div className="sta-select"><span className="lbl">Estaciones del taller · el paso llega por su familia</span></div>
+        <div className="sta-select"><span className="lbl">Todas las estaciones</span><ChevronDownIcon /></div>
         <div className="sta-toolbar-stats">
           <span className="stat"><strong>{totalActive}</strong>pasos activos</span>
           <span className="sep">·</span>

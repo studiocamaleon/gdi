@@ -13063,7 +13063,7 @@ body {
     0 1px 2px rgba(20, 20, 26, 0.06) !important;
 }
 
-/* Tablero de producción — adaptadores de la app (shell, sheet base, kanban propio) (touch 2) */
+/* Tablero de producción — adaptadores de la app (shell, sheet base, kanban propio) (touch 4) */
 
 /* En el diseño las páginas viven dentro de .content (padding 28px 32px
    40px + scroll); el shell de la app no envuelve así: el canvas va acá.
@@ -13110,17 +13110,10 @@ body {
   background: currentColor;
 }
 
-.tablero-produccion .d-kpi,
-.tablero-produccion .tab-board,
-.tablero-produccion .kan-col,
-.tablero-produccion .sta-toolbar,
-.tablero-produccion .sta-card,
-.tablero-produccion .sta-detail-head,
-.tablero-produccion .sta-detail-kpis,
-.tablero-produccion .sta-detail-filters,
-.tablero-produccion .sta-detail-board,
-.tablero-produccion .tl-legend,
-.tablero-produccion .tl-scroll {
+/* Card sólo para el kanban (agregado de la app): en el diseño los
+   contenedores sta-toolbar/sta-detail-kpis/sta-detail-board son
+   transparentes y las demás cards las define el propio diseño. */
+.tablero-produccion .kan-col {
   border: 1px solid var(--border);
   border-radius: var(--r-3);
   background: var(--surface);
@@ -13707,10 +13700,6 @@ body {
 .tablero-produccion .sig {
   color: var(--muted-text);
   font-size: 12px;
-}
-
-.tablero-produccion .sta-detail-kpis .kpi:last-child {
-  border-right: 1px solid var(--border);
 }
 
 .tablero-produccion .sta-col:first-child {
@@ -16323,7 +16312,7 @@ body {
 
 .tablero-produccion a.sta-toolbar-cta {
   text-decoration: none;
-  color: inherit;
+  color: #fff;
 }
 
 /* El paso activo (frontera de la ruta) se marca con borde, como el diseño.
