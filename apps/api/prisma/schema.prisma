@@ -404,6 +404,7 @@ model Tenant {
   estaciones                                       Estacion[]
   estacionFamilias                                 EstacionFamilia[]
   diasNoLaborables                                 DiaNoLaborable[]
+  configuracionProduccion                          ConfiguracionProduccion?
   estacionEmpleados                                EstacionEmpleado[]
   // === Modelo Universal V2 (Fase F.1.2) ===
   rutas                                            Ruta[]
@@ -1093,6 +1094,18 @@ model Estacion {
 
   @@unique([tenantId, nombre])
   @@index([tenantId, activo])
+}
+
+/// Configuración de producción del tenant. Hoy: margen de seguridad que
+/// el cotizador suma a la ETA cruda al sugerir la fecha prometible.
+/// Ver docs/simulacion-flujo-diseno.md D13.
+model ConfiguracionProduccion {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @unique @db.Uuid
+  /// Días HÁBILES (L-V no feriado) de colchón sobre la ETA. 0 = sin margen.
+  margenEtaDias Int      @default(0)
+  updatedAt     DateTime @updatedAt
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
 /// Día en que el taller NO trabaja (feriado, vacaciones, cierre): fecha

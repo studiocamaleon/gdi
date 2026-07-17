@@ -433,6 +433,30 @@ export function estimarDemoraNuevos({
   return resultado;
 }
 
+/**
+ * Suma N días HÁBILES (lunes a viernes, no feriados) a una fecha: el
+ * margen de seguridad del cotizador (D13). La hora se preserva. Con 0
+ * devuelve la fecha tal cual.
+ */
+export function sumarDiasHabiles(
+  fecha: Date,
+  dias: number,
+  noLaborables: Set<string> = new Set(),
+): Date {
+  const resultado = new Date(fecha);
+  let restantes = Math.max(0, Math.floor(dias));
+  let guardia = 0;
+  while (restantes > 0 && guardia < 400) {
+    guardia += 1;
+    resultado.setDate(resultado.getDate() + 1);
+    const dow = resultado.getDay();
+    if (dow === 0 || dow === 6) continue;
+    if (noLaborables.has(claveFecha(resultado))) continue;
+    restantes -= 1;
+  }
+  return resultado;
+}
+
 // ── Etiquetas ────────────────────────────────────────────────────────────
 
 const DIA_CORTO = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];

@@ -1657,6 +1657,11 @@
     color: var(--signal);
     font-weight: 600;
   }
+  /* Llega, pero la fecha elegida se come el margen del taller (D13). */
+  .op-mini-row .mval.eta-justo {
+    color: #b45309;
+    font-weight: 600;
+  }
 
   /* "El taller la terminaría ≈ …" bajo la fecha de entrega de la orden. */
   .eta-sugerida {
@@ -1681,6 +1686,10 @@
   .eta-sugerida.tarde,
   .eta-sugerida.tarde strong {
     color: var(--signal);
+  }
+  .eta-sugerida.justo,
+  .eta-sugerida.justo strong {
+    color: #b45309;
   }
 
   .op-date-input {

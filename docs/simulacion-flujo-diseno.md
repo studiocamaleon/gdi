@@ -103,5 +103,13 @@ tablero MÁS items hipotéticos construidos desde `item.cotizacion.pasos`
   estima" junto a su fecha. "~" = supuestos (tooltip con el motivo);
   items sin pasos o sin tiempos → sin sugerencia, nunca inventada.
 
-Pendiente de esta fase: margen de seguridad configurable sobre la ETA
-cruda, si el taller lo pide. (Feriados: implementados, ver D7.)
+- **D13 — Margen de seguridad configurable** (2026-07-17):
+  `ConfiguracionProduccion.margenEtaDias` por tenant (0–15, default 0),
+  editado en "Calendario del taller" del panel de estaciones. Son días
+  HÁBILES (L–V no feriado) que se suman a la ETA cruda SÓLO al sugerir la
+  fecha prometible en el cotizador — el tablero sigue mostrando ETAs
+  crudas de operación. La línea pasa a "terminaría ≈ mar 21 · prometé
+  desde jue 23" con TRES niveles contra la fecha elegida: rojo "después
+  de la fecha elegida" (< ETA, no llega), ámbar "queda sin margen"
+  (entre ETA y sugerida) y limpio (≥ sugerida). Con margen 0 todo se
+  comporta como antes.
