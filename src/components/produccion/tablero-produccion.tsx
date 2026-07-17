@@ -87,6 +87,8 @@ type PriorityFilter = "all" | TableroPrioridad;
 type KanbanBucketKey = "not-started" | "today" | "delayed" | "active";
 
 const DEFAULT_BOARD_MODE: Mode = "items";
+/** Refresco en vivo del dataset (mismo ritmo que el tracking público). */
+const POLL_TABLERO_MS = 15000;
 const BOARD_MODE_STORAGE_KEY = "grafoprint:produccion:tablero-default-mode:v1";
 const BOARD_MODE_LABELS: Record<Mode, string> = {
   items: "Por items",
@@ -1597,6 +1599,53 @@ export function TableroProduccion({
     setMode(savedMode);
   }, []);
 
+  // ── Tablero EN VIVO: lo que hace otro operario aparece sin recargar ────
+  // Polling del dataset (es chico) cada POLL_TABLERO_MS, pausado con la
+  // pestaña oculta y refrescado al volver al foco. Dos protecciones que el
+  // tracking público no necesita: no se aplica un snapshot con mutaciones
+  // propias EN VUELO (pisaría el update optimista) ni durante un DRAG (el
+  // re-render reemplaza la card arrastrada y corta el drop).
+  const mutacionesRef = React.useRef(0);
+  const dragActivoRef = React.useRef(false);
+  const ultimoSnapshotRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    let vivo = true;
+    const refrescar = async () => {
+      if (document.hidden || mutacionesRef.current > 0 || dragActivoRef.current) return;
+      try {
+        const { items: frescos } = await getTableroProduccion();
+        if (!vivo || mutacionesRef.current > 0 || dragActivoRef.current) return;
+        const snapshot = JSON.stringify(frescos);
+        if (snapshot === ultimoSnapshotRef.current) return; // sin cambios: ni un re-render
+        ultimoSnapshotRef.current = snapshot;
+        setItems(frescos);
+      } catch {
+        // Error de red: se conserva el último estado (no parpadea).
+      }
+    };
+    const id = window.setInterval(() => void refrescar(), POLL_TABLERO_MS);
+    const onFocus = () => {
+      if (!document.hidden) void refrescar();
+    };
+    const onDragStart = () => { dragActivoRef.current = true; };
+    const onDragEnd = () => { dragActivoRef.current = false; };
+    document.addEventListener("visibilitychange", onFocus);
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("dragstart", onDragStart);
+    window.addEventListener("dragend", onDragEnd);
+    window.addEventListener("drop", onDragEnd);
+    return () => {
+      vivo = false;
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onFocus);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("dragstart", onDragStart);
+      window.removeEventListener("dragend", onDragEnd);
+      window.removeEventListener("drop", onDragEnd);
+    };
+  }, []);
+
   React.useEffect(() => {
     if (!tabMenu) return undefined;
 
@@ -1663,14 +1712,17 @@ export function TableroProduccion({
     async (item: ItemView, paso: TableroPasoData, accion: TableroPasoAccion, motivo?: string) => {
       setBusy(true);
       setError(null);
+      mutacionesRef.current += 1;
       try {
         const actualizado = await accionPasoProduccion(item.data.ordenId, item.id, paso.id, { accion, motivo });
         setItems((current) => current.map((entry) => (entry.id === actualizado.id ? actualizado : entry)));
         const { items: refrescados } = await getTableroProduccion();
         setItems(refrescados);
+        ultimoSnapshotRef.current = JSON.stringify(refrescados);
       } catch (err) {
         setError(err instanceof Error ? err.message : "No se pudo ejecutar la acción.");
       } finally {
+        mutacionesRef.current -= 1;
         setBusy(false);
       }
     },
@@ -1684,6 +1736,7 @@ export function TableroProduccion({
    */
   const handleMesa = React.useCallback(async (pasoId: string, en: boolean) => {
     const previo = items;
+    mutacionesRef.current += 1;
     setItems((current) =>
       current.map((item) => ({
         ...item,
@@ -1700,6 +1753,8 @@ export function TableroProduccion({
     } catch (err) {
       setItems(previo);
       setError(err instanceof Error ? err.message : "No se pudo mover el paso.");
+    } finally {
+      mutacionesRef.current -= 1;
     }
   }, [items]);
 
@@ -1755,8 +1810,8 @@ export function TableroProduccion({
       <div className="tab-page">
         <div className="page-head">
           <div className="title-block">
-            <h1>Tablero de producción</h1>
-            <div className="sub">Items de las órdenes emitidas, con su ruta real de pasos. Click en un item para ver el detalle y ejecutar acciones.</div>
+            <h1>Tablero de producción en tiempo real</h1>
+            <div className="sub">Items de las órdenes emitidas, con su ruta real de pasos. Se actualiza solo, sin recargar. Click en un item para ver el detalle y ejecutar acciones.</div>
           </div>
         </div>
 
