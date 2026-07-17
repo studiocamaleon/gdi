@@ -81,10 +81,27 @@ finEstimado(item) = readyAt final
 - ETA en el pasado (trabajo atrasadísimo pero posible hoy) → se muestra
   normal ("hoy HH:MM").
 
-## 6. Fase 3 (siguiente)
+## 6. Fase 3 — Demora sugerida en el cotizador (2026-07-17)
 
-Demora sugerida para una OT NUEVA: correr esta misma simulación con un
-item hipotético (ruta del producto cotizado) insertado al final de las
-colas → fecha prometible por item y por orden, en el cotizador. Necesita:
-ruta estimada antes de emitir, política de prioridad para lo nuevo, y
-feriados (D7) para prometer fechas reales.
+`estimarDemoraNuevos()` corre la misma simulación con la carga viva del
+tablero MÁS items hipotéticos construidos desde `item.cotizacion.pasos`
+(el motor ya trae familia, centro y minutos por paso ANTES de emitir).
+
+- **D9 — Lo nuevo compite sin urgencia y sin entrega**: pierde todos los
+  empates contra el trabajo ya comprometido (su `ordenNumero` ordena
+  después de cualquier OT real). Promesa conservadora.
+- **D10 — Sólo en creación/borrador.** Una orden emitida ya ESTÁ en las
+  colas del tablero: volver a simular sus items los contaría dos veces.
+- **D11 — Foto al montar la ficha**: las colas (tablero + estaciones +
+  medianas) se cargan una vez al abrir; la ETA se recalcula en memoria al
+  agregar/editar items. Si los fetches fallan, la ficha sigue sin
+  sugerencia.
+- **D12 — Presentación**: bajo la fecha de entrega de la orden, "El taller
+  la terminaría ≈/~ mar 21/07" — en ROJO "— después de la fecha elegida"
+  si la fecha prometida es anterior a la ETA; por item, fila "Sistema
+  estima" junto a su fecha. "~" = supuestos (tooltip con el motivo);
+  items sin pasos o sin tiempos → sin sugerencia, nunca inventada.
+
+Pendiente de esta fase: feriados (D7, siguen vacíos) para que las fechas
+prometidas sobre semanas con feriado no queden optimistas; y margen de
+seguridad configurable sobre la ETA cruda si el taller lo pide.

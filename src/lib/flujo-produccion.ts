@@ -345,6 +345,94 @@ function antesQue(
   return a.sim.data.ordenNumero < b.sim.data.ordenNumero;
 }
 
+// ── Fase 3: demora sugerida para trabajo NUEVO (cotizador) ───────────────
+
+export type PasoHipotetico = {
+  familiaCodigo: string;
+  centroCostoId: string | null;
+  duracionMin: number | null;
+  nombre?: string;
+};
+
+export type ItemHipotetico = {
+  /** Id local del item en la ficha (clave del resultado). */
+  id: string;
+  pasos: PasoHipotetico[];
+};
+
+/**
+ * "Si este trabajo entra AHORA, ¿cuándo sale?": corre la simulación con la
+ * carga actual del taller MÁS los items hipotéticos del cotizador. Lo nuevo
+ * compite sin urgencia y sin entrega: pierde todos los empates contra el
+ * trabajo ya comprometido (promesa conservadora, D9 del doc). Devuelve la
+ * estimación de los hipotéticos, por id.
+ */
+export function estimarDemoraNuevos({
+  nuevos,
+  enCola,
+  estaciones,
+  medianas,
+  ahora = new Date(),
+  noLaborables = new Set<string>(),
+}: {
+  nuevos: ItemHipotetico[];
+  /** Items vivos del tablero (las colas reales de hoy). */
+  enCola: TableroItemData[];
+  estaciones: Estacion[];
+  medianas: Map<string, number>;
+  ahora?: Date;
+  noLaborables?: Set<string>;
+}): Map<string, SimulacionItem> {
+  const hipoteticos: TableroItemData[] = nuevos
+    .filter((nuevo) => nuevo.pasos.length > 0)
+    .map((nuevo) => ({
+      id: nuevo.id,
+      ordenId: `hipotetica-${nuevo.id}`,
+      // "￿" ordena después de cualquier número real de OT: último
+      // desempate perdido también contra items sin entrega.
+      ordenNumero: `￿${nuevo.id}`,
+      ordenEstado: "produccion",
+      itemIndice: 1,
+      codigo: nuevo.id,
+      nombre: nuevo.id,
+      clienteNombre: "",
+      vendedorNombre: "",
+      cantidad: 1,
+      cantidadUnidad: "u",
+      specs: [],
+      fechaEntrega: null,
+      sinRuta: false,
+      pasos: nuevo.pasos.map((paso, indice) => ({
+        id: `${nuevo.id}-paso-${indice}`,
+        indice,
+        nombre: paso.nombre ?? paso.familiaCodigo,
+        familiaCodigo: paso.familiaCodigo,
+        categoriaFamilia: "",
+        centroCostoId: paso.centroCostoId,
+        centroCostoNombre: null,
+        duracionEstimadaMin: paso.duracionMin,
+        estado: "pendiente",
+        motivoBloqueo: null,
+        iniciadoEl: null,
+        completadoEl: null,
+      })),
+    }));
+
+  const { porItem } = simularFlujo({
+    items: [...enCola, ...hipoteticos],
+    estaciones,
+    medianas,
+    ahora,
+    noLaborables,
+  });
+  const resultado = new Map<string, SimulacionItem>();
+  for (const nuevo of nuevos) {
+    const eta = porItem.get(nuevo.id);
+    if (eta) resultado.set(nuevo.id, eta);
+  }
+  return resultado;
+}
+
 // ── Etiquetas ────────────────────────────────────────────────────────────
 
 const DIA_CORTO = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
