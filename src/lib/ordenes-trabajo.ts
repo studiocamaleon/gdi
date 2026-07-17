@@ -201,6 +201,8 @@ export type OrdenTrabajoDetalle = OrdenTrabajoListItem & {
   canalVenta: string | null;
   /** Cargos directos a nivel orden (viático, flete…). */
   cargosDirectos: number;
+  /** Token del link público de seguimiento del cliente (/track/<token>). */
+  publicToken: string | null;
   productos: OrdenTrabajoProducto[];
   eventos: OrdenTrabajoEvento[];
   pago: OrdenTrabajoPago | null;
@@ -282,6 +284,7 @@ export function getMockOrdenDetalle(id: string): OrdenTrabajoDetalle | null {
       observaciones: null,
       canalVenta: null,
       cargosDirectos: 0,
+      publicToken: null,
       productos: [],
       eventos: [],
       pago: null,
@@ -293,6 +296,7 @@ export function getMockOrdenDetalle(id: string): OrdenTrabajoDetalle | null {
     observaciones: null,
     canalVenta: "mostrador",
     cargosDirectos: 8500,
+    publicToken: null,
     productos: [
       {
         codigo: "TAR-001",
