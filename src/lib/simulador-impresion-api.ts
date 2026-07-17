@@ -1,7 +1,7 @@
 import { apiRequest } from "@/lib/api";
 
 /**
- * Simulador de impresión — contrato con GET /produccion/simulador.
+ * Simulador GRAN FORMATO — contrato con GET /produccion/simulador.
  * Cola real: pasos `impresion_por_area` en FRONTERA de órdenes vivas, con
  * piezas físicas (nestingResult del snapshot), sustrato cotizado y el
  * catálogo de anchos/stock por materia prima.

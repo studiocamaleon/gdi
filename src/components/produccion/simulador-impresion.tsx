@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Simulador de impresión — cola REAL de pasos `impresion_por_area` en
+ * Simulador GRAN FORMATO — cola REAL de pasos `impresion_por_area` en
  * frontera, agrupada por TECNOLOGÍA → MATERIA PRIMA, re-nesteada de forma
  * consolidada con sugerencia del ancho de rollo que minimiza desperdicio
  * (y su $), y completar en LOTE: el impresor marca impreso todo el batch
@@ -716,7 +716,7 @@ export function SimuladorImpresion({ initialData }: { initialData: SimuladorData
     <div className="sim-page">
       <div className="sim-head">
         <div className="left">
-          <h1>Simulador de impresión</h1>
+          <h1>Simulador gran formato</h1>
           <div className="sub">
             Todo lo listo para imprimir por área, consolidado por material, con el
             ancho de rollo óptimo y su costo. Marcá el batch impreso de una.
