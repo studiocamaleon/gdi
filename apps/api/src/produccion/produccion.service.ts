@@ -8,6 +8,7 @@ import { Prisma } from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import type { UpsertEstacionDto } from './dto/upsert-estacion.dto';
+import type { CrearDiaNoLaborableDto } from './dto/crear-dia-no-laborable.dto';
 import { FAMILIAS } from '../productos-servicios/pasos/familias';
 import type { FamiliaCodigo } from '../productos-servicios/pasos/types';
 import { parseCalendario, type CalendarioEstacion } from './calendario';
@@ -147,6 +148,68 @@ export class ProduccionService {
       medianaMin: Math.round(Number(row.medianaMin) * 10) / 10,
       muestras: Number(row.muestras),
     }));
+  }
+
+  // ── Días no laborables (feriados y cierres del taller) ───────────────
+  // Fechas puntuales a nivel tenant que la proyección de cola y la
+  // simulación de flujo saltan. Ver docs/capacidad-estaciones-diseno.md D8.
+
+  async findDiasNoLaborables(auth: CurrentAuth) {
+    const rows = await this.prisma.diaNoLaborable.findMany({
+      where: { tenantId: auth.tenantId },
+      orderBy: { fecha: 'asc' },
+    });
+    return rows.map((row) => this.toDiaNoLaborable(row));
+  }
+
+  async crearDiaNoLaborable(auth: CurrentAuth, payload: CrearDiaNoLaborableDto) {
+    // El DTO valida el formato; acá el calendario real (30/02 → inválida).
+    const fecha = new Date(`${payload.fecha}T00:00:00.000Z`);
+    if (
+      Number.isNaN(fecha.getTime()) ||
+      fecha.toISOString().slice(0, 10) !== payload.fecha
+    ) {
+      throw new BadRequestException(`"${payload.fecha}" no es una fecha real.`);
+    }
+    try {
+      const creado = await this.prisma.diaNoLaborable.create({
+        data: {
+          tenantId: auth.tenantId,
+          fecha,
+          descripcion: payload.descripcion?.trim() || null,
+        },
+      });
+      return this.toDiaNoLaborable(creado);
+    } catch (error: unknown) {
+      if (isUniqueConstraintError(error)) {
+        throw new ConflictException('Esa fecha ya está cargada como no laborable.');
+      }
+      throw error;
+    }
+  }
+
+  async eliminarDiaNoLaborable(auth: CurrentAuth, id: string) {
+    const existing = await this.prisma.diaNoLaborable.findFirst({
+      where: { id, tenantId: auth.tenantId },
+      select: { id: true },
+    });
+    if (!existing) {
+      throw new NotFoundException('Día no laborable no encontrado.');
+    }
+    await this.prisma.diaNoLaborable.delete({ where: { id } });
+    return { ok: true };
+  }
+
+  private toDiaNoLaborable(row: {
+    id: string;
+    fecha: Date;
+    descripcion: string | null;
+  }) {
+    return {
+      id: row.id,
+      fecha: row.fecha.toISOString().slice(0, 10),
+      descripcion: row.descripcion ?? '',
+    };
   }
 
   /**

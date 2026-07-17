@@ -76,7 +76,7 @@ import {
   type CalendarioEstacion,
   type Estacion,
 } from "@/lib/estaciones";
-import type { DuracionFamilia } from "@/lib/estaciones-api";
+import type { DiaNoLaborable, DuracionFamilia } from "@/lib/estaciones-api";
 import { etiquetaEta, simularFlujo, type ResultadoSimulacion, type SimulacionItem } from "@/lib/flujo-produccion";
 
 type IconComponent = React.ComponentType<React.SVGProps<SVGSVGElement>>;
@@ -1071,11 +1071,13 @@ function stationIcon(station: StationInfo) {
 function StationCard({
   station,
   stats,
+  noLaborables,
   hoyMin = 0,
   onSelect,
 }: {
   station: StationInfo;
   stats: ReturnType<typeof computeStationStats>;
+  noLaborables: Set<string>;
   /** De lo en camino, minutos que la simulación estima que llegan HOY. */
   hoyMin?: number;
   onSelect: (stationKey: string) => void;
@@ -1087,7 +1089,7 @@ function StationCard({
   const colaLabel = stats.colaMin > 0 ? etiquetaDuracion(stats.colaMin) : null;
   const dias =
     station.capacidad != null && stats.colaMin > 0
-      ? proyectarColaDias(station.calendario, stats.colaMin, station.capacidad)
+      ? proyectarColaDias(station.calendario, stats.colaMin, station.capacidad, new Date(), noLaborables)
       : null;
   const entranteLabel = stats.entranteMin > 0 ? etiquetaDuracion(stats.entranteMin) : null;
   const cargaPartes = [
@@ -1138,12 +1140,14 @@ function StationGrid({
   items,
   estaciones,
   medianas,
+  noLaborables,
   llegadasHoyMin,
   onSelect,
 }: {
   items: ItemView[];
   estaciones: Estacion[];
   medianas: Map<string, number>;
+  noLaborables: Set<string>;
   llegadasHoyMin: Map<string, number>;
   onSelect: (stationKey: string) => void;
 }) {
@@ -1200,7 +1204,7 @@ function StationGrid({
               <span className="ct"><strong>{catTotal}</strong> pasos · {category.items.length} {category.items.length === 1 ? "estación" : "estaciones"}</span>
             </div>
             <div className="sta-grid">
-              {category.items.map(({ station, stats }) => <StationCard key={station.key} station={station} stats={stats} hoyMin={llegadasHoyMin.get(station.key) ?? 0} onSelect={onSelect} />)}
+              {category.items.map(({ station, stats }) => <StationCard key={station.key} station={station} stats={stats} noLaborables={noLaborables} hoyMin={llegadasHoyMin.get(station.key) ?? 0} onSelect={onSelect} />)}
             </div>
           </section>
         );
@@ -1214,7 +1218,7 @@ function StationGrid({
             <span className="ct"><strong>{sinEstacion.stats.total}</strong> pasos · <Link href="/produccion/estaciones">asignar familias</Link></span>
           </div>
           <div className="sta-grid">
-            <StationCard station={sinEstacion.station} stats={sinEstacion.stats} hoyMin={llegadasHoyMin.get(sinEstacion.station.key) ?? 0} onSelect={onSelect} />
+            <StationCard station={sinEstacion.station} stats={sinEstacion.stats} noLaborables={noLaborables} hoyMin={llegadasHoyMin.get(sinEstacion.station.key) ?? 0} onSelect={onSelect} />
           </div>
         </section>
       ) : null}
@@ -1284,6 +1288,7 @@ function StationDetail({
   items,
   estaciones,
   medianas,
+  noLaborables,
   stationKey,
   onBack,
   onOpen,
@@ -1291,6 +1296,7 @@ function StationDetail({
   items: ItemView[];
   estaciones: Estacion[];
   medianas: Map<string, number>;
+  noLaborables: Set<string>;
   stationKey: string;
   onBack: () => void;
   onOpen: (id: string) => void;
@@ -1301,13 +1307,13 @@ function StationDetail({
   const stats = computeStationStats(tasks, entrantes.get(stationKey) ?? [], medianas);
   const diasCola =
     station && station.capacidad != null && stats.colaMin > 0
-      ? proyectarColaDias(station.calendario, stats.colaMin, station.capacidad)
+      ? proyectarColaDias(station.calendario, stats.colaMin, station.capacidad, new Date(), noLaborables)
       : null;
   // Rango honesto (D12): el calendario caminado dos veces — sólo la cola,
   // y cola + lo en camino (cota superior si todo lo conocido llegara).
   const diasTotal =
     station && station.capacidad != null && stats.entranteMin > 0
-      ? proyectarColaDias(station.calendario, stats.colaMin + stats.entranteMin, station.capacidad)
+      ? proyectarColaDias(station.calendario, stats.colaMin + stats.entranteMin, station.capacidad, new Date(), noLaborables)
       : null;
   const [mesa, setMesa] = React.useState(() => new Set<string>());
   const [filter, setFilter] = React.useState("todos");
@@ -1416,18 +1422,20 @@ function ByStationView({
   items,
   estaciones,
   medianas,
+  noLaborables,
   llegadasHoyMin,
   onOpen,
 }: {
   items: ItemView[];
   estaciones: Estacion[];
   medianas: Map<string, number>;
+  noLaborables: Set<string>;
   llegadasHoyMin: Map<string, number>;
   onOpen: (id: string) => void;
 }) {
   const [stationKey, setStationKey] = React.useState<string | null>(null);
-  if (stationKey) return <StationDetail items={items} estaciones={estaciones} medianas={medianas} stationKey={stationKey} onBack={() => setStationKey(null)} onOpen={onOpen} />;
-  return <StationGrid items={items} estaciones={estaciones} medianas={medianas} llegadasHoyMin={llegadasHoyMin} onSelect={setStationKey} />;
+  if (stationKey) return <StationDetail items={items} estaciones={estaciones} medianas={medianas} noLaborables={noLaborables} stationKey={stationKey} onBack={() => setStationKey(null)} onOpen={onOpen} />;
+  return <StationGrid items={items} estaciones={estaciones} medianas={medianas} noLaborables={noLaborables} llegadasHoyMin={llegadasHoyMin} onSelect={setStationKey} />;
 }
 
 // ── Kanban ───────────────────────────────────────────────────────────────
@@ -1524,10 +1532,12 @@ export function TableroProduccion({
   initialItems,
   estaciones,
   duracionesFamilias,
+  diasNoLaborables,
 }: {
   initialItems: TableroItemData[];
   estaciones: Estacion[];
   duracionesFamilias: DuracionFamilia[];
+  diasNoLaborables: DiaNoLaborable[];
 }) {
   const [items, setItems] = React.useState<TableroItemData[]>(initialItems);
   const [mode, setMode] = React.useState<Mode>(DEFAULT_BOARD_MODE);
@@ -1576,10 +1586,16 @@ export function TableroProduccion({
     [duracionesFamilias],
   );
 
+  /** Fechas no laborables del taller (la proyección y la simulación las saltan). */
+  const noLaborables = React.useMemo(
+    () => new Set(diasNoLaborables.map((dia) => dia.fecha)),
+    [diasNoLaborables],
+  );
+
   /** Simulación de flujo (fase 2b): ETA por item + llegadas por estación. */
   const sim = React.useMemo<ResultadoSimulacion>(
-    () => simularFlujo({ items, estaciones, medianas }),
-    [items, estaciones, medianas],
+    () => simularFlujo({ items, estaciones, medianas, noLaborables }),
+    [items, estaciones, medianas, noLaborables],
   );
 
   /** Minutos de carga en camino que LLEGAN HOY, por estación. */
@@ -1736,7 +1752,7 @@ export function TableroProduccion({
                 </div>
               </>
             ) : null}
-            {mode === "estacion" ? <ByStationView items={views} estaciones={estaciones} medianas={medianas} llegadasHoyMin={llegadasHoyMin} onOpen={setSelectedId} /> : null}
+            {mode === "estacion" ? <ByStationView items={views} estaciones={estaciones} medianas={medianas} noLaborables={noLaborables} llegadasHoyMin={llegadasHoyMin} onOpen={setSelectedId} /> : null}
             {mode === "kanban" ? (
               <>
                 <FiltersBar filters={filters} setFilters={setFilters} counts={counts} />

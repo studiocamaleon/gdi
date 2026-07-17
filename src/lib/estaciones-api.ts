@@ -28,6 +28,34 @@ export async function getDuracionesFamilias() {
   return apiRequest<DuracionFamilia[]>("/produccion/duraciones-familias");
 }
 
+/**
+ * Feriados y cierres del taller (fechas no laborables a nivel tenant):
+ * la proyección de cola y la simulación de flujo los saltan.
+ */
+export type DiaNoLaborable = {
+  id: string;
+  /** "YYYY-MM-DD". */
+  fecha: string;
+  descripcion: string;
+};
+
+export async function getDiasNoLaborables() {
+  return apiRequest<DiaNoLaborable[]>("/produccion/dias-no-laborables");
+}
+
+export async function crearDiaNoLaborable(payload: { fecha: string; descripcion?: string }) {
+  return apiRequest<DiaNoLaborable>("/produccion/dias-no-laborables", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function eliminarDiaNoLaborable(id: string) {
+  return apiRequest<{ ok: boolean }>(`/produccion/dias-no-laborables/${id}`, {
+    method: "DELETE",
+  });
+}
+
 export async function createEstacion(payload: EstacionPayload) {
   return apiRequest<Estacion>("/produccion/estaciones", {
     method: "POST",

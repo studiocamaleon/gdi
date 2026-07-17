@@ -89,10 +89,12 @@ Proyección  = cola caminada por calendario →  "≈ 1,8 días"
   ahora (hoy quedan 3 h operativas, mañana es domingo inactivo, etc.), con
   los puestos como multiplicador. Una división por "capacidad diaria
   promedio" miente en fines de semana y estaciones de media jornada.
-- **D8 — Feriados FUERA de esta fase** (decisión usuario 2026-07-17). El
-  calendario semanal no modela excepciones de fecha. Cuando se necesite:
-  tabla de fechas no laborables a nivel tenant, consumida por el mismo
-  caminado de D7.
+- **D8 — Feriados y cierres** (diferidos al inicio; IMPLEMENTADOS
+  2026-07-17): tabla `DiaNoLaborable` a nivel TENANT (fecha + motivo,
+  unique por fecha), CRUD en `/produccion/dias-no-laborables` y gestión en
+  el panel de estaciones ("Feriados y cierres"). El caminado de D7 y la
+  simulación de flujo los saltan. Un feriado cierra el taller entero: no
+  hay excepciones por estación (el caso raro no justifica el modelo).
 - **D9 — El cálculo vive en el front; las medianas en el back.** El tablero
   ya arma el modelo de estaciones client-side con estaciones + pasos; la
   cola y el caminado del calendario se computan ahí. Lo único que el front

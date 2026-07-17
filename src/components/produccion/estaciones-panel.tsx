@@ -18,6 +18,7 @@ import {
   SearchIcon,
   ShieldCheckIcon,
   SunIcon,
+  CalendarOffIcon,
   TrashIcon,
   TruckIcon,
   WrenchIcon,
@@ -40,10 +41,14 @@ import {
 } from "@/lib/estaciones";
 import {
   createEstacion,
+  crearDiaNoLaborable,
   deleteEstacion,
+  eliminarDiaNoLaborable,
+  getDiasNoLaborables,
   getEstaciones,
   getFamiliasPasos,
   updateEstacion,
+  type DiaNoLaborable,
 } from "@/lib/estaciones-api";
 import { CATEGORIAS_FAMILIA } from "@/lib/tablero-produccion";
 
@@ -126,6 +131,131 @@ function Stepper({ label, value, min, step, unit, help, onChange }: { label: str
       </div>
       <div className="help">{help}</div>
     </div>
+  );
+}
+
+// ── Feriados y cierres del taller (días no laborables, a nivel tenant) ───
+
+const MES_CORTO = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+const DIA_SEMANA_CORTO = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
+
+/** "2026-07-20" → "lun 20 jul 2026" (fecha local, sin zona). */
+function etiquetaFeriado(fecha: string) {
+  const [anio, mes, dia] = fecha.split("-").map(Number);
+  const local = new Date(anio, mes - 1, dia);
+  return `${DIA_SEMANA_CORTO[local.getDay()]} ${dia} ${MES_CORTO[mes - 1]} ${anio}`;
+}
+
+/**
+ * Sheet de gestión de fechas no laborables: la proyección de cola del
+ * tablero y la demora sugerida del cotizador las saltan (D8 del doc de
+ * capacidad). Lista simple + alta (fecha, motivo) + borrado directo (es
+ * config reversible).
+ */
+function FeriadosSheet({ onClose }: { onClose: () => void }) {
+  const [dias, setDias] = React.useState<DiaNoLaborable[] | null>(null);
+  const [fecha, setFecha] = React.useState("");
+  const [descripcion, setDescripcion] = React.useState("");
+  const [guardando, setGuardando] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const fechaRef = React.useRef<HTMLInputElement | null>(null);
+
+  React.useEffect(() => {
+    let vigente = true;
+    getDiasNoLaborables()
+      .then((lista) => { if (vigente) setDias(lista); })
+      .catch(() => { if (vigente) setDias([]); });
+    return () => { vigente = false; };
+  }, []);
+
+  const agregar = async () => {
+    if (!fecha) return;
+    setGuardando(true);
+    setError(null);
+    try {
+      const creado = await crearDiaNoLaborable({ fecha, descripcion: descripcion || undefined });
+      setDias((current) => [...(current ?? []), creado].sort((a, b) => a.fecha.localeCompare(b.fecha)));
+      setFecha("");
+      setDescripcion("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo agregar la fecha.");
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const quitar = async (dia: DiaNoLaborable) => {
+    setError(null);
+    try {
+      await eliminarDiaNoLaborable(dia.id);
+      setDias((current) => (current ?? []).filter((entry) => entry.id !== dia.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo eliminar la fecha.");
+    }
+  };
+
+  const hoy = new Date();
+  const hoyClave = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`;
+
+  return (
+    <>
+      <div className="sheet-backdrop est-sheet-backdrop" onClick={onClose} />
+      <div className="sheet est-sheet feriados-sheet" role="dialog" aria-modal="true">
+        <div className="sheet-head est-sheet-head">
+          <div>
+            <div className="kicker">CALENDARIO DEL TALLER</div>
+            <h2>Feriados y cierres</h2>
+            <div className="sub">Días en que el taller no trabaja: la proyección de cola y la demora estimada los saltan.</div>
+          </div>
+        </div>
+        <div className="sheet-body est-form">
+          <div className="feriados-add">
+            <input
+              ref={fechaRef}
+              className="est-input"
+              type="date"
+              value={fecha}
+              onClick={() => fechaRef.current?.showPicker?.()}
+              onChange={(event) => setFecha(event.target.value)}
+              aria-label="Fecha no laborable"
+            />
+            <input
+              className="est-input"
+              placeholder="Motivo (feriado, vacaciones…)"
+              value={descripcion}
+              maxLength={120}
+              onChange={(event) => setDescripcion(event.target.value)}
+            />
+            <button type="button" className="btn btn-primary" disabled={!fecha || guardando} onClick={() => void agregar()}>
+              {guardando ? "Agregando…" : "Agregar"}
+            </button>
+          </div>
+          {error ? <div className="est-error" role="alert">{error}</div> : null}
+
+          {dias === null ? (
+            <div className="feriados-empty">Cargando…</div>
+          ) : dias.length === 0 ? (
+            <div className="feriados-empty">Sin fechas cargadas: el taller opera según el calendario semanal de cada estación.</div>
+          ) : (
+            <div className="feriados-list">
+              {dias.map((dia) => (
+                <div key={dia.id} className={`feriados-row ${dia.fecha < hoyClave ? "pasado" : ""}`}>
+                  <span className="fecha">{etiquetaFeriado(dia.fecha)}</span>
+                  <span className="motivo">{dia.descripcion || "Sin motivo"}</span>
+                  <button type="button" className="quitar" onClick={() => void quitar(dia)} aria-label={`Quitar ${dia.fecha}`}>
+                    <TrashIcon />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="sheet-foot est-foot">
+          <div className="spacer" />
+          <button type="button" className="btn" onClick={onClose}>Cerrar</button>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -543,6 +673,7 @@ export function EstacionesPanel({
   const [sheet, setSheet] = React.useState<"new" | Estacion | null>(null);
   const [nuevaEtapa, setNuevaEtapa] = React.useState<string | undefined>(undefined);
   const [aEliminar, setAEliminar] = React.useState<Estacion | null>(null);
+  const [feriadosOpen, setFeriadosOpen] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [query, setQuery] = React.useState("");
@@ -610,7 +741,10 @@ export function EstacionesPanel({
           <h1>Estaciones</h1>
           <div className="sub">Configurá las estaciones de tu taller: familias de pasos (rutean el tablero), máquinas, empleados y capacidad.</div>
         </div>
-        <button type="button" className="btn btn-primary" onClick={() => { setNuevaEtapa(undefined); setSheet("new"); }}><PlusIcon />Nueva estación</button>
+        <div className="page-head-actions">
+          <button type="button" className="btn" onClick={() => setFeriadosOpen(true)}><CalendarOffIcon />Feriados y cierres</button>
+          <button type="button" className="btn btn-primary" onClick={() => { setNuevaEtapa(undefined); setSheet("new"); }}><PlusIcon />Nueva estación</button>
+        </div>
       </div>
 
       <div className="est-toolbar">
@@ -672,6 +806,8 @@ export function EstacionesPanel({
           onDelete={(est) => setAEliminar(est)}
         />
       ) : null}
+
+      {feriadosOpen ? <FeriadosSheet onClose={() => setFeriadosOpen(false)} /> : null}
 
       <ConfirmacionDestructiva
         open={aEliminar !== null}
