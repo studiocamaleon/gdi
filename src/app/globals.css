@@ -13065,6 +13065,21 @@ body {
 
 /* Tablero de producción — adaptadores de la app (shell, sheet base, kanban propio) */
 
+/* En el diseño las páginas viven dentro de .content (padding 28px 32px
+   40px + scroll); el shell de la app no envuelve así: el canvas va acá.
+   (touch — Turbopack) */
+.tablero-produccion {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 28px 32px 40px;
+}
+
+/* Cards clickeables que en la app son <button> (el diseño usaba <div>):
+   fuera el text-align centrado del UA. */
+.tablero-produccion button {
+  text-align: left;
+}
+
 /* Tablero de producción: fuera de @layer para evitar pruning de clases dinámicas del mock. */
 /* Tablero de producción: fuera de @layer para evitar pruning de clases dinámicas del mock. */
 .tablero-produccion {

@@ -178,8 +178,10 @@ type ItemView = {
   sinRuta: boolean;
   progressPct: number;
   statusLine: string;
-  /** Estación (centro de costo) del paso actual, o "—". */
+  /** Estación REAL del paso activo (resuelta por familia+máquina), o "—". */
   station: string;
+  /** Icono de esa estación (clave del set del tablero). */
+  stationIcon: string | null;
   currentStep: StepView | undefined;
   steps: StepView[];
 };
@@ -197,8 +199,9 @@ function stepStatus(paso: TableroPasoData): StepStatus {
   }
 }
 
-function buildItemView(item: TableroItemData): ItemView {
+function buildItemView(item: TableroItemData, estaciones: Estacion[]): ItemView {
   const actual = pasoActual(item);
+  const estacionActual = actual ? resolverEstacionDePaso(estaciones, actual) : null;
   const steps = item.pasos.map<StepView>((paso) => ({
     paso,
     status: stepStatus(paso),
@@ -237,7 +240,8 @@ function buildItemView(item: TableroItemData): ItemView {
     sinRuta: item.sinRuta,
     progressPct: progresoItem(item),
     statusLine: lineaEstado(item),
-    station: actual?.centroCostoNombre ?? "—",
+    station: actual ? estacionActual?.nombre ?? "Sin estación" : "—",
+    stationIcon: estacionActual?.icono ?? null,
     currentStep,
     steps,
   };
@@ -322,7 +326,7 @@ function ItemRow({ item, onOpen }: { item: ItemView; onOpen: (id: string) => voi
           <span className="due-in">{item.dueIn === "Hoy" ? "vence hoy" : `${item.dueIn} restantes`}</span>
         </div>
         <div className="tab-assigned" title={`Estación actual: ${item.station}`}>
-          <span className="av"><FactoryIcon /></span>
+          <span className="av">{item.stationIcon ? React.createElement(getStepIcon(item.stationIcon)) : <FactoryIcon />}</span>
           <div>
             <div className="nm">{item.station}</div>
             <div className="role">{item.qtyLabel}</div>
@@ -1343,7 +1347,10 @@ export function TableroProduccion({
     };
   }, [tabMenu]);
 
-  const views = React.useMemo(() => items.map(buildItemView), [items]);
+  const views = React.useMemo(
+    () => items.map((item) => buildItemView(item, estaciones)),
+    [items, estaciones],
+  );
 
   /**
    * Acción sobre un paso: el backend devuelve el item re-proyectado, pero
