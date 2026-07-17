@@ -381,6 +381,64 @@ export type ComprobanteDetalle = Comprobante & {
   cobrosImputados: CobroImputado[];
 };
 
+/**
+ * El comprobante impreso. Su contenido lo fija la normativa, no nuestro
+ * modelo: RG 1415 (datos), RG 4892 (QR), RG 5616 (condición del receptor)
+ * y RG 5614 (transparencia fiscal al consumidor).
+ */
+export type FacturaDocumento = {
+  emisor: {
+    razonSocial: string;
+    domicilioFiscal: string | null;
+    condicionFiscal: string;
+    cuit: string;
+    ingresosBrutos: string | null;
+    inicioActividades: string | null;
+  };
+  letra: LetraComprobante;
+  /** El recuadro central: "COD. 01". Lo exige la norma. */
+  codigoArca: string;
+  tipoLabel: string;
+  puntoVenta: string;
+  numero: string;
+  fecha: string;
+  vencimientoPago: string | null;
+  receptor: {
+    razonSocial: string;
+    cuit: string | null;
+    domicilio: string | null;
+    /** RG 5616: obligatorio desde 2025. */
+    condicionFiscal: string;
+  };
+  condicionVenta: string;
+  moneda: string;
+  /** Sólo la A lleva columna de alícuota e IVA discriminado. */
+  discriminaIva: boolean;
+  items: Array<{
+    codigo: string | null;
+    descripcion: string;
+    cantidad: number;
+    precioUnitario: number;
+    alicuota: number | null;
+    subtotal: number;
+  }>;
+  subtotal: number;
+  ivaPorAlicuota: IvaPorAlicuota[];
+  /** RG 5614: el IVA que lleva adentro un comprobante que no lo discrimina. */
+  ivaContenido: number | null;
+  otrosImpuestosIndirectos: number | null;
+  otrosTributos: Array<{ descripcion: string; monto: number }>;
+  otrosTributosTotal: number;
+  total: number;
+  cae: string | null;
+  caeVencimiento: string | null;
+  /** null mientras no haya CAE: sin autorización no hay nada que verificar. */
+  qrUrl: string | null;
+  leyendas: Array<{ codigo: string | null; texto: string }>;
+  estado: ComprobanteEstado;
+  ordenNumero: string | null;
+};
+
 export type ComprobantePendiente = {
   id: string;
   numeroCompleto: string;

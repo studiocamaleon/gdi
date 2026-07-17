@@ -366,10 +366,13 @@ export function ComprobanteDetalleView({
               ) : null}
               {emitido ? (
                 <>
-                  <button type="button" className="btn" disabled>
+                  <Link
+                    className="btn"
+                    href={`/administracion/comprobantes/${c.id}/factura`}
+                  >
                     <DownloadIcon />
-                    Descargar PDF
-                  </button>
+                    Ver factura / PDF
+                  </Link>
                   <Link
                     className="btn"
                     href={`/administracion/comprobantes/nuevo?origen=${c.id}`}

@@ -18,6 +18,7 @@ import { ConfiguracionFiscalService } from './configuracion-fiscal.service';
 import { ComprobantesService } from './comprobantes.service';
 import { ImputacionesService } from './imputaciones.service';
 import { CuentaCorrienteService } from './cuenta-corriente.service';
+import { FacturaService } from './factura.service';
 import { UpsertMetodoPagoDto } from './dto/metodo-pago.dto';
 import { CrearCobroDto } from './dto/cobro.dto';
 import {
@@ -46,7 +47,14 @@ export class AdministracionController {
     private readonly comprobantesService: ComprobantesService,
     private readonly imputacionesService: ImputacionesService,
     private readonly cuentaCorrienteService: CuentaCorrienteService,
+    private readonly facturaService: FacturaService,
   ) {}
+
+  /** El comprobante impreso: todo lo que la ley exige que figure. */
+  @Get('comprobantes/:id/factura')
+  factura(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
+    return this.facturaService.documento(auth, id);
+  }
 
   // ── Cuenta corriente ─────────────────────────────────────────────────
 

@@ -7,6 +7,7 @@ import type {
   ComprobantePendiente,
   ComprobanteTipo,
   CondicionFiscalEmisor,
+  FacturaDocumento,
   ConfiguracionFiscal,
   CuentaCorriente,
   FilaDeudor,
@@ -142,6 +143,11 @@ export async function cargarCae(
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+/** El comprobante impreso, con todo lo que la ley exige que figure. */
+export async function getFactura(id: string): Promise<FacturaDocumento> {
+  return apiRequest(`/administracion/comprobantes/${id}/factura`);
 }
 
 export async function descartarComprobante(

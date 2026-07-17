@@ -7,6 +7,7 @@ import { ConfiguracionFiscalService } from './configuracion-fiscal.service';
 import { ComprobantesService } from './comprobantes.service';
 import { ImputacionesService } from './imputaciones.service';
 import { CuentaCorrienteService } from './cuenta-corriente.service';
+import { FacturaService } from './factura.service';
 import { ManualProvider } from './invoicing/manual.provider';
 import { AfipSdkProvider } from './invoicing/afip-sdk.provider';
 
@@ -20,6 +21,7 @@ import { AfipSdkProvider } from './invoicing/afip-sdk.provider';
     ComprobantesService,
     ImputacionesService,
     CuentaCorrienteService,
+    FacturaService,
     ManualProvider,
     AfipSdkProvider,
   ],

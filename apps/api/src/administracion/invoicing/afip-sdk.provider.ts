@@ -3,6 +3,14 @@ import {
   Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import {
+  CBTE_TIPO,
+  CBTE_TIPO_CON_RETENCION,
+  CONDICION_IVA_RECEPTOR,
+  DOC_TIPO_CUIT,
+  DOC_TIPO_SIN_IDENTIFICAR,
+  IVA_ID,
+} from './codigos-arca';
 import type {
   EmitirInput,
   EmitirResultado,
@@ -24,53 +32,6 @@ import type {
  */
 
 const BASE = 'https://app.afipsdk.com/api/v1/afip';
-
-/** FEParamGetTiposCbte — verificado contra ARCA. */
-const CBTE_TIPO: Record<string, number> = {
-  'factura:A': 1,
-  'nota_debito:A': 2,
-  'nota_credito:A': 3,
-  'factura:B': 6,
-  'nota_debito:B': 7,
-  'nota_credito:B': 8,
-  'factura:C': 11,
-  'nota_debito:C': 12,
-  'nota_credito:C': 13,
-};
-
-/**
- * La leyenda que reemplazó a la vieja factura M NO es un texto: es un tipo
- * de comprobante propio. Sólo existe para "Operación Sujeta a Retención";
- * "Pago en CBU informada" se imprime sobre una A normal.
- */
-const CBTE_TIPO_CON_RETENCION: Record<string, number> = {
-  'factura:A': 51,
-  'nota_debito:A': 52,
-  'nota_credito:A': 53,
-};
-
-/** FEParamGetTiposIva — verificado contra ARCA. */
-const IVA_ID: Record<number, number> = {
-  0: 3,
-  2.5: 9,
-  5: 8,
-  10.5: 4,
-  21: 5,
-  27: 6,
-};
-
-/** FEParamGetCondicionIvaReceptor — obligatorio desde la RG 5616. */
-const CONDICION_IVA_RECEPTOR: Record<string, number> = {
-  RI: 1,
-  monotributo: 6,
-  exento: 4,
-  consumidor_final: 5,
-  exterior: 9,
-};
-
-/** FEParamGetTiposDoc. 99 = "sin identificar" (consumidor final). */
-const DOC_TIPO_CUIT = 80;
-const DOC_TIPO_SIN_IDENTIFICAR = 99;
 
 type TicketAcceso = { token: string; sign: string; expira: number };
 

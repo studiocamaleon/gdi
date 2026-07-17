@@ -22,6 +22,7 @@ import {
 } from './letra-comprobante';
 import { ManualProvider } from './invoicing/manual.provider';
 import { AfipSdkProvider } from './invoicing/afip-sdk.provider';
+import { texto } from './invoicing/codigos-arca';
 import type {
   ComprobanteItemProvider,
   InvoicingProvider,
@@ -34,15 +35,6 @@ import {
 
 /** Lo que guardamos en itemsJson: el ítem que calcula + su descripción. */
 type ItemPersistido = ItemCalculo & { descripcion: string };
-
-/**
- * Texto de un campo Json. Sólo acepta strings de verdad: si viniera un
- * objeto, String() lo convertiría en "[object Object]" y ese texto
- * terminaría impreso en un comprobante fiscal.
- */
-function texto(valor: unknown, porDefecto = ''): string {
-  return typeof valor === 'string' && valor.trim() !== '' ? valor : porDefecto;
-}
 
 /**
  * itemsJson es Json para Prisma, pero siempre lo escribimos nosotros con

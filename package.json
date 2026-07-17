@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",
+    "@types/qrcode": "^1.5.6",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "jspdf": "^4.2.1",
@@ -24,6 +25,7 @@
     "next": "16.1.6",
     "opentype.js": "^2.0.0",
     "pdf-lib": "^1.17.1",
+    "qrcode": "^1.5.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "recharts": "^2.15.4",
