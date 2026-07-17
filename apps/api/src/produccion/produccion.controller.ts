@@ -39,6 +39,12 @@ export class ProduccionController {
     return this.service.findDuracionesFamilias(auth);
   }
 
+  /** Cola real del simulador de impresión (por área, en frontera). */
+  @Get('simulador')
+  simulador(@CurrentSession() auth: CurrentAuth) {
+    return this.service.simulador(auth);
+  }
+
   // ── Configuración de producción (margen de la ETA sugerida) ───────────
 
   @Get('configuracion')
