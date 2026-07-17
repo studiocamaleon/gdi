@@ -532,8 +532,11 @@ function DetailRuta({
       {item.steps.map((step, index) => {
         const paso = step.paso;
         const dur = etiquetaDuracion(paso.duracionEstimadaMin);
+        // El paso ACTIVO (la frontera de la secuencia) se resalta con borde
+        // para ubicar de un vistazo dónde está parado el trabajo.
+        const esActivo = item.currentStep?.paso.id === paso.id;
         return (
-          <div key={paso.id} className={`detail-step ${step.status}`}>
+          <div key={paso.id} className={`detail-step ${step.status}${esActivo ? " is-active" : ""}`}>
             <div className="ds-line">
               <span className="ds-dot">{routeStatusIcon(step, <span className="ix">{index + 1}</span>)}</span>
             </div>

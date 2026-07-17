@@ -16868,6 +16868,16 @@
   line-height: 1.55;
 }
 
+/* El paso activo (frontera de la ruta) se marca con borde, como el diseño.
+   (touch — Turbopack) */
+.tablero-produccion .detail-step.is-active .ds-body {
+  border: 1.5px solid var(--ink);
+}
+
+.tablero-produccion .detail-step.is-active.blocked .ds-body {
+  border-color: var(--signal);
+}
+
 .tablero-produccion .ds-acciones {
   display: flex;
   flex-wrap: wrap;
