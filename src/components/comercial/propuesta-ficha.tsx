@@ -52,12 +52,18 @@ import {
   getTableroProduccion,
   quitarOrdenItem,
 } from "@/lib/ordenes-trabajo-api";
-import { getDiasNoLaborables, getDuracionesFamilias, getEstaciones } from "@/lib/estaciones-api";
+import {
+  getConfiguracionProduccion,
+  getDiasNoLaborables,
+  getDuracionesFamilias,
+  getEstaciones,
+} from "@/lib/estaciones-api";
 import type { Estacion } from "@/lib/estaciones";
 import type { TableroItemData } from "@/lib/tablero-produccion";
 import {
   estimarDemoraNuevos,
   etiquetaEta,
+  sumarDiasHabiles,
   type SimulacionItem,
 } from "@/lib/flujo-produccion";
 import {
@@ -2962,17 +2968,39 @@ function buildOrdenItemSpecs(
   return arr;
 }
 
+function claveFechaEta(fecha: Date) {
+  return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}-${String(fecha.getDate()).padStart(2, "0")}`;
+}
+
 /**
  * Lectura de una ETA simulada contra la fecha elegida: "≈ mar 21/07" (o
- * "~" si corrió con supuestos) + si queda DESPUÉS de la fecha prometida.
+ * "~" si corrió con supuestos), la fecha SUGERIDA con el margen del taller
+ * (D13: ETA + días hábiles de colchón) y el nivel de alerta — "tarde" si
+ * la fecha elegida es anterior a la ETA cruda (no llega), "sin-margen" si
+ * cae entre la ETA y la sugerida (llega, pero sin colchón).
  */
 function describirEta(
   eta: SimulacionItem | null | undefined,
   fechaElegida: string | null,
-): { etiqueta: string; tarde: boolean; aprox: boolean; motivo: string } | null {
+  opts?: { margenDias?: number; noLaborables?: Set<string> },
+): {
+  etiqueta: string;
+  sugeridaEtiqueta: string | null;
+  nivel: "ok" | "sin-margen" | "tarde";
+  aprox: boolean;
+  motivo: string;
+} | null {
   if (!eta || !eta.finEstimado) return null;
   const fin = eta.finEstimado;
-  const finClave = `${fin.getFullYear()}-${String(fin.getMonth() + 1).padStart(2, "0")}-${String(fin.getDate()).padStart(2, "0")}`;
+  const margen = opts?.margenDias ?? 0;
+  const sugerida = margen > 0 ? sumarDiasHabiles(fin, margen, opts?.noLaborables) : null;
+  const elegida = fechaElegida ? fechaElegida.slice(0, 10) : null;
+  const nivel =
+    elegida && elegida < claveFechaEta(fin)
+      ? "tarde"
+      : elegida && sugerida && elegida < claveFechaEta(sugerida)
+        ? "sin-margen"
+        : "ok";
   const aprox = eta.parcial || eta.asumeDesbloqueo || eta.sinEstimar;
   const motivo = [
     eta.parcial ? "estación sin calendario en la ruta" : null,
@@ -2983,7 +3011,8 @@ function describirEta(
     .join(" · ");
   return {
     etiqueta: `${aprox ? "~" : "≈"} ${etiquetaEta(fin)}`,
-    tarde: fechaElegida ? finClave > fechaElegida.slice(0, 10) : false,
+    sugeridaEtiqueta: sugerida ? etiquetaEta(sugerida) : null,
+    nivel,
     aprox,
     motivo,
   };
@@ -2994,6 +3023,8 @@ export function ProductRow({
   index,
   expanded,
   etaSistema,
+  margenEtaDias = 0,
+  noLaborables,
   onToggle,
   onRemove,
   onEdit,
@@ -3007,6 +3038,9 @@ export function ProductRow({
   expanded: boolean;
   /** ETA simulada del item contra las colas del taller (fase 3); null = sin dato. */
   etaSistema?: SimulacionItem | null;
+  /** Margen del taller en días hábiles (D13) para el nivel "sin margen". */
+  margenEtaDias?: number;
+  noLaborables?: Set<string>;
   onToggle: () => void;
   /** Ausentes en modo lectura (OT emitida): la fila no se puede mutar. */
   onRemove?: () => void;
@@ -3323,17 +3357,17 @@ export function ProductRow({
                     )}
                   </div>
                   {(() => {
-                    const eta = describirEta(etaSistema, item.fechaEntrega ?? fechaEstimada);
+                    const eta = describirEta(etaSistema, item.fechaEntrega ?? fechaEstimada, { margenDias: margenEtaDias, noLaborables });
                     if (!eta) return null;
                     return (
                       <div className="op-mini-row">
                         <span className="mlbl">Sistema estima</span>
                         <span
-                          className={`mval mono ${eta.tarde ? "eta-tarde" : ""}`}
+                          className={`mval mono ${eta.nivel === "tarde" ? "eta-tarde" : eta.nivel === "sin-margen" ? "eta-justo" : ""}`}
                           title={eta.motivo || "Simulado contra las colas actuales del taller"}
                         >
                           {eta.etiqueta}
-                          {eta.tarde ? " · después de la fecha" : ""}
+                          {eta.nivel === "tarde" ? " · después de la fecha" : eta.nivel === "sin-margen" ? " · sin margen" : ""}
                         </span>
                       </div>
                     );
@@ -4589,6 +4623,7 @@ export function PropuestaFicha({
     medianas: Map<string, number>;
     noLaborables: Set<string>;
   } | null>(null);
+  const [margenEtaDias, setMargenEtaDias] = React.useState(0);
   React.useEffect(() => {
     if (!conDemoraSistema) return;
     let vigente = true;
@@ -4597,9 +4632,11 @@ export function PropuestaFicha({
       getEstaciones(),
       getDuracionesFamilias(),
       getDiasNoLaborables(),
+      getConfiguracionProduccion(),
     ])
-      .then(([tablero, estaciones, duraciones, diasNoLaborables]) => {
+      .then(([tablero, estaciones, duraciones, diasNoLaborables, config]) => {
         if (!vigente) return;
+        setMargenEtaDias(config.margenEtaDias);
         setColasTaller({
           enCola: tablero.items,
           estaciones,
@@ -5691,17 +5728,18 @@ export function PropuestaFicha({
             </div>
           )}
           {(() => {
-            const eta = describirEta(demoraOrden, fechaEstimada);
+            const eta = describirEta(demoraOrden, fechaEstimada, { margenDias: margenEtaDias, noLaborables: colasTaller?.noLaborables });
             if (!eta) return null;
             return (
               <div
-                className={`eta-sugerida ${eta.tarde ? "tarde" : ""}`}
+                className={`eta-sugerida ${eta.nivel === "tarde" ? "tarde" : eta.nivel === "sin-margen" ? "justo" : ""}`}
                 title={eta.motivo || "Simulado contra las colas actuales del taller"}
               >
                 <ClockIcon />
                 <span>
                   El taller la terminaría <strong>{eta.etiqueta}</strong>
-                  {eta.tarde ? " — después de la fecha elegida" : ""}
+                  {eta.sugeridaEtiqueta ? <> · prometé desde <strong>{eta.sugeridaEtiqueta}</strong></> : null}
+                  {eta.nivel === "tarde" ? " — después de la fecha elegida" : eta.nivel === "sin-margen" ? " — la fecha elegida queda sin margen" : ""}
                 </span>
               </div>
             );
@@ -5779,6 +5817,8 @@ export function PropuestaFicha({
                     index={index}
                     expanded={openIds.has(item.id)}
                     etaSistema={demoraPorItem?.get(item.id) ?? null}
+                    margenEtaDias={margenEtaDias}
+                    noLaborables={colasTaller?.noLaborables}
                     onToggle={() => toggle(item.id)}
                     onRemove={
                       modoOrden

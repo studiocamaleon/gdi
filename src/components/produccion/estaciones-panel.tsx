@@ -40,10 +40,12 @@ import {
   type FamiliaPasoCatalogo,
 } from "@/lib/estaciones";
 import {
+  actualizarConfiguracionProduccion,
   createEstacion,
   crearDiaNoLaborable,
   deleteEstacion,
   eliminarDiaNoLaborable,
+  getConfiguracionProduccion,
   getDiasNoLaborables,
   getEstaciones,
   getFamiliasPasos,
@@ -158,6 +160,7 @@ function FeriadosSheet({ onClose }: { onClose: () => void }) {
   const [descripcion, setDescripcion] = React.useState("");
   const [guardando, setGuardando] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [margen, setMargen] = React.useState<number | null>(null);
   const fechaRef = React.useRef<HTMLInputElement | null>(null);
 
   React.useEffect(() => {
@@ -165,8 +168,19 @@ function FeriadosSheet({ onClose }: { onClose: () => void }) {
     getDiasNoLaborables()
       .then((lista) => { if (vigente) setDias(lista); })
       .catch(() => { if (vigente) setDias([]); });
+    getConfiguracionProduccion()
+      .then((config) => { if (vigente) setMargen(config.margenEtaDias); })
+      .catch(() => { if (vigente) setMargen(0); });
     return () => { vigente = false; };
   }, []);
+
+  const cambiarMargen = (valor: number) => {
+    const acotado = Math.max(0, Math.min(15, valor));
+    setMargen(acotado); // optimista: el stepper responde al click
+    actualizarConfiguracionProduccion({ margenEtaDias: acotado }).catch(() => {
+      setError("No se pudo guardar el margen.");
+    });
+  };
 
   const agregar = async () => {
     if (!fecha) return;
@@ -203,12 +217,27 @@ function FeriadosSheet({ onClose }: { onClose: () => void }) {
       <div className="sheet est-sheet feriados-sheet" role="dialog" aria-modal="true">
         <div className="sheet-head est-sheet-head">
           <div>
-            <div className="kicker">CALENDARIO DEL TALLER</div>
-            <h2>Feriados y cierres</h2>
-            <div className="sub">Días en que el taller no trabaja: la proyección de cola y la demora estimada los saltan.</div>
+            <div className="kicker">PRODUCCIÓN</div>
+            <h2>Calendario del taller</h2>
+            <div className="sub">Feriados, cierres y margen para prometer fechas: alimentan la proyección de cola y la demora estimada.</div>
           </div>
         </div>
         <div className="sheet-body est-form">
+          <div className="est-section-head"><span className="num">01</span><div><div className="ttl">Margen para prometer</div><div className="sub">Colchón sobre la fecha que el sistema estima en el cotizador.</div></div></div>
+          {margen !== null ? (
+            <Stepper
+              label="Días hábiles de margen"
+              value={margen}
+              min={0}
+              step={1}
+              onChange={cambiarMargen}
+              help='Se suman a la ETA cruda al sugerir la fecha prometible ("terminaría ≈ mar 21 · prometé desde jue 23"). 0 = sin margen.'
+            />
+          ) : (
+            <div className="feriados-empty">Cargando…</div>
+          )}
+
+          <div className="est-section-head" style={{ marginTop: 18 }}><span className="num">02</span><div><div className="ttl">Feriados y cierres</div><div className="sub">Días en que el taller no trabaja: no aportan capacidad en ninguna proyección.</div></div></div>
           <div className="feriados-add">
             <input
               ref={fechaRef}
@@ -742,7 +771,7 @@ export function EstacionesPanel({
           <div className="sub">Configurá las estaciones de tu taller: familias de pasos (rutean el tablero), máquinas, empleados y capacidad.</div>
         </div>
         <div className="page-head-actions">
-          <button type="button" className="btn" onClick={() => setFeriadosOpen(true)}><CalendarOffIcon />Feriados y cierres</button>
+          <button type="button" className="btn" onClick={() => setFeriadosOpen(true)}><CalendarOffIcon />Calendario del taller</button>
           <button type="button" className="btn btn-primary" onClick={() => { setNuevaEtapa(undefined); setSheet("new"); }}><PlusIcon />Nueva estación</button>
         </div>
       </div>

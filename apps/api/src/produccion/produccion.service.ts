@@ -9,6 +9,7 @@ import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import type { UpsertEstacionDto } from './dto/upsert-estacion.dto';
 import type { CrearDiaNoLaborableDto } from './dto/crear-dia-no-laborable.dto';
+import type { ActualizarConfiguracionProduccionDto } from './dto/actualizar-configuracion-produccion.dto';
 import { FAMILIAS } from '../productos-servicios/pasos/familias';
 import type { FamiliaCodigo } from '../productos-servicios/pasos/types';
 import { parseCalendario, type CalendarioEstacion } from './calendario';
@@ -148,6 +149,27 @@ export class ProduccionService {
       medianaMin: Math.round(Number(row.medianaMin) * 10) / 10,
       muestras: Number(row.muestras),
     }));
+  }
+
+  // ── Configuración de producción (margen de la ETA sugerida) ──────────
+
+  async getConfiguracion(auth: CurrentAuth) {
+    const row = await this.prisma.configuracionProduccion.findUnique({
+      where: { tenantId: auth.tenantId },
+    });
+    return { margenEtaDias: row?.margenEtaDias ?? 0 };
+  }
+
+  async actualizarConfiguracion(
+    auth: CurrentAuth,
+    payload: ActualizarConfiguracionProduccionDto,
+  ) {
+    const row = await this.prisma.configuracionProduccion.upsert({
+      where: { tenantId: auth.tenantId },
+      create: { tenantId: auth.tenantId, margenEtaDias: payload.margenEtaDias },
+      update: { margenEtaDias: payload.margenEtaDias },
+    });
+    return { margenEtaDias: row.margenEtaDias };
   }
 
   // ── Días no laborables (feriados y cierres del taller) ───────────────

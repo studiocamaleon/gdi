@@ -56,6 +56,23 @@ export async function eliminarDiaNoLaborable(id: string) {
   });
 }
 
+/**
+ * Configuración de producción del tenant: margen de seguridad (en días
+ * hábiles) que el cotizador suma a la ETA cruda al sugerir fecha.
+ */
+export type ConfiguracionProduccion = { margenEtaDias: number };
+
+export async function getConfiguracionProduccion() {
+  return apiRequest<ConfiguracionProduccion>("/produccion/configuracion");
+}
+
+export async function actualizarConfiguracionProduccion(payload: ConfiguracionProduccion) {
+  return apiRequest<ConfiguracionProduccion>("/produccion/configuracion", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function createEstacion(payload: EstacionPayload) {
   return apiRequest<Estacion>("/produccion/estaciones", {
     method: "POST",

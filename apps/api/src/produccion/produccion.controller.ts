@@ -13,6 +13,7 @@ import type { CurrentAuth } from '../auth/auth.types';
 import { ProduccionService } from './produccion.service';
 import { UpsertEstacionDto } from './dto/upsert-estacion.dto';
 import { CrearDiaNoLaborableDto } from './dto/crear-dia-no-laborable.dto';
+import { ActualizarConfiguracionProduccionDto } from './dto/actualizar-configuracion-produccion.dto';
 
 @Controller('produccion')
 export class ProduccionController {
@@ -36,6 +37,21 @@ export class ProduccionController {
   @Get('duraciones-familias')
   findDuracionesFamilias(@CurrentSession() auth: CurrentAuth) {
     return this.service.findDuracionesFamilias(auth);
+  }
+
+  // ── Configuración de producción (margen de la ETA sugerida) ───────────
+
+  @Get('configuracion')
+  getConfiguracion(@CurrentSession() auth: CurrentAuth) {
+    return this.service.getConfiguracion(auth);
+  }
+
+  @Put('configuracion')
+  actualizarConfiguracion(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() payload: ActualizarConfiguracionProduccionDto,
+  ) {
+    return this.service.actualizarConfiguracion(auth, payload);
   }
 
   // ── Días no laborables (feriados y cierres del taller) ────────────────
