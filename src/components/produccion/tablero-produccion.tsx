@@ -149,6 +149,8 @@ type StepStatus = "done" | "current" | "pending" | "blocked";
 type StepView = {
   paso: TableroPasoData;
   status: StepStatus;
+  /** Paso ACTIVO (frontera de la secuencia): el diseño lo destaca con anillo. */
+  esActivo: boolean;
   iconKey: string;
   /** Subtítulo técnico: la estación (centro de costo) del paso. */
   tec: string;
@@ -196,13 +198,14 @@ function stepStatus(paso: TableroPasoData): StepStatus {
 }
 
 function buildItemView(item: TableroItemData): ItemView {
+  const actual = pasoActual(item);
   const steps = item.pasos.map<StepView>((paso) => ({
     paso,
     status: stepStatus(paso),
+    esActivo: paso.id === actual?.id,
     iconKey: familiaIcono(paso.familiaCodigo),
     tec: paso.centroCostoNombre ?? "Paso manual",
   }));
-  const actual = pasoActual(item);
   const currentStep = actual ? steps.find((s) => s.paso.id === actual.id) : undefined;
   const blocked = itemBloqueado(item);
   const bloqueadoPaso = item.pasos.find((paso) => paso.estado === "bloqueado");
@@ -264,8 +267,11 @@ function RouteStrip({ steps, compact = false }: { steps: StepView[]; compact?: b
   return (
     <div className={`route-strip ${compact ? "compact" : ""}`}>
       {steps.map((step, index) => {
+        // Visual: la frontera pendiente luce como "current" (anillo), aunque
+        // semánticamente siga pendiente (el sheet la muestra como estimada).
+        const visual = step.esActivo && step.status === "pending" ? "current" : step.status;
         const cls =
-          `route-step ${step.status}` +
+          `route-step ${visual}` +
           (step.status === "done" || (index > 0 && steps[index - 1]?.status === "done") ? " link-done" : "");
         return (
           <div key={step.paso.id} className={cls} title={`${step.paso.nombre} · ${step.tec}`}>

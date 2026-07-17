@@ -146,12 +146,18 @@ export function diasHastaEntrega(fechaEntrega: string | null): number | null {
   return Math.round((entrega.getTime() - hoy.getTime()) / 86_400_000);
 }
 
+const DIAS_SEMANA = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+const MESES_CORTOS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+/** "Vie 30 may", como el diseño (arrays fijos: sin depender del locale). */
 export function etiquetaEntrega(fechaEntrega: string | null): string {
   const dias = diasHastaEntrega(fechaEntrega);
   if (dias === null) return "Sin fecha";
   if (dias === 0) return "Hoy";
   if (dias === 1) return "Mañana";
-  return formatFechaOrden(fechaEntrega);
+  const fecha = fechaEntrega ? fechaLocalDesdeIso(fechaEntrega) : null;
+  if (!fecha) return formatFechaOrden(fechaEntrega);
+  return `${DIAS_SEMANA[fecha.getDay()]} ${fecha.getDate()} ${MESES_CORTOS[fecha.getMonth()]}`;
 }
 
 export function etiquetaRestante(fechaEntrega: string | null): string {

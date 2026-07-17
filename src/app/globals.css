@@ -3092,6 +3092,15 @@
   }
 }
 
+/* next/font define --font-geist-mono en <body>; --font-mono tiene que
+   resolverse AHÍ: declarada sólo en :root la sustitución queda inválida (la
+   var no existe a ese nivel, las custom properties se computan donde se
+   declaran) y toda la app perdía la tipografía mono. */
+body {
+  --font-mono:
+    var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
 :root {
   --bg: #f6f6f4;
   --surface: #ffffff;
@@ -3133,6 +3142,7 @@
   --r-4: 14px;
   --font-mono: var(--font-geist-mono);
   --shadow-sm: 0 1px 0 rgba(20, 20, 26, 0.04), 0 1px 2px rgba(20, 20, 26, 0.04);
+  /* (touch — Turbopack) */
   --shadow-md:
     0 1px 0 rgba(20, 20, 26, 0.04), 0 6px 24px -8px rgba(20, 20, 26, 0.12);
   --shadow-pop:
