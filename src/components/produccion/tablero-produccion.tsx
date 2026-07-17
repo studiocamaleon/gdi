@@ -539,9 +539,10 @@ function DetailRuta({
             </div>
             <div className="ds-body">
               <div className="ds-head">
+                {/* El protagonista es el PASO; el centro de costo vive en la
+                    vista Por estación y en el banner del paso actual. */}
                 <div>
-                  <div className="ds-tec">{step.tec}</div>
-                  <div className="ds-nm">{paso.nombre}</div>
+                  <div className="ds-tec">{paso.nombre}</div>
                 </div>
                 {step.status === "done" && paso.completadoEl ? (
                   <span className="ds-time done"><CheckIcon />{etiquetaMomento(paso.completadoEl)}</span>

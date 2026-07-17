@@ -16871,8 +16871,8 @@
 .tablero-produccion .ds-acciones {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
+  gap: 8px 12px;
+  margin-top: 12px;
 }
 
 .tablero-produccion .ds-bloqueo-form input {
