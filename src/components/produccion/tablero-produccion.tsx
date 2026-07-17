@@ -61,6 +61,7 @@ import {
   accionPasoProduccion,
   getOrdenTrabajo,
   getTableroProduccion,
+  mesaPasoProduccion,
 } from "@/lib/ordenes-trabajo-api";
 import type {
   OrdenTrabajoDetalle,
@@ -1254,14 +1255,27 @@ function TaskCard({
 }) {
   const statusLabel = task.isBlocked ? "BLOQUEADO" : task.isCurrent ? "EN CURSO" : "PENDIENTE";
   const statusCls = task.isBlocked ? "blocked" : task.isCurrent ? "current" : "pending";
+  const [dragging, setDragging] = React.useState(false);
+  // Reclamada por OTRO usuario (mesaEsMia la pondría en MI columna).
+  const enMesaDe = !inMesa ? task.step.paso.mesaUsuarioNombre : null;
 
   return (
-    <div className={`sta-task status-${statusCls} ${task.overdue ? "overdue" : ""} ${task.urgent ? "urgent" : ""} ${inMesa ? "in-mesa" : ""}`}>
+    <div
+      className={`sta-task status-${statusCls} ${task.overdue ? "overdue" : ""} ${task.urgent ? "urgent" : ""} ${inMesa ? "in-mesa" : ""} ${dragging ? "dragging" : ""}`}
+      draggable
+      onDragStart={(event) => {
+        event.dataTransfer.setData("text/paso-id", taskId(task));
+        event.dataTransfer.effectAllowed = "move";
+        setDragging(true);
+      }}
+      onDragEnd={() => setDragging(false)}
+    >
       <div className="sta-task-row1">
-        <span className="grip" title="Mover a tu mesa"><GripVerticalIcon /></span>
+        <span className="grip" title="Arrastrá para mover"><GripVerticalIcon /></span>
         <span className="code">{task.item.code}</span>
         <span className={`task-status ${statusCls}`}>{statusLabel}</span>
         {task.overdue ? <span className="task-vencido"><BanIcon />VENCIDO</span> : null}
+        {enMesaDe ? <span className="task-mesa-de" title="Otro usuario la tiene en su mesa"><UserIcon />{enMesaDe}</span> : null}
         <span className="ot">{task.item.otCode}</span>
       </div>
       <div className="sta-task-body">
@@ -1290,6 +1304,7 @@ function StationDetail({
   medianas,
   noLaborables,
   stationKey,
+  onMesa,
   onBack,
   onOpen,
 }: {
@@ -1298,6 +1313,7 @@ function StationDetail({
   medianas: Map<string, number>;
   noLaborables: Set<string>;
   stationKey: string;
+  onMesa: (pasoId: string, en: boolean) => void;
   onBack: () => void;
   onOpen: (id: string) => void;
 }) {
@@ -1315,22 +1331,37 @@ function StationDetail({
     station && station.capacidad != null && stats.entranteMin > 0
       ? proyectarColaDias(station.calendario, stats.colaMin + stats.entranteMin, station.capacidad, new Date(), noLaborables)
       : null;
-  const [mesa, setMesa] = React.useState(() => new Set<string>());
   const [filter, setFilter] = React.useState("todos");
+  /** Columna resaltada mientras se arrastra una tarea encima. */
+  const [dragOver, setDragOver] = React.useState<"mesa" | "shared" | null>(null);
   const etapa = station?.etapa ? etapaDeEstacion(station.etapa) : null;
   const estacionConfig = estaciones.find((entry) => entry.id === stationKey);
 
+  // "Mi mesa" es PERSISTENTE por usuario (paso.mesaEsMia, backend):
+  // reclamar acá lo ve todo el taller, y sobrevive recargas y sesiones.
+  const mesaTasks = tasks.filter((task) => task.step.paso.mesaEsMia);
+  const sharedTasks = tasks.filter((task) => !task.step.paso.mesaEsMia);
+
   const toggleMesa = (id: string) => {
-    setMesa((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    const task = tasks.find((entry) => taskId(entry) === id);
+    if (task) onMesa(id, !task.step.paso.mesaEsMia);
   };
 
-  const mesaTasks = tasks.filter((task) => mesa.has(taskId(task)));
-  const sharedTasks = tasks.filter((task) => !mesa.has(taskId(task)));
+  const permitirSoltar = (zona: "mesa" | "shared") => (event: React.DragEvent) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    setDragOver(zona);
+  };
+
+  const soltarEn = (zona: "mesa" | "shared") => (event: React.DragEvent) => {
+    event.preventDefault();
+    setDragOver(null);
+    const pasoId = event.dataTransfer.getData("text/paso-id");
+    const task = tasks.find((entry) => taskId(entry) === pasoId);
+    if (!task) return;
+    const en = zona === "mesa";
+    if (task.step.paso.mesaEsMia !== en) onMesa(pasoId, en);
+  };
   let visibleShared = sharedTasks;
   let visibleMesa = mesaTasks;
   if (filter === "pendientes") visibleShared = sharedTasks.filter((task) => task.isPending);
@@ -1367,7 +1398,7 @@ function StationDetail({
           <div className="k">En curso</div>
           <div className="v">{station?.capacidad ? `${stats.enCurso}/${station.capacidad}` : stats.enCurso}</div>
         </div>
-        <div className={`kpi ${mesa.size > 0 ? "ok" : "warn"}`}><div className="k">Mi mesa de trabajo</div><div className="v">{mesa.size}</div></div>
+        <div className={`kpi ${mesaTasks.length > 0 ? "ok" : "warn"}`}><div className="k">Mi mesa de trabajo</div><div className="v">{mesaTasks.length}</div></div>
         <div className="kpi cool"><div className="k">Pendientes</div><div className="v">{tasks.filter((task) => task.isPending).length}</div></div>
         <div className={`kpi ${tasks.some((task) => task.urgent) ? "warm" : ""}`}><div className="k">Urgentes</div><div className="v">{tasks.filter((task) => task.urgent).length}</div></div>
         <div className="kpi">
@@ -1400,17 +1431,27 @@ function StationDetail({
       <div className="sta-detail-board">
         <div className="sta-col mesa-col">
           <div className="sta-col-head"><span className="dot mesa" /><span className="ttl">Mi mesa de trabajo</span><span className="ct"><strong>{mesaTasks.length}</strong> pasos</span></div>
-          <div className={`sta-col-body ${mesaTasks.length === 0 ? "empty-mesa" : ""}`}>
+          <div
+            className={`sta-col-body ${mesaTasks.length === 0 ? "empty-mesa" : ""} ${dragOver === "mesa" ? "drag-over" : ""}`}
+            onDragOver={permitirSoltar("mesa")}
+            onDragLeave={() => setDragOver((current) => (current === "mesa" ? null : current))}
+            onDrop={soltarEn("mesa")}
+          >
             {mesaTasks.length === 0 ? <div className="sta-mesa-empty"><div className="ic"><SquareDashedIcon /></div><div className="ttl">Arrastrá tareas acá para trabajar en ellas</div><div className="sub">Las tareas pasan a tu mesa cuando las tomás de la fila compartida.</div></div> : null}
-            {visibleMesa.map((task, index) => <TaskCard key={taskId(task)} task={task} inMesa onMoveToMesa={toggleMesa} onOpen={onOpen} dragHint={index === 0 && filter !== "mesa"} />)}
+            {visibleMesa.map((task) => <TaskCard key={taskId(task)} task={task} inMesa onMoveToMesa={toggleMesa} onOpen={onOpen} />)}
           </div>
         </div>
 
         <div className="sta-col shared-col">
           <div className="sta-col-head"><span className="dot shared" /><span className="ttl">Pendientes compartidas</span><span className="ct"><strong>{visibleShared.length}</strong> pasos</span></div>
-          <div className="sta-col-body">
+          <div
+            className={`sta-col-body ${dragOver === "shared" ? "drag-over" : ""}`}
+            onDragOver={permitirSoltar("shared")}
+            onDragLeave={() => setDragOver((current) => (current === "shared" ? null : current))}
+            onDrop={soltarEn("shared")}
+          >
             {visibleShared.length === 0 ? <div className="sta-shared-empty">{filter === "mesa" ? "Solo se muestran las tareas de tu mesa." : "No quedan tareas pendientes que coincidan con el filtro."}</div> : null}
-            {visibleShared.map((task) => <TaskCard key={taskId(task)} task={task} inMesa={false} onMoveToMesa={toggleMesa} onOpen={onOpen} />)}
+            {visibleShared.map((task, index) => <TaskCard key={taskId(task)} task={task} inMesa={false} onMoveToMesa={toggleMesa} onOpen={onOpen} dragHint={index === 0 && mesaTasks.length === 0 && filter === "todos"} />)}
           </div>
         </div>
       </div>
@@ -1424,6 +1465,7 @@ function ByStationView({
   medianas,
   noLaborables,
   llegadasHoyMin,
+  onMesa,
   onOpen,
 }: {
   items: ItemView[];
@@ -1431,10 +1473,11 @@ function ByStationView({
   medianas: Map<string, number>;
   noLaborables: Set<string>;
   llegadasHoyMin: Map<string, number>;
+  onMesa: (pasoId: string, en: boolean) => void;
   onOpen: (id: string) => void;
 }) {
   const [stationKey, setStationKey] = React.useState<string | null>(null);
-  if (stationKey) return <StationDetail items={items} estaciones={estaciones} medianas={medianas} noLaborables={noLaborables} stationKey={stationKey} onBack={() => setStationKey(null)} onOpen={onOpen} />;
+  if (stationKey) return <StationDetail items={items} estaciones={estaciones} medianas={medianas} noLaborables={noLaborables} stationKey={stationKey} onMesa={onMesa} onBack={() => setStationKey(null)} onOpen={onOpen} />;
   return <StationGrid items={items} estaciones={estaciones} medianas={medianas} noLaborables={noLaborables} llegadasHoyMin={llegadasHoyMin} onSelect={setStationKey} />;
 }
 
@@ -1634,6 +1677,32 @@ export function TableroProduccion({
     [],
   );
 
+  /**
+   * Tomar/soltar un paso de MI mesa (persistente por usuario). Optimista:
+   * la card se mueve al soltar; el server confirma con el item
+   * re-proyectado (trae el nombre real del dueño) o se revierte.
+   */
+  const handleMesa = React.useCallback(async (pasoId: string, en: boolean) => {
+    const previo = items;
+    setItems((current) =>
+      current.map((item) => ({
+        ...item,
+        pasos: item.pasos.map((paso) =>
+          paso.id === pasoId
+            ? { ...paso, mesaEsMia: en, mesaUsuarioNombre: en ? "vos" : null }
+            : paso,
+        ),
+      })),
+    );
+    try {
+      const actualizado = await mesaPasoProduccion(pasoId, en);
+      setItems((current) => current.map((entry) => (entry.id === actualizado.id ? actualizado : entry)));
+    } catch (err) {
+      setItems(previo);
+      setError(err instanceof Error ? err.message : "No se pudo mover el paso.");
+    }
+  }, [items]);
+
   const tabEntries: Array<{ mode: Mode; label: string; count?: number }> = [
     { mode: "items", label: BOARD_MODE_LABELS.items, count: views.length },
     { mode: "estacion", label: BOARD_MODE_LABELS.estacion },
@@ -1752,7 +1821,7 @@ export function TableroProduccion({
                 </div>
               </>
             ) : null}
-            {mode === "estacion" ? <ByStationView items={views} estaciones={estaciones} medianas={medianas} noLaborables={noLaborables} llegadasHoyMin={llegadasHoyMin} onOpen={setSelectedId} /> : null}
+            {mode === "estacion" ? <ByStationView items={views} estaciones={estaciones} medianas={medianas} noLaborables={noLaborables} llegadasHoyMin={llegadasHoyMin} onMesa={handleMesa} onOpen={setSelectedId} /> : null}
             {mode === "kanban" ? (
               <>
                 <FiltersBar filters={filters} setFilters={setFilters} counts={counts} />

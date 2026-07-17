@@ -1331,7 +1331,14 @@ export class OrdenesTrabajoService {
         vendedor: { select: { nombreCompleto: true } },
         items: {
           orderBy: { ordenIndice: 'asc' as const },
-          include: { pasos: { orderBy: { indice: 'asc' as const } } },
+          include: {
+            pasos: {
+              orderBy: { indice: 'asc' as const },
+              include: {
+                mesaUsuario: { select: { nombreCompleto: true, email: true } },
+              },
+            },
+          },
         },
       },
       orderBy: [
@@ -1341,9 +1348,32 @@ export class OrdenesTrabajoService {
     });
     return {
       items: ordenes.flatMap((orden) =>
-        orden.items.map((item) => this.toTableroItem(orden, item)),
+        orden.items.map((item) => this.toTableroItem(orden, item, auth.userId)),
       ),
     };
+  }
+
+  /**
+   * Toma o suelta un paso de "mi mesa de trabajo" (vista Por estación).
+   * Reclamo simple y visible: tomar pisa el reclamo de otro (taller chico);
+   * los pasos hechos no se reclaman. Devuelve el item re-proyectado.
+   */
+  async mesaPaso(auth: CurrentAuth, pasoId: string, en: boolean) {
+    const paso = await this.prisma.ordenTrabajoItemPaso.findFirst({
+      where: { id: pasoId, tenantId: auth.tenantId },
+      select: { id: true, itemId: true, estado: true },
+    });
+    if (!paso) {
+      throw new NotFoundException('No se encontró el paso de producción.');
+    }
+    if (en && paso.estado === 'hecho') {
+      throw new BadRequestException('El paso ya está hecho: no va a ninguna mesa.');
+    }
+    await this.prisma.ordenTrabajoItemPaso.update({
+      where: { id: paso.id },
+      data: { mesaUsuarioId: en ? auth.userId : null },
+    });
+    return this.tableroItemActualizado(auth, paso.itemId);
   }
 
   /** Acción de ejecución sobre un paso (iniciar/completar/bloquear/…). */
@@ -1543,7 +1573,12 @@ export class OrdenesTrabajoService {
     const item = await this.prisma.ordenTrabajoItem.findFirst({
       where: { id: itemId, tenantId: auth.tenantId },
       include: {
-        pasos: { orderBy: { indice: 'asc' as const } },
+        pasos: {
+          orderBy: { indice: 'asc' as const },
+          include: {
+            mesaUsuario: { select: { nombreCompleto: true, email: true } },
+          },
+        },
         orden: {
           include: {
             cliente: { select: { nombre: true } },
@@ -1555,7 +1590,7 @@ export class OrdenesTrabajoService {
     if (!item) {
       throw new NotFoundException('No se encontró el item de la orden.');
     }
-    return this.toTableroItem(item.orden, item);
+    return this.toTableroItem(item.orden, item, auth.userId);
   }
 
   private toTableroItem(
@@ -1589,8 +1624,12 @@ export class OrdenesTrabajoService {
         motivoBloqueo: string | null;
         iniciadoEl: Date | null;
         completadoEl: Date | null;
+        mesaUsuarioId: string | null;
+        mesaUsuario: { nombreCompleto: string | null; email: string } | null;
       }>;
     },
+    /** Usuario que MIRA el tablero: define `mesaEsMia` por paso. */
+    viewerUserId: string,
   ) {
     return {
       id: item.id,
@@ -1629,6 +1668,10 @@ export class OrdenesTrabajoService {
         iniciadoEl: paso.iniciadoEl ? paso.iniciadoEl.toISOString() : null,
         completadoEl: paso.completadoEl
           ? paso.completadoEl.toISOString()
+          : null,
+        mesaEsMia: paso.mesaUsuarioId === viewerUserId,
+        mesaUsuarioNombre: paso.mesaUsuario
+          ? paso.mesaUsuario.nombreCompleto || paso.mesaUsuario.email
           : null,
       })),
     };

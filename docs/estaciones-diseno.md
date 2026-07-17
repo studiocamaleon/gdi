@@ -170,6 +170,15 @@ type Estacion = {
 
 ## 8. Fase B (después)
 
-Asignación de operario a paso (habilitados = los de la estación), "mi mesa"
-persistente por empleado, horario estructurado para planificación de entrega,
+Asignación de operario a paso (habilitados = los de la estación),
 sugerencia automática de estaciones iniciales desde máquinas/centros.
+
+Ya implementados de esta fase:
+- **Horario estructurado** → docs/capacidad-estaciones-diseno.md (2026-07-17).
+- **"Mi mesa" persistente** (2026-07-17): `OrdenTrabajoItemPaso.mesaUsuarioId`
+  (por USUARIO auth, SetNull) + `PATCH /ordenes-trabajo/tablero/pasos/:id/mesa`.
+  Drag & drop entre columnas en el detalle de estación (HTML5 nativo, con
+  botones como alternativa), optimista con confirmación del server. El
+  reclamo lo ve todo el taller: en compartidas, el paso tomado por OTRO
+  muestra chip "en mesa de {nombre}"; tomar pisa el reclamo ajeno (taller
+  chico). Los pasos hechos no se reclaman.

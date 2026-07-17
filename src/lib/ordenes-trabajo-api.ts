@@ -163,6 +163,17 @@ export async function accionPasoProduccion(
   );
 }
 
+/** Tomar/soltar un paso de MI mesa de trabajo (vista Por estación). */
+export async function mesaPasoProduccion(
+  pasoId: string,
+  en: boolean,
+): Promise<TableroItemData> {
+  return apiRequest<TableroItemData>(
+    `/ordenes-trabajo/tablero/pasos/${pasoId}/mesa`,
+    { method: "PATCH", body: JSON.stringify({ en }) },
+  );
+}
+
 export async function cambiarEstadoOrdenTrabajo(
   id: string,
   payload: {
