@@ -52,7 +52,7 @@ import {
   getTableroProduccion,
   quitarOrdenItem,
 } from "@/lib/ordenes-trabajo-api";
-import { getDuracionesFamilias, getEstaciones } from "@/lib/estaciones-api";
+import { getDiasNoLaborables, getDuracionesFamilias, getEstaciones } from "@/lib/estaciones-api";
 import type { Estacion } from "@/lib/estaciones";
 import type { TableroItemData } from "@/lib/tablero-produccion";
 import {
@@ -4587,6 +4587,7 @@ export function PropuestaFicha({
     enCola: TableroItemData[];
     estaciones: Estacion[];
     medianas: Map<string, number>;
+    noLaborables: Set<string>;
   } | null>(null);
   React.useEffect(() => {
     if (!conDemoraSistema) return;
@@ -4595,13 +4596,15 @@ export function PropuestaFicha({
       getTableroProduccion(),
       getEstaciones(),
       getDuracionesFamilias(),
+      getDiasNoLaborables(),
     ])
-      .then(([tablero, estaciones, duraciones]) => {
+      .then(([tablero, estaciones, duraciones, diasNoLaborables]) => {
         if (!vigente) return;
         setColasTaller({
           enCola: tablero.items,
           estaciones,
           medianas: new Map(duraciones.map((d) => [d.familiaCodigo, d.medianaMin])),
+          noLaborables: new Set(diasNoLaborables.map((dia) => dia.fecha)),
         });
       })
       .catch(() => {

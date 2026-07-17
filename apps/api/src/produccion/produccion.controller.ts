@@ -12,6 +12,7 @@ import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
 import { ProduccionService } from './produccion.service';
 import { UpsertEstacionDto } from './dto/upsert-estacion.dto';
+import { CrearDiaNoLaborableDto } from './dto/crear-dia-no-laborable.dto';
 
 @Controller('produccion')
 export class ProduccionController {
@@ -35,6 +36,29 @@ export class ProduccionController {
   @Get('duraciones-familias')
   findDuracionesFamilias(@CurrentSession() auth: CurrentAuth) {
     return this.service.findDuracionesFamilias(auth);
+  }
+
+  // ── Días no laborables (feriados y cierres del taller) ────────────────
+
+  @Get('dias-no-laborables')
+  findDiasNoLaborables(@CurrentSession() auth: CurrentAuth) {
+    return this.service.findDiasNoLaborables(auth);
+  }
+
+  @Post('dias-no-laborables')
+  crearDiaNoLaborable(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() payload: CrearDiaNoLaborableDto,
+  ) {
+    return this.service.crearDiaNoLaborable(auth, payload);
+  }
+
+  @Delete('dias-no-laborables/:id')
+  eliminarDiaNoLaborable(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+  ) {
+    return this.service.eliminarDiaNoLaborable(auth, id);
   }
 
   @Post('estaciones')

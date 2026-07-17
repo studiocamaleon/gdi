@@ -131,18 +131,27 @@ export function capacidadDiariaMaxMin(
   return max > 0 ? max * Math.max(1, puestos) : null;
 }
 
+/** "YYYY-MM-DD" local (clave de los días no laborables). */
+export function claveFechaLocal(fecha: Date): string {
+  const mes = String(fecha.getMonth() + 1).padStart(2, "0");
+  const dia = String(fecha.getDate()).padStart(2, "0");
+  return `${fecha.getFullYear()}-${mes}-${dia}`;
+}
+
 /**
  * Proyección de la cola en JORNADAS operativas, caminando el calendario
  * desde `desde` (D7 de capacidad-estaciones-diseno.md): hoy aporta sólo lo
- * que queda de su franja, los días inactivos no aportan, y cada día suma su
- * fracción consumida contra la capacidad completa de ese día. Los puestos
- * multiplican. null = sin calendario o cola que no se vacía en el horizonte.
+ * que queda de su franja, los días inactivos y los NO LABORABLES (feriados,
+ * cierres — D8) no aportan, y cada día suma su fracción consumida contra la
+ * capacidad completa de ese día. Los puestos multiplican. null = sin
+ * calendario o cola que no se vacía en el horizonte.
  */
 export function proyectarColaDias(
   calendario: CalendarioEstacion | null | undefined,
   colaMin: number,
   puestos: number,
   desde: Date = new Date(),
+  noLaborables: Set<string> = new Set(),
 ): number | null {
   if (!calendario) return null;
   if (colaMin <= 0) return 0;
@@ -151,6 +160,7 @@ export function proyectarColaDias(
   let dias = 0;
   for (let i = 0; i < 365; i += 1) {
     const fecha = new Date(desde.getFullYear(), desde.getMonth(), desde.getDate() + i);
+    if (noLaborables.has(claveFechaLocal(fecha))) continue;
     const franja = calendario.dias[JS_DIA[fecha.getDay()]];
     if (!franja) continue;
     const capacidadDia = minutosDeFranja(franja) * puestosEfectivos;

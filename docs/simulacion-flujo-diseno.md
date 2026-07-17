@@ -38,9 +38,10 @@
 - **D6 — Paso sin duración (ni propia ni mediana) → el item queda
   `sinEstimar`**: sin ETA, sin inventar defaults (coherente con D6 de
   capacidad).
-- **D7 — Feriados**: el motor recibe `noLaborables: Set<"YYYY-MM-DD">`
-  (hoy vacío). Cuando exista la tabla tenant se enchufa acá sin tocar el
-  algoritmo.
+- **D7 — Feriados**: el motor recibe `noLaborables: Set<"YYYY-MM-DD">`,
+  poblado desde `GET /produccion/dias-no-laborables` (tabla tenant
+  `DiaNoLaborable`, gestionada en el panel de estaciones). Tablero y
+  cotizador lo pasan; los días cargados no aportan capacidad.
 - **D8 — Horizonte 120 días**: si un paso no consigue ventana en ese
   horizonte (calendario vacío/absurdo), el item queda sin ETA.
 
@@ -102,6 +103,5 @@ tablero MÁS items hipotéticos construidos desde `item.cotizacion.pasos`
   estima" junto a su fecha. "~" = supuestos (tooltip con el motivo);
   items sin pasos o sin tiempos → sin sugerencia, nunca inventada.
 
-Pendiente de esta fase: feriados (D7, siguen vacíos) para que las fechas
-prometidas sobre semanas con feriado no queden optimistas; y margen de
-seguridad configurable sobre la ETA cruda si el taller lo pide.
+Pendiente de esta fase: margen de seguridad configurable sobre la ETA
+cruda, si el taller lo pide. (Feriados: implementados, ver D7.)
