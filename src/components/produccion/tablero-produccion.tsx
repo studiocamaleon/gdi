@@ -327,8 +327,8 @@ function ItemRow({ item, onOpen }: { item: ItemView; onOpen: (id: string) => voi
         <div className="tab-assigned" title={`Estación actual: ${item.station}`}>
           <span className="av">{item.stationIcon ? React.createElement(getStepIcon(item.stationIcon)) : <FactoryIcon />}</span>
           <div>
+            <div className="role">Estación actual</div>
             <div className="nm">{item.station}</div>
-            <div className="role">{item.qtyLabel}</div>
           </div>
         </div>
       </div>
