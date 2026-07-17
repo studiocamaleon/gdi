@@ -297,16 +297,6 @@ export function SimuladorLaser({ initialData }: { initialData: SimuladorLaserDat
   const totalHojas = data.jobs.reduce((acc, job) => acc + (job.hojas ?? 0), 0);
   const clicsColor = data.jobs.filter((j) => esColor(j.modoColor) !== false).reduce((acc, j) => acc + (j.clics ?? 0), 0);
   const clicsBn = data.jobs.filter((j) => esColor(j.modoColor) === false).reduce((acc, j) => acc + (j.clics ?? 0), 0);
-  const urgentes = data.jobs.filter((j) => {
-    const dias = diasHastaEntrega(j.fechaEntrega);
-    return dias !== null && dias <= 1;
-  }).length;
-  const imprimiendo = data.jobs.filter((j) => j.estado === "en_curso").length;
-
-  // Cuello de botella: sólo tiene sentido con más de una lane (comparar).
-  const cuello = lanes.length > 1
-    ? [...lanes].sort((a, b) => b.minutos - a.minutos)[0]
-    : null;
 
   return (
     <div className="sim-scroll">
@@ -336,19 +326,7 @@ export function SimuladorLaser({ initialData }: { initialData: SimuladorLaserDat
             <div className="sim-kpi"><div className="k">Hojas totales</div><div className="v mono">{lazNum(totalHojas)}</div></div>
             <div className="sim-kpi"><div className="k">Clics color</div><div className="v mono">{lazNum(clicsColor)}</div></div>
             <div className="sim-kpi"><div className="k">Clics B&N</div><div className="v mono">{lazNum(clicsBn)}</div></div>
-            <div className={`sim-kpi ${imprimiendo > 0 ? "ok" : ""}`}><div className="k">Imprimiendo</div><div className="v mono">{imprimiendo}</div></div>
-            <div className={`sim-kpi ${urgentes > 0 ? "warn" : ""}`}><div className="k">Urgentes</div><div className="v mono">{urgentes}</div></div>
           </div>
-
-          {cuello && cuello.minutos > 0 ? (
-            <div className="laz-hint">
-              <PrinterIcon />
-              <span>
-                <b>{cuello.nombre}</b> es el cuello de botella: se libera en{" "}
-                <b>~{lazFmtTime(cuello.minutos)}</b>.
-              </span>
-            </div>
-          ) : null}
 
           <div className="laz-board">
             {lanes.map((lane) => (

@@ -91,7 +91,9 @@ Lote: `POST /ordenes-trabajo/tablero/pasos/completar-lote` (existente).
    desbloquear → aparece en la lane del centro "Impresion Digital Laser"
    con batch "Papel ilustración brillante 300g · SRA3 · Color · doble
    faz", 25 hojas, 50 clics, 7 min.
-2. KPIs consolidados y cuello de botella con duraciones reales.
+2. KPIs consolidados (trabajos, hojas, clics color/B&N). Sin "urgentes",
+   "imprimiendo" ni cuello de botella: no aportan en este módulo
+   (decisión usuario 2026-07-17).
 3. "Marcar impresos (N)" completa el batch → tablero avanza → reabrir
    restaura.
 4. Poll: completar desde el tablero saca el job del simulador solo.

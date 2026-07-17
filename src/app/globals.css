@@ -18474,21 +18474,7 @@ textarea.est-input { resize: vertical; min-height: 60px; font-family: inherit; }
     font-size: 14px;
   }
 
-  /* ─── Simulador LÁSER: lanes por centro + batches enviables juntos ─── */
-  .laz-hint {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 14px;
-    padding: 9px 13px;
-    font-size: 12.5px;
-    color: var(--ink-2, #3c3c44);
-    background: var(--surface, #fff);
-    border: 1px solid var(--border, #e4e2df);
-    border-radius: 8px;
-  }
-  .laz-hint svg { width: 15px; height: 15px; flex: 0 0 auto; color: var(--muted-text, #74747c); }
-
+  /* ─── Simulador LÁSER: lanes por máquina + batches enviables juntos ─── */
   .laz-board { display: flex; flex-direction: column; gap: 16px; }
   .laz-lane {
     background: var(--surface, #fff);
