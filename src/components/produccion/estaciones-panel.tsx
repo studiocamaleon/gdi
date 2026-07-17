@@ -278,7 +278,7 @@ function StationForm({
                       >
                         {seleccionada ? <CheckIcon /> : null}
                         <span className="nm">{familia.nombre}</span>
-                        {tomadaPorOtra ? <span className="code">en {familia.estacionNombre}</span> : null}
+                        {tomadaPorOtra ? <span className="en-tag">en {familia.estacionNombre}</span> : null}
                       </button>
                     );
                   })}
@@ -306,9 +306,8 @@ function StationForm({
                       onClick={() => toggleLista("maquinaIds", machine.id)}
                     >
                       {seleccionada ? <CheckIcon /> : null}
-                      <span className="code">{machine.codigo}</span>
                       <span className="nm">{machine.nombre}</span>
-                      {enOtraDistinta ? <span className="code">en {enOtraDistinta}</span> : null}
+                      {enOtraDistinta ? <span className="en-tag">en {enOtraDistinta}</span> : null}
                     </button>
                   );
                 })}
