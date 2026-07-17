@@ -74,8 +74,12 @@ muerto de una iteración anterior; los modos son items/estación/kanban).
   (+`motivoBloqueo`, `iniciadoEl`, `completadoEl`). Acciones: iniciar,
   completar, bloquear, desbloquear, reabrir. Iniciar el primer paso de una
   orden `pendiente` la **auto-promueve a `produccion`** (evento de sistema).
-  Completar todos los pasos NO auto-finaliza la orden (la finalización/entrega
-  sigue siendo decisión humana en Órdenes).
+  **Completar el último paso pendiente la auto-finaliza** (`produccion →
+  finalizada`, `progresoPct` 100, evento de sistema; `ordenSeFinaliza`);
+  la OT sale del tablero. **Reabrir** un paso de una OT `finalizada` deshace
+  la finalización y la vuelve a `produccion` (única acción de paso permitida
+  sobre una orden finalizada). La entrega sigue siendo decisión humana en
+  Órdenes. *(Corrige la decisión original, que dejaba la finalización manual.)*
 - **D3 — Progreso.** `progresoPct` del item = hechos/total (por cantidad de
   pasos, fase 1). El de la orden = sobre el total de pasos de todos sus items;
   se persiste en `OrdenTrabajo.progresoPct` en cada acción (así el listado de

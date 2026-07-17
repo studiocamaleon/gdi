@@ -7,6 +7,7 @@
 import { BadRequestException } from '@nestjs/common';
 import {
   OrdenesTrabajoService,
+  ordenSeFinaliza,
   pasoEjecutable,
   pasoReabrible,
   TRANSICIONES_PASO,
@@ -350,6 +351,27 @@ describe('secuencia de la ruta — pasoEjecutable / pasoReabrible', () => {
       false,
     );
     expect(pasoReabrible(ruta('hecho', 'bloqueado'), 0)).toBe(false);
+  });
+});
+
+describe('auto-finalización — ordenSeFinaliza', () => {
+  it('completar el último paso pendiente finaliza la OT', () => {
+    expect(ordenSeFinaliza('completar', 4, 4)).toBe(true);
+  });
+
+  it('completar un paso intermedio no finaliza (quedan pasos)', () => {
+    expect(ordenSeFinaliza('completar', 4, 3)).toBe(false);
+  });
+
+  it('sólo la acción completar finaliza; el resto nunca', () => {
+    expect(ordenSeFinaliza('iniciar', 4, 4)).toBe(false);
+    expect(ordenSeFinaliza('bloquear', 4, 4)).toBe(false);
+    expect(ordenSeFinaliza('reabrir', 4, 4)).toBe(false);
+    expect(ordenSeFinaliza('desbloquear', 4, 4)).toBe(false);
+  });
+
+  it('una OT sin pasos materializados no se auto-finaliza', () => {
+    expect(ordenSeFinaliza('completar', 0, 0)).toBe(false);
   });
 });
 

@@ -12,6 +12,7 @@ import {
   ORDEN_TRABAJO_ESTADO_LABELS,
   progresoEfectivo,
   type OrdenTrabajoEstado,
+  type OrdenTrabajoPasoAccion,
   type OrdenTrabajoPasoEstado,
 } from './ordenes-trabajo.types';
 import type {
@@ -126,6 +127,19 @@ export function pasoReabrible(
   return pasos
     .filter((paso) => paso.indice > indice)
     .every((paso) => paso.estado === 'pendiente');
+}
+
+/**
+ * Una OT se finaliza sola cuando se completa su último paso pendiente: el
+ * total de pasos ya está hecho tras un `completar`. Sólo aplica a esa acción
+ * (bloquear/reabrir/desbloquear/iniciar nunca dejan todo hecho).
+ */
+export function ordenSeFinaliza(
+  accion: OrdenTrabajoPasoAccion,
+  total: number,
+  hechos: number,
+): boolean {
+  return accion === 'completar' && total > 0 && hechos === total;
 }
 
 @Injectable()
@@ -1313,7 +1327,11 @@ export class OrdenesTrabajoService {
       throw new NotFoundException('No se encontró el paso de producción.');
     }
     const ordenEstado = paso.orden.estado as OrdenTrabajoEstado;
-    if (!ESTADOS_TABLERO.includes(ordenEstado)) {
+    // Reabrir un paso de una OT ya finalizada la vuelve a producción (deshacer
+    // la auto-finalización); el resto de acciones exige orden activa.
+    const reabreFinalizada =
+      ordenEstado === 'finalizada' && payload.accion === 'reabrir';
+    if (!ESTADOS_TABLERO.includes(ordenEstado) && !reabreFinalizada) {
       throw new BadRequestException(
         `Con la orden en estado "${ORDEN_TRABAJO_ESTADO_LABELS[ordenEstado]}" no se pueden ejecutar pasos.`,
       );
@@ -1401,10 +1419,25 @@ export class OrdenesTrabajoService {
           where: { ordenId, estado: 'hecho' },
         }),
       ]);
+      // Estado destino de la OT tras la acción:
+      // - completar el último paso pendiente la FINALIZA sola;
+      // - reabrir un paso de una OT finalizada la reabre a producción;
+      // - el primer trabajo sobre una OT pendiente la promueve a producción.
+      const nuevoEstadoOrden: OrdenTrabajoEstado | null = ordenSeFinaliza(
+        payload.accion,
+        total,
+        hechos,
+      )
+        ? 'finalizada'
+        : reabreFinalizada
+          ? 'produccion'
+          : promueve
+            ? 'produccion'
+            : null;
       await tx.ordenTrabajo.update({
         where: { id: ordenId },
         data: {
-          ...(promueve ? { estado: 'produccion' } : {}),
+          ...(nuevoEstadoOrden ? { estado: nuevoEstadoOrden } : {}),
           ...(total > 0
             ? { progresoPct: Math.round((hechos / total) * 100) }
             : {}),
@@ -1431,18 +1464,28 @@ export class OrdenesTrabajoService {
           },
         },
       });
-      if (promueve) {
+      if (nuevoEstadoOrden) {
+        const nota =
+          nuevoEstadoOrden === 'finalizada'
+            ? 'todos los pasos completados'
+            : ordenEstado === 'finalizada'
+              ? 'se reabrió un paso'
+              : 'arrancó la producción';
         await tx.ordenTrabajoEvento.create({
           data: {
             tenantId: auth.tenantId,
             ordenId,
             fecha: new Date(ahora.getTime() + 1),
             tipo: 'estado',
-            descripcion: `Estado: ${ORDEN_TRABAJO_ESTADO_LABELS.pendiente} → ${ORDEN_TRABAJO_ESTADO_LABELS.produccion} (arrancó la producción)`,
+            descripcion: `Estado: ${ORDEN_TRABAJO_ESTADO_LABELS[ordenEstado]} → ${ORDEN_TRABAJO_ESTADO_LABELS[nuevoEstadoOrden]} (${nota})`,
             usuarioNombre: 'Sistema',
             usuarioId: null,
             origen: 'sistema',
-            datosJson: { campo: 'estado', antes: 'pendiente', despues: 'produccion' },
+            datosJson: {
+              campo: 'estado',
+              antes: ordenEstado,
+              despues: nuevoEstadoOrden,
+            },
           },
         });
       }
