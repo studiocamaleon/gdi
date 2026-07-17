@@ -1158,7 +1158,9 @@ function StationDetail({
             <p>
               {station?.sinEstacion
                 ? "Pasos cuya familia no está asignada a ninguna estación activa"
-                : [etapa?.nm, estacionConfig?.horario].filter(Boolean).join(" · ") || "Estación del taller"}
+                : estacionConfig?.descripcion ||
+                  [etapa?.nm, estacionConfig?.horario].filter(Boolean).join(" · ") ||
+                  "Estación del taller"}
             </p>
             <div className="actions">
               <button type="button" className="sta-btn ghost" onClick={onBack}><ArrowLeftIcon />Ver todas las estaciones</button>
@@ -1169,8 +1171,11 @@ function StationDetail({
       </div>
 
       <div className="sta-detail-kpis">
-        <div className="kpi"><div className="k">Total activos</div><div className="v">{tasks.length}</div></div>
-        {station?.capacidad ? <div className={`kpi ${tasks.length > station.capacidad ? "warm" : ""}`}><div className="k">Capacidad</div><div className="v">{tasks.length}/{station.capacidad}</div></div> : null}
+        {/* Capacidad fusionada: "2/3" — el diseño tiene exactamente 5 cards. */}
+        <div className={`kpi ${station?.capacidad && tasks.length > station.capacidad ? "warm" : ""}`}>
+          <div className="k">Total activos</div>
+          <div className="v">{station?.capacidad ? `${tasks.length}/${station.capacidad}` : tasks.length}</div>
+        </div>
         <div className={`kpi ${mesa.size > 0 ? "ok" : "warn"}`}><div className="k">Mi mesa de trabajo</div><div className="v">{mesa.size}</div></div>
         <div className="kpi cool"><div className="k">Pendientes</div><div className="v">{tasks.filter((task) => task.isPending).length}</div></div>
         <div className={`kpi ${tasks.some((task) => task.urgent) ? "warm" : ""}`}><div className="k">Urgentes</div><div className="v">{tasks.filter((task) => task.urgent).length}</div></div>

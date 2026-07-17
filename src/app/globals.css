@@ -13063,7 +13063,7 @@ body {
     0 1px 2px rgba(20, 20, 26, 0.06) !important;
 }
 
-/* Tablero de producción — adaptadores de la app (shell, sheet base, kanban propio) */
+/* Tablero de producción — adaptadores de la app (shell, sheet base, kanban propio) (touch 2) */
 
 /* En el diseño las páginas viven dentro de .content (padding 28px 32px
    40px + scroll); el shell de la app no envuelve así: el canvas va acá.
@@ -13129,8 +13129,7 @@ body {
 
 .tablero-produccion .d-kpi-head,
 .tablero-produccion .item-status-banner .lbl,
-.tablero-produccion .item-meta-strip .k,
-.tablero-produccion .sta-detail-kpis .k {
+.tablero-produccion .item-meta-strip .k {
   color: var(--muted-text);
   font-size: 10.5px;
   font-weight: 600;
@@ -13708,23 +13707,6 @@ body {
 .tablero-produccion .sig {
   color: var(--muted-text);
   font-size: 12px;
-}
-
-.tablero-produccion .sta-card-load .num,
-.tablero-produccion .counter .num,
-.tablero-produccion .sta-detail-kpis .v {
-  font-family: var(--font-mono);
-  font-size: 24px;
-  font-weight: 700;
-}
-
-.tablero-produccion .counter {
-  min-width: 94px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-2);
-  background: var(--surface-2);
-  text-align: center;
 }
 
 .tablero-produccion .sta-detail-kpis .kpi:last-child {
