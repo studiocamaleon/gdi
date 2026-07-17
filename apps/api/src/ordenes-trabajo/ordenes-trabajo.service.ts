@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto';
 import {
   BadRequestException,
   Injectable,
@@ -24,6 +25,31 @@ import type {
 import type { AccionPasoOrdenTrabajoDto } from './dto/accion-paso.dto';
 import { FAMILIAS } from '../productos-servicios/pasos/familias';
 import type { FamiliaCodigo } from '../productos-servicios/pasos/types';
+
+/**
+ * Token url-safe (~22 chars) para el link público de seguimiento del cliente.
+ * base64url de 16 bytes aleatorios: sin colisiones prácticas, sin caracteres
+ * que rompan una URL. Ver docs/tracking-publico-diseno.md
+ */
+function generarPublicToken(): string {
+  return randomBytes(16).toString('base64url');
+}
+
+/** Primer nombre visible ("Carolina Méndez" → "Carolina"). */
+function primerNombre(nombre: string): string {
+  return nombre.trim().split(/\s+/)[0] || nombre;
+}
+
+/** Hasta 2 iniciales ("Gráfica Corporearte" → "GC"). */
+function inicialesDe(nombre: string): string {
+  return nombre
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((parte) => parte[0]?.toUpperCase() ?? '')
+    .join('');
+}
 
 /** "2026-07-22" → "22/07/2026" (para descripciones humanas de eventos). */
 function formatFechaCorta(iso: string | null): string {
@@ -306,7 +332,18 @@ export class OrdenesTrabajoService {
     if (!orden) {
       throw new NotFoundException('No se encontró la orden de trabajo.');
     }
-    return this.toDetalle(orden);
+    // Backfill perezoso del link público: OTs emitidas antes de existir el
+    // token no tienen uno; se genera la primera vez que se abre el detalle
+    // para que "Compartir seguimiento" siempre tenga link.
+    let publicToken = orden.publicToken;
+    if (!publicToken && orden.estado !== 'borrador') {
+      publicToken = generarPublicToken();
+      await this.prisma.ordenTrabajo.update({
+        where: { id: orden.id },
+        data: { publicToken },
+      });
+    }
+    return this.toDetalle({ ...orden, publicToken });
   }
 
   // ── Crear ────────────────────────────────────────────────────────────
@@ -406,6 +443,8 @@ export class OrdenesTrabajoService {
           cotizacionId: payload.cotizacionId ?? null,
           estado: estadoInicial,
           fechaEmision: emitida ? ahora : null,
+          // Emitida al taller → link público de seguimiento del cliente.
+          publicToken: emitida ? generarPublicToken() : null,
           fechaEntrega: payload.fechaEntrega
             ? new Date(payload.fechaEntrega)
             : null,
@@ -1062,6 +1101,11 @@ export class OrdenesTrabajoService {
             desde === 'borrador' && !orden.fechaEmision
               ? new Date()
               : undefined,
+          // Salir de borrador es emitir → link público de seguimiento.
+          publicToken:
+            desde === 'borrador' && !orden.publicToken
+              ? generarPublicToken()
+              : undefined,
         },
       });
       // Salir de borrador es emitir: se materializan los pasos de
@@ -1633,6 +1677,9 @@ export class OrdenesTrabajoService {
       observaciones: orden.observaciones,
       canalVenta: (orden as { canalVenta?: string | null }).canalVenta ?? null,
       cargosDirectos: Number(orden.cargosDirectos ?? 0),
+      // Token del link público de seguimiento (para "Compartir" desde el staff).
+      publicToken:
+        (orden as { publicToken?: string | null }).publicToken ?? null,
       productos: orden.items.map((item) => {
         const cotItem = (
           item as typeof item & {
@@ -1717,6 +1764,154 @@ export class OrdenesTrabajoService {
       })),
       // El plan de pagos llega con el módulo de pagos (ver doc de diseño).
       pago: null,
+    };
+  }
+
+  // ── Seguimiento público (cliente) ────────────────────────────────────
+  // Vista pública por link privado (token). SIN sesión: se resuelve la OT
+  // por su publicToken único (que ES el scope) y se devuelve SÓLO una
+  // proyección cliente-facing — nunca montos, costos ni datos internos.
+  // Ver docs/tracking-publico-diseno.md
+
+  async trackingPublico(token: string) {
+    // findUnique por token global-único: sin sesión no hay tenantContext, así
+    // que la extensión de aislamiento no filtra — está bien, el token único
+    // identifica una sola orden y sus relaciones son FK de esa orden (no
+    // pueden cruzar tenants).
+    const orden = await this.prisma.ordenTrabajo.findUnique({
+      where: { publicToken: token },
+      select: {
+        numero: true,
+        estado: true,
+        createdAt: true,
+        fechaEntrega: true,
+        cliente: { select: { nombre: true } },
+        vendedor: {
+          select: {
+            nombreCompleto: true,
+            telefonoCodigo: true,
+            telefonoNumero: true,
+          },
+        },
+        tenant: { select: { nombre: true } },
+        items: {
+          orderBy: { ordenIndice: 'asc' as const },
+          select: {
+            id: true,
+            nombre: true,
+            specsJson: true,
+            pasos: {
+              orderBy: { indice: 'asc' as const },
+              select: {
+                indice: true,
+                nombre: true,
+                familiaCodigo: true,
+                estado: true,
+                completadoEl: true,
+                duracionEstimadaMin: true,
+                centroCostoNombre: true,
+              },
+            },
+          },
+        },
+        eventos: {
+          where: { tipo: 'emision' },
+          orderBy: { fecha: 'asc' as const },
+          take: 1,
+          select: { fecha: true },
+        },
+      },
+    });
+    if (!orden || orden.estado === 'borrador') {
+      throw new NotFoundException('No encontramos ese pedido.');
+    }
+
+    let pasosTotal = 0;
+    let pasosHechos = 0;
+    const items = orden.items.map((item) => {
+      const total = item.pasos.length;
+      const hechos = item.pasos.filter((p) => p.estado === 'hecho').length;
+      pasosTotal += total;
+      pasosHechos += hechos;
+      const actual = item.pasos.find((p) => p.estado !== 'hecho');
+      return {
+        id: item.id,
+        nombre: item.nombre,
+        specs: (item.specsJson ?? []) as Array<{
+          etiqueta: string;
+          valor: string;
+        }>,
+        progresoPct: total > 0 ? Math.round((hechos / total) * 100) : 0,
+        pasoActual: actual?.nombre ?? null,
+        estacionActual: actual?.centroCostoNombre ?? null,
+        pasos: item.pasos.map((p) => ({
+          indice: p.indice,
+          nombre: p.nombre,
+          familiaCodigo: p.familiaCodigo,
+          estado: p.estado,
+          completadoEl: p.completadoEl ? p.completadoEl.toISOString() : null,
+          duracionEstimadaMin:
+            p.duracionEstimadaMin != null ? Number(p.duracionEstimadaMin) : null,
+        })),
+      };
+    });
+
+    // Actividad cliente-facing: pasos completados (con su fecha) + emisión.
+    // Se arma desde los pasos (no desde los eventos internos, que traen texto
+    // de staff/montos), así nunca hay fuga de datos internos.
+    const actividad: Array<{ fecha: string; texto: string }> = [];
+    for (const item of orden.items) {
+      for (const paso of item.pasos) {
+        if (paso.estado === 'hecho' && paso.completadoEl) {
+          actividad.push({
+            fecha: paso.completadoEl.toISOString(),
+            texto: `Listo: ${paso.nombre}`,
+          });
+        }
+      }
+    }
+    if (orden.eventos[0]) {
+      actividad.push({
+        fecha: orden.eventos[0].fecha.toISOString(),
+        texto: 'Recibimos tu pedido y entró a producción.',
+      });
+    }
+    actividad.sort((a, b) => b.fecha.localeCompare(a.fecha));
+
+    const telefono =
+      orden.vendedor &&
+      (orden.vendedor.telefonoCodigo || orden.vendedor.telefonoNumero)
+        ? `${orden.vendedor.telefonoCodigo ?? ''}${orden.vendedor.telefonoNumero ?? ''}`.trim()
+        : null;
+
+    return {
+      numero: orden.numero,
+      estado: orden.estado,
+      creadaEl: orden.createdAt.toISOString(),
+      fechaEntrega: orden.fechaEntrega
+        ? orden.fechaEntrega.toISOString().slice(0, 10)
+        : null,
+      progresoPct:
+        pasosTotal > 0 ? Math.round((pasosHechos / pasosTotal) * 100) : 0,
+      imprenta: {
+        nombre: orden.tenant.nombre,
+        iniciales: inicialesDe(orden.tenant.nombre),
+      },
+      cliente: {
+        primerNombre: orden.cliente
+          ? primerNombre(orden.cliente.nombre)
+          : 'Hola',
+        iniciales: orden.cliente ? inicialesDe(orden.cliente.nombre) : '·',
+      },
+      vendedor: orden.vendedor
+        ? {
+            nombre: orden.vendedor.nombreCompleto,
+            iniciales: inicialesDe(orden.vendedor.nombreCompleto),
+            telefono,
+          }
+        : null,
+      items,
+      actividad: actividad.slice(0, 8),
     };
   }
 }

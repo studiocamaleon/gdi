@@ -19,10 +19,22 @@ import {
   EditarOrdenTrabajoDto,
 } from './dto/crear-orden-trabajo.dto';
 import { AccionPasoOrdenTrabajoDto } from './dto/accion-paso.dto';
+import { Public } from '../auth/public.decorator';
 
 @Controller('ordenes-trabajo')
 export class OrdenesTrabajoController {
   constructor(private readonly ordenesTrabajoService: OrdenesTrabajoService) {}
+
+  /**
+   * Seguimiento PÚBLICO por link privado (sin sesión). El token único ES la
+   * credencial; devuelve sólo la proyección cliente-facing. Declarado antes
+   * de :id — "track" no es un id. Ver docs/tracking-publico-diseno.md
+   */
+  @Public()
+  @Get('track/:token')
+  trackingPublico(@Param('token') token: string) {
+    return this.ordenesTrabajoService.trackingPublico(token);
+  }
 
   @Get()
   findAll(

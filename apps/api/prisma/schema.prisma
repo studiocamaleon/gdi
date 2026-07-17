@@ -1930,6 +1930,10 @@ model OrdenTrabajo {
   total              Decimal?             @db.Decimal(14, 2)
   /// Avance 0-100 informado por producción; null = sin dato.
   progresoPct        Int?
+  /// Token aleatorio url-safe del link PÚBLICO de seguimiento del cliente
+  /// (grafoprint.com.ar/track/<token>). Se genera al emitir la OT (salir de
+  /// borrador); null = todavía no compartible. Ver docs/tracking-publico-diseno.md
+  publicToken        String?              @unique
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
   tenant             Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
