@@ -583,6 +583,14 @@ function DetailRuta({
 
 type MaterialRow = { nombre: string; cantidad: number; unidad: string };
 
+/** Nota de producción del item (jobContext.notasProduccion del snapshot). */
+function notaProduccionDeDetalle(detalle: OrdenTrabajoDetalle, itemId: string): string | null {
+  const producto = detalle.productos.find((entry) => entry.id === itemId);
+  const jobContext = producto?.snapshot?.jobContext as { notasProduccion?: unknown } | null | undefined;
+  const nota = typeof jobContext?.notasProduccion === "string" ? jobContext.notasProduccion.trim() : "";
+  return nota || null;
+}
+
 /** Materiales estimados del item, desde la trazabilidad del snapshot. */
 function materialesDeDetalle(detalle: OrdenTrabajoDetalle, itemId: string): MaterialRow[] {
   const producto = detalle.productos.find((entry) => entry.id === itemId);
@@ -699,6 +707,7 @@ function ItemDetailSheet({
   const doneSteps = item.steps.filter((step) => step.status === "done").length;
   const currentStep = item.currentStep;
   const materiales = detalle ? materialesDeDetalle(detalle, item.id) : [];
+  const notaProduccion = detalle ? notaProduccionDeDetalle(detalle, item.id) : null;
   const eventos = detalle?.eventos ?? [];
   const estimadoTotal = etiquetaDuracion(
     item.data.pasos.reduce((acc, paso) => acc + (paso.duracionEstimadaMin ?? 0), 0),
@@ -741,6 +750,13 @@ function ItemDetailSheet({
               <div className="sub">{item.dueIn === "Hoy" ? "vence hoy" : `${item.dueIn} restantes`}</div>
             </div>
           </div>
+
+          {notaProduccion ? (
+            <div className="item-nota-produccion">
+              <div className="lbl">Nota de producción</div>
+              <div className="txt">{notaProduccion}</div>
+            </div>
+          ) : null}
 
           <div className="item-meta-strip">
             <div className="m"><div className="k">Avance</div><div className="v">{item.progressPct}%<span className="sub">· {doneSteps}/{totalSteps} pasos</span></div></div>
