@@ -23,6 +23,7 @@ import { ProduccionModule } from './produccion/produccion.module';
 import { ProductosServiciosModule } from './productos-servicios/productos-servicios.module';
 import { MotorUniversalModule } from './motor-universal/motor.module';
 import { OrdenesTrabajoModule } from './ordenes-trabajo/ordenes-trabajo.module';
+import { AdministracionModule } from './administracion/administracion.module';
 
 @Module({
   imports: [
@@ -74,6 +75,7 @@ import { OrdenesTrabajoModule } from './ordenes-trabajo/ordenes-trabajo.module';
     ProductosServiciosModule,
     MotorUniversalModule,
     OrdenesTrabajoModule,
+    AdministracionModule,
   ],
   controllers: [AppController],
   providers: [

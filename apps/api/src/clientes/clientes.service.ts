@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   Cliente,
   ClienteContacto,
@@ -8,6 +12,7 @@ import {
 } from '@prisma/client';
 import { CurrentAuth } from '../auth/auth.types';
 import { paginatedResponse } from '../common/dto/pagination.dto';
+import { cuitValido } from '../common/cuit';
 import { PrismaService } from '../prisma/prisma.service';
 import { ClienteContactoDto } from './dto/contacto.dto';
 import { ClienteDireccionDto, TipoDireccionDto } from './dto/direccion.dto';
@@ -76,6 +81,9 @@ export class ClientesService {
         tenantId: auth.tenantId,
         nombre: normalized.nombre,
         razonSocial: normalized.razonSocial,
+        cuit: normalized.cuit,
+        condicionFiscal: normalized.condicionFiscal,
+        limiteCredito: normalized.limiteCredito,
         emailPrincipal: normalized.email,
         telefonoCodigo: normalized.telefonoCodigo,
         telefonoNumero: normalized.telefonoNumero,
@@ -125,6 +133,9 @@ export class ClientesService {
         data: {
           nombre: normalized.nombre,
           razonSocial: normalized.razonSocial,
+          cuit: normalized.cuit,
+          condicionFiscal: normalized.condicionFiscal,
+          limiteCredito: normalized.limiteCredito,
           emailPrincipal: normalized.email,
           telefonoCodigo: normalized.telefonoCodigo,
           telefonoNumero: normalized.telefonoNumero,
@@ -212,10 +223,30 @@ export class ClientesService {
   }
 
   private normalizePayload(payload: UpsertClienteDto) {
+    const cuit = payload.cuit?.replace(/\D/g, '') || null;
+    if (cuit && !cuitValido(cuit)) {
+      throw new BadRequestException(
+        'El CUIT no es válido (revisá los 11 dígitos y el verificador).',
+      );
+    }
+    const condicionFiscal = payload.condicionFiscal ?? 'consumidor_final';
+    // Factura A exige CUIT del receptor: sin él, ARCA rechaza la emisión.
+    if (condicionFiscal === 'RI' && !cuit) {
+      throw new BadRequestException(
+        'Un Responsable Inscripto necesita CUIT para poder facturarle.',
+      );
+    }
+
     return {
       ...payload,
       nombre: payload.nombre.trim(),
       razonSocial: payload.razonSocial?.trim() || null,
+      cuit,
+      condicionFiscal,
+      limiteCredito:
+        payload.limiteCredito === undefined || payload.limiteCredito === null
+          ? null
+          : payload.limiteCredito,
       email: payload.email.trim().toLowerCase(),
       pais: payload.pais.trim().toUpperCase(),
       telefonoCodigo: payload.telefonoCodigo.trim(),
@@ -282,6 +313,10 @@ export class ClientesService {
       id: cliente.id,
       nombre: cliente.nombre,
       razonSocial: cliente.razonSocial ?? '',
+      cuit: cliente.cuit ?? '',
+      condicionFiscal: cliente.condicionFiscal,
+      limiteCredito:
+        cliente.limiteCredito === null ? null : Number(cliente.limiteCredito),
       email: cliente.emailPrincipal,
       telefonoCodigo: cliente.telefonoCodigo,
       telefonoNumero: cliente.telefonoNumero,

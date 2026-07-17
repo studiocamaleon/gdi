@@ -426,20 +426,31 @@ model Tenant {
   ordenTrabajoItems                                OrdenTrabajoItem[]
   ordenTrabajoEventos                              OrdenTrabajoEvento[]
   ordenTrabajoContadores                           OrdenTrabajoContador[]
+  cuentasFondos                                    CuentaFondos[]
+  metodosPago                                      MetodoPago[]
+  movimientosFondos                                MovimientoFondos[]
+  cobros                                           Cobro[]
+  retencionesPercepciones                          RetencionPercepcion[]
+  valores                                          Valor[]
+  configuracionFiscal                              ConfiguracionFiscal?
+  puntosVenta                                      PuntoVenta[]
+  comprobantes                                     Comprobante[]
+  comprobanteContadores                            ComprobanteContador[]
+  cobroImputaciones                                CobroImputacion[]
 }
 
 model User {
-  id             String        @id @default(uuid()) @db.Uuid
-  email          String        @unique
-  passwordHash   String?
-  nombreCompleto String?
-  activo         Boolean       @default(true)
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  memberships    Membership[]
-  authSessions   AuthSession[]
-  invitations    Invitation[]
-  empleados      Empleado[]
+  id                  String               @id @default(uuid()) @db.Uuid
+  email               String               @unique
+  passwordHash        String?
+  nombreCompleto      String?
+  activo              Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  memberships         Membership[]
+  authSessions        AuthSession[]
+  invitations         Invitation[]
+  empleados           Empleado[]
   ordenTrabajoEventos OrdenTrabajoEvento[]
 }
 
@@ -509,6 +520,14 @@ model Cliente {
   telefonoCodigo      String
   telefonoNumero      String
   paisCodigo          String                            @db.VarChar(2)
+  // === Datos fiscales (módulo Administración) ===
+  /// CUIT/CUIL sin guiones (11 dígitos) o null si no lo tenemos todavía.
+  cuit                String?                           @db.VarChar(11)
+  /// 'RI' | 'monotributo' | 'exento' | 'consumidor_final' | 'exterior'.
+  /// Define la letra del comprobante junto con la condición del emisor.
+  condicionFiscal     String                            @default("consumidor_final")
+  /// Tope de deuda en cta. cte. (null = sin límite definido).
+  limiteCredito       Decimal?                          @db.Decimal(14, 2)
   createdAt           DateTime                          @default(now())
   updatedAt           DateTime                          @updatedAt
   tenant              Tenant                            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -518,6 +537,9 @@ model Cliente {
   cotizacionesV2      Cotizacion[]                      @relation("CotizacionV2Cliente")
   preciosEspecialesV2 ProductoPrecioEspecialClienteV2[] @relation("ProductoPrecioEspecialClienteV2Cliente")
   ordenesTrabajo      OrdenTrabajo[]                    @relation("OrdenTrabajoCliente")
+  cobros              Cobro[]
+  valores             Valor[]
+  comprobantes        Comprobante[]
 
   @@unique([tenantId, nombre])
   @@index([tenantId, nombre])
@@ -538,6 +560,8 @@ model Proveedor {
   contactos                       ProveedorContacto[]
   direcciones                     ProveedorDireccion[]
   materiaPrimaVariantesReferencia MateriaPrimaVariante[] @relation("MateriaPrimaVarianteProveedorReferencia")
+
+  valores Valor[]
 
   @@unique([tenantId, nombre])
   @@index([tenantId, nombre])
@@ -1855,6 +1879,9 @@ model OrdenTrabajo {
   cotizacion         Cotizacion?          @relation(fields: [cotizacionId], references: [id])
   items              OrdenTrabajoItem[]
   eventos            OrdenTrabajoEvento[]
+  cobros             Cobro[]
+  movimientosFondos  MovimientoFondos[]
+  comprobantes       Comprobante[]
 
   @@unique([tenantId, numero])
   @@index([tenantId, estado])
@@ -1863,35 +1890,35 @@ model OrdenTrabajo {
 }
 
 model OrdenTrabajoItem {
-  id               String          @id @default(uuid()) @db.Uuid
-  tenantId         String          @db.Uuid
-  ordenId          String          @db.Uuid
+  id                    String          @id @default(uuid()) @db.Uuid
+  tenantId              String          @db.Uuid
+  ordenId               String          @db.Uuid
   /// FK al snapshot completo (ruta + pasos + materiales + valores). Las
   /// secciones futuras de Costos/Producción por item leen de ahí.
   /// Null = OT manual/histórica sin cotización.
-  cotizacionItemId String?         @db.Uuid
-  codigo           String
-  nombre           String
+  cotizacionItemId      String?         @db.Uuid
+  codigo                String
+  nombre                String
   /// Etiqueta corta legada (subcategoría). Preferir los dos campos de abajo.
-  familia          String
+  familia               String
   /// Categoría/subcategoría comercial tal como se ven al crear la orden
   /// ("Gran formato flexible" / "Vinilos impresos").
-  categoriaComercial    String     @default("")
-  subcategoriaComercial String     @default("")
-  cantidad         Decimal         @db.Decimal(14, 2)
-  cantidadUnidad   String
-  subtotal         Decimal         @db.Decimal(14, 2)
-  impuestos        Decimal         @db.Decimal(14, 2)
-  total            Decimal         @db.Decimal(14, 2)
+  categoriaComercial    String          @default("")
+  subcategoriaComercial String          @default("")
+  cantidad              Decimal         @db.Decimal(14, 2)
+  cantidadUnidad        String
+  subtotal              Decimal         @db.Decimal(14, 2)
+  impuestos             Decimal         @db.Decimal(14, 2)
+  total                 Decimal         @db.Decimal(14, 2)
   /// Proyección visible: [{ etiqueta, valor }].
-  specsJson        Json?
+  specsJson             Json?
   /// string[] de adicionales incluidos.
-  adicionalesJson  Json?
-  ordenIndice      Int             @default(0)
-  createdAt        DateTime        @default(now())
-  tenant           Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  orden            OrdenTrabajo    @relation(fields: [ordenId], references: [id], onDelete: Cascade)
-  cotizacionItem   CotizacionItem? @relation(fields: [cotizacionItemId], references: [id])
+  adicionalesJson       Json?
+  ordenIndice           Int             @default(0)
+  createdAt             DateTime        @default(now())
+  tenant                Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orden                 OrdenTrabajo    @relation(fields: [ordenId], references: [id], onDelete: Cascade)
+  cotizacionItem        CotizacionItem? @relation(fields: [cotizacionItemId], references: [id])
 
   @@index([tenantId, ordenId])
 }
@@ -1931,6 +1958,188 @@ model OrdenTrabajoContador {
   @@id([tenantId, anio])
 }
 
+// === ADMINISTRACIÓN (pagos / tesorería) ===
+// Ver docs/modulo-administracion-diseno.md. Catálogos por tenant: cómo
+// entra la plata (comisión, IVA s/comisión, plazo, retención) y dónde.
+
+model CuentaFondos {
+  id                 String             @id @default(uuid()) @db.Uuid
+  tenantId           String             @db.Uuid
+  /// 'caja' | 'banco' | 'billetera' | 'cartera_valores'.
+  tipo               String
+  nombre             String
+  banco              String?
+  cbuAlias           String?
+  moneda             String             @default("ARS") @db.VarChar(3)
+  /// Denormalizado recalculable desde MovimientoFondos (etapa B).
+  saldo              Decimal            @default(0) @db.Decimal(14, 2)
+  activo             Boolean            @default(true)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  tenant             Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  metodosPagoDefault MetodoPago[]
+  movimientos        MovimientoFondos[]
+  cobrosDestino      Cobro[]
+  valoresDeposito    Valor[]
+
+  @@unique([tenantId, nombre])
+  @@index([tenantId, activo])
+}
+
+model MetodoPago {
+  id                    String        @id @default(uuid()) @db.Uuid
+  tenantId              String        @db.Uuid
+  codigo                String
+  nombre                String
+  /// 'efectivo' | 'transferencia' | 'billetera_qr' | 'tarjeta_debito' |
+  /// 'tarjeta_credito' | 'cheque_echeq' | 'debito_automatico'.
+  tipo                  String
+  comisionPct           Decimal       @default(0) @db.Decimal(6, 3)
+  ivaComisionPct        Decimal       @default(0) @db.Decimal(6, 3)
+  plazoAcreditacionDias Int           @default(0)
+  /// Sugiere cargar líneas de retención al registrar cobros con este método.
+  sufreRetencion        Boolean       @default(false)
+  cuentaDestinoId       String?       @db.Uuid
+  activo                Boolean       @default(true)
+  orden                 Int           @default(0)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  tenant                Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cuentaDestino         CuentaFondos? @relation(fields: [cuentaDestinoId], references: [id], onDelete: SetNull)
+  cobros                Cobro[]
+
+  @@unique([tenantId, codigo])
+  @@index([tenantId, activo])
+}
+
+model MovimientoFondos {
+  id                 String        @id @default(uuid()) @db.Uuid
+  tenantId           String        @db.Uuid
+  cuentaId           String        @db.Uuid
+  fecha              DateTime      @default(now())
+  /// 'entrada' | 'salida'.
+  tipo               String
+  monto              Decimal       @db.Decimal(14, 2)
+  concepto           String
+  /// 'cobro' | 'pago' | 'transferencia' | 'valor' | 'ajuste_arqueo'.
+  origenTipo         String
+  cobroId            String?       @db.Uuid
+  valorId            String?       @db.Uuid
+  /// Movimiento espejo en la otra cuenta (transferencias).
+  transferenciaParId String?       @db.Uuid
+  ordenId            String?       @db.Uuid
+  /// Saldo de la cuenta después de este movimiento (extracto corrido).
+  saldoPosterior     Decimal       @db.Decimal(14, 2)
+  /// 'pendiente' | 'conciliado' | 'diferencia' (para conciliación, F3).
+  estadoConciliacion String        @default("pendiente")
+  createdAt          DateTime      @default(now())
+  tenant             Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cuenta             CuentaFondos  @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
+  cobro              Cobro?        @relation(fields: [cobroId], references: [id])
+  valor              Valor?        @relation(fields: [valorId], references: [id])
+  orden              OrdenTrabajo? @relation(fields: [ordenId], references: [id])
+
+  @@index([tenantId, cuentaId, fecha])
+}
+
+model Cobro {
+  id                        String                @id @default(uuid()) @db.Uuid
+  tenantId                  String                @db.Uuid
+  clienteId                 String?               @db.Uuid
+  ordenId                   String?               @db.Uuid
+  fecha                     DateTime
+  metodoPagoId              String                @db.Uuid
+  cuentaDestinoId           String                @db.Uuid
+  montoBruto                Decimal               @db.Decimal(14, 2)
+  /// % de comisión efectivamente aplicado (editable sobre el del método).
+  comisionPctAplicada       Decimal               @default(0) @db.Decimal(6, 3)
+  comisionMonto             Decimal               @default(0) @db.Decimal(14, 2)
+  comisionIvaMonto          Decimal               @default(0) @db.Decimal(14, 2)
+  netoAcreditado            Decimal               @db.Decimal(14, 2)
+  retencionesTotal          Decimal               @default(0) @db.Decimal(14, 2)
+  disponibleReal            Decimal               @db.Decimal(14, 2)
+  fechaAcreditacionEstimada DateTime?
+  /// 'pendiente' | 'acreditado'. Los cheques acreditan vía su Valor.
+  estadoAcreditacion        String                @default("pendiente")
+  moneda                    String                @default("ARS") @db.VarChar(3)
+  notas                     String?
+  anuladoEl                 DateTime?
+  createdAt                 DateTime              @default(now())
+  updatedAt                 DateTime              @updatedAt
+  tenant                    Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cliente                   Cliente?              @relation(fields: [clienteId], references: [id])
+  orden                     OrdenTrabajo?         @relation(fields: [ordenId], references: [id])
+  metodoPago                MetodoPago            @relation(fields: [metodoPagoId], references: [id])
+  cuentaDestino             CuentaFondos          @relation(fields: [cuentaDestinoId], references: [id])
+  retenciones               RetencionPercepcion[]
+  movimientos               MovimientoFondos[]
+  valores                   Valor[]
+  imputaciones              CobroImputacion[]
+
+  @@index([tenantId, ordenId])
+  @@index([tenantId, clienteId])
+  @@index([tenantId, estadoAcreditacion])
+}
+
+model RetencionPercepcion {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @db.Uuid
+  cobroId        String?  @db.Uuid
+  /// 'sufrida' (nos retienen al cobrar) | 'practicada' (retenemos al pagar, F2).
+  direccion      String   @default("sufrida")
+  /// 'SIRCREB' | 'SIRTAC' | 'IIBB_CONVENIO' | 'SICORE_GANANCIAS' |
+  /// 'IVA_RG2854' | 'PERCEPCION_IIBB' | 'otro'.
+  regimen        String
+  jurisdiccion   String?
+  base           Decimal  @db.Decimal(14, 2)
+  alicuota       Decimal  @db.Decimal(6, 3)
+  monto          Decimal  @db.Decimal(14, 2)
+  nroComprobante String?
+  /// 'YYYY-MM' para el reporte del contador.
+  periodoFiscal  String
+  createdAt      DateTime @default(now())
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cobro          Cobro?   @relation(fields: [cobroId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, periodoFiscal])
+  @@index([tenantId, regimen])
+}
+
+model Valor {
+  id               String             @id @default(uuid()) @db.Uuid
+  tenantId         String             @db.Uuid
+  /// 'tercero' (recibido) | 'propio' (emitido).
+  origen           String
+  /// 'fisico' | 'echeq'.
+  formato          String
+  /// 'comun' | 'diferido'.
+  modalidad        String
+  numero           String
+  banco            String
+  importe          Decimal            @db.Decimal(14, 2)
+  moneda           String             @default("ARS") @db.VarChar(3)
+  fechaEmision     DateTime?
+  fechaPago        DateTime?
+  /// tercero: 'cartera' | 'endosado' | 'depositado' | 'acreditado' | 'rechazado'
+  /// propio:  'cartera' | 'debitado' | 'rechazado'.
+  estado           String             @default("cartera")
+  clienteId        String?            @db.Uuid
+  proveedorId      String?            @db.Uuid
+  cobroId          String?            @db.Uuid
+  cuentaDepositoId String?            @db.Uuid
+  motivoRechazo    String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  tenant           Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cliente          Cliente?           @relation(fields: [clienteId], references: [id])
+  proveedor        Proveedor?         @relation(fields: [proveedorId], references: [id])
+  cobro            Cobro?             @relation(fields: [cobroId], references: [id])
+  cuentaDeposito   CuentaFondos?      @relation(fields: [cuentaDepositoId], references: [id])
+  movimientos      MovimientoFondos[]
+
+  @@index([tenantId, estado])
+}
+
 // === TAB PRECIO V2 ===
 // Preserva la lógica del actual sistema de precios especiales por cliente
 // adaptada al nuevo modelo de Producto.
@@ -1951,4 +2160,170 @@ model ProductoPrecioEspecialClienteV2 {
 
   @@unique([tenantId, productoId, clienteId])
   @@index([tenantId, clienteId])
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Administración · Configuración fiscal del emisor (etapa C)
+// Ver docs/modulo-administracion-diseno.md
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Datos fiscales del tenant como EMISOR. Junto con la condición del
+/// receptor definen la letra del comprobante (ver letra-comprobante.ts).
+/// Uno por tenant.
+model ConfiguracionFiscal {
+  id                   String       @id @default(uuid()) @db.Uuid
+  tenantId             String       @unique @db.Uuid
+  razonSocial          String
+  /// CUIT del emisor, 11 dígitos sin guiones.
+  cuit                 String       @db.VarChar(11)
+  /// 'RI' | 'monotributo' | 'exento'. Un consumidor final no emite.
+  condicionFiscal      String       @default("RI")
+  /// Nº de inscripción en Ingresos Brutos (o convenio multilateral).
+  ingresosBrutos       String?
+  domicilioFiscal      String?
+  inicioActividades    DateTime?
+  /// Leyenda obligatoria en las facturas A cuando ARCA no reconoce
+  /// solvencia patrimonial — reemplaza a la vieja factura M desde la
+  /// RG 5762/2025: 'PAGO EN CBU INFORMADA' | 'OPERACIÓN SUJETA A RETENCIÓN'.
+  leyendaFacturaA      String?
+  /// 'manual' | 'tusfacturas'. Las credenciales del proveedor NO viven
+  /// acá: se configuran en el módulo de Integraciones.
+  proveedorFacturacion String       @default("manual")
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  tenant               Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  puntosVenta          PuntoVenta[]
+
+  @@index([tenantId])
+}
+
+/// Punto de venta habilitado en ARCA. La numeración de comprobantes es
+/// por (punto de venta, tipo, letra).
+model PuntoVenta {
+  id                    String              @id @default(uuid()) @db.Uuid
+  tenantId              String              @db.Uuid
+  configuracionFiscalId String              @db.Uuid
+  /// Número que asignó ARCA (se muestra con 4 dígitos: 0001).
+  numero                Int
+  nombre                String
+  /// 'web_services' (factura electrónica por API) | 'portal' (ARCA web) |
+  /// 'talonario' (preimpreso). Sólo web_services puede emitir por provider.
+  modalidad             String              @default("web_services")
+  activo                Boolean             @default(true)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  tenant                Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  configuracionFiscal   ConfiguracionFiscal @relation(fields: [configuracionFiscalId], references: [id], onDelete: Cascade)
+  comprobantes          Comprobante[]
+  contadores            ComprobanteContador[]
+
+  @@unique([tenantId, numero])
+  @@index([tenantId, activo])
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Administración · Comprobantes (etapa C2)
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Comprobante fiscal (factura / NC / ND). La letra sale de la matriz
+/// emisor×receptor (letra-comprobante.ts) y se congela al crear.
+model Comprobante {
+  id                  String              @id @default(uuid()) @db.Uuid
+  tenantId            String              @db.Uuid
+  /// 'factura' | 'nota_credito' | 'nota_debito'
+  tipo                String
+  /// 'A' | 'B' | 'C' | 'E'
+  letra               String              @db.VarChar(1)
+  puntoVentaId        String              @db.Uuid
+  /// Número dentro de (punto de venta, tipo, letra). Null mientras es
+  /// borrador: se asigna recién al emitir, con el contador atómico.
+  numero              Int?
+  fecha               DateTime            @db.Date
+  clienteId           String?             @db.Uuid
+  ordenId             String?             @db.Uuid
+  /// Datos del receptor congelados al crear: si el cliente después cambia
+  /// de CUIT o de condición, el comprobante emitido NO cambia.
+  receptorSnapshot    Json
+  /// [{ descripcion, cantidad, precioUnitarioSinIva, alicuotaIva, ... }]
+  itemsJson           Json
+  netoGravado         Decimal             @db.Decimal(14, 2)
+  /// [{ alicuota, base, monto }] — la A las discrimina; B/C/E no.
+  ivaPorAlicuota      Json
+  ivaTotal            Decimal             @default(0) @db.Decimal(14, 2)
+  total               Decimal             @db.Decimal(14, 2)
+  moneda              String              @default("ARS")
+  cotizacion          Decimal?            @db.Decimal(14, 4)
+  /// 'borrador' | 'emitido' | 'rechazado' | 'anulado'
+  estado              String              @default("borrador")
+  cae                 String?
+  caeVencimiento      DateTime?
+  /// Condición de venta y vencimiento: el aging de deudores depende de esto.
+  condicionVenta      String?
+  vencimiento         DateTime?           @db.Date
+  /// Leyenda RG 5762/2025 en las A ('PAGO EN CBU INFORMADA'…).
+  leyenda             String?
+  /// Errores de ARCA. Llegan como TEXTO LIBRE: no hay tabla pública de
+  /// códigos, así que se guardan crudos para auditar.
+  rechazoJson         Json?
+  /// Respuesta cruda del provider (auditoría).
+  providerRaw         Json?
+  /// Clave anti-duplicado: se persiste ANTES de llamar al provider. Ante
+  /// un timeout se consulta por ella, nunca se reintenta a ciegas —
+  /// ningún provider garantiza idempotencia.
+  idempotencyKey      String              @unique
+  /// Saldo pendiente de cobro (total − imputaciones). Denormalizado, se
+  /// mantiene en la misma transacción que las imputaciones.
+  saldoPendiente      Decimal             @default(0) @db.Decimal(14, 2)
+  /// Para NC/ND: el comprobante que corrigen.
+  comprobanteOrigenId String?             @db.Uuid
+  anuladoEl           DateTime?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  puntoVenta          PuntoVenta          @relation(fields: [puntoVentaId], references: [id], onDelete: Restrict)
+  cliente             Cliente?            @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  orden               OrdenTrabajo?       @relation(fields: [ordenId], references: [id], onDelete: SetNull)
+  comprobanteOrigen   Comprobante?        @relation("ComprobanteCorrige", fields: [comprobanteOrigenId], references: [id], onDelete: SetNull)
+  correcciones        Comprobante[]       @relation("ComprobanteCorrige")
+  imputaciones        CobroImputacion[]
+
+  @@unique([tenantId, puntoVentaId, tipo, letra, numero])
+  @@index([tenantId, estado])
+  @@index([tenantId, clienteId])
+  @@index([tenantId, ordenId])
+  @@index([tenantId, vencimiento])
+}
+
+/// Numeración atómica por (punto de venta, tipo, letra) — mismo patrón que
+/// OrdenTrabajoContador. ARCA exige numeración correlativa sin huecos.
+model ComprobanteContador {
+  tenantId     String     @db.Uuid
+  puntoVentaId String     @db.Uuid
+  tipo         String
+  letra        String     @db.VarChar(1)
+  ultimo       Int        @default(0)
+  tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  puntoVenta   PuntoVenta @relation(fields: [puntoVentaId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, puntoVentaId, tipo, letra])
+}
+
+/// Aplica un cobro a un comprobante. Un cobro sin imputaciones es un
+/// anticipo a cuenta; la suma de imputaciones nunca supera ni al cobro ni
+/// al saldo del comprobante.
+model CobroImputacion {
+  id            String      @id @default(uuid()) @db.Uuid
+  tenantId      String      @db.Uuid
+  cobroId       String      @db.Uuid
+  comprobanteId String      @db.Uuid
+  monto         Decimal     @db.Decimal(14, 2)
+  createdAt     DateTime    @default(now())
+
+  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cobro         Cobro       @relation(fields: [cobroId], references: [id], onDelete: Cascade)
+  comprobante   Comprobante @relation(fields: [comprobanteId], references: [id], onDelete: Cascade)
+
+  @@unique([cobroId, comprobanteId])
+  @@index([tenantId, comprobanteId])
 }

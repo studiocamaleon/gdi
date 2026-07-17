@@ -7,6 +7,7 @@ export type NavIconKey =
   | "Users"
   | "Coin"
   | "Factory"
+  | "Wallet"
   | "Cube";
 
 export type NavChild = {
@@ -110,6 +111,38 @@ export const NAV: NavItem[] = [
         href: "/produccion/simulador",
       },
       { key: "estaciones", label: "Estaciones", href: "/produccion/estaciones" },
+    ],
+  },
+  {
+    key: "administracion",
+    label: "Administración",
+    icon: "Wallet",
+    children: [
+      {
+        key: "tesoreria",
+        label: "Tesorería",
+        href: "/administracion/tesoreria",
+      },
+      {
+        key: "comprobantes",
+        label: "Comprobantes",
+        href: "/administracion/comprobantes",
+      },
+      {
+        key: "deudores",
+        label: "Deudores",
+        href: "/administracion/deudores",
+      },
+      {
+        key: "metodos-pago",
+        label: "Métodos de pago",
+        href: "/administracion/metodos-pago",
+      },
+      {
+        key: "datos-fiscales",
+        label: "Datos fiscales",
+        href: "/administracion/datos-fiscales",
+      },
     ],
   },
   {

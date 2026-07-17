@@ -943,7 +943,7 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
   };
 
   return (
-    <section className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+    <section className="flex-1 min-h-0 space-y-6 overflow-y-auto p-4 md:p-6">
       <Card>
         <CardHeader className="pb-3">
           <div className="flex flex-wrap items-center justify-between gap-3">

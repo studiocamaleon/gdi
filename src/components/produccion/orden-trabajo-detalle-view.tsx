@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 
 import { EstadoOtBadge } from "@/components/produccion/ordenes-trabajo-view";
+import type { Cobro } from "@/lib/administracion";
+import { getCobros } from "@/lib/administracion-api";
 import {
   ORDEN_TRABAJO_ESTADOS,
   ORDEN_TRABAJO_FLOW,
@@ -299,10 +301,32 @@ function CobroForm({
 export function PagosTab({
   pago,
   total,
+  ordenId,
+  puedeCobrar = true,
 }: {
   pago: OrdenTrabajoPago | null;
   total: number;
+  /** Con ordenId la pestaña usa cobros persistidos (módulo Administración). */
+  ordenId?: string | null;
+  /** false en borradores: un borrador no puede recibir plata (se emite primero). */
+  puedeCobrar?: boolean;
 }) {
+  const [cobros, setCobros] = React.useState<Cobro[] | null>(null);
+  React.useEffect(() => {
+    if (!ordenId) return;
+    let activo = true;
+    getCobros({ ordenId })
+      .then((data) => {
+        if (activo) setCobros(data);
+      })
+      .catch(() => {
+        if (activo) setCobros([]);
+      });
+    return () => {
+      activo = false;
+    };
+  }, [ordenId]);
+
   const [movs, setMovs] = React.useState<MovimientoView[]>(() =>
     (pago?.movimientos ?? []).map((m) => ({
       fecha: formatFechaOrden(m.fecha),
@@ -336,6 +360,222 @@ export function PagosTab({
     setFlash(mov.monto);
     setTimeout(() => setFlash(null), 2600);
   };
+
+  if (ordenId) {
+    const lista = cobros ?? [];
+    const cargando = cobros === null;
+    const cobradoReal = lista.reduce((s, c) => s + c.montoBruto, 0);
+    const comisionesReal = lista.reduce(
+      (s, c) => s + c.comisionMonto + c.comisionIvaMonto,
+      0,
+    );
+    const netoReal = lista.reduce((s, c) => s + c.netoAcreditado, 0);
+    const retencionesReal = lista.reduce((s, c) => s + c.retencionesTotal, 0);
+    const disponibleTotal = lista.reduce((s, c) => s + c.disponibleReal, 0);
+    const pendientes = lista.filter(
+      (c) => c.estadoAcreditacion === "pendiente",
+    ).length;
+    const saldoReal = Math.max(0, total - cobradoReal);
+    const pctReal =
+      total > 0 ? Math.min(100, Math.round((cobradoReal / total) * 100)) : 0;
+    const saldadoReal = total > 0 && saldoReal <= 0;
+
+    return (
+      <div className="pagos-tab">
+        <div className="pagos-kpis">
+          <div className="pk">
+            <span className="pk-l">Total de la orden</span>
+            <span className="pk-v">{formatMonedaOrden(total)}</span>
+            <span className="pk-s">c/ impuestos</span>
+          </div>
+          <div className="pk pk-ok">
+            <span className="pk-l">Cobrado</span>
+            <span className="pk-v">{formatMonedaOrden(cobradoReal)}</span>
+            <span className="pk-s">
+              {pctReal}% · {lista.length} cobro{lista.length === 1 ? "" : "s"}
+            </span>
+          </div>
+          <div className={`pk ${saldadoReal ? "pk-ok" : "pk-warn"}`}>
+            <span className="pk-l">Saldo pendiente</span>
+            <span className="pk-v">{formatMonedaOrden(saldoReal)}</span>
+            <span className="pk-s">
+              {saldadoReal ? "Orden saldada" : "A cobrar"}
+            </span>
+          </div>
+        </div>
+
+        <div className="pagos-bar-card">
+          <div className="pbc-head">
+            <span className="pbc-ttl">Avance de cobranza</span>
+            <span className={`pbc-badge ${saldadoReal ? "ok" : "warn"}`}>
+              {saldadoReal ? "Saldada" : `${pctReal}% cobrado`}
+            </span>
+          </div>
+          <div className="pbc-track">
+            <div className="pbc-fill" style={{ width: pctReal + "%" }} />
+          </div>
+          <div className="pbc-legend">
+            <span>
+              <span className="dot ok" />
+              Cobrado {formatMonedaOrden(cobradoReal)}
+            </span>
+            <span>
+              <span className="dot wait" />
+              Pendiente {formatMonedaOrden(saldoReal)}
+            </span>
+          </div>
+        </div>
+
+        <div className="pagos-grid">
+          <div className="arc-page">
+            <div className="arc-sum-card">
+              <div className="h">Cobranza · las 3 cifras</div>
+              <div className="arc-three">
+                <div className="arc-tc f">
+                  <div className="l">Cobrado (bruto)</div>
+                  <div className="v">{formatMonedaOrden(cobradoReal)}</div>
+                  <div className="sub">
+                    {lista.length === 0
+                      ? "Sin cobros registrados"
+                      : `${lista.length} cobro${lista.length === 1 ? "" : "s"} registrado${lista.length === 1 ? "" : "s"}`}
+                  </div>
+                </div>
+                <div className="arc-tc n">
+                  <div className="l">Neto acreditado</div>
+                  <div className="v">{formatMonedaOrden(netoReal)}</div>
+                  {comisionesReal > 0 ? (
+                    <div className="delta">
+                      −{formatMonedaOrden(comisionesReal)} comisiones + IVA
+                    </div>
+                  ) : (
+                    <div className="sub">Sin comisiones de métodos</div>
+                  )}
+                </div>
+                <div className="arc-tc d">
+                  <div className="l">Disponible real</div>
+                  <div className="v">{formatMonedaOrden(disponibleTotal)}</div>
+                  {retencionesReal > 0 ? (
+                    <div className="delta">
+                      −{formatMonedaOrden(retencionesReal)} retenciones
+                    </div>
+                  ) : (
+                    <div className="sub">
+                      {pendientes > 0
+                        ? `${pendientes} cobro${pendientes === 1 ? "" : "s"} pendiente${pendientes === 1 ? "" : "s"} de acreditar`
+                        : "Sin retenciones"}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="otd-card pagos-reg">
+            <div className="otd-card-head">
+              <span className="ttl">Registrar cobro</span>
+            </div>
+            {saldadoReal ? (
+              <div className="pagos-saldado">
+                <span className="ps-ico">
+                  <CheckIcon size={18} />
+                </span>
+                <div className="ps-txt">
+                  <div className="ps-ttl">Orden totalmente saldada</div>
+                  <div className="ps-sub">
+                    No hay saldo pendiente de cobro.
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="pagos-reg-cta">
+                <div className="prc-saldo">
+                  <span className="l">Saldo a cobrar</span>
+                  <span className="v">{formatMonedaOrden(saldoReal)}</span>
+                </div>
+                {puedeCobrar ? (
+                  <Link
+                    className="btn btn-primary"
+                    href={`/administracion/cobros/nuevo?ordenId=${ordenId}`}
+                  >
+                    <PlusIcon />
+                    Registrar pago parcial o total
+                  </Link>
+                ) : (
+                  <div className="mov-empty" style={{ padding: "10px 0" }}>
+                    La orden es un borrador: emitila para poder registrar
+                    cobros.
+                  </div>
+                )}
+                <div className="prc-methods">
+                  {PAGO_METODOS.map((m) => (
+                    <span key={m.key} className="prc-chip">
+                      {m.nombre}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="otd-card">
+          <div className="otd-card-head">
+            <span className="ttl">
+              Cobros <span className="ct">{lista.length}</span>
+            </span>
+          </div>
+          {cargando ? (
+            <div className="mov-empty">Cargando cobros…</div>
+          ) : lista.length === 0 ? (
+            <div className="mov-empty">
+              Todavía no se registraron cobros para esta orden.
+            </div>
+          ) : (
+            <div className="mov-table">
+              <div className="mov-th">
+                <span>Fecha</span>
+                <span>Método</span>
+                <span>Cuenta destino</span>
+                <span>Acreditación</span>
+                <span className="r">Monto</span>
+              </div>
+              {lista.map((c) => (
+                <div key={c.id} className="mov-row">
+                  <span className="mov-fecha">{formatFechaOrden(c.fecha)}</span>
+                  <span className="mov-metodo">
+                    <span className="mov-badge">{metodoIni(c.metodoNombre)}</span>
+                    {c.metodoNombre}
+                  </span>
+                  <span className="mov-ref">
+                    {c.cuentaDestinoNombre}
+                    {c.valor ? (
+                      <span className="mov-who">
+                        · {c.valor.numero} ({c.valor.estado})
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="mov-comp">
+                    {c.estadoAcreditacion === "acreditado"
+                      ? "Acreditado"
+                      : c.fechaAcreditacionEstimada
+                        ? `Pendiente · ${formatFechaOrden(c.fechaAcreditacionEstimada)}`
+                        : "Pendiente"}
+                  </span>
+                  <span className="mov-monto">
+                    {formatMonedaOrden(c.montoBruto)}
+                  </span>
+                </div>
+              ))}
+              <div className="mov-foot">
+                <span>Total cobrado</span>
+                <span>{formatMonedaOrden(cobradoReal)}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   if (!pago) {
     return (
