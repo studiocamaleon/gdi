@@ -77,6 +77,7 @@ import {
   type Estacion,
 } from "@/lib/estaciones";
 import type { DuracionFamilia } from "@/lib/estaciones-api";
+import { etiquetaEta, simularFlujo, type ResultadoSimulacion, type SimulacionItem } from "@/lib/flujo-produccion";
 
 type IconComponent = React.ComponentType<React.SVGProps<SVGSVGElement>>;
 type Mode = "items" | "estacion" | "kanban";
@@ -301,7 +302,32 @@ function RouteStrip({ steps, compact = false }: { steps: StepView[]; compact?: b
 
 // ── Vista Por items ──────────────────────────────────────────────────────
 
-function ItemRow({ item, onOpen }: { item: ItemView; onOpen: (id: string) => void }) {
+/**
+ * "fin ≈ mar 22" bajo la entrega (Fase 2b): la simulación de flujo contra
+ * las colas reales. ROJO + "no llega" si la ETA supera la fecha de entrega
+ * — la señal del vendedor ANTES de que el retraso exista. "~" = corrió con
+ * supuestos (estación sin calendario o bloqueo asumido como destrabado).
+ */
+function EtaLine({ item, eta }: { item: ItemView; eta: SimulacionItem | undefined }) {
+  if (!eta || item.finished) return null;
+  if (eta.sinEstimar) return <span className="eta-line none">fin sin estimar</span>;
+  if (!eta.finEstimado) return null;
+  const fin = eta.finEstimado;
+  const finClave = `${fin.getFullYear()}-${String(fin.getMonth() + 1).padStart(2, "0")}-${String(fin.getDate()).padStart(2, "0")}`;
+  const late = item.data.fechaEntrega ? finClave > item.data.fechaEntrega.slice(0, 10) : false;
+  const aprox = eta.parcial || eta.asumeDesbloqueo;
+  const motivo = [eta.parcial ? "estación sin calendario en la ruta" : null, eta.asumeDesbloqueo ? "asume desbloqueo inmediato" : null]
+    .filter(Boolean)
+    .join(" · ");
+  return (
+    <span className={`eta-line ${late ? "late" : ""}`} title={motivo || undefined}>
+      fin {aprox ? "~" : "≈"} {etiquetaEta(fin)}
+      {late ? " · no llega" : ""}
+    </span>
+  );
+}
+
+function ItemRow({ item, eta, onOpen }: { item: ItemView; eta: SimulacionItem | undefined; onOpen: (id: string) => void }) {
   const cssRow =
     `tab-row priority-${item.priority}` +
     (item.blocked ? " blocked" : "") +
@@ -334,6 +360,7 @@ function ItemRow({ item, onOpen }: { item: ItemView; onOpen: (id: string) => voi
         <div className={`tab-due ${item.delayed && !item.blocked ? "delayed" : ""}`}>
           <span className="due-label">{item.dueLabel}</span>
           <span className="due-in">{item.dueIn === "Hoy" ? "vence hoy" : `${item.dueIn} restantes`}</span>
+          <EtaLine item={item} eta={eta} />
         </div>
         <div className="tab-assigned" title={`Estación actual: ${item.station}`}>
           <span className="av">{item.stationIcon ? React.createElement(getStepIcon(item.stationIcon)) : <FactoryIcon />}</span>
@@ -1044,10 +1071,13 @@ function stationIcon(station: StationInfo) {
 function StationCard({
   station,
   stats,
+  hoyMin = 0,
   onSelect,
 }: {
   station: StationInfo;
   stats: ReturnType<typeof computeStationStats>;
+  /** De lo en camino, minutos que la simulación estima que llegan HOY. */
+  hoyMin?: number;
   onSelect: (stationKey: string) => void;
 }) {
   const etapa = station.etapa ? etapaDeEstacion(station.etapa) : null;
@@ -1065,7 +1095,7 @@ function StationCard({
     colaLabel ? `cola ${colaLabel}` : null,
     // "≈ 0 d" para colas de minutos es ruido: sólo desde 0,1 jornadas.
     dias != null && dias >= 0.05 ? `≈ ${etiquetaDias(dias)}` : null,
-    entranteLabel ? `+${entranteLabel} en camino` : null,
+    entranteLabel ? `+${entranteLabel} en camino${hoyMin > 0 ? ` (${etiquetaDuracion(hoyMin)} hoy)` : ""}` : null,
   ].filter(Boolean);
   // La barra escala contra UN DÍA lleno de la estación; sin calendario, la
   // carga presente la llena (no hay vara de tiempo contra la cual medir).
@@ -1108,11 +1138,13 @@ function StationGrid({
   items,
   estaciones,
   medianas,
+  llegadasHoyMin,
   onSelect,
 }: {
   items: ItemView[];
   estaciones: Estacion[];
   medianas: Map<string, number>;
+  llegadasHoyMin: Map<string, number>;
   onSelect: (stationKey: string) => void;
 }) {
   const { stations, tareas, entrantes } = buildStationsModel(items, estaciones);
@@ -1168,7 +1200,7 @@ function StationGrid({
               <span className="ct"><strong>{catTotal}</strong> pasos · {category.items.length} {category.items.length === 1 ? "estación" : "estaciones"}</span>
             </div>
             <div className="sta-grid">
-              {category.items.map(({ station, stats }) => <StationCard key={station.key} station={station} stats={stats} onSelect={onSelect} />)}
+              {category.items.map(({ station, stats }) => <StationCard key={station.key} station={station} stats={stats} hoyMin={llegadasHoyMin.get(station.key) ?? 0} onSelect={onSelect} />)}
             </div>
           </section>
         );
@@ -1182,7 +1214,7 @@ function StationGrid({
             <span className="ct"><strong>{sinEstacion.stats.total}</strong> pasos · <Link href="/produccion/estaciones">asignar familias</Link></span>
           </div>
           <div className="sta-grid">
-            <StationCard station={sinEstacion.station} stats={sinEstacion.stats} onSelect={onSelect} />
+            <StationCard station={sinEstacion.station} stats={sinEstacion.stats} hoyMin={llegadasHoyMin.get(sinEstacion.station.key) ?? 0} onSelect={onSelect} />
           </div>
         </section>
       ) : null}
@@ -1384,16 +1416,18 @@ function ByStationView({
   items,
   estaciones,
   medianas,
+  llegadasHoyMin,
   onOpen,
 }: {
   items: ItemView[];
   estaciones: Estacion[];
   medianas: Map<string, number>;
+  llegadasHoyMin: Map<string, number>;
   onOpen: (id: string) => void;
 }) {
   const [stationKey, setStationKey] = React.useState<string | null>(null);
   if (stationKey) return <StationDetail items={items} estaciones={estaciones} medianas={medianas} stationKey={stationKey} onBack={() => setStationKey(null)} onOpen={onOpen} />;
-  return <StationGrid items={items} estaciones={estaciones} medianas={medianas} onSelect={setStationKey} />;
+  return <StationGrid items={items} estaciones={estaciones} medianas={medianas} llegadasHoyMin={llegadasHoyMin} onSelect={setStationKey} />;
 }
 
 // ── Kanban ───────────────────────────────────────────────────────────────
@@ -1542,6 +1576,25 @@ export function TableroProduccion({
     [duracionesFamilias],
   );
 
+  /** Simulación de flujo (fase 2b): ETA por item + llegadas por estación. */
+  const sim = React.useMemo<ResultadoSimulacion>(
+    () => simularFlujo({ items, estaciones, medianas }),
+    [items, estaciones, medianas],
+  );
+
+  /** Minutos de carga en camino que LLEGAN HOY, por estación. */
+  const llegadasHoyMin = React.useMemo(() => {
+    const resultado = new Map<string, number>();
+    const hoy = new Date().toDateString();
+    for (const [key, lista] of sim.llegadasPorEstacion) {
+      const minutosHoy = lista
+        .filter((llegada) => llegada.llegada.toDateString() === hoy)
+        .reduce((acc, llegada) => acc + llegada.duracionMin, 0);
+      if (minutosHoy > 0) resultado.set(key, minutosHoy);
+    }
+    return resultado;
+  }, [sim]);
+
   /**
    * Acción sobre un paso: el backend devuelve el item re-proyectado, pero
    * la acción puede promover la orden (pendiente → produccion) y eso afecta
@@ -1678,12 +1731,12 @@ export function TableroProduccion({
               <>
                 <FiltersBar filters={filters} setFilters={setFilters} counts={counts} />
                 <div className="tab-board">
-                  {filtered.map((item) => <ItemRow key={item.id} item={item} onOpen={setSelectedId} />)}
+                  {filtered.map((item) => <ItemRow key={item.id} item={item} eta={sim.porItem.get(item.id)} onOpen={setSelectedId} />)}
                   {filtered.length === 0 ? <div className="empty-results">No hay items que coincidan con los filtros.</div> : null}
                 </div>
               </>
             ) : null}
-            {mode === "estacion" ? <ByStationView items={views} estaciones={estaciones} medianas={medianas} onOpen={setSelectedId} /> : null}
+            {mode === "estacion" ? <ByStationView items={views} estaciones={estaciones} medianas={medianas} llegadasHoyMin={llegadasHoyMin} onOpen={setSelectedId} /> : null}
             {mode === "kanban" ? (
               <>
                 <FiltersBar filters={filters} setFilters={setFilters} counts={counts} />

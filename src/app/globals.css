@@ -14328,6 +14328,18 @@ body {
   font-variant-numeric: tabular-nums;
 }
 .tablero-produccion .tab-due.delayed .due-in { color: var(--signal); }
+/* ETA de la simulación de flujo (fase 2b): "fin ≈ mar 22" · "no llega". */
+.tablero-produccion .tab-due .eta-line {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted-text);
+  margin-top: 3px;
+  padding-top: 3px;
+  border-top: 1px dashed var(--border);
+  font-variant-numeric: tabular-nums;
+}
+.tablero-produccion .tab-due .eta-line.late { color: var(--signal); font-weight: 600; }
+.tablero-produccion .tab-due .eta-line.none { color: var(--muted-text-2); }
 .tablero-produccion .tab-assigned {
   display: flex;
   align-items: center;
