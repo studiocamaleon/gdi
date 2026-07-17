@@ -205,6 +205,20 @@ export type OrdenTrabajoDetalle = OrdenTrabajoListItem & {
   pago: OrdenTrabajoPago | null;
 };
 
+/**
+ * KPIs y contadores del listado, calculados por el BACKEND sobre el tenant
+ * completo. Antes se derivaban de las filas cargadas y mentían en cuanto
+ * había más órdenes que el límite de la página.
+ */
+export type OrdenesTrabajoStats = {
+  porEstado: Record<OrdenTrabajoEstado, number>;
+  totalOrdenes: number;
+  activas: number;
+  valorEnCurso: number;
+  proximasEntregar: number;
+  emitidasHoy: number;
+};
+
 /** Progreso derivado del estado cuando producción no informa un valor real. */
 export function progresoDerivado(
   estado: OrdenTrabajoEstado,

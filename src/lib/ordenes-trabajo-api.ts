@@ -1,5 +1,6 @@
 import { apiRequest } from "@/lib/api";
 import type {
+  OrdenesTrabajoStats,
   OrdenTrabajoDetalle,
   OrdenTrabajoListItem,
 } from "@/lib/ordenes-trabajo";
@@ -48,19 +49,24 @@ type PaginatedResponse<T> = {
   pages: number;
 };
 
+export type OrdenesTrabajoListado =
+  PaginatedResponse<OrdenTrabajoListItem> & {
+    stats: OrdenesTrabajoStats;
+  };
+
 export async function getOrdenesTrabajo(params?: {
   estado?: string;
   q?: string;
   page?: number;
   limit?: number;
-}): Promise<PaginatedResponse<OrdenTrabajoListItem>> {
+}): Promise<OrdenesTrabajoListado> {
   const search = new URLSearchParams();
   if (params?.estado) search.set("estado", params.estado);
   if (params?.q) search.set("q", params.q);
   if (params?.page) search.set("page", String(params.page));
   if (params?.limit) search.set("limit", String(params.limit));
   const query = search.toString();
-  return apiRequest<PaginatedResponse<OrdenTrabajoListItem>>(
+  return apiRequest<OrdenesTrabajoListado>(
     `/ordenes-trabajo${query ? `?${query}` : ""}`,
   );
 }

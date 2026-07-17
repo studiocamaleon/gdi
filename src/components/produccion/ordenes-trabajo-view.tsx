@@ -8,11 +8,11 @@ import { DownloadIcon, PlusIcon, SearchIcon } from "lucide-react";
 import {
   ORDEN_TRABAJO_ESTADOS,
   ORDEN_TRABAJO_FLOW,
-  fechaLocalDesdeIso,
   formatFechaOrden,
   formatMonedaOrden,
   type OrdenTrabajoEstado,
   type OrdenTrabajoListItem,
+  type OrdenesTrabajoStats,
 } from "@/lib/ordenes-trabajo";
 
 type FiltroEstado = OrdenTrabajoEstado | "todas";
@@ -56,38 +56,66 @@ function ProgresoMini({
   );
 }
 
-function esMismoDiaLocal(iso: string, fecha: Date) {
-  const local = fechaLocalDesdeIso(iso);
-  return (
-    local !== null &&
-    local.getFullYear() === fecha.getFullYear() &&
-    local.getMonth() === fecha.getMonth() &&
-    local.getDate() === fecha.getDate()
-  );
-}
-
-function diasHasta(iso: string | null, desde: Date): number | null {
-  if (!iso) return null;
-  const local = fechaLocalDesdeIso(iso);
-  if (!local) return null;
-  const base = new Date(desde.getFullYear(), desde.getMonth(), desde.getDate());
-  return Math.round((local.getTime() - base.getTime()) / 86_400_000);
-}
-
 export function OrdenesTrabajoView({
   ordenes = [],
+  stats,
+  total,
+  page,
+  pages,
+  limit,
+  q: qInicial,
+  estado: filtro,
 }: {
   ordenes?: OrdenTrabajoListItem[];
+  /** KPIs y contadores del tenant completo, calculados por el backend. */
+  stats: OrdenesTrabajoStats;
+  total: number;
+  page: number;
+  pages: number;
+  limit: number;
+  q: string;
+  estado: FiltroEstado;
 }) {
   const router = useRouter();
-  const [filtro, setFiltro] = React.useState<FiltroEstado>("todas");
-  const [busqueda, setBusqueda] = React.useState("");
+  const [busqueda, setBusqueda] = React.useState(qInicial);
   const [modo, setModo] = React.useState<ModoVista>("tabla");
+  const [navegando, startTransition] = React.useTransition();
 
   const abrirOrden = (id: string) =>
     router.push(`/produccion/ordenes/${id}`);
 
   const hoy = React.useMemo(() => new Date(), []);
+
+  /**
+   * Búsqueda, filtro y página viven en la URL: los resuelve el backend con
+   * sus índices. Filtrar acá arriba de una página ya recortada mostraría
+   * resultados incompletos sin avisar.
+   */
+  const navegar = React.useCallback(
+    (destino: { q?: string; estado?: FiltroEstado; page?: number }) => {
+      const params = new URLSearchParams();
+      const q = (destino.q ?? busqueda).trim();
+      const estado = destino.estado ?? filtro;
+      const pagina = destino.page ?? 1;
+      if (q) params.set("q", q);
+      if (estado !== "todas") params.set("estado", estado);
+      if (pagina > 1) params.set("page", String(pagina));
+      const qs = params.toString();
+      startTransition(() => {
+        router.replace(`/produccion/ordenes${qs ? `?${qs}` : ""}`, {
+          scroll: false,
+        });
+      });
+    },
+    [busqueda, filtro, router],
+  );
+
+  // La búsqueda espera a que dejes de tipear; el resto navega al toque.
+  React.useEffect(() => {
+    if (busqueda.trim() === qInicial.trim()) return;
+    const timer = setTimeout(() => navegar({ q: busqueda }), 350);
+    return () => clearTimeout(timer);
+  }, [busqueda, qInicial, navegar]);
 
   // NUEVA = emitida hace menos de 24h corridas Y todavía pendiente (cuando
   // el taller la agarra deja de ser "nueva"). Decisión 2026-07-16.
@@ -101,46 +129,12 @@ export function OrdenesTrabajoView({
     [hoy],
   );
 
-  const counts = React.useMemo(() => {
-    const base: Record<FiltroEstado, number> = {
-      todas: ordenes.length,
-      borrador: 0,
-      pendiente: 0,
-      produccion: 0,
-      finalizada: 0,
-      entregada: 0,
-    };
-    for (const orden of ordenes) base[orden.estado] += 1;
-    return base;
-  }, [ordenes]);
-
-  const kpis = React.useMemo(() => {
-    const esActiva = (o: OrdenTrabajoListItem) =>
-      o.estado === "pendiente" || o.estado === "produccion";
-    const activas = ordenes.filter(esActiva);
-    const valorEnCurso = ordenes
-      .filter((o) => o.estado !== "entregada" && o.estado !== "borrador")
-      .reduce((acc, o) => acc + o.total, 0);
-    const proximasEntregar = activas.filter((o) => {
-      const dias = diasHasta(o.fechaEntrega, hoy);
-      return dias !== null && dias >= 0 && dias <= 7;
-    }).length;
-    const emitidasHoy = ordenes.filter(
-      (o) => o.estado !== "borrador" && esMismoDiaLocal(o.creadaEl, hoy),
-    ).length;
-    return { activas: activas.length, valorEnCurso, proximasEntregar, emitidasHoy };
-  }, [ordenes, hoy]);
-
-  const lista = React.useMemo(() => {
-    const q = busqueda.trim().toLowerCase();
-    return ordenes.filter((o) => {
-      if (filtro !== "todas" && o.estado !== filtro) return false;
-      if (!q) return true;
-      const s =
-        `${o.numero} ${o.clienteNombre} ${o.resumen} ${o.vendedorNombre}`.toLowerCase();
-      return s.includes(q);
-    });
-  }, [ordenes, filtro, busqueda]);
+  const counts: Record<FiltroEstado, number> = {
+    todas: stats.totalOrdenes,
+    ...stats.porEstado,
+  };
+  const kpis = stats;
+  const lista = ordenes;
 
   const filtros: Array<{ k: FiltroEstado; label: string }> = [
     { k: "todas", label: "Todas" },
@@ -219,7 +213,7 @@ export function OrdenesTrabajoView({
                 key={f.k}
                 type="button"
                 className={`otl-fchip ${filtro === f.k ? "on" : ""}`}
-                onClick={() => setFiltro(f.k)}
+                onClick={() => navegar({ estado: f.k })}
               >
                 {f.label}
                 <span className="ct">{counts[f.k]}</span>
@@ -279,6 +273,12 @@ export function OrdenesTrabajoView({
           </div>
         </div>
 
+        <div
+          style={{
+            opacity: navegando ? 0.55 : 1,
+            transition: "opacity 0.15s",
+          }}
+        >
         {modo === "tabla" ? (
           <div className="otl-table">
             <div className="otl-tr otl-th">
@@ -375,6 +375,34 @@ export function OrdenesTrabajoView({
         {lista.length === 0 ? (
           <div className="otl-empty">
             Sin órdenes que coincidan con el filtro.
+          </div>
+        ) : null}
+        </div>
+
+        {pages > 1 ? (
+          <div className="otl-pager">
+            <span className="rango mono">
+              {(page - 1) * limit + 1}–{Math.min(page * limit, total)} de{" "}
+              {total}
+            </span>
+            <div className="botones">
+              <button
+                type="button"
+                className="btn"
+                disabled={page <= 1 || navegando}
+                onClick={() => navegar({ page: page - 1 })}
+              >
+                Anterior
+              </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={page >= pages || navegando}
+                onClick={() => navegar({ page: page + 1 })}
+              >
+                Siguiente
+              </button>
+            </div>
           </div>
         ) : null}
       </div>

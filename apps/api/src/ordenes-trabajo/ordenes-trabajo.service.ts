@@ -79,22 +79,88 @@ export class OrdenesTrabajoService {
         : {}),
     };
 
-    const [ordenes, total] = await this.prisma.$transaction([
-      this.prisma.ordenTrabajo.findMany({
-        where,
-        include: LIST_INCLUDE,
-        orderBy: { createdAt: 'desc' },
-        skip: query.skip,
-        take: query.limit,
-      }),
-      this.prisma.ordenTrabajo.count({ where }),
-    ]);
+    // Los KPIs y los contadores de los chips son del TENANT COMPLETO, no de
+    // la página cargada: si se calcularan sobre las filas devueltas (como
+    // hacía el front), con más órdenes que el límite empezarían a mentir.
+    // Van en la misma transacción: un solo round-trip, snapshot consistente.
+    const hoy0 = new Date();
+    hoy0.setHours(0, 0, 0, 0);
+    const manana0 = new Date(hoy0);
+    manana0.setDate(manana0.getDate() + 1);
+    const en8dias = new Date(hoy0);
+    en8dias.setDate(en8dias.getDate() + 8);
 
-    return paginatedResponse(
-      ordenes.map((orden) => this.toListItem(orden)),
-      total,
-      query,
-    );
+    const [ordenes, total, porEstado, proximasEntregar, emitidasHoy] =
+      await this.prisma.$transaction([
+        this.prisma.ordenTrabajo.findMany({
+          where,
+          include: LIST_INCLUDE,
+          orderBy: { createdAt: 'desc' },
+          skip: query.skip,
+          take: query.limit,
+        }),
+        this.prisma.ordenTrabajo.count({ where }),
+        this.prisma.ordenTrabajo.groupBy({
+          by: ['estado'],
+          where: { tenantId: auth.tenantId },
+          orderBy: { estado: 'asc' },
+          _count: { _all: true },
+          _sum: { total: true },
+        }),
+        // "Próximas a entregar": activas que vencen dentro de los 7 días.
+        this.prisma.ordenTrabajo.count({
+          where: {
+            tenantId: auth.tenantId,
+            estado: { in: ['pendiente', 'produccion'] },
+            fechaEntrega: { gte: hoy0, lt: en8dias },
+          },
+        }),
+        // "Emitidas hoy": todo lo que no es borrador creado en el día.
+        this.prisma.ordenTrabajo.count({
+          where: {
+            tenantId: auth.tenantId,
+            estado: { not: 'borrador' },
+            createdAt: { gte: hoy0, lt: manana0 },
+          },
+        }),
+      ]);
+
+    const counts: Record<OrdenTrabajoEstado, number> = {
+      borrador: 0,
+      pendiente: 0,
+      produccion: 0,
+      finalizada: 0,
+      entregada: 0,
+    };
+    // "Valor en curso": suma de todo lo que no está entregado ni en borrador.
+    let valorEnCurso = 0;
+    for (const grupo of porEstado as Array<{
+      estado: string;
+      _count: { _all: number };
+      _sum: { total: Prisma.Decimal | null };
+    }>) {
+      const estado = grupo.estado as OrdenTrabajoEstado;
+      counts[estado] = grupo._count._all;
+      if (estado !== 'entregada' && estado !== 'borrador') {
+        valorEnCurso += Number(grupo._sum.total ?? 0);
+      }
+    }
+
+    return {
+      ...paginatedResponse(
+        ordenes.map((orden) => this.toListItem(orden)),
+        total,
+        query,
+      ),
+      stats: {
+        porEstado: counts,
+        totalOrdenes: Object.values(counts).reduce((a, b) => a + b, 0),
+        activas: counts.pendiente + counts.produccion,
+        valorEnCurso,
+        proximasEntregar,
+        emitidasHoy,
+      },
+    };
   }
 
   // ── Detalle ──────────────────────────────────────────────────────────
@@ -128,7 +194,19 @@ export class OrdenesTrabajoService {
             },
           },
         },
-        eventos: { orderBy: { fecha: 'desc' as const } },
+        // Sólo lo que se serializa (datosJson pesa y no viaja al front) y
+        // con tope: el historial crece con cada edición y no puede volver
+        // ilimitado el detalle de una orden vieja.
+        eventos: {
+          orderBy: { fecha: 'desc' as const },
+          take: 200,
+          select: {
+            fecha: true,
+            tipo: true,
+            descripcion: true,
+            usuarioNombre: true,
+          },
+        },
       },
     });
     if (!orden) {
@@ -211,8 +289,7 @@ export class OrdenesTrabajoService {
     const impuestos = payload.items.reduce((s, i) => s + i.impuestos, 0);
     const cargosDirectos = payload.cargosDirectos ?? 0;
     const total = subtotal + impuestos + cargosDirectos;
-    const vendedorEmpleadoId =
-      payload.vendedorEmpleadoId ?? emisor?.id ?? null;
+    const vendedorEmpleadoId = payload.vendedorEmpleadoId ?? emisor?.id ?? null;
     const usuarioNombre =
       vendedor?.nombreCompleto ?? emisor?.nombreCompleto ?? auth.email;
     const ahora = new Date();
@@ -1003,8 +1080,7 @@ export class OrdenesTrabajoService {
       ...this.toListItem(orden),
       cotizacionId: orden.cotizacionId,
       observaciones: orden.observaciones,
-      canalVenta:
-        (orden as { canalVenta?: string | null }).canalVenta ?? null,
+      canalVenta: (orden as { canalVenta?: string | null }).canalVenta ?? null,
       cargosDirectos: Number(orden.cargosDirectos ?? 0),
       productos: orden.items.map((item) => {
         const cotItem = (

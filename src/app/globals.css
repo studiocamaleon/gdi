@@ -27358,3 +27358,25 @@ textarea.est-input {
 }
 
 /* fin tira de letras (touch — Turbopack) */
+
+/* Paginador del listado de OT — aparece recién cuando hay más de una página. */
+.otl-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 14px;
+  gap: 12px;
+}
+
+.otl-pager .rango {
+  font-size: 12.5px;
+  color: var(--muted-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.otl-pager .botones {
+  display: flex;
+  gap: 8px;
+}
+
+/* fin paginador OT (touch — Turbopack) */

@@ -38,11 +38,14 @@ describe('OrdenesTrabajoService — validarTransicion', () => {
     ['entregada', 'borrador'],
   ];
 
-  it.each(casosInvalidos)('%s → %s se rechaza (flujo sólo avanza)', (desde, hacia) => {
-    expect(() => svc().validarTransicion(desde, hacia)).toThrow(
-      BadRequestException,
-    );
-  });
+  it.each(casosInvalidos)(
+    '%s → %s se rechaza (flujo sólo avanza)',
+    (desde, hacia) => {
+      expect(() => svc().validarTransicion(desde, hacia)).toThrow(
+        BadRequestException,
+      );
+    },
+  );
 
   it('mismo estado se rechaza', () => {
     expect(() => svc().validarTransicion('produccion', 'produccion')).toThrow(
@@ -52,10 +55,7 @@ describe('OrdenesTrabajoService — validarTransicion', () => {
 
   it('estado desconocido se rechaza', () => {
     expect(() =>
-      svc().validarTransicion(
-        'cancelada' as OrdenTrabajoEstado,
-        'entregada',
-      ),
+      svc().validarTransicion('cancelada' as OrdenTrabajoEstado, 'entregada'),
     ).toThrow(BadRequestException);
   });
 });
