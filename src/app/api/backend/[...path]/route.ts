@@ -59,6 +59,12 @@ async function handler(
   if (respContentType) {
     responseHeaders.set("content-type", respContentType);
   }
+  // Sin esto, un archivo (el PDF de un comprobante) llega sin su nombre y el
+  // navegador lo baja como "path" o similar.
+  const disposition = response.headers.get("content-disposition");
+  if (disposition) {
+    responseHeaders.set("content-disposition", disposition);
+  }
 
   // 204/304 no pueden llevar body: construir Response con body nulo, o el
   // constructor lanza y el proxy devolvería 500 (rompía todos los DELETE).

@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import {
   ArrowLeftIcon,
+  DownloadIcon,
   PrinterIcon,
   ShieldCheckIcon,
   TriangleAlertIcon,
@@ -68,14 +69,21 @@ export function FacturaView({ doc, id }: { doc: FacturaDocumento; id: string }) 
             <ArrowLeftIcon />
             Volver al comprobante
           </Link>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => window.print()}
+          {/* El PDF lo genera el server: es el mismo archivo que después
+              va a salir por mail, no una impresión del navegador. */}
+          <a
+            className="btn btn-primary"
+            href={`/api/backend/administracion/comprobantes/${id}/pdf`}
+            target="_blank"
+            rel="noopener"
             style={{ marginLeft: "auto" }}
           >
+            <DownloadIcon />
+            Descargar PDF
+          </a>
+          <button type="button" className="btn" onClick={() => window.print()}>
             <PrinterIcon />
-            Imprimir / Guardar PDF
+            Imprimir
           </button>
         </div>
 

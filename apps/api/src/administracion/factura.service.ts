@@ -36,6 +36,29 @@ const CONDICION_VENTA_LABEL: Record<string, string> = {
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 /**
+ * ivaPorAlicuota es Json para Prisma pero siempre lo escribimos nosotros
+ * con esta forma. Se relee tipado en un solo lugar.
+ */
+function leerIva(
+  json: Prisma.JsonValue,
+): Array<{ alicuota: number; base: number; monto: number }> {
+  if (!Array.isArray(json)) return [];
+  return json.flatMap((raw) => {
+    if (typeof raw !== 'object' || raw === null) return [];
+    const o = raw as Record<string, unknown>;
+    const alicuota = Number(o.alicuota);
+    if (!Number.isFinite(alicuota)) return [];
+    return [
+      {
+        alicuota,
+        base: Number(o.base) || 0,
+        monto: Number(o.monto) || 0,
+      },
+    ];
+  });
+}
+
+/**
  * Arma el comprobante impreso: todo lo que la ley exige que figure.
  *
  * Es su propio servicio y no una proyección más de ComprobantesService
@@ -183,7 +206,7 @@ export class FacturaService {
       items: this.itemsDocumento(c.itemsJson, discrimina),
       // ── Totales ──
       subtotal: neto,
-      ivaPorAlicuota: discrimina ? c.ivaPorAlicuota : [],
+      ivaPorAlicuota: discrimina ? leerIva(c.ivaPorAlicuota) : [],
       /**
        * RG 5614 (Ley 27.743, Transparencia Fiscal al Consumidor): un
        * comprobante que no discrimina IVA igual tiene que informar el que

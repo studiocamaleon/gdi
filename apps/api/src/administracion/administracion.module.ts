@@ -8,6 +8,7 @@ import { ComprobantesService } from './comprobantes.service';
 import { ImputacionesService } from './imputaciones.service';
 import { CuentaCorrienteService } from './cuenta-corriente.service';
 import { FacturaService } from './factura.service';
+import { FacturaPdfService } from './factura-pdf.service';
 import { ManualProvider } from './invoicing/manual.provider';
 import { AfipSdkProvider } from './invoicing/afip-sdk.provider';
 
@@ -22,6 +23,7 @@ import { AfipSdkProvider } from './invoicing/afip-sdk.provider';
     ImputacionesService,
     CuentaCorrienteService,
     FacturaService,
+    FacturaPdfService,
     ManualProvider,
     AfipSdkProvider,
   ],

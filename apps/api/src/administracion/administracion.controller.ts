@@ -8,7 +8,10 @@ import {
   Post,
   Put,
   Query,
+  Res,
+  StreamableFile,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
 import { MetodosPagoService } from './metodos-pago.service';
@@ -19,6 +22,7 @@ import { ComprobantesService } from './comprobantes.service';
 import { ImputacionesService } from './imputaciones.service';
 import { CuentaCorrienteService } from './cuenta-corriente.service';
 import { FacturaService } from './factura.service';
+import { FacturaPdfService } from './factura-pdf.service';
 import { UpsertMetodoPagoDto } from './dto/metodo-pago.dto';
 import { CrearCobroDto } from './dto/cobro.dto';
 import {
@@ -48,7 +52,28 @@ export class AdministracionController {
     private readonly imputacionesService: ImputacionesService,
     private readonly cuentaCorrienteService: CuentaCorrienteService,
     private readonly facturaService: FacturaService,
+    private readonly facturaPdfService: FacturaPdfService,
   ) {}
+
+  /**
+   * El PDF del comprobante. Se genera en el server para que sea el mismo
+   * archivo que se descarga y el que se le mande por mail al cliente.
+   */
+  @Get('comprobantes/:id/pdf')
+  async facturaPdf(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const doc = await this.facturaService.documento(auth, id);
+    const pdf = await this.facturaPdfService.generar(doc);
+    const nombre = `${doc.letra}-${doc.puntoVenta}-${doc.numero}.pdf`;
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="${nombre}"`,
+    });
+    return new StreamableFile(pdf);
+  }
 
   /** El comprobante impreso: todo lo que la ley exige que figure. */
   @Get('comprobantes/:id/factura')
