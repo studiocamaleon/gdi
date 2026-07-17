@@ -16868,6 +16868,40 @@
   line-height: 1.55;
 }
 
+/* Estaciones reales: picker de familias, errores del form y hints (touch — Turbopack) */
+.est-page .m-chip.taken {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.est-page .est-error {
+  color: #b3401f;
+  font-size: 12.5px;
+  max-width: 340px;
+}
+
+.tablero-produccion .sta-config-hint {
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  border: 1px dashed var(--border, #dcdcd4);
+  border-radius: 10px;
+  color: var(--muted-text);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.tablero-produccion .sta-config-hint a,
+.tablero-produccion .sta-cat-head a {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.tablero-produccion a.sta-toolbar-cta {
+  text-decoration: none;
+  color: inherit;
+}
+
 /* El paso activo (frontera de la ruta) se marca con borde, como el diseño.
    (touch — Turbopack) */
 .tablero-produccion .detail-step.is-active .ds-body {

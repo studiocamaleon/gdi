@@ -402,6 +402,8 @@ model Tenant {
   productosImpuestosCatalogo                       ProductoImpuestoCatalogo[]
   productosComisionesCatalogo                      ProductoComisionCatalogo[]
   estaciones                                       Estacion[]
+  estacionFamilias                                 EstacionFamilia[]
+  estacionEmpleados                                EstacionEmpleado[]
   // === Modelo Universal V2 (Fase F.1.2) ===
   rutas                                            Ruta[]
   rutaPasos                                        RutaPaso[]
@@ -592,6 +594,7 @@ model Empleado {
   invitations            Invitation[]
   recursosCentroCosto    CentroCostoRecurso[] @relation("CentroCostoRecursoEmpleado")
   ordenesTrabajoVendidas OrdenTrabajo[]       @relation("OrdenTrabajoVendedor")
+  estaciones             EstacionEmpleado[]
 
   @@index([tenantId, nombreCompleto])
   @@index([tenantId, sector])
@@ -917,6 +920,9 @@ model Maquina {
   numeroSerie                  String?
   plantaId                     String                               @db.Uuid
   centroCostoPrincipalId       String?                              @db.Uuid
+  /// Estación de trabajo donde vive la máquina (una sola). Independiente del
+  /// centro de costo: costeo y piso de taller son ejes distintos.
+  estacionId                   String?                              @db.Uuid
   estado                       EstadoMaquina                        @default(ACTIVA)
   estadoConfiguracion          EstadoConfiguracionMaquina           @default(BORRADOR)
   geometriaTrabajo             GeometriaTrabajoMaquina
@@ -940,6 +946,7 @@ model Maquina {
   tenant                       Tenant                               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   planta                       Planta                               @relation(fields: [plantaId], references: [id], onDelete: Cascade)
   centroCostoPrincipal         CentroCosto?                         @relation("MaquinaCentroCostoPrincipal", fields: [centroCostoPrincipalId], references: [id], onDelete: SetNull)
+  estacion                     Estacion?                            @relation(fields: [estacionId], references: [id], onDelete: SetNull)
   perfilesOperativos           MaquinaPerfilOperativo[]
   consumibles                  MaquinaConsumible[]
   componentesDesgaste          MaquinaComponenteDesgaste[]
@@ -955,6 +962,7 @@ model Maquina {
   @@index([tenantId, plantaId, activo])
   @@index([tenantId, estado])
   @@index([tenantId, centroCostoPrincipalId])
+  @@index([tenantId, estacionId])
 }
 
 /// Perfil operativo de una máquina. Modelo universal alineado a doc §5–§13:
@@ -1051,18 +1059,61 @@ model MaquinaComponenteDesgaste {
   @@index([tenantId, materiaPrimaVarianteId, activo])
 }
 
+/// Estación de trabajo del taller: agrupa familias de pasos (qué se hace),
+/// máquinas (con qué) y empleados habilitados (quiénes). El paso llega a su
+/// estación por la FAMILIA (una familia vive en una sola estación).
+/// Ver docs/estaciones-diseno.md
 model Estacion {
-  id          String   @id @default(uuid()) @db.Uuid
-  tenantId    String   @db.Uuid
-  nombre      String
-  descripcion String?
-  activo      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id                   String             @id @default(uuid()) @db.Uuid
+  tenantId             String             @db.Uuid
+  nombre               String
+  descripcion          String?
+  /// Clave del set de iconos del tablero (Printer, Cut, Shield, …).
+  icono                String?
+  /// Pasos que pueden ejecutarse en paralelo (carga real del tablero).
+  capacidadConcurrente Int                @default(1)
+  /// Horario operativo, texto libre informativo ("8 a 18 hs").
+  horario              String?
+  activo               Boolean            @default(true)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  tenant               Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  familias             EstacionFamilia[]
+  empleados            EstacionEmpleado[]
+  maquinas             Maquina[]
 
   @@unique([tenantId, nombre])
   @@index([tenantId, activo])
+}
+
+/// Familia de pasos asignada a una estación. El unique por tenant garantiza
+/// que una familia viva en UNA sola estación: todo paso tiene a lo sumo una
+/// estación, sin ambigüedad de ruteo.
+model EstacionFamilia {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @db.Uuid
+  estacionId    String   @db.Uuid
+  /// FamiliaCodigo del catálogo fijo (productos-servicios/pasos/familias).
+  familiaCodigo String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  estacion      Estacion @relation(fields: [estacionId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, familiaCodigo])
+  @@index([tenantId, estacionId])
+}
+
+/// Empleado habilitado para trabajar en una estación (N:M).
+model EstacionEmpleado {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @db.Uuid
+  estacionId String   @db.Uuid
+  empleadoId String   @db.Uuid
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  estacion   Estacion @relation(fields: [estacionId], references: [id], onDelete: Cascade)
+  empleado   Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+
+  @@unique([estacionId, empleadoId])
+  @@index([tenantId, empleadoId])
 }
 
 model MateriaPrima {

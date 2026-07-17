@@ -1,0 +1,154 @@
+# Estaciones de producción — diseño real
+
+> Análisis 2026-07-17 (rama `feat/tablero-ordenes-reales`). Complementa a
+> docs/tablero-produccion-conexion-diseno.md: la fase 1 del tablero usó el
+> centro de costo como proxy de estación; esta fase crea la estación REAL
+> configurable y la vuelve la agrupación operativa del taller.
+
+## 1. Estado actual
+
+- **Entidad `Estacion`**: mínima (nombre, descripción, activo). CRUD real en
+  `apps/api/src/produccion/` (GET/POST/PUT/toggle; sin DELETE). **0 filas** en
+  dev: nadie la usa operativamente.
+- **Panel `/produccion/estaciones`**: 100% mock (14 estaciones, máquinas y
+  empleados inventados, 6 "etapas" hardcodeadas). El form ya diseñó la UX
+  correcta: identidad → recursos → capacidad/planificación.
+- **Tablero "Por estación"**: agrupa por `centroCostoNombre` del paso (proxy
+  fase 1). Sirve, pero el centro de costo es un concepto de COSTEO (tarifas),
+  no de PISO DE TALLER: "Ventas & Centro de Copiado" tarifa la DesignJet pero
+  nadie "trabaja parado" en ese centro.
+- **Datos reales disponibles**: 12 máquinas (con `centroCostoPrincipalId`),
+  7 empleados (con sector), catálogo fijo de ~41 familias de pasos con
+  `categoria` (9 categorías de alto nivel), y los pasos materializados del
+  tablero llevan `familiaCodigo` persistido.
+
+## 2. Concepto
+
+La **estación** es el lugar físico/lógico del taller donde se ejecuta un tipo
+de trabajo: agrupa **familias de pasos** (qué se hace ahí), **máquinas** (con
+qué) y **empleados habilitados** (quiénes), con una **capacidad** de trabajo
+concurrente. El paso llega a su estación por la **familia**.
+
+```
+FamiliaPaso (catálogo fijo) ──N:1── Estacion ──1:N── Maquina
+                                        │
+                                        └──N:M── Empleado
+```
+
+## 3. Decisiones
+
+- **D1 — La FAMILIA es la clave de ruteo paso→estación.** Una familia vive en
+  **una sola estación** (unique por tenant): así todo paso tiene a lo sumo una
+  estación, sin ambigüedad. El picker muestra las familias ya tomadas por otra
+  estación como deshabilitadas (con la dueña visible); la DB lo garantiza con
+  constraint y la API devuelve 409 con el nombre de la estación en conflicto.
+- **D2 — Una máquina está EN una estación** (FK nullable `estacionId` en
+  `Maquina`, SetNull al borrar la estación). Asignar en B una máquina que
+  estaba en A la **mueve** (la UI lo avisa). El `centroCostoPrincipalId` no se
+  toca: costeo y piso de taller son ejes independientes.
+- **D3 — Empleados N:M** (`EstacionEmpleado`): un operario puede estar
+  habilitado en varias estaciones.
+- **D4 — La categoría/etapa se DERIVA de las familias** asignadas (la
+  categoría mayoritaria; sin familias → "Sin configurar"). No hay campo
+  "etapa" manual: no puede divergir del contenido real de la estación. El
+  orden de secciones es el orden del catálogo de categorías.
+- **D5 — Capacidad y planificación (fase 1)**: `capacidadConcurrente` (pasos
+  en paralelo, para % de carga REAL del tablero: activos/capacidad) y
+  `horario` (texto libre informativo). El "tiempo promedio por paso" del mock
+  NO se persiste: se deriva de `duracionEstimadaMin` de los pasos reales
+  cuando haga falta. `icono` sí se persiste (lenguaje visual del tablero).
+- **D6 — El tablero agrupa por estación real.** `paso.familiaCodigo` →
+  estación ACTIVA que tenga esa familia. Pasos con familia sin estación (o de
+  estación inactiva) caen al bucket **"Sin estación"** con CTA a configurar.
+  El centro de costo queda como dato informativo del paso (banner del sheet),
+  ya no agrupa. Sin estaciones configuradas, la vista muestra el estado vacío
+  con CTA (no vuelve al proxy: sería tener dos verdades).
+- **D7 — Sin `estacionId` persistido en el paso.** El mapeo es en lectura:
+  reconfigurar estaciones re-rutea el trabajo vivo al instante y no hay
+  backfill. (Cuando exista asignación de operario/mesa persistente, se
+  revisa.)
+- **D8 — Borrar estación**: DELETE real con `ConfirmacionDestructiva`;
+  libera sus familias (cascade en `EstacionFamilia`), desasigna máquinas
+  (SetNull) y suelta empleados (cascade). El trabajo vivo cae a "Sin
+  estación" — nada se pierde.
+- **D9 — Catálogo de familias por API** (`GET /produccion/familias-pasos`):
+  código, nombre y categoría desde el catálogo del backend (fuente de
+  verdad), más qué estación la tiene tomada. El front no duplica nombres.
+
+## 4. Modelo (migración)
+
+```prisma
+model Estacion {
+  // existentes: id, tenantId, nombre, descripcion, activo, timestamps
+  icono                String?  // clave del set de iconos del tablero
+  capacidadConcurrente Int      @default(1)
+  horario              String?
+  familias             EstacionFamilia[]
+  empleados            EstacionEmpleado[]
+  maquinas             Maquina[]
+}
+
+model EstacionFamilia {
+  id, tenantId, estacionId, familiaCodigo
+  @@unique([tenantId, familiaCodigo])   // ← una familia, una estación
+}
+
+model EstacionEmpleado {
+  id, tenantId, estacionId, empleadoId
+  @@unique([estacionId, empleadoId])
+}
+
+// Maquina: + estacionId String? @db.Uuid (SetNull) + índice
+```
+
+## 5. Contrato
+
+`GET /produccion/estaciones` pasa a devolver la proyección completa:
+
+```ts
+type Estacion = {
+  id: string; nombre: string; descripcion: string; activo: boolean;
+  icono: string | null; capacidadConcurrente: number; horario: string | null;
+  familias: string[];                      // códigos
+  empleados: Array<{ id: string; nombreCompleto: string; sector: string }>;
+  maquinas: Array<{ id: string; codigo: string; nombre: string }>;
+  createdAt: string; updatedAt: string;
+};
+```
+
+`POST/PUT` reciben además `icono?`, `capacidadConcurrente?`, `horario?`,
+`familias: string[]`, `empleadoIds: string[]`, `maquinaIds: string[]`
+(reemplazo completo de las tres listas — el form edita el conjunto).
+`DELETE /produccion/estaciones/:id` nuevo.
+`GET /produccion/familias-pasos` →
+`Array<{ codigo, nombre, categoria, estacionId | null, estacionNombre | null }>`.
+
+## 6. Casos borde
+
+- Familia tomada por otra estación → 409 con nombre de la dueña (y la UI la
+  muestra deshabilitada de antemano).
+- Máquina que ya estaba en otra estación → se mueve (aviso en el picker).
+- Estación inactivada con trabajo vivo → sus pasos caen a "Sin estación";
+  reactivarla los recupera (mapeo en lectura, D7).
+- Empleado/máquina eliminados del sistema → cascade/SetNull; la estación
+  sigue válida.
+- Familias con `visibleEnSelector: false` (legacy): se listan sólo si ya
+  estaban asignadas.
+
+## 7. Journey (verificación E2E)
+
+1. Crear "Impresión digital" con familias `impresion_por_hoja` +
+   `impresion_por_pieza`, las 3 Ricoh, empleados de Producción, capacidad 4.
+2. Crear "Gran formato UV" (`impresion_por_area`), "Pre-prensa & Diseño"
+   (`pre_prensa`, `diseno_grafico`, `proof`), "Corte y terminación"
+   (`corte_guillotina`, `laminado`), "Textil" (`aplicacion_transfer`).
+3. Intentar asignar `pre_prensa` a otra estación → bloqueado con la dueña.
+4. Tablero "Por estación": los 9 pasos activos agrupados por las estaciones
+   creadas; carga = activos/capacidad; `trabajo_manual` (sin asignar) en
+   "Sin estación".
+
+## 8. Fase B (después)
+
+Asignación de operario a paso (habilitados = los de la estación), "mi mesa"
+persistente por empleado, horario estructurado para planificación de entrega,
+sugerencia automática de estaciones iniciales desde máquinas/centros.

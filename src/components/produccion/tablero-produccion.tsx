@@ -34,7 +34,6 @@ import {
 import {
   CATEGORIAS_FAMILIA,
   codigoVisibleItem,
-  estacionDePaso,
   etiquetaDuracion,
   etiquetaEntrega,
   etiquetaMomento,
@@ -46,11 +45,13 @@ import {
   itemIniciado,
   itemTerminado,
   lineaEstado,
+  mapaFamiliaEstacion,
   pasoActivo,
   pasoActual,
   pasoReabrible,
   prioridadDerivada,
   progresoItem,
+  SIN_ESTACION_KEY,
   type TableroItemData,
   type TableroPasoAccion,
   type TableroPasoData,
@@ -65,6 +66,7 @@ import type {
   OrdenTrabajoDetalle,
   OrdenTrabajoEvento,
 } from "@/lib/ordenes-trabajo";
+import type { Estacion } from "@/lib/estaciones";
 
 type IconComponent = React.ComponentType<React.SVGProps<SVGSVGElement>>;
 type Mode = "items" | "estacion" | "kanban";
@@ -775,12 +777,18 @@ function ItemDetailSheet({
   );
 }
 
-// ── Vista Por estación (fase 1: estación = centro de costo) ──────────────
+// ── Vista Por estación (estaciones reales: familia → estación) ───────────
 
 type StationInfo = {
   key: string;
   nm: string;
-  categoria: string;
+  icono: string | null;
+  /** Pasos concurrentes configurados; null para el bucket "Sin estación". */
+  capacidad: number | null;
+  horario: string | null;
+  /** Derivada de las tareas presentes (para agrupar por etapa). */
+  categoria: string | null;
+  sinEstacion: boolean;
 };
 
 type StationTask = {
@@ -793,36 +801,32 @@ type StationTask = {
   urgent: boolean;
 };
 
-function collectStations(items: ItemView[]): StationInfo[] {
-  const stations = new Map<string, StationInfo>();
-  for (const item of items) {
-    for (const step of item.steps) {
-      const estacion = estacionDePaso(step.paso);
-      if (!stations.has(estacion.key)) {
-        stations.set(estacion.key, {
-          key: estacion.key,
-          nm: estacion.nm,
-          categoria: step.paso.categoriaFamilia,
-        });
-      }
-    }
-  }
-  return [...stations.values()];
+function ordenarTareas(tasks: StationTask[]): StationTask[] {
+  return tasks.sort((a, b) => {
+    const aw = (a.isBlocked ? 0 : 1) + (a.overdue ? 0 : 2) + (a.isCurrent ? 1 : 4);
+    const bw = (b.isBlocked ? 0 : 1) + (b.overdue ? 0 : 2) + (b.isCurrent ? 1 : 4);
+    return aw - bw;
+  });
 }
 
 /**
- * Pasos ACTIVOS de una estación: la ruta es secuencial, así que acá entra
- * únicamente el paso listo para hacerse de cada item (el primero, o con
- * todos los anteriores hechos). Los pasos futuros no son trabajo de nadie
- * todavía y no deben engordar la cola de la estación.
+ * Modelo de la vista: las estaciones ACTIVAS configuradas + el bucket "Sin
+ * estación", con sus tareas activas. La ruta es secuencial, así que acá
+ * entra únicamente el paso listo para hacerse de cada item (el primero, o
+ * con todos los anteriores hechos): los futuros no son trabajo de nadie
+ * todavía. El paso llega a su estación por la FAMILIA.
  */
-function getActiveStepsAtStation(items: ItemView[], stationKey: string): StationTask[] {
-  const out: StationTask[] = [];
-  items.forEach((item) => {
-    item.steps.forEach((step) => {
-      if (estacionDePaso(step.paso).key !== stationKey) return;
-      if (!pasoActivo(item.data, step.paso)) return;
-      out.push({
+function buildStationsModel(items: ItemView[], estaciones: Estacion[]) {
+  const mapa = mapaFamiliaEstacion(estaciones);
+  const tareas = new Map<string, StationTask[]>();
+
+  for (const item of items) {
+    for (const step of item.steps) {
+      if (!pasoActivo(item.data, step.paso)) continue;
+      const estacion = mapa.get(step.paso.familiaCodigo);
+      const key = estacion?.id ?? SIN_ESTACION_KEY;
+      const lista = tareas.get(key) ?? [];
+      lista.push({
         item,
         step,
         isCurrent: step.status === "current",
@@ -831,22 +835,42 @@ function getActiveStepsAtStation(items: ItemView[], stationKey: string): Station
         overdue: item.delayed && step.status !== "blocked",
         urgent: item.priority === "urgent" || (item.delayed && step.status !== "blocked") || step.status === "blocked",
       });
-    });
-  });
+      tareas.set(key, lista);
+    }
+  }
+  for (const lista of tareas.values()) ordenarTareas(lista);
 
-  return out.sort((a, b) => {
-    const aw = (a.isBlocked ? 0 : 1) + (a.overdue ? 0 : 2) + (a.isCurrent ? 1 : 4);
-    const bw = (b.isBlocked ? 0 : 1) + (b.overdue ? 0 : 2) + (b.isCurrent ? 1 : 4);
-    return aw - bw;
-  });
+  const stations: StationInfo[] = estaciones
+    .filter((estacion) => estacion.activo)
+    .map((estacion) => ({
+      key: estacion.id,
+      nm: estacion.nombre,
+      icono: estacion.icono,
+      capacidad: estacion.capacidadConcurrente,
+      horario: estacion.horario,
+      categoria: tareas.get(estacion.id)?.[0]?.step.paso.categoriaFamilia ?? null,
+      sinEstacion: false,
+    }));
+  if (tareas.has(SIN_ESTACION_KEY)) {
+    stations.push({
+      key: SIN_ESTACION_KEY,
+      nm: "Sin estación",
+      icono: null,
+      capacidad: null,
+      horario: null,
+      categoria: null,
+      sinEstacion: true,
+    });
+  }
+
+  return { stations, tareas };
 }
 
 function taskId(task: StationTask) {
   return task.step.paso.id;
 }
 
-function computeStationStats(items: ItemView[], stationKey: string) {
-  const tasks = getActiveStepsAtStation(items, stationKey);
+function computeStationStats(tasks: StationTask[]) {
   const blocked = tasks.filter((task) => task.isBlocked).length;
   const urgent = tasks.filter((task) => task.urgent && !task.isBlocked).length;
   const pending = tasks.length - blocked - urgent;
@@ -876,7 +900,7 @@ function fmtDiasEntrega(dias: number) {
 function LoadBar({ pending, urgent, blocked, max }: { pending: number; urgent: number; blocked: number; max: number }) {
   const total = pending + urgent + blocked;
   if (max === 0 || total === 0) return <div className="load-bar"><div className="track" /></div>;
-  const width = (value: number) => `${(value / max) * 100}%`;
+  const width = (value: number) => `${Math.min(100, (value / max) * 100)}%`;
   return (
     <div className="load-bar">
       <div className="track">
@@ -888,30 +912,42 @@ function LoadBar({ pending, urgent, blocked, max }: { pending: number; urgent: n
   );
 }
 
+function stationIcon(station: StationInfo) {
+  if (station.sinEstacion) return <BanIcon />;
+  const IconCmp = station.icono ? getStepIcon(station.icono) : FactoryIcon;
+  return <IconCmp />;
+}
+
 function StationCard({
   station,
   stats,
-  maxLoad,
   onSelect,
 }: {
   station: StationInfo;
   stats: ReturnType<typeof computeStationStats>;
-  maxLoad: number;
   onSelect: (stationKey: string) => void;
 }) {
   const categoria = CATEGORIAS_FAMILIA.find((entry) => entry.key === station.categoria);
   const tone = stats.blocked > 0 ? "block" : stats.urgent > 0 ? "urgent" : "ok";
-  const loadPct = maxLoad > 0 ? Math.round((stats.total / maxLoad) * 100) : 0;
+  // Carga REAL: pasos activos sobre la capacidad concurrente configurada.
+  const loadPct = station.capacidad ? Math.round((stats.total / station.capacidad) * 100) : null;
 
   return (
     <button type="button" className={`sta-card tone-${tone}`} onClick={() => onSelect(station.key)}>
       <div className="sta-card-head">
-        <span className="sta-card-ico"><FactoryIcon /></span>
-        <div className="sta-card-titles"><div className="nm">{station.nm}</div><div className="desc">{categoria?.nm ?? "Centro de costo"}</div></div>
+        <span className="sta-card-ico">{stationIcon(station)}</span>
+        <div className="sta-card-titles">
+          <div className="nm">{station.nm}</div>
+          <div className="desc">{station.sinEstacion ? "Familias sin estación asignada" : categoria?.nm ?? "Estación del taller"}</div>
+        </div>
       </div>
       <div className="sta-card-load">
-        <div className="lh"><span className="num">{stats.total}</span><span className="lbl">pasos activos</span><span className="pct">{loadPct}% carga</span></div>
-        <LoadBar pending={stats.pending} urgent={stats.urgent} blocked={stats.blocked} max={maxLoad} />
+        <div className="lh">
+          <span className="num">{stats.total}</span>
+          <span className="lbl">pasos activos</span>
+          {loadPct != null ? <span className="pct">{loadPct}% de capacidad</span> : null}
+        </div>
+        <LoadBar pending={stats.pending} urgent={stats.urgent} blocked={stats.blocked} max={Math.max(station.capacidad ?? 0, stats.total)} />
         <div className="sta-card-segs">
           {stats.pending > 0 ? <span className="seg-lbl"><span className="dot pending" />{stats.pending} pendientes</span> : null}
           {stats.urgent > 0 ? <span className="seg-lbl"><span className="dot urgent" />{stats.urgent} urgente{stats.urgent > 1 ? "s" : ""}</span> : null}
@@ -927,15 +963,23 @@ function StationCard({
   );
 }
 
-function StationGrid({ items, onSelect }: { items: ItemView[]; onSelect: (stationKey: string) => void }) {
-  const stations = collectStations(items);
-  const allStats = stations.map((station) => ({ station, stats: computeStationStats(items, station.key) }));
+function StationGrid({
+  items,
+  estaciones,
+  onSelect,
+}: {
+  items: ItemView[];
+  estaciones: Estacion[];
+  onSelect: (stationKey: string) => void;
+}) {
+  const { stations, tareas } = buildStationsModel(items, estaciones);
+  const allStats = stations.map((station) => ({ station, stats: computeStationStats(tareas.get(station.key) ?? []) }));
   const totalActive = allStats.reduce((acc, entry) => acc + entry.stats.total, 0);
-  const maxLoad = Math.max(1, ...allStats.map((entry) => entry.stats.total));
   const blockedTotal = allStats.reduce((acc, entry) => acc + entry.stats.blocked, 0);
   const urgentTotal = allStats.reduce((acc, entry) => acc + entry.stats.urgent, 0);
-  const active = allStats.filter((entry) => entry.stats.total > 0);
+  const active = allStats.filter((entry) => entry.stats.total > 0 && !entry.station.sinEstacion);
   const idle = allStats.filter((entry) => entry.stats.total === 0);
+  const sinEstacion = allStats.find((entry) => entry.station.sinEstacion);
   const byCategory = CATEGORIAS_FAMILIA.map((category) => ({
     ...category,
     items: active
@@ -946,19 +990,21 @@ function StationGrid({ items, onSelect }: { items: ItemView[]; onSelect: (statio
   return (
     <div className="sta-grid-wrap">
       <div className="sta-toolbar">
-        <div className="sta-select"><span className="lbl">Estaciones = centros de costo de los pasos</span></div>
+        <div className="sta-select"><span className="lbl">Estaciones del taller · el paso llega por su familia</span></div>
         <div className="sta-toolbar-stats">
           <span className="stat"><strong>{totalActive}</strong>pasos activos</span>
           <span className="sep">·</span>
-          <span className="stat"><strong>{active.length}</strong>de {stations.length} estaciones activas</span>
+          <span className="stat"><strong>{active.length}</strong>de {stations.filter((s) => !s.sinEstacion).length} estaciones con trabajo</span>
           {blockedTotal > 0 ? <><span className="sep">·</span><span className="stat warn"><strong>{blockedTotal}</strong>bloqueado{blockedTotal > 1 ? "s" : ""}</span></> : null}
           {urgentTotal > 0 ? <><span className="sep">·</span><span className="stat amber"><strong>{urgentTotal}</strong>urgente{urgentTotal > 1 ? "s" : ""}</span></> : null}
         </div>
+        <Link className="sta-toolbar-cta" href="/produccion/estaciones"><CogIcon /><span>Configurar estaciones</span></Link>
       </div>
 
-      {byCategory.length === 0 ? (
-        <div className="sta-idle">
-          <div className="sta-idle-head"><span className="dot" /><span>No hay pasos activos en ninguna estación.</span></div>
+      {estaciones.filter((estacion) => estacion.activo).length === 0 ? (
+        <div className="sta-config-hint">
+          Todavía no configuraste estaciones: todo el trabajo aparece en «Sin estación».{" "}
+          <Link href="/produccion/estaciones">Crear estaciones</Link> y asignales familias de pasos para agrupar el tablero por tu taller real.
         </div>
       ) : null}
 
@@ -972,11 +1018,24 @@ function StationGrid({ items, onSelect }: { items: ItemView[]; onSelect: (statio
               <span className="ct"><strong>{catTotal}</strong> pasos · {category.items.length} {category.items.length === 1 ? "estación" : "estaciones"}</span>
             </div>
             <div className="sta-grid">
-              {category.items.map(({ station, stats }) => <StationCard key={station.key} station={station} stats={stats} maxLoad={maxLoad} onSelect={onSelect} />)}
+              {category.items.map(({ station, stats }) => <StationCard key={station.key} station={station} stats={stats} onSelect={onSelect} />)}
             </div>
           </section>
         );
       })}
+
+      {sinEstacion ? (
+        <section className="sta-cat">
+          <div className="sta-cat-head">
+            <h3>Sin estación asignada</h3>
+            <span className="rule" />
+            <span className="ct"><strong>{sinEstacion.stats.total}</strong> pasos · <Link href="/produccion/estaciones">asignar familias</Link></span>
+          </div>
+          <div className="sta-grid">
+            <StationCard station={sinEstacion.station} stats={sinEstacion.stats} onSelect={onSelect} />
+          </div>
+        </section>
+      ) : null}
 
       {idle.length > 0 ? (
         <div className="sta-idle">
@@ -984,7 +1043,7 @@ function StationGrid({ items, onSelect }: { items: ItemView[]; onSelect: (statio
           <div className="sta-idle-chips">
             {idle.map(({ station }) => (
               <button key={station.key} type="button" className="sta-idle-chip" onClick={() => onSelect(station.key)}>
-                <span className="ic"><FactoryIcon /></span><span className="nm">{station.nm}</span><span className="arr"><ArrowRightIcon /></span>
+                <span className="ic">{stationIcon(station)}</span><span className="nm">{station.nm}</span><span className="arr"><ArrowRightIcon /></span>
               </button>
             ))}
           </div>
@@ -1041,20 +1100,24 @@ function TaskCard({
 
 function StationDetail({
   items,
+  estaciones,
   stationKey,
   onBack,
   onOpen,
 }: {
   items: ItemView[];
+  estaciones: Estacion[];
   stationKey: string;
   onBack: () => void;
   onOpen: (id: string) => void;
 }) {
-  const station = collectStations(items).find((entry) => entry.key === stationKey);
-  const tasks = getActiveStepsAtStation(items, stationKey);
+  const { stations, tareas } = buildStationsModel(items, estaciones);
+  const station = stations.find((entry) => entry.key === stationKey);
+  const tasks = tareas.get(stationKey) ?? [];
   const [mesa, setMesa] = React.useState(() => new Set<string>());
   const [filter, setFilter] = React.useState("todos");
   const categoria = CATEGORIAS_FAMILIA.find((entry) => entry.key === station?.categoria);
+  const estacionConfig = estaciones.find((entry) => entry.id === stationKey);
 
   const toggleMesa = (id: string) => {
     setMesa((current) => {
@@ -1081,10 +1144,14 @@ function StationDetail({
     <div className="sta-detail">
       <div className="sta-detail-head">
         <div className="sta-detail-head-top">
-          <span className="sta-detail-ico"><FactoryIcon /></span>
+          <span className="sta-detail-ico">{station ? stationIcon(station) : <FactoryIcon />}</span>
           <div className="body">
             <h2>{station?.nm ?? "Estación"}</h2>
-            <p>{categoria?.nm ?? "Centro de costo"}</p>
+            <p>
+              {station?.sinEstacion
+                ? "Pasos cuya familia no está asignada a ninguna estación activa"
+                : [categoria?.nm, estacionConfig?.horario].filter(Boolean).join(" · ") || "Estación del taller"}
+            </p>
             <div className="actions">
               <button type="button" className="sta-btn ghost" onClick={onBack}><ArrowLeftIcon />Ver todas las estaciones</button>
             </div>
@@ -1095,6 +1162,7 @@ function StationDetail({
 
       <div className="sta-detail-kpis">
         <div className="kpi"><div className="k">Total activos</div><div className="v">{tasks.length}</div></div>
+        {station?.capacidad ? <div className={`kpi ${tasks.length > station.capacidad ? "warm" : ""}`}><div className="k">Capacidad</div><div className="v">{tasks.length}/{station.capacidad}</div></div> : null}
         <div className={`kpi ${mesa.size > 0 ? "ok" : "warn"}`}><div className="k">Mi mesa de trabajo</div><div className="v">{mesa.size}</div></div>
         <div className="kpi cool"><div className="k">Pendientes</div><div className="v">{tasks.filter((task) => task.isPending).length}</div></div>
         <div className={`kpi ${tasks.some((task) => task.urgent) ? "warm" : ""}`}><div className="k">Urgentes</div><div className="v">{tasks.filter((task) => task.urgent).length}</div></div>
@@ -1134,10 +1202,18 @@ function StationDetail({
   );
 }
 
-function ByStationView({ items, onOpen }: { items: ItemView[]; onOpen: (id: string) => void }) {
+function ByStationView({
+  items,
+  estaciones,
+  onOpen,
+}: {
+  items: ItemView[];
+  estaciones: Estacion[];
+  onOpen: (id: string) => void;
+}) {
   const [stationKey, setStationKey] = React.useState<string | null>(null);
-  if (stationKey) return <StationDetail items={items} stationKey={stationKey} onBack={() => setStationKey(null)} onOpen={onOpen} />;
-  return <StationGrid items={items} onSelect={setStationKey} />;
+  if (stationKey) return <StationDetail items={items} estaciones={estaciones} stationKey={stationKey} onBack={() => setStationKey(null)} onOpen={onOpen} />;
+  return <StationGrid items={items} estaciones={estaciones} onSelect={setStationKey} />;
 }
 
 // ── Kanban ───────────────────────────────────────────────────────────────
@@ -1219,7 +1295,13 @@ function KanbanView({ items, onOpen }: { items: ItemView[]; onOpen: (id: string)
 
 // ── Vista principal ──────────────────────────────────────────────────────
 
-export function TableroProduccion({ initialItems }: { initialItems: TableroItemData[] }) {
+export function TableroProduccion({
+  initialItems,
+  estaciones,
+}: {
+  initialItems: TableroItemData[];
+  estaciones: Estacion[];
+}) {
   const [items, setItems] = React.useState<TableroItemData[]>(initialItems);
   const [mode, setMode] = React.useState<Mode>(DEFAULT_BOARD_MODE);
   const [defaultMode, setDefaultMode] = React.useState<Mode>(DEFAULT_BOARD_MODE);
@@ -1399,7 +1481,7 @@ export function TableroProduccion({ initialItems }: { initialItems: TableroItemD
                 </div>
               </>
             ) : null}
-            {mode === "estacion" ? <ByStationView items={views} onOpen={setSelectedId} /> : null}
+            {mode === "estacion" ? <ByStationView items={views} estaciones={estaciones} onOpen={setSelectedId} /> : null}
             {mode === "kanban" ? (
               <>
                 <FiltersBar filters={filters} setFilters={setFilters} counts={counts} />

@@ -80,11 +80,12 @@ muerto de una iteración anterior; los modos son items/estación/kanban).
   pasos, fase 1). El de la orden = sobre el total de pasos de todos sus items;
   se persiste en `OrdenTrabajo.progresoPct` en cada acción (así el listado de
   Órdenes ya muestra avance real sin tocarse).
-- **D4 — Estación (fase 1) = centro de costo.** La vista "Por estación"
-  agrupa pasos activos por `centroCostoNombre` (bucket "Sin centro asignado"
-  para pasos manuales sin centro), con categorías por
-  `CategoriaFamiliaCodigo`. Vincular la entidad `Estacion` con centros de
-  costo/máquinas queda para la fase de estaciones reales.
+- **D4 — Estación (fase 1) = centro de costo.** ~~La vista "Por estación"
+  agrupa pasos activos por `centroCostoNombre`.~~ **Superada 2026-07-17 por
+  las estaciones reales** (docs/estaciones-diseno.md): el paso llega a su
+  estación por la FAMILIA (`mapaFamiliaEstacion`); familias sin estación →
+  bucket "Sin estación". El centro de costo quedó como dato informativo del
+  paso.
 - **D5 — Qué órdenes entran al tablero.** `pendiente` + `produccion`.
   Borradores no se emitieron; finalizadas/entregadas ya no son trabajo vivo.
 - **D6 — Items editables en `pendiente`.** Agregar/editar/quitar item
@@ -156,7 +157,9 @@ hermanos de la orden.
   del mapeo y las transiciones. Verificado E2E con las 6 OTs reales de dev:
   iniciar/completar/bloquear/desbloquear desde el sheet, auto-promoción
   `pendiente→produccion`, progreso reflejado en el listado de Órdenes.
+- **Estaciones reales (HECHA 2026-07-17):** ver docs/estaciones-diseno.md —
+  familias por estación (únicas), máquinas, empleados, capacidad; el tablero
+  agrupa por estación real con carga sobre capacidad.
 - **Fase B (futuras):** asignación de operarios y "mi mesa" persistente,
   prioridad manual a nivel orden/item, sub-progreso dentro del paso (pliegos),
-  archivos del item, actividad por item (hoy es por orden), estaciones reales
-  (entidad `Estacion` ↔ centros de costo/máquinas), timeline.
+  archivos del item, actividad por item (hoy es por orden), timeline.

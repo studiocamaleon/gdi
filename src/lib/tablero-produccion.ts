@@ -258,10 +258,21 @@ export function etiquetaMomento(iso: string | null): string | null {
   return `${dd}/${mm} ${hh}:${mi}`;
 }
 
-/** Clave/nombre de la "estación" (fase 1: centro de costo del paso). */
-export function estacionDePaso(paso: TableroPasoData): { key: string; nm: string } {
-  if (!paso.centroCostoId || !paso.centroCostoNombre) {
-    return { key: "sin-centro", nm: "Sin centro asignado" };
+/**
+ * Mapa familia → estación real (sólo estaciones ACTIVAS): el ruteo del
+ * tablero. Un paso cuya familia no está en ninguna estación activa cae al
+ * bucket "Sin estación".
+ */
+export function mapaFamiliaEstacion<T extends { activo: boolean; familias: string[] }>(
+  estaciones: T[],
+): Map<string, T> {
+  const mapa = new Map<string, T>();
+  for (const estacion of estaciones) {
+    if (!estacion.activo) continue;
+    for (const familia of estacion.familias) mapa.set(familia, estacion);
   }
-  return { key: paso.centroCostoId, nm: paso.centroCostoNombre };
+  return mapa;
 }
+
+/** Clave del bucket de pasos sin estación asignada. */
+export const SIN_ESTACION_KEY = "sin-estacion";
