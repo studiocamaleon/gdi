@@ -12,6 +12,7 @@ import {
   ORDEN_TRABAJO_ESTADO_LABELS,
   progresoEfectivo,
   type OrdenTrabajoEstado,
+  type OrdenTrabajoPasoEstado,
 } from './ordenes-trabajo.types';
 import type {
   CambiarEstadoOrdenTrabajoDto,
@@ -19,6 +20,9 @@ import type {
   CrearOrdenTrabajoItemDto,
   EditarOrdenTrabajoDto,
 } from './dto/crear-orden-trabajo.dto';
+import type { AccionPasoOrdenTrabajoDto } from './dto/accion-paso.dto';
+import { FAMILIAS } from '../productos-servicios/pasos/familias';
+import type { FamiliaCodigo } from '../productos-servicios/pasos/types';
 
 /** "2026-07-22" → "22/07/2026" (para descripciones humanas de eventos). */
 function formatFechaCorta(iso: string | null): string {
@@ -47,6 +51,82 @@ const LIST_INCLUDE = {
     orderBy: { ordenIndice: 'asc' as const },
   },
 };
+
+/** Órdenes que viven en el Tablero: emitidas y todavía no terminadas. */
+const ESTADOS_TABLERO: OrdenTrabajoEstado[] = ['pendiente', 'produccion'];
+
+/**
+ * Proyección mínima del PasoEjecutado del snapshot del cotizador
+ * (`CotizacionItem.trazabilidadJson.pasos`) que necesita la materialización.
+ * El JSON viene del motor universal (apps/api/src/motor-universal/tipos.ts).
+ */
+type PasoTrazabilidad = {
+  rutaPasoId?: string;
+  rutaPasoOrden?: number;
+  familiaCodigo?: string;
+  nombreVisible?: string | null;
+  activado?: boolean;
+  tiempo?: {
+    totalMin?: number;
+    centroCostoId?: string | null;
+    centroCostoNombre?: string | null;
+  };
+};
+
+function pasosActivados(trazabilidad: unknown): PasoTrazabilidad[] {
+  const pasos = (trazabilidad as { pasos?: unknown } | null | undefined)
+    ?.pasos;
+  if (!Array.isArray(pasos)) return [];
+  return (pasos as PasoTrazabilidad[]).filter((paso) => paso?.activado);
+}
+
+type ItemAMaterializar = {
+  id: string;
+  ordenId: string;
+  cotizacionItemId: string | null;
+};
+
+/** Transiciones válidas de un paso de producción por acción del Tablero. */
+export const TRANSICIONES_PASO: Record<
+  AccionPasoOrdenTrabajoDto['accion'],
+  { desde: OrdenTrabajoPasoEstado[]; verbo: string }
+> = {
+  iniciar: { desde: ['pendiente'], verbo: 'iniciado' },
+  completar: { desde: ['pendiente', 'en_curso'], verbo: 'completado' },
+  bloquear: { desde: ['pendiente', 'en_curso'], verbo: 'bloqueado' },
+  desbloquear: { desde: ['bloqueado'], verbo: 'desbloqueado' },
+  reabrir: { desde: ['hecho'], verbo: 'reabierto' },
+};
+
+type PasoSecuencia = { indice: number; estado: string };
+
+/**
+ * La ruta es una SECUENCIA: un paso está listo para ejecutarse (activo) sólo
+ * si es el primero o todos los anteriores ya están hechos. Iniciar,
+ * completar o bloquear fuera de la frontera rompería el orden de la ruta.
+ */
+export function pasoEjecutable(
+  pasos: PasoSecuencia[],
+  indice: number,
+): boolean {
+  return pasos
+    .filter((paso) => paso.indice < indice)
+    .every((paso) => paso.estado === 'hecho');
+}
+
+/**
+ * Deshacer un paso hecho sólo vale en la frontera hacia atrás: si un paso
+ * posterior ya arrancó (o también está hecho/bloqueado), reabrir éste
+ * dejaría la secuencia inconsistente.
+ */
+export function pasoReabrible(
+  pasos: PasoSecuencia[],
+  indice: number,
+): boolean {
+  return pasos
+    .filter((paso) => paso.indice > indice)
+    .every((paso) => paso.estado === 'pendiente');
+}
 
 @Injectable()
 export class OrdenesTrabajoService {
@@ -347,6 +427,16 @@ export class OrdenesTrabajoService {
           },
         },
       });
+
+      // Emitir al taller materializa los pasos de producción del Tablero
+      // desde la trazabilidad del snapshot (el borrador espera a emitirse).
+      if (emitida) {
+        const itemsCreados = await tx.ordenTrabajoItem.findMany({
+          where: { ordenId: orden.id },
+          select: { id: true, ordenId: true, cotizacionItemId: true },
+        });
+        await this.materializarPasosItems(tx, auth.tenantId, itemsCreados);
+      }
 
       // Timeline: se insertan en orden cronológico (productos → borrador →
       // número → emisión) con timestamps levemente separados para que el
@@ -717,6 +807,16 @@ export class OrdenesTrabajoService {
           ordenIndice: (ultimo._max.ordenIndice ?? -1) + 1,
         },
       });
+      // La orden ya está emitida: el item nuevo entra al Tablero con pasos.
+      if (orden.estado === 'pendiente') {
+        await this.materializarPasosItems(tx, auth.tenantId, [
+          {
+            id: creado.id,
+            ordenId: orden.id,
+            cotizacionItemId: creado.cotizacionItemId,
+          },
+        ]);
+      }
       await this.recalcularTotales(
         tx,
         orden.id,
@@ -794,6 +894,23 @@ export class OrdenesTrabajoService {
         where: { id: existente.id },
         data: this.buildItemData(payload),
       });
+      // Emitida: el item pudo cambiar de snapshot/ruta → pasos de nuevo.
+      // No hay ejecución que pisar: ejecutar promueve a `produccion`, y ahí
+      // los items quedan congelados.
+      if (orden.estado === 'pendiente') {
+        await this.materializarPasosItems(
+          tx,
+          auth.tenantId,
+          [
+            {
+              id: existente.id,
+              ordenId: orden.id,
+              cotizacionItemId: payload.cotizacionItemId ?? null,
+            },
+          ],
+          { reemplazar: true },
+        );
+      }
       await this.recalcularTotales(
         tx,
         orden.id,
@@ -920,8 +1037,8 @@ export class OrdenesTrabajoService {
           ? 100
           : orden.progresoPct;
 
-    await this.prisma.$transaction([
-      this.prisma.ordenTrabajo.update({
+    await this.prisma.$transaction(async (tx) => {
+      await tx.ordenTrabajo.update({
         where: { id: orden.id },
         data: {
           estado: hacia,
@@ -932,8 +1049,17 @@ export class OrdenesTrabajoService {
               ? new Date()
               : undefined,
         },
-      }),
-      this.prisma.ordenTrabajoEvento.create({
+      });
+      // Salir de borrador es emitir: se materializan los pasos de
+      // producción del Tablero desde la trazabilidad del snapshot.
+      if (desde === 'borrador') {
+        const items = await tx.ordenTrabajoItem.findMany({
+          where: { ordenId: orden.id },
+          select: { id: true, ordenId: true, cotizacionItemId: true },
+        });
+        await this.materializarPasosItems(tx, auth.tenantId, items);
+      }
+      await tx.ordenTrabajoEvento.create({
         data: {
           tenantId: auth.tenantId,
           ordenId: orden.id,
@@ -955,8 +1081,8 @@ export class OrdenesTrabajoService {
               : {}),
           },
         },
-      }),
-    ]);
+      });
+    });
 
     return this.findOne(auth, orden.id);
   }
@@ -1037,6 +1163,388 @@ export class OrdenesTrabajoService {
         `Transición inválida: ${ORDEN_TRABAJO_ESTADO_LABELS[desde]} → ${ORDEN_TRABAJO_ESTADO_LABELS[hacia]}. El flujo sólo avanza.`,
       );
     }
+  }
+
+  // ── Tablero de producción ────────────────────────────────────────────
+  // Los pasos de producción (OrdenTrabajoItemPaso) se materializan desde el
+  // snapshot del cotizador al emitir la orden; acá vive su ejecución.
+  // Ver docs/tablero-produccion-conexion-diseno.md
+
+  /** Filas de pasos a crear para un item, desde su trazabilidad. */
+  private pasosDesdeTrazabilidad(
+    tenantId: string,
+    ordenId: string,
+    itemId: string,
+    trazabilidad: unknown,
+  ) {
+    return pasosActivados(trazabilidad).map((paso, indice) => {
+      const familiaCodigo = paso.familiaCodigo ?? 'trabajo_manual';
+      const familia = FAMILIAS[familiaCodigo as FamiliaCodigo] as
+        | (typeof FAMILIAS)[FamiliaCodigo]
+        | undefined;
+      return {
+        tenantId,
+        ordenId,
+        itemId,
+        indice,
+        rutaPasoId: paso.rutaPasoId ?? null,
+        familiaCodigo,
+        categoriaFamilia: familia?.categoria ?? 'operaciones_manuales',
+        nombre: paso.nombreVisible?.trim() || familia?.nombre || familiaCodigo,
+        centroCostoId: paso.tiempo?.centroCostoId ?? null,
+        centroCostoNombre: paso.tiempo?.centroCostoNombre ?? null,
+        duracionEstimadaMin: paso.tiempo?.totalMin ?? null,
+      };
+    });
+  }
+
+  /**
+   * Materializa los pasos de producción de los items dados. Con
+   * `reemplazar` pisa los existentes (edición de item en `pendiente`, donde
+   * todavía no puede haber ejecución: ejecutar promueve a `produccion`, que
+   * congela los items).
+   */
+  private async materializarPasosItems(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    items: ItemAMaterializar[],
+    opts?: { reemplazar?: boolean },
+  ) {
+    const conSnapshot = items.filter((item) => item.cotizacionItemId);
+    if (opts?.reemplazar && items.length > 0) {
+      await tx.ordenTrabajoItemPaso.deleteMany({
+        where: { tenantId, itemId: { in: items.map((item) => item.id) } },
+      });
+    }
+    if (conSnapshot.length === 0) return;
+
+    const snapshots = await tx.cotizacionItem.findMany({
+      where: {
+        id: { in: conSnapshot.map((item) => item.cotizacionItemId!) },
+        tenantId,
+      },
+      select: { id: true, trazabilidadJson: true },
+    });
+    const trazabilidadPorId = new Map(
+      snapshots.map((snap) => [snap.id, snap.trazabilidadJson]),
+    );
+    const data = conSnapshot.flatMap((item) =>
+      this.pasosDesdeTrazabilidad(
+        tenantId,
+        item.ordenId,
+        item.id,
+        trazabilidadPorId.get(item.cotizacionItemId!),
+      ),
+    );
+    if (data.length > 0) {
+      await tx.ordenTrabajoItemPaso.createMany({ data });
+    }
+  }
+
+  /**
+   * Backfill perezoso: órdenes emitidas ANTES de que existieran los pasos
+   * materializados (o cuya trazabilidad no se procesó) reciben sus pasos la
+   * primera vez que alguien abre el Tablero. Idempotente: sólo toma items
+   * activos con snapshot y cero pasos.
+   */
+  private async backfillPasosTablero(auth: CurrentAuth) {
+    const candidatos = await this.prisma.ordenTrabajoItem.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        cotizacionItemId: { not: null },
+        pasos: { none: {} },
+        orden: { estado: { in: ESTADOS_TABLERO } },
+      },
+      select: { id: true, ordenId: true, cotizacionItemId: true },
+    });
+    if (candidatos.length === 0) return;
+    await this.prisma.$transaction((tx) =>
+      this.materializarPasosItems(tx, auth.tenantId, candidatos),
+    );
+  }
+
+  /** Items activos con sus pasos: el dataset COMPLETO del Tablero. */
+  async tablero(auth: CurrentAuth) {
+    await this.backfillPasosTablero(auth);
+    const ordenes = await this.prisma.ordenTrabajo.findMany({
+      where: { tenantId: auth.tenantId, estado: { in: ESTADOS_TABLERO } },
+      include: {
+        cliente: { select: { nombre: true } },
+        vendedor: { select: { nombreCompleto: true } },
+        items: {
+          orderBy: { ordenIndice: 'asc' as const },
+          include: { pasos: { orderBy: { indice: 'asc' as const } } },
+        },
+      },
+      orderBy: [
+        { fechaEntrega: { sort: 'asc' as const, nulls: 'last' as const } },
+        { createdAt: 'asc' as const },
+      ],
+    });
+    return {
+      items: ordenes.flatMap((orden) =>
+        orden.items.map((item) => this.toTableroItem(orden, item)),
+      ),
+    };
+  }
+
+  /** Acción de ejecución sobre un paso (iniciar/completar/bloquear/…). */
+  async accionPaso(
+    auth: CurrentAuth,
+    ordenId: string,
+    itemId: string,
+    pasoId: string,
+    payload: AccionPasoOrdenTrabajoDto,
+  ) {
+    const [paso, actor] = await Promise.all([
+      this.prisma.ordenTrabajoItemPaso.findFirst({
+        where: { id: pasoId, tenantId: auth.tenantId, ordenId, itemId },
+        include: {
+          orden: { select: { estado: true, progresoPct: true } },
+          item: { select: { nombre: true, ordenIndice: true } },
+        },
+      }),
+      this.prisma.empleado.findFirst({
+        where: { tenantId: auth.tenantId, userId: auth.userId },
+        select: { nombreCompleto: true },
+      }),
+    ]);
+    if (!paso) {
+      throw new NotFoundException('No se encontró el paso de producción.');
+    }
+    const ordenEstado = paso.orden.estado as OrdenTrabajoEstado;
+    if (!ESTADOS_TABLERO.includes(ordenEstado)) {
+      throw new BadRequestException(
+        `Con la orden en estado "${ORDEN_TRABAJO_ESTADO_LABELS[ordenEstado]}" no se pueden ejecutar pasos.`,
+      );
+    }
+
+    const transicion = TRANSICIONES_PASO[payload.accion];
+    const estadoActual = paso.estado as OrdenTrabajoPasoEstado;
+    if (!transicion.desde.includes(estadoActual)) {
+      throw new BadRequestException(
+        `No se puede ${payload.accion} un paso en estado "${estadoActual}".`,
+      );
+    }
+
+    // La ruta es una secuencia: sólo se ejecuta el paso ACTIVO (frontera).
+    const pasosItem = await this.prisma.ordenTrabajoItemPaso.findMany({
+      where: { tenantId: auth.tenantId, itemId },
+      select: { indice: true, estado: true },
+    });
+    const ejecuta =
+      payload.accion === 'iniciar' ||
+      payload.accion === 'completar' ||
+      payload.accion === 'bloquear';
+    if (ejecuta && !pasoEjecutable(pasosItem, paso.indice)) {
+      throw new BadRequestException(
+        `"${paso.nombre}" todavía no está listo: la ruta es secuencial y hay pasos anteriores sin completar.`,
+      );
+    }
+    if (payload.accion === 'reabrir' && !pasoReabrible(pasosItem, paso.indice)) {
+      throw new BadRequestException(
+        `No se puede reabrir "${paso.nombre}": hay pasos posteriores que ya arrancaron.`,
+      );
+    }
+
+    const motivo = payload.motivo?.trim();
+    if (payload.accion === 'bloquear' && !motivo) {
+      throw new BadRequestException(
+        'Para bloquear un paso indicá el motivo (qué lo está frenando).',
+      );
+    }
+
+    const ahora = new Date();
+    const data: Prisma.OrdenTrabajoItemPasoUpdateInput = (() => {
+      switch (payload.accion) {
+        case 'iniciar':
+          return { estado: 'en_curso', iniciadoEl: ahora };
+        case 'completar':
+          return {
+            estado: 'hecho',
+            completadoEl: ahora,
+            iniciadoEl: paso.iniciadoEl ?? ahora,
+          };
+        case 'bloquear':
+          return { estado: 'bloqueado', motivoBloqueo: motivo };
+        case 'desbloquear':
+          return {
+            estado: paso.iniciadoEl ? 'en_curso' : 'pendiente',
+            motivoBloqueo: null,
+          };
+        case 'reabrir':
+          return {
+            estado: 'pendiente',
+            iniciadoEl: null,
+            completadoEl: null,
+          };
+      }
+    })();
+
+    // Arrancar trabajo sobre una orden emitida la promueve a "produccion".
+    const promueve =
+      ordenEstado === 'pendiente' &&
+      (payload.accion === 'iniciar' || payload.accion === 'completar');
+    const usuarioNombre = actor?.nombreCompleto ?? auth.email;
+    const letraItem = String.fromCharCode(65 + (paso.item.ordenIndice % 26));
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.ordenTrabajoItemPaso.update({
+        where: { id: paso.id },
+        data,
+      });
+
+      // Progreso real de la orden: pasos hechos sobre el total (D3 del doc).
+      const [total, hechos] = await Promise.all([
+        tx.ordenTrabajoItemPaso.count({ where: { ordenId } }),
+        tx.ordenTrabajoItemPaso.count({
+          where: { ordenId, estado: 'hecho' },
+        }),
+      ]);
+      await tx.ordenTrabajo.update({
+        where: { id: ordenId },
+        data: {
+          ...(promueve ? { estado: 'produccion' } : {}),
+          ...(total > 0
+            ? { progresoPct: Math.round((hechos / total) * 100) }
+            : {}),
+        },
+      });
+
+      await tx.ordenTrabajoEvento.create({
+        data: {
+          tenantId: auth.tenantId,
+          ordenId,
+          tipo: 'paso',
+          descripcion: `Producción: "${paso.nombre}" ${transicion.verbo} — item ${letraItem} · ${paso.item.nombre}${
+            payload.accion === 'bloquear' ? ` (${motivo})` : ''
+          }`,
+          usuarioNombre,
+          usuarioId: auth.userId,
+          origen: 'usuario',
+          datosJson: {
+            pasoId: paso.id,
+            itemId,
+            accion: payload.accion,
+            antes: estadoActual,
+            ...(motivo ? { motivo } : {}),
+          },
+        },
+      });
+      if (promueve) {
+        await tx.ordenTrabajoEvento.create({
+          data: {
+            tenantId: auth.tenantId,
+            ordenId,
+            fecha: new Date(ahora.getTime() + 1),
+            tipo: 'estado',
+            descripcion: `Estado: ${ORDEN_TRABAJO_ESTADO_LABELS.pendiente} → ${ORDEN_TRABAJO_ESTADO_LABELS.produccion} (arrancó la producción)`,
+            usuarioNombre: 'Sistema',
+            usuarioId: null,
+            origen: 'sistema',
+            datosJson: { campo: 'estado', antes: 'pendiente', despues: 'produccion' },
+          },
+        });
+      }
+    });
+
+    return this.tableroItemActualizado(auth, itemId);
+  }
+
+  /** Re-proyección de un item del tablero después de una acción. */
+  private async tableroItemActualizado(auth: CurrentAuth, itemId: string) {
+    const item = await this.prisma.ordenTrabajoItem.findFirst({
+      where: { id: itemId, tenantId: auth.tenantId },
+      include: {
+        pasos: { orderBy: { indice: 'asc' as const } },
+        orden: {
+          include: {
+            cliente: { select: { nombre: true } },
+            vendedor: { select: { nombreCompleto: true } },
+          },
+        },
+      },
+    });
+    if (!item) {
+      throw new NotFoundException('No se encontró el item de la orden.');
+    }
+    return this.toTableroItem(item.orden, item);
+  }
+
+  private toTableroItem(
+    orden: {
+      id: string;
+      numero: string;
+      estado: string;
+      fechaEntrega: Date | null;
+      cliente: { nombre: string } | null;
+      vendedor: { nombreCompleto: string } | null;
+    },
+    item: {
+      id: string;
+      ordenIndice: number;
+      codigo: string;
+      nombre: string;
+      cantidad: Prisma.Decimal;
+      cantidadUnidad: string;
+      specsJson: Prisma.JsonValue;
+      cotizacionItemId: string | null;
+      pasos: Array<{
+        id: string;
+        indice: number;
+        nombre: string;
+        familiaCodigo: string;
+        categoriaFamilia: string;
+        centroCostoId: string | null;
+        centroCostoNombre: string | null;
+        duracionEstimadaMin: Prisma.Decimal | null;
+        estado: string;
+        motivoBloqueo: string | null;
+        iniciadoEl: Date | null;
+        completadoEl: Date | null;
+      }>;
+    },
+  ) {
+    return {
+      id: item.id,
+      ordenId: orden.id,
+      ordenNumero: orden.numero,
+      ordenEstado: orden.estado,
+      itemIndice: item.ordenIndice,
+      codigo: item.codigo,
+      nombre: item.nombre,
+      clienteNombre: orden.cliente?.nombre ?? 'Sin cliente',
+      vendedorNombre: orden.vendedor?.nombreCompleto ?? '—',
+      cantidad: Number(item.cantidad),
+      cantidadUnidad: item.cantidadUnidad,
+      specs: (item.specsJson ?? []) as Array<{
+        etiqueta: string;
+        valor: string;
+      }>,
+      fechaEntrega: orden.fechaEntrega
+        ? orden.fechaEntrega.toISOString().slice(0, 10)
+        : null,
+      sinRuta: item.pasos.length === 0,
+      pasos: item.pasos.map((paso) => ({
+        id: paso.id,
+        indice: paso.indice,
+        nombre: paso.nombre,
+        familiaCodigo: paso.familiaCodigo,
+        categoriaFamilia: paso.categoriaFamilia,
+        centroCostoId: paso.centroCostoId,
+        centroCostoNombre: paso.centroCostoNombre,
+        duracionEstimadaMin:
+          paso.duracionEstimadaMin != null
+            ? Number(paso.duracionEstimadaMin)
+            : null,
+        estado: paso.estado,
+        motivoBloqueo: paso.motivoBloqueo,
+        iniciadoEl: paso.iniciadoEl ? paso.iniciadoEl.toISOString() : null,
+        completadoEl: paso.completadoEl
+          ? paso.completadoEl.toISOString()
+          : null,
+      })),
+    };
   }
 
   // ── Mapeos al contrato del frontend ──────────────────────────────────

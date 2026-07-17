@@ -1,56 +1,75 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
   BanIcon,
   BookOpenIcon,
   BoxIcon,
-  CalendarIcon,
   CheckIcon,
-  ChevronDownIcon,
   ChevronRightIcon,
   CircleDotIcon,
   ClockIcon,
   CogIcon,
-  DownloadIcon,
   FactoryIcon,
-  FileIcon,
   GripVerticalIcon,
   LayersIcon,
   LayoutDashboardIcon,
   PackageIcon,
   PaintbrushIcon,
-  PauseIcon,
+  PlayIcon,
   PrinterIcon,
   ScissorsIcon,
   SearchIcon,
   ShieldCheckIcon,
-  SparklesIcon,
-  SunIcon,
   TruckIcon,
+  UnlockIcon,
   UserIcon,
   WrenchIcon,
   ZapIcon,
 } from "lucide-react";
 
 import {
-  PROD_ACTIVITY,
-  PROD_ITEMS,
-  PROD_STEPS,
-  STATION_CATEGORIES,
-  STATIONS,
-  STEP_TO_STATION,
-  type TableroActivity,
-  type TableroItem,
-  type TableroStep,
-} from "@/lib/tablero-produccion-mock";
+  CATEGORIAS_FAMILIA,
+  codigoVisibleItem,
+  estacionDePaso,
+  etiquetaDuracion,
+  etiquetaEntrega,
+  etiquetaMomento,
+  etiquetaRestante,
+  diasHastaEntrega,
+  familiaIcono,
+  itemBloqueado,
+  itemConRetraso,
+  itemIniciado,
+  itemTerminado,
+  lineaEstado,
+  pasoActivo,
+  pasoActual,
+  pasoReabrible,
+  prioridadDerivada,
+  progresoItem,
+  type TableroItemData,
+  type TableroPasoAccion,
+  type TableroPasoData,
+  type TableroPrioridad,
+} from "@/lib/tablero-produccion";
+import {
+  accionPasoProduccion,
+  getOrdenTrabajo,
+  getTableroProduccion,
+} from "@/lib/ordenes-trabajo-api";
+import type {
+  OrdenTrabajoDetalle,
+  OrdenTrabajoEvento,
+} from "@/lib/ordenes-trabajo";
 
 type IconComponent = React.ComponentType<React.SVGProps<SVGSVGElement>>;
 type Mode = "items" | "estacion" | "kanban";
 type StatusFilter = "all" | "in-progress" | "blocked" | "delayed" | "due-today";
-type PriorityFilter = "all" | "urgent" | "high" | "normal";
+type PriorityFilter = "all" | TableroPrioridad;
 type KanbanBucketKey = "not-started" | "today" | "delayed" | "active";
 
 const DEFAULT_BOARD_MODE: Mode = "items";
@@ -90,7 +109,6 @@ const TIco: Record<string, IconComponent> = {
   Printer: PrinterIcon,
   Plot: FactoryIcon,
   Cut: ScissorsIcon,
-  Sun: SunIcon,
   Brush: PaintbrushIcon,
   Scissors: ScissorsIcon,
   Stamp: CircleDotIcon,
@@ -103,50 +121,155 @@ const TIco: Record<string, IconComponent> = {
   Package: PackageIcon,
   Truck: TruckIcon,
   Wrench: WrenchIcon,
-  Pause: PauseIcon,
   Block: BanIcon,
 };
-
-const TL_HOUR_PX = 9;
-const TL_PAST_H = 72;
-const TL_FUTURE_H = 192;
-const TL_TOTAL_H = TL_PAST_H + TL_FUTURE_H;
-const TL_WIDTH = TL_TOTAL_H * TL_HOUR_PX;
-const TL_ORIGIN_PX = TL_PAST_H * TL_HOUR_PX;
-const TL_DAY_NAMES = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 
 function getStepIcon(icon: string) {
   return TIco[icon] ?? LayoutDashboardIcon;
 }
 
-function priorityLabel(priority: TableroItem["priority"]) {
+function priorityLabel(priority: TableroPrioridad) {
   return priority === "urgent" ? "Urgente" : priority === "high" ? "Alta" : "Normal";
 }
 
-function routeStatusIcon(step: TableroStep, metaIcon: string, fallback?: React.ReactNode) {
-  const IconCmp = getStepIcon(metaIcon);
+function iniciales(nombre: string): string {
+  return nombre
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((parte) => parte[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
+// ── View-model: derivados de presentación por item ───────────────────────
+
+type StepStatus = "done" | "current" | "pending" | "blocked";
+
+type StepView = {
+  paso: TableroPasoData;
+  status: StepStatus;
+  iconKey: string;
+  /** Subtítulo técnico: la estación (centro de costo) del paso. */
+  tec: string;
+};
+
+type ItemView = {
+  data: TableroItemData;
+  id: string;
+  code: string;
+  otCode: string;
+  customer: string;
+  vendedor: string;
+  product: string;
+  spec: string;
+  qtyLabel: string;
+  priority: TableroPrioridad;
+  dueLabel: string;
+  dueIn: string;
+  dueDays: number | null;
+  delayed: boolean;
+  blocked: boolean;
+  blockedReason: string | null;
+  started: boolean;
+  finished: boolean;
+  sinRuta: boolean;
+  progressPct: number;
+  statusLine: string;
+  /** Estación (centro de costo) del paso actual, o "—". */
+  station: string;
+  currentStep: StepView | undefined;
+  steps: StepView[];
+};
+
+function stepStatus(paso: TableroPasoData): StepStatus {
+  switch (paso.estado) {
+    case "hecho":
+      return "done";
+    case "en_curso":
+      return "current";
+    case "bloqueado":
+      return "blocked";
+    default:
+      return "pending";
+  }
+}
+
+function buildItemView(item: TableroItemData): ItemView {
+  const steps = item.pasos.map<StepView>((paso) => ({
+    paso,
+    status: stepStatus(paso),
+    iconKey: familiaIcono(paso.familiaCodigo),
+    tec: paso.centroCostoNombre ?? "Paso manual",
+  }));
+  const actual = pasoActual(item);
+  const currentStep = actual ? steps.find((s) => s.paso.id === actual.id) : undefined;
+  const blocked = itemBloqueado(item);
+  const bloqueadoPaso = item.pasos.find((paso) => paso.estado === "bloqueado");
+  const spec = item.specs
+    .slice(0, 3)
+    .map((entry) => entry.valor)
+    .filter(Boolean)
+    .join(" · ");
+
+  return {
+    data: item,
+    id: item.id,
+    code: codigoVisibleItem(item.ordenNumero, item.itemIndice),
+    otCode: item.ordenNumero,
+    customer: item.clienteNombre,
+    vendedor: item.vendedorNombre,
+    product: item.nombre,
+    spec: spec || item.codigo,
+    qtyLabel: `${item.cantidad.toLocaleString("es-AR")} ${item.cantidadUnidad}`,
+    priority: prioridadDerivada(item.fechaEntrega),
+    dueLabel: etiquetaEntrega(item.fechaEntrega),
+    dueIn: etiquetaRestante(item.fechaEntrega),
+    dueDays: diasHastaEntrega(item.fechaEntrega),
+    delayed: itemConRetraso(item),
+    blocked,
+    blockedReason: bloqueadoPaso?.motivoBloqueo ?? null,
+    started: itemIniciado(item),
+    finished: itemTerminado(item),
+    sinRuta: item.sinRuta,
+    progressPct: progresoItem(item),
+    statusLine: lineaEstado(item),
+    station: actual?.centroCostoNombre ?? "—",
+    currentStep,
+    steps,
+  };
+}
+
+// ── Ruta compacta (strip de pasos) ───────────────────────────────────────
+
+function routeStatusIcon(step: StepView, fallback?: React.ReactNode) {
+  const IconCmp = getStepIcon(step.iconKey);
   if (step.status === "done") return <CheckIcon />;
   if (step.status === "blocked") return <BanIcon />;
   if (step.status === "pending" && fallback) return fallback;
   return <IconCmp />;
 }
 
-function RouteStrip({ steps, compact = false }: { steps: TableroStep[]; compact?: boolean }) {
+function RouteStrip({ steps, compact = false }: { steps: StepView[]; compact?: boolean }) {
+  if (steps.length === 0) {
+    return (
+      <div className={`route-strip ${compact ? "compact" : ""}`}>
+        <div className="route-step pending" title="Item sin ruta de producción">
+          <span className="ri-dot"><BanIcon /></span>
+          <span className="ri-label">Sin ruta</span>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className={`route-strip ${compact ? "compact" : ""}`}>
       {steps.map((step, index) => {
-        const meta = PROD_STEPS[step.key];
-        const cls = `route-step ${step.status}` + (step.status === "done" || (index > 0 && steps[index - 1]?.status === "done") ? " link-done" : "");
-
+        const cls =
+          `route-step ${step.status}` +
+          (step.status === "done" || (index > 0 && steps[index - 1]?.status === "done") ? " link-done" : "");
         return (
-          <div key={`${step.key}-${index}`} className={cls} title={`${meta.nm} · ${meta.tec}`}>
-            <span className="ri-dot">{routeStatusIcon(step, meta.ico)}</span>
-            <span className="ri-label">{meta.nm}</span>
-            {step.status === "current" && step.progress != null && !compact ? (
-              <span className="ri-progress">
-                <span style={{ width: `${Math.round(step.progress * 100)}%` }} />
-              </span>
-            ) : null}
+          <div key={step.paso.id} className={cls} title={`${step.paso.nombre} · ${step.tec}`}>
+            <span className="ri-dot">{routeStatusIcon(step)}</span>
+            <span className="ri-label">{step.paso.nombre}</span>
           </div>
         );
       })}
@@ -154,11 +277,16 @@ function RouteStrip({ steps, compact = false }: { steps: TableroStep[]; compact?
   );
 }
 
-function ItemRow({ item, onOpen }: { item: TableroItem; onOpen: (code: string) => void }) {
-  const cssRow = `tab-row priority-${item.priority}` + (item.blocked ? " blocked" : "") + (!item.onTrack && !item.blocked ? " delayed" : "");
+// ── Vista Por items ──────────────────────────────────────────────────────
+
+function ItemRow({ item, onOpen }: { item: ItemView; onOpen: (id: string) => void }) {
+  const cssRow =
+    `tab-row priority-${item.priority}` +
+    (item.blocked ? " blocked" : "") +
+    (item.delayed && !item.blocked ? " delayed" : "");
 
   return (
-    <button type="button" className={cssRow} onClick={() => onOpen(item.code)}>
+    <button type="button" className={cssRow} onClick={() => onOpen(item.id)}>
       <div className="tab-row-left">
         <div className="tab-row-codes">
           <span className="item-code">{item.code}</span>
@@ -175,22 +303,22 @@ function ItemRow({ item, onOpen }: { item: TableroItem; onOpen: (code: string) =
 
       <div className="tab-row-route">
         <RouteStrip steps={item.steps} />
-        <div className={`tab-status-line ${item.blocked ? "blocked" : item.onTrack ? "" : "delayed"}`}>
-          <span className={`dot ${item.blocked ? "dot-block" : item.onTrack ? "dot-ok" : "dot-warn"}`} />
+        <div className={`tab-status-line ${item.blocked ? "blocked" : item.delayed ? "delayed" : ""}`}>
+          <span className={`dot ${item.blocked ? "dot-block" : item.delayed ? "dot-warn" : "dot-ok"}`} />
           <span>{item.statusLine}</span>
         </div>
       </div>
 
       <div className="tab-row-right">
-        <div className={`tab-due ${!item.onTrack && !item.blocked ? "delayed" : ""}`}>
-          <span className="due-label">{item.dueDate}</span>
-          <span className="due-in">{item.dueIn} restantes</span>
+        <div className={`tab-due ${item.delayed && !item.blocked ? "delayed" : ""}`}>
+          <span className="due-label">{item.dueLabel}</span>
+          <span className="due-in">{item.dueIn === "Hoy" ? "vence hoy" : `${item.dueIn} restantes`}</span>
         </div>
-        <div className="tab-assigned" title={item.operator.nombre}>
-          <span className="av">{item.operator.iniciales}</span>
+        <div className="tab-assigned" title={`Estación actual: ${item.station}`}>
+          <span className="av"><FactoryIcon /></span>
           <div>
-            <div className="nm">{item.operator.nombre.split(" ")[0]} {item.operator.nombre.split(" ")[1]?.[0]}.</div>
-            <div className="role">{item.machine !== "—" ? item.machine.split(" · ")[0] : item.operator.role}</div>
+            <div className="nm">{item.station}</div>
+            <div className="role">{item.qtyLabel}</div>
           </div>
         </div>
       </div>
@@ -269,37 +397,166 @@ function FiltersBar({
   );
 }
 
-function DetailRuta({ item }: { item: TableroItem }) {
+// ── Sheet de detalle: ruta + materiales + actividad reales ───────────────
+
+type AccionHandler = (
+  item: ItemView,
+  paso: TableroPasoData,
+  accion: TableroPasoAccion,
+  motivo?: string,
+) => Promise<void>;
+
+function PasoAcciones({
+  item,
+  step,
+  busy,
+  onAccion,
+}: {
+  item: ItemView;
+  step: StepView;
+  busy: boolean;
+  onAccion: AccionHandler;
+}) {
+  const [bloqueando, setBloqueando] = React.useState(false);
+  const [motivo, setMotivo] = React.useState("");
+  const paso = step.paso;
+  const esActual = item.currentStep?.paso.id === paso.id;
+
+  if (paso.estado === "hecho") {
+    // Reabrir sólo el último hecho: deshacer en el medio rompe la secuencia.
+    if (!pasoReabrible(item.data, paso)) return null;
+    return (
+      <div className="ds-acciones">
+        <button
+          type="button"
+          className="sta-btn ghost"
+          disabled={busy}
+          onClick={() => void onAccion(item, paso, "reabrir")}
+        >
+          Reabrir
+        </button>
+      </div>
+    );
+  }
+  if (paso.estado === "bloqueado") {
+    return (
+      <div className="ds-acciones">
+        <button
+          type="button"
+          className="sta-btn primary"
+          disabled={busy}
+          onClick={() => void onAccion(item, paso, "desbloquear")}
+        >
+          <UnlockIcon />Desbloquear
+        </button>
+      </div>
+    );
+  }
+  if (!esActual && paso.estado === "pendiente") return null;
+
+  if (bloqueando) {
+    return (
+      <div className="ds-acciones ds-bloqueo-form">
+        <input
+          autoFocus
+          placeholder="¿Qué está frenando este paso?"
+          value={motivo}
+          onChange={(event) => setMotivo(event.target.value)}
+        />
+        <button
+          type="button"
+          className="sta-btn primary"
+          disabled={busy || motivo.trim().length === 0}
+          onClick={() => {
+            void onAccion(item, paso, "bloquear", motivo.trim());
+            setBloqueando(false);
+            setMotivo("");
+          }}
+        >
+          Bloquear
+        </button>
+        <button type="button" className="sta-btn ghost" onClick={() => setBloqueando(false)}>
+          Cancelar
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="ds-acciones">
+      {paso.estado === "pendiente" ? (
+        <button
+          type="button"
+          className="sta-btn primary"
+          disabled={busy}
+          onClick={() => void onAccion(item, paso, "iniciar")}
+        >
+          <PlayIcon />Iniciar
+        </button>
+      ) : null}
+      <button
+        type="button"
+        className={`sta-btn ${paso.estado === "en_curso" ? "primary" : "ghost"}`}
+        disabled={busy}
+        onClick={() => void onAccion(item, paso, "completar")}
+      >
+        <CheckIcon />Completar
+      </button>
+      <button type="button" className="sta-btn ghost" disabled={busy} onClick={() => setBloqueando(true)}>
+        <BanIcon />Bloquear
+      </button>
+    </div>
+  );
+}
+
+function DetailRuta({
+  item,
+  busy,
+  onAccion,
+}: {
+  item: ItemView;
+  busy: boolean;
+  onAccion: AccionHandler;
+}) {
+  if (item.sinRuta) {
+    return (
+      <div className="detail-route-empty">
+        Este item no tiene ruta de producción: es una orden manual o histórica sin
+        snapshot del cotizador. Los pasos se materializan al emitir órdenes creadas
+        desde el cotizador.
+      </div>
+    );
+  }
   return (
     <div className="detail-route">
       {item.steps.map((step, index) => {
-        const meta = PROD_STEPS[step.key];
+        const paso = step.paso;
+        const dur = etiquetaDuracion(paso.duracionEstimadaMin);
         return (
-          <div key={`${step.key}-${index}`} className={`detail-step ${step.status}`}>
+          <div key={paso.id} className={`detail-step ${step.status}`}>
             <div className="ds-line">
-              <span className="ds-dot">{routeStatusIcon(step, meta.ico, <span className="ix">{index + 1}</span>)}</span>
+              <span className="ds-dot">{routeStatusIcon(step, <span className="ix">{index + 1}</span>)}</span>
             </div>
             <div className="ds-body">
               <div className="ds-head">
                 <div>
-                  <div className="ds-tec">{meta.tec}</div>
-                  <div className="ds-nm">{meta.nm}</div>
+                  <div className="ds-tec">{step.tec}</div>
+                  <div className="ds-nm">{paso.nombre}</div>
                 </div>
-                {step.status === "done" && step.end ? <span className="ds-time done"><CheckIcon />{step.end} · {step.dur}</span> : null}
-                {step.status === "current" ? <span className="ds-time current"><span className="dot" />En curso · {step.progress != null ? `${Math.round(step.progress * 100)}%` : "—"}</span> : null}
-                {step.status === "pending" && step.dur ? <span className="ds-time">estimado {step.dur}</span> : null}
+                {step.status === "done" && paso.completadoEl ? (
+                  <span className="ds-time done"><CheckIcon />{etiquetaMomento(paso.completadoEl)}</span>
+                ) : null}
+                {step.status === "current" ? (
+                  <span className="ds-time current"><span className="dot" />En curso{paso.iniciadoEl ? ` · desde ${etiquetaMomento(paso.iniciadoEl)}` : ""}</span>
+                ) : null}
+                {step.status === "pending" && dur ? <span className="ds-time">estimado {dur}</span> : null}
                 {step.status === "blocked" ? <span className="ds-time blocked"><BanIcon />Bloqueado</span> : null}
               </div>
 
-              {step.status === "current" ? (
-                <div className="ds-current-detail">
-                  <div className="ds-cd-row"><span className="k">Máquina</span><span className="v">{step.machine || "—"}</span></div>
-                  <div className="ds-cd-row"><span className="k">Operario</span><span className="v">{step.op || "—"}</span></div>
-                  {step.sub ? <div className="ds-cd-row"><span className="k">Avance</span><span className="v">{step.sub}</span></div> : null}
-                  {step.progress != null ? <div className="ds-cd-bar"><span style={{ width: `${Math.round(step.progress * 100)}%` }} /></div> : null}
-                </div>
+              {step.status === "blocked" && paso.motivoBloqueo ? (
+                <div className="ds-blocked-detail">{paso.motivoBloqueo}</div>
               ) : null}
-              {step.status === "blocked" && step.sub ? <div className="ds-blocked-detail">{step.sub}</div> : null}
+              <PasoAcciones item={item} step={step} busy={busy} onAccion={onAccion} />
             </div>
           </div>
         );
@@ -308,26 +565,50 @@ function DetailRuta({ item }: { item: TableroItem }) {
   );
 }
 
-function DetailMateriales() {
-  const mats = [
-    { code: "PAP-OPL-300", nm: "Opalina 300gr 70 x 100", qty: "4 rs · estimado", consumed: "3,2 rs", left: "0,8 rs" },
-    { code: "TIN-OFF-K", nm: "Tinta offset negra", qty: "1,2 kg · estimado", consumed: "0,9 kg", left: "0,3 kg" },
-    { code: "TIN-OFF-CMY", nm: "Tintas CMY (set)", qty: "0,8 kg · estimado", consumed: "0,6 kg", left: "0,2 kg" },
-    { code: "LAM-MAT-UV", nm: "Laminado mate UV", qty: "5,2 m2 · estimado", consumed: "—", left: "5,2 m2" },
-  ];
+type MaterialRow = { nombre: string; cantidad: number; unidad: string };
 
+/** Materiales estimados del item, desde la trazabilidad del snapshot. */
+function materialesDeDetalle(detalle: OrdenTrabajoDetalle, itemId: string): MaterialRow[] {
+  const producto = detalle.productos.find((entry) => entry.id === itemId);
+  const trazabilidad = producto?.snapshot?.trazabilidad as
+    | { pasos?: Array<{ activado?: boolean; materiales?: Array<Record<string, unknown>> }> }
+    | null
+    | undefined;
+  if (!trazabilidad?.pasos) return [];
+  const rows: MaterialRow[] = [];
+  for (const paso of trazabilidad.pasos) {
+    if (!paso?.activado || !Array.isArray(paso.materiales)) continue;
+    for (const material of paso.materiales) {
+      rows.push({
+        nombre:
+          (material.materialDisplayName as string) ||
+          (material.materialNombre as string) ||
+          "Material",
+        cantidad: Number(material.cantidad ?? 0),
+        unidad: (material.unidad as string) || "",
+      });
+    }
+  }
+  return rows;
+}
+
+function DetailMateriales({ materiales, cargando }: { materiales: MaterialRow[]; cargando: boolean }) {
+  if (cargando) return <div className="detail-route-empty">Cargando materiales…</div>;
+  if (materiales.length === 0) {
+    return <div className="detail-route-empty">Este item no tiene materiales estimados en su ruta.</div>;
+  }
   return (
     <table className="detail-tbl">
       <thead>
-        <tr><th>Material</th><th className="right">Estimado</th><th className="right">Consumido</th><th className="right">Restante</th></tr>
+        <tr><th>Material</th><th className="right">Estimado</th></tr>
       </thead>
       <tbody>
-        {mats.map((mat) => (
-          <tr key={mat.code}>
-            <td><div className="nm">{mat.nm}</div><div className="code">{mat.code}</div></td>
-            <td className="right mono">{mat.qty}</td>
-            <td className="right mono">{mat.consumed}</td>
-            <td className="right mono">{mat.left}</td>
+        {materiales.map((mat, index) => (
+          <tr key={`${mat.nombre}-${index}`}>
+            <td><div className="nm">{mat.nombre}</div></td>
+            <td className="right mono">
+              {mat.cantidad.toLocaleString("es-AR", { maximumFractionDigits: 2 })} {mat.unidad}
+            </td>
           </tr>
         ))}
       </tbody>
@@ -335,15 +616,23 @@ function DetailMateriales() {
   );
 }
 
-function DetailActividad({ activity }: { activity: TableroActivity[] }) {
+function DetailActividad({ eventos, cargando }: { eventos: OrdenTrabajoEvento[]; cargando: boolean }) {
+  if (cargando) return <div className="detail-route-empty">Cargando actividad…</div>;
+  if (eventos.length === 0) {
+    return <div className="detail-route-empty">Sin actividad registrada todavía.</div>;
+  }
   return (
     <div className="detail-activity">
-      {activity.map((row, index) => (
-        <div key={`${row.t}-${index}`} className={`act-row ${row.kind}`}>
-          <span className="t">{row.t}</span>
+      <div className="act-scope">Actividad de toda la orden</div>
+      {eventos.map((evento, index) => (
+        <div
+          key={`${evento.fecha}-${index}`}
+          className={`act-row ${evento.tipo === "paso" ? "step" : evento.tipo === "estado" || evento.tipo === "emision" ? "progress" : "comment"}`}
+        >
+          <span className="t">{etiquetaMomento(evento.fecha)}</span>
           <div className="body">
-            <div className="what">{row.what}</div>
-            <div className="who">por {row.who}</div>
+            <div className="what">{evento.descripcion}</div>
+            <div className="who">por {evento.usuarioNombre}</div>
           </div>
         </div>
       ))}
@@ -351,38 +640,53 @@ function DetailActividad({ activity }: { activity: TableroActivity[] }) {
   );
 }
 
-function DetailArchivos() {
-  const files = [
-    { nm: "Arte_final_v3.pdf", size: "12,4 MB", kind: "PDF", when: "hace 2h" },
-    { nm: "Prueba_color_lab.jpg", size: "1,8 MB", kind: "JPG", when: "Ayer" },
-    { nm: "OT-2487.pdf", size: "240 KB", kind: "PDF", when: "Lun 12 may" },
-  ];
-
-  return (
-    <div className="detail-files">
-      {files.map((file) => (
-        <div key={file.nm} className="file-row">
-          <span className="kind"><FileIcon />{file.kind}</span>
-          <div className="body">
-            <div className="nm">{file.nm}</div>
-            <div className="meta">{file.size} · {file.when}</div>
-          </div>
-          <button type="button" className="btn"><DownloadIcon />Descargar</button>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function ItemDetailSheet({ item, onClose }: { item: TableroItem | undefined; onClose: () => void }) {
+function ItemDetailSheet({
+  item,
+  busy,
+  onAccion,
+  onClose,
+}: {
+  item: ItemView | undefined;
+  busy: boolean;
+  onAccion: AccionHandler;
+  onClose: () => void;
+}) {
   const [tab, setTab] = React.useState("ruta");
+  const [detalle, setDetalle] = React.useState<OrdenTrabajoDetalle | null>(null);
+  const [cargandoDetalle, setCargandoDetalle] = React.useState(false);
+  const ordenId = item?.data.ordenId;
+
+  // Materiales y actividad viven en el detalle de la orden: se trae una vez
+  // al abrir el sheet (y se refresca si cambió la orden seleccionada).
+  React.useEffect(() => {
+    if (!ordenId) return;
+    let vigente = true;
+    setCargandoDetalle(true);
+    getOrdenTrabajo(ordenId)
+      .then((data) => {
+        if (vigente) setDetalle(data);
+      })
+      .catch(() => {
+        if (vigente) setDetalle(null);
+      })
+      .finally(() => {
+        if (vigente) setCargandoDetalle(false);
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [ordenId]);
+
   if (!item) return null;
 
   const totalSteps = item.steps.length;
   const doneSteps = item.steps.filter((step) => step.status === "done").length;
-  const currentStep = item.steps.find((step) => step.status === "current");
-  const currentMeta = currentStep ? PROD_STEPS[currentStep.key] : undefined;
-  const activity = PROD_ACTIVITY[item.code] ?? [{ t: "Sin actividad reciente", who: "—", what: "—", kind: "" }];
+  const currentStep = item.currentStep;
+  const materiales = detalle ? materialesDeDetalle(detalle, item.id) : [];
+  const eventos = detalle?.eventos ?? [];
+  const estimadoTotal = etiquetaDuracion(
+    item.data.pasos.reduce((acc, paso) => acc + (paso.duracionEstimadaMin ?? 0), 0),
+  );
 
   return (
     <>
@@ -403,39 +707,38 @@ function ItemDetailSheet({ item, onClose }: { item: TableroItem | undefined; onC
             <button type="button" className="close" onClick={onClose} aria-label="Cerrar">×</button>
           </div>
 
-          <div className={`item-status-banner ${item.blocked ? "blocked" : item.onTrack ? "ok" : "delayed"}`}>
+          <div className={`item-status-banner ${item.blocked ? "blocked" : item.delayed ? "delayed" : "ok"}`}>
             <span className="dot" />
             <div className="body">
               <div className="ttl">{item.statusLine}</div>
               {item.blocked && item.blockedReason ? <div className="sub">{item.blockedReason}</div> : null}
-              {!item.blocked && currentMeta ? (
+              {!item.blocked && currentStep ? (
                 <div className="sub">
-                  Paso actual · <strong>{currentMeta.tec}</strong>
-                  {currentStep?.machine && currentStep.machine !== "—" ? <> · en <strong>{currentStep.machine}</strong></> : null}
+                  Paso actual · <strong>{currentStep.paso.nombre}</strong>
+                  {currentStep.paso.centroCostoNombre ? <> · en <strong>{currentStep.paso.centroCostoNombre}</strong></> : null}
                 </div>
               ) : null}
             </div>
             <div className="due">
               <div className="lbl">Entrega</div>
-              <div className="val">{item.dueDate}</div>
-              <div className="sub">{item.dueIn} restantes</div>
+              <div className="val">{item.dueLabel}</div>
+              <div className="sub">{item.dueIn === "Hoy" ? "vence hoy" : `${item.dueIn} restantes`}</div>
             </div>
           </div>
 
           <div className="item-meta-strip">
             <div className="m"><div className="k">Avance</div><div className="v">{item.progressPct}%<span className="sub">· {doneSteps}/{totalSteps} pasos</span></div></div>
-            <div className="m"><div className="k">Cantidad</div><div className="v">{item.qty.toLocaleString("es-AR")} u</div></div>
-            <div className="m"><div className="k">Vendedor</div><div className="v"><span className="mini-av">{item.vendedor}</span></div></div>
-            <div className="m"><div className="k">Operario</div><div className="v">{item.operator.nombre}</div></div>
-            <div className="m"><div className="k">Máquina</div><div className="v mono">{item.machine}</div></div>
+            <div className="m"><div className="k">Cantidad</div><div className="v">{item.qtyLabel}</div></div>
+            <div className="m"><div className="k">Vendedor</div><div className="v"><span className="mini-av">{iniciales(item.vendedor)}</span>{item.vendedor.split(" ")[0]}</div></div>
+            <div className="m"><div className="k">Estación actual</div><div className="v">{item.station}</div></div>
+            <div className="m"><div className="k">Tiempo estimado</div><div className="v mono">{estimadoTotal ?? "—"}</div></div>
           </div>
 
           <div className="sheet-tabs">
             {[
               { k: "ruta", l: "Ruta de producción", n: totalSteps },
-              { k: "materiales", l: "Materiales", n: 4 },
-              { k: "actividad", l: "Actividad", n: activity.length },
-              { k: "archivos", l: "Archivos", n: 3 },
+              { k: "materiales", l: "Materiales", n: materiales.length },
+              { k: "actividad", l: "Actividad", n: eventos.length },
             ].map((entry) => (
               <button key={entry.k} type="button" className={tab === entry.k ? "on" : ""} onClick={() => setTab(entry.k)}>
                 {entry.l}<span className="ct">{entry.n}</span>
@@ -445,51 +748,40 @@ function ItemDetailSheet({ item, onClose }: { item: TableroItem | undefined; onC
         </div>
 
         <div className="sheet-body">
-          {tab === "ruta" ? <DetailRuta item={item} /> : null}
-          {tab === "materiales" ? <DetailMateriales /> : null}
-          {tab === "actividad" ? <DetailActividad activity={activity} /> : null}
-          {tab === "archivos" ? <DetailArchivos /> : null}
+          {tab === "ruta" ? <DetailRuta item={item} busy={busy} onAccion={onAccion} /> : null}
+          {tab === "materiales" ? <DetailMateriales materiales={materiales} cargando={cargandoDetalle} /> : null}
+          {tab === "actividad" ? <DetailActividad eventos={eventos} cargando={cargandoDetalle} /> : null}
         </div>
 
         <div className="sheet-foot">
-          <button type="button" className="btn"><PauseIcon />Pausar item</button>
-          {item.blocked ? <button type="button" className="btn">Desbloquear</button> : null}
+          <div className="sheet-foot-hint">
+            {item.finished
+              ? "Todos los pasos completados. La orden se finaliza desde Órdenes de trabajo."
+              : currentStep
+                ? `Paso actual: ${currentStep.paso.nombre}`
+                : null}
+          </div>
           <div className="spacer" />
-          <button type="button" className="btn btn-primary">Marcar paso completado</button>
+          <Link className="btn" href={`/produccion/ordenes?orden=${item.data.ordenId}`}>
+            Ver orden {item.otCode}
+          </Link>
         </div>
       </aside>
     </>
   );
 }
 
-function parseDueInHours(value: string) {
-  const lower = value.toLowerCase();
-  if (lower.includes("hoy")) {
-    const match = lower.match(/(\d+)/);
-    return match ? parseInt(match[1], 10) : 12;
-  }
+// ── Vista Por estación (fase 1: estación = centro de costo) ──────────────
 
-  let total = 0;
-  const days = lower.match(/(\d+)\s*d/);
-  const hours = lower.match(/(\d+)\s*h/);
-  if (days) total += parseInt(days[1], 10) * 24;
-  if (hours) total += parseInt(hours[1], 10);
-  return total || 999;
-}
-
-function fmtHoursUntil(hours: number) {
-  if (hours < 1) return "<1h";
-  if (hours < 24) return `${hours}h`;
-  const days = Math.floor(hours / 24);
-  const rem = hours % 24;
-  return rem > 0 ? `${days}d ${rem}h` : `${days}d`;
-}
+type StationInfo = {
+  key: string;
+  nm: string;
+  categoria: string;
+};
 
 type StationTask = {
-  itemCode: string;
-  item: TableroItem;
-  step: TableroStep;
-  stepIdx: number;
+  item: ItemView;
+  step: StepView;
   isCurrent: boolean;
   isBlocked: boolean;
   isPending: boolean;
@@ -497,21 +789,43 @@ type StationTask = {
   urgent: boolean;
 };
 
-function getActiveStepsAtStation(stationKey: string) {
+function collectStations(items: ItemView[]): StationInfo[] {
+  const stations = new Map<string, StationInfo>();
+  for (const item of items) {
+    for (const step of item.steps) {
+      const estacion = estacionDePaso(step.paso);
+      if (!stations.has(estacion.key)) {
+        stations.set(estacion.key, {
+          key: estacion.key,
+          nm: estacion.nm,
+          categoria: step.paso.categoriaFamilia,
+        });
+      }
+    }
+  }
+  return [...stations.values()];
+}
+
+/**
+ * Pasos ACTIVOS de una estación: la ruta es secuencial, así que acá entra
+ * únicamente el paso listo para hacerse de cada item (el primero, o con
+ * todos los anteriores hechos). Los pasos futuros no son trabajo de nadie
+ * todavía y no deben engordar la cola de la estación.
+ */
+function getActiveStepsAtStation(items: ItemView[], stationKey: string): StationTask[] {
   const out: StationTask[] = [];
-  PROD_ITEMS.forEach((item) => {
-    item.steps.forEach((step, index) => {
-      if (STEP_TO_STATION[step.key] !== stationKey || step.status === "done") return;
+  items.forEach((item) => {
+    item.steps.forEach((step) => {
+      if (estacionDePaso(step.paso).key !== stationKey) return;
+      if (!pasoActivo(item.data, step.paso)) return;
       out.push({
-        itemCode: item.code,
         item,
         step,
-        stepIdx: index,
         isCurrent: step.status === "current",
         isBlocked: step.status === "blocked",
         isPending: step.status === "pending",
-        overdue: !item.onTrack && step.status !== "blocked",
-        urgent: item.priority === "urgent" || (!item.onTrack && step.status !== "blocked") || step.status === "blocked",
+        overdue: item.delayed && step.status !== "blocked",
+        urgent: item.priority === "urgent" || (item.delayed && step.status !== "blocked") || step.status === "blocked",
       });
     });
   });
@@ -524,15 +838,19 @@ function getActiveStepsAtStation(stationKey: string) {
 }
 
 function taskId(task: StationTask) {
-  return `${task.itemCode}:${task.stepIdx}`;
+  return task.step.paso.id;
 }
 
-function computeStationStats(stationKey: string) {
-  const tasks = getActiveStepsAtStation(stationKey);
+function computeStationStats(items: ItemView[], stationKey: string) {
+  const tasks = getActiveStepsAtStation(items, stationKey);
   const blocked = tasks.filter((task) => task.isBlocked).length;
   const urgent = tasks.filter((task) => task.urgent && !task.isBlocked).length;
   const pending = tasks.length - blocked - urgent;
-  const minHours = tasks.reduce((min, task) => Math.min(min, parseDueInHours(task.item.dueIn)), Infinity);
+  const minDias = tasks.reduce<number | null>((min, task) => {
+    const dias = task.item.dueDays;
+    if (dias === null) return min;
+    return min === null ? dias : Math.min(min, dias);
+  }, null);
 
   return {
     tasks,
@@ -540,9 +858,15 @@ function computeStationStats(stationKey: string) {
     pending,
     urgent,
     blocked,
-    minHours: Number.isFinite(minHours) ? minHours : null,
+    minDias,
     oldestBlocked: tasks.find((task) => task.isBlocked),
   };
+}
+
+function fmtDiasEntrega(dias: number) {
+  if (dias < 0) return `vencida ${Math.abs(dias)}d`;
+  if (dias === 0) return "hoy";
+  return `${dias}d`;
 }
 
 function LoadBar({ pending, urgent, blocked, max }: { pending: number; urgent: number; blocked: number; max: number }) {
@@ -566,20 +890,20 @@ function StationCard({
   maxLoad,
   onSelect,
 }: {
-  station: (typeof STATIONS)[number];
+  station: StationInfo;
   stats: ReturnType<typeof computeStationStats>;
   maxLoad: number;
   onSelect: (stationKey: string) => void;
 }) {
-  const IconCmp = getStepIcon(station.icon);
+  const categoria = CATEGORIAS_FAMILIA.find((entry) => entry.key === station.categoria);
   const tone = stats.blocked > 0 ? "block" : stats.urgent > 0 ? "urgent" : "ok";
   const loadPct = maxLoad > 0 ? Math.round((stats.total / maxLoad) * 100) : 0;
 
   return (
     <button type="button" className={`sta-card tone-${tone}`} onClick={() => onSelect(station.key)}>
       <div className="sta-card-head">
-        <span className="sta-card-ico"><IconCmp /></span>
-        <div className="sta-card-titles"><div className="nm">{station.nm}</div><div className="desc">{station.desc}</div></div>
+        <span className="sta-card-ico"><FactoryIcon /></span>
+        <div className="sta-card-titles"><div className="nm">{station.nm}</div><div className="desc">{categoria?.nm ?? "Centro de costo"}</div></div>
       </div>
       <div className="sta-card-load">
         <div className="lh"><span className="num">{stats.total}</span><span className="lbl">pasos activos</span><span className="pct">{loadPct}% carga</span></div>
@@ -591,42 +915,48 @@ function StationCard({
         </div>
       </div>
       <div className="sta-card-signals">
-        {stats.oldestBlocked ? <div className="sig sig-block"><BanIcon /><span><strong>{stats.oldestBlocked.step.sub || "Sin detalle"}</strong></span></div> : null}
-        {stats.minHours != null ? <div className={`sig ${stats.minHours < 24 ? "sig-warn" : ""}`}><ClockIcon /><span>Próxima entrega · <strong>{fmtHoursUntil(stats.minHours)}</strong></span></div> : null}
+        {stats.oldestBlocked ? <div className="sig sig-block"><BanIcon /><span><strong>{stats.oldestBlocked.step.paso.motivoBloqueo || "Sin detalle"}</strong></span></div> : null}
+        {stats.minDias != null ? <div className={`sig ${stats.minDias <= 0 ? "sig-warn" : ""}`}><ClockIcon /><span>Próxima entrega · <strong>{fmtDiasEntrega(stats.minDias)}</strong></span></div> : null}
       </div>
       <div className="sta-card-foot"><span>Ver detalles</span><ArrowRightIcon /></div>
     </button>
   );
 }
 
-function StationGrid({ onSelect }: { onSelect: (stationKey: string) => void }) {
-  const allStats = STATIONS.map((station) => ({ station, stats: computeStationStats(station.key) }));
+function StationGrid({ items, onSelect }: { items: ItemView[]; onSelect: (stationKey: string) => void }) {
+  const stations = collectStations(items);
+  const allStats = stations.map((station) => ({ station, stats: computeStationStats(items, station.key) }));
   const totalActive = allStats.reduce((acc, entry) => acc + entry.stats.total, 0);
   const maxLoad = Math.max(1, ...allStats.map((entry) => entry.stats.total));
   const blockedTotal = allStats.reduce((acc, entry) => acc + entry.stats.blocked, 0);
   const urgentTotal = allStats.reduce((acc, entry) => acc + entry.stats.urgent, 0);
   const active = allStats.filter((entry) => entry.stats.total > 0);
   const idle = allStats.filter((entry) => entry.stats.total === 0);
-  const byCategory = STATION_CATEGORIES.map((category) => ({
+  const byCategory = CATEGORIAS_FAMILIA.map((category) => ({
     ...category,
     items: active
-      .filter(({ station }) => (category.stations as readonly string[]).includes(station.key))
+      .filter(({ station }) => station.categoria === category.key)
       .sort((a, b) => b.stats.blocked - a.stats.blocked || b.stats.urgent - a.stats.urgent || b.stats.total - a.stats.total),
   })).filter((category) => category.items.length > 0);
 
   return (
     <div className="sta-grid-wrap">
       <div className="sta-toolbar">
-        <div className="sta-select"><span className="lbl">Todas las estaciones</span><ChevronDownIcon /></div>
+        <div className="sta-select"><span className="lbl">Estaciones = centros de costo de los pasos</span></div>
         <div className="sta-toolbar-stats">
           <span className="stat"><strong>{totalActive}</strong>pasos activos</span>
           <span className="sep">·</span>
-          <span className="stat"><strong>{active.length}</strong>de {STATIONS.length} estaciones activas</span>
+          <span className="stat"><strong>{active.length}</strong>de {stations.length} estaciones activas</span>
           {blockedTotal > 0 ? <><span className="sep">·</span><span className="stat warn"><strong>{blockedTotal}</strong>bloqueado{blockedTotal > 1 ? "s" : ""}</span></> : null}
           {urgentTotal > 0 ? <><span className="sep">·</span><span className="stat amber"><strong>{urgentTotal}</strong>urgente{urgentTotal > 1 ? "s" : ""}</span></> : null}
         </div>
-        <button type="button" className="sta-toolbar-cta"><CalendarIcon /><span>Entrega: Próximas</span></button>
       </div>
+
+      {byCategory.length === 0 ? (
+        <div className="sta-idle">
+          <div className="sta-idle-head"><span className="dot" /><span>No hay pasos activos en ninguna estación.</span></div>
+        </div>
+      ) : null}
 
       {byCategory.map((category) => {
         const catTotal = category.items.reduce((acc, entry) => acc + entry.stats.total, 0);
@@ -648,14 +978,11 @@ function StationGrid({ onSelect }: { onSelect: (stationKey: string) => void }) {
         <div className="sta-idle">
           <div className="sta-idle-head"><span className="dot" /><span>Sin actividad ahora</span><span className="ct">{idle.length} estaciones</span></div>
           <div className="sta-idle-chips">
-            {idle.map(({ station }) => {
-              const IconCmp = getStepIcon(station.icon);
-              return (
-                <button key={station.key} type="button" className="sta-idle-chip" onClick={() => onSelect(station.key)}>
-                  <span className="ic"><IconCmp /></span><span className="nm">{station.nm}</span><span className="arr"><ArrowRightIcon /></span>
-                </button>
-              );
-            })}
+            {idle.map(({ station }) => (
+              <button key={station.key} type="button" className="sta-idle-chip" onClick={() => onSelect(station.key)}>
+                <span className="ic"><FactoryIcon /></span><span className="nm">{station.nm}</span><span className="arr"><ArrowRightIcon /></span>
+              </button>
+            ))}
           </div>
         </div>
       ) : null}
@@ -673,49 +1000,57 @@ function TaskCard({
   task: StationTask;
   inMesa: boolean;
   onMoveToMesa: (id: string) => void;
-  onOpen: (code: string) => void;
+  onOpen: (id: string) => void;
   dragHint?: boolean;
 }) {
-  const meta = PROD_STEPS[task.step.key];
   const statusLabel = task.isBlocked ? "BLOQUEADO" : task.isCurrent ? "EN CURSO" : "PENDIENTE";
   const statusCls = task.isBlocked ? "blocked" : task.isCurrent ? "current" : "pending";
 
   return (
     <div className={`sta-task status-${statusCls} ${task.overdue ? "overdue" : ""} ${task.urgent ? "urgent" : ""} ${inMesa ? "in-mesa" : ""}`}>
       <div className="sta-task-row1">
-        <span className="grip" title="Arrastrar a tu mesa"><GripVerticalIcon /></span>
-        <span className="cbx" role="checkbox" aria-checked="false" />
-        <span className="code">{task.itemCode}</span>
+        <span className="grip" title="Mover a tu mesa"><GripVerticalIcon /></span>
+        <span className="code">{task.item.code}</span>
         <span className={`task-status ${statusCls}`}>{statusLabel}</span>
         {task.overdue ? <span className="task-vencido"><BanIcon />VENCIDO</span> : null}
         <span className="ot">{task.item.otCode}</span>
       </div>
       <div className="sta-task-body">
         <div className="meta"><span className="ic"><UserIcon /></span><span className="v">{task.item.customer}</span></div>
-        <div className="meta"><span className="ic"><BoxIcon /></span><span className="v">{task.item.product} <span className="qty">· {task.item.qty.toLocaleString("es-AR")} u</span></span></div>
-        <div className="meta step"><span className="ic"><CogIcon /></span><span className="v">{meta.tec}</span></div>
-        {task.step.sub ? <div className="meta sub-detail"><span className="v">{task.step.sub}</span></div> : null}
+        <div className="meta"><span className="ic"><BoxIcon /></span><span className="v">{task.item.product} <span className="qty">· {task.item.qtyLabel}</span></span></div>
+        <div className="meta step"><span className="ic"><CogIcon /></span><span className="v">{task.step.paso.nombre}</span></div>
+        {task.step.paso.motivoBloqueo ? <div className="meta sub-detail"><span className="v">{task.step.paso.motivoBloqueo}</span></div> : null}
       </div>
       <div className="sta-task-foot">
-        <div className="ts"><ClockIcon /><span>{task.item.dueDate}</span><span className="sep">·</span><span className={task.overdue ? "warn" : ""}>{task.item.dueIn}</span></div>
+        <div className="ts"><ClockIcon /><span>{task.item.dueLabel}</span><span className="sep">·</span><span className={task.overdue ? "warn" : ""}>{task.item.dueIn}</span></div>
         <div className="actions">
           <button type="button" className="sta-btn ghost" onClick={(event) => { event.stopPropagation(); onMoveToMesa(taskId(task)); }}>
             {inMesa ? <><ArrowLeftIcon />Devolver</> : <>Mover a mi mesa<ArrowRightIcon /></>}
           </button>
-          <button type="button" className="sta-btn primary" onClick={(event) => { event.stopPropagation(); onOpen(task.itemCode); }}>Ver detalles</button>
+          <button type="button" className="sta-btn primary" onClick={(event) => { event.stopPropagation(); onOpen(task.item.id); }}>Ver detalles</button>
         </div>
       </div>
-      {dragHint ? <div className="sta-task-hint">Arrastrá esta tarea a Mesa de trabajo o Pendientes.</div> : null}
+      {dragHint ? <div className="sta-task-hint">Movete tareas a tu mesa para ordenar tu trabajo del día.</div> : null}
     </div>
   );
 }
 
-function StationDetail({ stationKey, onBack, onOpen }: { stationKey: string; onBack: () => void; onOpen: (code: string) => void }) {
-  const station = STATIONS.find((entry) => entry.key === stationKey) ?? STATIONS[0];
-  const IconCmp = getStepIcon(station.icon);
-  const tasks = getActiveStepsAtStation(stationKey);
+function StationDetail({
+  items,
+  stationKey,
+  onBack,
+  onOpen,
+}: {
+  items: ItemView[];
+  stationKey: string;
+  onBack: () => void;
+  onOpen: (id: string) => void;
+}) {
+  const station = collectStations(items).find((entry) => entry.key === stationKey);
+  const tasks = getActiveStepsAtStation(items, stationKey);
   const [mesa, setMesa] = React.useState(() => new Set<string>());
   const [filter, setFilter] = React.useState("todos");
+  const categoria = CATEGORIAS_FAMILIA.find((entry) => entry.key === station?.categoria);
 
   const toggleMesa = (id: string) => {
     setMesa((current) => {
@@ -742,13 +1077,12 @@ function StationDetail({ stationKey, onBack, onOpen }: { stationKey: string; onB
     <div className="sta-detail">
       <div className="sta-detail-head">
         <div className="sta-detail-head-top">
-          <span className="sta-detail-ico"><IconCmp /></span>
+          <span className="sta-detail-ico"><FactoryIcon /></span>
           <div className="body">
-            <h2>{station.nm}</h2>
-            <p>{station.desc}</p>
+            <h2>{station?.nm ?? "Estación"}</h2>
+            <p>{categoria?.nm ?? "Centro de costo"}</p>
             <div className="actions">
               <button type="button" className="sta-btn ghost" onClick={onBack}><ArrowLeftIcon />Ver todas las estaciones</button>
-              <button type="button" className="sta-btn ghost"><CheckIcon />Seleccionar todos</button>
             </div>
           </div>
           <div className="counter"><div className="num">{tasks.length}</div><div className="lbl">pasos activos</div></div>
@@ -779,7 +1113,7 @@ function StationDetail({ stationKey, onBack, onOpen }: { stationKey: string; onB
         <div className="sta-col mesa-col">
           <div className="sta-col-head"><span className="dot mesa" /><span className="ttl">Mi mesa de trabajo</span><span className="ct"><strong>{mesaTasks.length}</strong> pasos</span></div>
           <div className={`sta-col-body ${mesaTasks.length === 0 ? "empty-mesa" : ""}`}>
-            {mesaTasks.length === 0 ? <div className="sta-mesa-empty"><BoxIcon /><div className="ttl">Arrastrá tareas acá para trabajar en ellas</div><div className="sub">Las tareas pasan a tu mesa cuando las tomás de la fila compartida.</div></div> : null}
+            {mesaTasks.length === 0 ? <div className="sta-mesa-empty"><BoxIcon /><div className="ttl">Movete tareas acá para trabajar en ellas</div><div className="sub">Las tareas pasan a tu mesa cuando las tomás de la fila compartida.</div></div> : null}
             {visibleMesa.map((task, index) => <TaskCard key={taskId(task)} task={task} inMesa onMoveToMesa={toggleMesa} onOpen={onOpen} dragHint={index === 0 && filter !== "mesa"} />)}
           </div>
         </div>
@@ -796,30 +1130,32 @@ function StationDetail({ stationKey, onBack, onOpen }: { stationKey: string; onB
   );
 }
 
-function ByStationView({ onOpen }: { onOpen: (code: string) => void }) {
+function ByStationView({ items, onOpen }: { items: ItemView[]; onOpen: (id: string) => void }) {
   const [stationKey, setStationKey] = React.useState<string | null>(null);
-  if (stationKey) return <StationDetail stationKey={stationKey} onBack={() => setStationKey(null)} onOpen={onOpen} />;
-  return <StationGrid onSelect={setStationKey} />;
+  if (stationKey) return <StationDetail items={items} stationKey={stationKey} onBack={() => setStationKey(null)} onOpen={onOpen} />;
+  return <StationGrid items={items} onSelect={setStationKey} />;
 }
 
-function getCurrentStep(item: TableroItem) {
-  return item.steps.find((step) => step.status === "current" || step.status === "blocked");
-}
+// ── Kanban ───────────────────────────────────────────────────────────────
 
-function getKanbanBucket(item: TableroItem): KanbanBucketKey {
-  if (!item.steps.some((step) => step.status === "done")) return "not-started";
-  if (/Hoy/i.test(item.dueDate)) return "today";
-  if (!item.onTrack) return "delayed";
+function getKanbanBucket(item: ItemView): KanbanBucketKey {
+  if (!item.started) return "not-started";
+  if (item.dueDays === 0) return "today";
+  if (item.delayed) return "delayed";
   return "active";
 }
 
-function KanbanCard({ item, onOpen }: { item: TableroItem; onOpen: (code: string) => void }) {
-  const step = getCurrentStep(item);
-  const meta = step ? PROD_STEPS[step.key] : null;
-  const IconCmp = meta ? getStepIcon(meta.ico) : LayoutDashboardIcon;
+function kanbanStepIcon(item: ItemView) {
+  if (item.blocked) return <BanIcon />;
+  const IconCmp = item.currentStep ? getStepIcon(item.currentStep.iconKey) : LayoutDashboardIcon;
+  return <IconCmp />;
+}
+
+function KanbanCard({ item, onOpen }: { item: ItemView; onOpen: (id: string) => void }) {
+  const step = item.currentStep;
 
   return (
-    <button type="button" className={`kan-card priority-${item.priority} ${item.blocked ? "blocked" : !item.onTrack ? "delayed" : ""}`} onClick={() => onOpen(item.code)}>
+    <button type="button" className={`kan-card priority-${item.priority} ${item.blocked ? "blocked" : item.delayed ? "delayed" : ""}`} onClick={() => onOpen(item.id)}>
       <div className="kan-card-top">
         <span className="item-code">{item.code}</span>
         <span className="ot-badge">{item.otCode}</span>
@@ -829,26 +1165,26 @@ function KanbanCard({ item, onOpen }: { item: TableroItem; onOpen: (code: string
       <div className="kan-title">{item.product}</div>
       <div className="kan-meta">{item.customer} · {item.spec}</div>
       <div className="kan-step">
-        <span className="kan-step-ico">{item.blocked ? <BanIcon /> : <IconCmp />}</span>
+        <span className="kan-step-ico">{kanbanStepIcon(item)}</span>
         <div>
-          <div className="tec">{meta?.tec ?? "Sin paso actual"}</div>
-          <div className="sub">{step?.sub ?? item.statusLine}</div>
+          <div className="tec">{step?.paso.nombre ?? (item.sinRuta ? "Sin ruta" : "Completado")}</div>
+          <div className="sub">{item.statusLine}</div>
         </div>
       </div>
       <div className="kan-progress" aria-label={`Avance ${item.progressPct}%`}><span style={{ width: `${item.progressPct}%` }} /></div>
       <div className="kan-foot">
-        <span className={`due ${!item.onTrack || /Hoy/i.test(item.dueDate) ? "warn" : ""}`}><ClockIcon />{item.dueDate} · {item.dueIn}</span>
-        <span className="op"><span className="mini-av">{item.operator.iniciales}</span>{item.operator.nombre.split(" ")[0]}</span>
+        <span className={`due ${item.delayed || item.dueDays === 0 ? "warn" : ""}`}><ClockIcon />{item.dueLabel} · {item.dueIn}</span>
+        <span className="op"><span className="mini-av">{iniciales(item.vendedor)}</span>{item.vendedor.split(" ")[0]}</span>
       </div>
     </button>
   );
 }
 
-function KanbanView({ items, onOpen }: { items: TableroItem[]; onOpen: (code: string) => void }) {
+function KanbanView({ items, onOpen }: { items: ItemView[]; onOpen: (id: string) => void }) {
   const columns: Array<{ key: KanbanBucketKey; title: string; description: string }> = [
-    { key: "not-started", title: "No iniciados", description: "Sin pasos completados" },
+    { key: "not-started", title: "No iniciados", description: "Sin pasos ejecutados" },
     { key: "today", title: "Vencen hoy", description: "Prioridad de despacho" },
-    { key: "delayed", title: "Con retraso", description: "Fuera del plan" },
+    { key: "delayed", title: "Con retraso", description: "Entrega vencida" },
     { key: "active", title: "En curso", description: "Avanzando sin retraso" },
   ];
   const grouped = columns.map((column) => ({
@@ -869,7 +1205,7 @@ function KanbanView({ items, onOpen }: { items: TableroItem[]; onOpen: (code: st
           </div>
           <div className="kan-col-body">
             {column.items.length === 0 ? <div className="kan-empty">No hay items en esta columna.</div> : null}
-            {column.items.map((item) => <KanbanCard key={item.code} item={item} onOpen={onOpen} />)}
+            {column.items.map((item) => <KanbanCard key={item.id} item={item} onOpen={onOpen} />)}
           </div>
         </section>
       ))}
@@ -877,149 +1213,16 @@ function KanbanView({ items, onOpen }: { items: TableroItem[]; onOpen: (code: st
   );
 }
 
-function parseDurH(value?: string) {
-  if (!value || value === "—") return 1;
-  let total = 0;
-  const days = value.match(/(\d+)\s*d/);
-  const hours = value.match(/(\d+)\s*h/);
-  const minutes = value.match(/(\d+)\s*min/);
-  if (days) total += parseInt(days[1], 10) * 24;
-  if (hours) total += parseInt(hours[1], 10);
-  if (minutes) total += parseInt(minutes[1], 10) / 60;
-  return total || 1;
-}
+// ── Vista principal ──────────────────────────────────────────────────────
 
-function computeTimeline(item: TableroItem) {
-  const segments: Array<{ key: TableroStep["key"]; status: TableroStep["status"]; startH: number; durH: number; ref: TableroStep; progress?: number }> = [];
-  const currentIdx = item.steps.findIndex((step) => step.status === "current" || step.status === "blocked");
-  const splitIdx = currentIdx === -1 ? item.steps.length : currentIdx;
-  let cursor = 0;
-
-  for (let i = splitIdx - 1; i >= 0; i -= 1) {
-    const step = item.steps[i];
-    const dur = parseDurH(step.dur);
-    cursor -= dur;
-    segments.unshift({ key: step.key, status: "done", startH: cursor, durH: dur, ref: step });
-  }
-
-  cursor = 0;
-  if (currentIdx !== -1) {
-    const step = item.steps[currentIdx];
-    const dur = Math.max(parseDurH(step.dur), 1);
-    const progress = step.progress ?? (step.status === "blocked" ? 0 : 0.3);
-    const doneH = dur * progress;
-    segments.push({ key: step.key, status: step.status, startH: -doneH, durH: dur, ref: step, progress });
-    cursor = dur - doneH;
-  }
-
-  for (let i = splitIdx + 1; i < item.steps.length; i += 1) {
-    const step = item.steps[i];
-    const dur = parseDurH(step.dur);
-    segments.push({ key: step.key, status: "pending", startH: cursor, durH: dur, ref: step });
-    cursor += dur;
-  }
-
-  const endH = segments.length ? segments[segments.length - 1].startH + segments[segments.length - 1].durH : 0;
-  return { segments, endH, dueH: parseDueInHours(item.dueIn) };
-}
-
-function TimelineAxis() {
-  const ticks = [];
-  for (let h = -TL_PAST_H; h <= TL_FUTURE_H; h += 6) ticks.push({ h, isDay: h % 24 === 0 });
-  const dayLabels = [];
-  for (let d = Math.floor(-TL_PAST_H / 24); d <= Math.ceil(TL_FUTURE_H / 24); d += 1) {
-    const h = d * 24;
-    if (h < -TL_PAST_H || h > TL_FUTURE_H) continue;
-    const dayIdx = ((3 + d) % 7 + 7) % 7;
-    dayLabels.push({ h, label: TL_DAY_NAMES[dayIdx], num: 27 + d, isToday: d === 0 });
-  }
-
-  return (
-    <div className="tl-axis" style={{ width: TL_WIDTH }}>
-      <div className="tl-axis-days">
-        {dayLabels.map((day) => <div key={`${day.label}-${day.num}`} className={`tl-day ${day.isToday ? "today" : ""}`} style={{ left: TL_ORIGIN_PX + day.h * TL_HOUR_PX }}><span className="nm">{day.label}</span><span className="num">{day.num}</span></div>)}
-      </div>
-      <div className="tl-axis-ticks">
-        {ticks.map((tick) => <div key={tick.h} className={`tl-tick ${tick.isDay ? "day" : ""}`} style={{ left: TL_ORIGIN_PX + tick.h * TL_HOUR_PX }}>{!tick.isDay ? <span className="hr">{((tick.h % 24) + 24) % 24}h</span> : null}</div>)}
-      </div>
-    </div>
-  );
-}
-
-function TimelineRow({ item, onOpen }: { item: TableroItem; onOpen: (code: string) => void }) {
-  const { segments, endH, dueH } = computeTimeline(item);
-  const currentStep = item.steps.find((step) => step.status === "current" || step.status === "blocked");
-  const isDelayed = !item.onTrack && !item.blocked;
-  const overdue = dueH < endH;
-
-  return (
-    <button type="button" className={`tl-row ${item.blocked ? "blocked" : ""} ${isDelayed ? "delayed" : ""} priority-${item.priority}`} onClick={() => onOpen(item.code)}>
-      <div className="tl-row-left">
-        <div className="tl-row-codes"><span className="item-code">{item.code}</span>{item.priority !== "normal" ? <span className={`prio-pill prio-${item.priority}`}>{item.priority === "urgent" ? "Urg." : "Alta"}</span> : null}</div>
-        <div className="tl-row-product">{item.product}</div>
-        <div className="tl-row-meta"><span>{item.customer}</span><span className="sep">·</span><span className="mono">{item.qty.toLocaleString("es-AR")} u</span></div>
-      </div>
-
-      <div className="tl-row-bar" style={{ width: TL_WIDTH }}>
-        {segments.map((seg, index) => {
-          const meta = PROD_STEPS[seg.key];
-          const IconCmp = getStepIcon(meta.ico);
-          const left = TL_ORIGIN_PX + seg.startH * TL_HOUR_PX;
-          const width = Math.max(2, seg.durH * TL_HOUR_PX);
-          return (
-            <div key={`${seg.key}-${index}`} className={`tl-seg ${seg.status}`} style={{ left, width }} title={`${meta.nm} · ${meta.tec}`}>
-              {seg.status === "current" && seg.progress != null ? <span className="tl-seg-progress" style={{ width: `${Math.round(seg.progress * 100)}%` }} /> : null}
-              {width >= 28 ? <span className="tl-seg-ico">{seg.status === "done" ? <CheckIcon /> : seg.status === "blocked" ? <BanIcon /> : <IconCmp />}</span> : null}
-              {width >= 70 ? <span className="tl-seg-label">{meta.nm}</span> : null}
-            </div>
-          );
-        })}
-        <div className={`tl-due ${overdue ? "overdue" : ""}`} style={{ left: TL_ORIGIN_PX + dueH * TL_HOUR_PX }} title={`Entrega · ${item.dueDate}`}>
-          <span className="pin" />
-          <span className="lbl">{item.dueDate}</span>
-        </div>
-      </div>
-      <span className="sr-only">{currentStep ? PROD_STEPS[currentStep.key].nm : "Sin paso actual"}</span>
-    </button>
-  );
-}
-
-function TimelineView({ onOpen }: { onOpen: (code: string) => void }) {
-  const scrollRef = React.useRef<HTMLDivElement>(null);
-  React.useEffect(() => {
-    if (!scrollRef.current) return;
-    scrollRef.current.scrollLeft = Math.max(0, TL_ORIGIN_PX - scrollRef.current.clientWidth * 0.25);
-  }, []);
-
-  return (
-    <div className="tl-wrap">
-      <div className="tl-legend">
-        <div className="tl-legend-items">
-          <span className="lg"><span className="sw done" /> Pasos completados</span>
-          <span className="lg"><span className="sw current" /> En curso</span>
-          <span className="lg"><span className="sw pending" /> Pendientes</span>
-          <span className="lg"><span className="sw blocked" /> Bloqueado</span>
-          <span className="lg"><span className="sw due" /> Entrega comprometida</span>
-        </div>
-        <div className="tl-legend-now"><span className="tl-now-mark" /> Ahora</div>
-      </div>
-
-      <div className="tl-scroll" ref={scrollRef}>
-        <div className="tl-axis-wrap"><div className="tl-axis-left">Items en producción</div><TimelineAxis /></div>
-        <div className="tl-body">
-          <div className="tl-rows">{PROD_ITEMS.map((item) => <TimelineRow key={item.code} item={item} onOpen={onOpen} />)}</div>
-          <div className="tl-now-line" style={{ left: 280 + TL_ORIGIN_PX }}><div className="tl-now-pill"><span className="dot" />AHORA</div></div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export function TableroProduccion() {
+export function TableroProduccion({ initialItems }: { initialItems: TableroItemData[] }) {
+  const [items, setItems] = React.useState<TableroItemData[]>(initialItems);
   const [mode, setMode] = React.useState<Mode>(DEFAULT_BOARD_MODE);
   const [defaultMode, setDefaultMode] = React.useState<Mode>(DEFAULT_BOARD_MODE);
   const [tabMenu, setTabMenu] = React.useState<{ mode: Mode; x: number; y: number } | null>(null);
-  const [selectedCode, setSelectedCode] = React.useState<string | null>(null);
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
   const [filters, setFilters] = React.useState<{ status: StatusFilter; priority: PriorityFilter; query: string }>({ status: "all", priority: "all", query: "" });
 
   React.useEffect(() => {
@@ -1049,8 +1252,33 @@ export function TableroProduccion() {
     };
   }, [tabMenu]);
 
+  const views = React.useMemo(() => items.map(buildItemView), [items]);
+
+  /**
+   * Acción sobre un paso: el backend devuelve el item re-proyectado, pero
+   * la acción puede promover la orden (pendiente → produccion) y eso afecta
+   * a los items hermanos: se refresca el dataset completo (es chico).
+   */
+  const handleAccion = React.useCallback(
+    async (item: ItemView, paso: TableroPasoData, accion: TableroPasoAccion, motivo?: string) => {
+      setBusy(true);
+      setError(null);
+      try {
+        const actualizado = await accionPasoProduccion(item.data.ordenId, item.id, paso.id, { accion, motivo });
+        setItems((current) => current.map((entry) => (entry.id === actualizado.id ? actualizado : entry)));
+        const { items: refrescados } = await getTableroProduccion();
+        setItems(refrescados);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "No se pudo ejecutar la acción.");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [],
+  );
+
   const tabEntries: Array<{ mode: Mode; label: string; count?: number }> = [
-    { mode: "items", label: BOARD_MODE_LABELS.items, count: PROD_ITEMS.length },
+    { mode: "items", label: BOARD_MODE_LABELS.items, count: views.length },
     { mode: "estacion", label: BOARD_MODE_LABELS.estacion },
     { mode: "kanban", label: BOARD_MODE_LABELS.kanban },
   ];
@@ -1071,11 +1299,11 @@ export function TableroProduccion() {
   };
 
   const filtered = React.useMemo(() => {
-    return PROD_ITEMS.filter((item) => {
-      if (filters.status === "in-progress" && (item.blocked || !item.onTrack)) return false;
+    return views.filter((item) => {
+      if (filters.status === "in-progress" && (item.blocked || item.delayed)) return false;
       if (filters.status === "blocked" && !item.blocked) return false;
-      if (filters.status === "delayed" && (item.onTrack || item.blocked)) return false;
-      if (filters.status === "due-today" && !/Hoy/i.test(item.dueDate)) return false;
+      if (filters.status === "delayed" && (!item.delayed || item.blocked)) return false;
+      if (filters.status === "due-today" && item.dueDays !== 0) return false;
       if (filters.priority !== "all" && item.priority !== filters.priority) return false;
       if (filters.query) {
         const query = filters.query.toLowerCase();
@@ -1084,37 +1312,37 @@ export function TableroProduccion() {
       }
       return true;
     });
-  }, [filters]);
+  }, [views, filters]);
 
   const counts = {
-    all: PROD_ITEMS.length,
+    all: views.length,
     shown: filtered.length,
-    inProgress: PROD_ITEMS.filter((item) => item.onTrack && !item.blocked).length,
-    blocked: PROD_ITEMS.filter((item) => item.blocked).length,
-    delayed: PROD_ITEMS.filter((item) => !item.onTrack && !item.blocked).length,
-    today: PROD_ITEMS.filter((item) => /Hoy/i.test(item.dueDate)).length,
+    inProgress: views.filter((item) => !item.blocked && !item.delayed).length,
+    blocked: views.filter((item) => item.blocked).length,
+    delayed: views.filter((item) => item.delayed && !item.blocked).length,
+    today: views.filter((item) => item.dueDays === 0).length,
   };
-  const selectedItem = selectedCode ? PROD_ITEMS.find((item) => item.code === selectedCode) : undefined;
+  const selectedItem = selectedId ? views.find((item) => item.id === selectedId) : undefined;
 
   return (
     <div className="tablero-produccion">
       <div className="tab-page">
         <div className="page-head">
           <div className="title-block">
-            <h1>Tablero de producción <span className="live-pill"><span className="dot" />En vivo</span></h1>
-            <div className="sub">Items en producción agrupados por su recorrido individual. Click en un item para ver el detalle de la ruta y acciones rápidas.</div>
+            <h1>Tablero de producción</h1>
+            <div className="sub">Items de las órdenes emitidas, con su ruta real de pasos. Click en un item para ver el detalle y ejecutar acciones.</div>
           </div>
-          <button type="button" className="btn">Exportar</button>
-          <button type="button" className="btn">Ajustes de tablero</button>
         </div>
 
         <div className="d-kpi-row">
-          <div className="d-kpi"><div className="d-kpi-head"><span className="d-kpi-lbl">Items en producción</span></div><div className="d-kpi-val"><span className="num">{PROD_ITEMS.length}</span></div><div className="d-kpi-foot"><span className="d-delta tone-ok">↑ 2</span><span className="d-kpi-sub">vs ayer</span></div></div>
+          <div className="d-kpi"><div className="d-kpi-head"><span className="d-kpi-lbl">Items en producción</span></div><div className="d-kpi-val"><span className="num">{views.length}</span></div><div className="d-kpi-foot"><span className="d-kpi-sub">de órdenes emitidas</span></div></div>
           <div className="d-kpi"><div className="d-kpi-head"><span className="d-kpi-lbl">En curso · OK</span></div><div className="d-kpi-val"><span className="num ok">{counts.inProgress}</span></div><div className="d-kpi-foot"><span className="d-kpi-sub">avanzando sin retraso</span></div></div>
-          <div className="d-kpi"><div className="d-kpi-head"><span className="d-kpi-lbl">Con retraso</span></div><div className="d-kpi-val"><span className="num signal">{counts.delayed}</span></div><div className="d-kpi-foot"><span className="d-delta tone-signal">vencimiento próximo</span></div></div>
+          <div className="d-kpi"><div className="d-kpi-head"><span className="d-kpi-lbl">Con retraso</span></div><div className="d-kpi-val"><span className="num signal">{counts.delayed}</span></div><div className="d-kpi-foot"><span className="d-delta tone-signal">entrega vencida</span></div></div>
           <div className="d-kpi"><div className="d-kpi-head"><span className="d-kpi-lbl">Bloqueados</span></div><div className="d-kpi-val"><span className="num">{counts.blocked}</span></div><div className="d-kpi-foot"><span className="d-kpi-sub">requieren intervención</span></div></div>
           <div className="d-kpi"><div className="d-kpi-head"><span className="d-kpi-lbl">Vencen hoy</span></div><div className="d-kpi-val"><span className="num">{counts.today}</span></div><div className="d-kpi-foot"><span className="d-kpi-sub">prioridad de despacho</span></div></div>
         </div>
+
+        {error ? <div className="tab-error" role="alert">{error}</div> : null}
 
         <div className="dash-tabs">
           {tabEntries.map((entry) => (
@@ -1150,25 +1378,35 @@ export function TableroProduccion() {
           </div>
         ) : null}
 
-        {mode === "items" ? (
+        {views.length === 0 ? (
+          <div className="empty-results">
+            No hay órdenes en producción. Cuando emitas una orden de trabajo al taller,
+            sus items aparecen acá con su ruta de pasos.{" "}
+            <Link href="/produccion/ordenes">Ir a Órdenes de trabajo</Link>
+          </div>
+        ) : (
           <>
-            <FiltersBar filters={filters} setFilters={setFilters} counts={counts} />
-            <div className="tab-board">
-              {filtered.map((item) => <ItemRow key={item.code} item={item} onOpen={setSelectedCode} />)}
-              {filtered.length === 0 ? <div className="empty-results">No hay items que coincidan con los filtros.</div> : null}
-            </div>
+            {mode === "items" ? (
+              <>
+                <FiltersBar filters={filters} setFilters={setFilters} counts={counts} />
+                <div className="tab-board">
+                  {filtered.map((item) => <ItemRow key={item.id} item={item} onOpen={setSelectedId} />)}
+                  {filtered.length === 0 ? <div className="empty-results">No hay items que coincidan con los filtros.</div> : null}
+                </div>
+              </>
+            ) : null}
+            {mode === "estacion" ? <ByStationView items={views} onOpen={setSelectedId} /> : null}
+            {mode === "kanban" ? (
+              <>
+                <FiltersBar filters={filters} setFilters={setFilters} counts={counts} />
+                <KanbanView items={filtered} onOpen={setSelectedId} />
+              </>
+            ) : null}
           </>
-        ) : null}
-        {mode === "estacion" ? <ByStationView onOpen={setSelectedCode} /> : null}
-        {mode === "kanban" ? (
-          <>
-            <FiltersBar filters={filters} setFilters={setFilters} counts={counts} />
-            <KanbanView items={filtered} onOpen={setSelectedCode} />
-          </>
-        ) : null}
+        )}
       </div>
 
-      <ItemDetailSheet item={selectedItem} onClose={() => setSelectedCode(null)} />
+      <ItemDetailSheet item={selectedItem} busy={busy} onAccion={handleAccion} onClose={() => setSelectedId(null)} />
     </div>
   );
 }

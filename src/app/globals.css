@@ -16849,6 +16849,62 @@
   }
 }
 
+/* Tablero conectado a órdenes reales: acciones de paso + estados vacíos */
+.tablero-produccion .tab-error {
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border: 1px solid #f3c1b4;
+  border-radius: 10px;
+  background: #fdf1ed;
+  color: #b3401f;
+  font-size: 13px;
+}
+
+.tablero-produccion .detail-route-empty {
+  padding: 42px 24px;
+  color: var(--muted-text);
+  text-align: center;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.tablero-produccion .ds-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.tablero-produccion .ds-bloqueo-form input {
+  flex: 1;
+  min-width: 180px;
+  padding: 7px 10px;
+  border: 1px solid var(--border, #dcdcd4);
+  border-radius: 8px;
+  font-size: 13px;
+  background: var(--surface, #fff);
+  color: inherit;
+}
+
+.tablero-produccion .detail-activity .act-scope {
+  margin-bottom: 10px;
+  color: var(--muted-text);
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tablero-produccion .sheet-foot-hint {
+  color: var(--muted-text);
+  font-size: 12.5px;
+}
+
+.tablero-produccion .empty-results a {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
 /* Estaciones de producción */
 .est-page {
   flex: 1;

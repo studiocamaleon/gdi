@@ -49,6 +49,7 @@ export const EVENTO_ICONOS: Record<
   item_agregado: { Icono: PlusIcon },
   item_modificado: { Icono: PencilIcon },
   item_quitado: { Icono: Trash2Icon },
+  paso: { Icono: FactoryIcon },
   nota: { Icono: TagIcon },
 };
 

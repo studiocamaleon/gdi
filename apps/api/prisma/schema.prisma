@@ -424,6 +424,7 @@ model Tenant {
   productosComisionesAplicadas                     ProductoComisionAplicada[]
   ordenesTrabajo                                   OrdenTrabajo[]
   ordenTrabajoItems                                OrdenTrabajoItem[]
+  ordenTrabajoItemPasos                            OrdenTrabajoItemPaso[]
   ordenTrabajoEventos                              OrdenTrabajoEvento[]
   ordenTrabajoContadores                           OrdenTrabajoContador[]
   cuentasFondos                                    CuentaFondos[]
@@ -1878,6 +1879,7 @@ model OrdenTrabajo {
   vendedor           Empleado?            @relation("OrdenTrabajoVendedor", fields: [vendedorEmpleadoId], references: [id])
   cotizacion         Cotizacion?          @relation(fields: [cotizacionId], references: [id])
   items              OrdenTrabajoItem[]
+  pasos              OrdenTrabajoItemPaso[]
   eventos            OrdenTrabajoEvento[]
   cobros             Cobro[]
   movimientosFondos  MovimientoFondos[]
@@ -1919,8 +1921,48 @@ model OrdenTrabajoItem {
   tenant                Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   orden                 OrdenTrabajo    @relation(fields: [ordenId], references: [id], onDelete: Cascade)
   cotizacionItem        CotizacionItem? @relation(fields: [cotizacionItemId], references: [id])
+  pasos                 OrdenTrabajoItemPaso[]
 
   @@index([tenantId, ordenId])
+}
+
+/// Paso de producción de un item de OT: la unidad de trabajo del Tablero.
+/// Se materializa al EMITIR la orden desde `trazabilidadJson.pasos` del
+/// snapshot del cotizador (sólo pasos activados). El snapshot sigue siendo
+/// inmutable; acá vive el estado de EJECUCIÓN en el taller.
+/// Ver docs/tablero-produccion-conexion-diseno.md
+model OrdenTrabajoItemPaso {
+  id                  String           @id @default(uuid()) @db.Uuid
+  tenantId            String           @db.Uuid
+  ordenId             String           @db.Uuid
+  itemId              String           @db.Uuid
+  /// Posición del paso en la ruta del item (orden topológico del snapshot).
+  indice              Int
+  /// rutaPasoId del PasoEjecutado de origen (trazar contra el snapshot).
+  rutaPasoId          String?
+  familiaCodigo       String
+  /// Categoría de alto nivel de la familia (agrupa la vista Por estación).
+  categoriaFamilia    String
+  /// Nombre operativo visible ("Impresión digital frente").
+  nombre              String
+  /// Centro de costo que tarifó el paso — proxy de "estación" en fase 1.
+  centroCostoId       String?          @db.Uuid
+  centroCostoNombre   String?
+  duracionEstimadaMin Decimal?         @db.Decimal(10, 2)
+  /// 'pendiente' | 'en_curso' | 'hecho' | 'bloqueado'.
+  estado              String           @default("pendiente")
+  motivoBloqueo       String?
+  iniciadoEl          DateTime?
+  completadoEl        DateTime?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  tenant              Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orden               OrdenTrabajo     @relation(fields: [ordenId], references: [id], onDelete: Cascade)
+  item                OrdenTrabajoItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, ordenId])
+  @@index([tenantId, itemId])
+  @@index([tenantId, estado])
 }
 
 model OrdenTrabajoEvento {

@@ -94,6 +94,7 @@ export type OrdenTrabajoEventoTipo =
   | "item_agregado"
   | "item_modificado"
   | "item_quitado"
+  | "paso"
   | "nota";
 
 export type OrdenTrabajoEvento = {

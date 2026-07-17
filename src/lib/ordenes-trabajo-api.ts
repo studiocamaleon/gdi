@@ -4,6 +4,10 @@ import type {
   OrdenTrabajoDetalle,
   OrdenTrabajoListItem,
 } from "@/lib/ordenes-trabajo";
+import type {
+  TableroItemData,
+  TableroPasoAccion,
+} from "@/lib/tablero-produccion";
 
 /**
  * Cliente API de Órdenes de Trabajo. El backend implementa el contrato de
@@ -136,6 +140,26 @@ export async function quitarOrdenItem(
   return apiRequest<OrdenTrabajoDetalle>(
     `/ordenes-trabajo/${ordenId}/items/${itemId}`,
     { method: "DELETE" },
+  );
+}
+
+/** Dataset completo del Tablero: items de órdenes activas con sus pasos. */
+export async function getTableroProduccion(): Promise<{
+  items: TableroItemData[];
+}> {
+  return apiRequest<{ items: TableroItemData[] }>("/ordenes-trabajo/tablero");
+}
+
+/** Acción de ejecución sobre un paso; devuelve el item re-proyectado. */
+export async function accionPasoProduccion(
+  ordenId: string,
+  itemId: string,
+  pasoId: string,
+  payload: { accion: TableroPasoAccion; motivo?: string },
+): Promise<TableroItemData> {
+  return apiRequest<TableroItemData>(
+    `/ordenes-trabajo/${ordenId}/items/${itemId}/pasos/${pasoId}`,
+    { method: "PATCH", body: JSON.stringify(payload) },
   );
 }
 

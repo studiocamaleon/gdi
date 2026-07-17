@@ -24,6 +24,7 @@ export const ORDEN_TRABAJO_EVENTO_TIPOS = [
   'item_agregado',
   'item_modificado',
   'item_quitado',
+  'paso',
   'nota',
 ] as const;
 
@@ -39,8 +40,34 @@ export const ORDEN_TRABAJO_ESTADO_LABELS: Record<OrdenTrabajoEstado, string> = {
 };
 
 /**
+ * Pasos de producción (Tablero). Estados de ejecución de un
+ * OrdenTrabajoItemPaso y acciones que los transicionan.
+ * Ver docs/tablero-produccion-conexion-diseno.md
+ */
+export const ORDEN_TRABAJO_PASO_ESTADOS = [
+  'pendiente',
+  'en_curso',
+  'hecho',
+  'bloqueado',
+] as const;
+
+export type OrdenTrabajoPasoEstado =
+  (typeof ORDEN_TRABAJO_PASO_ESTADOS)[number];
+
+export const ORDEN_TRABAJO_PASO_ACCIONES = [
+  'iniciar',
+  'completar',
+  'bloquear',
+  'desbloquear',
+  'reabrir',
+] as const;
+
+export type OrdenTrabajoPasoAccion =
+  (typeof ORDEN_TRABAJO_PASO_ACCIONES)[number];
+
+/**
  * Progreso efectivo que reporta la API: derivado del estado salvo que
- * producción haya informado un valor real (futuro tablero).
+ * producción haya informado un valor real (tablero).
  */
 export function progresoEfectivo(
   estado: OrdenTrabajoEstado,
