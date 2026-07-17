@@ -163,6 +163,17 @@ export async function accionPasoProduccion(
   );
 }
 
+/**
+ * Completar varios pasos de una (simulador de impresión): resultado
+ * PARCIAL honesto — los que no pudieron, con su motivo.
+ */
+export async function completarPasosLote(pasoIds: string[]) {
+  return apiRequest<{ completados: number; errores: Array<{ pasoId: string; motivo: string }> }>(
+    "/ordenes-trabajo/tablero/pasos/completar-lote",
+    { method: "POST", body: JSON.stringify({ pasoIds }) },
+  );
+}
+
 /** Tomar/soltar un paso de MI mesa de trabajo (vista Por estación). */
 export async function mesaPasoProduccion(
   pasoId: string,

@@ -27,6 +27,138 @@ function calendarioAJson(calendario: CalendarioEstacion | null) {
     : (calendario as unknown as Prisma.InputJsonValue);
 }
 
+// ── Simulador de impresión: extracción del snapshot ──────────────────────
+
+type PiezaSimulador = { anchoMm: number; altoMm: number; cantidad: number };
+
+/** Paso de trazabilidad del snapshot (sólo lo que el simulador lee). */
+type TrazabilidadPasoSimulador = {
+  rutaPasoId?: string | null;
+  materiales?: Array<{
+    tipoLineaCosto?: string;
+    materialVarianteId?: string;
+    materialSku?: string;
+    materiaPrimaNombre?: string;
+    precioUnitario?: number;
+    unidad?: string;
+    atributosVarianteJson?: { anchoMm?: unknown } | null;
+    materiaPrimaId?: string;
+  }>;
+  nestingResult?: {
+    placements?: Array<{ widthMm?: number; heightMm?: number }>;
+    consumedLengthMm?: number;
+  } | null;
+};
+
+function numeroONull(valor: unknown): number | null {
+  return typeof valor === 'number' && Number.isFinite(valor) ? valor : null;
+}
+
+/**
+ * Piezas físicas del job: los placements del nestingResult (post-panelizado
+ * y con demasía — lo que la máquina imprime de verdad), comprimidos por
+ * dimensión. Fallback: jobContext.piezas (mm). [] = sin medidas (D2).
+ */
+function piezasDeSnapshot(
+  trazPaso: TrazabilidadPasoSimulador | null,
+  jobContext: Record<string, unknown> | null,
+): PiezaSimulador[] {
+  const placements = trazPaso?.nestingResult?.placements;
+  if (Array.isArray(placements) && placements.length > 0) {
+    const porDim = new Map<string, PiezaSimulador>();
+    for (const placement of placements) {
+      const anchoMm = numeroONull(placement.widthMm);
+      const altoMm = numeroONull(placement.heightMm);
+      if (anchoMm === null || altoMm === null) continue;
+      const clave = `${anchoMm}x${altoMm}`;
+      const previa = porDim.get(clave);
+      if (previa) previa.cantidad += 1;
+      else porDim.set(clave, { anchoMm, altoMm, cantidad: 1 });
+    }
+    if (porDim.size > 0) return [...porDim.values()];
+  }
+  const piezas = jobContext?.piezas;
+  if (Array.isArray(piezas)) {
+    return piezas
+      .map((pieza) => {
+        const anchoMm = numeroONull((pieza as { anchoMm?: unknown }).anchoMm);
+        const altoMm = numeroONull((pieza as { altoMm?: unknown }).altoMm);
+        const cantidad = numeroONull((pieza as { cantidad?: unknown }).cantidad) ?? 1;
+        if (anchoMm === null || altoMm === null) return null;
+        return { anchoMm, altoMm, cantidad: Math.max(1, Math.round(cantidad)) };
+      })
+      .filter((pieza): pieza is PiezaSimulador => pieza !== null);
+  }
+  return [];
+}
+
+function buildSimuladorJob(
+  orden: {
+    id: string;
+    numero: string;
+    fechaEntrega: Date | null;
+    cliente: { nombre: string } | null;
+  },
+  item: {
+    id: string;
+    codigo: string;
+    nombre: string;
+    ordenIndice: number;
+    cotizacionItem: {
+      jobContextJson: Prisma.JsonValue;
+      trazabilidadJson: Prisma.JsonValue;
+    } | null;
+  },
+  frontera: { id: string; rutaPasoId: string | null },
+) {
+  const jobContext =
+    (item.cotizacionItem?.jobContextJson as Record<string, unknown> | null) ?? null;
+  const pasosTraza = (
+    item.cotizacionItem?.trazabilidadJson as { pasos?: TrazabilidadPasoSimulador[] } | null
+  )?.pasos;
+  const trazPaso =
+    (Array.isArray(pasosTraza)
+      ? pasosTraza.find((paso) => paso.rutaPasoId && paso.rutaPasoId === frontera.rutaPasoId)
+      : null) ?? null;
+
+  // Sustrato: la línea MATERIAL del paso (las tintas son CONSUMIBLE_MAQUINA).
+  const sustrato =
+    trazPaso?.materiales?.find((mat) => mat.tipoLineaCosto === 'MATERIAL') ?? null;
+
+  // Tecnología elegida al cotizar: la del paso, o la global del job.
+  const tecnologiaPaso = frontera.rutaPasoId
+    ? jobContext?.[`tecnologia_${frontera.rutaPasoId}`]
+    : null;
+  const tecnologia =
+    (typeof tecnologiaPaso === 'string' && tecnologiaPaso) ||
+    (typeof jobContext?.tecnologia === 'string' && jobContext.tecnologia) ||
+    null;
+
+  const letraItem = String.fromCharCode(65 + (item.ordenIndice % 26));
+  return {
+    pasoId: frontera.id,
+    itemId: item.id,
+    ordenId: orden.id,
+    codigo: `${orden.numero} · ${letraItem}`,
+    cliente: orden.cliente?.nombre ?? 'Sin cliente',
+    producto: item.nombre,
+    fechaEntrega: orden.fechaEntrega ? orden.fechaEntrega.toISOString().slice(0, 10) : null,
+    tecnologia,
+    materiaPrimaId: null as string | null, // se resuelve abajo con la variante
+    materiaPrimaNombre: sustrato?.materiaPrimaNombre ?? null,
+    varianteCotizada: sustrato?.materialVarianteId
+      ? {
+          id: sustrato.materialVarianteId,
+          sku: sustrato.materialSku ?? '',
+          anchoMm: numeroONull(sustrato.atributosVarianteJson?.anchoMm),
+          precioMl: numeroONull(sustrato.precioUnitario),
+        }
+      : null,
+    consumoCotizadoMm: numeroONull(trazPaso?.nestingResult?.consumedLengthMm),
+    piezas: piezasDeSnapshot(trazPaso, jobContext),
+  };
+}
+
 function isUniqueConstraintError(error: unknown) {
   return (
     typeof error === 'object' &&
@@ -149,6 +281,132 @@ export class ProduccionService {
       medianaMin: Math.round(Number(row.medianaMin) * 10) / 10,
       muestras: Number(row.muestras),
     }));
+  }
+
+  // ── Simulador de impresión (cola real por área) ──────────────────────
+  // Pasos de familia impresion_por_area en FRONTERA de órdenes vivas, con
+  // sus piezas físicas (nestingResult del snapshot), el sustrato cotizado
+  // y el catálogo de anchos/stock de cada materia prima involucrada.
+  // Ver docs/simulador-impresion-diseno.md
+
+  async simulador(auth: CurrentAuth) {
+    const ordenes = await this.prisma.ordenTrabajo.findMany({
+      where: { tenantId: auth.tenantId, estado: { in: ['pendiente', 'produccion'] } },
+      select: {
+        id: true,
+        numero: true,
+        fechaEntrega: true,
+        cliente: { select: { nombre: true } },
+        items: {
+          orderBy: { ordenIndice: 'asc' },
+          select: {
+            id: true,
+            codigo: true,
+            nombre: true,
+            ordenIndice: true,
+            cotizacionItem: {
+              select: { jobContextJson: true, trazabilidadJson: true },
+            },
+            pasos: {
+              orderBy: { indice: 'asc' },
+              select: {
+                id: true,
+                indice: true,
+                familiaCodigo: true,
+                estado: true,
+                rutaPasoId: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const jobs: Array<ReturnType<typeof buildSimuladorJob>> = [];
+    for (const orden of ordenes) {
+      for (const item of orden.items) {
+        // Frontera de la secuencia: el primer paso no hecho del item.
+        const frontera = item.pasos.find((paso) => paso.estado !== 'hecho');
+        if (!frontera || frontera.familiaCodigo !== 'impresion_por_area') continue;
+        // Bloqueado no es imprimible ni completable: el tablero lo señala.
+        if (frontera.estado === 'bloqueado') continue;
+        jobs.push(buildSimuladorJob(orden, item, frontera));
+      }
+    }
+
+    // La trazabilidad guarda la VARIANTE pero no la materia prima: se
+    // resuelve acá para poder agrupar y traer los anchos hermanos.
+    const varianteIds = [
+      ...new Set(
+        jobs
+          .map((job) => job.varianteCotizada?.id)
+          .filter((id): id is string => typeof id === 'string'),
+      ),
+    ];
+    const variantes = varianteIds.length
+      ? await this.prisma.materiaPrimaVariante.findMany({
+          where: { tenantId: auth.tenantId, id: { in: varianteIds } },
+          select: { id: true, materiaPrimaId: true },
+        })
+      : [];
+    const materiaPrimaPorVariante = new Map(
+      variantes.map((variante) => [variante.id, variante.materiaPrimaId]),
+    );
+    for (const job of jobs) {
+      job.materiaPrimaId = job.varianteCotizada?.id
+        ? (materiaPrimaPorVariante.get(job.varianteCotizada.id) ?? null)
+        : null;
+    }
+
+    // Catálogo de anchos por materia prima involucrada (variantes + stock).
+    const materiaPrimaIds = [
+      ...new Set(jobs.map((job) => job.materiaPrimaId).filter((id): id is string => id !== null)),
+    ];
+    const materiasPrimas = materiaPrimaIds.length
+      ? await this.prisma.materiaPrima.findMany({
+          where: { tenantId: auth.tenantId, id: { in: materiaPrimaIds } },
+          select: {
+            id: true,
+            nombre: true,
+            variantes: {
+              where: { activo: true },
+              select: {
+                id: true,
+                sku: true,
+                atributosVarianteJson: true,
+                precioReferencia: true,
+                stocks: { select: { cantidadDisponible: true } },
+              },
+            },
+          },
+        })
+      : [];
+
+    const materiales = materiasPrimas.map((materiaPrima) => ({
+      materiaPrimaId: materiaPrima.id,
+      nombre: materiaPrima.nombre,
+      anchos: materiaPrima.variantes
+        .map((variante) => {
+          const atributos = variante.atributosVarianteJson as { anchoMm?: unknown } | null;
+          const anchoMm = typeof atributos?.anchoMm === 'number' ? atributos.anchoMm : null;
+          if (anchoMm === null || anchoMm <= 0) return null;
+          const stockMl = variante.stocks.reduce(
+            (acc, stock) => acc + Number(stock.cantidadDisponible),
+            0,
+          );
+          return {
+            varianteId: variante.id,
+            sku: variante.sku,
+            anchoMm,
+            precioMl: variante.precioReferencia != null ? Number(variante.precioReferencia) : null,
+            stockMl: variante.stocks.length > 0 ? stockMl : null,
+          };
+        })
+        .filter((ancho): ancho is NonNullable<typeof ancho> => ancho !== null)
+        .sort((a, b) => a.anchoMm - b.anchoMm),
+    }));
+
+    return { jobs, materiales };
   }
 
   // ── Configuración de producción (margen de la ETA sugerida) ──────────

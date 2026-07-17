@@ -1568,6 +1568,48 @@ export class OrdenesTrabajoService {
     return this.tableroItemActualizado(auth, itemId);
   }
 
+  /**
+   * Completa VARIOS pasos de una (el impresor manda varios archivos juntos
+   * y no debería marcar card por card). Reusa la acción individual por
+   * paso — mismas validaciones de frontera/estado, eventos, promoción de
+   * orden y auto-finalización — y devuelve un resultado PARCIAL honesto:
+   * los que no pudieron completarse vuelven con su motivo.
+   */
+  async completarPasosLote(auth: CurrentAuth, pasoIds: string[]) {
+    const unicos = [...new Set(pasoIds)];
+    const pasos = await this.prisma.ordenTrabajoItemPaso.findMany({
+      where: { id: { in: unicos }, tenantId: auth.tenantId },
+      select: { id: true, ordenId: true, itemId: true, nombre: true },
+    });
+    const porId = new Map(pasos.map((paso) => [paso.id, paso]));
+
+    let completados = 0;
+    const errores: Array<{ pasoId: string; motivo: string }> = [];
+    // Secuencial a propósito: dos pasos del lote pueden ser del mismo item
+    // (la frontera avanza al completar el primero) y la promoción de la
+    // orden no debe correr en paralelo consigo misma.
+    for (const pasoId of unicos) {
+      const paso = porId.get(pasoId);
+      if (!paso) {
+        errores.push({ pasoId, motivo: 'No se encontró el paso.' });
+        continue;
+      }
+      try {
+        await this.accionPaso(auth, paso.ordenId, paso.itemId, paso.id, {
+          accion: 'completar',
+        });
+        completados += 1;
+      } catch (error: unknown) {
+        errores.push({
+          pasoId,
+          motivo:
+            error instanceof Error ? error.message : 'No se pudo completar.',
+        });
+      }
+    }
+    return { completados, errores };
+  }
+
   /** Re-proyección de un item del tablero después de una acción. */
   private async tableroItemActualizado(auth: CurrentAuth, itemId: string) {
     const item = await this.prisma.ordenTrabajoItem.findFirst({

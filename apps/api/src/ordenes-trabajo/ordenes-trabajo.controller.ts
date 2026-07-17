@@ -20,6 +20,7 @@ import {
 } from './dto/crear-orden-trabajo.dto';
 import { AccionPasoOrdenTrabajoDto } from './dto/accion-paso.dto';
 import { MesaPasoDto } from './dto/mesa-paso.dto';
+import { CompletarPasosLoteDto } from './dto/completar-pasos-lote.dto';
 import { Public } from '../auth/public.decorator';
 
 @Controller('ordenes-trabajo')
@@ -49,6 +50,15 @@ export class OrdenesTrabajoController {
   @Get('tablero')
   tablero(@CurrentSession() auth: CurrentAuth) {
     return this.ordenesTrabajoService.tablero(auth);
+  }
+
+  /** Completar varios pasos de una (simulador de impresión). */
+  @Post('tablero/pasos/completar-lote')
+  completarPasosLote(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() payload: CompletarPasosLoteDto,
+  ) {
+    return this.ordenesTrabajoService.completarPasosLote(auth, payload.pasoIds);
   }
 
   /** Tomar/soltar un paso de MI mesa de trabajo (vista Por estación). */
