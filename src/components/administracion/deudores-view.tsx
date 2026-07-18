@@ -99,8 +99,9 @@ export function DeudoresView({ initialFilas }: { initialFilas: FilaDeudor[] }) {
             </div>
             <h3>Ningún cliente te debe plata</h3>
             <p>
-              Acá vas a ver la deuda de cada cliente repartida por antigüedad
-              en cuanto emitas comprobantes con saldo pendiente.
+              Acá vas a ver la deuda de cada cliente repartida por
+              antigüedad: cada orden finalizada suma lo que falta cobrar,
+              esté facturada o no.
             </p>
           </div>
         ) : (
@@ -163,15 +164,21 @@ export function DeudoresView({ initialFilas }: { initialFilas: FilaDeudor[] }) {
 
               {rows.map((d) => (
                 <div
-                  key={d.clienteId}
+                  key={d.clienteId ?? "mostrador"}
                   className="ade-mtx-tr ade-mtx-row"
+                  style={d.clienteId ? undefined : { cursor: "default" }}
                   onClick={() =>
+                    d.clienteId &&
                     router.push(`/clientes/${d.clienteId}/cuenta-corriente`)
                   }
                 >
                   <div className="ade-mtx-cli">
                     <span className="nm">{d.nombre}</span>
-                    <span className="sub">{formatCuitODash(d.cuit)}</span>
+                    <span className="sub">
+                      {formatCuitODash(d.cuit)}
+                      {" · fact. "}
+                      {d.facturadoPct}%
+                    </span>
                   </div>
                   {TRAMOS_AGING.map((t) => (
                     <div

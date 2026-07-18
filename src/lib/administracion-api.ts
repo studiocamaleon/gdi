@@ -18,8 +18,10 @@ import type {
   MetodoPagoTipo,
   ModalidadPuntoVenta,
   MovimientoFondos,
+  OrdenFacturable,
   ProveedorFacturacion,
   PuntoVenta,
+  ResultadoLoteFacturacion,
   TesoreriaKpis,
 } from "@/lib/administracion";
 
@@ -90,15 +92,44 @@ export async function getComprobantes(params?: {
   estado?: string;
   tipo?: string;
   clienteId?: string;
+  ordenId?: string;
   q?: string;
 }): Promise<Comprobante[]> {
   const search = new URLSearchParams();
   if (params?.estado) search.set("estado", params.estado);
   if (params?.tipo) search.set("tipo", params.tipo);
   if (params?.clienteId) search.set("clienteId", params.clienteId);
+  if (params?.ordenId) search.set("ordenId", params.ordenId);
   if (params?.q) search.set("q", params.q);
   const query = search.toString();
   return apiRequest(`/administracion/comprobantes${query ? `?${query}` : ""}`);
+}
+
+// ── Facturación sobre órdenes ──────────────────────────────────────────
+
+export async function getFacturacionPendientes(): Promise<OrdenFacturable[]> {
+  return apiRequest(`/administracion/facturacion/pendientes`);
+}
+
+export async function facturarOrden(
+  ordenId: string,
+  payload: { monto?: number; concepto?: string; puntoVentaId?: string },
+): Promise<Comprobante> {
+  return apiRequest(`/administracion/ordenes/${ordenId}/facturar`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function facturarLote(payload: {
+  ordenIds: string[];
+  modo: "por_orden" | "agrupada";
+  puntoVentaId?: string;
+}): Promise<ResultadoLoteFacturacion> {
+  return apiRequest(`/administracion/facturacion/lote`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function getComprobante(id: string): Promise<ComprobanteDetalle> {

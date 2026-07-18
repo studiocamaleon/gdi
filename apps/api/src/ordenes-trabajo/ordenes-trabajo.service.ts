@@ -1,6 +1,7 @@
 import { randomBytes } from 'crypto';
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -770,12 +771,24 @@ export class OrdenesTrabajoService {
     });
     const subtotal = Number(agregado._sum.subtotal ?? 0);
     const impuestos = Number(agregado._sum.impuestos ?? 0);
+    const total = subtotal + impuestos + cargosDirectos;
+    // El total no puede quedar por debajo de lo ya FACTURADO: antes hay
+    // que anular la factura o emitir una nota de crédito.
+    const actual = await tx.ordenTrabajo.findUniqueOrThrow({
+      where: { id: ordenId },
+      select: { facturadoTotal: true },
+    });
+    if (total < Number(actual.facturadoTotal) - 0.01) {
+      throw new ConflictException(
+        `La orden ya tiene $${Number(actual.facturadoTotal).toLocaleString('es-AR')} facturados y esta edición la dejaría en $${Math.round(total).toLocaleString('es-AR')}: anulá la factura o emitile una nota de crédito primero.`,
+      );
+    }
     await tx.ordenTrabajo.update({
       where: { id: ordenId },
       data: {
         subtotal,
         impuestos,
-        total: subtotal + impuestos + cargosDirectos,
+        total,
       },
     });
   }
@@ -1108,6 +1121,14 @@ export class OrdenesTrabajoService {
               : undefined,
         },
       });
+      // Primera finalización: nace la deuda comercial y arranca su aging.
+      // Sólo la primera (reabrir y re-finalizar no la resetea).
+      if (hacia === 'finalizada') {
+        await tx.ordenTrabajo.updateMany({
+          where: { id: orden.id, fechaFinalizada: null },
+          data: { fechaFinalizada: new Date() },
+        });
+      }
       // Salir de borrador es emitir: se materializan los pasos de
       // producción del Tablero desde la trazabilidad del snapshot.
       if (desde === 'borrador') {
@@ -1570,6 +1591,14 @@ export class OrdenesTrabajoService {
             : {}),
         },
       });
+      // Primera finalización (acá: el último paso completado la finaliza
+      // solo): nace la deuda comercial y arranca su aging.
+      if (nuevoEstadoOrden === 'finalizada') {
+        await tx.ordenTrabajo.updateMany({
+          where: { id: ordenId, fechaFinalizada: null },
+          data: { fechaFinalizada: new Date() },
+        });
+      }
 
       await tx.ordenTrabajoEvento.create({
         data: {
@@ -1818,6 +1847,14 @@ export class OrdenesTrabajoService {
       // Token del link público de seguimiento (para "Compartir" desde el staff).
       publicToken:
         (orden as { publicToken?: string | null }).publicToken ?? null,
+      // Ejes fiscal y de cobranza de la orden (denormalizados del motor de
+      // facturación). Ver docs/facturacion-ordenes-deuda-comercial-diseno.md
+      facturadoTotal: Number(
+        (orden as { facturadoTotal?: unknown }).facturadoTotal ?? 0,
+      ),
+      cobradoTotal: Number(
+        (orden as { cobradoTotal?: unknown }).cobradoTotal ?? 0,
+      ),
       productos: orden.items.map((item) => {
         const cotItem = (
           item as typeof item & {

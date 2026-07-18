@@ -59,6 +59,16 @@ export class ComprobanteItemDto {
   bonificacionPct?: number;
 }
 
+/** Cuánto de este comprobante aplica a una orden (monto TOTAL, IVA incluido). */
+export class ComprobanteOrdenVinculoDto {
+  @IsString()
+  ordenId: string;
+
+  @IsNumber()
+  @Min(0.01)
+  monto: number;
+}
+
 export class CrearComprobanteDto {
   @IsIn(COMPROBANTE_TIPOS as unknown as string[])
   tipo: ComprobanteTipo;
@@ -74,6 +84,17 @@ export class CrearComprobanteDto {
   @IsOptional()
   @IsString()
   ordenId?: string;
+
+  /**
+   * Vínculos factura↔orden con monto (parciales y lote). La suma tiene
+   * que dar el total del comprobante: se reparte completo. Excluyente
+   * con `ordenId` (que es el atajo "toda la factura a una orden").
+   */
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ComprobanteOrdenVinculoDto)
+  ordenes?: ComprobanteOrdenVinculoDto[];
 
   /** ISO date YYYY-MM-DD. Default: hoy. */
   @IsOptional()
@@ -109,6 +130,52 @@ export class CrearComprobanteDto {
   @IsOptional()
   @IsString()
   comprobanteOrigenId?: string;
+}
+
+/**
+ * Facturar una orden desde su ficha: monto TOTAL (IVA incluido) con
+ * atajos en la UI (100% del saldo / 50% / libre) y concepto texto libre.
+ * Sin monto factura el saldo sin facturar completo.
+ */
+export class FacturarOrdenDto {
+  @IsOptional()
+  @IsNumber()
+  @Min(0.01)
+  monto?: number;
+
+  @IsOptional()
+  @IsString()
+  concepto?: string;
+
+  /** Default: el primer punto de venta activo. */
+  @IsOptional()
+  @IsString()
+  puntoVentaId?: string;
+
+  /** false = dejar el borrador sin pedir CAE. Default: emitir. */
+  @IsOptional()
+  emitir?: boolean;
+}
+
+export const FACTURAR_LOTE_MODOS = ['por_orden', 'agrupada'] as const;
+export type FacturarLoteModo = (typeof FACTURAR_LOTE_MODOS)[number];
+
+/**
+ * Facturación en lote desde Administración → Facturación. Cada orden se
+ * factura por su saldo sin facturar. 'agrupada' exige un solo cliente
+ * (una factura tiene un receptor) y arma un renglón por orden.
+ */
+export class FacturarLoteDto {
+  @IsArray()
+  @IsString({ each: true })
+  ordenIds: string[];
+
+  @IsIn(FACTURAR_LOTE_MODOS as unknown as string[])
+  modo: FacturarLoteModo;
+
+  @IsOptional()
+  @IsString()
+  puntoVentaId?: string;
 }
 
 export class CargarCaeDto {

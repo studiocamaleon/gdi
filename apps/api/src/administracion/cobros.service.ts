@@ -7,6 +7,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CurrentAuth } from '../auth/auth.types';
 import type { CrearCobroDto } from './dto/cobro.dto';
+import { FacturacionOrdenesService } from './facturacion-ordenes.service';
 
 /**
  * Cobros — el registro de cómo entra la plata, con las tres cifras:
@@ -16,7 +17,10 @@ import type { CrearCobroDto } from './dto/cobro.dto';
  */
 @Injectable()
 export class CobrosService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly facturacionOrdenes: FacturacionOrdenesService,
+  ) {}
 
   /** Cálculo canónico de las tres cifras. */
   calcularCifras(input: {
@@ -207,6 +211,19 @@ export class CobrosService {
       }
 
       if (orden) {
+        // Eje de cobranza de la orden: denormalizado + matching automático
+        // contra sus facturas emitidas impagas (FIFO). El usuario no
+        // imputa a mano.
+        await this.facturacionOrdenes.recalcularCobrado(
+          tx,
+          auth.tenantId,
+          orden.id,
+        );
+        await this.facturacionOrdenes.matchearCobro(
+          tx,
+          auth.tenantId,
+          cobro.id,
+        );
         await tx.ordenTrabajoEvento.create({
           data: {
             tenantId: auth.tenantId,

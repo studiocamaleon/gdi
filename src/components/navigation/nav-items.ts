@@ -139,6 +139,11 @@ export const NAV: NavItem[] = [
         href: "/administracion/comprobantes",
       },
       {
+        key: "facturacion",
+        label: "Facturación",
+        href: "/administracion/facturacion",
+      },
+      {
         key: "deudores",
         label: "Deudores",
         href: "/administracion/deudores",

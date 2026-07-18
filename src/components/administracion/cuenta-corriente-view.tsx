@@ -42,10 +42,21 @@ function LedgerRow({ m }: { m: MovimientoCuentaCorriente }) {
           ) : (
             <span style={{ width: 14 }} />
           )}
-          <span className={`acc-lg-tipo t-${m.tipo === "nd" ? "fa" : m.tipo}`}>
+          <span
+            className={`acc-lg-tipo t-${
+              m.tipo === "nd" || m.tipo === "orden" ? "fa" : m.tipo
+            }`}
+          >
             {m.sigla}
           </span>
-          <span className="acc-lg-desc">{m.descripcion}</span>
+          <span className="acc-lg-desc">
+            {m.descripcion}
+            {m.tipo === "orden" && m.facturadoPct !== undefined ? (
+              <span className="acc-lg-dim" style={{ marginLeft: 8 }}>
+                fact. {m.facturadoPct}%
+              </span>
+            ) : null}
+          </span>
         </span>
         <span className="acc-lg-debe">
           {m.debe > 0 ? fmt(m.debe) : <span className="acc-lg-dim">—</span>}
@@ -217,9 +228,9 @@ export function CuentaCorrienteView({ cc }: { cc: CuentaCorriente }) {
             <div className={`v ${saldo <= 0 ? "ok" : ""}`}>{fmt(saldo)}</div>
             <div className="s">
               {saldo > 0 ? "Deudor" : "Sin deuda"} ·{" "}
-              {cc.comprobantesPendientes} comprobante
-              {cc.comprobantesPendientes === 1 ? "" : "s"} pendiente
-              {cc.comprobantesPendientes === 1 ? "" : "s"}
+              {cc.comprobantesPendientes}{" "}
+              {cc.comprobantesPendientes === 1 ? "orden" : "órdenes"} sin
+              cobrar
             </div>
           </div>
           <div className="acc-limit">
@@ -297,8 +308,8 @@ export function CuentaCorrienteView({ cc }: { cc: CuentaCorriente }) {
           </div>
           {cc.movimientos.length === 0 ? (
             <div className="acc-vacio">
-              Este cliente todavía no tiene movimientos: cuando le factures o
-              le registres un cobro van a aparecer acá.
+              Este cliente todavía no tiene movimientos: cuando una orden
+              suya se finalice o le registres un cobro van a aparecer acá.
             </div>
           ) : (
             cc.movimientos.map((m) => <LedgerRow key={m.id} m={m} />)

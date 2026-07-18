@@ -28,8 +28,11 @@ import { CrearCobroDto } from './dto/cobro.dto';
 import {
   CargarCaeDto,
   CrearComprobanteDto,
+  FacturarLoteDto,
+  FacturarOrdenDto,
   ImputarCobroDto,
 } from './dto/comprobante.dto';
+import { FacturacionOrdenesService } from './facturacion-ordenes.service';
 import {
   UpsertConfiguracionFiscalDto,
   UpsertPuntoVentaDto,
@@ -53,6 +56,7 @@ export class AdministracionController {
     private readonly cuentaCorrienteService: CuentaCorrienteService,
     private readonly facturaService: FacturaService,
     private readonly facturaPdfService: FacturaPdfService,
+    private readonly facturacionOrdenesService: FacturacionOrdenesService,
   ) {}
 
   /**
@@ -104,14 +108,43 @@ export class AdministracionController {
     @Query('estado') estado?: string,
     @Query('tipo') tipo?: string,
     @Query('clienteId') clienteId?: string,
+    @Query('ordenId') ordenId?: string,
     @Query('q') q?: string,
   ) {
     return this.comprobantesService.listar(auth, {
       estado,
       tipo,
       clienteId,
+      ordenId,
       q,
     });
+  }
+
+  // ── Facturación sobre órdenes ────────────────────────────────────────
+
+  /** Órdenes finalizadas con saldo sin facturar (vista Facturación). */
+  @Get('facturacion/pendientes')
+  pendientesFacturacion(@CurrentSession() auth: CurrentAuth) {
+    return this.facturacionOrdenesService.pendientesFacturacion(auth.tenantId);
+  }
+
+  /** Facturar (parcial o total) una orden desde su ficha. */
+  @Post('ordenes/:ordenId/facturar')
+  facturarOrden(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('ordenId') ordenId: string,
+    @Body() body: FacturarOrdenDto,
+  ) {
+    return this.comprobantesService.facturarOrden(auth, ordenId, body);
+  }
+
+  /** Facturar un lote de órdenes (N facturas o una agrupada). */
+  @Post('facturacion/lote')
+  facturarLote(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() body: FacturarLoteDto,
+  ) {
+    return this.comprobantesService.facturarLote(auth, body);
   }
 
   @Get('comprobantes/:id')

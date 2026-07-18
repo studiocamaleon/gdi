@@ -178,13 +178,16 @@ export const TRAMO_AGING_COLOR: Record<TramoAging, string> = {
 export type Aging = Record<TramoAging, number>;
 
 export type FilaDeudor = {
-  clienteId: string;
+  /** null = fila "Mostrador / sin cliente" (sin cta. cte. navegable). */
+  clienteId: string | null;
   nombre: string;
   cuit: string | null;
   aging: Aging;
   total: number;
   /** Vencido hace más de 60 días. */
   vencido: number;
+  /** Eje fiscal, secundario: % de lo vendido que pasó por factura. */
+  facturadoPct: number;
 };
 
 /**
@@ -234,14 +237,19 @@ export function colorTextoAging(
 export type MovimientoCuentaCorriente = {
   id: string;
   fecha: string;
-  tipo: "fa" | "nc" | "nd" | "cobro";
+  /** 'orden' = la OT finalizada al DEBE (deuda comercial); 'cobro' al HABER. */
+  tipo: "orden" | "cobro" | "fa" | "nc" | "nd";
   sigla: string;
   descripcion: string;
   debe: number;
   haber: number;
   saldo: number;
+  ordenId?: string;
   comprobanteId?: string;
   cobroId?: string;
+  /** Eje fiscal del renglón de orden: cuánto pasó por factura. */
+  facturado?: number;
+  facturadoPct?: number;
   imputaciones?: Array<{ nombre: string; monto: number; resto?: boolean }>;
 };
 
@@ -347,8 +355,11 @@ export type Comprobante = {
   fecha: string;
   clienteNombre: string;
   clienteCuit: string | null;
+  /** Legacy: el primer vínculo. Preferir `ordenes`. */
   ordenId: string | null;
   ordenNumero: string | null;
+  /** Vínculos con monto: cuánto de este comprobante aplica a cada orden. */
+  ordenes: Array<{ ordenId: string; numero: string; monto: number }>;
   items: ComprobanteItem[];
   netoGravado: number;
   ivaPorAlicuota: IvaPorAlicuota[];
@@ -380,6 +391,52 @@ export type CobroImputado = {
 export type ComprobanteDetalle = Comprobante & {
   cobrosImputados: CobroImputado[];
 };
+
+// ── Facturación sobre órdenes ──────────────────────────────────────────
+// La deuda es COMERCIAL (nace de la orden al finalizar); facturar es una
+// acción opcional sobre la orden. Ver docs/facturacion-ordenes-deuda-comercial-diseno.md
+
+export type OrdenFacturable = {
+  ordenId: string;
+  numero: string;
+  estado: string;
+  clienteId: string | null;
+  clienteNombre: string | null;
+  clienteCondicionFiscal: string | null;
+  fechaFinalizada: string | null;
+  total: number;
+  facturado: number;
+  cobrado: number;
+  saldoSinFacturar: number;
+};
+
+export type ResultadoLoteFacturacion = {
+  modo: "por_orden" | "agrupada";
+  resultados: Array<{
+    ordenId: string;
+    numero: string;
+    ok: boolean;
+    comprobante: Comprobante | null;
+    error: string | null;
+  }>;
+};
+
+/** Estados derivados de una orden en sus dos ejes independientes. */
+export function estadoFiscalOrden(
+  total: number,
+  facturado: number,
+): "sin_facturar" | "parcial" | "facturada" {
+  if (facturado <= 0.01) return "sin_facturar";
+  return facturado >= total - 0.01 ? "facturada" : "parcial";
+}
+
+export function estadoCobranzaOrden(
+  total: number,
+  cobrado: number,
+): "sin_cobrar" | "parcial" | "cobrada" {
+  if (cobrado <= 0.01) return "sin_cobrar";
+  return cobrado >= total - 0.01 ? "cobrada" : "parcial";
+}
 
 /**
  * El comprobante impreso. Su contenido lo fija la normativa, no nuestro

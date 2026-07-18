@@ -52,18 +52,21 @@ export class CobranzaService {
       rango.hasta.getDate() + 1,
     );
 
-    const [comprobantesAbiertos, costoRows, factCob, chequeRows, cuentas] =
+    const [ordenesAbiertas, costoRows, factCob, chequeRows, cuentas] =
       await Promise.all([
-        // Aging: saldo pendiente HOY (denormalizado) por comprobante.
-        this.prisma.comprobante.findMany({
+        // Aging: deuda COMERCIAL hoy — órdenes finalizadas/entregadas con
+        // saldo sin cobrar (total − cobrado), envejecidas desde su
+        // finalización. Ver docs/facturacion-ordenes-deuda-comercial-diseno.md.
+        this.prisma.ordenTrabajo.findMany({
           where: {
             tenantId,
-            estado: 'emitido',
-            saldoPendiente: { gt: 0 },
+            estado: { in: ['finalizada', 'entregada'] },
+            total: { gt: 0 },
           },
           select: {
-            fecha: true,
-            saldoPendiente: true,
+            fechaFinalizada: true,
+            total: true,
+            cobradoTotal: true,
             clienteId: true,
             cliente: { select: { nombre: true } },
           },
@@ -83,14 +86,17 @@ export class CobranzaService {
           GROUP BY mp.nombre
           ORDER BY comision DESC
         `,
-        // Facturado (comprobantes) y cobrado (cobros) del período.
+        // Devengado (órdenes finalizadas en el período, por su total) y
+        // cobrado (cobros) del período. "Facturado" acá es lo VENDIDO
+        // exigible, no lo fiscal — la deuda es comercial.
         this.prisma.$queryRaw<Array<{ facturado: number; cobrado: number }>>`
           SELECT
-            (SELECT COALESCE(SUM(total), 0)::float8 FROM "Comprobante"
-              WHERE "tenantId" = ${tenantId}::uuid AND estado = 'emitido'
-                AND fecha >= ${desde} AND fecha < ${hastaExcl}) AS facturado,
-            (SELECT COALESCE(SUM("montoBruto"), 0)::float8 FROM "Cobro"
+            (SELECT COALESCE(SUM(total), 0)::float8 FROM "OrdenTrabajo"
               WHERE "tenantId" = ${tenantId}::uuid
+                AND estado IN ('finalizada', 'entregada')
+                AND "fechaFinalizada" >= ${desde} AND "fechaFinalizada" < ${hastaExcl}) AS facturado,
+            (SELECT COALESCE(SUM("montoBruto"), 0)::float8 FROM "Cobro"
+              WHERE "tenantId" = ${tenantId}::uuid AND "anuladoEl" IS NULL
                 AND fecha >= ${desde} AND fecha < ${hastaExcl}) AS cobrado
         `,
         // Cheques de terceros aún por cobrar (no acreditados ni rechazados).
@@ -113,20 +119,25 @@ export class CobranzaService {
     const hoyMid = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
     const aging: Record<FranjaAging, number> = { '0-30': 0, '31-60': 0, '61-90': 0, '+90': 0 };
     const deudoresMap = new Map<string, Deudor>();
-    for (const c of comprobantesAbiertos) {
-      const saldo = Number(c.saldoPendiente);
+    for (const o of ordenesAbiertas) {
+      const saldo = Math.max(
+        0,
+        r2(Number(o.total ?? 0) - Number(o.cobradoTotal ?? 0)),
+      );
+      if (saldo <= 0) continue;
+      const fechaBase = o.fechaFinalizada ?? hoyMid;
       const dias = Math.max(
         0,
-        Math.floor((hoyMid.getTime() - c.fecha.getTime()) / MS_DIA),
+        Math.floor((hoyMid.getTime() - fechaBase.getTime()) / MS_DIA),
       );
       const franja = franjaDe(dias);
       aging[franja] += saldo;
-      const key = c.clienteId ?? 'sin-cliente';
+      const key = o.clienteId ?? 'sin-cliente';
       let d = deudoresMap.get(key);
       if (!d) {
         d = {
-          clienteId: c.clienteId,
-          cliente: c.cliente?.nombre ?? 'Sin cliente',
+          clienteId: o.clienteId,
+          cliente: o.cliente?.nombre ?? 'Mostrador / sin cliente',
           saldo: 0,
           diasMax: 0,
           porFranja: { '0-30': 0, '31-60': 0, '61-90': 0, '+90': 0 },
@@ -197,6 +208,8 @@ export class CobranzaService {
 
   /** Nota de honestidad para el aging (siempre "al día de hoy"). */
   limites(): string[] {
-    return ['Aging por antigüedad de emisión, al día de hoy (el saldo es actual).'];
+    return [
+      'Deuda comercial por orden (vendido − cobrado), envejecida desde la finalización; al día de hoy.',
+    ];
   }
 }

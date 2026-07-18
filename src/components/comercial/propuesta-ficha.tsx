@@ -19,6 +19,7 @@ import {
   HistoryIcon,
   PackageIcon,
   PlusIcon,
+  ReceiptTextIcon,
   SaveIcon,
   SearchIcon,
   StarIcon,
@@ -77,6 +78,10 @@ import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiv
 import type { CobroDraft } from "@/components/administracion/cobro-formulario";
 import { PagosStagingTab } from "@/components/comercial/pagos-staging-tab";
 import { crearCobro } from "@/lib/administracion-api";
+import {
+  ComprobantesOrdenTab,
+  FacturarOrdenModal,
+} from "@/components/administracion/facturacion-orden";
 import { EstadoOtBadge } from "@/components/produccion/ordenes-trabajo-view";
 import {
   EVENTO_ICONOS,
@@ -124,6 +129,7 @@ type OrdenTab =
   | "productos"
   | "produccion"
   | "pagos"
+  | "comprobantes"
   | "archivos"
   | "costos"
   | "historial";
@@ -670,12 +676,15 @@ function OrdenTabs({
   onChange,
   count,
   historialCount,
+  comprobantesCount,
 }: {
   value: OrdenTab;
   onChange: (value: OrdenTab) => void;
   count: number;
   /** Presente sólo en modo orden: agrega el tab Historial. */
   historialCount?: number;
+  /** Presente sólo en modo orden: agrega el tab Comprobantes. */
+  comprobantesCount?: number;
 }) {
   const tabs: Array<{
     key: OrdenTab;
@@ -686,6 +695,15 @@ function OrdenTabs({
     { key: "productos", label: "Productos", count, icon: <PackageIcon /> },
     { key: "produccion", label: "Produccion", icon: <FactoryIcon /> },
     { key: "pagos", label: "Pagos", icon: <CreditCardIcon /> },
+    ...(comprobantesCount !== undefined
+      ? [
+          {
+            key: "comprobantes" as const,
+            label: "Comprobantes",
+            icon: <ReceiptTextIcon />,
+          },
+        ]
+      : []),
     { key: "archivos", label: "Archivos", count: 2, icon: <FolderIcon /> },
     { key: "costos", label: "Costos", icon: <CircleDollarSignIcon /> },
     ...(historialCount !== undefined
@@ -4567,6 +4585,9 @@ export function PropuestaFicha({
   const [tipo, setTipo] = React.useState<TipoPropuesta>("orden_trabajo");
   const ordenTipo = tipoMap[tipo];
   const [tab, setTab] = React.useState<OrdenTab>("productos");
+  // Modal "Facturar" del header (la acción también vive en el tab
+  // Comprobantes). Ver docs/facturacion-ordenes-deuda-comercial-diseno.md §6.1.
+  const [facturarOpen, setFacturarOpen] = React.useState(false);
   // Cobros en staging (sólo creación): se registran todos al emitir la OT,
   // como los items. El backend rechaza cobros sobre borradores, así que
   // guardar borrador NO los persiste (se avisa con modal).
@@ -5558,7 +5579,10 @@ export function PropuestaFicha({
               value={ordenTipo}
               onChange={(value) => setTipo(fromOrdenTipo(value))}
             />
-          ) : orden && camposEditablesOrden(orden.estado).size > 0 ? (
+          ) : orden &&
+            (camposEditablesOrden(orden.estado).size > 0 ||
+              (orden.estado !== "borrador" &&
+                orden.total - orden.facturadoTotal > 0.01)) ? (
             <div style={{ display: "flex", gap: 8 }}>
               {editandoOrden ? (
                 <>
@@ -5596,6 +5620,16 @@ export function PropuestaFicha({
                       <CheckIcon />
                       {emitiendoBorrador ? "Emitiendo…" : "Emitir OT"}
                     </button>
+                  ) : orden.total - orden.facturadoTotal > 0.01 ? (
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => setFacturarOpen(true)}
+                      title="Emitir una factura vinculada a esta orden (total o parcial)"
+                    >
+                      <ReceiptTextIcon />
+                      Facturar
+                    </button>
                   ) : null}
                   {publicToken ? (
                     <button
@@ -5608,14 +5642,16 @@ export function PropuestaFicha({
                       {trackCopiado ? "Link copiado" : "Compartir seguimiento"}
                     </button>
                   ) : null}
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() => setEditandoOrden(true)}
-                  >
-                    <Edit3Icon />
-                    Editar orden
-                  </button>
+                  {camposEditablesOrden(orden.estado).size > 0 ? (
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => setEditandoOrden(true)}
+                    >
+                      <Edit3Icon />
+                      Editar orden
+                    </button>
+                  ) : null}
                 </>
               )}
             </div>
@@ -5754,6 +5790,7 @@ export function PropuestaFicha({
             onChange={setTab}
             count={items.length}
             historialCount={orden ? orden.eventos.length : undefined}
+            comprobantesCount={orden ? 0 : undefined}
           />
           {!modoOrden || itemsEnEdicion ? (
             <div className="orden-actions">
@@ -5978,6 +6015,30 @@ export function PropuestaFicha({
               />
             </div>
           )
+        ) : null}
+        {tab === "comprobantes" && orden ? (
+          <div className="otd-page" style={{ padding: 0 }}>
+            <ComprobantesOrdenTab
+              ordenId={orden.id}
+              numero={orden.numero}
+              total={orden.total}
+              facturadoInicial={orden.facturadoTotal}
+              cobradoInicial={orden.cobradoTotal}
+              puedeFacturar={orden.estado !== "borrador"}
+            />
+          </div>
+        ) : null}
+        {facturarOpen && orden ? (
+          <FacturarOrdenModal
+            ordenId={orden.id}
+            numero={orden.numero}
+            saldoSinFacturar={Math.max(0, orden.total - orden.facturadoTotal)}
+            onClose={() => setFacturarOpen(false)}
+            onFacturada={() => {
+              setTab("comprobantes");
+              router.refresh();
+            }}
+          />
         ) : null}
         {tab === "archivos" ? (
           <EmptyTab

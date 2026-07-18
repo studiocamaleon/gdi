@@ -460,6 +460,7 @@ model Tenant {
   comprobantes                                     Comprobante[]
   comprobanteContadores                            ComprobanteContador[]
   cobroImputaciones                                CobroImputacion[]
+  comprobanteOrdenes                               ComprobanteOrden[]
 }
 
 model User {
@@ -2035,6 +2036,19 @@ model OrdenTrabajo {
   /// (grafoprint.com.ar/track/<token>). Se genera al emitir la OT (salir de
   /// borrador); null = todavía no compartible. Ver docs/tracking-publico-diseno.md
   publicToken        String?              @unique
+  /// Primera vez que la orden llegó a 'finalizada'. Ancla del aging de la
+  /// deuda COMERCIAL (la deuda nace acá, no en la factura). Reabrir la
+  /// orden NO la borra: si vuelve a finalizar, el aging no se resetea.
+  /// Ver docs/facturacion-ordenes-deuda-comercial-diseno.md
+  fechaFinalizada    DateTime?
+  /// Denormalizados del eje fiscal y de cobranza, mantenidos en la misma
+  /// transacción que sus movimientos (patrón Comprobante.saldoPendiente):
+  /// facturadoTotal = Σ ComprobanteOrden.monto de facturas emitidas no
+  /// anuladas (las NC restan); cobradoTotal = Σ Cobro.montoBruto no
+  /// anulados de la orden. Los estados derivados (sin facturar/parcial/
+  /// facturada y sin cobrar/parcial/cobrada) se calculan de acá.
+  facturadoTotal     Decimal              @default(0) @db.Decimal(14, 2)
+  cobradoTotal       Decimal              @default(0) @db.Decimal(14, 2)
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
   tenant             Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -2047,6 +2061,7 @@ model OrdenTrabajo {
   cobros             Cobro[]
   movimientosFondos  MovimientoFondos[]
   comprobantes       Comprobante[]
+  comprobanteOrdenes ComprobanteOrden[]
 
   @@unique([tenantId, numero])
   @@index([tenantId, estado])
@@ -2450,6 +2465,9 @@ model Comprobante {
   numero              Int?
   fecha               DateTime            @db.Date
   clienteId           String?             @db.Uuid
+  /// DEPRECADO: reemplazado por la relación M-a-M `ordenes`
+  /// (ComprobanteOrden). Se conserva hasta migrar los servicios que lo
+  /// leen; no escribir más acá.
   ordenId             String?             @db.Uuid
   /// Datos del receptor congelados al crear: si el cliente después cambia
   /// de CUIT o de condición, el comprobante emitido NO cambia.
@@ -2497,6 +2515,7 @@ model Comprobante {
   comprobanteOrigen   Comprobante?        @relation("ComprobanteCorrige", fields: [comprobanteOrigenId], references: [id], onDelete: SetNull)
   correcciones        Comprobante[]       @relation("ComprobanteCorrige")
   imputaciones        CobroImputacion[]
+  ordenes             ComprobanteOrden[]
 
   @@unique([tenantId, puntoVentaId, tipo, letra, numero])
   @@index([tenantId, estado])
@@ -2536,4 +2555,27 @@ model CobroImputacion {
 
   @@unique([cobroId, comprobanteId])
   @@index([tenantId, comprobanteId])
+}
+
+/// Aplica (parte de) un comprobante a una orden de trabajo. Un comprobante
+/// puede cubrir varias órdenes (facturación en lote, un renglón por orden)
+/// y una orden recibir varios comprobantes (facturas parciales). `monto` es
+/// TOTAL (IVA incluido) en la moneda del comprobante. Invariante: la suma
+/// de montos de un comprobante = comprobante.total (se reparte completo).
+/// La deuda COMERCIAL no vive acá (nace de la orden al finalizar); esto es
+/// la capa fiscal opcional. Ver docs/facturacion-ordenes-deuda-comercial-diseno.md
+model ComprobanteOrden {
+  id            String       @id @default(uuid()) @db.Uuid
+  tenantId      String       @db.Uuid
+  comprobanteId String       @db.Uuid
+  ordenId       String       @db.Uuid
+  monto         Decimal      @db.Decimal(14, 2)
+  createdAt     DateTime     @default(now())
+
+  tenant        Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  comprobante   Comprobante  @relation(fields: [comprobanteId], references: [id], onDelete: Cascade)
+  orden         OrdenTrabajo @relation(fields: [ordenId], references: [id], onDelete: Cascade)
+
+  @@unique([comprobanteId, ordenId])
+  @@index([tenantId, ordenId])
 }

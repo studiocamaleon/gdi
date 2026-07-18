@@ -96,16 +96,20 @@ export class AlertasService {
     return grupos.flat().sort((a, b) => ORDEN[a.severidad] - ORDEN[b.severidad]);
   }
 
-  // 1. Deuda vencida > N% de la facturación del período.
+  // 1. Deuda vencida > N% de la facturación del período. Deuda COMERCIAL:
+  // órdenes finalizadas hace +30 días con saldo sin cobrar, contra lo
+  // vendido finalizado del período.
   private async deudaVencida(tenantId: string, rango: Rango, u: Umbrales): Promise<Alerta[]> {
     const [row] = await this.prisma.$queryRaw<Array<{ vencido: number; facturado: number }>>`
       SELECT
-        (SELECT COALESCE(SUM("saldoPendiente"), 0)::float8 FROM "Comprobante"
-          WHERE "tenantId" = ${tenantId}::uuid AND estado = 'emitido'
-            AND "saldoPendiente" > 0 AND fecha < (CURRENT_DATE - 30)) AS vencido,
-        (SELECT COALESCE(SUM(total), 0)::float8 FROM "Comprobante"
-          WHERE "tenantId" = ${tenantId}::uuid AND estado = 'emitido'
-            AND fecha >= ${rango.desde} AND fecha < ${finExclusivo(rango)}) AS facturado
+        (SELECT COALESCE(SUM(GREATEST(0, total - "cobradoTotal")), 0)::float8 FROM "OrdenTrabajo"
+          WHERE "tenantId" = ${tenantId}::uuid
+            AND estado IN ('finalizada', 'entregada')
+            AND "fechaFinalizada" < (CURRENT_DATE - 30)) AS vencido,
+        (SELECT COALESCE(SUM(total), 0)::float8 FROM "OrdenTrabajo"
+          WHERE "tenantId" = ${tenantId}::uuid
+            AND estado IN ('finalizada', 'entregada')
+            AND "fechaFinalizada" >= ${rango.desde} AND "fechaFinalizada" < ${finExclusivo(rango)}) AS facturado
     `;
     const vencido = row?.vencido ?? 0;
     const facturado = row?.facturado ?? 0;
