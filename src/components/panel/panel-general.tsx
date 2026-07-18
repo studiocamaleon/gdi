@@ -370,6 +370,27 @@ function HBar({ value, max, tone = "ink" }: { value: number; max: number; tone?:
   return <div className="d-hbar"><span style={{ width: `${p * 100}%`, background: colors[tone] }} /></div>;
 }
 
+/**
+ * Barra divergente desde el centro: izquierda (verde) = más rápido que lo
+ * cotizado, derecha (naranja) = más lento. Se satura en ±100% de desvío.
+ */
+function BarraDesvio({ desvioPct }: { desvioPct: number | null }) {
+  if (desvioPct == null) return null;
+  const mag = Math.min(100, Math.abs(desvioPct)) / 100;
+  const lento = desvioPct > 0;
+  return (
+    <div style={{ position: "relative", height: 10, background: "rgba(20,20,26,.05)", borderRadius: 3, overflow: "hidden" }}>
+      <span style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 1, background: "var(--muted-text-2)", opacity: 0.6 }} />
+      <span style={{
+        position: "absolute", top: 1, bottom: 1, borderRadius: 2,
+        left: lento ? "50%" : `${50 - mag * 50}%`,
+        width: `${mag * 50}%`,
+        background: Math.abs(desvioPct) <= 10 ? "var(--muted-text-2)" : lento ? "var(--signal)" : "var(--ok)",
+      }} />
+    </div>
+  );
+}
+
 function StackedHBar({ segments, height = 18 }: { segments: Array<{ value: number; color: string; label: string }>; height?: number }) {
   const total = segments.reduce((s, x) => s + x.value, 0) || 1;
   return <div className="d-shbar" style={{ height }}>{segments.map((s, i) => s.value > 0 ? <span key={i} style={{ width: `${(s.value / total) * 100}%`, background: s.color }} title={`${s.label}: ${s.value}`} /> : null)}</div>;
@@ -694,9 +715,30 @@ function TabProduccion({ d }: { d: ProduccionPanel }) {
         <Card span={5} title="Throughput diario" sub="pasos completados por día" action={<span className="mono" style={{ color: "var(--ink)", fontSize: 13, fontWeight: 600 }}>{d.throughput.reduce((a, t) => a + t.cantidad, 0)}</span>}>
           {d.throughput.length >= 2 ? <AreaChart series={d.throughput.map((t) => t.cantidad)} labels={d.throughput.map((t) => t.fecha.slice(5))} yFormat={(v) => String(Math.round(v))} height={220} nombres={["Pasos completados"]} fmtValor={(v) => fmtAR(v, 0)} /> : <BarChart labels={d.throughput.map((t) => t.fecha.slice(5))} data={[d.throughput.map((t) => t.cantidad)]} stacks={["Pasos"]} height={200} fmtValor={(v) => fmtAR(v, 0)} />}
         </Card>
-        <Card span={7} title="Precisión de estimación" sub="tiempo real vs. cotizado por familia" flush>
-          <table className="d-tbl"><thead><tr><th>Familia</th><th className="right">Cotizado</th><th className="right">Real</th><th className="right">Razón</th><th className="right">n</th></tr></thead>
-            <tbody>{d.eficiencia.porFamilia.map((f) => (<tr key={f.familia}><td><div className="nm">{f.familia}</div></td><td className="right mono">{fmtAR(f.estimadoMin, 0)}m</td><td className="right mono">{fmtAR(f.realMin, 1)}m</td><td className="right mono" style={{ color: (f.razon ?? 0) > 1.5 ? "var(--signal)" : "var(--ink)", fontWeight: 600 }}>{f.razon != null ? `${fmtAR(f.razon, 2)}×` : "—"}</td><td className="right mono" style={{ opacity: f.muestras < 3 ? 0.45 : 1 }}>{f.muestras}</td></tr>))}</tbody>
+        <Card span={7} title="Precisión de estimación" sub="¿tardamos más o menos que lo cotizado?" flush
+          foot={<span><span className="d-pip ok" style={{ marginRight: 4 }} />Más rápido que lo cotizado · <span className="d-pip warn" style={{ margin: "0 4px" }} />Más lento (revisar el tiempo del paso)</span>}>
+          <table className="d-tbl"><thead><tr><th>Familia</th><th className="right">Cotizado</th><th className="right">Real</th><th style={{ width: 110 }} /><th className="right">vs. cotizado</th></tr></thead>
+            <tbody>{d.eficiencia.porFamilia.map((f) => {
+              const desvio = f.razon != null ? (f.razon - 1) * 100 : null;
+              const enLinea = desvio != null && Math.abs(desvio) <= 10;
+              const color = desvio == null || enLinea ? "var(--muted-text)" : desvio > 0 ? "var(--signal)" : "var(--ok)";
+              return (
+                <tr key={f.familia}>
+                  <td><div className="nm">{f.familia}</div><div className="sub" style={{ color: f.muestras < 3 ? "var(--signal)" : undefined }}>{f.muestras} paso{f.muestras === 1 ? "" : "s"} medido{f.muestras === 1 ? "" : "s"}{f.muestras < 3 ? " · poca señal" : ""}</div></td>
+                  <td className="right mono">{fmtMinutos(f.estimadoMin)}</td>
+                  <td className="right mono">{f.realMin > 0 && f.realMin < 1 ? "<1m" : fmtMinutos(f.realMin)}</td>
+                  <td><BarraDesvio desvioPct={desvio} /></td>
+                  <td className="right">
+                    {desvio == null ? <span className="mono">—</span> : (
+                      <>
+                        <div className="mono" style={{ fontWeight: 600, color }}>{desvio > 0 ? "+" : ""}{fmtAR(desvio, 0)}%</div>
+                        <div style={{ fontSize: 10.5, color: "var(--muted-text)" }}>{enLinea ? "en línea" : desvio > 0 ? "más lento" : "más rápido"}</div>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}</tbody>
           </table>
         </Card>
         <Card span={7} title="Utilización por centro" sub="horas reales vs. capacidad práctica" flush>
