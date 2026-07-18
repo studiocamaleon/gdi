@@ -17774,6 +17774,15 @@ textarea.est-input { resize: vertical; min-height: 60px; font-family: inherit; }
 
 /* ═══════════════════════ Simulador de impresión ═══════════════════════ */
 @layer components {
+  /* Scroller propio (como tablero/estaciones): sin él, la página queda
+     constreñida al viewport como hijo flex del layout y el padding
+     inferior no entra en el scroll (la vista "queda pegada abajo"). */
+  .sim-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
   .sim-page {
     --muted: var(--muted-text);
     --muted-2: var(--muted-text-2);
@@ -18463,6 +18472,124 @@ textarea.est-input { resize: vertical; min-height: 60px; font-family: inherit; }
     text-align: center;
     color: var(--muted-2);
     font-size: 14px;
+  }
+
+  /* ─── Simulador LÁSER: lanes por máquina + batches enviables juntos ─── */
+  .laz-board { display: flex; flex-direction: column; gap: 16px; }
+  .laz-lane {
+    background: var(--surface, #fff);
+    border: 1px solid var(--border, #e4e2df);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .laz-lane-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--border, #e4e2df);
+    background: color-mix(in srgb, var(--ink, #14141a) 2%, var(--surface, #fff));
+  }
+  .laz-lane-ic {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px; height: 34px;
+    border-radius: 9px;
+    background: var(--ink, #14141a);
+    color: #fff;
+    flex: 0 0 auto;
+  }
+  .laz-lane-ic svg { width: 17px; height: 17px; }
+  .laz-lane-id { flex: 1; min-width: 0; }
+  .laz-lane-id .nm { font-size: 14px; font-weight: 650; letter-spacing: -0.01em; }
+  .laz-lane-id .sub { font-size: 11.5px; color: var(--muted-text, #74747c); margin-top: 1px; }
+  .laz-lane-stats { display: flex; gap: 16px; font-size: 11.5px; color: var(--muted-text, #74747c); }
+  .laz-lane-stats b { color: var(--ink, #14141a); font-weight: 650; }
+
+  .laz-batch { border-top: 1px solid var(--hairline, #efeeec); }
+  .laz-batch:first-of-type { border-top: none; }
+  .laz-batch-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    flex-wrap: wrap;
+  }
+  .laz-batch.urgent .laz-batch-head { box-shadow: inset 3px 0 0 var(--signal, #c2410c); }
+  .laz-batch-ic {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    flex: 0 0 auto;
+  }
+  .laz-batch-ic.col { background: #eef2ff; color: #1d4ed8; }
+  .laz-batch-ic.bn { background: #f1f1f0; color: #3c3c44; }
+  .laz-batch-ic svg { width: 15px; height: 15px; }
+  .laz-batch-id { flex: 1; min-width: 220px; }
+  .laz-batch-id .nm { font-size: 13px; font-weight: 650; letter-spacing: -0.005em; }
+  .laz-batch-chips { display: flex; gap: 5px; margin-top: 4px; flex-wrap: wrap; }
+  .laz-chip {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--border, #e4e2df);
+    color: var(--muted-text, #74747c);
+    background: var(--surface, #fff);
+  }
+  .laz-chip.col { background: #eef2ff; color: #1d4ed8; border-color: #d3deff; }
+  .laz-chip.bn { background: #f1f1f0; color: #3c3c44; border-color: #dddcd9; }
+  .laz-batch-stats { display: flex; gap: 14px; font-size: 11.5px; color: var(--muted-text, #74747c); }
+  .laz-batch-stats span { display: inline-flex; align-items: center; gap: 5px; }
+  .laz-batch-stats svg { width: 13px; height: 13px; }
+  .laz-lote { white-space: nowrap; }
+  .laz-lote svg { width: 14px; height: 14px; }
+
+  .laz-batch-body { padding: 0 16px 12px; display: flex; flex-direction: column; gap: 8px; }
+  .laz-job {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 12px;
+    border: 1px solid var(--border, #e4e2df);
+    border-radius: 9px;
+    background: var(--surface, #fff);
+  }
+  .laz-job.urgent { border-color: #f4d3c0; background: linear-gradient(180deg, var(--signal-bg, #fdf1ea), var(--surface, #fff) 70%); }
+  .laz-job.current { border-color: var(--ink, #14141a); box-shadow: inset 3px 0 0 var(--ink, #14141a); }
+  .laz-job-l { flex: 1; min-width: 0; }
+  .laz-job-1 { display: flex; align-items: center; gap: 8px; }
+  .laz-job-1 .code { font-size: 12px; font-weight: 700; }
+  .laz-urg {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--signal, #c2410c);
+    color: #fff;
+    letter-spacing: 0.05em;
+  }
+  .laz-print { font-size: 10.5px; color: var(--ok, #16794a); font-weight: 600; }
+  .laz-job-2 { font-size: 12px; color: var(--ink-2, #3c3c44); margin-top: 1px; }
+  .laz-job-3 { font-size: 11px; color: var(--muted-text, #74747c); margin-top: 2px; }
+  .laz-job-r { display: flex; gap: 5px; flex-wrap: wrap; justify-content: flex-end; }
+  .laz-fin {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--ink, #14141a) 4%, transparent);
+    color: var(--muted-text, #74747c);
+    border: 1px dashed var(--border-strong, #d4d2cd);
+  }
+
+  @media (max-width: 900px) {
+    .laz-lane-head { flex-wrap: wrap; }
+    .laz-batch-stats { width: 100%; }
   }
 
   /* Resultado del lote "Marcar impresos" (parcial honesto). */
@@ -27792,3 +27919,5 @@ body:has(.t-app) {
 }
 .t-notfound-card h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 6px; }
 .t-notfound-card p { font-size: 13px; color: var(--t-muted); line-height: 1.5; margin: 0; }
+
+

@@ -92,6 +92,139 @@ function piezasDeSnapshot(
   return [];
 }
 
+/** Paso de trazabilidad para el simulador LÁSER (por hoja). */
+type TrazabilidadPasoLaser = {
+  rutaPasoId?: string | null;
+  configPasoId?: string | null;
+  materiales?: Array<{
+    tipoLineaCosto?: string;
+    materiaPrimaNombre?: string;
+    cantidad?: number;
+    unidad?: string;
+    atributosVarianteJson?: {
+      gramaje?: unknown;
+      gramajeGr?: unknown;
+      formatoComercial?: unknown;
+      anchoMm?: unknown;
+      altoMm?: unknown;
+    } | null;
+  }>;
+  outputsCanonicos?: {
+    pliegos_impresos?: unknown;
+    pliego_impresion_ancho_mm?: unknown;
+    pliego_impresion_alto_mm?: unknown;
+  } | null;
+};
+
+function buildLaserJob(
+  orden: {
+    id: string;
+    numero: string;
+    fechaEntrega: Date | null;
+    cliente: { nombre: string } | null;
+  },
+  item: {
+    id: string;
+    nombre: string;
+    ordenIndice: number;
+    cotizacionItem: {
+      jobContextJson: Prisma.JsonValue;
+      trazabilidadJson: Prisma.JsonValue;
+    } | null;
+    pasos: Array<{ indice: number; nombre: string; estado: string }>;
+  },
+  frontera: {
+    id: string;
+    indice: number;
+    rutaPasoId: string | null;
+    estado: string;
+    centroCostoId: string | null;
+    centroCostoNombre: string | null;
+    duracionEstimadaMin: Prisma.Decimal | null;
+    iniciadoEl: Date | null;
+  },
+) {
+  const jobContext =
+    (item.cotizacionItem?.jobContextJson as Record<string, unknown> | null) ?? null;
+  const pasosTraza = (
+    item.cotizacionItem?.trazabilidadJson as { pasos?: TrazabilidadPasoLaser[] } | null
+  )?.pasos;
+  const trazPaso =
+    (Array.isArray(pasosTraza)
+      ? pasosTraza.find((paso) => paso.rutaPasoId && paso.rutaPasoId === frontera.rutaPasoId)
+      : null) ?? null;
+  const sustrato =
+    trazPaso?.materiales?.find((mat) => mat.tipoLineaCosto === 'MATERIAL') ?? null;
+  const atributos = sustrato?.atributosVarianteJson ?? null;
+
+  // Las claves por-paso del jobContext se indexan por CONFIG del paso
+  // (configPasoId), no por rutaPasoId.
+  const configPasoId = trazPaso?.configPasoId ?? null;
+  const modoPorPaso = (jobContext?.modoColorPorPaso as Record<string, unknown> | undefined)?.[
+    configPasoId ?? ''
+  ];
+  const modoColor =
+    (typeof modoPorPaso === 'string' && modoPorPaso) ||
+    (typeof jobContext?.modoColor === 'string' && jobContext.modoColor) ||
+    null;
+  // Máquina ASIGNADA al cotizar (elegible en el sheet); la default de la
+  // config se resuelve después si acá no hay nada.
+  const maquinaSeleccionada = jobContext?.[`maquinaSeleccionada_${configPasoId ?? ''}`];
+  const carasCrudo = numeroONull(jobContext?.caras);
+  const caras = carasCrudo === 1 || carasCrudo === 2 ? carasCrudo : null;
+
+  // Adónde va DESPUÉS: los pasos siguientes del item, como contexto.
+  const acabados = item.pasos
+    .filter((paso) => paso.indice > frontera.indice)
+    .map((paso) => paso.nombre)
+    .slice(0, 4);
+
+  // PLIEGO DE IMPRESIÓN (lo que se carga en la máquina) ≠ formato de
+  // compra del papel: acá los outputs canónicos; si vienen null (cotización
+  // vieja) se resuelve después desde la config del paso.
+  const pliegoAnchoMm = numeroONull(trazPaso?.outputsCanonicos?.pliego_impresion_ancho_mm);
+  const pliegoAltoMm = numeroONull(trazPaso?.outputsCanonicos?.pliego_impresion_alto_mm);
+
+  // Hojas físicas que pasan por la máquina = pliegos de impresión; los
+  // clics multiplican por caras.
+  const pliegos = numeroONull(trazPaso?.outputsCanonicos?.pliegos_impresos);
+  const gramaje = numeroONull(atributos?.gramaje) ?? numeroONull(atributos?.gramajeGr);
+  const letraItem = String.fromCharCode(65 + (item.ordenIndice % 26));
+  return {
+    pasoId: frontera.id,
+    itemId: item.id,
+    ordenId: orden.id,
+    codigo: `${orden.numero} · ${letraItem}`,
+    cliente: orden.cliente?.nombre ?? 'Sin cliente',
+    producto: item.nombre,
+    fechaEntrega: orden.fechaEntrega ? orden.fechaEntrega.toISOString().slice(0, 10) : null,
+    estado: frontera.estado as 'pendiente' | 'en_curso',
+    iniciadoEl: frontera.iniciadoEl ? frontera.iniciadoEl.toISOString() : null,
+    duracionEstimadaMin:
+      frontera.duracionEstimadaMin != null ? Number(frontera.duracionEstimadaMin) : null,
+    centroCostoId: frontera.centroCostoId,
+    centroCostoNombre: frontera.centroCostoNombre,
+    configPasoId,
+    maquinaId: typeof maquinaSeleccionada === 'string' ? maquinaSeleccionada : null,
+    maquinaNombre: null as string | null, // se resuelve con el catálogo
+    papel: sustrato
+      ? {
+          nombre: sustrato.materiaPrimaNombre ?? 'Papel sin identificar',
+          gramaje,
+        }
+      : null,
+    pliego:
+      pliegoAnchoMm !== null && pliegoAltoMm !== null
+        ? { preset: null as string | null, anchoMm: pliegoAnchoMm, altoMm: pliegoAltoMm }
+        : (null as { preset: string | null; anchoMm: number | null; altoMm: number | null } | null),
+    hojas: pliegos,
+    clics: pliegos !== null ? pliegos * (caras ?? 1) : null,
+    caras,
+    modoColor,
+    acabados,
+  };
+}
+
 function buildSimuladorJob(
   orden: {
     id: string;
@@ -407,6 +540,110 @@ export class ProduccionService {
     }));
 
     return { jobs, materiales };
+  }
+
+  // ── Simulador de impresión LÁSER (cola real por hoja) ────────────────
+  // Pasos impresion_por_hoja en FRONTERA de órdenes vivas: el operador de
+  // láser carga la bandeja una vez por batch (papel+pliego+color+caras) y
+  // manda todo junto. Datos del snapshot, no recalculados (D6).
+  // Ver docs/simulador-laser-diseno.md
+
+  async simuladorLaser(auth: CurrentAuth) {
+    const ordenes = await this.prisma.ordenTrabajo.findMany({
+      where: { tenantId: auth.tenantId, estado: { in: ['pendiente', 'produccion'] } },
+      select: {
+        id: true,
+        numero: true,
+        fechaEntrega: true,
+        cliente: { select: { nombre: true } },
+        items: {
+          orderBy: { ordenIndice: 'asc' },
+          select: {
+            id: true,
+            nombre: true,
+            ordenIndice: true,
+            cotizacionItem: {
+              select: { jobContextJson: true, trazabilidadJson: true },
+            },
+            pasos: {
+              orderBy: { indice: 'asc' },
+              select: {
+                id: true,
+                indice: true,
+                nombre: true,
+                familiaCodigo: true,
+                estado: true,
+                rutaPasoId: true,
+                centroCostoId: true,
+                centroCostoNombre: true,
+                duracionEstimadaMin: true,
+                iniciadoEl: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const jobs: Array<ReturnType<typeof buildLaserJob>> = [];
+    for (const orden of ordenes) {
+      for (const item of orden.items) {
+        const frontera = item.pasos.find((paso) => paso.estado !== 'hecho');
+        if (!frontera || frontera.familiaCodigo !== 'impresion_por_hoja') continue;
+        if (frontera.estado === 'bloqueado') continue;
+        jobs.push(buildLaserJob(orden, item, frontera));
+      }
+    }
+
+    // Pliego de impresión y máquina default desde la CONFIG del paso
+    // (cotizaciones viejas no traen los outputs canónicos de pliego, y la
+    // máquina del jobContext puede faltar → maquinaM1Id de la config).
+    const configIds = [
+      ...new Set(jobs.map((job) => job.configPasoId).filter((id): id is string => id !== null)),
+    ];
+    const configs = configIds.length
+      ? await this.prisma.productoConfigPaso.findMany({
+          where: { tenantId: auth.tenantId, id: { in: configIds } },
+          select: { id: true, paramsPasoJson: true, maquinaM1Id: true },
+        })
+      : [];
+    const configPorId = new Map(configs.map((config) => [config.id, config]));
+    for (const job of jobs) {
+      const config = job.configPasoId ? configPorId.get(job.configPasoId) : undefined;
+      if (!config) continue;
+      if (job.pliego === null) {
+        const nesting = (config.paramsPasoJson as {
+          nestingConfig?: { pliegoImpresion?: { preset?: unknown; anchoMm?: unknown; altoMm?: unknown } };
+        } | null)?.nestingConfig?.pliegoImpresion;
+        if (nesting) {
+          job.pliego = {
+            preset: typeof nesting.preset === 'string' ? nesting.preset : null,
+            anchoMm: numeroONull(nesting.anchoMm),
+            altoMm: numeroONull(nesting.altoMm),
+          };
+        }
+      }
+      if (job.maquinaId === null && config.maquinaM1Id) {
+        job.maquinaId = config.maquinaM1Id;
+      }
+    }
+
+    // Nombres de las máquinas asignadas.
+    const maquinaIds = [
+      ...new Set(jobs.map((job) => job.maquinaId).filter((id): id is string => id !== null)),
+    ];
+    const maquinas = maquinaIds.length
+      ? await this.prisma.maquina.findMany({
+          where: { tenantId: auth.tenantId, id: { in: maquinaIds } },
+          select: { id: true, nombre: true },
+        })
+      : [];
+    const maquinaPorId = new Map(maquinas.map((maquina) => [maquina.id, maquina.nombre]));
+    for (const job of jobs) {
+      job.maquinaNombre = job.maquinaId ? (maquinaPorId.get(job.maquinaId) ?? null) : null;
+    }
+
+    return { jobs };
   }
 
   // ── Configuración de producción (margen de la ETA sugerida) ──────────
