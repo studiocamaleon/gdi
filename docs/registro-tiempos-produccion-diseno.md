@@ -294,6 +294,18 @@ para el módulo de reportes:
 - `ConfiguracionInsights.razonTiemposPctMax` ya existe como umbral de alerta: pasa a
   tener materia prima confiable.
 
+## 9b. Ahorro por consolidación (agregado 2026-07-18)
+
+El ahorro que el simulador gran formato calcula al consolidar (material
+separado cotizado vs. consolidado real) se PERSISTE al marcar impresos:
+tabla `AhorroConsolidacion` (una fila por tanda, con material, tecnología,
+ml, $, baseline parcial y quién la marcó), registrada por
+`completar-lote` sólo si el lote completó entero (un parcial invalidaría
+los números de la tanda). El Panel general → tab Producción muestra el
+acumulado histórico + período y el desglose por material: es el argumento
+de valor del sistema ("cuánto ahorró la empresa gracias a consolidar").
+El baseline viene del motor al cotizar; sin baseline no se asienta nada.
+
 ## 10. Casos borde
 
 1. **Completar directo en modo cronómetro sin haber iniciado**: permitido (frontera

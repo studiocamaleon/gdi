@@ -62,6 +62,7 @@ export class OrdenesTrabajoController {
       auth,
       payload.pasoIds,
       payload.duracionTandaMin,
+      payload.ahorro,
     );
   }
 

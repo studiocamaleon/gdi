@@ -409,6 +409,7 @@ function fmtMinutos(min: number): string {
 function TabProduccion({ d }: { d: ProduccionPanel }) {
   const k = d.kpis;
   const registro = d.registroTiempos;
+  const ahorros = d.ahorros;
   return (
     <>
       <div className="d-kpi-row">
@@ -469,6 +470,47 @@ function TabProduccion({ d }: { d: ProduccionPanel }) {
           {registro.operadores.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Sin tramos de trabajo en el período.</div> : (
             <table className="d-tbl"><thead><tr><th>Operador</th><th className="right">Pasos</th><th className="right">Tiempo</th></tr></thead>
               <tbody>{registro.operadores.map((o) => (<tr key={o.operador}><td><div className="nm">{o.operador}</div></td><td className="right mono">{o.pasos}</td><td className="right mono">{fmtMinutos(o.minutos)}</td></tr>))}</tbody>
+            </table>
+          )}
+        </Card>
+
+        {/* ── Ahorro por consolidación: el valor que genera el sistema ── */}
+        <Card
+          span={5}
+          title="Ahorro por consolidación"
+          sub="material que NO se compró gracias a consolidar tandas"
+        >
+          {ahorros.historico.tandas === 0 ? (
+            <div className="d-empty" style={{ padding: 30 }}>
+              Todavía no hay tandas consolidadas registradas: el ahorro se asienta al marcar impresos en el Simulador gran formato.
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div>
+                <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".05em", color: "var(--muted-text)" }}>Acumulado histórico</div>
+                <div className="mono" style={{ fontSize: 26, fontWeight: 700, color: "var(--ok)" }}>$ {fmtAR(ahorros.historico.ahorroPesos, 0)}</div>
+                <div style={{ fontSize: 12, color: "var(--muted-text)" }}>{fmtAR(ahorros.historico.ahorroMl, 1)} ml de rollo · {ahorros.historico.tandas} tanda{ahorros.historico.tandas === 1 ? "" : "s"} · {ahorros.historico.jobs} trabajo{ahorros.historico.jobs === 1 ? "" : "s"}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".05em", color: "var(--muted-text)" }}>En el período</div>
+                <div className="mono" style={{ fontSize: 18, fontWeight: 600 }}>$ {fmtAR(ahorros.periodo.ahorroPesos, 0)}</div>
+                <div style={{ fontSize: 12, color: "var(--muted-text)" }}>{fmtAR(ahorros.periodo.ahorroMl, 1)} ml · {ahorros.periodo.tandas} tanda{ahorros.periodo.tandas === 1 ? "" : "s"}</div>
+              </div>
+            </div>
+          )}
+        </Card>
+        <Card span={7} title="Ahorro por material" sub="acumulado histórico por consolidación" flush>
+          {ahorros.porMaterial.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Sin ahorros registrados todavía.</div> : (
+            <table className="d-tbl"><thead><tr><th>Material</th><th>Tecnología</th><th className="right">Tandas</th><th className="right">Rollo</th><th className="right">Ahorro</th></tr></thead>
+              <tbody>{ahorros.porMaterial.map((m) => (
+                <tr key={`${m.material}|${m.tecnologia ?? ""}`}>
+                  <td><div className="nm">{m.material}</div></td>
+                  <td>{m.tecnologia ? technologyCodeLabel(m.tecnologia) || m.tecnologia : "—"}</td>
+                  <td className="right mono">{m.tandas}</td>
+                  <td className="right mono">{fmtAR(m.ahorroMl, 1)} ml</td>
+                  <td className="right mono" style={{ color: "var(--ok)", fontWeight: 600 }}>$ {fmtAR(m.ahorroPesos, 0)}</td>
+                </tr>
+              ))}</tbody>
             </table>
           )}
         </Card>

@@ -448,6 +448,7 @@ model Tenant {
   ordenTrabajoItems                                OrdenTrabajoItem[]
   ordenTrabajoItemPasos                            OrdenTrabajoItemPaso[]
   ordenTrabajoPasoTramos                           OrdenTrabajoPasoTramo[]
+  ahorrosConsolidacion                             AhorroConsolidacion[]
   ordenTrabajoEventos                              OrdenTrabajoEvento[]
   ordenTrabajoContadores                           OrdenTrabajoContador[]
   cuentasFondos                                    CuentaFondos[]
@@ -481,6 +482,7 @@ model User {
   pasosIniciados      OrdenTrabajoItemPaso[] @relation("PasosIniciados")
   pasosCompletados    OrdenTrabajoItemPaso[] @relation("PasosCompletados")
   tramosPaso          OrdenTrabajoPasoTramo[] @relation("TramosPaso")
+  ahorrosConsolidacion AhorroConsolidacion[] @relation("AhorrosConsolidacion")
 }
 
 model Membership {
@@ -2204,6 +2206,41 @@ model OrdenTrabajoPasoTramo {
   @@index([tenantId, pasoId])
   @@index([tenantId, finEl])
   @@index([tenantId, usuarioId, finEl])
+}
+
+/// Ahorro de material CONCRETADO al consolidar trabajos en el simulador
+/// gran formato: una fila por tanda marcada impresa, con el consumo que
+/// hubiera costado imprimir por separado (baseline del motor al cotizar)
+/// vs. el consolidado real. Es el "cuánto ahorra la empresa gracias al
+/// sistema" acumulado que muestra el Panel general.
+model AhorroConsolidacion {
+  id                   String   @id @default(uuid()) @db.Uuid
+  tenantId             String   @db.Uuid
+  /// Quién marcó la tanda (snapshot del nombre; FK puede quedar null).
+  usuarioId            String?  @db.Uuid
+  usuarioNombre        String
+  materiaPrimaId       String?  @db.Uuid
+  materiaPrimaNombre   String
+  /// Código del catálogo de tecnologías (uv, dtf_textil, …).
+  tecnologia           String?
+  /// Trabajos consolidados en la tanda.
+  jobs                 Int
+  /// Rollo consumido si cada trabajo se imprimía por separado (ml).
+  consumoSeparadoMl    Decimal  @db.Decimal(12, 2)
+  /// Rollo consumido consolidado (ml).
+  consumoConsolidadoMl Decimal  @db.Decimal(12, 2)
+  ahorroMl             Decimal  @db.Decimal(12, 2)
+  costoSeparado        Decimal? @db.Decimal(14, 2)
+  costoConsolidado     Decimal? @db.Decimal(14, 2)
+  /// Ahorro en pesos (null si el material no tiene precio por ml).
+  ahorroPesos          Decimal? @db.Decimal(14, 2)
+  /// Algún job de la tanda no tenía baseline: el ahorro es parcial.
+  baselineParcial      Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  tenant               Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  usuario              User?    @relation("AhorrosConsolidacion", fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
 }
 
 model OrdenTrabajoEvento {

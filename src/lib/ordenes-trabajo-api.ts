@@ -200,13 +200,33 @@ export async function accionPasoProduccion(
  * PARCIAL honesto — los que no pudieron, con su motivo. `duracionTandaMin`
  * (opcional) prorratea la duración real de la tanda entre los pasos (D11).
  */
+/**
+ * Ahorro de material concretado al consolidar la tanda (simulador gran
+ * formato): se persiste como valor generado por el sistema y alimenta el
+ * acumulado del Panel general.
+ */
+export type AhorroConsolidacionPayload = {
+  materiaPrimaId?: string;
+  materiaPrimaNombre: string;
+  tecnologia?: string;
+  jobs: number;
+  consumoSeparadoMl: number;
+  consumoConsolidadoMl: number;
+  ahorroMl: number;
+  costoSeparado?: number;
+  costoConsolidado?: number;
+  ahorroPesos?: number;
+  baselineParcial?: boolean;
+};
+
 export async function completarPasosLote(
   pasoIds: string[],
   duracionTandaMin?: number,
+  ahorro?: AhorroConsolidacionPayload,
 ) {
   const resultado = await apiRequest<{ completados: number; errores: Array<{ pasoId: string; motivo: string }> }>(
     "/ordenes-trabajo/tablero/pasos/completar-lote",
-    { method: "POST", body: JSON.stringify({ pasoIds, duracionTandaMin }) },
+    { method: "POST", body: JSON.stringify({ pasoIds, duracionTandaMin, ahorro }) },
   );
   avisarTramosCambiaron();
   return resultado;

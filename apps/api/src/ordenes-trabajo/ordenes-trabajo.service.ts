@@ -30,6 +30,7 @@ import type {
   EditarOrdenTrabajoDto,
 } from './dto/crear-orden-trabajo.dto';
 import type { AccionPasoOrdenTrabajoDto } from './dto/accion-paso.dto';
+import type { AhorroConsolidacionDto } from './dto/completar-pasos-lote.dto';
 import {
   FAMILIAS,
   modoRegistroDeFamilia,
@@ -2015,6 +2016,7 @@ export class OrdenesTrabajoService {
     auth: CurrentAuth,
     pasoIds: string[],
     duracionTandaMin?: number,
+    ahorro?: AhorroConsolidacionDto,
   ) {
     const unicos = [...new Set(pasoIds)];
     const pasos = await this.prisma.ordenTrabajoItemPaso.findMany({
@@ -2090,6 +2092,35 @@ export class OrdenesTrabajoService {
         });
       }
     }
+
+    // Ahorro por consolidación de la tanda (simulador gran formato): se
+    // asienta SOLO si el lote completó entero — con completados parciales
+    // los números del batch (calculados para la tanda completa) mentirían.
+    if (ahorro && completados > 0 && errores.length === 0) {
+      const actor = await this.prisma.empleado.findFirst({
+        where: { tenantId: auth.tenantId, userId: auth.userId },
+        select: { nombreCompleto: true },
+      });
+      await this.prisma.ahorroConsolidacion.create({
+        data: {
+          tenantId: auth.tenantId,
+          usuarioId: auth.userId,
+          usuarioNombre: actor?.nombreCompleto ?? auth.email,
+          materiaPrimaId: ahorro.materiaPrimaId ?? null,
+          materiaPrimaNombre: ahorro.materiaPrimaNombre,
+          tecnologia: ahorro.tecnologia ?? null,
+          jobs: ahorro.jobs,
+          consumoSeparadoMl: ahorro.consumoSeparadoMl,
+          consumoConsolidadoMl: ahorro.consumoConsolidadoMl,
+          ahorroMl: ahorro.ahorroMl,
+          costoSeparado: ahorro.costoSeparado ?? null,
+          costoConsolidado: ahorro.costoConsolidado ?? null,
+          ahorroPesos: ahorro.ahorroPesos ?? null,
+          baselineParcial: ahorro.baselineParcial ?? false,
+        },
+      });
+    }
+
     return { completados, errores };
   }
 

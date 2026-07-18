@@ -56,7 +56,7 @@ export class ReporteProduccionService {
   }
 
   async produccion(tenantId: string, rango: Rango) {
-    const [otd, eficiencia, util, throughput, bloqueos, carga, registro] =
+    const [otd, eficiencia, util, throughput, bloqueos, carga, registro, ahorros] =
       await Promise.all([
         this.otd(tenantId, rango),
         this.eficiencia(tenantId, rango),
@@ -65,6 +65,7 @@ export class ReporteProduccionService {
         this.bloqueos(tenantId),
         this.carga(tenantId),
         this.registroTiempos(tenantId, rango),
+        this.ahorros(tenantId, rango),
       ]);
     return {
       kpis: {
@@ -83,6 +84,7 @@ export class ReporteProduccionService {
       throughput,
       bloqueos: bloqueos.motivos,
       registroTiempos: registro,
+      ahorros,
     };
   }
 
@@ -370,6 +372,67 @@ export class ReporteProduccionService {
         operador: row.operador,
         minutos: r2(row.minutos),
         pasos: row.pasos,
+      })),
+    };
+  }
+
+  // ── Ahorro por consolidación (simulador gran formato) ──────────────
+  // El argumento de valor del sistema: cuánto material y dinero se ahorró
+  // consolidando tandas vs. imprimir cada trabajo por separado (baseline
+  // del motor al cotizar). Período + ACUMULADO histórico.
+  private async ahorros(tenantId: string, rango: Rango) {
+    const [periodoRows, historicoRows, porMaterialRows] = await Promise.all([
+      this.prisma.$queryRaw<
+        Array<{ tandas: number; jobs: number; ml: number; pesos: number }>
+      >`
+        SELECT COUNT(*)::int AS tandas,
+               COALESCE(SUM(a.jobs), 0)::int AS jobs,
+               COALESCE(SUM(a."ahorroMl"), 0)::float8 AS ml,
+               COALESCE(SUM(a."ahorroPesos"), 0)::float8 AS pesos
+        FROM "AhorroConsolidacion" a
+        WHERE a."tenantId" = ${tenantId}::uuid
+          AND a."createdAt" >= ${rango.desde} AND a."createdAt" < ${finExclusivo(rango)}
+      `,
+      this.prisma.$queryRaw<
+        Array<{ tandas: number; jobs: number; ml: number; pesos: number }>
+      >`
+        SELECT COUNT(*)::int AS tandas,
+               COALESCE(SUM(a.jobs), 0)::int AS jobs,
+               COALESCE(SUM(a."ahorroMl"), 0)::float8 AS ml,
+               COALESCE(SUM(a."ahorroPesos"), 0)::float8 AS pesos
+        FROM "AhorroConsolidacion" a
+        WHERE a."tenantId" = ${tenantId}::uuid
+      `,
+      // Desglose ACUMULADO por material (el pitch de valor completo).
+      this.prisma.$queryRaw<
+        Array<{ material: string; tecnologia: string | null; tandas: number; ml: number; pesos: number }>
+      >`
+        SELECT a."materiaPrimaNombre" AS material,
+               a.tecnologia,
+               COUNT(*)::int AS tandas,
+               COALESCE(SUM(a."ahorroMl"), 0)::float8 AS ml,
+               COALESCE(SUM(a."ahorroPesos"), 0)::float8 AS pesos
+        FROM "AhorroConsolidacion" a
+        WHERE a."tenantId" = ${tenantId}::uuid
+        GROUP BY 1, 2 ORDER BY pesos DESC, ml DESC
+        LIMIT 10
+      `,
+    ]);
+    const resumen = (row?: { tandas: number; jobs: number; ml: number; pesos: number }) => ({
+      tandas: row?.tandas ?? 0,
+      jobs: row?.jobs ?? 0,
+      ahorroMl: r2(row?.ml ?? 0),
+      ahorroPesos: r2(row?.pesos ?? 0),
+    });
+    return {
+      periodo: resumen(periodoRows[0]),
+      historico: resumen(historicoRows[0]),
+      porMaterial: porMaterialRows.map((row) => ({
+        material: row.material,
+        tecnologia: row.tecnologia,
+        tandas: row.tandas,
+        ahorroMl: r2(row.ml),
+        ahorroPesos: r2(row.pesos),
       })),
     };
   }

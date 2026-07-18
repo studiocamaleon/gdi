@@ -20,7 +20,10 @@ import {
   type SimuladorData,
   type SimuladorJob,
 } from "@/lib/simulador-impresion-api";
-import { completarPasosLote } from "@/lib/ordenes-trabajo-api";
+import {
+  completarPasosLote,
+  type AhorroConsolidacionPayload,
+} from "@/lib/ordenes-trabajo-api";
 import { technologyCodeLabel } from "@/lib/maquinaria-tecnologias";
 import { diasHastaEntrega, etiquetaEntrega } from "@/lib/tablero-produccion";
 
@@ -64,6 +67,8 @@ type VTech = { key: string; nm: string; sub: string; color: string };
 
 const SIN_TECNOLOGIA = "sin_tecnologia";
 const SIN_MATERIAL = "sin_material";
+
+const r2 = (n: number) => Math.round(n * 100) / 100;
 
 const TECH_COLORS = ["#6d4bd8", "#1f9d6b", "#2f8fd6", "#c9599a", "#d9803a", "#3a9ca0", "#b0578f"];
 
@@ -390,7 +395,11 @@ function SimMaterialCard({
   jobs: VJob[];
   excluded: Set<string>;
   onToggle: (id: string) => void;
-  onCompletar: (pasoIds: string[], duracionTandaMin?: number) => void;
+  onCompletar: (
+    pasoIds: string[],
+    duracionTandaMin?: number,
+    ahorro?: AhorroConsolidacionPayload,
+  ) => void;
   completando: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
@@ -449,6 +458,26 @@ function SimMaterialCard({
     (acc, j) => acc + (j.duracionEstimadaMin ?? 0),
     0,
   );
+
+  // Ahorro CONCRETADO de la tanda: se persiste al marcar impresos para el
+  // acumulado del Panel general. Sin baseline cotizado no hay qué asentar.
+  const materiaPrimaId = material.key.split("|")[1];
+  const ahorroPayload: AhorroConsolidacionPayload | undefined =
+    ahorroMl !== null && consolidadoMl !== null
+      ? {
+          materiaPrimaId: materiaPrimaId !== SIN_MATERIAL ? materiaPrimaId : undefined,
+          materiaPrimaNombre: material.nm,
+          tecnologia: material.tech !== SIN_TECNOLOGIA ? material.tech : undefined,
+          jobs: activeJobs.length,
+          consumoSeparadoMl: r2(separadoMl),
+          consumoConsolidadoMl: r2(consolidadoMl),
+          ahorroMl: r2(ahorroMl),
+          costoSeparado: separadoPesos > 0 ? r2(separadoPesos) : undefined,
+          costoConsolidado: shownPack?.costo != null ? r2(shownPack.costo) : undefined,
+          ahorroPesos: ahorroPesos !== null ? r2(ahorroPesos) : undefined,
+          baselineParcial,
+        }
+      : undefined;
 
   return (
     <div className={`sim-mat ${open ? "open" : ""}`}>
@@ -628,7 +657,11 @@ function SimMaterialCard({
                   className="btn btn-primary sim-send"
                   disabled={completables.length === 0 || completando}
                   onClick={() =>
-                    onCompletar(completables, tandaValida ? tandaMin : undefined)
+                    onCompletar(
+                      completables,
+                      tandaValida ? tandaMin : undefined,
+                      ahorroPayload,
+                    )
                   }
                 >
                   <ArrowRightIcon />
@@ -698,12 +731,16 @@ export function SimuladorImpresion({ initialData }: { initialData: SimuladorData
       return n;
     });
 
-  const completar = async (pasoIds: string[], duracionTandaMin?: number) => {
+  const completar = async (
+    pasoIds: string[],
+    duracionTandaMin?: number,
+    ahorro?: AhorroConsolidacionPayload,
+  ) => {
     setCompletando(true);
     completandoRef.current = true;
     setResultado(null);
     try {
-      const res = await completarPasosLote(pasoIds, duracionTandaMin);
+      const res = await completarPasosLote(pasoIds, duracionTandaMin, ahorro);
       const fresh = await getSimuladorImpresion();
       setData(fresh);
       setResultado(
@@ -841,7 +878,7 @@ export function SimuladorImpresion({ initialData }: { initialData: SimuladorData
                   jobs={mj}
                   excluded={excluded}
                   onToggle={toggle}
-                  onCompletar={(pasoIds, tanda) => void completar(pasoIds, tanda)}
+                  onCompletar={(pasoIds, tanda, ahorro) => void completar(pasoIds, tanda, ahorro)}
                   completando={completando}
                 />
               );
