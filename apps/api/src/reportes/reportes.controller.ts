@@ -55,6 +55,7 @@ export class ReportesController {
         contribucion: actual.contribucion,
         contribucionPct: actual.contribucionPct,
         contribucionDeltaPts: deltas.contribucionPts,
+        costosFijos: actual.costosFijos,
         puntoEquilibrio: actual.puntoEquilibrio,
         avancePct: actual.avancePct,
       },
