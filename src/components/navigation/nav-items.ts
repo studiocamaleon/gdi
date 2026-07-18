@@ -68,6 +68,11 @@ export const NAV: NavItem[] = [
       },
       { key: "maquinaria", label: "Maquinaria", href: "/costos/maquinaria" },
       {
+        key: "gastos-fijos",
+        label: "Gastos fijos",
+        href: "/costos/gastos-fijos",
+      },
+      {
         key: "rutas",
         label: "Rutas de producción",
         href: "/productos-servicios/rutas",

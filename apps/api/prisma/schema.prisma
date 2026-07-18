@@ -96,6 +96,19 @@ enum CategoriaComponenteCostoCentro {
   OTROS
 }
 
+/// Categorías de gasto fijo de estructura (planificación / punto de equilibrio).
+/// Independiente de las categorías de componente de centro (costeo/tarifa).
+enum CategoriaGastoFijo {
+  ALQUILER
+  SUELDOS
+  SERVICIOS // luz, agua, internet, teléfono
+  AMORTIZACION // depreciación de máquinas/equipos
+  FINANCIEROS // intereses, cuotas, leasing
+  IMPUESTOS // fijos (no IVA/IIBB, que se costean por venta)
+  MARKETING
+  OTROS
+}
+
 enum OrigenComponenteCostoCentro {
   MANUAL
   SUGERIDO
@@ -381,6 +394,7 @@ model Tenant {
   centroCostoRecursos                              CentroCostoRecurso[]
   centroCostoRecursosMaquinaria                    CentroCostoRecursoMaquinaPeriodo[]
   centroCostoComponentesCostoPeriodo               CentroCostoComponenteCostoPeriodo[]
+  gastosFijosEstructura                            GastoFijoEstructura[]
   centroCostoCapacidadesPeriodo                    CentroCostoCapacidadPeriodo[]
   centroCostoTarifasPeriodo                        CentroCostoTarifaPeriodo[]
   maquinas                                         Maquina[]
@@ -1120,6 +1134,30 @@ model ConfiguracionInsights {
   margenPctMin        Int      @default(25)
   updatedAt           DateTime @updatedAt
   tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+/// Gasto fijo de estructura (nivel empresa) — fuente ÚNICA del pool de costos
+/// fijos del PUNTO DE EQUILIBRIO. Desacoplado de los centros de costo (que
+/// existen para armar tarifas). Modelo recurrente con vigencia: aplica todos
+/// los meses entre `vigenteDesde` y `vigenteHasta` (null = indefinido).
+/// Ver docs/gastos-fijos-estructura-diseno.md
+model GastoFijoEstructura {
+  id             String             @id @default(uuid()) @db.Uuid
+  tenantId       String             @db.Uuid
+  nombre         String
+  categoria      CategoriaGastoFijo
+  importeMensual Decimal            @db.Decimal(14, 2)
+  /// 'YYYY-MM' — primer mes de vigencia (inclusive).
+  vigenteDesde   String
+  /// 'YYYY-MM' — último mes de vigencia (inclusive); null = indefinido.
+  vigenteHasta   String?
+  activo         Boolean            @default(true)
+  notas          String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  tenant         Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
 }
 
 /// Configuración de producción del tenant. Hoy: margen de seguridad que

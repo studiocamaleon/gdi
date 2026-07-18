@@ -13,6 +13,7 @@ import { TenantContextInterceptor } from './common/interceptors/tenant-context.i
 import { AuthModule } from './auth/auth.module';
 import { ClientesModule } from './clientes/clientes.module';
 import { CostosModule } from './costos/costos.module';
+import { GastosFijosModule } from './gastos-fijos/gastos-fijos.module';
 import { EmpleadosModule } from './empleados/empleados.module';
 import { MaquinariaModule } from './maquinaria/maquinaria.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -70,6 +71,7 @@ import { ReportesModule } from './reportes/reportes.module';
     EmpleadosModule,
     ProveedoresModule,
     CostosModule,
+    GastosFijosModule,
     MaquinariaModule,
     InventarioModule,
     ProduccionModule,

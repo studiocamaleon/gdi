@@ -431,9 +431,13 @@ function TabProduccion({ d }: { d: ProduccionPanel }) {
 /* ═══════════ TAB · Finanzas ═══════════ */
 type FinanzasData = { meta: MetaPanel; rentabilidad: RentabilidadPanel; cobranza: CobranzaPanel };
 const AGING_COLORS: Record<string, string> = { "0-30": "var(--ok)", "31-60": "#c8c6c0", "61-90": "#d97757", "+90": "var(--signal)" };
+const CATEGORIA_GASTO_LABEL: Record<string, string> = {
+  ALQUILER: "Alquiler", SUELDOS: "Sueldos", SERVICIOS: "Servicios", AMORTIZACION: "Amortización",
+  FINANCIEROS: "Financieros", IMPUESTOS: "Impuestos", MARKETING: "Marketing", OTROS: "Otros",
+};
 function TabFinanzas({ d }: { d: FinanzasData }) {
   const r = d.rentabilidad, co = d.cobranza;
-  const gasto = r.gastoPorCentro ?? [];
+  const gasto = r.gastoPorCategoria ?? [];
   return (
     <>
       <div className="d-kpi-row">
@@ -470,19 +474,23 @@ function TabFinanzas({ d }: { d: FinanzasData }) {
             <tbody>{co.costoCobrar.map((m) => (<tr key={m.metodo}><td><div className="nm">{m.metodo}</div></td><td className="right mono">{m.cantidad}</td><td className="right mono">${fmtK(m.bruto)}</td><td className="right mono" style={{ color: m.comision > 0 ? "var(--signal)" : "var(--muted-text)", fontWeight: 600 }}>${fmtK(m.comision)}</td><td className="right mono">{pct(m.pct)}</td></tr>))}</tbody>
           </table>
         </Card>
-        <Card span={5} title="Gasto por centro de costo" sub="estructura del período">
-          <div className="d-gauge-row">
-            <StackedRing segments={gasto.map((g) => g.monto)} label={`$${fmtK(r.costosFijos ?? 0)}`} sub="costo fijo" />
-            <div className="meta" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {gasto.slice(0, 6).map((g, i) => (
-                <div key={g.centroId} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: 2, background: SEG_COLORS[i % SEG_COLORS.length] }} />
-                  <span style={{ color: "var(--ink-2)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.centro}</span>
-                  <span className="mono" style={{ color: "var(--muted-text)" }}>{pct(g.pct)}</span>
-                </div>
-              ))}
+        <Card span={5} title="Gasto fijo por categoría" sub="estructura mensual (gastos fijos)">
+          {gasto.length === 0 ? (
+            <div className="d-empty" style={{ padding: 30 }}>Sin gastos fijos de estructura cargados. Cargalos en Costos → Gastos fijos para calcular el punto de equilibrio.</div>
+          ) : (
+            <div className="d-gauge-row">
+              <StackedRing segments={gasto.map((g) => g.monto)} label={`$${fmtK(r.costosFijos ?? 0)}`} sub="costo fijo" />
+              <div className="meta" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {gasto.slice(0, 8).map((g, i) => (
+                  <div key={g.categoria} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 2, background: SEG_COLORS[i % SEG_COLORS.length] }} />
+                    <span style={{ color: "var(--ink-2)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{CATEGORIA_GASTO_LABEL[g.categoria] ?? g.categoria}</span>
+                    <span className="mono" style={{ color: "var(--muted-text)" }}>{pct(g.pct)}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </Card>
         <Card span={12} title="Deudores principales" sub="prioridad de cobranza" flush>
           {co.deudores.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Sin deuda pendiente.</div> : (

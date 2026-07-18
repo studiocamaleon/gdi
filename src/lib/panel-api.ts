@@ -21,8 +21,8 @@ export type MetaPanel = {
 
 export type RangoPanel = { desde?: string; hasta?: string };
 
-/** Gasto estructural por centro (donut de Finanzas). */
-export type CentroGastoPanel = { centroId: string; centro: string; monto: number; pct: number };
+/** Gasto fijo de estructura por categoría (donut de Finanzas). */
+export type CategoriaGastoPanel = { categoria: string; monto: number; pct: number };
 
 /**
  * Bloque de rentabilidad: márgenes y PUNTO DE EQUILIBRIO. Resumen trae un
@@ -45,7 +45,7 @@ export type RentabilidadPanel = {
   costoTotal?: number;
   costosVariables?: number;
   costosFijos?: number;
-  gastoPorCentro?: CentroGastoPanel[];
+  gastoPorCategoria?: CategoriaGastoPanel[];
 };
 
 /** Respuesta base de un tab (mientras se construye, `pendiente: true`). */

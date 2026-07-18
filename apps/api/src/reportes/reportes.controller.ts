@@ -106,7 +106,7 @@ export class ReportesController {
         costosFijos: actual.costosFijos,
         puntoEquilibrio: actual.puntoEquilibrio,
         avancePct: actual.avancePct,
-        gastoPorCentro: actual.gastoPorCentro,
+        gastoPorCategoria: actual.gastoPorCategoria,
       },
       cobranza,
     };

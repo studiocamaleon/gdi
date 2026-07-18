@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { fraccionMesEnRango, mesesDelRango, type Rango } from './periodo';
 
@@ -21,7 +20,7 @@ function finExclusivo(rango: Rango): Date {
   );
 }
 
-export type CentroGasto = { centroId: string; centro: string; monto: number; pct: number };
+export type CategoriaGasto = { categoria: string; monto: number; pct: number };
 
 export type RentabilidadPeriodo = {
   ventas: number;
@@ -35,7 +34,7 @@ export type RentabilidadPeriodo = {
   /** null cuando no se puede calcular (sin fijos o contribución no positiva). */
   puntoEquilibrio: number | null;
   avancePct: number | null;
-  gastoPorCentro: CentroGasto[];
+  gastoPorCategoria: CategoriaGasto[];
   itemsSinCosto: number;
 };
 
@@ -47,7 +46,7 @@ export class RentabilidadService {
     const desde = rango.desde;
     const hastaExcl = finExclusivo(rango);
 
-    const [ventasCosto, variables, fijosRows] = await Promise.all([
+    const [ventasCosto, variables, gastosFijos] = await Promise.all([
       // Ventas (neto del OT item) + costo (snapshot de cotización).
       this.prisma.$queryRaw<
         Array<{ ventas: number; costo: number; items_sin_costo: number }>
@@ -78,18 +77,18 @@ export class RentabilidadService {
           AND ot."fechaEmision" < ${hastaExcl}
           AND mat->>'tipoLineaCosto' IN ('MATERIAL', 'CONSUMIBLE_MAQUINA')
       `,
-      // Costos FIJOS por centro y mes (se prorratean por rango en JS).
-      this.prisma.$queryRaw<
-        Array<{ centroId: string; centro: string; periodo: string; monto: number }>
-      >`
-        SELECT c."centroCostoId" AS "centroId", cc.nombre AS centro,
-               c.periodo, SUM(c."importeMensual")::float8 AS monto
-        FROM "CentroCostoComponenteCostoPeriodo" c
-        JOIN "CentroCosto" cc ON cc.id = c."centroCostoId"
-        WHERE c."tenantId" = ${tenantId}::uuid
-          AND c.periodo IN (${Prisma.join(mesesDelRango(rango))})
-        GROUP BY c."centroCostoId", cc.nombre, c.periodo
-      `,
+      // Costos FIJOS de estructura (gastos fijos recurrentes con vigencia).
+      // Fuente única del pool del punto de equilibrio; se prorratean por rango
+      // en JS según los meses en que cada gasto está vigente.
+      this.prisma.gastoFijoEstructura.findMany({
+        where: { tenantId, activo: true },
+        select: {
+          categoria: true,
+          importeMensual: true,
+          vigenteDesde: true,
+          vigenteHasta: true,
+        },
+      }),
     ]);
 
     const ventas = ventasCosto[0]?.ventas ?? 0;
@@ -97,15 +96,22 @@ export class RentabilidadService {
     const itemsSinCosto = ventasCosto[0]?.items_sin_costo ?? 0;
     const costosVariables = variables[0]?.variables ?? 0;
 
-    // Costos fijos prorrateados y agrupados por centro (para el donut).
-    const porCentro = new Map<string, { centro: string; monto: number }>();
+    // Costos fijos prorrateados por rango y agrupados por categoría (donut).
+    // Cada gasto suma en los meses del rango en que está vigente.
+    const meses = mesesDelRango(rango);
+    const porCategoria = new Map<string, number>();
     let costosFijos = 0;
-    for (const row of fijosRows) {
-      const proporcion = row.monto * fraccionMesEnRango(row.periodo, rango);
-      costosFijos += proporcion;
-      const previo = porCentro.get(row.centroId);
-      if (previo) previo.monto += proporcion;
-      else porCentro.set(row.centroId, { centro: row.centro, monto: proporcion });
+    for (const gasto of gastosFijos) {
+      const importe = Number(gasto.importeMensual);
+      for (const mes of meses) {
+        const vigente =
+          gasto.vigenteDesde <= mes &&
+          (gasto.vigenteHasta === null || mes <= gasto.vigenteHasta);
+        if (!vigente) continue;
+        const proporcion = importe * fraccionMesEnRango(mes, rango);
+        costosFijos += proporcion;
+        porCategoria.set(gasto.categoria, (porCategoria.get(gasto.categoria) ?? 0) + proporcion);
+      }
     }
 
     const margenBruto = ventas - costoTotal;
@@ -116,12 +122,11 @@ export class RentabilidadService {
     const avancePct =
       puntoEquilibrio && puntoEquilibrio > 0 ? (ventas / puntoEquilibrio) * 100 : null;
 
-    const gastoPorCentro: CentroGasto[] = [...porCentro.entries()]
-      .map(([centroId, v]) => ({
-        centroId,
-        centro: v.centro,
-        monto: r2(v.monto),
-        pct: costosFijos > 0 ? r2((v.monto / costosFijos) * 100) : 0,
+    const gastoPorCategoria: CategoriaGasto[] = [...porCategoria.entries()]
+      .map(([categoria, monto]) => ({
+        categoria,
+        monto: r2(monto),
+        pct: costosFijos > 0 ? r2((monto / costosFijos) * 100) : 0,
       }))
       .sort((a, b) => b.monto - a.monto);
 
@@ -136,7 +141,7 @@ export class RentabilidadService {
       costosFijos: r2(costosFijos),
       puntoEquilibrio: puntoEquilibrio !== null ? r2(puntoEquilibrio) : null,
       avancePct: avancePct !== null ? r2(avancePct) : null,
-      gastoPorCentro,
+      gastoPorCategoria,
       itemsSinCosto,
     };
   }
@@ -173,7 +178,7 @@ export class RentabilidadService {
       );
     }
     if (p.costosFijos === 0) {
-      l.push('Costos fijos no cargados en el período: sin punto de equilibrio.');
+      l.push('Sin gastos fijos de estructura vigentes: sin punto de equilibrio.');
     } else if (p.puntoEquilibrio === null) {
       l.push('Contribución no positiva: punto de equilibrio indefinido.');
     }
