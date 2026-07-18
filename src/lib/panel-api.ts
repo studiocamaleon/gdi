@@ -72,10 +72,20 @@ export type ClienteDormidoPanel = {
   diasSinComprar: number;
   historico: number;
 };
+export type PuntoTicketPanel = {
+  fecha: string;
+  ordenes: number;
+  ticketPromedio: number;
+  ticketMediana: number;
+};
+/** Celda del heatmap categoría × mes (últimos 12 meses). */
+export type CeldaEstacionalidadPanel = { categoria: string; mes: string; monto: number };
 export type ComercialPanel = {
   kpis: {
     ventas: number;
     ventasDeltaPct: number | null;
+    /** vs. mismo período del año anterior; null hasta tener esa historia. */
+    ventasDeltaAnualPct: number | null;
     ordenes: number;
     ordenesDeltaPct: number | null;
     ticketPromedio: number;
@@ -84,6 +94,9 @@ export type ComercialPanel = {
     clientesDormidos: number;
   };
   serie: Array<{ fecha: string; monto: number }>;
+  /** Evolución del ticket por orden: promedio y mediana por bucket. */
+  serieTicket: PuntoTicketPanel[];
+  estacionalidad: CeldaEstacionalidadPanel[];
   granularidad: GranularidadPanel;
   rankingClientes: RankingPanel[];
   rankingVendedores: RankingPanel[];
@@ -186,6 +199,30 @@ export type MedidaUsoPanel = {
   m2: number;
   items: number;
 };
+/** Punto de la serie evolutiva del mix (bucket × categoría o producto). */
+export type PuntoMixPanel = { fecha: string; nombre: string; monto: number };
+export type AdicionalUsoPanel = {
+  etiqueta: string;
+  items: number;
+  pctItems: number;
+  ventas: number;
+};
+export type ProductoAdicionalesPanel = {
+  nombre: string;
+  items: number;
+  itemsCon: number;
+  pctCon: number;
+};
+/** Attach rate de adicionales (pasos opcionales) — v1 sin economía por adicional. */
+export type AdicionalesPanel = {
+  itemsTotales: number;
+  itemsCon: number;
+  pctCon: number;
+  ticketItemCon: number;
+  ticketItemSin: number;
+  porAdicional: AdicionalUsoPanel[];
+  porProducto: ProductoAdicionalesPanel[];
+};
 export type ProductoPanel = {
   porCategoria: ProductoMargenPanel[];
   porProducto: ProductoMargenPanel[];
@@ -197,6 +234,68 @@ export type ProductoPanel = {
   porMedida: MedidaUsoPanel[];
   totalM2: number;
   porTecnologia: MixPanel[];
+  /** Mix evolutivo por categoría (el front pivota por `nombre`). */
+  mixEvolutivo: PuntoMixPanel[];
+  adicionales: AdicionalesPanel;
+};
+/** Drill del mix: serie por producto dentro de una categoría + su margen. */
+export type MixCategoriaPanel = {
+  categoria: string;
+  serie: PuntoMixPanel[];
+  productos: ProductoMargenPanel[];
+};
+
+/** Tab Clientes: cartera, retención, RFM y margen por cliente. */
+export type SegmentoRfmPanel =
+  | "campeones"
+  | "leales"
+  | "nuevos"
+  | "en_riesgo"
+  | "perdidos"
+  | "ocasionales";
+export type ClienteRfmPanel = {
+  clienteId: string;
+  cliente: string;
+  ordenes: number;
+  facturadoHistorico: number;
+  ultimaCompra: string;
+  diasSinComprar: number;
+};
+export type ParetoClientePanel = {
+  clienteId: string;
+  cliente: string;
+  ordenes: number;
+  facturado: number;
+  pct: number;
+  pctAcumulado: number;
+};
+export type MargenClientePanel = {
+  clienteId: string | null;
+  cliente: string;
+  ordenes: number;
+  ventas: number;
+  margen: number;
+  margenPct: number | null;
+  itemsSinCosto: number;
+};
+export type ClientesPanel = {
+  kpis: {
+    activos: number;
+    nuevos: number;
+    recurrentes: number;
+    retencionPct: number | null;
+    frecuenciaMedianaDias: number | null;
+    concentracionTop3Pct: number | null;
+  };
+  pareto: ParetoClientePanel[];
+  serieNuevosRecurrentes: Array<{ fecha: string; nuevos: number; recurrentes: number }>;
+  rfm: {
+    diasActivo: number;
+    segmentos: Array<{ segmento: SegmentoRfmPanel; clientes: number; facturado: number }>;
+    enRiesgo: ClienteRfmPanel[];
+  };
+  margenClientes: MargenClientePanel[];
+  granularidad: GranularidadPanel;
 };
 
 /** Cobranza (tab Finanzas): aging, costo de cobrar, DSO, cheques, fondos. */
@@ -277,4 +376,16 @@ export function getPanelProduccion(rango?: RangoPanel) {
 }
 export function getPanelProducto(rango?: RangoPanel) {
   return apiRequest<TabPanel<ProductoPanel>>(`/reportes/panel/producto${qs(rango)}`);
+}
+export function getPanelClientes(rango?: RangoPanel) {
+  return apiRequest<TabPanel<ClientesPanel>>(`/reportes/panel/clientes${qs(rango)}`);
+}
+export function getPanelMixCategoria(categoria: string, rango?: RangoPanel) {
+  const params = new URLSearchParams();
+  if (rango?.desde) params.set("desde", rango.desde);
+  if (rango?.hasta) params.set("hasta", rango.hasta);
+  params.set("categoria", categoria);
+  return apiRequest<TabPanel<MixCategoriaPanel>>(
+    `/reportes/panel/producto/mix-categoria?${params.toString()}`,
+  );
 }

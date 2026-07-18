@@ -100,6 +100,23 @@ export function periodoAnterior(rango: Rango): Rango {
   return { desde, hasta };
 }
 
+/**
+ * Mismo período del AÑO anterior (delta interanual). Si el rango son
+ * meses calendario completos corre 12 meses preservando el fin de mes;
+ * si es arbitrario, las mismas fechas un año atrás.
+ */
+export function mismoPeriodoAnioAnterior(rango: Rango): Rango {
+  const desde = new Date(
+    rango.desde.getFullYear() - 1,
+    rango.desde.getMonth(),
+    rango.desde.getDate(),
+  );
+  const hasta = esUltimoDiaDeMes(rango.hasta)
+    ? finDeMes(new Date(rango.hasta.getFullYear() - 1, rango.hasta.getMonth(), 1))
+    : new Date(rango.hasta.getFullYear() - 1, rango.hasta.getMonth(), rango.hasta.getDate());
+  return { desde, hasta };
+}
+
 /** Granularidad de las series según el largo del rango. */
 export function granularidad(rango: Rango): Granularidad {
   const dias = diasDelRango(rango);

@@ -14,20 +14,27 @@ import {
   FactoryIcon,
   CircleDollarSignIcon,
   PackageIcon,
+  UsersIcon,
 } from "lucide-react";
 import { technologyCodeLabel } from "@/lib/maquinaria-tecnologias";
 import {
+  getPanelClientes,
   getPanelComercial,
   getPanelFinanzas,
+  getPanelMixCategoria,
   getPanelProduccion,
   getPanelProducto,
   getPanelResumen,
   type AlertaPanel,
+  type CeldaEstacionalidadPanel,
+  type ClientesPanel,
   type CobranzaPanel,
   type ComercialPanel,
   type MetaPanel,
+  type MixCategoriaPanel,
   type ProduccionPanel,
   type ProductoPanel,
+  type PuntoMixPanel,
   type RangoPanel,
   type RankingPanel,
   type RentabilidadPanel,
@@ -195,6 +202,76 @@ function LegendDot({ color, label, value }: { color: string; label: string; valu
   return <div className="d-legend-item"><span className="d-legend-dot" style={{ background: color }} /><span className="lbl">{label}</span>{value != null ? <span className="val mono">{value}</span> : null}</div>;
 }
 
+/** Pivota puntos {fecha,nombre,monto} a series apiladas (top N + "Otros"). */
+function pivotMix(puntos: PuntoMixPanel[], maxSeries = 6): { labels: string[]; nombres: string[]; data: number[][] } {
+  const fechas = [...new Set(puntos.map((p) => p.fecha))].sort();
+  const totales = new Map<string, number>();
+  for (const p of puntos) totales.set(p.nombre, (totales.get(p.nombre) ?? 0) + p.monto);
+  const ranking = [...totales.entries()].sort((a, b) => b[1] - a[1]).map(([n]) => n);
+  const top = ranking.slice(0, maxSeries);
+  const idx = new Map(fechas.map((f, i) => [f, i] as const));
+  const data = top.map(() => fechas.map(() => 0));
+  const otros = fechas.map(() => 0);
+  for (const p of puntos) {
+    const i = idx.get(p.fecha);
+    if (i == null) continue;
+    const s = top.indexOf(p.nombre);
+    if (s >= 0) data[s][i] += p.monto;
+    else otros[i] += p.monto;
+  }
+  const hayOtros = ranking.length > maxSeries;
+  return {
+    labels: fechas.map((f) => f.slice(5)),
+    nombres: hayOtros ? [...top, "Otros"] : top,
+    data: hayOtros ? [...data, otros] : data,
+  };
+}
+
+const MESES_CORTOS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+/** "2026-07" → "jul 26" (sin ambigüedad día/mes). */
+function formatoMesCorto(mes: string): string {
+  const [y, m] = mes.split("-");
+  return `${MESES_CORTOS[Number(m) - 1] ?? m} ${y.slice(2)}`;
+}
+
+/** Heatmap categoría × mes: intensidad = venta de la celda vs. el máximo. */
+function HeatmapEstacionalidad({ celdas }: { celdas: CeldaEstacionalidadPanel[] }) {
+  const meses = [...new Set(celdas.map((c) => c.mes))].sort();
+  const totales = new Map<string, number>();
+  for (const c of celdas) totales.set(c.categoria, (totales.get(c.categoria) ?? 0) + c.monto);
+  const categorias = [...totales.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([n]) => n);
+  const valor = new Map(celdas.map((c) => [`${c.categoria}|${c.mes}`, c.monto] as const));
+  const max = Math.max(...celdas.map((c) => c.monto), 1);
+  if (meses.length === 0) return <div className="d-empty" style={{ padding: 30 }}>Sin ventas registradas todavía.</div>;
+  return (
+    <div style={{ overflowX: "auto" }}>
+      <div style={{ display: "grid", gridTemplateColumns: `minmax(90px, 130px) repeat(${meses.length}, minmax(26px, 1fr))`, gap: 3, alignItems: "center" }}>
+        {categorias.map((cat) => (
+          <React.Fragment key={cat}>
+            <div style={{ fontSize: 11.5, color: "var(--ink-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={cat}>{cat}</div>
+            {meses.map((mes) => {
+              const m = valor.get(`${cat}|${mes}`) ?? 0;
+              return (
+                <div
+                  key={mes}
+                  title={`${cat} · ${formatoMesCorto(mes)}: $${fmtAR(m)}`}
+                  style={{ height: 22, borderRadius: 3, background: m > 0 ? `rgba(20,20,26,${(0.08 + 0.72 * (m / max)).toFixed(3)})` : "rgba(20,20,26,.03)" }}
+                />
+              );
+            })}
+          </React.Fragment>
+        ))}
+        <div />
+        {meses.map((mes, i) => (
+          <div key={mes} className="mono" style={{ fontSize: 9.5, color: "var(--muted-text)", textAlign: "center" }}>
+            {i % 2 === 0 || meses.length <= 6 ? formatoMesCorto(mes) : ""}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ─── KPI (verbatim del diseño) ─── */
 function Kpi({ label, value, currency, sub, delta, deltaUnit = "%", deltaTone = "auto", spark, sparkSignal, hint }: { label: string; value: React.ReactNode; currency?: string; sub?: string; delta?: number | null; deltaUnit?: string; deltaTone?: "auto" | "ok" | "signal" | "muted" | "inverse"; spark?: number[]; sparkSignal?: boolean; hint?: string }) {
   let tone = "muted";
@@ -351,9 +428,10 @@ function TabComercial({ d }: { d: ComercialPanel }) {
   return (
     <>
       <div className="d-kpi-row">
-        <Kpi label="Ventas" currency="$" value={fmtK(k.ventas)} delta={k.ventasDeltaPct} spark={d.serie.map((s) => s.monto)} />
+        <Kpi label="Ventas" currency="$" value={fmtK(k.ventas)} delta={k.ventasDeltaPct} spark={d.serie.map((s) => s.monto)}
+          sub={k.ventasDeltaAnualPct != null ? `${k.ventasDeltaAnualPct >= 0 ? "+" : ""}${fmtAR(k.ventasDeltaAnualPct, 1)}% vs año pasado` : "vs período anterior"} />
         <Kpi label="Órdenes" value={fmtAR(k.ordenes)} delta={k.ordenesDeltaPct} />
-        <Kpi label="Ticket promedio" currency="$" value={fmtK(k.ticketPromedio)} />
+        <Kpi label="Ticket promedio" currency="$" value={fmtK(k.ticketPromedio)} spark={d.serieTicket.map((t) => t.ticketPromedio)} />
         <Kpi label="Clientes nuevos" value={fmtAR(k.nuevosClientes)} delta={k.nuevosClientes} deltaTone="ok" sub="este período" />
         <Kpi label="Clientes dormidos" value={fmtAR(k.clientesDormidos)} deltaTone="signal" delta={k.clientesDormidos > 0 ? k.clientesDormidos : undefined} sub="sin comprar" />
       </div>
@@ -368,6 +446,22 @@ function TabComercial({ d }: { d: ComercialPanel }) {
               <HBar value={m.monto} max={maxCatMix} />
             </div>
           ))}
+        </Card>
+        <Card span={7} title="Evolución del ticket" sub="promedio y mediana por orden"
+          foot={d.serieTicket.length >= 2 ? <span>La <strong style={{ color: "var(--ink)" }}>mediana</strong> (punteada) resiste las órdenes grandes: si se separan, pocas órdenes inflan el promedio.</span> : undefined}>
+          {d.serieTicket.length >= 2 ? (
+            <>
+              <AreaChart series={d.serieTicket.map((t) => t.ticketPromedio)} secondary={d.serieTicket.map((t) => t.ticketMediana)} labels={d.serieTicket.map((t) => t.fecha.slice(5))} yFormat={(v) => `$${fmtK(v)}`} height={210} />
+              <div className="d-legend" style={{ marginTop: 8 }}>
+                <LegendDot color="var(--ink)" label="Promedio" value={`$${fmtK(k.ticketPromedio)}`} />
+                <LegendDot color="var(--muted-text-2)" label="Mediana" />
+              </div>
+            </>
+          ) : <div className="d-empty" style={{ padding: 40 }}>Serie insuficiente para graficar el ticket.</div>}
+        </Card>
+        <Card span={5} title="Estacionalidad por categoría" sub="ventas por mes · últimos 12 meses">
+          <HeatmapEstacionalidad celdas={d.estacionalidad} />
+          <div style={{ fontSize: 11, color: "var(--muted-text)", marginTop: 10 }}>Más oscuro = más venta. El índice estacional llega con 2+ años de historia.</div>
         </Card>
         <Card span={6} title="Clientes principales" flush><RankList rows={d.rankingClientes} /></Card>
         <Card span={6} title="Ranking de vendedores" flush><RankList rows={d.rankingVendedores} /></Card>
@@ -604,11 +698,56 @@ function FacturacionVsCosto({ rentabilidad: r, meta }: { rentabilidad: Rentabili
 }
 
 /* ═══════════ TAB · Ventas & Producto ═══════════ */
-function TabProducto({ d }: { d: ProductoPanel }) {
+/** Mix evolutivo con drill: apilado por categoría; al elegir una, por producto. */
+function MixEvolutivoCard({ d, rango }: { d: ProductoPanel; rango: RangoPanel }) {
+  const [categoria, setCategoria] = React.useState<string | null>(null);
+  const [drill, setDrill] = React.useState<MixCategoriaPanel | null>(null);
+  const [cargando, setCargando] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!categoria) { setDrill(null); setError(null); return; }
+    let vivo = true; setCargando(true); setError(null);
+    getPanelMixCategoria(categoria, rango)
+      .then((res) => { if (vivo) setDrill(res as MixCategoriaPanel); })
+      .catch((err) => { if (vivo) setError(err instanceof Error ? err.message : "No se pudo abrir la categoría."); })
+      .finally(() => { if (vivo) setCargando(false); });
+    return () => { vivo = false; };
+  }, [categoria, rango]);
+
+  const puntos = categoria && drill ? drill.serie : d.mixEvolutivo;
+  const pivot = pivotMix(puntos);
+  const categorias = [...new Set(d.mixEvolutivo.map((p) => p.nombre))];
+  return (
+    <Card span={12} title="Evolución del mix" sub={categoria ? `productos de ${categoria}` : "ventas apiladas por categoría"}
+      action={
+        <select value={categoria ?? ""} onChange={(e) => setCategoria(e.target.value || null)}
+          style={{ fontSize: 12, padding: "4px 8px", borderRadius: 6, border: "1px solid var(--hairline)", background: "transparent", color: "var(--ink)" }}>
+          <option value="">Todas las categorías</option>
+          {categorias.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+      }>
+      {error ? <div className="d-empty" style={{ padding: 30 }}>{error}</div>
+        : cargando && !puntos.length ? <div className="d-empty" style={{ padding: 30 }}>Abriendo la categoría…</div>
+        : pivot.labels.length >= 2 ? (
+          <>
+            <BarChart labels={pivot.labels} data={pivot.data} mode="stack" colors={pivot.nombres.map((_, i) => SEG_COLORS[i % SEG_COLORS.length])} yFormat={(v) => `$${fmtK(v)}`} height={230} />
+            <div className="d-legend" style={{ marginTop: 10, flexWrap: "wrap" }}>
+              {pivot.nombres.map((n, i) => <LegendDot key={n} color={SEG_COLORS[i % SEG_COLORS.length]} label={n} />)}
+            </div>
+          </>
+        ) : <div className="d-empty" style={{ padding: 40 }}>El período no tiene serie suficiente: probá “Trimestre” o “Año”.</div>}
+    </Card>
+  );
+}
+
+function TabProducto({ d, rango }: { d: ProductoPanel; rango: RangoPanel }) {
   const fmtMed = (a: number, alto: number) => `${fmtAR(a / 10, 0)}×${fmtAR(alto / 10, 0)} cm`;
   const maxTec = Math.max(...d.porTecnologia.map((m) => m.monto), 1);
+  const ad = d.adicionales;
   return (
     <div className="dash-grid">
+      <MixEvolutivoCard d={d} rango={rango} />
       <Card span={6} title="Ventas por categoría" sub="margen y contribución" flush>
         <table className="d-tbl"><thead><tr><th>Categoría</th><th className="right">Margen</th><th className="right" title="Margen de contribución = ventas − material y consumibles">MC</th><th className="right">Ventas</th></tr></thead>
           <tbody>{d.porCategoria.map((c) => (<tr key={c.nombre}><td><div className="nm">{c.nombre}</div></td><td className="right"><div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "flex-end" }}><div style={{ width: 44 }}><HBar value={c.margenPct} max={70} tone={c.margenPct >= 50 ? "ok" : c.margenPct >= 40 ? "ink" : "signal"} /></div><span className="mono" style={{ width: 42 }}>{pct(c.margenPct)}</span></div></td><td className="right mono" style={{ color: "var(--ok)" }}>{pct(c.contribucionPct)}</td><td className="right mono">${fmtK(c.ventas)}</td></tr>))}</tbody>
@@ -618,6 +757,39 @@ function TabProducto({ d }: { d: ProductoPanel }) {
         <table className="d-tbl"><thead><tr><th>Producto</th><th className="right">Items</th><th className="right">Margen</th><th className="right" title="Margen de contribución = ventas − material y consumibles">MC</th><th className="right">Ventas</th></tr></thead>
           <tbody>{d.porProducto.slice(0, 8).map((p) => (<tr key={p.nombre}><td><div className="nm">{p.nombre}</div></td><td className="right mono">{p.items}</td><td className="right mono">{pct(p.margenPct)}</td><td className="right mono" style={{ color: "var(--ok)" }}>{pct(p.contribucionPct)}</td><td className="right mono">${fmtK(p.ventas)}</td></tr>))}</tbody>
         </table>
+      </Card>
+      <Card span={7} title="Adicionales más pedidos" sub="qué se agrega a los trabajos y cuánto suma al ticket"
+        action={<span className="mono" style={{ color: "var(--ink)", fontSize: 13, fontWeight: 600 }}>{pct(ad.pctCon, 0)} con adicionales</span>} flush>
+        {ad.porAdicional.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Ningún item del período llevó adicionales.</div> : (
+          <>
+            <table className="d-tbl"><thead><tr><th>Adicional</th><th style={{ width: 110 }} /><th className="right">Items</th><th className="right">Attach</th><th className="right">Ventas de esos items</th></tr></thead>
+              <tbody>{ad.porAdicional.slice(0, 8).map((a) => (
+                <tr key={a.etiqueta}><td><div className="nm">{a.etiqueta}</div></td>
+                  <td><HBar value={a.pctItems} max={Math.max(...ad.porAdicional.map((x) => x.pctItems), 1)} /></td>
+                  <td className="right mono">{a.items}</td>
+                  <td className="right mono" style={{ fontWeight: 600 }}>{pct(a.pctItems, 0)}</td>
+                  <td className="right mono">${fmtK(a.ventas)}</td></tr>
+              ))}</tbody>
+            </table>
+            <div style={{ display: "flex", gap: 18, padding: "10px 14px", fontSize: 12, color: "var(--muted-text)", borderTop: "1px solid var(--hairline)" }}>
+              <span>Item con adicionales <strong className="mono" style={{ color: "var(--ink)" }}>${fmtK(ad.ticketItemCon)}</strong></span>
+              <span>sin adicionales <strong className="mono" style={{ color: "var(--ink)" }}>${fmtK(ad.ticketItemSin)}</strong></span>
+              {ad.ticketItemSin > 0 && ad.itemsCon > 0 ? <span style={{ color: "var(--ok)" }}>{ad.ticketItemCon >= ad.ticketItemSin ? "+" : ""}{fmtAR(((ad.ticketItemCon - ad.ticketItemSin) / ad.ticketItemSin) * 100, 0)}% de ticket</span> : null}
+            </div>
+          </>
+        )}
+      </Card>
+      <Card span={5} title="Adicionales por producto" sub="% de cada producto que sale con adicionales" flush>
+        {ad.porProducto.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Sin ventas en el período.</div> : (
+          <table className="d-tbl"><thead><tr><th>Producto</th><th className="right">Items</th><th style={{ width: 80 }} /><th className="right">Con adic.</th></tr></thead>
+            <tbody>{ad.porProducto.slice(0, 8).map((p) => (
+              <tr key={p.nombre}><td><div className="nm">{p.nombre}</div></td>
+                <td className="right mono">{p.items}</td>
+                <td><HBar value={p.pctCon} max={100} tone={p.pctCon >= 50 ? "ok" : "ink"} /></td>
+                <td className="right mono" style={{ fontWeight: 600 }}>{pct(p.pctCon, 0)}</td></tr>
+            ))}</tbody>
+          </table>
+        )}
       </Card>
       <Card span={7} title="Uso de papel y material" sub="consumo teórico del período" flush>
         <table className="d-tbl"><thead><tr><th>Material</th><th className="right">Cantidad</th><th className="right">Trabajos</th><th className="right">Costo</th></tr></thead>
@@ -646,11 +818,115 @@ function TabProducto({ d }: { d: ProductoPanel }) {
   );
 }
 
+/* ═══════════ TAB · Clientes ═══════════ */
+const SEGMENTO_RFM_META: Record<string, { label: string; hint: string }> = {
+  campeones: { label: "Campeones", hint: "Compran seguido y hace poco (4+ órdenes)" },
+  leales: { label: "Leales", hint: "Activos con 2-3 órdenes" },
+  nuevos: { label: "Nuevos", hint: "Primera compra reciente" },
+  en_riesgo: { label: "En riesgo", hint: "Recurrentes que están dejando de comprar" },
+  perdidos: { label: "Perdidos", hint: "Recurrentes sin comprar hace mucho" },
+  ocasionales: { label: "Ocasionales", hint: "Una sola compra, hace tiempo" },
+};
+const SEGMENTO_RFM_COLOR: Record<string, string> = {
+  campeones: "var(--ok)", leales: "var(--ink)", nuevos: "#3a9ca0",
+  en_riesgo: "#d97757", perdidos: "var(--signal)", ocasionales: "#c8c6c0",
+};
+
+function TabClientes({ d }: { d: ClientesPanel }) {
+  const k = d.kpis;
+  const serieNR = d.serieNuevosRecurrentes;
+  const maxSeg = Math.max(...d.rfm.segmentos.map((s) => s.clientes), 1);
+  return (
+    <>
+      <div className="d-kpi-row">
+        <Kpi label="Clientes activos" value={fmtAR(k.activos)} sub="compraron en el período" />
+        <Kpi label="Retención" value={pct(k.retencionPct, 0)} sub="del período anterior que volvieron" hint="Clientes del período anterior equivalente que también compraron en éste" />
+        <Kpi label="Recompra" value={k.frecuenciaMedianaDias != null ? `${fmtAR(k.frecuenciaMedianaDias, 0)} d` : "—"} sub="mediana entre compras" />
+        <Kpi label="Clientes nuevos" value={fmtAR(k.nuevos)} sub={`${fmtAR(k.recurrentes)} recurrentes`} />
+        <Kpi label="Concentración top 3" value={pct(k.concentracionTop3Pct, 0)} deltaTone="signal" sub="de la venta del período" hint="Cuánto de tu facturación depende de sólo 3 clientes" />
+      </div>
+      <div className="dash-grid">
+        <Card span={7} title="Nuevos vs. recurrentes" sub="de dónde viene la venta de cada período"
+          foot={<span>La barra clara es venta de clientes captados en ese período; la oscura, de los que ya tenías.</span>}>
+          {serieNR.length >= 2 ? (
+            <>
+              <BarChart labels={serieNR.map((s) => s.fecha.slice(5))} data={[serieNR.map((s) => s.recurrentes), serieNR.map((s) => s.nuevos)]} mode="stack" colors={["var(--ink)", "#8aa896"]} yFormat={(v) => `$${fmtK(v)}`} height={220} />
+              <div className="d-legend" style={{ marginTop: 10 }}>
+                <LegendDot color="var(--ink)" label="Recurrentes" />
+                <LegendDot color="#8aa896" label="Nuevos" />
+              </div>
+            </>
+          ) : <div className="d-empty" style={{ padding: 40 }}>Serie insuficiente: probá “Trimestre” o “Año”.</div>}
+        </Card>
+        <Card span={5} title="Segmentos de cartera" sub={`activo = compró hace ≤${d.rfm.diasActivo} días`}>
+          {d.rfm.segmentos.map((s) => (
+            <div key={s.segmento} style={{ marginBottom: 10 }} title={SEGMENTO_RFM_META[s.segmento]?.hint}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 2, background: SEGMENTO_RFM_COLOR[s.segmento] ?? "var(--ink)" }} />
+                  {SEGMENTO_RFM_META[s.segmento]?.label ?? s.segmento}
+                </span>
+                <span className="mono" style={{ color: "var(--muted-text)" }}>{s.clientes} · ${fmtK(s.facturado)} hist.</span>
+              </div>
+              <HBar value={s.clientes} max={maxSeg} tone={s.segmento === "en_riesgo" || s.segmento === "perdidos" ? "signal" : s.segmento === "campeones" ? "ok" : "ink"} />
+            </div>
+          ))}
+        </Card>
+        <Card span={7} title="Concentración de cartera" sub="quiénes explican tu facturación del período" flush>
+          {d.pareto.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Sin ventas con cliente en el período.</div> : (
+            <table className="d-tbl"><thead><tr><th>Cliente</th><th className="right">Órdenes</th><th className="right">Facturado</th><th className="right">%</th><th className="right">% acum.</th></tr></thead>
+              <tbody>{d.pareto.map((c) => (
+                <tr key={c.clienteId}><td><div className="nm">{c.cliente}</div></td>
+                  <td className="right mono">{c.ordenes}</td>
+                  <td className="right mono">${fmtK(c.facturado)}</td>
+                  <td className="right mono">{pct(c.pct, 0)}</td>
+                  <td className="right mono" style={{ color: c.pctAcumulado >= 80 ? "var(--muted-text)" : "var(--ink)", fontWeight: 600 }}>{pct(c.pctAcumulado, 0)}</td></tr>
+              ))}</tbody>
+            </table>
+          )}
+        </Card>
+        <Card span={5} title="Clientes en riesgo" sub="recurrentes que están dejando de comprar" flush>
+          {d.rfm.enRiesgo.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Ningún recurrente en zona de riesgo.</div> : (
+            <table className="d-tbl"><thead><tr><th>Cliente</th><th className="right">Sin comprar</th><th className="right">Histórico</th></tr></thead>
+              <tbody>{d.rfm.enRiesgo.map((c) => (
+                <tr key={c.clienteId}><td><div className="nm">{c.cliente}</div><div className="sub">{c.ordenes} órdenes · última {c.ultimaCompra}</div></td>
+                  <td className="right mono" style={{ color: "var(--signal)" }}>{c.diasSinComprar} d</td>
+                  <td className="right mono">${fmtK(c.facturadoHistorico)}</td></tr>
+              ))}</tbody>
+            </table>
+          )}
+        </Card>
+        <Card span={12} title="Margen por cliente" sub="quién factura mucho y margina poco" flush>
+          {d.margenClientes.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Sin ventas en el período.</div> : (
+            <table className="d-tbl"><thead><tr><th>Cliente</th><th className="right">Órdenes</th><th className="right">Ventas</th><th className="right">Margen</th><th className="right">Margen %</th></tr></thead>
+              <tbody>{d.margenClientes.map((c) => (
+                <tr key={c.clienteId ?? c.cliente}>
+                  <td><div className="nm">{c.cliente}</div>{c.itemsSinCosto > 0 ? <div className="sub">{c.itemsSinCosto} item{c.itemsSinCosto === 1 ? "" : "s"} sin costo snapshoteado (fuera del margen)</div> : null}</td>
+                  <td className="right mono">{c.ordenes}</td>
+                  <td className="right mono">${fmtK(c.ventas)}</td>
+                  <td className="right mono">${fmtK(c.margen)}</td>
+                  <td className="right">{c.margenPct != null ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "flex-end" }}>
+                      <div style={{ width: 60 }}><HBar value={c.margenPct} max={70} tone={c.margenPct >= 50 ? "ok" : c.margenPct >= 40 ? "ink" : "signal"} /></div>
+                      <span className="mono" style={{ width: 42 }}>{pct(c.margenPct)}</span>
+                    </div>
+                  ) : <span className="mono">—</span>}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          )}
+        </Card>
+      </div>
+    </>
+  );
+}
+
 /* ═══════════ Shell ═══════════ */
-type TabKey = "resumen" | "comercial" | "produccion" | "finanzas" | "producto";
+type TabKey = "resumen" | "comercial" | "clientes" | "produccion" | "finanzas" | "producto";
 const TABS: Array<{ key: TabKey; label: string; Icon: React.ComponentType<React.SVGProps<SVGSVGElement>> }> = [
   { key: "resumen", label: "Resumen ejecutivo", Icon: LayoutGridIcon },
   { key: "comercial", label: "Comercial", Icon: BriefcaseIcon },
+  { key: "clientes", label: "Clientes", Icon: UsersIcon },
   { key: "produccion", label: "Producción", Icon: FactoryIcon },
   { key: "finanzas", label: "Finanzas", Icon: CircleDollarSignIcon },
   { key: "producto", label: "Ventas & Producto", Icon: PackageIcon },
@@ -671,7 +947,7 @@ function rangoDe(p: PeriodoKey): RangoPanel {
   return { desde: iso(new Date(y, 0, 1)), hasta: iso(new Date(y, 11, 31)) };
 }
 const FETCHERS: Record<TabKey, (r: RangoPanel) => Promise<unknown>> = {
-  resumen: getPanelResumen, comercial: getPanelComercial, produccion: getPanelProduccion, finanzas: getPanelFinanzas, producto: getPanelProducto,
+  resumen: getPanelResumen, comercial: getPanelComercial, clientes: getPanelClientes, produccion: getPanelProduccion, finanzas: getPanelFinanzas, producto: getPanelProducto,
 };
 
 export function PanelGeneral({ initialResumen }: { initialResumen: ResumenData }) {
@@ -682,6 +958,8 @@ export function PanelGeneral({ initialResumen }: { initialResumen: ResumenData }
   const [error, setError] = React.useState<string | null>(null);
   const key = `${tab}|${periodo}`;
   const data = cache[key];
+  // Identidad estable del rango: evita re-fetches del drill por objeto nuevo.
+  const rango = React.useMemo(() => rangoDe(periodo), [periodo]);
 
   React.useEffect(() => {
     if (data) return;
@@ -725,9 +1003,10 @@ export function PanelGeneral({ initialResumen }: { initialResumen: ResumenData }
           <>
             {tab === "resumen" ? <TabResumen d={data as ResumenData} /> : null}
             {tab === "comercial" ? <TabComercial d={data as ComercialPanel} /> : null}
+            {tab === "clientes" ? <TabClientes d={data as ClientesPanel} /> : null}
             {tab === "produccion" ? <TabProduccion d={data as ProduccionPanel} /> : null}
             {tab === "finanzas" ? <TabFinanzas d={data as FinanzasData} /> : null}
-            {tab === "producto" ? <TabProducto d={data as ProductoPanel} /> : null}
+            {tab === "producto" ? <TabProducto d={data as ProductoPanel} rango={rango} /> : null}
             {meta && meta.limites.length > 0 ? (
               <div style={{ fontSize: 11, color: "var(--muted-text)", lineHeight: 1.5, marginTop: 4 }}>
                 <strong>Fuente:</strong> {meta.fuente}. {meta.limites.join(" ")}{meta.sinComparativa ? " Sin período anterior para comparar." : ""}
