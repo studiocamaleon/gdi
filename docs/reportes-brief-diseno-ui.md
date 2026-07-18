@@ -1,13 +1,12 @@
 # Inteligencia de negocio — brief de diseño UI/UX
 
-> 2026-07-17. Documento de trabajo PARA EL DISEÑADOR (Lucas): todo lo que
-> hay que diseñar para el módulo de reportes, pantalla por pantalla, con
-> los datos reales que cada vista va a mostrar. Basado en
-> docs/reportes-inteligentes-estudio.md. El backend se construye en
-> paralelo contra los contratos de §9 — diseñar sobre esos campos
-> garantiza que las vistas se enchufan sin cambios.
-> Sugerencia de diseño en claude.ai/design, proyecto Grafoprint (mismo
-> circuito que el simulador láser).
+> ⚠️ SUPERADO 2026-07-17. Este brief planteaba 7 pantallas planas. El
+> usuario diseñó en su lugar un "Panel general" con TABS POR ROL que se
+> adoptó como estructura base. La verdad vigente vive en
+> docs/reportes-panel-analisis-diseno.md (mapa de realidad + métricas
+> nuevas) y docs/reportes-plan-backend.md (plan alineado al panel). Se
+> conserva este archivo sólo como referencia de los componentes globales
+> (§2) y contratos base, que siguen aplicando dentro del panel.
 
 ## 1. La sección en el sidebar
 
