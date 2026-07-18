@@ -15,10 +15,13 @@ import {
   CircleDollarSignIcon,
   HardHatIcon,
   PackageIcon,
+  UserRoundIcon,
   UsersIcon,
 } from "lucide-react";
+import { TabMiDesempeno } from "@/components/produccion/mi-desempeno";
 import { technologyCodeLabel } from "@/lib/maquinaria-tecnologias";
 import {
+  getMiDesempeno,
   getPanelClientes,
   getPanelComercial,
   getPanelEquipo,
@@ -34,6 +37,7 @@ import {
   type ComercialPanel,
   type EquipoPanel,
   type MetaPanel,
+  type MiDesempenoPanel,
   type MixCategoriaPanel,
   type ProduccionPanel,
   type ProductoPanel,
@@ -1338,7 +1342,7 @@ function TabClientes({ d }: { d: ClientesPanel }) {
 }
 
 /* ═══════════ Shell ═══════════ */
-type TabKey = "resumen" | "comercial" | "clientes" | "produccion" | "equipo" | "finanzas" | "producto";
+type TabKey = "resumen" | "comercial" | "clientes" | "produccion" | "equipo" | "finanzas" | "producto" | "midesempeno";
 const TABS: Array<{ key: TabKey; label: string; Icon: React.ComponentType<React.SVGProps<SVGSVGElement>> }> = [
   { key: "resumen", label: "Resumen ejecutivo", Icon: LayoutGridIcon },
   { key: "comercial", label: "Comercial", Icon: BriefcaseIcon },
@@ -1347,6 +1351,8 @@ const TABS: Array<{ key: TabKey; label: string; Icon: React.ComponentType<React.
   { key: "equipo", label: "Equipo", Icon: HardHatIcon },
   { key: "finanzas", label: "Finanzas", Icon: CircleDollarSignIcon },
   { key: "producto", label: "Ventas & Producto", Icon: PackageIcon },
+  // Vista personal del usuario logueado. El gating por rol llega después.
+  { key: "midesempeno", label: "Mi desempeño", Icon: UserRoundIcon },
 ];
 type PeriodoKey = "mes" | "mesPasado" | "trimestre" | "anio";
 const PERIODOS: Array<{ key: PeriodoKey; label: string }> = [
@@ -1365,6 +1371,8 @@ function rangoDe(p: PeriodoKey): RangoPanel {
 }
 const FETCHERS: Record<TabKey, (r: RangoPanel) => Promise<unknown>> = {
   resumen: getPanelResumen, comercial: getPanelComercial, clientes: getPanelClientes, produccion: getPanelProduccion, equipo: getPanelEquipo, finanzas: getPanelFinanzas, producto: getPanelProducto,
+  // Ventana fija de 8 semanas: ignora el selector de período.
+  midesempeno: () => getMiDesempeno(),
 };
 
 export function PanelGeneral({ initialResumen }: { initialResumen: ResumenData }) {
@@ -1425,6 +1433,7 @@ export function PanelGeneral({ initialResumen }: { initialResumen: ResumenData }
             {tab === "equipo" ? <TabEquipo d={data as EquipoPanel} /> : null}
             {tab === "finanzas" ? <TabFinanzas d={data as FinanzasData} /> : null}
             {tab === "producto" ? <TabProducto d={data as ProductoPanel} rango={rango} /> : null}
+            {tab === "midesempeno" ? <TabMiDesempeno d={data as MiDesempenoPanel} /> : null}
             {meta && meta.limites.length > 0 ? (
               <div style={{ fontSize: 11, color: "var(--muted-text)", lineHeight: 1.5, marginTop: 4 }}>
                 <strong>Fuente:</strong> {meta.fuente}. {meta.limites.join(" ")}{meta.sinComparativa ? " Sin período anterior para comparar." : ""}
