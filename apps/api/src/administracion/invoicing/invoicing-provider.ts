@@ -67,6 +67,11 @@ export type EmitirInput = {
   /** Ya calculados por totales-comprobante.ts: el provider no recalcula. */
   netoGravado?: number;
   ivaTotal?: number;
+  /**
+   * Desglose por alícuota (totales-comprobante.ts). La B lo necesita ante
+   * ARCA: discrimina internamente aunque el cliente no lo vea.
+   */
+  ivaPorAlicuota?: Array<{ alicuota: number; base: number; monto: number }>;
   total: number;
   condicionVenta?: string;
   vencimiento?: string | null;

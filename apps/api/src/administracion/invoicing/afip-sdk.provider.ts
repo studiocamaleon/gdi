@@ -205,10 +205,13 @@ export class AfipSdkProvider implements InvoicingProvider {
     const conRetencion = input.leyenda === 'OPERACIÓN SUJETA A RETENCIÓN';
     const cbteTipo = this.cbteTipo(input, conRetencion);
 
-    // Neto, IVA y alícuotas. En B/C el IVA no se discrimina ante ARCA.
-    const discrimina = input.letra === 'A';
+    // Neto, IVA y alícuotas. Ante ARCA, A **y B** discriminan (la B no se
+    // lo muestra al cliente, pero WSFE exige el objeto IVA con neto > 0 —
+    // error 10070 si falta). C/E no llevan IVA: el precio es final.
+    const discrimina = input.letra === 'A' || input.letra === 'B';
     const alicIva: Array<{ Id: number; BaseImp: number; Importe: number }> = [];
-    if (discrimina) {
+    if (input.letra === 'A') {
+      // En A los items vienen a precio NETO: el desglose se arma de ahí.
       const porAli = new Map<number, { base: number; monto: number }>();
       for (const it of input.items) {
         const base = it.cantidad * it.precioUnitarioSinIva;
@@ -230,6 +233,23 @@ export class AfipSdkProvider implements InvoicingProvider {
           Id: id,
           BaseImp: r2(v.base),
           Importe: r2(v.monto),
+        });
+      }
+    } else if (input.letra === 'B') {
+      // En B los items traen el IVA ADENTRO: recalcular desde el precio
+      // inflaría la base. Se usa el desglose ya extraído por
+      // totales-comprobante.ts, que viene en el input.
+      for (const linea of input.ivaPorAlicuota ?? []) {
+        const id = IVA_ID[linea.alicuota];
+        if (!id) {
+          throw new ServiceUnavailableException(
+            `ARCA no acepta la alícuota de IVA ${linea.alicuota}%.`,
+          );
+        }
+        alicIva.push({
+          Id: id,
+          BaseImp: r2(linea.base),
+          Importe: r2(linea.monto),
         });
       }
     }
