@@ -124,6 +124,23 @@ export function mesesDelRango(rango: Rango): string[] {
   return meses;
 }
 
+/**
+ * Fracción [0..1] del mes "YYYY-MM" que cae dentro del rango. Prorratea
+ * los costos fijos (mensuales) a rangos parciales: mes completo → 1,
+ * medio mes → ~0,5. Base del punto de equilibrio para cualquier rango.
+ */
+export function fraccionMesEnRango(mes: string, rango: Rango): number {
+  const [y, m] = mes.split('-').map(Number);
+  const inicioMes = new Date(y, m - 1, 1);
+  const finMes = new Date(y, m, 0);
+  const overlapInicio = inicioMes > rango.desde ? inicioMes : rango.desde;
+  const overlapFin = finMes < rango.hasta ? finMes : rango.hasta;
+  if (overlapFin < overlapInicio) return 0;
+  const dias =
+    Math.round((overlapFin.getTime() - overlapInicio.getTime()) / MS_DIA) + 1;
+  return dias / finMes.getDate();
+}
+
 /** `hasta` como instante de fin de día, para comparaciones < en SQL. */
 export function finDeDia(fecha: Date): Date {
   return new Date(

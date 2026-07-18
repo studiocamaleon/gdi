@@ -1,5 +1,6 @@
 import {
   diasDelRango,
+  fraccionMesEnRango,
   granularidad,
   mesesDelRango,
   parseRango,
@@ -78,6 +79,22 @@ describe('periodo', () => {
         '2026-07',
         '2026-08',
       ]);
+    });
+  });
+
+  describe('fraccionMesEnRango', () => {
+    it('mes completo → 1', () => {
+      expect(fraccionMesEnRango('2026-07', parseRango('2026-07-01', '2026-07-31'))).toBe(1);
+    });
+    it('rango parcial → prorratea por días', () => {
+      // 11 días (10 al 20) de 31 → 11/31
+      expect(fraccionMesEnRango('2026-07', parseRango('2026-07-10', '2026-07-20'))).toBeCloseTo(11 / 31, 5);
+    });
+    it('mes fuera del rango → 0', () => {
+      expect(fraccionMesEnRango('2026-05', parseRango('2026-07-01', '2026-07-31'))).toBe(0);
+    });
+    it('mes intermedio de un rango largo → 1', () => {
+      expect(fraccionMesEnRango('2026-06', parseRango('2026-05-15', '2026-08-10'))).toBe(1);
     });
   });
 

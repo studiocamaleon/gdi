@@ -21,6 +21,33 @@ export type MetaPanel = {
 
 export type RangoPanel = { desde?: string; hasta?: string };
 
+/** Gasto estructural por centro (donut de Finanzas). */
+export type CentroGastoPanel = { centroId: string; centro: string; monto: number; pct: number };
+
+/**
+ * Bloque de rentabilidad: márgenes y PUNTO DE EQUILIBRIO. Resumen trae un
+ * subconjunto; Finanzas suma costos variables/fijos y el gasto por centro.
+ * Deltas: ventas en % vs. período anterior; márgenes en PUNTOS. null =
+ * sin comparativa (el período anterior no tuvo ventas).
+ */
+export type RentabilidadPanel = {
+  ventas: number;
+  ventasDeltaPct: number | null;
+  margenBruto: number;
+  margenBrutoPct: number;
+  margenBrutoDeltaPts?: number | null;
+  contribucion: number;
+  contribucionPct: number;
+  contribucionDeltaPts?: number | null;
+  /** null cuando no se puede calcular (sin fijos o contribución no positiva). */
+  puntoEquilibrio: number | null;
+  avancePct: number | null;
+  costoTotal?: number;
+  costosVariables?: number;
+  costosFijos?: number;
+  gastoPorCentro?: CentroGastoPanel[];
+};
+
 /** Respuesta base de un tab (mientras se construye, `pendiente: true`). */
 export type TabPanel<T = Record<string, never>> = {
   meta: MetaPanel;
@@ -36,13 +63,17 @@ function qs(rango?: RangoPanel): string {
 }
 
 export function getPanelResumen(rango?: RangoPanel) {
-  return apiRequest<TabPanel>(`/reportes/panel/resumen${qs(rango)}`);
+  return apiRequest<TabPanel<{ rentabilidad: RentabilidadPanel; pendiente: string[] }>>(
+    `/reportes/panel/resumen${qs(rango)}`,
+  );
 }
 export function getPanelComercial(rango?: RangoPanel) {
   return apiRequest<TabPanel>(`/reportes/panel/comercial${qs(rango)}`);
 }
 export function getPanelFinanzas(rango?: RangoPanel) {
-  return apiRequest<TabPanel>(`/reportes/panel/finanzas${qs(rango)}`);
+  return apiRequest<TabPanel<{ rentabilidad: RentabilidadPanel; pendiente: string[] }>>(
+    `/reportes/panel/finanzas${qs(rango)}`,
+  );
 }
 export function getPanelProduccion(rango?: RangoPanel) {
   return apiRequest<TabPanel>(`/reportes/panel/produccion${qs(rango)}`);
