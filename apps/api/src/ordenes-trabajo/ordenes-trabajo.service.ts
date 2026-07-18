@@ -1480,6 +1480,44 @@ export class OrdenesTrabajoService {
     };
   }
 
+  /**
+   * Pausa automática por inactividad (D13): el widget la dispara cuando el
+   * operario no respondió el "¿seguís con este paso?". Cierra el tramo con
+   * motivo `auto_pausa`. Si el paso ya no está corriendo (lo completaron o
+   * pausaron en el medio), no-op honesto: devuelve el item actual.
+   */
+  async autoPausarPaso(auth: CurrentAuth, pasoId: string) {
+    const paso = await this.prisma.ordenTrabajoItemPaso.findFirst({
+      where: { id: pasoId, tenantId: auth.tenantId },
+      select: {
+        id: true,
+        ordenId: true,
+        itemId: true,
+        estado: true,
+        tramos: { where: { finEl: null }, select: { usuarioId: true } },
+      },
+    });
+    if (!paso) {
+      throw new NotFoundException('No se encontró el paso de producción.');
+    }
+    if (paso.estado !== 'en_curso' || paso.tramos.length === 0) {
+      return this.tableroItemActualizado(auth, paso.itemId);
+    }
+    if (paso.tramos[0].usuarioId !== auth.userId) {
+      throw new BadRequestException(
+        'El tramo abierto de este paso es de otro usuario.',
+      );
+    }
+    return this.accionPaso(
+      auth,
+      paso.ordenId,
+      paso.itemId,
+      paso.id,
+      { accion: 'pausar' },
+      { autoPausa: true },
+    );
+  }
+
   /** Items activos con sus pasos: el dataset COMPLETO del Tablero. */
   async tablero(auth: CurrentAuth) {
     await this.reconciliarTramosVencidos(auth.tenantId);
@@ -1497,7 +1535,12 @@ export class OrdenesTrabajoService {
               include: {
                 mesaUsuario: { select: { nombreCompleto: true, email: true } },
                 tramos: {
-                  orderBy: { inicioEl: 'desc' as const },
+                  // "Último" = el abierto si existe, si no el cerrado más
+                  // reciente (por CIERRE: un tramo puede cerrar después de
+                  // otro que arrancó más tarde… nunca al revés).
+                  orderBy: {
+                    finEl: { sort: 'desc' as const, nulls: 'first' as const },
+                  },
                   take: 1,
                   select: {
                     usuarioId: true,
@@ -1567,7 +1610,12 @@ export class OrdenesTrabajoService {
               include: {
                 mesaUsuario: { select: { nombreCompleto: true, email: true } },
                 tramos: {
-                  orderBy: { inicioEl: 'desc' as const },
+                  // "Último" = el abierto si existe, si no el cerrado más
+                  // reciente (por CIERRE: un tramo puede cerrar después de
+                  // otro que arrancó más tarde… nunca al revés).
+                  orderBy: {
+                    finEl: { sort: 'desc' as const, nulls: 'first' as const },
+                  },
                   take: 1,
                   select: {
                     usuarioId: true,
@@ -1621,8 +1669,12 @@ export class OrdenesTrabajoService {
     itemId: string,
     pasoId: string,
     payload: AccionPasoOrdenTrabajoDto,
-    /** Uso interno del lote (D11): tiempo prorrateado de la tanda. */
-    interno?: { tiempoLoteMin?: number },
+    /**
+     * Uso interno: `tiempoLoteMin` = prorrateo de la tanda (D11);
+     * `autoPausa` = pausa sin respuesta del operario (D13, la dispara el
+     * widget tras el countdown — no lleva motivo del catálogo).
+     */
+    interno?: { tiempoLoteMin?: number; autoPausa?: boolean },
   ) {
     await this.reconciliarTramosVencidos(auth.tenantId);
     const [paso, actor] = await Promise.all([
@@ -1702,7 +1754,7 @@ export class OrdenesTrabajoService {
         'Para bloquear un paso indicá el motivo (qué lo está frenando).',
       );
     }
-    if (payload.accion === 'pausar') {
+    if (payload.accion === 'pausar' && !interno?.autoPausa) {
       if (!motivo || !MOTIVOS_PAUSA.includes(motivo as MotivoPausa)) {
         throw new BadRequestException(
           'Para pausar un paso elegí un motivo del catálogo.',
@@ -1844,7 +1896,9 @@ export class OrdenesTrabajoService {
                 ? 'completado'
                 : payload.accion === 'bloquear'
                   ? 'bloqueo'
-                  : `pausa:${motivo}`,
+                  : interno?.autoPausa
+                    ? 'auto_pausa'
+                    : `pausa:${motivo}`,
             ...(payload.accion === 'pausar' && motivo === 'otro'
               ? { motivoDetalle: payload.motivoDetalle?.trim() }
               : {}),
@@ -1901,12 +1955,16 @@ export class OrdenesTrabajoService {
             payload.accion === 'bloquear'
               ? ` (${motivo})`
               : payload.accion === 'pausar'
-                ? ` (${MOTIVO_PAUSA_LABELS[motivo as MotivoPausa]})`
+                ? ` (${
+                    interno?.autoPausa
+                      ? 'automática: sin respuesta'
+                      : MOTIVO_PAUSA_LABELS[motivo as MotivoPausa]
+                  })`
                 : ''
           }`,
-          usuarioNombre,
-          usuarioId: auth.userId,
-          origen: 'usuario',
+          usuarioNombre: interno?.autoPausa ? 'Sistema' : usuarioNombre,
+          usuarioId: interno?.autoPausa ? null : auth.userId,
+          origen: interno?.autoPausa ? 'sistema' : 'usuario',
           datosJson: {
             pasoId: paso.id,
             itemId,
@@ -2045,7 +2103,9 @@ export class OrdenesTrabajoService {
           include: {
             mesaUsuario: { select: { nombreCompleto: true, email: true } },
             tramos: {
-              orderBy: { inicioEl: 'desc' as const },
+              orderBy: {
+                finEl: { sort: 'desc' as const, nulls: 'first' as const },
+              },
               take: 1,
               select: {
                 usuarioId: true,

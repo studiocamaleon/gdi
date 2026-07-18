@@ -16589,6 +16589,178 @@ body {
   gap: 8px;
 }
 
+/* ─── Widget flotante "En curso" (registro-tiempos §7) ─── */
+.pasos-widget {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 70;
+}
+.pasos-widget .pw-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--ink);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(20,20,26,.22);
+  cursor: pointer;
+}
+.pasos-widget .pw-pill svg { width: 14px; height: 14px; }
+.pasos-widget .pw-pill-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #4ade80;
+  animation: pw-pulse 2s ease-in-out infinite;
+}
+@keyframes pw-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .35; }
+}
+.pasos-widget .pw-pill-time {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  opacity: .75;
+  font-variant-numeric: tabular-nums;
+}
+.pasos-widget .pw-panel {
+  width: 340px;
+  max-height: 70vh;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  box-shadow: 0 12px 36px rgba(20,20,26,.18);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pasos-widget .pw-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 4px;
+}
+.pasos-widget .pw-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--ink-2);
+}
+.pasos-widget .pw-title svg { width: 14px; height: 14px; }
+.pasos-widget .pw-min {
+  border: none;
+  background: none;
+  color: var(--muted-text);
+  cursor: pointer;
+  padding: 2px;
+}
+.pasos-widget .pw-min svg { width: 16px; height: 16px; }
+.pasos-widget .pw-item {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pasos-widget .pw-item.warn { border-color: #d97706; background: #fffbeb; }
+.pasos-widget .pw-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pasos-widget .pw-paso { font-size: 13px; font-weight: 600; color: var(--ink); }
+.pasos-widget .pw-crono {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted-text);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.pasos-widget .pw-item-sub { font-size: 11.5px; color: var(--muted-text); }
+.pasos-widget .pw-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.pasos-widget .pw-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.pasos-widget .pw-btn svg { width: 13px; height: 13px; }
+.pasos-widget .pw-btn.primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+.pasos-widget .pw-btn:disabled { opacity: .5; cursor: default; }
+.pasos-widget .pw-link {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--muted-text);
+  text-decoration: underline;
+}
+.pasos-widget .pw-prompt {
+  border-top: 1px dashed #fcd34d;
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pasos-widget .pw-prompt-txt { font-size: 12.5px; color: #b45309; }
+.pasos-widget .pw-pausa {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pasos-widget .pw-pausa input {
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-size: 12.5px;
+  background: var(--surface, #fff);
+}
+.pasos-widget .pw-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.pasos-widget .pw-chip {
+  padding: 4px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 11.5px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.pasos-widget .pw-chip.on {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+
 .tablero-produccion .detail-activity .act-scope {
   margin-bottom: 10px;
   color: var(--muted-text);

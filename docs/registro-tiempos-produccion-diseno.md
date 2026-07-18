@@ -1,8 +1,9 @@
 # Registro de tiempos de producción — diseño
 
-Fecha: 2026-07-18. Estado: etapas A (esquema + backend) y B (tablero +
-detalle) IMPLEMENTADAS en `feat/registro-tiempos-produccion` y verificadas
-E2E; etapas C (widget), D (simuladores) y E (config) pendientes.
+Fecha: 2026-07-18. Estado: etapas A (esquema + backend), B (tablero +
+detalle) y C (widget flotante + inactividad) IMPLEMENTADAS en
+`feat/registro-tiempos-produccion` y verificadas E2E; etapas D
+(simuladores) y E (config) pendientes.
 Ajustes sobre el diseño hechos en B: la atribución NO se muestra en el
 tracking público (contradecía el principio "sin fuga de datos internos" de
 ese módulo; queda en tablero y detalle interno), y la proyección expone

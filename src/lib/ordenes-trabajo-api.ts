@@ -216,6 +216,14 @@ export async function getMisTramosAbiertos(): Promise<MisTramosAbiertos> {
   return apiRequest<MisTramosAbiertos>("/ordenes-trabajo/tablero/mis-tramos");
 }
 
+/** Pausa automática por inactividad (D13): sin respuesta al countdown. */
+export async function autoPausarPaso(pasoId: string): Promise<TableroItemData> {
+  return apiRequest<TableroItemData>(
+    `/ordenes-trabajo/tablero/pasos/${pasoId}/auto-pausa`,
+    { method: "PATCH" },
+  );
+}
+
 /** Tomar/soltar un paso de MI mesa de trabajo (vista Por estación). */
 export async function mesaPasoProduccion(
   pasoId: string,

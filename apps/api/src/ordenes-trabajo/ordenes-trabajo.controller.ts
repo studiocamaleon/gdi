@@ -71,6 +71,12 @@ export class OrdenesTrabajoController {
     return this.ordenesTrabajoService.misTramosAbiertos(auth);
   }
 
+  /** Pausa automática por inactividad (D13): sin respuesta al countdown. */
+  @Patch('tablero/pasos/:pasoId/auto-pausa')
+  autoPausa(@CurrentSession() auth: CurrentAuth, @Param('pasoId') pasoId: string) {
+    return this.ordenesTrabajoService.autoPausarPaso(auth, pasoId);
+  }
+
   /** Tomar/soltar un paso de MI mesa de trabajo (vista Por estación). */
   @Patch('tablero/pasos/:pasoId/mesa')
   mesaPaso(
