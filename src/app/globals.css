@@ -22061,9 +22061,14 @@ textarea.est-input { resize: vertical; min-height: 60px; font-family: inherit; }
   opacity: 0;
 }
 
-.emit-check {
+/* El tamaño viene del atributo width/height del SVG (82), pero la regla
+   amplia `.ot-v1 svg { width:14px }` lo pisaba (el overlay vive dentro de
+   .ot-v1). Se fija explícito con mayor especificidad. */
+.emit-seal .emit-check {
   position: relative;
   z-index: 2;
+  width: 82px;
+  height: 82px;
 }
 
 .emit-check .ec-circle {
