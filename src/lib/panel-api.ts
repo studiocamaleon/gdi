@@ -142,6 +142,15 @@ export type ProduccionPanel = {
   utilizacion: Array<{ centro: string; horasReales: number; capacidadPractica: number; pct: number | null }>;
   throughput: Array<{ fecha: string; cantidad: number }>;
   bloqueos: Array<{ motivo: string; veces: number }>;
+  /** Registro de tiempos (docs/registro-tiempos-produccion-diseno.md §9). */
+  registroTiempos: {
+    totalPasos: number;
+    /** % de pasos del período cuyo tiempo es una medición real. */
+    confiablePct: number | null;
+    fuentes: Array<{ fuente: string; pasos: number; pct: number }>;
+    pausas: Array<{ motivo: string; veces: number }>;
+    operadores: Array<{ operador: string; minutos: number; pasos: number }>;
+  };
 };
 
 /** Ventas & Producto: márgenes por categoría/producto, uso de papel, medidas. */

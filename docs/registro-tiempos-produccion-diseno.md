@@ -275,9 +275,15 @@ Contrato (cambios):
 - Los pasos de estas familias serán `solo_completar`, así que el lote nunca choca
   con tramos abiertos de cronómetro.
 
-## 9. Reportes habilitados (consumo futuro)
+## 9. Reportes habilitados
 
-Este diseño deja los datos listos para (no se implementan acá):
+2026-07-18: primera entrega implementada en el Panel general → tab
+Producción: card "Calidad del registro" (distribución de fuentes + %
+medido), "Pausas del taller" (Pareto de motivos) y "Tiempo por operador"
+(suma de tramos del período). Además la "Precisión de estimación" pasó a
+usar sólo fuentes medidas (D14) y la "Utilización por centro" suma
+`tiempoRealMin` (los pasos de máquina ya no quedan en 0). El resto queda
+para el módulo de reportes:
 
 - Real vs estimado por familia / centro de costo / producto (solo fuentes medidas) →
   recalibrar velocidades y factor PPM.
