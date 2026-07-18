@@ -21,7 +21,6 @@ import {
   PlusIcon,
   SaveIcon,
   SearchIcon,
-  SquareIcon,
   StarIcon,
   Trash2Icon,
   TriangleAlertIcon,
@@ -639,7 +638,19 @@ function OrdenSegmented({
         className={`oseg ${value === "orden" ? "on" : ""}`}
         onClick={() => onChange("orden")}
       >
-        <SquareIcon />
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.7}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <rect x="4" y="4" width="16" height="16" rx="2" />
+          <path d="M8 9h8M8 13h8M8 17h5" />
+        </svg>
         Orden de trabajo
       </button>
       <button
