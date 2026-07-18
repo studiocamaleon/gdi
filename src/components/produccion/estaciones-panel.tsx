@@ -161,6 +161,7 @@ function FeriadosSheet({ onClose }: { onClose: () => void }) {
   const [guardando, setGuardando] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [margen, setMargen] = React.useState<number | null>(null);
+  const [corte, setCorte] = React.useState<string | null>(null);
   const fechaRef = React.useRef<HTMLInputElement | null>(null);
 
   React.useEffect(() => {
@@ -169,8 +170,16 @@ function FeriadosSheet({ onClose }: { onClose: () => void }) {
       .then((lista) => { if (vigente) setDias(lista); })
       .catch(() => { if (vigente) setDias([]); });
     getConfiguracionProduccion()
-      .then((config) => { if (vigente) setMargen(config.margenEtaDias); })
-      .catch(() => { if (vigente) setMargen(0); });
+      .then((config) => {
+        if (!vigente) return;
+        setMargen(config.margenEtaDias);
+        setCorte(config.corteJornada);
+      })
+      .catch(() => {
+        if (!vigente) return;
+        setMargen(0);
+        setCorte("20:00");
+      });
     return () => { vigente = false; };
   }, []);
 
@@ -179,6 +188,17 @@ function FeriadosSheet({ onClose }: { onClose: () => void }) {
     setMargen(acotado); // optimista: el stepper responde al click
     actualizarConfiguracionProduccion({ margenEtaDias: acotado }).catch(() => {
       setError("No se pudo guardar el margen.");
+    });
+  };
+
+  const cambiarCorte = (valor: string) => {
+    setCorte(valor); // optimista: el picker responde al toque
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(valor)) return;
+    actualizarConfiguracionProduccion({
+      margenEtaDias: margen ?? 0,
+      corteJornada: valor,
+    }).catch(() => {
+      setError("No se pudo guardar el corte de jornada.");
     });
   };
 
@@ -237,7 +257,22 @@ function FeriadosSheet({ onClose }: { onClose: () => void }) {
             <div className="feriados-empty">Cargando…</div>
           )}
 
-          <div className="est-section-head" style={{ marginTop: 18 }}><span className="num">02</span><div><div className="ttl">Feriados y cierres</div><div className="sub">Días en que el taller no trabaja: no aportan capacidad en ninguna proyección.</div></div></div>
+          <div className="est-section-head" style={{ marginTop: 18 }}><span className="num">02</span><div><div className="ttl">Corte de jornada</div><div className="sub">Hora a la que los cronómetros de pasos que quedaron corriendo se cierran solos (el tiempo no sigue sumando de noche ni el fin de semana).</div></div></div>
+          {corte !== null ? (
+            <div className="feriados-add" style={{ maxWidth: 220 }}>
+              <input
+                className="est-input"
+                type="time"
+                value={corte}
+                onChange={(event) => cambiarCorte(event.target.value)}
+                aria-label="Hora de corte de jornada"
+              />
+            </div>
+          ) : (
+            <div className="feriados-empty">Cargando…</div>
+          )}
+
+          <div className="est-section-head" style={{ marginTop: 18 }}><span className="num">03</span><div><div className="ttl">Feriados y cierres</div><div className="sub">Días en que el taller no trabaja: no aportan capacidad en ninguna proyección.</div></div></div>
           <div className="feriados-add">
             <input
               ref={fechaRef}

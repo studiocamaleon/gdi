@@ -171,10 +171,17 @@ function LaserBatchCard({
   completando,
 }: {
   batch: LaserBatch;
-  onCompletar: (pasoIds: string[]) => void;
+  onCompletar: (pasoIds: string[], duracionTandaMin?: number) => void;
   completando: boolean;
 }) {
   const color = esColor(batch.modoColor);
+  // Duración REAL de la tanda (opcional, registro-tiempos D11): un solo
+  // número medido que el backend prorratea entre los trabajos del lote.
+  // Vacío = cada paso asienta su estimado; NO se prellena para no fabricar
+  // "mediciones" que nadie midió.
+  const [tanda, setTanda] = React.useState("");
+  const tandaMin = Number(tanda);
+  const tandaValida = Number.isFinite(tandaMin) && tandaMin >= 1;
   return (
     <div className={`laz-batch ${batch.urgentes > 0 ? "urgent" : ""}`}>
       <div className="laz-batch-head">
@@ -199,11 +206,30 @@ function LaserBatchCard({
           <span title="Hojas físicas a cargar en bandeja"><FileStackIcon />{lazNum(batch.hojas)} hojas</span>
           <span title="Tiempo estimado del batch"><ClockIcon />{batch.minutos > 0 ? `~${lazFmtTime(batch.minutos)}` : "—"}</span>
         </div>
+        <div
+          className="sim-tanda"
+          title="Si medís cuánto duró la tanda completa, ese tiempo real se reparte entre los trabajos y sirve para calibrar la máquina. Vacío = queda el estimado."
+        >
+          <label>Duró</label>
+          <input
+            type="number"
+            min={1}
+            placeholder={batch.minutos > 0 ? `~${Math.round(batch.minutos)}` : "min"}
+            value={tanda}
+            onChange={(event) => setTanda(event.target.value)}
+          />
+          <span className="u">min</span>
+        </div>
         <button
           type="button"
           className="btn btn-primary laz-lote"
           disabled={completando || batch.jobs.length === 0}
-          onClick={() => onCompletar(batch.jobs.map((job) => job.pasoId))}
+          onClick={() =>
+            onCompletar(
+              batch.jobs.map((job) => job.pasoId),
+              tandaValida ? tandaMin : undefined,
+            )
+          }
         >
           <CheckIcon />
           {completando ? "Marcando…" : `Marcar impresos (${batch.jobs.length})`}
@@ -249,12 +275,12 @@ export function SimuladorLaser({ initialData }: { initialData: SimuladorLaserDat
     };
   }, []);
 
-  const completar = async (pasoIds: string[]) => {
+  const completar = async (pasoIds: string[], duracionTandaMin?: number) => {
     setCompletando(true);
     completandoRef.current = true;
     setResultado(null);
     try {
-      const res = await completarPasosLote(pasoIds);
+      const res = await completarPasosLote(pasoIds, duracionTandaMin);
       const fresh = await getSimuladorLaser();
       setData(fresh);
       setResultado(
@@ -347,7 +373,7 @@ export function SimuladorLaser({ initialData }: { initialData: SimuladorLaserDat
                   <LaserBatchCard
                     key={batch.key}
                     batch={batch}
-                    onCompletar={(pasoIds) => void completar(pasoIds)}
+                    onCompletar={(pasoIds, tanda) => void completar(pasoIds, tanda)}
                     completando={completando}
                   />
                 ))}

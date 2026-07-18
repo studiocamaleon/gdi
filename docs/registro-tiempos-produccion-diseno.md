@@ -1,9 +1,13 @@
 # Registro de tiempos de producción — diseño
 
-Fecha: 2026-07-18. Estado: etapas A (esquema + backend), B (tablero +
-detalle) y C (widget flotante + inactividad) IMPLEMENTADAS en
-`feat/registro-tiempos-produccion` y verificadas E2E; etapas D
-(simuladores) y E (config) pendientes.
+Fecha: 2026-07-18. Estado: TODAS las etapas (A esquema+backend, B tablero+
+detalle, C widget+inactividad, D simuladores, E config) IMPLEMENTADAS en
+`feat/registro-tiempos-produccion` y verificadas E2E.
+Ajuste sobre D11 hecho en la etapa D: el campo de tanda NO se prellena con
+el estimado (queda como placeholder) — un valor precargado que el operario
+confirma sin mirar fabricaría "mediciones" `medido_lote` que nadie midió y
+contaminaría las fuentes que la mediana D14 considera confiables.
+La métrica "% pasos sin tiempo" (E) queda para el módulo de reportes (§9).
 Ajustes sobre el diseño hechos en B: la atribución NO se muestra en el
 tracking público (contradecía el principio "sin fuga de datos internos" de
 ese módulo; queda en tablero y detalle interno), y la proyección expone

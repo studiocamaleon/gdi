@@ -58,15 +58,24 @@ export async function eliminarDiaNoLaborable(id: string) {
 
 /**
  * Configuración de producción del tenant: margen de seguridad (en días
- * hábiles) que el cotizador suma a la ETA cruda al sugerir fecha.
+ * hábiles) que el cotizador suma a la ETA cruda al sugerir fecha, y hora
+ * de corte de jornada a la que los cronómetros abiertos se cierran solos
+ * (registro-tiempos-produccion D9).
  */
-export type ConfiguracionProduccion = { margenEtaDias: number };
+export type ConfiguracionProduccion = {
+  margenEtaDias: number;
+  /** "HH:mm". */
+  corteJornada: string;
+};
 
 export async function getConfiguracionProduccion() {
   return apiRequest<ConfiguracionProduccion>("/produccion/configuracion");
 }
 
-export async function actualizarConfiguracionProduccion(payload: ConfiguracionProduccion) {
+export async function actualizarConfiguracionProduccion(payload: {
+  margenEtaDias: number;
+  corteJornada?: string;
+}) {
   return apiRequest<ConfiguracionProduccion>("/produccion/configuracion", {
     method: "PUT",
     body: JSON.stringify(payload),

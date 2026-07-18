@@ -242,7 +242,11 @@ function buildSimuladorJob(
       trazabilidadJson: Prisma.JsonValue;
     } | null;
   },
-  frontera: { id: string; rutaPasoId: string | null },
+  frontera: {
+    id: string;
+    rutaPasoId: string | null;
+    duracionEstimadaMin: Prisma.Decimal | null;
+  },
 ) {
   const jobContext =
     (item.cotizacionItem?.jobContextJson as Record<string, unknown> | null) ?? null;
@@ -289,6 +293,11 @@ function buildSimuladorJob(
       : null,
     consumoCotizadoMm: numeroONull(trazPaso?.nestingResult?.consumedLengthMm),
     piezas: piezasDeSnapshot(trazPaso, jobContext),
+    // Prellenar "¿cuánto duró la tanda?" (registro-tiempos D11).
+    duracionEstimadaMin:
+      frontera.duracionEstimadaMin != null
+        ? Number(frontera.duracionEstimadaMin)
+        : null,
   };
 }
 
@@ -448,6 +457,7 @@ export class ProduccionService {
                 familiaCodigo: true,
                 estado: true,
                 rutaPasoId: true,
+                duracionEstimadaMin: true,
               },
             },
           },
