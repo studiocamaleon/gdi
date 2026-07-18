@@ -3,6 +3,7 @@ import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
 import { ReportesService } from './reportes.service';
 import { RentabilidadService } from './rentabilidad.service';
+import { CobranzaService } from './cobranza.service';
 import { RangoReporteDto } from './dto/rango-reporte.dto';
 
 /**
@@ -17,6 +18,7 @@ export class ReportesController {
   constructor(
     private readonly service: ReportesService,
     private readonly rentabilidad: RentabilidadService,
+    private readonly cobranza: CobranzaService,
   ) {}
 
   @Get('resumen')
@@ -63,14 +65,13 @@ export class ReportesController {
   @Get('finanzas')
   async finanzas(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
     const { rango, anterior } = this.service.resolverRango(query);
-    const { actual, sinComparativa, deltas } = await this.rentabilidad.bloque(
-      auth.tenantId,
-      rango,
-      anterior,
-    );
+    const [{ actual, sinComparativa, deltas }, cobranza] = await Promise.all([
+      this.rentabilidad.bloque(auth.tenantId, rango, anterior),
+      this.cobranza.finanzas(auth.tenantId, rango),
+    ]);
     return {
       meta: this.service.metaBase(rango, anterior, 'Comprobantes y costos', {
-        limites: this.rentabilidad.limites(actual),
+        limites: [...this.rentabilidad.limites(actual), ...this.cobranza.limites()],
         sinComparativa,
       }),
       rentabilidad: {
@@ -87,8 +88,7 @@ export class ReportesController {
         avancePct: actual.avancePct,
         gastoPorCentro: actual.gastoPorCentro,
       },
-      // Aging, DSO, costo de cobrar, cheques, deudores, fondos: cobranza.service.
-      pendiente: ['aging', 'dso', 'costoCobrar', 'cheques', 'deudores', 'fondos'],
+      cobranza,
     };
   }
 

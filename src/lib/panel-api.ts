@@ -62,6 +62,39 @@ function qs(rango?: RangoPanel): string {
   return s ? `?${s}` : "";
 }
 
+/** Cobranza (tab Finanzas): aging, costo de cobrar, DSO, cheques, fondos. */
+export type FranjaAgingPanel = "0-30" | "31-60" | "61-90" | "+90";
+export type DeudorPanel = {
+  clienteId: string | null;
+  cliente: string;
+  saldo: number;
+  diasMax: number;
+  porFranja: Record<FranjaAgingPanel, number>;
+};
+export type CostoCobrarMetodoPanel = {
+  metodo: string;
+  cantidad: number;
+  bruto: number;
+  comision: number;
+  neto: number;
+  pct: number;
+};
+export type CobranzaPanel = {
+  facturado: number;
+  cobrado: number;
+  brecha: number;
+  /** Días de facturación inmovilizados en la deuda; null si sin facturación. */
+  dso: number | null;
+  aging: Array<{ franja: FranjaAgingPanel; monto: number }>;
+  agingTotal: number;
+  vencido: number;
+  deudores: DeudorPanel[];
+  costoCobrar: CostoCobrarMetodoPanel[];
+  comisionTotal: number;
+  cheques: Array<{ estado: string; cantidad: number; importe: number; proximoVencimiento: string | null }>;
+  fondos: Array<{ cuenta: string; saldo: number }>;
+};
+
 export function getPanelResumen(rango?: RangoPanel) {
   return apiRequest<TabPanel<{ rentabilidad: RentabilidadPanel; pendiente: string[] }>>(
     `/reportes/panel/resumen${qs(rango)}`,
@@ -71,7 +104,7 @@ export function getPanelComercial(rango?: RangoPanel) {
   return apiRequest<TabPanel>(`/reportes/panel/comercial${qs(rango)}`);
 }
 export function getPanelFinanzas(rango?: RangoPanel) {
-  return apiRequest<TabPanel<{ rentabilidad: RentabilidadPanel; pendiente: string[] }>>(
+  return apiRequest<TabPanel<{ rentabilidad: RentabilidadPanel; cobranza: CobranzaPanel }>>(
     `/reportes/panel/finanzas${qs(rango)}`,
   );
 }
