@@ -55,6 +55,133 @@ const pct = (n: number | null | undefined, d = 1) =>
 
 /* ═══════════ Chart primitives (verbatim del diseño) ═══════════ */
 
+/**
+ * Paleta categórica de series (orden FIJO — es el mecanismo de seguridad
+ * para daltonismo, no cosmética). Validada con el validador de dataviz
+ * sobre superficie blanca: ΔE adyacente mínimo 16.0, contraste ≥3:1.
+ * Distinta de los colores de estado (--signal/--ok), que quedan
+ * reservados para semáforos.
+ */
+const PALETA_SERIES = ["#3d6fd6", "#d0662e", "#0e9fae", "#c34d8c", "#b08915", "#7a5fd0"];
+const COLOR_OTROS = "#a8a6a0";
+
+/** Ancho real del contenedor (evita el SVG estirado por viewBox fijo). */
+function useAncho<T extends HTMLElement>(): [React.RefObject<T | null>, number] {
+  const ref = React.useRef<T>(null);
+  const [ancho, setAncho] = React.useState(0);
+  React.useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entradas) => setAncho(entradas[0].contentRect.width));
+    ro.observe(el);
+    setAncho(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, ancho];
+}
+
+/** Curva monótona (Fritsch–Carlson): suave sin inventar picos que no están en los datos. */
+function pathMonotona(pts: Array<readonly [number, number]>): string {
+  if (pts.length < 2) return pts.length ? `M${pts[0][0]} ${pts[0][1]}` : "";
+  const n = pts.length;
+  const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+  const dx: number[] = [], m: number[] = [];
+  for (let i = 0; i < n - 1; i++) { dx.push(xs[i + 1] - xs[i]); m.push((ys[i + 1] - ys[i]) / (xs[i + 1] - xs[i])); }
+  const t: number[] = [m[0]];
+  for (let i = 1; i < n - 1; i++) {
+    if (m[i - 1] * m[i] <= 0) t.push(0);
+    else { const w1 = 2 * dx[i] + dx[i - 1], w2 = dx[i] + 2 * dx[i - 1]; t.push((w1 + w2) / (w1 / m[i - 1] + w2 / m[i])); }
+  }
+  t.push(m[n - 2]);
+  let d = `M${xs[0].toFixed(1)} ${ys[0].toFixed(1)}`;
+  for (let i = 0; i < n - 1; i++) {
+    const x1 = xs[i] + dx[i] / 3, y1 = ys[i] + (t[i] * dx[i]) / 3;
+    const x2 = xs[i + 1] - dx[i] / 3, y2 = ys[i + 1] - (t[i + 1] * dx[i]) / 3;
+    d += ` C${x1.toFixed(1)} ${y1.toFixed(1)}, ${x2.toFixed(1)} ${y2.toFixed(1)}, ${xs[i + 1].toFixed(1)} ${ys[i + 1].toFixed(1)}`;
+  }
+  return d;
+}
+
+/** Tooltip flotante de los gráficos: título (bucket) + filas con punto de color. */
+type FilaTooltip = { color: string; label: string; valor: string };
+function TooltipChart({ x, contenedorAncho, titulo, filas }: { x: number; contenedorAncho: number; titulo: string; filas: FilaTooltip[] }) {
+  const ANCHO_TT = 190;
+  const left = Math.max(4, Math.min(x + 14, contenedorAncho - ANCHO_TT - 4));
+  return (
+    <div style={{ position: "absolute", left, top: 6, width: ANCHO_TT, pointerEvents: "none", zIndex: 5, background: "var(--surface)", border: "1px solid var(--hairline)", borderRadius: 8, boxShadow: "0 6px 20px rgba(20,20,26,.10)", padding: "8px 10px" }}>
+      <div style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: ".05em", color: "var(--muted-text)", marginBottom: 6 }}>{titulo}</div>
+      {filas.map((f) => (
+        <div key={f.label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, lineHeight: 1.7 }}>
+          <span style={{ width: 8, height: 8, borderRadius: 2, background: f.color, flexShrink: 0 }} />
+          <span style={{ color: "var(--ink-2)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.label}</span>
+          <span className="mono" style={{ color: "var(--ink)", fontWeight: 600 }}>{f.valor}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Multi-línea con curvas monótonas, colores de PALETA_SERIES y crosshair
+ * con tooltip (el mix evolutivo y cualquier comparación de series).
+ * Ancho medido del contenedor: nada se estira.
+ */
+function MultiLineChart({ series, labels, height = 240, yFormat = (v: number) => String(v), fmtValor = (v: number) => `$${fmtAR(v)}` }: {
+  series: Array<{ nombre: string; color: string; values: number[] }>;
+  labels: string[];
+  height?: number;
+  yFormat?: (v: number) => string;
+  fmtValor?: (v: number) => string;
+}) {
+  const [ref, anchoMedido] = useAncho<HTMLDivElement>();
+  const [hover, setHover] = React.useState<number | null>(null);
+  const W = Math.max(320, anchoMedido || 640), H = height;
+  const padL = 46, padR = 14, padT = 14, padB = 24;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+  const max = Math.max(...series.flatMap((s) => s.values), 0) * 1.08 || 1;
+  const step = innerW / Math.max(1, labels.length - 1);
+  const x = (i: number) => padL + i * step;
+  const y = (v: number) => padT + innerH - (v / max) * innerH;
+  const ticks = Array.from({ length: 5 }, (_, i) => (max * i) / 4);
+
+  const alBucket = (clientX: number, rect: DOMRect) => {
+    const idx = Math.round((clientX - rect.left - padL) / step);
+    setHover(Math.max(0, Math.min(labels.length - 1, idx)));
+  };
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}
+      onMouseLeave={() => setHover(null)}
+      onMouseMove={(e) => alBucket(e.clientX, e.currentTarget.getBoundingClientRect())}>
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: "block" }}>
+        {ticks.map((v, i) => (
+          <g key={i}>
+            <line x1={padL} x2={W - padR} y1={y(v)} y2={y(v)} stroke="var(--hairline)" strokeWidth="1" />
+            <text x={padL - 8} y={y(v) + 3} fontSize="10" textAnchor="end" fill="var(--muted-text)" fontFamily="var(--font-mono)">{yFormat(v)}</text>
+          </g>
+        ))}
+        {labels.map((lab, i) =>
+          i % Math.ceil(labels.length / Math.max(3, Math.floor(innerW / 70))) === 0 || i === labels.length - 1 ? (
+            <text key={i} x={x(i)} y={H - 6} fontSize="10" textAnchor="middle" fill="var(--muted-text)">{lab}</text>
+          ) : null,
+        )}
+        {hover != null ? <line x1={x(hover)} x2={x(hover)} y1={padT} y2={padT + innerH} stroke="var(--muted-text-2)" strokeWidth="1" strokeDasharray="3 3" /> : null}
+        {series.map((s) => (
+          <path key={s.nombre} d={pathMonotona(s.values.map((v, i) => [x(i), y(v)] as const))} fill="none" stroke={s.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        ))}
+        {series.map((s) => {
+          const i = hover ?? s.values.length - 1;
+          return <circle key={s.nombre} cx={x(i)} cy={y(s.values[i] ?? 0)} r={hover != null ? 4 : 3} fill={s.color} stroke="var(--surface)" strokeWidth="2" />;
+        })}
+      </svg>
+      {hover != null ? (
+        <TooltipChart x={x(hover)} contenedorAncho={W} titulo={labels[hover]}
+          filas={[...series].sort((a, b) => (b.values[hover] ?? 0) - (a.values[hover] ?? 0)).map((s) => ({ color: s.color, label: s.nombre, valor: fmtValor(s.values[hover] ?? 0) }))} />
+      ) : null}
+    </div>
+  );
+}
+
 function Sparkline({ values, height = 28, width = 84, signal = false }: { values: number[]; height?: number; width?: number; signal?: boolean }) {
   if (!values?.length || values.length < 2) return null;
   const min = Math.min(...values), max = Math.max(...values), range = max - min || 1;
@@ -73,7 +200,9 @@ function Sparkline({ values, height = 28, width = 84, signal = false }: { values
   );
 }
 
-function AreaChart({ series, labels, height = 220, yFormat = (v: number) => String(v), secondary }: { series: number[]; labels: string[]; height?: number; yFormat?: (v: number) => string; secondary?: number[] }) {
+function AreaChart({ series, labels, height = 220, yFormat = (v: number) => String(v), secondary, nombres = ["Valor"], fmtValor = (v: number) => `$${fmtAR(v)}` }: { series: number[]; labels: string[]; height?: number; yFormat?: (v: number) => string; secondary?: number[]; nombres?: [string, string?]; fmtValor?: (v: number) => string }) {
+  const [wrapRef, anchoWrap] = useAncho<HTMLDivElement>();
+  const [hover, setHover] = React.useState<number | null>(null);
   const W = 800, H = height, padL = 44, padR = 8, padT = 18, padB = 26;
   const innerW = W - padL - padR, innerH = H - padT - padB;
   const all = secondary ? [...series, ...secondary] : series;
@@ -84,32 +213,61 @@ function AreaChart({ series, labels, height = 220, yFormat = (v: number) => Stri
   const line = pts.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
   const area = `${line} L${pts[pts.length - 1][0].toFixed(1)} ${padT + innerH} L${pts[0][0].toFixed(1)} ${padT + innerH} Z`;
   const ticks = Array.from({ length: 5 }, (_, i) => min + (range * i) / 4);
+  // El SVG se estira al ancho del card: el mouse se mapea en coordenadas del viewBox.
+  const alBucket = (clientX: number, rect: DOMRect) => {
+    const xView = ((clientX - rect.left) / rect.width) * W;
+    setHover(Math.max(0, Math.min(series.length - 1, Math.round((xView - padL) / step))));
+  };
+  const xPixel = (i: number) => (anchoWrap > 0 ? ((padL + i * step) / W) * anchoWrap : 0);
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" style={{ display: "block" }}>
-      {ticks.map((v, i) => {
-        const y = padT + innerH - ((v - min) / range) * innerH;
-        return (
-          <g key={i}>
-            <line x1={padL} x2={W - padR} y1={y} y2={y} stroke="var(--hairline)" strokeWidth="1" />
-            <text x={padL - 8} y={y + 3} fontSize="10" textAnchor="end" fill="var(--muted-text)" fontFamily="var(--font-mono)">{yFormat(v)}</text>
-          </g>
-        );
-      })}
-      {labels.map((lab, i) =>
-        i % Math.ceil(labels.length / 12) === 0 || i === labels.length - 1 ? (
-          <text key={i} x={padL + i * step} y={H - 8} fontSize="10" textAnchor="middle" fill="var(--muted-text)">{lab}</text>
-        ) : null,
-      )}
-      {pts2 ? <path d={pts2.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ")} fill="none" stroke="var(--muted-text-2)" strokeWidth="1.4" strokeDasharray="3 3" /> : null}
-      <path d={area} fill="rgba(20,20,26,.06)" />
-      <path d={line} fill="none" stroke="var(--ink)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r="3" fill="var(--ink)" />
-      <circle cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r="6" fill="var(--ink)" opacity=".12" />
-    </svg>
+    <div ref={wrapRef} style={{ position: "relative" }}
+      onMouseLeave={() => setHover(null)}
+      onMouseMove={(e) => alBucket(e.clientX, e.currentTarget.getBoundingClientRect())}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" style={{ display: "block" }}>
+        {ticks.map((v, i) => {
+          const y = padT + innerH - ((v - min) / range) * innerH;
+          return (
+            <g key={i}>
+              <line x1={padL} x2={W - padR} y1={y} y2={y} stroke="var(--hairline)" strokeWidth="1" />
+              <text x={padL - 8} y={y + 3} fontSize="10" textAnchor="end" fill="var(--muted-text)" fontFamily="var(--font-mono)">{yFormat(v)}</text>
+            </g>
+          );
+        })}
+        {labels.map((lab, i) =>
+          i % Math.ceil(labels.length / 12) === 0 || i === labels.length - 1 ? (
+            <text key={i} x={padL + i * step} y={H - 8} fontSize="10" textAnchor="middle" fill="var(--muted-text)">{lab}</text>
+          ) : null,
+        )}
+        {hover != null ? <line x1={pts[hover][0]} x2={pts[hover][0]} y1={padT} y2={padT + innerH} stroke="var(--muted-text-2)" strokeWidth="1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" /> : null}
+        {pts2 ? <path d={pts2.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ")} fill="none" stroke="var(--muted-text-2)" strokeWidth="1.4" strokeDasharray="3 3" /> : null}
+        <path d={area} fill="rgba(20,20,26,.06)" />
+        <path d={line} fill="none" stroke="var(--ink)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        {hover == null ? (
+          <>
+            <circle cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r="3" fill="var(--ink)" />
+            <circle cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r="6" fill="var(--ink)" opacity=".12" />
+          </>
+        ) : (
+          <>
+            <circle cx={pts[hover][0]} cy={pts[hover][1]} r="4" fill="var(--ink)" stroke="var(--surface)" strokeWidth="2" />
+            {pts2 ? <circle cx={pts2[hover][0]} cy={pts2[hover][1]} r="4" fill="var(--muted-text-2)" stroke="var(--surface)" strokeWidth="2" /> : null}
+          </>
+        )}
+      </svg>
+      {hover != null && anchoWrap > 0 ? (
+        <TooltipChart x={xPixel(hover)} contenedorAncho={anchoWrap} titulo={labels[hover]}
+          filas={[
+            { color: "var(--ink)", label: nombres[0], valor: fmtValor(series[hover]) },
+            ...(secondary && nombres[1] ? [{ color: "var(--muted-text-2)", label: nombres[1], valor: fmtValor(secondary[hover]) }] : []),
+          ]} />
+      ) : null}
+    </div>
   );
 }
 
-function BarChart({ data, labels, height = 220, yFormat = (v: number) => String(v), mode = "stack", colors }: { data: number[][]; labels: string[]; height?: number; yFormat?: (v: number) => string; mode?: "stack" | "group"; colors?: string[]; stacks?: string[] }) {
+function BarChart({ data, labels, height = 220, yFormat = (v: number) => String(v), mode = "stack", colors, stacks, fmtValor = (v: number) => `$${fmtAR(v)}` }: { data: number[][]; labels: string[]; height?: number; yFormat?: (v: number) => string; mode?: "stack" | "group"; colors?: string[]; stacks?: string[]; fmtValor?: (v: number) => string }) {
+  const [wrapRef, anchoWrap] = useAncho<HTMLDivElement>();
+  const [hover, setHover] = React.useState<number | null>(null);
   const W = 800, H = height, padL = 44, padR = 8, padT = 18, padB = 26;
   const innerW = W - padL - padR, innerH = H - padT - padB;
   const stackCount = data.length, barCount = data[0]?.length ?? 0;
@@ -120,39 +278,58 @@ function BarChart({ data, labels, height = 220, yFormat = (v: number) => String(
     ? Math.max(...labels.map((_, i) => data.reduce((s, st) => s + (st[i] ?? 0), 0)))
     : Math.max(...data.flat())) * 1.12 || 1;
   const ticks = Array.from({ length: 5 }, (_, i) => (max * i) / 4);
+  const alBucket = (clientX: number, rect: DOMRect) => {
+    const xView = ((clientX - rect.left) / rect.width) * W;
+    setHover(Math.max(0, Math.min(barCount - 1, Math.floor((xView - padL) / groupW))));
+  };
+  const filasDe = (bi: number): FilaTooltip[] => {
+    const filas = data.map((st, si) => ({ color: col(si), label: stacks?.[si] ?? `Serie ${si + 1}`, valor: fmtValor(st[bi] ?? 0) }));
+    if (mode === "stack" && stackCount > 1) {
+      filas.push({ color: "transparent", label: "Total", valor: fmtValor(data.reduce((s, st) => s + (st[bi] ?? 0), 0)) });
+    }
+    return filas;
+  };
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" style={{ display: "block" }}>
-      {ticks.map((v, i) => {
-        const y = padT + innerH - (v / max) * innerH;
-        return (
-          <g key={i}>
-            <line x1={padL} x2={W - padR} y1={y} y2={y} stroke="var(--hairline)" strokeWidth="1" />
-            <text x={padL - 8} y={y + 3} fontSize="10" textAnchor="end" fill="var(--muted-text)" fontFamily="var(--font-mono)">{yFormat(v)}</text>
-          </g>
-        );
-      })}
-      {labels.map((lab, bi) => {
-        const cx = padL + groupW * bi + groupW / 2;
-        if (mode === "stack") {
-          const barW = Math.min(28, groupW * 0.55);
-          let accY = padT + innerH;
+    <div ref={wrapRef} style={{ position: "relative" }}
+      onMouseLeave={() => setHover(null)}
+      onMouseMove={(e) => alBucket(e.clientX, e.currentTarget.getBoundingClientRect())}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" style={{ display: "block" }}>
+        {ticks.map((v, i) => {
+          const y = padT + innerH - (v / max) * innerH;
           return (
-            <g key={bi}>
-              {data.map((st, si) => { const h = ((st[bi] ?? 0) / max) * innerH; accY -= h; return <rect key={si} x={cx - barW / 2} y={accY} width={barW} height={h} fill={col(si)} rx="1.5" />; })}
+            <g key={i}>
+              <line x1={padL} x2={W - padR} y1={y} y2={y} stroke="var(--hairline)" strokeWidth="1" />
+              <text x={padL - 8} y={y + 3} fontSize="10" textAnchor="end" fill="var(--muted-text)" fontFamily="var(--font-mono)">{yFormat(v)}</text>
+            </g>
+          );
+        })}
+        {labels.map((lab, bi) => {
+          const cx = padL + groupW * bi + groupW / 2;
+          const atenuada = hover != null && hover !== bi ? 0.45 : 1;
+          if (mode === "stack") {
+            const barW = Math.min(28, groupW * 0.55);
+            let accY = padT + innerH;
+            return (
+              <g key={bi} opacity={atenuada}>
+                {data.map((st, si) => { const h = ((st[bi] ?? 0) / max) * innerH; accY -= h; return <rect key={si} x={cx - barW / 2} y={accY} width={barW} height={h} fill={col(si)} rx="1.5" />; })}
+                <text x={cx} y={H - 8} fontSize="10" textAnchor="middle" fill="var(--muted-text)">{lab}</text>
+              </g>
+            );
+          }
+          const barW = Math.min(10, (groupW * 0.7) / stackCount);
+          const totalW = barW * stackCount + 2 * (stackCount - 1);
+          return (
+            <g key={bi} opacity={atenuada}>
+              {data.map((st, si) => { const h = ((st[bi] ?? 0) / max) * innerH; return <rect key={si} x={cx - totalW / 2 + si * (barW + 2)} y={padT + innerH - h} width={barW} height={h} fill={col(si)} rx="1.5" />; })}
               <text x={cx} y={H - 8} fontSize="10" textAnchor="middle" fill="var(--muted-text)">{lab}</text>
             </g>
           );
-        }
-        const barW = Math.min(10, (groupW * 0.7) / stackCount);
-        const totalW = barW * stackCount + 2 * (stackCount - 1);
-        return (
-          <g key={bi}>
-            {data.map((st, si) => { const h = ((st[bi] ?? 0) / max) * innerH; return <rect key={si} x={cx - totalW / 2 + si * (barW + 2)} y={padT + innerH - h} width={barW} height={h} fill={col(si)} rx="1.5" />; })}
-            <text x={cx} y={H - 8} fontSize="10" textAnchor="middle" fill="var(--muted-text)">{lab}</text>
-          </g>
-        );
-      })}
-    </svg>
+        })}
+      </svg>
+      {hover != null && anchoWrap > 0 ? (
+        <TooltipChart x={((padL + groupW * hover + groupW / 2) / W) * anchoWrap} contenedorAncho={anchoWrap} titulo={labels[hover]} filas={filasDe(hover)} />
+      ) : null}
+    </div>
   );
 }
 
@@ -437,7 +614,7 @@ function TabComercial({ d }: { d: ComercialPanel }) {
       </div>
       <div className="dash-grid">
         <Card span={8} title="Ventas del período" sub={`serie ${d.granularidad}`} foot={<span>Ticket promedio <strong style={{ color: "var(--ink)" }}>${fmtK(k.ticketPromedio)}</strong> · {k.itemsPorOrden} items/orden</span>}>
-          {d.serie.length >= 2 ? <AreaChart series={d.serie.map((s) => s.monto)} labels={labels} yFormat={(v) => `$${fmtK(v)}`} height={230} /> : <div className="d-empty" style={{ padding: 40 }}>Serie insuficiente.</div>}
+          {d.serie.length >= 2 ? <AreaChart series={d.serie.map((s) => s.monto)} labels={labels} yFormat={(v) => `$${fmtK(v)}`} height={230} nombres={["Ventas"]} /> : <div className="d-empty" style={{ padding: 40 }}>Serie insuficiente.</div>}
         </Card>
         <Card span={4} title="Mix por categoría" sub="participación">
           {d.mixCategoria.map((m) => (
@@ -451,7 +628,7 @@ function TabComercial({ d }: { d: ComercialPanel }) {
           foot={d.serieTicket.length >= 2 ? <span>La <strong style={{ color: "var(--ink)" }}>mediana</strong> (punteada) resiste las órdenes grandes: si se separan, pocas órdenes inflan el promedio.</span> : undefined}>
           {d.serieTicket.length >= 2 ? (
             <>
-              <AreaChart series={d.serieTicket.map((t) => t.ticketPromedio)} secondary={d.serieTicket.map((t) => t.ticketMediana)} labels={d.serieTicket.map((t) => t.fecha.slice(5))} yFormat={(v) => `$${fmtK(v)}`} height={210} />
+              <AreaChart series={d.serieTicket.map((t) => t.ticketPromedio)} secondary={d.serieTicket.map((t) => t.ticketMediana)} labels={d.serieTicket.map((t) => t.fecha.slice(5))} yFormat={(v) => `$${fmtK(v)}`} height={210} nombres={["Promedio", "Mediana"]} />
               <div className="d-legend" style={{ marginTop: 8 }}>
                 <LegendDot color="var(--ink)" label="Promedio" value={`$${fmtK(k.ticketPromedio)}`} />
                 <LegendDot color="var(--muted-text-2)" label="Mediana" />
@@ -515,7 +692,7 @@ function TabProduccion({ d }: { d: ProduccionPanel }) {
       </div>
       <div className="dash-grid">
         <Card span={5} title="Throughput diario" sub="pasos completados por día" action={<span className="mono" style={{ color: "var(--ink)", fontSize: 13, fontWeight: 600 }}>{d.throughput.reduce((a, t) => a + t.cantidad, 0)}</span>}>
-          {d.throughput.length >= 2 ? <AreaChart series={d.throughput.map((t) => t.cantidad)} labels={d.throughput.map((t) => t.fecha.slice(5))} yFormat={(v) => String(Math.round(v))} height={220} /> : <BarChart labels={d.throughput.map((t) => t.fecha.slice(5))} data={[d.throughput.map((t) => t.cantidad)]} stacks={["Pasos"]} height={200} />}
+          {d.throughput.length >= 2 ? <AreaChart series={d.throughput.map((t) => t.cantidad)} labels={d.throughput.map((t) => t.fecha.slice(5))} yFormat={(v) => String(Math.round(v))} height={220} nombres={["Pasos completados"]} fmtValor={(v) => fmtAR(v, 0)} /> : <BarChart labels={d.throughput.map((t) => t.fecha.slice(5))} data={[d.throughput.map((t) => t.cantidad)]} stacks={["Pasos"]} height={200} fmtValor={(v) => fmtAR(v, 0)} />}
         </Card>
         <Card span={7} title="Precisión de estimación" sub="tiempo real vs. cotizado por familia" flush>
           <table className="d-tbl"><thead><tr><th>Familia</th><th className="right">Cotizado</th><th className="right">Real</th><th className="right">Razón</th><th className="right">n</th></tr></thead>
@@ -718,8 +895,13 @@ function MixEvolutivoCard({ d, rango }: { d: ProductoPanel; rango: RangoPanel })
   const puntos = categoria && drill ? drill.serie : d.mixEvolutivo;
   const pivot = pivotMix(puntos);
   const categorias = [...new Set(d.mixEvolutivo.map((p) => p.nombre))];
+  // El color sigue a la ENTIDAD (orden alfabético estable), no a su ranking:
+  // cambiar de período no repinta a las categorías que sobreviven.
+  const ordenAlfa = pivot.nombres.filter((n) => n !== "Otros").sort((a, b) => a.localeCompare(b, "es"));
+  const colorDe = (n: string) => (n === "Otros" ? COLOR_OTROS : PALETA_SERIES[ordenAlfa.indexOf(n) % PALETA_SERIES.length]);
+  const series = pivot.nombres.map((n, i) => ({ nombre: n, color: colorDe(n), values: pivot.data[i] }));
   return (
-    <Card span={12} title="Evolución del mix" sub={categoria ? `productos de ${categoria}` : "ventas apiladas por categoría"}
+    <Card span={12} title="Evolución del mix" sub={categoria ? `productos de ${categoria}` : "ventas por categoría en el tiempo"}
       action={
         <select value={categoria ?? ""} onChange={(e) => setCategoria(e.target.value || null)}
           style={{ fontSize: 12, padding: "4px 8px", borderRadius: 6, border: "1px solid var(--hairline)", background: "transparent", color: "var(--ink)" }}>
@@ -731,9 +913,9 @@ function MixEvolutivoCard({ d, rango }: { d: ProductoPanel; rango: RangoPanel })
         : cargando && !puntos.length ? <div className="d-empty" style={{ padding: 30 }}>Abriendo la categoría…</div>
         : pivot.labels.length >= 2 ? (
           <>
-            <BarChart labels={pivot.labels} data={pivot.data} mode="stack" colors={pivot.nombres.map((_, i) => SEG_COLORS[i % SEG_COLORS.length])} yFormat={(v) => `$${fmtK(v)}`} height={230} />
+            <MultiLineChart series={series} labels={pivot.labels} yFormat={(v) => `$${fmtK(v)}`} height={240} />
             <div className="d-legend" style={{ marginTop: 10, flexWrap: "wrap" }}>
-              {pivot.nombres.map((n, i) => <LegendDot key={n} color={SEG_COLORS[i % SEG_COLORS.length]} label={n} />)}
+              {series.map((s) => <LegendDot key={s.nombre} color={s.color} label={s.nombre} value={`$${fmtK(s.values.reduce((a, v) => a + v, 0))}`} />)}
             </div>
           </>
         ) : <div className="d-empty" style={{ padding: 40 }}>El período no tiene serie suficiente: probá “Trimestre” o “Año”.</div>}
@@ -850,7 +1032,7 @@ function TabClientes({ d }: { d: ClientesPanel }) {
           foot={<span>La barra clara es venta de clientes captados en ese período; la oscura, de los que ya tenías.</span>}>
           {serieNR.length >= 2 ? (
             <>
-              <BarChart labels={serieNR.map((s) => s.fecha.slice(5))} data={[serieNR.map((s) => s.recurrentes), serieNR.map((s) => s.nuevos)]} mode="stack" colors={["var(--ink)", "#8aa896"]} yFormat={(v) => `$${fmtK(v)}`} height={220} />
+              <BarChart labels={serieNR.map((s) => s.fecha.slice(5))} data={[serieNR.map((s) => s.recurrentes), serieNR.map((s) => s.nuevos)]} mode="stack" stacks={["Recurrentes", "Nuevos"]} colors={["var(--ink)", "#8aa896"]} yFormat={(v) => `$${fmtK(v)}`} height={220} />
               <div className="d-legend" style={{ marginTop: 10 }}>
                 <LegendDot color="var(--ink)" label="Recurrentes" />
                 <LegendDot color="#8aa896" label="Nuevos" />
