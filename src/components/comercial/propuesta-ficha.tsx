@@ -51,6 +51,7 @@ import {
   getTableroProduccion,
   quitarOrdenItem,
 } from "@/lib/ordenes-trabajo-api";
+import { emitirPresupuesto } from "@/lib/presupuestos-api";
 import {
   getConfiguracionProduccion,
   getDiasNoLaborables,
@@ -3778,6 +3779,7 @@ export function ResumenBar({
   fechaEstimada,
   fechaCreacion,
   onEmitir,
+  onEmitirPresupuesto,
   emitiendo = false,
   onGuardarBorrador,
   guardandoBorrador = false,
@@ -3790,6 +3792,8 @@ export function ResumenBar({
   fechaCreacion: string;
   /** Ausente en modo lectura (OT emitida): sin acciones de guardado/emisión. */
   onEmitir?: () => void;
+  /** Emisión del PRESUPUESTO (toggle en "Presupuesto"). */
+  onEmitirPresupuesto?: () => void;
   emitiendo?: boolean;
   onGuardarBorrador?: () => void;
   guardandoBorrador?: boolean;
@@ -3932,7 +3936,7 @@ export function ResumenBar({
             type="button"
             className="btn btn-primary"
             disabled={emitiendo || items.length === 0}
-            onClick={tipo === "orden" ? onEmitir : undefined}
+            onClick={tipo === "orden" ? onEmitir : onEmitirPresupuesto}
           >
             {tipo === "orden" ? (
               <>
@@ -3942,7 +3946,7 @@ export function ResumenBar({
             ) : (
               <>
                 <ExternalLinkIcon />
-                Enviar al cliente
+                {emitiendo ? "Emitiendo…" : "Emitir presupuesto"}
               </>
             )}
           </button>
@@ -5136,6 +5140,62 @@ export function PropuestaFicha({
    * Emitir OT: snapshots + OrdenTrabajo en `pendiente`. El overlay muestra
    * el número real cuando el backend lo asigna; al cerrar navega al detalle.
    */
+  /**
+   * Emitir PRESUPUESTO (toggle "Presupuesto" REAL — antes era cosmético):
+   * misma persistencia de snapshots que la OT, pero el destino es el ciclo
+   * comercial (/comercial/presupuestos): numera PRES-AAAA-NNNN y guarda la
+   * proyección de items para convertir después. No crea ninguna OT.
+   */
+  const [emitiendoPresupuesto, setEmitiendoPresupuesto] = React.useState(false);
+  const emitirPresupuestoCb = React.useCallback(async () => {
+    if (items.length === 0) {
+      toast.error("Agregá al menos un producto antes de emitir el presupuesto.");
+      return;
+    }
+    if (!clienteId) {
+      toast.error("Asigná un cliente: el presupuesto es para alguien.");
+      return;
+    }
+    setEmitiendoPresupuesto(true);
+    try {
+      const { itemsConSnapshot, cotizacionId } = await persistirSnapshotsItems();
+      if (!cotizacionId) {
+        throw new Error("No se pudo persistir la cotización del presupuesto.");
+      }
+      const resumen = calcularResumenOrden(items, cargosOrden);
+      const presupuesto = await emitirPresupuesto({
+        cotizacionId,
+        clienteId,
+        canalVenta,
+        fechaEntrega: fechaEntregaOrden(),
+        cargosDirectos: resumen.cargosTotal,
+        items: itemsConSnapshot.map(({ item, cotizacionItemId }) =>
+          itemToOrdenItemPayload(item, cotizacionItemId),
+        ),
+      });
+      toast.success(
+        `Presupuesto ${presupuesto.numero} emitido. Enviálo al cliente desde el listado.`,
+      );
+      router.push("/comercial/presupuestos");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudo emitir el presupuesto.",
+      );
+    } finally {
+      setEmitiendoPresupuesto(false);
+    }
+  }, [
+    items,
+    cargosOrden,
+    clienteId,
+    canalVenta,
+    persistirSnapshotsItems,
+    fechaEntregaOrden,
+    router,
+  ]);
+
   const emitirOrden = React.useCallback(async () => {
     if (items.length === 0) {
       toast.error("Agregá al menos un producto antes de emitir la orden.");
@@ -6096,7 +6156,8 @@ export function PropuestaFicha({
             fechaEstimada={fechaEstimada}
             fechaCreacion={fechaCreacion}
             onEmitir={emitirOrden}
-            emitiendo={emitiendo}
+            onEmitirPresupuesto={emitirPresupuestoCb}
+            emitiendo={emitiendo || emitiendoPresupuesto}
             onGuardarBorrador={() =>
               cobrosStaged.length > 0
                 ? setConfirmBorradorConCobros(true)

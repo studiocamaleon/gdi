@@ -44,6 +44,11 @@ export const NAV: NavItem[] = [
         label: "Crear propuesta",
         href: "/comercial/crear-propuesta",
       },
+      {
+        key: "presupuestos",
+        label: "Presupuestos",
+        href: "/comercial/presupuestos",
+      },
     ],
   },
   {
