@@ -1227,14 +1227,18 @@ function TabEquipo({ d }: { d: EquipoPanel }) {
 }
 
 /* ═══════════ TAB · Clientes ═══════════ */
-const SEGMENTO_RFM_META: Record<string, { label: string; hint: string }> = {
-  campeones: { label: "Campeones", hint: "Compran seguido y hace poco (4+ órdenes)" },
-  leales: { label: "Leales", hint: "Activos con 2-3 órdenes" },
-  nuevos: { label: "Nuevos", hint: "Primera compra reciente" },
-  en_riesgo: { label: "En riesgo", hint: "Recurrentes que están dejando de comprar" },
-  perdidos: { label: "Perdidos", hint: "Recurrentes sin comprar hace mucho" },
-  ocasionales: { label: "Ocasionales", hint: "Una sola compra, hace tiempo" },
-};
+/** Regla de cada segmento, con los umbrales reales (diasActivo configurable). */
+function segmentoRfmMeta(diasActivo: number): Record<string, { label: string; regla: string }> {
+  const lejos = diasActivo * 3;
+  return {
+    campeones: { label: "Campeones", regla: `4+ compras · la última hace ≤${diasActivo} días` },
+    leales: { label: "Leales", regla: `2-3 compras · la última hace ≤${diasActivo} días` },
+    nuevos: { label: "Nuevos", regla: `primera compra hace ≤${diasActivo} días` },
+    en_riesgo: { label: "En riesgo", regla: `2+ compras · sin comprar hace ${diasActivo + 1}-${lejos} días` },
+    perdidos: { label: "Perdidos", regla: `2+ compras · sin comprar hace más de ${lejos} días` },
+    ocasionales: { label: "Ocasionales", regla: `una sola compra · hace más de ${diasActivo} días` },
+  };
+}
 const SEGMENTO_RFM_COLOR: Record<string, string> = {
   campeones: "var(--ok)", leales: "var(--ink)", nuevos: "#3a9ca0",
   en_riesgo: "#d97757", perdidos: "var(--signal)", ocasionales: "#c8c6c0",
@@ -1266,19 +1270,23 @@ function TabClientes({ d }: { d: ClientesPanel }) {
             </>
           ) : <div className="d-empty" style={{ padding: 40 }}>Serie insuficiente: probá “Trimestre” o “Año”.</div>}
         </Card>
-        <Card span={5} title="Segmentos de cartera" sub={`activo = compró hace ≤${d.rfm.diasActivo} días`}>
-          {d.rfm.segmentos.map((s) => (
-            <div key={s.segmento} style={{ marginBottom: 10 }} title={SEGMENTO_RFM_META[s.segmento]?.hint}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}>
-                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: 2, background: SEGMENTO_RFM_COLOR[s.segmento] ?? "var(--ink)" }} />
-                  {SEGMENTO_RFM_META[s.segmento]?.label ?? s.segmento}
-                </span>
-                <span className="mono" style={{ color: "var(--muted-text)" }}>{s.clientes} · ${fmtK(s.facturado)} hist.</span>
+        <Card span={5} title="Segmentos de cartera" sub="según cuándo y cuánto compró cada cliente">
+          {d.rfm.segmentos.map((s) => {
+            const meta = segmentoRfmMeta(d.rfm.diasActivo)[s.segmento];
+            return (
+              <div key={s.segmento} style={{ marginBottom: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: 12, marginBottom: 1 }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 2, background: SEGMENTO_RFM_COLOR[s.segmento] ?? "var(--ink)" }} />
+                    {meta?.label ?? s.segmento}
+                  </span>
+                  <span className="mono" style={{ color: "var(--muted-text)" }}>{s.clientes} · ${fmtK(s.facturado)} hist.</span>
+                </div>
+                {meta ? <div style={{ fontSize: 10.5, color: "var(--muted-text)", marginLeft: 14, marginBottom: 4 }}>{meta.regla}</div> : null}
+                <HBar value={s.clientes} max={maxSeg} tone={s.segmento === "en_riesgo" || s.segmento === "perdidos" ? "signal" : s.segmento === "campeones" ? "ok" : "ink"} />
               </div>
-              <HBar value={s.clientes} max={maxSeg} tone={s.segmento === "en_riesgo" || s.segmento === "perdidos" ? "signal" : s.segmento === "campeones" ? "ok" : "ink"} />
-            </div>
-          ))}
+            );
+          })}
         </Card>
         <Card span={7} title="Concentración de cartera" sub="quiénes explican tu facturación del período" flush>
           {d.pareto.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Sin ventas con cliente en el período.</div> : (
