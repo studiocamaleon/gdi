@@ -1354,6 +1354,59 @@ export class OrdenesTrabajoService {
   }
 
   /**
+   * Pasos materializados de UNA orden — alimenta el tab "Producción" del
+   * detalle de OT (ver el estado sin ir al Tablero). Reusa la misma
+   * proyección que el Tablero, pero acotada a la orden y sin el filtro de
+   * estados: una OT terminada muestra su ruta completa. Backfill perezoso.
+   */
+  async pasosDeOrden(auth: CurrentAuth, ordenId: string) {
+    const existe = await this.prisma.ordenTrabajo.findFirst({
+      where: { id: ordenId, tenantId: auth.tenantId },
+      select: { id: true },
+    });
+    if (!existe) {
+      throw new NotFoundException('No se encontró la orden de trabajo.');
+    }
+    const candidatos = await this.prisma.ordenTrabajoItem.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        ordenId,
+        cotizacionItemId: { not: null },
+        pasos: { none: {} },
+      },
+      select: { id: true, ordenId: true, cotizacionItemId: true },
+    });
+    if (candidatos.length > 0) {
+      await this.prisma.$transaction((tx) =>
+        this.materializarPasosItems(tx, auth.tenantId, candidatos),
+      );
+    }
+    const orden = await this.prisma.ordenTrabajo.findFirst({
+      where: { id: ordenId, tenantId: auth.tenantId },
+      include: {
+        cliente: { select: { nombre: true } },
+        vendedor: { select: { nombreCompleto: true } },
+        items: {
+          orderBy: { ordenIndice: 'asc' as const },
+          include: {
+            pasos: {
+              orderBy: { indice: 'asc' as const },
+              include: {
+                mesaUsuario: { select: { nombreCompleto: true, email: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+    return {
+      items: (orden?.items ?? []).map((item) =>
+        this.toTableroItem(orden!, item, auth.userId),
+      ),
+    };
+  }
+
+  /**
    * Toma o suelta un paso de "mi mesa de trabajo" (vista Por estación).
    * Reclamo simple y visible: tomar pisa el reclamo de otro (taller chico);
    * los pasos hechos no se reclaman. Devuelve el item re-proyectado.

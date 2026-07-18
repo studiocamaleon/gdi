@@ -150,6 +150,15 @@ export async function getTableroProduccion(): Promise<{
   return apiRequest<{ items: TableroItemData[] }>("/ordenes-trabajo/tablero");
 }
 
+/** Pasos materializados de UNA orden (tab Producción del detalle de OT). */
+export async function getOrdenPasos(
+  ordenId: string,
+): Promise<{ items: TableroItemData[] }> {
+  return apiRequest<{ items: TableroItemData[] }>(
+    `/ordenes-trabajo/${ordenId}/pasos`,
+  );
+}
+
 /** Acción de ejecución sobre un paso; devuelve el item re-proyectado. */
 export async function accionPasoProduccion(
   ordenId: string,

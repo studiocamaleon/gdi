@@ -60,6 +60,7 @@ import {
 } from "@/lib/estaciones-api";
 import type { Estacion } from "@/lib/estaciones";
 import type { TableroItemData } from "@/lib/tablero-produccion";
+import { ProduccionOrdenTab } from "@/components/comercial/produccion-orden-tab";
 import {
   estimarDemoraNuevos,
   etiquetaEta,
@@ -3202,7 +3203,7 @@ export function ProductRow({
                   spec.val.length > 40;
                 const cortas = specs.filter((spec) => !esLarga(spec));
                 const largas = specs.filter(esLarga);
-                const renderSpec = (spec: (typeof specs)[number]) => {
+                const renderSpec = (spec: (typeof specs)[number], idx: number) => {
                   const isMedidasSpec = spec.lbl
                     .toLowerCase()
                     .includes("medida");
@@ -3218,7 +3219,7 @@ export function ProductRow({
                       className={`spec ${isMedidasSpec ? "with-action" : ""} ${
                         isModoColorSpec ? "color-mode-spec" : ""
                       } ${esLarga(spec) ? "spec-long" : ""}`}
-                      key={spec.lbl}
+                      key={`${spec.lbl}-${idx}`}
                     >
                       <div className="spec-head">
                         <div className="lbl">{spec.lbl}</div>
@@ -5943,10 +5944,14 @@ export function PropuestaFicha({
         ) : null}
 
         {tab === "produccion" ? (
-          <EmptyTab
-            title="Programacion de produccion"
-            description="Una vez confirmada la OT vas a poder ver pasos, maquinas asignadas y tiempos estimados aca."
-          />
+          orden ? (
+            <ProduccionOrdenTab ordenId={orden.id} />
+          ) : (
+            <EmptyTab
+              title="Programacion de produccion"
+              description="Una vez confirmada la OT vas a poder ver pasos, maquinas asignadas y tiempos estimados aca."
+            />
+          )
         ) : null}
         {tab === "pagos" ? (
           orden ? (

@@ -28872,3 +28872,106 @@ body:has(.t-app) {
 .gf .empty svg{width:34px;height:34px;opacity:.5;margin-bottom:10px}
 .gf .row-in{animation:gfRowIn .3s ease}
 @keyframes gfRowIn{from{background:var(--accent-bg)}to{background:transparent}}
+
+/* ════════════════════════════════════════════════════════════════ */
+/*  Tab Producción de la OT — ruta de producción por producto        */
+/*  CSS provisto por el usuario, scopeado bajo .prodtab.             */
+/* ════════════════════════════════════════════════════════════════ */
+.prodtab {
+  --surface:#fff; --surface-2:#fafaf9;
+  --border:#e7e5e2; --border-strong:#d4d2cd; --hairline:#efece8;
+  --ink:#14141a; --ink-2:#2c2c33; --muted:#6e6e76; --muted-2:#92929b;
+  --accent:#d9642a;                 /* naranja de marca (paso en curso) */
+  --ok:#16794a; --ok-bg:#e9f4ee;    /* verde "completo" */
+  --r-3:10px; --r-4:14px;
+  --shadow-sm:0 1px 0 rgba(20,20,26,.04), 0 1px 2px rgba(20,20,26,.04);
+  display:flex; flex-direction:column; gap:16px;
+}
+.prodtab .mono{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+
+/* Card contenedor */
+.prodtab .otd-card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--r-4); padding:18px 20px; box-shadow:var(--shadow-sm); }
+.prodtab .otd-card-head{ display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:14px; }
+.prodtab .otd-card-head .ttl{ font-size:14px; font-weight:600; letter-spacing:-.01em; display:inline-flex; align-items:center; gap:8px; }
+.prodtab .otd-card-head .ttl .ct{ font-family:var(--font-mono); font-size:11px; font-weight:700; padding:1px 7px; border-radius:999px; background:var(--surface-2); border:1px solid var(--border); color:var(--muted); }
+.prodtab .otd-card-head .sub{ font-size:12px; color:var(--muted-2); }
+
+/* Avance general */
+.prodtab .otp-overall{ display:flex; align-items:center; gap:20px; }
+.prodtab .otp-overall-body{ flex:1; min-width:0; }
+.prodtab .otp-overall-ttl{ font-size:14px; font-weight:600; letter-spacing:-.01em; }
+.prodtab .otp-overall-track{ height:8px; border-radius:5px; background:var(--surface-2); overflow:hidden; margin:10px 0 8px; }
+.prodtab .otp-overall-fill{ height:100%; border-radius:5px; background:linear-gradient(90deg, var(--accent), #6f8bf0); transition:width .4s ease; }
+.prodtab .otp-overall-stats{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:12px; color:var(--muted); }
+.prodtab .otp-overall-stats .dot-sep{ color:var(--muted-2); }
+.prodtab .otp-overall-stats .run{ color:var(--accent); font-weight:600; }
+.prodtab .otp-overall-stats .warn{ color:#d92d20; font-weight:600; }
+.prodtab .otp-ring{ position:relative; width:72px; height:72px; border-radius:50%; flex:0 0 auto; background:conic-gradient(var(--ink) calc(var(--p) * 1%), #ececec 0); display:grid; place-items:center; }
+.prodtab .otp-ring-hole{ position:absolute; inset:7px; background:var(--surface); border-radius:50%; }
+.prodtab .otp-ring-val{ position:relative; font-size:16px; font-weight:700; color:var(--ink); }
+
+/* Ruta por producto */
+.prodtab .otp-prods{ display:flex; flex-direction:column; gap:8px; }
+.prodtab .otp-prod{ border:1px solid var(--border); border-radius:var(--r-3); background:var(--surface); overflow:hidden; }
+.prodtab .otp-prod.open{ border-color:var(--border-strong); }
+.prodtab .otp-prod-head{ display:grid; grid-template-columns:20px minmax(150px,1.3fr) minmax(150px,1.6fr) 90px 40px; align-items:center; gap:12px; padding:12px 14px; cursor:pointer; }
+.prodtab .otp-prod-head .chev{ color:var(--muted-2); display:grid; place-items:center; }
+.prodtab .otp-prod-id{ min-width:0; }
+.prodtab .otp-prod-id .code{ font-size:10.5px; font-weight:700; color:var(--muted); display:block; }
+.prodtab .otp-prod-id .nm{ font-size:13px; font-weight:600; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* Pill de estado actual (En Impresión…) */
+.prodtab .otp-prod-now .pill{ display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:600; padding:3px 9px; border-radius:999px; max-width:100%; }
+.prodtab .otp-prod-now .pill svg{ width:12px; height:12px; }
+.prodtab .otp-prod-now .pill.ok{ background:var(--ok-bg); color:var(--ok); }
+.prodtab .otp-prod-now .pill.run{ background:#eef2ff; color:var(--accent); }
+.prodtab .otp-prod-now .pill.run .d{ width:6px; height:6px; border-radius:50%; background:var(--accent); animation:otpPulse 1.4s ease-in-out infinite; }
+.prodtab .otp-prod-now .pill.blk{ background:#fef3f2; color:#d92d20; }
+.prodtab .otp-prod-now .pill.wait{ background:var(--surface-2); color:var(--muted); }
+@keyframes otpPulse{ 0%,100%{ opacity:1; } 50%{ opacity:.3; } }
+
+/* Barra de progreso + % */
+.prodtab .otp-prod-track{ height:6px; border-radius:3px; background:var(--surface-2); overflow:hidden; }
+.prodtab .otp-prod-fill{ height:100%; border-radius:3px; background:linear-gradient(90deg, var(--accent), #6f8bf0); transition:width .4s ease; }
+.prodtab .otp-prod-pct{ font-size:12px; font-weight:600; text-align:right; color:var(--ink-2); }
+
+/* Tira de nodos (los íconos con la línea) */
+.prodtab .otp-prod-strip{ display:flex; align-items:center; padding:0 14px 12px; overflow-x:auto; }
+.prodtab .otp-node{ display:flex; flex-direction:column; align-items:center; gap:3px; flex:none; }
+.prodtab .otp-ic{ position:relative; width:24px; height:24px; border-radius:7px; display:grid; place-items:center; background:var(--surface-2); color:var(--muted-2); border:1px solid var(--border); }
+.prodtab .otp-ic svg{ width:13px; height:13px; }
+.prodtab .otp-node.done .otp-ic{ background:var(--ok-bg); color:var(--ok); border-color:transparent; }
+.prodtab .otp-node.current .otp-ic{ background:var(--accent); color:#fff; border-color:transparent; }
+.prodtab .otp-node.blocked .otp-ic{ background:#fee4e2; color:#d92d20; border-color:transparent; }
+.prodtab .otp-run{ position:absolute; inset:-3px; border-radius:9px; border:2px solid var(--accent); opacity:.4; animation:otpRing 1.6s ease-out infinite; }
+@keyframes otpRing{ 0%{ transform:scale(.8); opacity:.6; } 100%{ transform:scale(1.3); opacity:0; } }
+.prodtab .otp-seg{ flex:1; min-width:14px; height:2px; background:var(--border); margin:0 2px; align-self:flex-start; margin-top:11px; }
+.prodtab .otp-seg.on{ background:var(--ok); }
+
+/* Detalle expandido (lista de pasos) */
+.prodtab .otp-prod-detail{ border-top:1px solid var(--hairline); background:var(--surface-2); padding:12px 14px; }
+.prodtab .otp-detail-head{ font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin-bottom:8px; }
+.prodtab .otp-detail-list{ display:flex; flex-direction:column; gap:2px; }
+.prodtab .otp-dl-row{ display:grid; grid-template-columns:26px 1fr auto; align-items:center; gap:10px; padding:7px 8px; border-radius:8px; }
+.prodtab .otp-dl-row.current{ background:#eef2ff; }
+.prodtab .otp-dl-row.blocked{ background:#fef3f2; }
+.prodtab .otp-dl-ic{ width:24px; height:24px; border-radius:7px; display:grid; place-items:center; background:var(--surface); color:var(--muted-2); border:1px solid var(--border); }
+.prodtab .otp-dl-ic svg{ width:13px; height:13px; }
+.prodtab .otp-dl-row.done .otp-dl-ic{ color:var(--ok); border-color:transparent; background:var(--ok-bg); }
+.prodtab .otp-dl-row.current .otp-dl-ic{ background:var(--accent); color:#fff; border-color:transparent; }
+.prodtab .otp-dl-row.blocked .otp-dl-ic{ background:#fee4e2; color:#d92d20; border-color:transparent; }
+.prodtab .otp-dl-body{ min-width:0; }
+.prodtab .otp-dl-top{ display:flex; align-items:center; gap:8px; }
+.prodtab .otp-dl-top .nm{ font-size:12.5px; font-weight:600; }
+.prodtab .otp-dl-badge{ font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; padding:1px 6px; border-radius:4px; background:var(--surface); color:var(--muted); border:1px solid var(--border); }
+.prodtab .otp-dl-badge.done{ color:var(--ok); }
+.prodtab .otp-dl-badge.current{ background:var(--accent); color:#fff; border-color:transparent; }
+.prodtab .otp-dl-badge.blocked{ background:#d92d20; color:#fff; border-color:transparent; }
+.prodtab .otp-dl-sub{ font-size:11px; color:var(--muted); margin-top:1px; }
+.prodtab .otp-dl-end{ font-size:11px; color:var(--muted-2); white-space:nowrap; }
+
+/* Responsive */
+@media (max-width:900px){
+  .prodtab .otp-prod-head{ grid-template-columns:18px 1fr auto; }
+  .prodtab .otp-prod-track, .prodtab .otp-prod-pct{ display:none; }
+}

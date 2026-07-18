@@ -76,6 +76,12 @@ export class OrdenesTrabajoController {
     return this.ordenesTrabajoService.findOne(auth, id);
   }
 
+  /** Pasos materializados de la orden (tab Producción del detalle). */
+  @Get(':id/pasos')
+  pasosDeOrden(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
+    return this.ordenesTrabajoService.pasosDeOrden(auth, id);
+  }
+
   @Post()
   create(
     @CurrentSession() auth: CurrentAuth,
