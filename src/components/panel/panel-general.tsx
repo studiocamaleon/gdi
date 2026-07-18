@@ -518,14 +518,14 @@ function TabProducto({ d }: { d: ProductoPanel }) {
   const maxTec = Math.max(...d.porTecnologia.map((m) => m.monto), 1);
   return (
     <div className="dash-grid">
-      <Card span={6} title="Ventas por categoría" sub="con margen" flush>
-        <table className="d-tbl"><thead><tr><th>Categoría</th><th className="right">Margen</th><th className="right">Ventas</th></tr></thead>
-          <tbody>{d.porCategoria.map((c) => (<tr key={c.nombre}><td><div className="nm">{c.nombre}</div></td><td className="right"><div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "flex-end" }}><div style={{ width: 50 }}><HBar value={c.margenPct} max={70} tone={c.margenPct >= 50 ? "ok" : c.margenPct >= 40 ? "ink" : "signal"} /></div><span className="mono" style={{ width: 42 }}>{pct(c.margenPct)}</span></div></td><td className="right mono">${fmtK(c.ventas)}</td></tr>))}</tbody>
+      <Card span={6} title="Ventas por categoría" sub="margen y contribución" flush>
+        <table className="d-tbl"><thead><tr><th>Categoría</th><th className="right">Margen</th><th className="right" title="Margen de contribución = ventas − material y consumibles">MC</th><th className="right">Ventas</th></tr></thead>
+          <tbody>{d.porCategoria.map((c) => (<tr key={c.nombre}><td><div className="nm">{c.nombre}</div></td><td className="right"><div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "flex-end" }}><div style={{ width: 44 }}><HBar value={c.margenPct} max={70} tone={c.margenPct >= 50 ? "ok" : c.margenPct >= 40 ? "ink" : "signal"} /></div><span className="mono" style={{ width: 42 }}>{pct(c.margenPct)}</span></div></td><td className="right mono" style={{ color: "var(--ok)" }}>{pct(c.contribucionPct)}</td><td className="right mono">${fmtK(c.ventas)}</td></tr>))}</tbody>
         </table>
       </Card>
-      <Card span={6} title="Productos más vendidos" sub="volumen y margen" flush>
-        <table className="d-tbl"><thead><tr><th>Producto</th><th className="right">Items</th><th className="right">Margen</th><th className="right">Ventas</th></tr></thead>
-          <tbody>{d.porProducto.slice(0, 8).map((p) => (<tr key={p.nombre}><td><div className="nm">{p.nombre}</div></td><td className="right mono">{p.items}</td><td className="right mono">{pct(p.margenPct)}</td><td className="right mono">${fmtK(p.ventas)}</td></tr>))}</tbody>
+      <Card span={6} title="Productos más vendidos" sub="volumen, margen y MC" flush>
+        <table className="d-tbl"><thead><tr><th>Producto</th><th className="right">Items</th><th className="right">Margen</th><th className="right" title="Margen de contribución = ventas − material y consumibles">MC</th><th className="right">Ventas</th></tr></thead>
+          <tbody>{d.porProducto.slice(0, 8).map((p) => (<tr key={p.nombre}><td><div className="nm">{p.nombre}</div></td><td className="right mono">{p.items}</td><td className="right mono">{pct(p.margenPct)}</td><td className="right mono" style={{ color: "var(--ok)" }}>{pct(p.contribucionPct)}</td><td className="right mono">${fmtK(p.ventas)}</td></tr>))}</tbody>
         </table>
       </Card>
       <Card span={7} title="Uso de papel y material" sub="consumo teórico del período" flush>

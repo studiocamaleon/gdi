@@ -151,6 +151,10 @@ export type ProductoMargenPanel = {
   costo: number;
   margen: number;
   margenPct: number;
+  /** Costos variables (material + consumibles) y margen de contribución. */
+  costosVariables: number;
+  contribucion: number;
+  contribucionPct: number;
   items: number;
 };
 export type MaterialUsoPanel = {

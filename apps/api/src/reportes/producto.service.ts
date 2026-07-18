@@ -26,6 +26,11 @@ export type ProductoMargen = {
   costo: number;
   margen: number;
   margenPct: number;
+  /** Costos variables (material + consumibles de máquina). */
+  costosVariables: number;
+  /** Margen de contribución = ventas − costos variables. */
+  contribucion: number;
+  contribucionPct: number;
   items: number;
 };
 export type MaterialUso = {
@@ -91,16 +96,25 @@ export class ProductoService {
     limite?: number,
   ): Promise<ProductoMargen[]> {
     const rows = await this.prisma.$queryRawUnsafe<
-      Array<{ nombre: string; ventas: number; costo: number; items: number }>
+      Array<{ nombre: string; ventas: number; costo: number; variables: number; items: number }>
     >(
       `
       SELECT ${dimensionSql} AS nombre,
              COALESCE(SUM(oti.subtotal), 0)::float8 AS ventas,
              COALESCE(SUM(ci."costoTotal"), 0)::float8 AS costo,
+             COALESCE(SUM(v.variables), 0)::float8 AS variables,
              COUNT(*)::int AS items
       FROM "OrdenTrabajoItem" oti
       JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
       LEFT JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
+      -- Costos variables por item (material + consumibles): escalar por LATERAL
+      -- para no multiplicar filas al agregar ventas/costo.
+      LEFT JOIN LATERAL (
+        SELECT COALESCE(SUM((mat->>'costoTotal')::numeric), 0) AS variables
+        FROM jsonb_array_elements(ci."trazabilidadJson"->'pasos') paso
+        CROSS JOIN jsonb_array_elements(COALESCE(paso->'materiales', '[]'::jsonb)) mat
+        WHERE mat->>'tipoLineaCosto' IN ('MATERIAL', 'CONSUMIBLE_MAQUINA')
+      ) v ON true
       WHERE oti."tenantId" = $1::uuid AND ot.estado <> 'borrador'
         AND ot."fechaEmision" >= $2 AND ot."fechaEmision" < $3
       GROUP BY 1
@@ -113,12 +127,16 @@ export class ProductoService {
     );
     return rows.map((r) => {
       const margen = r.ventas - r.costo;
+      const contribucion = r.ventas - r.variables;
       return {
         nombre: r.nombre,
         ventas: r2(r.ventas),
         costo: r2(r.costo),
         margen: r2(margen),
         margenPct: r.ventas > 0 ? r2((margen / r.ventas) * 100) : 0,
+        costosVariables: r2(r.variables),
+        contribucion: r2(contribucion),
+        contribucionPct: r.ventas > 0 ? r2((contribucion / r.ventas) * 100) : 0,
         items: r.items,
       };
     });
