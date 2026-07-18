@@ -24,6 +24,7 @@ import { ProductosServiciosModule } from './productos-servicios/productos-servic
 import { MotorUniversalModule } from './motor-universal/motor.module';
 import { OrdenesTrabajoModule } from './ordenes-trabajo/ordenes-trabajo.module';
 import { AdministracionModule } from './administracion/administracion.module';
+import { ReportesModule } from './reportes/reportes.module';
 
 @Module({
   imports: [
@@ -76,6 +77,7 @@ import { AdministracionModule } from './administracion/administracion.module';
     MotorUniversalModule,
     OrdenesTrabajoModule,
     AdministracionModule,
+    ReportesModule,
   ],
   controllers: [AppController],
   providers: [
