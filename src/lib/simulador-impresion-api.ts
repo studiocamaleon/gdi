@@ -33,6 +33,8 @@ export type SimuladorJob = {
   consumoCotizadoMm: number | null;
   /** [] = sin medidas (fuera del nesting, dentro del lote). */
   piezas: SimuladorPieza[];
+  /** Estimado del paso (min): prellena "¿cuánto duró la tanda?" (D11). */
+  duracionEstimadaMin: number | null;
 };
 
 export type SimuladorAncho = {

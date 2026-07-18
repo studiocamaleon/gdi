@@ -6,16 +6,20 @@
  */
 import { BadRequestException } from '@nestjs/common';
 import {
+  corteJornadaDe,
   OrdenesTrabajoService,
   ordenSeFinaliza,
   pasoEjecutable,
   pasoReabrible,
+  sumaTramosMin,
   TRANSICIONES_PASO,
 } from '../ordenes-trabajo.service';
 import {
   progresoEfectivo,
+  tiempoMedidoValido,
   type OrdenTrabajoEstado,
 } from '../ordenes-trabajo.types';
+import { modoRegistroDeFamilia } from '../../productos-servicios/pasos/familias';
 
 function svc(): OrdenesTrabajoService {
   return Object.create(
@@ -304,10 +308,16 @@ describe('TRANSICIONES_PASO (acciones del Tablero)', () => {
     expect(TRANSICIONES_PASO.iniciar.desde).toEqual(['pendiente']);
   });
 
-  it('completar desde pendiente o en curso (atajo de taller)', () => {
+  it('pausar sólo desde en curso; continuar sólo desde pausado', () => {
+    expect(TRANSICIONES_PASO.pausar.desde).toEqual(['en_curso']);
+    expect(TRANSICIONES_PASO.continuar.desde).toEqual(['pausado']);
+  });
+
+  it('completar desde pendiente, en curso o pausado (atajo de taller)', () => {
     expect(TRANSICIONES_PASO.completar.desde).toEqual([
       'pendiente',
       'en_curso',
+      'pausado',
     ]);
   });
 
@@ -380,5 +390,135 @@ describe('numeración OT-AAAA-NNNN', () => {
     expect(`OT-2026-${String(7).padStart(4, '0')}`).toBe('OT-2026-0007');
     expect(`OT-2026-${String(184).padStart(4, '0')}`).toBe('OT-2026-0184');
     expect(`OT-2026-${String(12345).padStart(4, '0')}`).toBe('OT-2026-12345');
+  });
+});
+
+// ── Registro de tiempos (docs/registro-tiempos-produccion-diseno.md) ──────
+
+describe('registro de tiempos — sumaTramosMin (D2)', () => {
+  const t = (inicioIso: string, finIso: string | null) => ({
+    inicioEl: new Date(inicioIso),
+    finEl: finIso ? new Date(finIso) : null,
+  });
+
+  it('suma sólo tramos cerrados, en minutos', () => {
+    expect(
+      sumaTramosMin([
+        t('2026-07-18T10:00:00Z', '2026-07-18T10:30:00Z'),
+        t('2026-07-18T14:00:00Z', '2026-07-18T14:45:00Z'),
+      ]),
+    ).toBe(75);
+  });
+
+  it('el tramo abierto no suma (se cierra antes de asentar)', () => {
+    expect(
+      sumaTramosMin([
+        t('2026-07-18T10:00:00Z', '2026-07-18T10:30:00Z'),
+        t('2026-07-18T14:00:00Z', null),
+      ]),
+    ).toBe(30);
+  });
+
+  it('sin tramos → 0', () => {
+    expect(sumaTramosMin([])).toBe(0);
+  });
+});
+
+describe('registro de tiempos — tiempoMedidoValido (D8, anti "1 seg")', () => {
+  it('menos de 1 minuto nunca vale', () => {
+    expect(tiempoMedidoValido(0.02, null)).toBe(false);
+    expect(tiempoMedidoValido(0.5, 3)).toBe(false);
+  });
+
+  it('con estimado, exige al menos el 10%', () => {
+    expect(tiempoMedidoValido(5, 100)).toBe(false);
+    expect(tiempoMedidoValido(10, 100)).toBe(true);
+    expect(tiempoMedidoValido(45, 100)).toBe(true);
+  });
+
+  it('sin estimado, alcanza con 1 minuto', () => {
+    expect(tiempoMedidoValido(1, null)).toBe(true);
+    expect(tiempoMedidoValido(1.5, null)).toBe(true);
+  });
+});
+
+describe('registro de tiempos — corteJornadaDe (D9)', () => {
+  it('tramo abierto antes del corte cierra ese mismo día', () => {
+    const inicio = new Date('2026-07-17T14:30:00');
+    const corte = corteJornadaDe(inicio, '20:00');
+    expect(corte.getDate()).toBe(17);
+    expect(corte.getHours()).toBe(20);
+    expect(corte.getMinutes()).toBe(0);
+  });
+
+  it('tramo abierto DESPUÉS del corte (turno noche) cierra al día siguiente', () => {
+    const inicio = new Date('2026-07-17T21:15:00');
+    const corte = corteJornadaDe(inicio, '20:00');
+    expect(corte.getDate()).toBe(18);
+    expect(corte.getHours()).toBe(20);
+  });
+
+  it('corte malformado cae al default 20:00', () => {
+    const inicio = new Date('2026-07-17T10:00:00');
+    const corte = corteJornadaDe(inicio, 'corrupto');
+    expect(corte.getHours()).toBe(20);
+    expect(corte.getMinutes()).toBe(0);
+  });
+});
+
+describe('registro de tiempos — modoRegistroDeFamilia (D1)', () => {
+  it('las familias de impresión se completan de un click', () => {
+    for (const codigo of [
+      'impresion_por_hoja',
+      'impresion_por_area',
+      'impresion_por_pieza',
+      'aplicacion_transfer',
+      'grabado_laser',
+    ]) {
+      expect(modoRegistroDeFamilia(codigo)).toBe('solo_completar');
+    }
+  });
+
+  it('el resto usa cronómetro con tramos', () => {
+    for (const codigo of [
+      'corte_guillotina',
+      'trabajo_manual',
+      'embalaje',
+      'diseno_grafico',
+      'pre_prensa',
+    ]) {
+      expect(modoRegistroDeFamilia(codigo)).toBe('cronometro');
+    }
+  });
+
+  it('familia desconocida no rompe: cronómetro', () => {
+    expect(modoRegistroDeFamilia('familia_inventada')).toBe('cronometro');
+  });
+});
+
+describe('registro de tiempos — materialización asigna modoRegistro', () => {
+  const pasosDesde = (trazabilidad: unknown) =>
+    (
+      svc() as unknown as {
+        pasosDesdeTrazabilidad: (
+          tenantId: string,
+          ordenId: string,
+          itemId: string,
+          trazabilidad: unknown,
+        ) => Array<Record<string, unknown>>;
+      }
+    ).pasosDesdeTrazabilidad('t-1', 'o-1', 'i-1', trazabilidad);
+
+  it('impresión → solo_completar; manual → cronometro', () => {
+    const pasos = pasosDesde({
+      pasos: [
+        { familiaCodigo: 'impresion_por_area', activado: true },
+        { familiaCodigo: 'corte_manual', activado: true },
+      ],
+    });
+    expect(pasos.map((p) => p.modoRegistro)).toEqual([
+      'solo_completar',
+      'cronometro',
+    ]);
   });
 });

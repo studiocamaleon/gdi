@@ -100,6 +100,15 @@ export type RelacionMaquina = 'M-0' | 'M-1' | 'M-2';
  */
 export type ModoTiempo = 'T-1' | 'T-2' | 'T-3' | 'T-4';
 
+/** Cómo se registra el trabajo del paso en el tablero de producción
+ *  (registro-tiempos-produccion D1):
+ *  - 'cronometro': domina la mano de obra — Iniciar→Pausar/Continuar→Completar
+ *    con tramos medidos.
+ *  - 'solo_completar': domina el runtime de máquina (tandas consolidadas) —
+ *    un click y el tiempo asentado es el estimado del motor.
+ */
+export type ModoRegistroPaso = 'cronometro' | 'solo_completar';
+
 /** Cómo se decide la cantidad a producir en el paso. Ver D.3. */
 export type MecanismoCantidad =
   | 'DIRECT_FROM_JOBCONTEXT' // lee directo un campo del JobContext
@@ -320,6 +329,9 @@ export interface DefinicionFamilia {
   relacionMaquinaSoportada: RelacionMaquina[];
   /** Modos de tiempo que la familia soporta. El modelador habilita un subset al armar producto. */
   modosTiempoSoportados: ModoTiempo[];
+  /** Registro en el tablero. Si se omite, se deriva de la categoría:
+   *  produccion_impresion → 'solo_completar', el resto → 'cronometro'. */
+  modoRegistro?: ModoRegistroPaso;
   /** Mecanismos de cantidad soportados. Si lista 1 solo, no hay decisión del modelador. */
   mecanismosCantidadSoportados: MecanismoCantidad[];
   /** Modos de activación soportados. Casi todas soportan los 3. */

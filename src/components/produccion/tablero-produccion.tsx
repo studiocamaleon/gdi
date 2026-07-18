@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -19,6 +20,7 @@ import {
   LayoutDashboardIcon,
   PackageIcon,
   PaintbrushIcon,
+  PauseIcon,
   PlayIcon,
   PrinterIcon,
   ScissorsIcon,
@@ -45,6 +47,7 @@ import {
   itemIniciado,
   itemTerminado,
   lineaEstado,
+  MOTIVOS_PAUSA,
   resolverEstacionDePaso,
   pasoActivo,
   pasoActual,
@@ -52,6 +55,7 @@ import {
   prioridadDerivada,
   progresoItem,
   SIN_ESTACION_KEY,
+  TIEMPO_FUENTE_LABELS,
   type TableroItemData,
   type TableroPasoAccion,
   type TableroPasoData,
@@ -213,7 +217,7 @@ function VentanaSentinel({
 
 // ── View-model: derivados de presentación por item ───────────────────────
 
-type StepStatus = "done" | "current" | "pending" | "blocked";
+type StepStatus = "done" | "current" | "paused" | "pending" | "blocked";
 
 type StepView = {
   paso: TableroPasoData;
@@ -261,11 +265,27 @@ function stepStatus(paso: TableroPasoData): StepStatus {
       return "done";
     case "en_curso":
       return "current";
+    case "pausado":
+      return "paused";
     case "bloqueado":
       return "blocked";
     default:
       return "pending";
   }
+}
+
+/**
+ * Cronómetro vivo de un tramo abierto: minutos transcurridos desde
+ * `desdeIso`, refrescado cada 30 s (suficiente para un taller).
+ */
+function ElapsedMin({ desdeIso }: { desdeIso: string }) {
+  const [, tick] = React.useReducer((n: number) => n + 1, 0);
+  React.useEffect(() => {
+    const timer = setInterval(tick, 30_000);
+    return () => clearInterval(timer);
+  }, []);
+  const min = Math.max(1, (Date.now() - new Date(desdeIso).getTime()) / 60_000);
+  return <>{etiquetaDuracion(min)}</>;
 }
 
 function buildItemView(item: TableroItemData, estaciones: Estacion[]): ItemView {
@@ -322,6 +342,7 @@ function routeStatusIcon(step: StepView, fallback?: React.ReactNode) {
   const IconCmp = getStepIcon(step.iconKey);
   if (step.status === "done") return <CheckIcon />;
   if (step.status === "blocked") return <BanIcon />;
+  if (step.status === "paused") return <PauseIcon />;
   if (step.status === "pending" && fallback) return fallback;
   return <IconCmp />;
 }
@@ -509,8 +530,34 @@ type AccionHandler = (
   item: ItemView,
   paso: TableroPasoData,
   accion: TableroPasoAccion,
-  motivo?: string,
+  opts?: { motivo?: string; motivoDetalle?: string; tiempoDeclaradoMin?: number },
 ) => Promise<void>;
+
+/**
+ * ¿Completar este paso sería un "inicio y completo en 1 seg" (D8)? Sólo
+ * evaluable client-side cuando NO hubo tramos previos: nunca se inició, o
+ * el único tramo es el abierto y lleva menos del umbral (1 min o 10% del
+ * estimado). Con historia de pausas el backend decide solo.
+ */
+function completarSeriaInstantaneo(paso: TableroPasoData): boolean {
+  if (paso.modoRegistro !== "cronometro") return false;
+  // Un paso reabierto conserva sus tramos históricos: el backend ya tiene
+  // tiempo medido y va a preferirlo — no molestar con el prompt.
+  if (paso.estado === "pendiente") return paso.iniciadoEl == null;
+  if (paso.estado !== "en_curso" || !paso.tramoAbierto) return false;
+  const esPrimerTramo = paso.iniciadoEl === paso.tramoAbierto.inicioEl;
+  if (!esPrimerTramo) return false;
+  const elapsedMin = (Date.now() - new Date(paso.tramoAbierto.inicioEl).getTime()) / 60_000;
+  const umbral = Math.max(1, (paso.duracionEstimadaMin ?? 0) * 0.1);
+  return elapsedMin < umbral;
+}
+
+/** Chips del micro-prompt de tiempo declarado (D8): estimado, mitad, doble. */
+function chipsDeclarar(estimado: number | null): number[] {
+  if (estimado == null || estimado <= 0) return [];
+  const redondo = (n: number) => Math.max(1, Math.round(n));
+  return [...new Set([redondo(estimado / 2), redondo(estimado), redondo(estimado * 2)])];
+}
 
 function PasoAcciones({
   item,
@@ -525,8 +572,14 @@ function PasoAcciones({
 }) {
   const [bloqueando, setBloqueando] = React.useState(false);
   const [motivo, setMotivo] = React.useState("");
+  const [pausando, setPausando] = React.useState(false);
+  const [motivoPausa, setMotivoPausa] = React.useState<string | null>(null);
+  const [detallePausa, setDetallePausa] = React.useState("");
+  const [declarando, setDeclarando] = React.useState(false);
+  const [tiempoOtro, setTiempoOtro] = React.useState("");
   const paso = step.paso;
   const esActual = item.currentStep?.paso.id === paso.id;
+  const esCronometro = paso.modoRegistro === "cronometro";
 
   if (paso.estado === "hecho") {
     // Reabrir sólo el último hecho: deshacer en el medio rompe la secuencia.
@@ -574,7 +627,7 @@ function PasoAcciones({
           className="sta-btn primary"
           disabled={busy || motivo.trim().length === 0}
           onClick={() => {
-            void onAccion(item, paso, "bloquear", motivo.trim());
+            void onAccion(item, paso, "bloquear", { motivo: motivo.trim() });
             setBloqueando(false);
             setMotivo("");
           }}
@@ -588,9 +641,114 @@ function PasoAcciones({
     );
   }
 
+  // Pausar con motivo del catálogo (D7); "Otro" pide un detalle corto.
+  if (pausando) {
+    const necesitaDetalle = motivoPausa === "otro";
+    return (
+      <div className="ds-acciones ds-pausa-form">
+        <div className="ds-form-title">¿Por qué se pausa?</div>
+        <div className="ds-chips">
+          {MOTIVOS_PAUSA.map((entry) => (
+            <button
+              key={entry.codigo}
+              type="button"
+              className={`ds-chip ${motivoPausa === entry.codigo ? "on" : ""}`}
+              onClick={() => setMotivoPausa(entry.codigo)}
+            >
+              {entry.etiqueta}
+            </button>
+          ))}
+        </div>
+        {necesitaDetalle ? (
+          <input
+            autoFocus
+            placeholder="Contanos brevemente el motivo"
+            value={detallePausa}
+            onChange={(event) => setDetallePausa(event.target.value)}
+          />
+        ) : null}
+        <div className="ds-form-actions">
+          <button
+            type="button"
+            className="sta-btn primary"
+            disabled={busy || !motivoPausa || (necesitaDetalle && detallePausa.trim().length === 0)}
+            onClick={() => {
+              void onAccion(item, paso, "pausar", {
+                motivo: motivoPausa ?? undefined,
+                motivoDetalle: necesitaDetalle ? detallePausa.trim() : undefined,
+              });
+              setPausando(false);
+              setMotivoPausa(null);
+              setDetallePausa("");
+            }}
+          >
+            <PauseIcon />Pausar
+          </button>
+          <button type="button" className="sta-btn ghost" onClick={() => setPausando(false)}>
+            Cancelar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Micro-prompt D8: el paso se completa sin tiempo medido — se ofrece
+  // declarar cuánto llevó (opcional, un toque) o completar sin tiempo.
+  if (declarando) {
+    const otroMin = Number(tiempoOtro);
+    const completar = (tiempoDeclaradoMin?: number) => {
+      void onAccion(item, paso, "completar", { tiempoDeclaradoMin });
+      setDeclarando(false);
+      setTiempoOtro("");
+    };
+    return (
+      <div className="ds-acciones ds-declarar-form">
+        <div className="ds-form-title">
+          Sin tiempo registrado. ¿Cuánto llevó aprox?
+        </div>
+        <div className="ds-chips">
+          {chipsDeclarar(paso.duracionEstimadaMin).map((min) => (
+            <button
+              key={min}
+              type="button"
+              className="ds-chip"
+              disabled={busy}
+              onClick={() => completar(min)}
+            >
+              {etiquetaDuracion(min)}
+            </button>
+          ))}
+          <input
+            className="ds-chip-input"
+            type="number"
+            min={1}
+            placeholder="min"
+            value={tiempoOtro}
+            onChange={(event) => setTiempoOtro(event.target.value)}
+          />
+          {Number.isFinite(otroMin) && otroMin >= 1 ? (
+            <button type="button" className="ds-chip on" disabled={busy} onClick={() => completar(otroMin)}>
+              Usar {etiquetaDuracion(otroMin)}
+            </button>
+          ) : null}
+        </div>
+        <div className="ds-form-actions">
+          <button type="button" className="sta-btn ghost" disabled={busy} onClick={() => completar(undefined)}>
+            Completar sin tiempo
+          </button>
+          <button type="button" className="sta-btn ghost" onClick={() => setDeclarando(false)}>
+            Cancelar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="ds-acciones">
-      {paso.estado === "pendiente" ? (
+      {/* Cronómetro: Iniciar/Pausar/Continuar. Un paso de máquina
+          (solo_completar) se completa de un click, sin cronómetro. */}
+      {esCronometro && paso.estado === "pendiente" ? (
         <button
           type="button"
           className="sta-btn primary"
@@ -600,11 +758,29 @@ function PasoAcciones({
           <PlayIcon />Iniciar
         </button>
       ) : null}
+      {esCronometro && paso.estado === "en_curso" ? (
+        <button type="button" className="sta-btn ghost" disabled={busy} onClick={() => setPausando(true)}>
+          <PauseIcon />Pausar
+        </button>
+      ) : null}
+      {esCronometro && paso.estado === "pausado" ? (
+        <button
+          type="button"
+          className="sta-btn primary"
+          disabled={busy}
+          onClick={() => void onAccion(item, paso, "continuar")}
+        >
+          <PlayIcon />Continuar
+        </button>
+      ) : null}
       <button
         type="button"
-        className={`sta-btn ${paso.estado === "en_curso" ? "primary" : "ghost"}`}
+        className={`sta-btn ${paso.estado === "en_curso" || !esCronometro ? "primary" : "ghost"}`}
         disabled={busy}
-        onClick={() => void onAccion(item, paso, "completar")}
+        onClick={() => {
+          if (completarSeriaInstantaneo(paso)) setDeclarando(true);
+          else void onAccion(item, paso, "completar");
+        }}
       >
         <CheckIcon />Completar
       </button>
@@ -657,7 +833,13 @@ function DetailRuta({
                   <span className="ds-time done"><CheckIcon />{etiquetaMomento(paso.completadoEl)}</span>
                 ) : null}
                 {step.status === "current" ? (
-                  <span className="ds-time current"><span className="dot" />En curso{paso.iniciadoEl ? ` · desde ${etiquetaMomento(paso.iniciadoEl)}` : ""}</span>
+                  <span className="ds-time current">
+                    <span className="dot" />En curso
+                    {paso.tramoAbierto ? <> · <ElapsedMin desdeIso={paso.tramoAbierto.inicioEl} /></> : paso.iniciadoEl ? ` · desde ${etiquetaMomento(paso.iniciadoEl)}` : ""}
+                  </span>
+                ) : null}
+                {step.status === "paused" ? (
+                  <span className="ds-time paused"><PauseIcon />Pausado</span>
                 ) : null}
                 {step.status === "pending" && dur ? <span className="ds-time">estimado {dur}</span> : null}
                 {step.status === "blocked" ? <span className="ds-time blocked"><BanIcon />Bloqueado</span> : null}
@@ -665,6 +847,20 @@ function DetailRuta({
 
               {step.status === "blocked" && paso.motivoBloqueo ? (
                 <div className="ds-blocked-detail">{paso.motivoBloqueo}</div>
+              ) : null}
+              {step.status === "paused" && paso.motivoPausa ? (
+                <div className="ds-paused-detail">{paso.motivoPausa}</div>
+              ) : null}
+              {step.status === "current" && paso.tramoAbierto && !paso.tramoAbierto.esMio ? (
+                <div className="ds-operador">Lo está trabajando {paso.tramoAbierto.usuarioNombre}</div>
+              ) : null}
+              {step.status === "done" ? (
+                <div className="ds-operador">
+                  {paso.tiempoRealMin != null && paso.tiempoFuente !== "invalido"
+                    ? `${etiquetaDuracion(paso.tiempoRealMin) ?? `${paso.tiempoRealMin} min`} (${paso.tiempoFuente ? TIEMPO_FUENTE_LABELS[paso.tiempoFuente] : "—"})`
+                    : "Sin tiempo registrado"}
+                  {paso.completadoPorNombre ? ` · por ${paso.completadoPorNombre}` : ""}
+                </div>
               ) : null}
               <PasoAcciones item={item} step={step} busy={busy} onAccion={onAccion} />
             </div>
@@ -1310,8 +1506,20 @@ function TaskCard({
   onOpen: (id: string) => void;
   dragHint?: boolean;
 }) {
-  const statusLabel = task.isBlocked ? "BLOQUEADO" : task.isCurrent ? "EN CURSO" : "PENDIENTE";
-  const statusCls = task.isBlocked ? "blocked" : task.isCurrent ? "current" : "pending";
+  const statusLabel = task.isBlocked
+    ? "BLOQUEADO"
+    : task.step.status === "paused"
+      ? "PAUSADO"
+      : task.isCurrent
+        ? "EN CURSO"
+        : "PENDIENTE";
+  const statusCls = task.isBlocked
+    ? "blocked"
+    : task.step.status === "paused"
+      ? "paused"
+      : task.isCurrent
+        ? "current"
+        : "pending";
   const [dragging, setDragging] = React.useState(false);
   // Reclamada por OTRO usuario (mesaEsMia la pondría en MI columna).
   const enMesaDe = !inMesa ? task.step.paso.mesaUsuarioNombre : null;
@@ -1683,12 +1891,21 @@ export function TableroProduccion({
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [filters, setFilters] = React.useState<{ status: StatusFilter; priority: PriorityFilter; query: string }>({ status: "all", priority: "all", query: "" });
+  const searchParams = useSearchParams();
 
   React.useEffect(() => {
     const savedMode = readStoredBoardMode();
     setDefaultMode(savedMode);
     setMode(savedMode);
   }, []);
+
+  // Deep-link del widget "En curso": /produccion/tablero?item=<id> abre el
+  // sheet de ese item directo (searchParams cambia de instancia en cada
+  // navegación, así que re-clickear el link vuelve a abrirlo).
+  React.useEffect(() => {
+    const itemParam = searchParams.get("item");
+    if (itemParam) setSelectedId(itemParam);
+  }, [searchParams]);
 
   // ── Tablero EN VIVO: lo que hace otro operario aparece sin recargar ────
   // Polling del dataset (es chico) cada POLL_TABLERO_MS, pausado con la
@@ -1800,12 +2017,17 @@ export function TableroProduccion({
    * a los items hermanos: se refresca el dataset completo (es chico).
    */
   const handleAccion = React.useCallback(
-    async (item: ItemView, paso: TableroPasoData, accion: TableroPasoAccion, motivo?: string) => {
+    async (
+      item: ItemView,
+      paso: TableroPasoData,
+      accion: TableroPasoAccion,
+      opts?: { motivo?: string; motivoDetalle?: string; tiempoDeclaradoMin?: number },
+    ) => {
       setBusy(true);
       setError(null);
       mutacionesRef.current += 1;
       try {
-        const actualizado = await accionPasoProduccion(item.data.ordenId, item.id, paso.id, { accion, motivo });
+        const actualizado = await accionPasoProduccion(item.data.ordenId, item.id, paso.id, { accion, ...opts });
         setItems((current) => current.map((entry) => (entry.id === actualizado.id ? actualizado : entry)));
         const { items: refrescados } = await getTableroProduccion();
         setItems(refrescados);

@@ -5,6 +5,7 @@ import { getCurrentUserCached } from "@/lib/auth-server";
 import { getSessionToken } from "@/lib/session";
 import { AppSidebar } from "@/components/app-sidebar";
 import { NavigationFeedbackProvider } from "@/components/navigation/navigation-feedback";
+import { PasosEnCursoWidget } from "@/components/produccion/pasos-en-curso-widget";
 import { UserTenantMenu } from "@/components/user-tenant-menu";
 import {
   SidebarInset,
@@ -57,6 +58,7 @@ export default async function DashboardLayout({
             {children}
           </main>
         </SidebarInset>
+        <PasosEnCursoWidget />
       </SidebarProvider>
     </NavigationFeedbackProvider>
   );

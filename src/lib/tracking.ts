@@ -8,7 +8,12 @@
 
 import { apiRequest } from "@/lib/api";
 
-export type TrackingPasoEstado = "pendiente" | "en_curso" | "hecho" | "bloqueado";
+export type TrackingPasoEstado =
+  | "pendiente"
+  | "en_curso"
+  | "pausado"
+  | "hecho"
+  | "bloqueado";
 
 export type TrackingPaso = {
   indice: number;

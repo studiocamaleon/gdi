@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { fraccionMesEnRango, mesesDelRango, type Rango } from './periodo';
 import { FAMILIAS } from '../productos-servicios/pasos/familias';
 import type { FamiliaCodigo } from '../productos-servicios/pasos/types';
+import { etiquetaMotivoFin } from '../ordenes-trabajo/ordenes-trabajo.types';
 
 /**
  * Producción (mirada de gerencia). OTD (entregas a tiempo), lead time,
@@ -55,14 +56,16 @@ export class ReporteProduccionService {
   }
 
   async produccion(tenantId: string, rango: Rango) {
-    const [otd, eficiencia, util, throughput, bloqueos, carga] = await Promise.all([
-      this.otd(tenantId, rango),
-      this.eficiencia(tenantId, rango),
-      this.utilizacion(tenantId, rango),
-      this.throughput(tenantId, rango),
-      this.bloqueos(tenantId),
-      this.carga(tenantId),
-    ]);
+    const [otd, eficiencia, util, throughput, bloqueos, carga, registro] =
+      await Promise.all([
+        this.otd(tenantId, rango),
+        this.eficiencia(tenantId, rango),
+        this.utilizacion(tenantId, rango),
+        this.throughput(tenantId, rango),
+        this.bloqueos(tenantId),
+        this.carga(tenantId),
+        this.registroTiempos(tenantId, rango),
+      ]);
     return {
       kpis: {
         otdPct: otd.otdPct,
@@ -79,6 +82,7 @@ export class ReporteProduccionService {
       utilizacion: util.centros,
       throughput,
       bloqueos: bloqueos.motivos,
+      registroTiempos: registro,
     };
   }
 
@@ -182,26 +186,29 @@ export class ReporteProduccionService {
 
   // ── Eficiencia de tiempo (real vs. cotizado) ───────────────────────
   private async eficiencia(tenantId: string, rango: Rango) {
-    // Filtro de atípicos (plan §5): real <= 8h y <= 5× lo estimado.
+    // Sólo fuentes MEDIDAS (registro-tiempos D14): comparar el estimado
+    // contra sí mismo (fuente 'estimado') o contra percepciones
+    // ('declarado') no calibra nada. Filtro de atípicos (plan §5):
+    // real <= 8h y <= 5× lo estimado.
     const rows = await this.prisma.$queryRaw<
       Array<{ familia: string; real: number; estimado: number; muestras: number; atipicos: number }>
     >`
       SELECT p."familiaCodigo" AS familia,
-             percentile_cont(0.5) WITHIN GROUP (
-               ORDER BY EXTRACT(EPOCH FROM (p."completadoEl" - p."iniciadoEl")) / 60.0
-             ) FILTER (WHERE EXTRACT(EPOCH FROM (p."completadoEl" - p."iniciadoEl")) / 60.0 <= 480
-                        AND EXTRACT(EPOCH FROM (p."completadoEl" - p."iniciadoEl")) / 60.0 <= 5 * p."duracionEstimadaMin") AS real,
+             percentile_cont(0.5) WITHIN GROUP (ORDER BY p."tiempoRealMin")
+               FILTER (WHERE p."tiempoRealMin" <= 480
+                        AND p."tiempoRealMin" <= 5 * p."duracionEstimadaMin") AS real,
              percentile_cont(0.5) WITHIN GROUP (ORDER BY p."duracionEstimadaMin")
-               FILTER (WHERE EXTRACT(EPOCH FROM (p."completadoEl" - p."iniciadoEl")) / 60.0 <= 480
-                        AND EXTRACT(EPOCH FROM (p."completadoEl" - p."iniciadoEl")) / 60.0 <= 5 * p."duracionEstimadaMin") AS estimado,
-             COUNT(*) FILTER (WHERE EXTRACT(EPOCH FROM (p."completadoEl" - p."iniciadoEl")) / 60.0 <= 480
-                        AND EXTRACT(EPOCH FROM (p."completadoEl" - p."iniciadoEl")) / 60.0 <= 5 * p."duracionEstimadaMin")::int AS muestras,
-             COUNT(*) FILTER (WHERE EXTRACT(EPOCH FROM (p."completadoEl" - p."iniciadoEl")) / 60.0 > 480
-                        OR EXTRACT(EPOCH FROM (p."completadoEl" - p."iniciadoEl")) / 60.0 > 5 * p."duracionEstimadaMin")::int AS atipicos
+               FILTER (WHERE p."tiempoRealMin" <= 480
+                        AND p."tiempoRealMin" <= 5 * p."duracionEstimadaMin") AS estimado,
+             COUNT(*) FILTER (WHERE p."tiempoRealMin" <= 480
+                        AND p."tiempoRealMin" <= 5 * p."duracionEstimadaMin")::int AS muestras,
+             COUNT(*) FILTER (WHERE p."tiempoRealMin" > 480
+                        OR p."tiempoRealMin" > 5 * p."duracionEstimadaMin")::int AS atipicos
       FROM "OrdenTrabajoItemPaso" p
       WHERE p."tenantId" = ${tenantId}::uuid AND p.estado = 'hecho'
-        AND p."iniciadoEl" IS NOT NULL AND p."completadoEl" IS NOT NULL
-        AND p."completadoEl" > p."iniciadoEl" AND p."duracionEstimadaMin" IS NOT NULL
+        AND p."tiempoRealMin" IS NOT NULL
+        AND p."tiempoFuente" IN ('medido', 'medido_lote')
+        AND p."duracionEstimadaMin" IS NOT NULL
         AND p."completadoEl" >= ${rango.desde} AND p."completadoEl" < ${finExclusivo(rango)}
       GROUP BY p."familiaCodigo"
     `;
@@ -236,14 +243,16 @@ export class ReporteProduccionService {
   // ── Utilización por centro vs. capacidad práctica ──────────────────
   private async utilizacion(tenantId: string, rango: Rango) {
     const [reales, capacidades] = await Promise.all([
+      // Tiempo asentado por paso (cualquier fuente): los pasos de máquina
+      // asientan su estimado (D10) y también son carga real del centro —
+      // con timestamps quedaban en 0 y la utilización subcontaba.
       this.prisma.$queryRaw<Array<{ centroId: string; centro: string; minReales: number }>>`
         SELECT p."centroCostoId" AS "centroId", cc.nombre AS centro,
-               COALESCE(SUM(EXTRACT(EPOCH FROM (p."completadoEl" - p."iniciadoEl")) / 60.0), 0)::float8 AS "minReales"
+               COALESCE(SUM(p."tiempoRealMin"), 0)::float8 AS "minReales"
         FROM "OrdenTrabajoItemPaso" p
         JOIN "CentroCosto" cc ON cc.id = p."centroCostoId"
         WHERE p."tenantId" = ${tenantId}::uuid AND p.estado = 'hecho'
-          AND p."iniciadoEl" IS NOT NULL AND p."completadoEl" IS NOT NULL
-          AND p."completadoEl" > p."iniciadoEl"
+          AND p."tiempoRealMin" IS NOT NULL
           AND p."completadoEl" >= ${rango.desde} AND p."completadoEl" < ${finExclusivo(rango)}
         GROUP BY p."centroCostoId", cc.nombre
       `,
@@ -295,6 +304,76 @@ export class ReporteProduccionService {
     return rows.map((r) => ({ fecha: r.fecha, cantidad: r.cantidad }));
   }
 
+  // ── Registro de tiempos (calidad, pausas y operadores) ─────────────
+  // Métricas del módulo registro-tiempos (§9 del doc): con qué calidad se
+  // están registrando los tiempos, por qué se pausa el taller y cuánto
+  // tiempo de trabajo asentó cada operador en el período.
+  private async registroTiempos(tenantId: string, rango: Rango) {
+    const [fuentesRows, pausasRows, operadoresRows] = await Promise.all([
+      // Calidad del tiempo de cada paso completado del período (D3).
+      this.prisma.$queryRaw<Array<{ fuente: string; pasos: number }>>`
+        SELECT COALESCE(p."tiempoFuente", 'invalido') AS fuente,
+               COUNT(*)::int AS pasos
+        FROM "OrdenTrabajoItemPaso" p
+        WHERE p."tenantId" = ${tenantId}::uuid AND p.estado = 'hecho'
+          AND p."completadoEl" >= ${rango.desde} AND p."completadoEl" < ${finExclusivo(rango)}
+        GROUP BY 1 ORDER BY pasos DESC
+      `,
+      // Pareto de pausas: cierres de tramo que NO son fin normal de trabajo
+      // (se excluyen 'completado', 'bloqueo' —ya tiene su card— y el
+      // backfill de migración).
+      this.prisma.$queryRaw<Array<{ motivo: string; veces: number }>>`
+        SELECT t."motivoFin" AS motivo, COUNT(*)::int AS veces
+        FROM "OrdenTrabajoPasoTramo" t
+        WHERE t."tenantId" = ${tenantId}::uuid
+          AND t."finEl" IS NOT NULL
+          AND t."finEl" >= ${rango.desde} AND t."finEl" < ${finExclusivo(rango)}
+          AND t."motivoFin" NOT IN ('completado', 'bloqueo', 'migracion')
+        GROUP BY 1 ORDER BY veces DESC
+      `,
+      // Tiempo de trabajo asentado por operador (suma de tramos cerrados).
+      this.prisma.$queryRaw<
+        Array<{ operador: string; minutos: number; pasos: number }>
+      >`
+        SELECT t."usuarioNombre" AS operador,
+               COALESCE(SUM(EXTRACT(EPOCH FROM (t."finEl" - t."inicioEl")) / 60.0), 0)::float8 AS minutos,
+               COUNT(DISTINCT t."pasoId")::int AS pasos
+        FROM "OrdenTrabajoPasoTramo" t
+        WHERE t."tenantId" = ${tenantId}::uuid
+          AND t."finEl" IS NOT NULL
+          AND t."finEl" >= ${rango.desde} AND t."finEl" < ${finExclusivo(rango)}
+          AND t."motivoFin" <> 'migracion'
+        GROUP BY 1 ORDER BY minutos DESC
+        LIMIT 8
+      `,
+    ]);
+
+    const totalPasos = fuentesRows.reduce((acc, row) => acc + row.pasos, 0);
+    const confiables = fuentesRows
+      .filter((row) => row.fuente === 'medido' || row.fuente === 'medido_lote')
+      .reduce((acc, row) => acc + row.pasos, 0);
+
+    return {
+      totalPasos,
+      /** % de pasos del período cuyo tiempo es una medición real. */
+      confiablePct: totalPasos > 0 ? r2((confiables / totalPasos) * 100) : null,
+      fuentes: fuentesRows.map((row) => ({
+        fuente: row.fuente,
+        pasos: row.pasos,
+        pct: totalPasos > 0 ? r2((row.pasos / totalPasos) * 100) : 0,
+      })),
+      pausas: pausasRows.map((row) => ({
+        motivo: etiquetaMotivoFin(row.motivo, null) ?? row.motivo,
+        veces: row.veces,
+      })),
+      operadores: operadoresRows.map((row) => ({
+        operador: row.operador,
+        minutos: r2(row.minutos),
+        pasos: row.pasos,
+      })),
+    };
+  }
+
   // ── Bloqueos (foto actual por motivo) ──────────────────────────────
   private async bloqueos(tenantId: string) {
     const rows = await this.prisma.$queryRaw<Array<{ motivo: string; veces: number }>>`
@@ -312,8 +391,13 @@ export class ReporteProduccionService {
 
   limites(prod: Awaited<ReturnType<ReporteProduccionService['produccion']>>): string[] {
     const l = [
-      'Utilización según tiempos reales marcados; pasos completados sin inicio no suman runtime.',
+      'Utilización según el tiempo asentado por paso (medido o estimado); la eficiencia usa sólo tiempos medidos.',
     ];
+    if (prod.registroTiempos.confiablePct !== null && prod.registroTiempos.confiablePct < 50) {
+      l.push(
+        'Menos de la mitad de los pasos del período tienen tiempo medido: la eficiencia se apoya en pocas muestras.',
+      );
+    }
     if (prod.otd.sinFecha > 0) {
       l.push(`${prod.otd.sinFecha} orden(es) finalizada(s) sin fecha de entrega, fuera del OTD.`);
     }

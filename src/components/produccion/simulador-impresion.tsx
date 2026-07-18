@@ -44,6 +44,8 @@ type VJob = {
   consumoCotizadoMl: number | null;
   precioMlCotizado: number | null;
   sinMedidas: boolean;
+  /** Estimado del paso (min): placeholder de "¿cuánto duró la tanda?" (D11). */
+  duracionEstimadaMin: number | null;
 };
 
 type VMaterial = {
@@ -102,6 +104,7 @@ function buildViewModel(data: SimuladorData) {
       consumoCotizadoMl: job.consumoCotizadoMm !== null ? job.consumoCotizadoMm / 1000 : null,
       precioMlCotizado: job.varianteCotizada?.precioMl ?? null,
       sinMedidas: job.piezas.length === 0,
+      duracionEstimadaMin: job.duracionEstimadaMin,
     };
     const matKey = materialKeyDe(job);
     const lista = jobs.get(matKey) ?? [];
@@ -387,11 +390,17 @@ function SimMaterialCard({
   jobs: VJob[];
   excluded: Set<string>;
   onToggle: (id: string) => void;
-  onCompletar: (pasoIds: string[]) => void;
+  onCompletar: (pasoIds: string[], duracionTandaMin?: number) => void;
   completando: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
   const [rollOverride, setRollOverride] = React.useState<number | null>(null);
+  // Duración REAL de la tanda (opcional, registro-tiempos D11): se prorratea
+  // entre los trabajos del lote. Vacío = cada paso asienta su estimado; NO
+  // se prellena para no fabricar "mediciones" que nadie midió.
+  const [tanda, setTanda] = React.useState("");
+  const tandaMin = Number(tanda);
+  const tandaValida = Number.isFinite(tandaMin) && tandaMin >= 1;
 
   const activeJobs = React.useMemo(
     () => jobs.filter((j) => !excluded.has(j.id)),
@@ -436,6 +445,10 @@ function SimMaterialCard({
 
   const singleRoll = material.rolls.length === 1;
   const completables = activeJobs.map((j) => j.id);
+  const estimadoTanda = activeJobs.reduce(
+    (acc, j) => acc + (j.duracionEstimadaMin ?? 0),
+    0,
+  );
 
   return (
     <div className={`sim-mat ${open ? "open" : ""}`}>
@@ -596,11 +609,27 @@ function SimMaterialCard({
                     {ahorroPesos !== null ? ` · ${fmtPesos(ahorroPesos)}` : ""}
                   </span>
                 </div>
+                <div
+                  className="sim-tanda"
+                  title="Si medís cuánto duró la tanda completa, ese tiempo real se reparte entre los trabajos y sirve para calibrar la máquina. Vacío = queda el estimado."
+                >
+                  <label>Duró</label>
+                  <input
+                    type="number"
+                    min={1}
+                    placeholder={estimadoTanda > 0 ? `~${Math.round(estimadoTanda)}` : "min"}
+                    value={tanda}
+                    onChange={(event) => setTanda(event.target.value)}
+                  />
+                  <span className="u">min</span>
+                </div>
                 <button
                   type="button"
                   className="btn btn-primary sim-send"
                   disabled={completables.length === 0 || completando}
-                  onClick={() => onCompletar(completables)}
+                  onClick={() =>
+                    onCompletar(completables, tandaValida ? tandaMin : undefined)
+                  }
                 >
                   <ArrowRightIcon />
                   {completando ? "Marcando…" : `Marcar impresos (${completables.length})`}
@@ -669,12 +698,12 @@ export function SimuladorImpresion({ initialData }: { initialData: SimuladorData
       return n;
     });
 
-  const completar = async (pasoIds: string[]) => {
+  const completar = async (pasoIds: string[], duracionTandaMin?: number) => {
     setCompletando(true);
     completandoRef.current = true;
     setResultado(null);
     try {
-      const res = await completarPasosLote(pasoIds);
+      const res = await completarPasosLote(pasoIds, duracionTandaMin);
       const fresh = await getSimuladorImpresion();
       setData(fresh);
       setResultado(
@@ -812,7 +841,7 @@ export function SimuladorImpresion({ initialData }: { initialData: SimuladorData
                   jobs={mj}
                   excluded={excluded}
                   onToggle={toggle}
-                  onCompletar={(pasoIds) => void completar(pasoIds)}
+                  onCompletar={(pasoIds, tanda) => void completar(pasoIds, tanda)}
                   completando={completando}
                 />
               );

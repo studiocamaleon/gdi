@@ -392,8 +392,23 @@ function TabComercial({ d }: { d: ComercialPanel }) {
 }
 
 /* ═══════════ TAB · Producción ═══════════ */
+/** Fuente del tiempo asentado por paso (registro-tiempos D3): etiqueta y color. */
+const FUENTE_TIEMPO_META: Record<string, { label: string; color: string }> = {
+  medido: { label: "Medido", color: "var(--ok)" },
+  medido_lote: { label: "Medido en tanda", color: "#3a9ca0" },
+  declarado: { label: "Declarado", color: "#5a7fd8" },
+  estimado: { label: "Estimado (máquina)", color: "#c8c6c0" },
+  invalido: { label: "Sin tiempo", color: "var(--signal)" },
+};
+
+/** "95m" / "3,2h" según magnitud (tiempos de operador del panel). */
+function fmtMinutos(min: number): string {
+  return min < 90 ? `${fmtAR(min, 0)}m` : `${fmtAR(min / 60, 1)}h`;
+}
+
 function TabProduccion({ d }: { d: ProduccionPanel }) {
   const k = d.kpis;
+  const registro = d.registroTiempos;
   return (
     <>
       <div className="d-kpi-row">
@@ -421,6 +436,39 @@ function TabProduccion({ d }: { d: ProduccionPanel }) {
           {d.otd.atrasadas.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Ninguna orden se entregó tarde.</div> : (
             <table className="d-tbl"><thead><tr><th>Orden</th><th>Cliente</th><th className="right">Atraso</th></tr></thead>
               <tbody>{d.otd.atrasadas.map((o) => (<tr key={o.numero}><td className="mono">{o.numero}</td><td>{o.cliente}</td><td className="right mono" style={{ color: "var(--signal)" }}>{o.diasAtraso} d</td></tr>))}</tbody>
+            </table>
+          )}
+        </Card>
+
+        {/* ── Registro de tiempos (docs/registro-tiempos-produccion §9) ── */}
+        <Card
+          span={4}
+          title="Calidad del registro"
+          sub="fuente del tiempo de cada paso"
+          action={<span className="mono" style={{ color: "var(--ink)", fontSize: 13, fontWeight: 600 }}>{registro.confiablePct != null ? `${fmtAR(registro.confiablePct, 0)}% medido` : "—"}</span>}
+        >
+          {registro.totalPasos === 0 ? <div className="d-empty" style={{ padding: 30 }}>Sin pasos completados en el período.</div> : (
+            <>
+              <StackedHBar segments={registro.fuentes.map((f) => ({ value: f.pasos, color: FUENTE_TIEMPO_META[f.fuente]?.color ?? "var(--muted-text-2)", label: FUENTE_TIEMPO_META[f.fuente]?.label ?? f.fuente }))} />
+              <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+                {registro.fuentes.map((f) => (
+                  <LegendDot key={f.fuente} color={FUENTE_TIEMPO_META[f.fuente]?.color ?? "var(--muted-text-2)"} label={FUENTE_TIEMPO_META[f.fuente]?.label ?? f.fuente} value={`${f.pasos} · ${fmtAR(f.pct, 0)}%`} />
+                ))}
+              </div>
+            </>
+          )}
+        </Card>
+        <Card span={4} title="Pausas del taller" sub="por qué se corta el trabajo" flush>
+          {registro.pausas.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Sin pausas registradas en el período.</div> : (
+            <table className="d-tbl"><thead><tr><th>Motivo</th><th style={{ width: 90 }} /><th className="right">Veces</th></tr></thead>
+              <tbody>{registro.pausas.map((p) => (<tr key={p.motivo}><td><div className="nm">{p.motivo}</div></td><td><HBar value={p.veces} max={Math.max(...registro.pausas.map((x) => x.veces), 1)} tone={p.motivo === "Pausa automática" || p.motivo === "Fin de jornada" ? "muted" : "ink"} /></td><td className="right mono">{p.veces}</td></tr>))}</tbody>
+            </table>
+          )}
+        </Card>
+        <Card span={4} title="Tiempo por operador" sub="tramos de trabajo del período" flush>
+          {registro.operadores.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Sin tramos de trabajo en el período.</div> : (
+            <table className="d-tbl"><thead><tr><th>Operador</th><th className="right">Pasos</th><th className="right">Tiempo</th></tr></thead>
+              <tbody>{registro.operadores.map((o) => (<tr key={o.operador}><td><div className="nm">{o.operador}</div></td><td className="right mono">{o.pasos}</td><td className="right mono">{fmtMinutos(o.minutos)}</td></tr>))}</tbody>
             </table>
           )}
         </Card>

@@ -447,6 +447,7 @@ model Tenant {
   ordenesTrabajo                                   OrdenTrabajo[]
   ordenTrabajoItems                                OrdenTrabajoItem[]
   ordenTrabajoItemPasos                            OrdenTrabajoItemPaso[]
+  ordenTrabajoPasoTramos                           OrdenTrabajoPasoTramo[]
   ordenTrabajoEventos                              OrdenTrabajoEvento[]
   ordenTrabajoContadores                           OrdenTrabajoContador[]
   cuentasFondos                                    CuentaFondos[]
@@ -477,6 +478,9 @@ model User {
   empleados           Empleado[]
   ordenTrabajoEventos OrdenTrabajoEvento[]
   pasosEnMesa         OrdenTrabajoItemPaso[] @relation("PasosEnMesa")
+  pasosIniciados      OrdenTrabajoItemPaso[] @relation("PasosIniciados")
+  pasosCompletados    OrdenTrabajoItemPaso[] @relation("PasosCompletados")
+  tramosPaso          OrdenTrabajoPasoTramo[] @relation("TramosPaso")
 }
 
 model Membership {
@@ -1172,6 +1176,9 @@ model ConfiguracionProduccion {
   tenantId      String   @unique @db.Uuid
   /// Días HÁBILES (L-V no feriado) de colchón sobre la ETA. 0 = sin margen.
   margenEtaDias Int      @default(0)
+  /// Hora local "HH:mm" de corte de jornada: los tramos de trabajo abiertos
+  /// se cierran solos a esta hora (registro-tiempos-produccion D9).
+  corteJornada  String   @default("20:00")
   updatedAt     DateTime @updatedAt
   tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
@@ -2127,11 +2134,27 @@ model OrdenTrabajoItemPaso {
   centroCostoId       String?          @db.Uuid
   centroCostoNombre   String?
   duracionEstimadaMin Decimal?         @db.Decimal(10, 2)
-  /// 'pendiente' | 'en_curso' | 'hecho' | 'bloqueado'.
+  /// 'pendiente' | 'en_curso' | 'pausado' | 'hecho' | 'bloqueado'.
   estado              String           @default("pendiente")
   motivoBloqueo       String?
   iniciadoEl          DateTime?
   completadoEl        DateTime?
+  /// Cómo se registra el trabajo (snapshot del catálogo de familias al
+  /// materializar, D1): 'cronometro' (MO domina, tramos) | 'solo_completar'
+  /// (runtime de máquina, un click y tiempo = estimado).
+  modoRegistro        String           @default("cronometro")
+  /// Tiempo real asentado al completar (D3). En modo cronómetro es la suma
+  /// de tramos; en solo_completar copia el estimado. Null hasta 'hecho'.
+  tiempoRealMin       Decimal?         @db.Decimal(10, 2)
+  /// Calidad/origen de tiempoRealMin: 'medido' | 'medido_lote' |
+  /// 'declarado' | 'estimado' | 'invalido'.
+  tiempoFuente        String?
+  /// Atribución directa (D5): quién abrió el primer tramo / quién completó.
+  /// Nombre = snapshot (el FK puede quedar null si se borra el usuario).
+  iniciadoPorId       String?          @db.Uuid
+  iniciadoPorNombre   String?
+  completadoPorId     String?          @db.Uuid
+  completadoPorNombre String?
   /// Usuario que tomó el paso a SU mesa de trabajo (vista Por estación del
   /// tablero): reclamo visible para todos, persistente entre sesiones.
   mesaUsuarioId       String?          @db.Uuid
@@ -2141,11 +2164,46 @@ model OrdenTrabajoItemPaso {
   orden               OrdenTrabajo     @relation(fields: [ordenId], references: [id], onDelete: Cascade)
   item                OrdenTrabajoItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
   mesaUsuario         User?            @relation("PasosEnMesa", fields: [mesaUsuarioId], references: [id], onDelete: SetNull)
+  iniciadoPor         User?            @relation("PasosIniciados", fields: [iniciadoPorId], references: [id], onDelete: SetNull)
+  completadoPor       User?            @relation("PasosCompletados", fields: [completadoPorId], references: [id], onDelete: SetNull)
+  tramos              OrdenTrabajoPasoTramo[]
 
   @@index([tenantId, ordenId])
   @@index([tenantId, itemId])
   @@index([tenantId, estado])
   @@index([tenantId, mesaUsuarioId])
+}
+
+/// Sesión de trabajo sobre un paso (registro-tiempos-produccion D2): quién,
+/// desde y hasta cuándo, y por qué terminó. El tiempo medido del paso es la
+/// SUMA de sus tramos — habilita pausas con motivo, multi-operario y cierre
+/// automático por jornada. Máximo un tramo abierto (finEl null) por paso.
+/// Ver docs/registro-tiempos-produccion-diseno.md
+model OrdenTrabajoPasoTramo {
+  id            String               @id @default(uuid()) @db.Uuid
+  tenantId      String               @db.Uuid
+  pasoId        String               @db.Uuid
+  usuarioId     String?              @db.Uuid
+  /// Nombre visible del actor (snapshot; el FK real es usuarioId).
+  usuarioNombre String
+  inicioEl      DateTime
+  /// Null = tramo abierto (cronómetro corriendo).
+  finEl         DateTime?
+  /// 'completado' | 'pausa:<motivo D7>' | 'fin_jornada' | 'auto_pausa' |
+  /// 'bloqueo' | 'migracion'.
+  motivoFin     String?
+  /// Texto libre cuando el motivo de pausa es 'otro'.
+  motivoDetalle String?              @db.VarChar(300)
+  /// 'usuario' | 'sistema' (cierres automáticos).
+  origen        String               @default("usuario")
+  createdAt     DateTime             @default(now())
+  tenant        Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  paso          OrdenTrabajoItemPaso @relation(fields: [pasoId], references: [id], onDelete: Cascade)
+  usuario       User?                @relation("TramosPaso", fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, pasoId])
+  @@index([tenantId, finEl])
+  @@index([tenantId, usuarioId, finEl])
 }
 
 model OrdenTrabajoEvento {
