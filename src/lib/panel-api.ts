@@ -187,17 +187,30 @@ export type ProductoMargenPanel = {
 };
 export type MaterialUsoPanel = {
   material: string;
+  /** Unidad canónica: unidad, hoja, m2, metro_lineal, ml, gramo. */
   unidad: string;
+  /** Formato comercial de la hoja (SRA3, A3+…) cuando la variante lo trae. */
+  formato: string | null;
   cantidad: number;
   costo: number;
   items: number;
 };
-export type MedidaUsoPanel = {
-  anchoMm: number;
-  altoMm: number;
-  unidades: number;
-  m2: number;
+export type MedidasModoProductoPanel = {
+  nombre: string;
   items: number;
+  estandar: number;
+  personalizada: number;
+  pctEstandar: number;
+};
+/** Medida estándar (predefinida del producto) vs. a medida (personalizada). */
+export type MedidasResumenPanel = {
+  items: number;
+  estandar: number;
+  personalizada: number;
+  pctEstandar: number | null;
+  sinDato: number;
+  porProducto: MedidasModoProductoPanel[];
+  topEstandar: Array<{ nombre: string; items: number }>;
 };
 /** Punto de la serie evolutiva del mix (bucket × categoría o producto). */
 export type PuntoMixPanel = { fecha: string; nombre: string; monto: number };
@@ -230,8 +243,8 @@ export type ProductoPanel = {
   porPapel: MaterialUsoPanel[];
   /** Consumo de tintas/tóner — teórico, del snapshot. */
   consumoTintas: MaterialUsoPanel[];
-  /** Medidas vendidas por dimensión de pieza (mm), con m². */
-  porMedida: MedidaUsoPanel[];
+  /** Medida estándar vs. a medida, global y por producto. */
+  medidas: MedidasResumenPanel;
   totalM2: number;
   porTecnologia: MixPanel[];
   /** Mix evolutivo por categoría (el front pivota por `nombre`). */

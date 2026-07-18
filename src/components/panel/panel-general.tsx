@@ -923,10 +923,30 @@ function MixEvolutivoCard({ d, rango }: { d: ProductoPanel; rango: RangoPanel })
   );
 }
 
+/** Unidades canónicas de material → etiqueta humana y decimales sensatos. */
+const UNIDAD_MATERIAL: Record<string, { singular: string; plural: string; dec: number }> = {
+  unidad: { singular: "unidad", plural: "unidades", dec: 0 },
+  hoja: { singular: "hoja", plural: "hojas", dec: 0 },
+  m2: { singular: "m²", plural: "m²", dec: 1 },
+  metro_lineal: { singular: "m lineal", plural: "m lineales", dec: 1 },
+  ml: { singular: "ml", plural: "ml", dec: 0 },
+  gramo: { singular: "g", plural: "g", dec: 0 },
+};
+function fmtCantidadMaterial(m: { cantidad: number; unidad: string; formato: string | null }): string {
+  if (m.unidad === "gramo" && m.cantidad >= 1000) return `${fmtAR(m.cantidad / 1000, 2)} kg`;
+  const u = UNIDAD_MATERIAL[m.unidad];
+  if (!u) return `${fmtAR(m.cantidad, 1)} ${m.unidad}`;
+  const etiqueta = m.cantidad === 1 ? u.singular : u.plural;
+  const formato = m.unidad === "hoja" && m.formato ? ` ${m.formato}` : "";
+  return `${fmtAR(m.cantidad, u.dec)} ${etiqueta}${formato}`;
+}
+
+const COLOR_A_MEDIDA = PALETA_SERIES[1];
+
 function TabProducto({ d, rango }: { d: ProductoPanel; rango: RangoPanel }) {
-  const fmtMed = (a: number, alto: number) => `${fmtAR(a / 10, 0)}×${fmtAR(alto / 10, 0)} cm`;
   const maxTec = Math.max(...d.porTecnologia.map((m) => m.monto), 1);
   const ad = d.adicionales;
+  const med = d.medidas;
   return (
     <div className="dash-grid">
       <MixEvolutivoCard d={d} rango={rango} />
@@ -975,17 +995,43 @@ function TabProducto({ d, rango }: { d: ProductoPanel; rango: RangoPanel }) {
       </Card>
       <Card span={7} title="Uso de papel y material" sub="consumo teórico del período" flush>
         <table className="d-tbl"><thead><tr><th>Material</th><th className="right">Cantidad</th><th className="right">Trabajos</th><th className="right">Costo</th></tr></thead>
-          <tbody>{d.porPapel.map((m) => (<tr key={m.material}><td><div className="nm">{m.material}</div></td><td className="right mono">{fmtAR(m.cantidad, 1)} {m.unidad}</td><td className="right mono">{m.items}</td><td className="right mono">${fmtK(m.costo)}</td></tr>))}</tbody>
+          <tbody>{d.porPapel.map((m) => (<tr key={`${m.material}|${m.formato ?? ""}`}><td><div className="nm">{m.material}</div></td><td className="right mono">{fmtCantidadMaterial(m)}</td><td className="right mono">{m.items}</td><td className="right mono">${fmtK(m.costo)}</td></tr>))}</tbody>
         </table>
       </Card>
-      <Card span={5} title="Medidas más vendidas" sub={`${fmtAR(d.totalM2, 1)} m² totales`} flush>
-        <table className="d-tbl"><thead><tr><th>Medida</th><th className="right">Unidades</th><th className="right">m²</th></tr></thead>
-          <tbody>{d.porMedida.slice(0, 8).map((m) => (<tr key={`${m.anchoMm}x${m.altoMm}`}><td className="mono">{fmtMed(m.anchoMm, m.altoMm)}</td><td className="right mono">{fmtAR(m.unidades)}</td><td className="right mono">{fmtAR(m.m2, 2)}</td></tr>))}</tbody>
-        </table>
+      <Card span={5} title="Medida estándar vs. a medida" sub={`cómo se cotizó cada item · ${fmtAR(d.totalM2, 1)} m² vendidos`}>
+        {med.items === 0 ? <div className="d-empty" style={{ padding: 30 }}>Sin items con dato de medida en el período.</div> : (
+          <>
+            <StackedHBar segments={[
+              { value: med.estandar, color: "var(--ink)", label: "Estándar" },
+              { value: med.personalizada, color: COLOR_A_MEDIDA, label: "A medida" },
+            ]} />
+            <div style={{ display: "flex", gap: 18, marginTop: 10, marginBottom: 12, fontSize: 12 }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: "var(--ink)" }} />Estándar <strong className="mono">{med.estandar}</strong><span style={{ color: "var(--muted-text)" }}>({med.pctEstandar != null ? pct(med.pctEstandar, 0) : "—"})</span></span>
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: COLOR_A_MEDIDA }} />A medida <strong className="mono">{med.personalizada}</strong><span style={{ color: "var(--muted-text)" }}>({med.pctEstandar != null ? pct(100 - med.pctEstandar, 0) : "—"})</span></span>
+            </div>
+            <table className="d-tbl"><thead><tr><th>Producto</th><th className="right">Items</th><th style={{ width: 90 }} /><th className="right">A medida</th></tr></thead>
+              <tbody>{med.porProducto.map((p) => (
+                <tr key={p.nombre}><td><div className="nm">{p.nombre}</div></td>
+                  <td className="right mono">{p.items}</td>
+                  <td><StackedHBar height={10} segments={[
+                    { value: p.estandar, color: "var(--ink)", label: "Estándar" },
+                    { value: p.personalizada, color: COLOR_A_MEDIDA, label: "A medida" },
+                  ]} /></td>
+                  <td className="right mono" style={{ fontWeight: 600, color: p.personalizada > 0 ? COLOR_A_MEDIDA : "var(--muted-text)" }}>{pct(100 - p.pctEstandar, 0)}</td></tr>
+              ))}</tbody>
+            </table>
+            {med.topEstandar.length > 0 ? (
+              <div style={{ marginTop: 10, fontSize: 11.5, color: "var(--muted-text)" }}>
+                Estándar más usadas: {med.topEstandar.map((t) => `${t.nombre} ×${t.items}`).join(" · ")}
+              </div>
+            ) : null}
+            {med.sinDato > 0 ? <div style={{ marginTop: 6, fontSize: 11, color: "var(--muted-text)" }}>{med.sinDato} item{med.sinDato === 1 ? "" : "s"} sin dato de medida, fuera del porcentaje.</div> : null}
+          </>
+        )}
       </Card>
       <Card span={6} title="Consumo de tintas" sub="teórico, del snapshot" flush>
         <table className="d-tbl"><thead><tr><th>Tinta</th><th className="right">Cantidad</th></tr></thead>
-          <tbody>{d.consumoTintas.map((m) => (<tr key={m.material}><td><div className="nm">{m.material}</div></td><td className="right mono">{fmtAR(m.cantidad, 1)} {m.unidad}</td></tr>))}</tbody>
+          <tbody>{d.consumoTintas.map((m) => (<tr key={`${m.material}|${m.formato ?? ""}`}><td><div className="nm">{m.material}</div></td><td className="right mono">{fmtCantidadMaterial(m)}</td></tr>))}</tbody>
         </table>
       </Card>
       <Card span={6} title="Mix por tecnología">

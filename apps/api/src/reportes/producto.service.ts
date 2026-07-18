@@ -35,17 +35,32 @@ export type ProductoMargen = {
 };
 export type MaterialUso = {
   material: string;
+  /** Unidad canónica: unidad, hoja, m2, metro_lineal, ml, gramo. */
   unidad: string;
+  /** Formato comercial de la hoja/pliego (SRA3, A3+…) si la variante lo trae. */
+  formato: string | null;
   cantidad: number;
   costo: number;
   items: number;
 };
-export type MedidaUso = {
-  anchoMm: number;
-  altoMm: number;
-  unidades: number;
-  m2: number;
+export type MedidasModoProducto = {
+  nombre: string;
   items: number;
+  estandar: number;
+  personalizada: number;
+  pctEstandar: number;
+};
+export type MedidasResumen = {
+  /** Items con modo de medida conocido. */
+  items: number;
+  estandar: number;
+  personalizada: number;
+  pctEstandar: number | null;
+  /** Items viejos sin medidaModo en el jobContext (fuera del %). */
+  sinDato: number;
+  porProducto: MedidasModoProducto[];
+  /** Medidas predefinidas más usadas, por nombre. */
+  topEstandar: Array<{ nombre: string; items: number }>;
 };
 /** Punto de la serie evolutiva de una dimensión (categoría o producto). */
 export type PuntoMix = { fecha: string; nombre: string; monto: number };
@@ -78,27 +93,26 @@ export class ProductoService {
     const hastaExcl = finExclusivo(rango);
     const filtro = { tenantId, desde, hastaExcl };
 
-    const [categoria, producto, papel, tintas, medidas, tecnologia, mixEvolutivo, adicionales] =
+    const [categoria, producto, papel, tintas, medidas, totalM2, tecnologia, mixEvolutivo, adicionales] =
       await Promise.all([
         this.margenPor(filtro, `COALESCE(NULLIF(oti."categoriaComercial", ''), 'Sin categoría')`),
         this.margenPor(filtro, `oti.nombre`, 20),
         this.materialesPorTipo(filtro, 'MATERIAL'),
         this.materialesPorTipo(filtro, 'CONSUMIBLE_MAQUINA'),
-        this.medidas(filtro),
+        this.medidasModo(filtro),
+        this.totalM2(filtro),
         this.tecnologia(filtro),
         this.serieMix(filtro, granularidad(rango)),
         this.adicionales(filtro),
       ]);
-
-    const totalM2 = medidas.reduce((a, m) => a + m.m2, 0);
 
     return {
       porCategoria: categoria,
       porProducto: producto,
       porPapel: papel,
       consumoTintas: tintas,
-      porMedida: medidas,
-      totalM2: r2(totalM2),
+      medidas,
+      totalM2,
       porTecnologia: tecnologia,
       mixEvolutivo,
       adicionales,
@@ -303,11 +317,17 @@ export class ProductoService {
     tipoLinea: 'MATERIAL' | 'CONSUMIBLE_MAQUINA',
   ): Promise<MaterialUso[]> {
     const rows = await this.prisma.$queryRawUnsafe<
-      Array<{ material: string; unidad: string; cantidad: number; costo: number; items: number }>
+      Array<{ material: string; unidad: string; formato: string | null; cantidad: number; costo: number; items: number }>
     >(
       `
       SELECT COALESCE(mat->>'materiaPrimaNombre', 'Sin identificar') AS material,
-             COALESCE(mat->>'unidad', '') AS unidad,
+             -- Unidad canónica: la trazabilidad mezcla sinónimos históricos.
+             CASE WHEN mat->>'unidad' IN ('metro_lineal', 'm_lineales') THEN 'metro_lineal'
+                  WHEN mat->>'unidad' IN ('hoja', 'pliegos') THEN 'hoja'
+                  ELSE COALESCE(mat->>'unidad', '') END AS unidad,
+             -- El formato comercial de la variante desambigua "hojas ¿de qué?".
+             CASE WHEN mat->>'unidad' IN ('hoja', 'pliegos')
+                  THEN mat->'atributosVarianteJson'->>'formatoComercial' END AS formato,
              COALESCE(SUM((mat->>'cantidad')::numeric), 0)::float8 AS cantidad,
              COALESCE(SUM((mat->>'costoTotal')::numeric), 0)::float8 AS costo,
              COUNT(DISTINCT oti.id)::int AS items
@@ -319,7 +339,7 @@ export class ProductoService {
       WHERE oti."tenantId" = $1::uuid AND ot.estado <> 'borrador'
         AND ot."fechaEmision" >= $2 AND ot."fechaEmision" < $3
         AND mat->>'tipoLineaCosto' = $4
-      GROUP BY 1, 2
+      GROUP BY 1, 2, 3
       ORDER BY costo DESC
       `,
       f.tenantId,
@@ -330,48 +350,113 @@ export class ProductoService {
     return rows.map((r) => ({
       material: r.material,
       unidad: r.unidad,
+      formato: r.formato,
       cantidad: r2(r.cantidad),
       costo: r2(r.costo),
       items: r.items,
     }));
   }
 
-  /** Medidas vendidas: por dimensión de pieza, unidades y m² (del jobContext). */
-  private async medidas(f: {
+  /**
+   * Medida estándar vs. a medida: `jobContext.medidaModo` dice cómo se
+   * cotizó cada item (predefinida del producto o personalizada). Split
+   * global, por producto, y ranking de medidas predefinidas por nombre.
+   */
+  private async medidasModo(f: {
     tenantId: string;
     desde: Date;
     hastaExcl: Date;
-  }): Promise<MedidaUso[]> {
-    const rows = await this.prisma.$queryRawUnsafe<
-      Array<{ ancho: number; alto: number; unidades: number; m2: number; items: number }>
-    >(
+  }): Promise<MedidasResumen> {
+    const [porProductoRows, topEstandar] = await Promise.all([
+      this.prisma.$queryRawUnsafe<
+        Array<{ nombre: string; modo: string | null; items: number }>
+      >(
+        `
+        SELECT oti.nombre, ci."jobContextJson"->>'medidaModo' AS modo, COUNT(*)::int AS items
+        FROM "OrdenTrabajoItem" oti
+        JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
+        JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
+        WHERE oti."tenantId" = $1::uuid AND ot.estado <> 'borrador'
+          AND ot."fechaEmision" >= $2 AND ot."fechaEmision" < $3
+        GROUP BY 1, 2
+        `,
+        f.tenantId,
+        f.desde,
+        f.hastaExcl,
+      ),
+      this.prisma.$queryRawUnsafe<Array<{ nombre: string; items: number }>>(
+        `
+        SELECT ci."jobContextJson"->>'medidaPredefinidaNombre' AS nombre, COUNT(*)::int AS items
+        FROM "OrdenTrabajoItem" oti
+        JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
+        JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
+        WHERE oti."tenantId" = $1::uuid AND ot.estado <> 'borrador'
+          AND ot."fechaEmision" >= $2 AND ot."fechaEmision" < $3
+          AND ci."jobContextJson"->>'medidaModo' = 'predefinida'
+          AND COALESCE(ci."jobContextJson"->>'medidaPredefinidaNombre', '') <> ''
+        GROUP BY 1 ORDER BY items DESC LIMIT 6
+        `,
+        f.tenantId,
+        f.desde,
+        f.hastaExcl,
+      ),
+    ]);
+
+    const porProductoMap = new Map<string, MedidasModoProducto>();
+    let estandar = 0, personalizada = 0, sinDato = 0;
+    for (const r of porProductoRows) {
+      if (r.modo !== 'predefinida' && r.modo !== 'personalizada') {
+        sinDato += r.items;
+        continue;
+      }
+      const p = porProductoMap.get(r.nombre) ?? {
+        nombre: r.nombre, items: 0, estandar: 0, personalizada: 0, pctEstandar: 0,
+      };
+      p.items += r.items;
+      if (r.modo === 'predefinida') { p.estandar += r.items; estandar += r.items; }
+      else { p.personalizada += r.items; personalizada += r.items; }
+      porProductoMap.set(r.nombre, p);
+    }
+    const porProducto = [...porProductoMap.values()]
+      .map((p) => ({ ...p, pctEstandar: r2((p.estandar / p.items) * 100) }))
+      .sort((a, b) => b.items - a.items)
+      .slice(0, 8);
+    const items = estandar + personalizada;
+
+    return {
+      items,
+      estandar,
+      personalizada,
+      pctEstandar: items > 0 ? r2((estandar / items) * 100) : null,
+      sinDato,
+      porProducto,
+      topEstandar,
+    };
+  }
+
+  /** m² vendidos del período (piezas del jobContext), para el subtítulo. */
+  private async totalM2(f: {
+    tenantId: string;
+    desde: Date;
+    hastaExcl: Date;
+  }): Promise<number> {
+    const rows = await this.prisma.$queryRawUnsafe<Array<{ m2: number }>>(
       `
-      SELECT (pieza->>'anchoMm')::float8 AS ancho, (pieza->>'altoMm')::float8 AS alto,
-             COALESCE(SUM((pieza->>'cantidad')::numeric), 0)::float8 AS unidades,
-             COALESCE(SUM((pieza->>'anchoMm')::numeric * (pieza->>'altoMm')::numeric
-                          * (pieza->>'cantidad')::numeric) / 1e6, 0)::float8 AS m2,
-             COUNT(DISTINCT oti.id)::int AS items
+      SELECT COALESCE(SUM((pieza->>'anchoMm')::numeric * (pieza->>'altoMm')::numeric
+                          * COALESCE((pieza->>'cantidad')::numeric, 1)) / 1e6, 0)::float8 AS m2
       FROM "OrdenTrabajoItem" oti
       JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
       JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
-      CROSS JOIN LATERAL jsonb_array_elements(ci."jobContextJson"->'piezas') pieza
+      CROSS JOIN LATERAL jsonb_array_elements(COALESCE(ci."jobContextJson"->'piezas', '[]'::jsonb)) pieza
       WHERE oti."tenantId" = $1::uuid AND ot.estado <> 'borrador'
         AND ot."fechaEmision" >= $2 AND ot."fechaEmision" < $3
         AND pieza->>'anchoMm' IS NOT NULL AND pieza->>'altoMm' IS NOT NULL
-      GROUP BY 1, 2
-      ORDER BY m2 DESC
       `,
       f.tenantId,
       f.desde,
       f.hastaExcl,
     );
-    return rows.map((r) => ({
-      anchoMm: r.ancho,
-      altoMm: r.alto,
-      unidades: r2(r.unidades),
-      m2: r2(r.m2),
-      items: r.items,
-    }));
+    return r2(rows[0]?.m2 ?? 0);
   }
 
   private async tecnologia(f: {
@@ -406,6 +491,7 @@ export class ProductoService {
     return [
       'Consumo de papel y tintas: teórico, del snapshot de cada orden (no de stock real).',
       'Adicionales: frecuencia y ticket con/sin — el precio de cada adicional individual no se persiste todavía.',
+      'Medidas: estándar vs. a medida según cómo se cotizó cada item; los items sin ese dato quedan fuera del porcentaje.',
     ];
   }
 }
