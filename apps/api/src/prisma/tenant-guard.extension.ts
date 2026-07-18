@@ -98,7 +98,13 @@ export const tenantGuardExtension = Prisma.defineExtension((client) =>
 
           if (operation === 'findUnique' || operation === 'findUniqueOrThrow') {
             // El `where` único no admite tenantId: post-filtramos el resultado.
-            const result = (await query(args)) as {
+            // Si la query trae `select` sin tenantId, se lo inyectamos para
+            // poder verificar — si no, el post-filtro compararía contra
+            // undefined y descartaría filas PROPIAS (bug: configuración
+            // fiscal "inexistente" con select parcial).
+            const sel = (a as { select?: Record<string, unknown> }).select;
+            if (sel && sel.tenantId === undefined) sel.tenantId = true;
+            const result = (await query(a)) as {
               tenantId?: string;
             } | null;
             if (result && result.tenantId !== tenantId) {
