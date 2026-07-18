@@ -15,6 +15,7 @@ import {
   CircleDollarSignIcon,
   PackageIcon,
 } from "lucide-react";
+import { technologyCodeLabel } from "@/lib/maquinaria-tecnologias";
 import {
   getPanelComercial,
   getPanelFinanzas,
@@ -380,7 +381,7 @@ function TabComercial({ d }: { d: ComercialPanel }) {
         <Card span={4} title="Mix por tecnología">
           {d.mixTecnologia.map((m) => (
             <div key={m.nombre} style={{ marginBottom: 10 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}><span>{m.nombre}</span><span className="mono" style={{ color: "var(--muted-text)" }}>{pct(m.pct)}</span></div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}><span>{technologyCodeLabel(m.nombre) || m.nombre}</span><span className="mono" style={{ color: "var(--muted-text)" }}>{pct(m.pct)}</span></div>
               <HBar value={m.pct} max={100} />
             </div>
           ))}
@@ -546,7 +547,7 @@ function TabProducto({ d }: { d: ProductoPanel }) {
       <Card span={6} title="Mix por tecnología">
         {d.porTecnologia.map((m) => (
           <div key={m.nombre} style={{ marginBottom: 10 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}><span>{m.nombre}</span><span className="mono" style={{ color: "var(--muted-text)" }}>${fmtK(m.monto)} · {pct(m.pct)}</span></div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}><span>{technologyCodeLabel(m.nombre) || m.nombre}</span><span className="mono" style={{ color: "var(--muted-text)" }}>${fmtK(m.monto)} · {pct(m.pct)}</span></div>
             <HBar value={m.monto} max={maxTec} />
           </div>
         ))}
