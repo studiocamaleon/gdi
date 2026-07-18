@@ -26,6 +26,12 @@ function nombreFamilia(codigo: string): string {
   return FAMILIAS[codigo as FamiliaCodigo]?.nombre ?? codigo;
 }
 
+/** "YYYY-MM" del mes actual (para la capacidad vigente). */
+function mesActual(): string {
+  const hoy = new Date();
+  return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
+}
+
 type OtdRow = {
   numero: string;
   cliente: string | null;
@@ -38,22 +44,24 @@ type OtdRow = {
 export class ReporteProduccionService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** OTD + utilización agregada para los KPIs del Resumen. */
+  /** OTD + utilización + carga para los KPIs del Resumen. */
   async resumenKpis(tenantId: string, rango: Rango) {
-    const [otd, util] = await Promise.all([
+    const [otd, util, carga] = await Promise.all([
       this.otd(tenantId, rango),
       this.utilizacion(tenantId, rango),
+      this.carga(tenantId),
     ]);
-    return { otdPct: otd.otdPct, utilizacionPct: util.promedioPct };
+    return { otdPct: otd.otdPct, utilizacionPct: util.promedioPct, ...carga };
   }
 
   async produccion(tenantId: string, rango: Rango) {
-    const [otd, eficiencia, util, throughput, bloqueos] = await Promise.all([
+    const [otd, eficiencia, util, throughput, bloqueos, carga] = await Promise.all([
       this.otd(tenantId, rango),
       this.eficiencia(tenantId, rango),
       this.utilizacion(tenantId, rango),
       this.throughput(tenantId, rango),
       this.bloqueos(tenantId),
+      this.carga(tenantId),
     ]);
     return {
       kpis: {
@@ -63,12 +71,47 @@ export class ReporteProduccionService {
         eficienciaPct: eficiencia.eficienciaPct,
         bloqueados: bloqueos.total,
         utilizacionPct: util.promedioPct,
+        trabajosEnCola: carga.trabajosEnCola,
+        diasDeCarga: carga.diasDeCarga,
       },
       otd,
       eficiencia,
       utilizacion: util.centros,
       throughput,
       bloqueos: bloqueos.motivos,
+    };
+  }
+
+  /**
+   * Carga del taller AHORA: pasos pendientes de órdenes vivas y su tiempo,
+   * convertido a DÍAS de carga contra la capacidad diaria de los centros
+   * (capacidadPractica del mes / días por mes). Foto operativa, no del rango.
+   */
+  private async carga(tenantId: string) {
+    const [colaRows, capRows] = await Promise.all([
+      this.prisma.$queryRaw<Array<{ trabajos: number; minutos: number }>>`
+        SELECT COUNT(*)::int AS trabajos,
+               COALESCE(SUM(p."duracionEstimadaMin"), 0)::float8 AS minutos
+        FROM "OrdenTrabajoItemPaso" p
+        JOIN "OrdenTrabajo" ot ON ot.id = p."ordenId"
+        WHERE p."tenantId" = ${tenantId}::uuid AND p.estado <> 'hecho'
+          AND ot.estado IN ('pendiente', 'produccion')
+      `,
+      this.prisma.centroCostoCapacidadPeriodo.findMany({
+        where: { tenantId, periodo: mesActual() },
+        select: { capacidadPractica: true, diasPorMes: true },
+      }),
+    ]);
+    const trabajosEnCola = colaRows[0]?.trabajos ?? 0;
+    const horasCola = (colaRows[0]?.minutos ?? 0) / 60;
+    // Capacidad diaria (horas) = Σ capacidadPractica del mes / días por mes.
+    const horasPorDia = capRows.reduce((acc, c) => {
+      const dias = Number(c.diasPorMes) || 0;
+      return dias > 0 ? acc + Number(c.capacidadPractica) / dias : acc;
+    }, 0);
+    return {
+      trabajosEnCola,
+      diasDeCarga: horasPorDia > 0 ? r2(horasCola / horasPorDia) : null,
     };
   }
 

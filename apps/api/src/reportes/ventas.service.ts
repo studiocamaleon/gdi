@@ -40,19 +40,27 @@ export type ClienteDormido = {
 export class VentasService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Serie temporal de ventas del rango (para la tendencia del Resumen). */
-  async serie(tenantId: string, rango: Rango): Promise<Array<{ fecha: string; monto: number }>> {
+  /**
+   * Serie temporal del rango: ventas y COSTO por bucket (para el gráfico
+   * "Facturación, costo y margen"). `monto` = ventas, retrocompatible.
+   */
+  async serie(
+    tenantId: string,
+    rango: Rango,
+  ): Promise<Array<{ fecha: string; monto: number; costo: number }>> {
     const truncUnit = Prisma.raw(`'${TRUNC[granularidad(rango)]}'`);
-    const rows = await this.prisma.$queryRaw<Array<{ fecha: string; monto: number }>>`
+    const rows = await this.prisma.$queryRaw<Array<{ fecha: string; monto: number; costo: number }>>`
       SELECT to_char(date_trunc(${truncUnit}, ot."fechaEmision"), 'YYYY-MM-DD') AS fecha,
-             COALESCE(SUM(oti.subtotal), 0)::float8 AS monto
+             COALESCE(SUM(oti.subtotal), 0)::float8 AS monto,
+             COALESCE(SUM(ci."costoTotal"), 0)::float8 AS costo
       FROM "OrdenTrabajoItem" oti
       JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
+      LEFT JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
       WHERE oti."tenantId" = ${tenantId}::uuid AND ot.estado <> 'borrador'
         AND ot."fechaEmision" >= ${rango.desde} AND ot."fechaEmision" < ${finExclusivo(rango)}
       GROUP BY 1 ORDER BY 1
     `;
-    return rows.map((s) => ({ fecha: s.fecha, monto: r2(s.monto) }));
+    return rows.map((s) => ({ fecha: s.fecha, monto: r2(s.monto), costo: r2(s.costo) }));
   }
 
   /** Top clientes del rango por facturación (para Resumen y Comercial). */

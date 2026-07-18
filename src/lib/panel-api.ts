@@ -120,6 +120,8 @@ export type ProduccionPanel = {
     eficienciaPct: number | null;
     bloqueados: number;
     utilizacionPct: number | null;
+    trabajosEnCola: number;
+    diasDeCarga: number | null;
   };
   otd: {
     total: number;
@@ -211,11 +213,19 @@ export type CobranzaPanel = {
   fondos: Array<{ cuenta: string; saldo: number }>;
 };
 
+export type ResumenProduccionKpis = {
+  otdPct: number | null;
+  utilizacionPct: number | null;
+  trabajosEnCola: number;
+  diasDeCarga: number | null;
+};
+
 export function getPanelResumen(rango?: RangoPanel) {
   return apiRequest<
     TabPanel<{
       rentabilidad: RentabilidadPanel;
-      produccion: { otdPct: number | null; utilizacionPct: number | null };
+      produccion: ResumenProduccionKpis;
+      serie: Array<{ fecha: string; monto: number; costo: number }>;
       topClientes: RankingPanel[];
       topProductos: ProductoMargenPanel[];
       alertas: AlertaPanel[];

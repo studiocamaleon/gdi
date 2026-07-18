@@ -53,6 +53,7 @@ export class ReportesController {
         margenBruto: actual.margenBruto,
         margenBrutoPct: actual.margenBrutoPct,
         margenBrutoDeltaPts: deltas.margenBrutoPts,
+        costoTotal: actual.costoTotal,
         contribucion: actual.contribucion,
         contribucionPct: actual.contribucionPct,
         contribucionDeltaPts: deltas.contribucionPts,
