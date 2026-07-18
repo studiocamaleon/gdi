@@ -17,6 +17,7 @@ import {
   accionPasoProduccion,
   autoPausarPaso,
   getMisTramosAbiertos,
+  TRAMOS_CAMBIARON_EVENT,
   type MisTramosAbiertos,
 } from "@/lib/ordenes-trabajo-api";
 import { etiquetaDuracion, MOTIVOS_PAUSA } from "@/lib/tablero-produccion";
@@ -73,7 +74,22 @@ export function PasosEnCursoWidget() {
     const timer = setInterval(() => {
       if (!document.hidden) void refetch();
     }, POLL_MS);
-    return () => clearInterval(timer);
+    // Refresco INSTANTÁNEO: cualquier acción propia sobre pasos (tablero,
+    // simuladores o el propio widget) avisa por evento; y al volver el
+    // foco a la pestaña no se espera el próximo poll.
+    const onCambio = () => void refetch();
+    const onFoco = () => {
+      if (!document.hidden) void refetch();
+    };
+    window.addEventListener(TRAMOS_CAMBIARON_EVENT, onCambio);
+    window.addEventListener("focus", onFoco);
+    document.addEventListener("visibilitychange", onFoco);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener(TRAMOS_CAMBIARON_EVENT, onCambio);
+      window.removeEventListener("focus", onFoco);
+      document.removeEventListener("visibilitychange", onFoco);
+    };
   }, [refetch]);
 
   // Reloj del cronómetro y del countdown (1 s; barato, sólo con tramos).
@@ -295,8 +311,12 @@ export function PasosEnCursoWidget() {
                   >
                     <CheckIcon />Completar
                   </button>
-                  <Link className="pw-link" href="/produccion/tablero">
-                    Tablero
+                  <Link
+                    className="pw-link"
+                    href={`/produccion/tablero?item=${tramo.itemId}`}
+                    title="Abrir el detalle de este paso en el tablero"
+                  >
+                    Ver paso
                   </Link>
                 </div>
               ) : null}

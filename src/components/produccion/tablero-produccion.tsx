@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -1890,12 +1891,21 @@ export function TableroProduccion({
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [filters, setFilters] = React.useState<{ status: StatusFilter; priority: PriorityFilter; query: string }>({ status: "all", priority: "all", query: "" });
+  const searchParams = useSearchParams();
 
   React.useEffect(() => {
     const savedMode = readStoredBoardMode();
     setDefaultMode(savedMode);
     setMode(savedMode);
   }, []);
+
+  // Deep-link del widget "En curso": /produccion/tablero?item=<id> abre el
+  // sheet de ese item directo (searchParams cambia de instancia en cada
+  // navegación, así que re-clickear el link vuelve a abrirlo).
+  React.useEffect(() => {
+    const itemParam = searchParams.get("item");
+    if (itemParam) setSelectedId(itemParam);
+  }, [searchParams]);
 
   // ── Tablero EN VIVO: lo que hace otro operario aparece sin recargar ────
   // Polling del dataset (es chico) cada POLL_TABLERO_MS, pausado con la
