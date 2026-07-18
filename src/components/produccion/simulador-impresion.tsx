@@ -121,12 +121,24 @@ function buildViewModel(data: SimuladorData) {
       const cat = job.materiaPrimaId ? catalogo.get(job.materiaPrimaId) : undefined;
       const stockMl: Record<number, number | null> = {};
       const precioMl: Record<number, number | null> = {};
-      const rolls = (cat?.anchos ?? []).map((ancho) => {
+      // El simulador nestea por ANCHO: varias variantes del catálogo pueden
+      // compartir ancho (mismo cm, distinto color/gramaje). Se deduplica por
+      // ancho para no repetir rollos (evita keys duplicadas): se acumula el
+      // stock y se conserva el precio más bajo del ancho.
+      const rolls: number[] = [];
+      for (const ancho of cat?.anchos ?? []) {
         const rollCm = ancho.anchoMm / 10;
-        stockMl[rollCm] = ancho.stockMl;
-        precioMl[rollCm] = ancho.precioMl;
-        return rollCm;
-      });
+        if (!rolls.includes(rollCm)) {
+          rolls.push(rollCm);
+          stockMl[rollCm] = ancho.stockMl;
+          precioMl[rollCm] = ancho.precioMl;
+        } else {
+          if (ancho.stockMl != null) stockMl[rollCm] = (stockMl[rollCm] ?? 0) + ancho.stockMl;
+          if (ancho.precioMl != null && (precioMl[rollCm] == null || ancho.precioMl < precioMl[rollCm]!)) {
+            precioMl[rollCm] = ancho.precioMl;
+          }
+        }
+      }
       materials.push({
         key: matKey,
         tech: techKey,
