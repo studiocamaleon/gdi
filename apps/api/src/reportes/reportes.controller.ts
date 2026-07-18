@@ -5,6 +5,7 @@ import { ReportesService } from './reportes.service';
 import { RentabilidadService } from './rentabilidad.service';
 import { CobranzaService } from './cobranza.service';
 import { VentasService } from './ventas.service';
+import { ProductoService } from './producto.service';
 import { RangoReporteDto } from './dto/rango-reporte.dto';
 
 /**
@@ -21,6 +22,7 @@ export class ReportesController {
     private readonly rentabilidad: RentabilidadService,
     private readonly cobranza: CobranzaService,
     private readonly ventas: VentasService,
+    private readonly productos: ProductoService,
   ) {}
 
   @Get('resumen')
@@ -109,13 +111,14 @@ export class ReportesController {
   }
 
   @Get('producto')
-  producto(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
+  async producto(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
     const { rango, anterior } = this.service.resolverRango(query);
+    const producto = await this.productos.producto(auth.tenantId, rango);
     return {
       meta: this.service.metaBase(rango, anterior, 'Snapshot de cotización', {
-        limites: ['Tab en construcción.'],
+        limites: this.productos.limites(),
       }),
-      pendiente: true,
+      ...producto,
     };
   }
 }

@@ -92,6 +92,42 @@ export type ComercialPanel = {
   dormidos: ClienteDormidoPanel[];
 };
 
+/** Ventas & Producto: márgenes por categoría/producto, uso de papel, medidas. */
+export type ProductoMargenPanel = {
+  nombre: string;
+  ventas: number;
+  costo: number;
+  margen: number;
+  margenPct: number;
+  items: number;
+};
+export type MaterialUsoPanel = {
+  material: string;
+  unidad: string;
+  cantidad: number;
+  costo: number;
+  items: number;
+};
+export type MedidaUsoPanel = {
+  anchoMm: number;
+  altoMm: number;
+  unidades: number;
+  m2: number;
+  items: number;
+};
+export type ProductoPanel = {
+  porCategoria: ProductoMargenPanel[];
+  porProducto: ProductoMargenPanel[];
+  /** Consumo de sustrato (papel/vinilo/film) — teórico, del snapshot. */
+  porPapel: MaterialUsoPanel[];
+  /** Consumo de tintas/tóner — teórico, del snapshot. */
+  consumoTintas: MaterialUsoPanel[];
+  /** Medidas vendidas por dimensión de pieza (mm), con m². */
+  porMedida: MedidaUsoPanel[];
+  totalM2: number;
+  porTecnologia: MixPanel[];
+};
+
 /** Cobranza (tab Finanzas): aging, costo de cobrar, DSO, cheques, fondos. */
 export type FranjaAgingPanel = "0-30" | "31-60" | "61-90" | "+90";
 export type DeudorPanel = {
@@ -142,5 +178,5 @@ export function getPanelProduccion(rango?: RangoPanel) {
   return apiRequest<TabPanel>(`/reportes/panel/produccion${qs(rango)}`);
 }
 export function getPanelProducto(rango?: RangoPanel) {
-  return apiRequest<TabPanel>(`/reportes/panel/producto${qs(rango)}`);
+  return apiRequest<TabPanel<ProductoPanel>>(`/reportes/panel/producto${qs(rango)}`);
 }
