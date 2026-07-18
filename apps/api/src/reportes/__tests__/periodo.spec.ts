@@ -3,6 +3,7 @@ import {
   fraccionMesEnRango,
   granularidad,
   mesesDelRango,
+  mismoPeriodoAnioAnterior,
   parseRango,
   periodoAnterior,
 } from '../periodo';
@@ -59,6 +60,26 @@ describe('periodo', () => {
       const a = periodoAnterior(parseRango('2026-07-10', '2026-07-16')); // 7 días
       expect(iso(a.hasta)).toBe('2026-07-09');
       expect(iso(a.desde)).toBe('2026-07-03');
+    });
+  });
+
+  describe('mismoPeriodoAnioAnterior', () => {
+    it('mes calendario → mismo mes del año anterior, completo', () => {
+      const a = mismoPeriodoAnioAnterior(parseRango('2026-07-01', '2026-07-31'));
+      expect(iso(a.desde)).toBe('2025-07-01');
+      expect(iso(a.hasta)).toBe('2025-07-31');
+    });
+
+    it('febrero de año bisiesto → febrero completo del año anterior', () => {
+      const a = mismoPeriodoAnioAnterior(parseRango('2028-02-01', '2028-02-29'));
+      expect(iso(a.desde)).toBe('2027-02-01');
+      expect(iso(a.hasta)).toBe('2027-02-28');
+    });
+
+    it('rango arbitrario → mismas fechas un año atrás', () => {
+      const a = mismoPeriodoAnioAnterior(parseRango('2026-07-10', '2026-07-20'));
+      expect(iso(a.desde)).toBe('2025-07-10');
+      expect(iso(a.hasta)).toBe('2025-07-20');
     });
   });
 

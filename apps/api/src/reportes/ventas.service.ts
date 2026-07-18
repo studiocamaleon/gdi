@@ -1,7 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { granularidad, type Granularidad, type Rango } from './periodo';
+import {
+  granularidad,
+  mismoPeriodoAnioAnterior,
+  type Granularidad,
+  type Rango,
+} from './periodo';
 
 /**
  * Ventas — el eje comercial del Panel. Facturación, ticket, serie
@@ -35,6 +40,13 @@ export type ClienteDormido = {
   diasSinComprar: number;
   historico: number;
 };
+export type PuntoTicket = {
+  fecha: string;
+  ordenes: number;
+  ticketPromedio: number;
+  ticketMediana: number;
+};
+export type CeldaEstacionalidad = { categoria: string; mes: string; monto: number };
 
 @Injectable()
 export class VentasService {
@@ -83,16 +95,72 @@ export class VentasService {
     return rows.map((r) => ({ ...r, facturado: r2(r.facturado) }));
   }
 
+  /**
+   * Evolución del ticket por bucket: promedio Y mediana del total por
+   * orden (el promedio miente cuando dos órdenes grandes tapan cincuenta
+   * chicas — la mediana lo dice).
+   */
+  async serieTicket(tenantId: string, rango: Rango): Promise<PuntoTicket[]> {
+    const truncUnit = Prisma.raw(`'${TRUNC[granularidad(rango)]}'`);
+    const rows = await this.prisma.$queryRaw<
+      Array<{ fecha: string; ordenes: number; promedio: number; mediana: number }>
+    >`
+      WITH ordenes AS (
+        SELECT ot.id, date_trunc(${truncUnit}, ot."fechaEmision") AS bucket,
+               SUM(oti.subtotal) AS total
+        FROM "OrdenTrabajoItem" oti
+        JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
+        WHERE oti."tenantId" = ${tenantId}::uuid AND ot.estado <> 'borrador'
+          AND ot."fechaEmision" >= ${rango.desde} AND ot."fechaEmision" < ${finExclusivo(rango)}
+        GROUP BY ot.id, 2
+      )
+      SELECT to_char(bucket, 'YYYY-MM-DD') AS fecha, COUNT(*)::int AS ordenes,
+             COALESCE(AVG(total), 0)::float8 AS promedio,
+             COALESCE(percentile_cont(0.5) WITHIN GROUP (ORDER BY total), 0)::float8 AS mediana
+      FROM ordenes GROUP BY bucket ORDER BY bucket
+    `;
+    return rows.map((r) => ({
+      fecha: r.fecha,
+      ordenes: r.ordenes,
+      ticketPromedio: r2(r.promedio),
+      ticketMediana: r2(r.mediana),
+    }));
+  }
+
+  /**
+   * Ventas por categoría × mes de los 12 meses que terminan en el rango:
+   * la base del heatmap de estacionalidad. El índice estacional serio
+   * llega cuando haya 2+ años de historia; hasta entonces esto muestra
+   * "qué categoría vendió en qué mes" desde que hay datos.
+   */
+  async estacionalidad(tenantId: string, rango: Rango): Promise<CeldaEstacionalidad[]> {
+    const desde12 = new Date(rango.hasta.getFullYear(), rango.hasta.getMonth() - 11, 1);
+    const rows = await this.prisma.$queryRaw<CeldaEstacionalidad[]>`
+      SELECT COALESCE(NULLIF(oti."categoriaComercial", ''), 'Sin categoría') AS categoria,
+             to_char(date_trunc('month', ot."fechaEmision"), 'YYYY-MM') AS mes,
+             COALESCE(SUM(oti.subtotal), 0)::float8 AS monto
+      FROM "OrdenTrabajoItem" oti
+      JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
+      WHERE oti."tenantId" = ${tenantId}::uuid AND ot.estado <> 'borrador'
+        AND ot."fechaEmision" >= ${desde12} AND ot."fechaEmision" < ${finExclusivo(rango)}
+      GROUP BY 1, 2 ORDER BY 2, 1
+    `;
+    return rows.map((r) => ({ ...r, monto: r2(r.monto) }));
+  }
+
   async comercial(tenantId: string, rango: Rango, anterior: Rango, hoy: Date = new Date()) {
     const desde = rango.desde;
     const hastaExcl = finExclusivo(rango);
     const gran = granularidad(rango);
 
-    const [totalRows, prevRows, serieRows, clientes, vendedores, categoria, tecnologia, historia] =
+    const [totalRows, prevRows, anualRows, serieRows, ticketRows, estacionalidadRows, clientes, vendedores, categoria, tecnologia, historia] =
       await Promise.all([
         this.totales(tenantId, rango),
         this.totales(tenantId, anterior),
+        this.totales(tenantId, mismoPeriodoAnioAnterior(rango)),
         this.serie(tenantId, rango),
+        this.serieTicket(tenantId, rango),
+        this.estacionalidad(tenantId, rango),
         this.topClientes(tenantId, rango, 8),
         this.prisma.$queryRaw<Array<{ id: string | null; nombre: string; ordenes: number; facturado: number }>>`
           SELECT ot."vendedorEmpleadoId" AS id, COALESCE(e."nombreCompleto", 'Sin vendedor') AS nombre,
@@ -166,11 +234,15 @@ export class VentasService {
     const ticketPromedio = total.ordenes > 0 ? r2(total.ventas / total.ordenes) : 0;
     const itemsPorOrden = total.ordenes > 0 ? r2(total.items / total.ordenes) : 0;
     const sinComparativa = prev.ventas === 0;
+    const anual = anualRows;
 
     return {
       kpis: {
         ventas: r2(total.ventas),
         ventasDeltaPct: prev.ventas > 0 ? r2(((total.ventas - prev.ventas) / prev.ventas) * 100) : null,
+        /** vs. mismo período del año anterior; null hasta que exista esa historia. */
+        ventasDeltaAnualPct:
+          anual.ventas > 0 ? r2(((total.ventas - anual.ventas) / anual.ventas) * 100) : null,
         ordenes: total.ordenes,
         ordenesDeltaPct: prev.ordenes > 0 ? r2(((total.ordenes - prev.ordenes) / prev.ordenes) * 100) : null,
         ticketPromedio,
@@ -179,6 +251,8 @@ export class VentasService {
         clientesDormidos: dormidos.length,
       },
       serie: serieRows,
+      serieTicket: ticketRows,
+      estacionalidad: estacionalidadRows,
       granularidad: gran,
       rankingClientes: clientes,
       rankingVendedores: vendedores.map((v) => ({ ...v, facturado: r2(v.facturado) })),

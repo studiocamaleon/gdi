@@ -14,20 +14,27 @@ import {
   FactoryIcon,
   CircleDollarSignIcon,
   PackageIcon,
+  UsersIcon,
 } from "lucide-react";
 import { technologyCodeLabel } from "@/lib/maquinaria-tecnologias";
 import {
+  getPanelClientes,
   getPanelComercial,
   getPanelFinanzas,
+  getPanelMixCategoria,
   getPanelProduccion,
   getPanelProducto,
   getPanelResumen,
   type AlertaPanel,
+  type CeldaEstacionalidadPanel,
+  type ClientesPanel,
   type CobranzaPanel,
   type ComercialPanel,
   type MetaPanel,
+  type MixCategoriaPanel,
   type ProduccionPanel,
   type ProductoPanel,
+  type PuntoMixPanel,
   type RangoPanel,
   type RankingPanel,
   type RentabilidadPanel,
@@ -48,6 +55,133 @@ const pct = (n: number | null | undefined, d = 1) =>
 
 /* ═══════════ Chart primitives (verbatim del diseño) ═══════════ */
 
+/**
+ * Paleta categórica de series (orden FIJO — es el mecanismo de seguridad
+ * para daltonismo, no cosmética). Validada con el validador de dataviz
+ * sobre superficie blanca: ΔE adyacente mínimo 16.0, contraste ≥3:1.
+ * Distinta de los colores de estado (--signal/--ok), que quedan
+ * reservados para semáforos.
+ */
+const PALETA_SERIES = ["#3d6fd6", "#d0662e", "#0e9fae", "#c34d8c", "#b08915", "#7a5fd0"];
+const COLOR_OTROS = "#a8a6a0";
+
+/** Ancho real del contenedor (evita el SVG estirado por viewBox fijo). */
+function useAncho<T extends HTMLElement>(): [React.RefObject<T | null>, number] {
+  const ref = React.useRef<T>(null);
+  const [ancho, setAncho] = React.useState(0);
+  React.useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entradas) => setAncho(entradas[0].contentRect.width));
+    ro.observe(el);
+    setAncho(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, ancho];
+}
+
+/** Curva monótona (Fritsch–Carlson): suave sin inventar picos que no están en los datos. */
+function pathMonotona(pts: Array<readonly [number, number]>): string {
+  if (pts.length < 2) return pts.length ? `M${pts[0][0]} ${pts[0][1]}` : "";
+  const n = pts.length;
+  const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+  const dx: number[] = [], m: number[] = [];
+  for (let i = 0; i < n - 1; i++) { dx.push(xs[i + 1] - xs[i]); m.push((ys[i + 1] - ys[i]) / (xs[i + 1] - xs[i])); }
+  const t: number[] = [m[0]];
+  for (let i = 1; i < n - 1; i++) {
+    if (m[i - 1] * m[i] <= 0) t.push(0);
+    else { const w1 = 2 * dx[i] + dx[i - 1], w2 = dx[i] + 2 * dx[i - 1]; t.push((w1 + w2) / (w1 / m[i - 1] + w2 / m[i])); }
+  }
+  t.push(m[n - 2]);
+  let d = `M${xs[0].toFixed(1)} ${ys[0].toFixed(1)}`;
+  for (let i = 0; i < n - 1; i++) {
+    const x1 = xs[i] + dx[i] / 3, y1 = ys[i] + (t[i] * dx[i]) / 3;
+    const x2 = xs[i + 1] - dx[i] / 3, y2 = ys[i + 1] - (t[i + 1] * dx[i]) / 3;
+    d += ` C${x1.toFixed(1)} ${y1.toFixed(1)}, ${x2.toFixed(1)} ${y2.toFixed(1)}, ${xs[i + 1].toFixed(1)} ${ys[i + 1].toFixed(1)}`;
+  }
+  return d;
+}
+
+/** Tooltip flotante de los gráficos: título (bucket) + filas con punto de color. */
+type FilaTooltip = { color: string; label: string; valor: string };
+function TooltipChart({ x, contenedorAncho, titulo, filas }: { x: number; contenedorAncho: number; titulo: string; filas: FilaTooltip[] }) {
+  const ANCHO_TT = 190;
+  const left = Math.max(4, Math.min(x + 14, contenedorAncho - ANCHO_TT - 4));
+  return (
+    <div style={{ position: "absolute", left, top: 6, width: ANCHO_TT, pointerEvents: "none", zIndex: 5, background: "var(--surface)", border: "1px solid var(--hairline)", borderRadius: 8, boxShadow: "0 6px 20px rgba(20,20,26,.10)", padding: "8px 10px" }}>
+      <div style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: ".05em", color: "var(--muted-text)", marginBottom: 6 }}>{titulo}</div>
+      {filas.map((f) => (
+        <div key={f.label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, lineHeight: 1.7 }}>
+          <span style={{ width: 8, height: 8, borderRadius: 2, background: f.color, flexShrink: 0 }} />
+          <span style={{ color: "var(--ink-2)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.label}</span>
+          <span className="mono" style={{ color: "var(--ink)", fontWeight: 600 }}>{f.valor}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Multi-línea con curvas monótonas, colores de PALETA_SERIES y crosshair
+ * con tooltip (el mix evolutivo y cualquier comparación de series).
+ * Ancho medido del contenedor: nada se estira.
+ */
+function MultiLineChart({ series, labels, height = 240, yFormat = (v: number) => String(v), fmtValor = (v: number) => `$${fmtAR(v)}` }: {
+  series: Array<{ nombre: string; color: string; values: number[] }>;
+  labels: string[];
+  height?: number;
+  yFormat?: (v: number) => string;
+  fmtValor?: (v: number) => string;
+}) {
+  const [ref, anchoMedido] = useAncho<HTMLDivElement>();
+  const [hover, setHover] = React.useState<number | null>(null);
+  const W = Math.max(320, anchoMedido || 640), H = height;
+  const padL = 46, padR = 14, padT = 14, padB = 24;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+  const max = Math.max(...series.flatMap((s) => s.values), 0) * 1.08 || 1;
+  const step = innerW / Math.max(1, labels.length - 1);
+  const x = (i: number) => padL + i * step;
+  const y = (v: number) => padT + innerH - (v / max) * innerH;
+  const ticks = Array.from({ length: 5 }, (_, i) => (max * i) / 4);
+
+  const alBucket = (clientX: number, rect: DOMRect) => {
+    const idx = Math.round((clientX - rect.left - padL) / step);
+    setHover(Math.max(0, Math.min(labels.length - 1, idx)));
+  };
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}
+      onMouseLeave={() => setHover(null)}
+      onMouseMove={(e) => alBucket(e.clientX, e.currentTarget.getBoundingClientRect())}>
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: "block" }}>
+        {ticks.map((v, i) => (
+          <g key={i}>
+            <line x1={padL} x2={W - padR} y1={y(v)} y2={y(v)} stroke="var(--hairline)" strokeWidth="1" />
+            <text x={padL - 8} y={y(v) + 3} fontSize="10" textAnchor="end" fill="var(--muted-text)" fontFamily="var(--font-mono)">{yFormat(v)}</text>
+          </g>
+        ))}
+        {labels.map((lab, i) =>
+          i % Math.ceil(labels.length / Math.max(3, Math.floor(innerW / 70))) === 0 || i === labels.length - 1 ? (
+            <text key={i} x={x(i)} y={H - 6} fontSize="10" textAnchor="middle" fill="var(--muted-text)">{lab}</text>
+          ) : null,
+        )}
+        {hover != null ? <line x1={x(hover)} x2={x(hover)} y1={padT} y2={padT + innerH} stroke="var(--muted-text-2)" strokeWidth="1" strokeDasharray="3 3" /> : null}
+        {series.map((s) => (
+          <path key={s.nombre} d={pathMonotona(s.values.map((v, i) => [x(i), y(v)] as const))} fill="none" stroke={s.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        ))}
+        {series.map((s) => {
+          const i = hover ?? s.values.length - 1;
+          return <circle key={s.nombre} cx={x(i)} cy={y(s.values[i] ?? 0)} r={hover != null ? 4 : 3} fill={s.color} stroke="var(--surface)" strokeWidth="2" />;
+        })}
+      </svg>
+      {hover != null ? (
+        <TooltipChart x={x(hover)} contenedorAncho={W} titulo={labels[hover]}
+          filas={[...series].sort((a, b) => (b.values[hover] ?? 0) - (a.values[hover] ?? 0)).map((s) => ({ color: s.color, label: s.nombre, valor: fmtValor(s.values[hover] ?? 0) }))} />
+      ) : null}
+    </div>
+  );
+}
+
 function Sparkline({ values, height = 28, width = 84, signal = false }: { values: number[]; height?: number; width?: number; signal?: boolean }) {
   if (!values?.length || values.length < 2) return null;
   const min = Math.min(...values), max = Math.max(...values), range = max - min || 1;
@@ -66,7 +200,9 @@ function Sparkline({ values, height = 28, width = 84, signal = false }: { values
   );
 }
 
-function AreaChart({ series, labels, height = 220, yFormat = (v: number) => String(v), secondary }: { series: number[]; labels: string[]; height?: number; yFormat?: (v: number) => string; secondary?: number[] }) {
+function AreaChart({ series, labels, height = 220, yFormat = (v: number) => String(v), secondary, nombres = ["Valor"], fmtValor = (v: number) => `$${fmtAR(v)}` }: { series: number[]; labels: string[]; height?: number; yFormat?: (v: number) => string; secondary?: number[]; nombres?: [string, string?]; fmtValor?: (v: number) => string }) {
+  const [wrapRef, anchoWrap] = useAncho<HTMLDivElement>();
+  const [hover, setHover] = React.useState<number | null>(null);
   const W = 800, H = height, padL = 44, padR = 8, padT = 18, padB = 26;
   const innerW = W - padL - padR, innerH = H - padT - padB;
   const all = secondary ? [...series, ...secondary] : series;
@@ -77,32 +213,61 @@ function AreaChart({ series, labels, height = 220, yFormat = (v: number) => Stri
   const line = pts.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
   const area = `${line} L${pts[pts.length - 1][0].toFixed(1)} ${padT + innerH} L${pts[0][0].toFixed(1)} ${padT + innerH} Z`;
   const ticks = Array.from({ length: 5 }, (_, i) => min + (range * i) / 4);
+  // El SVG se estira al ancho del card: el mouse se mapea en coordenadas del viewBox.
+  const alBucket = (clientX: number, rect: DOMRect) => {
+    const xView = ((clientX - rect.left) / rect.width) * W;
+    setHover(Math.max(0, Math.min(series.length - 1, Math.round((xView - padL) / step))));
+  };
+  const xPixel = (i: number) => (anchoWrap > 0 ? ((padL + i * step) / W) * anchoWrap : 0);
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" style={{ display: "block" }}>
-      {ticks.map((v, i) => {
-        const y = padT + innerH - ((v - min) / range) * innerH;
-        return (
-          <g key={i}>
-            <line x1={padL} x2={W - padR} y1={y} y2={y} stroke="var(--hairline)" strokeWidth="1" />
-            <text x={padL - 8} y={y + 3} fontSize="10" textAnchor="end" fill="var(--muted-text)" fontFamily="var(--font-mono)">{yFormat(v)}</text>
-          </g>
-        );
-      })}
-      {labels.map((lab, i) =>
-        i % Math.ceil(labels.length / 12) === 0 || i === labels.length - 1 ? (
-          <text key={i} x={padL + i * step} y={H - 8} fontSize="10" textAnchor="middle" fill="var(--muted-text)">{lab}</text>
-        ) : null,
-      )}
-      {pts2 ? <path d={pts2.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ")} fill="none" stroke="var(--muted-text-2)" strokeWidth="1.4" strokeDasharray="3 3" /> : null}
-      <path d={area} fill="rgba(20,20,26,.06)" />
-      <path d={line} fill="none" stroke="var(--ink)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r="3" fill="var(--ink)" />
-      <circle cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r="6" fill="var(--ink)" opacity=".12" />
-    </svg>
+    <div ref={wrapRef} style={{ position: "relative" }}
+      onMouseLeave={() => setHover(null)}
+      onMouseMove={(e) => alBucket(e.clientX, e.currentTarget.getBoundingClientRect())}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" style={{ display: "block" }}>
+        {ticks.map((v, i) => {
+          const y = padT + innerH - ((v - min) / range) * innerH;
+          return (
+            <g key={i}>
+              <line x1={padL} x2={W - padR} y1={y} y2={y} stroke="var(--hairline)" strokeWidth="1" />
+              <text x={padL - 8} y={y + 3} fontSize="10" textAnchor="end" fill="var(--muted-text)" fontFamily="var(--font-mono)">{yFormat(v)}</text>
+            </g>
+          );
+        })}
+        {labels.map((lab, i) =>
+          i % Math.ceil(labels.length / 12) === 0 || i === labels.length - 1 ? (
+            <text key={i} x={padL + i * step} y={H - 8} fontSize="10" textAnchor="middle" fill="var(--muted-text)">{lab}</text>
+          ) : null,
+        )}
+        {hover != null ? <line x1={pts[hover][0]} x2={pts[hover][0]} y1={padT} y2={padT + innerH} stroke="var(--muted-text-2)" strokeWidth="1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" /> : null}
+        {pts2 ? <path d={pts2.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ")} fill="none" stroke="var(--muted-text-2)" strokeWidth="1.4" strokeDasharray="3 3" /> : null}
+        <path d={area} fill="rgba(20,20,26,.06)" />
+        <path d={line} fill="none" stroke="var(--ink)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        {hover == null ? (
+          <>
+            <circle cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r="3" fill="var(--ink)" />
+            <circle cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r="6" fill="var(--ink)" opacity=".12" />
+          </>
+        ) : (
+          <>
+            <circle cx={pts[hover][0]} cy={pts[hover][1]} r="4" fill="var(--ink)" stroke="var(--surface)" strokeWidth="2" />
+            {pts2 ? <circle cx={pts2[hover][0]} cy={pts2[hover][1]} r="4" fill="var(--muted-text-2)" stroke="var(--surface)" strokeWidth="2" /> : null}
+          </>
+        )}
+      </svg>
+      {hover != null && anchoWrap > 0 ? (
+        <TooltipChart x={xPixel(hover)} contenedorAncho={anchoWrap} titulo={labels[hover]}
+          filas={[
+            { color: "var(--ink)", label: nombres[0], valor: fmtValor(series[hover]) },
+            ...(secondary && nombres[1] ? [{ color: "var(--muted-text-2)", label: nombres[1], valor: fmtValor(secondary[hover]) }] : []),
+          ]} />
+      ) : null}
+    </div>
   );
 }
 
-function BarChart({ data, labels, height = 220, yFormat = (v: number) => String(v), mode = "stack", colors }: { data: number[][]; labels: string[]; height?: number; yFormat?: (v: number) => string; mode?: "stack" | "group"; colors?: string[]; stacks?: string[] }) {
+function BarChart({ data, labels, height = 220, yFormat = (v: number) => String(v), mode = "stack", colors, stacks, fmtValor = (v: number) => `$${fmtAR(v)}` }: { data: number[][]; labels: string[]; height?: number; yFormat?: (v: number) => string; mode?: "stack" | "group"; colors?: string[]; stacks?: string[]; fmtValor?: (v: number) => string }) {
+  const [wrapRef, anchoWrap] = useAncho<HTMLDivElement>();
+  const [hover, setHover] = React.useState<number | null>(null);
   const W = 800, H = height, padL = 44, padR = 8, padT = 18, padB = 26;
   const innerW = W - padL - padR, innerH = H - padT - padB;
   const stackCount = data.length, barCount = data[0]?.length ?? 0;
@@ -113,39 +278,58 @@ function BarChart({ data, labels, height = 220, yFormat = (v: number) => String(
     ? Math.max(...labels.map((_, i) => data.reduce((s, st) => s + (st[i] ?? 0), 0)))
     : Math.max(...data.flat())) * 1.12 || 1;
   const ticks = Array.from({ length: 5 }, (_, i) => (max * i) / 4);
+  const alBucket = (clientX: number, rect: DOMRect) => {
+    const xView = ((clientX - rect.left) / rect.width) * W;
+    setHover(Math.max(0, Math.min(barCount - 1, Math.floor((xView - padL) / groupW))));
+  };
+  const filasDe = (bi: number): FilaTooltip[] => {
+    const filas = data.map((st, si) => ({ color: col(si), label: stacks?.[si] ?? `Serie ${si + 1}`, valor: fmtValor(st[bi] ?? 0) }));
+    if (mode === "stack" && stackCount > 1) {
+      filas.push({ color: "transparent", label: "Total", valor: fmtValor(data.reduce((s, st) => s + (st[bi] ?? 0), 0)) });
+    }
+    return filas;
+  };
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" style={{ display: "block" }}>
-      {ticks.map((v, i) => {
-        const y = padT + innerH - (v / max) * innerH;
-        return (
-          <g key={i}>
-            <line x1={padL} x2={W - padR} y1={y} y2={y} stroke="var(--hairline)" strokeWidth="1" />
-            <text x={padL - 8} y={y + 3} fontSize="10" textAnchor="end" fill="var(--muted-text)" fontFamily="var(--font-mono)">{yFormat(v)}</text>
-          </g>
-        );
-      })}
-      {labels.map((lab, bi) => {
-        const cx = padL + groupW * bi + groupW / 2;
-        if (mode === "stack") {
-          const barW = Math.min(28, groupW * 0.55);
-          let accY = padT + innerH;
+    <div ref={wrapRef} style={{ position: "relative" }}
+      onMouseLeave={() => setHover(null)}
+      onMouseMove={(e) => alBucket(e.clientX, e.currentTarget.getBoundingClientRect())}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" style={{ display: "block" }}>
+        {ticks.map((v, i) => {
+          const y = padT + innerH - (v / max) * innerH;
           return (
-            <g key={bi}>
-              {data.map((st, si) => { const h = ((st[bi] ?? 0) / max) * innerH; accY -= h; return <rect key={si} x={cx - barW / 2} y={accY} width={barW} height={h} fill={col(si)} rx="1.5" />; })}
+            <g key={i}>
+              <line x1={padL} x2={W - padR} y1={y} y2={y} stroke="var(--hairline)" strokeWidth="1" />
+              <text x={padL - 8} y={y + 3} fontSize="10" textAnchor="end" fill="var(--muted-text)" fontFamily="var(--font-mono)">{yFormat(v)}</text>
+            </g>
+          );
+        })}
+        {labels.map((lab, bi) => {
+          const cx = padL + groupW * bi + groupW / 2;
+          const atenuada = hover != null && hover !== bi ? 0.45 : 1;
+          if (mode === "stack") {
+            const barW = Math.min(28, groupW * 0.55);
+            let accY = padT + innerH;
+            return (
+              <g key={bi} opacity={atenuada}>
+                {data.map((st, si) => { const h = ((st[bi] ?? 0) / max) * innerH; accY -= h; return <rect key={si} x={cx - barW / 2} y={accY} width={barW} height={h} fill={col(si)} rx="1.5" />; })}
+                <text x={cx} y={H - 8} fontSize="10" textAnchor="middle" fill="var(--muted-text)">{lab}</text>
+              </g>
+            );
+          }
+          const barW = Math.min(10, (groupW * 0.7) / stackCount);
+          const totalW = barW * stackCount + 2 * (stackCount - 1);
+          return (
+            <g key={bi} opacity={atenuada}>
+              {data.map((st, si) => { const h = ((st[bi] ?? 0) / max) * innerH; return <rect key={si} x={cx - totalW / 2 + si * (barW + 2)} y={padT + innerH - h} width={barW} height={h} fill={col(si)} rx="1.5" />; })}
               <text x={cx} y={H - 8} fontSize="10" textAnchor="middle" fill="var(--muted-text)">{lab}</text>
             </g>
           );
-        }
-        const barW = Math.min(10, (groupW * 0.7) / stackCount);
-        const totalW = barW * stackCount + 2 * (stackCount - 1);
-        return (
-          <g key={bi}>
-            {data.map((st, si) => { const h = ((st[bi] ?? 0) / max) * innerH; return <rect key={si} x={cx - totalW / 2 + si * (barW + 2)} y={padT + innerH - h} width={barW} height={h} fill={col(si)} rx="1.5" />; })}
-            <text x={cx} y={H - 8} fontSize="10" textAnchor="middle" fill="var(--muted-text)">{lab}</text>
-          </g>
-        );
-      })}
-    </svg>
+        })}
+      </svg>
+      {hover != null && anchoWrap > 0 ? (
+        <TooltipChart x={((padL + groupW * hover + groupW / 2) / W) * anchoWrap} contenedorAncho={anchoWrap} titulo={labels[hover]} filas={filasDe(hover)} />
+      ) : null}
+    </div>
   );
 }
 
@@ -193,6 +377,76 @@ function StackedHBar({ segments, height = 18 }: { segments: Array<{ value: numbe
 
 function LegendDot({ color, label, value }: { color: string; label: string; value?: string }) {
   return <div className="d-legend-item"><span className="d-legend-dot" style={{ background: color }} /><span className="lbl">{label}</span>{value != null ? <span className="val mono">{value}</span> : null}</div>;
+}
+
+/** Pivota puntos {fecha,nombre,monto} a series apiladas (top N + "Otros"). */
+function pivotMix(puntos: PuntoMixPanel[], maxSeries = 6): { labels: string[]; nombres: string[]; data: number[][] } {
+  const fechas = [...new Set(puntos.map((p) => p.fecha))].sort();
+  const totales = new Map<string, number>();
+  for (const p of puntos) totales.set(p.nombre, (totales.get(p.nombre) ?? 0) + p.monto);
+  const ranking = [...totales.entries()].sort((a, b) => b[1] - a[1]).map(([n]) => n);
+  const top = ranking.slice(0, maxSeries);
+  const idx = new Map(fechas.map((f, i) => [f, i] as const));
+  const data = top.map(() => fechas.map(() => 0));
+  const otros = fechas.map(() => 0);
+  for (const p of puntos) {
+    const i = idx.get(p.fecha);
+    if (i == null) continue;
+    const s = top.indexOf(p.nombre);
+    if (s >= 0) data[s][i] += p.monto;
+    else otros[i] += p.monto;
+  }
+  const hayOtros = ranking.length > maxSeries;
+  return {
+    labels: fechas.map((f) => f.slice(5)),
+    nombres: hayOtros ? [...top, "Otros"] : top,
+    data: hayOtros ? [...data, otros] : data,
+  };
+}
+
+const MESES_CORTOS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+/** "2026-07" → "jul 26" (sin ambigüedad día/mes). */
+function formatoMesCorto(mes: string): string {
+  const [y, m] = mes.split("-");
+  return `${MESES_CORTOS[Number(m) - 1] ?? m} ${y.slice(2)}`;
+}
+
+/** Heatmap categoría × mes: intensidad = venta de la celda vs. el máximo. */
+function HeatmapEstacionalidad({ celdas }: { celdas: CeldaEstacionalidadPanel[] }) {
+  const meses = [...new Set(celdas.map((c) => c.mes))].sort();
+  const totales = new Map<string, number>();
+  for (const c of celdas) totales.set(c.categoria, (totales.get(c.categoria) ?? 0) + c.monto);
+  const categorias = [...totales.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([n]) => n);
+  const valor = new Map(celdas.map((c) => [`${c.categoria}|${c.mes}`, c.monto] as const));
+  const max = Math.max(...celdas.map((c) => c.monto), 1);
+  if (meses.length === 0) return <div className="d-empty" style={{ padding: 30 }}>Sin ventas registradas todavía.</div>;
+  return (
+    <div style={{ overflowX: "auto" }}>
+      <div style={{ display: "grid", gridTemplateColumns: `minmax(90px, 130px) repeat(${meses.length}, minmax(26px, 1fr))`, gap: 3, alignItems: "center" }}>
+        {categorias.map((cat) => (
+          <React.Fragment key={cat}>
+            <div style={{ fontSize: 11.5, color: "var(--ink-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={cat}>{cat}</div>
+            {meses.map((mes) => {
+              const m = valor.get(`${cat}|${mes}`) ?? 0;
+              return (
+                <div
+                  key={mes}
+                  title={`${cat} · ${formatoMesCorto(mes)}: $${fmtAR(m)}`}
+                  style={{ height: 22, borderRadius: 3, background: m > 0 ? `rgba(20,20,26,${(0.08 + 0.72 * (m / max)).toFixed(3)})` : "rgba(20,20,26,.03)" }}
+                />
+              );
+            })}
+          </React.Fragment>
+        ))}
+        <div />
+        {meses.map((mes, i) => (
+          <div key={mes} className="mono" style={{ fontSize: 9.5, color: "var(--muted-text)", textAlign: "center" }}>
+            {i % 2 === 0 || meses.length <= 6 ? formatoMesCorto(mes) : ""}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 /* ─── KPI (verbatim del diseño) ─── */
@@ -351,15 +605,16 @@ function TabComercial({ d }: { d: ComercialPanel }) {
   return (
     <>
       <div className="d-kpi-row">
-        <Kpi label="Ventas" currency="$" value={fmtK(k.ventas)} delta={k.ventasDeltaPct} spark={d.serie.map((s) => s.monto)} />
+        <Kpi label="Ventas" currency="$" value={fmtK(k.ventas)} delta={k.ventasDeltaPct} spark={d.serie.map((s) => s.monto)}
+          sub={k.ventasDeltaAnualPct != null ? `${k.ventasDeltaAnualPct >= 0 ? "+" : ""}${fmtAR(k.ventasDeltaAnualPct, 1)}% vs año pasado` : "vs período anterior"} />
         <Kpi label="Órdenes" value={fmtAR(k.ordenes)} delta={k.ordenesDeltaPct} />
-        <Kpi label="Ticket promedio" currency="$" value={fmtK(k.ticketPromedio)} />
+        <Kpi label="Ticket promedio" currency="$" value={fmtK(k.ticketPromedio)} spark={d.serieTicket.map((t) => t.ticketPromedio)} />
         <Kpi label="Clientes nuevos" value={fmtAR(k.nuevosClientes)} delta={k.nuevosClientes} deltaTone="ok" sub="este período" />
         <Kpi label="Clientes dormidos" value={fmtAR(k.clientesDormidos)} deltaTone="signal" delta={k.clientesDormidos > 0 ? k.clientesDormidos : undefined} sub="sin comprar" />
       </div>
       <div className="dash-grid">
         <Card span={8} title="Ventas del período" sub={`serie ${d.granularidad}`} foot={<span>Ticket promedio <strong style={{ color: "var(--ink)" }}>${fmtK(k.ticketPromedio)}</strong> · {k.itemsPorOrden} items/orden</span>}>
-          {d.serie.length >= 2 ? <AreaChart series={d.serie.map((s) => s.monto)} labels={labels} yFormat={(v) => `$${fmtK(v)}`} height={230} /> : <div className="d-empty" style={{ padding: 40 }}>Serie insuficiente.</div>}
+          {d.serie.length >= 2 ? <AreaChart series={d.serie.map((s) => s.monto)} labels={labels} yFormat={(v) => `$${fmtK(v)}`} height={230} nombres={["Ventas"]} /> : <div className="d-empty" style={{ padding: 40 }}>Serie insuficiente.</div>}
         </Card>
         <Card span={4} title="Mix por categoría" sub="participación">
           {d.mixCategoria.map((m) => (
@@ -368,6 +623,22 @@ function TabComercial({ d }: { d: ComercialPanel }) {
               <HBar value={m.monto} max={maxCatMix} />
             </div>
           ))}
+        </Card>
+        <Card span={7} title="Evolución del ticket" sub="promedio y mediana por orden"
+          foot={d.serieTicket.length >= 2 ? <span>La <strong style={{ color: "var(--ink)" }}>mediana</strong> (punteada) resiste las órdenes grandes: si se separan, pocas órdenes inflan el promedio.</span> : undefined}>
+          {d.serieTicket.length >= 2 ? (
+            <>
+              <AreaChart series={d.serieTicket.map((t) => t.ticketPromedio)} secondary={d.serieTicket.map((t) => t.ticketMediana)} labels={d.serieTicket.map((t) => t.fecha.slice(5))} yFormat={(v) => `$${fmtK(v)}`} height={210} nombres={["Promedio", "Mediana"]} />
+              <div className="d-legend" style={{ marginTop: 8 }}>
+                <LegendDot color="var(--ink)" label="Promedio" value={`$${fmtK(k.ticketPromedio)}`} />
+                <LegendDot color="var(--muted-text-2)" label="Mediana" />
+              </div>
+            </>
+          ) : <div className="d-empty" style={{ padding: 40 }}>Serie insuficiente para graficar el ticket.</div>}
+        </Card>
+        <Card span={5} title="Estacionalidad por categoría" sub="ventas por mes · últimos 12 meses">
+          <HeatmapEstacionalidad celdas={d.estacionalidad} />
+          <div style={{ fontSize: 11, color: "var(--muted-text)", marginTop: 10 }}>Más oscuro = más venta. El índice estacional llega con 2+ años de historia.</div>
         </Card>
         <Card span={6} title="Clientes principales" flush><RankList rows={d.rankingClientes} /></Card>
         <Card span={6} title="Ranking de vendedores" flush><RankList rows={d.rankingVendedores} /></Card>
@@ -421,7 +692,7 @@ function TabProduccion({ d }: { d: ProduccionPanel }) {
       </div>
       <div className="dash-grid">
         <Card span={5} title="Throughput diario" sub="pasos completados por día" action={<span className="mono" style={{ color: "var(--ink)", fontSize: 13, fontWeight: 600 }}>{d.throughput.reduce((a, t) => a + t.cantidad, 0)}</span>}>
-          {d.throughput.length >= 2 ? <AreaChart series={d.throughput.map((t) => t.cantidad)} labels={d.throughput.map((t) => t.fecha.slice(5))} yFormat={(v) => String(Math.round(v))} height={220} /> : <BarChart labels={d.throughput.map((t) => t.fecha.slice(5))} data={[d.throughput.map((t) => t.cantidad)]} stacks={["Pasos"]} height={200} />}
+          {d.throughput.length >= 2 ? <AreaChart series={d.throughput.map((t) => t.cantidad)} labels={d.throughput.map((t) => t.fecha.slice(5))} yFormat={(v) => String(Math.round(v))} height={220} nombres={["Pasos completados"]} fmtValor={(v) => fmtAR(v, 0)} /> : <BarChart labels={d.throughput.map((t) => t.fecha.slice(5))} data={[d.throughput.map((t) => t.cantidad)]} stacks={["Pasos"]} height={200} fmtValor={(v) => fmtAR(v, 0)} />}
         </Card>
         <Card span={7} title="Precisión de estimación" sub="tiempo real vs. cotizado por familia" flush>
           <table className="d-tbl"><thead><tr><th>Familia</th><th className="right">Cotizado</th><th className="right">Real</th><th className="right">Razón</th><th className="right">n</th></tr></thead>
@@ -604,11 +875,81 @@ function FacturacionVsCosto({ rentabilidad: r, meta }: { rentabilidad: Rentabili
 }
 
 /* ═══════════ TAB · Ventas & Producto ═══════════ */
-function TabProducto({ d }: { d: ProductoPanel }) {
-  const fmtMed = (a: number, alto: number) => `${fmtAR(a / 10, 0)}×${fmtAR(alto / 10, 0)} cm`;
+/** Mix evolutivo con drill: apilado por categoría; al elegir una, por producto. */
+function MixEvolutivoCard({ d, rango }: { d: ProductoPanel; rango: RangoPanel }) {
+  const [categoria, setCategoria] = React.useState<string | null>(null);
+  const [drill, setDrill] = React.useState<MixCategoriaPanel | null>(null);
+  const [cargando, setCargando] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!categoria) { setDrill(null); setError(null); return; }
+    let vivo = true; setCargando(true); setError(null);
+    getPanelMixCategoria(categoria, rango)
+      .then((res) => { if (vivo) setDrill(res as MixCategoriaPanel); })
+      .catch((err) => { if (vivo) setError(err instanceof Error ? err.message : "No se pudo abrir la categoría."); })
+      .finally(() => { if (vivo) setCargando(false); });
+    return () => { vivo = false; };
+  }, [categoria, rango]);
+
+  const puntos = categoria && drill ? drill.serie : d.mixEvolutivo;
+  const pivot = pivotMix(puntos);
+  const categorias = [...new Set(d.mixEvolutivo.map((p) => p.nombre))];
+  // El color sigue a la ENTIDAD (orden alfabético estable), no a su ranking:
+  // cambiar de período no repinta a las categorías que sobreviven.
+  const ordenAlfa = pivot.nombres.filter((n) => n !== "Otros").sort((a, b) => a.localeCompare(b, "es"));
+  const colorDe = (n: string) => (n === "Otros" ? COLOR_OTROS : PALETA_SERIES[ordenAlfa.indexOf(n) % PALETA_SERIES.length]);
+  const series = pivot.nombres.map((n, i) => ({ nombre: n, color: colorDe(n), values: pivot.data[i] }));
+  return (
+    <Card span={12} title="Evolución del mix" sub={categoria ? `productos de ${categoria}` : "ventas por categoría en el tiempo"}
+      action={
+        <select value={categoria ?? ""} onChange={(e) => setCategoria(e.target.value || null)}
+          style={{ fontSize: 12, padding: "4px 8px", borderRadius: 6, border: "1px solid var(--hairline)", background: "transparent", color: "var(--ink)" }}>
+          <option value="">Todas las categorías</option>
+          {categorias.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+      }>
+      {error ? <div className="d-empty" style={{ padding: 30 }}>{error}</div>
+        : cargando && !puntos.length ? <div className="d-empty" style={{ padding: 30 }}>Abriendo la categoría…</div>
+        : pivot.labels.length >= 2 ? (
+          <>
+            <MultiLineChart series={series} labels={pivot.labels} yFormat={(v) => `$${fmtK(v)}`} height={240} />
+            <div className="d-legend" style={{ marginTop: 10, flexWrap: "wrap" }}>
+              {series.map((s) => <LegendDot key={s.nombre} color={s.color} label={s.nombre} value={`$${fmtK(s.values.reduce((a, v) => a + v, 0))}`} />)}
+            </div>
+          </>
+        ) : <div className="d-empty" style={{ padding: 40 }}>El período no tiene serie suficiente: probá “Trimestre” o “Año”.</div>}
+    </Card>
+  );
+}
+
+/** Unidades canónicas de material → etiqueta humana y decimales sensatos. */
+const UNIDAD_MATERIAL: Record<string, { singular: string; plural: string; dec: number }> = {
+  unidad: { singular: "unidad", plural: "unidades", dec: 0 },
+  hoja: { singular: "hoja", plural: "hojas", dec: 0 },
+  m2: { singular: "m²", plural: "m²", dec: 1 },
+  metro_lineal: { singular: "m lineal", plural: "m lineales", dec: 1 },
+  ml: { singular: "ml", plural: "ml", dec: 0 },
+  gramo: { singular: "g", plural: "g", dec: 0 },
+};
+function fmtCantidadMaterial(m: { cantidad: number; unidad: string; formato: string | null }): string {
+  if (m.unidad === "gramo" && m.cantidad >= 1000) return `${fmtAR(m.cantidad / 1000, 2)} kg`;
+  const u = UNIDAD_MATERIAL[m.unidad];
+  if (!u) return `${fmtAR(m.cantidad, 1)} ${m.unidad}`;
+  const etiqueta = m.cantidad === 1 ? u.singular : u.plural;
+  const formato = m.unidad === "hoja" && m.formato ? ` ${m.formato}` : "";
+  return `${fmtAR(m.cantidad, u.dec)} ${etiqueta}${formato}`;
+}
+
+const COLOR_A_MEDIDA = PALETA_SERIES[1];
+
+function TabProducto({ d, rango }: { d: ProductoPanel; rango: RangoPanel }) {
   const maxTec = Math.max(...d.porTecnologia.map((m) => m.monto), 1);
+  const ad = d.adicionales;
+  const med = d.medidas;
   return (
     <div className="dash-grid">
+      <MixEvolutivoCard d={d} rango={rango} />
       <Card span={6} title="Ventas por categoría" sub="margen y contribución" flush>
         <table className="d-tbl"><thead><tr><th>Categoría</th><th className="right">Margen</th><th className="right" title="Margen de contribución = ventas − material y consumibles">MC</th><th className="right">Ventas</th></tr></thead>
           <tbody>{d.porCategoria.map((c) => (<tr key={c.nombre}><td><div className="nm">{c.nombre}</div></td><td className="right"><div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "flex-end" }}><div style={{ width: 44 }}><HBar value={c.margenPct} max={70} tone={c.margenPct >= 50 ? "ok" : c.margenPct >= 40 ? "ink" : "signal"} /></div><span className="mono" style={{ width: 42 }}>{pct(c.margenPct)}</span></div></td><td className="right mono" style={{ color: "var(--ok)" }}>{pct(c.contribucionPct)}</td><td className="right mono">${fmtK(c.ventas)}</td></tr>))}</tbody>
@@ -619,19 +960,78 @@ function TabProducto({ d }: { d: ProductoPanel }) {
           <tbody>{d.porProducto.slice(0, 8).map((p) => (<tr key={p.nombre}><td><div className="nm">{p.nombre}</div></td><td className="right mono">{p.items}</td><td className="right mono">{pct(p.margenPct)}</td><td className="right mono" style={{ color: "var(--ok)" }}>{pct(p.contribucionPct)}</td><td className="right mono">${fmtK(p.ventas)}</td></tr>))}</tbody>
         </table>
       </Card>
+      <Card span={7} title="Adicionales más pedidos" sub="qué se agrega a los trabajos y cuánto suma al ticket"
+        action={<span className="mono" style={{ color: "var(--ink)", fontSize: 13, fontWeight: 600 }}>{pct(ad.pctCon, 0)} con adicionales</span>} flush>
+        {ad.porAdicional.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Ningún item del período llevó adicionales.</div> : (
+          <>
+            <table className="d-tbl"><thead><tr><th>Adicional</th><th style={{ width: 110 }} /><th className="right">Items</th><th className="right">Attach</th><th className="right">Ventas de esos items</th></tr></thead>
+              <tbody>{ad.porAdicional.slice(0, 8).map((a) => (
+                <tr key={a.etiqueta}><td><div className="nm">{a.etiqueta}</div></td>
+                  <td><HBar value={a.pctItems} max={Math.max(...ad.porAdicional.map((x) => x.pctItems), 1)} /></td>
+                  <td className="right mono">{a.items}</td>
+                  <td className="right mono" style={{ fontWeight: 600 }}>{pct(a.pctItems, 0)}</td>
+                  <td className="right mono">${fmtK(a.ventas)}</td></tr>
+              ))}</tbody>
+            </table>
+            <div style={{ display: "flex", gap: 18, padding: "10px 14px", fontSize: 12, color: "var(--muted-text)", borderTop: "1px solid var(--hairline)" }}>
+              <span>Item con adicionales <strong className="mono" style={{ color: "var(--ink)" }}>${fmtK(ad.ticketItemCon)}</strong></span>
+              <span>sin adicionales <strong className="mono" style={{ color: "var(--ink)" }}>${fmtK(ad.ticketItemSin)}</strong></span>
+              {ad.ticketItemSin > 0 && ad.itemsCon > 0 ? <span style={{ color: "var(--ok)" }}>{ad.ticketItemCon >= ad.ticketItemSin ? "+" : ""}{fmtAR(((ad.ticketItemCon - ad.ticketItemSin) / ad.ticketItemSin) * 100, 0)}% de ticket</span> : null}
+            </div>
+          </>
+        )}
+      </Card>
+      <Card span={5} title="Adicionales por producto" sub="% de cada producto que sale con adicionales" flush>
+        {ad.porProducto.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Sin ventas en el período.</div> : (
+          <table className="d-tbl"><thead><tr><th>Producto</th><th className="right">Items</th><th style={{ width: 80 }} /><th className="right">Con adic.</th></tr></thead>
+            <tbody>{ad.porProducto.slice(0, 8).map((p) => (
+              <tr key={p.nombre}><td><div className="nm">{p.nombre}</div></td>
+                <td className="right mono">{p.items}</td>
+                <td><HBar value={p.pctCon} max={100} tone={p.pctCon >= 50 ? "ok" : "ink"} /></td>
+                <td className="right mono" style={{ fontWeight: 600 }}>{pct(p.pctCon, 0)}</td></tr>
+            ))}</tbody>
+          </table>
+        )}
+      </Card>
       <Card span={7} title="Uso de papel y material" sub="consumo teórico del período" flush>
         <table className="d-tbl"><thead><tr><th>Material</th><th className="right">Cantidad</th><th className="right">Trabajos</th><th className="right">Costo</th></tr></thead>
-          <tbody>{d.porPapel.map((m) => (<tr key={m.material}><td><div className="nm">{m.material}</div></td><td className="right mono">{fmtAR(m.cantidad, 1)} {m.unidad}</td><td className="right mono">{m.items}</td><td className="right mono">${fmtK(m.costo)}</td></tr>))}</tbody>
+          <tbody>{d.porPapel.map((m) => (<tr key={`${m.material}|${m.formato ?? ""}`}><td><div className="nm">{m.material}</div></td><td className="right mono">{fmtCantidadMaterial(m)}</td><td className="right mono">{m.items}</td><td className="right mono">${fmtK(m.costo)}</td></tr>))}</tbody>
         </table>
       </Card>
-      <Card span={5} title="Medidas más vendidas" sub={`${fmtAR(d.totalM2, 1)} m² totales`} flush>
-        <table className="d-tbl"><thead><tr><th>Medida</th><th className="right">Unidades</th><th className="right">m²</th></tr></thead>
-          <tbody>{d.porMedida.slice(0, 8).map((m) => (<tr key={`${m.anchoMm}x${m.altoMm}`}><td className="mono">{fmtMed(m.anchoMm, m.altoMm)}</td><td className="right mono">{fmtAR(m.unidades)}</td><td className="right mono">{fmtAR(m.m2, 2)}</td></tr>))}</tbody>
-        </table>
+      <Card span={5} title="Medida estándar vs. a medida" sub={`cómo se cotizó cada item · ${fmtAR(d.totalM2, 1)} m² vendidos`}>
+        {med.items === 0 ? <div className="d-empty" style={{ padding: 30 }}>Sin items con dato de medida en el período.</div> : (
+          <>
+            <StackedHBar segments={[
+              { value: med.estandar, color: "var(--ink)", label: "Estándar" },
+              { value: med.personalizada, color: COLOR_A_MEDIDA, label: "A medida" },
+            ]} />
+            <div style={{ display: "flex", gap: 18, marginTop: 10, marginBottom: 12, fontSize: 12 }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: "var(--ink)" }} />Estándar <strong className="mono">{med.estandar}</strong><span style={{ color: "var(--muted-text)" }}>({med.pctEstandar != null ? pct(med.pctEstandar, 0) : "—"})</span></span>
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: COLOR_A_MEDIDA }} />A medida <strong className="mono">{med.personalizada}</strong><span style={{ color: "var(--muted-text)" }}>({med.pctEstandar != null ? pct(100 - med.pctEstandar, 0) : "—"})</span></span>
+            </div>
+            <table className="d-tbl"><thead><tr><th>Producto</th><th className="right">Items</th><th style={{ width: 90 }} /><th className="right">A medida</th></tr></thead>
+              <tbody>{med.porProducto.map((p) => (
+                <tr key={p.nombre}><td><div className="nm">{p.nombre}</div></td>
+                  <td className="right mono">{p.items}</td>
+                  <td><StackedHBar height={10} segments={[
+                    { value: p.estandar, color: "var(--ink)", label: "Estándar" },
+                    { value: p.personalizada, color: COLOR_A_MEDIDA, label: "A medida" },
+                  ]} /></td>
+                  <td className="right mono" style={{ fontWeight: 600, color: p.personalizada > 0 ? COLOR_A_MEDIDA : "var(--muted-text)" }}>{pct(100 - p.pctEstandar, 0)}</td></tr>
+              ))}</tbody>
+            </table>
+            {med.topEstandar.length > 0 ? (
+              <div style={{ marginTop: 10, fontSize: 11.5, color: "var(--muted-text)" }}>
+                Estándar más usadas: {med.topEstandar.map((t) => `${t.nombre} ×${t.items}`).join(" · ")}
+              </div>
+            ) : null}
+            {med.sinDato > 0 ? <div style={{ marginTop: 6, fontSize: 11, color: "var(--muted-text)" }}>{med.sinDato} item{med.sinDato === 1 ? "" : "s"} sin dato de medida, fuera del porcentaje.</div> : null}
+          </>
+        )}
       </Card>
       <Card span={6} title="Consumo de tintas" sub="teórico, del snapshot" flush>
         <table className="d-tbl"><thead><tr><th>Tinta</th><th className="right">Cantidad</th></tr></thead>
-          <tbody>{d.consumoTintas.map((m) => (<tr key={m.material}><td><div className="nm">{m.material}</div></td><td className="right mono">{fmtAR(m.cantidad, 1)} {m.unidad}</td></tr>))}</tbody>
+          <tbody>{d.consumoTintas.map((m) => (<tr key={`${m.material}|${m.formato ?? ""}`}><td><div className="nm">{m.material}</div></td><td className="right mono">{fmtCantidadMaterial(m)}</td></tr>))}</tbody>
         </table>
       </Card>
       <Card span={6} title="Mix por tecnología">
@@ -646,11 +1046,115 @@ function TabProducto({ d }: { d: ProductoPanel }) {
   );
 }
 
+/* ═══════════ TAB · Clientes ═══════════ */
+const SEGMENTO_RFM_META: Record<string, { label: string; hint: string }> = {
+  campeones: { label: "Campeones", hint: "Compran seguido y hace poco (4+ órdenes)" },
+  leales: { label: "Leales", hint: "Activos con 2-3 órdenes" },
+  nuevos: { label: "Nuevos", hint: "Primera compra reciente" },
+  en_riesgo: { label: "En riesgo", hint: "Recurrentes que están dejando de comprar" },
+  perdidos: { label: "Perdidos", hint: "Recurrentes sin comprar hace mucho" },
+  ocasionales: { label: "Ocasionales", hint: "Una sola compra, hace tiempo" },
+};
+const SEGMENTO_RFM_COLOR: Record<string, string> = {
+  campeones: "var(--ok)", leales: "var(--ink)", nuevos: "#3a9ca0",
+  en_riesgo: "#d97757", perdidos: "var(--signal)", ocasionales: "#c8c6c0",
+};
+
+function TabClientes({ d }: { d: ClientesPanel }) {
+  const k = d.kpis;
+  const serieNR = d.serieNuevosRecurrentes;
+  const maxSeg = Math.max(...d.rfm.segmentos.map((s) => s.clientes), 1);
+  return (
+    <>
+      <div className="d-kpi-row">
+        <Kpi label="Clientes activos" value={fmtAR(k.activos)} sub="compraron en el período" />
+        <Kpi label="Retención" value={pct(k.retencionPct, 0)} sub="del período anterior que volvieron" hint="Clientes del período anterior equivalente que también compraron en éste" />
+        <Kpi label="Recompra" value={k.frecuenciaMedianaDias != null ? `${fmtAR(k.frecuenciaMedianaDias, 0)} d` : "—"} sub="mediana entre compras" />
+        <Kpi label="Clientes nuevos" value={fmtAR(k.nuevos)} sub={`${fmtAR(k.recurrentes)} recurrentes`} />
+        <Kpi label="Concentración top 3" value={pct(k.concentracionTop3Pct, 0)} deltaTone="signal" sub="de la venta del período" hint="Cuánto de tu facturación depende de sólo 3 clientes" />
+      </div>
+      <div className="dash-grid">
+        <Card span={7} title="Nuevos vs. recurrentes" sub="de dónde viene la venta de cada período"
+          foot={<span>La barra clara es venta de clientes captados en ese período; la oscura, de los que ya tenías.</span>}>
+          {serieNR.length >= 2 ? (
+            <>
+              <BarChart labels={serieNR.map((s) => s.fecha.slice(5))} data={[serieNR.map((s) => s.recurrentes), serieNR.map((s) => s.nuevos)]} mode="stack" stacks={["Recurrentes", "Nuevos"]} colors={["var(--ink)", "#8aa896"]} yFormat={(v) => `$${fmtK(v)}`} height={220} />
+              <div className="d-legend" style={{ marginTop: 10 }}>
+                <LegendDot color="var(--ink)" label="Recurrentes" />
+                <LegendDot color="#8aa896" label="Nuevos" />
+              </div>
+            </>
+          ) : <div className="d-empty" style={{ padding: 40 }}>Serie insuficiente: probá “Trimestre” o “Año”.</div>}
+        </Card>
+        <Card span={5} title="Segmentos de cartera" sub={`activo = compró hace ≤${d.rfm.diasActivo} días`}>
+          {d.rfm.segmentos.map((s) => (
+            <div key={s.segmento} style={{ marginBottom: 10 }} title={SEGMENTO_RFM_META[s.segmento]?.hint}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 2, background: SEGMENTO_RFM_COLOR[s.segmento] ?? "var(--ink)" }} />
+                  {SEGMENTO_RFM_META[s.segmento]?.label ?? s.segmento}
+                </span>
+                <span className="mono" style={{ color: "var(--muted-text)" }}>{s.clientes} · ${fmtK(s.facturado)} hist.</span>
+              </div>
+              <HBar value={s.clientes} max={maxSeg} tone={s.segmento === "en_riesgo" || s.segmento === "perdidos" ? "signal" : s.segmento === "campeones" ? "ok" : "ink"} />
+            </div>
+          ))}
+        </Card>
+        <Card span={7} title="Concentración de cartera" sub="quiénes explican tu facturación del período" flush>
+          {d.pareto.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Sin ventas con cliente en el período.</div> : (
+            <table className="d-tbl"><thead><tr><th>Cliente</th><th className="right">Órdenes</th><th className="right">Facturado</th><th className="right">%</th><th className="right">% acum.</th></tr></thead>
+              <tbody>{d.pareto.map((c) => (
+                <tr key={c.clienteId}><td><div className="nm">{c.cliente}</div></td>
+                  <td className="right mono">{c.ordenes}</td>
+                  <td className="right mono">${fmtK(c.facturado)}</td>
+                  <td className="right mono">{pct(c.pct, 0)}</td>
+                  <td className="right mono" style={{ color: c.pctAcumulado >= 80 ? "var(--muted-text)" : "var(--ink)", fontWeight: 600 }}>{pct(c.pctAcumulado, 0)}</td></tr>
+              ))}</tbody>
+            </table>
+          )}
+        </Card>
+        <Card span={5} title="Clientes en riesgo" sub="recurrentes que están dejando de comprar" flush>
+          {d.rfm.enRiesgo.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Ningún recurrente en zona de riesgo.</div> : (
+            <table className="d-tbl"><thead><tr><th>Cliente</th><th className="right">Sin comprar</th><th className="right">Histórico</th></tr></thead>
+              <tbody>{d.rfm.enRiesgo.map((c) => (
+                <tr key={c.clienteId}><td><div className="nm">{c.cliente}</div><div className="sub">{c.ordenes} órdenes · última {c.ultimaCompra}</div></td>
+                  <td className="right mono" style={{ color: "var(--signal)" }}>{c.diasSinComprar} d</td>
+                  <td className="right mono">${fmtK(c.facturadoHistorico)}</td></tr>
+              ))}</tbody>
+            </table>
+          )}
+        </Card>
+        <Card span={12} title="Margen por cliente" sub="quién factura mucho y margina poco" flush>
+          {d.margenClientes.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Sin ventas en el período.</div> : (
+            <table className="d-tbl"><thead><tr><th>Cliente</th><th className="right">Órdenes</th><th className="right">Ventas</th><th className="right">Margen</th><th className="right">Margen %</th></tr></thead>
+              <tbody>{d.margenClientes.map((c) => (
+                <tr key={c.clienteId ?? c.cliente}>
+                  <td><div className="nm">{c.cliente}</div>{c.itemsSinCosto > 0 ? <div className="sub">{c.itemsSinCosto} item{c.itemsSinCosto === 1 ? "" : "s"} sin costo snapshoteado (fuera del margen)</div> : null}</td>
+                  <td className="right mono">{c.ordenes}</td>
+                  <td className="right mono">${fmtK(c.ventas)}</td>
+                  <td className="right mono">${fmtK(c.margen)}</td>
+                  <td className="right">{c.margenPct != null ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "flex-end" }}>
+                      <div style={{ width: 60 }}><HBar value={c.margenPct} max={70} tone={c.margenPct >= 50 ? "ok" : c.margenPct >= 40 ? "ink" : "signal"} /></div>
+                      <span className="mono" style={{ width: 42 }}>{pct(c.margenPct)}</span>
+                    </div>
+                  ) : <span className="mono">—</span>}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          )}
+        </Card>
+      </div>
+    </>
+  );
+}
+
 /* ═══════════ Shell ═══════════ */
-type TabKey = "resumen" | "comercial" | "produccion" | "finanzas" | "producto";
+type TabKey = "resumen" | "comercial" | "clientes" | "produccion" | "finanzas" | "producto";
 const TABS: Array<{ key: TabKey; label: string; Icon: React.ComponentType<React.SVGProps<SVGSVGElement>> }> = [
   { key: "resumen", label: "Resumen ejecutivo", Icon: LayoutGridIcon },
   { key: "comercial", label: "Comercial", Icon: BriefcaseIcon },
+  { key: "clientes", label: "Clientes", Icon: UsersIcon },
   { key: "produccion", label: "Producción", Icon: FactoryIcon },
   { key: "finanzas", label: "Finanzas", Icon: CircleDollarSignIcon },
   { key: "producto", label: "Ventas & Producto", Icon: PackageIcon },
@@ -671,7 +1175,7 @@ function rangoDe(p: PeriodoKey): RangoPanel {
   return { desde: iso(new Date(y, 0, 1)), hasta: iso(new Date(y, 11, 31)) };
 }
 const FETCHERS: Record<TabKey, (r: RangoPanel) => Promise<unknown>> = {
-  resumen: getPanelResumen, comercial: getPanelComercial, produccion: getPanelProduccion, finanzas: getPanelFinanzas, producto: getPanelProducto,
+  resumen: getPanelResumen, comercial: getPanelComercial, clientes: getPanelClientes, produccion: getPanelProduccion, finanzas: getPanelFinanzas, producto: getPanelProducto,
 };
 
 export function PanelGeneral({ initialResumen }: { initialResumen: ResumenData }) {
@@ -682,6 +1186,8 @@ export function PanelGeneral({ initialResumen }: { initialResumen: ResumenData }
   const [error, setError] = React.useState<string | null>(null);
   const key = `${tab}|${periodo}`;
   const data = cache[key];
+  // Identidad estable del rango: evita re-fetches del drill por objeto nuevo.
+  const rango = React.useMemo(() => rangoDe(periodo), [periodo]);
 
   React.useEffect(() => {
     if (data) return;
@@ -725,9 +1231,10 @@ export function PanelGeneral({ initialResumen }: { initialResumen: ResumenData }
           <>
             {tab === "resumen" ? <TabResumen d={data as ResumenData} /> : null}
             {tab === "comercial" ? <TabComercial d={data as ComercialPanel} /> : null}
+            {tab === "clientes" ? <TabClientes d={data as ClientesPanel} /> : null}
             {tab === "produccion" ? <TabProduccion d={data as ProduccionPanel} /> : null}
             {tab === "finanzas" ? <TabFinanzas d={data as FinanzasData} /> : null}
-            {tab === "producto" ? <TabProducto d={data as ProductoPanel} /> : null}
+            {tab === "producto" ? <TabProducto d={data as ProductoPanel} rango={rango} /> : null}
             {meta && meta.limites.length > 0 ? (
               <div style={{ fontSize: 11, color: "var(--muted-text)", lineHeight: 1.5, marginTop: 4 }}>
                 <strong>Fuente:</strong> {meta.fuente}. {meta.limites.join(" ")}{meta.sinComparativa ? " Sin período anterior para comparar." : ""}

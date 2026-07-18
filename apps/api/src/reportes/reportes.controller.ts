@@ -8,7 +8,9 @@ import { VentasService } from './ventas.service';
 import { ProductoService } from './producto.service';
 import { ReporteProduccionService } from './produccion.service';
 import { AlertasService } from './alertas.service';
+import { ClientesService } from './clientes.service';
 import { RangoReporteDto } from './dto/rango-reporte.dto';
+import { MixCategoriaDto } from './dto/mix-categoria.dto';
 import { ActualizarUmbralesDto } from './dto/actualizar-umbrales.dto';
 
 /**
@@ -28,6 +30,7 @@ export class ReportesController {
     private readonly productos: ProductoService,
     private readonly produccionSvc: ReporteProduccionService,
     private readonly alertas: AlertasService,
+    private readonly clientesSvc: ClientesService,
   ) {}
 
   @Get('resumen')
@@ -143,6 +146,29 @@ export class ReportesController {
         limites: this.productos.limites(),
       }),
       ...producto,
+    };
+  }
+
+  @Get('producto/mix-categoria')
+  async mixCategoria(@CurrentSession() auth: CurrentAuth, @Query() query: MixCategoriaDto) {
+    const { rango, anterior } = this.service.resolverRango(query);
+    const drill = await this.productos.mixCategoria(auth.tenantId, rango, query.categoria);
+    return {
+      meta: this.service.metaBase(rango, anterior, 'Snapshot de cotización'),
+      ...drill,
+    };
+  }
+
+  @Get('clientes')
+  async clientes(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
+    const { rango, anterior } = this.service.resolverRango(query);
+    const clientes = await this.clientesSvc.clientes(auth.tenantId, rango, anterior);
+    return {
+      meta: this.service.metaBase(rango, anterior, 'Órdenes emitidas (historial completo)', {
+        limites: this.clientesSvc.limites(clientes.rfm.diasActivo),
+        sinComparativa: clientes.sinComparativa,
+      }),
+      ...clientes,
     };
   }
 
