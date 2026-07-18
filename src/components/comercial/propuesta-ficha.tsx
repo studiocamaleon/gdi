@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeftIcon,
-  BriefcaseBusinessIcon,
   CalendarIcon,
   ClockIcon,
   CheckIcon,
@@ -5493,18 +5492,7 @@ export function PropuestaFicha({
                 Órdenes de trabajo
               </Link>
             </nav>
-          ) : (
-            <>
-              <Link className="back-link" href="/">
-                <ArrowLeftIcon />
-                Volver
-              </Link>
-              <div className="eyebrow">
-                <BriefcaseBusinessIcon />
-                Comercial
-              </div>
-            </>
-          )}
+          ) : null}
           {orden ? (
             <h1
               style={{
