@@ -459,6 +459,41 @@ export function getPanelClientes(rango?: RangoPanel) {
 export function getPanelEquipo(rango?: RangoPanel) {
   return apiRequest<TabPanel<EquipoPanel>>(`/reportes/panel/equipo${qs(rango)}`);
 }
+
+/** "Mi desempeño": la vista del propio operario — siempre scoped al user logueado. */
+export type MiDesempenoPanel = {
+  limites: string[];
+  ventana: { desde: string; hasta: string; semanas: number };
+  hoy: { minutos: number; pasos: number };
+  semanaActual: {
+    minutos: number;
+    pasos: number;
+    dias: number;
+    /** vs. el promedio de TUS semanas previas con actividad; null sin historia. */
+    vsPromedioPct: number | null;
+  };
+  serieSemanal: Array<{ semana: string; minutos: number; pasos: number; dias: number }>;
+  eficiencia: {
+    muestras: number;
+    muestraMinima: number;
+    desvioPct: number | null;
+    serie: Array<{ semana: string; desvioPct: number; muestras: number }>;
+  };
+  disciplina: {
+    pasos: number;
+    medidos: number;
+    declarados: number;
+    estimados: number;
+    invalidos: number;
+    medidoPct: number | null;
+    autoPausas: number;
+  };
+  familias: Array<{ familia: string; minutos: number; pasos: number; nueva: boolean }>;
+  pausas: Array<{ motivo: string; veces: number }>;
+};
+export function getMiDesempeno() {
+  return apiRequest<MiDesempenoPanel>(`/reportes/panel/mi-desempeno`);
+}
 export function getPanelMixCategoria(categoria: string, rango?: RangoPanel) {
   const params = new URLSearchParams();
   if (rango?.desde) params.set("desde", rango.desde);

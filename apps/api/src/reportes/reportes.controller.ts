@@ -186,6 +186,19 @@ export class ReportesController {
     };
   }
 
+  /**
+   * "Mi desempeño": SIEMPRE scoped al usuario logueado (auth.userId) —
+   * la vista del propio operario, ventana fija de 8 semanas.
+   */
+  @Get('mi-desempeno')
+  async miDesempeno(@CurrentSession() auth: CurrentAuth) {
+    const datos = await this.equipoSvc.miDesempeno(auth.tenantId, auth.userId);
+    return {
+      limites: this.equipoSvc.limitesMiDesempeno(),
+      ...datos,
+    };
+  }
+
   @Get('umbrales')
   getUmbrales(@CurrentSession() auth: CurrentAuth) {
     return this.alertas.getUmbrales(auth.tenantId);

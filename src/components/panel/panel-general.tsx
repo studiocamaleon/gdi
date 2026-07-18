@@ -45,15 +45,15 @@ import {
 } from "@/lib/panel-api";
 
 /* ─── Formato es-AR ─── */
-const fmtAR = (n: number, d = 0) =>
+export const fmtAR = (n: number, d = 0) =>
   n.toLocaleString("es-AR", { minimumFractionDigits: d, maximumFractionDigits: d });
-function fmtK(n: number): string {
+export function fmtK(n: number): string {
   const a = Math.abs(n);
   if (a >= 1e6) return (n / 1e6).toFixed(1).replace(".0", "") + "M";
   if (a >= 1e3) return (n / 1e3).toFixed(a >= 100e3 ? 0 : 1).replace(".0", "") + "k";
   return fmtAR(n);
 }
-const pct = (n: number | null | undefined, d = 1) =>
+export const pct = (n: number | null | undefined, d = 1) =>
   n == null ? "—" : `${fmtAR(n, d).replace(/,0$/, "")}%`;
 
 /* ═══════════ Chart primitives (verbatim del diseño) ═══════════ */
@@ -185,7 +185,7 @@ function MultiLineChart({ series, labels, height = 240, yFormat = (v: number) =>
   );
 }
 
-function Sparkline({ values, height = 28, width = 84, signal = false }: { values: number[]; height?: number; width?: number; signal?: boolean }) {
+export function Sparkline({ values, height = 28, width = 84, signal = false }: { values: number[]; height?: number; width?: number; signal?: boolean }) {
   if (!values?.length || values.length < 2) return null;
   const min = Math.min(...values), max = Math.max(...values), range = max - min || 1;
   const step = width / (values.length - 1);
@@ -203,7 +203,7 @@ function Sparkline({ values, height = 28, width = 84, signal = false }: { values
   );
 }
 
-function AreaChart({ series, labels, height = 220, yFormat = (v: number) => String(v), secondary, nombres = ["Valor"], fmtValor = (v: number) => `$${fmtAR(v)}` }: { series: number[]; labels: string[]; height?: number; yFormat?: (v: number) => string; secondary?: number[]; nombres?: [string, string?]; fmtValor?: (v: number) => string }) {
+export function AreaChart({ series, labels, height = 220, yFormat = (v: number) => String(v), secondary, nombres = ["Valor"], fmtValor = (v: number) => `$${fmtAR(v)}` }: { series: number[]; labels: string[]; height?: number; yFormat?: (v: number) => string; secondary?: number[]; nombres?: [string, string?]; fmtValor?: (v: number) => string }) {
   const [wrapRef, anchoWrap] = useAncho<HTMLDivElement>();
   const [hover, setHover] = React.useState<number | null>(null);
   const W = 800, H = height, padL = 44, padR = 8, padT = 18, padB = 26;
@@ -367,7 +367,7 @@ function StackedRing({ segments, size = 150, stroke = 20, label, sub }: { segmen
   );
 }
 
-function HBar({ value, max, tone = "ink" }: { value: number; max: number; tone?: "ink" | "ok" | "signal" | "muted" }) {
+export function HBar({ value, max, tone = "ink" }: { value: number; max: number; tone?: "ink" | "ok" | "signal" | "muted" }) {
   const p = max > 0 ? Math.max(0, Math.min(1, value / max)) : 0;
   const colors = { ink: "var(--ink)", ok: "var(--ok)", signal: "var(--signal)", muted: "var(--muted-text-2)" };
   return <div className="d-hbar"><span style={{ width: `${p * 100}%`, background: colors[tone] }} /></div>;
@@ -377,7 +377,7 @@ function HBar({ value, max, tone = "ink" }: { value: number; max: number; tone?:
  * Barra divergente desde el centro: izquierda (verde) = más rápido que lo
  * cotizado, derecha (naranja) = más lento. Se satura en ±100% de desvío.
  */
-function BarraDesvio({ desvioPct }: { desvioPct: number | null }) {
+export function BarraDesvio({ desvioPct }: { desvioPct: number | null }) {
   if (desvioPct == null) return null;
   const mag = Math.min(100, Math.abs(desvioPct)) / 100;
   const lento = desvioPct > 0;
@@ -394,12 +394,12 @@ function BarraDesvio({ desvioPct }: { desvioPct: number | null }) {
   );
 }
 
-function StackedHBar({ segments, height = 18 }: { segments: Array<{ value: number; color: string; label: string }>; height?: number }) {
+export function StackedHBar({ segments, height = 18 }: { segments: Array<{ value: number; color: string; label: string }>; height?: number }) {
   const total = segments.reduce((s, x) => s + x.value, 0) || 1;
   return <div className="d-shbar" style={{ height }}>{segments.map((s, i) => s.value > 0 ? <span key={i} style={{ width: `${(s.value / total) * 100}%`, background: s.color }} title={`${s.label}: ${s.value}`} /> : null)}</div>;
 }
 
-function LegendDot({ color, label, value }: { color: string; label: string; value?: string }) {
+export function LegendDot({ color, label, value }: { color: string; label: string; value?: string }) {
   return <div className="d-legend-item"><span className="d-legend-dot" style={{ background: color }} /><span className="lbl">{label}</span>{value != null ? <span className="val mono">{value}</span> : null}</div>;
 }
 
@@ -474,7 +474,7 @@ function HeatmapEstacionalidad({ celdas }: { celdas: CeldaEstacionalidadPanel[] 
 }
 
 /* ─── KPI (verbatim del diseño) ─── */
-function Kpi({ label, value, currency, sub, delta, deltaUnit = "%", deltaTone = "auto", spark, sparkSignal, hint }: { label: string; value: React.ReactNode; currency?: string; sub?: string; delta?: number | null; deltaUnit?: string; deltaTone?: "auto" | "ok" | "signal" | "muted" | "inverse"; spark?: number[]; sparkSignal?: boolean; hint?: string }) {
+export function Kpi({ label, value, currency, sub, delta, deltaUnit = "%", deltaTone = "auto", spark, sparkSignal, hint }: { label: string; value: React.ReactNode; currency?: string; sub?: string; delta?: number | null; deltaUnit?: string; deltaTone?: "auto" | "ok" | "signal" | "muted" | "inverse"; spark?: number[]; sparkSignal?: boolean; hint?: string }) {
   let tone = "muted";
   if (typeof delta === "number") {
     if (deltaTone === "auto") tone = delta >= 0 ? "ok" : "signal";
@@ -496,7 +496,7 @@ function Kpi({ label, value, currency, sub, delta, deltaUnit = "%", deltaTone = 
 }
 
 /* ─── Card ─── */
-function Card({ span, title, sub, action, flush, foot, children }: { span: number; title: string; sub?: string; action?: React.ReactNode; flush?: boolean; foot?: React.ReactNode; children: React.ReactNode }) {
+export function Card({ span, title, sub, action, flush, foot, children }: { span: number; title: string; sub?: string; action?: React.ReactNode; flush?: boolean; foot?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className={`d-card span-${span}`}>
       <div className="d-card-head">
@@ -697,7 +697,7 @@ const FUENTE_TIEMPO_META: Record<string, { label: string; color: string }> = {
 };
 
 /** "95m" / "3,2h" según magnitud (tiempos de operador del panel). */
-function fmtMinutos(min: number): string {
+export function fmtMinutos(min: number): string {
   return min < 90 ? `${fmtAR(min, 0)}m` : `${fmtAR(min / 60, 1)}h`;
 }
 
@@ -1086,7 +1086,7 @@ function TabProducto({ d, rango }: { d: ProductoPanel; rango: RangoPanel }) {
 }
 
 /* ═══════════ TAB · Equipo ═══════════ */
-const FUENTE_DISCIPLINA_COLORS: Array<{ key: "medidos" | "declarados" | "estimados" | "invalidos"; label: string; color: string }> = [
+export const FUENTE_DISCIPLINA_COLORS: Array<{ key: "medidos" | "declarados" | "estimados" | "invalidos"; label: string; color: string }> = [
   { key: "medidos", label: "Medido", color: "var(--ok)" },
   { key: "declarados", label: "Declarado", color: "#5a7fd8" },
   { key: "estimados", label: "Estimado", color: "#c8c6c0" },
