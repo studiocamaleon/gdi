@@ -92,6 +92,37 @@ export type ComercialPanel = {
   dormidos: ClienteDormidoPanel[];
 };
 
+/** Producción (mirada de gerencia): OTD, eficiencia de tiempo, utilización. */
+export type ProduccionPanel = {
+  kpis: {
+    otdPct: number | null;
+    atrasoPromedioDias: number;
+    leadTimeDias: number | null;
+    eficienciaPct: number | null;
+    bloqueados: number;
+    utilizacionPct: number | null;
+  };
+  otd: {
+    total: number;
+    aTiempo: number;
+    tarde: number;
+    sinFecha: number;
+    otdPct: number | null;
+    atrasoPromedioDias: number;
+    leadTimeDias: number | null;
+    atrasadas: Array<{ numero: string; cliente: string; fechaEntrega: string; diasAtraso: number }>;
+  };
+  eficiencia: {
+    /** >100% = tarda MÁS que lo cotizado. */
+    eficienciaPct: number | null;
+    porFamilia: Array<{ familia: string; estimadoMin: number; realMin: number; razon: number | null; muestras: number }>;
+    atipicosExcluidos: number;
+  };
+  utilizacion: Array<{ centro: string; horasReales: number; capacidadPractica: number; pct: number | null }>;
+  throughput: Array<{ fecha: string; cantidad: number }>;
+  bloqueos: Array<{ motivo: string; veces: number }>;
+};
+
 /** Ventas & Producto: márgenes por categoría/producto, uso de papel, medidas. */
 export type ProductoMargenPanel = {
   nombre: string;
@@ -163,7 +194,12 @@ export type CobranzaPanel = {
 
 export function getPanelResumen(rango?: RangoPanel) {
   return apiRequest<
-    TabPanel<{ rentabilidad: RentabilidadPanel; topClientes: RankingPanel[]; pendiente: string[] }>
+    TabPanel<{
+      rentabilidad: RentabilidadPanel;
+      produccion: { otdPct: number | null; utilizacionPct: number | null };
+      topClientes: RankingPanel[];
+      pendiente: string[];
+    }>
   >(`/reportes/panel/resumen${qs(rango)}`);
 }
 export function getPanelComercial(rango?: RangoPanel) {
@@ -175,7 +211,7 @@ export function getPanelFinanzas(rango?: RangoPanel) {
   );
 }
 export function getPanelProduccion(rango?: RangoPanel) {
-  return apiRequest<TabPanel>(`/reportes/panel/produccion${qs(rango)}`);
+  return apiRequest<TabPanel<ProduccionPanel>>(`/reportes/panel/produccion${qs(rango)}`);
 }
 export function getPanelProducto(rango?: RangoPanel) {
   return apiRequest<TabPanel<ProductoPanel>>(`/reportes/panel/producto${qs(rango)}`);
