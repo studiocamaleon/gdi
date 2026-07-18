@@ -534,22 +534,20 @@ type AccionHandler = (
 ) => Promise<void>;
 
 /**
- * ¿Completar este paso sería un "inicio y completo en 1 seg" (D8)? Sólo
- * evaluable client-side cuando NO hubo tramos previos: nunca se inició, o
- * el único tramo es el abierto y lleva menos del umbral (1 min o 10% del
- * estimado). Con historia de pausas el backend decide solo.
+ * ¿Completar este paso dejaría el tiempo INVÁLIDO (D8, el "inicio y
+ * completo en 1 seg")? Espejo del criterio del backend: suma de tramos
+ * cerrados (`tiempoAcumuladoMin`) + el abierto si corre, contra el umbral
+ * de 1 min o 10% del estimado. Cubre pendiente, en curso y pausado.
  */
 function completarSeriaInstantaneo(paso: TableroPasoData): boolean {
   if (paso.modoRegistro !== "cronometro") return false;
-  // Un paso reabierto conserva sus tramos históricos: el backend ya tiene
-  // tiempo medido y va a preferirlo — no molestar con el prompt.
-  if (paso.estado === "pendiente") return paso.iniciadoEl == null;
-  if (paso.estado !== "en_curso" || !paso.tramoAbierto) return false;
-  const esPrimerTramo = paso.iniciadoEl === paso.tramoAbierto.inicioEl;
-  if (!esPrimerTramo) return false;
-  const elapsedMin = (Date.now() - new Date(paso.tramoAbierto.inicioEl).getTime()) / 60_000;
+  if (paso.estado !== "pendiente" && paso.estado !== "en_curso" && paso.estado !== "pausado") return false;
+  const abiertoMin = paso.tramoAbierto
+    ? (Date.now() - new Date(paso.tramoAbierto.inicioEl).getTime()) / 60_000
+    : 0;
+  const suma = paso.tiempoAcumuladoMin + abiertoMin;
   const umbral = Math.max(1, (paso.duracionEstimadaMin ?? 0) * 0.1);
-  return elapsedMin < umbral;
+  return suma < umbral;
 }
 
 /** Chips del micro-prompt de tiempo declarado (D8): estimado, mitad, doble. */

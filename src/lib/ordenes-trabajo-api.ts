@@ -246,6 +246,8 @@ export type MisTramosAbiertos = {
     /** ISO datetime. */
     inicioEl: string;
     duracionEstimadaMin: number | null;
+    /** Minutos ya trabajados en tramos anteriores (cerrados) del paso. */
+    acumuladoPrevioMin: number;
   }>;
 };
 

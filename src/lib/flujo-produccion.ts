@@ -422,6 +422,7 @@ export function estimarDemoraNuevos({
         completadoPorNombre: null,
         tramoAbierto: null,
         motivoPausa: null,
+        tiempoAcumuladoMin: 0,
         mesaEsMia: false,
         mesaUsuarioNombre: null,
       })),

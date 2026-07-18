@@ -47,6 +47,26 @@ function labelCrono(tramo: Tramo, ahora: number): string {
   return estimado ? `${transcurrido} · est. ${estimado}` : transcurrido;
 }
 
+/**
+ * ¿Completar dejaría el tiempo inválido (D8)? Mismo criterio del backend:
+ * tramos cerrados + el vivo, contra 1 min o 10% del estimado.
+ */
+function completarSeriaInvalido(tramo: Tramo, ahora: number): boolean {
+  const suma = tramo.acumuladoPrevioMin + elapsedMin(tramo, ahora);
+  const umbral = Math.max(
+    1,
+    tramo.duracionEstimadaMin != null ? tramo.duracionEstimadaMin * 0.1 : 0,
+  );
+  return suma < umbral;
+}
+
+/** Chips del micro-prompt: mitad, estimado y doble del estimado del paso. */
+function chipsDeclarar(estimado: number | null): number[] {
+  if (estimado == null || estimado <= 0) return [];
+  const redondo = (n: number) => Math.max(1, Math.round(n));
+  return [...new Set([redondo(estimado / 2), redondo(estimado), redondo(estimado * 2)])];
+}
+
 export function PasosEnCursoWidget() {
   const [tramos, setTramos] = React.useState<Tramo[]>([]);
   const [expanded, setExpanded] = React.useState(false);
@@ -54,6 +74,8 @@ export function PasosEnCursoWidget() {
   const [pausandoId, setPausandoId] = React.useState<string | null>(null);
   const [motivo, setMotivo] = React.useState<string | null>(null);
   const [detalle, setDetalle] = React.useState("");
+  const [declarandoId, setDeclarandoId] = React.useState<string | null>(null);
+  const [tiempoOtro, setTiempoOtro] = React.useState("");
   /** Prompt de inactividad activo: paso + momento límite de la auto-pausa. */
   const [prompt, setPrompt] = React.useState<{ pasoId: string; deadline: number } | null>(null);
   const [ahora, setAhora] = React.useState(() => Date.now());
@@ -138,7 +160,12 @@ export function PasosEnCursoWidget() {
 
   const accion = async (
     tramo: Tramo,
-    payload: { accion: "pausar" | "completar"; motivo?: string; motivoDetalle?: string },
+    payload: {
+      accion: "pausar" | "completar";
+      motivo?: string;
+      motivoDetalle?: string;
+      tiempoDeclaradoMin?: number;
+    },
   ) => {
     setBusyId(tramo.pasoId);
     try {
@@ -149,6 +176,8 @@ export function PasosEnCursoWidget() {
       setPausandoId(null);
       setMotivo(null);
       setDetalle("");
+      setDeclarandoId(null);
+      setTiempoOtro("");
       if (prompt?.pasoId === tramo.pasoId) setPrompt(null);
       await refetch();
     } catch (error) {
@@ -156,6 +185,12 @@ export function PasosEnCursoWidget() {
     } finally {
       setBusyId(null);
     }
+  };
+
+  // D8: completar con menos del umbral trabajado ofrece declarar primero.
+  const completarConPrompt = (tramo: Tramo) => {
+    if (completarSeriaInvalido(tramo, Date.now())) setDeclarandoId(tramo.pasoId);
+    else void accion(tramo, { accion: "completar" });
   };
 
   const seguirTrabajando = (pasoId: string) => {
@@ -243,7 +278,71 @@ export function PasosEnCursoWidget() {
                 </div>
               ) : null}
 
-              {pausandoId === tramo.pasoId ? (
+              {declarandoId === tramo.pasoId ? (
+                <div className="pw-pausa">
+                  <div className="pw-prompt-txt">
+                    Casi no hay tiempo registrado. ¿Cuánto llevó aprox?
+                  </div>
+                  <div className="pw-chips">
+                    {chipsDeclarar(tramo.duracionEstimadaMin).map((min) => (
+                      <button
+                        key={min}
+                        type="button"
+                        className="pw-chip"
+                        disabled={busy}
+                        onClick={() =>
+                          void accion(tramo, { accion: "completar", tiempoDeclaradoMin: min })
+                        }
+                      >
+                        {etiquetaDuracion(min)}
+                      </button>
+                    ))}
+                    <input
+                      style={{ width: 64, flex: "0 0 auto" }}
+                      type="number"
+                      min={1}
+                      placeholder="min"
+                      value={tiempoOtro}
+                      onChange={(event) => setTiempoOtro(event.target.value)}
+                    />
+                    {Number.isFinite(Number(tiempoOtro)) && Number(tiempoOtro) >= 1 ? (
+                      <button
+                        type="button"
+                        className="pw-chip on"
+                        disabled={busy}
+                        onClick={() =>
+                          void accion(tramo, {
+                            accion: "completar",
+                            tiempoDeclaradoMin: Number(tiempoOtro),
+                          })
+                        }
+                      >
+                        Usar {etiquetaDuracion(Number(tiempoOtro))}
+                      </button>
+                    ) : null}
+                  </div>
+                  <div className="pw-actions">
+                    <button
+                      type="button"
+                      className="pw-btn"
+                      disabled={busy}
+                      onClick={() => void accion(tramo, { accion: "completar" })}
+                    >
+                      Completar sin tiempo
+                    </button>
+                    <button
+                      type="button"
+                      className="pw-btn"
+                      onClick={() => {
+                        setDeclarandoId(null);
+                        setTiempoOtro("");
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : pausandoId === tramo.pasoId ? (
                 <div className="pw-pausa">
                   <div className="pw-chips">
                     {MOTIVOS_PAUSA.map((entry) => (
@@ -307,7 +406,7 @@ export function PasosEnCursoWidget() {
                     type="button"
                     className="pw-btn primary"
                     disabled={busy}
-                    onClick={() => void accion(tramo, { accion: "completar" })}
+                    onClick={() => completarConPrompt(tramo)}
                   >
                     <CheckIcon />Completar
                   </button>

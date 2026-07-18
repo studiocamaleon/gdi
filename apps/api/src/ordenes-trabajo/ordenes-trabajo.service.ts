@@ -1458,6 +1458,10 @@ export class OrdenesTrabajoService {
                 cliente: { select: { nombre: true } },
               },
             },
+            tramos: {
+              where: { finEl: { not: null } },
+              select: { inicioEl: true, finEl: true },
+            },
           },
         },
       },
@@ -1477,6 +1481,10 @@ export class OrdenesTrabajoService {
           tramo.paso.duracionEstimadaMin != null
             ? Number(tramo.paso.duracionEstimadaMin)
             : null,
+        // Minutos ya trabajados en tramos ANTERIORES (cerrados): el widget
+        // los suma al cronómetro vivo para decidir si ofrecer declarar (D8).
+        acumuladoPrevioMin:
+          Math.round(sumaTramosMin(tramo.paso.tramos) * 100) / 100,
       })),
     };
   }
@@ -1536,13 +1544,11 @@ export class OrdenesTrabajoService {
               include: {
                 mesaUsuario: { select: { nombreCompleto: true, email: true } },
                 tramos: {
-                  // "Último" = el abierto si existe, si no el cerrado más
-                  // reciente (por CIERRE: un tramo puede cerrar después de
-                  // otro que arrancó más tarde… nunca al revés).
+                  // Todos los tramos del paso (son pocos): la proyección
+                  // deriva el abierto, el último cierre y el acumulado.
                   orderBy: {
                     finEl: { sort: 'desc' as const, nulls: 'first' as const },
                   },
-                  take: 1,
                   select: {
                     usuarioId: true,
                     usuarioNombre: true,
@@ -1611,13 +1617,11 @@ export class OrdenesTrabajoService {
               include: {
                 mesaUsuario: { select: { nombreCompleto: true, email: true } },
                 tramos: {
-                  // "Último" = el abierto si existe, si no el cerrado más
-                  // reciente (por CIERRE: un tramo puede cerrar después de
-                  // otro que arrancó más tarde… nunca al revés).
+                  // Todos los tramos del paso (son pocos): la proyección
+                  // deriva el abierto, el último cierre y el acumulado.
                   orderBy: {
                     finEl: { sort: 'desc' as const, nulls: 'first' as const },
                   },
-                  take: 1,
                   select: {
                     usuarioId: true,
                     usuarioNombre: true,
@@ -2137,7 +2141,6 @@ export class OrdenesTrabajoService {
               orderBy: {
                 finEl: { sort: 'desc' as const, nulls: 'first' as const },
               },
-              take: 1,
               select: {
                 usuarioId: true,
                 usuarioNombre: true,
@@ -2209,6 +2212,7 @@ export class OrdenesTrabajoService {
           motivoFin: string | null;
           motivoDetalle: string | null;
         }>;
+        // (la suma de cerrados sale de sumaTramosMin sobre este array)
       }>;
     },
     /** Usuario que MIRA el tablero: define `mesaEsMia` por paso. */
@@ -2268,6 +2272,10 @@ export class OrdenesTrabajoService {
                 esMio: paso.tramos[0].usuarioId === viewerUserId,
               }
             : null,
+        // Minutos ya trabajados (tramos CERRADOS): la UI evalúa con esto si
+        // completar dejaría el tiempo inválido y ofrece declarar (D8).
+        tiempoAcumuladoMin:
+          Math.round(sumaTramosMin(paso.tramos) * 100) / 100,
         motivoPausa:
           paso.estado === 'pausado' && paso.tramos[0]
             ? etiquetaMotivoFin(

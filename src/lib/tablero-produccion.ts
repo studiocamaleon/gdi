@@ -66,6 +66,8 @@ export type TableroPasoData = {
   tramoAbierto: TableroPasoTramoAbierto | null;
   /** Etiqueta humana de por qué está pausado (solo estado 'pausado'). */
   motivoPausa: string | null;
+  /** Minutos ya trabajados en tramos cerrados (evalúa el prompt D8). */
+  tiempoAcumuladoMin: number;
   /** El paso está en MI mesa de trabajo (reclamo persistente por usuario). */
   mesaEsMia: boolean;
   /** Quién lo tiene en su mesa (para el resto del taller); null = nadie. */
