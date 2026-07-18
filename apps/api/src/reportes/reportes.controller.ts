@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Body, Controller, Get, Put, Query } from '@nestjs/common';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
 import { ReportesService } from './reportes.service';
@@ -7,7 +7,9 @@ import { CobranzaService } from './cobranza.service';
 import { VentasService } from './ventas.service';
 import { ProductoService } from './producto.service';
 import { ReporteProduccionService } from './produccion.service';
+import { AlertasService } from './alertas.service';
 import { RangoReporteDto } from './dto/rango-reporte.dto';
+import { ActualizarUmbralesDto } from './dto/actualizar-umbrales.dto';
 
 /**
  * Panel general (Inteligencia de negocio) — un endpoint por TAB. Los
@@ -25,16 +27,20 @@ export class ReportesController {
     private readonly ventas: VentasService,
     private readonly productos: ProductoService,
     private readonly produccionSvc: ReporteProduccionService,
+    private readonly alertas: AlertasService,
   ) {}
 
   @Get('resumen')
   async resumen(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
     const { rango, anterior } = this.service.resolverRango(query);
-    const [{ actual, sinComparativa, deltas }, topClientes, prodKpis] = await Promise.all([
-      this.rentabilidad.bloque(auth.tenantId, rango, anterior),
-      this.ventas.topClientes(auth.tenantId, rango, 5),
-      this.produccionSvc.resumenKpis(auth.tenantId, rango),
-    ]);
+    const [{ actual, sinComparativa, deltas }, topClientes, topProductos, prodKpis, alertas] =
+      await Promise.all([
+        this.rentabilidad.bloque(auth.tenantId, rango, anterior),
+        this.ventas.topClientes(auth.tenantId, rango, 5),
+        this.productos.topProductos(auth.tenantId, rango, 5),
+        this.produccionSvc.resumenKpis(auth.tenantId, rango),
+        this.alertas.activas(auth.tenantId, rango),
+      ]);
     return {
       meta: this.service.metaBase(rango, anterior, 'Órdenes emitidas', {
         limites: this.rentabilidad.limites(actual),
@@ -54,8 +60,8 @@ export class ReportesController {
       },
       produccion: prodKpis,
       topClientes,
-      // Top productos (producto.service) y alertas (alertas.service) después.
-      pendiente: ['topProductos', 'alertas'],
+      topProductos,
+      alertas: alertas.slice(0, 5),
     };
   }
 
@@ -114,6 +120,16 @@ export class ReportesController {
     };
   }
 
+  @Get('alertas')
+  async alertasActivas(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
+    const { rango, anterior } = this.service.resolverRango(query);
+    const activas = await this.alertas.activas(auth.tenantId, rango);
+    return {
+      meta: this.service.metaBase(rango, anterior, 'Reglas sobre los agregados del período'),
+      activas,
+    };
+  }
+
   @Get('producto')
   async producto(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
     const { rango, anterior } = this.service.resolverRango(query);
@@ -124,5 +140,18 @@ export class ReportesController {
       }),
       ...producto,
     };
+  }
+
+  @Get('umbrales')
+  getUmbrales(@CurrentSession() auth: CurrentAuth) {
+    return this.alertas.getUmbrales(auth.tenantId);
+  }
+
+  @Put('umbrales')
+  actualizarUmbrales(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() payload: ActualizarUmbralesDto,
+  ) {
+    return this.alertas.actualizarUmbrales(auth.tenantId, payload);
   }
 }

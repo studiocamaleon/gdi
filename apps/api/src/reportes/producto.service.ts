@@ -75,6 +75,15 @@ export class ProductoService {
     };
   }
 
+  /** Top productos por facturación (para el Resumen). */
+  async topProductos(tenantId: string, rango: Rango, limite = 5): Promise<ProductoMargen[]> {
+    return this.margenPor(
+      { tenantId, desde: rango.desde, hastaExcl: finExclusivo(rango) },
+      'oti.nombre',
+      limite,
+    );
+  }
+
   /** Ventas + costo + margen por una dimensión SQL (categoría o producto). */
   private async margenPor(
     f: { tenantId: string; desde: Date; hastaExcl: Date },

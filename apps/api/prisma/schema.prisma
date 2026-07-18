@@ -405,6 +405,7 @@ model Tenant {
   estacionFamilias                                 EstacionFamilia[]
   diasNoLaborables                                 DiaNoLaborable[]
   configuracionProduccion                          ConfiguracionProduccion?
+  configuracionInsights                            ConfiguracionInsights?
   estacionEmpleados                                EstacionEmpleado[]
   // === Modelo Universal V2 (Fase F.1.2) ===
   rutas                                            Ruta[]
@@ -1095,6 +1096,30 @@ model Estacion {
 
   @@unique([tenantId, nombre])
   @@index([tenantId, activo])
+}
+
+/// Umbrales configurables de las alertas del Panel (inteligencia de
+/// negocio). Un registro por tenant, con defaults sensatos.
+/// Ver docs/reportes-plan-backend.md §5.
+model ConfiguracionInsights {
+  id                  String   @id @default(uuid()) @db.Uuid
+  tenantId            String   @unique @db.Uuid
+  /// Días sin comprar para marcar "dormido" a un cliente recurrente.
+  diasClienteDormido  Int      @default(60)
+  /// % de la facturación del período a partir del cual la deuda vencida alerta.
+  deudaVencidaPctMax  Int      @default(20)
+  /// % de facturación concentrada en el top-3 que alerta.
+  concentracionPctMax Int      @default(50)
+  /// Meses sin actualizar tarifas de un centro que alerta.
+  mesesTarifaVieja    Int      @default(3)
+  /// Razón real/cotizado (en %) por familia que alerta (150 = 1,5×).
+  razonTiemposPctMax  Int      @default(150)
+  /// % de utilización por centro por debajo del cual alerta.
+  utilizacionPctMin   Int      @default(40)
+  /// Margen % de categoría por debajo del cual alerta.
+  margenPctMin        Int      @default(25)
+  updatedAt           DateTime @updatedAt
+  tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
 /// Configuración de producción del tenant. Hoy: margen de seguridad que

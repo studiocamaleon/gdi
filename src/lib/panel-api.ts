@@ -92,6 +92,25 @@ export type ComercialPanel = {
   dormidos: ClienteDormidoPanel[];
 };
 
+/** Alertas: la capa de inteligencia — avisos accionables con severidad. */
+export type SeveridadPanel = "critico" | "atencion" | "info";
+export type AlertaPanel = {
+  id: string;
+  severidad: SeveridadPanel;
+  titulo: string;
+  detalle: string;
+  reporte: "finanzas" | "comercial" | "produccion" | "producto";
+};
+export type UmbralesPanel = {
+  diasClienteDormido: number;
+  deudaVencidaPctMax: number;
+  concentracionPctMax: number;
+  mesesTarifaVieja: number;
+  razonTiemposPctMax: number;
+  utilizacionPctMin: number;
+  margenPctMin: number;
+};
+
 /** Producción (mirada de gerencia): OTD, eficiencia de tiempo, utilización. */
 export type ProduccionPanel = {
   kpis: {
@@ -198,9 +217,23 @@ export function getPanelResumen(rango?: RangoPanel) {
       rentabilidad: RentabilidadPanel;
       produccion: { otdPct: number | null; utilizacionPct: number | null };
       topClientes: RankingPanel[];
-      pendiente: string[];
+      topProductos: ProductoMargenPanel[];
+      alertas: AlertaPanel[];
     }>
   >(`/reportes/panel/resumen${qs(rango)}`);
+}
+
+export function getPanelAlertas(rango?: RangoPanel) {
+  return apiRequest<TabPanel<{ activas: AlertaPanel[] }>>(`/reportes/panel/alertas${qs(rango)}`);
+}
+export function getPanelUmbrales() {
+  return apiRequest<UmbralesPanel>(`/reportes/panel/umbrales`);
+}
+export function actualizarPanelUmbrales(payload: Partial<UmbralesPanel>) {
+  return apiRequest<UmbralesPanel>(`/reportes/panel/umbrales`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
 }
 export function getPanelComercial(rango?: RangoPanel) {
   return apiRequest<TabPanel<ComercialPanel>>(`/reportes/panel/comercial${qs(rango)}`);

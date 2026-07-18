@@ -6,6 +6,7 @@ import { CobranzaService } from './cobranza.service';
 import { VentasService } from './ventas.service';
 import { ProductoService } from './producto.service';
 import { ReporteProduccionService } from './produccion.service';
+import { AlertasService } from './alertas.service';
 
 @Module({
   controllers: [ReportesController],
@@ -16,6 +17,7 @@ import { ReporteProduccionService } from './produccion.service';
     VentasService,
     ProductoService,
     ReporteProduccionService,
+    AlertasService,
   ],
 })
 export class ReportesModule {}
