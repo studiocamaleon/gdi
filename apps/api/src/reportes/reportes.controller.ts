@@ -4,6 +4,7 @@ import type { CurrentAuth } from '../auth/auth.types';
 import { ReportesService } from './reportes.service';
 import { RentabilidadService } from './rentabilidad.service';
 import { CobranzaService } from './cobranza.service';
+import { VentasService } from './ventas.service';
 import { RangoReporteDto } from './dto/rango-reporte.dto';
 
 /**
@@ -19,16 +20,16 @@ export class ReportesController {
     private readonly service: ReportesService,
     private readonly rentabilidad: RentabilidadService,
     private readonly cobranza: CobranzaService,
+    private readonly ventas: VentasService,
   ) {}
 
   @Get('resumen')
   async resumen(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
     const { rango, anterior } = this.service.resolverRango(query);
-    const { actual, sinComparativa, deltas } = await this.rentabilidad.bloque(
-      auth.tenantId,
-      rango,
-      anterior,
-    );
+    const [{ actual, sinComparativa, deltas }, topClientes] = await Promise.all([
+      this.rentabilidad.bloque(auth.tenantId, rango, anterior),
+      this.ventas.topClientes(auth.tenantId, rango, 5),
+    ]);
     return {
       meta: this.service.metaBase(rango, anterior, 'Órdenes emitidas', {
         limites: this.rentabilidad.limites(actual),
@@ -46,19 +47,23 @@ export class ReportesController {
         puntoEquilibrio: actual.puntoEquilibrio,
         avancePct: actual.avancePct,
       },
-      // OTD y carga del taller se suman con produccion.service.
-      pendiente: ['otd', 'cargaTaller', 'topClientes', 'topProductos', 'alertas'],
+      topClientes,
+      // OTD y carga del taller (produccion.service), top productos
+      // (producto.service) y alertas (alertas.service) se suman después.
+      pendiente: ['otd', 'cargaTaller', 'topProductos', 'alertas'],
     };
   }
 
   @Get('comercial')
-  comercial(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
+  async comercial(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
     const { rango, anterior } = this.service.resolverRango(query);
+    const comercial = await this.ventas.comercial(auth.tenantId, rango, anterior);
     return {
       meta: this.service.metaBase(rango, anterior, 'Órdenes emitidas', {
-        limites: ['Tab en construcción.'],
+        limites: ['Clientes dormidos y nuevos: sobre todo el historial, no el rango.'],
+        sinComparativa: comercial.sinComparativa,
       }),
-      pendiente: true,
+      ...comercial,
     };
   }
 

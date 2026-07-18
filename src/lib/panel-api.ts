@@ -62,6 +62,36 @@ function qs(rango?: RangoPanel): string {
   return s ? `?${s}` : "";
 }
 
+/** Ventas (tab Comercial + top clientes del Resumen). */
+export type RankingPanel = { id: string | null; nombre: string; ordenes: number; facturado: number };
+export type MixPanel = { nombre: string; monto: number; pct: number };
+export type ClienteDormidoPanel = {
+  clienteId: string | null;
+  cliente: string;
+  ultimaCompra: string;
+  diasSinComprar: number;
+  historico: number;
+};
+export type ComercialPanel = {
+  kpis: {
+    ventas: number;
+    ventasDeltaPct: number | null;
+    ordenes: number;
+    ordenesDeltaPct: number | null;
+    ticketPromedio: number;
+    itemsPorOrden: number;
+    nuevosClientes: number;
+    clientesDormidos: number;
+  };
+  serie: Array<{ fecha: string; monto: number }>;
+  granularidad: GranularidadPanel;
+  rankingClientes: RankingPanel[];
+  rankingVendedores: RankingPanel[];
+  mixCategoria: MixPanel[];
+  mixTecnologia: MixPanel[];
+  dormidos: ClienteDormidoPanel[];
+};
+
 /** Cobranza (tab Finanzas): aging, costo de cobrar, DSO, cheques, fondos. */
 export type FranjaAgingPanel = "0-30" | "31-60" | "61-90" | "+90";
 export type DeudorPanel = {
@@ -96,12 +126,12 @@ export type CobranzaPanel = {
 };
 
 export function getPanelResumen(rango?: RangoPanel) {
-  return apiRequest<TabPanel<{ rentabilidad: RentabilidadPanel; pendiente: string[] }>>(
-    `/reportes/panel/resumen${qs(rango)}`,
-  );
+  return apiRequest<
+    TabPanel<{ rentabilidad: RentabilidadPanel; topClientes: RankingPanel[]; pendiente: string[] }>
+  >(`/reportes/panel/resumen${qs(rango)}`);
 }
 export function getPanelComercial(rango?: RangoPanel) {
-  return apiRequest<TabPanel>(`/reportes/panel/comercial${qs(rango)}`);
+  return apiRequest<TabPanel<ComercialPanel>>(`/reportes/panel/comercial${qs(rango)}`);
 }
 export function getPanelFinanzas(rango?: RangoPanel) {
   return apiRequest<TabPanel<{ rentabilidad: RentabilidadPanel; cobranza: CobranzaPanel }>>(
