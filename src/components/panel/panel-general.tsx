@@ -64,6 +64,7 @@ function Kpi({
   deltaInvert,
   sub,
   tone,
+  spark,
 }: {
   label: string;
   value: React.ReactNode;
@@ -72,6 +73,7 @@ function Kpi({
   deltaInvert?: boolean;
   sub?: string;
   tone?: "ok" | "signal" | "warn";
+  spark?: number[];
 }) {
   return (
     <div className={`pg-kpi ${tone ?? ""}`}>
@@ -80,6 +82,7 @@ function Kpi({
       <div className="pg-kpi-foot">
         {delta !== undefined ? <Delta value={delta} unit={deltaUnit} invert={deltaInvert} /> : null}
         {sub ? <span className="pg-kpi-sub">{sub}</span> : null}
+        {spark && spark.length > 1 ? <span className="pg-kpi-spark"><Sparkline values={spark} /></span> : null}
       </div>
     </div>
   );
@@ -172,23 +175,99 @@ function AgingBar({ aging, total }: { aging: CobranzaPanel["aging"]; total: numb
   );
 }
 
-/* ─── Serie temporal (línea) ─── */
-function MiniLine({ serie }: { serie: Array<{ fecha: string; monto: number }> }) {
-  if (serie.length < 2) return <div className="pg-empty-sm">Serie insuficiente para el período.</div>;
-  const W = 640, H = 150, pad = 8;
-  const max = Math.max(...serie.map((s) => s.monto), 1);
-  const pts = serie.map((s, i) => {
-    const x = pad + (i / (serie.length - 1)) * (W - pad * 2);
-    const y = H - pad - (s.monto / max) * (H - pad * 2);
-    return `${x},${y}`;
-  });
+/* ─── Sparkline (dentro de KPIs) ─── */
+function Sparkline({ values, w = 88, h = 30 }: { values: number[]; w?: number; h?: number }) {
+  if (values.length < 2) return null;
+  const min = Math.min(...values), max = Math.max(...values), range = max - min || 1;
+  const step = w / (values.length - 1);
+  const pts = values.map((v, i) => [i * step, h - ((v - min) / range) * (h - 4) - 2] as const);
+  const d = pts.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
+  const area = `M0 ${h} ${pts.map(([x, y]) => `L${x.toFixed(1)} ${y.toFixed(1)}`).join(" ")} L${w} ${h} Z`;
+  const last = pts[pts.length - 1];
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" preserveAspectRatio="none" className="pg-line">
-      <polyline points={pts.join(" ")} fill="none" stroke="var(--ink)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-      {serie.map((s, i) => {
-        const x = pad + (i / (serie.length - 1)) * (W - pad * 2);
-        const y = H - pad - (s.monto / max) * (H - pad * 2);
-        return <circle key={i} cx={x} cy={y} r="2.5" fill="var(--ink)" />;
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ display: "block" }}>
+      <path d={area} fill="rgba(20,20,26,.05)" />
+      <path d={d} fill="none" stroke="var(--ink)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={last[0]} cy={last[1]} r="2.2" fill="var(--ink)" />
+    </svg>
+  );
+}
+
+/* ─── AreaChart (grilla + ejes, estética del diseño) ─── */
+function AreaChart({ serie, height = 210 }: { serie: Array<{ fecha: string; monto: number }>; height?: number }) {
+  if (serie.length < 2) return <div className="pg-empty-sm">El período no tiene serie suficiente para graficar.</div>;
+  const W = 800, H = height, padL = 52, padR = 10, padT = 16, padB = 26;
+  const iw = W - padL - padR, ih = H - padT - padB;
+  const max = Math.max(...serie.map((s) => s.monto)) * 1.1 || 1;
+  const step = iw / (serie.length - 1);
+  const xy = serie.map((s, i) => [padL + i * step, padT + ih - (s.monto / max) * ih] as const);
+  const line = xy.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
+  const area = `${line} L${xy[xy.length - 1][0].toFixed(1)} ${padT + ih} L${xy[0][0].toFixed(1)} ${padT + ih} Z`;
+  const ticks = 4;
+  const every = Math.ceil(serie.length / 8);
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" style={{ display: "block" }}>
+      {Array.from({ length: ticks + 1 }, (_, i) => {
+        const v = (max * i) / ticks;
+        const y = padT + ih - (v / max) * ih;
+        return (
+          <g key={i}>
+            <line x1={padL} x2={W - padR} y1={y} y2={y} stroke="var(--hairline, #efeeec)" strokeWidth="1" />
+            <text x={padL - 8} y={y + 3} fontSize="10" textAnchor="end" fill="var(--muted-text)" fontFamily="var(--font-mono)">${fmtK(v)}</text>
+          </g>
+        );
+      })}
+      {serie.map((s, i) =>
+        i % every === 0 || i === serie.length - 1 ? (
+          <text key={i} x={padL + i * step} y={H - 8} fontSize="10" textAnchor="middle" fill="var(--muted-text)">{s.fecha.slice(5)}</text>
+        ) : null,
+      )}
+      <path d={area} fill="rgba(20,20,26,.06)" />
+      <path d={line} fill="none" stroke="var(--ink)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={xy[xy.length - 1][0]} cy={xy[xy.length - 1][1]} r="3.5" fill="var(--ink)" />
+      <circle cx={xy[xy.length - 1][0]} cy={xy[xy.length - 1][1]} r="7" fill="var(--ink)" opacity=".12" />
+    </svg>
+  );
+}
+
+/* ─── BarChart vertical (grilla + ejes) ─── */
+function BarChart({
+  data,
+  height = 200,
+  yFormat = (v: number) => String(Math.round(v)),
+}: {
+  data: Array<{ label: string; value: number }>;
+  height?: number;
+  yFormat?: (v: number) => string;
+}) {
+  if (data.length === 0) return <div className="pg-empty-sm">Sin datos en el período.</div>;
+  const W = 800, H = height, padL = 44, padR = 8, padT = 14, padB = 26;
+  const iw = W - padL - padR, ih = H - padT - padB;
+  const max = Math.max(...data.map((d) => d.value)) * 1.12 || 1;
+  const groupW = iw / data.length;
+  const barW = Math.min(30, groupW * 0.55);
+  const ticks = 4;
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" style={{ display: "block" }}>
+      {Array.from({ length: ticks + 1 }, (_, i) => {
+        const v = (max * i) / ticks;
+        const y = padT + ih - (v / max) * ih;
+        return (
+          <g key={i}>
+            <line x1={padL} x2={W - padR} y1={y} y2={y} stroke="var(--hairline, #efeeec)" strokeWidth="1" />
+            <text x={padL - 8} y={y + 3} fontSize="10" textAnchor="end" fill="var(--muted-text)" fontFamily="var(--font-mono)">{yFormat(v)}</text>
+          </g>
+        );
+      })}
+      {data.map((d, i) => {
+        const cx = padL + groupW * i + groupW / 2;
+        const h = (d.value / max) * ih;
+        return (
+          <g key={d.label}>
+            <rect x={cx - barW / 2} y={padT + ih - h} width={barW} height={h} fill="var(--ink)" rx="2" />
+            <text x={cx} y={H - 8} fontSize="10" textAnchor="middle" fill="var(--muted-text)">{d.label}</text>
+          </g>
+        );
       })}
     </svg>
   );
@@ -230,6 +309,7 @@ type ResumenData = {
   meta: MetaPanel;
   rentabilidad: RentabilidadPanel;
   produccion: { otdPct: number | null; utilizacionPct: number | null };
+  serie: Array<{ fecha: string; monto: number }>;
   topClientes: RankingPanel[];
   topProductos: Array<{ nombre: string; ventas: number; margenPct: number; items: number }>;
   alertas: AlertaPanel[];
@@ -238,10 +318,12 @@ type ResumenData = {
 function TabResumen({ d }: { d: ResumenData }) {
   const r = d.rentabilidad;
   const maxCli = Math.max(...d.topClientes.map((c) => c.facturado), 1);
+  const spark = d.serie.map((s) => s.monto);
+  const totalSerie = spark.reduce((a, b) => a + b, 0);
   return (
     <>
       <div className="pg-kpi-row">
-        <Kpi label="Facturación" value={pesosK(r.ventas)} delta={r.ventasDeltaPct} sub="vs período anterior" />
+        <Kpi label="Facturación" value={pesosK(r.ventas)} delta={r.ventasDeltaPct} spark={spark} />
         <Kpi label="Margen bruto" value={pct(r.margenBrutoPct)} delta={r.margenBrutoDeltaPts} deltaUnit="pts" />
         <Kpi label="Contribución" value={pct(r.contribucionPct)} delta={r.contribucionDeltaPts} deltaUnit="pts" tone="ok" />
         <Kpi label="Punto de equilibrio" value={r.puntoEquilibrio != null ? pesosK(r.puntoEquilibrio) : "—"} sub={r.avancePct != null ? `avance ${pct(r.avancePct)}` : "sin costos fijos"} tone={r.avancePct != null && r.avancePct < 100 ? "warn" : "ok"} />
@@ -250,12 +332,17 @@ function TabResumen({ d }: { d: ResumenData }) {
       </div>
 
       <div className="pg-grid">
+        <Card span={8} title="Facturación del período" sub={`serie ${d.meta.granularidad}`}
+          action={<div className="pg-card-total">Total <strong>{pesos(totalSerie)}</strong></div>}>
+          <AreaChart serie={d.serie} />
+        </Card>
+
         <Card span={4} title="Punto de equilibrio" sub="cuánto de tu estructura cubriste">
           <PeGauge rentabilidad={r} />
         </Card>
 
-        <Card span={8} title="Alertas activas" sub="lo que requiere atención" action={<Link className="pg-more" href="#">Ver todas</Link>}>
-          <div className="pg-insights">
+        <Card span={12} title="Alertas activas" sub="lo que requiere atención" action={<span className="pg-more">{d.alertas.length} activa{d.alertas.length === 1 ? "" : "s"}</span>}>
+          <div className="pg-insights row">
             {d.alertas.length === 0 ? <div className="pg-empty-sm">Sin alertas activas. Todo en orden.</div> : d.alertas.map((a) => <InsightCard key={a.id} a={a} />)}
           </div>
         </Card>
@@ -325,8 +412,9 @@ function TabComercial({ d }: { d: ComercialPanel }) {
         <Kpi label="Clientes dormidos" value={fmt(k.clientesDormidos)} tone={k.clientesDormidos > 0 ? "warn" : undefined} sub="recurrentes sin comprar" />
       </div>
       <div className="pg-grid">
-        <Card span={8} title="Ventas del período" sub={`serie ${d.granularidad}`}>
-          <MiniLine serie={d.serie} />
+        <Card span={8} title="Ventas del período" sub={`serie ${d.granularidad}`}
+          action={<div className="pg-card-total">Ticket <strong>{pesosK(k.ticketPromedio)}</strong></div>}>
+          <AreaChart serie={d.serie} />
         </Card>
         <Card span={4} title="Mix por categoría" sub="participación en ventas">
           <MixList items={d.mixCategoria} />
@@ -431,7 +519,6 @@ function TabFinanzas({ d }: { d: FinanzasData }) {
 /* ═══════════ TAB · Producción ═══════════ */
 function TabProduccion({ d }: { d: ProduccionPanel }) {
   const k = d.kpis;
-  const maxTh = Math.max(...d.throughput.map((t) => t.cantidad), 1);
   return (
     <>
       <div className="pg-kpi-row">
@@ -472,11 +559,7 @@ function TabProduccion({ d }: { d: ProduccionPanel }) {
           )}
         </Card>
         <Card span={4} title="Throughput" sub="pasos completados por día">
-          <div className="pg-mix">
-            {d.throughput.map((t) => (
-              <div key={t.fecha} className="pg-mix-row"><span className="nm mono">{t.fecha.slice(5)}</span><div className="bar"><HBar value={t.cantidad} max={maxTh} /></div><span className="val mono">{t.cantidad}</span></div>
-            ))}
-          </div>
+          <BarChart data={d.throughput.map((t) => ({ label: t.fecha.slice(5), value: t.cantidad }))} height={200} />
         </Card>
       </div>
     </>

@@ -33,13 +33,14 @@ export class ReportesController {
   @Get('resumen')
   async resumen(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
     const { rango, anterior } = this.service.resolverRango(query);
-    const [{ actual, sinComparativa, deltas }, topClientes, topProductos, prodKpis, alertas] =
+    const [{ actual, sinComparativa, deltas }, topClientes, topProductos, prodKpis, alertas, serie] =
       await Promise.all([
         this.rentabilidad.bloque(auth.tenantId, rango, anterior),
         this.ventas.topClientes(auth.tenantId, rango, 5),
         this.productos.topProductos(auth.tenantId, rango, 5),
         this.produccionSvc.resumenKpis(auth.tenantId, rango),
         this.alertas.activas(auth.tenantId, rango),
+        this.ventas.serie(auth.tenantId, rango),
       ]);
     return {
       meta: this.service.metaBase(rango, anterior, 'Órdenes emitidas', {
@@ -60,6 +61,7 @@ export class ReportesController {
         avancePct: actual.avancePct,
       },
       produccion: prodKpis,
+      serie,
       topClientes,
       topProductos,
       alertas: alertas.slice(0, 5),

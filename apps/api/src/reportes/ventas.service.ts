@@ -40,6 +40,21 @@ export type ClienteDormido = {
 export class VentasService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** Serie temporal de ventas del rango (para la tendencia del Resumen). */
+  async serie(tenantId: string, rango: Rango): Promise<Array<{ fecha: string; monto: number }>> {
+    const truncUnit = Prisma.raw(`'${TRUNC[granularidad(rango)]}'`);
+    const rows = await this.prisma.$queryRaw<Array<{ fecha: string; monto: number }>>`
+      SELECT to_char(date_trunc(${truncUnit}, ot."fechaEmision"), 'YYYY-MM-DD') AS fecha,
+             COALESCE(SUM(oti.subtotal), 0)::float8 AS monto
+      FROM "OrdenTrabajoItem" oti
+      JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
+      WHERE oti."tenantId" = ${tenantId}::uuid AND ot.estado <> 'borrador'
+        AND ot."fechaEmision" >= ${rango.desde} AND ot."fechaEmision" < ${finExclusivo(rango)}
+      GROUP BY 1 ORDER BY 1
+    `;
+    return rows.map((s) => ({ fecha: s.fecha, monto: r2(s.monto) }));
+  }
+
   /** Top clientes del rango por facturación (para Resumen y Comercial). */
   async topClientes(tenantId: string, rango: Rango, limite = 5): Promise<RankingItem[]> {
     const rows = await this.prisma.$queryRaw<
@@ -64,21 +79,12 @@ export class VentasService {
     const desde = rango.desde;
     const hastaExcl = finExclusivo(rango);
     const gran = granularidad(rango);
-    const truncUnit = Prisma.raw(`'${TRUNC[gran]}'`);
 
     const [totalRows, prevRows, serieRows, clientes, vendedores, categoria, tecnologia, historia] =
       await Promise.all([
         this.totales(tenantId, rango),
         this.totales(tenantId, anterior),
-        this.prisma.$queryRaw<Array<{ fecha: string; monto: number }>>`
-          SELECT to_char(date_trunc(${truncUnit}, ot."fechaEmision"), 'YYYY-MM-DD') AS fecha,
-                 COALESCE(SUM(oti.subtotal), 0)::float8 AS monto
-          FROM "OrdenTrabajoItem" oti
-          JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
-          WHERE oti."tenantId" = ${tenantId}::uuid AND ot.estado <> 'borrador'
-            AND ot."fechaEmision" >= ${desde} AND ot."fechaEmision" < ${hastaExcl}
-          GROUP BY 1 ORDER BY 1
-        `,
+        this.serie(tenantId, rango),
         this.topClientes(tenantId, rango, 8),
         this.prisma.$queryRaw<Array<{ id: string | null; nombre: string; ordenes: number; facturado: number }>>`
           SELECT ot."vendedorEmpleadoId" AS id, COALESCE(e."nombreCompleto", 'Sin vendedor') AS nombre,
@@ -164,7 +170,7 @@ export class VentasService {
         nuevosClientes,
         clientesDormidos: dormidos.length,
       },
-      serie: serieRows.map((s) => ({ fecha: s.fecha, monto: r2(s.monto) })),
+      serie: serieRows,
       granularidad: gran,
       rankingClientes: clientes,
       rankingVendedores: vendedores.map((v) => ({ ...v, facturado: r2(v.facturado) })),

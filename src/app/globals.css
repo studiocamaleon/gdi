@@ -28043,3 +28043,11 @@ body:has(.t-app) {
 .pg .pg-line { display: block; height: 150px; }
 .pg .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 
+
+/* Panel — polish: totales de card, sparkline en KPI, insights en fila */
+.pg .pg-card-total { font-size: 11.5px; color: var(--muted-text); }
+.pg .pg-card-total strong { color: var(--ink); font-family: var(--font-mono); font-weight: 600; }
+.pg .pg-kpi-spark { margin-left: auto; }
+.pg .pg-insights.row { flex-direction: row; flex-wrap: wrap; }
+.pg .pg-insights.row .pg-insight { flex: 1 1 340px; }
+
