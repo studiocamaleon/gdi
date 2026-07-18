@@ -96,6 +96,22 @@ enum CategoriaComponenteCostoCentro {
   OTROS
 }
 
+/// Categorías de gasto fijo de estructura (planificación / punto de equilibrio).
+/// Independiente de las categorías de componente de centro (costeo/tarifa).
+enum CategoriaGastoFijo {
+  ALQUILER
+  SUELDOS
+  SERVICIOS // luz, agua, internet, teléfono
+  AMORTIZACION // depreciación de máquinas/equipos
+  FINANCIEROS // intereses, cuotas, leasing
+  IMPUESTOS // fijos (no IVA/IIBB, que se costean por venta)
+  MARKETING
+  SEGUROS
+  SOFTWARE // software y licencias
+  LEGAL // contable / legal
+  OTROS
+}
+
 enum OrigenComponenteCostoCentro {
   MANUAL
   SUGERIDO
@@ -381,6 +397,7 @@ model Tenant {
   centroCostoRecursos                              CentroCostoRecurso[]
   centroCostoRecursosMaquinaria                    CentroCostoRecursoMaquinaPeriodo[]
   centroCostoComponentesCostoPeriodo               CentroCostoComponenteCostoPeriodo[]
+  gastosFijosEstructura                            GastoFijoEstructura[]
   centroCostoCapacidadesPeriodo                    CentroCostoCapacidadPeriodo[]
   centroCostoTarifasPeriodo                        CentroCostoTarifaPeriodo[]
   maquinas                                         Maquina[]
@@ -405,6 +422,7 @@ model Tenant {
   estacionFamilias                                 EstacionFamilia[]
   diasNoLaborables                                 DiaNoLaborable[]
   configuracionProduccion                          ConfiguracionProduccion?
+  configuracionInsights                            ConfiguracionInsights?
   estacionEmpleados                                EstacionEmpleado[]
   // === Modelo Universal V2 (Fase F.1.2) ===
   rutas                                            Ruta[]
@@ -1095,6 +1113,54 @@ model Estacion {
 
   @@unique([tenantId, nombre])
   @@index([tenantId, activo])
+}
+
+/// Umbrales configurables de las alertas del Panel (inteligencia de
+/// negocio). Un registro por tenant, con defaults sensatos.
+/// Ver docs/reportes-plan-backend.md §5.
+model ConfiguracionInsights {
+  id                  String   @id @default(uuid()) @db.Uuid
+  tenantId            String   @unique @db.Uuid
+  /// Días sin comprar para marcar "dormido" a un cliente recurrente.
+  diasClienteDormido  Int      @default(60)
+  /// % de la facturación del período a partir del cual la deuda vencida alerta.
+  deudaVencidaPctMax  Int      @default(20)
+  /// % de facturación concentrada en el top-3 que alerta.
+  concentracionPctMax Int      @default(50)
+  /// Meses sin actualizar tarifas de un centro que alerta.
+  mesesTarifaVieja    Int      @default(3)
+  /// Razón real/cotizado (en %) por familia que alerta (150 = 1,5×).
+  razonTiemposPctMax  Int      @default(150)
+  /// % de utilización por centro por debajo del cual alerta.
+  utilizacionPctMin   Int      @default(40)
+  /// Margen % de categoría por debajo del cual alerta.
+  margenPctMin        Int      @default(25)
+  updatedAt           DateTime @updatedAt
+  tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+/// Gasto fijo de estructura (nivel empresa) — fuente ÚNICA del pool de costos
+/// fijos del PUNTO DE EQUILIBRIO. Desacoplado de los centros de costo (que
+/// existen para armar tarifas). Modelo recurrente con vigencia: aplica todos
+/// los meses entre `vigenteDesde` y `vigenteHasta` (null = indefinido).
+/// Ver docs/gastos-fijos-estructura-diseno.md
+model GastoFijoEstructura {
+  id             String             @id @default(uuid()) @db.Uuid
+  tenantId       String             @db.Uuid
+  nombre         String
+  categoria      CategoriaGastoFijo
+  importeMensual Decimal            @db.Decimal(14, 2)
+  /// 'YYYY-MM' — primer mes de vigencia (inclusive).
+  vigenteDesde   String
+  /// 'YYYY-MM' — último mes de vigencia (inclusive); null = indefinido.
+  vigenteHasta   String?
+  activo         Boolean            @default(true)
+  notas          String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  tenant         Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
 }
 
 /// Configuración de producción del tenant. Hoy: margen de seguridad que
