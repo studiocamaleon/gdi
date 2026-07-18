@@ -13,7 +13,31 @@ import { fechaLocalDesdeIso, formatFechaOrden } from "@/lib/ordenes-trabajo";
 
 // ── Contrato con el backend ──────────────────────────────────────────────
 
-export type TableroPasoEstado = "pendiente" | "en_curso" | "hecho" | "bloqueado";
+export type TableroPasoEstado =
+  | "pendiente"
+  | "en_curso"
+  | "pausado"
+  | "hecho"
+  | "bloqueado";
+
+/** Registro de tiempos (docs/registro-tiempos-produccion-diseno.md D1). */
+export type TableroPasoModoRegistro = "cronometro" | "solo_completar";
+
+/** Calidad/origen del tiempo real asentado en un paso hecho (D3). */
+export type TableroPasoTiempoFuente =
+  | "medido"
+  | "medido_lote"
+  | "declarado"
+  | "estimado"
+  | "invalido";
+
+/** Cronómetro corriendo sobre el paso: quién y desde cuándo. */
+export type TableroPasoTramoAbierto = {
+  usuarioNombre: string;
+  /** ISO datetime. */
+  inicioEl: string;
+  esMio: boolean;
+};
 
 export type TableroPasoData = {
   id: string;
@@ -31,6 +55,17 @@ export type TableroPasoData = {
   /** ISO datetime o null. */
   iniciadoEl: string | null;
   completadoEl: string | null;
+  /** cronometro (Iniciar→Pausar/Continuar→Completar) o solo_completar. */
+  modoRegistro: TableroPasoModoRegistro;
+  /** Tiempo real asentado al completar; null hasta 'hecho'. */
+  tiempoRealMin: number | null;
+  tiempoFuente: TableroPasoTiempoFuente | null;
+  /** Atribución de operador (D5). */
+  iniciadoPorNombre: string | null;
+  completadoPorNombre: string | null;
+  tramoAbierto: TableroPasoTramoAbierto | null;
+  /** Etiqueta humana de por qué está pausado (solo estado 'pausado'). */
+  motivoPausa: string | null;
   /** El paso está en MI mesa de trabajo (reclamo persistente por usuario). */
   mesaEsMia: boolean;
   /** Quién lo tiene en su mesa (para el resto del taller); null = nadie. */
@@ -60,10 +95,31 @@ export type TableroItemData = {
 
 export type TableroPasoAccion =
   | "iniciar"
+  | "pausar"
+  | "continuar"
   | "completar"
   | "bloquear"
   | "desbloquear"
   | "reabrir";
+
+/** Motivos de pausa elegibles (espejo de MOTIVOS_PAUSA del backend, D7). */
+export const MOTIVOS_PAUSA: Array<{ codigo: string; etiqueta: string }> = [
+  { codigo: "falta_material", etiqueta: "Falta material" },
+  { codigo: "falta_informacion", etiqueta: "Falta información" },
+  { codigo: "cambio_prioridad", etiqueta: "Cambio de prioridad" },
+  { codigo: "mantenimiento_maquina", etiqueta: "Mantenimiento de máquina" },
+  { codigo: "fin_turno", etiqueta: "Fin de turno" },
+  { codigo: "otro", etiqueta: "Otro" },
+];
+
+/** Etiqueta corta de la fuente del tiempo (para chips/tooltips). */
+export const TIEMPO_FUENTE_LABELS: Record<TableroPasoTiempoFuente, string> = {
+  medido: "medido",
+  medido_lote: "medido en tanda",
+  declarado: "declarado",
+  estimado: "estimado",
+  invalido: "sin tiempo",
+};
 
 // ── Metadatos de familias de pasos (espejo del catálogo del backend) ─────
 
@@ -243,6 +299,7 @@ export function lineaEstado(item: TableroItemData): string {
   // El motivo del bloqueo se muestra aparte (blockedReason): acá sólo el dónde.
   if (actual.estado === "bloqueado") return `Bloqueado en ${actual.nombre}`;
   if (actual.estado === "en_curso") return `${actual.nombre} · en curso`;
+  if (actual.estado === "pausado") return `${actual.nombre} · pausado`;
   if (!itemIniciado(item)) return `Por iniciar · primer paso: ${actual.nombre}`;
   return `Próximo paso: ${actual.nombre}`;
 }

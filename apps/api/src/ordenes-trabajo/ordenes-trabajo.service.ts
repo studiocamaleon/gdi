@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { CurrentAuth } from '../auth/auth.types';
 import { paginatedResponse } from '../common/dto/pagination.dto';
 import {
+  etiquetaMotivoFin,
   MOTIVOS_PAUSA,
   MOTIVO_PAUSA_LABELS,
   ORDEN_TRABAJO_ESTADOS,
@@ -1496,11 +1497,15 @@ export class OrdenesTrabajoService {
               include: {
                 mesaUsuario: { select: { nombreCompleto: true, email: true } },
                 tramos: {
-                  where: { finEl: null },
+                  orderBy: { inicioEl: 'desc' as const },
+                  take: 1,
                   select: {
                     usuarioId: true,
                     usuarioNombre: true,
                     inicioEl: true,
+                    finEl: true,
+                    motivoFin: true,
+                    motivoDetalle: true,
                   },
                 },
               },
@@ -1562,11 +1567,15 @@ export class OrdenesTrabajoService {
               include: {
                 mesaUsuario: { select: { nombreCompleto: true, email: true } },
                 tramos: {
-                  where: { finEl: null },
+                  orderBy: { inicioEl: 'desc' as const },
+                  take: 1,
                   select: {
                     usuarioId: true,
                     usuarioNombre: true,
                     inicioEl: true,
+                    finEl: true,
+                    motivoFin: true,
+                    motivoDetalle: true,
                   },
                 },
               },
@@ -2036,11 +2045,15 @@ export class OrdenesTrabajoService {
           include: {
             mesaUsuario: { select: { nombreCompleto: true, email: true } },
             tramos: {
-              where: { finEl: null },
+              orderBy: { inicioEl: 'desc' as const },
+              take: 1,
               select: {
                 usuarioId: true,
                 usuarioNombre: true,
                 inicioEl: true,
+                finEl: true,
+                motivoFin: true,
+                motivoDetalle: true,
               },
             },
           },
@@ -2101,6 +2114,9 @@ export class OrdenesTrabajoService {
           usuarioId: string | null;
           usuarioNombre: string;
           inicioEl: Date;
+          finEl: Date | null;
+          motivoFin: string | null;
+          motivoDetalle: string | null;
         }>;
       }>;
     },
@@ -2151,14 +2167,23 @@ export class OrdenesTrabajoService {
         tiempoFuente: paso.tiempoFuente,
         iniciadoPorNombre: paso.iniciadoPorNombre,
         completadoPorNombre: paso.completadoPorNombre,
-        // Cronómetro corriendo (tramo abierto): quién y desde cuándo.
-        tramoAbierto: paso.tramos[0]
-          ? {
-              usuarioNombre: paso.tramos[0].usuarioNombre,
-              inicioEl: paso.tramos[0].inicioEl.toISOString(),
-              esMio: paso.tramos[0].usuarioId === viewerUserId,
-            }
-          : null,
+        // Último tramo: si sigue abierto es el cronómetro corriendo; si el
+        // paso quedó pausado, su motivo de cierre explica la pausa.
+        tramoAbierto:
+          paso.tramos[0] && !paso.tramos[0].finEl
+            ? {
+                usuarioNombre: paso.tramos[0].usuarioNombre,
+                inicioEl: paso.tramos[0].inicioEl.toISOString(),
+                esMio: paso.tramos[0].usuarioId === viewerUserId,
+              }
+            : null,
+        motivoPausa:
+          paso.estado === 'pausado' && paso.tramos[0]
+            ? etiquetaMotivoFin(
+                paso.tramos[0].motivoFin,
+                paso.tramos[0].motivoDetalle,
+              )
+            : null,
         mesaEsMia: paso.mesaUsuarioId === viewerUserId,
         mesaUsuarioNombre: paso.mesaUsuario
           ? paso.mesaUsuario.nombreCompleto || paso.mesaUsuario.email

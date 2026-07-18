@@ -58,16 +58,18 @@ const TICO: Record<string, React.FC<IcoProps>> = {
 const Ico = (name: string) => TICO[name] ?? TICO.Tool;
 
 /* ─── Mapeo estado real → estado visual del diseño ─── */
-type VisualStatus = "done" | "current" | "pending" | "blocked";
+type VisualStatus = "done" | "current" | "paused" | "pending" | "blocked";
 const STATUS_OF: Record<TableroPasoEstado, VisualStatus> = {
   hecho: "done",
   en_curso: "current",
+  pausado: "paused",
   bloqueado: "blocked",
   pendiente: "pending",
 };
 const ST_LBL: Record<VisualStatus, string> = {
   done: "Completo",
   current: "En curso",
+  paused: "Pausado",
   pending: "Pendiente",
   blocked: "Bloqueado",
 };
@@ -93,8 +95,12 @@ function ProductoRuta({ item }: { item: TableroItemData }) {
   const doneN = route.filter((s) => s.estado === "hecho").length;
   const blocked = route.find((s) => s.estado === "bloqueado");
   const current = route.find((s) => s.estado === "en_curso");
-  const proximo = !current && !blocked ? route.find((s) => s.estado === "pendiente") : undefined;
-  const state = blocked ? "blocked" : current ? "run" : pct === 100 ? "done" : "wait";
+  const pausado = route.find((s) => s.estado === "pausado");
+  const proximo =
+    !current && !blocked && !pausado
+      ? route.find((s) => s.estado === "pendiente")
+      : undefined;
+  const state = blocked ? "blocked" : current || pausado ? "run" : pct === 100 ? "done" : "wait";
 
   return (
     <div className={`otp-prod ${open ? "open" : ""}`}>
@@ -110,6 +116,8 @@ function ProductoRuta({ item }: { item: TableroItemData }) {
             <span className="pill blk"><TICO.Block />Bloqueado · {blocked.nombre}</span>
           ) : current ? (
             <span className="pill run"><span className="d" />En {current.nombre}</span>
+          ) : pausado ? (
+            <span className="pill wait">Pausado · {pausado.nombre}</span>
           ) : proximo ? (
             <span className="pill wait">Próximo · {proximo.nombre}</span>
           ) : (
@@ -137,12 +145,26 @@ function ProductoRuta({ item }: { item: TableroItemData }) {
               const status = STATUS_OF[s.estado];
               const IcoC = Ico(familiaIcono(s.familiaCodigo));
               const dur = etiquetaDuracion(s.duracionEstimadaMin);
-              const sub = [s.centroCostoNombre, dur ? `est. ${dur}` : null].filter(Boolean).join(" · ");
+              // Hecho: quién lo completó y cuánto llevó (si el tiempo vale).
+              const tiempoReal =
+                s.estado === "hecho" && s.tiempoRealMin != null && s.tiempoFuente !== "invalido"
+                  ? etiquetaDuracion(s.tiempoRealMin)
+                  : null;
+              const sub = [
+                s.centroCostoNombre,
+                s.estado === "hecho" ? tiempoReal ?? "sin tiempo" : dur ? `est. ${dur}` : null,
+                s.estado === "hecho" && s.completadoPorNombre ? `por ${s.completadoPorNombre}` : null,
+                s.estado === "pausado" ? s.motivoPausa : null,
+              ]
+                .filter(Boolean)
+                .join(" · ");
               const end =
                 s.estado === "hecho"
                   ? etiquetaMomento(s.completadoEl) ?? "—"
                   : s.estado === "en_curso"
                   ? "en curso"
+                  : s.estado === "pausado"
+                  ? "pausado"
                   : s.estado === "bloqueado"
                   ? s.motivoBloqueo ?? "bloqueado"
                   : dur ?? "—";

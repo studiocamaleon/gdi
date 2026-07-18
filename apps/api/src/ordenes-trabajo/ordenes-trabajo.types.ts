@@ -93,6 +93,26 @@ export const MOTIVO_PAUSA_LABELS: Record<MotivoPausa, string> = {
   otro: 'Otro',
 };
 
+/**
+ * Etiqueta humana del motivo de cierre de un tramo (para la card pausada):
+ * "pausa:falta_material" → "Falta material"; cierres de sistema con nombre
+ * propio; null si no aplica.
+ */
+export function etiquetaMotivoFin(
+  motivoFin: string | null,
+  motivoDetalle: string | null,
+): string | null {
+  if (!motivoFin) return null;
+  if (motivoFin === 'fin_jornada') return 'Fin de jornada';
+  if (motivoFin === 'auto_pausa') return 'Pausa automática';
+  if (motivoFin.startsWith('pausa:')) {
+    const codigo = motivoFin.slice('pausa:'.length) as MotivoPausa;
+    if (codigo === 'otro' && motivoDetalle) return motivoDetalle;
+    return MOTIVO_PAUSA_LABELS[codigo] ?? codigo;
+  }
+  return null;
+}
+
 /** Calidad/origen del tiempo real asentado en un paso hecho (D3). */
 export const TIEMPO_FUENTES = [
   'medido',

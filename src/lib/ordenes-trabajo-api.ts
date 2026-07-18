@@ -164,7 +164,15 @@ export async function accionPasoProduccion(
   ordenId: string,
   itemId: string,
   pasoId: string,
-  payload: { accion: TableroPasoAccion; motivo?: string },
+  payload: {
+    accion: TableroPasoAccion;
+    /** Bloquear: texto libre. Pausar: código de MOTIVOS_PAUSA. */
+    motivo?: string;
+    /** Texto libre cuando el motivo de pausa es "otro". */
+    motivoDetalle?: string;
+    /** Completar con tiempo medido inválido: cuánto llevó aprox (D8). */
+    tiempoDeclaradoMin?: number;
+  },
 ): Promise<TableroItemData> {
   return apiRequest<TableroItemData>(
     `/ordenes-trabajo/${ordenId}/items/${itemId}/pasos/${pasoId}`,
@@ -174,13 +182,38 @@ export async function accionPasoProduccion(
 
 /**
  * Completar varios pasos de una (simulador de impresión): resultado
- * PARCIAL honesto — los que no pudieron, con su motivo.
+ * PARCIAL honesto — los que no pudieron, con su motivo. `duracionTandaMin`
+ * (opcional) prorratea la duración real de la tanda entre los pasos (D11).
  */
-export async function completarPasosLote(pasoIds: string[]) {
+export async function completarPasosLote(
+  pasoIds: string[],
+  duracionTandaMin?: number,
+) {
   return apiRequest<{ completados: number; errores: Array<{ pasoId: string; motivo: string }> }>(
     "/ordenes-trabajo/tablero/pasos/completar-lote",
-    { method: "POST", body: JSON.stringify({ pasoIds }) },
+    { method: "POST", body: JSON.stringify({ pasoIds, duracionTandaMin }) },
   );
+}
+
+/** Tramos de trabajo abiertos del usuario (widget flotante "En curso"). */
+export type MisTramosAbiertos = {
+  tramos: Array<{
+    id: string;
+    pasoId: string;
+    ordenId: string;
+    itemId: string;
+    pasoNombre: string;
+    itemNombre: string;
+    ordenNumero: string;
+    clienteNombre: string;
+    /** ISO datetime. */
+    inicioEl: string;
+    duracionEstimadaMin: number | null;
+  }>;
+};
+
+export async function getMisTramosAbiertos(): Promise<MisTramosAbiertos> {
+  return apiRequest<MisTramosAbiertos>("/ordenes-trabajo/tablero/mis-tramos");
 }
 
 /** Tomar/soltar un paso de MI mesa de trabajo (vista Por estación). */

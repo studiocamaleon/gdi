@@ -1,11 +1,12 @@
 # Registro de tiempos de producción — diseño
 
-Fecha: 2026-07-18. Estado: etapa A (esquema + backend) IMPLEMENTADA en
-`feat/registro-tiempos-produccion` y verificada E2E; etapas B–E pendientes.
-Nota de transición A→B: hasta que el tablero se adapte (etapa B), el botón
-"Iniciar" sobre pasos de impresión devuelve 400 con mensaje claro (D10), y un
-paso puede aparecer en estado `pausado` (cierre por jornada) que la UI vieja
-no conoce.
+Fecha: 2026-07-18. Estado: etapas A (esquema + backend) y B (tablero +
+detalle) IMPLEMENTADAS en `feat/registro-tiempos-produccion` y verificadas
+E2E; etapas C (widget), D (simuladores) y E (config) pendientes.
+Ajustes sobre el diseño hechos en B: la atribución NO se muestra en el
+tracking público (contradecía el principio "sin fuga de datos internos" de
+ese módulo; queda en tablero y detalle interno), y la proyección expone
+`motivoPausa` + `tramoAbierto` desde el último tramo del paso.
 
 Objetivo: unificar el avance de pasos de producción en un flujo consistente que capture
 tiempos reales confiables y atribución de operador, sin generar fricción que lleve a
