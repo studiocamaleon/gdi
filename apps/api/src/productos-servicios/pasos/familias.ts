@@ -18,6 +18,7 @@ import type {
   CompatibilidadMaterialSlot,
   DefinicionFamilia,
   FamiliaCodigo,
+  ModoRegistroPaso,
 } from './types';
 
 const MP = {
@@ -1735,6 +1736,26 @@ export function listarFamiliasPorCategoria(
   categoria: string,
 ): DefinicionFamilia[] {
   return Object.values(FAMILIAS).filter((f) => f.categoria === categoria);
+}
+
+/**
+ * Modo de registro del trabajo en el tablero (registro-tiempos-produccion
+ * D1): override explícito de la familia o default por categoría — las de
+ * produccion_impresion se completan de un click (el cronómetro por trabajo
+ * mediría cola/tandas, no producción); el resto usa cronómetro con tramos.
+ * Acepta string crudo porque el paso materializado guarda el código plano.
+ */
+export function modoRegistroDeFamilia(codigo: string): ModoRegistroPaso {
+  const familia = FAMILIAS[codigo as FamiliaCodigo] as
+    | DefinicionFamilia
+    | undefined;
+  if (!familia) return 'cronometro';
+  return (
+    familia.modoRegistro ??
+    (familia.categoria === 'produccion_impresion'
+      ? 'solo_completar'
+      : 'cronometro')
+  );
 }
 
 /** Cantidad total de familias en el catálogo. */

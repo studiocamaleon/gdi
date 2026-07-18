@@ -10,12 +10,17 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { CurrentAuth } from '../auth/auth.types';
 import { paginatedResponse } from '../common/dto/pagination.dto';
 import {
+  MOTIVOS_PAUSA,
+  MOTIVO_PAUSA_LABELS,
   ORDEN_TRABAJO_ESTADOS,
   ORDEN_TRABAJO_ESTADO_LABELS,
   progresoEfectivo,
+  tiempoMedidoValido,
+  type MotivoPausa,
   type OrdenTrabajoEstado,
   type OrdenTrabajoPasoAccion,
   type OrdenTrabajoPasoEstado,
+  type TiempoFuente,
 } from './ordenes-trabajo.types';
 import type {
   CambiarEstadoOrdenTrabajoDto,
@@ -24,7 +29,10 @@ import type {
   EditarOrdenTrabajoDto,
 } from './dto/crear-orden-trabajo.dto';
 import type { AccionPasoOrdenTrabajoDto } from './dto/accion-paso.dto';
-import { FAMILIAS } from '../productos-servicios/pasos/familias';
+import {
+  FAMILIAS,
+  modoRegistroDeFamilia,
+} from '../productos-servicios/pasos/familias';
 import type { FamiliaCodigo } from '../productos-servicios/pasos/types';
 
 /**
@@ -120,11 +128,50 @@ export const TRANSICIONES_PASO: Record<
   { desde: OrdenTrabajoPasoEstado[]; verbo: string }
 > = {
   iniciar: { desde: ['pendiente'], verbo: 'iniciado' },
-  completar: { desde: ['pendiente', 'en_curso'], verbo: 'completado' },
-  bloquear: { desde: ['pendiente', 'en_curso'], verbo: 'bloqueado' },
+  pausar: { desde: ['en_curso'], verbo: 'pausado' },
+  continuar: { desde: ['pausado'], verbo: 'reanudado' },
+  completar: {
+    desde: ['pendiente', 'en_curso', 'pausado'],
+    verbo: 'completado',
+  },
+  bloquear: { desde: ['pendiente', 'en_curso', 'pausado'], verbo: 'bloqueado' },
   desbloquear: { desde: ['bloqueado'], verbo: 'desbloqueado' },
   reabrir: { desde: ['hecho'], verbo: 'reabierto' },
 };
+
+/**
+ * Suma en minutos de los tramos CERRADOS de un paso (el tiempo medido, D2).
+ * Un tramo abierto no suma: se cierra antes de completar/pausar.
+ */
+export function sumaTramosMin(
+  tramos: Array<{ inicioEl: Date; finEl: Date | null }>,
+): number {
+  return tramos.reduce((acc, tramo) => {
+    if (!tramo.finEl) return acc;
+    return acc + (tramo.finEl.getTime() - tramo.inicioEl.getTime()) / 60_000;
+  }, 0);
+}
+
+/**
+ * Corte de jornada que aplica a un tramo abierto (D9): la hora `corte`
+ * ("HH:mm") del día en que se abrió; si se abrió DESPUÉS del corte (turno
+ * nocturno), la del día siguiente. Determinístico: no depende de cuándo
+ * corre la reconciliación.
+ */
+export function corteJornadaDe(inicioEl: Date, corte: string): Date {
+  const [hh, mm] = corte.split(':').map((parte) => Number(parte));
+  const corteDia = new Date(inicioEl);
+  corteDia.setHours(
+    Number.isFinite(hh) ? hh : 20,
+    Number.isFinite(mm) ? mm : 0,
+    0,
+    0,
+  );
+  if (inicioEl >= corteDia) {
+    corteDia.setDate(corteDia.getDate() + 1);
+  }
+  return corteDia;
+}
 
 type PasoSecuencia = { indice: number; estado: string };
 
@@ -1273,6 +1320,7 @@ export class OrdenesTrabajoService {
         centroCostoId: paso.tiempo?.centroCostoId ?? null,
         centroCostoNombre: paso.tiempo?.centroCostoNombre ?? null,
         duracionEstimadaMin: paso.tiempo?.totalMin ?? null,
+        modoRegistro: modoRegistroDeFamilia(familiaCodigo),
       };
     });
   }
@@ -1342,8 +1390,98 @@ export class OrdenesTrabajoService {
     );
   }
 
+  /**
+   * Cierre perezoso por jornada (D9 de registro-tiempos): el backend no
+   * tiene scheduler, así que cada lectura/acción del tablero cierra los
+   * tramos abiertos cuya jornada venció, retroactivamente a la HORA DE
+   * CORTE del día en que se abrieron (determinístico: da lo mismo cuándo
+   * corre). El paso en curso queda pausado; el operario decide continuar.
+   */
+  private async reconciliarTramosVencidos(tenantId: string) {
+    const abiertos = await this.prisma.ordenTrabajoPasoTramo.findMany({
+      where: { tenantId, finEl: null },
+      select: { id: true, pasoId: true, inicioEl: true },
+    });
+    if (abiertos.length === 0) return;
+    const config = await this.prisma.configuracionProduccion.findUnique({
+      where: { tenantId },
+      select: { corteJornada: true },
+    });
+    const corte = config?.corteJornada ?? '20:00';
+    const ahora = new Date();
+    const vencidos = abiertos
+      .map((tramo) => ({
+        ...tramo,
+        corteEl: corteJornadaDe(tramo.inicioEl, corte),
+      }))
+      .filter((tramo) => tramo.corteEl <= ahora);
+    if (vencidos.length === 0) return;
+    await this.prisma.$transaction(async (tx) => {
+      for (const tramo of vencidos) {
+        await tx.ordenTrabajoPasoTramo.update({
+          where: { id: tramo.id },
+          data: { finEl: tramo.corteEl, motivoFin: 'fin_jornada' },
+        });
+        await tx.ordenTrabajoItemPaso.updateMany({
+          where: { id: tramo.pasoId, estado: 'en_curso' },
+          data: { estado: 'pausado' },
+        });
+      }
+    });
+  }
+
+  /**
+   * Tramos abiertos DEL usuario que mira: alimenta el widget flotante
+   * "En curso" (visible en toda la app). Reconcilia primero para no
+   * mostrar cronómetros de ayer.
+   */
+  async misTramosAbiertos(auth: CurrentAuth) {
+    await this.reconciliarTramosVencidos(auth.tenantId);
+    const tramos = await this.prisma.ordenTrabajoPasoTramo.findMany({
+      where: { tenantId: auth.tenantId, usuarioId: auth.userId, finEl: null },
+      orderBy: { inicioEl: 'asc' },
+      include: {
+        paso: {
+          select: {
+            id: true,
+            ordenId: true,
+            itemId: true,
+            nombre: true,
+            estado: true,
+            duracionEstimadaMin: true,
+            item: { select: { nombre: true } },
+            orden: {
+              select: {
+                numero: true,
+                cliente: { select: { nombre: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+    return {
+      tramos: tramos.map((tramo) => ({
+        id: tramo.id,
+        pasoId: tramo.paso.id,
+        ordenId: tramo.paso.ordenId,
+        itemId: tramo.paso.itemId,
+        pasoNombre: tramo.paso.nombre,
+        itemNombre: tramo.paso.item.nombre,
+        ordenNumero: tramo.paso.orden.numero,
+        clienteNombre: tramo.paso.orden.cliente?.nombre ?? 'Sin cliente',
+        inicioEl: tramo.inicioEl.toISOString(),
+        duracionEstimadaMin:
+          tramo.paso.duracionEstimadaMin != null
+            ? Number(tramo.paso.duracionEstimadaMin)
+            : null,
+      })),
+    };
+  }
+
   /** Items activos con sus pasos: el dataset COMPLETO del Tablero. */
   async tablero(auth: CurrentAuth) {
+    await this.reconciliarTramosVencidos(auth.tenantId);
     await this.backfillPasosTablero(auth);
     const ordenes = await this.prisma.ordenTrabajo.findMany({
       where: { tenantId: auth.tenantId, estado: { in: ESTADOS_TABLERO } },
@@ -1357,6 +1495,14 @@ export class OrdenesTrabajoService {
               orderBy: { indice: 'asc' as const },
               include: {
                 mesaUsuario: { select: { nombreCompleto: true, email: true } },
+                tramos: {
+                  where: { finEl: null },
+                  select: {
+                    usuarioId: true,
+                    usuarioNombre: true,
+                    inicioEl: true,
+                  },
+                },
               },
             },
           },
@@ -1381,6 +1527,7 @@ export class OrdenesTrabajoService {
    * estados: una OT terminada muestra su ruta completa. Backfill perezoso.
    */
   async pasosDeOrden(auth: CurrentAuth, ordenId: string) {
+    await this.reconciliarTramosVencidos(auth.tenantId);
     const existe = await this.prisma.ordenTrabajo.findFirst({
       where: { id: ordenId, tenantId: auth.tenantId },
       select: { id: true },
@@ -1414,6 +1561,14 @@ export class OrdenesTrabajoService {
               orderBy: { indice: 'asc' as const },
               include: {
                 mesaUsuario: { select: { nombreCompleto: true, email: true } },
+                tramos: {
+                  where: { finEl: null },
+                  select: {
+                    usuarioId: true,
+                    usuarioNombre: true,
+                    inicioEl: true,
+                  },
+                },
               },
             },
           },
@@ -1450,20 +1605,24 @@ export class OrdenesTrabajoService {
     return this.tableroItemActualizado(auth, paso.itemId);
   }
 
-  /** Acción de ejecución sobre un paso (iniciar/completar/bloquear/…). */
+  /** Acción de ejecución sobre un paso (iniciar/pausar/completar/…). */
   async accionPaso(
     auth: CurrentAuth,
     ordenId: string,
     itemId: string,
     pasoId: string,
     payload: AccionPasoOrdenTrabajoDto,
+    /** Uso interno del lote (D11): tiempo prorrateado de la tanda. */
+    interno?: { tiempoLoteMin?: number },
   ) {
+    await this.reconciliarTramosVencidos(auth.tenantId);
     const [paso, actor] = await Promise.all([
       this.prisma.ordenTrabajoItemPaso.findFirst({
         where: { id: pasoId, tenantId: auth.tenantId, ordenId, itemId },
         include: {
           orden: { select: { estado: true, progresoPct: true } },
           item: { select: { nombre: true, ordenIndice: true } },
+          tramos: { select: { id: true, inicioEl: true, finEl: true } },
         },
       }),
       this.prisma.empleado.findFirst({
@@ -1493,6 +1652,19 @@ export class OrdenesTrabajoService {
       );
     }
 
+    // En modo solo_completar (runtime de máquina, D10) no hay cronómetro:
+    // el paso se completa de un click y el tiempo asentado es el estimado.
+    const esCronometro = paso.modoRegistro === 'cronometro';
+    const accionCronometro =
+      payload.accion === 'iniciar' ||
+      payload.accion === 'pausar' ||
+      payload.accion === 'continuar';
+    if (!esCronometro && accionCronometro) {
+      throw new BadRequestException(
+        `"${paso.nombre}" es un paso de máquina: se completa directo, sin cronómetro.`,
+      );
+    }
+
     // La ruta es una secuencia: sólo se ejecuta el paso ACTIVO (frontera).
     const pasosItem = await this.prisma.ordenTrabajoItemPaso.findMany({
       where: { tenantId: auth.tenantId, itemId },
@@ -1500,6 +1672,8 @@ export class OrdenesTrabajoService {
     });
     const ejecuta =
       payload.accion === 'iniciar' ||
+      payload.accion === 'pausar' ||
+      payload.accion === 'continuar' ||
       payload.accion === 'completar' ||
       payload.accion === 'bloquear';
     if (ejecuta && !pasoEjecutable(pasosItem, paso.indice)) {
@@ -1519,30 +1693,110 @@ export class OrdenesTrabajoService {
         'Para bloquear un paso indicá el motivo (qué lo está frenando).',
       );
     }
+    if (payload.accion === 'pausar') {
+      if (!motivo || !MOTIVOS_PAUSA.includes(motivo as MotivoPausa)) {
+        throw new BadRequestException(
+          'Para pausar un paso elegí un motivo del catálogo.',
+        );
+      }
+      if (motivo === 'otro' && !payload.motivoDetalle?.trim()) {
+        throw new BadRequestException(
+          'Contanos brevemente el motivo de la pausa.',
+        );
+      }
+    }
 
+    const tramoAbierto = paso.tramos.find((tramo) => !tramo.finEl) ?? null;
+    if (
+      (payload.accion === 'iniciar' || payload.accion === 'continuar') &&
+      tramoAbierto
+    ) {
+      throw new BadRequestException(
+        `"${paso.nombre}" ya tiene un tramo de trabajo abierto.`,
+      );
+    }
+
+    const usuarioNombre = actor?.nombreCompleto ?? auth.email;
     const ahora = new Date();
-    const data: Prisma.OrdenTrabajoItemPasoUpdateInput = (() => {
+
+    // Tiempo asentado al completar (D3): medido = suma de tramos (cerrando
+    // el abierto acá mismo); un instantáneo no vale (D8) salvo que el
+    // operario declare; el lote pisa con el prorrateo de la tanda (D11);
+    // los pasos de máquina asientan el estimado del motor (D10).
+    let tiempoRealMin: number | null = null;
+    let tiempoFuente: TiempoFuente | null = null;
+    if (payload.accion === 'completar') {
+      const estimado =
+        paso.duracionEstimadaMin != null
+          ? Number(paso.duracionEstimadaMin)
+          : null;
+      if (interno?.tiempoLoteMin != null) {
+        tiempoRealMin = Math.round(interno.tiempoLoteMin * 100) / 100;
+        tiempoFuente = 'medido_lote';
+      } else if (!esCronometro) {
+        tiempoRealMin = estimado;
+        tiempoFuente = estimado != null ? 'estimado' : 'invalido';
+      } else {
+        const abiertoMin = tramoAbierto
+          ? (ahora.getTime() - tramoAbierto.inicioEl.getTime()) / 60_000
+          : 0;
+        const suma = sumaTramosMin(paso.tramos) + abiertoMin;
+        if (tiempoMedidoValido(suma, estimado)) {
+          tiempoRealMin = Math.round(suma * 100) / 100;
+          tiempoFuente = 'medido';
+        } else if (payload.tiempoDeclaradoMin != null) {
+          tiempoRealMin = payload.tiempoDeclaradoMin;
+          tiempoFuente = 'declarado';
+        } else {
+          tiempoFuente = 'invalido';
+        }
+      }
+    }
+
+    const data: Prisma.OrdenTrabajoItemPasoUncheckedUpdateInput = (() => {
       switch (payload.accion) {
         case 'iniciar':
-          return { estado: 'en_curso', iniciadoEl: ahora };
+        case 'continuar':
+          return {
+            estado: 'en_curso',
+            iniciadoEl: paso.iniciadoEl ?? ahora,
+            // Atribución del primer tramo (D5) + auto-reclamo de mesa (D6).
+            ...(paso.iniciadoPorId == null
+              ? { iniciadoPorId: auth.userId, iniciadoPorNombre: usuarioNombre }
+              : {}),
+            mesaUsuarioId: auth.userId,
+          };
+        case 'pausar':
+          return { estado: 'pausado' };
         case 'completar':
           return {
             estado: 'hecho',
             completadoEl: ahora,
             iniciadoEl: paso.iniciadoEl ?? ahora,
+            completadoPorId: auth.userId,
+            completadoPorNombre: usuarioNombre,
+            tiempoRealMin,
+            tiempoFuente,
           };
         case 'bloquear':
           return { estado: 'bloqueado', motivoBloqueo: motivo };
         case 'desbloquear':
+          // Volver de un bloqueo no reabre el cronómetro solo: si hubo
+          // trabajo queda pausado y el operario decide continuar.
           return {
-            estado: paso.iniciadoEl ? 'en_curso' : 'pendiente',
+            estado: esCronometro && paso.iniciadoEl ? 'pausado' : 'pendiente',
             motivoBloqueo: null,
           };
         case 'reabrir':
+          // D12: conserva iniciadoEl y los tramos históricos; el tiempo se
+          // recalcula sobre todos los tramos al re-completar.
           return {
             estado: 'pendiente',
-            iniciadoEl: null,
             completadoEl: null,
+            tiempoRealMin: null,
+            tiempoFuente: null,
+            completadoPorId: null,
+            completadoPorNombre: null,
           };
       }
     })();
@@ -1551,7 +1805,6 @@ export class OrdenesTrabajoService {
     const promueve =
       ordenEstado === 'pendiente' &&
       (payload.accion === 'iniciar' || payload.accion === 'completar');
-    const usuarioNombre = actor?.nombreCompleto ?? auth.email;
     const letraItem = String.fromCharCode(65 + (paso.item.ordenIndice % 26));
 
     await this.prisma.$transaction(async (tx) => {
@@ -1559,6 +1812,36 @@ export class OrdenesTrabajoService {
         where: { id: paso.id },
         data,
       });
+
+      // Tramos (D2): iniciar/continuar abren sesión de trabajo; pausar,
+      // completar y bloquear cierran la abierta con su motivo.
+      if (payload.accion === 'iniciar' || payload.accion === 'continuar') {
+        await tx.ordenTrabajoPasoTramo.create({
+          data: {
+            tenantId: auth.tenantId,
+            pasoId: paso.id,
+            usuarioId: auth.userId,
+            usuarioNombre,
+            inicioEl: ahora,
+          },
+        });
+      } else if (tramoAbierto) {
+        await tx.ordenTrabajoPasoTramo.update({
+          where: { id: tramoAbierto.id },
+          data: {
+            finEl: ahora,
+            motivoFin:
+              payload.accion === 'completar'
+                ? 'completado'
+                : payload.accion === 'bloquear'
+                  ? 'bloqueo'
+                  : `pausa:${motivo}`,
+            ...(payload.accion === 'pausar' && motivo === 'otro'
+              ? { motivoDetalle: payload.motivoDetalle?.trim() }
+              : {}),
+          },
+        });
+      }
 
       // Progreso real de la orden: pasos hechos sobre el total (D3 del doc).
       const [total, hechos] = await Promise.all([
@@ -1606,7 +1889,11 @@ export class OrdenesTrabajoService {
           ordenId,
           tipo: 'paso',
           descripcion: `Producción: "${paso.nombre}" ${transicion.verbo} — item ${letraItem} · ${paso.item.nombre}${
-            payload.accion === 'bloquear' ? ` (${motivo})` : ''
+            payload.accion === 'bloquear'
+              ? ` (${motivo})`
+              : payload.accion === 'pausar'
+                ? ` (${MOTIVO_PAUSA_LABELS[motivo as MotivoPausa]})`
+                : ''
           }`,
           usuarioNombre,
           usuarioId: auth.userId,
@@ -1657,13 +1944,55 @@ export class OrdenesTrabajoService {
    * orden y auto-finalización — y devuelve un resultado PARCIAL honesto:
    * los que no pudieron completarse vuelven con su motivo.
    */
-  async completarPasosLote(auth: CurrentAuth, pasoIds: string[]) {
+  async completarPasosLote(
+    auth: CurrentAuth,
+    pasoIds: string[],
+    duracionTandaMin?: number,
+  ) {
     const unicos = [...new Set(pasoIds)];
     const pasos = await this.prisma.ordenTrabajoItemPaso.findMany({
       where: { id: { in: unicos }, tenantId: auth.tenantId },
-      select: { id: true, ordenId: true, itemId: true, nombre: true },
+      select: {
+        id: true,
+        ordenId: true,
+        itemId: true,
+        nombre: true,
+        duracionEstimadaMin: true,
+      },
     });
     const porId = new Map(pasos.map((paso) => [paso.id, paso]));
+
+    // Prorrateo de la tanda (D11): un solo número medido para todo el lote,
+    // repartido por peso del estimado. Los pasos sin estimado pesan como el
+    // estimado promedio (o 1 si ninguno tiene).
+    const tiempoLotePorPaso = new Map<string, number>();
+    if (duracionTandaMin != null && duracionTandaMin > 0 && pasos.length > 0) {
+      const estimados = pasos
+        .map((paso) =>
+          paso.duracionEstimadaMin != null
+            ? Number(paso.duracionEstimadaMin)
+            : null,
+        )
+        .filter((valor): valor is number => valor != null && valor > 0);
+      const pesoDefault =
+        estimados.length > 0
+          ? estimados.reduce((a, b) => a + b, 0) / estimados.length
+          : 1;
+      const pesoDe = (paso: (typeof pasos)[number]) => {
+        const estimado =
+          paso.duracionEstimadaMin != null
+            ? Number(paso.duracionEstimadaMin)
+            : null;
+        return estimado != null && estimado > 0 ? estimado : pesoDefault;
+      };
+      const sumaPesos = pasos.reduce((acc, paso) => acc + pesoDe(paso), 0);
+      for (const paso of pasos) {
+        tiempoLotePorPaso.set(
+          paso.id,
+          (duracionTandaMin * pesoDe(paso)) / sumaPesos,
+        );
+      }
+    }
 
     let completados = 0;
     const errores: Array<{ pasoId: string; motivo: string }> = [];
@@ -1677,9 +2006,14 @@ export class OrdenesTrabajoService {
         continue;
       }
       try {
-        await this.accionPaso(auth, paso.ordenId, paso.itemId, paso.id, {
-          accion: 'completar',
-        });
+        await this.accionPaso(
+          auth,
+          paso.ordenId,
+          paso.itemId,
+          paso.id,
+          { accion: 'completar' },
+          { tiempoLoteMin: tiempoLotePorPaso.get(paso.id) },
+        );
         completados += 1;
       } catch (error: unknown) {
         errores.push({
@@ -1701,6 +2035,14 @@ export class OrdenesTrabajoService {
           orderBy: { indice: 'asc' as const },
           include: {
             mesaUsuario: { select: { nombreCompleto: true, email: true } },
+            tramos: {
+              where: { finEl: null },
+              select: {
+                usuarioId: true,
+                usuarioNombre: true,
+                inicioEl: true,
+              },
+            },
           },
         },
         orden: {
@@ -1748,8 +2090,18 @@ export class OrdenesTrabajoService {
         motivoBloqueo: string | null;
         iniciadoEl: Date | null;
         completadoEl: Date | null;
+        modoRegistro: string;
+        tiempoRealMin: Prisma.Decimal | null;
+        tiempoFuente: string | null;
+        iniciadoPorNombre: string | null;
+        completadoPorNombre: string | null;
         mesaUsuarioId: string | null;
         mesaUsuario: { nombreCompleto: string | null; email: string } | null;
+        tramos: Array<{
+          usuarioId: string | null;
+          usuarioNombre: string;
+          inicioEl: Date;
+        }>;
       }>;
     },
     /** Usuario que MIRA el tablero: define `mesaEsMia` por paso. */
@@ -1792,6 +2144,20 @@ export class OrdenesTrabajoService {
         iniciadoEl: paso.iniciadoEl ? paso.iniciadoEl.toISOString() : null,
         completadoEl: paso.completadoEl
           ? paso.completadoEl.toISOString()
+          : null,
+        modoRegistro: paso.modoRegistro,
+        tiempoRealMin:
+          paso.tiempoRealMin != null ? Number(paso.tiempoRealMin) : null,
+        tiempoFuente: paso.tiempoFuente,
+        iniciadoPorNombre: paso.iniciadoPorNombre,
+        completadoPorNombre: paso.completadoPorNombre,
+        // Cronómetro corriendo (tramo abierto): quién y desde cuándo.
+        tramoAbierto: paso.tramos[0]
+          ? {
+              usuarioNombre: paso.tramos[0].usuarioNombre,
+              inicioEl: paso.tramos[0].inicioEl.toISOString(),
+              esMio: paso.tramos[0].usuarioId === viewerUserId,
+            }
           : null,
         mesaEsMia: paso.mesaUsuarioId === viewerUserId,
         mesaUsuarioNombre: paso.mesaUsuario

@@ -58,7 +58,17 @@ export class OrdenesTrabajoController {
     @CurrentSession() auth: CurrentAuth,
     @Body() payload: CompletarPasosLoteDto,
   ) {
-    return this.ordenesTrabajoService.completarPasosLote(auth, payload.pasoIds);
+    return this.ordenesTrabajoService.completarPasosLote(
+      auth,
+      payload.pasoIds,
+      payload.duracionTandaMin,
+    );
+  }
+
+  /** Tramos de trabajo abiertos del usuario (widget flotante "En curso"). */
+  @Get('tablero/mis-tramos')
+  misTramos(@CurrentSession() auth: CurrentAuth) {
+    return this.ordenesTrabajoService.misTramosAbiertos(auth);
   }
 
   /** Tomar/soltar un paso de MI mesa de trabajo (vista Por estación). */

@@ -386,9 +386,10 @@ export class ProduccionService {
   /**
    * Mediana histórica de duración REAL por familia de pasos (fallback de
    * `duracionEstimadaMin` para la cola del tablero, D6 del doc de capacidad):
-   * completadoEl − iniciadoEl de los pasos `hecho` del tenant, sólo familias
-   * con muestras suficientes. Mediana y no promedio: resiste el paso que
-   * quedó abierto un fin de semana.
+   * `tiempoRealMin` de los pasos `hecho` del tenant, SOLO fuentes medidas
+   * (D14 de registro-tiempos: 'estimado' acá cerraría el círculo
+   * estimado→"real"→estimado, y 'declarado' es percepción, no medición).
+   * Mediana y no promedio: resiste el outlier.
    */
   async findDuracionesFamilias(auth: CurrentAuth) {
     const rows = await this.prisma.$queryRaw<
@@ -396,15 +397,14 @@ export class ProduccionService {
     >`
       SELECT "familiaCodigo",
              percentile_cont(0.5) WITHIN GROUP (
-               ORDER BY EXTRACT(EPOCH FROM ("completadoEl" - "iniciadoEl")) / 60.0
+               ORDER BY "tiempoRealMin"
              ) AS "medianaMin",
              COUNT(*)::int AS "muestras"
       FROM "OrdenTrabajoItemPaso"
       WHERE "tenantId" = ${auth.tenantId}::uuid
         AND "estado" = 'hecho'
-        AND "iniciadoEl" IS NOT NULL
-        AND "completadoEl" IS NOT NULL
-        AND "completadoEl" > "iniciadoEl"
+        AND "tiempoRealMin" IS NOT NULL
+        AND "tiempoFuente" IN ('medido', 'medido_lote')
       GROUP BY "familiaCodigo"
       HAVING COUNT(*) >= ${MIN_MUESTRAS_MEDIANA}
       ORDER BY "familiaCodigo" ASC
@@ -652,7 +652,10 @@ export class ProduccionService {
     const row = await this.prisma.configuracionProduccion.findUnique({
       where: { tenantId: auth.tenantId },
     });
-    return { margenEtaDias: row?.margenEtaDias ?? 0 };
+    return {
+      margenEtaDias: row?.margenEtaDias ?? 0,
+      corteJornada: row?.corteJornada ?? '20:00',
+    };
   }
 
   async actualizarConfiguracion(
@@ -661,10 +664,17 @@ export class ProduccionService {
   ) {
     const row = await this.prisma.configuracionProduccion.upsert({
       where: { tenantId: auth.tenantId },
-      create: { tenantId: auth.tenantId, margenEtaDias: payload.margenEtaDias },
-      update: { margenEtaDias: payload.margenEtaDias },
+      create: {
+        tenantId: auth.tenantId,
+        margenEtaDias: payload.margenEtaDias,
+        ...(payload.corteJornada ? { corteJornada: payload.corteJornada } : {}),
+      },
+      update: {
+        margenEtaDias: payload.margenEtaDias,
+        ...(payload.corteJornada ? { corteJornada: payload.corteJornada } : {}),
+      },
     });
-    return { margenEtaDias: row.margenEtaDias };
+    return { margenEtaDias: row.margenEtaDias, corteJornada: row.corteJornada };
   }
 
   // ── Días no laborables (feriados y cierres del taller) ───────────────
