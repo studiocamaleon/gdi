@@ -106,6 +106,9 @@ enum CategoriaGastoFijo {
   FINANCIEROS // intereses, cuotas, leasing
   IMPUESTOS // fijos (no IVA/IIBB, que se costean por venta)
   MARKETING
+  SEGUROS
+  SOFTWARE // software y licencias
+  LEGAL // contable / legal
   OTROS
 }
 
