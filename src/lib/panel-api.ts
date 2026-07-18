@@ -291,6 +291,69 @@ export type MargenClientePanel = {
   margenPct: number | null;
   itemsSinCosto: number;
 };
+/** Tab Equipo: por persona, con las guardas del estudio (sin rankings). */
+export type PersonaProduccionPanel = {
+  id: string | null;
+  nombre: string;
+  minutos: number;
+  pasos: number;
+  dias: number;
+  familias: number;
+  autoPausas: number;
+};
+export type PersonaEficienciaPanel = {
+  id: string | null;
+  nombre: string;
+  muestras: number;
+  /** null = muestra insuficiente (no se muestra número). */
+  desvioPct: number | null;
+  serie: Array<{ semana: string; desvioPct: number; muestras: number }>;
+};
+export type PersonaDisciplinaPanel = {
+  id: string | null;
+  nombre: string;
+  pasos: number;
+  medidos: number;
+  declarados: number;
+  estimados: number;
+  invalidos: number;
+  medidoPct: number;
+  autoPausas: number;
+};
+export type CeldaPolivalenciaPanel = {
+  nombre: string;
+  familia: string;
+  minutos: number;
+  pasos: number;
+};
+export type VendedorEquipoPanel = {
+  empleadoId: string | null;
+  nombre: string;
+  ordenes: number;
+  facturado: number;
+  ticketPromedio: number;
+  margen: number | null;
+  margenPct: number | null;
+  itemsSinCosto: number;
+  comisionEstimada: number | null;
+};
+export type EquipoPanel = {
+  kpis: {
+    personasActivas: number;
+    minutosProductivos: number;
+    pasosCompletados: number;
+    medidoPct: number | null;
+    vendedoresActivos: number;
+  };
+  personas: PersonaProduccionPanel[];
+  eficiencia: PersonaEficienciaPanel[];
+  muestraMinima: number;
+  disciplina: PersonaDisciplinaPanel[];
+  polivalencia: CeldaPolivalenciaPanel[];
+  familiasSinRespaldo: Array<{ familia: string; persona: string }>;
+  vendedores: VendedorEquipoPanel[];
+};
+
 export type ClientesPanel = {
   kpis: {
     activos: number;
@@ -392,6 +455,9 @@ export function getPanelProducto(rango?: RangoPanel) {
 }
 export function getPanelClientes(rango?: RangoPanel) {
   return apiRequest<TabPanel<ClientesPanel>>(`/reportes/panel/clientes${qs(rango)}`);
+}
+export function getPanelEquipo(rango?: RangoPanel) {
+  return apiRequest<TabPanel<EquipoPanel>>(`/reportes/panel/equipo${qs(rango)}`);
 }
 export function getPanelMixCategoria(categoria: string, rango?: RangoPanel) {
   const params = new URLSearchParams();

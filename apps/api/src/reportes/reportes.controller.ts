@@ -9,6 +9,7 @@ import { ProductoService } from './producto.service';
 import { ReporteProduccionService } from './produccion.service';
 import { AlertasService } from './alertas.service';
 import { ClientesService } from './clientes.service';
+import { EquipoService } from './equipo.service';
 import { RangoReporteDto } from './dto/rango-reporte.dto';
 import { MixCategoriaDto } from './dto/mix-categoria.dto';
 import { ActualizarUmbralesDto } from './dto/actualizar-umbrales.dto';
@@ -31,6 +32,7 @@ export class ReportesController {
     private readonly produccionSvc: ReporteProduccionService,
     private readonly alertas: AlertasService,
     private readonly clientesSvc: ClientesService,
+    private readonly equipoSvc: EquipoService,
   ) {}
 
   @Get('resumen')
@@ -169,6 +171,18 @@ export class ReportesController {
         sinComparativa: clientes.sinComparativa,
       }),
       ...clientes,
+    };
+  }
+
+  @Get('equipo')
+  async equipo(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
+    const { rango, anterior } = this.service.resolverRango(query);
+    const equipo = await this.equipoSvc.equipo(auth.tenantId, rango);
+    return {
+      meta: this.service.metaBase(rango, anterior, 'Tramos de trabajo y pasos completados', {
+        limites: this.equipoSvc.limites(),
+      }),
+      ...equipo,
     };
   }
 

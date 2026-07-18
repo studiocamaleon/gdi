@@ -13,6 +13,7 @@ import {
   BriefcaseIcon,
   FactoryIcon,
   CircleDollarSignIcon,
+  HardHatIcon,
   PackageIcon,
   UsersIcon,
 } from "lucide-react";
@@ -20,6 +21,7 @@ import { technologyCodeLabel } from "@/lib/maquinaria-tecnologias";
 import {
   getPanelClientes,
   getPanelComercial,
+  getPanelEquipo,
   getPanelFinanzas,
   getPanelMixCategoria,
   getPanelProduccion,
@@ -30,6 +32,7 @@ import {
   type ClientesPanel,
   type CobranzaPanel,
   type ComercialPanel,
+  type EquipoPanel,
   type MetaPanel,
   type MixCategoriaPanel,
   type ProduccionPanel,
@@ -754,9 +757,10 @@ function TabProduccion({ d }: { d: ProduccionPanel }) {
           )}
         </Card>
 
-        {/* ── Registro de tiempos (docs/registro-tiempos-produccion §9) ── */}
+        {/* ── Registro de tiempos (docs/registro-tiempos-produccion §9).
+             El detalle por operador vive en el tab Equipo. ── */}
         <Card
-          span={4}
+          span={6}
           title="Calidad del registro"
           sub="fuente del tiempo de cada paso"
           action={<span className="mono" style={{ color: "var(--ink)", fontSize: 13, fontWeight: 600 }}>{registro.confiablePct != null ? `${fmtAR(registro.confiablePct, 0)}% medido` : "—"}</span>}
@@ -772,17 +776,10 @@ function TabProduccion({ d }: { d: ProduccionPanel }) {
             </>
           )}
         </Card>
-        <Card span={4} title="Pausas del taller" sub="por qué se corta el trabajo" flush>
+        <Card span={6} title="Pausas del taller" sub="por qué se corta el trabajo" flush>
           {registro.pausas.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Sin pausas registradas en el período.</div> : (
             <table className="d-tbl"><thead><tr><th>Motivo</th><th style={{ width: 90 }} /><th className="right">Veces</th></tr></thead>
               <tbody>{registro.pausas.map((p) => (<tr key={p.motivo}><td><div className="nm">{p.motivo}</div></td><td><HBar value={p.veces} max={Math.max(...registro.pausas.map((x) => x.veces), 1)} tone={p.motivo === "Pausa automática" || p.motivo === "Fin de jornada" ? "muted" : "ink"} /></td><td className="right mono">{p.veces}</td></tr>))}</tbody>
-            </table>
-          )}
-        </Card>
-        <Card span={4} title="Tiempo por operador" sub="tramos de trabajo del período" flush>
-          {registro.operadores.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Sin tramos de trabajo en el período.</div> : (
-            <table className="d-tbl"><thead><tr><th>Operador</th><th className="right">Pasos</th><th className="right">Tiempo</th></tr></thead>
-              <tbody>{registro.operadores.map((o) => (<tr key={o.operador}><td><div className="nm">{o.operador}</div></td><td className="right mono">{o.pasos}</td><td className="right mono">{fmtMinutos(o.minutos)}</td></tr>))}</tbody>
             </table>
           )}
         </Card>
@@ -1088,6 +1085,147 @@ function TabProducto({ d, rango }: { d: ProductoPanel; rango: RangoPanel }) {
   );
 }
 
+/* ═══════════ TAB · Equipo ═══════════ */
+const FUENTE_DISCIPLINA_COLORS: Array<{ key: "medidos" | "declarados" | "estimados" | "invalidos"; label: string; color: string }> = [
+  { key: "medidos", label: "Medido", color: "var(--ok)" },
+  { key: "declarados", label: "Declarado", color: "#5a7fd8" },
+  { key: "estimados", label: "Estimado", color: "#c8c6c0" },
+  { key: "invalidos", label: "Sin tiempo", color: "var(--signal)" },
+];
+
+/** Matriz personas × familias con intensidad por minutos trabajados. */
+function MatrizPolivalencia({ celdas }: { celdas: EquipoPanel["polivalencia"] }) {
+  const personas = [...new Set(celdas.map((c) => c.nombre))].sort((a, b) => a.localeCompare(b, "es")).slice(0, 8);
+  const totalesFam = new Map<string, number>();
+  for (const c of celdas) totalesFam.set(c.familia, (totalesFam.get(c.familia) ?? 0) + c.minutos);
+  const familias = [...totalesFam.entries()].sort((a, b) => b[1] - a[1]).map(([f]) => f).slice(0, 8);
+  const valor = new Map(celdas.map((c) => [`${c.familia}|${c.nombre}`, c] as const));
+  const max = Math.max(...celdas.map((c) => c.minutos), 1);
+  if (personas.length === 0) return <div className="d-empty" style={{ padding: 30 }}>Sin tramos de trabajo en el período.</div>;
+  return (
+    <div style={{ overflowX: "auto" }}>
+      <div style={{ display: "grid", gridTemplateColumns: `minmax(110px, 150px) repeat(${personas.length}, minmax(34px, 1fr))`, gap: 3, alignItems: "center" }}>
+        <div />
+        {personas.map((p) => (
+          <div key={p} title={p} style={{ fontSize: 10, color: "var(--muted-text)", textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.split(" ")[0]}</div>
+        ))}
+        {familias.map((fam) => (
+          <React.Fragment key={fam}>
+            <div style={{ fontSize: 11.5, color: "var(--ink-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={fam}>{fam}</div>
+            {personas.map((p) => {
+              const c = valor.get(`${fam}|${p}`);
+              return (
+                <div key={p} title={c ? `${p} · ${fam}: ${fmtMinutos(c.minutos)} en ${c.pasos} paso${c.pasos === 1 ? "" : "s"}` : `${p} · ${fam}: sin trabajo`}
+                  style={{ height: 22, borderRadius: 3, background: c ? `rgba(20,20,26,${(0.10 + 0.7 * (c.minutos / max)).toFixed(3)})` : "rgba(20,20,26,.03)" }} />
+              );
+            })}
+          </React.Fragment>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TabEquipo({ d }: { d: EquipoPanel }) {
+  const k = d.kpis;
+  return (
+    <>
+      <div className="d-kpi-row">
+        <Kpi label="Personas activas" value={fmtAR(k.personasActivas)} sub="trabajaron en el período" />
+        <Kpi label="Horas productivas" value={fmtAR(k.minutosProductivos / 60, 1)} sub="cronometradas en pasos" hint="Suma de tramos de trabajo; no es asistencia" />
+        <Kpi label="Pasos completados" value={fmtAR(k.pasosCompletados)} />
+        <Kpi label="Tiempo medido" value={pct(k.medidoPct, 0)} sub="disciplina de registro" hint="Pasos cuyo tiempo salió del cronómetro; habilita todas las demás métricas" />
+        <Kpi label="Vendedores" value={fmtAR(k.vendedoresActivos)} sub="con ventas en el período" />
+      </div>
+      <div className="dash-grid">
+        <Card span={7} title="Trabajo por persona" sub="tiempo cronometrado, no asistencia" flush>
+          {d.personas.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Sin tramos de trabajo en el período.</div> : (
+            <table className="d-tbl"><thead><tr><th>Persona</th><th className="right">Pasos</th><th className="right">Días</th><th className="right">Familias</th><th className="right">Tiempo</th></tr></thead>
+              <tbody>{d.personas.map((p) => (
+                <tr key={p.id ?? p.nombre}>
+                  <td><div className="nm">{p.nombre}</div>{p.autoPausas > 0 ? <div className="sub">{p.autoPausas} auto-pausa{p.autoPausas === 1 ? "" : "s"} (cronómetro olvidado)</div> : null}</td>
+                  <td className="right mono">{p.pasos}</td>
+                  <td className="right mono">{p.dias}</td>
+                  <td className="right mono">{p.familias}</td>
+                  <td className="right mono" style={{ fontWeight: 600 }}>{fmtMinutos(p.minutos)}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          )}
+        </Card>
+        <Card span={5} title="Disciplina de registro" sub="calidad del tiempo de los pasos de cada uno">
+          {d.disciplina.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Sin pasos completados en el período.</div> : (
+            <>
+              {d.disciplina.map((p) => (
+                <div key={p.id ?? p.nombre} style={{ marginBottom: 10 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}>
+                    <span>{p.nombre}</span>
+                    <span className="mono" style={{ color: p.medidoPct >= 70 ? "var(--ok)" : "var(--muted-text)" }}>{pct(p.medidoPct, 0)} medido · {p.pasos} pasos</span>
+                  </div>
+                  <StackedHBar height={10} segments={FUENTE_DISCIPLINA_COLORS.map((f) => ({ value: p[f.key], color: f.color, label: f.label }))} />
+                </div>
+              ))}
+              <div className="d-legend" style={{ marginTop: 8, flexWrap: "wrap" }}>
+                {FUENTE_DISCIPLINA_COLORS.map((f) => <LegendDot key={f.key} color={f.color} label={f.label} />)}
+              </div>
+            </>
+          )}
+        </Card>
+        <Card span={7} title="Eficiencia vs. cotizado" sub="tendencia de cada uno contra sí mismo — no es un ranking" flush
+          foot={<span>Sólo con {d.muestraMinima}+ pasos medidos en el período: con menos muestra el número es ruido, no desempeño. Orden alfabético.</span>}>
+          {d.eficiencia.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Sin pasos medidos en el período.</div> : (
+            <table className="d-tbl"><thead><tr><th>Persona</th><th className="right">Pasos medidos</th><th>Tendencia semanal</th><th style={{ width: 100 }} /><th className="right">vs. cotizado</th></tr></thead>
+              <tbody>{d.eficiencia.map((p) => {
+                const conDato = p.desvioPct != null;
+                return (
+                  <tr key={p.id ?? p.nombre}>
+                    <td><div className="nm">{p.nombre}</div></td>
+                    <td className="right mono" style={{ opacity: conDato ? 1 : 0.5 }}>{p.muestras}</td>
+                    <td>{conDato && p.serie.length >= 2 ? <Sparkline values={p.serie.map((s) => s.desvioPct)} signal={(p.serie[p.serie.length - 1]?.desvioPct ?? 0) > 10} /> : <span style={{ fontSize: 11, color: "var(--muted-text)" }}>—</span>}</td>
+                    <td>{conDato ? <BarraDesvio desvioPct={p.desvioPct} /> : null}</td>
+                    <td className="right">
+                      {conDato ? (
+                        <span className="mono" style={{ fontWeight: 600, color: Math.abs(p.desvioPct!) <= 10 ? "var(--muted-text)" : p.desvioPct! > 0 ? "var(--signal)" : "var(--ok)" }}>{p.desvioPct! > 0 ? "+" : ""}{fmtAR(p.desvioPct!, 0)}%</span>
+                      ) : (
+                        <span style={{ fontSize: 11, color: "var(--muted-text)" }}>pocos datos ({p.muestras}/{d.muestraMinima})</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}</tbody>
+            </table>
+          )}
+        </Card>
+        <Card span={5} title="Polivalencia observada" sub="quién trabajó en qué familia (minutos)">
+          <MatrizPolivalencia celdas={d.polivalencia} />
+          {d.familiasSinRespaldo.length > 0 ? (
+            <div style={{ marginTop: 12, fontSize: 11.5, color: "var(--signal)" }}>
+              Sin respaldo: {d.familiasSinRespaldo.map((f) => `${f.familia} (sólo ${f.persona.split(" ")[0]})`).join(" · ")}
+            </div>
+          ) : null}
+          <div style={{ marginTop: 6, fontSize: 11, color: "var(--muted-text)" }}>Más oscuro = más tiempo. Una familia con una sola persona es un riesgo de cobertura.</div>
+        </Card>
+        <Card span={12} title="Vendedores" sub="venta, margen y comisión estimada del período" flush>
+          {d.vendedores.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Sin ventas en el período.</div> : (
+            <table className="d-tbl"><thead><tr><th>Vendedor</th><th className="right">Órdenes</th><th className="right">Ticket</th><th className="right">Margen</th><th className="right">Facturado</th><th className="right" title="Reglas de comisión configuradas aplicadas a la venta; no es liquidación">Comisión est.</th></tr></thead>
+              <tbody>{d.vendedores.map((v) => (
+                <tr key={v.empleadoId ?? v.nombre}>
+                  <td><div className="nm">{v.nombre}</div>{v.itemsSinCosto > 0 ? <div className="sub">{v.itemsSinCosto} item{v.itemsSinCosto === 1 ? "" : "s"} sin costo (fuera del margen)</div> : null}</td>
+                  <td className="right mono">{v.ordenes}</td>
+                  <td className="right mono">${fmtK(v.ticketPromedio)}</td>
+                  <td className="right mono" style={{ color: "var(--ok)" }}>{v.margenPct != null ? pct(v.margenPct) : "—"}</td>
+                  <td className="right mono" style={{ fontWeight: 600 }}>${fmtK(v.facturado)}</td>
+                  <td className="right mono">{v.comisionEstimada != null ? `$${fmtK(v.comisionEstimada)}` : <span style={{ color: "var(--muted-text)" }}>sin regla</span>}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          )}
+        </Card>
+      </div>
+    </>
+  );
+}
+
 /* ═══════════ TAB · Clientes ═══════════ */
 const SEGMENTO_RFM_META: Record<string, { label: string; hint: string }> = {
   campeones: { label: "Campeones", hint: "Compran seguido y hace poco (4+ órdenes)" },
@@ -1192,12 +1330,13 @@ function TabClientes({ d }: { d: ClientesPanel }) {
 }
 
 /* ═══════════ Shell ═══════════ */
-type TabKey = "resumen" | "comercial" | "clientes" | "produccion" | "finanzas" | "producto";
+type TabKey = "resumen" | "comercial" | "clientes" | "produccion" | "equipo" | "finanzas" | "producto";
 const TABS: Array<{ key: TabKey; label: string; Icon: React.ComponentType<React.SVGProps<SVGSVGElement>> }> = [
   { key: "resumen", label: "Resumen ejecutivo", Icon: LayoutGridIcon },
   { key: "comercial", label: "Comercial", Icon: BriefcaseIcon },
   { key: "clientes", label: "Clientes", Icon: UsersIcon },
   { key: "produccion", label: "Producción", Icon: FactoryIcon },
+  { key: "equipo", label: "Equipo", Icon: HardHatIcon },
   { key: "finanzas", label: "Finanzas", Icon: CircleDollarSignIcon },
   { key: "producto", label: "Ventas & Producto", Icon: PackageIcon },
 ];
@@ -1217,7 +1356,7 @@ function rangoDe(p: PeriodoKey): RangoPanel {
   return { desde: iso(new Date(y, 0, 1)), hasta: iso(new Date(y, 11, 31)) };
 }
 const FETCHERS: Record<TabKey, (r: RangoPanel) => Promise<unknown>> = {
-  resumen: getPanelResumen, comercial: getPanelComercial, clientes: getPanelClientes, produccion: getPanelProduccion, finanzas: getPanelFinanzas, producto: getPanelProducto,
+  resumen: getPanelResumen, comercial: getPanelComercial, clientes: getPanelClientes, produccion: getPanelProduccion, equipo: getPanelEquipo, finanzas: getPanelFinanzas, producto: getPanelProducto,
 };
 
 export function PanelGeneral({ initialResumen }: { initialResumen: ResumenData }) {
@@ -1275,6 +1414,7 @@ export function PanelGeneral({ initialResumen }: { initialResumen: ResumenData }
             {tab === "comercial" ? <TabComercial d={data as ComercialPanel} /> : null}
             {tab === "clientes" ? <TabClientes d={data as ClientesPanel} /> : null}
             {tab === "produccion" ? <TabProduccion d={data as ProduccionPanel} /> : null}
+            {tab === "equipo" ? <TabEquipo d={data as EquipoPanel} /> : null}
             {tab === "finanzas" ? <TabFinanzas d={data as FinanzasData} /> : null}
             {tab === "producto" ? <TabProducto d={data as ProductoPanel} rango={rango} /> : null}
             {meta && meta.limites.length > 0 ? (
