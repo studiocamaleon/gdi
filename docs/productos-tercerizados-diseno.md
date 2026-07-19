@@ -195,7 +195,29 @@ Un paso tercerizado en la OT **es una compra al proveedor**, no producción:
 
 ---
 
-## 7. Cotización — UI (según la fuente de costo)
+## 7a. Setup — UI de creación (decidido 2026-07-19)
+
+**No hay flujo nuevo ni sección aparte.** El tercerizado se crea desde el mismo
+módulo **Productos y servicios** (integrado); un producto tercerizado es un
+producto normal cuya ruta tiene ≥1 paso marcado tercerizado.
+
+- **Listado** (`productos-table.tsx`): badge "Tercerizado" (o "Parcial") + un
+  filtro para encontrarlos rápido. Requiere un flag derivado a nivel producto
+  (¿algún configPaso tercerizado?), calculado en `listarProductos`.
+- **Editor de paso** (`config-pasos-editor-view.tsx`, panel del paso ~L4790): un
+  toggle **"Lo terceriza un proveedor"**. Al activarlo, el bloque de máquina/
+  material se reemplaza por: **proveedor**, **fuente de costo** (matriz / tarifa
+  por magnitud / fijo), **plazo del proveedor**, y el editor de la fuente:
+  - **matriz**: ejes (agregar eje + sus valores como chips) → la **grilla se
+    auto-genera** con todas las combinaciones (cantidad como columnas); el usuario
+    **llena los costos** en cada celda y puede **borrar** las filas que el
+    proveedor no ofrece. Cero CSV — todo en la grilla.
+  - **tarifa por magnitud**: magnitud (área/ml/perímetro/cantidad) + tarifa +
+    mínimos opcionales.
+  - **fijo**: costo + por (trabajo/unidad).
+- **Pricing** (tab existente): margen con `por_margen`.
+
+## 7b. Cotización — UI (según la fuente de costo)
 
 - Catálogo (paso select): **sin cambios** — aparece por `activo`. Badge
   "Tercerizado" / "Parcial" para distinguir.
@@ -251,9 +273,10 @@ Un paso tercerizado en la OT **es una compra al proveedor**, no producción:
 ## 10. Fases
 
 - **F1 — Costeo tercerizado por paso + catálogo + cotización.** Campos en
-  `ProductoConfigPaso`, tabla de matriz + ABM/CSV, rama en `ejecutarPaso`, relajar
-  la validación de máquina, UI de captura por fuente. Cubre las 3 variantes en la
-  cotización (el 80% del valor: ya se cotiza y vende).
+  `ProductoConfigPaso`, tabla de matriz, rama en `ejecutarPaso`, relajar la
+  validación de máquina (todo ✅ hecho), + **ABM por UI** (toggle + fuente +
+  grilla auto-generada en el editor de paso; badge/filtro en el listado) y la UI
+  de captura en el cotizador. Cubre las 3 variantes (el 80% del valor).
 - **F2 — OT: compra con seguimiento.** `tipoEjecucion='tercerizado'` +
   estado de compra en el paso, panel de compras en la OT, bloqueo por dependencia,
   progreso/ETA con `plazoProveedorDias`.
@@ -276,6 +299,10 @@ Un paso tercerizado en la OT **es una compra al proveedor**, no producción:
   soporta `minimoMagnitud` y `minimoCosto`.
 - **F. `perimetro_ml` como magnitud del motor** (no input manual): se calcula
   desde las piezas, para confección/soldado por perímetro.
+- **G. Setup 100% por UI, integrado** (no CSV, no sección aparte): el tercerizado
+  es un toggle del paso en el editor normal de productos; la matriz se llena en una
+  **grilla auto-generada** (ejes → combinaciones → costos, borrando las que no
+  aplican); badge/filtro "Tercerizado" en el listado.
 
 **Límites conocidos aceptados en v1:**
 - **Ruta lineal, no DAG** (`orden` simple): las dependencias convergentes se

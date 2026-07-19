@@ -7,6 +7,7 @@ import { Prisma, UnidadBaseCentroCosto } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { UpsertProductoConfigPasoDto } from './dto/producto-ruta.dto';
 import { FamiliasPasosService } from './familias-pasos.service';
+import { construirClaveMatch } from '../motor-universal/tercerizado-costo';
 import { FAMILIAS } from './pasos/familias';
 import type { FamiliaCodigo } from './pasos/types';
 
@@ -212,6 +213,17 @@ export class ConfigPasosService {
             ? new Prisma.Decimal(dto.tiempoFijoOverrideMin)
             : null,
         dotacionOperarios: Math.max(1, Math.round(dto.dotacionOperarios ?? 1)),
+        tercerizado: dto.tercerizado ?? false,
+        proveedorId: dto.tercerizado ? (dto.proveedorId ?? null) : null,
+        fuenteCostoTercerizado: dto.tercerizado
+          ? (dto.fuenteCostoTercerizado ?? null)
+          : null,
+        tercerizadoConfigJson: (dto.tercerizado
+          ? (dto.tercerizadoConfigJson ?? Prisma.JsonNull)
+          : Prisma.JsonNull) as Prisma.InputJsonValue,
+        plazoProveedorDias: dto.tercerizado
+          ? (dto.plazoProveedorDias ?? null)
+          : null,
         activo: true,
       };
 
@@ -302,6 +314,53 @@ export class ConfigPasosService {
             })),
           });
         }
+      }
+
+      // Matriz del paso tercerizado (fuente 'matriz'): reemplaza las filas.
+      // El claveMatch se deriva server-side con la MISMA función del motor.
+      const ejes =
+        (
+          dto.tercerizadoConfigJson as
+            | { ejes?: Array<{ clave: string; orden?: number }> }
+            | null
+            | undefined
+        )?.ejes ?? [];
+      if (dto.tercerizado && dto.fuenteCostoTercerizado === 'matriz') {
+        await tx.pasoTercerizadoEntrada.deleteMany({
+          where: { productoConfigPasoId: configPaso.id },
+        });
+        const porClave = new Map<
+          string,
+          { claveMatch: string; valores: Record<string, unknown>; cantidad: number; costo: number }
+        >();
+        for (const e of dto.tercerizadoEntradas ?? []) {
+          const claveMatch = construirClaveMatch(ejes, e.valores);
+          if (!claveMatch) continue;
+          porClave.set(claveMatch, {
+            claveMatch,
+            valores: e.valores,
+            cantidad: e.cantidad,
+            costo: e.costo,
+          });
+        }
+        if (porClave.size > 0) {
+          await tx.pasoTercerizadoEntrada.createMany({
+            data: [...porClave.values()].map((f) => ({
+              tenantId,
+              productoConfigPasoId: configPaso.id,
+              valoresJson: f.valores as Prisma.InputJsonValue,
+              claveMatch: f.claveMatch,
+              cantidad: f.cantidad,
+              costo: new Prisma.Decimal(f.costo),
+              activo: true,
+            })),
+          });
+        }
+      } else if (existente) {
+        // Dejó de ser matriz (o de ser tercerizado): limpiar filas viejas.
+        await tx.pasoTercerizadoEntrada.deleteMany({
+          where: { productoConfigPasoId: configPaso.id },
+        });
       }
 
       return configPaso;

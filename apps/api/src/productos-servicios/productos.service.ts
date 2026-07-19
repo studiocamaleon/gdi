@@ -302,6 +302,7 @@ export class ProductosService {
                 },
                 maquinasCandidatas: { orderBy: { orden: 'asc' } },
                 cargosDirectosPaso: true,
+                tercerizadoEntradas: { where: { activo: true } },
               },
             },
           },

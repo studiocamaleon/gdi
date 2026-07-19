@@ -3,6 +3,7 @@ import {
   IsArray,
   IsBoolean,
   IsEnum,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsNumber,
@@ -205,6 +206,53 @@ export class UpsertProductoConfigPasoDto {
   @ValidateNested({ each: true })
   @Type(() => UpsertMaquinaCandidataDto)
   maquinasCandidatas?: UpsertMaquinaCandidataDto[];
+
+  // === Tercerización (docs/productos-tercerizados-diseno.md) ===
+  @IsOptional()
+  @IsBoolean()
+  tercerizado?: boolean;
+
+  @IsOptional()
+  @IsUUID()
+  proveedorId?: string | null;
+
+  @IsOptional()
+  @IsIn(['tarifa_magnitud', 'matriz', 'fijo'])
+  fuenteCostoTercerizado?: string | null;
+
+  @IsOptional()
+  @IsObject()
+  tercerizadoConfigJson?: Record<string, unknown> | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  plazoProveedorDias?: number | null;
+
+  /** Filas de la matriz (sólo fuente 'matriz'); el claveMatch lo deriva el server. */
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => UpsertPasoTercerizadoEntradaDto)
+  tercerizadoEntradas?: UpsertPasoTercerizadoEntradaDto[];
+}
+
+export class UpsertPasoTercerizadoEntradaDto {
+  /** { ejeClave: valorClave } — la combinación de esta fila. */
+  @IsObject()
+  valores!: Record<string, unknown>;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  cantidad!: number;
+
+  /** Costo NETO del proveedor para esa tanda. */
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  costo!: number;
 }
 
 export class UpsertSlotMaterialDto {
