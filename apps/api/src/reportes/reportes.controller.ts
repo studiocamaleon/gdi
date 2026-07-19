@@ -10,6 +10,7 @@ import { ReporteProduccionService } from './produccion.service';
 import { AlertasService } from './alertas.service';
 import { ClientesService } from './clientes.service';
 import { EquipoService } from './equipo.service';
+import { EmbudoService } from './embudo.service';
 import { RangoReporteDto } from './dto/rango-reporte.dto';
 import { MixCategoriaDto } from './dto/mix-categoria.dto';
 import { ActualizarUmbralesDto } from './dto/actualizar-umbrales.dto';
@@ -33,6 +34,7 @@ export class ReportesController {
     private readonly alertas: AlertasService,
     private readonly clientesSvc: ClientesService,
     private readonly equipoSvc: EquipoService,
+    private readonly embudoSvc: EmbudoService,
   ) {}
 
   @Get('resumen')
@@ -84,6 +86,23 @@ export class ReportesController {
         sinComparativa: comercial.sinComparativa,
       }),
       ...comercial,
+    };
+  }
+
+  @Get('embudo')
+  async embudo(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
+    const { rango, anterior } = this.service.resolverRango(query);
+    const { otManualesFuera, ...embudo } = await this.embudoSvc.embudo(
+      auth.tenantId,
+      rango,
+      anterior,
+    );
+    return {
+      meta: this.service.metaBase(rango, anterior, 'Presupuestos emitidos (cohorte)', {
+        limites: this.embudoSvc.limites(otManualesFuera),
+        sinComparativa: embudo.sinComparativa,
+      }),
+      ...embudo,
     };
   }
 

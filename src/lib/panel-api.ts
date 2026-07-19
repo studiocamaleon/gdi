@@ -105,6 +105,34 @@ export type ComercialPanel = {
   dormidos: ClienteDormidoPanel[];
 };
 
+/** Embudo comercial: cohorte de presupuestos emitidos → aprobados → producción → entrega. */
+export type EmbudoEtapaPanel = {
+  clave: "emitidas" | "aprobadas" | "produccion" | "entregadas";
+  label: string;
+  cantidad: number;
+  monto: number;
+  /** Etapa / cohorte total (barra). */
+  sharePct: number;
+  /** Etapa / etapa anterior (paso a paso); null en la 1ª. */
+  conversionPct: number | null;
+};
+export type EmbudoFugaPanel = { motivo: string; cantidad: number; monto: number };
+export type EmbudoVelocidadPanel = { tramo: string; diasPromedio: number | null };
+export type EmbudoPanel = {
+  sinComparativa: boolean;
+  kpis: {
+    tasaAprobacion: number;
+    tasaAprobacionDeltaPct: number | null;
+    tasaEntrega: number;
+    pipelineAbiertoCantidad: number;
+    pipelineAbiertoMonto: number;
+    cicloPromedioDias: number | null;
+  };
+  funnel: EmbudoEtapaPanel[];
+  fugas: EmbudoFugaPanel[];
+  velocidad: EmbudoVelocidadPanel[];
+};
+
 /** Alertas: la capa de inteligencia — avisos accionables con severidad. */
 export type SeveridadPanel = "critico" | "atencion" | "info";
 export type AlertaPanel = {
@@ -441,6 +469,9 @@ export function actualizarPanelUmbrales(payload: Partial<UmbralesPanel>) {
 }
 export function getPanelComercial(rango?: RangoPanel) {
   return apiRequest<TabPanel<ComercialPanel>>(`/reportes/panel/comercial${qs(rango)}`);
+}
+export function getPanelEmbudo(rango?: RangoPanel) {
+  return apiRequest<TabPanel<EmbudoPanel>>(`/reportes/panel/embudo${qs(rango)}`);
 }
 export function getPanelFinanzas(rango?: RangoPanel) {
   return apiRequest<TabPanel<{ rentabilidad: RentabilidadPanel; cobranza: CobranzaPanel }>>(

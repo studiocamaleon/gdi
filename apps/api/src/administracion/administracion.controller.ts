@@ -23,6 +23,7 @@ import { ImputacionesService } from './imputaciones.service';
 import { CuentaCorrienteService } from './cuenta-corriente.service';
 import { FacturaService } from './factura.service';
 import { FacturaPdfService } from './factura-pdf.service';
+import { EstadoCuentaPdfService } from './estado-cuenta-pdf.service';
 import { UpsertMetodoPagoDto } from './dto/metodo-pago.dto';
 import { CrearCobroDto } from './dto/cobro.dto';
 import {
@@ -56,6 +57,7 @@ export class AdministracionController {
     private readonly cuentaCorrienteService: CuentaCorrienteService,
     private readonly facturaService: FacturaService,
     private readonly facturaPdfService: FacturaPdfService,
+    private readonly estadoCuentaPdfService: EstadoCuentaPdfService,
     private readonly facturacionOrdenesService: FacturacionOrdenesService,
   ) {}
 
@@ -98,6 +100,44 @@ export class AdministracionController {
     @Param('clienteId') clienteId: string,
   ) {
     return this.cuentaCorrienteService.obtener(auth, clienteId);
+  }
+
+  /**
+   * Estado de cuenta en PDF: mismos datos que la vista, generado en el
+   * server (mismo patrón que el PDF del comprobante).
+   */
+  @Get('clientes/:clienteId/cuenta-corriente/pdf')
+  async cuentaCorrientePdf(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('clienteId') clienteId: string,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const [cc, config] = await Promise.all([
+      this.cuentaCorrienteService.obtener(auth, clienteId),
+      this.configuracionFiscalService.obtener(auth),
+    ]);
+    const emisor = config
+      ? {
+          razonSocial: config.razonSocial,
+          cuit: config.cuit,
+          condicionFiscal: config.condicionFiscal,
+          domicilioFiscal: config.domicilioFiscal,
+          ingresosBrutos: config.ingresosBrutos,
+        }
+      : null;
+    const pdf = this.estadoCuentaPdfService.generar(cc, emisor);
+    const slug =
+      (cc.cliente.nombre || 'cliente')
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-zA-Z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .toLowerCase() || 'cliente';
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="estado-cuenta-${slug}.pdf"`,
+    });
+    return new StreamableFile(pdf);
   }
 
   // ── Comprobantes ─────────────────────────────────────────────────────
