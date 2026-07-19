@@ -1055,6 +1055,12 @@ export interface CotizarResponse {
       costoTotal: number;
       /** G-M1 — Resultado del nesting cuando el paso lo invoca. */
       nestingResult?: NestingViewerInput;
+      // === Tercerización ===
+      tercerizado?: boolean;
+      /** Atributos elegidos (eje→valor) con etiquetas, para Especificaciones. */
+      tercerizadoEtiquetas?: Array<{ eje: string; valor: string }>;
+      /** Tecnología asignada al paso tercerizado (para reportes). */
+      tecnologiaTercerizado?: string | null;
     }>;
     cargosDirectosCotizacion: Array<{
       cargoCodigo: string;

@@ -1641,11 +1641,49 @@ export class MotorUniversalService {
    * tiempo interno; el motor lo suma como cualquier paso. Delega el costeo al
    * módulo puro `tercerizado-costo`. docs/productos-tercerizados-diseno.md §5.
    */
+  /**
+   * Etiquetas (eje→valor) de los atributos elegidos de un paso tercerizado con
+   * matriz, para mostrarlos en Especificaciones. Excluye el eje `cantidad` (ya
+   * se ve en la cantidad del ítem). Usa las etiquetas del config; cae al valor
+   * crudo si falta.
+   */
+  private etiquetasEjesTercerizado(
+    config: Record<string, unknown>,
+    seleccion: Record<string, unknown>,
+  ): Array<{ eje: string; valor: string }> {
+    const ejes = Array.isArray(config.ejes)
+      ? (config.ejes as Array<Record<string, unknown>>)
+      : [];
+    const filas: Array<{ eje: string; valor: string }> = [];
+    for (const eje of ejes) {
+      const clave = typeof eje.clave === 'string' ? eje.clave : '';
+      if (!clave || clave === 'cantidad') continue;
+      const valorClave = seleccion[clave];
+      if (valorClave == null || valorClave === '') continue;
+      const valores = Array.isArray(eje.valores)
+        ? (eje.valores as Array<Record<string, unknown>>)
+        : [];
+      const match = valores.find((v) => v.clave === valorClave);
+      filas.push({
+        eje: (typeof eje.label === 'string' && eje.label) || clave,
+        valor:
+          (match && typeof match.label === 'string' && match.label) ||
+          String(valorClave),
+      });
+    }
+    return filas;
+  }
+
   private ejecutarPasoTercerizado(
     paso: PasoCargado,
     jobContext: JobContext,
     errores: ErrorMotor[],
   ): PasoEjecutado {
+    const config = (paso.tercerizadoConfigJson ?? {}) as Record<string, unknown>;
+    const seleccionMatriz =
+      ((jobContext as Record<string, unknown>)[
+        `tercerizado_${paso.configPasoId}`
+      ] as Record<string, unknown>) ?? {};
     const base = {
       rutaPasoId: paso.rutaPasoId,
       rutaPasoOrden: paso.rutaPasoOrden,
@@ -1656,14 +1694,13 @@ export class MotorUniversalService {
       tercerizado: true,
       proveedorId: paso.proveedorId ?? null,
       plazoProveedorDias: paso.plazoProveedorDias ?? null,
+      tecnologiaTercerizado:
+        typeof config.tecnologia === 'string' ? config.tecnologia : null,
+      tercerizadoEtiquetas: this.etiquetasEjesTercerizado(config, seleccionMatriz),
     };
-    const seleccionMatriz =
-      ((jobContext as Record<string, unknown>)[
-        `tercerizado_${paso.configPasoId}`
-      ] as Record<string, unknown>) ?? {};
     const resultado = resolverCostoTercerizado({
       fuente: paso.fuenteCostoTercerizado ?? '',
-      config: (paso.tercerizadoConfigJson ?? {}) as Record<string, unknown>,
+      config,
       magnitudes: {
         area_m2: jobContext.piezaAreaTotalM2,
         perimetro_ml: jobContext.piezaPerimetroTotalM,

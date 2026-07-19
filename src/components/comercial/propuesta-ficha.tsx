@@ -3003,8 +3003,43 @@ function buildOrdenItemSpecs(
     arr.push({ lbl: "Estampas", val: estampas });
   }
 
+  // Tercerizado: los atributos elegidos (Papel, terminación, …) que resolvió el
+  // motor se muestran como specs, para que la ficha/OT reflejen lo que se pidió
+  // al proveedor. docs/productos-tercerizados-diseno.md
+  let tecnologiaTercerizado: string | null = null;
+  for (const paso of item.cotizacion.pasos) {
+    if (paso.tecnologiaTercerizado) tecnologiaTercerizado = paso.tecnologiaTercerizado;
+    for (const fila of paso.tercerizadoEtiquetas ?? []) {
+      if (arr.some((spec) => spec.lbl.toLowerCase() === fila.eje.toLowerCase())) {
+        continue;
+      }
+      arr.push({ lbl: fila.eje, val: fila.valor });
+    }
+  }
+  // Tecnología asignada al tercerizado: pisa la genérica del producto ("Impresión")
+  // con el proceso real (ej. Offset), que es lo que clasifican los reportes.
+  if (tecnologiaTercerizado) {
+    const label = TECNOLOGIA_TERCERIZADO_LABEL[tecnologiaTercerizado] ?? tecnologiaTercerizado;
+    const idx = arr.findIndex((spec) => spec.lbl.toLowerCase() === "tecnología");
+    if (idx >= 0) arr[idx] = { ...arr[idx], val: label };
+    else arr.push({ lbl: "Tecnología", val: label });
+  }
+
   return arr;
 }
+
+/** Etiquetas de las tecnologías tercerizables (espejo del selector del editor). */
+const TECNOLOGIA_TERCERIZADO_LABEL: Record<string, string> = {
+  offset: "Offset",
+  serigrafia: "Serigrafía",
+  tampografia: "Tampografía",
+  sublimacion: "Sublimación",
+  bordado: "Bordado",
+  laser: "Corte/grabado láser",
+  flexografia: "Flexografía",
+  termoformado: "Termoformado",
+  otra: "Otra",
+};
 
 function claveFechaEta(fecha: Date) {
   return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}-${String(fecha.getDate()).padStart(2, "0")}`;

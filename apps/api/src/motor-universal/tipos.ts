@@ -273,6 +273,12 @@ export interface PasoEjecutado {
     tarifa?: number;
     entradaClave?: string;
   };
+  /** Atributos elegidos del paso tercerizado (eje→valor) con sus etiquetas,
+   *  para mostrarlos en Especificaciones. Ej: [{eje:"Papel", valor:"Ilus 150"}]. */
+  tercerizadoEtiquetas?: Array<{ eje: string; valor: string }>;
+  /** Tecnología asignada manualmente al paso tercerizado (para que los reportes
+   *  lo clasifiquen aunque no tenga máquina). Ej: "offset". */
+  tecnologiaTercerizado?: string | null;
   /** Costo total del paso (tiempo + materiales + cargos, o costo tercerizado). */
   costoTotal: number;
   /** Outputs canónicos que el paso escribió al JobContext. */

@@ -42,6 +42,21 @@ const MAGNITUDES = [
   { value: "cantidad", label: "Cantidad (unidades)" },
 ] as const;
 
+// Tecnología del proceso tercerizado (para que los reportes lo clasifiquen aunque
+// no tenga máquina propia). Incluye procesos que la gráfica no hace in-house.
+const SIN_TECNOLOGIA = "__none__";
+const TECNOLOGIAS_TERCERIZADO = [
+  { value: "offset", label: "Offset" },
+  { value: "serigrafia", label: "Serigrafía" },
+  { value: "tampografia", label: "Tampografía" },
+  { value: "sublimacion", label: "Sublimación" },
+  { value: "bordado", label: "Bordado" },
+  { value: "laser", label: "Corte/grabado láser" },
+  { value: "flexografia", label: "Flexografía" },
+  { value: "termoformado", label: "Termoformado" },
+  { value: "otra", label: "Otra" },
+] as const;
+
 const slug = (s: string) =>
   s
     .normalize("NFD")
@@ -109,7 +124,7 @@ export function PasoTercerizadoPanel({
 
   return (
     <div className="flex flex-col gap-5 rounded-lg border border-border bg-muted/30 p-4">
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <label className="flex flex-col gap-1.5 text-sm">
           <span className="text-muted-foreground">Proveedor</span>
           <Select
@@ -139,7 +154,14 @@ export function PasoTercerizadoPanel({
           <Select
             value={fuente}
             onValueChange={(v) =>
-              onChange({ fuenteCostoTercerizado: v, tercerizadoConfigJson: {} })
+              onChange({
+                fuenteCostoTercerizado: v,
+                // La fuente cambia la config específica (ejes/tarifa/fijo) pero la
+                // tecnología del proceso se conserva.
+                tercerizadoConfigJson: cfg.tecnologia
+                  ? { tecnologia: cfg.tecnologia }
+                  : {},
+              })
             }
           >
             <SelectTrigger>
@@ -168,6 +190,33 @@ export function PasoTercerizadoPanel({
             }
             placeholder="—"
           />
+        </label>
+
+        <label className="flex flex-col gap-1.5 text-sm">
+          <span className="text-muted-foreground">Tecnología (para reportes)</span>
+          <Select
+            value={typeof cfg.tecnologia === "string" && cfg.tecnologia ? cfg.tecnologia : SIN_TECNOLOGIA}
+            onValueChange={(v) =>
+              patchCfg({ tecnologia: v === SIN_TECNOLOGIA ? null : v })
+            }
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Sin tecnología">
+                {typeof cfg.tecnologia === "string" && cfg.tecnologia
+                  ? (TECNOLOGIAS_TERCERIZADO.find((t) => t.value === cfg.tecnologia)?.label ??
+                    cfg.tecnologia)
+                  : "Sin tecnología"}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={SIN_TECNOLOGIA}>Sin tecnología</SelectItem>
+              {TECNOLOGIAS_TERCERIZADO.map((t) => (
+                <SelectItem key={t.value} value={t.value}>
+                  {t.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </label>
       </div>
 
