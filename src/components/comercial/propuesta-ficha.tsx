@@ -1476,6 +1476,11 @@ function getCostBuckets(item: PropuestaItem) {
       amount: item.cotizacion.costos.tiempoTotal,
     },
     {
+      key: "tercerizado",
+      label: "Costo de proveedor",
+      amount: item.cotizacion.costos.tercerizadoTotal ?? 0,
+    },
+    {
       key: "cargos",
       label: "Cargos directos",
       amount: item.cotizacion.costos.cargosDirectosTotal,
@@ -2517,12 +2522,13 @@ function CostosItemView({
   );
   const ivaTotal = Math.max(0, precioBruto - precioNeto);
   // Margen de contribución = Precio neto − costos variables. Variables (decisión
-  // del usuario): materiales + cargos + impuestos internos + comisiones. El
-  // centro de costo (máquina + mano de obra) es estructura fija que la
-  // contribución cubre → MC = centro de costo + margen.
+  // del usuario): materiales + costo de proveedor (tercerizado) + cargos +
+  // impuestos internos + comisiones. El centro de costo (máquina + mano de obra)
+  // es estructura fija que la contribución cubre → MC = centro de costo + margen.
   const costosVariablesTotal =
     item.cotizacion.costos.materialesTotal +
     item.cotizacion.costos.cargosDirectosTotal +
+    (item.cotizacion.costos.tercerizadoTotal ?? 0) +
     costosInternosTotal +
     comisionesTotal;
   const margenContribucionMonto = precioNeto - costosVariablesTotal;
@@ -2566,6 +2572,7 @@ function CostosItemView({
   const TIPO_POR_BUCKET: Record<string, string> = {
     materiales: "Materia prima",
     "centro-costo": "Centro de costo",
+    tercerizado: "Proveedor",
     cargos: "Cargo directo",
   };
   // Filas punto por punto: todo lo que compone el precio neto (suma 100%).
@@ -2717,9 +2724,9 @@ function CostosItemView({
             }}
           >
             Indicador de gestión — no forma parte de la composición del precio.
-            Precio neto − costos variables (materiales, cargos, impuestos
-            internos, comisiones). Es lo que queda para cubrir la estructura
-            fija (centro de costo) y dejar ganancia.
+            Precio neto − costos variables (materiales, proveedor, cargos,
+            impuestos internos, comisiones). Es lo que queda para cubrir la
+            estructura fija (centro de costo) y dejar ganancia.
           </span>
         </div>
         <div

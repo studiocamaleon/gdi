@@ -646,6 +646,7 @@ export class MotorUniversalService {
         tiempoTotal,
         materialesTotal,
         cargosDirectosTotal,
+        tercerizadoTotal,
         total,
         unitario: costoUnitarioComercial,
       },

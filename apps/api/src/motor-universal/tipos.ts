@@ -154,6 +154,8 @@ export interface CotizacionResultado {
     tiempoTotal: number;
     materialesTotal: number;
     cargosDirectosTotal: number;
+    /** Costo de pasos tercerizados (lo que se paga al proveedor). */
+    tercerizadoTotal: number;
     total: number;
     unitario: number;
   };
