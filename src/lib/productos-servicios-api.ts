@@ -384,6 +384,29 @@ export interface UpsertConfigPasoPayload {
   dotacionOperarios?: number;
   slotsMateriales?: UpsertSlotMaterialPayload[];
   maquinasCandidatas?: UpsertMaquinaCandidataPayload[];
+  // === Tercerización (docs/productos-tercerizados-diseno.md) ===
+  tercerizado?: boolean;
+  proveedorId?: string | null;
+  /** 'tarifa_magnitud' | 'matriz' | 'fijo'. */
+  fuenteCostoTercerizado?: string | null;
+  tercerizadoConfigJson?: Record<string, unknown> | null;
+  plazoProveedorDias?: number | null;
+  /** Filas de la matriz (fuente 'matriz'); el claveMatch lo deriva el server. */
+  tercerizadoEntradas?: TercerizadoEntradaPayload[];
+}
+
+export interface TercerizadoEntradaPayload {
+  valores: Record<string, unknown>;
+  cantidad: number;
+  costo: number;
+}
+
+/** Un eje de la matriz de un paso tercerizado. */
+export interface TercerizadoEje {
+  clave: string;
+  label: string;
+  orden: number;
+  valores: Array<{ clave: string; label: string }>;
 }
 
 export async function upsertConfigPaso(

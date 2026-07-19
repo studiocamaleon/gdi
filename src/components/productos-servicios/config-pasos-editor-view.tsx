@@ -42,6 +42,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { RuleBuilder } from "@/components/productos-servicios/rule-builder";
+import { PasoTercerizadoPanel } from "@/components/productos-servicios/paso-tercerizado-panel";
 import {
   actualizarPasoExtra,
   buscarMateriasPrimasConfigPaso,
@@ -2873,6 +2874,21 @@ export function ConfigPasosEditorView({
             cantidadBase: s.cantidadBase ?? null,
             aplicaMultiCaras: s.aplicaMultiCaras,
           })) ?? [],
+        tercerizado: existente?.tercerizado ?? false,
+        proveedorId: existente?.proveedorId ?? null,
+        fuenteCostoTercerizado: existente?.fuenteCostoTercerizado ?? null,
+        tercerizadoConfigJson:
+          (existente?.tercerizadoConfigJson as
+            | Record<string, unknown>
+            | null
+            | undefined) ?? null,
+        plazoProveedorDias: existente?.plazoProveedorDias ?? null,
+        tercerizadoEntradas:
+          existente?.tercerizadoEntradas?.map((e) => ({
+            valores: e.valoresJson,
+            cantidad: e.cantidad,
+            costo: Number(e.costo),
+          })) ?? [],
       };
     }
     // G-F3 sub-fase 2 — borradores para los pasos extras (mismo panel).
@@ -4905,6 +4921,51 @@ export function ConfigPasosEditorView({
                       </div>
 
                       <div className="config-step-content pasos-sections">
+                        <section className="section-block open">
+                          <div className="sb-head">
+                            <span className="num">T</span>
+                            <span className="ttl">Tercerización</span>
+                            <span className="hint">
+                              ¿Este paso lo compra un proveedor?
+                            </span>
+                          </div>
+                          <div className="sb-body">
+                            <label
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 8,
+                                fontSize: 14,
+                                cursor: "pointer",
+                                marginBottom: cfg.tercerizado ? 14 : 0,
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={!!cfg.tercerizado}
+                                onChange={(event) =>
+                                  updateConfig(
+                                    paso.id,
+                                    event.target.checked
+                                      ? {
+                                          tercerizado: true,
+                                          maquinaM1Id: null,
+                                          perfilM1Id: null,
+                                        }
+                                      : { tercerizado: false },
+                                  )
+                                }
+                              />
+                              Lo terceriza un proveedor (no lo produce la empresa)
+                            </label>
+                            {cfg.tercerizado ? (
+                              <PasoTercerizadoPanel
+                                value={cfg}
+                                onChange={(patch) => updateConfig(paso.id, patch)}
+                              />
+                            ) : null}
+                          </div>
+                        </section>
                         <section className="section-block open">
                           <div className="sb-head">
                             <span className="num">01</span>
