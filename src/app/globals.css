@@ -29365,3 +29365,9 @@ body:has(.t-app) {
 .pp-dw-rechazo{border:1px solid #e7e5e2;border-radius:10px;padding:14px;margin-bottom:16px;background:var(--surface-2)}
 .pp-dw-rechazo select,.pp-dw-rechazo input{width:100%;padding:7px 10px;border-radius:8px;border:1px solid #d4d2cd;font-size:13px;font-family:inherit;background:var(--surface)}
 
+
+/* Presupuestos: opcionales incluidos como seccion propia (que NO pasen desapercibidos) */
+.pp-opt{margin-top:10px}
+.pp-opt-lbl{font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--ok);font-weight:600;margin-bottom:5px}
+.pp-chip.opt{background:var(--ok-bg);border-color:#cfe6d8;color:var(--ok);font-weight:500}
+.pp-chip.opt svg{width:10px;height:10px;flex:0 0 auto}

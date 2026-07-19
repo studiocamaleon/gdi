@@ -144,14 +144,24 @@ export function PresupuestoPublicoView({
                 </div>
                 <div className="it-price">{fmtMoneda(i.total)}</div>
               </div>
-              {i.specs.length || i.adicionales.length ? (
-                <div className="pp-chips">
+              {i.specs.length ? (
+                <div className="pp-chips" style={{ marginTop: 13 }}>
                   {i.specs.map((s) => (
                     <span key={s.etiqueta} className="pp-chip"><span className="k">{s.etiqueta}</span>{s.valor}</span>
                   ))}
-                  {i.adicionales.map((a) => (
-                    <span key={a} className="pp-chip">{a}</span>
-                  ))}
+                </div>
+              ) : null}
+              {i.adicionales.length ? (
+                <div className="pp-opt">
+                  <div className="pp-opt-lbl">Opcionales incluidos</div>
+                  <div className="pp-chips">
+                    {i.adicionales.map((a) => (
+                      <span key={a} className="pp-chip opt">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6L9 17l-5-5" /></svg>
+                        {a}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               ) : null}
             </div>

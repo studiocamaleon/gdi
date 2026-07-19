@@ -26,6 +26,9 @@ const SURFACE2: [number, number, number] = [250, 250, 249];
 const ACCENT: [number, number, number] = [217, 100, 42];
 const ACCENT_BG: [number, number, number] = [253, 241, 234];
 const ACCENT_BORD: [number, number, number] = [240, 205, 184];
+const OK: [number, number, number] = [22, 121, 74];
+const OK_BG: [number, number, number] = [233, 244, 238];
+const OK_BORD: [number, number, number] = [207, 230, 216];
 
 let geistCache: { regular: string; bold: string } | null | undefined;
 
@@ -210,12 +213,19 @@ export class PresupuestoPdfService {
     y += 4;
 
     for (const [idx, item] of d.items.entries()) {
-      const chips = [
-        ...item.specs.map((s) => `${s.etiqueta}: ${s.valor}`),
-        ...item.adicionales,
-      ];
-      const filasChips = this.medirFilasChips(pdf, chips, CONTENIDO - 24);
-      const altoCard = 16 + (chips.length ? filasChips * 7 + 2 : 0);
+      const chips = item.specs.map((s) => `${s.etiqueta}: ${s.valor}`);
+      const anchoChips = CONTENIDO - 24;
+      const filasChips = chips.length ? this.medirFilasChips(pdf, chips, anchoChips) : 0;
+      // Los opcionales van en su PROPIA sección (etiqueta + chips verdes
+      // con tilde): que no pasen desapercibidos entre las specs.
+      const filasOpt = item.adicionales.length
+        ? this.medirFilasChips(pdf, item.adicionales, anchoChips, 5)
+        : 0;
+      const altoCard =
+        16 +
+        (chips.length ? filasChips * 7 : 0) +
+        (item.adicionales.length ? 5 + filasOpt * 7 : 0) +
+        (chips.length || item.adicionales.length ? 2 : 0);
       if (y + altoCard > 270) {
         pdf.addPage();
         y = MARGEN;
@@ -251,21 +261,40 @@ export class PresupuestoPdfService {
       pdf.setTextColor(...INK);
       pdf.text(money(item.total), ANCHO - MARGEN - 5, y + 8, { align: 'right' });
 
+      let ySec = y + 16.5;
       if (chips.length) {
-        this.dibujarChips(pdf, chips, MARGEN + 17, y + 16.5, CONTENIDO - 24);
+        this.dibujarChips(pdf, chips, MARGEN + 17, ySec, anchoChips);
+        ySec += filasChips * 7;
+      }
+      if (item.adicionales.length) {
+        pdf.setFont(this.familia, 'bold');
+        pdf.setFontSize(6.5);
+        pdf.setTextColor(...OK);
+        pdf.text('O P C I O N A L E S   I N C L U I D O S', MARGEN + 17, ySec + 2.6);
+        this.dibujarChips(pdf, item.adicionales, MARGEN + 17, ySec + 4.4, anchoChips, {
+          fill: OK_BG,
+          borde: OK_BORD,
+          texto: OK,
+          tilde: true,
+        });
       }
       y += altoCard + 4;
     }
     return y + 2;
   }
 
-  private medirFilasChips(pdf: jsPDF, chips: string[], anchoMax: number): number {
+  private medirFilasChips(
+    pdf: jsPDF,
+    chips: string[],
+    anchoMax: number,
+    extra = 0,
+  ): number {
     pdf.setFont(this.familia, 'normal');
     pdf.setFontSize(7.5);
     let filas = 1;
     let x = 0;
     for (const chip of chips) {
-      const w = pdf.getTextWidth(chip) + 7;
+      const w = pdf.getTextWidth(chip) + 7 + extra;
       if (x + w > anchoMax) {
         filas += 1;
         x = 0;
@@ -275,22 +304,43 @@ export class PresupuestoPdfService {
     return filas;
   }
 
-  private dibujarChips(pdf: jsPDF, chips: string[], x0: number, y0: number, anchoMax: number) {
+  private dibujarChips(
+    pdf: jsPDF,
+    chips: string[],
+    x0: number,
+    y0: number,
+    anchoMax: number,
+    estilo?: {
+      fill: [number, number, number];
+      borde: [number, number, number];
+      texto: [number, number, number];
+      tilde?: boolean;
+    },
+  ) {
     pdf.setFont(this.familia, 'normal');
     pdf.setFontSize(7.5);
+    const extra = estilo?.tilde ? 5 : 0;
     let x = x0;
     let y = y0;
     for (const chip of chips) {
-      const w = pdf.getTextWidth(chip) + 7;
+      const w = pdf.getTextWidth(chip) + 7 + extra;
       if (x + w > x0 + anchoMax) {
         x = x0;
         y += 7;
       }
-      pdf.setFillColor(...SURFACE2);
-      pdf.setDrawColor(...BORDER);
+      pdf.setFillColor(...(estilo?.fill ?? SURFACE2));
+      pdf.setDrawColor(...(estilo?.borde ?? BORDER));
       pdf.roundedRect(x, y, w, 5.6, 2.8, 2.8, 'FD');
-      pdf.setTextColor(...INK2);
-      pdf.text(chip, x + 3.5, y + 3.9);
+      if (estilo?.tilde) {
+        // Tilde dibujado (el glifo ✓ puede no estar en el subset de la fuente).
+        pdf.setDrawColor(...(estilo.texto));
+        pdf.setLineWidth(0.55);
+        pdf.line(x + 2.7, y + 3, x + 3.6, y + 3.9);
+        pdf.line(x + 3.6, y + 3.9, x + 5.4, y + 1.9);
+        pdf.setLineWidth(0.35);
+      }
+      pdf.setTextColor(...(estilo?.texto ?? INK2));
+      pdf.text(chip, x + 3.5 + extra, y + 3.9);
       x += w + 2;
     }
   }
