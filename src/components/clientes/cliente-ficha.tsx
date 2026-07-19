@@ -7,6 +7,7 @@ import {
   ArrowLeftIcon,
   MapPinHouseIcon,
   PlusIcon,
+  ReceiptTextIcon,
   SaveIcon,
   StarIcon,
   Trash2Icon,
@@ -419,6 +420,16 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {mode === "edit" ? (
+            <Button
+              variant="outline"
+              nativeButton={false}
+              render={<Link href={`/clientes/${cliente.id}/cuenta-corriente`} />}
+            >
+              <ReceiptTextIcon data-icon="inline-start" />
+              Cuenta corriente
+            </Button>
+          ) : null}
           <Button variant="brand" onClick={handleSave} disabled={isSaving}>
             {isSaving ? <GdiSpinner className="size-4" data-icon="inline-start" /> : <SaveIcon data-icon="inline-start" />}
             {mode === "create" ? "Crear cliente" : "Guardar cambios"}

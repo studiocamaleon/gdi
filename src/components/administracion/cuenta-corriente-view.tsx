@@ -8,6 +8,7 @@ import {
   CheckIcon,
   ChevronRightIcon,
   CoinsIcon,
+  FileTextIcon,
   InfoIcon,
   TriangleAlertIcon,
   XIcon,
@@ -292,9 +293,15 @@ export function CuentaCorrienteView({ cc }: { cc: CuentaCorriente }) {
             Ver aging
           </button>
           <div className="sp">
-            <button type="button" className="btn" disabled>
+            <a
+              className="btn"
+              href={`/api/backend/administracion/clientes/${cc.cliente.id}/cuenta-corriente/pdf`}
+              target="_blank"
+              rel="noopener"
+            >
+              <FileTextIcon />
               Estado de cuenta PDF
-            </button>
+            </a>
           </div>
         </div>
 
