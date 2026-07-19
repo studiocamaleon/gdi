@@ -13,6 +13,7 @@ import {
   BriefcaseIcon,
   FactoryIcon,
   CircleDollarSignIcon,
+  FilterIcon,
   HardHatIcon,
   PackageIcon,
   UserRoundIcon,
@@ -24,6 +25,7 @@ import {
   getMiDesempeno,
   getPanelClientes,
   getPanelComercial,
+  getPanelEmbudo,
   getPanelEquipo,
   getPanelFinanzas,
   getPanelMixCategoria,
@@ -35,6 +37,7 @@ import {
   type ClientesPanel,
   type CobranzaPanel,
   type ComercialPanel,
+  type EmbudoPanel,
   type EquipoPanel,
   type MetaPanel,
   type MiDesempenoPanel,
@@ -569,7 +572,7 @@ function TabResumen({ d }: { d: ResumenData }) {
   return (
     <>
       <div className="d-kpi-row">
-        <Kpi label="Facturación" currency="$" value={fmtK(r.ventas)} delta={r.ventasDeltaPct} sub="vs período anterior" spark={spark} />
+        <Kpi label="Ventas" currency="$" value={fmtK(r.ventas)} delta={r.ventasDeltaPct} sub="vs período anterior · sin IVA" spark={spark} />
         <Kpi label="Margen bruto" value={pct(r.margenBrutoPct)} delta={r.margenBrutoDeltaPts} deltaUnit="pts" />
         <Kpi label="Contribución" value={pct(r.contribucionPct)} delta={r.contribucionDeltaPts} deltaUnit="pts" hint="Ventas menos costos variables (material + tintas)" />
         <Kpi label="Punto de equilibrio" currency="$" value={r.puntoEquilibrio != null ? fmtK(r.puntoEquilibrio) : "—"} sub={r.avancePct != null ? `avance ${pct(r.avancePct)}` : "sin costos fijos"} />
@@ -577,8 +580,8 @@ function TabResumen({ d }: { d: ResumenData }) {
       </div>
 
       <div className="dash-grid">
-        <Card span={8} title="Facturación, costo y margen" sub={`serie ${d.meta.granularidad} · pesos`}
-          foot={<><span>Total facturado <strong style={{ color: "var(--ink)" }}>${fmtAR(ytd)}</strong></span><span style={{ marginLeft: "auto" }}>Contribución <strong style={{ color: "var(--ok)" }}>{pct(r.contribucionPct)}</strong></span></>}>
+        <Card span={8} title="Ventas, costo y margen" sub={`serie ${d.meta.granularidad} · pesos, sin IVA`}
+          foot={<><span>Total ventas <strong style={{ color: "var(--ink)" }}>${fmtAR(ytd)}</strong></span><span style={{ marginLeft: "auto" }}>Contribución <strong style={{ color: "var(--ok)" }}>{pct(r.contribucionPct)}</strong></span></>}>
           {d.serie.length >= 2 ? (
             <>
               <BarChart labels={labels} data={[costos, margenes]} stacks={["Costo", "Margen"]} mode="stack" colors={["#c8c6c0", "var(--ink)"]} yFormat={(v) => `$${fmtK(v)}`} height={240} />
@@ -598,7 +601,7 @@ function TabResumen({ d }: { d: ResumenData }) {
                 <div className="ttl">Necesitás ${fmtK(r.puntoEquilibrio)}/período</div>
                 <div className="sub">para cubrir tu estructura fija</div>
                 <div className="breakdown">
-                  <div className="row"><span className="d-pip ok" /><span className="nm">Facturado</span><span className="val">${fmtK(r.ventas)}</span></div>
+                  <div className="row"><span className="d-pip ok" /><span className="nm">Ventas</span><span className="val">${fmtK(r.ventas)}</span></div>
                   <div className="row"><span className="d-pip" /><span className="nm">Costos fijos</span><span className="val">${fmtK(r.costosFijos ?? 0)}</span></div>
                 </div>
               </div>
@@ -606,11 +609,11 @@ function TabResumen({ d }: { d: ResumenData }) {
           ) : <div className="d-empty" style={{ padding: 30 }}>Cargá los costos fijos de tus centros para ver el punto de equilibrio.</div>}
         </Card>
 
-        <Card span={6} title="Clientes principales" sub="por facturación" flush><RankList rows={d.topClientes} cols="18px 1fr 90px" /></Card>
+        <Card span={6} title="Clientes principales" sub="por ventas · sin IVA" flush><RankList rows={d.topClientes} cols="18px 1fr 90px" /></Card>
 
-        <Card span={6} title="Productos con mayor facturación" sub="con su margen" flush>
+        <Card span={6} title="Productos con más ventas" sub="con su margen · sin IVA" flush>
           <table className="d-tbl">
-            <thead><tr><th>Producto</th><th className="right">Margen</th><th className="right">Facturado</th></tr></thead>
+            <thead><tr><th>Producto</th><th className="right">Margen</th><th className="right">Ventas</th></tr></thead>
             <tbody>{d.topProductos.map((p) => (
               <tr key={p.nombre}><td><div className="nm">{p.nombre}</div></td>
                 <td className="right"><div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "flex-end" }}><div style={{ width: 60 }}><HBar value={p.margenPct} max={70} tone={p.margenPct >= 50 ? "ok" : p.margenPct >= 40 ? "ink" : "signal"} /></div><span className="mono" style={{ width: 42 }}>{pct(p.margenPct)}</span></div></td>
@@ -633,15 +636,15 @@ function TabComercial({ d }: { d: ComercialPanel }) {
   return (
     <>
       <div className="d-kpi-row">
-        <Kpi label="Ventas" currency="$" value={fmtK(k.ventas)} delta={k.ventasDeltaPct} spark={d.serie.map((s) => s.monto)}
-          sub={k.ventasDeltaAnualPct != null ? `${k.ventasDeltaAnualPct >= 0 ? "+" : ""}${fmtAR(k.ventasDeltaAnualPct, 1)}% vs año pasado` : "vs período anterior"} />
+        <Kpi label="Ventas" currency="$" value={fmtK(k.ventas)} delta={k.ventasDeltaPct} spark={d.serie.map((s) => s.monto)} hint="Totales de venta netos — no incluyen IVA"
+          sub={`${k.ventasDeltaAnualPct != null ? `${k.ventasDeltaAnualPct >= 0 ? "+" : ""}${fmtAR(k.ventasDeltaAnualPct, 1)}% vs año pasado` : "vs período anterior"} · sin IVA`} />
         <Kpi label="Órdenes" value={fmtAR(k.ordenes)} delta={k.ordenesDeltaPct} />
-        <Kpi label="Ticket promedio" currency="$" value={fmtK(k.ticketPromedio)} spark={d.serieTicket.map((t) => t.ticketPromedio)} />
+        <Kpi label="Ticket promedio" currency="$" value={fmtK(k.ticketPromedio)} spark={d.serieTicket.map((t) => t.ticketPromedio)} hint="Promedio por orden, sin IVA" />
         <Kpi label="Clientes nuevos" value={fmtAR(k.nuevosClientes)} delta={k.nuevosClientes} deltaTone="ok" sub="este período" />
         <Kpi label="Clientes dormidos" value={fmtAR(k.clientesDormidos)} deltaTone="signal" delta={k.clientesDormidos > 0 ? k.clientesDormidos : undefined} sub="sin comprar" />
       </div>
       <div className="dash-grid">
-        <Card span={8} title="Ventas del período" sub={`serie ${d.granularidad}`} foot={<span>Ticket promedio <strong style={{ color: "var(--ink)" }}>${fmtK(k.ticketPromedio)}</strong> · {k.itemsPorOrden} items/orden</span>}>
+        <Card span={8} title="Ventas del período" sub={`serie ${d.granularidad} · sin IVA`} foot={<span>Ticket promedio <strong style={{ color: "var(--ink)" }}>${fmtK(k.ticketPromedio)}</strong> · {k.itemsPorOrden} items/orden</span>}>
           {d.serie.length >= 2 ? <AreaChart series={d.serie.map((s) => s.monto)} labels={labels} yFormat={(v) => `$${fmtK(v)}`} height={230} nombres={["Ventas"]} /> : <div className="d-empty" style={{ padding: 40 }}>Serie insuficiente.</div>}
         </Card>
         <Card span={4} title="Mix por categoría" sub="participación">
@@ -664,12 +667,12 @@ function TabComercial({ d }: { d: ComercialPanel }) {
             </>
           ) : <div className="d-empty" style={{ padding: 40 }}>Serie insuficiente para graficar el ticket.</div>}
         </Card>
-        <Card span={5} title="Estacionalidad por categoría" sub="ventas por mes · últimos 12 meses">
+        <Card span={5} title="Estacionalidad por categoría" sub="ventas por mes · últimos 12 meses · sin IVA">
           <HeatmapEstacionalidad celdas={d.estacionalidad} />
           <div style={{ fontSize: 11, color: "var(--muted-text)", marginTop: 10 }}>Más oscuro = más venta. El índice estacional llega con 2+ años de historia.</div>
         </Card>
-        <Card span={6} title="Clientes principales" flush><RankList rows={d.rankingClientes} /></Card>
-        <Card span={6} title="Ranking de vendedores" flush><RankList rows={d.rankingVendedores} /></Card>
+        <Card span={6} title="Clientes principales" sub="por ventas · sin IVA" flush><RankList rows={d.rankingClientes} /></Card>
+        <Card span={6} title="Ranking de vendedores" sub="por ventas · sin IVA" flush><RankList rows={d.rankingVendedores} /></Card>
         <Card span={8} title="Clientes dormidos" sub="recurrentes que dejaron de comprar" flush>
           {d.dormidos.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Tus clientes recurrentes siguen activos.</div> : (
             <table className="d-tbl"><thead><tr><th>Cliente</th><th className="right">Última compra</th><th className="right">Sin comprar</th><th className="right">Historial</th></tr></thead>
@@ -682,6 +685,90 @@ function TabComercial({ d }: { d: ComercialPanel }) {
             <div key={m.nombre} style={{ marginBottom: 10 }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}><span>{technologyCodeLabel(m.nombre) || m.nombre}</span><span className="mono" style={{ color: "var(--muted-text)" }}>{pct(m.pct)}</span></div>
               <HBar value={m.pct} max={100} />
+            </div>
+          ))}
+        </Card>
+      </div>
+    </>
+  );
+}
+
+/* ═══════════ TAB · Embudo comercial ═══════════ */
+/**
+ * Salud del pipeline cotización → producción sobre una COHORTE de
+ * presupuestos emitidos en el rango. Semántica "alcanzó al menos": cada
+ * etapa mide hasta dónde llegó cada presupuesto, no dónde está hoy, así el
+ * funnel decrece de forma monótona. Cierra en Entregadas.
+ * Ver docs/embudo-comercial-panel-diseno.md
+ */
+function TabEmbudo({ d }: { d: EmbudoPanel }) {
+  const k = d.kpis;
+  const [modo, setModo] = React.useState<"cant" | "monto">("cant");
+  const valDe = (e: { cantidad: number; monto: number }) => (modo === "cant" ? e.cantidad : e.monto);
+  const base = d.funnel[0] ? valDe(d.funnel[0]) : 0;
+  const maxFuga = Math.max(...d.fugas.map((f) => f.cantidad), 1);
+  const toggle = (
+    <div className="dash-period">
+      {(["cant", "monto"] as const).map((m) => (
+        <button key={m} className={modo === m ? "on" : ""} onClick={() => setModo(m)}>
+          {m === "cant" ? "Cantidad" : "En $"}
+        </button>
+      ))}
+    </div>
+  );
+  return (
+    <>
+      <div className="d-kpi-row">
+        <Kpi label="Tasa de aprobación" value={pct(k.tasaAprobacion)} delta={k.tasaAprobacionDeltaPct} deltaUnit=" pts" sub="aprobadas / emitidas" />
+        <Kpi label="Emitida → entregada" value={pct(k.tasaEntrega)} sub="conversión total del ciclo" />
+        <Kpi label="Pipeline abierto" currency="$" value={fmtK(k.pipelineAbiertoMonto)} sub={`${fmtAR(k.pipelineAbiertoCantidad)} presupuestos vivos hoy · sin IVA`} />
+        <Kpi label="Ciclo promedio" value={k.cicloPromedioDias != null ? fmtAR(k.cicloPromedioDias, 1) : "—"} sub="días · emisión → entrega" />
+      </div>
+      <div className="dash-grid">
+        <Card span={12} title="Embudo comercial" sub="cohorte de presupuestos emitidos en el período · montos sin IVA" action={toggle}
+          foot={<span>La <strong style={{ color: "var(--ink)" }}>conversión</strong> es paso a paso (etapa sobre la anterior); el <strong style={{ color: "var(--ink)" }}>%</strong> de la barra es sobre lo emitido.</span>}>
+          {base === 0 ? <div className="d-empty" style={{ padding: 40 }}>Sin presupuestos emitidos en el período.</div> : (
+            <div style={{ marginTop: 6 }}>
+              {d.funnel.map((e, i) => {
+                const val = valDe(e);
+                const prev = i > 0 ? valDe(d.funnel[i - 1]) : 0;
+                const share = base > 0 ? (val / base) * 100 : 0;
+                const conv = i === 0 ? null : prev > 0 ? (val / prev) * 100 : 0;
+                const display = modo === "cant" ? fmtAR(e.cantidad) : `$${fmtK(e.monto)}`;
+                return (
+                  <div key={e.clave} style={{ marginBottom: 16 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 5 }}>
+                      <span style={{ fontSize: 14 }}>{e.label} <strong style={{ marginLeft: 4 }}>{display}</strong></span>
+                      {conv != null ? <span style={{ fontSize: 12, color: "var(--muted-text)" }}>↳ conversión {fmtAR(conv, 1)}%</span> : null}
+                    </div>
+                    <div style={{ position: "relative", height: 28, background: "rgba(20,20,26,.05)", borderRadius: 6, overflow: "hidden" }}>
+                      <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${share}%`, background: "var(--ink)", borderRadius: 6 }} />
+                      <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: "var(--muted-text)" }}>{fmtAR(share, 0)}%</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+        <Card span={6} title="Dónde se pierde" sub="presupuestos no aprobados · montos sin IVA">
+          {d.fugas.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Ningún presupuesto perdido: todo lo emitido sigue vivo o se aprobó.</div> : (
+            d.fugas.map((f) => (
+              <div key={f.motivo} style={{ marginBottom: 11 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}>
+                  <span>{f.motivo}</span>
+                  <span className="mono" style={{ color: "var(--muted-text)" }}>{fmtAR(f.cantidad)} · ${fmtK(f.monto)}</span>
+                </div>
+                <HBar value={f.cantidad} max={maxFuga} tone="muted" />
+              </div>
+            ))
+          )}
+        </Card>
+        <Card span={6} title="Velocidad del ciclo" sub="días promedio entre etapas">
+          {d.velocidad.map((v) => (
+            <div key={v.tramo} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "9px 0", borderBottom: "1px solid var(--hairline)" }}>
+              <span style={{ fontSize: 13, color: "var(--muted-text)" }}>{v.tramo}</span>
+              <span style={{ fontSize: 15 }}>{v.diasPromedio != null ? <>{fmtAR(v.diasPromedio, 1)} <span style={{ fontSize: 11, color: "var(--muted-text-2)" }}>d</span></> : "—"}</span>
             </div>
           ))}
         </Card>
@@ -846,15 +933,15 @@ function TabFinanzas({ d }: { d: FinanzasData }) {
   return (
     <>
       <div className="d-kpi-row">
-        <Kpi label="Facturado" currency="$" value={fmtK(co.facturado)} sub="comprobantes emitidos" />
+        <Kpi label="Ventas" currency="$" value={fmtK(r.ventas)} delta={r.ventasDeltaPct} sub="órdenes emitidas · sin IVA" />
         <Kpi label="Contribución" value={pct(r.contribucionPct)} sub="margen de contribución" />
         <Kpi label="Punto de equilibrio" currency="$" value={r.puntoEquilibrio != null ? fmtK(r.puntoEquilibrio) : "—"} sub={r.avancePct != null ? `avance ${pct(r.avancePct)}` : undefined} />
         <Kpi label="Cuentas por cobrar" currency="$" value={fmtK(co.agingTotal)} sub={`DSO ${co.dso != null ? fmtAR(co.dso) : "—"} días`} />
         <Kpi label="Costo de cobrar" currency="$" value={fmtK(co.comisionTotal)} deltaTone="signal" sub="comisiones del período" />
       </div>
       <div className="dash-grid">
-        <Card span={8} title="Facturación vs costo" sub={`serie ${d.meta.granularidad}`}
-          action={<div className="d-legend"><LegendDot color="var(--ink)" label="Facturación" value={`$${fmtK(r.ventas)}`} /><LegendDot color="#c8c6c0" label="Costo" value={`$${fmtK(r.costoTotal ?? 0)}`} /></div>}>
+        <Card span={8} title="Ventas vs costo" sub={`serie ${d.meta.granularidad} · sin IVA`}
+          action={<div className="d-legend"><LegendDot color="var(--ink)" label="Ventas" value={`$${fmtK(r.ventas)}`} /><LegendDot color="#c8c6c0" label="Costo" value={`$${fmtK(r.costoTotal ?? 0)}`} /></div>}>
           <FacturacionVsCosto rentabilidad={r} meta={d.meta} />
         </Card>
         <Card span={4} title="Cuentas por cobrar" sub="por antigüedad" foot={<><span className="d-pip warn" />Vencido <strong style={{ color: "var(--signal)" }}>${fmtAR(co.vencido)}</strong></>}>
@@ -910,10 +997,10 @@ function TabFinanzas({ d }: { d: FinanzasData }) {
 }
 
 function FacturacionVsCosto({ rentabilidad: r, meta }: { rentabilidad: RentabilidadPanel; meta: MetaPanel }) {
-  // Con un solo período agregado, se muestra el par facturación/costo como
+  // Con un solo período agregado, se muestra el par ventas/costo como
   // barras agrupadas (el período no trae serie de costo mensual aún).
   return (
-    <BarChart labels={[meta.rango.desde.slice(5)]} data={[[r.ventas], [r.costoTotal ?? 0]]} stacks={["Facturación", "Costo"]} mode="group" colors={["var(--ink)", "#c8c6c0"]} yFormat={(v) => `$${fmtK(v)}`} height={230} />
+    <BarChart labels={[meta.rango.desde.slice(5)]} data={[[r.ventas], [r.costoTotal ?? 0]]} stacks={["Ventas", "Costo"]} mode="group" colors={["var(--ink)", "#c8c6c0"]} yFormat={(v) => `$${fmtK(v)}`} height={230} />
   );
 }
 
@@ -993,17 +1080,17 @@ function TabProducto({ d, rango }: { d: ProductoPanel; rango: RangoPanel }) {
   return (
     <div className="dash-grid">
       <MixEvolutivoCard d={d} rango={rango} />
-      <Card span={6} title="Ventas por categoría" sub="margen y contribución" flush>
+      <Card span={6} title="Ventas por categoría" sub="margen y contribución · sin IVA" flush>
         <table className="d-tbl"><thead><tr><th>Categoría</th><th className="right">Margen</th><th className="right" title="Margen de contribución = ventas − material y consumibles">MC</th><th className="right">Ventas</th></tr></thead>
           <tbody>{d.porCategoria.map((c) => (<tr key={c.nombre}><td><div className="nm">{c.nombre}</div></td><td className="right"><div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "flex-end" }}><div style={{ width: 44 }}><HBar value={c.margenPct} max={70} tone={c.margenPct >= 50 ? "ok" : c.margenPct >= 40 ? "ink" : "signal"} /></div><span className="mono" style={{ width: 42 }}>{pct(c.margenPct)}</span></div></td><td className="right mono" style={{ color: "var(--ok)" }}>{pct(c.contribucionPct)}</td><td className="right mono">${fmtK(c.ventas)}</td></tr>))}</tbody>
         </table>
       </Card>
-      <Card span={6} title="Productos más vendidos" sub="volumen, margen y MC" flush>
+      <Card span={6} title="Productos más vendidos" sub="volumen, margen y MC · sin IVA" flush>
         <table className="d-tbl"><thead><tr><th>Producto</th><th className="right">Items</th><th className="right">Margen</th><th className="right" title="Margen de contribución = ventas − material y consumibles">MC</th><th className="right">Ventas</th></tr></thead>
           <tbody>{d.porProducto.slice(0, 8).map((p) => (<tr key={p.nombre}><td><div className="nm">{p.nombre}</div></td><td className="right mono">{p.items}</td><td className="right mono">{pct(p.margenPct)}</td><td className="right mono" style={{ color: "var(--ok)" }}>{pct(p.contribucionPct)}</td><td className="right mono">${fmtK(p.ventas)}</td></tr>))}</tbody>
         </table>
       </Card>
-      <Card span={7} title="Adicionales más pedidos" sub="qué se agrega a los trabajos y cuánto suma al ticket"
+      <Card span={7} title="Adicionales más pedidos" sub="qué se agrega a los trabajos y cuánto suma al ticket · sin IVA"
         action={<span className="mono" style={{ color: "var(--ink)", fontSize: 13, fontWeight: 600 }}>{pct(ad.pctCon, 0)} con adicionales</span>} flush>
         {ad.porAdicional.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Ningún item del período llevó adicionales.</div> : (
           <>
@@ -1209,9 +1296,9 @@ function TabEquipo({ d }: { d: EquipoPanel }) {
           ) : null}
           <div style={{ marginTop: 6, fontSize: 11, color: "var(--muted-text)" }}>Más oscuro = más tiempo. Una familia con una sola persona es un riesgo de cobertura.</div>
         </Card>
-        <Card span={12} title="Vendedores" sub="venta, margen y comisión estimada del período" flush>
+        <Card span={12} title="Vendedores" sub="venta, margen y comisión estimada del período · sin IVA" flush>
           {d.vendedores.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Sin ventas en el período.</div> : (
-            <table className="d-tbl"><thead><tr><th>Vendedor</th><th className="right">Órdenes</th><th className="right">Ticket</th><th className="right">Margen</th><th className="right">Facturado</th><th className="right" title="Reglas de comisión configuradas aplicadas a la venta; no es liquidación">Comisión est.</th></tr></thead>
+            <table className="d-tbl"><thead><tr><th>Vendedor</th><th className="right">Órdenes</th><th className="right">Ticket</th><th className="right">Margen</th><th className="right">Ventas</th><th className="right" title="Reglas de comisión configuradas aplicadas a la venta; no es liquidación">Comisión est.</th></tr></thead>
               <tbody>{d.vendedores.map((v) => (
                 <tr key={v.empleadoId ?? v.nombre}>
                   <td><div className="nm">{v.nombre}</div>{v.itemsSinCosto > 0 ? <div className="sub">{v.itemsSinCosto} item{v.itemsSinCosto === 1 ? "" : "s"} sin costo (fuera del margen)</div> : null}</td>
@@ -1259,7 +1346,7 @@ function TabClientes({ d }: { d: ClientesPanel }) {
         <Kpi label="Retención" value={pct(k.retencionPct, 0)} sub="del período anterior que volvieron" hint="Clientes del período anterior equivalente que también compraron en éste" />
         <Kpi label="Recompra" value={k.frecuenciaMedianaDias != null ? `${fmtAR(k.frecuenciaMedianaDias, 0)} d` : "—"} sub="mediana entre compras" />
         <Kpi label="Clientes nuevos" value={fmtAR(k.nuevos)} sub={`${fmtAR(k.recurrentes)} recurrentes`} />
-        <Kpi label="Concentración top 3" value={pct(k.concentracionTop3Pct, 0)} deltaTone="signal" sub="de la venta del período" hint="Cuánto de tu facturación depende de sólo 3 clientes" />
+        <Kpi label="Concentración top 3" value={pct(k.concentracionTop3Pct, 0)} deltaTone="signal" sub="de la venta del período" hint="Cuánto de tus ventas (sin IVA) dependen de sólo 3 clientes" />
       </div>
       <div className="dash-grid">
         <Card span={7} title="Nuevos vs. recurrentes" sub="de dónde viene la venta de cada período"
@@ -1292,9 +1379,9 @@ function TabClientes({ d }: { d: ClientesPanel }) {
             );
           })}
         </Card>
-        <Card span={7} title="Concentración de cartera" sub="quiénes explican tu facturación del período" flush>
+        <Card span={7} title="Concentración de cartera" sub="quiénes explican tus ventas del período · sin IVA" flush>
           {d.pareto.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Sin ventas con cliente en el período.</div> : (
-            <table className="d-tbl"><thead><tr><th>Cliente</th><th className="right">Órdenes</th><th className="right">Facturado</th><th className="right">%</th><th className="right">% acum.</th></tr></thead>
+            <table className="d-tbl"><thead><tr><th>Cliente</th><th className="right">Órdenes</th><th className="right">Ventas</th><th className="right">%</th><th className="right">% acum.</th></tr></thead>
               <tbody>{d.pareto.map((c) => (
                 <tr key={c.clienteId}><td><div className="nm">{c.cliente}</div></td>
                   <td className="right mono">{c.ordenes}</td>
@@ -1316,7 +1403,7 @@ function TabClientes({ d }: { d: ClientesPanel }) {
             </table>
           )}
         </Card>
-        <Card span={12} title="Margen por cliente" sub="quién factura mucho y margina poco" flush>
+        <Card span={12} title="Margen por cliente" sub="quién vende mucho y margina poco · sin IVA" flush>
           {d.margenClientes.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Sin ventas en el período.</div> : (
             <table className="d-tbl"><thead><tr><th>Cliente</th><th className="right">Órdenes</th><th className="right">Ventas</th><th className="right">Margen</th><th className="right">Margen %</th></tr></thead>
               <tbody>{d.margenClientes.map((c) => (
@@ -1342,10 +1429,11 @@ function TabClientes({ d }: { d: ClientesPanel }) {
 }
 
 /* ═══════════ Shell ═══════════ */
-type TabKey = "resumen" | "comercial" | "clientes" | "produccion" | "equipo" | "finanzas" | "producto" | "midesempeno";
+type TabKey = "resumen" | "comercial" | "embudo" | "clientes" | "produccion" | "equipo" | "finanzas" | "producto" | "midesempeno";
 const TABS: Array<{ key: TabKey; label: string; Icon: React.ComponentType<React.SVGProps<SVGSVGElement>> }> = [
   { key: "resumen", label: "Resumen ejecutivo", Icon: LayoutGridIcon },
   { key: "comercial", label: "Comercial", Icon: BriefcaseIcon },
+  { key: "embudo", label: "Embudo", Icon: FilterIcon },
   { key: "clientes", label: "Clientes", Icon: UsersIcon },
   { key: "produccion", label: "Producción", Icon: FactoryIcon },
   { key: "equipo", label: "Equipo", Icon: HardHatIcon },
@@ -1370,7 +1458,7 @@ function rangoDe(p: PeriodoKey): RangoPanel {
   return { desde: iso(new Date(y, 0, 1)), hasta: iso(new Date(y, 11, 31)) };
 }
 const FETCHERS: Record<TabKey, (r: RangoPanel) => Promise<unknown>> = {
-  resumen: getPanelResumen, comercial: getPanelComercial, clientes: getPanelClientes, produccion: getPanelProduccion, equipo: getPanelEquipo, finanzas: getPanelFinanzas, producto: getPanelProducto,
+  resumen: getPanelResumen, comercial: getPanelComercial, embudo: getPanelEmbudo, clientes: getPanelClientes, produccion: getPanelProduccion, equipo: getPanelEquipo, finanzas: getPanelFinanzas, producto: getPanelProducto,
   // Ventana fija de 8 semanas: ignora el selector de período.
   midesempeno: () => getMiDesempeno(),
 };
@@ -1428,6 +1516,7 @@ export function PanelGeneral({ initialResumen }: { initialResumen: ResumenData }
           <>
             {tab === "resumen" ? <TabResumen d={data as ResumenData} /> : null}
             {tab === "comercial" ? <TabComercial d={data as ComercialPanel} /> : null}
+            {tab === "embudo" ? <TabEmbudo d={data as EmbudoPanel} /> : null}
             {tab === "clientes" ? <TabClientes d={data as ClientesPanel} /> : null}
             {tab === "produccion" ? <TabProduccion d={data as ProduccionPanel} /> : null}
             {tab === "equipo" ? <TabEquipo d={data as EquipoPanel} /> : null}
