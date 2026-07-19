@@ -503,8 +503,10 @@ export class PresupuestosService {
   }
 
   // ── Convertir: aprobado → OT (total o parcial) ─────────────────────
+  // Sólo desde APROBADO: convertir sin la decisión del cliente saltearía
+  // el ciclo (decisión del usuario 2026-07-18).
   async convertir(auth: CurrentAuth, id: string, dto: ConvertirPresupuestoDto) {
-    const c = await this.exigir(id, ['enviado', 'aprobado']);
+    const c = await this.exigir(id, ['aprobado']);
     const emision = (c.emisionJson ?? null) as unknown as EmisionJson | null;
     if (!emision?.items?.length) {
       throw new BadRequestException(
@@ -521,19 +523,6 @@ export class PresupuestosService {
       }
     }
     const parcial = items.length < emision.items.length;
-
-    // Si el vendedor convierte directo desde "enviado", el acto implica la
-    // aprobación del cliente — queda explícito en el timeline.
-    if (c.estado === 'enviado') {
-      await this.prisma.cotizacion.update({
-        where: { id },
-        data: { estado: 'aprobado', fechaResuelto: new Date() },
-      });
-      await this.evento(auth, id, {
-        tipo: 'aprobado',
-        descripcion: 'Aprobado al convertir en orden de trabajo.',
-      });
-    }
 
     // La fecha de entrega cotizada puede haber quedado en el pasado: la OT
     // nace en borrador para revisarla y emitirla desde su propia ficha.

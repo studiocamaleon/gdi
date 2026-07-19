@@ -384,7 +384,7 @@ function PresupuestoPanel({ id, puedeAprobar, onCerrar, onCambio }: { id: string
                   </button>
                 </>
               ) : null}
-              {d.estado === "enviado" || d.estado === "aprobado" ? (
+              {d.estado === "aprobado" ? (
                 <button type="button" className="pp-da primary" disabled={trabajando} onClick={() => void convertir()}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
                   Convertir en OT
@@ -459,7 +459,7 @@ function PresupuestoPanel({ id, puedeAprobar, onCerrar, onCambio }: { id: string
 
               <div className="pp-dw-card">
                 {d.items.map((i, idx) => {
-                  const seleccionable = (d.estado === "enviado" || d.estado === "aprobado") && i.cotizacionItemId != null;
+                  const seleccionable = d.estado === "aprobado" && i.cotizacionItemId != null;
                   const on = i.cotizacionItemId != null && seleccion.has(i.cotizacionItemId);
                   return (
                     <div key={i.cotizacionItemId ?? idx} className="pp-dw-item">
