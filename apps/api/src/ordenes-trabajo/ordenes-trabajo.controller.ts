@@ -20,6 +20,7 @@ import {
 } from './dto/crear-orden-trabajo.dto';
 import { AccionPasoOrdenTrabajoDto } from './dto/accion-paso.dto';
 import { MesaPasoDto } from './dto/mesa-paso.dto';
+import { AvanzarCompraDto } from './dto/avanzar-compra.dto';
 import { CompletarPasosLoteDto } from './dto/completar-pasos-lote.dto';
 import { Public } from '../auth/public.decorator';
 
@@ -86,6 +87,20 @@ export class OrdenesTrabajoController {
     @Body() payload: MesaPasoDto,
   ) {
     return this.ordenesTrabajoService.mesaPaso(auth, pasoId, payload.en);
+  }
+
+  /** Panel de Compras: avanzar el estado de una compra tercerizada (F2). */
+  @Patch('tablero/pasos/:pasoId/compra')
+  avanzarCompra(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('pasoId') pasoId: string,
+    @Body() payload: AvanzarCompraDto,
+  ) {
+    return this.ordenesTrabajoService.avanzarCompra(
+      auth,
+      pasoId,
+      payload.estadoCompra,
+    );
   }
 
   @Get(':id')

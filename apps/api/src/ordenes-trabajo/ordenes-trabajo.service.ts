@@ -109,6 +109,10 @@ type PasoTrazabilidad = {
     centroCostoId?: string | null;
     centroCostoNombre?: string | null;
   };
+  /// Paso tercerizado (compra a proveedor) — ver F2 en el diseño.
+  tercerizado?: boolean;
+  proveedorId?: string | null;
+  plazoProveedorDias?: number | null;
 };
 
 function pasosActivados(trazabilidad: unknown): PasoTrazabilidad[] {
@@ -1304,12 +1308,14 @@ export class OrdenesTrabajoService {
     ordenId: string,
     itemId: string,
     trazabilidad: unknown,
+    proveedorNombrePorId: Map<string, string> = new Map(),
   ) {
     return pasosActivados(trazabilidad).map((paso, indice) => {
       const familiaCodigo = paso.familiaCodigo ?? 'trabajo_manual';
       const familia = FAMILIAS[familiaCodigo as FamiliaCodigo] as
         | (typeof FAMILIAS)[FamiliaCodigo]
         | undefined;
+      const esTercerizado = paso.tercerizado === true;
       return {
         tenantId,
         ordenId,
@@ -1323,6 +1329,15 @@ export class OrdenesTrabajoService {
         centroCostoNombre: paso.tiempo?.centroCostoNombre ?? null,
         duracionEstimadaMin: paso.tiempo?.totalMin ?? null,
         modoRegistro: modoRegistroDeFamilia(familiaCodigo),
+        // === Tercerización (F2): el paso comprado va al panel de Compras. ===
+        tipoEjecucion: esTercerizado ? 'tercerizado' : 'interno',
+        proveedorId: esTercerizado ? (paso.proveedorId ?? null) : null,
+        proveedorNombre:
+          esTercerizado && paso.proveedorId
+            ? (proveedorNombrePorId.get(paso.proveedorId) ?? null)
+            : null,
+        plazoProveedorDias: esTercerizado ? (paso.plazoProveedorDias ?? null) : null,
+        estadoCompra: esTercerizado ? 'pendiente' : null,
       };
     });
   }
@@ -1357,12 +1372,30 @@ export class OrdenesTrabajoService {
     const trazabilidadPorId = new Map(
       snapshots.map((snap) => [snap.id, snap.trazabilidadJson]),
     );
+    // Snapshot del nombre de cada proveedor de los pasos tercerizados.
+    const proveedorIds = new Set<string>();
+    for (const snap of snapshots) {
+      for (const paso of pasosActivados(snap.trazabilidadJson)) {
+        if (paso.tercerizado && paso.proveedorId) {
+          proveedorIds.add(paso.proveedorId);
+        }
+      }
+    }
+    const proveedorNombrePorId = new Map<string, string>();
+    if (proveedorIds.size > 0) {
+      const provs = await tx.proveedor.findMany({
+        where: { tenantId, id: { in: [...proveedorIds] } },
+        select: { id: true, nombre: true },
+      });
+      for (const p of provs) proveedorNombrePorId.set(p.id, p.nombre);
+    }
     const data = conSnapshot.flatMap((item) =>
       this.pasosDesdeTrazabilidad(
         tenantId,
         item.ordenId,
         item.id,
         trazabilidadPorId.get(item.cotizacionItemId!),
+        proveedorNombrePorId,
       ),
     );
     if (data.length > 0) {
@@ -2166,6 +2199,86 @@ export class OrdenesTrabajoService {
     return this.toTableroItem(item.orden, item, auth.userId);
   }
 
+  /**
+   * Panel de Compras de la OT (F2): avanza el estado de compra de un paso
+   * TERCERIZADO — pendiente → pedido → recibido → entregado. Al llegar a
+   * recibido/entregado el paso pasa a `estado:'hecho'`, lo que desbloquea el
+   * paso interno siguiente (secuencialidad) y lo cuenta en el progreso.
+   */
+  async avanzarCompra(auth: CurrentAuth, pasoId: string, estadoCompra: string) {
+    const VALIDOS = ['pendiente', 'pedido', 'recibido', 'entregado'];
+    if (!VALIDOS.includes(estadoCompra)) {
+      throw new BadRequestException('Estado de compra inválido.');
+    }
+    return this.prisma.$transaction(async (tx) => {
+      const paso = await tx.ordenTrabajoItemPaso.findFirst({
+        where: { id: pasoId, tenantId: auth.tenantId },
+        include: { item: { select: { nombre: true } } },
+      });
+      if (!paso) throw new NotFoundException('Paso no encontrado.');
+      if (paso.tipoEjecucion !== 'tercerizado') {
+        throw new BadRequestException('El paso no es una compra tercerizada.');
+      }
+      const recibido =
+        estadoCompra === 'recibido' || estadoCompra === 'entregado';
+      await tx.ordenTrabajoItemPaso.update({
+        where: { id: pasoId },
+        data: {
+          estadoCompra,
+          estado: recibido ? 'hecho' : 'pendiente',
+          completadoEl: recibido ? (paso.completadoEl ?? new Date()) : null,
+        },
+      });
+      const ordenId = paso.ordenId;
+      const [orden, total, hechos] = await Promise.all([
+        tx.ordenTrabajo.findFirst({
+          where: { id: ordenId },
+          select: { estado: true },
+        }),
+        tx.ordenTrabajoItemPaso.count({ where: { ordenId } }),
+        tx.ordenTrabajoItemPaso.count({ where: { ordenId, estado: 'hecho' } }),
+      ]);
+      const promueve =
+        orden?.estado === 'pendiente' && estadoCompra !== 'pendiente';
+      const finaliza =
+        total > 0 &&
+        hechos === total &&
+        (orden?.estado === 'produccion' || promueve);
+      await tx.ordenTrabajo.update({
+        where: { id: ordenId },
+        data: {
+          ...(total > 0
+            ? { progresoPct: Math.round((hechos / total) * 100) }
+            : {}),
+          ...(finaliza
+            ? { estado: 'finalizada' }
+            : promueve
+              ? { estado: 'produccion' }
+              : {}),
+        },
+      });
+      if (finaliza) {
+        await tx.ordenTrabajo.updateMany({
+          where: { id: ordenId, fechaFinalizada: null },
+          data: { fechaFinalizada: new Date() },
+        });
+      }
+      await tx.ordenTrabajoEvento.create({
+        data: {
+          tenantId: auth.tenantId,
+          ordenId,
+          tipo: 'compra',
+          descripcion: `Compra tercerizada: "${paso.nombre}" (${paso.item.nombre}) → ${estadoCompra}`,
+          usuarioNombre: auth.email,
+          usuarioId: auth.userId,
+          origen: 'usuario',
+          datosJson: { pasoId, estadoCompra },
+        },
+      });
+      return { ok: true, pasoId, estadoCompra };
+    });
+  }
+
   private toTableroItem(
     orden: {
       id: string;
@@ -2195,6 +2308,10 @@ export class OrdenesTrabajoService {
         duracionEstimadaMin: Prisma.Decimal | null;
         estado: string;
         motivoBloqueo: string | null;
+        tipoEjecucion: string;
+        proveedorNombre: string | null;
+        plazoProveedorDias: number | null;
+        estadoCompra: string | null;
         iniciadoEl: Date | null;
         completadoEl: Date | null;
         modoRegistro: string;
@@ -2252,6 +2369,10 @@ export class OrdenesTrabajoService {
             : null,
         estado: paso.estado,
         motivoBloqueo: paso.motivoBloqueo,
+        tipoEjecucion: paso.tipoEjecucion,
+        proveedorNombre: paso.proveedorNombre,
+        plazoProveedorDias: paso.plazoProveedorDias,
+        estadoCompra: paso.estadoCompra,
         iniciadoEl: paso.iniciadoEl ? paso.iniciadoEl.toISOString() : null,
         completadoEl: paso.completadoEl
           ? paso.completadoEl.toISOString()

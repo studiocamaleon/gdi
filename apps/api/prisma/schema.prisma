@@ -2271,6 +2271,18 @@ model OrdenTrabajoItemPaso {
   /// 'pendiente' | 'en_curso' | 'pausado' | 'hecho' | 'bloqueado'.
   estado              String           @default("pendiente")
   motivoBloqueo       String?
+  /// === Tercerización (F2, docs/productos-tercerizados-diseno.md §6) ===
+  /// 'interno' (producción propia, va al tablero) | 'tercerizado' (compra a un
+  /// proveedor, va al panel de Compras, fuera del tablero).
+  tipoEjecucion       String           @default("interno")
+  proveedorId         String?          @db.Uuid
+  /// Snapshot del nombre del proveedor (no FK, patrón de los demás nombres).
+  proveedorNombre     String?
+  plazoProveedorDias  Int?
+  /// Sólo tercerizados: 'pendiente' | 'pedido' | 'recibido' | 'entregado'.
+  /// Al llegar a recibido/entregado, `estado` pasa a 'hecho' (desbloquea el
+  /// paso interno siguiente y cuenta en el progreso de la OT).
+  estadoCompra        String?
   iniciadoEl          DateTime?
   completadoEl        DateTime?
   /// Cómo se registra el trabajo (snapshot del catálogo de familias al
