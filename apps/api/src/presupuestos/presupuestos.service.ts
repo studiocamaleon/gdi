@@ -9,6 +9,7 @@ import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrdenesTrabajoService } from '../ordenes-trabajo/ordenes-trabajo.service';
 import type { CrearOrdenTrabajoItemDto } from '../ordenes-trabajo/dto/crear-orden-trabajo.dto';
+import { evaluarAprobacion } from './aprobacion';
 import {
   ConvertirPresupuestoDto,
   DecisionPublicaDto,
@@ -70,6 +71,11 @@ export class PresupuestosService {
       validezDiasDefault: row?.validezDiasDefault ?? 15,
       senaSugeridaPctDefault: Number(row?.senaSugeridaPctDefault ?? 50),
       condicionesTexto: row?.condicionesTexto ?? null,
+      // Reglas de aprobación (F2): null = desactivada.
+      aprobacionMontoMax:
+        row?.aprobacionMontoMax != null ? Number(row.aprobacionMontoMax) : null,
+      aprobacionMargenMinPct:
+        row?.aprobacionMargenMinPct != null ? Number(row.aprobacionMargenMinPct) : null,
     };
   }
 
@@ -292,6 +298,9 @@ export class PresupuestosService {
       primeraVistaEl: c.primeraVistaEl?.toISOString() ?? null,
       motivoPerdida: c.motivoPerdida,
       motivoPerdidaDetalle: c.motivoPerdidaDetalle,
+      aprobacionMotivos: (c.aprobacionMotivosJson ?? []) as Array<{ regla: string; detalle: string }>,
+      aprobacionSolicitadaEl: c.aprobacionSolicitadaEl?.toISOString() ?? null,
+      aprobacionResueltaPor: c.aprobacionResueltaPorNombre,
       observaciones: c.observaciones,
       senaSugeridaPct: c.senaSugeridaPct != null ? Number(c.senaSugeridaPct) : null,
       subtotal: Number(c.subtotal ?? 0),
@@ -326,28 +335,136 @@ export class PresupuestosService {
   }
 
   // ── Enviar: borrador → enviado (habilita el link público) ──────────
+  // F2: al PRIMER envío se evalúan las reglas de aprobación. Si disparan
+  // y el actor es OPERADOR, el presupuesto queda BLOQUEADO en
+  // pendiente_aprobacion (sin token público). SUPERVISOR/ADMIN están
+  // exentos: envían igual y el evento registra que asumieron el envío.
   async enviar(auth: CurrentAuth, id: string) {
     const c = await this.exigir(id, ['borrador', 'enviado']);
     if (!c.clienteId) {
       throw new BadRequestException('Asigná un cliente antes de enviar.');
     }
+
+    if (c.estado === 'borrador') {
+      const motivos = await this.evaluarReglas(auth.tenantId, id, Number(c.total ?? 0));
+      if (motivos.length > 0) {
+        const detalleMotivos = motivos.map((m) => m.detalle).join(' ');
+        if (auth.role === 'OPERADOR') {
+          await this.prisma.cotizacion.update({
+            where: { id },
+            data: {
+              estado: 'pendiente_aprobacion',
+              aprobacionMotivosJson: motivos as unknown as Prisma.InputJsonValue,
+              aprobacionSolicitadaEl: new Date(),
+              aprobacionResueltaPorId: null,
+              aprobacionResueltaPorNombre: null,
+              aprobacionResueltaEl: null,
+            },
+          });
+          await this.evento(auth, id, {
+            tipo: 'aprobacion_solicitada',
+            descripcion: `Requiere aprobación de un supervisor antes de enviarse: ${detalleMotivos}`,
+            datosJson: { motivos },
+          });
+          return this.detalle(auth, id);
+        }
+        // Exento por rol: envía igual, pero queda dicho.
+        await this.prisma.cotizacion.update({
+          where: { id },
+          data: { aprobacionMotivosJson: motivos as unknown as Prisma.InputJsonValue },
+        });
+        await this.evento(auth, id, {
+          tipo: 'envio_asumido',
+          descripcion: `Las reglas de aprobación dispararon y el envío fue asumido por su rol: ${detalleMotivos}`,
+          datosJson: { motivos, rol: auth.role },
+        });
+      }
+    }
+
+    return this.ejecutarEnvio(auth, c, { reenvio: c.estado === 'enviado' });
+  }
+
+  /** El acto de envío en sí (token + fecha + estado + evento). */
+  private async ejecutarEnvio(
+    auth: CurrentAuth,
+    c: { id: string; publicToken: string | null },
+    opts: { reenvio: boolean; descripcion?: string },
+  ) {
     const token = c.publicToken ?? generarPublicToken();
-    const yaEnviado = c.estado === 'enviado';
     await this.prisma.cotizacion.update({
-      where: { id },
+      where: { id: c.id },
       data: {
         estado: 'enviado',
         fechaEnvio: new Date(),
         publicToken: token,
       },
     });
-    await this.evento(auth, id, {
+    await this.evento(auth, c.id, {
       tipo: 'enviado',
-      descripcion: yaEnviado
-        ? 'Presupuesto reenviado al cliente.'
-        : 'Presupuesto enviado al cliente.',
+      descripcion:
+        opts.descripcion ??
+        (opts.reenvio
+          ? 'Presupuesto reenviado al cliente.'
+          : 'Presupuesto enviado al cliente.'),
     });
-    return this.detalle(auth, id);
+    return this.detalle(auth, c.id);
+  }
+
+  /** Reglas de aprobación contra los items con costo del snapshot. */
+  private async evaluarReglas(tenantId: string, cotizacionId: string, total: number) {
+    const [cfg, items] = await Promise.all([
+      this.config(tenantId),
+      this.prisma.cotizacionItem.findMany({
+        where: { cotizacionId },
+        select: { precioTotal: true, costoTotal: true },
+      }),
+    ]);
+    return evaluarAprobacion(
+      { aprobacionMontoMax: cfg.aprobacionMontoMax, aprobacionMargenMinPct: cfg.aprobacionMargenMinPct },
+      {
+        total,
+        items: items.map((i) => ({
+          subtotal: Number(i.precioTotal ?? 0),
+          costoTotal: i.costoTotal != null ? Number(i.costoTotal) : null,
+        })),
+      },
+    );
+  }
+
+  // ── Resolución de la aprobación pendiente (SUPERVISOR/ADMIN) ───────
+  async resolverAprobacion(
+    auth: CurrentAuth,
+    id: string,
+    dto: { decision: 'aprobar' | 'devolver'; comentario?: string },
+  ) {
+    const c = await this.exigir(id, ['pendiente_aprobacion']);
+    const nombre = await this.nombreDe(auth);
+    await this.prisma.cotizacion.update({
+      where: { id },
+      data: {
+        aprobacionResueltaPorId: auth.userId,
+        aprobacionResueltaPorNombre: nombre,
+        aprobacionResueltaEl: new Date(),
+        ...(dto.decision === 'devolver' ? { estado: 'borrador' } : {}),
+      },
+    });
+    if (dto.decision === 'devolver') {
+      await this.evento(auth, id, {
+        tipo: 'aprobacion_devuelta',
+        descripcion: `Devuelto por ${nombre} sin enviar${dto.comentario ? `: ${dto.comentario}` : '.'}`,
+        datosJson: { comentario: dto.comentario ?? null },
+      });
+      return this.detalle(auth, id);
+    }
+    // Aprobar = aprobar Y enviar en el mismo acto (decisión del plan §9).
+    await this.evento(auth, id, {
+      tipo: 'aprobacion_aprobada',
+      descripcion: `Aprobación interna otorgada por ${nombre}.`,
+    });
+    return this.ejecutarEnvio(auth, { id: c.id, publicToken: c.publicToken }, {
+      reenvio: false,
+      descripcion: 'Presupuesto enviado al cliente (con aprobación interna).',
+    });
   }
 
   // ── Resolver: el vendedor marca la decisión ────────────────────────

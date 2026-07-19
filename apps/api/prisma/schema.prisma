@@ -1977,6 +1977,13 @@ model Cotizacion {
   /// 'competencia' | 'otro' (+detalle libre).
   motivoPerdida                String?
   motivoPerdidaDetalle         String?          @db.VarChar(300)
+  /// === Aprobación interna por umbrales (F2) ===
+  /// Motivos que dispararon al intentar enviar: [{ regla, detalle }].
+  aprobacionMotivosJson        Json?
+  aprobacionSolicitadaEl       DateTime?
+  aprobacionResueltaPorId      String?          @db.Uuid
+  aprobacionResueltaPorNombre  String?
+  aprobacionResueltaEl         DateTime?
   /// Credencial del link público "ver/aprobar presupuesto" (patrón tracking).
   publicToken                  String?          @unique
   /// Primera apertura del link público — el badge "visto" (no es estado).

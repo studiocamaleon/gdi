@@ -29366,8 +29366,12 @@ body:has(.t-app) {
 .pp-dw-rechazo select,.pp-dw-rechazo input{width:100%;padding:7px 10px;border-radius:8px;border:1px solid #d4d2cd;font-size:13px;font-family:inherit;background:var(--surface)}
 
 
-/* Presupuestos: opcionales incluidos como seccion propia (que NO pasen desapercibidos) */
+/* Presupuestos: opcionales incluidos como seccion propia (que no pasen desapercibidos) */
 .pp-opt{margin-top:10px}
 .pp-opt-lbl{font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--ok);font-weight:600;margin-bottom:5px}
 .pp-chip.opt{background:var(--ok-bg);border-color:#cfe6d8;color:var(--ok);font-weight:500}
 .pp-chip.opt svg{width:10px;height:10px;flex:0 0 auto}
+.pp-badge.pend{background:#fef9c3;color:#a16207}.pp-badge.pend .d{background:#a16207}
+.pp-banner-aprob{border:1px solid #fde68a;background:#fef9c3;border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:12.5px;color:#a16207}
+.pp-banner-aprob .t{font-weight:600;margin-bottom:4px}
+.pp-banner-aprob ul{margin:0;padding-left:16px}

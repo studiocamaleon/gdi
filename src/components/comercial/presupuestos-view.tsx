@@ -9,17 +9,22 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { PlusIcon, SearchIcon } from "lucide-react";
+import { PlusIcon, SearchIcon, SettingsIcon } from "lucide-react";
 import { toast } from "sonner";
+import type { MembershipRole } from "@/lib/auth";
 import {
   MOTIVOS_PERDIDA,
+  actualizarConfigPresupuestos,
   convertirPresupuesto,
   enviarPresupuesto,
+  getConfigPresupuestos,
   getPresupuesto,
   listarPresupuestos,
   presupuestoPdfUrl,
   presupuestoPublicUrl,
+  resolverAprobacionPresupuesto,
   resolverPresupuesto,
+  type ConfigPresupuestos,
   type PresupuestoDetalle,
   type PresupuestoEstado,
   type PresupuestosListado,
@@ -27,6 +32,7 @@ import {
 
 const ESTADO_META: Record<PresupuestoEstado, { label: string; color: string; bg: string }> = {
   borrador: { label: "Borrador", color: "#6e6e76", bg: "rgba(20,20,26,.06)" },
+  pendiente_aprobacion: { label: "Pend. aprobación", color: "#a16207", bg: "#fef9c3" },
   enviado: { label: "Enviado", color: "#1d4ed8", bg: "rgba(29,78,216,.09)" },
   aprobado: { label: "Aprobado", color: "#16794a", bg: "rgba(22,121,74,.10)" },
   rechazado: { label: "Rechazado", color: "#c2410c", bg: "rgba(194,65,12,.10)" },
@@ -44,6 +50,7 @@ const fmtFecha = (iso: string | null) => {
 
 const BADGE_CLASE: Record<PresupuestoEstado, string> = {
   borrador: "neutral",
+  pendiente_aprobacion: "pend",
   enviado: "sent",
   aprobado: "won",
   rechazado: "lost",
@@ -63,11 +70,13 @@ function EstadoBadge({ estado, visto }: { estado: PresupuestoEstado; visto?: boo
   );
 }
 
-export function PresupuestosView({ initial }: { initial: PresupuestosListado }) {
+export function PresupuestosView({ initial, rol }: { initial: PresupuestosListado; rol: MembershipRole }) {
   const [data, setData] = React.useState(initial);
   const [filtro, setFiltro] = React.useState<PresupuestoEstado | "todos">("todos");
   const [busqueda, setBusqueda] = React.useState("");
   const [abiertoId, setAbiertoId] = React.useState<string | null>(null);
+  const [configAbierta, setConfigAbierta] = React.useState(false);
+  const puedeAprobar = rol === "administrador" || rol === "supervisor";
 
   const recargar = React.useCallback(async () => {
     try {
@@ -112,6 +121,7 @@ export function PresupuestosView({ initial }: { initial: PresupuestosListado }) 
   const chips: Array<{ k: PresupuestoEstado | "todos"; label: string }> = [
     { k: "todos", label: "Todos" },
     { k: "borrador", label: "Borrador" },
+    { k: "pendiente_aprobacion", label: "Pend. aprobación" },
     { k: "enviado", label: "Enviados" },
     { k: "aprobado", label: "Aprobados" },
     { k: "rechazado", label: "Rechazados" },
@@ -130,6 +140,12 @@ export function PresupuestosView({ initial }: { initial: PresupuestosListado }) 
             <div className="sub">El ciclo comercial: enviá, seguí la decisión del cliente y convertí en orden.</div>
           </div>
           <div className="right">
+            {puedeAprobar ? (
+              <button type="button" className="btn" onClick={() => setConfigAbierta(true)}>
+                <SettingsIcon />
+                Configuración
+              </button>
+            ) : null}
             <Link href="/comercial/crear-propuesta" className="btn btn-primary">
               <PlusIcon />
               Nuevo presupuesto
@@ -223,18 +239,23 @@ export function PresupuestosView({ initial }: { initial: PresupuestosListado }) 
       </div>
 
       {abiertoId ? (
-        <PresupuestoPanel id={abiertoId} onCerrar={() => setAbiertoId(null)} onCambio={recargar} />
+        <PresupuestoPanel id={abiertoId} puedeAprobar={puedeAprobar} onCerrar={() => setAbiertoId(null)} onCambio={recargar} />
+      ) : null}
+      {configAbierta ? (
+        <ConfigPresupuestosSheet onCerrar={() => setConfigAbierta(false)} />
       ) : null}
     </div>
   );
 }
 
 /* ─── Panel lateral de detalle ─── */
-function PresupuestoPanel({ id, onCerrar, onCambio }: { id: string; onCerrar: () => void; onCambio: () => void }) {
+function PresupuestoPanel({ id, puedeAprobar, onCerrar, onCambio }: { id: string; puedeAprobar: boolean; onCerrar: () => void; onCambio: () => void }) {
   const [d, setD] = React.useState<PresupuestoDetalle | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [trabajando, setTrabajando] = React.useState(false);
   const [rechazoAbierto, setRechazoAbierto] = React.useState(false);
+  const [devolucionAbierta, setDevolucionAbierta] = React.useState(false);
+  const [comentarioDevolucion, setComentarioDevolucion] = React.useState("");
   const [motivo, setMotivo] = React.useState("precio");
   const [motivoDetalle, setMotivoDetalle] = React.useState("");
   const [seleccion, setSeleccion] = React.useState<Set<string>>(new Set());
@@ -359,6 +380,18 @@ function PresupuestoPanel({ id, onCerrar, onCambio }: { id: string; onCerrar: ()
                   Enviar al cliente
                 </button>
               ) : null}
+              {d.estado === "pendiente_aprobacion" && puedeAprobar ? (
+                <>
+                  <button type="button" className="pp-da ok" disabled={trabajando} onClick={() => void accion(() => resolverAprobacionPresupuesto(id, { decision: "aprobar" }), "Aprobado y enviado al cliente.")}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5" /></svg>
+                    Aprobar y enviar
+                  </button>
+                  <button type="button" className="pp-da" disabled={trabajando} onClick={() => setDevolucionAbierta(true)}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M9 14L4 9l5-5" /><path d="M4 9h10a6 6 0 0 1 0 12h-3" /></svg>
+                    Devolver
+                  </button>
+                </>
+              ) : null}
               {d.estado === "enviado" ? (
                 <button type="button" className="pp-da ok" disabled={trabajando} onClick={() => void accion(() => resolverPresupuesto(id, { resultado: "aprobado" }), "Aprobado.")}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5" /></svg>
@@ -385,6 +418,26 @@ function PresupuestoPanel({ id, onCerrar, onCambio }: { id: string; onCerrar: ()
             </div>
 
             <div className="pp-dw-body">
+              {d.estado === "pendiente_aprobacion" ? (
+                <div className="pp-banner-aprob">
+                  <div className="t">{puedeAprobar ? "Requiere tu aprobación para enviarse" : "Esperando aprobación de un supervisor"}</div>
+                  <ul>
+                    {d.aprobacionMotivos.map((m, i) => <li key={i}>{m.detalle}</li>)}
+                  </ul>
+                </div>
+              ) : null}
+              {devolucionAbierta ? (
+                <div className="pp-dw-rechazo">
+                  <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 8 }}>Devolver sin enviar — decile al vendedor qué revisar</div>
+                  <input placeholder="Comentario (opcional)" value={comentarioDevolucion} onChange={(e) => setComentarioDevolucion(e.target.value)} style={{ marginBottom: 10 }} />
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button type="button" className="pp-da primary" disabled={trabajando} onClick={() => { setDevolucionAbierta(false); void accion(() => resolverAprobacionPresupuesto(id, { decision: "devolver", comentario: comentarioDevolucion || undefined }), "Devuelto al vendedor."); }}>
+                      Confirmar devolución
+                    </button>
+                    <button type="button" className="pp-da" onClick={() => setDevolucionAbierta(false)}>Cancelar</button>
+                  </div>
+                </div>
+              ) : null}
               {rechazoAbierto ? (
                 <div className="pp-dw-rechazo">
                   <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 8 }}>¿Por qué se perdió? (alimenta tus métricas)</div>
@@ -464,3 +517,97 @@ function PresupuestoPanel({ id, onCerrar, onCambio }: { id: string; onCerrar: ()
   );
 }
 
+
+/* ─── Configuración del módulo (validez, seña, condiciones y umbrales F2) ─── */
+function ConfigPresupuestosSheet({ onCerrar }: { onCerrar: () => void }) {
+  const [cfg, setCfg] = React.useState<ConfigPresupuestos | null>(null);
+  const [guardando, setGuardando] = React.useState(false);
+
+  React.useEffect(() => {
+    getConfigPresupuestos().then(setCfg).catch(() => {
+      toast.error("No se pudo cargar la configuración.");
+      onCerrar();
+    });
+  }, [onCerrar]);
+
+  const guardar = async () => {
+    if (!cfg) return;
+    setGuardando(true);
+    try {
+      await actualizarConfigPresupuestos(cfg);
+      toast.success("Configuración guardada.");
+      onCerrar();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo guardar.");
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const num = (v: string): number | null => (v.trim() === "" ? null : Number(v));
+  const campo = (label: string, hint: string, children: React.ReactNode) => (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 2 }}>{label}</div>
+      <div style={{ fontSize: 11.5, color: "var(--muted-text)", marginBottom: 6 }}>{hint}</div>
+      {children}
+    </div>
+  );
+  const inputStyle: React.CSSProperties = { width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid #d4d2cd", fontSize: 13, fontFamily: "inherit", background: "var(--surface)" };
+
+  return (
+    <div className="pp-scrim" onClick={onCerrar}>
+      <div className="pp-drawer" onClick={(e) => e.stopPropagation()} style={{ width: 460 }}>
+        <div className="pp-dw-head">
+          <div className="top">
+            <span style={{ fontSize: 15, fontWeight: 600 }}>Configuración de presupuestos</span>
+            <button type="button" className="x" onClick={onCerrar} aria-label="Cerrar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
+            </button>
+          </div>
+        </div>
+        <div className="pp-dw-body">
+          {!cfg ? (
+            <div style={{ color: "var(--muted-text)" }}>Cargando…</div>
+          ) : (
+            <>
+              {campo("Validez (días)", "Cuánto vale el presupuesto desde que se envía; después vence solo.", (
+                <input type="number" min={1} max={365} style={inputStyle} value={cfg.validezDiasDefault}
+                  onChange={(e) => setCfg({ ...cfg, validezDiasDefault: Number(e.target.value) || 15 })} />
+              ))}
+              {campo("Seña sugerida (%)", "Se imprime como condición de pago en el PDF y el link.", (
+                <input type="number" min={0} max={100} style={inputStyle} value={cfg.senaSugeridaPctDefault}
+                  onChange={(e) => setCfg({ ...cfg, senaSugeridaPctDefault: Number(e.target.value) || 0 })} />
+              ))}
+              {campo("Condiciones del PDF", "Términos que se agregan al pie de cada presupuesto.", (
+                <textarea rows={3} style={{ ...inputStyle, resize: "vertical" }} value={cfg.condicionesTexto ?? ""}
+                  onChange={(e) => setCfg({ ...cfg, condicionesTexto: e.target.value || null })} />
+              ))}
+
+              <div className="pp-dw-sec" style={{ marginTop: 20 }}>Aprobación interna (umbrales)</div>
+              <div style={{ fontSize: 11.5, color: "var(--muted-text)", marginBottom: 12 }}>
+                Si un presupuesto se sale de estos límites, un operador no puede enviarlo: queda esperando la aprobación de un supervisor. Vacío = regla desactivada.
+              </div>
+              {campo("Monto máximo sin aprobación ($)", "Totales por encima de este valor requieren aprobación.", (
+                <input type="number" min={0} style={inputStyle} placeholder="Sin límite"
+                  value={cfg.aprobacionMontoMax ?? ""}
+                  onChange={(e) => setCfg({ ...cfg, aprobacionMontoMax: num(e.target.value) })} />
+              ))}
+              {campo("Margen mínimo (%)", "Presupuestos con margen real por debajo requieren aprobación (usa el costo del snapshot). Sugerido: 25.", (
+                <input type="number" min={0} max={100} style={inputStyle} placeholder="Desactivado"
+                  value={cfg.aprobacionMargenMinPct ?? ""}
+                  onChange={(e) => setCfg({ ...cfg, aprobacionMargenMinPct: num(e.target.value) })} />
+              ))}
+
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <button type="button" className="pp-da primary" disabled={guardando} onClick={() => void guardar()}>
+                  {guardando ? "Guardando…" : "Guardar"}
+                </button>
+                <button type="button" className="pp-da" onClick={onCerrar}>Cancelar</button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

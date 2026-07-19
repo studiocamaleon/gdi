@@ -11,9 +11,11 @@ import {
   Query,
   StreamableFile,
 } from '@nestjs/common';
+import { RolSistema } from '@prisma/client';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
 import { Public } from '../auth/public.decorator';
+import { Roles } from '../auth/roles.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { PresupuestosService } from './presupuestos.service';
 import { PresupuestoPdfService } from './presupuesto-pdf.service';
@@ -23,6 +25,7 @@ import {
   DecisionPublicaDto,
   EmitirPresupuestoDto,
   ListarPresupuestosDto,
+  ResolverAprobacionDto,
   ResolverPresupuestoDto,
 } from './dto/presupuestos.dto';
 
@@ -53,7 +56,9 @@ export class PresupuestosController {
     return this.service.config(auth.tenantId);
   }
 
+  /** El operador no se sube su propio umbral (plan F2 §6). */
   @Put('config')
+  @Roles(RolSistema.ADMINISTRADOR, RolSistema.SUPERVISOR)
   actualizarConfig(
     @CurrentSession() auth: CurrentAuth,
     @Body() dto: ActualizarConfigPresupuestosDto,
@@ -89,6 +94,16 @@ export class PresupuestosController {
     @Body() dto: ResolverPresupuestoDto,
   ) {
     return this.service.resolver(auth, id, dto);
+  }
+
+  @Patch(':id/aprobacion')
+  @Roles(RolSistema.ADMINISTRADOR, RolSistema.SUPERVISOR)
+  resolverAprobacion(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ResolverAprobacionDto,
+  ) {
+    return this.service.resolverAprobacion(auth, id, dto);
   }
 
   @Post(':id/convertir')

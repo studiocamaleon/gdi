@@ -8,6 +8,7 @@ import { apiRequest } from "@/lib/api";
 
 export type PresupuestoEstado =
   | "borrador"
+  | "pendiente_aprobacion"
   | "enviado"
   | "aprobado"
   | "rechazado"
@@ -80,6 +81,10 @@ export type PresupuestoDetalle = {
   primeraVistaEl: string | null;
   motivoPerdida: string | null;
   motivoPerdidaDetalle: string | null;
+  /** F2: motivos que dispararon la aprobación interna y quién resolvió. */
+  aprobacionMotivos: Array<{ regla: string; detalle: string }>;
+  aprobacionSolicitadaEl: string | null;
+  aprobacionResueltaPor: string | null;
   observaciones: string | null;
   senaSugeridaPct: number | null;
   subtotal: number;
@@ -139,6 +144,9 @@ export type ConfigPresupuestos = {
   validezDiasDefault: number;
   senaSugeridaPctDefault: number;
   condicionesTexto: string | null;
+  /** Reglas de aprobación interna; null = desactivada. */
+  aprobacionMontoMax: number | null;
+  aprobacionMargenMinPct: number | null;
 };
 
 export function listarPresupuestos(filtros?: {
@@ -197,6 +205,17 @@ export function convertirPresupuesto(id: string, payload?: { itemIds?: string[] 
     `/presupuestos/${id}/convertir`,
     { method: "POST", body: JSON.stringify(payload ?? {}) },
   );
+}
+
+/** Resolución de una aprobación pendiente (SUPERVISOR/ADMIN). */
+export function resolverAprobacionPresupuesto(
+  id: string,
+  payload: { decision: "aprobar" | "devolver"; comentario?: string },
+) {
+  return apiRequest<PresupuestoDetalle>(`/presupuestos/${id}/aprobacion`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function getConfigPresupuestos() {

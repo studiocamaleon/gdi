@@ -13,6 +13,7 @@ import {
   Max,
   MaxLength,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import {
@@ -23,6 +24,7 @@ import {
 /** Estados del ciclo (docs/presupuestos-modulo-estudio.md §4). */
 export const PRESUPUESTO_ESTADOS = [
   'borrador',
+  'pendiente_aprobacion',
   'enviado',
   'aprobado',
   'rechazado',
@@ -143,6 +145,17 @@ export class ListarPresupuestosDto {
   busqueda?: string;
 }
 
+/** Resolución de una aprobación interna pendiente (SUPERVISOR/ADMIN). */
+export class ResolverAprobacionDto {
+  @IsIn(['aprobar', 'devolver'])
+  decision: 'aprobar' | 'devolver';
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  comentario?: string;
+}
+
 export class ActualizarConfigPresupuestosDto {
   @IsOptional()
   @IsInt()
@@ -160,4 +173,18 @@ export class ActualizarConfigPresupuestosDto {
   @IsString()
   @MaxLength(4000)
   condicionesTexto?: string;
+
+  /** null = regla desactivada. */
+  @IsOptional()
+  @ValidateIf((o) => o.aprobacionMontoMax !== null)
+  @IsNumber()
+  @Min(0)
+  aprobacionMontoMax?: number | null;
+
+  @IsOptional()
+  @ValidateIf((o) => o.aprobacionMargenMinPct !== null)
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  aprobacionMargenMinPct?: number | null;
 }
