@@ -431,6 +431,7 @@ model Tenant {
   productos                                        Producto[]
   productoRutasAlternativas                        ProductoRutaAlternativa[]
   productoConfigPasos                              ProductoConfigPaso[]
+  pasoTercerizadoEntradas                          PasoTercerizadoEntrada[]
   productoConfigPasoSlotsMateriales                ProductoConfigPasoSlotMaterial[]
   productoConfigPasoSlotMaterialCandidatos         ProductoConfigPasoSlotMaterialCandidato[]
   productoConfigPasoSlotMaterialCandidatoVariantes ProductoConfigPasoSlotMaterialCandidatoVariante[]
@@ -594,6 +595,7 @@ model Proveedor {
   contactos                       ProveedorContacto[]
   direcciones                     ProveedorDireccion[]
   materiaPrimaVariantesReferencia MateriaPrimaVariante[] @relation("MateriaPrimaVarianteProveedorReferencia")
+  configPasosTercerizados         ProductoConfigPaso[]   @relation("ProductoConfigPasoProveedor")
 
   valores Valor[]
 
@@ -1721,6 +1723,19 @@ model ProductoConfigPaso {
   /// de obra (no el de máquina): un paso a 2 personas consume el doble de
   /// horas-hombre. Ver docs/hora-hombre-setup-cleanup-diseno.md
   dotacionOperarios           Int                                  @default(1)
+  /// === Tercerización (docs/productos-tercerizados-diseno.md) ===
+  /// El paso lo compra un proveedor: su costo NO sale de máquina/tiempo/material
+  /// sino de la fuente. El motor lo suma como cualquier paso y NO consume máquina.
+  tercerizado                 Boolean                              @default(false)
+  proveedorId                 String?                              @db.Uuid
+  /// 'tarifa_magnitud' | 'matriz' | 'fijo'.
+  fuenteCostoTercerizado      String?
+  /// Config por fuente: tarifa_magnitud { magnitud, tarifa, minimoMagnitud?,
+  /// minimoCosto? }; matriz { ejes:[{clave,label,orden,valores}] } (filas en
+  /// PasoTercerizadoEntrada); fijo { costo, por:'trabajo'|'unidad' }.
+  tercerizadoConfigJson       Json?
+  /// Lead time del proveedor, para la ETA de la OT (F2).
+  plazoProveedorDias          Int?
   activo                      Boolean                              @default(true)
   createdAt                   DateTime                             @default(now())
   updatedAt                   DateTime                             @updatedAt
@@ -1730,15 +1745,43 @@ model ProductoConfigPaso {
   maquinaM1                   Maquina?                             @relation("ProductoConfigPasoMaquinaM1", fields: [maquinaM1Id], references: [id])
   perfilM1                    MaquinaPerfilOperativo?              @relation("ProductoConfigPasoPerfilM1", fields: [perfilM1Id], references: [id])
   centroCosto                 CentroCosto?                         @relation("ProductoConfigPasoCentroCostoManual", fields: [centroCostoId], references: [id], onDelete: SetNull)
+  proveedor                   Proveedor?                           @relation("ProductoConfigPasoProveedor", fields: [proveedorId], references: [id], onDelete: SetNull)
   slotsMateriales             ProductoConfigPasoSlotMaterial[]
   maquinasCandidatas          ProductoConfigPasoMaquinaCandidata[]
   cargosDirectosPaso          ProductoCargoDirectoPaso[]
+  tercerizadoEntradas         PasoTercerizadoEntrada[]
 
   @@unique([tenantId, productoRutaAlternativaId, rutaPasoId])
   @@index([tenantId, productoRutaAlternativaId])
   @@index([tenantId, centroCostoId])
   @@index([tenantId, maquinaM1Id])
   @@index([tenantId, perfilM1Id])
+  @@index([tenantId, proveedorId])
+}
+
+/// Fila de la matriz de precios de un proveedor para un paso tercerizado con
+/// fuente `matriz`. Lookup EXACTO por `claveMatch` (concat de valores de eje en
+/// orden). Costo en NETO. Ver docs/productos-tercerizados-diseno.md
+model PasoTercerizadoEntrada {
+  id                   String             @id @default(uuid()) @db.Uuid
+  tenantId             String             @db.Uuid
+  productoConfigPasoId String             @db.Uuid
+  /// { ejeClave: valorClave } — la combinación de esta fila (para mostrar/editar).
+  valoresJson          Json
+  /// Concat canónico de valores en orden de eje: lookup exacto O(1).
+  claveMatch           String
+  /// Unidades de la tanda (deriva el unitario y el subtotal).
+  cantidad             Int
+  /// Costo TOTAL del proveedor para esa tanda (NETO, sin IVA).
+  costo                Decimal            @db.Decimal(14, 2)
+  activo               Boolean            @default(true)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  tenant               Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productoConfigPaso   ProductoConfigPaso @relation(fields: [productoConfigPasoId], references: [id], onDelete: Cascade)
+
+  @@unique([productoConfigPasoId, claveMatch])
+  @@index([tenantId, productoConfigPasoId])
 }
 
 model ProductoConfigPasoSlotMaterial {
