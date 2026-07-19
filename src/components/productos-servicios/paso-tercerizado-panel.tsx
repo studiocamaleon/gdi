@@ -590,7 +590,7 @@ function MatrizEditor({
         </div>
         <div className="grid-scroll">
           {gridLista ? (
-            <table className="grid">
+            <table className="cgrid">
               <thead>
                 <tr>
                   {atributos.map((e) => (

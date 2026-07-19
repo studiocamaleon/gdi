@@ -29459,14 +29459,14 @@ body:has(.t-app) {
 
 /* grid */
 .terc .grid-scroll{overflow-x:auto;border:1px solid var(--border);border-radius:var(--r-3)}
-.terc table.grid{width:100%;border-collapse:collapse;min-width:520px}
-.terc table.grid th,.terc table.grid td{padding:0;text-align:left}
-.terc table.grid thead th{background:var(--surface-3);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;padding:12px 16px;border-bottom:1px solid var(--border);white-space:nowrap}
-.terc table.grid thead th.q{text-align:right;font-family:var(--font-mono);font-size:12px;letter-spacing:0;text-transform:none;color:var(--ink-2);font-weight:600}
+.terc table.cgrid{display:table;width:100%;border-collapse:collapse;min-width:520px}
+.terc table.cgrid th,.terc table.cgrid td{padding:0;text-align:left}
+.terc table.cgrid thead th{background:var(--surface-3);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;padding:12px 16px;border-bottom:1px solid var(--border);white-space:nowrap}
+.terc table.cgrid thead th.q{text-align:right;font-family:var(--font-mono);font-size:12px;letter-spacing:0;text-transform:none;color:var(--ink-2);font-weight:600}
 .terc .attr-col{padding:14px 16px !important;border-bottom:1px solid var(--hairline);white-space:nowrap}
 .terc .attr-col .v{font-size:13px;font-weight:500;color:var(--ink)}
-.terc table.grid tbody tr:last-child .attr-col,.terc table.grid tbody tr:last-child td{border-bottom:none}
-.terc table.grid tbody tr:hover td{background:var(--surface-2)}
+.terc table.cgrid tbody tr:last-child .attr-col,.terc table.cgrid tbody tr:last-child td{border-bottom:none}
+.terc table.cgrid tbody tr:hover td{background:var(--surface-2)}
 .terc .cell{padding:9px 12px !important;border-bottom:1px solid var(--hairline);text-align:right}
 .terc .cell-in{width:100%;max-width:130px;height:36px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface);padding:0 12px 0 22px;font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:13px;color:var(--ink);text-align:right;outline:none;transition:border-color .12s,box-shadow .12s;margin-left:auto;display:block}
 .terc .cell-in:focus{border-color:var(--ink);box-shadow:0 0 0 3px rgba(20,20,26,.06)}
