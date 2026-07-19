@@ -441,6 +441,9 @@ model Tenant {
   productoCargosDirectosCotizacion                 ProductoCargoDirectoCotizacion[]
   cotizacionesV2                                   Cotizacion[]
   cotizacionesV2Items                              CotizacionItem[]
+  cotizacionContadores                             CotizacionContador[]
+  cotizacionEventos                                CotizacionEvento[]
+  configuracionPresupuestos                        ConfiguracionPresupuestos?
   productosPreciosEspecialesClientesV2             ProductoPrecioEspecialClienteV2[]
   productosImpuestosAplicados                      ProductoImpuestoAplicado[]
   productosComisionesAplicadas                     ProductoComisionAplicada[]
@@ -622,6 +625,7 @@ model Empleado {
   invitations            Invitation[]
   recursosCentroCosto    CentroCostoRecurso[] @relation("CentroCostoRecursoEmpleado")
   ordenesTrabajoVendidas OrdenTrabajo[]       @relation("OrdenTrabajoVendedor")
+  cotizacionesVendidas   Cotizacion[]         @relation("CotizacionVendedor")
   estaciones             EstacionEmpleado[]
 
   @@index([tenantId, nombreCompleto])
@@ -1948,8 +1952,13 @@ model ProductoCargoDirectoCotizacion {
 model Cotizacion {
   id                           String           @id @default(uuid()) @db.Uuid
   tenantId                     String           @db.Uuid
+  /// PRES-AAAA-NNNN (CotizacionContador). Null = contenedor de snapshots
+  /// de la ficha (venta directa); con número = PRESUPUESTO formal.
   numero                       String?
   clienteId                    String?          @db.Uuid
+  /// Ciclo del presupuesto (docs/presupuestos-modulo-estudio.md §4):
+  /// 'borrador' | 'enviado' | 'aprobado' | 'rechazado' | 'vencido' |
+  /// 'convertido' ('pendiente_aprobacion' reservado para F2).
   estado                       String           @default("borrador")
   fechaEmision                 DateTime?
   fechaValidez                 DateTime?
@@ -1957,18 +1966,98 @@ model Cotizacion {
   /// Cargos directos a nivel cotización (suma de los que apliquen).
   cargosDirectosCotizacionJson Json?
   subtotal                     Decimal?         @db.Decimal(14, 2)
+  impuestos                    Decimal?         @db.Decimal(14, 2)
   total                        Decimal?         @db.Decimal(14, 2)
+  /// === Ciclo comercial del presupuesto ===
+  vendedorEmpleadoId           String?          @db.Uuid
+  canalVenta                   String?
+  fechaEnvio                   DateTime?
+  fechaResuelto                DateTime?
+  /// Picklist al perder: 'precio' | 'plazo' | 'sin_respuesta' |
+  /// 'competencia' | 'otro' (+detalle libre).
+  motivoPerdida                String?
+  motivoPerdidaDetalle         String?          @db.VarChar(300)
+  /// === Aprobación interna por umbrales (F2) ===
+  /// Motivos que dispararon al intentar enviar: [{ regla, detalle }].
+  aprobacionMotivosJson        Json?
+  aprobacionSolicitadaEl       DateTime?
+  aprobacionResueltaPorId      String?          @db.Uuid
+  aprobacionResueltaPorNombre  String?
+  aprobacionResueltaEl         DateTime?
+  /// Credencial del link público "ver/aprobar presupuesto" (patrón tracking).
+  publicToken                  String?          @unique
+  /// Primera apertura del link público — el badge "visto" (no es estado).
+  primeraVistaEl               DateTime?
+  senaSugeridaPct              Decimal?         @db.Decimal(5, 2)
+  /// Proyección congelada para convertir en OT sin reconstruir la ficha:
+  /// { fechaEntrega, canalVenta, cargosDirectos, items: CrearOrdenTrabajoItemDto[] }.
+  emisionJson                  Json?
+  /// OT creada al convertir (referencia cruzada; la OT ya guarda cotizacionId).
+  convertidaOrdenId            String?          @db.Uuid
   createdAt                    DateTime         @default(now())
   updatedAt                    DateTime         @updatedAt
   tenant                       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   cliente                      Cliente?         @relation("CotizacionV2Cliente", fields: [clienteId], references: [id])
+  vendedor                     Empleado?        @relation("CotizacionVendedor", fields: [vendedorEmpleadoId], references: [id], onDelete: SetNull)
   items                        CotizacionItem[]
   ordenesTrabajo               OrdenTrabajo[]
+  eventos                      CotizacionEvento[]
 
   @@unique([tenantId, numero])
   @@index([tenantId, estado])
   @@index([tenantId, createdAt])
   @@index([tenantId, clienteId])
+}
+
+/// Numeración de presupuestos por tenant y año (patrón OrdenTrabajoContador).
+model CotizacionContador {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  anio     Int
+  ultimo   Int    @default(0)
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, anio])
+}
+
+/// Timeline del presupuesto (patrón OrdenTrabajoEvento): creado, enviado,
+/// visto, aprobado/rechazado (por el vendedor o por el CLIENTE vía link
+/// público — con timestamp, vale como firma virtual), vencido, convertido.
+model CotizacionEvento {
+  id            String     @id @default(uuid()) @db.Uuid
+  tenantId      String     @db.Uuid
+  cotizacionId  String     @db.Uuid
+  fecha         DateTime   @default(now())
+  tipo          String
+  descripcion   String
+  /// Null = acción del sistema o del cliente por link público.
+  usuarioId     String?    @db.Uuid
+  usuarioNombre String
+  datosJson     Json?
+  /// 'usuario' | 'sistema' | 'cliente'.
+  origen        String     @default("usuario")
+  tenant        Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cotizacion    Cotizacion @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, cotizacionId, fecha])
+}
+
+/// Configuración de presupuestos por tenant (patrón ConfiguracionProduccion).
+/// Los campos de aprobación interna quedan dormidos hasta F2.
+model ConfiguracionPresupuestos {
+  id                          String   @id @default(uuid()) @db.Uuid
+  tenantId                    String   @unique @db.Uuid
+  validezDiasDefault          Int      @default(15)
+  senaSugeridaPctDefault      Decimal  @default(50) @db.Decimal(5, 2)
+  /// Términos y condiciones que imprime el PDF.
+  condicionesTexto            String?
+  aprobacionMontoMax          Decimal? @db.Decimal(14, 2)
+  aprobacionMargenMinPct      Decimal? @db.Decimal(5, 2)
+  aprobacionDescuentoMaxPct   Decimal? @db.Decimal(5, 2)
+  requiereAprobacionSinCosteo Boolean  @default(false)
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+  tenant                      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
 model CotizacionItem {
