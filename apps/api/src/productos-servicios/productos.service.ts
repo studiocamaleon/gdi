@@ -902,6 +902,7 @@ export class ProductosService {
                 cargosDirectosPaso: {
                   include: { cargoDirectoCatalogo: true },
                 },
+                tercerizadoEntradas: { where: { activo: true } },
               },
               orderBy: { rutaPaso: { orden: 'asc' } },
             },
