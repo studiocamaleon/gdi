@@ -77,6 +77,21 @@ export function PresupuestosView({ initial }: { initial: PresupuestosListado }) 
     }
   }, []);
 
+  // La decisión del cliente llega por el link público desde OTRO
+  // navegador: el estado se refresca por polling (patrón del tablero,
+  // POLL_TABLERO_MS) sólo con la pestaña visible, y al volver a ella.
+  React.useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState === "visible") void recargar();
+    };
+    const timer = setInterval(tick, 15_000);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", tick);
+    };
+  }, [recargar]);
+
   const lista = data.presupuestos.filter((p) => {
     if (filtro !== "todos" && p.estado !== filtro) return false;
     if (busqueda) {
@@ -224,16 +239,32 @@ function PresupuestoPanel({ id, onCerrar, onCambio }: { id: string; onCerrar: ()
   const [motivoDetalle, setMotivoDetalle] = React.useState("");
   const [seleccion, setSeleccion] = React.useState<Set<string>>(new Set());
 
-  const cargar = React.useCallback(async () => {
+  const cargar = React.useCallback(async (inicial = false) => {
     try {
       const det = await getPresupuesto(id);
       setD(det);
-      setSeleccion(new Set(det.items.map((i) => i.cotizacionItemId).filter((x): x is string => x != null)));
+      // La selección de conversión parcial sólo se inicializa al abrir:
+      // un refresh por polling no debe pisar lo que el usuario destildó.
+      if (inicial) {
+        setSeleccion(new Set(det.items.map((i) => i.cotizacionItemId).filter((x): x is string => x != null)));
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo cargar el presupuesto.");
     }
   }, [id]);
-  React.useEffect(() => { void cargar(); }, [cargar]);
+  React.useEffect(() => { void cargar(true); }, [cargar]);
+
+  // El drawer abierto también refresca (estado + timeline) mientras se
+  // espera la decisión del cliente; pausa durante acciones o el form de
+  // rechazo para no interferir.
+  React.useEffect(() => {
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible" && !trabajando && !rechazoAbierto) {
+        void cargar();
+      }
+    }, 10_000);
+    return () => clearInterval(timer);
+  }, [cargar, trabajando, rechazoAbierto]);
 
   const accion = async (fn: () => Promise<unknown>, ok: string) => {
     setTrabajando(true);
@@ -432,3 +463,4 @@ function PresupuestoPanel({ id, onCerrar, onCambio }: { id: string; onCerrar: ()
     </div>
   );
 }
+
