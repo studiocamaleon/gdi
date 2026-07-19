@@ -29372,6 +29372,6 @@ body:has(.t-app) {
 .pp-chip.opt{background:var(--ok-bg);border-color:#cfe6d8;color:var(--ok);font-weight:500}
 .pp-chip.opt svg{width:10px;height:10px;flex:0 0 auto}
 .pp-badge.pend{background:#fef9c3;color:#a16207}.pp-badge.pend .d{background:#a16207}
-.pp-banner-aprob{border:1px solid #fde68a;background:#fef9c3;border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:12.5px;color:#a16207}
+.pp-banner-aprob{border:1px solid #fde68a;background:#fef9c3;border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:12.5px;line-height:1.5;color:#a16207}
 .pp-banner-aprob .t{font-weight:600;margin-bottom:4px}
 .pp-banner-aprob ul{margin:0;padding-left:16px}
