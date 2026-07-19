@@ -48,6 +48,7 @@ import {
   crearOrdenTrabajo,
   editarOrdenItem,
   editarOrdenTrabajo,
+  getOrdenTrabajo,
   getTableroProduccion,
   quitarOrdenItem,
 } from "@/lib/ordenes-trabajo-api";
@@ -4573,9 +4574,22 @@ export function PropuestaFicha({
   initialProductos = [],
   initialCargosDirectos = [],
   currentUser = null,
-  orden,
+  orden: ordenProp,
   recienEmitida = false,
 }: PropuestaFichaProps) {
+  // La OT vive en estado local (inicializada desde el prop del server) para
+  // poder refrescar el header/stepper en vivo sin recargar la página cuando
+  // una acción interna cambia su estado (ej: avance de compra tercerizada).
+  const [orden, setOrden] = React.useState(ordenProp);
+  React.useEffect(() => {
+    setOrden(ordenProp);
+  }, [ordenProp]);
+  const recargarOrden = React.useCallback(() => {
+    if (!ordenProp?.id) return;
+    getOrdenTrabajo(ordenProp.id)
+      .then(setOrden)
+      .catch(() => {});
+  }, [ordenProp?.id]);
   const modoOrden = Boolean(orden);
   // Tag "RECIÉN EMITIDA": sólo en la visita inmediata a la emisión (llegada
   // con ?emitida=1, o al emitir un borrador acá mismo). El param se limpia
@@ -6041,7 +6055,7 @@ export function PropuestaFicha({
 
         {tab === "produccion" ? (
           orden ? (
-            <ProduccionOrdenTab ordenId={orden.id} />
+            <ProduccionOrdenTab ordenId={orden.id} onOrdenActualizada={recargarOrden} />
           ) : (
             <EmptyTab
               title="Programacion de produccion"

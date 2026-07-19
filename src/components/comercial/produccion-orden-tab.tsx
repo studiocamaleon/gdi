@@ -197,7 +197,15 @@ function Ring({ pct }: { pct: number }) {
   );
 }
 
-export function ProduccionOrdenTab({ ordenId }: { ordenId: string }) {
+export function ProduccionOrdenTab({
+  ordenId,
+  onOrdenActualizada,
+}: {
+  ordenId: string;
+  /** Avisa al padre que el estado de la OT pudo cambiar (ej: al avanzar una
+   *  compra tercerizada que finaliza la orden) para refrescar header/stepper. */
+  onOrdenActualizada?: () => void;
+}) {
   const [items, setItems] = React.useState<TableroItemData[] | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -205,7 +213,8 @@ export function ProduccionOrdenTab({ ordenId }: { ordenId: string }) {
     getOrdenPasos(ordenId)
       .then((res) => setItems(res.items))
       .catch((e) => setError(e instanceof Error ? e.message : "No se pudieron cargar los pasos."));
-  }, [ordenId]);
+    onOrdenActualizada?.();
+  }, [ordenId, onOrdenActualizada]);
 
   React.useEffect(() => {
     setItems(null);
