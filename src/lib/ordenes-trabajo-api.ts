@@ -196,6 +196,20 @@ export async function accionPasoProduccion(
 }
 
 /**
+ * Panel de Compras (F2): avanza el estado de una compra tercerizada
+ * (pendiente → pedido → recibido → entregado).
+ */
+export async function avanzarCompraProduccion(
+  pasoId: string,
+  estadoCompra: string,
+): Promise<{ ok: boolean; pasoId: string; estadoCompra: string }> {
+  return apiRequest(`/ordenes-trabajo/tablero/pasos/${pasoId}/compra`, {
+    method: "PATCH",
+    body: JSON.stringify({ estadoCompra }),
+  });
+}
+
+/**
  * Completar varios pasos de una (simulador de impresión): resultado
  * PARCIAL honesto — los que no pudieron, con su motivo. `duracionTandaMin`
  * (opcional) prorratea la duración real de la tanda entre los pasos (D11).

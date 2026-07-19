@@ -425,6 +425,10 @@ export function estimarDemoraNuevos({
         tiempoAcumuladoMin: 0,
         mesaEsMia: false,
         mesaUsuarioNombre: null,
+        tipoEjecucion: "interno",
+        proveedorNombre: null,
+        plazoProveedorDias: null,
+        estadoCompra: null,
       })),
     }));
 
