@@ -2339,6 +2339,21 @@ function buildJobContext(
   if (tecnologiasActivas.size === 1) {
     ctx.tecnologia = Array.from(tecnologiasActivas)[0];
   }
+  // Tercerizado sin máquina: la tecnología la elige el comercial en el editor y
+  // viaja en tercerizadoConfigJson. Se refleja en jobContext.tecnologia para que
+  // los reportes por tecnología cuenten al tercerizado (si ya hay tecnología de
+  // máquina, esa gana). docs/productos-tercerizados-diseno.md
+  if (!ctx.tecnologia) {
+    for (const configPaso of rutaSel?.configPasos ?? []) {
+      if (!configPaso.tercerizado || !includeConfig(configPaso)) continue;
+      const tec = (configPaso.tercerizadoConfigJson as { tecnologia?: unknown } | null)
+        ?.tecnologia;
+      if (typeof tec === "string" && tec) {
+        ctx.tecnologia = tec;
+        break;
+      }
+    }
+  }
 
   const modosColorComercial = getModosColorComercial(
     rutaSel,
