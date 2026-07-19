@@ -4901,7 +4901,7 @@ function ApConfigStep({
               <CotizadorTercerizadoSelectors
                 configPasos={rutaSel.configPasos}
                 seleccion={motorConfig.seleccionTercerizado}
-                onChange={(configPasoId, ejeClave, valorClave) =>
+                onChange={(configPasoId, ejeClave, valorClave) => {
                   setMotorConfig((current) => ({
                     ...current,
                     seleccionTercerizado: {
@@ -4911,8 +4911,14 @@ function ApConfigStep({
                         [ejeClave]: valorClave,
                       },
                     },
-                  }))
-                }
+                  }));
+                  // La cantidad de la matriz es la tanda: sincroniza el qty del
+                  // ítem para que el subtotal cierre (precio unitario × qty).
+                  if (ejeClave === "cantidad") {
+                    const n = Number(valorClave);
+                    if (n > 0) setQty(n);
+                  }
+                }}
               />
             ) : null}
 

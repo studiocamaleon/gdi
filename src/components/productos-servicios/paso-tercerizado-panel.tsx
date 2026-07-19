@@ -95,6 +95,13 @@ export function PasoTercerizadoPanel({
     };
   }, []);
 
+  // El panel muestra "matriz" por default; hay que dejarlo también en el estado
+  // (si no, se guarda fuente vacía y el motor no puede costear).
+  React.useEffect(() => {
+    if (!value.fuenteCostoTercerizado) onChange({ fuenteCostoTercerizado: "matriz" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value.fuenteCostoTercerizado]);
+
   const fuente = value.fuenteCostoTercerizado ?? "matriz";
   const cfg = cfgDe(value);
   const patchCfg = (extra: Record<string, unknown>) =>

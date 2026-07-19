@@ -581,7 +581,14 @@ export class MotorUniversalService {
     );
     const cargosDirectosTotal =
       cargosDirectosPasoTotal + cargosDirectosCotizacionTotal;
-    const total = tiempoTotal + materialesTotal + cargosDirectosTotal;
+    // Los pasos TERCERIZADOS aportan su costo directo (no tienen tiempo/material);
+    // se suman aparte para no perderlos ni duplicar el costo de los internos.
+    const tercerizadoTotal = pasosEjecutados.reduce(
+      (acc, p) => acc + (p.tercerizado ? p.costoTotal : 0),
+      0,
+    );
+    const total =
+      tiempoTotal + materialesTotal + cargosDirectosTotal + tercerizadoTotal;
     const cantidadEfectiva = jobContext.cantidad ?? 1;
     const cantidadComercialReal = this.resolverCantidadComercialBase(
       producto,

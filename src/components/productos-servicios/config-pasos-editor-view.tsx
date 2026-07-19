@@ -4954,6 +4954,11 @@ export function ConfigPasosEditorView({
                                     event.target.checked
                                       ? {
                                           tercerizado: true,
+                                          // Fuente por default (el panel muestra
+                                          // matriz): hay que persistirla, no dejarla
+                                          // sólo en el display.
+                                          fuenteCostoTercerizado:
+                                            cfg.fuenteCostoTercerizado ?? "matriz",
                                           maquinaM1Id: null,
                                           perfilM1Id: null,
                                         }

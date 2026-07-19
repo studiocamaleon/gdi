@@ -1,21 +1,17 @@
 "use client";
 
 import * as React from "react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import type { ConfigPasoDetalle } from "@/lib/productos-servicios";
 import type { TercerizadoEje } from "@/lib/productos-servicios-api";
 
 /**
  * Selectores de eje para los pasos TERCERIZADOS con fuente `matriz` del
- * producto que se está cotizando. Aislado del sheet gigante: sólo lee los
- * ejes y emite la selección; el motor hace el lookup con
- * `tercerizado_<configPasoId>`. docs/productos-tercerizados-diseno.md §7b.
+ * producto que se está cotizando. Aislado del sheet gigante.
+ *
+ * Usa `<select>` NATIVO a propósito: los Select de radix renderizan su menú en
+ * un portal fuera del sheet, y el sheet se cierra al detectar "click afuera".
+ * El nativo renderiza inline y no dispara ese cierre.
+ * docs/productos-tercerizados-diseno.md §7b.
  */
 export function CotizadorTercerizadoSelectors({
   configPasos,
@@ -46,21 +42,20 @@ export function CotizadorTercerizadoSelectors({
               {ejes.map((eje) => (
                 <label key={eje.clave} className="flex flex-col gap-1.5 text-sm">
                   <span className="text-muted-foreground">{eje.label}</span>
-                  <Select
+                  <select
                     value={sel[eje.clave] ?? ""}
-                    onValueChange={(v) => onChange(cp.id, eje.clave, v ?? "")}
+                    onChange={(e) => onChange(cp.id, eje.clave, e.target.value)}
+                    className="h-9 rounded-md border border-border bg-transparent px-2 text-sm"
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Elegí…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {eje.valores.map((v) => (
-                        <SelectItem key={v.clave} value={v.clave}>
-                          {v.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    <option value="" disabled>
+                      Elegí…
+                    </option>
+                    {eje.valores.map((v) => (
+                      <option key={v.clave} value={v.clave}>
+                        {v.label}
+                      </option>
+                    ))}
+                  </select>
                 </label>
               ))}
             </div>
