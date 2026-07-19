@@ -1,9 +1,10 @@
 "use client";
 
 /**
- * Página pública del presupuesto (cliente final, mobile-first, co-branded
- * con el nombre del negocio — espíritu del tracking público de OT).
- * Aprobar/Rechazar sólo cuando está vigente; la decisión queda registrada.
+ * Página pública del presupuesto — portada del rediseño DesignSync
+ * "Presupuesto (rediseño).html" (vista 2 · Online): brand co-branded,
+ * card con chips de specs, totales con total destacado, condiciones y
+ * decisión en un tap. Clases pp-* en globals.css.
  */
 
 import * as React from "react";
@@ -18,10 +19,34 @@ const fmtFecha = (iso: string | null) => {
   const [y, m, d] = iso.slice(0, 10).split("-");
   return `${d}/${m}/${y}`;
 };
+const inicialesDe = (nombre: string) =>
+  nombre
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join("");
 
-const INK = "#14141a";
-const MUTED = "#6e6e76";
-const HAIRLINE = "#efece8";
+function diasHastaVencer(iso: string | null): number | null {
+  if (!iso) return null;
+  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+  const hoy = new Date();
+  const hoyMid = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  return Math.round((new Date(y, m - 1, d).getTime() - hoyMid.getTime()) / 86_400_000);
+}
+
+const IconoReloj = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
+);
+const IconoEscudo = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6z" /></svg>
+);
+const IconoCheck = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M20 6L9 17l-5-5" /></svg>
+);
+const IconoCandado = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
+);
 
 export function PresupuestoPublicoView({
   token,
@@ -55,156 +80,140 @@ export function PresupuestoPublicoView({
 
   if (!d) {
     return (
-      <Shell titulo="Presupuesto">
-        <p style={{ color: MUTED, fontSize: 14 }}>
-          No encontramos este presupuesto. Verificá el link o pedile uno nuevo a tu proveedor.
-        </p>
-      </Shell>
+      <div className="pp-online-bg">
+        <div className="pp-olcard">
+          <div className="pp-ol-sheet" style={{ padding: 24, fontSize: 14, color: "var(--muted-text)" }}>
+            No encontramos este presupuesto. Verificá el link o pedile uno nuevo a tu proveedor.
+          </div>
+        </div>
+      </div>
     );
   }
 
   const vigente = d.estado === "enviado";
-  const decidido = d.estado === "aprobado" || d.estado === "rechazado" || d.estado === "convertido";
+  const dias = diasHastaVencer(d.fechaValidez);
 
   return (
-    <Shell titulo={d.negocio}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 2 }}>
-        <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: ".08em", color: MUTED }}>Presupuesto</div>
-        <div className="mono" style={{ fontSize: 13, fontWeight: 700, color: INK }}>{d.numero}</div>
-      </div>
-      <div style={{ fontSize: 13, color: MUTED, marginBottom: 16 }}>
-        {d.cliente ? <>Para <strong style={{ color: INK }}>{d.cliente}</strong> · </> : null}
-        {fmtFecha(d.fechaEmision)} · válido hasta <strong style={{ color: INK }}>{fmtFecha(d.fechaValidez)}</strong>
-      </div>
-
-      {d.estado === "vencido" ? (
-        <Aviso color="#92929b" bg="rgba(20,20,26,.05)">
-          Este presupuesto venció. Pedile a {d.negocio} una actualización — los precios pueden haber cambiado.
-        </Aviso>
-      ) : null}
-      {d.estado === "aprobado" || d.estado === "convertido" ? (
-        <Aviso color="#16794a" bg="rgba(22,121,74,.08)">
-          ¡Gracias! El presupuesto quedó aprobado. {d.negocio} se va a contactar para coordinar el trabajo.
-        </Aviso>
-      ) : null}
-      {d.estado === "rechazado" ? (
-        <Aviso color="#c2410c" bg="rgba(194,65,12,.08)">
-          Registramos que no vas a avanzar con este presupuesto. ¡Gracias por avisar!
-        </Aviso>
-      ) : null}
-
-      <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: 12, overflow: "hidden", marginBottom: 14 }}>
-        {d.items.map((i, idx) => (
-          <div key={idx} style={{ padding: "12px 14px", borderTop: idx > 0 ? `1px solid ${HAIRLINE}` : "none" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-              <div style={{ fontWeight: 600, fontSize: 14, color: INK }}>{i.nombre}</div>
-              <div className="mono" style={{ fontWeight: 600, fontSize: 14, color: INK, whiteSpace: "nowrap" }}>{fmtMoneda(i.total)}</div>
-            </div>
-            <div style={{ fontSize: 12.5, color: MUTED, marginTop: 2 }}>
-              {i.cantidad.toLocaleString("es-AR")} {i.cantidadUnidad}
-              {i.adicionales.length ? ` · con ${i.adicionales.join(", ")}` : ""}
-            </div>
-            {i.specs.length ? (
-              <div style={{ fontSize: 11.5, color: "#92929b", marginTop: 2 }}>
-                {i.specs.map((s) => `${s.etiqueta}: ${s.valor}`).join(" · ")}
-              </div>
-            ) : null}
+    <div className="pp-online-bg">
+      <div className="pp-olcard">
+        <div className="pp-ol-brand">
+          <div className="pp-tlogo">{inicialesDe(d.negocio)}</div>
+          <div>
+            <div className="tn">{d.negocio}</div>
+            <div className="tsub">Presupuesto para vos</div>
           </div>
-        ))}
-        <div style={{ padding: "12px 14px", borderTop: `1px solid ${HAIRLINE}`, background: "#fafaf9" }}>
-          <FilaTotal label="Subtotal" valor={fmtMoneda(d.subtotal)} />
-          {d.cargosDirectos > 0 ? <FilaTotal label="Cargos" valor={fmtMoneda(d.cargosDirectos)} /> : null}
-          <FilaTotal label="Impuestos" valor={fmtMoneda(d.impuestos)} />
-          <FilaTotal label="Total" valor={fmtMoneda(d.total)} grande />
+          <div className="powered"><span className="pp-gmark">G</span>con tecnología Grafo</div>
         </div>
-      </div>
 
-      {d.senaSugeridaPct != null && d.senaSugeridaPct > 0 && !decidido ? (
-        <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 14 }}>
-          Condiciones: seña del {d.senaSugeridaPct.toLocaleString("es-AR")}% para iniciar el trabajo, saldo contra entrega.
-        </div>
-      ) : null}
-      {d.observaciones ? (
-        <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 14 }}>{d.observaciones}</div>
-      ) : null}
+        <div className="pp-ol-sheet">
+          <div className="pp-ol-head">
+            <div className="lbl">Presupuesto</div>
+            <div className="row">
+              <span className="num">{d.numero}</span>
+              {vigente && dias != null ? (
+                <span className="pp-ol-valid"><IconoReloj />{dias <= 0 ? "Vence hoy" : `Vence en ${dias} día${dias === 1 ? "" : "s"}`}</span>
+              ) : null}
+            </div>
+            <div className="for">
+              {d.cliente ? <>Para <b>{d.cliente}</b> · </> : null}emitido {fmtFecha(d.fechaEmision)}
+            </div>
+          </div>
 
-      {vigente ? (
-        <>
-          {rechazando ? (
-            <div style={{ marginBottom: 12 }}>
-              <textarea
-                placeholder="Contanos por qué (opcional): ¿precio, plazo, otra cosa?"
-                value={comentario}
-                onChange={(e) => setComentario(e.target.value)}
-                rows={3}
-                style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #d4d2cd", fontSize: 13.5, resize: "vertical" }}
-              />
+          {d.estado === "vencido" ? (
+            <div className="pp-ol-aviso" style={{ background: "rgba(20,20,26,.05)", color: "var(--muted-text)" }}>
+              Este presupuesto venció. Pedile a {d.negocio} una actualización — los precios pueden haber cambiado.
             </div>
           ) : null}
-          <div style={{ display: "flex", gap: 10 }}>
-            {rechazando ? (
-              <>
-                <Boton onClick={() => void decidir("rechazado")} disabled={decidiendo} tono="peligro">
-                  {decidiendo ? "Enviando…" : "Confirmar rechazo"}
-                </Boton>
-                <Boton onClick={() => setRechazando(false)} disabled={decidiendo} tono="neutro">Volver</Boton>
-              </>
-            ) : (
-              <>
-                <Boton onClick={() => void decidir("aprobado")} disabled={decidiendo} tono="ok">
-                  {decidiendo ? "Enviando…" : "Aprobar presupuesto"}
-                </Boton>
-                <Boton onClick={() => setRechazando(true)} disabled={decidiendo} tono="neutro">No avanzar</Boton>
-              </>
-            )}
-          </div>
-          <div style={{ fontSize: 11.5, color: "#92929b", marginTop: 10 }}>
-            Tu decisión queda registrada con fecha y hora para {d.negocio}.
-          </div>
-        </>
-      ) : null}
+          {d.estado === "aprobado" || d.estado === "convertido" ? (
+            <div className="pp-ol-aviso" style={{ background: "var(--ok-bg)", color: "var(--ok)" }}>
+              ¡Gracias! El presupuesto quedó aprobado. {d.negocio} se va a contactar para coordinar el trabajo.
+            </div>
+          ) : null}
+          {d.estado === "rechazado" ? (
+            <div className="pp-ol-aviso" style={{ background: "#fef2f2", color: "#b91c1c" }}>
+              Registramos que no vas a avanzar con este presupuesto. ¡Gracias por avisar!
+            </div>
+          ) : null}
 
-      {error ? <div style={{ marginTop: 10, fontSize: 13, color: "#c2410c" }}>{error}</div> : null}
-    </Shell>
-  );
-}
+          {d.items.map((i, idx) => (
+            <div key={idx} className="pp-ol-item">
+              <div className="it-top">
+                <div>
+                  <div className="it-nm">{i.nombre}</div>
+                  <div className="it-qty">{i.cantidad.toLocaleString("es-AR")} {i.cantidadUnidad}</div>
+                </div>
+                <div className="it-price">{fmtMoneda(i.total)}</div>
+              </div>
+              {i.specs.length || i.adicionales.length ? (
+                <div className="pp-chips">
+                  {i.specs.map((s) => (
+                    <span key={s.etiqueta} className="pp-chip"><span className="k">{s.etiqueta}</span>{s.valor}</span>
+                  ))}
+                  {i.adicionales.map((a) => (
+                    <span key={a} className="pp-chip">{a}</span>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ))}
 
-function Shell({ titulo, children }: { titulo: string; children: React.ReactNode }) {
-  return (
-    <div style={{ minHeight: "100vh", background: "#f6f5f3", padding: "28px 16px 60px" }}>
-      <div style={{ maxWidth: 560, margin: "0 auto" }}>
-        <div style={{ fontSize: 17, fontWeight: 700, color: INK, marginBottom: 14 }}>{titulo}</div>
-        <div style={{ background: "#fff", border: `1px solid ${HAIRLINE}`, borderRadius: 16, padding: "20px 20px 24px", boxShadow: "0 10px 30px rgba(20,20,26,.06)" }}>
-          {children}
+          <div className="pp-ol-tot">
+            <div className="tr"><span>Subtotal</span><span className="v">{fmtMoneda(d.subtotal)}</span></div>
+            {d.cargosDirectos > 0 ? <div className="tr"><span>Cargos</span><span className="v">{fmtMoneda(d.cargosDirectos)}</span></div> : null}
+            <div className="tr"><span>Impuestos</span><span className="v">{fmtMoneda(d.impuestos)}</span></div>
+            <div className="tr grand"><span className="l">Total</span><span className="v">{fmtMoneda(d.total)}</span></div>
+          </div>
+
+          {d.senaSugeridaPct != null && d.senaSugeridaPct > 0 ? (
+            <div className="pp-ol-cond">
+              <IconoEscudo />
+              <span>Seña del {d.senaSugeridaPct.toLocaleString("es-AR")}% para iniciar el trabajo, saldo contra entrega.</span>
+            </div>
+          ) : null}
+          {d.observaciones ? (
+            <div className="pp-ol-cond"><span style={{ width: 14 }} /><span>{d.observaciones}</span></div>
+          ) : null}
+
+          {vigente ? (
+            <>
+              {rechazando ? (
+                <div style={{ padding: "6px 22px 0" }}>
+                  <textarea
+                    className="pp-ol-textarea"
+                    placeholder="Contanos por qué (opcional): ¿precio, plazo, otra cosa?"
+                    value={comentario}
+                    onChange={(e) => setComentario(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+              ) : null}
+              <div className="pp-ol-actions">
+                {rechazando ? (
+                  <>
+                    <button type="button" className="pp-ol-btn" style={{ background: "#b91c1c", color: "#fff", borderColor: "#b91c1c" }} onClick={() => void decidir("rechazado")} disabled={decidiendo}>
+                      {decidiendo ? "Enviando…" : "Confirmar rechazo"}
+                    </button>
+                    <button type="button" className="pp-ol-btn" onClick={() => setRechazando(false)} disabled={decidiendo}>Volver</button>
+                  </>
+                ) : (
+                  <>
+                    <button type="button" className="pp-ol-btn approve" onClick={() => void decidir("aprobado")} disabled={decidiendo}>
+                      <IconoCheck />
+                      {decidiendo ? "Enviando…" : "Aprobar presupuesto"}
+                    </button>
+                    <button type="button" className="pp-ol-btn" onClick={() => setRechazando(true)} disabled={decidiendo}>No avanzar</button>
+                  </>
+                )}
+              </div>
+              <div className="pp-ol-foot"><IconoCandado />Tu decisión queda registrada con fecha y hora.</div>
+            </>
+          ) : (
+            <div style={{ height: 18 }} />
+          )}
+
+          {error ? <div style={{ padding: "0 22px 16px", fontSize: 13, color: "#b91c1c" }}>{error}</div> : null}
         </div>
       </div>
     </div>
-  );
-}
-
-function Aviso({ color, bg, children }: { color: string; bg: string; children: React.ReactNode }) {
-  return <div style={{ padding: "10px 14px", borderRadius: 10, background: bg, color, fontSize: 13.5, fontWeight: 500, marginBottom: 14 }}>{children}</div>;
-}
-
-function FilaTotal({ label, valor, grande }: { label: string; valor: string; grande?: boolean }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "space-between", fontSize: grande ? 15.5 : 12.5, fontWeight: grande ? 700 : 400, color: grande ? INK : MUTED, marginTop: grande ? 6 : 2 }}>
-      <span>{label}</span>
-      <span className="mono" style={{ color: INK }}>{valor}</span>
-    </div>
-  );
-}
-
-function Boton({ onClick, disabled, tono, children }: { onClick: () => void; disabled?: boolean; tono: "ok" | "neutro" | "peligro"; children: React.ReactNode }) {
-  const estilos: Record<string, React.CSSProperties> = {
-    ok: { background: "#16794a", color: "#fff", border: "1px solid #16794a" },
-    peligro: { background: "#c2410c", color: "#fff", border: "1px solid #c2410c" },
-    neutro: { background: "#fff", color: INK, border: "1px solid #d4d2cd" },
-  };
-  return (
-    <button type="button" onClick={onClick} disabled={disabled}
-      style={{ flex: 1, padding: "12px 16px", borderRadius: 10, fontSize: 14.5, fontWeight: 600, cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.6 : 1, ...estilos[tono] }}>
-      {children}
-    </button>
   );
 }
