@@ -2,15 +2,6 @@
 
 import * as React from "react";
 import { PlusIcon, XIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { getProveedores } from "@/lib/proveedores-api";
 import type {
   TercerizadoEje,
@@ -20,8 +11,10 @@ import type {
 
 /**
  * Panel de configuración de un paso TERCERIZADO (proveedor + fuente de costo).
- * Aislado del editor grande a propósito: la grilla vive en su propio subárbol
- * y no arrastra al editor de pasos en cada tecla.
+ * UI portada verbatim del diseño canónico (claude.ai/design ·
+ * "Tercerización proveedor.html"); estilos scopeados bajo `.terc` en globals.css.
+ * Usa `<select>` nativos (como el diseño): renderizan inline y no cierran el
+ * sheet del cotizador (el editor de rutas no es sheet, pero mantenemos paridad).
  * docs/productos-tercerizados-diseno.md §7a.
  */
 
@@ -30,8 +23,8 @@ type Patch = Partial<UpsertConfigPasoPayload>;
 const CLAVE_CANTIDAD = "cantidad";
 
 const FUENTES = [
-  { value: "matriz", label: "Matriz (medida/faz/papel × cantidad)" },
-  { value: "tarifa_magnitud", label: "Tarifa por magnitud ($/m², $/ml, …)" },
+  { value: "matriz", label: "Matriz de costos" },
+  { value: "tarifa_magnitud", label: "Tarifa por magnitud" },
   { value: "fijo", label: "Costo fijo" },
 ] as const;
 
@@ -90,9 +83,12 @@ const claveDe = (valores: Record<string, unknown>) =>
 export function PasoTercerizadoPanel({
   value,
   onChange,
+  onToggle,
 }: {
   value: UpsertConfigPasoPayload;
   onChange: (patch: Patch) => void;
+  /** Prende/apaga la tercerización del paso (limpia máquina/perfil al prender). */
+  onToggle: (tercerizado: boolean) => void;
 }) {
   const [proveedores, setProveedores] = React.useState<
     Array<{ id: string; nombre: string }>
@@ -110,12 +106,15 @@ export function PasoTercerizadoPanel({
     };
   }, []);
 
-  // El panel muestra "matriz" por default; hay que dejarlo también en el estado
-  // (si no, se guarda fuente vacía y el motor no puede costear).
+  const on = !!value.tercerizado;
+
+  // El panel muestra "matriz" por default; hay que dejarlo también en el estado.
   React.useEffect(() => {
-    if (!value.fuenteCostoTercerizado) onChange({ fuenteCostoTercerizado: "matriz" });
+    if (on && !value.fuenteCostoTercerizado) {
+      onChange({ fuenteCostoTercerizado: "matriz" });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value.fuenteCostoTercerizado]);
+  }, [on, value.fuenteCostoTercerizado]);
 
   const fuente = value.fuenteCostoTercerizado ?? "matriz";
   const cfg = cfgDe(value);
@@ -123,115 +122,127 @@ export function PasoTercerizadoPanel({
     onChange({ tercerizadoConfigJson: { ...cfg, ...extra } });
 
   return (
-    <div className="flex flex-col gap-5 rounded-lg border border-border bg-muted/30 p-4">
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <label className="flex flex-col gap-1.5 text-sm">
-          <span className="text-muted-foreground">Proveedor</span>
-          <Select
-            value={value.proveedorId ?? ""}
-            onValueChange={(v) => onChange({ proveedorId: v || null })}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Elegí un proveedor">
-                {value.proveedorId
-                  ? (proveedores.find((p) => p.id === value.proveedorId)?.nombre ??
-                    "…")
-                  : undefined}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {proveedores.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.nombre}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </label>
+    <div className="terc">
+      <button
+        type="button"
+        className={`toggle-card ${on ? "on" : ""}`}
+        onClick={() => onToggle(!on)}
+        aria-pressed={on}
+      >
+        <span className="switch" />
+        <div>
+          <div className="tt">Lo terceriza un proveedor</div>
+          <div className="ts">
+            No lo produce la empresa — el costo lo define la grilla del proveedor.
+          </div>
+        </div>
+      </button>
 
-        <label className="flex flex-col gap-1.5 text-sm">
-          <span className="text-muted-foreground">Fuente de costo</span>
-          <Select
-            value={fuente}
-            onValueChange={(v) =>
-              onChange({
-                fuenteCostoTercerizado: v,
-                // La fuente cambia la config específica (ejes/tarifa/fijo) pero la
-                // tecnología del proceso se conserva.
-                tercerizadoConfigJson: cfg.tecnologia
-                  ? { tecnologia: cfg.tecnologia }
-                  : {},
-              })
-            }
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {FUENTES.map((f) => (
-                <SelectItem key={f.value} value={f.value}>
-                  {f.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </label>
+      {on ? (
+        <div className="panel">
+          {/* proveedor */}
+          <div className="sec">
+            <div className="fields">
+              <div className="field">
+                <label>Proveedor</label>
+                <select
+                  className="ctl"
+                  value={value.proveedorId ?? ""}
+                  onChange={(e) => onChange({ proveedorId: e.target.value || null })}
+                >
+                  <option value="">Elegí un proveedor</option>
+                  {proveedores.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>Fuente de costo</label>
+                <select
+                  className="ctl"
+                  value={fuente}
+                  onChange={(e) =>
+                    onChange({
+                      fuenteCostoTercerizado: e.target.value,
+                      // Cambiar la fuente resetea la config específica pero conserva
+                      // la tecnología del proceso.
+                      tercerizadoConfigJson: cfg.tecnologia
+                        ? { tecnologia: cfg.tecnologia }
+                        : {},
+                    })
+                  }
+                >
+                  {FUENTES.map((f) => (
+                    <option key={f.value} value={f.value}>
+                      {f.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>Plazo del proveedor (días)</label>
+                <input
+                  className="ctl mono"
+                  type="number"
+                  min={0}
+                  placeholder="Ej: 5"
+                  value={value.plazoProveedorDias ?? ""}
+                  onChange={(e) =>
+                    onChange({
+                      plazoProveedorDias:
+                        e.target.value === "" ? null : Number(e.target.value),
+                    })
+                  }
+                />
+              </div>
+              <div className="field">
+                <label>Tecnología (para reportes)</label>
+                <select
+                  className="ctl"
+                  value={
+                    typeof cfg.tecnologia === "string" && cfg.tecnologia
+                      ? cfg.tecnologia
+                      : SIN_TECNOLOGIA
+                  }
+                  onChange={(e) =>
+                    patchCfg({
+                      tecnologia: e.target.value === SIN_TECNOLOGIA ? null : e.target.value,
+                    })
+                  }
+                >
+                  <option value={SIN_TECNOLOGIA}>Sin tecnología</option>
+                  {TECNOLOGIAS_TERCERIZADO.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
 
-        <label className="flex flex-col gap-1.5 text-sm">
-          <span className="text-muted-foreground">Plazo del proveedor (días)</span>
-          <Input
-            type="number"
-            min={0}
-            value={value.plazoProveedorDias ?? ""}
-            onChange={(e) =>
-              onChange({
-                plazoProveedorDias: e.target.value === "" ? null : Number(e.target.value),
-              })
-            }
-            placeholder="—"
-          />
-        </label>
+          {fuente === "tarifa_magnitud" ? (
+            <TarifaEditor cfg={cfg} patchCfg={patchCfg} />
+          ) : fuente === "fijo" ? (
+            <FijoEditor cfg={cfg} patchCfg={patchCfg} />
+          ) : (
+            <MatrizEditor value={value} onChange={onChange} />
+          )}
 
-        <label className="flex flex-col gap-1.5 text-sm">
-          <span className="text-muted-foreground">Tecnología (para reportes)</span>
-          <Select
-            value={typeof cfg.tecnologia === "string" && cfg.tecnologia ? cfg.tecnologia : SIN_TECNOLOGIA}
-            onValueChange={(v) =>
-              patchCfg({ tecnologia: v === SIN_TECNOLOGIA ? null : v })
-            }
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Sin tecnología">
-                {typeof cfg.tecnologia === "string" && cfg.tecnologia
-                  ? (TECNOLOGIAS_TERCERIZADO.find((t) => t.value === cfg.tecnologia)?.label ??
-                    cfg.tecnologia)
-                  : "Sin tecnología"}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={SIN_TECNOLOGIA}>Sin tecnología</SelectItem>
-              {TECNOLOGIAS_TERCERIZADO.map((t) => (
-                <SelectItem key={t.value} value={t.value}>
-                  {t.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </label>
-      </div>
-
-      {fuente === "matriz" ? (
-        <MatrizEditor value={value} onChange={onChange} />
-      ) : fuente === "tarifa_magnitud" ? (
-        <TarifaEditor cfg={cfg} patchCfg={patchCfg} />
-      ) : (
-        <FijoEditor cfg={cfg} patchCfg={patchCfg} />
-      )}
-
-      <p className="text-xs text-muted-foreground">
-        Los costos se cargan en <b>neto (sin IVA)</b>. El precio de venta sale del
-        margen configurado en el tab <b>Pricing</b>.
-      </p>
+          <div className="foot">
+            <p>
+              Cada celda es el costo del proveedor para esa combinación y tanda.
+              Dejá vacías las combinaciones que no ofrece.
+            </p>
+            <p>
+              Los costos se cargan en <b>neto (sin IVA)</b>. El precio de venta
+              sale del margen configurado en el tab <b>Pricing</b>.
+            </p>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -246,54 +257,66 @@ function TarifaEditor({
 }) {
   const numOrNull = (v: string) => (v === "" ? null : Number(v));
   return (
-    <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-      <label className="flex flex-col gap-1.5 text-sm">
-        <span className="text-muted-foreground">Magnitud</span>
-        <Select
-          value={String(cfg.magnitud ?? "area_m2")}
-          onValueChange={(v) => patchCfg({ magnitud: v })}
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
+    <div className="sec">
+      <div className="sec-head">
+        <h2>Tarifa por magnitud</h2>
+        <span className="hint">el costo se calcula por unidad de magnitud</span>
+      </div>
+      <div className="fields four">
+        <div className="field">
+          <label>Magnitud</label>
+          <select
+            className="ctl"
+            value={String(cfg.magnitud ?? "area_m2")}
+            onChange={(e) => patchCfg({ magnitud: e.target.value })}
+          >
             {MAGNITUDES.map((m) => (
-              <SelectItem key={m.value} value={m.value}>
+              <option key={m.value} value={m.value}>
                 {m.label}
-              </SelectItem>
+              </option>
             ))}
-          </SelectContent>
-        </Select>
-      </label>
-      <label className="flex flex-col gap-1.5 text-sm">
-        <span className="text-muted-foreground">Tarifa ($)</span>
-        <Input
-          type="number"
-          min={0}
-          value={(cfg.tarifa as number) ?? ""}
-          onChange={(e) => patchCfg({ tarifa: numOrNull(e.target.value) })}
-        />
-      </label>
-      <label className="flex flex-col gap-1.5 text-sm">
-        <span className="text-muted-foreground">Mínimo de magnitud</span>
-        <Input
-          type="number"
-          min={0}
-          value={(cfg.minimoMagnitud as number) ?? ""}
-          onChange={(e) => patchCfg({ minimoMagnitud: numOrNull(e.target.value) })}
-          placeholder="opcional"
-        />
-      </label>
-      <label className="flex flex-col gap-1.5 text-sm">
-        <span className="text-muted-foreground">Mínimo de costo ($)</span>
-        <Input
-          type="number"
-          min={0}
-          value={(cfg.minimoCosto as number) ?? ""}
-          onChange={(e) => patchCfg({ minimoCosto: numOrNull(e.target.value) })}
-          placeholder="opcional"
-        />
-      </label>
+          </select>
+        </div>
+        <div className="field">
+          <label>Tarifa ($)</label>
+          <div className="money">
+            <span className="mp">$</span>
+            <input
+              className="ctl mono"
+              type="number"
+              min={0}
+              placeholder="0"
+              value={(cfg.tarifa as number) ?? ""}
+              onChange={(e) => patchCfg({ tarifa: numOrNull(e.target.value) })}
+            />
+          </div>
+        </div>
+        <div className="field">
+          <label>Mínimo de magnitud</label>
+          <input
+            className="ctl mono"
+            type="number"
+            min={0}
+            placeholder="opcional"
+            value={(cfg.minimoMagnitud as number) ?? ""}
+            onChange={(e) => patchCfg({ minimoMagnitud: numOrNull(e.target.value) })}
+          />
+        </div>
+        <div className="field">
+          <label>Mínimo de costo ($)</label>
+          <div className="money">
+            <span className="mp">$</span>
+            <input
+              className="ctl mono"
+              type="number"
+              min={0}
+              placeholder="opcional"
+              value={(cfg.minimoCosto as number) ?? ""}
+              onChange={(e) => patchCfg({ minimoCosto: numOrNull(e.target.value) })}
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -307,33 +330,40 @@ function FijoEditor({
   patchCfg: (extra: Record<string, unknown>) => void;
 }) {
   return (
-    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-      <label className="flex flex-col gap-1.5 text-sm">
-        <span className="text-muted-foreground">Costo ($)</span>
-        <Input
-          type="number"
-          min={0}
-          value={(cfg.costo as number) ?? ""}
-          onChange={(e) =>
-            patchCfg({ costo: e.target.value === "" ? null : Number(e.target.value) })
-          }
-        />
-      </label>
-      <label className="flex flex-col gap-1.5 text-sm">
-        <span className="text-muted-foreground">Se cobra por</span>
-        <Select
-          value={String(cfg.por ?? "trabajo")}
-          onValueChange={(v) => patchCfg({ por: v })}
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="trabajo">Trabajo (una vez)</SelectItem>
-            <SelectItem value="unidad">Unidad (× cantidad)</SelectItem>
-          </SelectContent>
-        </Select>
-      </label>
+    <div className="sec">
+      <div className="sec-head">
+        <h2>Costo fijo</h2>
+        <span className="hint">un costo único para el producto</span>
+      </div>
+      <div className="fields">
+        <div className="field">
+          <label>Costo ($)</label>
+          <div className="money">
+            <span className="mp">$</span>
+            <input
+              className="ctl mono"
+              type="number"
+              min={0}
+              placeholder="0"
+              value={(cfg.costo as number) ?? ""}
+              onChange={(e) =>
+                patchCfg({ costo: e.target.value === "" ? null : Number(e.target.value) })
+              }
+            />
+          </div>
+        </div>
+        <div className="field">
+          <label>Se cobra por</label>
+          <select
+            className="ctl"
+            value={String(cfg.por ?? "trabajo")}
+            onChange={(e) => patchCfg({ por: e.target.value })}
+          >
+            <option value="trabajo">Trabajo (una vez)</option>
+            <option value="unidad">Unidad (× cantidad)</option>
+          </select>
+        </div>
+      </div>
     </div>
   );
 }
@@ -347,19 +377,22 @@ function MatrizEditor({
   onChange: (patch: Patch) => void;
 }) {
   const cfg = cfgDe(value);
-  const ejes: TercerizadoEje[] = Array.isArray(cfg.ejes) ? (cfg.ejes as TercerizadoEje[]) : [];
+  const ejes: TercerizadoEje[] = Array.isArray(cfg.ejes)
+    ? (cfg.ejes as TercerizadoEje[])
+    : [];
   const atributos = ejes.filter((e) => e.clave !== CLAVE_CANTIDAD);
   const cantidadEje = ejes.find((e) => e.clave === CLAVE_CANTIDAD);
   const cantidades = cantidadEje?.valores ?? [];
   const entradas = value.tercerizadoEntradas ?? [];
 
   const setEjes = (next: TercerizadoEje[]) =>
-    onChange({ tercerizadoConfigJson: { ...cfg, ejes: next, columnaEjeClave: CLAVE_CANTIDAD } });
+    onChange({
+      tercerizadoConfigJson: { ...cfg, ejes: next, columnaEjeClave: CLAVE_CANTIDAD },
+    });
 
   const setEntradas = (next: TercerizadoEntradaPayload[]) =>
     onChange({ tercerizadoEntradas: next });
 
-  // Índice de costos por clave-de-combinación, para lookup O(1) en la grilla.
   const costoPorClave = React.useMemo(() => {
     const m = new Map<string, number>();
     for (const e of entradas) m.set(claveDe(e.valores), e.costo);
@@ -368,7 +401,11 @@ function MatrizEditor({
 
   const combos = React.useMemo(() => combinaciones(atributos), [atributos]);
 
-  const setCosto = (rowValores: Record<string, string>, cantClave: string, costo: number | null) => {
+  const setCosto = (
+    rowValores: Record<string, string>,
+    cantClave: string,
+    costo: number | null,
+  ) => {
     const valores = { ...rowValores, [CLAVE_CANTIDAD]: cantClave };
     const clave = claveDe(valores);
     const resto = entradas.filter((e) => claveDe(e.valores) !== clave);
@@ -391,215 +428,231 @@ function MatrizEditor({
 
   const patchEje = (clave: string, patch: Partial<TercerizadoEje>) => {
     const next = ejes.map((e) => (e.clave === clave ? { ...e, ...patch } : e));
-    setEjes(next.filter((e) => e.clave !== CLAVE_CANTIDAD).concat(cantidadEje ? [cantidadEje] : []));
+    setEjes(
+      next.filter((e) => e.clave !== CLAVE_CANTIDAD).concat(cantidadEje ? [cantidadEje] : []),
+    );
   };
 
   const removeEje = (clave: string) =>
     setEjes(atributos.filter((e) => e.clave !== clave).concat(cantidadEje ? [cantidadEje] : []));
 
-  const setCantidades = (vals: Array<{ clave: string; label: string }>) => {
-    const nuevoCant: TercerizadoEje = {
-      clave: CLAVE_CANTIDAD,
-      label: "Cantidad",
-      orden: 99,
-      valores: vals,
-    };
-    setEjes([...atributos, nuevoCant]);
+  const addValor = (ejeClave: string, texto: string) => {
+    const t = texto.trim();
+    if (!t) return;
+    const eje = atributos.find((e) => e.clave === ejeClave);
+    if (!eje) return;
+    const clave = slug(t);
+    if (eje.valores.some((v) => v.clave === clave)) return;
+    patchEje(ejeClave, { valores: [...eje.valores, { clave, label: t }] });
   };
 
+  const removeValor = (ejeClave: string, valClave: string) => {
+    const eje = atributos.find((e) => e.clave === ejeClave);
+    if (!eje) return;
+    patchEje(ejeClave, { valores: eje.valores.filter((v) => v.clave !== valClave) });
+  };
+
+  const setCantidades = (vals: Array<{ clave: string; label: string }>) => {
+    setEjes([
+      ...atributos,
+      { clave: CLAVE_CANTIDAD, label: "Cantidad", orden: 99, valores: vals },
+    ]);
+  };
+
+  const addCantidad = (texto: string) => {
+    const n = parseInt((texto || "").replace(/\D/g, ""), 10);
+    if (!n) return;
+    if (cantidades.some((c) => c.clave === String(n))) return;
+    const next = [...cantidades, { clave: String(n), label: String(n) }].sort(
+      (a, b) => Number(a.clave) - Number(b.clave),
+    );
+    setCantidades(next);
+  };
+
+  const gridLista =
+    atributos.length > 0 &&
+    atributos.every((e) => e.valores.length > 0) &&
+    cantidades.length > 0;
+
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium">Atributos (filas)</span>
-          <Button type="button" variant="outline" size="sm" onClick={addEje}>
-            <PlusIcon data-icon="inline-start" /> Agregar atributo
-          </Button>
+    <>
+      {/* atributos */}
+      <div className="sec">
+        <div className="sec-head">
+          <h2>Atributos</h2>
+          <span className="hint">definen las filas de la grilla</span>
+          <span className="grow" />
+          <button type="button" className="btn-add" onClick={addEje}>
+            <PlusIcon /> Agregar atributo
+          </button>
         </div>
-        {atributos.length === 0 ? (
-          <p className="text-xs text-muted-foreground">
-            Agregá los atributos que mueven el precio (medida, faz, papel…).
-          </p>
-        ) : (
-          atributos.map((eje) => (
-            <EjeEditor
-              key={eje.clave}
-              eje={eje}
-              onLabel={(label) => patchEje(eje.clave, { label })}
-              onValores={(valores) => patchEje(eje.clave, { valores })}
-              onRemove={() => removeEje(eje.clave)}
-            />
-          ))
-        )}
+        <div className="attr-list">
+          {atributos.length === 0 ? (
+            <p style={{ fontSize: 12.5, color: "var(--muted-text-2)", margin: 0 }}>
+              Agregá los atributos que mueven el precio (medida, faz, papel…).
+            </p>
+          ) : (
+            atributos.map((eje) => (
+              <div className="attr-row" key={eje.clave}>
+                <div className="attr-top">
+                  <input
+                    className="attr-name"
+                    value={eje.label}
+                    placeholder="Nombre del atributo"
+                    onChange={(e) => patchEje(eje.clave, { label: e.target.value })}
+                  />
+                  <button
+                    type="button"
+                    className="attr-del"
+                    onClick={() => removeEje(eje.clave)}
+                    title="Quitar atributo"
+                  >
+                    <XIcon />
+                  </button>
+                </div>
+                <div className="vals">
+                  {eje.valores.map((v) => (
+                    <span className="pill" key={v.clave}>
+                      {v.label}
+                      <button
+                        type="button"
+                        className="x"
+                        onClick={() => removeValor(eje.clave, v.clave)}
+                        aria-label={`Quitar ${v.label}`}
+                      >
+                        <XIcon />
+                      </button>
+                    </span>
+                  ))}
+                  <input
+                    className="val-in"
+                    placeholder="Agregar valor…"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addValor(eje.clave, e.currentTarget.value);
+                        e.currentTarget.value = "";
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
 
-      <ChipsEditor
-        titulo="Cantidades (columnas)"
-        placeholder="Ej. 1000"
-        valores={cantidades}
-        numerico
-        onChange={setCantidades}
-      />
+      {/* cantidades */}
+      <div className="sec">
+        <div className="sec-head">
+          <h2>Cantidades</h2>
+          <span className="hint">definen las columnas de la grilla</span>
+        </div>
+        <div className="qty-row">
+          {cantidades.map((c) => (
+            <span className="qpill" key={c.clave}>
+              {Number(c.clave).toLocaleString("es-AR")}
+              <button
+                type="button"
+                className="x"
+                onClick={() =>
+                  setCantidades(cantidades.filter((x) => x.clave !== c.clave))
+                }
+                aria-label={`Quitar ${c.label}`}
+              >
+                <XIcon />
+              </button>
+            </span>
+          ))}
+          <input
+            className="qty-in"
+            type="number"
+            min={0}
+            placeholder="Ej: 5000"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addCantidad(e.currentTarget.value);
+                e.currentTarget.value = "";
+              }
+            }}
+          />
+        </div>
+      </div>
 
-      {atributos.length > 0 && atributos.every((e) => e.valores.length > 0) && cantidades.length > 0 ? (
-        <div className="flex flex-col gap-2">
-          <span className="text-sm font-medium">Grilla de costos (neto)</span>
-          <div className="overflow-x-auto rounded-md border border-border">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-muted-foreground">
+      {/* grilla */}
+      <div className="sec">
+        <div className="sec-head">
+          <h2>
+            Grilla de costos{" "}
+            <span style={{ color: "var(--muted-text-2)", fontWeight: 500 }}>· neto</span>
+          </h2>
+        </div>
+        <div className="grid-scroll">
+          {gridLista ? (
+            <table className="grid">
+              <thead>
                 <tr>
                   {atributos.map((e) => (
-                    <th key={e.clave} className="px-3 py-2 text-left font-medium">
-                      {e.label}
-                    </th>
+                    <th key={e.clave}>{e.label || "—"}</th>
                   ))}
                   {cantidades.map((c) => (
-                    <th key={c.clave} className="px-3 py-2 text-right font-medium">
-                      {c.label}
+                    <th key={c.clave} className="q">
+                      {Number(c.clave).toLocaleString("es-AR")}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {combos.map((combo, i) => (
-                  <tr key={i} className="border-t border-border">
+                  <tr key={i}>
                     {atributos.map((e) => (
-                      <td key={e.clave} className="px-3 py-1.5">
-                        {e.valores.find((v) => v.clave === combo[e.clave])?.label ?? combo[e.clave]}
+                      <td key={e.clave} className="attr-col">
+                        <span className="v">
+                          {e.valores.find((v) => v.clave === combo[e.clave])?.label ??
+                            combo[e.clave]}
+                        </span>
                       </td>
                     ))}
-                    {cantidades.map((c) => (
-                      <td key={c.clave} className="px-2 py-1 text-right">
-                        <Input
-                          type="number"
-                          min={0}
-                          className="h-8 w-24 text-right"
-                          value={costoPorClave.get(claveDe({ ...combo, [CLAVE_CANTIDAD]: c.clave })) ?? ""}
-                          onChange={(ev) =>
-                            setCosto(combo, c.clave, ev.target.value === "" ? null : Number(ev.target.value))
-                          }
-                        />
-                      </td>
-                    ))}
+                    {cantidades.map((c) => {
+                      const val =
+                        costoPorClave.get(
+                          claveDe({ ...combo, [CLAVE_CANTIDAD]: c.clave }),
+                        ) ?? "";
+                      return (
+                        <td key={c.clave} className="cell">
+                          <div className="cell-wrap">
+                            <input
+                              className={`cell-in ${val !== "" ? "filled" : ""}`}
+                              type="number"
+                              min={0}
+                              placeholder="0"
+                              value={val}
+                              onChange={(ev) =>
+                                setCosto(
+                                  combo,
+                                  c.clave,
+                                  ev.target.value === "" ? null : Number(ev.target.value),
+                                )
+                              }
+                            />
+                            <span className="pfx">$</span>
+                          </div>
+                        </td>
+                      );
+                    })}
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Cada celda es el costo del proveedor para esa tanda. Dejá vacías las
-            combinaciones que no ofrece.
-          </p>
-        </div>
-      ) : (
-        <p className="text-xs text-muted-foreground">
-          Cargá al menos un atributo con valores y las cantidades para ver la grilla.
-        </p>
-      )}
-    </div>
-  );
-}
-
-/* ─────────── Editor de un eje (label + chips de valores) ─────────── */
-function EjeEditor({
-  eje,
-  onLabel,
-  onValores,
-  onRemove,
-}: {
-  eje: TercerizadoEje;
-  onLabel: (label: string) => void;
-  onValores: (valores: Array<{ clave: string; label: string }>) => void;
-  onRemove: () => void;
-}) {
-  return (
-    <div className="flex flex-col gap-2 rounded-md border border-border p-3">
-      <div className="flex items-center gap-2">
-        <Input
-          value={eje.label}
-          onChange={(e) => onLabel(e.target.value)}
-          className="h-8 max-w-[220px]"
-          placeholder="Nombre del atributo"
-        />
-        <Button type="button" variant="ghost" size="icon" onClick={onRemove} aria-label="Quitar atributo">
-          <XIcon />
-        </Button>
-      </div>
-      <ChipsEditor
-        titulo=""
-        placeholder="Ej. 10×15"
-        valores={eje.valores}
-        onChange={onValores}
-      />
-    </div>
-  );
-}
-
-/* ─────────── Editor genérico de chips (valores) ─────────── */
-function ChipsEditor({
-  titulo,
-  placeholder,
-  valores,
-  numerico,
-  onChange,
-}: {
-  titulo: string;
-  placeholder: string;
-  valores: Array<{ clave: string; label: string }>;
-  numerico?: boolean;
-  onChange: (valores: Array<{ clave: string; label: string }>) => void;
-}) {
-  const [texto, setTexto] = React.useState("");
-  const agregar = () => {
-    const t = texto.trim();
-    if (!t) return;
-    const clave = numerico ? String(Number(t.replace(/\D/g, "")) || t) : slug(t);
-    if (valores.some((v) => v.clave === clave)) {
-      setTexto("");
-      return;
-    }
-    onChange([...valores, { clave, label: t }]);
-    setTexto("");
-  };
-  return (
-    <div className="flex flex-col gap-2">
-      {titulo ? <span className="text-sm font-medium">{titulo}</span> : null}
-      <div className="flex flex-wrap items-center gap-1.5">
-        {valores.map((v) => (
-          <span
-            key={v.clave}
-            className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs"
-          >
-            {v.label}
-            <button
-              type="button"
-              onClick={() => onChange(valores.filter((x) => x.clave !== v.clave))}
-              aria-label={`Quitar ${v.label}`}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <XIcon className="size-3" />
-            </button>
-          </span>
-        ))}
-        <div className="flex items-center gap-1">
-          <Input
-            value={texto}
-            onChange={(e) => setTexto(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                agregar();
-              }
-            }}
-            placeholder={placeholder}
-            className="h-8 w-28"
-            type={numerico ? "number" : "text"}
-          />
-          <Button type="button" variant="outline" size="sm" onClick={agregar}>
-            <PlusIcon />
-          </Button>
+          ) : (
+            <div className="empty-grid">
+              Agregá atributos con valores y al menos una cantidad para generar la
+              grilla.
+            </div>
+          )}
         </div>
       </div>
-    </div>
+    </>
   );
 }

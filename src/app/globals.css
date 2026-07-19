@@ -29378,3 +29378,105 @@ body:has(.t-app) {
 .pp-banner-aprob{border:1px solid #fde68a;background:#fef9c3;border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:12.5px;line-height:1.5;color:#a16207}
 .pp-banner-aprob .t{font-weight:600;margin-bottom:4px}
 .pp-banner-aprob ul{margin:0;padding-left:16px}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Tercerización de proveedor — panel del editor de pasos.
+   Portado verbatim del diseño canónico (claude.ai/design ·
+   "Tercerización proveedor.html"), auto-scopeado bajo .terc con remap de
+   --muted/--muted-2 a color de texto y los pocos tokens que no están en :root.
+   ═══════════════════════════════════════════════════════════════════════ */
+.terc{
+  --muted:var(--muted-text);--muted-2:var(--muted-text-2);
+  --surface-3:#f2f1ee;--accent-bg:#fdf1ea;--accent-bord:#f0cdb8;--info-bord:#d6def8;
+  color:var(--ink);font-size:13.5px;line-height:1.45;
+  display:block;
+}
+.terc .mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+
+/* master toggle */
+.terc button.toggle-card{display:flex;width:100%;text-align:left;align-items:center;gap:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-4);padding:16px 18px;box-shadow:var(--shadow-sm);cursor:pointer;transition:border-color .14s;font:inherit;color:inherit}
+.terc button.toggle-card.on{border-color:var(--accent-bord);background:linear-gradient(180deg,var(--accent-bg),var(--surface) 80%)}
+.terc .switch{position:relative;width:42px;height:24px;border-radius:999px;background:var(--border-strong);flex:0 0 auto;transition:background .16s}
+.terc .switch::after{content:"";position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .16s}
+.terc button.toggle-card.on .switch{background:var(--accent)}
+.terc button.toggle-card.on .switch::after{transform:translateX(18px)}
+.terc .toggle-card .tt{font-size:14px;font-weight:600}
+.terc .toggle-card .ts{font-size:12.5px;color:var(--muted);margin-top:2px}
+
+.terc .panel{margin-top:18px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-4);box-shadow:var(--shadow-sm);overflow:hidden}
+.terc .sec{padding:22px 24px;border-bottom:1px solid var(--hairline)}
+.terc .sec:last-child{border-bottom:none}
+.terc .sec-head{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.terc .sec-head h2{font-size:13px;font-weight:600;letter-spacing:.01em;margin:0}
+.terc .sec-head .hint{font-size:12px;color:var(--muted-2)}
+.terc .sec-head .grow{flex:1}
+
+/* fields */
+.terc .fields{display:grid;grid-template-columns:1fr 1fr;gap:16px 22px}
+.terc .fields.four{grid-template-columns:repeat(4,1fr)}
+@media(max-width:680px){.terc .fields,.terc .fields.four{grid-template-columns:1fr}}
+.terc .money{position:relative}
+.terc .money .mp{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-family:var(--font-mono);font-size:13px;color:var(--muted-2);pointer-events:none}
+.terc .money .ctl{padding-left:24px}
+.terc .field{display:flex;flex-direction:column;gap:7px}
+.terc .field label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+.terc .ctl{height:38px;border:1px solid var(--border-strong);border-radius:var(--r-3);background:var(--surface);padding:0 12px;font-family:inherit;font-size:13.5px;color:var(--ink);width:100%;outline:none;transition:border-color .12s,box-shadow .12s}
+.terc .ctl:focus{border-color:var(--ink);box-shadow:0 0 0 3px rgba(20,20,26,.06)}
+.terc .ctl::placeholder{color:var(--muted-2)}
+.terc select.ctl{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236e6e76' stroke-width='1.8'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 11px center;padding-right:34px;cursor:pointer}
+
+/* mini add button */
+.terc .btn-add{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 12px;border-radius:9px;border:1px solid var(--border-strong);background:var(--surface);font-size:12.5px;font-weight:500;color:var(--ink-2);transition:.12s}
+.terc .btn-add:hover{border-color:var(--ink-2);background:var(--surface-2)}
+.terc .btn-add svg{width:14px;height:14px}
+
+/* attribute rows */
+.terc .attr-list{display:flex;flex-direction:column;gap:10px}
+.terc .attr-row{border:1px solid var(--border);border-radius:var(--r-3);background:var(--surface-2);padding:13px 14px}
+.terc .attr-top{display:flex;align-items:center;gap:10px;margin-bottom:11px}
+.terc .attr-name{height:34px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface);padding:0 12px;font-family:inherit;font-size:13.5px;font-weight:600;color:var(--ink);width:220px;outline:none;transition:border-color .12s,box-shadow .12s}
+.terc .attr-name:focus{border-color:var(--ink);box-shadow:0 0 0 3px rgba(20,20,26,.06)}
+.terc .attr-del{width:30px;height:30px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--muted-2);display:grid;place-items:center;transition:.12s;margin-left:auto}
+.terc .attr-del:hover{color:#b91c1c;border-color:#e6c3bc;background:#fbeeeb}
+.terc .attr-del svg{width:15px;height:15px}
+.terc .vals{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+.terc .pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:500;color:var(--ink-2);background:var(--surface);border:1px solid var(--border-strong);border-radius:999px;padding:5px 8px 5px 12px}
+.terc .pill .x{width:16px;height:16px;border-radius:50%;background:var(--surface-3);color:var(--muted);display:grid;place-items:center;transition:.12s;border:none;cursor:pointer}
+.terc .pill .x:hover{background:#f2d7cf;color:#b91c1c}
+.terc .pill .x svg{width:10px;height:10px}
+.terc .val-in{height:30px;border:1px dashed var(--border-strong);border-radius:999px;background:transparent;padding:0 12px;font-family:inherit;font-size:12.5px;color:var(--ink);width:130px;outline:none}
+.terc .val-in:focus{border-style:solid;border-color:var(--ink)}
+.terc .val-in::placeholder{color:var(--muted-2)}
+
+/* quantities */
+.terc .qty-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.terc .qpill{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:12.5px;font-weight:600;color:var(--ink);background:var(--info-bg);border:1px solid var(--info-bord);border-radius:8px;padding:6px 8px 6px 12px}
+.terc .qpill .x{width:16px;height:16px;border-radius:5px;color:var(--info);display:grid;place-items:center;opacity:.7;transition:.12s;border:none;background:transparent;cursor:pointer}
+.terc .qpill .x:hover{opacity:1;background:#dfe6fb}
+.terc .qpill .x svg{width:10px;height:10px}
+.terc .qty-in{height:34px;border:1px dashed var(--border-strong);border-radius:8px;background:transparent;padding:0 12px;font-family:var(--font-mono);font-size:12.5px;color:var(--ink);width:110px;outline:none}
+.terc .qty-in:focus{border-style:solid;border-color:var(--ink)}
+
+/* grid */
+.terc .grid-scroll{overflow-x:auto;border:1px solid var(--border);border-radius:var(--r-3)}
+.terc table.grid{width:100%;border-collapse:collapse;min-width:520px}
+.terc table.grid th,.terc table.grid td{padding:0;text-align:left}
+.terc table.grid thead th{background:var(--surface-3);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;padding:12px 16px;border-bottom:1px solid var(--border);white-space:nowrap}
+.terc table.grid thead th.q{text-align:right;font-family:var(--font-mono);font-size:12px;letter-spacing:0;text-transform:none;color:var(--ink-2);font-weight:600}
+.terc .attr-col{padding:14px 16px !important;border-bottom:1px solid var(--hairline);white-space:nowrap}
+.terc .attr-col .v{font-size:13px;font-weight:500;color:var(--ink)}
+.terc table.grid tbody tr:last-child .attr-col,.terc table.grid tbody tr:last-child td{border-bottom:none}
+.terc table.grid tbody tr:hover td{background:var(--surface-2)}
+.terc .cell{padding:9px 12px !important;border-bottom:1px solid var(--hairline);text-align:right}
+.terc .cell-in{width:100%;max-width:130px;height:36px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface);padding:0 12px 0 22px;font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:13px;color:var(--ink);text-align:right;outline:none;transition:border-color .12s,box-shadow .12s;margin-left:auto;display:block}
+.terc .cell-in:focus{border-color:var(--ink);box-shadow:0 0 0 3px rgba(20,20,26,.06)}
+.terc .cell-in.filled{background:var(--ok-bg);border-color:#cfe6d8;color:var(--ok)}
+.terc .cell-wrap{position:relative;max-width:130px;margin-left:auto}
+.terc .cell-wrap .pfx{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-family:var(--font-mono);font-size:12px;color:var(--muted-2);pointer-events:none}
+.terc .cell-in.filled+.pfx{color:var(--ok)}
+
+.terc .foot{padding:16px 24px;background:var(--surface-2);border-top:1px solid var(--hairline)}
+.terc .foot p{margin:0 0 6px;font-size:12px;color:var(--muted)}
+.terc .foot p:last-child{margin-bottom:0}
+.terc .foot b{color:var(--ink-2);font-weight:600}
+.terc .empty-grid{padding:32px 20px;text-align:center;color:var(--muted-2);font-size:12.5px}

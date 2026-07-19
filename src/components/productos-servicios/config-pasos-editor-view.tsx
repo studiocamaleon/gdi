@@ -3978,13 +3978,16 @@ export function ConfigPasosEditorView({
     const noEjecutar = cfg.modoActivacion === "NO_EJECUTAR";
     const cantidadRelevante =
       !noEjecutar && requiereMecanismoCantidad(cfg, familia);
-    const valBasico = noEjecutar
+    // Un paso tercerizado no se produce internamente: no aplican las
+    // validaciones de máquina/material/producción (su costo lo valida el backend).
+    const sinValidacionProduccion = noEjecutar || cfg.tercerizado;
+    const valBasico = sinValidacionProduccion
       ? { errores: [], warnings: [] }
       : validarBasico(cfg, familia);
-    const valMateriales = noEjecutar
+    const valMateriales = sinValidacionProduccion
       ? { errores: [], warnings: [] }
       : validarMateriales(cfg, familia);
-    const valAvanzado = noEjecutar
+    const valAvanzado = sinValidacionProduccion
       ? { errores: [], warnings: [] }
       : validarAvanzado(
           jsonText.params,
@@ -4782,9 +4785,10 @@ export function ConfigPasosEditorView({
                             : "máx. ancho imprimible",
                         ].join(" · ")
                       : "";
-                  const valBasico = noEjecutar
-                    ? { errores: [], warnings: [] }
-                    : validarBasico(cfg, familia);
+                  const valBasico =
+                    noEjecutar || cfg.tercerizado
+                      ? { errores: [], warnings: [] }
+                      : validarBasico(cfg, familia);
                   const valMateriales = noEjecutar
                     ? { errores: [], warnings: [] }
                     : validarMateriales(cfg, familia);
@@ -4935,45 +4939,27 @@ export function ConfigPasosEditorView({
                             </span>
                           </div>
                           <div className="sb-body">
-                            <label
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 8,
-                                fontSize: 14,
-                                cursor: "pointer",
-                                marginBottom: cfg.tercerizado ? 14 : 0,
-                              }}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={!!cfg.tercerizado}
-                                onChange={(event) =>
-                                  updateConfig(
-                                    paso.id,
-                                    event.target.checked
-                                      ? {
-                                          tercerizado: true,
-                                          // Fuente por default (el panel muestra
-                                          // matriz): hay que persistirla, no dejarla
-                                          // sólo en el display.
-                                          fuenteCostoTercerizado:
-                                            cfg.fuenteCostoTercerizado ?? "matriz",
-                                          maquinaM1Id: null,
-                                          perfilM1Id: null,
-                                        }
-                                      : { tercerizado: false },
-                                  )
-                                }
-                              />
-                              Lo terceriza un proveedor (no lo produce la empresa)
-                            </label>
-                            {cfg.tercerizado ? (
-                              <PasoTercerizadoPanel
-                                value={cfg}
-                                onChange={(patch) => updateConfig(paso.id, patch)}
-                              />
-                            ) : null}
+                            <PasoTercerizadoPanel
+                              value={cfg}
+                              onChange={(patch) => updateConfig(paso.id, patch)}
+                              onToggle={(tercerizado) =>
+                                updateConfig(
+                                  paso.id,
+                                  tercerizado
+                                    ? {
+                                        tercerizado: true,
+                                        // Fuente por default (el panel muestra
+                                        // matriz): hay que persistirla, no dejarla
+                                        // sólo en el display.
+                                        fuenteCostoTercerizado:
+                                          cfg.fuenteCostoTercerizado ?? "matriz",
+                                        maquinaM1Id: null,
+                                        perfilM1Id: null,
+                                      }
+                                    : { tercerizado: false },
+                                )
+                              }
+                            />
                           </div>
                         </section>
                         <section className="section-block open">
@@ -5030,6 +5016,7 @@ export function ConfigPasosEditorView({
                                   ruta del producto.
                                 </span>
                               </div>
+                              {!cfg.tercerizado && (
                               <div className="field">
                                 <label>Multiplicadores</label>
                                 <div className="chip-row">
@@ -5073,6 +5060,7 @@ export function ConfigPasosEditorView({
                                   En materiales, caras se define por slot.
                                 </span>
                               </div>
+                              )}
                               {cfg.modoActivacion === "CONDICIONAL" && (
                                 <div className="md:col-span-full">
                                   <RuleBuilder
@@ -5103,7 +5091,10 @@ export function ConfigPasosEditorView({
                           </div>
                         </section>
 
-                        {!noEjecutar && (
+                        {/* Un paso tercerizado no se produce internamente: no tiene
+                            tiempo/costo, máquina, materiales ni overrides. Sólo se
+                            configura su Activación (sin multiplicadores). */}
+                        {!noEjecutar && !cfg.tercerizado && (
                           <>
                             <section className="section-block open">
                               <div className="sb-head">
