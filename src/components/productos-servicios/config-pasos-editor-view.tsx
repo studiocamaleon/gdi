@@ -4796,14 +4796,19 @@ export function ConfigPasosEditorView({
                         cfg,
                         familia ? { codigo: familia.codigo } : undefined,
                       );
-                  const totalErrores =
-                    valBasico.errores.length +
-                    valMateriales.errores.length +
-                    valAvanzado.errores.length;
-                  const totalWarnings =
-                    valBasico.warnings.length +
-                    valMateriales.warnings.length +
-                    valAvanzado.warnings.length;
+                  // Un paso tercerizado no usa máquina/material: su validez es
+                  // la de su fuente de costo (la chequea el backend), no estas
+                  // validaciones de producción.
+                  const totalErrores = cfg.tercerizado
+                    ? 0
+                    : valBasico.errores.length +
+                      valMateriales.errores.length +
+                      valAvanzado.errores.length;
+                  const totalWarnings = cfg.tercerizado
+                    ? 0
+                    : valBasico.warnings.length +
+                      valMateriales.warnings.length +
+                      valAvanzado.warnings.length;
                   const pasoTieneCambios = hasUnsavedChanges(paso.id);
 
                   return (
