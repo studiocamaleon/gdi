@@ -117,7 +117,12 @@ export function PasoTercerizadoPanel({
             onValueChange={(v) => onChange({ proveedorId: v || null })}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Elegí un proveedor" />
+              <SelectValue placeholder="Elegí un proveedor">
+                {value.proveedorId
+                  ? (proveedores.find((p) => p.id === value.proveedorId)?.nombre ??
+                    "…")
+                  : undefined}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {proveedores.map((p) => (

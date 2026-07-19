@@ -34,6 +34,7 @@ import {
 
 import {
   formatCurrency,
+  formatUnitPrice,
   type CotizacionPropuestaSnapshot,
   type PasoProduccionPropuesta,
   type PropuestaItem,
@@ -5742,7 +5743,7 @@ function ApConfigStep({
                 <div className="row">
                   <span className="lbl">{labelPrecioUnitario(product.unidad)}</span>
                   <span className="val mono">
-                    {formatCurrency(getCotizacionUnitario(cotizacionExitosa))}
+                    {formatUnitPrice(getCotizacionUnitario(cotizacionExitosa))}
                   </span>
                 </div>
                 <div className="row">
