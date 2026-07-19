@@ -376,6 +376,20 @@ export function ProductosServiciosTable({
                         <td>
                           <div className="name">
                             {highlightMatch(p.nombre, search)}
+                            {p.tercerizado ? (
+                              <span
+                                className="tag"
+                                style={{
+                                  marginLeft: 8,
+                                  background: "var(--ps-blue-bg)",
+                                  color: "var(--ps-blue)",
+                                  borderColor: "var(--ps-blue-bord)",
+                                }}
+                                title="Tiene al menos un paso que compra a un proveedor"
+                              >
+                                Tercerizado
+                              </span>
+                            ) : null}
                           </div>
                           <div className="desc">{p.descripcion ?? ""}</div>
                         </td>

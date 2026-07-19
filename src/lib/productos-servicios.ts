@@ -102,6 +102,8 @@ export interface ProductoListItem {
   minimoComercialCantidad: string | null;
   minimoComercialBase: MinimoComercialBase;
   activo: boolean;
+  /** Derivado: algún paso de alguna ruta es tercerizado (para el badge). */
+  tercerizado?: boolean;
   subcategoriaComercial: ProductoSubcategoriaComercial & {
     categoria: Omit<ProductoCategoriaComercial, "subcategorias">;
   };

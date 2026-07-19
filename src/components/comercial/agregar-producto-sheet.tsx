@@ -25,6 +25,7 @@ import {
   getHerramientaEditorSello,
 } from "@/lib/producto-herramientas";
 import { leerMedidasPdf } from "@/lib/pdf-medidas";
+import { CotizadorTercerizadoSelectors } from "@/components/comercial/cotizador-tercerizado-selectors";
 import {
   SelloEditorSheet,
   type DisenoSello,
@@ -213,6 +214,8 @@ type MotorConfigState = {
   seleccionMaquina: Record<string, string>;
   seleccionPerfil: Record<string, string>;
   seleccionModoColor: Record<string, string>;
+  /** Valores de eje elegidos por paso tercerizado con matriz (`tercerizado_<configPasoId>`). */
+  seleccionTercerizado: Record<string, Record<string, string>>;
   modoCotizacionLineal: ModoCotizacionLineal;
   zonaInstalacion: string;
   m2Instalados: number;
@@ -391,6 +394,7 @@ const DEFAULT_MOTOR_CONFIG: MotorConfigState = {
   seleccionMaquina: {},
   seleccionPerfil: {},
   seleccionModoColor: {},
+  seleccionTercerizado: {},
   modoCotizacionLineal: "nesting",
   zonaInstalacion: "CABA",
   m2Instalados: 0,
@@ -2293,6 +2297,15 @@ function buildJobContext(
 
   for (const [configPasoId, maquinaId] of Object.entries(config.seleccionMaquina)) {
     if (maquinaId) ctx[`maquinaSeleccionada_${configPasoId}`] = maquinaId;
+  }
+
+  // Valores de eje de un paso tercerizado con matriz → el motor hace el lookup.
+  for (const [configPasoId, valores] of Object.entries(
+    config.seleccionTercerizado ?? {},
+  )) {
+    if (valores && Object.keys(valores).length > 0) {
+      ctx[`tercerizado_${configPasoId}`] = valores;
+    }
   }
 
   // Override explícito de perfil de impresión elegido por el comercial
@@ -4882,6 +4895,25 @@ function ApConfigStep({
                     })),
                 )}
               </div>
+            ) : null}
+
+            {rutaSel ? (
+              <CotizadorTercerizadoSelectors
+                configPasos={rutaSel.configPasos}
+                seleccion={motorConfig.seleccionTercerizado}
+                onChange={(configPasoId, ejeClave, valorClave) =>
+                  setMotorConfig((current) => ({
+                    ...current,
+                    seleccionTercerizado: {
+                      ...current.seleccionTercerizado,
+                      [configPasoId]: {
+                        ...(current.seleccionTercerizado[configPasoId] ?? {}),
+                        [ejeClave]: valorClave,
+                      },
+                    },
+                  }))
+                }
+              />
             ) : null}
 
             {metroLinealConMedidasVariables ? (
