@@ -363,17 +363,9 @@ function PresupuestoPanel({ id, puedeAprobar, onCerrar, onCambio }: { id: string
               </div>
             </div>
 
+            {/* Jerarquía: acción PRINCIPAL del estado primero, secundarias
+                 al lado, y utilitarias (PDF/link) como íconos a la derecha. */}
             <div className="pp-dw-actions">
-              <a className="pp-da" href={presupuestoPdfUrl(d.id)} target="_blank" rel="noreferrer">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14 3v5h5" /><path d="M8 13h8M8 17h6M6 3h9l5 5v13H6z" /></svg>
-                PDF
-              </a>
-              {d.publicToken && (d.estado === "enviado" || d.estado === "aprobado") ? (
-                <button type="button" className="pp-da" onClick={copiarLink}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1" /><path d="M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1" /></svg>
-                  Copiar link
-                </button>
-              ) : null}
               {d.estado === "borrador" ? (
                 <button type="button" className="pp-da primary" disabled={trabajando} onClick={() => void accion(() => enviarPresupuesto(id), "Presupuesto enviado — copiá el link y compartilo.")}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z" /></svg>
@@ -392,6 +384,12 @@ function PresupuestoPanel({ id, puedeAprobar, onCerrar, onCambio }: { id: string
                   </button>
                 </>
               ) : null}
+              {d.estado === "enviado" || d.estado === "aprobado" ? (
+                <button type="button" className="pp-da primary" disabled={trabajando} onClick={() => void convertir()}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+                  Convertir en OT
+                </button>
+              ) : null}
               {d.estado === "enviado" ? (
                 <button type="button" className="pp-da ok" disabled={trabajando} onClick={() => void accion(() => resolverPresupuesto(id, { resultado: "aprobado" }), "Aprobado.")}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5" /></svg>
@@ -404,17 +402,22 @@ function PresupuestoPanel({ id, puedeAprobar, onCerrar, onCambio }: { id: string
                   Marcar perdido
                 </button>
               ) : null}
-              {d.estado === "enviado" || d.estado === "aprobado" ? (
-                <button type="button" className="pp-da primary" disabled={trabajando} onClick={() => void convertir()}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
-                  Convertir en OT
-                </button>
-              ) : null}
               {d.estado === "convertido" && d.ordenConvertidaId ? (
                 <Link className="pp-da primary" href={`/produccion/ordenes/${d.ordenConvertidaId}`}>
                   Ver orden {d.ordenConvertida}
                 </Link>
               ) : null}
+
+              <span style={{ marginLeft: "auto", display: "inline-flex", gap: 9 }}>
+                <a className="pp-da icon" href={presupuestoPdfUrl(d.id)} target="_blank" rel="noreferrer" title="Descargar PDF">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14 3v5h5" /><path d="M8 13h8M8 17h6M6 3h9l5 5v13H6z" /></svg>
+                </a>
+                {d.publicToken && (d.estado === "enviado" || d.estado === "aprobado") ? (
+                  <button type="button" className="pp-da icon" onClick={copiarLink} title="Copiar link del cliente">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1" /><path d="M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1" /></svg>
+                  </button>
+                ) : null}
+              </span>
             </div>
 
             <div className="pp-dw-body">

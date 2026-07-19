@@ -29327,7 +29327,10 @@ body:has(.t-app) {
 .pp-dw-head .x svg{width:16px;height:16px}
 .pp-dw-head .sub{font-size:12.5px;color:var(--muted-text);margin-top:9px}
 .pp-dw-head .sub b{color:var(--ink-2);font-weight:600}
-.pp-dw-actions{padding:16px 24px;display:flex;flex-wrap:wrap;gap:9px;border-bottom:1px solid var(--hairline)}
+.pp-dw-actions{padding:16px 24px;display:flex;flex-wrap:wrap;gap:9px;align-items:center;border-bottom:1px solid var(--hairline)}
+.pp-dw-actions .sp{flex:1;min-width:6px}
+.pp-da.icon{width:36px;padding:0;justify-content:center;color:var(--muted-text)}
+.pp-da.icon:hover{color:var(--ink)}
 .pp-da{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 14px;border-radius:9px;border:1px solid #d4d2cd;background:var(--surface);font-size:12.5px;font-weight:500;transition:.12s;cursor:pointer;font-family:inherit;color:inherit;text-decoration:none}
 .pp-da svg{width:15px;height:15px}
 .pp-da:hover{border-color:var(--ink-2);background:var(--surface-2);color:inherit}
@@ -29366,7 +29369,7 @@ body:has(.t-app) {
 .pp-dw-rechazo select,.pp-dw-rechazo input{width:100%;padding:7px 10px;border-radius:8px;border:1px solid #d4d2cd;font-size:13px;font-family:inherit;background:var(--surface)}
 
 
-/* Presupuestos: opcionales incluidos como seccion propia (que no pasen desapercibidos) */
+/* Presupuestos: opcionales incluidos como seccion propia — que no pasen desapercibidos */
 .pp-opt{margin-top:10px}
 .pp-opt-lbl{font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--ok);font-weight:600;margin-bottom:5px}
 .pp-chip.opt{background:var(--ok-bg);border-color:#cfe6d8;color:var(--ok);font-weight:500}
