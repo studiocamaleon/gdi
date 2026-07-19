@@ -259,7 +259,19 @@ export interface PasoEjecutado {
   materiales?: MaterialEjecutado[];
   /** Cargos directos a nivel paso (si activado). */
   cargosDirectosPaso?: CargoDirectoEjecutado[];
-  /** Costo total del paso (tiempo + materiales + cargos). */
+  /** El paso lo compró un proveedor (no consume máquina ni tiempo interno). */
+  tercerizado?: boolean;
+  proveedorId?: string | null;
+  plazoProveedorDias?: number | null;
+  /** Detalle del costeo tercerizado, para desglose/UI. */
+  tercerizadoDetalle?: {
+    fuente: string;
+    magnitud?: string;
+    valorMagnitud?: number;
+    tarifa?: number;
+    entradaClave?: string;
+  };
+  /** Costo total del paso (tiempo + materiales + cargos, o costo tercerizado). */
   costoTotal: number;
   /** Outputs canónicos que el paso escribió al JobContext. */
   outputsCanonicos?: Record<string, unknown>;
@@ -537,6 +549,20 @@ export interface PasoCargado {
   tiempoFijoOverrideMin: number | null;
   /** Operarios que ocupa el paso; multiplica el costo de mano de obra. */
   dotacionOperarios?: number | null;
+  /** === Tercerización (docs/productos-tercerizados-diseno.md) === */
+  tercerizado?: boolean;
+  proveedorId?: string | null;
+  /** 'tarifa_magnitud' | 'matriz' | 'fijo'. */
+  fuenteCostoTercerizado?: string | null;
+  tercerizadoConfigJson?: unknown;
+  plazoProveedorDias?: number | null;
+  /** Filas de la matriz (sólo fuente 'matriz'), con costo ya en number. */
+  tercerizadoEntradas?: Array<{
+    claveMatch: string;
+    valoresJson: unknown;
+    cantidad: number;
+    costo: number;
+  }>;
   /** Detalles de la máquina (cargados del JOIN). */
   maquina?: {
     id: string;
