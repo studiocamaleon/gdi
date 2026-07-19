@@ -25,7 +25,12 @@ import {
   getHerramientaEditorSello,
 } from "@/lib/producto-herramientas";
 import { leerMedidasPdf } from "@/lib/pdf-medidas";
-import { CotizadorTercerizadoSelectors } from "@/components/comercial/cotizador-tercerizado-selectors";
+import {
+  CotizadorTercerizadoSelectors,
+  getTercerizadoCantidades,
+  tercerizadoEjes,
+  tercerizadoMatrizPasos,
+} from "@/components/comercial/cotizador-tercerizado-selectors";
 import {
   SelloEditorSheet,
   type DisenoSello,
@@ -2300,15 +2305,6 @@ function buildJobContext(
     if (maquinaId) ctx[`maquinaSeleccionada_${configPasoId}`] = maquinaId;
   }
 
-  // Valores de eje de un paso tercerizado con matriz → el motor hace el lookup.
-  for (const [configPasoId, valores] of Object.entries(
-    config.seleccionTercerizado ?? {},
-  )) {
-    if (valores && Object.keys(valores).length > 0) {
-      ctx[`tercerizado_${configPasoId}`] = valores;
-    }
-  }
-
   // Override explícito de perfil de impresión elegido por el comercial
   // ("Modificar perfil"). El motor lo valida contra la máquina activa.
   for (const [configPasoId, perfilId] of Object.entries(config.seleccionPerfil)) {
@@ -2316,6 +2312,19 @@ function buildJobContext(
   }
 
   const rutaSel = getRutaSeleccionada(productoDetalle, config.rutaAlternativaId);
+
+  // Valores de eje de un paso tercerizado con matriz → el motor hace el lookup.
+  // El eje `cantidad` se toma de `qty` (la cantidad del ítem es la fuente única),
+  // no de un campo aparte; los demás ejes vienen de la selección del comercial.
+  for (const cp of tercerizadoMatrizPasos(rutaSel?.configPasos ?? [])) {
+    const elegidos = config.seleccionTercerizado?.[cp.id] ?? {};
+    const usaCantidad = tercerizadoEjes(cp).some((eje) => eje.clave === "cantidad");
+    const valores = usaCantidad
+      ? { ...elegidos, cantidad: String(qty) }
+      : elegidos;
+    if (Object.keys(valores).length > 0) ctx[`tercerizado_${cp.id}`] = valores;
+  }
+
   const tecnologiasActivas = new Set<string>();
   for (const configPaso of rutaSel?.configPasos ?? []) {
     if (!includeConfig(configPaso)) continue;
@@ -4564,15 +4573,22 @@ function ApConfigStep({
     (slot) => !slotKeysLinealDirecto.has(materialSelectionKey(slot.configPasoId, slot.slotCodigo)),
   );
   const hasQuantityShortcuts = !["m²", "m2", "ml"].includes(product.unidad.toLowerCase());
-  const exactPricingQuantities = getExactPricingQuantities(product);
-  const usesExactPricingQuantities = exactPricingQuantities.length > 0;
+  // Un producto tercerizado con matriz define su cantidad por el eje `cantidad`:
+  // esas cantidades manejan el campo de cantidad del ítem (botones fijos), igual
+  // que un producto con precios por cantidad exacta. Así hay un solo campo.
+  const tercerizadoCantidades = getTercerizadoCantidades(rutaSel?.configPasos ?? []);
+  const pricingQuantities =
+    tercerizadoCantidades.length > 0
+      ? tercerizadoCantidades
+      : getExactPricingQuantities(product);
+  const usesExactPricingQuantities = pricingQuantities.length > 0;
   const quantityShortcuts = usesExactPricingQuantities
-    ? exactPricingQuantities
+    ? pricingQuantities
     : hasQuantityShortcuts
       ? [100, 200, 300, 400]
       : [];
   const isAllowedQuantity =
-    !usesExactPricingQuantities || exactPricingQuantities.includes(qty);
+    !usesExactPricingQuantities || pricingQuantities.includes(qty);
   const minimoComercialStatus = getMinimumCommercialStatus(
     product,
     productoDetalle,
@@ -4588,9 +4604,9 @@ function ApConfigStep({
           <div
             className="ap-qty-shortcuts ap-qty-options ap-qty-options-equal"
             aria-label="Cantidades permitidas"
-            style={{ "--ap-qty-count": exactPricingQuantities.length } as React.CSSProperties}
+            style={{ "--ap-qty-count": pricingQuantities.length } as React.CSSProperties}
           >
-            {exactPricingQuantities.map((value) => (
+            {pricingQuantities.map((value) => (
               <button
                 key={value}
                 type="button"
@@ -4902,6 +4918,7 @@ function ApConfigStep({
               <CotizadorTercerizadoSelectors
                 configPasos={rutaSel.configPasos}
                 seleccion={motorConfig.seleccionTercerizado}
+                renderSegmented={renderSegmentedControl}
                 onChange={(configPasoId, ejeClave, valorClave) => {
                   setMotorConfig((current) => ({
                     ...current,
@@ -4913,12 +4930,6 @@ function ApConfigStep({
                       },
                     },
                   }));
-                  // La cantidad de la matriz es la tanda: sincroniza el qty del
-                  // ítem para que el subtotal cierre (precio unitario × qty).
-                  if (ejeClave === "cantidad") {
-                    const n = Number(valorClave);
-                    if (n > 0) setQty(n);
-                  }
                 }}
               />
             ) : null}
@@ -5921,6 +5932,16 @@ export function AgregarProductoSheet({
     const coercedQty = coerceQtyToPricingOptions(qty, product);
     if (coercedQty !== qty) setQty(coercedQty);
   }, [product, qty]);
+
+  // Producto tercerizado con matriz: si la cantidad actual no es una de las
+  // cantidades definidas por el proveedor, arranca en la primera (evita cotizar
+  // con una cantidad fuera de la lista y deja la cotización lista de una).
+  React.useEffect(() => {
+    if (!productoDetalle) return;
+    const ruta = getRutaSeleccionada(productoDetalle, motorConfig.rutaAlternativaId);
+    const cantidades = getTercerizadoCantidades(ruta?.configPasos ?? []);
+    if (cantidades.length > 0 && !cantidades.includes(qty)) setQty(cantidades[0]);
+  }, [productoDetalle, motorConfig.rutaAlternativaId, qty]);
 
   React.useEffect(() => {
     if (!open || !editingItem) return;

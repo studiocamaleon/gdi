@@ -8,67 +8,91 @@ import type { TercerizadoEje } from "@/lib/productos-servicios-api";
  * Selectores de eje para los pasos TERCERIZADOS con fuente `matriz` del
  * producto que se está cotizando. Aislado del sheet gigante.
  *
- * Usa `<select>` NATIVO a propósito: los Select de radix renderizan su menú en
- * un portal fuera del sheet, y el sheet se cierra al detectar "click afuera".
- * El nativo renderiza inline y no dispara ese cierre.
+ * El eje `cantidad` NO se dibuja acá: la cantidad se elige con el campo de
+ * cantidad normal del ítem (que ya muestra las cantidades definidas como
+ * botones cuando el producto trabaja con cantidades fijas). Así no hay dos
+ * campos de cantidad; la selección de matriz recibe `qty` en `buildJobContext`.
+ * Los demás ejes (papel, terminación, …) se muestran como botones segmentados
+ * para mantener la estética del resto del cotizador.
  * docs/productos-tercerizados-diseno.md §7b.
  */
 export function CotizadorTercerizadoSelectors({
   configPasos,
   seleccion,
   onChange,
+  renderSegmented,
 }: {
   configPasos: ConfigPasoDetalle[];
   seleccion: Record<string, Record<string, string>>;
   onChange: (configPasoId: string, ejeClave: string, valorClave: string) => void;
+  renderSegmented: (
+    name: string,
+    value: string,
+    options: Array<{ value: string; label: string }>,
+    onChange: (value: string) => void,
+  ) => React.ReactNode;
 }) {
-  const pasos = configPasos.filter(
-    (cp) => cp.tercerizado && cp.fuenteCostoTercerizado === "matriz",
-  );
-  if (pasos.length === 0) return null;
+  const bloques = tercerizadoMatrizPasos(configPasos)
+    .map((cp) => ({
+      cp,
+      // El eje cantidad lo maneja el campo de cantidad del ítem.
+      ejes: tercerizadoEjes(cp).filter((eje) => eje.clave !== "cantidad"),
+    }))
+    .filter((bloque) => bloque.ejes.length > 0);
+  if (bloques.length === 0) return null;
 
   return (
-    <div className="flex flex-col gap-4">
-      {pasos.map((cp) => {
-        const ejes = ejesDe(cp);
-        if (ejes.length === 0) return null;
+    <>
+      {bloques.flatMap(({ cp, ejes }) => {
         const sel = seleccion[cp.id] ?? {};
-        return (
-          <div key={cp.id} className="flex flex-col gap-2">
-            <span className="text-sm font-medium">
-              {cp.nombreVisible?.trim() || "Opciones del proveedor"}
-            </span>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {ejes.map((eje) => (
-                <label key={eje.clave} className="flex flex-col gap-1.5 text-sm">
-                  <span className="text-muted-foreground">{eje.label}</span>
-                  <select
-                    value={sel[eje.clave] ?? ""}
-                    onChange={(e) => onChange(cp.id, eje.clave, e.target.value)}
-                    className="h-9 rounded-md border border-border bg-transparent px-2 text-sm"
-                  >
-                    <option value="" disabled>
-                      Elegí…
-                    </option>
-                    {eje.valores.map((v) => (
-                      <option key={v.clave} value={v.clave}>
-                        {v.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ))}
-            </div>
+        return ejes.map((eje) => (
+          <div key={`${cp.id}:${eje.clave}`} className="ap-spec ap-spec-wide">
+            <label>{eje.label}</label>
+            {renderSegmented(
+              eje.label,
+              sel[eje.clave] ?? "",
+              eje.valores.map((v) => ({ value: v.clave, label: v.label })),
+              (valorClave) => onChange(cp.id, eje.clave, valorClave),
+            )}
           </div>
-        );
+        ));
       })}
-    </div>
+    </>
   );
 }
 
-function ejesDe(cp: ConfigPasoDetalle): TercerizadoEje[] {
+/** Pasos tercerizados con fuente `matriz` de un set de config-pasos. */
+export function tercerizadoMatrizPasos(
+  configPasos: ConfigPasoDetalle[],
+): ConfigPasoDetalle[] {
+  return configPasos.filter(
+    (cp) => cp.tercerizado && cp.fuenteCostoTercerizado === "matriz",
+  );
+}
+
+/** Ejes de un paso tercerizado, ordenados por `orden`. */
+export function tercerizadoEjes(cp: ConfigPasoDetalle): TercerizadoEje[] {
   const cfg = cp.tercerizadoConfigJson;
   const ejes = cfg && typeof cfg === "object" ? (cfg as { ejes?: unknown }).ejes : null;
   if (!Array.isArray(ejes)) return [];
   return [...(ejes as TercerizadoEje[])].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+}
+
+/**
+ * Cantidades definidas por el/los eje(s) `cantidad` de los pasos tercerizados
+ * con matriz. Alimentan el campo de cantidad del ítem como botones fijos.
+ */
+export function getTercerizadoCantidades(
+  configPasos: ConfigPasoDetalle[],
+): number[] {
+  const valores = new Set<number>();
+  for (const cp of tercerizadoMatrizPasos(configPasos)) {
+    const eje = tercerizadoEjes(cp).find((e) => e.clave === "cantidad");
+    if (!eje) continue;
+    for (const v of eje.valores) {
+      const n = Number(v.clave);
+      if (Number.isFinite(n) && n > 0) valores.add(n);
+    }
+  }
+  return [...valores].sort((a, b) => a - b);
 }
