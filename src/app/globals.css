@@ -29397,6 +29397,66 @@ body:has(.t-app) {
 .pp-banner-aprob .t{font-weight:600;margin-bottom:4px}
 .pp-banner-aprob ul{margin:0;padding-left:16px}
 
+/* ═══════════════════════════════════════════════════════════════════════
+   Detalle de presupuesto (vista dedicada). Reusa la estructura de la ficha
+   de OT (.ot-v1, .orden-head, .orden-form, .orden-tabs, .otd-flow, .otd-card,
+   .tbl, .pp-badge/.pp-chip/.pp-timeline); acá sólo lo propio del presupuesto.
+   ═══════════════════════════════════════════════════════════════════════ */
+.pp-detalle .pp-visto{font-size:11.5px;color:var(--muted-text-2);font-weight:500;display:inline-flex}
+.pp-detalle .ofield-ctrl.pp-ofield-ro{display:flex;align-items:center;min-height:38px;font-size:13.5px;color:var(--ink)}
+
+/* Barra de la acción principal del estado */
+.pp-accion-bar{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;
+  background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--border-strong);
+  border-radius:var(--r-3);padding:14px 18px;margin-bottom:18px;box-shadow:var(--shadow-sm)}
+.pp-accion-bar.ok{border-left-color:#16794a;background:linear-gradient(90deg,#e9f4ee 0%,var(--surface) 42%)}
+.pp-accion-bar.warn{border-left-color:#d9642a;background:linear-gradient(90deg,#fdf1ea 0%,var(--surface) 42%)}
+.pp-accion-bar .t{font-size:14px;font-weight:600;color:var(--ink)}
+.pp-accion-bar .s{font-size:12.5px;color:var(--muted-text);margin-top:2px;max-width:70ch}
+.pp-accion-bar .acts{display:flex;gap:8px;flex-shrink:0}
+
+/* Formularios inline (rechazo / devolución) */
+.pp-form-card{margin-bottom:18px}
+.pp-form-body{padding:16px 18px;display:flex;flex-direction:column;gap:12px}
+.pp-textarea{width:100%;min-height:82px;resize:vertical;border:1px solid var(--border-strong);
+  border-radius:var(--r-3);background:var(--surface);padding:10px 12px;font:inherit;font-size:13.5px;
+  color:var(--ink);outline:none}
+.pp-textarea:focus{border-color:var(--ink);box-shadow:0 0 0 3px rgba(20,20,26,.06)}
+.pp-form-actions{display:flex;justify-content:flex-end;gap:8px}
+.pp-motivos{display:flex;flex-wrap:wrap;gap:7px}
+.pp-motivo{height:30px;padding:0 12px;border-radius:999px;border:1px solid var(--border-strong);
+  background:var(--surface);font-size:12.5px;color:var(--ink-2);cursor:pointer;transition:.12s}
+.pp-motivo:hover{border-color:var(--ink-2)}
+.pp-motivo.on{background:var(--ink);border-color:var(--ink);color:#fff}
+
+/* Resumen financiero */
+.pp-resumen{display:flex;align-items:stretch;gap:14px;flex-wrap:wrap;padding:18px}
+.pp-resumen .op{align-self:center;color:var(--muted-text-2);font-size:15px}
+.pp-cifra{flex:1 1 140px;min-width:0}
+.pp-cifra .l{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted-text);font-weight:600}
+.pp-cifra .v{font-family:var(--font-mono);font-size:20px;font-weight:600;color:var(--ink);margin-top:4px}
+.pp-cifra .s{font-size:11.5px;color:var(--muted-text-2);margin-top:2px}
+.pp-total{flex:1 1 180px;min-width:0;background:var(--ink);color:#fff;border-radius:var(--r-3);padding:12px 16px}
+.pp-total .l{font-size:11px;text-transform:uppercase;letter-spacing:.06em;opacity:.7;font-weight:600}
+.pp-total .v{font-family:var(--font-mono);font-size:24px;font-weight:700;margin-top:4px}
+.pp-total .s{font-size:11.5px;opacity:.7;margin-top:2px}
+
+.pp-observaciones{padding:16px 18px;font-size:13.5px;color:var(--ink-2);line-height:1.5;white-space:pre-wrap}
+
+/* Selección de items a convertir */
+.pp-conv{display:flex;flex-direction:column}
+.pp-conv-row{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:12px;
+  padding:12px 18px;border-top:1px solid var(--hairline);cursor:pointer;transition:background .12s}
+.pp-conv-row:hover{background:var(--surface-2)}
+.pp-conv-row.off{cursor:default;opacity:.55}
+.pp-conv-row .nm{font-size:13.5px;font-weight:500;color:var(--ink);min-width:0}
+.pp-conv-row .qt{font-size:12.5px;color:var(--muted-text)}
+.pp-conv-row .tt{font-size:13px;font-weight:600;color:var(--ink)}
+.pp-conv-row:not(.on) .nm{color:var(--muted-text)}
+.pp-conv-empty{padding:26px 18px;text-align:center;color:var(--muted-text-2);font-size:12.5px}
+.pp-conv-foot{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;
+  border-top:1px solid var(--border);background:var(--surface-2);font-size:12.5px;color:var(--muted-text)}
+
 /* Paso tercerizado en la ruta del tablero: informativo, no ejecutable.
    Se avanza desde "Compras / Tercerizados" en la orden. */
 .ds-terc{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:8px}
