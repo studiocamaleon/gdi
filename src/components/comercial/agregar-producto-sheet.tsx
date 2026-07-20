@@ -3495,6 +3495,46 @@ function ApConfigStep({
   const tiemposManualesPrincipales = tiemposManualesComercial.filter(
     (item) => item.modoActivacion !== "OPCIONAL",
   );
+  // Catálogo de familias: hace falta el `paramsPasoSchema` para renderizar los
+  // campos que el modelador abrió al comercial.
+  const [familiasCatalogo, setFamiliasCatalogo] = React.useState<
+    Map<string, FamiliaListItem>
+  >(new Map());
+  React.useEffect(() => {
+    let cancelado = false;
+    getCatalogoFamilias()
+      .then((catalogo) => {
+        if (cancelado) return;
+        setFamiliasCatalogo(new Map(catalogo.familias.map((f) => [f.codigo, f])));
+      })
+      .catch(() => {
+        // Sin catálogo no se ofrecen los campos editables; el motor sigue
+        // usando lo que modeló el modelador.
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+
+  // Params que el modelador dejó abiertos al comercial.
+  const pasosConParamsComercial = React.useMemo(
+    () =>
+      getParamsComercialDeRuta(rutaSel?.configPasos ?? [], familiasCatalogo),
+    [rutaSel, familiasCatalogo],
+  );
+  // Los params de pasos NO opcionales van con los datos del producto; los de
+  // pasos opcionales se configuran en la card del opcional activado, igual que
+  // el tiempo manual y los materiales.
+  const pasosParamsComercialPrincipales = pasosConParamsComercial.filter(
+    (paso) => paso.modoActivacion !== "OPCIONAL",
+  );
+  const paramsComercialPorConfigPaso = React.useMemo(
+    () =>
+      new Map(
+        pasosConParamsComercial.map((paso) => [paso.configPasoId, paso]),
+      ),
+    [pasosConParamsComercial],
+  );
   const opcionalesConfigurables = React.useMemo(
     () =>
       opcionalesRuta
@@ -3504,16 +3544,22 @@ function ApConfigStep({
           tiempoManual: opcional.configPasoId
             ? (tiemposManualesPorConfigPaso.get(opcional.configPasoId) ?? null)
             : null,
+          paramsComercial: opcional.configPasoId
+            ? (paramsComercialPorConfigPaso.get(opcional.configPasoId) ?? null)
+            : null,
         }))
         .filter(
           (item) =>
             product.real &&
             adi.includes(item.opcional.code) &&
-            (item.slots.length > 0 || item.tiempoManual !== null),
+            (item.slots.length > 0 ||
+              item.tiempoManual !== null ||
+              item.paramsComercial !== null),
         ),
     [
       adi,
       opcionalesRuta,
+      paramsComercialPorConfigPaso,
       product.real,
       slotsMaterialesOpcionalesPorPaso,
       tiemposManualesPorConfigPaso,
@@ -4559,38 +4605,6 @@ function ApConfigStep({
       };
     });
   };
-  // Catálogo de familias: hace falta el `paramsPasoSchema` para renderizar los
-  // campos que el modelador abrió al comercial.
-  const [familiasCatalogo, setFamiliasCatalogo] = React.useState<
-    Map<string, FamiliaListItem>
-  >(new Map());
-  React.useEffect(() => {
-    let cancelado = false;
-    getCatalogoFamilias()
-      .then((catalogo) => {
-        if (cancelado) return;
-        setFamiliasCatalogo(new Map(catalogo.familias.map((f) => [f.codigo, f])));
-      })
-      .catch(() => {
-        // Sin catálogo no se ofrecen los campos editables; el motor sigue
-        // usando lo que modeló el modelador.
-      });
-    return () => {
-      cancelado = true;
-    };
-  }, []);
-
-  // Params que el modelador dejó abiertos al comercial.
-  const pasosConParamsComercial = React.useMemo(
-    () =>
-      getParamsComercialDeRuta(rutaSel?.configPasos ?? [], familiasCatalogo),
-    [rutaSel, familiasCatalogo],
-  );
-  const pasosParamsComercialActivos = pasosConParamsComercial.filter(
-    (paso) =>
-      paso.modoActivacion !== "OPCIONAL" ||
-      Boolean(motorConfig.opcionalesActivados[paso.configPasoId]),
-  );
 
   const setParamComercial = (
     configPasoId: string,
@@ -4612,11 +4626,16 @@ function ApConfigStep({
   const renderParamComercialField = (
     paso: PasoConParamsComercial,
     campo: CampoEditableComercial,
+    opciones: { soloEtiqueta?: boolean } = {},
   ) => {
     const elegido = motorConfig.paramsComercial?.[paso.configPasoId];
     const valor = valorEfectivoCampo(campo, elegido);
     const key = `param-${paso.configPasoId}-${campo.campo}`;
-    const label = `${paso.nombre} · ${campo.etiqueta}`;
+    // Dentro de la card del opcional el nombre del paso ya está en el título:
+    // repetirlo en cada campo sería ruido.
+    const label = opciones.soloEtiqueta
+      ? campo.etiqueta
+      : `${paso.nombre} · ${campo.etiqueta}`;
 
     if (campo.tipo === "multi-enum") {
       const seleccion = Array.isArray(valor) ? valor.map(String) : [];
@@ -5679,7 +5698,7 @@ function ApConfigStep({
               renderTiempoManualField(tiempoPaso),
             )}
 
-            {pasosParamsComercialActivos.flatMap((paso) =>
+            {pasosParamsComercialPrincipales.flatMap((paso) =>
               paso.campos.map((campo) => renderParamComercialField(paso, campo)),
             )}
 
@@ -5826,7 +5845,8 @@ function ApConfigStep({
               </div>
             </div>
             <div className="ap-optional-config-grid">
-              {opcionalesConfigurables.map(({ opcional, slots, tiempoManual }) => {
+              {opcionalesConfigurables.map(
+                ({ opcional, slots, tiempoManual, paramsComercial }) => {
                 const resumen = slots
                   .map((slot) => describeSlotSelection(slot, motorConfig))
                   .filter((item): item is string => Boolean(item));
@@ -5859,6 +5879,11 @@ function ApConfigStep({
                       {tiempoManual
                         ? renderTiempoManualField(tiempoManual)
                         : null}
+                      {paramsComercial?.campos.map((campo) =>
+                        renderParamComercialField(paramsComercial, campo, {
+                          soloEtiqueta: true,
+                        }),
+                      )}
                     </div>
                     {resumen.length > 0 ? (
                       <div className="ap-optional-config-summary">
