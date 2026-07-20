@@ -4,10 +4,13 @@ import {
   type MutacionAplicadaView,
   demasiaPorLado,
   describirLados,
+  describirModificaciones,
+  describirOjales,
   medidaAntesDespues,
   medidasDeCorte,
   porcentajeMaterialExtra,
   resumenModificacion,
+  resumenOjales,
   tieneDemasia,
 } from "@/lib/modificaciones-fisicas";
 
@@ -115,6 +118,93 @@ describe("porcentajeMaterialExtra", () => {
 
   it("devuelve null sin piezas", () => {
     expect(porcentajeMaterialExtra({ ...BOLSILLO, piezas: [] })).toBeNull();
+  });
+});
+
+describe("resumenOjales / describirOjales", () => {
+  const CONFIG = {
+    separacionMaxMm: 500,
+    lados: ["superior", "inferior", "izquierdo", "derecho"],
+    esquinasSiempre: true,
+  };
+  const posiciones = (n: number) => Array.from({ length: n }, () => ({}));
+
+  it("una sola pieza: el total es el de la pieza", () => {
+    const r = resumenOjales([
+      {
+        ojalesLayout: [{ cantidad: 1, posiciones: posiciones(10) }],
+        ojalesConfig: CONFIG,
+      },
+    ])!;
+    expect(r).toMatchObject({ total: 10, porPieza: 10, piezas: 1 });
+    expect(describirOjales(r)).toBe(
+      "10 ojales · cada 50 cm · los 4 lados",
+    );
+  });
+
+  /** Lo que pidió el usuario: cuántos ojales lleva el trabajo, no la pieza. */
+  it("varias piezas: manda el total y aclara el por pieza", () => {
+    const r = resumenOjales([
+      {
+        ojalesLayout: [{ cantidad: 3, posiciones: posiciones(10) }],
+        ojalesConfig: CONFIG,
+      },
+    ])!;
+    expect(r).toMatchObject({ total: 30, porPieza: 10, piezas: 3 });
+    expect(describirOjales(r)).toBe(
+      "30 ojales (10 por pieza) · cada 50 cm · los 4 lados",
+    );
+  });
+
+  it("suma piezas de medidas distintas", () => {
+    const r = resumenOjales([
+      {
+        ojalesLayout: [
+          { cantidad: 1, posiciones: posiciones(10) },
+          { cantidad: 2, posiciones: posiciones(8) },
+        ],
+        ojalesConfig: CONFIG,
+      },
+    ])!;
+    expect(r.total).toBe(26);
+    expect(r.piezas).toBe(3);
+  });
+
+  it("sin ojales no hay resumen", () => {
+    expect(resumenOjales([{}, { ojalesLayout: null }])).toBeNull();
+  });
+
+  it("sin config igual informa la cantidad", () => {
+    const r = resumenOjales([
+      { ojalesLayout: [{ cantidad: 1, posiciones: posiciones(6) }] },
+    ])!;
+    expect(describirOjales(r)).toBe("6 ojales");
+  });
+});
+
+describe("describirModificaciones", () => {
+  it("una línea por paso PRE", () => {
+    expect(
+      describirModificaciones([
+        { mutacionAplicada: BOLSILLO },
+        {},
+        {
+          mutacionAplicada: {
+            ...BOLSILLO,
+            subTipo: "refuerzo",
+            lados: ["izquierdo", "derecho"],
+            demasiaMm: 40,
+          },
+        },
+      ]),
+    ).toEqual([
+      "Bolsillo en arriba y abajo · +100 mm por lado",
+      "Refuerzo en los laterales · +40 mm por lado",
+    ]);
+  });
+
+  it("sin pasos PRE devuelve vacío", () => {
+    expect(describirModificaciones([{}])).toEqual([]);
   });
 });
 

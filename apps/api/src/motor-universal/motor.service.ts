@@ -600,7 +600,14 @@ export class MotorUniversalService {
         if (paramsOjales) {
           // Layout para el visor de nesting: dónde va cada ojal.
           const layout = calcularLayoutOjales(jobContext, paramsOjales);
-          if (layout.length > 0) ejecucion.ojalesLayout = layout;
+          if (layout.length > 0) {
+            ejecucion.ojalesLayout = layout;
+            ejecucion.ojalesConfig = {
+              separacionMaxMm: paramsOjales.separacionMaxMm,
+              lados: paramsOjales.lados,
+              esquinasSiempre: paramsOjales.esquinasSiempre,
+            };
+          }
         }
         if (!paramsOjales) {
           errores.push({

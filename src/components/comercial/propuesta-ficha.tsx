@@ -108,10 +108,13 @@ import { AgregarProductoSheet } from "@/components/comercial/agregar-producto-sh
 import {
   type MutacionAplicadaView,
   demasiaPorLado,
+  describirModificaciones,
+  describirOjales,
   medidaAntesDespues,
   medidasDeCorte,
   porcentajeMaterialExtra,
   resumenModificacion,
+  resumenOjales,
   tieneDemasia,
 } from "@/lib/modificaciones-fisicas";
 import { NestingViewer } from "@/components/nesting/nesting-viewer";
@@ -3061,6 +3064,16 @@ function buildOrdenItemSpecs(
       materialIdx += 1;
     }
   }
+
+  // 1.c Modificaciones físicas y ojales: lo que el taller necesita saber del
+  //     acabado. El dato más importante es CUÁNTOS ojales lleva el trabajo.
+  //     Ver docs/modificaciones-fisicas-lona-diseno.md §7.
+  const modificaciones = describirModificaciones(item.cotizacion.pasos);
+  for (const descripcion of modificaciones) {
+    arr.push({ lbl: "Terminación", val: descripcion });
+  }
+  const ojales = resumenOjales(item.cotizacion.pasos);
+  if (ojales) arr.push({ lbl: "Ojales", val: describirOjales(ojales) });
 
   // 2. Montaje: material del sustrato sobre el que se monta (ej. Imán,
   //    PVC espumado · 3 mm), justo después del principal.

@@ -307,6 +307,15 @@ export interface PasoEjecutado {
     cantidad: number;
     posiciones: Array<{ xMm: number; yMm: number; lado: LadoPieza }>;
   }>;
+  /**
+   * Sólo pasos `colocacion_ojales`: cómo se pidieron. Va aparte del layout
+   * porque describe el PASO, no cada pieza. Alimenta la spec de la ficha/OT.
+   */
+  ojalesConfig?: {
+    separacionMaxMm: number;
+    lados: LadoPieza[];
+    esquinasSiempre: boolean;
+  };
   /** Tiempo calculado (si activado). */
   tiempo?: {
     setupMin: number;

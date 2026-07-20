@@ -1023,6 +1023,12 @@ export interface CotizarResponse {
           lado: "superior" | "inferior" | "izquierdo" | "derecho";
         }>;
       }> | null;
+      /** Sólo `colocacion_ojales`: cómo se pidieron (describe el paso). */
+      ojalesConfig?: {
+        separacionMaxMm: number;
+        lados: string[];
+        esquinasSiempre: boolean;
+      } | null;
       tiempo?: {
         totalMin: number;
         centroCostoId?: string | null;

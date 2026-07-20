@@ -113,6 +113,94 @@ export function medidaAntesDespues(mutacion: MutacionAplicadaView) {
   return { antes: pieza.antes, despues: pieza.despues };
 }
 
+export interface OjalesConfigView {
+  separacionMaxMm: number;
+  lados: string[];
+  esquinasSiempre: boolean;
+}
+
+export interface ResumenOjales {
+  /** Ojales de TODO el ítem: por pieza × cantidad de piezas. */
+  total: number;
+  /** Ojales de UNA pieza. Igual al total cuando hay una sola. */
+  porPieza: number;
+  /** Cuántas piezas llevan ojales. */
+  piezas: number;
+  separacionMaxMm: number | null;
+  lados: string[];
+}
+
+/**
+ * Resumen de los ojales del ítem, para la ficha y la OT.
+ *
+ * Lo primero que necesita saber el taller es CUÁNTOS ojales lleva el trabajo
+ * —no cuántos por lona—, así que el total manda y el "por pieza" se muestra
+ * sólo cuando hay más de una.
+ */
+export function resumenOjales(
+  pasos: Array<{
+    ojalesLayout?: Array<{ cantidad: number; posiciones: unknown[] }> | null;
+    ojalesConfig?: OjalesConfigView | null;
+  }>,
+): ResumenOjales | null {
+  let total = 0;
+  let porPieza = 0;
+  let piezas = 0;
+  let config: OjalesConfigView | null = null;
+
+  for (const paso of pasos) {
+    for (const layout of paso.ojalesLayout ?? []) {
+      total += layout.posiciones.length * layout.cantidad;
+      porPieza = Math.max(porPieza, layout.posiciones.length);
+      piezas += layout.cantidad;
+    }
+    if (paso.ojalesConfig) config = paso.ojalesConfig;
+  }
+
+  if (total === 0) return null;
+  return {
+    total,
+    porPieza,
+    piezas,
+    separacionMaxMm: config?.separacionMaxMm ?? null,
+    lados: config?.lados ?? [],
+  };
+}
+
+/** "20 ojales (10 por pieza) · cada 50 cm · los 4 lados" */
+export function describirOjales(resumen: ResumenOjales): string {
+  const partes: string[] = [];
+  partes.push(
+    resumen.piezas > 1
+      ? `${resumen.total} ojales (${resumen.porPieza} por pieza)`
+      : `${resumen.total} ojales`,
+  );
+  if (resumen.separacionMaxMm) {
+    partes.push(`cada ${formatMmComoCm(resumen.separacionMaxMm)} cm`);
+  }
+  if (resumen.lados.length > 0) partes.push(describirLados(resumen.lados));
+  return partes.join(" · ");
+}
+
+function formatMmComoCm(mm: number): string {
+  return new Intl.NumberFormat("es-AR", { maximumFractionDigits: 1 }).format(
+    mm / 10,
+  );
+}
+
+/**
+ * Descripción de las modificaciones físicas del ítem, una por paso PRE.
+ * Ej: ["Refuerzo en los 4 lados · +40 mm por lado"].
+ */
+export function describirModificaciones(
+  pasos: Array<{ mutacionAplicada?: MutacionAplicadaView | null }>,
+): string[] {
+  return pasos
+    .map((paso) => paso.mutacionAplicada)
+    .filter((m): m is MutacionAplicadaView => Boolean(m))
+    .map(resumenModificacion);
+}
+
 /**
  * Demasía TOTAL de cada lado, acumulando todos los pasos PRE de la ruta.
  *
