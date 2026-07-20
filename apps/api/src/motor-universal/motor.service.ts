@@ -67,6 +67,7 @@ import {
   calcularPerimetroPiezasM,
   congelarMedidaVisible,
 } from './job-context-metrics';
+import { resolverArrastreOpcionales } from './arrastre-opcionales';
 import {
   aplicarMutacionPre,
   calcularMetrosLinealesUnion,
@@ -511,6 +512,37 @@ export class MotorUniversalService {
       centroCostoIds: centroIds,
     });
 
+    // 1c. ARRASTRE ENTRE OPCIONALES — un paso puede exigir que otros se
+    // ejecuten (ojales requiere el refuerzo perimetral). Va ANTES del bucle
+    // porque la dependencia apunta hacia atrás en la ruta: cuando el motor
+    // llega a los ojales, el refuerzo ya pasó.
+    // Ver docs/modificaciones-fisicas-lona-diseno.md
+    const arrastre = resolverArrastreOpcionales(
+      producto.pasos.map((p) => ({
+        rutaPasoId: p.rutaPasoId,
+        configPasoId: p.configPasoId,
+        nombreVisible: p.nombreVisible,
+        familiaCodigo: p.familiaCodigo,
+        modoActivacion: p.modoActivacion,
+        requiereRutaPasoIds: p.requiereRutaPasoIds,
+      })),
+      jobContext.opcionalesActivados ?? {},
+    );
+    jobContext.opcionalesActivados = arrastre.opcionalesActivados;
+    const arrastrePorConfigPasoId = new Map(
+      arrastre.arrastres.map((a) => [a.configPasoId, a]),
+    );
+    for (const conflicto of arrastre.conflictos) {
+      errores.push({
+        codigo: 'dependencia_de_paso_no_resoluble',
+        severidad: 'ERROR',
+        rutaPasoId: conflicto.rutaPasoId,
+        mensaje: `"${conflicto.requeridoPorNombre}" necesita otro paso que no se puede ejecutar: ${conflicto.motivo}.`,
+        sugerencia:
+          'Revisar la dependencia declarada en el paso, o habilitar el paso requerido en esta ruta.',
+      });
+    }
+
     // 2. ITERAR PASOS EN ORDEN TOPOLÓGICO (orden simple por ahora)
     const pasosEjecutados: PasoEjecutado[] = [];
     /**
@@ -540,6 +572,14 @@ export class MotorUniversalService {
         pasosSiguientes,
         outputsAcumulados,
       );
+      // Si el paso se encendió por arrastre, el comercial tiene que verlo: si
+      // no, el precio sube sin explicación.
+      const arrastrado = arrastrePorConfigPasoId.get(paso.configPasoId);
+      if (arrastrado && ejecucion.activado) {
+        ejecucion.activadoPorDependencia = {
+          requeridoPorNombre: arrastrado.requeridoPorNombre,
+        };
+      }
       pasosEjecutados.push(ejecucion);
 
       // Si este paso generó errores, marcar para no seguir
@@ -5949,6 +5989,7 @@ export class MotorUniversalService {
           ? Number(cp.tiempoFijoOverrideMin)
           : null,
         dotacionOperarios: cp.dotacionOperarios ?? 1,
+        requiereRutaPasoIds: cp.requiereRutaPasoIds ?? [],
         tercerizado: cp.tercerizado,
         proveedorId: cp.proveedorId,
         fuenteCostoTercerizado: cp.fuenteCostoTercerizado,

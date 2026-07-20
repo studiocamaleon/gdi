@@ -543,6 +543,31 @@ la pieza ARMADA, no al de cada panel. `overlayAplicable()` devuelve false con `p
 el overlay no se dibuja: preferimos no mostrar nada antes que mostrar franjas y ojales sobre las
 líneas de unión interiores. Falta mapear paneles a pieza lógica.
 
+## 8.d Arrastre entre opcionales (2026-07-20)
+
+**El problema.** Modelar "el refuerzo va sí o sí cuando hay ojales" no se podía: los modos de
+activación son EXCLUYENTES (`resolverActivacion`), así que poner el refuerzo en CONDICIONAL le
+sacaba al comercial la posibilidad de pedir refuerzo solo, y un producto que sólo ofrece refuerzo
+quedaba sin forma de expresarse.
+
+**El diagnóstico**: no es una condición, es una **implicación**. El modo de activación era la
+herramienta equivocada. (Con CONDICIONAL igual "funcionaba" —la regla JsonLogic ve
+`opcionalesActivados` en el JobContext— pero ataba el refuerzo a los ojales.)
+
+**La solución**: `ProductoConfigPaso.requiereRutaPasoIds`. Un paso declara qué otros NECESITA; al
+activarse los enciende aunque sean OPCIONALES. El paso requerido sigue siendo OPCIONAL y se puede
+pedir por su cuenta.
+
+- Se declara **en el paso que tiene la dependencia** (ojales), no en el requerido: es donde el
+  modelador está pensando, y si mañana otro paso necesita refuerzo lo declara sin tocarlo.
+- **Pasada PREVIA al bucle** (`arrastre-opcionales.ts`): la dependencia apunta hacia ATRÁS en la
+  ruta —el refuerzo corre antes que los ojales— así que resolverla dentro del loop llegaría tarde.
+- **Transitivo** (A→B→C enciende los tres) y con guarda de ciclos.
+- Un paso en **NO_EJECUTAR no se fuerza**: el modelador lo apagó a propósito. Se reporta como
+  error `dependencia_de_paso_no_resoluble` en vez de encenderlo por la ventana.
+- El paso arrastrado queda **forzado** mientras el que lo exige esté activo, y se muestra en el
+  cotizador con un chip "🔗 lo exige X": si el precio sube sin explicación es peor que el bug.
+
 ## 9. Decisiones tomadas
 
 1. Bolsillo y refuerzo son **la misma primitiva** con parámetros distintos, no dos lógicas.

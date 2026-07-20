@@ -382,6 +382,8 @@ export interface UpsertConfigPasoPayload {
   cleanupOverrideMin?: number | null;
   tiempoFijoOverrideMin?: number | null;
   dotacionOperarios?: number;
+  /** rutaPasoId de los pasos que este paso enciende al activarse. */
+  requiereRutaPasoIds?: string[];
   slotsMateriales?: UpsertSlotMaterialPayload[];
   maquinasCandidatas?: UpsertMaquinaCandidataPayload[];
   // === Tercerización (docs/productos-tercerizados-diseno.md) ===
@@ -992,6 +994,8 @@ export interface CotizarResponse {
       configPasoId?: string;
       activado: boolean;
       razonNoActivado?: string;
+      /** El paso se encendió porque otro lo exige (ojales arrastra refuerzo). */
+      activadoPorDependencia?: { requeridoPorNombre: string } | null;
       /**
        * Sólo pasos `modificacion_pre`: qué medida agrandó y en cuánto. El
        * cliente pidió la medida `antes`, el taller corta la `despues`.

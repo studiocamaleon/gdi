@@ -2886,6 +2886,15 @@ function CostosItemView({
                               ⏱ estimado por el comercial
                             </span>
                           ) : null}
+                          {paso.activadoPorDependencia ? (
+                            <span
+                              className="cost-chip"
+                              title={`Se activó automáticamente porque "${paso.activadoPorDependencia.requeridoPorNombre}" lo necesita. No se puede quitar mientras ese paso esté activo.`}
+                            >
+                              🔗 lo exige{" "}
+                              {paso.activadoPorDependencia.requeridoPorNombre}
+                            </span>
+                          ) : null}
                           {paso.mutacionAplicada ? (
                             <span
                               className="cost-chip"

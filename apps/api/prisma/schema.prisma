@@ -1736,6 +1736,15 @@ model ProductoConfigPaso {
   tercerizadoConfigJson       Json?
   /// Lead time del proveedor, para la ETA de la OT (F2).
   plazoProveedorDias          Int?
+  /// === Arrastre entre opcionales ===
+  /// `rutaPasoId` de los pasos que este paso NECESITA: al activarse, los
+  /// enciende aunque sean OPCIONALES y el comercial no los haya tildado.
+  /// Ej: colocar ojales requiere el refuerzo perimetral.
+  ///
+  /// Es una IMPLICACIÓN, no un modo de activación: el paso requerido sigue
+  /// siendo OPCIONAL y se puede activar por su cuenta (refuerzo sin ojales).
+  /// Ver docs/modificaciones-fisicas-lona-diseno.md
+  requiereRutaPasoIds         String[]                             @default([]) @db.Uuid
   activo                      Boolean                              @default(true)
   createdAt                   DateTime                             @default(now())
   updatedAt                   DateTime                             @updatedAt

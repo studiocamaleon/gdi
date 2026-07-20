@@ -213,6 +213,11 @@ export class ConfigPasosService {
             ? new Prisma.Decimal(dto.tiempoFijoOverrideMin)
             : null,
         dotacionOperarios: Math.max(1, Math.round(dto.dotacionOperarios ?? 1)),
+        // Un paso no puede requerirse a sí mismo: sería un arrastre trivial que
+        // sólo confunde al leer la config.
+        requiereRutaPasoIds: (dto.requiereRutaPasoIds ?? []).filter(
+          (id) => id !== dto.rutaPasoId,
+        ),
         tercerizado: dto.tercerizado ?? false,
         proveedorId: dto.tercerizado ? (dto.proveedorId ?? null) : null,
         fuenteCostoTercerizado: dto.tercerizado

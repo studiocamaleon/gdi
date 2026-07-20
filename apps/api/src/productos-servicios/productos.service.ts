@@ -397,6 +397,7 @@ export class ProductosService {
                 cleanupOverrideMin: config.cleanupOverrideMin,
                 tiempoFijoOverrideMin: config.tiempoFijoOverrideMin,
                 dotacionOperarios: config.dotacionOperarios,
+                requiereRutaPasoIds: config.requiereRutaPasoIds,
                 activo: config.activo,
               },
             });

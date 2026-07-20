@@ -291,6 +291,12 @@ export interface PasoEjecutado {
   /** Razón si NO se activó (ej: "no es OBLIGATORIO + el comercial no lo activó"). */
   razonNoActivado?: string;
   /**
+   * El paso se encendió porque OTRO lo exige, no porque el comercial lo tildara
+   * (ojales arrastra el refuerzo). Se muestra en el cotizador: si el precio
+   * sube sin explicación, es peor que el bug. Ver `arrastre-opcionales.ts`.
+   */
+  activadoPorDependencia?: { requeridoPorNombre: string };
+  /**
    * Sólo pasos `modificacion_pre`: qué medida agrandó y en cuánto. Alimenta el
    * desglose del cotizador y la doble medida de la OT (el operario corta la
    * medida `despues`, el cliente pidió la visible).
@@ -668,6 +674,11 @@ export interface PasoCargado {
   tiempoFijoOverrideMin: number | null;
   /** Operarios que ocupa el paso; multiplica el costo de mano de obra. */
   dotacionOperarios?: number | null;
+  /**
+   * `rutaPasoId` de los pasos que este paso NECESITA: al activarse los
+   * enciende aunque sean OPCIONALES. Ver `arrastre-opcionales.ts`.
+   */
+  requiereRutaPasoIds?: string[];
   /** === Tercerización (docs/productos-tercerizados-diseno.md) === */
   tercerizado?: boolean;
   proveedorId?: string | null;

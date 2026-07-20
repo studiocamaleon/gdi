@@ -2897,6 +2897,7 @@ export function ConfigPasosEditorView({
         cleanupOverrideMin: existente?.cleanupOverrideMin ?? null,
         tiempoFijoOverrideMin: existente?.tiempoFijoOverrideMin ?? null,
         dotacionOperarios: existente?.dotacionOperarios ?? 1,
+        requiereRutaPasoIds: existente?.requiereRutaPasoIds ?? [],
         maquinasCandidatas: normalizeMaquinasCandidatas(
           existente?.maquinasCandidatas?.map((candidata, index) => ({
             maquinaId: candidata.maquinaId,
@@ -5134,6 +5135,51 @@ export function ConfigPasosEditorView({
                                 </span>
                               </div>
                               )}
+                              {/* Arrastre entre opcionales: este paso puede
+                                  exigir que otros se ejecuten. Ver
+                                  docs/modificaciones-fisicas-lona-diseno.md */}
+                              <div className="field md:col-span-full">
+                                <LabelConTooltip
+                                  label="Este paso necesita que también se ejecuten"
+                                  tooltip="Al activarse, enciende esos pasos aunque sean OPCIONALES y el comercial no los haya tildado. Ej: colocar ojales necesita el refuerzo perimetral. Los pasos elegidos siguen pudiendo activarse por su cuenta."
+                                />
+                                <div className="flex flex-wrap gap-2">
+                                  {rutaAlternativa.ruta.pasos
+                                    .filter((otro) => otro.id !== paso.id)
+                                    .map((otro) => {
+                                      const requeridos =
+                                        cfg.requiereRutaPasoIds ?? [];
+                                      const elegido = requeridos.includes(
+                                        otro.id,
+                                      );
+                                      const nombreOtro =
+                                        configs[otro.id]?.nombreVisible?.trim() ||
+                                        humanizeCode(otro.familiaCodigo);
+                                      return (
+                                        <label
+                                          key={otro.id}
+                                          className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm"
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={elegido}
+                                            onChange={(e) =>
+                                              updateConfig(paso.id, {
+                                                requiereRutaPasoIds: e.target
+                                                  .checked
+                                                  ? [...requeridos, otro.id]
+                                                  : requeridos.filter(
+                                                      (id) => id !== otro.id,
+                                                    ),
+                                              })
+                                            }
+                                          />
+                                          <span>{nombreOtro}</span>
+                                        </label>
+                                      );
+                                    })}
+                                </div>
+                              </div>
                               {cfg.modoActivacion === "CONDICIONAL" && (
                                 <div className="md:col-span-full">
                                   <RuleBuilder

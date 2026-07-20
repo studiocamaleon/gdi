@@ -203,6 +203,8 @@ export interface ConfigPasoDetalle {
   cleanupOverrideMin?: number | null;
   tiempoFijoOverrideMin?: number | null;
   dotacionOperarios?: number | null;
+  /** rutaPasoId de los pasos que este paso enciende al activarse. */
+  requiereRutaPasoIds?: string[] | null;
   slotsMateriales: Array<SlotMaterialDetalle>;
   /** G-F2: candidatas M-2; cuando length > 1 el cotizador muestra Select de override. */
   maquinasCandidatas?: Array<{

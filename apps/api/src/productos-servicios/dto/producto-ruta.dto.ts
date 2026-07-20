@@ -195,6 +195,16 @@ export class UpsertProductoConfigPasoDto {
   @Min(1)
   dotacionOperarios?: number;
 
+  /**
+   * `rutaPasoId` de los pasos que este paso NECESITA: al activarse los
+   * enciende aunque sean OPCIONALES (ojales requiere el refuerzo).
+   * Ver docs/modificaciones-fisicas-lona-diseno.md
+   */
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  requiereRutaPasoIds?: string[];
+
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
