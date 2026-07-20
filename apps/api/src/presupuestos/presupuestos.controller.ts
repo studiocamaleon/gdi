@@ -126,7 +126,7 @@ export class PresupuestosController {
       this.service.config(auth.tenantId),
       this.pdfTenantNombre(auth.tenantId),
     ]);
-    const buffer = this.pdf.generar({
+    const buffer = await this.pdf.generar({
       numero: detalle.numero!,
       negocio: tenant,
       cliente: detalle.cliente?.nombre ?? null,
