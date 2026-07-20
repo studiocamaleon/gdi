@@ -592,7 +592,13 @@ pedir por su cuenta.
 - Un paso en **NO_EJECUTAR no se fuerza**: el modelador lo apagó a propósito. Se reporta como
   error `dependencia_de_paso_no_resoluble` en vez de encenderlo por la ventana.
 - El paso arrastrado queda **forzado** mientras el que lo exige esté activo, y se muestra en el
-  cotizador con un chip "🔗 lo exige X": si el precio sube sin explicación es peor que el bug.
+  desglose con un chip "Exigido por X": si el precio sube sin explicación es peor que el bug.
+- **El front también resuelve el arrastre** (`src/lib/arrastre-opcionales.ts`, espejo del backend).
+  Al principio vivía sólo en el motor y eso rompía dos cosas: la card del paso arrastrado no
+  aparecía —no había dónde completar sus params— y `configPasoRuntime` descartaba sus valores,
+  porque el filtro miraba sólo lo que había tildado el comercial. El front necesita saber qué
+  está activo ANTES de cotizar. En la card, el paso arrastrado muestra "Lo exige otro paso" en
+  lugar de "Quitar opcional".
 
 ## 8.e Params que elige el comercial (2026-07-20)
 

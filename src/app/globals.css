@@ -11141,6 +11141,20 @@ body {
     background: var(--surface-2);
   }
 
+  /* El opcional lo encendió otro paso que lo necesita: no se puede quitar
+     desde acá, y hay que decir por qué en vez de dejar un botón muerto. */
+  .ot-v1 .ap-optional-config-title .quit.is-locked {
+    cursor: default;
+    font-style: italic;
+    opacity: 0.75;
+    white-space: nowrap;
+  }
+
+  .ot-v1 .ap-optional-config-title .quit.is-locked:hover {
+    color: var(--muted);
+    background: transparent;
+  }
+
   .ot-v1 .ap-optional-config-fields {
     display: grid;
     gap: 16px;

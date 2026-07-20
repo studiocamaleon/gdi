@@ -18,6 +18,10 @@ import {
   StarIcon,
   XIcon,
 } from "lucide-react";
+import {
+  arrastradosPorDependencia,
+  opcionalesActivadosEfectivos,
+} from "@/lib/arrastre-opcionales";
 import { etiquetaValorParam } from "@/lib/params-familia";
 import {
   type CampoEditableComercial,
@@ -2348,12 +2352,17 @@ function buildJobContext(
 
   // Params abiertos al comercial: sólo de pasos ACTIVOS y sólo lo que cambió.
   // Quedan en el snapshot del ítem, así que llegan a la OT.
+  // Activación EFECTIVA: incluye los pasos que otro exige (ojales enciende el
+  // refuerzo). Sin esto, los params de un paso arrastrado se descartaban.
+  const opcionalesEfectivos = opcionalesActivadosEfectivos(
+    rutaSel?.configPasos ?? [],
+    config.opcionalesActivados,
+  );
   const runtimeParams = buildConfigPasoRuntime(
     rutaSel?.configPasos ?? [],
     config.paramsComercial ?? {},
     (configPasoId, modoActivacion) =>
-      modoActivacion !== "OPCIONAL" ||
-      Boolean(config.opcionalesActivados[configPasoId]),
+      modoActivacion !== "OPCIONAL" || Boolean(opcionalesEfectivos[configPasoId]),
   );
   if (Object.keys(runtimeParams).length > 0) {
     ctx.configPasoRuntime = runtimeParams;
@@ -3535,6 +3544,26 @@ function ApConfigStep({
       ),
     [pasosConParamsComercial],
   );
+  // Activación EFECTIVA en el sheet: un paso puede estar encendido porque OTRO
+  // lo exige, no porque el comercial lo tildara. Sin esto su card no aparecía y
+  // no había dónde completar sus params.
+  const opcionalesEfectivosSheet = React.useMemo(
+    () =>
+      opcionalesActivadosEfectivos(
+        rutaSel?.configPasos ?? [],
+        motorConfig.opcionalesActivados,
+      ),
+    [rutaSel, motorConfig.opcionalesActivados],
+  );
+  const arrastradosSheet = React.useMemo(
+    () =>
+      arrastradosPorDependencia(
+        rutaSel?.configPasos ?? [],
+        motorConfig.opcionalesActivados,
+      ),
+    [rutaSel, motorConfig.opcionalesActivados],
+  );
+
   const opcionalesConfigurables = React.useMemo(
     () =>
       opcionalesRuta
@@ -3551,13 +3580,17 @@ function ApConfigStep({
         .filter(
           (item) =>
             product.real &&
-            adi.includes(item.opcional.code) &&
+            (adi.includes(item.opcional.code) ||
+              (item.opcional.configPasoId
+                ? Boolean(opcionalesEfectivosSheet[item.opcional.configPasoId])
+                : false)) &&
             (item.slots.length > 0 ||
               item.tiempoManual !== null ||
               item.paramsComercial !== null),
         ),
     [
       adi,
+      opcionalesEfectivosSheet,
       opcionalesRuta,
       paramsComercialPorConfigPaso,
       product.real,
@@ -5847,6 +5880,9 @@ function ApConfigStep({
             <div className="ap-optional-config-grid">
               {opcionalesConfigurables.map(
                 ({ opcional, slots, tiempoManual, paramsComercial }) => {
+                  const arrastrado = opcional.configPasoId
+                    ? arrastradosSheet.has(opcional.configPasoId)
+                    : false;
                 const resumen = slots
                   .map((slot) => describeSlotSelection(slot, motorConfig))
                   .filter((item): item is string => Boolean(item));
@@ -5861,13 +5897,21 @@ function ApConfigStep({
                         <span className="d" aria-hidden="true" />
                         {tiempoPendiente ? "Falta el tiempo" : "Configurado"}
                       </span>
-                      <button
-                        type="button"
-                        className="quit"
-                        onClick={() => setOpcional(opcional.code, false)}
-                      >
-                        Quitar opcional
-                      </button>
+                      {arrastrado ? (
+                        // Lo encendió otro paso que lo necesita: quitarlo acá
+                        // dejaría la cotización inconsistente.
+                        <span className="quit is-locked">
+                          Lo exige otro paso
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="quit"
+                          onClick={() => setOpcional(opcional.code, false)}
+                        >
+                          Quitar opcional
+                        </button>
+                      )}
                     </div>
                     <div className="ap-optional-config-fields">
                       {slots.map((slot) =>
