@@ -56,14 +56,17 @@ export function parsearParamsModificacionPre(
 }
 
 /**
- * Demasía TOTAL de cada lado, acumulando todos los pasos PRE ya ejecutados.
+ * Demasía acumulada por lado de los pasos PRE ya ejecutados.
  *
- * Al doblarse hacia atrás, la demasía de un lado forma sobre la pieza terminada
- * una banda reforzada de ese ancho, medida hacia adentro desde el borde. Es lo
- * que necesita `colocacion_ojales` para centrar el ojal en esa banda.
+ * Con `soloSubTipos` se puede acotar a un tipo de modificación. Lo usa
+ * `colocacion_ojales` para mirar SÓLO el refuerzo: al doblarse hacia atrás, un
+ * refuerzo deja sobre la pieza terminada una banda plana de su mismo ancho, y
+ * el ojal se centra ahí. Un BOLSILLO no sirve para eso — es un tubo para el
+ * caño, no una zona reforzada donde perforar.
  */
 export function demasiaAcumuladaPorLado(
   jobContext: JobContext,
+  opciones?: { soloSubTipos?: string[] },
 ): Record<LadoPieza, number> {
   const total: Record<LadoPieza, number> = {
     superior: 0,
@@ -72,6 +75,12 @@ export function demasiaAcumuladaPorLado(
     derecho: 0,
   };
   for (const mutacion of jobContext.mutacionesAplicadas ?? []) {
+    if (
+      opciones?.soloSubTipos &&
+      !opciones.soloSubTipos.includes(mutacion.subTipo)
+    ) {
+      continue;
+    }
     for (const lado of mutacion.lados) {
       total[lado] += mutacion.demasiaMm;
     }

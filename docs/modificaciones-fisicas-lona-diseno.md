@@ -512,7 +512,10 @@ y taller.
   **sangrado de impresión** (`pieceBleedMm`). Para no llamar dos cosas distintas igual, la de
   modificaciones se rotula **"Bolsillo / refuerzo"**.
 - La geometría vive en `src/lib/nesting-overlay.ts` con tests propios; el componente sólo dibuja.
-- **El ojal se centra en la banda del refuerzo.** Al doblarse hacia atrás, un refuerzo de 20 mm
+- **El ojal se centra en la banda del REFUERZO, no del bolsillo** (`SUBTIPOS_QUE_REFUERZAN`). El
+  refuerzo doblado deja una banda plana donde se puede perforar; el bolsillo es un tubo para el
+  caño, y centrar el ojal ahí lo metería innecesariamente adentro de la lona.
+- Al doblarse hacia atrás, un refuerzo de 20 mm
   deja sobre la pieza terminada una banda reforzada de 20 mm medida hacia adentro desde el borde;
   el ojal va al medio de esa banda, o sea a 10 mm. La regla **escala sola** con cualquier tamaño
   de refuerzo y no hay nada que configurar. `distanciaBordeMm` (default 10) quedó sólo como

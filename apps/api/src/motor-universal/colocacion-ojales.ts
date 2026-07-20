@@ -26,6 +26,13 @@ import type { JobContext, LadoPieza } from './tipos';
  */
 export const DISTANCIA_BORDE_OJAL_MM_DEFAULT = 10;
 
+/**
+ * Sub-tipos de `modificacion_pre` que dejan una banda plana reforzada donde se
+ * puede perforar un ojal. El `bolsillo` queda afuera a propósito: es un tubo
+ * para el caño, y centrar el ojal en él lo metería innecesariamente adentro.
+ */
+export const SUBTIPOS_QUE_REFUERZAN = ['refuerzo'];
+
 export interface ParamsColocacionOjales {
   /** Separación MÁXIMA entre ojales. Se reparte pareja sin superarla. */
   separacionMaxMm: number;
@@ -283,9 +290,12 @@ export function calcularLayoutOjales(
   const piezas = jobContext.piezasVisibles ?? jobContext.piezas;
   if (!piezas || piezas.length === 0) return [];
 
-  // El refuerzo de cada lado lo dejaron los pasos PRE, que ya corrieron: el
-  // ojal se centra en esa banda.
-  const demasia = demasiaAcumuladaPorLado(jobContext);
+  // Sólo el REFUERZO cuenta para centrar: deja una banda plana donde perforar.
+  // El bolsillo es un tubo para el caño, no una zona reforzada, así que no
+  // arrastra la posición del ojal.
+  const demasia = demasiaAcumuladaPorLado(jobContext, {
+    soloSubTipos: SUBTIPOS_QUE_REFUERZAN,
+  });
 
   return piezas.flatMap((pieza) => {
     const cantidad = Number(pieza.cantidad ?? 0);

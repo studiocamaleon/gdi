@@ -425,6 +425,62 @@ describe('calcularLayoutOjales', () => {
   it('sin piezas devuelve vacío', () => {
     expect(calcularLayoutOjales({ cantidad: 1 }, params())).toEqual([]);
   });
+
+  /**
+   * Sólo el refuerzo deja una banda plana donde perforar. El bolsillo es un
+   * tubo para el caño: centrar el ojal ahí lo metería 5cm adentro de la lona.
+   */
+  it('el REFUERZO centra el ojal en su banda', () => {
+    const jc = lona();
+    aplicarMutacionPre(
+      jc,
+      { subTipo: 'refuerzo', lados: CUATRO_LADOS, demasiaMm: 40 },
+      { rutaPasoId: 'rp-1', nombrePaso: 'Refuerzo' },
+    );
+
+    const claves = calcularLayoutOjales(jc, params())[0].posiciones.map(
+      (p) => `${p.xMm}:${p.yMm}`,
+    );
+    expect(claves).toContain('20:20');
+  });
+
+  it('el BOLSILLO no arrastra la posición del ojal', () => {
+    const jc = lona();
+    aplicarMutacionPre(
+      jc,
+      { subTipo: 'bolsillo', lados: ['superior', 'inferior'], demasiaMm: 100 },
+      { rutaPasoId: 'rp-1', nombrePaso: 'Bolsillo' },
+    );
+
+    const claves = calcularLayoutOjales(jc, params())[0].posiciones.map(
+      (p) => `${p.xMm}:${p.yMm}`,
+    );
+    // Sin refuerzo, la distancia declarada en el paso: 10mm, no 50.
+    expect(claves).toContain('10:10');
+    expect(claves).not.toContain('10:50');
+  });
+
+  it('con bolsillo Y refuerzo, manda el refuerzo en todos los lados', () => {
+    const jc = lona();
+    aplicarMutacionPre(
+      jc,
+      { subTipo: 'bolsillo', lados: ['superior', 'inferior'], demasiaMm: 100 },
+      { rutaPasoId: 'rp-1', nombrePaso: 'Bolsillo' },
+    );
+    aplicarMutacionPre(
+      jc,
+      { subTipo: 'refuerzo', lados: ['izquierdo', 'derecho'], demasiaMm: 40 },
+      { rutaPasoId: 'rp-2', nombrePaso: 'Refuerzo lateral' },
+    );
+
+    const claves = calcularLayoutOjales(jc, params())[0].posiciones.map(
+      (p) => `${p.xMm}:${p.yMm}`,
+    );
+    // 20mm en los laterales por su refuerzo, y arriba/abajo se alinean a esos
+    // 20mm en vez de tomar los 50 del bolsillo.
+    expect(claves).toContain('20:20');
+    expect(claves).toContain('500:20');
+  });
 });
 
 describe('calcularCantidadOjales', () => {
