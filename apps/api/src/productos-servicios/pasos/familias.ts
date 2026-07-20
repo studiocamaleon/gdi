@@ -1637,6 +1637,15 @@ const colocacion_ojales: DefinicionFamilia = {
       requerido: true,
     },
     {
+      campo: 'distanciaBordeMm',
+      etiqueta: 'Distancia del ojal al borde (mm)',
+      tipo: 'number',
+      default: 10,
+      requerido: false,
+      descripcion:
+        'Cuánto adentro del borde terminado va el centro del ojal: nunca se perfora sobre el filo, va dentro de la zona reforzada. Típico 5 a 10 mm.',
+    },
+    {
       campo: 'esquinasSiempre',
       etiqueta: 'Ojal en cada esquina',
       tipo: 'boolean',

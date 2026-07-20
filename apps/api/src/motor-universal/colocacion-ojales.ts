@@ -19,12 +19,20 @@
 import { largoDelLadoMm, parsearLados } from './lados-pieza';
 import type { JobContext, LadoPieza } from './tipos';
 
+/** Cuánto adentro del borde terminado va el centro del ojal, por defecto. */
+export const DISTANCIA_BORDE_OJAL_MM_DEFAULT = 10;
+
 export interface ParamsColocacionOjales {
   /** Separación MÁXIMA entre ojales. Se reparte pareja sin superarla. */
   separacionMaxMm: number;
   lados: LadoPieza[];
   /** Si cada esquina lleva ojal sí o sí (práctica de taller). Default true. */
   esquinasSiempre: boolean;
+  /**
+   * Distancia del CENTRO del ojal al borde terminado. El ojal nunca se perfora
+   * sobre el filo: va unos milímetros adentro, dentro de la zona reforzada.
+   */
+  distanciaBordeMm: number;
 }
 
 export function parsearParamsColocacionOjales(
@@ -38,10 +46,17 @@ export function parsearParamsColocacionOjales(
   const separacionMaxMm = Number(params.separacionMaxMm ?? NaN);
   if (!Number.isFinite(separacionMaxMm) || separacionMaxMm <= 0) return null;
 
+  const distanciaRaw = Number(params.distanciaBordeMm ?? NaN);
+  const distanciaBordeMm =
+    Number.isFinite(distanciaRaw) && distanciaRaw >= 0
+      ? distanciaRaw
+      : DISTANCIA_BORDE_OJAL_MM_DEFAULT;
+
   return {
     separacionMaxMm,
     lados,
     esquinasSiempre: params.esquinasSiempre !== false,
+    distanciaBordeMm,
   };
 }
 
@@ -63,6 +78,27 @@ export interface PosicionOjal {
 /** Redondeo a 0.1mm para deduplicar esquinas sin sufrir el error de punto flotante. */
 function clavePosicion(x: number, y: number): string {
   return `${Math.round(x * 10)}:${Math.round(y * 10)}`;
+}
+
+/**
+ * Corre el punto desde el borde hacia adentro de la pieza.
+ *
+ * El sentido se deduce de QUÉ bordes toca el punto, no del lado que lo generó:
+ * así una esquina —que toca dos— se corre en diagonal, en vez de quedar pegada
+ * al filo perpendicular. Un ojal a mitad de lado se corre en un solo eje.
+ */
+function correrHaciaAdentro(
+  xMm: number,
+  yMm: number,
+  anchoMm: number,
+  altoMm: number,
+  insetMm: number,
+): { xMm: number; yMm: number } {
+  if (insetMm <= 0) return { xMm, yMm };
+  return {
+    xMm: xMm === 0 ? insetMm : xMm === anchoMm ? anchoMm - insetMm : xMm,
+    yMm: yMm === 0 ? insetMm : yMm === altoMm ? altoMm - insetMm : yMm,
+  };
 }
 
 /**
@@ -91,6 +127,12 @@ export function calcularPosicionesOjales(
 ): PosicionOjal[] {
   if (anchoMm <= 0 || altoMm <= 0) return [];
 
+  // No puede meterse más allá del centro de la pieza (lonas muy chicas).
+  const inset = Math.max(
+    0,
+    Math.min(params.distanciaBordeMm, anchoMm / 2, altoMm / 2),
+  );
+
   const vistas = new Set<string>();
   const posiciones: PosicionOjal[] = [];
 
@@ -117,10 +159,14 @@ export function calcularPosicionesOjales(
             ? 0
             : altoMm;
 
+      // Se deduplica por la posición SOBRE el borde: dos lados adyacentes
+      // comparten la esquina antes de correrla hacia adentro.
       const clave = clavePosicion(xMm, yMm);
       if (vistas.has(clave)) continue;
       vistas.add(clave);
-      posiciones.push({ xMm, yMm, lado });
+
+      const adentro = correrHaciaAdentro(xMm, yMm, anchoMm, altoMm, inset);
+      posiciones.push({ ...adentro, lado });
     }
   }
 

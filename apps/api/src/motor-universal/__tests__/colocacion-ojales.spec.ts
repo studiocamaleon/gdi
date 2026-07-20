@@ -21,6 +21,7 @@ function params(over: Partial<Parameters<typeof calcularOjalesPorPieza>[2]> = {}
     separacionMaxMm: 500,
     lados: CUATRO_LADOS,
     esquinasSiempre: true,
+    distanciaBordeMm: 10,
     ...over,
   };
 }
@@ -46,7 +47,28 @@ describe('parsearParamsColocacionOjales', () => {
       separacionMaxMm: 500,
       lados: ['superior', 'derecho'],
       esquinasSiempre: true,
+      distanciaBordeMm: 10,
     });
+  });
+
+  it('respeta una distancia al borde propia', () => {
+    expect(
+      parsearParamsColocacionOjales({
+        separacionMaxMm: 500,
+        lados: ['superior'],
+        distanciaBordeMm: 25,
+      })?.distanciaBordeMm,
+    ).toBe(25);
+  });
+
+  it('un valor inválido cae al default', () => {
+    expect(
+      parsearParamsColocacionOjales({
+        separacionMaxMm: 500,
+        lados: ['superior'],
+        distanciaBordeMm: -5,
+      })?.distanciaBordeMm,
+    ).toBe(10);
   });
 
   it('respeta esquinasSiempre en false', () => {
@@ -137,12 +159,59 @@ describe('calcularOjalesPorPieza', () => {
 });
 
 describe('calcularPosicionesOjales', () => {
-  /** Las coordenadas son de la medida VISIBLE: (0,0) = esquina sup. izq. */
-  it('reparte parejo sobre cada lado, con ambos extremos', () => {
+  /**
+   * Coordenadas de la medida VISIBLE: (0,0) = esquina sup. izq. El ojal no se
+   * perfora sobre el filo: va `distanciaBordeMm` hacia adentro.
+   */
+  it('reparte parejo sobre el lado y corre los ojales hacia adentro', () => {
     const pos = calcularPosicionesOjales(
       1500,
       1000,
       params({ lados: ['superior'] }),
+    );
+    expect(pos.map((p) => [p.xMm, p.yMm])).toEqual([
+      [10, 10], // esquina: se corre en los DOS ejes
+      [500, 10], // mitad de lado: sólo se aleja del borde superior
+      [1000, 10],
+      [1490, 10], // esquina opuesta
+    ]);
+  });
+
+  it('las esquinas se corren en diagonal y las de lado en un solo eje', () => {
+    const pos = calcularPosicionesOjales(1500, 1000, params());
+    const claves = pos.map((p) => `${p.xMm}:${p.yMm}`);
+    // Las 4 esquinas, movidas en ambos ejes.
+    for (const esquina of ['10:10', '1490:10', '10:990', '1490:990']) {
+      expect(claves).toContain(esquina);
+    }
+    // El del medio del lado izquierdo sólo se alejó del borde izquierdo.
+    expect(claves).toContain('10:500');
+  });
+
+  it('las esquinas compartidas siguen contando UNA sola vez', () => {
+    const pos = calcularPosicionesOjales(1500, 1000, params());
+    expect(pos).toHaveLength(10);
+    expect(new Set(pos.map((p) => `${p.xMm}:${p.yMm}`)).size).toBe(10);
+  });
+
+  it('toda posición queda a la distancia declarada de algún borde', () => {
+    for (const p of calcularPosicionesOjales(1500, 1000, params())) {
+      const pegadoAAlgunBorde =
+        p.xMm === 10 || p.xMm === 1490 || p.yMm === 10 || p.yMm === 990;
+      expect(pegadoAAlgunBorde).toBe(true);
+      // Y siempre dentro de la pieza.
+      expect(p.xMm).toBeGreaterThan(0);
+      expect(p.xMm).toBeLessThan(1500);
+      expect(p.yMm).toBeGreaterThan(0);
+      expect(p.yMm).toBeLessThan(1000);
+    }
+  });
+
+  it('con distancia 0 vuelve a caer sobre el filo', () => {
+    const pos = calcularPosicionesOjales(
+      1500,
+      1000,
+      params({ lados: ['superior'], distanciaBordeMm: 0 }),
     );
     expect(pos.map((p) => [p.xMm, p.yMm])).toEqual([
       [0, 0],
@@ -152,22 +221,15 @@ describe('calcularPosicionesOjales', () => {
     ]);
   });
 
-  it('las esquinas compartidas aparecen UNA sola vez', () => {
-    const pos = calcularPosicionesOjales(1500, 1000, params());
-    expect(pos).toHaveLength(10);
-    const claves = pos.map((p) => `${p.xMm}:${p.yMm}`);
-    expect(new Set(claves).size).toBe(10);
-    // Las 4 esquinas están presentes.
-    for (const esquina of ['0:0', '1500:0', '0:1000', '1500:1000']) {
-      expect(claves).toContain(esquina);
-    }
-  });
-
-  it('cada posición cae sobre el perímetro', () => {
-    for (const p of calcularPosicionesOjales(1500, 1000, params())) {
-      const enBorde =
-        p.xMm === 0 || p.xMm === 1500 || p.yMm === 0 || p.yMm === 1000;
-      expect(enBorde).toBe(true);
+  it('en una pieza chica no se pasa del centro', () => {
+    const pos = calcularPosicionesOjales(
+      40,
+      40,
+      params({ lados: ['superior'], separacionMaxMm: 500, distanciaBordeMm: 50 }),
+    );
+    for (const p of pos) {
+      expect(p.xMm).toBeLessThanOrEqual(20);
+      expect(p.yMm).toBeLessThanOrEqual(20);
     }
   });
 
@@ -178,7 +240,7 @@ describe('calcularPosicionesOjales', () => {
       1000,
       params({ lados: ['superior'] }),
     );
-    expect(pos.map((p) => p.xMm)).toEqual([0, 400, 800, 1200]);
+    expect(pos.map((p) => p.xMm)).toEqual([10, 400, 800, 1190]);
   });
 
   it('sin esquinasSiempre no pone los extremos', () => {

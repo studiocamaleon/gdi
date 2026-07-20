@@ -512,6 +512,12 @@ y taller.
   **sangrado de impresión** (`pieceBleedMm`). Para no llamar dos cosas distintas igual, la de
   modificaciones se rotula **"Bolsillo / refuerzo"**.
 - La geometría vive en `src/lib/nesting-overlay.ts` con tests propios; el componente sólo dibuja.
+- **El ojal no va sobre el filo**: su centro se corre `distanciaBordeMm` hacia adentro del borde
+  terminado (default 10 mm, configurable en el paso), que es donde se perfora en el taller —
+  dentro de la zona reforzada. No es un ajuste del dibujo sino la posición real, así que la
+  calcula el motor. El sentido del corrimiento se deduce de qué bordes toca el punto, no del lado
+  que lo generó: una esquina se corre en diagonal y un ojal a mitad de lado en un solo eje.
+  La separación se sigue midiendo **sobre el borde**; sólo se mueve el punto de perforado.
 
 **Pendiente — piezas paneleadas.** Cuando una lona no entra en el ancho del rollo, el nesting la
 parte en paneles y cada placement es una tajada; la franja y los ojales pertenecen al perímetro de
