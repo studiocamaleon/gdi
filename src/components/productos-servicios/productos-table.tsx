@@ -358,7 +358,10 @@ export function ProductosServiciosTable({
               <table className="tbl">
                 <thead>
                   <tr>
-                    <th>Nombre</th>
+                    {/* El nombre trae descripción debajo: sin un piso propio el
+                        auto-layout se lo come (quedaba en ~140px) y el texto se
+                        parte en muchas líneas en pantallas chicas. */}
+                    <th style={{ minWidth: 260 }}>Nombre</th>
                     <th>Categoría</th>
                     <th>¿Cómo se cobra?</th>
                     <th>Manejo de medidas</th>
