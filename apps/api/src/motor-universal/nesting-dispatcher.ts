@@ -636,7 +636,13 @@ function evaluateSequentialRollCandidate(
   return { result, algorithm: 'secuencial-rollo' };
 }
 
-function evaluateRollLayoutForConfiguredAlgorithm(
+/**
+ * Corre el/los algoritmos de rollo y devuelve el mejor layout. Exportado para
+ * que el SIMULADOR de producción acomode la tanda consolidada con este mismo
+ * motor en vez de reimplementar un packer propio (que derivaba: ver
+ * docs/simulador-impresion-diseno.md).
+ */
+export function evaluateRollLayoutForConfiguredAlgorithm(
   shelfInput: EvaluateGranFormatoMixedShelfLayoutInput,
   algorithm: NestingConfigResolved['algorithm'],
 ): {

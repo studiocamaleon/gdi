@@ -26,6 +26,10 @@ import {
 } from "@/lib/ordenes-trabajo-api";
 import { technologyCodeLabel } from "@/lib/maquinaria-tecnologias";
 import { diasHastaEntrega, etiquetaEntrega } from "@/lib/tablero-produccion";
+import {
+  simularNesting,
+  type SimuladorNestingGrupo,
+} from "@/lib/simulador-impresion-api";
 
 const POLL_SIMULADOR_MS = 15000;
 
@@ -165,96 +169,21 @@ function buildViewModel(data: SimuladorData) {
   return { jobs, techs, materials };
 }
 
-/* ─────────── Motor de nesting (shelf-packing FFDH con rotación) ─────────── */
+/* ─────────── Nesting: motor puro en src/lib (testeado) ─────────── */
+
 
 type SimPlaced = { x: number; y: number; w: number; h: number; id: string };
 
-type SimPackResult = {
+type SimRollResult = {
   placed: SimPlaced[];
+  /** Largo de rollo consumido (cm). */
   totalLen: number;
   utilization: number;
   pieceArea: number;
   wasteArea: number;
-  /** Jobs con alguna pieza que no entra en el ancho (todo o nada por job). */
+  /** pasoIds cuya pieza no entra en este ancho. */
   incompatible: string[];
   pieces: number;
-};
-
-function simPack(jobs: VJob[], rollCm: number, opts: { margin?: number; gap?: number } = {}): SimPackResult {
-  const margin = opts.margin ?? 3;
-  const gap = opts.gap ?? 1.5;
-  const usable = rollCm - margin * 2;
-
-  const rects: Array<{ w: number; h: number; id: string }> = [];
-  const incompatible: string[] = [];
-  for (const job of jobs) {
-    if (job.sinMedidas) continue;
-    // Todo o nada: si una pieza del job no entra, el job no se imprime acá.
-    if (job.piezas.some((pieza) => Math.min(pieza.w, pieza.h) > usable)) {
-      incompatible.push(job.id);
-      continue;
-    }
-    for (const pieza of job.piezas) {
-      for (let c = 0; c < pieza.copies; c++) rects.push({ w: pieza.w, h: pieza.h, id: job.id });
-    }
-  }
-
-  for (const r of rects) {
-    const long = Math.max(r.w, r.h);
-    const short = Math.min(r.w, r.h);
-    if (long <= usable) {
-      r.w = long;
-      r.h = short;
-    } else {
-      r.w = short;
-      r.h = long;
-    }
-  }
-  rects.sort((a, b) => b.h - a.h || b.w - a.w);
-
-  const shelves: Array<{ y: number; h: number; x: number }> = [];
-  const placed: SimPlaced[] = [];
-  let cursorY = 0;
-  for (const r of rects) {
-    let shelf: { y: number; h: number; x: number } | null = null;
-    for (const s of shelves) {
-      if (s.x + r.w <= usable && r.h <= s.h) {
-        shelf = s;
-        break;
-      }
-      if (s.x + r.h <= usable && r.w <= s.h && Math.max(r.w, r.h) <= usable) {
-        const t = r.w;
-        r.w = r.h;
-        r.h = t;
-        shelf = s;
-        break;
-      }
-    }
-    if (!shelf) {
-      shelf = { y: cursorY, h: r.h, x: 0 };
-      shelves.push(shelf);
-      cursorY += r.h + gap;
-    }
-    placed.push({ x: margin + shelf.x, y: shelf.y, w: r.w, h: r.h, id: r.id });
-    shelf.x += r.w + gap;
-  }
-
-  const last = shelves[shelves.length - 1];
-  const totalLen = last ? last.y + last.h : 0;
-  const pieceArea = placed.reduce((a, p) => a + p.w * p.h, 0);
-  const rollArea = rollCm * totalLen;
-  return {
-    placed,
-    totalLen,
-    utilization: rollArea ? pieceArea / rollArea : 0,
-    pieceArea,
-    wasteArea: Math.max(0, rollArea - pieceArea),
-    incompatible,
-    pieces: placed.length,
-  };
-}
-
-type SimRollResult = SimPackResult & {
   rollCm: number;
   stockMl: number | null;
   stockOk: boolean;
@@ -263,19 +192,43 @@ type SimRollResult = SimPackResult & {
   costo: number | null;
 };
 
-function simCompareRolls(jobs: VJob[], material: VMaterial) {
+/**
+ * Traduce el acomodo que devolvió el MOTOR (mm) al view-model en cm y le suma
+ * lo que es del catálogo: stock, precio y cuál ancho conviene.
+ * El nesting no se calcula acá — ver `simularNesting`.
+ */
+function simCompareRolls(
+  material: VMaterial,
+  grupo: SimuladorNestingGrupo | undefined,
+) {
+  const porAncho = new Map((grupo?.anchos ?? []).map((a) => [a.anchoMm, a]));
   const results: SimRollResult[] = material.rolls.map((rollCm) => {
-    const r = simPack(jobs, rollCm);
+    const acomodo = porAncho.get(Math.round(rollCm * 10));
+    const totalLen = acomodo?.consumedLengthMm != null ? acomodo.consumedLengthMm / 10 : 0;
+    const placed: SimPlaced[] = (acomodo?.placements ?? []).map((p) => ({
+      x: p.xMm / 10,
+      y: p.yMm / 10,
+      w: p.widthMm / 10,
+      h: p.heightMm / 10,
+      id: p.pasoId ?? "",
+    }));
+    const pieceArea = placed.reduce((a, p) => a + p.w * p.h, 0);
     const stockMl = material.stockMl[rollCm] ?? null;
     const precioMl = material.precioMl[rollCm] ?? null;
     return {
       rollCm,
-      ...r,
+      placed,
+      totalLen,
+      utilization: (acomodo?.aprovechamientoPct ?? 0) / 100,
+      pieceArea,
+      wasteArea: Math.max(0, rollCm * totalLen - pieceArea),
+      incompatible: acomodo?.incompatibles ?? [],
+      pieces: acomodo?.piezasAcomodadas ?? 0,
       stockMl,
       // Sin dato de stock no se bloquea la sugerencia (se muestra "—").
-      stockOk: stockMl === null || stockMl >= r.totalLen / 100,
+      stockOk: stockMl === null || stockMl >= totalLen / 100,
       precioMl,
-      costo: precioMl !== null ? (r.totalLen / 100) * precioMl : null,
+      costo: precioMl !== null ? (totalLen / 100) * precioMl : null,
     };
   });
   const eligible = results.filter(
@@ -303,15 +256,28 @@ function SimRollLayout({
   pack,
   rollCm,
   colorMap,
+  nesteando,
+  nestingError,
   height = 190,
 }: {
   pack: SimRollResult | undefined;
   rollCm: number;
   colorMap: Record<string, string>;
+  nesteando: boolean;
+  nestingError: string | null;
   height?: number;
 }) {
+  // El acomodo lo calcula el motor: mientras no llegue no se dibuja un rollo
+  // vacío como si fuera el resultado.
+  if (nestingError) {
+    return <div className="sim-layout-empty">{nestingError}</div>;
+  }
   if (!pack || pack.pieces === 0) {
-    return <div className="sim-layout-empty">Sin piezas para acomodar</div>;
+    return (
+      <div className="sim-layout-empty">
+        {nesteando ? "Calculando el acomodo…" : "Sin piezas para acomodar"}
+      </div>
+    );
   }
   const lenCm = Math.max(pack.totalLen, 40);
   const W = 720;
@@ -387,6 +353,9 @@ function SimMaterialCard({
   material,
   jobs,
   excluded,
+  nesting,
+  nesteando,
+  nestingError,
   onToggle,
   onCompletar,
   completando,
@@ -394,6 +363,10 @@ function SimMaterialCard({
   material: VMaterial;
   jobs: VJob[];
   excluded: Set<string>;
+  /** Acomodo que devolvió el motor para este material. */
+  nesting: SimuladorNestingGrupo | undefined;
+  nesteando: boolean;
+  nestingError: string | null;
   onToggle: (id: string) => void;
   onCompletar: (
     pasoIds: string[],
@@ -416,8 +389,8 @@ function SimMaterialCard({
     [jobs, excluded],
   );
   const { results, bestRoll } = React.useMemo(
-    () => simCompareRolls(activeJobs, material),
-    [activeJobs, material],
+    () => simCompareRolls(material, nesting),
+    [material, nesting],
   );
   const shownRoll =
     rollOverride && material.rolls.includes(rollOverride) ? rollOverride : bestRoll;
@@ -582,6 +555,8 @@ function SimMaterialCard({
                   pack={shownPack}
                   rollCm={shownRoll || material.rolls[0] || 100}
                   colorMap={colorMap}
+                  nesteando={nesteando}
+                  nestingError={nestingError}
                 />
               </div>
 
@@ -758,6 +733,64 @@ export function SimuladorImpresion({ initialData }: { initialData: SimuladorData
 
   const currentTechKey = tech?.key ?? null;
   const techMaterials = materials.filter((m) => m.tech === currentTechKey);
+
+  // El acomodo lo calcula el MOTOR en el backend (mismo nesting que cotizó).
+  // Se pide de a toda la tecnología: la cabecera totaliza el ahorro de todos
+  // sus materiales, así que de a uno serían N idas y vueltas por click.
+  const grupos = React.useMemo(
+    () =>
+      techMaterials
+        .map((m) => ({
+          key: m.key,
+          pasoIds: (jobsByMat.get(m.key) ?? [])
+            .filter((j) => !excluded.has(j.id) && !j.sinMedidas)
+            .map((j) => j.id),
+          anchosMm: m.rolls.map((rollCm) => Math.round(rollCm * 10)),
+        }))
+        .filter((g) => g.pasoIds.length > 0 && g.anchosMm.length > 0),
+    [techMaterials, jobsByMat, excluded],
+  );
+  const gruposKey = JSON.stringify(grupos);
+  const [nesting, setNesting] = React.useState<Map<string, SimuladorNestingGrupo>>(
+    () => new Map(),
+  );
+  const [nestingError, setNestingError] = React.useState<string | null>(null);
+  const [nesteando, setNesteando] = React.useState(false);
+
+  React.useEffect(() => {
+    if (grupos.length === 0) {
+      setNesting(new Map());
+      setNestingError(null);
+      return;
+    }
+    const ctrl = new AbortController();
+    setNesteando(true);
+    // Se debouncea: sacar y poner trabajos del batch es un click rápido.
+    const id = window.setTimeout(() => {
+      simularNesting({ grupos }, ctrl.signal)
+        .then((res) => {
+          setNesting(new Map(res.grupos.map((g) => [g.key, g])));
+          setNestingError(null);
+        })
+        .catch((err: unknown) => {
+          if (ctrl.signal.aborted) return;
+          // Sin acomodo no se inventan números: se avisa y no se muestra nada.
+          setNesting(new Map());
+          setNestingError(
+            err instanceof Error ? err.message : "No se pudo calcular el acomodo.",
+          );
+        })
+        .finally(() => {
+          if (!ctrl.signal.aborted) setNesteando(false);
+        });
+    }, 200);
+    return () => {
+      ctrl.abort();
+      window.clearTimeout(id);
+    };
+    // grupos se recrea en cada render; su CONTENIDO es la dependencia real.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gruposKey]);
   const techJobs = techMaterials
     .flatMap((m) => jobsByMat.get(m.key) ?? [])
     .filter((j) => !excluded.has(j.id));
@@ -773,7 +806,7 @@ export function SimuladorImpresion({ initialData }: { initialData: SimuladorData
   for (const m of techMaterials) {
     const mj = (jobsByMat.get(m.key) ?? []).filter((j) => !excluded.has(j.id));
     if (!mj.length) continue;
-    const { results, bestRoll } = simCompareRolls(mj, m);
+    const { results, bestRoll } = simCompareRolls(m, nesting.get(m.key));
     const best = results.find((r) => r.rollCm === bestRoll);
     if (!best) continue;
     const conBaseline = mj.filter((j) => j.consumoCotizadoMl !== null && !j.sinMedidas);
@@ -877,6 +910,9 @@ export function SimuladorImpresion({ initialData }: { initialData: SimuladorData
                   material={m}
                   jobs={mj}
                   excluded={excluded}
+                  nesting={nesting.get(m.key)}
+                  nesteando={nesteando}
+                  nestingError={nestingError}
                   onToggle={toggle}
                   onCompletar={(pasoIds, tanda, ahorro) => void completar(pasoIds, tanda, ahorro)}
                   completando={completando}
