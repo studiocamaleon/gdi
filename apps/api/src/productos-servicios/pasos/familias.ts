@@ -1587,6 +1587,68 @@ const modificacion_post: DefinicionFamilia = {
   productosTipicos: ['Tarjetas con redondeo', 'Talonarios numerados'],
 };
 
+const colocacion_ojales: DefinicionFamilia = {
+  codigo: 'colocacion_ojales',
+  nombre: 'Colocación de ojales',
+  categoria: 'operaciones_manuales',
+  descripcion:
+    'Coloca ojales sobre el perímetro de la pieza. La cantidad se DERIVA de la medida visible y de cada cuántos mm van los ojales — no la carga el comercial. Suele ir después de un refuerzo perimetral.',
+  relacionMaquinaSoportada: ['M-0'],
+  modosTiempoSoportados: ['T-1', 'T-2'],
+  // CALCULADO_POR_PASO: el paso deriva la cantidad del perímetro visible.
+  mecanismosCantidadSoportados: [
+    'CALCULADO_POR_PASO',
+    'DIRECT_FROM_JOBCONTEXT',
+  ],
+  modosActivacionSoportados: ['OPCIONAL', 'OBLIGATORIO', 'CONDICIONAL'],
+  modoActivacionDefault: 'OPCIONAL',
+  multiplicadoresSoportados: [],
+  slotsRequeridos: [
+    {
+      codigo: 'ojal',
+      nombre: 'Ojal / ojalillo',
+      tipo: 'INSUMO_PASO',
+      requerido: true,
+      compatibilidadMaterial: {
+        familiasMateriaPrima: ['HERRAJE_ACCESORIO'],
+        subfamiliasMateriaPrima: ['OJAL_OJALILLO_REMACHE'],
+      },
+    },
+  ],
+  permiteSlotsAdicionales: true,
+  plantillasCompatibles: [],
+  inputsRequeridos: [],
+  outputsCanonicos: ['ojales_colocados'],
+  validaciones: [],
+  paramsPasoSchema: [
+    {
+      campo: 'separacionMaxMm',
+      etiqueta: 'Separación máxima entre ojales (mm)',
+      tipo: 'number',
+      requerido: true,
+      descripcion:
+        'Es un MÁXIMO, no un valor exacto: los ojales se reparten parejos por cada lado sin superar esta distancia.',
+    },
+    {
+      campo: 'lados',
+      etiqueta: 'Lados con ojales',
+      tipo: 'multi-enum',
+      valoresPermitidos: ['superior', 'inferior', 'izquierdo', 'derecho'],
+      requerido: true,
+    },
+    {
+      campo: 'esquinasSiempre',
+      etiqueta: 'Ojal en cada esquina',
+      tipo: 'boolean',
+      default: true,
+      requerido: false,
+      descripcion:
+        'Práctica de taller: la esquina lleva ojal sí o sí. Cuando dos lados adyacentes llevan ojales, la esquina se cuenta UNA sola vez.',
+    },
+  ],
+  productosTipicos: ['Lona con ojales', 'Banner para colgar'],
+};
+
 // ============================================================================
 // 3.8 Logística / instalación in situ (3)
 // ============================================================================
@@ -1732,6 +1794,7 @@ export const FAMILIAS: Record<FamiliaCodigo, DefinicionFamilia> = {
   trabajo_manual,
   modificacion_pre,
   modificacion_post,
+  colocacion_ojales,
   envio,
   instalacion_in_situ,
   toma_medidas,

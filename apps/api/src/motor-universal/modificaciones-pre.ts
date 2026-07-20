@@ -21,17 +21,8 @@
 import {
   recalcularMetricasDerivadasPiezas,
 } from './job-context-metrics';
+import { LADOS_EJE_ALTO, largoDelLadoMm, parsearLados } from './lados-pieza';
 import type { JobContext, LadoPieza, MutacionAplicada } from './tipos';
-
-export const LADOS_PIEZA: LadoPieza[] = [
-  'superior',
-  'inferior',
-  'izquierdo',
-  'derecho',
-];
-
-/** Lados que agrandan el ALTO al recibir demasía. */
-const LADOS_EJE_ALTO: LadoPieza[] = ['superior', 'inferior'];
 
 export interface ParamsModificacionPre {
   /** Preset: `bolsillo` (lados horizontales, demasía grande) o `refuerzo`. */
@@ -50,8 +41,7 @@ export function parsearParamsModificacionPre(
 ): ParamsModificacionPre | null {
   const params = (paramsPasoJson ?? {}) as Record<string, unknown>;
 
-  const ladosRaw = Array.isArray(params.lados) ? params.lados : [];
-  const lados = LADOS_PIEZA.filter((lado) => ladosRaw.includes(lado));
+  const lados = parsearLados(params.lados);
   if (lados.length === 0) return null;
 
   const demasiaMm = Number(params.demasiaMm ?? NaN);
@@ -88,7 +78,7 @@ export function calcularMetrosLinealesUnion(
     if (anchoMm <= 0 || altoMm <= 0 || cantidad <= 0) return acc;
 
     const largoTotalMm = params.lados.reduce(
-      (sum, lado) => sum + (LADOS_EJE_ALTO.includes(lado) ? anchoMm : altoMm),
+      (sum, lado) => sum + largoDelLadoMm(lado, anchoMm, altoMm),
       0,
     );
     return acc + (largoTotalMm / 1000) * cantidad;

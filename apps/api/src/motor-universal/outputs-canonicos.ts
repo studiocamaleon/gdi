@@ -281,6 +281,12 @@ function computeOutput(
     return true;
   }
 
+  if (key === 'ojales_colocados') {
+    // La cantidad del paso YA son los ojales: los deriva `resolverCantidad`
+    // del perímetro VISIBLE.
+    return cantidadEfectiva || null;
+  }
+
   // ─── Casos puntuales ──────────────────────────────────────────────
   if (key === 'proof_aprobado') {
     // Si el paso se ejecutó sin errores, asumimos proof aprobado.

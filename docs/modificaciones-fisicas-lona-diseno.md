@@ -313,8 +313,19 @@ const colocacion_ojales: DefinicionFamilia = {
 };
 ```
 
-`CALCULADO_POR_PASO` ya existe como mecanismo (`pasos/types.ts:116`, hoy lo usa el nesting). Hay
-que agregarle una segunda estrategia: cálculo por perímetro.
+`CALCULADO_POR_PASO` ya existe como mecanismo (`pasos/types.ts`, hoy lo usa el nesting). Se le
+agregó una segunda estrategia: cálculo por perímetro.
+
+**Semántica de `esquinasSiempre: false`**: los lados llevan sólo los ojales INTERMEDIOS
+(`tramos − 1` por lado) y no hay esquinas que descontar, porque ningún lado aporta sus extremos.
+Sobre 1500×1000 cada 500mm en los 4 lados da 6 ojales en vez de 10.
+
+**Un paso de ojales mal configurado también corta la cotización**
+(`colocacion_ojales_mal_configurada`): sin separación ni lados la cantidad sale 0 y el paso no
+cobra nada, el mismo silencio que evita la guarda de `modificacion_pre`.
+
+Sumar la familia obligó a tocar dos guardas del catálogo: el union `FamiliaCodigo` y los tests que
+fijan el total de familias (41 → 42).
 
 ---
 
@@ -425,7 +436,7 @@ responsabilidad del modelador; la traza de §5.1 lo deja visible en el desglose.
 |---|---|---|
 | **A. Contrato** ✅ | `medidaVisibleMm` / `piezasVisibles` congeladas al inicio del loop; `mutacionesAplicadas[]`; recálculo de `piezaAreaTotalM2` y `piezaPerimetroTotalM` tras cada mutación (§6.3) | Bajo. Aditivo, sin cambio de comportamiento si no hay pasos PRE. |
 | **B. Sub-tarea (i)** ✅ | Mutación real en `modificacion_pre`: `lados[]` + `demasiaMm`, por pieza y en ambos caminos; output `metros_lineales_union`; tiempo T-2 en ml/h; retiro de sub-tipos muertos | Medio. Toca el loop del motor. Cubrir con tests antes. |
-| **C. Ojales** | Familia `colocacion_ojales`; estrategia de cantidad por perímetro en `CALCULADO_POR_PASO` con dedupe de esquinas; slot de material; output `ojales_colocados` | Medio. La fórmula necesita tests propios (§4). |
+| **C. Ojales** ✅ | Familia `colocacion_ojales`; estrategia de cantidad por perímetro en `CALCULADO_POR_PASO` con dedupe de esquinas; slot de material; output `ojales_colocados` | Medio. La fórmula necesita tests propios (§4). |
 | **D. Editor** | Render de `multi-enum` para `lados`; presets de subTipo; validación de orden (§6.4) | Bajo. |
 | **E. Cotizador** | Desglose con medida pedida vs. material y el detalle de cada modificación | Bajo. |
 | **F. OT / producción** | Doble medida en la OT y el tablero; medida visible en el seguimiento público | Bajo. |

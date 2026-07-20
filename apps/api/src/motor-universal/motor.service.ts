@@ -72,6 +72,10 @@ import {
   calcularMetrosLinealesUnion,
   parsearParamsModificacionPre,
 } from './modificaciones-pre';
+import {
+  calcularCantidadOjales,
+  parsearParamsColocacionOjales,
+} from './colocacion-ojales';
 
 const MODO_SIN_IMPRESION = 'SIN_IMPRESION';
 const FAMILIAS_IMPRESION = new Set([
@@ -585,6 +589,23 @@ export class MotorUniversalService {
             nombrePaso: ejecucion.nombreVisible ?? paso.familiaCodigo,
           });
           if (traza) ejecucion.mutacionAplicada = traza;
+        }
+      }
+
+      // Misma lógica para ojales: sin separación ni lados la cantidad sale 0 y
+      // el paso no cobra nada, otra vez en silencio.
+      if (paso.familiaCodigo === 'colocacion_ojales' && ejecucion.activado) {
+        if (!parsearParamsColocacionOjales(paso.paramsPasoJson)) {
+          errores.push({
+            codigo: 'colocacion_ojales_mal_configurada',
+            severidad: 'ERROR',
+            rutaPasoId: paso.rutaPasoId,
+            rutaPasoOrden: paso.rutaPasoOrden,
+            familiaCodigo: paso.familiaCodigo,
+            mensaje: `El paso "${ejecucion.nombreVisible ?? paso.familiaCodigo}" no declara separación entre ojales ni lados, así que no puede calcular cuántos ojales entran.`,
+            sugerencia:
+              'Configurar en el paso la separación máxima entre ojales (mm) y los lados donde van.',
+          });
         }
       }
     }
@@ -4646,6 +4667,13 @@ export class MotorUniversalService {
       if (paso.familiaCodigo === 'modificacion_pre') {
         const params = parsearParamsModificacionPre(paso.paramsPasoJson);
         if (params) return calcularMetrosLinealesUnion(jobContext, params);
+        return 0;
+      }
+      // Etapa C — `colocacion_ojales` deriva su cantidad del perímetro VISIBLE
+      // (el ojal va al borde terminado, no crece con la demasía del refuerzo).
+      if (paso.familiaCodigo === 'colocacion_ojales') {
+        const params = parsearParamsColocacionOjales(paso.paramsPasoJson);
+        if (params) return calcularCantidadOjales(jobContext, params);
         return 0;
       }
       // Fallback histórico: m² crudos de las piezas (sin desperdicio) cuando

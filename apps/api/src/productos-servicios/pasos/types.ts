@@ -59,6 +59,7 @@ export type FamiliaCodigo =
   // Modificaciones físicas (sub-categoría dentro de manuales)
   | 'modificacion_pre'
   | 'modificacion_post'
+  | 'colocacion_ojales'
   // Logística / instalación
   | 'envio'
   | 'instalacion_in_situ'
