@@ -102,6 +102,8 @@ export interface ProductoListItem {
   minimoComercialCantidad: string | null;
   minimoComercialBase: MinimoComercialBase;
   activo: boolean;
+  /** Derivado: algún paso de alguna ruta es tercerizado (para el badge). */
+  tercerizado?: boolean;
   subcategoriaComercial: ProductoSubcategoriaComercial & {
     categoria: Omit<ProductoCategoriaComercial, "subcategorias">;
   };
@@ -246,6 +248,19 @@ export interface ConfigPasoDetalle {
     };
   }>;
   cargosDirectosPaso: Array<CargoPasoDetalle>;
+  // === Tercerización (docs/productos-tercerizados-diseno.md) ===
+  tercerizado?: boolean;
+  proveedorId?: string | null;
+  fuenteCostoTercerizado?: string | null;
+  tercerizadoConfigJson?: Record<string, unknown> | null;
+  plazoProveedorDias?: number | null;
+  tercerizadoEntradas?: Array<{
+    id: string;
+    valoresJson: Record<string, unknown>;
+    claveMatch: string;
+    cantidad: number;
+    costo: number | string;
+  }>;
 }
 
 export interface SlotMaterialDetalle {

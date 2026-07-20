@@ -11,7 +11,6 @@ import {
   type CobroDraft,
 } from "@/components/administracion/cobro-formulario";
 import type {
-  ComprobantePendiente,
   CuentaFondosResumen,
   MetodoPago,
 } from "@/lib/administracion";
@@ -33,12 +32,10 @@ export function RegistrarCobroView({
   orden,
   metodos,
   cuentas,
-  pendientes,
 }: {
   orden: OrdenContexto;
   metodos: MetodoPago[];
   cuentas: CuentaFondosResumen[];
-  pendientes: ComprobantePendiente[];
 }) {
   const router = useRouter();
   const saldo = Math.max(0, orden.total - orden.cobradoBruto);
@@ -134,7 +131,6 @@ export function RegistrarCobroView({
           saldo={saldo}
           metodos={metodos}
           cuentas={cuentas}
-          pendientes={pendientes}
           guardando={guardando}
           onSubmit={(draft) => void submit(draft)}
           cancelHref={`/produccion/ordenes/${orden.id}`}

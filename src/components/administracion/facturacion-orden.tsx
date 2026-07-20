@@ -253,6 +253,7 @@ export function ComprobantesOrdenTab({
   facturadoInicial,
   cobradoInicial,
   puedeFacturar,
+  recargarToken = 0,
 }: {
   ordenId: string;
   numero: string;
@@ -261,6 +262,11 @@ export function ComprobantesOrdenTab({
   cobradoInicial: number;
   /** false en borradores (se emite la OT primero). */
   puedeFacturar: boolean;
+  /**
+   * Cambia cuando algo de afuera facturó (ej. el botón "Facturar" del header de
+   * la OT, que monta su propio modal): fuerza recargar comprobantes y cobros.
+   */
+  recargarToken?: number;
 }) {
   const [comprobantes, setComprobantes] = React.useState<Comprobante[] | null>(
     null,
@@ -280,7 +286,7 @@ export function ComprobantesOrdenTab({
     return () => {
       activo = false;
     };
-  }, [ordenId, refrescos]);
+  }, [ordenId, refrescos, recargarToken]);
 
   // Los ejes se recalculan de lo listado (fuente viva); si todavía no
   // cargó, valen los denormalizados que vinieron con la orden.

@@ -39,13 +39,6 @@ const Ico = {
       <path d="m9 6 6 6-6 6" />
     </svg>
   ),
-  Route: (props: React.SVGProps<SVGSVGElement>) => (
-    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <circle cx="6" cy="19" r="2.5" />
-      <circle cx="18" cy="5" r="2.5" />
-      <path d="M8.5 19H14a4 4 0 0 0 0-8h-4a4 4 0 0 1 0-8h5.5" />
-    </svg>
-  ),
   Arrow: (props: React.SVGProps<SVGSVGElement>) => (
     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...props}>
       <path d="M5 12h14M13 6l6 6-6 6" />
@@ -355,16 +348,20 @@ export function ProductosServiciosTable({
                 />
               </div>
             ) : (
-              <table className="tbl">
+              /* `fixed`: los anchos los mandan los % de abajo y no el contenido.
+                 Con el auto-layout la columna Nombre quedaba en ~140px, y ponerle
+                 un min-width subía el min-content de la tabla (1089→1209px), que
+                 los ancestros flex (`.content`, `.gp-main`, con min-width:auto) no
+                 pueden encoger — la vista terminaba más ancha que el viewport. */
+              <table className="tbl" style={{ tableLayout: "fixed" }}>
                 <thead>
                   <tr>
-                    <th>Nombre</th>
-                    <th>Categoría</th>
-                    <th>¿Cómo se cobra?</th>
-                    <th>Manejo de medidas</th>
-                    <th>Rutas</th>
-                    <th>Estado</th>
-                    <th className="right" style={{ width: 96 }}>Acciones</th>
+                    <th style={{ width: "34%" }}>Nombre</th>
+                    <th style={{ width: "14%" }}>Categoría</th>
+                    <th style={{ width: "16%" }}>¿Cómo se cobra?</th>
+                    <th style={{ width: "19%" }}>Manejo de medidas</th>
+                    <th style={{ width: "9%" }}>Estado</th>
+                    <th className="right" style={{ width: "8%" }}>Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -376,6 +373,20 @@ export function ProductosServiciosTable({
                         <td>
                           <div className="name">
                             {highlightMatch(p.nombre, search)}
+                            {p.tercerizado ? (
+                              <span
+                                className="tag"
+                                style={{
+                                  marginLeft: 8,
+                                  background: "var(--ps-blue-bg)",
+                                  color: "var(--ps-blue)",
+                                  borderColor: "var(--ps-blue-bord)",
+                                }}
+                                title="Tiene al menos un paso que compra a un proveedor"
+                              >
+                                Tercerizado
+                              </span>
+                            ) : null}
                           </div>
                           <div className="desc">{p.descripcion ?? ""}</div>
                         </td>
@@ -398,16 +409,6 @@ export function ProductosServiciosTable({
                           >
                             <span className="d" />
                             {lblMedidas.label}
-                          </span>
-                        </td>
-                        <td>
-                          <span className="inline-flex flex-wrap gap-1.5">
-                            {p.rutasAlternativas.map((ra) => (
-                              <span key={ra.id} className="tag route">
-                                <Ico.Route />
-                                {ra.nombre}
-                              </span>
-                            ))}
                           </span>
                         </td>
                         <td>

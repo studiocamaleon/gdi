@@ -10,6 +10,7 @@ import type { FamiliaCodigo } from '../productos-servicios/pasos/types';
 import { evaluarRegla } from './evaluador-jsonlogic';
 import { loadTarifasHorarias } from '../productos-servicios/costing/load-tarifas';
 import { calcularPrecio, type PrecioConfig } from './calculador-precio';
+import { resolverCostoTercerizado } from './tercerizado-costo';
 import { AplicarPrecioService } from '../productos-servicios/precio/aplicar-precio.service';
 import { PreciosEspecialesClientesService } from '../productos-servicios/precio/precios-especiales-clientes/precios-especiales-clientes.service';
 import type {
@@ -580,7 +581,14 @@ export class MotorUniversalService {
     );
     const cargosDirectosTotal =
       cargosDirectosPasoTotal + cargosDirectosCotizacionTotal;
-    const total = tiempoTotal + materialesTotal + cargosDirectosTotal;
+    // Los pasos TERCERIZADOS aportan su costo directo (no tienen tiempo/material);
+    // se suman aparte para no perderlos ni duplicar el costo de los internos.
+    const tercerizadoTotal = pasosEjecutados.reduce(
+      (acc, p) => acc + (p.tercerizado ? p.costoTotal : 0),
+      0,
+    );
+    const total =
+      tiempoTotal + materialesTotal + cargosDirectosTotal + tercerizadoTotal;
     const cantidadEfectiva = jobContext.cantidad ?? 1;
     const cantidadComercialReal = this.resolverCantidadComercialBase(
       producto,
@@ -638,6 +646,7 @@ export class MotorUniversalService {
         tiempoTotal,
         materialesTotal,
         cargosDirectosTotal,
+        tercerizadoTotal,
         total,
         unitario: costoUnitarioComercial,
       },
@@ -1627,6 +1636,102 @@ export class MotorUniversalService {
     return `${yyyy}-${mm}`;
   }
 
+  /**
+   * Costo de un paso tercerizado (lo compra un proveedor). No consume máquina ni
+   * tiempo interno; el motor lo suma como cualquier paso. Delega el costeo al
+   * módulo puro `tercerizado-costo`. docs/productos-tercerizados-diseno.md §5.
+   */
+  /**
+   * Etiquetas (eje→valor) de los atributos elegidos de un paso tercerizado con
+   * matriz, para mostrarlos en Especificaciones. Excluye el eje `cantidad` (ya
+   * se ve en la cantidad del ítem). Usa las etiquetas del config; cae al valor
+   * crudo si falta.
+   */
+  private etiquetasEjesTercerizado(
+    config: Record<string, unknown>,
+    seleccion: Record<string, unknown>,
+  ): Array<{ eje: string; valor: string }> {
+    const ejes = Array.isArray(config.ejes)
+      ? (config.ejes as Array<Record<string, unknown>>)
+      : [];
+    const filas: Array<{ eje: string; valor: string }> = [];
+    for (const eje of ejes) {
+      const clave = typeof eje.clave === 'string' ? eje.clave : '';
+      if (!clave || clave === 'cantidad') continue;
+      const valorClave = seleccion[clave];
+      if (valorClave == null || valorClave === '') continue;
+      const valores = Array.isArray(eje.valores)
+        ? (eje.valores as Array<Record<string, unknown>>)
+        : [];
+      const match = valores.find((v) => v.clave === valorClave);
+      filas.push({
+        eje: (typeof eje.label === 'string' && eje.label) || clave,
+        valor:
+          (match && typeof match.label === 'string' && match.label) ||
+          String(valorClave),
+      });
+    }
+    return filas;
+  }
+
+  private ejecutarPasoTercerizado(
+    paso: PasoCargado,
+    jobContext: JobContext,
+    errores: ErrorMotor[],
+  ): PasoEjecutado {
+    const config = (paso.tercerizadoConfigJson ?? {}) as Record<string, unknown>;
+    const seleccionMatriz =
+      ((jobContext as Record<string, unknown>)[
+        `tercerizado_${paso.configPasoId}`
+      ] as Record<string, unknown>) ?? {};
+    const base = {
+      rutaPasoId: paso.rutaPasoId,
+      rutaPasoOrden: paso.rutaPasoOrden,
+      familiaCodigo: paso.familiaCodigo,
+      nombreVisible: paso.nombreVisible,
+      configPasoId: paso.configPasoId,
+      activado: true,
+      tercerizado: true,
+      proveedorId: paso.proveedorId ?? null,
+      plazoProveedorDias: paso.plazoProveedorDias ?? null,
+      tecnologiaTercerizado:
+        typeof config.tecnologia === 'string' ? config.tecnologia : null,
+      tercerizadoEtiquetas: this.etiquetasEjesTercerizado(config, seleccionMatriz),
+    };
+    const resultado = resolverCostoTercerizado({
+      fuente: paso.fuenteCostoTercerizado ?? '',
+      config,
+      magnitudes: {
+        area_m2: jobContext.piezaAreaTotalM2,
+        perimetro_ml: jobContext.piezaPerimetroTotalM,
+        ml: jobContext.metrosLineales ?? jobContext.ml,
+        cantidad: jobContext.cantidad ?? jobContext.cantidadComercial,
+      },
+      seleccionMatriz,
+      entradas: paso.tercerizadoEntradas ?? [],
+    });
+    if (!resultado.ok) {
+      errores.push({
+        codigo: 'tercerizado_no_resoluble',
+        severidad: 'ERROR',
+        mensaje: resultado.error,
+        rutaPasoId: paso.rutaPasoId,
+        rutaPasoOrden: paso.rutaPasoOrden,
+        familiaCodigo: paso.familiaCodigo,
+        contexto: {
+          configPasoId: paso.configPasoId,
+          fuente: paso.fuenteCostoTercerizado,
+        },
+      });
+      return { ...base, costoTotal: 0 };
+    }
+    return {
+      ...base,
+      costoTotal: resultado.costo,
+      tercerizadoDetalle: resultado.detalle,
+    };
+  }
+
   private async ejecutarPaso(
     tenantId: string,
     paso: PasoCargado,
@@ -1652,6 +1757,12 @@ export class MotorUniversalService {
         razonNoActivado: activacion.razon,
         costoTotal: 0,
       };
+    }
+
+    // TERCERIZADO — el paso lo compra un proveedor: costo por su fuente, sin
+    // máquina ni tiempo interno. docs/productos-tercerizados-diseno.md §5.
+    if (paso.tercerizado) {
+      return this.ejecutarPasoTercerizado(paso, jobContext, errores);
     }
 
     // a.1) F.2.8 — Ejecutar validaciones D.7 declaradas por la familia
@@ -5565,6 +5676,7 @@ export class MotorUniversalService {
                 },
                 perfilM1: true,
                 centroCosto: true,
+                tercerizadoEntradas: { where: { activo: true } },
                 slotsMateriales: {
                   include: {
                     materialVariante: {
@@ -5741,6 +5853,17 @@ export class MotorUniversalService {
           ? Number(cp.tiempoFijoOverrideMin)
           : null,
         dotacionOperarios: cp.dotacionOperarios ?? 1,
+        tercerizado: cp.tercerizado,
+        proveedorId: cp.proveedorId,
+        fuenteCostoTercerizado: cp.fuenteCostoTercerizado,
+        tercerizadoConfigJson: cp.tercerizadoConfigJson,
+        plazoProveedorDias: cp.plazoProveedorDias,
+        tercerizadoEntradas: cp.tercerizadoEntradas.map((e) => ({
+          claveMatch: e.claveMatch,
+          valoresJson: e.valoresJson,
+          cantidad: e.cantidad,
+          costo: Number(e.costo),
+        })),
         maquina: cp.maquinaM1
           ? {
               id: cp.maquinaM1.id,

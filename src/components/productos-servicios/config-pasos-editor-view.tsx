@@ -42,6 +42,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { RuleBuilder } from "@/components/productos-servicios/rule-builder";
+import { PasoTercerizadoPanel } from "@/components/productos-servicios/paso-tercerizado-panel";
 import {
   actualizarPasoExtra,
   buscarMateriasPrimasConfigPaso,
@@ -2873,6 +2874,21 @@ export function ConfigPasosEditorView({
             cantidadBase: s.cantidadBase ?? null,
             aplicaMultiCaras: s.aplicaMultiCaras,
           })) ?? [],
+        tercerizado: existente?.tercerizado ?? false,
+        proveedorId: existente?.proveedorId ?? null,
+        fuenteCostoTercerizado: existente?.fuenteCostoTercerizado ?? null,
+        tercerizadoConfigJson:
+          (existente?.tercerizadoConfigJson as
+            | Record<string, unknown>
+            | null
+            | undefined) ?? null,
+        plazoProveedorDias: existente?.plazoProveedorDias ?? null,
+        tercerizadoEntradas:
+          existente?.tercerizadoEntradas?.map((e) => ({
+            valores: e.valoresJson,
+            cantidad: e.cantidad,
+            costo: Number(e.costo),
+          })) ?? [],
       };
     }
     // G-F3 sub-fase 2 — borradores para los pasos extras (mismo panel).
@@ -3962,13 +3978,16 @@ export function ConfigPasosEditorView({
     const noEjecutar = cfg.modoActivacion === "NO_EJECUTAR";
     const cantidadRelevante =
       !noEjecutar && requiereMecanismoCantidad(cfg, familia);
-    const valBasico = noEjecutar
+    // Un paso tercerizado no se produce internamente: no aplican las
+    // validaciones de máquina/material/producción (su costo lo valida el backend).
+    const sinValidacionProduccion = noEjecutar || cfg.tercerizado;
+    const valBasico = sinValidacionProduccion
       ? { errores: [], warnings: [] }
       : validarBasico(cfg, familia);
-    const valMateriales = noEjecutar
+    const valMateriales = sinValidacionProduccion
       ? { errores: [], warnings: [] }
       : validarMateriales(cfg, familia);
-    const valAvanzado = noEjecutar
+    const valAvanzado = sinValidacionProduccion
       ? { errores: [], warnings: [] }
       : validarAvanzado(
           jsonText.params,
@@ -4766,9 +4785,10 @@ export function ConfigPasosEditorView({
                             : "máx. ancho imprimible",
                         ].join(" · ")
                       : "";
-                  const valBasico = noEjecutar
-                    ? { errores: [], warnings: [] }
-                    : validarBasico(cfg, familia);
+                  const valBasico =
+                    noEjecutar || cfg.tercerizado
+                      ? { errores: [], warnings: [] }
+                      : validarBasico(cfg, familia);
                   const valMateriales = noEjecutar
                     ? { errores: [], warnings: [] }
                     : validarMateriales(cfg, familia);
@@ -4780,14 +4800,19 @@ export function ConfigPasosEditorView({
                         cfg,
                         familia ? { codigo: familia.codigo } : undefined,
                       );
-                  const totalErrores =
-                    valBasico.errores.length +
-                    valMateriales.errores.length +
-                    valAvanzado.errores.length;
-                  const totalWarnings =
-                    valBasico.warnings.length +
-                    valMateriales.warnings.length +
-                    valAvanzado.warnings.length;
+                  // Un paso tercerizado no usa máquina/material: su validez es
+                  // la de su fuente de costo (la chequea el backend), no estas
+                  // validaciones de producción.
+                  const totalErrores = cfg.tercerizado
+                    ? 0
+                    : valBasico.errores.length +
+                      valMateriales.errores.length +
+                      valAvanzado.errores.length;
+                  const totalWarnings = cfg.tercerizado
+                    ? 0
+                    : valBasico.warnings.length +
+                      valMateriales.warnings.length +
+                      valAvanzado.warnings.length;
                   const pasoTieneCambios = hasUnsavedChanges(paso.id);
 
                   return (
@@ -4907,6 +4932,42 @@ export function ConfigPasosEditorView({
                       <div className="config-step-content pasos-sections">
                         <section className="section-block open">
                           <div className="sb-head">
+                            <span className="num">T</span>
+                            <span className="ttl">Tercerización</span>
+                            <span className="hint">
+                              ¿Este paso lo compra un proveedor?
+                            </span>
+                          </div>
+                          <div className="sb-body">
+                            <PasoTercerizadoPanel
+                              value={cfg}
+                              onChange={(patch) => updateConfig(paso.id, patch)}
+                              onToggle={(tercerizado) =>
+                                updateConfig(
+                                  paso.id,
+                                  tercerizado
+                                    ? {
+                                        tercerizado: true,
+                                        // Fuente por default (el panel muestra
+                                        // matriz): hay que persistirla, no dejarla
+                                        // sólo en el display.
+                                        fuenteCostoTercerizado:
+                                          cfg.fuenteCostoTercerizado ?? "matriz",
+                                        maquinaM1Id: null,
+                                        perfilM1Id: null,
+                                        // No se produce internamente: los
+                                        // multiplicadores (caras, tipoCopia) no
+                                        // aplican y no deben quedar persistidos.
+                                        multiplicadoresActivos: [],
+                                      }
+                                    : { tercerizado: false },
+                                )
+                              }
+                            />
+                          </div>
+                        </section>
+                        <section className="section-block open">
+                          <div className="sb-head">
                             <span className="num">01</span>
                             <span className="ttl">Activación</span>
                             <span className="hint">
@@ -4959,6 +5020,7 @@ export function ConfigPasosEditorView({
                                   ruta del producto.
                                 </span>
                               </div>
+                              {!cfg.tercerizado && (
                               <div className="field">
                                 <label>Multiplicadores</label>
                                 <div className="chip-row">
@@ -5002,6 +5064,7 @@ export function ConfigPasosEditorView({
                                   En materiales, caras se define por slot.
                                 </span>
                               </div>
+                              )}
                               {cfg.modoActivacion === "CONDICIONAL" && (
                                 <div className="md:col-span-full">
                                   <RuleBuilder
@@ -5032,7 +5095,10 @@ export function ConfigPasosEditorView({
                           </div>
                         </section>
 
-                        {!noEjecutar && (
+                        {/* Un paso tercerizado no se produce internamente: no tiene
+                            tiempo/costo, máquina, materiales ni overrides. Sólo se
+                            configura su Activación (sin multiplicadores). */}
+                        {!noEjecutar && !cfg.tercerizado && (
                           <>
                             <section className="section-block open">
                               <div className="sb-head">

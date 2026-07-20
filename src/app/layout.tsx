@@ -19,8 +19,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "GDI ERP",
-  description: "ERP inicial para graficas con interfaz en shadcn/ui.",
+  title: "Grafoprint | Gráfica Digital Inteligente",
+  description:
+    "Sistema de gestión para gráficas: presupuestos, órdenes de trabajo, producción y administración.",
 };
 
 export default function RootLayout({

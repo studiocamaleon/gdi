@@ -5,13 +5,11 @@ import {
   type OrdenContexto,
 } from "@/components/administracion/registrar-cobro-view";
 import type {
-  ComprobantePendiente,
   CuentaFondosResumen,
   MetodoPago,
 } from "@/lib/administracion";
 import {
   getCobros,
-  getComprobantesPendientes,
   getCuentasFondos,
   getMetodosPago,
 } from "@/lib/administracion-api";
@@ -29,7 +27,6 @@ export default async function RegistrarCobroPage({
   let orden: OrdenContexto | null = null;
   let metodos: MetodoPago[] = [];
   let cuentas: CuentaFondosResumen[] = [];
-  let pendientes: ComprobantePendiente[] = [];
 
   try {
     if (ordenId) {
@@ -50,12 +47,6 @@ export default async function RegistrarCobroPage({
       };
       metodos = metodosData;
       cuentas = cuentasData;
-      // Sin cliente no hay cuenta corriente contra la cual imputar.
-      if (detalle.clienteId) {
-        pendientes = await getComprobantesPendientes(detalle.clienteId).catch(
-          () => [],
-        );
-      }
     }
   } catch {
     orden = null;
@@ -96,7 +87,6 @@ export default async function RegistrarCobroPage({
       orden={orden}
       metodos={metodos}
       cuentas={cuentas}
-      pendientes={pendientes}
     />
   );
 }

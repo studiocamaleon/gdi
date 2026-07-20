@@ -48,6 +48,7 @@ import {
   crearOrdenTrabajo,
   editarOrdenItem,
   editarOrdenTrabajo,
+  getOrdenTrabajo,
   getTableroProduccion,
   quitarOrdenItem,
 } from "@/lib/ordenes-trabajo-api";
@@ -75,6 +76,7 @@ import {
   type OrdenTrabajoProducto,
 } from "@/lib/ordenes-trabajo";
 import { ConfirmacionSalida } from "@/components/ui/confirmacion-salida";
+import { AvisoOtEnBorrador } from "@/components/comercial/aviso-ot-en-borrador";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import type { CobroDraft } from "@/components/administracion/cobro-formulario";
 import { PagosStagingTab } from "@/components/comercial/pagos-staging-tab";
@@ -124,6 +126,12 @@ type PropuestaFichaProps = {
    * el tag "RECIÉN EMITIDA" en esta visita y limpia el param de la URL.
    */
   recienEmitida?: boolean;
+  /**
+   * True al aterrizar desde la conversión de un presupuesto (?convertida=1):
+   * abre el aviso de que la orden quedó en BORRADOR y todavía no fue al
+   * taller. Ver <AvisoOtEnBorrador />.
+   */
+  recienConvertida?: boolean;
 };
 
 type OrdenTab =
@@ -1475,6 +1483,11 @@ function getCostBuckets(item: PropuestaItem) {
       amount: item.cotizacion.costos.tiempoTotal,
     },
     {
+      key: "tercerizado",
+      label: "Costo de proveedor",
+      amount: item.cotizacion.costos.tercerizadoTotal ?? 0,
+    },
+    {
       key: "cargos",
       label: "Cargos directos",
       amount: item.cotizacion.costos.cargosDirectosTotal,
@@ -2516,12 +2529,13 @@ function CostosItemView({
   );
   const ivaTotal = Math.max(0, precioBruto - precioNeto);
   // Margen de contribución = Precio neto − costos variables. Variables (decisión
-  // del usuario): materiales + cargos + impuestos internos + comisiones. El
-  // centro de costo (máquina + mano de obra) es estructura fija que la
-  // contribución cubre → MC = centro de costo + margen.
+  // del usuario): materiales + costo de proveedor (tercerizado) + cargos +
+  // impuestos internos + comisiones. El centro de costo (máquina + mano de obra)
+  // es estructura fija que la contribución cubre → MC = centro de costo + margen.
   const costosVariablesTotal =
     item.cotizacion.costos.materialesTotal +
     item.cotizacion.costos.cargosDirectosTotal +
+    (item.cotizacion.costos.tercerizadoTotal ?? 0) +
     costosInternosTotal +
     comisionesTotal;
   const margenContribucionMonto = precioNeto - costosVariablesTotal;
@@ -2565,6 +2579,7 @@ function CostosItemView({
   const TIPO_POR_BUCKET: Record<string, string> = {
     materiales: "Materia prima",
     "centro-costo": "Centro de costo",
+    tercerizado: "Proveedor",
     cargos: "Cargo directo",
   };
   // Filas punto por punto: todo lo que compone el precio neto (suma 100%).
@@ -2716,9 +2731,9 @@ function CostosItemView({
             }}
           >
             Indicador de gestión — no forma parte de la composición del precio.
-            Precio neto − costos variables (materiales, cargos, impuestos
-            internos, comisiones). Es lo que queda para cubrir la estructura
-            fija (centro de costo) y dejar ganancia.
+            Precio neto − costos variables (materiales, proveedor, cargos,
+            impuestos internos, comisiones). Es lo que queda para cubrir la
+            estructura fija (centro de costo) y dejar ganancia.
           </span>
         </div>
         <div
@@ -2995,8 +3010,43 @@ function buildOrdenItemSpecs(
     arr.push({ lbl: "Estampas", val: estampas });
   }
 
+  // Tercerizado: los atributos elegidos (Papel, terminación, …) que resolvió el
+  // motor se muestran como specs, para que la ficha/OT reflejen lo que se pidió
+  // al proveedor. docs/productos-tercerizados-diseno.md
+  let tecnologiaTercerizado: string | null = null;
+  for (const paso of item.cotizacion.pasos) {
+    if (paso.tecnologiaTercerizado) tecnologiaTercerizado = paso.tecnologiaTercerizado;
+    for (const fila of paso.tercerizadoEtiquetas ?? []) {
+      if (arr.some((spec) => spec.lbl.toLowerCase() === fila.eje.toLowerCase())) {
+        continue;
+      }
+      arr.push({ lbl: fila.eje, val: fila.valor });
+    }
+  }
+  // Tecnología asignada al tercerizado: pisa la genérica del producto ("Impresión")
+  // con el proceso real (ej. Offset), que es lo que clasifican los reportes.
+  if (tecnologiaTercerizado) {
+    const label = TECNOLOGIA_TERCERIZADO_LABEL[tecnologiaTercerizado] ?? tecnologiaTercerizado;
+    const idx = arr.findIndex((spec) => spec.lbl.toLowerCase() === "tecnología");
+    if (idx >= 0) arr[idx] = { ...arr[idx], val: label };
+    else arr.push({ lbl: "Tecnología", val: label });
+  }
+
   return arr;
 }
+
+/** Etiquetas de las tecnologías tercerizables (espejo del selector del editor). */
+const TECNOLOGIA_TERCERIZADO_LABEL: Record<string, string> = {
+  offset: "Offset",
+  serigrafia: "Serigrafía",
+  tampografia: "Tampografía",
+  sublimacion: "Sublimación",
+  bordado: "Bordado",
+  laser: "Corte/grabado láser",
+  flexografia: "Flexografía",
+  termoformado: "Termoformado",
+  otra: "Otra",
+};
 
 function claveFechaEta(fecha: Date) {
   return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}-${String(fecha.getDate()).padStart(2, "0")}`;
@@ -4573,9 +4623,23 @@ export function PropuestaFicha({
   initialProductos = [],
   initialCargosDirectos = [],
   currentUser = null,
-  orden,
+  orden: ordenProp,
   recienEmitida = false,
+  recienConvertida = false,
 }: PropuestaFichaProps) {
+  // La OT vive en estado local (inicializada desde el prop del server) para
+  // poder refrescar el header/stepper en vivo sin recargar la página cuando
+  // una acción interna cambia su estado (ej: avance de compra tercerizada).
+  const [orden, setOrden] = React.useState(ordenProp);
+  React.useEffect(() => {
+    setOrden(ordenProp);
+  }, [ordenProp]);
+  const recargarOrden = React.useCallback(() => {
+    if (!ordenProp?.id) return;
+    getOrdenTrabajo(ordenProp.id)
+      .then(setOrden)
+      .catch(() => {});
+  }, [ordenProp?.id]);
   const modoOrden = Boolean(orden);
   // Tag "RECIÉN EMITIDA": sólo en la visita inmediata a la emisión (llegada
   // con ?emitida=1, o al emitir un borrador acá mismo). El param se limpia
@@ -4586,12 +4650,26 @@ export function PropuestaFicha({
     if (!recienEmitida) return;
     window.history.replaceState(null, "", window.location.pathname);
   }, [recienEmitida]);
+  // Aviso "quedó en borrador" al llegar desde una conversión. Sólo si la
+  // orden SIGUE en borrador: si alguien recarga con el param después de
+  // emitirla, no tiene sentido avisar. El param se limpia igual que el de
+  // emisión, para que un refresh o un link compartido no lo reabran.
+  const [avisoBorradorAbierto, setAvisoBorradorAbierto] = React.useState(
+    recienConvertida && ordenProp?.estado === "borrador",
+  );
+  React.useEffect(() => {
+    if (!recienConvertida) return;
+    window.history.replaceState(null, "", window.location.pathname);
+  }, [recienConvertida]);
   const [tipo, setTipo] = React.useState<TipoPropuesta>("orden_trabajo");
   const ordenTipo = tipoMap[tipo];
   const [tab, setTab] = React.useState<OrdenTab>("productos");
   // Modal "Facturar" del header (la acción también vive en el tab
   // Comprobantes). Ver docs/facturacion-ordenes-deuda-comercial-diseno.md §6.1.
   const [facturarOpen, setFacturarOpen] = React.useState(false);
+  // Se incrementa al facturar desde el header, para que el tab Comprobantes
+  // (que hace su propio fetch) recargue la lista sin refrescar la página.
+  const [comprobantesToken, setComprobantesToken] = React.useState(0);
   // Cobros en staging (sólo creación): se registran todos al emitir la OT,
   // como los items. El backend rechaza cobros sobre borradores, así que
   // guardar borrador NO los persiste (se avisa con modal).
@@ -5046,6 +5124,14 @@ export function PropuestaFicha({
       setEmitiendoBorrador(false);
     }
   }, [orden, router]);
+
+  // Emitir desde el aviso de recién convertida. Se cierra pase lo que pase:
+  // si faltaba cliente o fecha, emitirBorrador ya avisó por toast y lo que
+  // corresponde es dejar la orden a la vista para corregirla.
+  const emitirDesdeAviso = React.useCallback(async () => {
+    await emitirBorrador();
+    setAvisoBorradorAbierto(false);
+  }, [emitirBorrador]);
 
   const descartarYSalir = React.useCallback(() => {
     if (!navPendiente) return;
@@ -6041,7 +6127,7 @@ export function PropuestaFicha({
 
         {tab === "produccion" ? (
           orden ? (
-            <ProduccionOrdenTab ordenId={orden.id} />
+            <ProduccionOrdenTab ordenId={orden.id} onOrdenActualizada={recargarOrden} />
           ) : (
             <EmptyTab
               title="Programacion de produccion"
@@ -6085,6 +6171,7 @@ export function PropuestaFicha({
               facturadoInicial={orden.facturadoTotal}
               cobradoInicial={orden.cobradoTotal}
               puedeFacturar={orden.estado !== "borrador"}
+              recargarToken={comprobantesToken}
             />
           </div>
         ) : null}
@@ -6096,6 +6183,12 @@ export function PropuestaFicha({
             onClose={() => setFacturarOpen(false)}
             onFacturada={() => {
               setTab("comprobantes");
+              // El tab de Comprobantes tiene su propio fetch cliente: router.refresh()
+              // sólo revalida el server component, así que hay que pedirle que
+              // recargue la lista (si no, el comprobante recién emitido no aparece
+              // hasta refrescar la página a mano).
+              setComprobantesToken((n) => n + 1);
+              recargarOrden();
               router.refresh();
             }}
           />
@@ -6172,6 +6265,18 @@ export function PropuestaFicha({
       {emitiendo ? (
         <EmitOverlay numero={emisionNumero} onDone={finalizarEmision} />
       ) : null}
+
+      {/* Montado SIEMPRE y controlado por `open`, igual que los demás
+          modales de la ficha: montarlo condicionalmente agrega/saca un
+          consumidor de useId y desalinea los ids generados entre server y
+          cliente (hydration mismatch en el menú de usuario del topbar). */}
+      <AvisoOtEnBorrador
+        open={avisoBorradorAbierto && orden?.estado === "borrador"}
+        numero={orden?.numero ?? ""}
+        emitiendo={emitiendoBorrador}
+        onEmitirAhora={emitirDesdeAviso}
+        onEmitirDespues={() => setAvisoBorradorAbierto(false)}
+      />
 
       <ConfirmacionSalida
         open={navPendiente !== null}

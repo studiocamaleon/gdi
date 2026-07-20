@@ -41,13 +41,20 @@ export const NAV: NavItem[] = [
     children: [
       {
         key: "crear-propuesta",
-        label: "Crear propuesta",
+        label: "Crear orden",
         href: "/comercial/crear-propuesta",
       },
       {
         key: "presupuestos",
         label: "Presupuestos",
         href: "/comercial/presupuestos",
+      },
+      // Vive en Comercial (sigue el flujo propuesta → presupuesto → OT) aunque
+      // la ruta siga bajo /produccion/ordenes.
+      {
+        key: "ordenes-trabajo",
+        label: "Órdenes de trabajo",
+        href: "/produccion/ordenes",
       },
     ],
   },
@@ -110,11 +117,10 @@ export const NAV: NavItem[] = [
     icon: "Factory",
     children: [
       {
-        key: "ordenes-trabajo",
-        label: "Órdenes de trabajo",
-        href: "/produccion/ordenes",
+        key: "tablero-produccion",
+        label: "Tablero de producción",
+        href: "/produccion/tablero",
       },
-      { key: "tablero-produccion", label: "Tablero", href: "/produccion/tablero" },
       {
         key: "simulador",
         label: "Simulador gran formato",

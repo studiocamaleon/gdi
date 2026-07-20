@@ -557,6 +557,14 @@ function chipsDeclarar(estimado: number | null): number[] {
   return [...new Set([redondo(estimado / 2), redondo(estimado), redondo(estimado * 2)])];
 }
 
+/** Estado de la compra de un paso tercerizado, en lenguaje del taller. */
+const COMPRA_LABELS: Record<string, string> = {
+  pendiente: "Compra pendiente",
+  pedido: "Pedido al proveedor",
+  recibido: "Recibido",
+  entregado: "Entregado",
+};
+
 function PasoAcciones({
   item,
   step,
@@ -578,6 +586,28 @@ function PasoAcciones({
   const paso = step.paso;
   const esActual = item.currentStep?.paso.id === paso.id;
   const esCronometro = paso.modoRegistro === "cronometro";
+
+  // Un paso TERCERIZADO es una compra al proveedor, no trabajo del taller: no se
+  // ejecuta desde el tablero (se avanza en "Compras / Tercerizados" de la OT).
+  // Igual se muestra —y sigue contando para la secuencia— porque bloquea al paso
+  // interno siguiente hasta que la compra esté recibida.
+  // docs/productos-tercerizados-diseno.md §6.
+  if (paso.tipoEjecucion === "tercerizado") {
+    const estadoCompra = paso.estadoCompra ?? "pendiente";
+    return (
+      <div className="ds-terc">
+        <span className={`dst-badge ${estadoCompra}`}>Tercerizado</span>
+        <span className="dst-info">
+          {paso.proveedorNombre ? `${paso.proveedorNombre} · ` : ""}
+          {COMPRA_LABELS[estadoCompra] ?? estadoCompra}
+          {paso.plazoProveedorDias != null
+            ? ` · plazo ${paso.plazoProveedorDias} d`
+            : ""}
+        </span>
+        <span className="dst-hint">Se gestiona desde la orden</span>
+      </div>
+    );
+  }
 
   if (paso.estado === "hecho") {
     // Reabrir sólo el último hecho: deshacer en el medio rompe la secuencia.

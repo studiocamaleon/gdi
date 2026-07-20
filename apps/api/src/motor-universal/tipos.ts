@@ -154,6 +154,8 @@ export interface CotizacionResultado {
     tiempoTotal: number;
     materialesTotal: number;
     cargosDirectosTotal: number;
+    /** Costo de pasos tercerizados (lo que se paga al proveedor). */
+    tercerizadoTotal: number;
     total: number;
     unitario: number;
   };
@@ -259,7 +261,25 @@ export interface PasoEjecutado {
   materiales?: MaterialEjecutado[];
   /** Cargos directos a nivel paso (si activado). */
   cargosDirectosPaso?: CargoDirectoEjecutado[];
-  /** Costo total del paso (tiempo + materiales + cargos). */
+  /** El paso lo compró un proveedor (no consume máquina ni tiempo interno). */
+  tercerizado?: boolean;
+  proveedorId?: string | null;
+  plazoProveedorDias?: number | null;
+  /** Detalle del costeo tercerizado, para desglose/UI. */
+  tercerizadoDetalle?: {
+    fuente: string;
+    magnitud?: string;
+    valorMagnitud?: number;
+    tarifa?: number;
+    entradaClave?: string;
+  };
+  /** Atributos elegidos del paso tercerizado (eje→valor) con sus etiquetas,
+   *  para mostrarlos en Especificaciones. Ej: [{eje:"Papel", valor:"Ilus 150"}]. */
+  tercerizadoEtiquetas?: Array<{ eje: string; valor: string }>;
+  /** Tecnología asignada manualmente al paso tercerizado (para que los reportes
+   *  lo clasifiquen aunque no tenga máquina). Ej: "offset". */
+  tecnologiaTercerizado?: string | null;
+  /** Costo total del paso (tiempo + materiales + cargos, o costo tercerizado). */
   costoTotal: number;
   /** Outputs canónicos que el paso escribió al JobContext. */
   outputsCanonicos?: Record<string, unknown>;
@@ -537,6 +557,20 @@ export interface PasoCargado {
   tiempoFijoOverrideMin: number | null;
   /** Operarios que ocupa el paso; multiplica el costo de mano de obra. */
   dotacionOperarios?: number | null;
+  /** === Tercerización (docs/productos-tercerizados-diseno.md) === */
+  tercerizado?: boolean;
+  proveedorId?: string | null;
+  /** 'tarifa_magnitud' | 'matriz' | 'fijo'. */
+  fuenteCostoTercerizado?: string | null;
+  tercerizadoConfigJson?: unknown;
+  plazoProveedorDias?: number | null;
+  /** Filas de la matriz (sólo fuente 'matriz'), con costo ya en number. */
+  tercerizadoEntradas?: Array<{
+    claveMatch: string;
+    valoresJson: unknown;
+    cantidad: number;
+    costo: number;
+  }>;
   /** Detalles de la máquina (cargados del JOIN). */
   maquina?: {
     id: string;

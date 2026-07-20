@@ -98,6 +98,21 @@ export function formatCurrency(value: number) {
   }).format(value);
 }
 
+/**
+ * Precio POR UNIDAD: muestra centavos cuando es chico (ej. tercerizado por
+ * tanda: $0,10/u), pero entero para valores grandes. Los totales siguen usando
+ * `formatCurrency` (enteros).
+ */
+export function formatUnitPrice(value: number) {
+  const digits = value !== 0 && Math.abs(value) < 100 ? 2 : 0;
+  return new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: digits,
+  }).format(value);
+}
+
 export function formatUnidad(unidad: UnidadPropuesta) {
   if (unidad === "m2") return "m²";
   if (unidad === "metro_lineal") return "ml";

@@ -73,6 +73,24 @@ export class ProductoValidacionService {
         }
         if (config.modoActivacion === 'NO_EJECUTAR') continue;
 
+        // Paso tercerizado: lo compra un proveedor. No requiere máquina ni
+        // material; sólo validamos que tenga una fuente de costo válida.
+        if (config.tercerizado) {
+          const fuentesOk = ['tarifa_magnitud', 'matriz', 'fijo'];
+          if (
+            !config.fuenteCostoTercerizado ||
+            !fuentesOk.includes(config.fuenteCostoTercerizado)
+          ) {
+            errores.push({
+              severidad: 'ERROR',
+              codigo: 'tercerizado_sin_fuente',
+              mensaje: `Paso ${paso.orden} (${familia.nombre}): tercerizado sin fuente de costo válida (tarifa_magnitud | matriz | fijo).`,
+              ubicacion: { rutaAltId: ra.id, rutaPasoId: paso.id },
+            });
+          }
+          continue;
+        }
+
         const params =
           config.paramsPasoJson &&
           typeof config.paramsPasoJson === 'object' &&

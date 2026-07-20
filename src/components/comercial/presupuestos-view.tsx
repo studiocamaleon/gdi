@@ -9,23 +9,15 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { PlusIcon, SearchIcon, SettingsIcon } from "lucide-react";
 import { toast } from "sonner";
 import type { MembershipRole } from "@/lib/auth";
 import {
-  MOTIVOS_PERDIDA,
   actualizarConfigPresupuestos,
-  convertirPresupuesto,
-  enviarPresupuesto,
   getConfigPresupuestos,
-  getPresupuesto,
   listarPresupuestos,
-  presupuestoPdfUrl,
-  presupuestoPublicUrl,
-  resolverAprobacionPresupuesto,
-  resolverPresupuesto,
   type ConfigPresupuestos,
-  type PresupuestoDetalle,
   type PresupuestoEstado,
   type PresupuestosListado,
 } from "@/lib/presupuestos-api";
@@ -71,10 +63,10 @@ function EstadoBadge({ estado, visto }: { estado: PresupuestoEstado; visto?: boo
 }
 
 export function PresupuestosView({ initial, rol }: { initial: PresupuestosListado; rol: MembershipRole }) {
+  const router = useRouter();
   const [data, setData] = React.useState(initial);
   const [filtro, setFiltro] = React.useState<PresupuestoEstado | "todos">("todos");
   const [busqueda, setBusqueda] = React.useState("");
-  const [abiertoId, setAbiertoId] = React.useState<string | null>(null);
   const [configAbierta, setConfigAbierta] = React.useState(false);
   const puedeAprobar = rol === "administrador" || rol === "supervisor";
 
@@ -217,7 +209,7 @@ export function PresupuestosView({ initial, rol }: { initial: PresupuestosListad
               </thead>
               <tbody>
                 {lista.map((p) => (
-                  <tr key={p.id} onClick={() => setAbiertoId(p.id)} style={{ borderTop: "1px solid #efece8", cursor: "pointer" }}>
+                  <tr key={p.id} onClick={() => router.push(`/comercial/presupuestos/${p.id}`)} style={{ borderTop: "1px solid #efece8", cursor: "pointer" }}>
                     <td className="mono" style={{ padding: "11px 14px", fontWeight: 600 }}>{p.numero}</td>
                     <td style={{ padding: "11px 14px" }}>{p.cliente}<span style={{ color: "#92929b" }}> · {p.items} item{p.items === 1 ? "" : "s"}</span></td>
                     <td style={{ padding: "11px 14px" }}>
@@ -238,9 +230,6 @@ export function PresupuestosView({ initial, rol }: { initial: PresupuestosListad
         )}
       </div>
 
-      {abiertoId ? (
-        <PresupuestoPanel id={abiertoId} puedeAprobar={puedeAprobar} onCerrar={() => setAbiertoId(null)} onCambio={recargar} />
-      ) : null}
       {configAbierta ? (
         <ConfigPresupuestosSheet onCerrar={() => setConfigAbierta(false)} />
       ) : null}
@@ -249,279 +238,6 @@ export function PresupuestosView({ initial, rol }: { initial: PresupuestosListad
 }
 
 /* ─── Panel lateral de detalle ─── */
-function PresupuestoPanel({ id, puedeAprobar, onCerrar, onCambio }: { id: string; puedeAprobar: boolean; onCerrar: () => void; onCambio: () => void }) {
-  const [d, setD] = React.useState<PresupuestoDetalle | null>(null);
-  const [error, setError] = React.useState<string | null>(null);
-  const [trabajando, setTrabajando] = React.useState(false);
-  const [rechazoAbierto, setRechazoAbierto] = React.useState(false);
-  const [devolucionAbierta, setDevolucionAbierta] = React.useState(false);
-  const [comentarioDevolucion, setComentarioDevolucion] = React.useState("");
-  const [motivo, setMotivo] = React.useState("precio");
-  const [motivoDetalle, setMotivoDetalle] = React.useState("");
-  const [seleccion, setSeleccion] = React.useState<Set<string>>(new Set());
-
-  const cargar = React.useCallback(async (inicial = false) => {
-    try {
-      const det = await getPresupuesto(id);
-      setD(det);
-      // La selección de conversión parcial sólo se inicializa al abrir:
-      // un refresh por polling no debe pisar lo que el usuario destildó.
-      if (inicial) {
-        setSeleccion(new Set(det.items.map((i) => i.cotizacionItemId).filter((x): x is string => x != null)));
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo cargar el presupuesto.");
-    }
-  }, [id]);
-  React.useEffect(() => { void cargar(true); }, [cargar]);
-
-  // El drawer abierto también refresca (estado + timeline) mientras se
-  // espera la decisión del cliente; pausa durante acciones o el form de
-  // rechazo para no interferir.
-  React.useEffect(() => {
-    const timer = setInterval(() => {
-      if (document.visibilityState === "visible" && !trabajando && !rechazoAbierto) {
-        void cargar();
-      }
-    }, 10_000);
-    return () => clearInterval(timer);
-  }, [cargar, trabajando, rechazoAbierto]);
-
-  const accion = async (fn: () => Promise<unknown>, ok: string) => {
-    setTrabajando(true);
-    try {
-      await fn();
-      toast.success(ok);
-      await cargar();
-      onCambio();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "No se pudo completar la acción.");
-    } finally {
-      setTrabajando(false);
-    }
-  };
-
-  const copiarLink = () => {
-    if (!d?.publicToken) return;
-    void navigator.clipboard.writeText(presupuestoPublicUrl(d.publicToken));
-    toast.success("Link copiado. Compartilo con el cliente: puede aprobar desde ahí.");
-  };
-
-  const convertir = () =>
-    accion(async () => {
-      const total = d!.items.filter((i) => i.cotizacionItemId != null).length;
-      const parcial = seleccion.size < total;
-      const res = await convertirPresupuesto(id, parcial ? { itemIds: [...seleccion] } : {});
-      toast.success(`Orden ${res.ordenNumero} creada en borrador — revisá la fecha de entrega y emitila.`);
-    }, "Presupuesto convertido.");
-
-  const chipsDe = (i: PresupuestoDetalle["items"][number]) => (
-    <>
-      {i.specs.length ? (
-        <div className="pp-chips">
-          {i.specs.map((s) => (
-            <span key={s.etiqueta} className="pp-chip"><span className="k">{s.etiqueta}</span>{s.valor}</span>
-          ))}
-        </div>
-      ) : null}
-      {i.adicionales.length ? (
-        <div className="pp-opt">
-          <div className="pp-opt-lbl">Opcionales incluidos</div>
-          <div className="pp-chips">
-            {i.adicionales.map((a) => (
-              <span key={a} className="pp-chip opt">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6L9 17l-5-5" /></svg>
-                {a}
-              </span>
-            ))}
-          </div>
-        </div>
-      ) : null}
-    </>
-  );
-
-  return (
-    <div className="pp-scrim" onClick={onCerrar}>
-      <div className="pp-drawer" onClick={(e) => e.stopPropagation()}>
-        {error ? (
-          <div style={{ padding: 30, color: "#b91c1c" }}>{error}</div>
-        ) : !d ? (
-          <div style={{ padding: 30, color: "var(--muted-text)" }}>Cargando…</div>
-        ) : (
-          <>
-            <div className="pp-dw-head">
-              <div className="top">
-                <span className="num">{d.numero}</span>
-                <EstadoBadge estado={d.estado} visto={d.primeraVistaEl != null} />
-                <button type="button" className="x" onClick={onCerrar} aria-label="Cerrar">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
-                </button>
-              </div>
-              <div className="sub">
-                <b>{d.cliente?.nombre ?? "Sin cliente"}</b> · emitido {fmtFecha(d.fechaEmision)} · válido hasta {fmtFecha(d.fechaValidez)}
-                {d.vendedor ? <> · {d.vendedor.nombre}</> : null}
-              </div>
-            </div>
-
-            {/* Jerarquía: acción PRINCIPAL del estado primero, secundarias
-                 al lado, y utilitarias (PDF/link) como íconos a la derecha. */}
-            <div className="pp-dw-actions">
-              {d.estado === "borrador" ? (
-                <button type="button" className="pp-da primary" disabled={trabajando} onClick={() => void accion(() => enviarPresupuesto(id), "Presupuesto enviado — copiá el link y compartilo.")}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z" /></svg>
-                  Enviar al cliente
-                </button>
-              ) : null}
-              {d.estado === "pendiente_aprobacion" && puedeAprobar ? (
-                <>
-                  <button type="button" className="pp-da ok" disabled={trabajando} onClick={() => void accion(() => resolverAprobacionPresupuesto(id, { decision: "aprobar" }), "Aprobado y enviado al cliente.")}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5" /></svg>
-                    Aprobar y enviar
-                  </button>
-                  <button type="button" className="pp-da" disabled={trabajando} onClick={() => setDevolucionAbierta(true)}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M9 14L4 9l5-5" /><path d="M4 9h10a6 6 0 0 1 0 12h-3" /></svg>
-                    Devolver
-                  </button>
-                </>
-              ) : null}
-              {d.estado === "aprobado" ? (
-                <button type="button" className="pp-da primary" disabled={trabajando} onClick={() => void convertir()}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
-                  Convertir en OT
-                </button>
-              ) : null}
-              {d.estado === "enviado" ? (
-                <button type="button" className="pp-da ok" disabled={trabajando} onClick={() => void accion(() => resolverPresupuesto(id, { resultado: "aprobado" }), "Aprobado.")}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5" /></svg>
-                  Marcar aprobado
-                </button>
-              ) : null}
-              {d.estado === "enviado" || d.estado === "vencido" ? (
-                <button type="button" className="pp-da" disabled={trabajando} onClick={() => setRechazoAbierto(true)}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M18 6L6 18M6 6l12 12" /></svg>
-                  Marcar perdido
-                </button>
-              ) : null}
-              {d.estado === "convertido" && d.ordenConvertidaId ? (
-                <Link className="pp-da primary" href={`/produccion/ordenes/${d.ordenConvertidaId}`}>
-                  Ver orden {d.ordenConvertida}
-                </Link>
-              ) : null}
-
-              <span style={{ marginLeft: "auto", display: "inline-flex", gap: 9 }}>
-                <a className="pp-da icon" href={presupuestoPdfUrl(d.id)} target="_blank" rel="noreferrer" title="Descargar PDF">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14 3v5h5" /><path d="M8 13h8M8 17h6M6 3h9l5 5v13H6z" /></svg>
-                </a>
-                {d.publicToken && (d.estado === "enviado" || d.estado === "aprobado") ? (
-                  <button type="button" className="pp-da icon" onClick={copiarLink} title="Copiar link del cliente">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1" /><path d="M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1" /></svg>
-                  </button>
-                ) : null}
-              </span>
-            </div>
-
-            <div className="pp-dw-body">
-              {d.estado === "pendiente_aprobacion" ? (
-                <div className="pp-banner-aprob">
-                  <div className="t">{puedeAprobar ? "Requiere tu aprobación para enviarse" : "Esperando aprobación de un supervisor"}</div>
-                  <ul>
-                    {d.aprobacionMotivos.map((m, i) => <li key={i}>{m.detalle}</li>)}
-                  </ul>
-                </div>
-              ) : null}
-              {devolucionAbierta ? (
-                <div className="pp-dw-rechazo">
-                  <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 8 }}>Devolver sin enviar — decile al vendedor qué revisar</div>
-                  <input placeholder="Comentario (opcional)" value={comentarioDevolucion} onChange={(e) => setComentarioDevolucion(e.target.value)} style={{ marginBottom: 10 }} />
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button type="button" className="pp-da primary" disabled={trabajando} onClick={() => { setDevolucionAbierta(false); void accion(() => resolverAprobacionPresupuesto(id, { decision: "devolver", comentario: comentarioDevolucion || undefined }), "Devuelto al vendedor."); }}>
-                      Confirmar devolución
-                    </button>
-                    <button type="button" className="pp-da" onClick={() => setDevolucionAbierta(false)}>Cancelar</button>
-                  </div>
-                </div>
-              ) : null}
-              {rechazoAbierto ? (
-                <div className="pp-dw-rechazo">
-                  <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 8 }}>¿Por qué se perdió? (alimenta tus métricas)</div>
-                  <select value={motivo} onChange={(e) => setMotivo(e.target.value)} style={{ marginBottom: 8 }}>
-                    {MOTIVOS_PERDIDA.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-                  </select>
-                  <input placeholder="Detalle (opcional)" value={motivoDetalle} onChange={(e) => setMotivoDetalle(e.target.value)} style={{ marginBottom: 10 }} />
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button type="button" className="pp-da primary" disabled={trabajando} onClick={() => { setRechazoAbierto(false); void accion(() => resolverPresupuesto(id, { resultado: "rechazado", motivoPerdida: motivo, motivoPerdidaDetalle: motivoDetalle || undefined }), "Registrado como perdido."); }}>
-                      Confirmar pérdida
-                    </button>
-                    <button type="button" className="pp-da" onClick={() => setRechazoAbierto(false)}>Cancelar</button>
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="pp-dw-card">
-                {d.items.map((i, idx) => {
-                  const seleccionable = d.estado === "aprobado" && i.cotizacionItemId != null;
-                  const on = i.cotizacionItemId != null && seleccion.has(i.cotizacionItemId);
-                  return (
-                    <div key={i.cotizacionItemId ?? idx} className="pp-dw-item">
-                      {seleccionable ? (
-                        <button type="button" className={`chkbox ${on ? "on" : ""}`} title="Incluir al convertir" onClick={() => {
-                          const s = new Set(seleccion);
-                          if (on) s.delete(i.cotizacionItemId!);
-                          else s.add(i.cotizacionItemId!);
-                          setSeleccion(s);
-                        }}>
-                          {on ? <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6L9 17l-5-5" /></svg> : null}
-                        </button>
-                      ) : null}
-                      <div className="bd">
-                        <div className="nm">{i.nombre}</div>
-                        {chipsDe(i)}
-                      </div>
-                      <div className="rt">
-                        <div className="q">{i.cantidad.toLocaleString("es-AR")} {i.cantidadUnidad}</div>
-                        <div className="p">{fmtMoneda(i.total)}</div>
-                      </div>
-                    </div>
-                  );
-                })}
-                <div className="pp-dw-tot">
-                  <span className="t">Subtotal<b>{fmtMoneda(d.subtotal)}</b></span>
-                  {d.cargosDirectos > 0 ? <span className="t">Cargos<b>{fmtMoneda(d.cargosDirectos)}</b></span> : null}
-                  <span className="t">Impuestos<b>{fmtMoneda(d.impuestos)}</b></span>
-                  <span className="grand">Total<b> {fmtMoneda(d.total)}</b></span>
-                </div>
-              </div>
-
-              {d.motivoPerdida ? (
-                <div style={{ fontSize: 12.5, color: "#b91c1c", marginBottom: 14 }}>
-                  Perdido por: {MOTIVOS_PERDIDA.find((m) => m.value === d.motivoPerdida)?.label ?? d.motivoPerdida}
-                  {d.motivoPerdidaDetalle ? ` — ${d.motivoPerdidaDetalle}` : ""}
-                </div>
-              ) : null}
-
-              <div className="pp-dw-sec">Historial</div>
-              <div className="pp-timeline">
-                {d.eventos.map((e, i) => (
-                  <div key={i} className={`pp-tl ${i === 0 ? "hot" : ""}`}>
-                    <span className="dot" />
-                    <div className="tm">
-                      {new Date(e.fecha).toLocaleString("es-AR", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })}
-                    </div>
-                    <div className="tx">{e.descripcion}</div>
-                    <div className="who">· {e.usuario}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-
-/* ─── Configuración del módulo (validez, seña, condiciones y umbrales F2) ─── */
 function ConfigPresupuestosSheet({ onCerrar }: { onCerrar: () => void }) {
   const [cfg, setCfg] = React.useState<ConfigPresupuestos | null>(null);
   const [guardando, setGuardando] = React.useState(false);

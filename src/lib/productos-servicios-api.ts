@@ -384,6 +384,29 @@ export interface UpsertConfigPasoPayload {
   dotacionOperarios?: number;
   slotsMateriales?: UpsertSlotMaterialPayload[];
   maquinasCandidatas?: UpsertMaquinaCandidataPayload[];
+  // === Tercerización (docs/productos-tercerizados-diseno.md) ===
+  tercerizado?: boolean;
+  proveedorId?: string | null;
+  /** 'tarifa_magnitud' | 'matriz' | 'fijo'. */
+  fuenteCostoTercerizado?: string | null;
+  tercerizadoConfigJson?: Record<string, unknown> | null;
+  plazoProveedorDias?: number | null;
+  /** Filas de la matriz (fuente 'matriz'); el claveMatch lo deriva el server. */
+  tercerizadoEntradas?: TercerizadoEntradaPayload[];
+}
+
+export interface TercerizadoEntradaPayload {
+  valores: Record<string, unknown>;
+  cantidad: number;
+  costo: number;
+}
+
+/** Un eje de la matriz de un paso tercerizado. */
+export interface TercerizadoEje {
+  clave: string;
+  label: string;
+  orden: number;
+  valores: Array<{ clave: string; label: string }>;
 }
 
 export async function upsertConfigPaso(
@@ -913,6 +936,8 @@ export interface CotizarResponse {
       tiempoTotal: number;
       materialesTotal: number;
       cargosDirectosTotal: number;
+      /** Costo de pasos tercerizados (lo que se paga al proveedor). */
+      tercerizadoTotal?: number;
       total: number;
       unitario: number;
     };
@@ -1030,6 +1055,12 @@ export interface CotizarResponse {
       costoTotal: number;
       /** G-M1 — Resultado del nesting cuando el paso lo invoca. */
       nestingResult?: NestingViewerInput;
+      // === Tercerización ===
+      tercerizado?: boolean;
+      /** Atributos elegidos (eje→valor) con etiquetas, para Especificaciones. */
+      tercerizadoEtiquetas?: Array<{ eje: string; valor: string }>;
+      /** Tecnología asignada al paso tercerizado (para reportes). */
+      tecnologiaTercerizado?: string | null;
     }>;
     cargosDirectosCotizacion: Array<{
       cargoCodigo: string;

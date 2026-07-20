@@ -65,6 +65,11 @@ export class ProductosService {
               nombre: true,
               esPreferida: true,
               ruta: { select: { id: true, codigo: true, nombre: true } },
+              configPasos: {
+                where: { tercerizado: true },
+                select: { id: true },
+                take: 1,
+              },
             },
             orderBy: { orden: 'asc' },
           },
@@ -73,7 +78,15 @@ export class ProductosService {
       this.prisma.producto.count({ where }),
     ]);
 
-    return paginatedResponse(data, total, pagination);
+    // Flag derivado: ¿algún paso tercerizado en alguna ruta? (para el badge)
+    const conFlag = data.map((producto) => ({
+      ...producto,
+      tercerizado: producto.rutasAlternativas.some(
+        (ra) => ra.configPasos.length > 0,
+      ),
+    }));
+
+    return paginatedResponse(conFlag, total, pagination);
   }
 
   async crearProducto(tenantId: string, dto: CrearProductoDto) {
@@ -302,6 +315,7 @@ export class ProductosService {
                 },
                 maquinasCandidatas: { orderBy: { orden: 'asc' } },
                 cargosDirectosPaso: true,
+                tercerizadoEntradas: { where: { activo: true } },
               },
             },
           },
@@ -888,6 +902,7 @@ export class ProductosService {
                 cargosDirectosPaso: {
                   include: { cargoDirectoCatalogo: true },
                 },
+                tercerizadoEntradas: { where: { activo: true } },
               },
               orderBy: { rutaPaso: { orden: 'asc' } },
             },

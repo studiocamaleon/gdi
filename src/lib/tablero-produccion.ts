@@ -72,6 +72,12 @@ export type TableroPasoData = {
   mesaEsMia: boolean;
   /** Quién lo tiene en su mesa (para el resto del taller); null = nadie. */
   mesaUsuarioNombre: string | null;
+  /** === Tercerización (F2) ===: 'interno' (tablero) | 'tercerizado' (Compras). */
+  tipoEjecucion: string;
+  proveedorNombre: string | null;
+  plazoProveedorDias: number | null;
+  /** Sólo tercerizados: 'pendiente' | 'pedido' | 'recibido' | 'entregado'. */
+  estadoCompra: string | null;
 };
 
 export type TableroItemData = {

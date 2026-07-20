@@ -19,6 +19,7 @@ import {
   type TableroPasoData,
   type TableroPasoEstado,
 } from "@/lib/tablero-produccion";
+import { PanelComprasOt } from "@/components/comercial/panel-compras-ot";
 
 /* ─── Íconos (set TIco del diseño, verbatim) ─── */
 type IcoProps = React.SVGProps<SVGSVGElement>;
@@ -196,19 +197,30 @@ function Ring({ pct }: { pct: number }) {
   );
 }
 
-export function ProduccionOrdenTab({ ordenId }: { ordenId: string }) {
+export function ProduccionOrdenTab({
+  ordenId,
+  onOrdenActualizada,
+}: {
+  ordenId: string;
+  /** Avisa al padre que el estado de la OT pudo cambiar (ej: al avanzar una
+   *  compra tercerizada que finaliza la orden) para refrescar header/stepper. */
+  onOrdenActualizada?: () => void;
+}) {
   const [items, setItems] = React.useState<TableroItemData[] | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
+  const cargar = React.useCallback(() => {
+    getOrdenPasos(ordenId)
+      .then((res) => setItems(res.items))
+      .catch((e) => setError(e instanceof Error ? e.message : "No se pudieron cargar los pasos."));
+    onOrdenActualizada?.();
+  }, [ordenId, onOrdenActualizada]);
+
   React.useEffect(() => {
-    let vivo = true;
     setItems(null);
     setError(null);
-    getOrdenPasos(ordenId)
-      .then((res) => { if (vivo) setItems(res.items); })
-      .catch((e) => { if (vivo) setError(e instanceof Error ? e.message : "No se pudieron cargar los pasos."); });
-    return () => { vivo = false; };
-  }, [ordenId]);
+    cargar();
+  }, [cargar]);
 
   if (error) {
     return <div className="pagos-empty"><div className="pe-ttl">No se pudo cargar la producción</div><div className="pe-sub">{error}</div></div>;
@@ -250,6 +262,9 @@ export function ProduccionOrdenTab({ ordenId }: { ordenId: string }) {
           </div>
         </div>
       </div>
+
+      {/* Compras / Tercerizados (F2) */}
+      <PanelComprasOt items={conRuta} onChanged={cargar} />
 
       {/* Ruta por producto */}
       <div className="otd-card">
