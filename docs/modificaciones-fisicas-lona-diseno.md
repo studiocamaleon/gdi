@@ -469,6 +469,27 @@ Etapas A–C son el núcleo; D–F son la superficie. A es prerequisito de todo.
 
 ---
 
+## 8.b Verificación en la app (2026-07-20)
+
+Verificado end-to-end contra la app corriendo, con una ruta de prueba sobre **Lona Frontlight**
+(`modificacion_pre` → `impresion_por_area` → `colocacion_ojales`) y una lona de **150 × 100 cm**:
+
+| Qué | Resultado |
+|---|---|
+| Editor: params de ambas familias | Renderizan (enum, multi-enum, number, boolean con su default) |
+| Editor: preset de `subTipo` | Elegir "Bolsillo" tildó Superior+Inferior y cargó 100 mm |
+| Editor: validaciones nuevas | "Sin lados afectados" / "Sin demasía por lado" aparecen y se limpian al completar |
+| Editor: filtro del slot `ojal` | Sin ojales en inventario decía "sin materias primas compatibles"; al cargar uno lo ofreció |
+| Motor: mutación | `Cantidad cotizada 1,8 m²` (pedida 1,5 m² + bolsillo sup/inf de 100 mm) |
+| Motor: ojales | Material $350 = **10 ojales** × $35 — el número del caso B |
+| Cotizador: chip | "📐 agranda la medida" en la fila del paso |
+| Cotizador: bloque | "Pedida 150 × 100 cm → material **150 × 120 cm** (+20% de material)" y "3 ml de unión" |
+| OT: doble medida | Specs muestran `MEDIDAS 150 x 100 cm` y `MEDIDA DE CORTE 150 × 120 cm` |
+| Tracking público | La spec de corte NO sale por la API (verificado inyectándola en la DB) |
+
+No hizo falta corregir nada del código: los tres números del diseño (1,8 m² · +20% · 3 ml · 10
+ojales) salieron correctos a la primera.
+
 ## 9. Decisiones tomadas
 
 1. Bolsillo y refuerzo son **la misma primitiva** con parámetros distintos, no dos lógicas.
