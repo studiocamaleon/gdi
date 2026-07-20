@@ -435,9 +435,21 @@ verificó que el motor consume sus params.
 
 ### Producción (OT y tablero)
 
-1. La OT muestra **las dos medidas**, con la de corte destacada: el operario corta 1580×1080.
+1. La OT muestra **las dos medidas**: la spec `Medida de corte` se genera en `buildOrdenItemSpecs`
+   junto a `Medidas` y se persiste al emitir, así que el detalle de la OT la muestra rotulada.
 2. El paso de refuerzo aparece con sus metros lineales; el de ojales con la cantidad y el tipo.
 3. El seguimiento público al cliente muestra sólo la medida visible.
+
+**Dos decisiones de la etapa F que no estaban en el diseño original:**
+
+- **El resumen de la tarjeta del tablero une valores SIN etiqueta** (los primeros 3, con `·`).
+  Meter ahí la medida de corte dejaba dos medidas sueltas sin rótulo y el operario no sabría cuál
+  cortar — peor que no mostrarla. Se excluye del resumen y se muestra aparte, rotulada
+  (`Cortar 158 × 108 cm`), en el panel del item, que es donde el operario abre antes de trabajar.
+- **El filtro del seguimiento público es de BACKEND**, en `trackingPublico`
+  (`tracking-publico-specs.ts`), no del front. Ese endpoint es `@Public()` y sin sesión: es el
+  límite real, y su propio contrato dice que devuelve "sólo la proyección cliente-facing".
+  Verificado end-to-end inyectando la spec en la DB y confirmando que no sale por la API.
 
 ---
 
@@ -450,7 +462,7 @@ verificó que el motor consume sus params.
 | **C. Ojales** ✅ | Familia `colocacion_ojales`; estrategia de cantidad por perímetro en `CALCULADO_POR_PASO` con dedupe de esquinas; slot de material; output `ojales_colocados` | Medio. La fórmula necesita tests propios (§4). |
 | **D. Editor** ✅ | Render de `multi-enum` para `lados`; presets de subTipo; validación de orden (§6.4) | Bajo. |
 | **E. Cotizador** ✅ | Desglose con medida pedida vs. material y el detalle de cada modificación | Bajo. |
-| **F. OT / producción** | Doble medida en la OT y el tablero; medida visible en el seguimiento público | Bajo. |
+| **F. OT / producción** ✅ | Doble medida en la OT y el tablero; medida visible en el seguimiento público | Bajo. |
 | **G. Tests** | Casos A, B y C de §4 end-to-end; encadenamiento de dos PRE; recálculo de métricas; multi-pieza | — |
 
 Etapas A–C son el núcleo; D–F son la superficie. A es prerequisito de todo.

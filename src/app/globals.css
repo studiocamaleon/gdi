@@ -13696,6 +13696,15 @@ body {
   font-size: 12.5px;
 }
 
+/* Medida de corte: el operario NO corta lo que pidió el cliente cuando el
+   item lleva bolsillo o refuerzo. Se destaca para que no pase de largo. */
+.tablero-produccion .sheet .sub.corte-medida {
+  margin-top: 5px;
+  border-left: 3px solid var(--warn, #d97706);
+  padding-left: 8px;
+  color: var(--ink);
+}
+
 .tablero-produccion .sheet .close {
   display: inline-flex;
   align-items: center;

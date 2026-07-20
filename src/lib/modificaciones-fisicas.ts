@@ -95,3 +95,41 @@ export function medidaAntesDespues(mutacion: MutacionAplicadaView) {
   if (!pieza) return null;
   return { antes: pieza.antes, despues: pieza.despues };
 }
+
+/**
+ * Medida final de CORTE de cada pieza, atravesando todos los pasos PRE de la
+ * ruta: el `antes` del primero y el `despues` del último.
+ *
+ * Es lo que el operario tiene que cortar. Con varios pasos encadenados
+ * (refuerzo + bolsillo) la medida intermedia no le sirve a nadie: sólo importan
+ * la que pidió el cliente y la que hay que cortar.
+ *
+ * Todos los pasos PRE mutan el mismo array de piezas en el mismo orden, así
+ * que el índice alinea. Devuelve [] si ningún paso modificó medidas.
+ */
+export function medidasDeCorte(
+  pasos: Array<{ mutacionAplicada?: MutacionAplicadaView | null }>,
+): Array<{
+  antes: { anchoMm: number; altoMm: number };
+  despues: { anchoMm: number; altoMm: number };
+}> {
+  const mutaciones = pasos
+    .map((paso) => paso.mutacionAplicada)
+    .filter((m): m is MutacionAplicadaView => Boolean(m));
+  if (mutaciones.length === 0) return [];
+
+  const primera = mutaciones[0];
+  const ultima = mutaciones[mutaciones.length - 1];
+
+  return primera.piezas
+    .map((pieza, i) => ({
+      antes: pieza.antes,
+      despues: ultima.piezas[i]?.despues ?? pieza.despues,
+    }))
+    // Si una pieza terminó igual que empezó, no aporta nada al operario.
+    .filter(
+      (m) =>
+        m.antes.anchoMm !== m.despues.anchoMm ||
+        m.antes.altoMm !== m.despues.altoMm,
+    );
+}

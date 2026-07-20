@@ -108,6 +108,7 @@ import { AgregarProductoSheet } from "@/components/comercial/agregar-producto-sh
 import {
   type MutacionAplicadaView,
   medidaAntesDespues,
+  medidasDeCorte,
   porcentajeMaterialExtra,
   resumenModificacion,
 } from "@/lib/modificaciones-fisicas";
@@ -3019,6 +3020,31 @@ function buildOrdenItemSpecs(
       lbl: "Material",
       val: getMaterialCommercialLabel(mainMaterial),
     });
+  }
+
+  // 1.b Medida de corte: cuando un paso `modificacion_pre` agrandó la medida
+  //     (bolsillo, refuerzo), el operario NO corta lo que pidió el cliente.
+  //     Las dos medidas tienen que viajar a la OT o se corta mal.
+  //     Ver docs/modificaciones-fisicas-lona-diseno.md §7.
+  const cortes = medidasDeCorte(item.cotizacion.pasos);
+  if (cortes.length > 0) {
+    const valor = cortes
+      .map(
+        (corte) =>
+          `${formatMmAsCm(corte.despues.anchoMm)} × ${formatMmAsCm(
+            corte.despues.altoMm,
+          )} cm`,
+      )
+      .join(" · ");
+    const medidasIdx = arr.findIndex((spec) =>
+      spec.lbl.toLowerCase().includes("medida"),
+    );
+    const spec = { lbl: "Medida de corte", val: valor };
+    if (medidasIdx >= 0) arr.splice(medidasIdx + 1, 0, spec);
+    else arr.unshift(spec);
+    if (materialIdx >= 0 && medidasIdx >= 0 && materialIdx > medidasIdx) {
+      materialIdx += 1;
+    }
   }
 
   // 2. Montaje: material del sustrato sobre el que se monta (ej. Imán,

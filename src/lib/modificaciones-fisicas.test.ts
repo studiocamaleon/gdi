@@ -4,6 +4,7 @@ import {
   type MutacionAplicadaView,
   describirLados,
   medidaAntesDespues,
+  medidasDeCorte,
   porcentajeMaterialExtra,
   resumenModificacion,
 } from "@/lib/modificaciones-fisicas";
@@ -112,6 +113,94 @@ describe("porcentajeMaterialExtra", () => {
 
   it("devuelve null sin piezas", () => {
     expect(porcentajeMaterialExtra({ ...BOLSILLO, piezas: [] })).toBeNull();
+  });
+});
+
+describe("medidasDeCorte", () => {
+  it("sin pasos PRE no hay medida de corte", () => {
+    expect(medidasDeCorte([{ mutacionAplicada: null }, {}])).toEqual([]);
+  });
+
+  it("con un solo paso devuelve su antes y después", () => {
+    expect(medidasDeCorte([{ mutacionAplicada: BOLSILLO }])).toEqual([
+      {
+        antes: { anchoMm: 1500, altoMm: 1000 },
+        despues: { anchoMm: 1500, altoMm: 1200 },
+      },
+    ]);
+  });
+
+  /**
+   * El caso que importa: con refuerzo + bolsillo encadenados, la medida
+   * intermedia no le sirve a nadie. El operario necesita la que pidió el
+   * cliente y la que tiene que cortar.
+   */
+  it("atraviesa varios pasos: primer antes contra último después", () => {
+    const refuerzo: MutacionAplicadaView = {
+      ...BOLSILLO,
+      subTipo: "refuerzo",
+      lados: ["izquierdo", "derecho"],
+      demasiaMm: 40,
+      piezas: [
+        {
+          antes: { anchoMm: 1500, altoMm: 1200 },
+          despues: { anchoMm: 1580, altoMm: 1200 },
+        },
+      ],
+    };
+
+    expect(
+      medidasDeCorte([
+        { mutacionAplicada: BOLSILLO },
+        {},
+        { mutacionAplicada: refuerzo },
+      ]),
+    ).toEqual([
+      {
+        antes: { anchoMm: 1500, altoMm: 1000 },
+        despues: { anchoMm: 1580, altoMm: 1200 },
+      },
+    ]);
+  });
+
+  it("alinea las piezas por índice", () => {
+    const dosPiezas: MutacionAplicadaView = {
+      ...BOLSILLO,
+      piezas: [
+        {
+          antes: { anchoMm: 1500, altoMm: 1000 },
+          despues: { anchoMm: 1500, altoMm: 1200 },
+        },
+        {
+          antes: { anchoMm: 800, altoMm: 600 },
+          despues: { anchoMm: 800, altoMm: 800 },
+        },
+      ],
+    };
+
+    expect(medidasDeCorte([{ mutacionAplicada: dosPiezas }])).toHaveLength(2);
+    expect(medidasDeCorte([{ mutacionAplicada: dosPiezas }])[1]).toEqual({
+      antes: { anchoMm: 800, altoMm: 600 },
+      despues: { anchoMm: 800, altoMm: 800 },
+    });
+  });
+
+  it("descarta piezas que terminaron igual que empezaron", () => {
+    const soloUna: MutacionAplicadaView = {
+      ...BOLSILLO,
+      piezas: [
+        {
+          antes: { anchoMm: 1500, altoMm: 1000 },
+          despues: { anchoMm: 1500, altoMm: 1200 },
+        },
+        {
+          antes: { anchoMm: 800, altoMm: 600 },
+          despues: { anchoMm: 800, altoMm: 600 },
+        },
+      ],
+    };
+
+    expect(medidasDeCorte([{ mutacionAplicada: soloUna }])).toHaveLength(1);
   });
 });
 

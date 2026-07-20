@@ -238,6 +238,12 @@ type ItemView = {
   vendedor: string;
   product: string;
   spec: string;
+  /**
+   * Medida que hay que CORTAR cuando un paso de modificación (bolsillo,
+   * refuerzo) agrandó la pieza. Va aparte y etiquetada: en el resumen suelto
+   * quedarían dos medidas sin rótulo y el operario no sabría cuál cortar.
+   */
+  corteLabel: string | null;
   qtyLabel: string;
   priority: TableroPrioridad;
   dueLabel: string;
@@ -301,11 +307,18 @@ function buildItemView(item: TableroItemData, estaciones: Estacion[]): ItemView 
   const currentStep = actual ? steps.find((s) => s.paso.id === actual.id) : undefined;
   const blocked = itemBloqueado(item);
   const bloqueadoPaso = item.pasos.find((paso) => paso.estado === "bloqueado");
+  // El resumen une valores SIN etiqueta, así que la medida de corte no puede
+  // entrar acá: quedarían dos medidas sueltas y ninguna diría cuál cortar.
+  const esSpecCorte = (etiqueta: string) =>
+    etiqueta.trim().toLowerCase() === "medida de corte";
   const spec = item.specs
+    .filter((entry) => !esSpecCorte(entry.etiqueta))
     .slice(0, 3)
     .map((entry) => entry.valor)
     .filter(Boolean)
     .join(" · ");
+  const corteLabel =
+    item.specs.find((entry) => esSpecCorte(entry.etiqueta))?.valor ?? null;
 
   return {
     data: item,
@@ -316,6 +329,7 @@ function buildItemView(item: TableroItemData, estaciones: Estacion[]): ItemView 
     vendedor: item.vendedorNombre,
     product: item.nombre,
     spec: spec || item.codigo,
+    corteLabel,
     qtyLabel: `${item.cantidad.toLocaleString("es-AR")} ${item.cantidadUnidad}`,
     priority: prioridadDerivada(item.fechaEntrega),
     dueLabel: etiquetaEntrega(item.fechaEntrega),
@@ -1057,6 +1071,12 @@ function ItemDetailSheet({
               </div>
               <h2>{item.product}</h2>
               <div className="sub">{item.customer} · {item.spec}</div>
+              {item.corteLabel ? (
+                <div className="sub corte-medida">
+                  <strong>Cortar {item.corteLabel}</strong> — lleva bolsillo o
+                  refuerzo, es más grande que la medida pedida
+                </div>
+              ) : null}
             </div>
             <button type="button" className="close" onClick={onClose} aria-label="Cerrar">×</button>
           </div>

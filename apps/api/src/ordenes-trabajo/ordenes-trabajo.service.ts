@@ -70,6 +70,7 @@ function formatFechaCorta(iso: string | null): string {
   return `${dia}/${mes}/${anio}`;
 }
 import type { OrdenesTrabajoQueryDto } from './dto/ordenes-trabajo-query.dto';
+import { filtrarSpecsPublicas } from './tracking-publico-specs';
 
 type OrdenConRelaciones = Prisma.OrdenTrabajoGetPayload<{
   include: {
@@ -2663,10 +2664,14 @@ export class OrdenesTrabajoService {
       return {
         id: item.id,
         nombre: item.nombre,
-        specs: (item.specsJson ?? []) as Array<{
-          etiqueta: string;
-          valor: string;
-        }>,
+        // El cliente ve la medida que pidió, no la de corte: si un paso PRE la
+        // agrandó (bolsillo, refuerzo), ese número es para el operario.
+        specs: filtrarSpecsPublicas(
+          (item.specsJson ?? []) as Array<{
+            etiqueta: string;
+            valor: string;
+          }>,
+        ),
         progresoPct: total > 0 ? Math.round((hechos / total) * 100) : 0,
         pasoActual: actual?.nombre ?? null,
         estacionActual: actual?.centroCostoNombre ?? null,
