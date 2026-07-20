@@ -4778,6 +4778,9 @@ export function PropuestaFicha({
           centroCostoId: paso.tiempo?.centroCostoId ?? null,
           duracionMin: paso.tiempo?.totalMin ?? null,
           nombre: paso.nombreVisible ?? undefined,
+          // Un tercerizado no ocupa el taller: aporta el plazo del proveedor.
+          tercerizado: paso.tercerizado === true,
+          plazoProveedorDias: paso.plazoProveedorDias ?? null,
         })),
     }));
     return estimarDemoraNuevos({ nuevos, ...colasTaller });

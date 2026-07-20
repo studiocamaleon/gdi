@@ -1061,6 +1061,8 @@ export interface CotizarResponse {
       tercerizadoEtiquetas?: Array<{ eje: string; valor: string }>;
       /** Tecnología asignada al paso tercerizado (para reportes). */
       tecnologiaTercerizado?: string | null;
+      /** Lead time del proveedor: lo que este paso le suma a la ETA. */
+      plazoProveedorDias?: number | null;
     }>;
     cargosDirectosCotizacion: Array<{
       cargoCodigo: string;

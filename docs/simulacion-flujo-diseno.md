@@ -44,6 +44,19 @@
   cotizador lo pasan; los días cargados no aportan capacidad.
 - **D8 — Horizonte 120 días**: si un paso no consigue ventana en ese
   horizonte (calendario vacío/absurdo), el item queda sin ETA.
+- **D14 — Los pasos TERCERIZADOS no consumen taller** (2026-07-20). Un paso
+  con `tipoEjecucion:'tercerizado'` lo produce un proveedor: **no ocupa un
+  puesto de ninguna estación** (corre en paralelo a la producción propia) y
+  su costo en tiempo es el lead time `plazoProveedorDias`, sumado en **días
+  HÁBILES** con los feriados del taller — no minutos de estación. Lo único
+  que hace es correr el reloj del item y liberar al paso siguiente. Se
+  resuelven al principio de cada vuelta del scheduler, antes de repartir
+  capacidad, y se drenan en cadena si la ruta tiene dos seguidos.
+  Corolarios: **nunca toman la mediana de su familia** (esa mediana se midió
+  sobre pasos internos y no dice nada del proveedor), y **no marcan
+  `parcial`** — no son un supuesto, es un dato cargado. Si el paso no tiene
+  `plazoProveedorDias`, aplica D6: `sinEstimar`, no se inventa una ETA.
+  Ver `docs/productos-tercerizados-diseno.md` §Lead time.
 
 ## 3. Algoritmo
 

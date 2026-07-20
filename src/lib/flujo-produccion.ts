@@ -160,7 +160,19 @@ type ItemSim = {
   done: boolean;
 };
 
+/**
+ * Un paso tercerizado no se produce acá: lo hace un proveedor, en su propio
+ * calendario y sin ocupar un puesto del taller. Su costo en tiempo es el lead
+ * time (`plazoProveedorDias`), no minutos de estación.
+ */
+function esTercerizado(paso: TableroPasoData): boolean {
+  return paso.tipoEjecucion === "tercerizado";
+}
+
 function duracionDePaso(paso: TableroPasoData, medianas: Map<string, number>): number | null {
+  // Un tercerizado nunca toma la mediana de la familia: esa mediana se midió
+  // sobre pasos INTERNOS y no dice nada del proveedor. Se programa aparte.
+  if (esTercerizado(paso)) return null;
   if (paso.duracionEstimadaMin != null && paso.duracionEstimadaMin > 0) return paso.duracionEstimadaMin;
   return medianas.get(paso.familiaCodigo) ?? null;
 }
@@ -268,6 +280,36 @@ export function simularFlujo({
   const limite = sims.reduce((acc, sim) => acc + sim.restantes.length, 0) + 8;
   while (guardia < limite) {
     guardia += 1;
+
+    // Los tercerizados se resuelven ANTES de repartir capacidad: no compiten
+    // por un puesto (el proveedor trabaja en paralelo al taller), sólo corren
+    // el reloj del item y liberan al paso siguiente. Se drenan en cadena por
+    // si la ruta tiene dos seguidos.
+    for (const sim of sims) {
+      while (
+        !sim.done &&
+        sim.idx < sim.restantes.length &&
+        esTercerizado(sim.restantes[sim.idx])
+      ) {
+        const paso = sim.restantes[sim.idx];
+        const plazo = paso.plazoProveedorDias;
+        if (plazo == null || plazo < 0) {
+          // Sin lead time cargado no hay con qué estimar. Igual que cualquier
+          // paso sin duración (D6): no se inventa una ETA.
+          sim.resultado.sinEstimar = true;
+          sim.done = true;
+          break;
+        }
+        const fin = sumarDiasHabiles(sim.readyAt, plazo, noLaborables);
+        sim.readyAt = fin;
+        sim.idx += 1;
+        if (sim.idx === sim.restantes.length) {
+          sim.resultado.finEstimado = fin;
+          sim.done = true;
+        }
+      }
+    }
+
     let mejor: { sim: ItemSim; est: EstacionSim; duracion: number; start: Date } | null = null;
 
     for (const sim of sims) {
@@ -352,6 +394,9 @@ export type PasoHipotetico = {
   centroCostoId: string | null;
   duracionMin: number | null;
   nombre?: string;
+  /** Paso comprado a un proveedor: no ocupa el taller, tarda su lead time. */
+  tercerizado?: boolean;
+  plazoProveedorDias?: number | null;
 };
 
 export type ItemHipotetico = {
@@ -425,9 +470,9 @@ export function estimarDemoraNuevos({
         tiempoAcumuladoMin: 0,
         mesaEsMia: false,
         mesaUsuarioNombre: null,
-        tipoEjecucion: "interno",
+        tipoEjecucion: paso.tercerizado ? "tercerizado" : "interno",
         proveedorNombre: null,
-        plazoProveedorDias: null,
+        plazoProveedorDias: paso.plazoProveedorDias ?? null,
         estadoCompra: null,
       })),
     }));
