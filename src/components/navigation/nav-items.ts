@@ -41,7 +41,7 @@ export const NAV: NavItem[] = [
     children: [
       {
         key: "crear-propuesta",
-        label: "Crear propuesta",
+        label: "Crear orden",
         href: "/comercial/crear-propuesta",
       },
       {
@@ -116,7 +116,11 @@ export const NAV: NavItem[] = [
     label: "Producción",
     icon: "Factory",
     children: [
-      { key: "tablero-produccion", label: "Tablero", href: "/produccion/tablero" },
+      {
+        key: "tablero-produccion",
+        label: "Tablero de producción",
+        href: "/produccion/tablero",
+      },
       {
         key: "simulador",
         label: "Simulador gran formato",
