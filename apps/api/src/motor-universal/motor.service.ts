@@ -34,6 +34,7 @@ import type {
   NestingEjecutado,
   NestingCostingPreview,
   TiempoManualConfig,
+  MutacionAplicada,
 } from './tipos';
 import {
   runNestingForPaso,
@@ -67,6 +68,7 @@ import {
   calcularPerimetroPiezasM,
   congelarMedidaVisible,
 } from './job-context-metrics';
+import { familiaMutaMedidasEnPrePasada } from '../productos-servicios/pasos/familias';
 import { resolverArrastreOpcionales } from './arrastre-opcionales';
 import { paramsEfectivos } from './params-runtime';
 import {
@@ -558,6 +560,49 @@ export class MotorUniversalService {
       });
     }
 
+    // 1d. PRE-PASADA DE MEDIDAS — las familias que declaran
+    // `mutaMedidasEnPrePasada` aplican su demasía ANTES del bucle, sin importar
+    // dónde estén en la ruta. Así el modelador puede ordenar la ruta como se
+    // produce de verdad (una lona se imprime y DESPUÉS se refuerza) sin que la
+    // impresión cotice sobre la medida chica.
+    //
+    // Es seguro porque esas familias no pueden depender de nada que publique un
+    // paso anterior: no soportan HEREDAR_DEL_OUTPUT_CANONICO y su regla
+    // CONDICIONAL no puede mirar outputs canónicos (`validacion-pre-pasada.ts`).
+    // Ver docs/modificaciones-fisicas-lona-diseno.md §6.1.
+    const mutacionesPrePasada = new Map<string, MutacionAplicada>();
+    for (const paso of producto.pasos) {
+      if (!familiaMutaMedidasEnPrePasada(paso.familiaCodigo)) continue;
+      const activacion = this.evaluarActivacion(paso, jobContext);
+      if (!activacion.activado) continue;
+
+      const nombrePaso = paso.nombreVisible ?? paso.familiaCodigo;
+      const params = parsearParamsModificacionPre(
+        this.paramsEfectivosDelPaso(paso, jobContext),
+      );
+      if (!params) {
+        // Corta la cotización a propósito: un PRE activo pero sin lados ni
+        // demasía dejaría la medida de material sin agrandar y cobraría de
+        // menos EN SILENCIO — justo lo que esta familia existe para evitar.
+        errores.push({
+          codigo: 'modificacion_pre_mal_configurada',
+          severidad: 'ERROR',
+          rutaPasoId: paso.rutaPasoId,
+          rutaPasoOrden: paso.rutaPasoOrden,
+          familiaCodigo: paso.familiaCodigo,
+          mensaje: `El paso "${nombrePaso}" no declara lados afectados ni demasía válida, así que no puede agrandar la medida de material.`,
+          sugerencia:
+            'Configurar en el paso los lados afectados (superior/inferior/izquierdo/derecho) y la demasía por lado en mm.',
+        });
+        continue;
+      }
+      const traza = aplicarMutacionPre(jobContext, params, {
+        rutaPasoId: paso.rutaPasoId,
+        nombrePaso,
+      });
+      if (traza) mutacionesPrePasada.set(paso.rutaPasoId, traza);
+    }
+
     // 2. ITERAR PASOS EN ORDEN TOPOLÓGICO (orden simple por ahora)
     const pasosEjecutados: PasoEjecutado[] = [];
     /**
@@ -618,37 +663,12 @@ export class MotorUniversalService {
         }
       }
 
-      // Sub-tarea (i) del bucle — SOLO los pasos PRE mutan valores MUTABLES
-      // del JobContext. Va después del merge de outputs: el paso ya cobró su
-      // tiempo sobre la medida visible, y a partir de acá los pasos siguientes
-      // (impresión, nesting, material) leen la medida agrandada.
+      // Sub-tarea (i) — la mutación YA se aplicó en la pre-pasada (va antes del
+      // bucle para que el orden de la ruta pueda ser el orden real de
+      // producción). Acá sólo se adjunta la traza para el desglose y la OT.
       // Ver docs/modificaciones-fisicas-lona-diseno.md §6.1.
-      if (paso.familiaCodigo === 'modificacion_pre' && ejecucion.activado) {
-        const params = parsearParamsModificacionPre(
-          this.paramsEfectivosDelPaso(paso, jobContext),
-        );
-        if (!params) {
-          // Corta la cotización a propósito: un PRE activo pero sin lados ni
-          // demasía dejaría la medida de material sin agrandar y cobraría de
-          // menos EN SILENCIO — justo lo que esta familia existe para evitar.
-          errores.push({
-            codigo: 'modificacion_pre_mal_configurada',
-            severidad: 'ERROR',
-            rutaPasoId: paso.rutaPasoId,
-            rutaPasoOrden: paso.rutaPasoOrden,
-            familiaCodigo: paso.familiaCodigo,
-            mensaje: `El paso "${ejecucion.nombreVisible ?? paso.familiaCodigo}" no declara lados afectados ni demasía válida, así que no puede agrandar la medida de material.`,
-            sugerencia:
-              'Configurar en el paso los lados afectados (superior/inferior/izquierdo/derecho) y la demasía por lado en mm.',
-          });
-        } else {
-          const traza = aplicarMutacionPre(jobContext, params, {
-            rutaPasoId: paso.rutaPasoId,
-            nombrePaso: ejecucion.nombreVisible ?? paso.familiaCodigo,
-          });
-          if (traza) ejecucion.mutacionAplicada = traza;
-        }
-      }
+      const trazaPre = mutacionesPrePasada.get(paso.rutaPasoId);
+      if (trazaPre) ejecucion.mutacionAplicada = trazaPre;
 
       // Misma lógica para ojales: sin separación ni lados la cantidad sale 0 y
       // el paso no cobra nada, otra vez en silencio.

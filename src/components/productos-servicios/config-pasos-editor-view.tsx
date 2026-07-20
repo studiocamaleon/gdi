@@ -2198,36 +2198,6 @@ function requiereMecanismoCantidad(
   return tieneMaterialesDeclarados;
 }
 
-/**
- * Familias de producción que leen las medidas del JobContext. Si un
- * `modificacion_pre` queda DESPUÉS de alguna de estas, su demasía no le llega
- * a nadie y el trabajo se cotiza con la medida chica, en silencio.
- */
-const FAMILIAS_AGUAS_ABAJO_DE_UN_PRE = new Set([
-  "impresion_por_hoja",
-  "impresion_por_area",
-  "impresion_por_pieza",
-  "corte_guillotina",
-  "corte_laser",
-  "corte_manual",
-  "plotter_corte",
-  "troquelado_digital",
-  "cnc",
-  "laminado",
-]);
-
-function modificacionPreFueraDeOrden(
-  paso: { familiaCodigo: string; orden: number },
-  pasos: Array<{ familiaCodigo: string; orden: number }>,
-): boolean {
-  if (paso.familiaCodigo !== "modificacion_pre") return false;
-  return pasos.some(
-    (otro) =>
-      otro.orden < paso.orden &&
-      FAMILIAS_AGUAS_ABAJO_DE_UN_PRE.has(otro.familiaCodigo),
-  );
-}
-
 function validarBasico(
   cfg: UpsertConfigPasoPayload,
   familia:
@@ -2240,7 +2210,7 @@ function validarBasico(
         }>;
       }
     | undefined,
-  contexto?: { familiaCodigo?: string; preFueraDeOrden?: boolean },
+  contexto?: { familiaCodigo?: string },
 ): TabValidacion {
   const errores: string[] = [];
   const warnings: string[] = [];
@@ -2263,11 +2233,6 @@ function validarBasico(
     if (!readOptionalNumber(params.separacionMaxMm)) {
       errores.push("Sin separación entre ojales");
     }
-  }
-  if (contexto?.preFueraDeOrden) {
-    warnings.push(
-      "Va después de un paso de producción: la demasía no le llega y se cotiza la medida chica",
-    );
   }
   const soportaManual =
     familia?.relacionMaquinaSoportada.includes("M-0") ?? false;
@@ -4041,13 +4006,7 @@ export function ConfigPasosEditorView({
     const sinValidacionProduccion = noEjecutar || cfg.tercerizado;
     const valBasico = sinValidacionProduccion
       ? { errores: [], warnings: [] }
-      : validarBasico(cfg, familia, {
-          familiaCodigo: paso.familiaCodigo,
-          preFueraDeOrden: modificacionPreFueraDeOrden(
-            paso,
-            rutaAlternativa.ruta.pasos,
-          ),
-        });
+      : validarBasico(cfg, familia, { familiaCodigo: paso.familiaCodigo });
     const valMateriales = sinValidacionProduccion
       ? { errores: [], warnings: [] }
       : validarMateriales(cfg, familia);
@@ -4854,10 +4813,6 @@ export function ConfigPasosEditorView({
                       ? { errores: [], warnings: [] }
                       : validarBasico(cfg, familia, {
                           familiaCodigo: paso.familiaCodigo,
-                          preFueraDeOrden: modificacionPreFueraDeOrden(
-                            paso,
-                            rutaAlternativa.ruta.pasos,
-                          ),
                         });
                   const valMateriales = noEjecutar
                     ? { errores: [], warnings: [] }

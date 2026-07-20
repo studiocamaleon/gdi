@@ -396,9 +396,35 @@ caso la mutación no llega a nadie y el costo sale mal en silencio.
 Caso borde conocido: bolsillo en los 4 lados + refuerzo en los 4 lados duplicaría demasía. Es
 responsabilidad del modelador; la traza de §5.1 lo deja visible en el desglose.
 
-**Implementado en la etapa D**: el editor marca con warning el `modificacion_pre` que quedó después
-de una familia de producción que lee medidas (impresión, cortes, laminado, CNC), y con ERROR los
-params faltantes que el backend rechazaría al cotizar — se ven al configurar, no al cotizar.
+**RESUELTO 2026-07-20 — el orden de la ruta ya no afecta el costo.** Las familias que declaran
+`mutaMedidasEnPrePasada` aplican su demasía en una **pasada previa al bucle**, sin importar dónde
+estén en la ruta. Así el modelador ordena la ruta como se produce de verdad —una lona se imprime y
+DESPUÉS se refuerza— sin cotizar de menos.
+
+Medido antes de implementarlo, con una lona de 150×100: poner la impresión antes del refuerzo
+bajaba el total de **$92.519 a $84.033** (−9%), sin error ni advertencia. Con la pre-pasada, los
+dos órdenes dan $92.519.
+
+Es seguro porque esas familias no pueden depender de nada que publique un paso anterior:
+
+- `HEREDAR_DEL_OUTPUT_CANONICO` no está entre sus `mecanismosCantidadSoportados`, y el backend
+  rechaza con 400 si alguien lo intenta (`familias-pasos.service.ts`).
+- Su regla CONDICIONAL no puede referenciar **outputs canónicos**
+  (`validacion-pre-pasada.ts`): en la pre-pasada ese output todavía no existe, la regla daría
+  falso y la mutación no se aplicaría en silencio. Una regla sobre datos del pedido
+  ("si uso = exterior, reforzar") sigue siendo válida.
+
+Por eso **no** hizo falta partir `modificacion_pre` en familias específicas: el aislamiento sale de
+lo que la familia declara, no de cuántas familias hay — y partirla habría deshecho el hallazgo
+central de este diseño (bolsillo y refuerzo son la misma primitiva).
+
+El editor sigue marcando con ERROR los params faltantes que el backend rechazaría al cotizar. El
+warning de "PRE fuera de orden" **se retiró**: pasó a ser falso.
+
+**Cuidado al reordenar una ruta**: el motor toma el orden del **snapshot de `RutaVersion`**, no del
+`RutaPaso` vivo (`motor.service.ts`, `configPasosVersionados`). Cambiar el orden sin publicar una
+versión nueva no afecta las cotizaciones — protege lo ya cotizado, pero puede hacer creer que un
+cambio no tuvo efecto.
 
 El renderer de params es **genérico, guiado por `paramsPasoSchema`**, pero **opt-in por familia**
 (`FAMILIAS_CON_PARAMS_EDITABLES` en `src/lib/params-familia.ts`). Volverlo automático para las 42

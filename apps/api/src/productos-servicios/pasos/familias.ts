@@ -1546,6 +1546,9 @@ const modificacion_pre: DefinicionFamilia = {
     'Lona con bolsillos para caño',
     'Lona con refuerzo perimetral',
   ],
+  // El motor aplica la demasía ANTES del bucle: así la ruta puede tener el
+  // orden real de producción (imprimir → reforzar) sin cotizar de menos.
+  mutaMedidasEnPrePasada: true,
 };
 
 const modificacion_post: DefinicionFamilia = {
@@ -1857,3 +1860,14 @@ export function modoRegistroDeFamilia(codigo: string): ModoRegistroPaso {
 
 /** Cantidad total de familias en el catálogo. */
 export const FAMILIAS_TOTAL = Object.keys(FAMILIAS).length;
+
+/**
+ * La familia muta medidas del JobContext y el motor la resuelve en la
+ * PRE-PASADA, antes del bucle. Ver `mutaMedidasEnPrePasada` en types.ts.
+ */
+export function familiaMutaMedidasEnPrePasada(familiaCodigo: string): boolean {
+  return (
+    (FAMILIAS as Record<string, DefinicionFamilia | undefined>)[familiaCodigo]
+      ?.mutaMedidasEnPrePasada === true
+  );
+}

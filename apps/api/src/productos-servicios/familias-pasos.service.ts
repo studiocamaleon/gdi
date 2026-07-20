@@ -7,6 +7,7 @@ import {
   listarFamilias as listarFamiliasCatalogo,
 } from './pasos/familias';
 import { MODOS_ACTIVACION_UNIVERSALES } from './pasos/types';
+import { outputsReferenciadosPorRegla } from './pasos/validacion-pre-pasada';
 import type {
   FamiliaCodigo,
   MecanismoCantidad,
@@ -218,6 +219,20 @@ export class FamiliasPasosService {
       throw new BadRequestException(
         `La familia ${familiaCodigo} no soporta mecanismoCantidad=${dto.mecanismoCantidad}`,
       );
+    }
+
+    // Una familia que muta medidas se resuelve ANTES del bucle, cuando todavía
+    // no corrió ningún paso: su condición no puede mirar un output canónico,
+    // porque daría falso y la mutación no se aplicaría en silencio.
+    if (familia.mutaMedidasEnPrePasada && dto.condicionActivacionJson) {
+      const outputs = outputsReferenciadosPorRegla(dto.condicionActivacionJson);
+      if (outputs.length > 0) {
+        throw new BadRequestException(
+          `La condición de ${familiaCodigo} no puede depender de ${outputs.join(', ')}: ` +
+            'esta familia se resuelve antes que el resto de los pasos, así que ese ' +
+            'dato todavía no existe. Usá datos del pedido (medidas, cantidad, opciones).',
+        );
+      }
     }
 
     const multiplicadoresSoportados = new Set(
