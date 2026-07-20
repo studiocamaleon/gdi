@@ -568,6 +568,28 @@ pedir por su cuenta.
 - El paso arrastrado queda **forzado** mientras el que lo exige esté activo, y se muestra en el
   cotizador con un chip "🔗 lo exige X": si el precio sube sin explicación es peor que el bug.
 
+## 8.e Params que elige el comercial (2026-07-20)
+
+El modelador marca por campo **"El comercial puede cambiarlo al cotizar"**
+(`paramsPasoJson.camposEditablesComercial`). Lo que él configuró pasa a ser la
+SUGERENCIA: si el comercial no toca nada, cotiza igual que antes.
+
+Es **genérico**, no atado a estas familias: sale del `paramsPasoSchema`, así que
+cualquier familia con params lo hereda. Mismo patrón que `tiempoManual`, y reusa
+`configPasoRuntime`, que ya existía en el JobContext sin usarse.
+
+- **Whitelist en el motor** (`params-runtime.ts`): el runtime sólo pisa los
+  campos declarados abiertos. Sin eso, cualquiera que llame a la API podría
+  cambiar la demasía de un refuerzo o el sub-tipo, que son decisiones del
+  modelador y no de la cotización.
+- Un **array vacío se respeta**: vaciar los lados es una elección, y el motor
+  corta con `*_mal_configurada` en vez de cotizar mal en silencio.
+- `subTipo` no es abrible: define de qué modificación se trata.
+- Los valores quedan en el snapshot del ítem, así que **llegan a la OT** y la
+  spec de Ojales muestra lo que realmente se eligió.
+- `buildConfigPasoRuntime` no necesita el catálogo de familias (qué está
+  abierto sale del paso); el schema sólo hace falta para renderizar los inputs.
+
 ## 9. Decisiones tomadas
 
 1. Bolsillo y refuerzo son **la misma primitiva** con parámetros distintos, no dos lógicas.

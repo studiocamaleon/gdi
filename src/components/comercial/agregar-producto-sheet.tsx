@@ -18,7 +18,14 @@ import {
   StarIcon,
   XIcon,
 } from "lucide-react";
-import { buildConfigPasoRuntime } from "@/lib/params-comercial";
+import { etiquetaValorParam } from "@/lib/params-familia";
+import {
+  type CampoEditableComercial,
+  type PasoConParamsComercial,
+  buildConfigPasoRuntime,
+  getParamsComercialDeRuta,
+  valorEfectivoCampo,
+} from "@/lib/params-comercial";
 import { toast } from "sonner";
 
 import {
@@ -48,11 +55,13 @@ import {
 } from "@/lib/propuestas";
 import {
   cotizar,
+  getCatalogoFamilias,
   getProductoById,
   type CotizarResponse,
 } from "@/lib/productos-servicios-api";
 import type {
   ConfigPasoDetalle,
+  FamiliaListItem,
   ProductoDetalle,
   ProductoListItem,
   RutaAlternativaDetalle,
@@ -4550,6 +4559,149 @@ function ApConfigStep({
       };
     });
   };
+  // Catálogo de familias: hace falta el `paramsPasoSchema` para renderizar los
+  // campos que el modelador abrió al comercial.
+  const [familiasCatalogo, setFamiliasCatalogo] = React.useState<
+    Map<string, FamiliaListItem>
+  >(new Map());
+  React.useEffect(() => {
+    let cancelado = false;
+    getCatalogoFamilias()
+      .then((catalogo) => {
+        if (cancelado) return;
+        setFamiliasCatalogo(new Map(catalogo.familias.map((f) => [f.codigo, f])));
+      })
+      .catch(() => {
+        // Sin catálogo no se ofrecen los campos editables; el motor sigue
+        // usando lo que modeló el modelador.
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+
+  // Params que el modelador dejó abiertos al comercial.
+  const pasosConParamsComercial = React.useMemo(
+    () =>
+      getParamsComercialDeRuta(rutaSel?.configPasos ?? [], familiasCatalogo),
+    [rutaSel, familiasCatalogo],
+  );
+  const pasosParamsComercialActivos = pasosConParamsComercial.filter(
+    (paso) =>
+      paso.modoActivacion !== "OPCIONAL" ||
+      Boolean(motorConfig.opcionalesActivados[paso.configPasoId]),
+  );
+
+  const setParamComercial = (
+    configPasoId: string,
+    campo: string,
+    valor: unknown,
+  ) => {
+    setMotorConfig((current) => ({
+      ...current,
+      paramsComercial: {
+        ...current.paramsComercial,
+        [configPasoId]: {
+          ...(current.paramsComercial?.[configPasoId] ?? {}),
+          [campo]: valor,
+        },
+      },
+    }));
+  };
+
+  const renderParamComercialField = (
+    paso: PasoConParamsComercial,
+    campo: CampoEditableComercial,
+  ) => {
+    const elegido = motorConfig.paramsComercial?.[paso.configPasoId];
+    const valor = valorEfectivoCampo(campo, elegido);
+    const key = `param-${paso.configPasoId}-${campo.campo}`;
+    const label = `${paso.nombre} · ${campo.etiqueta}`;
+
+    if (campo.tipo === "multi-enum") {
+      const seleccion = Array.isArray(valor) ? valor.map(String) : [];
+      return (
+        <div className="ap-spec ap-spec-wide" key={key}>
+          <label>{label}</label>
+          <div className="ap-chip-row">
+            {campo.valoresPermitidos.map((opcion) => {
+              const activo = seleccion.includes(opcion);
+              return (
+                <button
+                  key={opcion}
+                  type="button"
+                  className={`ap-chip ${activo ? "on" : ""}`}
+                  onClick={() =>
+                    setParamComercial(
+                      paso.configPasoId,
+                      campo.campo,
+                      campo.valoresPermitidos.filter((v) =>
+                        v === opcion ? !activo : seleccion.includes(v),
+                      ),
+                    )
+                  }
+                >
+                  {etiquetaValorParam(opcion)}
+                </button>
+              );
+            })}
+          </div>
+          {seleccion.length === 0 ? (
+            <div className="ap-minimum-alert is-blocked">
+              <CircleAlertIcon />
+              <span>Elegí al menos uno o la cotización no va a poder calcularse.</span>
+            </div>
+          ) : null}
+        </div>
+      );
+    }
+
+    if (campo.tipo === "number") {
+      return (
+        <div className="ap-spec" key={key}>
+          <label>{label}</label>
+          <input
+            type="number"
+            min={0}
+            step={1}
+            value={typeof valor === "number" ? valor : ""}
+            placeholder="Sugerido"
+            onChange={(event) =>
+              setParamComercial(
+                paso.configPasoId,
+                campo.campo,
+                event.target.value === "" ? null : Number(event.target.value),
+              )
+            }
+          />
+        </div>
+      );
+    }
+
+    if (campo.tipo === "boolean") {
+      return (
+        <div className="ap-spec ap-spec-wide" key={key}>
+          <label className="ap-check">
+            <input
+              type="checkbox"
+              checked={valor !== false}
+              onChange={(event) =>
+                setParamComercial(
+                  paso.configPasoId,
+                  campo.campo,
+                  event.target.checked,
+                )
+              }
+            />
+            <span>{label}</span>
+          </label>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
   const renderTiempoManualField = (tiempoPaso: TiempoManualComercial) => {
     const nombrePaso =
       tiempoPaso.nombreVisible?.trim() ||
@@ -5525,6 +5677,10 @@ function ApConfigStep({
 
             {tiemposManualesPrincipales.map((tiempoPaso) =>
               renderTiempoManualField(tiempoPaso),
+            )}
+
+            {pasosParamsComercialActivos.flatMap((paso) =>
+              paso.campos.map((campo) => renderParamComercialField(paso, campo)),
             )}
 
             {slotsMaterialesGenerales.map((slot) => renderMaterialSelect(slot))}

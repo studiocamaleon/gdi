@@ -13,6 +13,20 @@
 import { camposEditablesComercial } from "@/lib/params-familia";
 import type { FamiliaListItem } from "@/lib/productos-servicios";
 
+/**
+ * Nombre del paso para el comercial. Sin `nombreVisible` cae al código de
+ * familia humanizado: `colocacion_ojales` en crudo no se muestra.
+ */
+function nombrePaso(
+  nombreVisible: string | null | undefined,
+  familiaCodigo: string,
+): string {
+  const propio = nombreVisible?.trim();
+  if (propio) return propio;
+  const humanizado = familiaCodigo.replace(/_/g, " ");
+  return humanizado.charAt(0).toUpperCase() + humanizado.slice(1);
+}
+
 export interface CampoEditableComercial {
   campo: string;
   etiqueta: string;
@@ -73,9 +87,7 @@ export function getParamsComercialDeRuta(
     resultado.push({
       configPasoId: config.id,
       familiaCodigo: config.rutaPaso.familiaCodigo,
-      nombre:
-        config.nombreVisible?.trim() ||
-        config.rutaPaso.familiaCodigo.replace(/_/g, " "),
+      nombre: nombrePaso(config.nombreVisible, config.rutaPaso.familiaCodigo),
       modoActivacion: config.modoActivacion,
       campos,
     });

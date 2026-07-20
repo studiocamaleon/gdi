@@ -53,6 +53,14 @@ describe("getParamsComercialDeRuta", () => {
     expect(r[0].campos[0].sugerido).toBe(500);
   });
 
+  it("sin nombre visible, humaniza el código de familia", () => {
+    const r = getParamsComercialDeRuta(
+      [configPaso({ nombreVisible: null })],
+      familias,
+    );
+    expect(r[0].nombre).toBe("Colocacion ojales");
+  });
+
   it("un paso sin campos abiertos no aparece", () => {
     const sinAbrir = configPaso({
       paramsPasoJson: { separacionMaxMm: 500, lados: ["superior"] },
