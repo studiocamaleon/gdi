@@ -512,12 +512,20 @@ y taller.
   **sangrado de impresión** (`pieceBleedMm`). Para no llamar dos cosas distintas igual, la de
   modificaciones se rotula **"Bolsillo / refuerzo"**.
 - La geometría vive en `src/lib/nesting-overlay.ts` con tests propios; el componente sólo dibuja.
-- **El ojal no va sobre el filo**: su centro se corre `distanciaBordeMm` hacia adentro del borde
-  terminado (default 10 mm, configurable en el paso), que es donde se perfora en el taller —
-  dentro de la zona reforzada. No es un ajuste del dibujo sino la posición real, así que la
-  calcula el motor. El sentido del corrimiento se deduce de qué bordes toca el punto, no del lado
-  que lo generó: una esquina se corre en diagonal y un ojal a mitad de lado en un solo eje.
-  La separación se sigue midiendo **sobre el borde**; sólo se mueve el punto de perforado.
+- **El ojal se centra en la banda del refuerzo.** Al doblarse hacia atrás, un refuerzo de 20 mm
+  deja sobre la pieza terminada una banda reforzada de 20 mm medida hacia adentro desde el borde;
+  el ojal va al medio de esa banda, o sea a 10 mm. La regla **escala sola** con cualquier tamaño
+  de refuerzo y no hay nada que configurar. `distanciaBordeMm` (default 10) quedó sólo como
+  fallback para los lados SIN refuerzo.
+  - Es la posición REAL, no un ajuste del dibujo, así que la calcula el motor.
+  - **El inset es por LADO**: el paso de ojales lee la demasía acumulada de los pasos PRE
+    (`demasiaAcumuladaPorLado`). Con bolsillo de 100 mm arriba y refuerzo de 40 mm al costado, el
+    ojal de esquina queda a 50 mm en vertical y 20 mm en horizontal — cada eje centrado en la
+    banda de su propio lado.
+  - El sentido del corrimiento se deduce de qué bordes toca el punto, no del lado que lo generó:
+    una esquina se corre en diagonal y un ojal a mitad de lado en un solo eje.
+  - Se deduplica **antes** de correr, así la esquina compartida sigue contando una sola vez, y la
+    separación se sigue midiendo **sobre el borde**: sólo se mueve el punto de perforado.
 
 **Pendiente — piezas paneleadas.** Cuando una lona no entra en el ancho del rollo, el nesting la
 parte en paneles y cada placement es una tajada; la franja y los ojales pertenecen al perímetro de

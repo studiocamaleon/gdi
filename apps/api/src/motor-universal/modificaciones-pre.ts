@@ -56,6 +56,30 @@ export function parsearParamsModificacionPre(
 }
 
 /**
+ * Demasía TOTAL de cada lado, acumulando todos los pasos PRE ya ejecutados.
+ *
+ * Al doblarse hacia atrás, la demasía de un lado forma sobre la pieza terminada
+ * una banda reforzada de ese ancho, medida hacia adentro desde el borde. Es lo
+ * que necesita `colocacion_ojales` para centrar el ojal en esa banda.
+ */
+export function demasiaAcumuladaPorLado(
+  jobContext: JobContext,
+): Record<LadoPieza, number> {
+  const total: Record<LadoPieza, number> = {
+    superior: 0,
+    inferior: 0,
+    izquierdo: 0,
+    derecho: 0,
+  };
+  for (const mutacion of jobContext.mutacionesAplicadas ?? []) {
+    for (const lado of mutacion.lados) {
+      total[lado] += mutacion.demasiaMm;
+    }
+  }
+  return total;
+}
+
+/**
  * Metros lineales de unión del paso — el driver del tiempo (T-2 en ml/h).
  *
  * Se mide sobre `piezasVisibles` (la medida que pidió el cliente), NO sobre

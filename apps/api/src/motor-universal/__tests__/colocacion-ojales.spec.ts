@@ -3,6 +3,7 @@ import {
   calcularLayoutOjales,
   calcularOjalesPorPieza,
   calcularPosicionesOjales,
+  insetDelLado,
   parsearParamsColocacionOjales,
 } from '../colocacion-ojales';
 import { congelarMedidaVisible } from '../job-context-metrics';
@@ -257,6 +258,90 @@ describe('calcularPosicionesOjales', () => {
     expect(calcularOjalesPorPieza(1500, 1000, p)).toBe(
       calcularPosicionesOjales(1500, 1000, p).length,
     );
+  });
+});
+
+describe('insetDelLado', () => {
+  /**
+   * El refuerzo doblado hacia atrás deja una banda de su mismo ancho sobre la
+   * pieza terminada; el ojal se centra en ella.
+   */
+  it('centra el ojal en la banda del refuerzo', () => {
+    expect(insetDelLado(20, 10)).toBe(10);
+    expect(insetDelLado(40, 10)).toBe(20);
+    expect(insetDelLado(100, 10)).toBe(50);
+  });
+
+  it('sin refuerzo usa la distancia declarada en el paso', () => {
+    expect(insetDelLado(0, 10)).toBe(10);
+    expect(insetDelLado(0, 25)).toBe(25);
+  });
+});
+
+describe('calcularPosicionesOjales con refuerzo', () => {
+  const CON_REFUERZO = {
+    superior: 40,
+    inferior: 40,
+    izquierdo: 40,
+    derecho: 40,
+  };
+
+  it('caso B: refuerzo de 40mm centra los ojales a 20mm del borde', () => {
+    const pos = calcularPosicionesOjales(1500, 1000, params(), CON_REFUERZO);
+    const claves = pos.map((p) => `${p.xMm}:${p.yMm}`);
+    expect(claves).toContain('20:20');
+    expect(claves).toContain('1480:20');
+    expect(claves).toContain('20:980');
+    expect(claves).toContain('1480:980');
+    expect(pos).toHaveLength(10);
+  });
+
+  it('escala solo: un refuerzo de 20mm centra a 10mm', () => {
+    const pos = calcularPosicionesOjales(
+      1500,
+      1000,
+      params({ lados: ['superior'] }),
+      { superior: 20, inferior: 20, izquierdo: 20, derecho: 20 },
+    );
+    expect(pos[1]).toMatchObject({ xMm: 500, yMm: 10 });
+  });
+
+  /**
+   * El caso que obliga a que el inset sea POR LADO: bolsillo grande arriba y
+   * abajo, refuerzo chico a los costados.
+   */
+  it('cada eje se centra en la banda de SU lado', () => {
+    const pos = calcularPosicionesOjales(1500, 1000, params(), {
+      superior: 100,
+      inferior: 100,
+      izquierdo: 40,
+      derecho: 40,
+    });
+    const claves = pos.map((p) => `${p.xMm}:${p.yMm}`);
+    // Esquina: 20mm en x (refuerzo lateral) y 50mm en y (bolsillo).
+    expect(claves).toContain('20:50');
+    // Mitad del lado superior: sólo se centra en la banda del bolsillo.
+    expect(claves).toContain('500:50');
+    // Mitad del lado izquierdo: sólo en la del refuerzo.
+    expect(claves).toContain('20:500');
+  });
+
+  it('un lado sin refuerzo cae a la distancia declarada', () => {
+    const pos = calcularPosicionesOjales(
+      1500,
+      1000,
+      params({ lados: ['superior', 'izquierdo'] }),
+      { superior: 40, inferior: 0, izquierdo: 0, derecho: 0 },
+    );
+    const claves = pos.map((p) => `${p.xMm}:${p.yMm}`);
+    // y = 20 por el refuerzo superior; x = 10 por el default del paso.
+    expect(claves).toContain('10:20');
+  });
+
+  it('la cantidad no cambia al centrar', () => {
+    expect(
+      calcularPosicionesOjales(1500, 1000, params(), CON_REFUERZO),
+    ).toHaveLength(calcularPosicionesOjales(1500, 1000, params()).length);
   });
 });
 

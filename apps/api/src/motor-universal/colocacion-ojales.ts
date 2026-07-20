@@ -16,10 +16,14 @@
  * propios. Esconderlo tras un dropdown repetiría el error que la etapa B
  * corrigió: un enum decorativo que el motor ignora.
  */
-import { largoDelLadoMm, parsearLados } from './lados-pieza';
+import { LADOS_PIEZA, largoDelLadoMm, parsearLados } from './lados-pieza';
+import { demasiaAcumuladaPorLado } from './modificaciones-pre';
 import type { JobContext, LadoPieza } from './tipos';
 
-/** Cuánto adentro del borde terminado va el centro del ojal, por defecto. */
+/**
+ * Distancia al borde de los lados SIN refuerzo. Donde hay refuerzo manda la
+ * banda: el ojal se centra en ella (ver `insetDelLado`).
+ */
 export const DISTANCIA_BORDE_OJAL_MM_DEFAULT = 10;
 
 export interface ParamsColocacionOjales {
@@ -29,10 +33,28 @@ export interface ParamsColocacionOjales {
   /** Si cada esquina lleva ojal sí o sí (práctica de taller). Default true. */
   esquinasSiempre: boolean;
   /**
-   * Distancia del CENTRO del ojal al borde terminado. El ojal nunca se perfora
-   * sobre el filo: va unos milímetros adentro, dentro de la zona reforzada.
+   * Distancia del CENTRO del ojal al borde terminado, para los lados que NO
+   * tienen refuerzo. Donde hay refuerzo, el ojal se centra en su banda.
    */
   distanciaBordeMm: number;
+}
+
+/**
+ * Cuánto adentro del borde va el centro del ojal, para UN lado.
+ *
+ * Al doblarse hacia atrás, un refuerzo de 20 mm deja sobre la pieza terminada
+ * una banda reforzada de 20 mm de ancho medida hacia adentro desde el borde.
+ * El ojal se centra en esa banda: 10 mm. Así la posición sale bien sea cual
+ * sea el tamaño del refuerzo, sin tener que configurar nada.
+ *
+ * Si el lado no tiene refuerzo no hay banda donde centrarse, y se usa la
+ * distancia declarada en el paso.
+ */
+export function insetDelLado(
+  demasiaDelLadoMm: number,
+  distanciaBordeMm: number,
+): number {
+  return demasiaDelLadoMm > 0 ? demasiaDelLadoMm / 2 : distanciaBordeMm;
 }
 
 export function parsearParamsColocacionOjales(
@@ -86,18 +108,31 @@ function clavePosicion(x: number, y: number): string {
  * El sentido se deduce de QUÉ bordes toca el punto, no del lado que lo generó:
  * así una esquina —que toca dos— se corre en diagonal, en vez de quedar pegada
  * al filo perpendicular. Un ojal a mitad de lado se corre en un solo eje.
+ *
+ * Cada eje usa el inset de SU borde: en una lona con bolsillo arriba y refuerzo
+ * al costado, el ojal de esquina se centra en la banda del bolsillo
+ * verticalmente y en la del refuerzo horizontalmente.
  */
 function correrHaciaAdentro(
   xMm: number,
   yMm: number,
   anchoMm: number,
   altoMm: number,
-  insetMm: number,
+  inset: Record<LadoPieza, number>,
 ): { xMm: number; yMm: number } {
-  if (insetMm <= 0) return { xMm, yMm };
   return {
-    xMm: xMm === 0 ? insetMm : xMm === anchoMm ? anchoMm - insetMm : xMm,
-    yMm: yMm === 0 ? insetMm : yMm === altoMm ? altoMm - insetMm : yMm,
+    xMm:
+      xMm === 0
+        ? inset.izquierdo
+        : xMm === anchoMm
+          ? anchoMm - inset.derecho
+          : xMm,
+    yMm:
+      yMm === 0
+        ? inset.superior
+        : yMm === altoMm
+          ? altoMm - inset.inferior
+          : yMm,
   };
 }
 
@@ -124,13 +159,23 @@ export function calcularPosicionesOjales(
   anchoMm: number,
   altoMm: number,
   params: ParamsColocacionOjales,
+  demasiaPorLadoMm?: Record<LadoPieza, number>,
 ): PosicionOjal[] {
   if (anchoMm <= 0 || altoMm <= 0) return [];
 
-  // No puede meterse más allá del centro de la pieza (lonas muy chicas).
-  const inset = Math.max(
-    0,
-    Math.min(params.distanciaBordeMm, anchoMm / 2, altoMm / 2),
+  // Cada lado se centra en SU banda de refuerzo; sin refuerzo usa la distancia
+  // declarada. Y nunca más allá del centro de la pieza (lonas muy chicas).
+  const inset = LADOS_PIEZA.reduce(
+    (acc, lado) => {
+      const crudo = insetDelLado(
+        demasiaPorLadoMm?.[lado] ?? 0,
+        params.distanciaBordeMm,
+      );
+      const eje = lado === 'superior' || lado === 'inferior' ? altoMm : anchoMm;
+      acc[lado] = Math.max(0, Math.min(crudo, eje / 2));
+      return acc;
+    },
+    {} as Record<LadoPieza, number>,
   );
 
   const vistas = new Set<string>();
@@ -216,12 +261,21 @@ export function calcularLayoutOjales(
   const piezas = jobContext.piezasVisibles ?? jobContext.piezas;
   if (!piezas || piezas.length === 0) return [];
 
+  // El refuerzo de cada lado lo dejaron los pasos PRE, que ya corrieron: el
+  // ojal se centra en esa banda.
+  const demasia = demasiaAcumuladaPorLado(jobContext);
+
   return piezas.flatMap((pieza) => {
     const cantidad = Number(pieza.cantidad ?? 0);
     const anchoMm = Number(pieza.anchoMm ?? 0);
     const altoMm = Number(pieza.altoMm ?? 0);
     if (cantidad <= 0) return [];
-    const posiciones = calcularPosicionesOjales(anchoMm, altoMm, params);
+    const posiciones = calcularPosicionesOjales(
+      anchoMm,
+      altoMm,
+      params,
+      demasia,
+    );
     if (posiciones.length === 0) return [];
     return [{ anchoMm, altoMm, cantidad, posiciones }];
   });

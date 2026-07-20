@@ -1638,12 +1638,12 @@ const colocacion_ojales: DefinicionFamilia = {
     },
     {
       campo: 'distanciaBordeMm',
-      etiqueta: 'Distancia del ojal al borde (mm)',
+      etiqueta: 'Distancia al borde sin refuerzo (mm)',
       tipo: 'number',
       default: 10,
       requerido: false,
       descripcion:
-        'Cuánto adentro del borde terminado va el centro del ojal: nunca se perfora sobre el filo, va dentro de la zona reforzada. Típico 5 a 10 mm.',
+        'Sólo para lados SIN refuerzo. Donde hay refuerzo no hace falta configurar nada: el refuerzo doblado deja una banda de su mismo ancho y el ojal se centra en ella (refuerzo de 20 mm → ojal a 10 mm del borde).',
     },
     {
       campo: 'esquinasSiempre',
