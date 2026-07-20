@@ -517,7 +517,14 @@ y taller.
   el ojal va al medio de esa banda, o sea a 10 mm. La regla **escala sola** con cualquier tamaño
   de refuerzo y no hay nada que configurar. `distanciaBordeMm` (default 10) quedó sólo como
   fallback para los lados SIN refuerzo.
-  - Es la posición REAL, no un ajuste del dibujo, así que la calcula el motor.
+  - Es la posición REAL, no un ajuste del dibujo, así que la calcula el motor. Nada de esto toca
+    el nesting ni el costo: se deduplica antes de correr el punto y la separación se mide sobre
+    el borde.
+  - **Los lados SIN refuerzo se alinean a los que sí lo tienen** (`insetDeReferencia`), para que
+    el dibujo quede parejo — si no, los ojales de esos lados quedaban pegados al filo y los otros
+    no. Con refuerzos de distinto tamaño toma el MENOR: meter un ojal a la mitad de la banda más
+    grande, sobre un lado que no tiene nada que lo refuerce, lo dejaría demasiado adentro. Recién
+    si NINGÚN lado tiene refuerzo se usa `distanciaBordeMm`.
   - **El inset es por LADO**: el paso de ojales lee la demasía acumulada de los pasos PRE
     (`demasiaAcumuladaPorLado`). Con bolsillo de 100 mm arriba y refuerzo de 40 mm al costado, el
     ojal de esquina queda a 50 mm en vertical y 20 mm en horizontal — cada eje centrado en la

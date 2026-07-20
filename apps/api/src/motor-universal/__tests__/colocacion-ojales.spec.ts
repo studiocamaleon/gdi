@@ -3,6 +3,7 @@ import {
   calcularLayoutOjales,
   calcularOjalesPorPieza,
   calcularPosicionesOjales,
+  insetDeReferencia,
   insetDelLado,
   parsearParamsColocacionOjales,
 } from '../colocacion-ojales';
@@ -272,9 +273,41 @@ describe('insetDelLado', () => {
     expect(insetDelLado(100, 10)).toBe(50);
   });
 
-  it('sin refuerzo usa la distancia declarada en el paso', () => {
+  it('sin refuerzo usa el fallback', () => {
     expect(insetDelLado(0, 10)).toBe(10);
     expect(insetDelLado(0, 25)).toBe(25);
+  });
+});
+
+describe('insetDeReferencia', () => {
+  it('sin ningún refuerzo usa la distancia declarada', () => {
+    expect(
+      insetDeReferencia(
+        { superior: 0, inferior: 0, izquierdo: 0, derecho: 0 },
+        10,
+      ),
+    ).toBe(10);
+    expect(insetDeReferencia(undefined, 15)).toBe(15);
+  });
+
+  it('con un solo refuerzo, la mitad de esa banda', () => {
+    expect(
+      insetDeReferencia(
+        { superior: 40, inferior: 0, izquierdo: 0, derecho: 0 },
+        10,
+      ),
+    ).toBe(20);
+  });
+
+  it('con refuerzos distintos toma el MENOR', () => {
+    // El ojal de un lado sin refuerzo no debería quedar tan adentro como el de
+    // la banda más grande: no hay nada que lo refuerce ahí.
+    expect(
+      insetDeReferencia(
+        { superior: 100, inferior: 100, izquierdo: 40, derecho: 40 },
+        10,
+      ),
+    ).toBe(20);
   });
 });
 
@@ -326,7 +359,12 @@ describe('calcularPosicionesOjales con refuerzo', () => {
     expect(claves).toContain('20:500');
   });
 
-  it('un lado sin refuerzo cae a la distancia declarada', () => {
+  /**
+   * Es un criterio VISUAL: no cambia cantidades ni nesting. Sin esto, los
+   * ojales de los lados sin refuerzo quedaban más al filo que los otros y el
+   * dibujo se veía desparejo.
+   */
+  it('un lado sin refuerzo se alinea a la distancia de los que sí tienen', () => {
     const pos = calcularPosicionesOjales(
       1500,
       1000,
@@ -334,8 +372,23 @@ describe('calcularPosicionesOjales con refuerzo', () => {
       { superior: 40, inferior: 0, izquierdo: 0, derecho: 0 },
     );
     const claves = pos.map((p) => `${p.xMm}:${p.yMm}`);
-    // y = 20 por el refuerzo superior; x = 10 por el default del paso.
-    expect(claves).toContain('10:20');
+    // Los dos ejes a 20mm: el superior por su refuerzo, el izquierdo copiándolo.
+    expect(claves).toContain('20:20');
+    expect(claves).toContain('20:500');
+  });
+
+  it('con refuerzos distintos, los lados sin refuerzo toman el MENOR', () => {
+    const pos = calcularPosicionesOjales(1500, 1000, params(), {
+      superior: 100,
+      inferior: 0,
+      izquierdo: 40,
+      derecho: 0,
+    });
+    const claves = pos.map((p) => `${p.xMm}:${p.yMm}`);
+    // superior 100 → 50 ; izquierdo 40 → 20 ; los sin refuerzo copian el 20.
+    expect(claves).toContain('20:50');
+    expect(claves).toContain('1480:50');
+    expect(claves).toContain('20:980');
   });
 
   it('la cantidad no cambia al centrar', () => {

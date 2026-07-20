@@ -47,14 +47,37 @@ export interface ParamsColocacionOjales {
  * El ojal se centra en esa banda: 10 mm. Así la posición sale bien sea cual
  * sea el tamaño del refuerzo, sin tener que configurar nada.
  *
- * Si el lado no tiene refuerzo no hay banda donde centrarse, y se usa la
- * distancia declarada en el paso.
+ * Si el lado no tiene refuerzo no hay banda donde centrarse y se usa el
+ * `fallbackMm`, que se calcula con `insetDeReferencia`.
  */
 export function insetDelLado(
   demasiaDelLadoMm: number,
+  fallbackMm: number,
+): number {
+  return demasiaDelLadoMm > 0 ? demasiaDelLadoMm / 2 : fallbackMm;
+}
+
+/**
+ * Distancia a usar en los lados SIN refuerzo.
+ *
+ * Toma la de los lados que SÍ lo tienen, para que el dibujo quede parejo: si
+ * una lona lleva refuerzo sólo en dos lados, los ojales de los otros dos se
+ * alinean a la misma distancia en vez de quedar más al filo.
+ *
+ * Con refuerzos de distinto tamaño usa el MENOR: meter un ojal a la mitad del
+ * refuerzo más grande, sobre un lado que no tiene nada que lo refuerce, lo
+ * dejaría demasiado adentro.
+ *
+ * Sin ningún refuerzo, la distancia declarada en el paso.
+ */
+export function insetDeReferencia(
+  demasiaPorLadoMm: Record<LadoPieza, number> | undefined,
   distanciaBordeMm: number,
 ): number {
-  return demasiaDelLadoMm > 0 ? demasiaDelLadoMm / 2 : distanciaBordeMm;
+  const conRefuerzo = LADOS_PIEZA.map((lado) => demasiaPorLadoMm?.[lado] ?? 0)
+    .filter((mm) => mm > 0)
+    .map((mm) => mm / 2);
+  return conRefuerzo.length > 0 ? Math.min(...conRefuerzo) : distanciaBordeMm;
 }
 
 export function parsearParamsColocacionOjales(
@@ -163,14 +186,13 @@ export function calcularPosicionesOjales(
 ): PosicionOjal[] {
   if (anchoMm <= 0 || altoMm <= 0) return [];
 
-  // Cada lado se centra en SU banda de refuerzo; sin refuerzo usa la distancia
-  // declarada. Y nunca más allá del centro de la pieza (lonas muy chicas).
+  // Cada lado se centra en SU banda de refuerzo; los que no tienen se alinean
+  // a la de los que sí, para que el dibujo quede parejo. Y nunca más allá del
+  // centro de la pieza (lonas muy chicas).
+  const fallback = insetDeReferencia(demasiaPorLadoMm, params.distanciaBordeMm);
   const inset = LADOS_PIEZA.reduce(
     (acc, lado) => {
-      const crudo = insetDelLado(
-        demasiaPorLadoMm?.[lado] ?? 0,
-        params.distanciaBordeMm,
-      );
+      const crudo = insetDelLado(demasiaPorLadoMm?.[lado] ?? 0, fallback);
       const eje = lado === 'superior' || lado === 'inferior' ? altoMm : anchoMm;
       acc[lado] = Math.max(0, Math.min(crudo, eje / 2));
       return acc;
