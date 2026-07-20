@@ -4648,6 +4648,9 @@ export function PropuestaFicha({
   // Modal "Facturar" del header (la acción también vive en el tab
   // Comprobantes). Ver docs/facturacion-ordenes-deuda-comercial-diseno.md §6.1.
   const [facturarOpen, setFacturarOpen] = React.useState(false);
+  // Se incrementa al facturar desde el header, para que el tab Comprobantes
+  // (que hace su propio fetch) recargue la lista sin refrescar la página.
+  const [comprobantesToken, setComprobantesToken] = React.useState(0);
   // Cobros en staging (sólo creación): se registran todos al emitir la OT,
   // como los items. El backend rechaza cobros sobre borradores, así que
   // guardar borrador NO los persiste (se avisa con modal).
@@ -6141,6 +6144,7 @@ export function PropuestaFicha({
               facturadoInicial={orden.facturadoTotal}
               cobradoInicial={orden.cobradoTotal}
               puedeFacturar={orden.estado !== "borrador"}
+              recargarToken={comprobantesToken}
             />
           </div>
         ) : null}
@@ -6152,6 +6156,12 @@ export function PropuestaFicha({
             onClose={() => setFacturarOpen(false)}
             onFacturada={() => {
               setTab("comprobantes");
+              // El tab de Comprobantes tiene su propio fetch cliente: router.refresh()
+              // sólo revalida el server component, así que hay que pedirle que
+              // recargue la lista (si no, el comprobante recién emitido no aparece
+              // hasta refrescar la página a mano).
+              setComprobantesToken((n) => n + 1);
+              recargarOrden();
               router.refresh();
             }}
           />
