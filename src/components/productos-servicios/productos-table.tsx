@@ -355,19 +355,21 @@ export function ProductosServiciosTable({
                 />
               </div>
             ) : (
-              <table className="tbl">
+              /* `fixed`: los anchos los mandan los % de abajo y no el contenido.
+                 Con el auto-layout la columna Nombre quedaba en ~140px, y ponerle
+                 un min-width subía el min-content de la tabla (1089→1209px), que
+                 los ancestros flex (`.content`, `.gp-main`, con min-width:auto) no
+                 pueden encoger — la vista terminaba más ancha que el viewport. */
+              <table className="tbl" style={{ tableLayout: "fixed" }}>
                 <thead>
                   <tr>
-                    {/* El nombre trae descripción debajo: sin un piso propio el
-                        auto-layout se lo come (quedaba en ~140px) y el texto se
-                        parte en muchas líneas en pantallas chicas. */}
-                    <th style={{ minWidth: 260 }}>Nombre</th>
-                    <th>Categoría</th>
-                    <th>¿Cómo se cobra?</th>
-                    <th>Manejo de medidas</th>
-                    <th>Rutas</th>
-                    <th>Estado</th>
-                    <th className="right" style={{ width: 96 }}>Acciones</th>
+                    <th style={{ width: "28%" }}>Nombre</th>
+                    <th style={{ width: "13%" }}>Categoría</th>
+                    <th style={{ width: "15%" }}>¿Cómo se cobra?</th>
+                    <th style={{ width: "17%" }}>Manejo de medidas</th>
+                    <th style={{ width: "11%" }}>Rutas</th>
+                    <th style={{ width: "8%" }}>Estado</th>
+                    <th className="right" style={{ width: "8%" }}>Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
