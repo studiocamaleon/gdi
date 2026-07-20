@@ -29,6 +29,7 @@ import {
   type PresupuestoEstado,
 } from "@/lib/presupuestos-api";
 import type { MembershipRole } from "@/lib/auth";
+import { CANALES_VENTA } from "@/lib/propuestas";
 
 /**
  * Vista de detalle DEDICADA de un presupuesto (antes vivía en un drawer de
@@ -57,6 +58,10 @@ const MOTIVOS_PERDIDA = [
   { v: "sin_respuesta", l: "Sin respuesta" },
   { v: "otro", l: "Otro" },
 ];
+
+/** El canal se guarda como slug ("mostrador"); se muestra con su etiqueta. */
+const canalLabel = (v: string | null) =>
+  v ? (CANALES_VENTA.find((c) => c.value === v)?.label ?? v) : "—";
 
 const fmtMoneda = (n: number) => "$" + Math.round(n).toLocaleString("es-AR");
 const fmtFecha = (iso: string | null) =>
@@ -238,7 +243,7 @@ export function PresupuestoDetalleView({
           {d.vendedor?.nombre ?? "—"}
         </Campo>
         <Campo label="Canal de venta" icon={<StoreIcon />}>
-          {d.canalVenta ?? "—"}
+          {canalLabel(d.canalVenta)}
         </Campo>
         <Campo label="Válido hasta" icon={<CalendarIcon />} hint={d.fechaEntrega ? `Entrega estimada ${fmtFecha(d.fechaEntrega)}` : undefined}>
           {fmtFecha(d.fechaValidez)}

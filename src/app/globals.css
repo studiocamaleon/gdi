@@ -29403,6 +29403,10 @@ body:has(.t-app) {
    .tbl, .pp-badge/.pp-chip/.pp-timeline); acá sólo lo propio del presupuesto.
    ═══════════════════════════════════════════════════════════════════════ */
 .pp-detalle .pp-visto{font-size:11.5px;color:var(--muted-text-2);font-weight:500;display:inline-flex}
+/* `.otd-card` no trae margen propio (en la OT lo da el contenedor); acá las
+   cards se apilan sueltas en la columna y quedaban pegadas. */
+.pp-detalle .otd-card{margin-bottom:16px}
+.pp-detalle .otd-card:last-child{margin-bottom:0}
 .pp-detalle .ofield-ctrl.pp-ofield-ro{display:flex;align-items:center;min-height:38px;font-size:13.5px;color:var(--ink)}
 
 /* Barra de la acción principal del estado */
