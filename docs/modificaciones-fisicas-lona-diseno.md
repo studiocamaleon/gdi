@@ -396,6 +396,17 @@ caso la mutación no llega a nadie y el costo sale mal en silencio.
 Caso borde conocido: bolsillo en los 4 lados + refuerzo en los 4 lados duplicaría demasía. Es
 responsabilidad del modelador; la traza de §5.1 lo deja visible en el desglose.
 
+**Implementado en la etapa D**: el editor marca con warning el `modificacion_pre` que quedó después
+de una familia de producción que lee medidas (impresión, cortes, laminado, CNC), y con ERROR los
+params faltantes que el backend rechazaría al cotizar — se ven al configurar, no al cotizar.
+
+El renderer de params es **genérico, guiado por `paramsPasoSchema`**, pero **opt-in por familia**
+(`FAMILIAS_CON_PARAMS_EDITABLES` en `src/lib/params-familia.ts`). Volverlo automático para las 42
+familias expondría params que el motor NO lee —`tipoPliegue` no lo lee nadie— y duplicaría
+controles en las tres familias que ya tienen UI a medida (`pre_prensa`,
+`montaje_sobre_sustrato`, `diseno_grafico`). Se suma una familia a la lista recién cuando se
+verificó que el motor consume sus params.
+
 ---
 
 ## 7. Journey
@@ -437,7 +448,7 @@ responsabilidad del modelador; la traza de §5.1 lo deja visible en el desglose.
 | **A. Contrato** ✅ | `medidaVisibleMm` / `piezasVisibles` congeladas al inicio del loop; `mutacionesAplicadas[]`; recálculo de `piezaAreaTotalM2` y `piezaPerimetroTotalM` tras cada mutación (§6.3) | Bajo. Aditivo, sin cambio de comportamiento si no hay pasos PRE. |
 | **B. Sub-tarea (i)** ✅ | Mutación real en `modificacion_pre`: `lados[]` + `demasiaMm`, por pieza y en ambos caminos; output `metros_lineales_union`; tiempo T-2 en ml/h; retiro de sub-tipos muertos | Medio. Toca el loop del motor. Cubrir con tests antes. |
 | **C. Ojales** ✅ | Familia `colocacion_ojales`; estrategia de cantidad por perímetro en `CALCULADO_POR_PASO` con dedupe de esquinas; slot de material; output `ojales_colocados` | Medio. La fórmula necesita tests propios (§4). |
-| **D. Editor** | Render de `multi-enum` para `lados`; presets de subTipo; validación de orden (§6.4) | Bajo. |
+| **D. Editor** ✅ | Render de `multi-enum` para `lados`; presets de subTipo; validación de orden (§6.4) | Bajo. |
 | **E. Cotizador** | Desglose con medida pedida vs. material y el detalle de cada modificación | Bajo. |
 | **F. OT / producción** | Doble medida en la OT y el tablero; medida visible en el seguimiento público | Bajo. |
 | **G. Tests** | Casos A, B y C de §4 end-to-end; encadenamiento de dos PRE; recálculo de métricas; multi-pieza | — |
