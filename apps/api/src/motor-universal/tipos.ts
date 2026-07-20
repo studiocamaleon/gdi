@@ -27,6 +27,30 @@ export interface CotizarInput {
 }
 
 /**
+ * Lados de una pieza rectangular. Los pasos `modificacion_pre` declaran sobre
+ * qué lados aplican la demasía; `colocacion_ojales`, sobre cuáles coloca.
+ */
+export type LadoPieza = 'superior' | 'inferior' | 'izquierdo' | 'derecho';
+
+/**
+ * Registro de UNA mutación aplicada por un paso `modificacion_pre`.
+ *
+ * Es la traza que necesita el desglose de la cotización y la OT para explicar
+ * por qué el material mide más que lo que pidió el cliente (el operario corta
+ * la medida `despues`, el cliente pidió la visible).
+ */
+export interface MutacionAplicada {
+  rutaPasoId: string;
+  nombrePaso: string;
+  /** Preset del paso: `bolsillo` | `refuerzo`. */
+  subTipo: string;
+  lados: LadoPieza[];
+  demasiaMm: number;
+  antes: { anchoMm: number; altoMm: number };
+  despues: { anchoMm: number; altoMm: number };
+}
+
+/**
  * Job Context — el "estado" del trabajo de cotización.
  * El motor lo lee de los inputs del comercial y lo va MUTANDO a medida
  * que ejecuta pasos (los pasos PRE pueden modificar medidas, etc.).
@@ -43,6 +67,27 @@ export interface JobContext {
   }>;
   /** Medidas custom cuando el producto permite medida personalizada (LIBRE o MIXTA). */
   medidaCustomMm?: { anchoMm: number; altoMm: number };
+  /**
+   * INMUTABLE. Medida que pidió el cliente, congelada antes del primer paso
+   * PRE. Los pasos que miden sobre el borde TERMINADO (soldadura de bolsillo,
+   * colocación de ojales) leen de acá, no de `medidaCustomMm`/`piezas[]`, que
+   * describen el material y sí crecen con la demasía.
+   * Ver `docs/modificaciones-fisicas-lona-diseno.md` §3.
+   */
+  medidaVisibleMm?: { anchoMm: number; altoMm: number };
+  /** INMUTABLE. Contraparte multi-pieza de `medidaVisibleMm`. */
+  piezasVisibles?: Array<{
+    cantidad: number;
+    anchoMm: number;
+    altoMm: number;
+  }>;
+  /**
+   * Traza acumulada de las mutaciones que aplicaron los pasos `modificacion_pre`.
+   * Se APPENDEA: no puede viajar como output canónico porque el merge del loop
+   * hace `jobContext[key] = value` y un segundo paso PRE pisaría la traza del
+   * primero (caso real: refuerzo + bolsillo, o refuerzo + ojales).
+   */
+  mutacionesAplicadas?: MutacionAplicada[];
   /** Multiplicador caras (1 simple faz, 2 doble faz). */
   caras?: 1 | 2;
   /** Multi-copia para talonarios (1 simple, 2 duplicado, 3 triplicado). */
@@ -63,10 +108,22 @@ export interface JobContext {
   m2_instalados?: number;
   /** Para instalación: zona elegida. */
   zonaInstalacion?: string;
-  /** Área total calculada desde las piezas comerciales. */
+  /**
+   * Área total calculada desde las piezas comerciales. Describe el MATERIAL:
+   * se recalcula cuando un paso PRE muta las medidas
+   * (`recalcularMetricasDerivadasPiezas`).
+   */
   piezaAreaTotalM2?: number;
-  /** Perímetro rectangular total de piezas en metros, útil para refilado/corte manual. */
+  /**
+   * Perímetro rectangular total de piezas en metros, útil para refilado/corte
+   * manual. Describe el MATERIAL — para medir sobre el borde terminado
+   * (ojales, soldadura) usar `piezasVisibles`.
+   */
   piezaPerimetroTotalM?: number;
+  /** Ancho máximo entre las piezas (material, se recalcula tras mutar). */
+  piezaAnchoMaxMm?: number;
+  /** Alto máximo entre las piezas (material, se recalcula tras mutar). */
+  piezaAltoMaxMm?: number;
   /** Metros lineales comerciales o ingresados por el usuario. */
   metrosLineales?: number;
   metroLineal?: number;

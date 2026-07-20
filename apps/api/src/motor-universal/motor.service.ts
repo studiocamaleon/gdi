@@ -63,7 +63,10 @@ import {
   modoColorMatchesPerfil,
   normalizeModoColor,
 } from '../productos-servicios/modo-color-comercial';
-import { calcularPerimetroPiezasM } from './job-context-metrics';
+import {
+  calcularPerimetroPiezasM,
+  congelarMedidaVisible,
+} from './job-context-metrics';
 
 const MODO_SIN_IMPRESION = 'SIN_IMPRESION';
 const FAMILIAS_IMPRESION = new Set([
@@ -465,6 +468,13 @@ export class MotorUniversalService {
         },
       ];
     }
+    // Congelar la medida VISIBLE antes de que ningún paso PRE la mute. Los
+    // pasos que miden sobre el borde terminado (soldadura de bolsillo,
+    // colocación de ojales) leen de acá; `piezas[]`/`medidaCustomMm` describen
+    // el material y sí crecen con la demasía.
+    // Ver docs/modificaciones-fisicas-lona-diseno.md §3.
+    congelarMedidaVisible(jobContext);
+
     this.enriquecerJobContextConGramajePrincipal(producto, jobContext);
     this.enriquecerJobContextConTecnologias(producto.pasos, jobContext);
 
@@ -3408,8 +3418,9 @@ export class MotorUniversalService {
       if (key.startsWith('caras_')) dup[key] = 1;
     }
     if (typeof jc.cantidad === 'number') dup.cantidad = jc.cantidad * caras;
-    if (Array.isArray(jc.piezas)) {
-      dup.piezas = (jc.piezas as Array<Record<string, unknown>>).map((p) => ({
+    for (const campo of ['piezas', 'piezasVisibles'] as const) {
+      if (!Array.isArray(jc[campo])) continue;
+      dup[campo] = (jc[campo] as Array<Record<string, unknown>>).map((p) => ({
         ...p,
         cantidad:
           typeof p.cantidad === 'number' ? p.cantidad * caras : p.cantidad,
