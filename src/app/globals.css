@@ -2184,6 +2184,18 @@
     gap: 8px;
   }
 
+  /* Detalle de una modificación física PRE: medida pedida vs. de material. */
+  .cost-detail-lines {
+    display: grid;
+    gap: 4px;
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-1);
+    padding: 10px;
+    background: var(--surface);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
   .cost-empty-line {
     border: 1px dashed var(--hairline);
     border-radius: var(--r-1);

@@ -449,7 +449,7 @@ verificó que el motor consume sus params.
 | **B. Sub-tarea (i)** ✅ | Mutación real en `modificacion_pre`: `lados[]` + `demasiaMm`, por pieza y en ambos caminos; output `metros_lineales_union`; tiempo T-2 en ml/h; retiro de sub-tipos muertos | Medio. Toca el loop del motor. Cubrir con tests antes. |
 | **C. Ojales** ✅ | Familia `colocacion_ojales`; estrategia de cantidad por perímetro en `CALCULADO_POR_PASO` con dedupe de esquinas; slot de material; output `ojales_colocados` | Medio. La fórmula necesita tests propios (§4). |
 | **D. Editor** ✅ | Render de `multi-enum` para `lados`; presets de subTipo; validación de orden (§6.4) | Bajo. |
-| **E. Cotizador** | Desglose con medida pedida vs. material y el detalle de cada modificación | Bajo. |
+| **E. Cotizador** ✅ | Desglose con medida pedida vs. material y el detalle de cada modificación | Bajo. |
 | **F. OT / producción** | Doble medida en la OT y el tablero; medida visible en el seguimiento público | Bajo. |
 | **G. Tests** | Casos A, B y C de §4 end-to-end; encadenamiento de dos PRE; recálculo de métricas; multi-pieza | — |
 

@@ -105,6 +105,12 @@ import {
   type UnidadPropuesta,
 } from "@/lib/propuestas";
 import { AgregarProductoSheet } from "@/components/comercial/agregar-producto-sheet";
+import {
+  type MutacionAplicadaView,
+  medidaAntesDespues,
+  porcentajeMaterialExtra,
+  resumenModificacion,
+} from "@/lib/modificaciones-fisicas";
 import { NestingViewer } from "@/components/nesting/nesting-viewer";
 import { listClientes } from "@/lib/clientes-api";
 import { getCurrentPeriodo } from "@/lib/costos";
@@ -2432,6 +2438,44 @@ function CommercialPriceDetailPanel({
   );
 }
 
+/**
+ * Detalle de un paso `modificacion_pre`: explica por qué el material mide más
+ * que lo que pidió el cliente. Es el dato que evita la pregunta "¿por qué esta
+ * lona salió más cara si pedí 150×100?".
+ */
+function MutacionPasoDetail({ mutacion }: { mutacion: MutacionAplicadaView }) {
+  const medidas = medidaAntesDespues(mutacion);
+  const extra = porcentajeMaterialExtra(mutacion);
+
+  return (
+    <div className="cost-detail-block">
+      <div className="cost-detail-title">Medida modificada</div>
+      <div className="cost-detail-lines">
+        <div>{resumenModificacion(mutacion)}</div>
+        {medidas ? (
+          <div>
+            Pedida {formatMmAsCm(medidas.antes.anchoMm)} ×{" "}
+            {formatMmAsCm(medidas.antes.altoMm)} cm → material{" "}
+            <strong>
+              {formatMmAsCm(medidas.despues.anchoMm)} ×{" "}
+              {formatMmAsCm(medidas.despues.altoMm)} cm
+            </strong>
+            {extra !== null && extra > 0
+              ? ` (+${formatDecimal(extra, 1)}% de material)`
+              : null}
+          </div>
+        ) : null}
+        {mutacion.metrosLinealesUnion > 0 ? (
+          <div>
+            {formatDecimal(mutacion.metrosLinealesUnion, 2)} ml de unión
+            (soldado o pegado)
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function PasoCostDetail({ paso }: { paso: PasoCosteo }) {
   const materiales = paso.materiales ?? [];
   const cargos = paso.cargosDirectosPaso ?? [];
@@ -2439,6 +2483,10 @@ function PasoCostDetail({ paso }: { paso: PasoCosteo }) {
 
   return (
     <div className="cost-step-expanded">
+      {paso.mutacionAplicada ? (
+        <MutacionPasoDetail mutacion={paso.mutacionAplicada} />
+      ) : null}
+
       <div className="cost-detail-block">
         <div className="cost-detail-title">Materiales del paso</div>
         <MaterialesPasoTable materiales={materiales} />
@@ -2780,6 +2828,7 @@ function CostosItemView({
                 const puedeExpandir =
                   paso.activado &&
                   (Boolean(paso.tiempo) ||
+                    Boolean(paso.mutacionAplicada) ||
                     (paso.materiales?.length ?? 0) > 0 ||
                     (paso.cargosDirectosPaso?.length ?? 0) > 0);
                 const expanded = expandedCostSteps.has(stepKey);
@@ -2816,6 +2865,16 @@ function CostosItemView({
                               title="El tiempo de este paso lo estimó el comercial al cotizar; no sale del cálculo del motor."
                             >
                               ⏱ estimado por el comercial
+                            </span>
+                          ) : null}
+                          {paso.mutacionAplicada ? (
+                            <span
+                              className="cost-chip"
+                              title={`${resumenModificacion(
+                                paso.mutacionAplicada,
+                              )}. El material se corta más grande que la medida pedida; abrí el paso para ver el detalle.`}
+                            >
+                              📐 agranda la medida
                             </span>
                           ) : null}
                         </div>

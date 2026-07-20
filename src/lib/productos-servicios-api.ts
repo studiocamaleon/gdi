@@ -992,6 +992,23 @@ export interface CotizarResponse {
       configPasoId?: string;
       activado: boolean;
       razonNoActivado?: string;
+      /**
+       * Sólo pasos `modificacion_pre`: qué medida agrandó y en cuánto. El
+       * cliente pidió la medida `antes`, el taller corta la `despues`.
+       * Ver docs/modificaciones-fisicas-lona-diseno.md.
+       */
+      mutacionAplicada?: {
+        subTipo: string;
+        lados: string[];
+        demasiaMm: number;
+        deltaAnchoMm: number;
+        deltaAltoMm: number;
+        metrosLinealesUnion: number;
+        piezas: Array<{
+          antes: { anchoMm: number; altoMm: number };
+          despues: { anchoMm: number; altoMm: number };
+        }>;
+      } | null;
       tiempo?: {
         totalMin: number;
         centroCostoId?: string | null;
