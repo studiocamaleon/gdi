@@ -2655,10 +2655,21 @@ describe('MotorUniversalService — smoke tests', () => {
       widthMm: 1830,
       heightMm: 2750,
     });
+    // `margins` es el margen CRUDO de máquina (margenesNoImprimiblesMm: 5),
+    // sin la demasía. El borde efectivo donde arrancan las piezas es 5 + 2,5 y
+    // vive en `usableArea` (1830 − 7,5×2 = 1815). Ver NestingVisualConfig.
     expect(r!.visualConfig).toMatchObject({
-      margins: { leftMm: 7.5, rightMm: 7.5, topMm: 7.5, bottomMm: 7.5 },
+      margins: { leftMm: 5, rightMm: 5, topMm: 5, bottomMm: 5 },
       spacing: { horizontalMm: 5, verticalMm: 5 },
       pieceBleedMm: 2.5,
+      // Adentro del margen de máquina solamente: 1830 − 5×2.
+      printableArea: {
+        xMm: 5,
+        yMm: 5,
+        widthMm: 1820,
+        heightMm: 2740,
+      },
+      // Adentro del margen Y de la demasía: 1830 − 7,5×2.
       usableArea: {
         xMm: 7.5,
         yMm: 7.5,

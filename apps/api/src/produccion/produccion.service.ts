@@ -13,6 +13,8 @@ import type { ActualizarConfiguracionProduccionDto } from './dto/actualizar-conf
 import { FAMILIAS } from '../productos-servicios/pasos/familias';
 import type { FamiliaCodigo } from '../productos-servicios/pasos/types';
 import { parseCalendario, type CalendarioEstacion } from './calendario';
+import { evaluateRollLayoutForConfiguredAlgorithm } from '../motor-universal/nesting-dispatcher';
+import type { SimularNestingDto } from './dto/simular-nesting.dto';
 
 /**
  * Mínimo de pasos hechos por familia para publicar su mediana histórica:
@@ -47,8 +49,68 @@ type TrazabilidadPasoSimulador = {
   nestingResult?: {
     placements?: Array<{ widthMm?: number; heightMm?: number }>;
     consumedLengthMm?: number;
+    algorithm?: unknown;
+    visualConfig?: {
+      margins?: { topMm?: unknown; leftMm?: unknown; rightMm?: unknown; bottomMm?: unknown } | null;
+      spacing?: { horizontalMm?: unknown; verticalMm?: unknown } | null;
+      allowRotation?: unknown;
+      pieceBleedMm?: unknown;
+    } | null;
   } | null;
 };
+
+/**
+ * Config de acomodo con la que el MOTOR costeó este paso, para volver a
+ * acomodar la tanda consolidada con el mismo motor y los mismos parámetros.
+ * Comparar contra un acomodo hecho con otros márgenes daba "ahorros"
+ * negativos que no existían. Sin nesting en el snapshot → null.
+ */
+type NestingConfigSnapshot = {
+  margenLateralMm: number;
+  margenLongitudinalMm: number;
+  separacionHMm: number;
+  separacionVMm: number;
+  /**
+   * La demasía se come un borde de cada lado ADEMÁS del margen de máquina:
+   * el motor acomoda dentro de `printable − 2×demasía` (por eso el snapshot
+   * guarda usableArea 565 contra printableArea 570 en un rollo de 600).
+   */
+  demasiaMm: number;
+  permitirRotacion: boolean;
+  algorithm: NestingAlgorithm;
+};
+
+/** Algoritmos de rollo que el simulador sabe correr (el resto → 'auto'). */
+type NestingAlgorithm = 'auto' | 'shelf-rollo' | 'maxrects-rollo';
+
+function nestingConfigDeSnapshot(
+  trazPaso: TrazabilidadPasoSimulador | null,
+): NestingConfigSnapshot | null {
+  const nesting = trazPaso?.nestingResult;
+  const visual = nesting?.visualConfig;
+  if (!visual) return null;
+  const margins = visual.margins ?? {};
+  const spacing = visual.spacing ?? {};
+  // Conservador: el lado más ancho manda, el rollo es uno solo.
+  const lateral = Math.max(numeroONull(margins.leftMm) ?? 0, numeroONull(margins.rightMm) ?? 0);
+  const longitudinal = Math.max(
+    numeroONull(margins.topMm) ?? 0,
+    numeroONull(margins.bottomMm) ?? 0,
+  );
+  const algorithm = nesting?.algorithm;
+  return {
+    margenLateralMm: lateral,
+    margenLongitudinalMm: longitudinal,
+    separacionHMm: numeroONull(spacing.horizontalMm) ?? 0,
+    separacionVMm: numeroONull(spacing.verticalMm) ?? 0,
+    demasiaMm: numeroONull(visual.pieceBleedMm) ?? 0,
+    permitirRotacion: visual.allowRotation !== false,
+    // Se respeta el algoritmo con el que se COTIZÓ: correr otro haría aparecer
+    // un ahorro que viene del algoritmo y no de juntar los trabajos.
+    algorithm:
+      algorithm === 'shelf-rollo' || algorithm === 'maxrects-rollo' ? algorithm : 'auto',
+  };
+}
 
 function numeroONull(valor: unknown): number | null {
   return typeof valor === 'number' && Number.isFinite(valor) ? valor : null;
@@ -90,6 +152,153 @@ function piezasDeSnapshot(
       .filter((pieza): pieza is PiezaSimulador => pieza !== null);
   }
   return [];
+}
+
+/** Lo que `acomodarTanda` necesita de un paso ya cargado de la DB. */
+type PasoParaAcomodar = {
+  id: string;
+  rutaPasoId: string | null;
+  item: {
+    cotizacionItem: {
+      jobContextJson: Prisma.JsonValue;
+      trazabilidadJson: Prisma.JsonValue;
+    } | null;
+  };
+};
+
+/**
+ * Acomoda la tanda consolidada con el motor real, un resultado por ancho de
+ * rollo candidato. Las piezas y la config salen del snapshot de cada paso.
+ * Exportada para test: es el pegamento entre el snapshot y el motor.
+ */
+export function acomodarTanda(pasos: PasoParaAcomodar[], anchosMm: number[]) {
+  // Un `medidas[i]` por paso: el motor devuelve `piece-<i>-<copia>`, así se
+  // sabe de qué trabajo es cada pieza acomodada.
+  const medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number }> = [];
+  const pasoDeMedida: string[] = [];
+  const configs: NestingConfigSnapshot[] = [];
+  const sinMedidas: string[] = [];
+
+  for (const paso of pasos) {
+    const jobContext =
+      (paso.item.cotizacionItem?.jobContextJson as Record<string, unknown> | null) ?? null;
+    const pasosTraza = (
+      paso.item.cotizacionItem?.trazabilidadJson as {
+        pasos?: TrazabilidadPasoSimulador[];
+      } | null
+    )?.pasos;
+    const trazPaso =
+      (Array.isArray(pasosTraza)
+        ? pasosTraza.find((t) => t.rutaPasoId && t.rutaPasoId === paso.rutaPasoId)
+        : null) ?? null;
+
+    const piezas = piezasDeSnapshot(trazPaso, jobContext);
+    if (piezas.length === 0) {
+      sinMedidas.push(paso.id);
+      continue;
+    }
+    const config = nestingConfigDeSnapshot(trazPaso);
+    if (config) configs.push(config);
+    for (const pieza of piezas) {
+      medidas.push({ anchoMm: pieza.anchoMm, altoMm: pieza.altoMm, cantidad: pieza.cantidad });
+      pasoDeMedida.push(paso.id);
+    }
+  }
+
+  // Config de la tanda: la más conservadora, el rollo es uno solo.
+  const config = configs.reduce<NestingConfigSnapshot | null>(
+    (acc, cur) =>
+      acc === null
+        ? cur
+        : {
+            margenLateralMm: Math.max(acc.margenLateralMm, cur.margenLateralMm),
+            margenLongitudinalMm: Math.max(acc.margenLongitudinalMm, cur.margenLongitudinalMm),
+            separacionHMm: Math.max(acc.separacionHMm, cur.separacionHMm),
+            separacionVMm: Math.max(acc.separacionVMm, cur.separacionVMm),
+            demasiaMm: Math.max(acc.demasiaMm, cur.demasiaMm),
+            permitirRotacion: acc.permitirRotacion && cur.permitirRotacion,
+            algorithm: acc.algorithm === cur.algorithm ? acc.algorithm : 'auto',
+          },
+      null,
+  );
+  if (!config || medidas.length === 0) return { sinMedidas, anchos: [] };
+
+  // Bordes efectivos: margen de máquina MÁS demasía, igual que al cotizar
+  // (el snapshot guarda usableArea 565 contra printableArea 570 en un 600).
+  const bordeLateralMm = config.margenLateralMm + config.demasiaMm;
+  const bordeLongitudinalMm = config.margenLongitudinalMm + config.demasiaMm;
+
+  const vacio = (anchoMm: number, incompatibles: string[]) => ({
+    anchoMm,
+    consumedLengthMm: null,
+    aprovechamientoPct: null,
+    piezasAcomodadas: 0,
+    incompatibles,
+    placements: [] as Array<Record<string, unknown>>,
+  });
+
+  const anchos = anchosMm.map((anchoMm) => {
+    const printableWidthMm = anchoMm - bordeLateralMm * 2;
+    // Piezas que no entran ni de canto: el job entero queda afuera del batch.
+    const incompatibles = [
+      ...new Set(
+        medidas
+          .map((medida, idx) =>
+            Math.min(medida.anchoMm, medida.altoMm) > printableWidthMm ? pasoDeMedida[idx] : null,
+          )
+          .filter((pasoId): pasoId is string => pasoId !== null),
+      ),
+    ];
+    const indicesUsados = medidas
+      .map((_, idx) => idx)
+      .filter((idx) => !incompatibles.includes(pasoDeMedida[idx]));
+
+    if (printableWidthMm <= 0 || indicesUsados.length === 0) return vacio(anchoMm, incompatibles);
+
+    const candidato = evaluateRollLayoutForConfiguredAlgorithm(
+      {
+        printableWidthMm,
+        marginLeftMm: bordeLateralMm,
+        marginStartMm: bordeLongitudinalMm,
+        marginEndMm: bordeLongitudinalMm,
+        separacionHorizontalMm: config.separacionHMm,
+        separacionVerticalMm: config.separacionVMm,
+        permitirRotacion: config.permitirRotacion,
+        medidas: indicesUsados.map((idx) => medidas[idx]),
+      },
+      config.algorithm,
+    );
+    if (!candidato) return vacio(anchoMm, incompatibles);
+
+    const { result } = candidato;
+    const areaTotalMm2 = anchoMm * result.consumedLengthMm;
+    return {
+      anchoMm,
+      consumedLengthMm: result.consumedLengthMm,
+      aprovechamientoPct:
+        areaTotalMm2 > 0
+          ? Math.round(((result.usefulAreaM2 * 1_000_000) / areaTotalMm2) * 10000) / 100
+          : 0,
+      piezasAcomodadas: result.placements.length,
+      incompatibles,
+      placements: result.placements.map((p) => {
+        // `piece-<medidaIndex>-<copia>`; medidaIndex indexa el array que se le
+        // pasó al motor, que acá viene filtrado por incompatibles.
+        const medidaIndex = Number.parseInt((p.sourcePieceId ?? '').split('-')[1] ?? '', 10);
+        const idxOriginal = indicesUsados[medidaIndex];
+        return {
+          pasoId: idxOriginal !== undefined ? pasoDeMedida[idxOriginal] : null,
+          xMm: p.centerXMm - p.widthMm / 2,
+          yMm: p.centerYMm - p.heightMm / 2,
+          widthMm: p.widthMm,
+          heightMm: p.heightMm,
+          rotated: p.rotated,
+        };
+      }),
+    };
+  });
+
+  return { sinMedidas, anchos };
 }
 
 /** Paso de trazabilidad para el simulador LÁSER (por hoja). */
@@ -456,6 +665,7 @@ export class ProduccionService {
                 indice: true,
                 familiaCodigo: true,
                 estado: true,
+                tipoEjecucion: true,
                 rutaPasoId: true,
                 duracionEstimadaMin: true,
               },
@@ -473,6 +683,8 @@ export class ProduccionService {
         if (!frontera || frontera.familiaCodigo !== 'impresion_por_area') continue;
         // Bloqueado no es imprimible ni completable: el tablero lo señala.
         if (frontera.estado === 'bloqueado') continue;
+        // El tercerizado lo imprime el proveedor: vive en Compras, no en el taller.
+        if (frontera.tipoEjecucion === 'tercerizado') continue;
         jobs.push(buildSimuladorJob(orden, item, frontera));
       }
     }
@@ -552,6 +764,44 @@ export class ProduccionService {
     return { jobs, materiales };
   }
 
+  /**
+   * Re-acomoda cada tanda del simulador con el MOTOR real (mismo nesting que
+   * usó la cotización) para cada ancho de rollo candidato.
+   *
+   * Existe para que el simulador no tenga packer propio: cuando lo tenía, sus
+   * márgenes y separaciones no eran los del motor, le entraban menos piezas
+   * por fila que al cotizar y el "ahorro vs. cotizado" salía negativo.
+   */
+  async simuladorNesting(auth: CurrentAuth, dto: SimularNestingDto) {
+    const pasoIds = [...new Set(dto.grupos.flatMap((grupo) => grupo.pasoIds))];
+    const pasos = await this.prisma.ordenTrabajoItemPaso.findMany({
+      where: { tenantId: auth.tenantId, id: { in: pasoIds } },
+      select: {
+        id: true,
+        rutaPasoId: true,
+        item: {
+          select: {
+            cotizacionItem: { select: { jobContextJson: true, trazabilidadJson: true } },
+          },
+        },
+      },
+    });
+    if (pasos.length === 0) throw new NotFoundException('No se encontraron los pasos.');
+    const porId = new Map(pasos.map((paso) => [paso.id, paso]));
+
+    return {
+      grupos: dto.grupos.map((grupo) => ({
+        key: grupo.key,
+        ...acomodarTanda(
+          grupo.pasoIds
+            .map((id) => porId.get(id))
+            .filter((paso): paso is (typeof pasos)[number] => paso !== undefined),
+          grupo.anchosMm,
+        ),
+      })),
+    };
+  }
+
   // ── Simulador de impresión LÁSER (cola real por hoja) ────────────────
   // Pasos impresion_por_hoja en FRONTERA de órdenes vivas: el operador de
   // láser carga la bandeja una vez por batch (papel+pliego+color+caras) y
@@ -583,6 +833,7 @@ export class ProduccionService {
                 nombre: true,
                 familiaCodigo: true,
                 estado: true,
+                tipoEjecucion: true,
                 rutaPasoId: true,
                 centroCostoId: true,
                 centroCostoNombre: true,
@@ -601,6 +852,8 @@ export class ProduccionService {
         const frontera = item.pasos.find((paso) => paso.estado !== 'hecho');
         if (!frontera || frontera.familiaCodigo !== 'impresion_por_hoja') continue;
         if (frontera.estado === 'bloqueado') continue;
+        // El tercerizado lo imprime el proveedor: vive en Compras, no en el taller.
+        if (frontera.tipoEjecucion === 'tercerizado') continue;
         jobs.push(buildLaserJob(orden, item, frontera));
       }
     }

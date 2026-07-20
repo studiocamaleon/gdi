@@ -59,3 +59,50 @@ export type SimuladorData = {
 export async function getSimuladorImpresion() {
   return apiRequest<SimuladorData>("/produccion/simulador");
 }
+
+/* ─────────── Re-acomodo con el motor ─────────── */
+
+/**
+ * El simulador NO tiene packer propio: le pide al backend que acomode la
+ * tanda con el mismo nesting que usó la cotización. Tenerlo duplicado hacía
+ * que márgenes y separaciones derivaran y el ahorro saliera negativo.
+ */
+export type SimuladorNestingPlacement = {
+  /** Paso al que pertenece la pieza (null si no se pudo mapear). */
+  pasoId: string | null;
+  xMm: number;
+  yMm: number;
+  widthMm: number;
+  heightMm: number;
+  rotated: boolean;
+};
+
+export type SimuladorNestingAncho = {
+  anchoMm: number;
+  /** null = no se pudo acomodar en este ancho. */
+  consumedLengthMm: number | null;
+  aprovechamientoPct: number | null;
+  piezasAcomodadas: number;
+  /** pasoIds cuya pieza no entra en este ancho. */
+  incompatibles: string[];
+  placements: SimuladorNestingPlacement[];
+};
+
+export type SimuladorNestingGrupo = {
+  key: string;
+  /** pasoIds sin medidas: quedan fuera del nesting, dentro del lote. */
+  sinMedidas: string[];
+  anchos: SimuladorNestingAncho[];
+};
+
+export type SimuladorNestingRequest = {
+  grupos: Array<{ key: string; pasoIds: string[]; anchosMm: number[] }>;
+};
+
+export async function simularNesting(body: SimuladorNestingRequest, signal?: AbortSignal) {
+  return apiRequest<{ grupos: SimuladorNestingGrupo[] }>("/produccion/simulador/nesting", {
+    method: "POST",
+    body: JSON.stringify(body),
+    signal,
+  });
+}
