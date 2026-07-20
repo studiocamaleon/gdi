@@ -39,13 +39,6 @@ const Ico = {
       <path d="m9 6 6 6-6 6" />
     </svg>
   ),
-  Route: (props: React.SVGProps<SVGSVGElement>) => (
-    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <circle cx="6" cy="19" r="2.5" />
-      <circle cx="18" cy="5" r="2.5" />
-      <path d="M8.5 19H14a4 4 0 0 0 0-8h-4a4 4 0 0 1 0-8h5.5" />
-    </svg>
-  ),
   Arrow: (props: React.SVGProps<SVGSVGElement>) => (
     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...props}>
       <path d="M5 12h14M13 6l6 6-6 6" />
@@ -363,12 +356,11 @@ export function ProductosServiciosTable({
               <table className="tbl" style={{ tableLayout: "fixed" }}>
                 <thead>
                   <tr>
-                    <th style={{ width: "28%" }}>Nombre</th>
-                    <th style={{ width: "13%" }}>Categoría</th>
-                    <th style={{ width: "15%" }}>¿Cómo se cobra?</th>
-                    <th style={{ width: "17%" }}>Manejo de medidas</th>
-                    <th style={{ width: "11%" }}>Rutas</th>
-                    <th style={{ width: "8%" }}>Estado</th>
+                    <th style={{ width: "34%" }}>Nombre</th>
+                    <th style={{ width: "14%" }}>Categoría</th>
+                    <th style={{ width: "16%" }}>¿Cómo se cobra?</th>
+                    <th style={{ width: "19%" }}>Manejo de medidas</th>
+                    <th style={{ width: "9%" }}>Estado</th>
                     <th className="right" style={{ width: "8%" }}>Acciones</th>
                   </tr>
                 </thead>
@@ -417,16 +409,6 @@ export function ProductosServiciosTable({
                           >
                             <span className="d" />
                             {lblMedidas.label}
-                          </span>
-                        </td>
-                        <td>
-                          <span className="inline-flex flex-wrap gap-1.5">
-                            {p.rutasAlternativas.map((ra) => (
-                              <span key={ra.id} className="tag route">
-                                <Ico.Route />
-                                {ra.nombre}
-                              </span>
-                            ))}
                           </span>
                         </td>
                         <td>
