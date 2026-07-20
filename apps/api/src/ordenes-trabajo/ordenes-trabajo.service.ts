@@ -1399,8 +1399,36 @@ export class OrdenesTrabajoService {
       ),
     );
     if (data.length > 0) {
-      await tx.ordenTrabajoItemPaso.createMany({ data });
+      // skipDuplicates = ON CONFLICT DO NOTHING contra el único
+      // (itemId, indice): si dos materializaciones corren a la vez, el
+      // perdedor no inserta en vez de reventar una lectura del tablero.
+      await tx.ordenTrabajoItemPaso.createMany({ data, skipDuplicates: true });
     }
+  }
+
+  /**
+   * Materialización perezosa segura. El chequeo "items sin pasos" que hacen
+   * los llamadores corre FUERA de la transacción, así que para cuando ésta
+   * abre, otro request (o la emisión de la OT) puede haberlos materializado
+   * ya. Se vuelve a filtrar acá adentro, y el único (itemId, indice) tapa la
+   * ventana que aún queda entre este SELECT y el INSERT.
+   */
+  private async materializarPasosFaltantes(
+    tenantId: string,
+    candidatos: ItemAMaterializar[],
+  ) {
+    if (candidatos.length === 0) return;
+    await this.prisma.$transaction(async (tx) => {
+      const yaConPasos = await tx.ordenTrabajoItemPaso.findMany({
+        where: { tenantId, itemId: { in: candidatos.map((c) => c.id) } },
+        select: { itemId: true },
+        distinct: ['itemId'],
+      });
+      const materializados = new Set(yaConPasos.map((p) => p.itemId));
+      const faltantes = candidatos.filter((c) => !materializados.has(c.id));
+      if (faltantes.length === 0) return;
+      await this.materializarPasosItems(tx, tenantId, faltantes);
+    });
   }
 
   /**
@@ -1419,10 +1447,7 @@ export class OrdenesTrabajoService {
       },
       select: { id: true, ordenId: true, cotizacionItemId: true },
     });
-    if (candidatos.length === 0) return;
-    await this.prisma.$transaction((tx) =>
-      this.materializarPasosItems(tx, auth.tenantId, candidatos),
-    );
+    await this.materializarPasosFaltantes(auth.tenantId, candidatos);
   }
 
   /**
@@ -1632,11 +1657,7 @@ export class OrdenesTrabajoService {
       },
       select: { id: true, ordenId: true, cotizacionItemId: true },
     });
-    if (candidatos.length > 0) {
-      await this.prisma.$transaction((tx) =>
-        this.materializarPasosItems(tx, auth.tenantId, candidatos),
-      );
-    }
+    await this.materializarPasosFaltantes(auth.tenantId, candidatos);
     const orden = await this.prisma.ordenTrabajo.findFirst({
       where: { id: ordenId, tenantId: auth.tenantId },
       include: {

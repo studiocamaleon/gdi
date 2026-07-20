@@ -2314,6 +2314,13 @@ model OrdenTrabajoItemPaso {
   completadoPor       User?            @relation("PasosCompletados", fields: [completadoPorId], references: [id], onDelete: SetNull)
   tramos              OrdenTrabajoPasoTramo[]
 
+  /// Un solo paso por posición de la ruta. Es la garantía DURA contra la
+  /// doble materialización: el backfill perezoso chequea "item sin pasos" y
+  /// recién después inserta, así que dos lecturas simultáneas (o emitir la OT
+  /// mientras el front abre el detalle) pueden ver cero pasos las dos y
+  /// duplicar la ruta entera. Con el único, el perdedor de la carrera no
+  /// inserta nada (createMany usa ON CONFLICT DO NOTHING).
+  @@unique([itemId, indice])
   @@index([tenantId, ordenId])
   @@index([tenantId, itemId])
   @@index([tenantId, estado])
