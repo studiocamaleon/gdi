@@ -22,6 +22,7 @@ import {
   enviarPresupuesto,
   getPresupuesto,
   presupuestoPdfUrl,
+  presupuestoPublicPath,
   presupuestoPublicUrl,
   resolverAprobacionPresupuesto,
   resolverPresupuesto,
@@ -194,7 +195,7 @@ export function PresupuestoDetalleView({
               </button>
               <a
                 className="btn"
-                href={presupuestoPublicUrl(d.publicToken)}
+                href={presupuestoPublicPath(d.publicToken)}
                 target="_blank"
                 rel="noreferrer"
                 title="Abrir la vista que ve el cliente"
