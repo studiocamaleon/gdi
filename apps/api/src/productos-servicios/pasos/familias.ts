@@ -1494,32 +1494,57 @@ const modificacion_pre: DefinicionFamilia = {
   nombre: 'Modificación pre-producción',
   categoria: 'operaciones_manuales',
   descripcion:
-    'Modificación física que MUTA el JobContext (medidas, etc.) antes de los pasos de producción. Ej: bolsillos en lona, refuerzos en bordes, dobladillo.',
+    'Demasía perimetral selectiva: agranda la medida de MATERIAL sobre los lados elegidos, antes de los pasos de producción. Bolsillos y refuerzos en lona. La unión (soldadura/pegado) se mide sobre la medida VISIBLE.',
   relacionMaquinaSoportada: ['M-0'],
   modosTiempoSoportados: ['T-1', 'T-2'],
-  mecanismosCantidadSoportados: ['DIRECT_FROM_JOBCONTEXT'],
-  modosActivacionSoportados: ['OPCIONAL'],
+  // CALCULADO_POR_PASO: el paso calcula sus propios metros lineales de unión a
+  // partir de la medida visible + los lados elegidos.
+  mecanismosCantidadSoportados: [
+    'CALCULADO_POR_PASO',
+    'DIRECT_FROM_JOBCONTEXT',
+  ],
+  modosActivacionSoportados: ['OPCIONAL', 'OBLIGATORIO', 'CONDICIONAL'],
   modoActivacionDefault: 'OPCIONAL',
   multiplicadoresSoportados: [],
   slotsRequeridos: [],
   permiteSlotsAdicionales: true,
   plantillasCompatibles: [],
   inputsRequeridos: [],
-  outputsCanonicos: ['mutacion_aplicada'],
+  outputsCanonicos: ['metros_lineales_union', 'mutacion_aplicada'],
   validaciones: [],
   paramsPasoSchema: [
     {
       campo: 'subTipo',
-      etiqueta: 'Sub-tipo de modificación',
+      etiqueta: 'Tipo de modificación',
       tipo: 'enum',
-      valoresPermitidos: [
-        'bolsillo_lona',
-        'refuerzo_bordes',
-        'dobladillo',
-        'ojales_con_margen',
-      ],
+      // Preset: precarga valores y nombra el paso en la OT. No cambia la lógica.
+      valoresPermitidos: ['bolsillo', 'refuerzo'],
+      default: 'refuerzo',
       requerido: true,
+      descripcion:
+        'Bolsillo: demasía grande (100-150mm) para que entre el caño, típicamente en los lados horizontales. Refuerzo: demasía chica (30-50mm), típicamente en los 4 lados.',
     },
+    {
+      campo: 'lados',
+      etiqueta: 'Lados afectados',
+      tipo: 'multi-enum',
+      valoresPermitidos: ['superior', 'inferior', 'izquierdo', 'derecho'],
+      requerido: true,
+      descripcion:
+        'Cada lado elegido suma la demasía a su eje: superior/inferior agrandan el alto, izquierdo/derecho el ancho.',
+    },
+    {
+      campo: 'demasiaMm',
+      etiqueta: 'Demasía por lado (mm)',
+      tipo: 'number',
+      requerido: true,
+      descripcion:
+        'Milímetros que se agregan POR CADA lado elegido. Bolsillo sup+inf de 100mm sobre una lona de 1000mm de alto deja 1200mm de material.',
+    },
+  ],
+  productosTipicos: [
+    'Lona con bolsillos para caño',
+    'Lona con refuerzo perimetral',
   ],
 };
 

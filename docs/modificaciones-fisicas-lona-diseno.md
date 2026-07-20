@@ -220,12 +220,22 @@ interface JobContext {
    * Traza acumulada de mutaciones aplicadas por pasos PRE. Se APPENDEA, no se
    * sobrescribe (ver §6.2 — riesgo del merge de outputs canónicos).
    */
-  mutacionesAplicadas?: Array<{
-    rutaPasoId: string;
-    nombrePaso: string;
-    subTipo: string;
-    lados: LadoPieza[];
-    demasiaMm: number;
+  mutacionesAplicadas?: MutacionAplicada[];
+}
+
+interface MutacionAplicada {
+  rutaPasoId: string;
+  nombrePaso: string;
+  subTipo: string;
+  lados: LadoPieza[];
+  demasiaMm: number;
+  /** Demasía total por eje (demasiaMm × lados de ese eje). */
+  deltaAnchoMm: number;
+  deltaAltoMm: number;
+  /** Metros lineales de unión, medidos sobre la VISIBLE. */
+  metrosLinealesUnion: number;
+  /** Antes/después POR PIEZA — un solo item en el caso típico de lona. */
+  piezas: Array<{
     antes: { anchoMm: number; altoMm: number };
     despues: { anchoMm: number; altoMm: number };
   }>;
@@ -244,8 +254,6 @@ paramsPasoSchema: [
     valoresPermitidos: ['superior', 'inferior', 'izquierdo', 'derecho'],
     etiqueta: 'Lados afectados', requerido: true },
   { campo: 'demasiaMm',   tipo: 'number', etiqueta: 'Demasía por lado (mm)', requerido: true },
-  { campo: 'ladosEditablesPorComercial', tipo: 'boolean',
-    etiqueta: 'El comercial puede cambiar los lados al cotizar', requerido: false },
 ]
 ```
 
@@ -253,8 +261,15 @@ Cambios respecto de lo declarado hoy:
 
 - Sub-tipos `dobladillo` y `ojales_con_margen` **se retiran**. `dobladillo` es un `refuerzo` con
   otra demasía. `ojales_con_margen` mezclaba dos operaciones que ahora son dos pasos.
-- `mecanismosCantidadSoportados` se mantiene en `DIRECT_FROM_JOBCONTEXT`.
+- `mecanismosCantidadSoportados`: **`CALCULADO_POR_PASO`** (+ `DIRECT_FROM_JOBCONTEXT` como
+  fallback). `DIRECT_FROM_JOBCONTEXT` no servía: pese a lo que dice su comentario, en el motor está
+  cableado duro a `jobContext.cantidad` y no lee un campo arbitrario. `CALCULADO_POR_PASO` describe
+  exactamente lo que pasa —el paso calcula sus propios metros lineales de unión— y el dispatcher de
+  nesting devuelve `null` para esta familia, así que la rama nueva queda alcanzable.
 - `modosTiempoSoportados`: `T-1` (fijo) o `T-2` con productividad en **ml/h**.
+- `tipo: 'multi-enum'` es un valor nuevo de `TipoParamsPaso`. `paramsPasoSchema` hoy es
+  **documentación**: lo consume sólo la ficha de capacidades de familias, no hay un editor
+  genérico que lo renderice como formulario (por eso la etapa D es UI a medida, no un tipo nuevo).
 
 **Outputs canónicos**:
 
@@ -262,6 +277,11 @@ Cambios respecto de lo declarado hoy:
 |---|---|---|
 | `metros_lineales_union` | number | Driver de tiempo (T-2) y de consumibles si los hubiera |
 | `mutacion_aplicada` | boolean | Sólo para validaciones `EXISTS_OUTPUT`. La traza rica vive en `jobContext.mutacionesAplicadas` |
+
+**Un PRE activo pero mal configurado corta la cotización** (`modificacion_pre_mal_configurada`,
+severidad ERROR). Sin lados o sin demasía, la medida de material no se agranda y el trabajo se
+cobra de menos **en silencio** — justo lo que esta familia existe para evitar. Es un error de
+modelado: aparece la primera vez que el modelador prueba el producto.
 
 ### 5.3 `colocacion_ojales` — familia nueva
 
@@ -403,8 +423,8 @@ responsabilidad del modelador; la traza de §5.1 lo deja visible en el desglose.
 
 | Etapa | Contenido | Riesgo |
 |---|---|---|
-| **A. Contrato** | `medidaVisibleMm` / `piezasVisibles` congeladas al inicio del loop; `mutacionesAplicadas[]`; recálculo de `piezaAreaTotalM2` y `piezaPerimetroTotalM` tras cada mutación (§6.3) | Bajo. Aditivo, sin cambio de comportamiento si no hay pasos PRE. |
-| **B. Sub-tarea (i)** | Mutación real en `modificacion_pre`: `lados[]` + `demasiaMm`, por pieza y en ambos caminos; output `metros_lineales_union`; tiempo T-2 en ml/h; retiro de sub-tipos muertos | Medio. Toca el loop del motor. Cubrir con tests antes. |
+| **A. Contrato** ✅ | `medidaVisibleMm` / `piezasVisibles` congeladas al inicio del loop; `mutacionesAplicadas[]`; recálculo de `piezaAreaTotalM2` y `piezaPerimetroTotalM` tras cada mutación (§6.3) | Bajo. Aditivo, sin cambio de comportamiento si no hay pasos PRE. |
+| **B. Sub-tarea (i)** ✅ | Mutación real en `modificacion_pre`: `lados[]` + `demasiaMm`, por pieza y en ambos caminos; output `metros_lineales_union`; tiempo T-2 en ml/h; retiro de sub-tipos muertos | Medio. Toca el loop del motor. Cubrir con tests antes. |
 | **C. Ojales** | Familia `colocacion_ojales`; estrategia de cantidad por perímetro en `CALCULADO_POR_PASO` con dedupe de esquinas; slot de material; output `ojales_colocados` | Medio. La fórmula necesita tests propios (§4). |
 | **D. Editor** | Render de `multi-enum` para `lados`; presets de subTipo; validación de orden (§6.4) | Bajo. |
 | **E. Cotizador** | Desglose con medida pedida vs. material y el detalle de cada modificación | Bajo. |

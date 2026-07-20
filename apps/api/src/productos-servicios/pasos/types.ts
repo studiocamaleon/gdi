@@ -292,7 +292,12 @@ export type ValidacionDeclarada =
 // paramsPaso schema (qué params soporta el modelador en el paso del producto)
 // ============================================================================
 
-export type TipoParamsPaso = 'string' | 'number' | 'boolean' | 'enum';
+export type TipoParamsPaso =
+  | 'string'
+  | 'number'
+  | 'boolean'
+  | 'enum'
+  | 'multi-enum';
 
 export interface ParamsPasoDeclarado {
   /** Nombre del campo en el JSON paramsPaso. */

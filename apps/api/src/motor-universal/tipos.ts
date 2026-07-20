@@ -46,8 +46,16 @@ export interface MutacionAplicada {
   subTipo: string;
   lados: LadoPieza[];
   demasiaMm: number;
-  antes: { anchoMm: number; altoMm: number };
-  despues: { anchoMm: number; altoMm: number };
+  /** Demasía total agregada a cada eje (demasiaMm × lados de ese eje). */
+  deltaAnchoMm: number;
+  deltaAltoMm: number;
+  /** Metros lineales de unión, medidos sobre la medida VISIBLE. */
+  metrosLinealesUnion: number;
+  /** Medida antes y después, por pieza. Un solo item en el caso típico de lona. */
+  piezas: Array<{
+    antes: { anchoMm: number; altoMm: number };
+    despues: { anchoMm: number; altoMm: number };
+  }>;
 }
 
 /**
@@ -282,6 +290,12 @@ export interface PasoEjecutado {
   activado: boolean;
   /** Razón si NO se activó (ej: "no es OBLIGATORIO + el comercial no lo activó"). */
   razonNoActivado?: string;
+  /**
+   * Sólo pasos `modificacion_pre`: qué medida agrandó y en cuánto. Alimenta el
+   * desglose del cotizador y la doble medida de la OT (el operario corta la
+   * medida `despues`, el cliente pidió la visible).
+   */
+  mutacionAplicada?: MutacionAplicada;
   /** Tiempo calculado (si activado). */
   tiempo?: {
     setupMin: number;

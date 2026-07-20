@@ -67,6 +67,11 @@ import {
   calcularPerimetroPiezasM,
   congelarMedidaVisible,
 } from './job-context-metrics';
+import {
+  aplicarMutacionPre,
+  calcularMetrosLinealesUnion,
+  parsearParamsModificacionPre,
+} from './modificaciones-pre';
 
 const MODO_SIN_IMPRESION = 'SIN_IMPRESION';
 const FAMILIAS_IMPRESION = new Set([
@@ -550,6 +555,36 @@ export class MotorUniversalService {
           if (value === null || value === undefined) continue;
           (jobContext as Record<string, unknown>)[key] = value;
           outputsAcumulados.add(key);
+        }
+      }
+
+      // Sub-tarea (i) del bucle — SOLO los pasos PRE mutan valores MUTABLES
+      // del JobContext. Va después del merge de outputs: el paso ya cobró su
+      // tiempo sobre la medida visible, y a partir de acá los pasos siguientes
+      // (impresión, nesting, material) leen la medida agrandada.
+      // Ver docs/modificaciones-fisicas-lona-diseno.md §6.1.
+      if (paso.familiaCodigo === 'modificacion_pre' && ejecucion.activado) {
+        const params = parsearParamsModificacionPre(paso.paramsPasoJson);
+        if (!params) {
+          // Corta la cotización a propósito: un PRE activo pero sin lados ni
+          // demasía dejaría la medida de material sin agrandar y cobraría de
+          // menos EN SILENCIO — justo lo que esta familia existe para evitar.
+          errores.push({
+            codigo: 'modificacion_pre_mal_configurada',
+            severidad: 'ERROR',
+            rutaPasoId: paso.rutaPasoId,
+            rutaPasoOrden: paso.rutaPasoOrden,
+            familiaCodigo: paso.familiaCodigo,
+            mensaje: `El paso "${ejecucion.nombreVisible ?? paso.familiaCodigo}" no declara lados afectados ni demasía válida, así que no puede agrandar la medida de material.`,
+            sugerencia:
+              'Configurar en el paso los lados afectados (superior/inferior/izquierdo/derecho) y la demasía por lado en mm.',
+          });
+        } else {
+          const traza = aplicarMutacionPre(jobContext, params, {
+            rutaPasoId: paso.rutaPasoId,
+            nombrePaso: ejecucion.nombreVisible ?? paso.familiaCodigo,
+          });
+          if (traza) ejecucion.mutacionAplicada = traza;
         }
       }
     }
@@ -4604,6 +4639,14 @@ export class MotorUniversalService {
       // con desperdicio real (m_lineales para shelf-rollo, pliegos para grid).
       if (nestingDispatch) {
         return nestingDispatch.cantidadCalculada;
+      }
+      // Etapa B — `modificacion_pre` calcula sus propios metros lineales de
+      // unión sobre la medida VISIBLE (la costura corre por el borde
+      // terminado, no crece con la demasía). Es el driver del tiempo T-2.
+      if (paso.familiaCodigo === 'modificacion_pre') {
+        const params = parsearParamsModificacionPre(paso.paramsPasoJson);
+        if (params) return calcularMetrosLinealesUnion(jobContext, params);
+        return 0;
       }
       // Fallback histórico: m² crudos de las piezas (sin desperdicio) cuando
       // la familia no tiene algoritmo soportado por el dispatcher.
