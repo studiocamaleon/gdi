@@ -376,27 +376,47 @@ export interface NestingEjecutado {
   };
 }
 
+/**
+ * Geometría del acomodo, en TRES niveles concéntricos. Confundirlos ya costó
+ * caro (el simulador acomodaba con márgenes que no eran los del motor), así
+ * que conviene tenerlos claros:
+ *
+ *   substrato            600 mm  ── el rollo/pliego entero
+ *   └ printableArea      570 mm  ── adentro del margen de MÁQUINA
+ *     └ usableArea       565 mm  ── adentro también de la demasía: acá van
+ *                                   las piezas de verdad
+ *
+ * `margins` es el margen CRUDO de máquina (15), NO incluye la demasía. Quien
+ * necesite el borde efectivo donde arrancan las piezas usa `usableArea`, o
+ * suma `pieceBleedMm` (así lo hace `acomodarTanda` del simulador). Se reportan
+ * separados porque la UI los muestra como dos cosas distintas.
+ */
 export interface NestingVisualConfig {
+  /** Margen de máquina, SIN la demasía. Ver el diagrama de arriba. */
   margins: {
     leftMm: number;
     rightMm: number;
     topMm: number;
     bottomMm: number;
   };
+  /** Separación entre piezas vecinas (= pieceBleedMm × 2). */
   spacing: {
     horizontalMm: number;
     verticalMm: number;
   };
+  /** Demasía por lado de cada pieza. */
   pieceBleedMm?: number;
   allowRotation: boolean;
   substrateLabel?: string;
   centerPlacements?: boolean;
+  /** Adentro del margen de máquina Y de la demasía: donde van las piezas. */
   usableArea: {
     xMm: number;
     yMm: number;
     widthMm: number;
     heightMm: number;
   };
+  /** Adentro del margen de máquina solamente. */
   printableArea?: {
     xMm: number;
     yMm: number;
