@@ -171,6 +171,7 @@ export const FAMILIA_ICONOS: Record<string, string> = {
   trabajo_manual: "Tool",
   modificacion_pre: "Tool",
   modificacion_post: "Tool",
+  colocacion_ojales: "Tool",
   envio: "Truck",
   instalacion_in_situ: "Wrench",
   toma_medidas: "Tool",

@@ -1494,32 +1494,57 @@ const modificacion_pre: DefinicionFamilia = {
   nombre: 'Modificación pre-producción',
   categoria: 'operaciones_manuales',
   descripcion:
-    'Modificación física que MUTA el JobContext (medidas, etc.) antes de los pasos de producción. Ej: bolsillos en lona, refuerzos en bordes, dobladillo.',
+    'Demasía perimetral selectiva: agranda la medida de MATERIAL sobre los lados elegidos, antes de los pasos de producción. Bolsillos y refuerzos en lona. La unión (soldadura/pegado) se mide sobre la medida VISIBLE.',
   relacionMaquinaSoportada: ['M-0'],
   modosTiempoSoportados: ['T-1', 'T-2'],
-  mecanismosCantidadSoportados: ['DIRECT_FROM_JOBCONTEXT'],
-  modosActivacionSoportados: ['OPCIONAL'],
+  // CALCULADO_POR_PASO: el paso calcula sus propios metros lineales de unión a
+  // partir de la medida visible + los lados elegidos.
+  mecanismosCantidadSoportados: [
+    'CALCULADO_POR_PASO',
+    'DIRECT_FROM_JOBCONTEXT',
+  ],
+  modosActivacionSoportados: ['OPCIONAL', 'OBLIGATORIO', 'CONDICIONAL'],
   modoActivacionDefault: 'OPCIONAL',
   multiplicadoresSoportados: [],
   slotsRequeridos: [],
   permiteSlotsAdicionales: true,
   plantillasCompatibles: [],
   inputsRequeridos: [],
-  outputsCanonicos: ['mutacion_aplicada'],
+  outputsCanonicos: ['metros_lineales_union', 'mutacion_aplicada'],
   validaciones: [],
   paramsPasoSchema: [
     {
       campo: 'subTipo',
-      etiqueta: 'Sub-tipo de modificación',
+      etiqueta: 'Tipo de modificación',
       tipo: 'enum',
-      valoresPermitidos: [
-        'bolsillo_lona',
-        'refuerzo_bordes',
-        'dobladillo',
-        'ojales_con_margen',
-      ],
+      // Preset: precarga valores y nombra el paso en la OT. No cambia la lógica.
+      valoresPermitidos: ['bolsillo', 'refuerzo'],
+      default: 'refuerzo',
       requerido: true,
+      descripcion:
+        'Bolsillo: demasía grande (100-150mm) para que entre el caño, típicamente en los lados horizontales. Refuerzo: demasía chica (30-50mm), típicamente en los 4 lados.',
     },
+    {
+      campo: 'lados',
+      etiqueta: 'Lados afectados',
+      tipo: 'multi-enum',
+      valoresPermitidos: ['superior', 'inferior', 'izquierdo', 'derecho'],
+      requerido: true,
+      descripcion:
+        'Cada lado elegido suma la demasía a su eje: superior/inferior agrandan el alto, izquierdo/derecho el ancho.',
+    },
+    {
+      campo: 'demasiaMm',
+      etiqueta: 'Demasía por lado (mm)',
+      tipo: 'number',
+      requerido: true,
+      descripcion:
+        'Milímetros que se agregan POR CADA lado elegido. Bolsillo sup+inf de 100mm sobre una lona de 1000mm de alto deja 1200mm de material.',
+    },
+  ],
+  productosTipicos: [
+    'Lona con bolsillos para caño',
+    'Lona con refuerzo perimetral',
   ],
 };
 
@@ -1560,6 +1585,77 @@ const modificacion_post: DefinicionFamilia = {
     },
   ],
   productosTipicos: ['Tarjetas con redondeo', 'Talonarios numerados'],
+};
+
+const colocacion_ojales: DefinicionFamilia = {
+  codigo: 'colocacion_ojales',
+  nombre: 'Colocación de ojales',
+  categoria: 'operaciones_manuales',
+  descripcion:
+    'Coloca ojales sobre el perímetro de la pieza. La cantidad se DERIVA de la medida visible y de cada cuántos mm van los ojales — no la carga el comercial. Suele ir después de un refuerzo perimetral.',
+  relacionMaquinaSoportada: ['M-0'],
+  modosTiempoSoportados: ['T-1', 'T-2'],
+  // CALCULADO_POR_PASO: el paso deriva la cantidad del perímetro visible.
+  mecanismosCantidadSoportados: [
+    'CALCULADO_POR_PASO',
+    'DIRECT_FROM_JOBCONTEXT',
+  ],
+  modosActivacionSoportados: ['OPCIONAL', 'OBLIGATORIO', 'CONDICIONAL'],
+  modoActivacionDefault: 'OPCIONAL',
+  multiplicadoresSoportados: [],
+  slotsRequeridos: [
+    {
+      codigo: 'ojal',
+      nombre: 'Ojal / ojalillo',
+      tipo: 'INSUMO_PASO',
+      requerido: true,
+      compatibilidadMaterial: {
+        familiasMateriaPrima: ['HERRAJE_ACCESORIO'],
+        subfamiliasMateriaPrima: ['OJAL_OJALILLO_REMACHE'],
+      },
+    },
+  ],
+  permiteSlotsAdicionales: true,
+  plantillasCompatibles: [],
+  inputsRequeridos: [],
+  outputsCanonicos: ['ojales_colocados'],
+  validaciones: [],
+  paramsPasoSchema: [
+    {
+      campo: 'separacionMaxMm',
+      etiqueta: 'Separación máxima entre ojales (mm)',
+      tipo: 'number',
+      requerido: true,
+      descripcion:
+        'Es un MÁXIMO, no un valor exacto: los ojales se reparten parejos por cada lado sin superar esta distancia.',
+    },
+    {
+      campo: 'lados',
+      etiqueta: 'Lados con ojales',
+      tipo: 'multi-enum',
+      valoresPermitidos: ['superior', 'inferior', 'izquierdo', 'derecho'],
+      requerido: true,
+    },
+    {
+      campo: 'distanciaBordeMm',
+      etiqueta: 'Distancia al borde sin refuerzo (mm)',
+      tipo: 'number',
+      default: 10,
+      requerido: false,
+      descripcion:
+        'Sólo para lados SIN refuerzo. Donde hay refuerzo no hace falta configurar nada: el refuerzo doblado deja una banda de su mismo ancho y el ojal se centra en ella (refuerzo de 20 mm → ojal a 10 mm del borde).',
+    },
+    {
+      campo: 'esquinasSiempre',
+      etiqueta: 'Ojal en cada esquina',
+      tipo: 'boolean',
+      default: true,
+      requerido: false,
+      descripcion:
+        'Práctica de taller: la esquina lleva ojal sí o sí. Cuando dos lados adyacentes llevan ojales, la esquina se cuenta UNA sola vez.',
+    },
+  ],
+  productosTipicos: ['Lona con ojales', 'Banner para colgar'],
 };
 
 // ============================================================================
@@ -1707,6 +1803,7 @@ export const FAMILIAS: Record<FamiliaCodigo, DefinicionFamilia> = {
   trabajo_manual,
   modificacion_pre,
   modificacion_post,
+  colocacion_ojales,
   envio,
   instalacion_in_situ,
   toma_medidas,

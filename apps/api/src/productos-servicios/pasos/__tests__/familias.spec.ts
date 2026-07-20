@@ -16,8 +16,8 @@ import {
 import type { CategoriaFamiliaCodigo, FamiliaCodigo } from '../types';
 
 describe('Catálogo de familias', () => {
-  it('contiene exactamente 41 familias', () => {
-    expect(FAMILIAS_TOTAL).toBe(41);
+  it('contiene exactamente 42 familias', () => {
+    expect(FAMILIAS_TOTAL).toBe(42);
   });
 
   it('todas las familias tienen categoría válida', () => {
@@ -252,7 +252,7 @@ describe('Helpers', () => {
     expect(() => getFamilia('familia_inexistente' as FamiliaCodigo)).toThrow();
   });
 
-  it('listarFamilias devuelve los 41 códigos', () => {
-    expect(listarFamilias().length).toBe(41);
+  it('listarFamilias devuelve los 42 códigos', () => {
+    expect(listarFamilias().length).toBe(42);
   });
 });

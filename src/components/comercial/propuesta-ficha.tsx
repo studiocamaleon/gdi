@@ -105,6 +105,15 @@ import {
   type UnidadPropuesta,
 } from "@/lib/propuestas";
 import { AgregarProductoSheet } from "@/components/comercial/agregar-producto-sheet";
+import {
+  type MutacionAplicadaView,
+  demasiaPorLado,
+  medidaAntesDespues,
+  medidasDeCorte,
+  porcentajeMaterialExtra,
+  resumenModificacion,
+  tieneDemasia,
+} from "@/lib/modificaciones-fisicas";
 import { NestingViewer } from "@/components/nesting/nesting-viewer";
 import { listClientes } from "@/lib/clientes-api";
 import { getCurrentPeriodo } from "@/lib/costos";
@@ -1642,6 +1651,18 @@ function ProduccionItemView({
     index: index + 1,
     paso,
   }));
+  // Overlay de modificaciones físicas: la demasía y los ojales viven en pasos
+  // HERMANOS del que trae el nesting (`modificacion_pre` y `colocacion_ojales`
+  // vs. la impresión), así que se arman acá y se pasan al visor.
+  const modificacionesOverlay = React.useMemo(() => {
+    const pasos = item.cotizacion.pasos;
+    const demasia = demasiaPorLado(pasos);
+    const ojales =
+      pasos.flatMap((paso) => paso.ojalesLayout ?? [])[0]?.posiciones ?? [];
+    if (!tieneDemasia(demasia) && ojales.length === 0) return undefined;
+    return { demasia, ojales };
+  }, [item.cotizacion.pasos]);
+
   const [activeNestingKey, setActiveNestingKey] = React.useState("");
   const activeNestingTab =
     nestingTabs.find((tab) => tab.key === activeNestingKey) ??
@@ -1769,6 +1790,7 @@ function ProduccionItemView({
                       ? 420
                       : 560
                   }
+                  modificaciones={modificacionesOverlay}
                 />
               </div>
             ) : null}
@@ -2432,6 +2454,44 @@ function CommercialPriceDetailPanel({
   );
 }
 
+/**
+ * Detalle de un paso `modificacion_pre`: explica por qué el material mide más
+ * que lo que pidió el cliente. Es el dato que evita la pregunta "¿por qué esta
+ * lona salió más cara si pedí 150×100?".
+ */
+function MutacionPasoDetail({ mutacion }: { mutacion: MutacionAplicadaView }) {
+  const medidas = medidaAntesDespues(mutacion);
+  const extra = porcentajeMaterialExtra(mutacion);
+
+  return (
+    <div className="cost-detail-block">
+      <div className="cost-detail-title">Medida modificada</div>
+      <div className="cost-detail-lines">
+        <div>{resumenModificacion(mutacion)}</div>
+        {medidas ? (
+          <div>
+            Pedida {formatMmAsCm(medidas.antes.anchoMm)} ×{" "}
+            {formatMmAsCm(medidas.antes.altoMm)} cm → material{" "}
+            <strong>
+              {formatMmAsCm(medidas.despues.anchoMm)} ×{" "}
+              {formatMmAsCm(medidas.despues.altoMm)} cm
+            </strong>
+            {extra !== null && extra > 0
+              ? ` (+${formatDecimal(extra, 1)}% de material)`
+              : null}
+          </div>
+        ) : null}
+        {mutacion.metrosLinealesUnion > 0 ? (
+          <div>
+            {formatDecimal(mutacion.metrosLinealesUnion, 2)} ml de unión
+            (soldado o pegado)
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function PasoCostDetail({ paso }: { paso: PasoCosteo }) {
   const materiales = paso.materiales ?? [];
   const cargos = paso.cargosDirectosPaso ?? [];
@@ -2439,6 +2499,10 @@ function PasoCostDetail({ paso }: { paso: PasoCosteo }) {
 
   return (
     <div className="cost-step-expanded">
+      {paso.mutacionAplicada ? (
+        <MutacionPasoDetail mutacion={paso.mutacionAplicada} />
+      ) : null}
+
       <div className="cost-detail-block">
         <div className="cost-detail-title">Materiales del paso</div>
         <MaterialesPasoTable materiales={materiales} />
@@ -2780,6 +2844,7 @@ function CostosItemView({
                 const puedeExpandir =
                   paso.activado &&
                   (Boolean(paso.tiempo) ||
+                    Boolean(paso.mutacionAplicada) ||
                     (paso.materiales?.length ?? 0) > 0 ||
                     (paso.cargosDirectosPaso?.length ?? 0) > 0);
                 const expanded = expandedCostSteps.has(stepKey);
@@ -2816,6 +2881,16 @@ function CostosItemView({
                               title="El tiempo de este paso lo estimó el comercial al cotizar; no sale del cálculo del motor."
                             >
                               ⏱ estimado por el comercial
+                            </span>
+                          ) : null}
+                          {paso.mutacionAplicada ? (
+                            <span
+                              className="cost-chip"
+                              title={`${resumenModificacion(
+                                paso.mutacionAplicada,
+                              )}. El material se corta más grande que la medida pedida; abrí el paso para ver el detalle.`}
+                            >
+                              📐 agranda la medida
                             </span>
                           ) : null}
                         </div>
@@ -2960,6 +3035,31 @@ function buildOrdenItemSpecs(
       lbl: "Material",
       val: getMaterialCommercialLabel(mainMaterial),
     });
+  }
+
+  // 1.b Medida de corte: cuando un paso `modificacion_pre` agrandó la medida
+  //     (bolsillo, refuerzo), el operario NO corta lo que pidió el cliente.
+  //     Las dos medidas tienen que viajar a la OT o se corta mal.
+  //     Ver docs/modificaciones-fisicas-lona-diseno.md §7.
+  const cortes = medidasDeCorte(item.cotizacion.pasos);
+  if (cortes.length > 0) {
+    const valor = cortes
+      .map(
+        (corte) =>
+          `${formatMmAsCm(corte.despues.anchoMm)} × ${formatMmAsCm(
+            corte.despues.altoMm,
+          )} cm`,
+      )
+      .join(" · ");
+    const medidasIdx = arr.findIndex((spec) =>
+      spec.lbl.toLowerCase().includes("medida"),
+    );
+    const spec = { lbl: "Medida de corte", val: valor };
+    if (medidasIdx >= 0) arr.splice(medidasIdx + 1, 0, spec);
+    else arr.unshift(spec);
+    if (materialIdx >= 0 && medidasIdx >= 0 && materialIdx > medidasIdx) {
+      materialIdx += 1;
+    }
   }
 
   // 2. Montaje: material del sustrato sobre el que se monta (ej. Imán,

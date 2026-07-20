@@ -2,6 +2,15 @@
 
 import * as React from "react";
 import type { NestingViewerInput } from "@/lib/productos-servicios-api";
+import type {
+  DemasiaPorLado,
+  PosicionOjalView,
+} from "@/lib/modificaciones-fisicas";
+import {
+  marcoDemasia,
+  overlayAplicable,
+  puntosOjales,
+} from "@/lib/nesting-overlay";
 import { cn } from "@/lib/utils";
 
 export interface NestingViewerProps {
@@ -33,6 +42,19 @@ export interface NestingViewerProps {
   maxPx?: number;
   showLabels?: boolean;
   className?: string;
+  /**
+   * Modificaciones físicas a superponer sobre cada pieza: la franja de demasía
+   * (bolsillo / refuerzo) y dónde van los ojales. Las posiciones vienen del
+   * motor, no se recalculan acá.
+   * Ver docs/modificaciones-fisicas-lona-diseno.md.
+   */
+  modificaciones?: ModificacionesOverlay;
+}
+
+export interface ModificacionesOverlay {
+  demasia: DemasiaPorLado;
+  /** Posiciones en coordenadas de la medida VISIBLE de la pieza. */
+  ojales: PosicionOjalView[];
 }
 
 const PIECE_COLORS = [
@@ -206,6 +228,7 @@ export function NestingViewer({
   maxPx = 560,
   showLabels = true,
   className,
+  modificaciones,
 }: NestingViewerProps) {
   const pieceGroups = usePieceGroups(result.placements);
   const firstSubstrate = result.substrates[0];
@@ -302,6 +325,7 @@ export function NestingViewer({
         pieceGroups={pieceGroups}
         visualConfig={result.visualConfig}
         costingPreview={result.costingPreview}
+        modificaciones={modificaciones}
       />
 
       <div className="nesting-canvas-list">
@@ -316,6 +340,7 @@ export function NestingViewer({
             placements={result.placements.filter((p) => (p.substrateIndex ?? 0) === idx)}
             maxPx={maxPx}
             showLabels={showLabels}
+            modificaciones={modificaciones}
           />
         ))}
       </div>
@@ -511,17 +536,35 @@ function NestingLegend({
   pieceGroups,
   visualConfig,
   costingPreview,
+  modificaciones,
 }: {
   pieceGroups: ReturnType<typeof usePieceGroups>;
   visualConfig?: NestingViewerInput["visualConfig"];
   costingPreview?: NestingViewerInput["costingPreview"];
+  modificaciones?: ModificacionesOverlay;
 }) {
   const hasMargins = visualConfig && Object.values(visualConfig.margins).some((value) => value > 0);
   const hasBleed = visualConfig && getPieceBleedMm(visualConfig) > 0;
   const showCosting = costingPreview && costingPreview.strategy !== "simple";
   const hasPanelizado = visualConfig?.panelizado?.enabled === true;
+  // OJO: el chip "Demasía" de acá abajo es el SANGRADO de impresión
+  // (`pieceBleedMm`), no la demasía de un bolsillo/refuerzo. Son cosas
+  // distintas, así que la de modificaciones se llama por su nombre de taller.
+  const hasModificacion =
+    modificaciones !== undefined &&
+    Object.values(modificaciones.demasia).some((mm) => mm > 0);
+  const hasOjales = (modificaciones?.ojales.length ?? 0) > 0;
 
-  if (pieceGroups.length === 0 && !hasMargins && !hasBleed && !showCosting && !hasPanelizado) return null;
+  if (
+    pieceGroups.length === 0 &&
+    !hasMargins &&
+    !hasBleed &&
+    !showCosting &&
+    !hasPanelizado &&
+    !hasModificacion &&
+    !hasOjales
+  )
+    return null;
 
   return (
     <div className="nesting-legend">
@@ -532,6 +575,10 @@ function NestingLegend({
       {costingPreview?.wasteAreaMm2 ? <LegendChip color="#fef3ed" border="#f4b9a0" label="Desperdicio" dashed /> : null}
       {hasBleed ? <LegendChip color="#e7e5e4" border="#bdb9b4" label="Demasía" /> : null}
       {hasPanelizado ? <LegendChip color="#fef3c7" border="#d97706" label="Solape" /> : null}
+      {hasModificacion ? (
+        <LegendChip color="#fdd2b0" border="#c2410c" label="Bolsillo / refuerzo" dashed />
+      ) : null}
+      {hasOjales ? <LegendChip color="#ffffff" border="#0f766e" label="Ojales" /> : null}
       {pieceGroups.map((piece) => (
         <span key={piece.key} className="lg-item">
           <span
@@ -579,6 +626,7 @@ interface SubstrateViewProps {
   placements: NestingViewerInput["placements"];
   maxPx: number;
   showLabels: boolean;
+  modificaciones?: ModificacionesOverlay;
 }
 
 function SubstrateView({
@@ -590,6 +638,7 @@ function SubstrateView({
   placements,
   maxPx,
   showLabels,
+  modificaciones,
 }: SubstrateViewProps) {
   const widthMm = substrate.widthMm;
   const heightMm = substrate.kind === "sheet" ? substrate.heightMm : substrate.lengthMm;
@@ -742,6 +791,7 @@ function SubstrateView({
                 index={idx}
                 showLabels={showLabels}
                 displayTransform={placementTransform}
+                modificaciones={modificaciones}
               />
             ))}
           </g>
@@ -795,11 +845,13 @@ function PlacementRect({
   index,
   showLabels,
   displayTransform,
+  modificaciones,
 }: {
   placement: Placement;
   index: number;
   showLabels: boolean;
   displayTransform: DisplayTransform;
+  modificaciones?: ModificacionesOverlay;
 }) {
   const rect = mapDisplayRect(displayTransform, placement.xMm, placement.yMm, placement.widthMm, placement.heightMm);
   const { x, y, width: w, height: h } = rect;
@@ -860,6 +912,11 @@ function PlacementRect({
       {placement.rotated ? (
         <line x1={x} y1={y} x2={x + w} y2={y + h} stroke={style.text} strokeWidth={0.45} strokeDasharray="3 3" opacity={0.35} />
       ) : null}
+      <ModificacionesFisicasOverlay
+        placement={placement}
+        displayTransform={displayTransform}
+        modificaciones={modificaciones}
+      />
       {showMainLabel ? (
         <>
           <text
@@ -1310,6 +1367,96 @@ function SpacingLayer({
               <rect {...svgRectWithMinimum(bottomBleed)} fill="#a8a29e" />
             ) : null}
           </React.Fragment>
+        );
+      })}
+    </g>
+  );
+}
+
+/**
+ * Franja de demasía + ubicación de los ojales sobre una pieza.
+ *
+ * La demasía se pinta como UN path con `fillRule="evenodd"` (marco exterior
+ * menos área visible) para que las esquinas no se superpongan y queden más
+ * oscuras que el resto de la franja.
+ *
+ * No se dibuja sobre piezas paneleadas: ahí cada placement es una tajada y las
+ * franjas caerían sobre las líneas de unión interiores.
+ */
+function ModificacionesFisicasOverlay({
+  placement,
+  displayTransform,
+  modificaciones,
+}: {
+  placement: Placement;
+  displayTransform: DisplayTransform;
+  modificaciones?: ModificacionesOverlay;
+}) {
+  if (!modificaciones) return null;
+  if (!overlayAplicable(placement)) return null;
+
+  const marco = marcoDemasia(placement, modificaciones.demasia);
+  const puntos = puntosOjales(
+    placement,
+    modificaciones.demasia,
+    modificaciones.ojales,
+  );
+  if (!marco && puntos.length === 0) return null;
+
+  const toRect = (r: { xMm: number; yMm: number; widthMm: number; heightMm: number }) =>
+    mapDisplayRect(displayTransform, r.xMm, r.yMm, r.widthMm, r.heightMm);
+
+  let pathDemasia: string | null = null;
+  let innerRect: ReturnType<typeof mapDisplayRect> | null = null;
+  if (marco) {
+    const outer = toRect(marco.outer);
+    innerRect = toRect(marco.inner);
+    pathDemasia = [
+      `M ${outer.x} ${outer.y} h ${outer.width} v ${outer.height} h ${-outer.width} Z`,
+      `M ${innerRect.x} ${innerRect.y} h ${innerRect.width} v ${innerRect.height} h ${-innerRect.width} Z`,
+    ].join(" ");
+  }
+
+  // Radio del ojal proporcional a la escala, con topes para que se vea igual
+  // en una lona chica que en una grande.
+  const radio = Math.min(3.2, Math.max(1.3, displayTransform.scale * 12));
+
+  return (
+    <g pointerEvents="none">
+      {pathDemasia ? (
+        <path
+          d={pathDemasia}
+          fillRule="evenodd"
+          fill="#f97316"
+          fillOpacity={0.32}
+          stroke="#c2410c"
+          strokeWidth={0.5}
+          strokeDasharray="2.5 2"
+        />
+      ) : null}
+      {innerRect ? (
+        <rect
+          x={innerRect.x}
+          y={innerRect.y}
+          width={innerRect.width}
+          height={innerRect.height}
+          fill="none"
+          stroke="#c2410c"
+          strokeWidth={0.6}
+        />
+      ) : null}
+      {puntos.map((punto, i) => {
+        const p = mapDisplayRect(displayTransform, punto.xMm, punto.yMm, 0, 0);
+        return (
+          <circle
+            key={`ojal-${i}`}
+            cx={p.x}
+            cy={p.y}
+            r={radio}
+            fill="#ffffff"
+            stroke="#0f766e"
+            strokeWidth={0.9}
+          />
         );
       })}
     </g>

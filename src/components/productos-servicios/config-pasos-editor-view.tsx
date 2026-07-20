@@ -64,6 +64,7 @@ import {
   getPersonalizaciones,
 } from "@/lib/producto-personalizaciones";
 import { PasoExtraEditor } from "@/components/productos-servicios/paso-extra-editor";
+import { ParamsFamiliaFields } from "@/components/productos-servicios/params-familia-fields";
 import {
   criterioMotorAutoLabels,
   formulaConsumoLabels,
@@ -2197,6 +2198,36 @@ function requiereMecanismoCantidad(
   return tieneMaterialesDeclarados;
 }
 
+/**
+ * Familias de producción que leen las medidas del JobContext. Si un
+ * `modificacion_pre` queda DESPUÉS de alguna de estas, su demasía no le llega
+ * a nadie y el trabajo se cotiza con la medida chica, en silencio.
+ */
+const FAMILIAS_AGUAS_ABAJO_DE_UN_PRE = new Set([
+  "impresion_por_hoja",
+  "impresion_por_area",
+  "impresion_por_pieza",
+  "corte_guillotina",
+  "corte_laser",
+  "corte_manual",
+  "plotter_corte",
+  "troquelado_digital",
+  "cnc",
+  "laminado",
+]);
+
+function modificacionPreFueraDeOrden(
+  paso: { familiaCodigo: string; orden: number },
+  pasos: Array<{ familiaCodigo: string; orden: number }>,
+): boolean {
+  if (paso.familiaCodigo !== "modificacion_pre") return false;
+  return pasos.some(
+    (otro) =>
+      otro.orden < paso.orden &&
+      FAMILIAS_AGUAS_ABAJO_DE_UN_PRE.has(otro.familiaCodigo),
+  );
+}
+
 function validarBasico(
   cfg: UpsertConfigPasoPayload,
   familia:
@@ -2209,9 +2240,35 @@ function validarBasico(
         }>;
       }
     | undefined,
+  contexto?: { familiaCodigo?: string; preFueraDeOrden?: boolean },
 ): TabValidacion {
   const errores: string[] = [];
   const warnings: string[] = [];
+
+  // Modificaciones físicas: el backend CORTA la cotización si estos params
+  // faltan (agrandaría nada y cobraría de menos en silencio). Los adelantamos
+  // acá para que el modelador lo vea al configurar y no al cotizar.
+  if (contexto?.familiaCodigo === "modificacion_pre") {
+    const params = asRecord(cfg.paramsPasoJson);
+    const lados = Array.isArray(params.lados) ? params.lados : [];
+    if (lados.length === 0) errores.push("Sin lados afectados");
+    if (!readOptionalNumber(params.demasiaMm)) {
+      errores.push("Sin demasía por lado");
+    }
+  }
+  if (contexto?.familiaCodigo === "colocacion_ojales") {
+    const params = asRecord(cfg.paramsPasoJson);
+    const lados = Array.isArray(params.lados) ? params.lados : [];
+    if (lados.length === 0) errores.push("Sin lados con ojales");
+    if (!readOptionalNumber(params.separacionMaxMm)) {
+      errores.push("Sin separación entre ojales");
+    }
+  }
+  if (contexto?.preFueraDeOrden) {
+    warnings.push(
+      "Va después de un paso de producción: la demasía no le llega y se cotiza la medida chica",
+    );
+  }
   const soportaManual =
     familia?.relacionMaquinaSoportada.includes("M-0") ?? false;
   const soportaMaquina =
@@ -3983,7 +4040,13 @@ export function ConfigPasosEditorView({
     const sinValidacionProduccion = noEjecutar || cfg.tercerizado;
     const valBasico = sinValidacionProduccion
       ? { errores: [], warnings: [] }
-      : validarBasico(cfg, familia);
+      : validarBasico(cfg, familia, {
+          familiaCodigo: paso.familiaCodigo,
+          preFueraDeOrden: modificacionPreFueraDeOrden(
+            paso,
+            rutaAlternativa.ruta.pasos,
+          ),
+        });
     const valMateriales = sinValidacionProduccion
       ? { errores: [], warnings: [] }
       : validarMateriales(cfg, familia);
@@ -4788,7 +4851,13 @@ export function ConfigPasosEditorView({
                   const valBasico =
                     noEjecutar || cfg.tercerizado
                       ? { errores: [], warnings: [] }
-                      : validarBasico(cfg, familia);
+                      : validarBasico(cfg, familia, {
+                          familiaCodigo: paso.familiaCodigo,
+                          preFueraDeOrden: modificacionPreFueraDeOrden(
+                            paso,
+                            rutaAlternativa.ruta.pasos,
+                          ),
+                        });
                   const valMateriales = noEjecutar
                     ? { errores: [], warnings: [] }
                     : validarMateriales(cfg, familia);
@@ -5606,6 +5675,15 @@ export function ConfigPasosEditorView({
                                       />
                                     </div>
                                   )}
+                                  {familia ? (
+                                    <ParamsFamiliaFields
+                                      familia={familia}
+                                      params={paramsPaso}
+                                      onChange={(patch) =>
+                                        updateStepParams(paso.id, patch)
+                                      }
+                                    />
+                                  ) : null}
                                   <div className="field md:col-span-full">
                                     <LabelConTooltip
                                       label="Tiempo estimado por el comercial"

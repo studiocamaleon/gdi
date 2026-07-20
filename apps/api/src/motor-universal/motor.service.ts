@@ -63,7 +63,20 @@ import {
   modoColorMatchesPerfil,
   normalizeModoColor,
 } from '../productos-servicios/modo-color-comercial';
-import { calcularPerimetroPiezasM } from './job-context-metrics';
+import {
+  calcularPerimetroPiezasM,
+  congelarMedidaVisible,
+} from './job-context-metrics';
+import {
+  aplicarMutacionPre,
+  calcularMetrosLinealesUnion,
+  parsearParamsModificacionPre,
+} from './modificaciones-pre';
+import {
+  calcularCantidadOjales,
+  calcularLayoutOjales,
+  parsearParamsColocacionOjales,
+} from './colocacion-ojales';
 
 const MODO_SIN_IMPRESION = 'SIN_IMPRESION';
 const FAMILIAS_IMPRESION = new Set([
@@ -465,6 +478,13 @@ export class MotorUniversalService {
         },
       ];
     }
+    // Congelar la medida VISIBLE antes de que ningún paso PRE la mute. Los
+    // pasos que miden sobre el borde terminado (soldadura de bolsillo,
+    // colocación de ojales) leen de acá; `piezas[]`/`medidaCustomMm` describen
+    // el material y sí crecen con la demasía.
+    // Ver docs/modificaciones-fisicas-lona-diseno.md §3.
+    congelarMedidaVisible(jobContext);
+
     this.enriquecerJobContextConGramajePrincipal(producto, jobContext);
     this.enriquecerJobContextConTecnologias(producto.pasos, jobContext);
 
@@ -540,6 +560,59 @@ export class MotorUniversalService {
           if (value === null || value === undefined) continue;
           (jobContext as Record<string, unknown>)[key] = value;
           outputsAcumulados.add(key);
+        }
+      }
+
+      // Sub-tarea (i) del bucle — SOLO los pasos PRE mutan valores MUTABLES
+      // del JobContext. Va después del merge de outputs: el paso ya cobró su
+      // tiempo sobre la medida visible, y a partir de acá los pasos siguientes
+      // (impresión, nesting, material) leen la medida agrandada.
+      // Ver docs/modificaciones-fisicas-lona-diseno.md §6.1.
+      if (paso.familiaCodigo === 'modificacion_pre' && ejecucion.activado) {
+        const params = parsearParamsModificacionPre(paso.paramsPasoJson);
+        if (!params) {
+          // Corta la cotización a propósito: un PRE activo pero sin lados ni
+          // demasía dejaría la medida de material sin agrandar y cobraría de
+          // menos EN SILENCIO — justo lo que esta familia existe para evitar.
+          errores.push({
+            codigo: 'modificacion_pre_mal_configurada',
+            severidad: 'ERROR',
+            rutaPasoId: paso.rutaPasoId,
+            rutaPasoOrden: paso.rutaPasoOrden,
+            familiaCodigo: paso.familiaCodigo,
+            mensaje: `El paso "${ejecucion.nombreVisible ?? paso.familiaCodigo}" no declara lados afectados ni demasía válida, así que no puede agrandar la medida de material.`,
+            sugerencia:
+              'Configurar en el paso los lados afectados (superior/inferior/izquierdo/derecho) y la demasía por lado en mm.',
+          });
+        } else {
+          const traza = aplicarMutacionPre(jobContext, params, {
+            rutaPasoId: paso.rutaPasoId,
+            nombrePaso: ejecucion.nombreVisible ?? paso.familiaCodigo,
+          });
+          if (traza) ejecucion.mutacionAplicada = traza;
+        }
+      }
+
+      // Misma lógica para ojales: sin separación ni lados la cantidad sale 0 y
+      // el paso no cobra nada, otra vez en silencio.
+      if (paso.familiaCodigo === 'colocacion_ojales' && ejecucion.activado) {
+        const paramsOjales = parsearParamsColocacionOjales(paso.paramsPasoJson);
+        if (paramsOjales) {
+          // Layout para el visor de nesting: dónde va cada ojal.
+          const layout = calcularLayoutOjales(jobContext, paramsOjales);
+          if (layout.length > 0) ejecucion.ojalesLayout = layout;
+        }
+        if (!paramsOjales) {
+          errores.push({
+            codigo: 'colocacion_ojales_mal_configurada',
+            severidad: 'ERROR',
+            rutaPasoId: paso.rutaPasoId,
+            rutaPasoOrden: paso.rutaPasoOrden,
+            familiaCodigo: paso.familiaCodigo,
+            mensaje: `El paso "${ejecucion.nombreVisible ?? paso.familiaCodigo}" no declara separación entre ojales ni lados, así que no puede calcular cuántos ojales entran.`,
+            sugerencia:
+              'Configurar en el paso la separación máxima entre ojales (mm) y los lados donde van.',
+          });
         }
       }
     }
@@ -3408,8 +3481,9 @@ export class MotorUniversalService {
       if (key.startsWith('caras_')) dup[key] = 1;
     }
     if (typeof jc.cantidad === 'number') dup.cantidad = jc.cantidad * caras;
-    if (Array.isArray(jc.piezas)) {
-      dup.piezas = (jc.piezas as Array<Record<string, unknown>>).map((p) => ({
+    for (const campo of ['piezas', 'piezasVisibles'] as const) {
+      if (!Array.isArray(jc[campo])) continue;
+      dup[campo] = (jc[campo] as Array<Record<string, unknown>>).map((p) => ({
         ...p,
         cantidad:
           typeof p.cantidad === 'number' ? p.cantidad * caras : p.cantidad,
@@ -4593,6 +4667,21 @@ export class MotorUniversalService {
       // con desperdicio real (m_lineales para shelf-rollo, pliegos para grid).
       if (nestingDispatch) {
         return nestingDispatch.cantidadCalculada;
+      }
+      // Etapa B — `modificacion_pre` calcula sus propios metros lineales de
+      // unión sobre la medida VISIBLE (la costura corre por el borde
+      // terminado, no crece con la demasía). Es el driver del tiempo T-2.
+      if (paso.familiaCodigo === 'modificacion_pre') {
+        const params = parsearParamsModificacionPre(paso.paramsPasoJson);
+        if (params) return calcularMetrosLinealesUnion(jobContext, params);
+        return 0;
+      }
+      // Etapa C — `colocacion_ojales` deriva su cantidad del perímetro VISIBLE
+      // (el ojal va al borde terminado, no crece con la demasía del refuerzo).
+      if (paso.familiaCodigo === 'colocacion_ojales') {
+        const params = parsearParamsColocacionOjales(paso.paramsPasoJson);
+        if (params) return calcularCantidadOjales(jobContext, params);
+        return 0;
       }
       // Fallback histórico: m² crudos de las piezas (sin desperdicio) cuando
       // la familia no tiene algoritmo soportado por el dispatcher.
