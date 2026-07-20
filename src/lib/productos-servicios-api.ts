@@ -1009,6 +1009,20 @@ export interface CotizarResponse {
           despues: { anchoMm: number; altoMm: number };
         }>;
       } | null;
+      /**
+       * Sólo pasos `colocacion_ojales`: dónde va cada ojal, en coordenadas de
+       * la medida VISIBLE. Lo dibuja el visor de nesting.
+       */
+      ojalesLayout?: Array<{
+        anchoMm: number;
+        altoMm: number;
+        cantidad: number;
+        posiciones: Array<{
+          xMm: number;
+          yMm: number;
+          lado: "superior" | "inferior" | "izquierdo" | "derecho";
+        }>;
+      }> | null;
       tiempo?: {
         totalMin: number;
         centroCostoId?: string | null;

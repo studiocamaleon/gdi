@@ -1,6 +1,8 @@
 import {
   calcularCantidadOjales,
+  calcularLayoutOjales,
   calcularOjalesPorPieza,
+  calcularPosicionesOjales,
   parsearParamsColocacionOjales,
 } from '../colocacion-ojales';
 import { congelarMedidaVisible } from '../job-context-metrics';
@@ -131,6 +133,97 @@ describe('calcularOjalesPorPieza', () => {
 
   it('devuelve 0 con medidas inválidas', () => {
     expect(calcularOjalesPorPieza(0, 1000, params())).toBe(0);
+  });
+});
+
+describe('calcularPosicionesOjales', () => {
+  /** Las coordenadas son de la medida VISIBLE: (0,0) = esquina sup. izq. */
+  it('reparte parejo sobre cada lado, con ambos extremos', () => {
+    const pos = calcularPosicionesOjales(
+      1500,
+      1000,
+      params({ lados: ['superior'] }),
+    );
+    expect(pos.map((p) => [p.xMm, p.yMm])).toEqual([
+      [0, 0],
+      [500, 0],
+      [1000, 0],
+      [1500, 0],
+    ]);
+  });
+
+  it('las esquinas compartidas aparecen UNA sola vez', () => {
+    const pos = calcularPosicionesOjales(1500, 1000, params());
+    expect(pos).toHaveLength(10);
+    const claves = pos.map((p) => `${p.xMm}:${p.yMm}`);
+    expect(new Set(claves).size).toBe(10);
+    // Las 4 esquinas están presentes.
+    for (const esquina of ['0:0', '1500:0', '0:1000', '1500:1000']) {
+      expect(claves).toContain(esquina);
+    }
+  });
+
+  it('cada posición cae sobre el perímetro', () => {
+    for (const p of calcularPosicionesOjales(1500, 1000, params())) {
+      const enBorde =
+        p.xMm === 0 || p.xMm === 1500 || p.yMm === 0 || p.yMm === 1000;
+      expect(enBorde).toBe(true);
+    }
+  });
+
+  it('con separación no múltiplo reparte parejo sin superar el máximo', () => {
+    // 1200 cada 500 → 3 tramos de 400mm.
+    const pos = calcularPosicionesOjales(
+      1200,
+      1000,
+      params({ lados: ['superior'] }),
+    );
+    expect(pos.map((p) => p.xMm)).toEqual([0, 400, 800, 1200]);
+  });
+
+  it('sin esquinasSiempre no pone los extremos', () => {
+    const pos = calcularPosicionesOjales(
+      1500,
+      1000,
+      params({ lados: ['superior'], esquinasSiempre: false }),
+    );
+    expect(pos.map((p) => p.xMm)).toEqual([500, 1000]);
+  });
+
+  it('la cantidad se deriva de las posiciones', () => {
+    const p = params();
+    expect(calcularOjalesPorPieza(1500, 1000, p)).toBe(
+      calcularPosicionesOjales(1500, 1000, p).length,
+    );
+  });
+});
+
+describe('calcularLayoutOjales', () => {
+  it('publica el marco visible y las posiciones por pieza', () => {
+    const layout = calcularLayoutOjales(lona(2), params());
+    expect(layout).toHaveLength(1);
+    expect(layout[0]).toMatchObject({
+      anchoMm: 1500,
+      altoMm: 1000,
+      cantidad: 2,
+    });
+    expect(layout[0].posiciones).toHaveLength(10);
+  });
+
+  it('usa la VISIBLE aunque el material esté mutado', () => {
+    const jc = lona();
+    aplicarMutacionPre(
+      jc,
+      { subTipo: 'refuerzo', lados: CUATRO_LADOS, demasiaMm: 40 },
+      { rutaPasoId: 'rp-1', nombrePaso: 'Refuerzo' },
+    );
+
+    const layout = calcularLayoutOjales(jc, params());
+    expect(layout[0]).toMatchObject({ anchoMm: 1500, altoMm: 1000 });
+  });
+
+  it('sin piezas devuelve vacío', () => {
+    expect(calcularLayoutOjales({ cantidad: 1 }, params())).toEqual([]);
   });
 });
 

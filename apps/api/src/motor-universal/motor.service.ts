@@ -74,6 +74,7 @@ import {
 } from './modificaciones-pre';
 import {
   calcularCantidadOjales,
+  calcularLayoutOjales,
   parsearParamsColocacionOjales,
 } from './colocacion-ojales';
 
@@ -595,7 +596,13 @@ export class MotorUniversalService {
       // Misma lógica para ojales: sin separación ni lados la cantidad sale 0 y
       // el paso no cobra nada, otra vez en silencio.
       if (paso.familiaCodigo === 'colocacion_ojales' && ejecucion.activado) {
-        if (!parsearParamsColocacionOjales(paso.paramsPasoJson)) {
+        const paramsOjales = parsearParamsColocacionOjales(paso.paramsPasoJson);
+        if (paramsOjales) {
+          // Layout para el visor de nesting: dónde va cada ojal.
+          const layout = calcularLayoutOjales(jobContext, paramsOjales);
+          if (layout.length > 0) ejecucion.ojalesLayout = layout;
+        }
+        if (!paramsOjales) {
           errores.push({
             codigo: 'colocacion_ojales_mal_configurada',
             severidad: 'ERROR',

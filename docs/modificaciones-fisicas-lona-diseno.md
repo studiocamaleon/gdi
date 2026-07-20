@@ -490,6 +490,35 @@ Verificado end-to-end contra la app corriendo, con una ruta de prueba sobre **Lo
 No hizo falta corregir nada del código: los tres números del diseño (1,8 m² · +20% · 3 ml · 10
 ojales) salieron correctos a la primera.
 
+## 8.c Overlay en el dibujo de nesting (2026-07-20)
+
+El `NestingViewer` superpone sobre cada pieza la **franja de demasía** y la **ubicación de los
+ojales**, para que el taller vea qué parte se dobla y dónde va cada ojal. Como
+`PropuestaFicha` es también el detalle de la OT en producción, un solo componente cubre cotizador
+y taller.
+
+- **Las posiciones salen del MOTOR** (`ojalesLayout` en `PasoEjecutado`), no se recalculan en el
+  front: si el reparto cambia, el dibujo cambia con él. Por eso
+  `calcularPosicionesOjales` pasó a ser la primitiva y la cantidad se deriva
+  (`calcularOjalesPorPieza` = `posiciones.length`). De paso el dedupe de esquinas dejó de ser una
+  resta aparte: se unen las posiciones de cada lado y se deduplican por coordenada.
+- **La demasía se acumula por LADO** (`demasiaPorLado`), no por eje: un bolsillo sólo arriba no se
+  dibuja igual que uno repartido arriba y abajo, y `deltaAnchoMm`/`deltaAltoMm` no distinguen.
+- **Rotación**: el nesting puede girar la pieza 90° para que entre en el rollo, así que la franja
+  se traduce a los lados dibujados (`demasiaDibujada`) y los puntos se rotan con ella. En los
+  casos reales —bolsillo (arriba+abajo) y refuerzo (los 4)— la demasía es simétrica por eje, así
+  que el sentido de giro no cambia el dibujo.
+- **Colisión de nombres**: la leyenda del visor YA tenía un chip "Demasía" que significa el
+  **sangrado de impresión** (`pieceBleedMm`). Para no llamar dos cosas distintas igual, la de
+  modificaciones se rotula **"Bolsillo / refuerzo"**.
+- La geometría vive en `src/lib/nesting-overlay.ts` con tests propios; el componente sólo dibuja.
+
+**Pendiente — piezas paneleadas.** Cuando una lona no entra en el ancho del rollo, el nesting la
+parte en paneles y cada placement es una tajada; la franja y los ojales pertenecen al perímetro de
+la pieza ARMADA, no al de cada panel. `overlayAplicable()` devuelve false con `panelCount > 1` y
+el overlay no se dibuja: preferimos no mostrar nada antes que mostrar franjas y ojales sobre las
+líneas de unión interiores. Falta mapear paneles a pieza lógica.
+
 ## 9. Decisiones tomadas
 
 1. Bolsillo y refuerzo son **la misma primitiva** con parámetros distintos, no dos lógicas.

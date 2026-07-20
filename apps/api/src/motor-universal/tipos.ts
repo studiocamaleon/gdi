@@ -296,6 +296,17 @@ export interface PasoEjecutado {
    * medida `despues`, el cliente pidió la visible).
    */
   mutacionAplicada?: MutacionAplicada;
+  /**
+   * Sólo pasos `colocacion_ojales`: dónde va cada ojal, en coordenadas de la
+   * medida VISIBLE. Lo dibuja el visor de nesting — las posiciones salen del
+   * motor para que el dibujo no pueda contradecir al cálculo.
+   */
+  ojalesLayout?: Array<{
+    anchoMm: number;
+    altoMm: number;
+    cantidad: number;
+    posiciones: Array<{ xMm: number; yMm: number; lado: LadoPieza }>;
+  }>;
   /** Tiempo calculado (si activado). */
   tiempo?: {
     setupMin: number;

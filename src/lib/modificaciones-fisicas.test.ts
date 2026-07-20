@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   type MutacionAplicadaView,
+  demasiaPorLado,
   describirLados,
   medidaAntesDespues,
   medidasDeCorte,
   porcentajeMaterialExtra,
   resumenModificacion,
+  tieneDemasia,
 } from "@/lib/modificaciones-fisicas";
 
 /** Caso A del diseño: bolsillo sup+inf de 100mm sobre 1500×1000. */
@@ -113,6 +115,51 @@ describe("porcentajeMaterialExtra", () => {
 
   it("devuelve null sin piezas", () => {
     expect(porcentajeMaterialExtra({ ...BOLSILLO, piezas: [] })).toBeNull();
+  });
+});
+
+describe("demasiaPorLado", () => {
+  it("sin pasos PRE no hay demasía", () => {
+    const d = demasiaPorLado([{ mutacionAplicada: null }, {}]);
+    expect(d).toEqual({ superior: 0, inferior: 0, izquierdo: 0, derecho: 0 });
+    expect(tieneDemasia(d)).toBe(false);
+  });
+
+  it("caso A: el bolsillo sólo carga los lados horizontales", () => {
+    const d = demasiaPorLado([{ mutacionAplicada: BOLSILLO }]);
+    expect(d).toEqual({
+      superior: 100,
+      inferior: 100,
+      izquierdo: 0,
+      derecho: 0,
+    });
+    expect(tieneDemasia(d)).toBe(true);
+  });
+
+  /** Es lo que distingue un bolsillo arriba+abajo de uno sólo arriba. */
+  it("acumula pasos encadenados en los ejes que corresponden", () => {
+    const refuerzoLateral: MutacionAplicadaView = {
+      ...BOLSILLO,
+      subTipo: "refuerzo",
+      lados: ["izquierdo", "derecho"],
+      demasiaMm: 40,
+    };
+    expect(
+      demasiaPorLado([
+        { mutacionAplicada: BOLSILLO },
+        {},
+        { mutacionAplicada: refuerzoLateral },
+      ]),
+    ).toEqual({ superior: 100, inferior: 100, izquierdo: 40, derecho: 40 });
+  });
+
+  it("dos pasos sobre el mismo lado se suman", () => {
+    expect(
+      demasiaPorLado([
+        { mutacionAplicada: { ...BOLSILLO, lados: ["superior"] } },
+        { mutacionAplicada: { ...BOLSILLO, lados: ["superior"], demasiaMm: 30 } },
+      ]).superior,
+    ).toBe(130);
   });
 });
 

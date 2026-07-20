@@ -16,7 +16,7 @@
  * propios. Esconderlo tras un dropdown repetiría el error que la etapa B
  * corrigió: un enum decorativo que el motor ignora.
  */
-import { ESQUINAS, largoDelLadoMm, parsearLados } from './lados-pieza';
+import { largoDelLadoMm, parsearLados } from './lados-pieza';
 import type { JobContext, LadoPieza } from './tipos';
 
 export interface ParamsColocacionOjales {
@@ -46,44 +46,94 @@ export function parsearParamsColocacionOjales(
 }
 
 /**
- * Ojales de UNA pieza.
+ * Posición de un ojal, en coordenadas de la medida VISIBLE de la pieza:
+ * origen (0,0) = esquina superior izquierda del área que ve el cliente.
  *
- * Con `esquinasSiempre` (el caso normal): cada lado se divide en
- * `ceil(L / separacion)` tramos y lleva un ojal en cada punta de cada tramo,
- * o sea `tramos + 1` posiciones contando ambos extremos. Después se descuenta
- * una posición por cada esquina cuyos DOS lados adyacentes llevan ojales — si
- * no, la esquina se contaría dos veces.
+ * El dibujo del nesting las usa para mostrar dónde van los ojales; por eso
+ * salen del motor y no se recalculan en el front (si el reparto cambia, el
+ * dibujo tiene que cambiar con él).
+ */
+export interface PosicionOjal {
+  xMm: number;
+  yMm: number;
+  /** Lado que la generó. En una esquina compartida gana el primero en orden. */
+  lado: LadoPieza;
+}
+
+/** Redondeo a 0.1mm para deduplicar esquinas sin sufrir el error de punto flotante. */
+function clavePosicion(x: number, y: number): string {
+  return `${Math.round(x * 10)}:${Math.round(y * 10)}`;
+}
+
+/**
+ * Posiciones de los ojales de UNA pieza.
+ *
+ * Cada lado se divide en `ceil(L / separacion)` tramos iguales —así la
+ * separación real nunca supera el máximo— y lleva un ojal en cada punta de
+ * cada tramo, incluidos ambos extremos. Las posiciones de todos los lados se
+ * unen y **se deduplican**: una esquina compartida por dos lados adyacentes
+ * seleccionados es UN ojal, no dos.
  *
  * Ejemplo del diseño (1500×1000, cada 500mm, los 4 lados):
- *   horizontales: ceil(1500/500)=3 tramos → 4 posiciones c/u  →  8
- *   verticales:   ceil(1000/500)=2 tramos → 3 posiciones c/u  →  6
- *   esquinas compartidas                                       → −4
- *                                                        TOTAL = 10
+ *   superior:  4 posiciones (x = 0, 500, 1000, 1500)
+ *   inferior:  4
+ *   izquierdo: 3 posiciones (y = 0, 500, 1000)
+ *   derecho:   3
+ *   4 esquinas duplicadas                          → TOTAL = 10
  *
- * Sin `esquinasSiempre`, los lados sólo llevan los ojales intermedios
- * (`tramos − 1`) y no hay esquinas que descontar.
+ * Sin `esquinasSiempre`, los lados llevan sólo los ojales intermedios y no hay
+ * esquinas que deduplicar.
  */
+export function calcularPosicionesOjales(
+  anchoMm: number,
+  altoMm: number,
+  params: ParamsColocacionOjales,
+): PosicionOjal[] {
+  if (anchoMm <= 0 || altoMm <= 0) return [];
+
+  const vistas = new Set<string>();
+  const posiciones: PosicionOjal[] = [];
+
+  for (const lado of params.lados) {
+    const largoMm = largoDelLadoMm(lado, anchoMm, altoMm);
+    if (largoMm <= 0) continue;
+
+    const tramos = Math.ceil(largoMm / params.separacionMaxMm);
+    const desde = params.esquinasSiempre ? 0 : 1;
+    const hasta = params.esquinasSiempre ? tramos : tramos - 1;
+
+    for (let i = desde; i <= hasta; i++) {
+      const avance = (largoMm * i) / tramos;
+      const xMm =
+        lado === 'superior' || lado === 'inferior'
+          ? avance
+          : lado === 'izquierdo'
+            ? 0
+            : anchoMm;
+      const yMm =
+        lado === 'izquierdo' || lado === 'derecho'
+          ? avance
+          : lado === 'superior'
+            ? 0
+            : altoMm;
+
+      const clave = clavePosicion(xMm, yMm);
+      if (vistas.has(clave)) continue;
+      vistas.add(clave);
+      posiciones.push({ xMm, yMm, lado });
+    }
+  }
+
+  return posiciones;
+}
+
+/** Ojales de UNA pieza. La cantidad se DERIVA de las posiciones. */
 export function calcularOjalesPorPieza(
   anchoMm: number,
   altoMm: number,
   params: ParamsColocacionOjales,
 ): number {
-  if (anchoMm <= 0 || altoMm <= 0) return 0;
-
-  const posiciones = params.lados.reduce((acc, lado) => {
-    const largoMm = largoDelLadoMm(lado, anchoMm, altoMm);
-    if (largoMm <= 0) return acc;
-    const tramos = Math.ceil(largoMm / params.separacionMaxMm);
-    return acc + (params.esquinasSiempre ? tramos + 1 : Math.max(tramos - 1, 0));
-  }, 0);
-
-  if (!params.esquinasSiempre) return posiciones;
-
-  const esquinasCompartidas = ESQUINAS.filter(
-    ([a, b]) => params.lados.includes(a) && params.lados.includes(b),
-  ).length;
-
-  return Math.max(posiciones - esquinasCompartidas, 0);
+  return calcularPosicionesOjales(anchoMm, altoMm, params).length;
 }
 
 /**
@@ -94,17 +144,39 @@ export function calcularCantidadOjales(
   jobContext: JobContext,
   params: ParamsColocacionOjales,
 ): number {
-  const piezas = jobContext.piezasVisibles ?? jobContext.piezas;
-  if (!piezas || piezas.length === 0) return 0;
+  return calcularLayoutOjales(jobContext, params).reduce(
+    (acc, pieza) => acc + pieza.posiciones.length * pieza.cantidad,
+    0,
+  );
+}
 
-  return piezas.reduce((acc, pieza) => {
+export interface LayoutOjalesPieza {
+  /** Medida VISIBLE de la pieza — el marco sobre el que van las posiciones. */
+  anchoMm: number;
+  altoMm: number;
+  cantidad: number;
+  posiciones: PosicionOjal[];
+}
+
+/**
+ * Layout por pieza, para que el visor de nesting dibuje los ojales donde el
+ * motor los pensó. Se calcula sobre la medida VISIBLE (regla de oro): el ojal
+ * va al borde terminado, no crece con la demasía de un refuerzo previo.
+ */
+export function calcularLayoutOjales(
+  jobContext: JobContext,
+  params: ParamsColocacionOjales,
+): LayoutOjalesPieza[] {
+  const piezas = jobContext.piezasVisibles ?? jobContext.piezas;
+  if (!piezas || piezas.length === 0) return [];
+
+  return piezas.flatMap((pieza) => {
     const cantidad = Number(pieza.cantidad ?? 0);
-    if (cantidad <= 0) return acc;
-    const porPieza = calcularOjalesPorPieza(
-      Number(pieza.anchoMm ?? 0),
-      Number(pieza.altoMm ?? 0),
-      params,
-    );
-    return acc + porPieza * cantidad;
-  }, 0);
+    const anchoMm = Number(pieza.anchoMm ?? 0);
+    const altoMm = Number(pieza.altoMm ?? 0);
+    if (cantidad <= 0) return [];
+    const posiciones = calcularPosicionesOjales(anchoMm, altoMm, params);
+    if (posiciones.length === 0) return [];
+    return [{ anchoMm, altoMm, cantidad, posiciones }];
+  });
 }

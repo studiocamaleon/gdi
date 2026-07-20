@@ -31,7 +31,24 @@ const ETIQUETA_LADO: Record<string, string> = {
   derecho: "derecha",
 };
 
-const ORDEN_LADOS = ["superior", "inferior", "izquierdo", "derecho"];
+const ORDEN_LADOS = ["superior", "inferior", "izquierdo", "derecho"] as const;
+
+export type LadoPieza = (typeof ORDEN_LADOS)[number];
+
+export type DemasiaPorLado = Record<LadoPieza, number>;
+
+export interface PosicionOjalView {
+  xMm: number;
+  yMm: number;
+  lado: LadoPieza;
+}
+
+export interface LayoutOjalesView {
+  anchoMm: number;
+  altoMm: number;
+  cantidad: number;
+  posiciones: PosicionOjalView[];
+}
 
 export function etiquetaSubTipoModificacion(subTipo: string): string {
   return ETIQUETA_SUBTIPO[subTipo] ?? subTipo;
@@ -94,6 +111,39 @@ export function medidaAntesDespues(mutacion: MutacionAplicadaView) {
   const pieza = mutacion.piezas[0];
   if (!pieza) return null;
   return { antes: pieza.antes, despues: pieza.despues };
+}
+
+/**
+ * Demasía TOTAL de cada lado, acumulando todos los pasos PRE de la ruta.
+ *
+ * Un bolsillo arriba/abajo y un refuerzo lateral suman en ejes distintos; dos
+ * pasos sobre el mismo lado se suman. Es lo que el dibujo necesita para saber
+ * qué franja de la pieza es demasía y cuál es el área visible — no alcanza con
+ * `deltaAnchoMm`/`deltaAltoMm`, porque un bolsillo sólo arriba no es lo mismo
+ * que uno repartido arriba y abajo.
+ */
+export function demasiaPorLado(
+  pasos: Array<{ mutacionAplicada?: MutacionAplicadaView | null }>,
+): DemasiaPorLado {
+  const total: DemasiaPorLado = {
+    superior: 0,
+    inferior: 0,
+    izquierdo: 0,
+    derecho: 0,
+  };
+  for (const paso of pasos) {
+    const mutacion = paso.mutacionAplicada;
+    if (!mutacion) continue;
+    for (const lado of mutacion.lados) {
+      if (lado in total) total[lado as LadoPieza] += mutacion.demasiaMm;
+    }
+  }
+  return total;
+}
+
+/** true si algún lado recibió demasía. */
+export function tieneDemasia(demasia: DemasiaPorLado): boolean {
+  return ORDEN_LADOS.some((lado) => demasia[lado] > 0);
 }
 
 /**

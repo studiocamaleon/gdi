@@ -107,10 +107,12 @@ import {
 import { AgregarProductoSheet } from "@/components/comercial/agregar-producto-sheet";
 import {
   type MutacionAplicadaView,
+  demasiaPorLado,
   medidaAntesDespues,
   medidasDeCorte,
   porcentajeMaterialExtra,
   resumenModificacion,
+  tieneDemasia,
 } from "@/lib/modificaciones-fisicas";
 import { NestingViewer } from "@/components/nesting/nesting-viewer";
 import { listClientes } from "@/lib/clientes-api";
@@ -1649,6 +1651,18 @@ function ProduccionItemView({
     index: index + 1,
     paso,
   }));
+  // Overlay de modificaciones físicas: la demasía y los ojales viven en pasos
+  // HERMANOS del que trae el nesting (`modificacion_pre` y `colocacion_ojales`
+  // vs. la impresión), así que se arman acá y se pasan al visor.
+  const modificacionesOverlay = React.useMemo(() => {
+    const pasos = item.cotizacion.pasos;
+    const demasia = demasiaPorLado(pasos);
+    const ojales =
+      pasos.flatMap((paso) => paso.ojalesLayout ?? [])[0]?.posiciones ?? [];
+    if (!tieneDemasia(demasia) && ojales.length === 0) return undefined;
+    return { demasia, ojales };
+  }, [item.cotizacion.pasos]);
+
   const [activeNestingKey, setActiveNestingKey] = React.useState("");
   const activeNestingTab =
     nestingTabs.find((tab) => tab.key === activeNestingKey) ??
@@ -1776,6 +1790,7 @@ function ProduccionItemView({
                       ? 420
                       : 560
                   }
+                  modificaciones={modificacionesOverlay}
                 />
               </div>
             ) : null}
