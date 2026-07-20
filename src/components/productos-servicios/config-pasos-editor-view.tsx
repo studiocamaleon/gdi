@@ -4955,6 +4955,10 @@ export function ConfigPasosEditorView({
                                           cfg.fuenteCostoTercerizado ?? "matriz",
                                         maquinaM1Id: null,
                                         perfilM1Id: null,
+                                        // No se produce internamente: los
+                                        // multiplicadores (caras, tipoCopia) no
+                                        // aplican y no deben quedar persistidos.
+                                        multiplicadoresActivos: [],
                                       }
                                     : { tercerizado: false },
                                 )

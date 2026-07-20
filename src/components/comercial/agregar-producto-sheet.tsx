@@ -789,6 +789,9 @@ function routeUsesCaras(
     ruta?.configPasos.some(
       (config) =>
         includeConfig(config) &&
+        // Un paso tercerizado no se produce internamente: su costo sale de la
+        // matriz/tarifa del proveedor, no lo multiplican caras ni tipoCopia.
+        !config.tercerizado &&
         (config.multiplicadoresActivos.includes("caras") ||
           config.slotsMateriales.some((slot) => slot.aplicaMultiCaras)),
     ) ?? false
@@ -815,6 +818,7 @@ function routeUsesTipoCopia(
     ruta?.configPasos.some(
       (config) =>
         includeConfig(config) &&
+        !config.tercerizado &&
         (config.multiplicadoresActivos.includes("tipoCopia") ||
           condicionRefiereTipoCopia(config.condicionActivacionJson)),
     ) ?? false
@@ -4490,6 +4494,7 @@ function ApConfigStep({
         (config) =>
           isExecutableConfigPaso(config) &&
           includeVisibleConfig(config) &&
+          !config.tercerizado &&
           (config.multiplicadoresActivos.includes("caras") ||
             config.slotsMateriales.some((slot) => slot.aplicaMultiCaras)),
       ) ?? [],
