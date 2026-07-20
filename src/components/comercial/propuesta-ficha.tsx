@@ -76,6 +76,7 @@ import {
   type OrdenTrabajoProducto,
 } from "@/lib/ordenes-trabajo";
 import { ConfirmacionSalida } from "@/components/ui/confirmacion-salida";
+import { AvisoOtEnBorrador } from "@/components/comercial/aviso-ot-en-borrador";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import type { CobroDraft } from "@/components/administracion/cobro-formulario";
 import { PagosStagingTab } from "@/components/comercial/pagos-staging-tab";
@@ -125,6 +126,12 @@ type PropuestaFichaProps = {
    * el tag "RECIÉN EMITIDA" en esta visita y limpia el param de la URL.
    */
   recienEmitida?: boolean;
+  /**
+   * True al aterrizar desde la conversión de un presupuesto (?convertida=1):
+   * abre el aviso de que la orden quedó en BORRADOR y todavía no fue al
+   * taller. Ver <AvisoOtEnBorrador />.
+   */
+  recienConvertida?: boolean;
 };
 
 type OrdenTab =
@@ -4618,6 +4625,7 @@ export function PropuestaFicha({
   currentUser = null,
   orden: ordenProp,
   recienEmitida = false,
+  recienConvertida = false,
 }: PropuestaFichaProps) {
   // La OT vive en estado local (inicializada desde el prop del server) para
   // poder refrescar el header/stepper en vivo sin recargar la página cuando
@@ -4642,6 +4650,17 @@ export function PropuestaFicha({
     if (!recienEmitida) return;
     window.history.replaceState(null, "", window.location.pathname);
   }, [recienEmitida]);
+  // Aviso "quedó en borrador" al llegar desde una conversión. Sólo si la
+  // orden SIGUE en borrador: si alguien recarga con el param después de
+  // emitirla, no tiene sentido avisar. El param se limpia igual que el de
+  // emisión, para que un refresh o un link compartido no lo reabran.
+  const [avisoBorradorAbierto, setAvisoBorradorAbierto] = React.useState(
+    recienConvertida && ordenProp?.estado === "borrador",
+  );
+  React.useEffect(() => {
+    if (!recienConvertida) return;
+    window.history.replaceState(null, "", window.location.pathname);
+  }, [recienConvertida]);
   const [tipo, setTipo] = React.useState<TipoPropuesta>("orden_trabajo");
   const ordenTipo = tipoMap[tipo];
   const [tab, setTab] = React.useState<OrdenTab>("productos");
@@ -5105,6 +5124,14 @@ export function PropuestaFicha({
       setEmitiendoBorrador(false);
     }
   }, [orden, router]);
+
+  // Emitir desde el aviso de recién convertida. Se cierra pase lo que pase:
+  // si faltaba cliente o fecha, emitirBorrador ya avisó por toast y lo que
+  // corresponde es dejar la orden a la vista para corregirla.
+  const emitirDesdeAviso = React.useCallback(async () => {
+    await emitirBorrador();
+    setAvisoBorradorAbierto(false);
+  }, [emitirBorrador]);
 
   const descartarYSalir = React.useCallback(() => {
     if (!navPendiente) return;
@@ -6238,6 +6265,18 @@ export function PropuestaFicha({
       {emitiendo ? (
         <EmitOverlay numero={emisionNumero} onDone={finalizarEmision} />
       ) : null}
+
+      {/* Montado SIEMPRE y controlado por `open`, igual que los demás
+          modales de la ficha: montarlo condicionalmente agrega/saca un
+          consumidor de useId y desalinea los ids generados entre server y
+          cliente (hydration mismatch en el menú de usuario del topbar). */}
+      <AvisoOtEnBorrador
+        open={avisoBorradorAbierto && orden?.estado === "borrador"}
+        numero={orden?.numero ?? ""}
+        emitiendo={emitiendoBorrador}
+        onEmitirAhora={emitirDesdeAviso}
+        onEmitirDespues={() => setAvisoBorradorAbierto(false)}
+      />
 
       <ConfirmacionSalida
         open={navPendiente !== null}

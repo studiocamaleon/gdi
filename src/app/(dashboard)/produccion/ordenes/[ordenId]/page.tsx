@@ -18,7 +18,7 @@ export default async function OrdenTrabajoDetallePage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { ordenId } = await params;
-  const { emitida } = await searchParams;
+  const { emitida, convertida } = await searchParams;
 
   let detalle;
   try {
@@ -51,6 +51,7 @@ export default async function OrdenTrabajoDetallePage({
       initialClientes={clientes}
       initialProductos={productos}
       recienEmitida={emitida === "1"}
+      recienConvertida={convertida === "1"}
     />
   );
 }

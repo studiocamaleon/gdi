@@ -141,11 +141,25 @@ export function PresupuestoDetalleView({
   const itemsConvertibles = d.items.filter((i) => i.cotizacionItemId != null);
   const parcial = seleccion.size < itemsConvertibles.length;
 
-  const convertir = () =>
-    accion(async () => {
+  // Convertir lleva DERECHO a la orden, con ?convertida=1: allá se abre el
+  // aviso de que quedó en borrador. Antes esto era sólo un toast acá y era
+  // fácil creer que la orden ya estaba emitida y dejarla parada sin querer.
+  //
+  // No usa accion() porque ése recarga el presupuesto y hace router.refresh()
+  // al terminar: dos requests sobre una vista que estamos abandonando. En el
+  // camino feliz `trabajando` queda en true a propósito, para que no se pueda
+  // apretar dos veces mientras navega.
+  const convertir = async () => {
+    setTrabajando(true);
+    try {
       const res = await convertirPresupuesto(id, parcial ? { itemIds: [...seleccion] } : {});
-      toast.success(`Orden ${res.ordenNumero} creada en borrador — revisá la fecha de entrega y emitila.`);
-    }, "Presupuesto convertido.");
+      toast.success(`Presupuesto convertido en ${res.ordenNumero}.`);
+      router.push(`/produccion/ordenes/${res.ordenId}?convertida=1`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo convertir el presupuesto.");
+      setTrabajando(false);
+    }
+  };
 
   const meta = ESTADO_META[d.estado];
   const idxActual = FLUJO.indexOf(d.estado);
