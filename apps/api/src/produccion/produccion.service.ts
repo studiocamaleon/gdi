@@ -456,6 +456,7 @@ export class ProduccionService {
                 indice: true,
                 familiaCodigo: true,
                 estado: true,
+                tipoEjecucion: true,
                 rutaPasoId: true,
                 duracionEstimadaMin: true,
               },
@@ -473,6 +474,8 @@ export class ProduccionService {
         if (!frontera || frontera.familiaCodigo !== 'impresion_por_area') continue;
         // Bloqueado no es imprimible ni completable: el tablero lo señala.
         if (frontera.estado === 'bloqueado') continue;
+        // El tercerizado lo imprime el proveedor: vive en Compras, no en el taller.
+        if (frontera.tipoEjecucion === 'tercerizado') continue;
         jobs.push(buildSimuladorJob(orden, item, frontera));
       }
     }
@@ -583,6 +586,7 @@ export class ProduccionService {
                 nombre: true,
                 familiaCodigo: true,
                 estado: true,
+                tipoEjecucion: true,
                 rutaPasoId: true,
                 centroCostoId: true,
                 centroCostoNombre: true,
@@ -601,6 +605,8 @@ export class ProduccionService {
         const frontera = item.pasos.find((paso) => paso.estado !== 'hecho');
         if (!frontera || frontera.familiaCodigo !== 'impresion_por_hoja') continue;
         if (frontera.estado === 'bloqueado') continue;
+        // El tercerizado lo imprime el proveedor: vive en Compras, no en el taller.
+        if (frontera.tipoEjecucion === 'tercerizado') continue;
         jobs.push(buildLaserJob(orden, item, frontera));
       }
     }
