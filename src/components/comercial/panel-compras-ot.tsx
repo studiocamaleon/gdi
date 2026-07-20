@@ -31,7 +31,17 @@ export function PanelComprasOt({
   const compras = items.flatMap((item) =>
     item.pasos
       .filter((paso) => paso.tipoEjecucion === "tercerizado")
-      .map((paso) => ({ paso, item })),
+      .map((paso) => ({
+        paso,
+        item,
+        // La ruta es una SECUENCIA también para las compras: no se le puede
+        // pedir al proveedor hasta que lo anterior esté hecho (ej. el diseño
+        // gráfico que hay que mandarle). El backend lo valida igual.
+        esperandoA:
+          item.pasos.find(
+            (otro) => otro.indice < paso.indice && otro.estado !== "hecho",
+          )?.nombre ?? null,
+      })),
   );
   if (compras.length === 0) return null;
 
@@ -59,9 +69,10 @@ export function PanelComprasOt({
         <span className="sub">Pasos que compramos a un proveedor (fuera del tablero)</span>
       </div>
       <div style={{ display: "flex", flexDirection: "column" }}>
-        {compras.map(({ paso, item }) => {
+        {compras.map(({ paso, item, esperandoA }) => {
           const actual = paso.estadoCompra ?? "pendiente";
           const idxActual = ESTADOS.indexOf(actual as (typeof ESTADOS)[number]);
+          const bloqueada = Boolean(esperandoA);
           return (
             <div
               key={paso.id}
@@ -92,24 +103,44 @@ export function PanelComprasOt({
                   </div>
                 </div>
               </div>
+              {bloqueada ? (
+                <div style={{ fontSize: 12, color: "var(--muted-text-2)" }}>
+                  Esperando a <b style={{ fontWeight: 600 }}>{esperandoA}</b> para
+                  poder pedirle al proveedor.
+                </div>
+              ) : null}
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {ESTADOS.map((estado, i) => {
                   const activo = i <= idxActual;
+                  // Volver a "pendiente" siempre se permite (es deshacer).
+                  const deshabilitado =
+                    saving === paso.id ||
+                    estado === actual ||
+                    (bloqueada && estado !== "pendiente");
                   return (
                     <button
                       key={estado}
                       type="button"
-                      disabled={saving === paso.id || estado === actual}
+                      disabled={deshabilitado}
+                      title={
+                        bloqueada && estado !== "pendiente"
+                          ? `Falta completar "${esperandoA}"`
+                          : undefined
+                      }
                       onClick={() => avanzar(paso.id, estado)}
                       style={{
                         fontSize: 12,
                         padding: "5px 12px",
                         borderRadius: 6,
-                        cursor: estado === actual ? "default" : "pointer",
+                        cursor: deshabilitado ? "default" : "pointer",
                         border: `1px solid ${activo ? "var(--ink)" : "var(--hairline)"}`,
                         background: activo ? "var(--ink)" : "transparent",
                         color: activo ? "#fff" : "var(--muted-text)",
-                        opacity: saving === paso.id ? 0.6 : 1,
+                        opacity:
+                          saving === paso.id ||
+                          (bloqueada && estado !== "pendiente" && !activo)
+                            ? 0.45
+                            : 1,
                       }}
                     >
                       {LABEL[estado]}

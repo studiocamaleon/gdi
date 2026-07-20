@@ -2219,6 +2219,25 @@ export class OrdenesTrabajoService {
       if (paso.tipoEjecucion !== 'tercerizado') {
         throw new BadRequestException('El paso no es una compra tercerizada.');
       }
+      // La ruta es una SECUENCIA también para las compras: no se le puede pedir
+      // al proveedor hasta que lo anterior esté hecho (ej. el diseño gráfico que
+      // hay que mandarle). Volver a 'pendiente' siempre se permite (es deshacer).
+      if (estadoCompra !== 'pendiente') {
+        const previoPendiente = await tx.ordenTrabajoItemPaso.findFirst({
+          where: {
+            itemId: paso.itemId,
+            indice: { lt: paso.indice },
+            estado: { not: 'hecho' },
+          },
+          orderBy: { indice: 'asc' },
+          select: { nombre: true },
+        });
+        if (previoPendiente) {
+          throw new BadRequestException(
+            `No se puede avanzar la compra: falta completar "${previoPendiente.nombre}".`,
+          );
+        }
+      }
       const recibido =
         estadoCompra === 'recibido' || estadoCompra === 'entregado';
       await tx.ordenTrabajoItemPaso.update({
