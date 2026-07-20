@@ -13,12 +13,14 @@ import {
   CreditCardIcon,
   Edit3Icon,
   ExternalLinkIcon,
+  ExpandIcon,
   FactoryIcon,
   FileIcon,
   FolderIcon,
   HistoryIcon,
   PackageIcon,
   PlusIcon,
+  LinkIcon,
   ReceiptTextIcon,
   SaveIcon,
   SearchIcon,
@@ -2883,7 +2885,8 @@ function CostosItemView({
                               className="cost-chip"
                               title="El tiempo de este paso lo estimó el comercial al cotizar; no sale del cálculo del motor."
                             >
-                              ⏱ estimado por el comercial
+                              <ClockIcon aria-hidden="true" />
+                              Tiempo estimado
                             </span>
                           ) : null}
                           {paso.activadoPorDependencia ? (
@@ -2891,7 +2894,8 @@ function CostosItemView({
                               className="cost-chip"
                               title={`Se activó automáticamente porque "${paso.activadoPorDependencia.requeridoPorNombre}" lo necesita. No se puede quitar mientras ese paso esté activo.`}
                             >
-                              🔗 lo exige{" "}
+                              <LinkIcon aria-hidden="true" />
+                              Lo exige{" "}
                               {paso.activadoPorDependencia.requeridoPorNombre}
                             </span>
                           ) : null}
@@ -2902,7 +2906,8 @@ function CostosItemView({
                                 paso.mutacionAplicada,
                               )}. El material se corta más grande que la medida pedida; abrí el paso para ver el detalle.`}
                             >
-                              📐 agranda la medida
+                              <ExpandIcon aria-hidden="true" />
+                              Agranda la medida
                             </span>
                           ) : null}
                         </div>
