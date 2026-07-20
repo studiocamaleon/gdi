@@ -18,6 +18,7 @@ import {
   StarIcon,
   XIcon,
 } from "lucide-react";
+import { buildConfigPasoRuntime } from "@/lib/params-comercial";
 import { toast } from "sonner";
 
 import {
@@ -222,6 +223,12 @@ type MotorConfigState = {
   seleccionModoColor: Record<string, string>;
   /** Valores de eje elegidos por paso tercerizado con matriz (`tercerizado_<configPasoId>`). */
   seleccionTercerizado: Record<string, Record<string, string>>;
+  /**
+   * Params del paso que el modelador dejó abiertos y el comercial cambió
+   * (`configPasoRuntime[configPasoId]` al motor). Ausente = usar la sugerencia.
+   * Ver docs/modificaciones-fisicas-lona-diseno.md
+   */
+  paramsComercial: Record<string, Record<string, unknown>>;
   modoCotizacionLineal: ModoCotizacionLineal;
   zonaInstalacion: string;
   m2Instalados: number;
@@ -401,6 +408,7 @@ const DEFAULT_MOTOR_CONFIG: MotorConfigState = {
   seleccionPerfil: {},
   seleccionModoColor: {},
   seleccionTercerizado: {},
+  paramsComercial: {},
   modoCotizacionLineal: "nesting",
   zonaInstalacion: "CABA",
   m2Instalados: 0,
@@ -2327,6 +2335,19 @@ function buildJobContext(
       ? { ...elegidos, cantidad: String(qty) }
       : elegidos;
     if (Object.keys(valores).length > 0) ctx[`tercerizado_${cp.id}`] = valores;
+  }
+
+  // Params abiertos al comercial: sólo de pasos ACTIVOS y sólo lo que cambió.
+  // Quedan en el snapshot del ítem, así que llegan a la OT.
+  const runtimeParams = buildConfigPasoRuntime(
+    rutaSel?.configPasos ?? [],
+    config.paramsComercial ?? {},
+    (configPasoId, modoActivacion) =>
+      modoActivacion !== "OPCIONAL" ||
+      Boolean(config.opcionalesActivados[configPasoId]),
+  );
+  if (Object.keys(runtimeParams).length > 0) {
+    ctx.configPasoRuntime = runtimeParams;
   }
 
   const tecnologiasActivas = new Set<string>();

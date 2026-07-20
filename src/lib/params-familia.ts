@@ -106,6 +106,34 @@ export function toggleMultiEnum(
  * Estado de un checkbox booleano: el valor guardado si existe, si no el
  * default del schema (y `true` cuando el schema tampoco lo declara).
  */
+/**
+ * Campos que el modelador dejó abiertos para que el comercial los cambie al
+ * cotizar. Lo modelado pasa a ser la SUGERENCIA.
+ * Espejo de `apps/api/src/motor-universal/params-runtime.ts`.
+ */
+export const CAMPO_EDITABLES = "camposEditablesComercial";
+
+export function camposEditablesComercial(
+  params: Record<string, unknown>,
+): string[] {
+  const declarados = params[CAMPO_EDITABLES];
+  if (!Array.isArray(declarados)) return [];
+  return declarados.filter((c): c is string => typeof c === "string");
+}
+
+/** Patch al marcar/desmarcar "el comercial puede cambiarlo" en un campo. */
+export function toggleCampoEditable(
+  params: Record<string, unknown>,
+  campo: string,
+  abierto: boolean,
+): Record<string, unknown> {
+  const actuales = camposEditablesComercial(params);
+  const siguiente = abierto
+    ? Array.from(new Set([...actuales, campo]))
+    : actuales.filter((c) => c !== campo);
+  return { [CAMPO_EDITABLES]: siguiente };
+}
+
 export function valorBooleanoParam(
   valorGuardado: unknown,
   defaultSchema: unknown,

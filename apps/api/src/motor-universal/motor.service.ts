@@ -68,6 +68,7 @@ import {
   congelarMedidaVisible,
 } from './job-context-metrics';
 import { resolverArrastreOpcionales } from './arrastre-opcionales';
+import { paramsEfectivos } from './params-runtime';
 import {
   aplicarMutacionPre,
   calcularMetrosLinealesUnion,
@@ -393,6 +394,20 @@ export class MotorUniversalService {
     private readonly preciosEspecialesClientes: PreciosEspecialesClientesService,
   ) {}
 
+  /**
+   * Params del paso con los campos que el modelador dejó ABIERTOS pisados por
+   * lo que eligió el comercial. Ver `params-runtime.ts`.
+   */
+  private paramsEfectivosDelPaso(
+    paso: { configPasoId: string; paramsPasoJson?: unknown },
+    jobContext: JobContext,
+  ): Record<string, unknown> {
+    return paramsEfectivos(
+      paso.paramsPasoJson,
+      jobContext.configPasoRuntime?.[paso.configPasoId],
+    );
+  }
+
   private valueToMessage(value: unknown) {
     if (value === null || value === undefined) {
       return '?';
@@ -609,7 +624,9 @@ export class MotorUniversalService {
       // (impresión, nesting, material) leen la medida agrandada.
       // Ver docs/modificaciones-fisicas-lona-diseno.md §6.1.
       if (paso.familiaCodigo === 'modificacion_pre' && ejecucion.activado) {
-        const params = parsearParamsModificacionPre(paso.paramsPasoJson);
+        const params = parsearParamsModificacionPre(
+          this.paramsEfectivosDelPaso(paso, jobContext),
+        );
         if (!params) {
           // Corta la cotización a propósito: un PRE activo pero sin lados ni
           // demasía dejaría la medida de material sin agrandar y cobraría de
@@ -636,7 +653,9 @@ export class MotorUniversalService {
       // Misma lógica para ojales: sin separación ni lados la cantidad sale 0 y
       // el paso no cobra nada, otra vez en silencio.
       if (paso.familiaCodigo === 'colocacion_ojales' && ejecucion.activado) {
-        const paramsOjales = parsearParamsColocacionOjales(paso.paramsPasoJson);
+        const paramsOjales = parsearParamsColocacionOjales(
+          this.paramsEfectivosDelPaso(paso, jobContext),
+        );
         if (paramsOjales) {
           // Layout para el visor de nesting: dónde va cada ojal.
           const layout = calcularLayoutOjales(jobContext, paramsOjales);
@@ -4719,14 +4738,18 @@ export class MotorUniversalService {
       // unión sobre la medida VISIBLE (la costura corre por el borde
       // terminado, no crece con la demasía). Es el driver del tiempo T-2.
       if (paso.familiaCodigo === 'modificacion_pre') {
-        const params = parsearParamsModificacionPre(paso.paramsPasoJson);
+        const params = parsearParamsModificacionPre(
+          this.paramsEfectivosDelPaso(paso, jobContext),
+        );
         if (params) return calcularMetrosLinealesUnion(jobContext, params);
         return 0;
       }
       // Etapa C — `colocacion_ojales` deriva su cantidad del perímetro VISIBLE
       // (el ojal va al borde terminado, no crece con la demasía del refuerzo).
       if (paso.familiaCodigo === 'colocacion_ojales') {
-        const params = parsearParamsColocacionOjales(paso.paramsPasoJson);
+        const params = parsearParamsColocacionOjales(
+          this.paramsEfectivosDelPaso(paso, jobContext),
+        );
         if (params) return calcularCantidadOjales(jobContext, params);
         return 0;
       }

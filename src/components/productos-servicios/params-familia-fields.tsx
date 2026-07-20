@@ -7,8 +7,10 @@ import type { FamiliaListItem } from "@/lib/productos-servicios";
 import {
   DESCRIPCIONES_VALOR_PARAM,
   FAMILIAS_CON_PARAMS_EDITABLES,
+  camposEditablesComercial,
   etiquetaValorParam,
   patchParaEnum,
+  toggleCampoEditable,
   toggleMultiEnum,
   valorBooleanoParam,
 } from "@/lib/params-familia";
@@ -50,6 +52,27 @@ export function ParamsFamiliaFields({
     return null;
   }
 
+  const abiertos = camposEditablesComercial(params);
+
+  /**
+   * Deja que el comercial cambie este campo al cotizar. Lo modelado pasa a ser
+   * la sugerencia. `subTipo` queda afuera: es el preset que define de qué
+   * modificación se trata, no un dato de la cotización.
+   */
+  const renderToggleEditable = (param: ParamSchema) =>
+    param.campo === "subTipo" ? null : (
+      <label className="text-muted-foreground mt-1 flex items-center gap-1.5 text-xs">
+        <input
+          type="checkbox"
+          checked={abiertos.includes(param.campo)}
+          onChange={(e) =>
+            onChange(toggleCampoEditable(params, param.campo, e.target.checked))
+          }
+        />
+        El comercial puede cambiarlo al cotizar
+      </label>
+    );
+
   const renderCampo = (param: ParamSchema) => {
     const valor = params[param.campo];
 
@@ -69,6 +92,7 @@ export function ParamsFamiliaFields({
             options={opcionesDeEnum(param.valoresPermitidos ?? [])}
             placeholder="Elegir"
           />
+          {renderToggleEditable(param)}
         </div>
       );
     }
@@ -94,6 +118,7 @@ export function ParamsFamiliaFields({
             }
             placeholder="mm"
           />
+          {renderToggleEditable(param)}
         </div>
       );
     }
@@ -138,6 +163,7 @@ export function ParamsFamiliaFields({
               la cotización va a cortar.
             </span>
           ) : null}
+          {renderToggleEditable(param)}
         </div>
       );
     }
@@ -160,6 +186,7 @@ export function ParamsFamiliaFields({
               ) : null}
             </span>
           </label>
+          {renderToggleEditable(param)}
         </div>
       );
     }

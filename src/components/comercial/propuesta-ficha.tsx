@@ -2895,7 +2895,7 @@ function CostosItemView({
                               title={`Se activó automáticamente porque "${paso.activadoPorDependencia.requeridoPorNombre}" lo necesita. No se puede quitar mientras ese paso esté activo.`}
                             >
                               <LinkIcon aria-hidden="true" />
-                              Lo exige{" "}
+                              Exigido por{" "}
                               {paso.activadoPorDependencia.requeridoPorNombre}
                             </span>
                           ) : null}
