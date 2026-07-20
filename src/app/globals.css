@@ -13434,6 +13434,24 @@ body {
   color: #fff;
 }
 
+/* Iconos y avatares de tamaño fijo que viven en una fila flex junto a texto: sin
+   flex-shrink:0 el navegador los comprime cuando el texto es largo y quedan
+   ovalados/cortados. El que tiene que acomodarse es el texto. */
+.tablero-produccion .kan-step-ico,
+.tablero-produccion .kan-step-ico svg,
+.tablero-produccion .av,
+.tablero-produccion .mini-av,
+.tablero-produccion .ri-dot,
+.tablero-produccion .ds-dot,
+.tablero-produccion .file-row .kind {
+  flex-shrink: 0;
+}
+
+/* …y el texto es el que absorbe la falta de espacio. */
+.tablero-produccion .kan-step > div {
+  min-width: 0;
+}
+
 .tablero-produccion .kan-step .tec {
   color: var(--ink);
   font-size: 12.5px;
