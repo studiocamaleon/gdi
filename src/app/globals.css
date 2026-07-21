@@ -30453,7 +30453,7 @@ body:has(.t-app) {
 .tablero-produccion .simu-day {
   position: absolute;
   top: 0;
-  height: 34px;
+  height: 19px;
   border-left: 1px solid var(--simu-hair);
   display: flex;
   align-items: center;
@@ -30461,6 +30461,30 @@ body:has(.t-app) {
 }
 
 .tablero-produccion .simu-day.wk { border-left-color: var(--simu-line); }
+
+/* Ticks horarios: viven en la mitad de abajo del eje, sin pelear con la
+   etiqueta del día. */
+.tablero-produccion .simu-hora {
+  position: absolute;
+  bottom: 0;
+  height: 15px;
+  border-left: 1px solid var(--simu-hair);
+  padding-left: 4px;
+  pointer-events: none;
+}
+
+.tablero-produccion .simu-hora span {
+  font-family: var(--simu-mono);
+  font-size: 8.5px;
+  color: var(--simu-ink-3);
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tablero-produccion .simu-gridline.hora {
+  background: color-mix(in oklab, var(--simu-hair) 55%, transparent);
+}
 
 .tablero-produccion .simu-day span {
   font-family: var(--simu-mono);

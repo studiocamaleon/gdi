@@ -917,6 +917,7 @@ export class ProduccionService {
     });
     return {
       margenEtaDias: row?.margenEtaDias ?? 0,
+      tiempoEntrePasosMin: row?.tiempoEntrePasosMin ?? 0,
       corteJornada: row?.corteJornada ?? '20:00',
     };
   }
@@ -930,6 +931,7 @@ export class ProduccionService {
       create: {
         tenantId: auth.tenantId,
         margenEtaDias: payload.margenEtaDias,
+        tiempoEntrePasosMin: payload.tiempoEntrePasosMin ?? 0,
         ...(payload.corteJornada ? { corteJornada: payload.corteJornada } : {}),
       },
       update: {
@@ -937,7 +939,11 @@ export class ProduccionService {
         ...(payload.corteJornada ? { corteJornada: payload.corteJornada } : {}),
       },
     });
-    return { margenEtaDias: row.margenEtaDias, corteJornada: row.corteJornada };
+    return {
+      margenEtaDias: row.margenEtaDias,
+      corteJornada: row.corteJornada,
+      tiempoEntrePasosMin: row.tiempoEntrePasosMin,
+    };
   }
 
   // ── Días no laborables (feriados y cierres del taller) ───────────────
@@ -1151,6 +1157,7 @@ export class ProduccionService {
             etapa: payload.etapa ?? 'preprensa',
             icono: payload.icono?.trim() || null,
             capacidadConcurrente: payload.capacidadConcurrente ?? 1,
+            tiempoPreparacionMin: payload.tiempoPreparacionMin ?? null,
             calendarioJson: calendarioAJson(parseCalendario(payload.calendario)),
           },
         });
@@ -1191,6 +1198,10 @@ export class ProduccionService {
             icono: payload.icono?.trim() || null,
             capacidadConcurrente:
               payload.capacidadConcurrente ?? existing.capacidadConcurrente,
+            tiempoPreparacionMin:
+              payload.tiempoPreparacionMin !== undefined
+                ? payload.tiempoPreparacionMin
+                : existing.tiempoPreparacionMin,
             // undefined = no tocar; null explícito = borrar el calendario.
             calendarioJson:
               payload.calendario === undefined
@@ -1259,6 +1270,7 @@ export class ProduccionService {
       etapa: item.etapa,
       icono: item.icono,
       capacidadConcurrente: item.capacidadConcurrente,
+      tiempoPreparacionMin: item.tiempoPreparacionMin,
       calendario: (item.calendarioJson as CalendarioEstacion | null) ?? null,
       familias: item.familias.map((fila) => fila.familiaCodigo),
       empleados: item.empleados.map((fila) => ({

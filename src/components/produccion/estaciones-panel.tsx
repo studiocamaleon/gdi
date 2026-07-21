@@ -162,6 +162,7 @@ function FeriadosSheet({ onClose }: { onClose: () => void }) {
   const [error, setError] = React.useState<string | null>(null);
   const [margen, setMargen] = React.useState<number | null>(null);
   const [corte, setCorte] = React.useState<string | null>(null);
+  const [entrePasos, setEntrePasos] = React.useState<number | null>(null);
   const fechaRef = React.useRef<HTMLInputElement | null>(null);
 
   React.useEffect(() => {
@@ -174,11 +175,13 @@ function FeriadosSheet({ onClose }: { onClose: () => void }) {
         if (!vigente) return;
         setMargen(config.margenEtaDias);
         setCorte(config.corteJornada);
+        setEntrePasos(config.tiempoEntrePasosMin);
       })
       .catch(() => {
         if (!vigente) return;
         setMargen(0);
         setCorte("20:00");
+        setEntrePasos(0);
       });
     return () => { vigente = false; };
   }, []);
@@ -186,8 +189,23 @@ function FeriadosSheet({ onClose }: { onClose: () => void }) {
   const cambiarMargen = (valor: number) => {
     const acotado = Math.max(0, Math.min(15, valor));
     setMargen(acotado); // optimista: el stepper responde al click
-    actualizarConfiguracionProduccion({ margenEtaDias: acotado }).catch(() => {
+    actualizarConfiguracionProduccion({
+      margenEtaDias: acotado,
+      tiempoEntrePasosMin: entrePasos ?? 0,
+    }).catch(() => {
       setError("No se pudo guardar el margen.");
+    });
+  };
+
+  /** Minutos que cuesta llevar el material a la próxima estación. */
+  const cambiarEntrePasos = (valor: number) => {
+    const acotado = Math.max(0, Math.min(240, valor));
+    setEntrePasos(acotado);
+    actualizarConfiguracionProduccion({
+      margenEtaDias: margen ?? 0,
+      tiempoEntrePasosMin: acotado,
+    }).catch(() => {
+      setError("No se pudo guardar el tiempo entre pasos.");
     });
   };
 
@@ -196,6 +214,7 @@ function FeriadosSheet({ onClose }: { onClose: () => void }) {
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(valor)) return;
     actualizarConfiguracionProduccion({
       margenEtaDias: margen ?? 0,
+      tiempoEntrePasosMin: entrePasos ?? 0,
       corteJornada: valor,
     }).catch(() => {
       setError("No se pudo guardar el corte de jornada.");
@@ -257,7 +276,21 @@ function FeriadosSheet({ onClose }: { onClose: () => void }) {
             <div className="feriados-empty">Cargando…</div>
           )}
 
-          <div className="est-section-head" style={{ marginTop: 18 }}><span className="num">02</span><div><div className="ttl">Corte de jornada</div><div className="sub">Hora a la que los cronómetros de pasos que quedaron corriendo se cierran solos (el tiempo no sigue sumando de noche ni el fin de semana).</div></div></div>
+          <div className="est-section-head" style={{ marginTop: 18 }}><span className="num">02</span><div><div className="ttl">Tiempo entre pasos</div><div className="sub">Lo que cuesta llevar el material a la próxima estación y dejarlo listo. Cada estación puede declarar el suyo; esto es el valor por defecto.</div></div></div>
+          {entrePasos !== null ? (
+            <Stepper
+              label="Minutos de traslado"
+              value={entrePasos}
+              min={0}
+              step={5}
+              onChange={cambiarEntrePasos}
+              help="Nadie termina 9:35 y arranca otro paso 9:35. Lo hace el operario, así que ocupa un puesto de la estación destino — pero no su máquina. 0 = sin colchón."
+            />
+          ) : (
+            <div className="feriados-empty">Cargando…</div>
+          )}
+
+          <div className="est-section-head" style={{ marginTop: 18 }}><span className="num">03</span><div><div className="ttl">Corte de jornada</div><div className="sub">Hora a la que los cronómetros de pasos que quedaron corriendo se cierran solos (el tiempo no sigue sumando de noche ni el fin de semana).</div></div></div>
           {corte !== null ? (
             <div className="feriados-add" style={{ maxWidth: 220 }}>
               <input
@@ -272,7 +305,7 @@ function FeriadosSheet({ onClose }: { onClose: () => void }) {
             <div className="feriados-empty">Cargando…</div>
           )}
 
-          <div className="est-section-head" style={{ marginTop: 18 }}><span className="num">03</span><div><div className="ttl">Feriados y cierres</div><div className="sub">Días en que el taller no trabaja: no aportan capacidad en ninguna proyección.</div></div></div>
+          <div className="est-section-head" style={{ marginTop: 18 }}><span className="num">04</span><div><div className="ttl">Feriados y cierres</div><div className="sub">Días en que el taller no trabaja: no aportan capacidad en ninguna proyección.</div></div></div>
           <div className="feriados-add">
             <input
               ref={fechaRef}

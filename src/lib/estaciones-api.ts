@@ -64,6 +64,7 @@ export async function eliminarDiaNoLaborable(id: string) {
  */
 export type ConfiguracionProduccion = {
   margenEtaDias: number;
+  tiempoEntrePasosMin: number;
   /** "HH:mm". */
   corteJornada: string;
 };
@@ -74,6 +75,7 @@ export async function getConfiguracionProduccion() {
 
 export async function actualizarConfiguracionProduccion(payload: {
   margenEtaDias: number;
+  tiempoEntrePasosMin: number;
   corteJornada?: string;
 }) {
   return apiRequest<ConfiguracionProduccion>("/produccion/configuracion", {

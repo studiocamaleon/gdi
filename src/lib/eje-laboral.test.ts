@@ -26,6 +26,7 @@ function estacion(id: string, calendario: CalendarioEstacion | null): Estacion {
     etapa: "impresion",
     icono: null,
     capacidadConcurrente: 1,
+    tiempoPreparacionMin: null,
     calendario,
     familias: [],
     empleados: [],

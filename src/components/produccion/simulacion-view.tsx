@@ -47,6 +47,21 @@ const ZOOMS: Array<[string, number]> = [
   ["Hora", 1.6],
 ];
 
+/**
+ * Intervalo de los ticks horarios según cuánto mide una jornada en pantalla.
+ * Calibrado sobre jornadas reales (~540 min): a zoom "Día" son ~243 px.
+ */
+function pasoHorario(jornadaPx: number): number | null {
+  if (jornadaPx > 1100) return 30;
+  if (jornadaPx > 450) return 60;
+  if (jornadaPx > 170) return 120;
+  if (jornadaPx > 80) return 180;
+  return null;
+}
+
+/** Debajo de esto la etiqueta se pisa con la de al lado: queda sólo el tick. */
+const ANCHO_MIN_ETIQUETA = 30;
+
 const DIA_CORTO = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
 const hhmm = (d: Date) =>
   `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
@@ -77,6 +92,9 @@ type Bloque = {
   tercerizado: boolean;
   enCurso: boolean;
   candidatos: number | null;
+  preparacionMin: number;
+  /** Cuándo entra la máquina: el inicio más el traslado. */
+  inicioTrabajo: Date;
   tarde: boolean;
   entrega: string | null;
   fila: number;
@@ -101,6 +119,7 @@ export function SimulacionView({
   noLaborables,
   onOpen,
   vistaInicial = "mesa",
+  zoomInicial = 0.16,
 }: {
   items: TableroItemData[];
   estaciones: Estacion[];
@@ -108,9 +127,11 @@ export function SimulacionView({
   noLaborables: Set<string>;
   onOpen: (itemId: string) => void;
   vistaInicial?: "mesa" | "proj";
+  /** px por minuto laboral. Ver ZOOMS. */
+  zoomInicial?: number;
 }) {
   const [vista, setVista] = React.useState<"mesa" | "proj">(vistaInicial);
-  const [z, setZ] = React.useState(0.16);
+  const [z, setZ] = React.useState(zoomInicial);
   const [corte, setCorte] = React.useState<number | null>(null);
   const [soloTarde, setSoloTarde] = React.useState(false);
   const [consulta, setConsulta] = React.useState("");
@@ -480,6 +501,30 @@ function LineaDeTiempo({
   const ancho = (eje.dias.length * eje.jornadaMin) * z + 60;
   const hiloOT = focoOTs && focoOTs.size === 1 ? [...focoOTs][0] : null;
 
+  /* Las horas reales del taller dentro de cada jornada. El eje son minutos
+     laborales, así que la hora se reconstruye desde el inicio de la ventana. */
+  const intervalo = pasoHorario(eje.jornadaMin * z);
+  const ticks: Array<{ key: string; x: number; etiqueta: string }> = [];
+  if (intervalo) {
+    for (const dia of eje.dias) {
+      // Primer múltiplo del intervalo dentro de la jornada, sin pisar el
+      // borde del día (que ya lleva la etiqueta de la fecha).
+      const primero = Math.ceil(eje.ventana.desde / intervalo) * intervalo;
+      for (let min = primero; min < eje.ventana.hasta; min += intervalo) {
+        const offset = min - eje.ventana.desde;
+        if (offset <= 0) continue;
+        ticks.push({
+          key: `${dia.fecha}-${min}`,
+          x: dia.x + offset,
+          etiqueta:
+            intervalo * z >= ANCHO_MIN_ETIQUETA
+              ? `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`
+              : "",
+        });
+      }
+    }
+  }
+
   return (
     <>
       <div className="simu-legend">
@@ -545,6 +590,11 @@ function LineaDeTiempo({
                   {eje.jornadaMin * z > 46 ? <span>{d.etiqueta}</span> : null}
                 </div>
               ))}
+              {ticks.map((t) => (
+                <div key={t.key} className="simu-hora" style={{ left: t.x * z }}>
+                  <span>{t.etiqueta}</span>
+                </div>
+              ))}
             </div>
 
             <div className="simu-lanes">
@@ -556,6 +606,9 @@ function LineaDeTiempo({
                 >
                   {eje.dias.map((d) => (
                     <div key={d.fecha} className="simu-gridline" style={{ left: d.x * z }} />
+                  ))}
+                  {ticks.map((t) => (
+                    <div key={t.key} className="simu-gridline hora" style={{ left: t.x * z }} />
                   ))}
                   {c.bloques.map((b) => {
                     const col = tintaDe(b.ot, otsInfo);
@@ -864,8 +917,8 @@ function Inspector({
   if (b.esperaMin > 0)
     notas.push(
       <div key="e" className="simu-note">
-        Esperó <b>{horas(b.esperaMin)}</b> a que se liberara un puesto en {b.estNombre}. El
-        trabajo estaba listo antes, pero la estación estaba ocupada.
+        Esperó <b>{horas(b.esperaMin)}</b> en {b.estNombre} a que se liberara un puesto o
+        la máquina. El trabajo estaba listo antes, pero el recurso estaba ocupado.
       </div>,
     );
   if (b.tercerizado)
@@ -886,6 +939,14 @@ function Inspector({
     notas.push(
       <div key="z" className="simu-note">
         Duración cero real: el paso existe en la ruta pero no consume tiempo de máquina.
+      </div>,
+    );
+  if (b.preparacionMin > 0)
+    notas.push(
+      <div key="p" className="simu-note">
+        Antes de trabajar hay <b>{b.preparacionMin} min</b> de traslado: el operario va a
+        buscar el material. Ocupa un puesto de {b.estNombre}, pero no su máquina — la
+        máquina recién entra a las <b>{hhmm(b.inicioTrabajo)}</b>.
       </div>,
     );
   if (b.enCurso)
@@ -943,6 +1004,9 @@ function Inspector({
             <Fila k="Plazo proveedor" v={`${b.plazoDias} días`} />
           )}
           <Fila k="Espera previa" v={b.esperaMin > 0 ? horas(b.esperaMin) : "—"} />
+          {b.preparacionMin > 0 ? (
+            <Fila k="Traslado" v={`${b.preparacionMin} min`} />
+          ) : null}
           <Fila k="Paso nº" v={String(b.pasoIndice)} />
           {b.entrega ? <Fila k="Entrega" v={b.entrega} /> : null}
         </div>
@@ -1025,6 +1089,8 @@ function construir(
         tercerizado: p.tercerizado,
         enCurso: p.enCurso,
         candidatos: p.candidatos,
+        preparacionMin: p.preparacionMin,
+        inicioTrabajo: p.inicioTrabajo,
         tarde: !!(entrega && eta?.finEstimado && eta.finEstimado > entrega),
         entrega: entrega ? diaCorto(entrega) : null,
         fila: 0,

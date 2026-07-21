@@ -1,6 +1,7 @@
 import { TableroProduccion } from "@/components/produccion/tablero-produccion";
 import { getTableroProduccion } from "@/lib/ordenes-trabajo-api";
 import {
+  getConfiguracionProduccion,
   getDiasNoLaborables,
   getDuracionesFamilias,
   getEstaciones,
@@ -25,13 +26,20 @@ export default async function TableroProduccionPage() {
   let estaciones: Estacion[] = [];
   let duraciones: DuracionFamilia[] = [];
   let diasNoLaborables: DiaNoLaborable[] = [];
+  let tiempoEntrePasosMin = 0;
   try {
-    [{ items }, estaciones, duraciones, diasNoLaborables] = await Promise.all([
+    const [tablero, ests, durs, dias, config] = await Promise.all([
       getTableroProduccion(),
       getEstaciones(),
       getDuracionesFamilias(),
       getDiasNoLaborables(),
+      getConfiguracionProduccion(),
     ]);
+    items = tablero.items;
+    estaciones = ests;
+    duraciones = durs;
+    diasNoLaborables = dias;
+    tiempoEntrePasosMin = config.tiempoEntrePasosMin;
   } catch {
     // Estados vacíos de la vista.
   }
@@ -41,6 +49,7 @@ export default async function TableroProduccionPage() {
       estaciones={estaciones}
       duracionesFamilias={duraciones}
       diasNoLaborables={diasNoLaborables}
+      tiempoEntrePasosMin={tiempoEntrePasosMin}
     />
   );
 }

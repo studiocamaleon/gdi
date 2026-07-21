@@ -71,9 +71,17 @@ export type PasoProgramado = {
   /** Id de estación, o SIN_ESTACION_KEY / PROVEEDOR_KEY. */
   estacionKey: string;
   inicio: Date;
+  /**
+   * Cuándo empieza el trabajo en sí: `inicio` más el traslado, en minutos
+   * LABORALES (si el traslado cruza el cierre, sigue al día siguiente).
+   * Es también cuándo entra la máquina.
+   */
+  inicioTrabajo: Date;
   fin: Date;
   /** Minutos de taller. null en tercerizados: su costo es el lead time. */
   duracionMin: number | null;
+  /** Minutos de traslado/preparación antes de empezar. Ocupan puesto, no máquina. */
+  preparacionMin: number;
   plazoDias: number | null;
   /** Cuánto esperó el trabajo a que se liberara un puesto. */
   esperaMin: number;
@@ -172,6 +180,45 @@ export function sumarMinutosLaborales(
   return null;
 }
 
+/**
+ * La inversa de `sumarMinutosLaborales`: el instante laboral que está N
+ * minutos ANTES de `hasta`. Se usa para arrancar la preparación con la
+ * anticipación justa — el operario sale a buscar el material mientras la
+ * máquina todavía está ocupada, para llegar cuando se libera.
+ * null si el horizonte hacia atrás no alcanza.
+ */
+export function restarMinutosLaborales(
+  calendario: CalendarioEstacion,
+  hasta: Date,
+  minutos: number,
+  noLaborables: Set<string> = new Set(),
+): Date | null {
+  if (minutos <= 0) return hasta;
+  let restante = minutos;
+  let t = hasta;
+  for (let i = 0; i < HORIZONTE_DIAS; i += 1) {
+    const franja = franjaDelDia(calendario, t, noLaborables);
+    if (franja) {
+      const abre = conHora(t, minutosDe(franja.desde));
+      const cierra = conHora(t, minutosDe(franja.hasta));
+      // Sólo cuenta el tramo del día que queda por detrás de `t`.
+      const tope = t < cierra ? t : cierra;
+      const disponibles = Math.max(0, (tope.getTime() - abre.getTime()) / 60000);
+      if (restante <= disponibles) {
+        return new Date(tope.getTime() - restante * 60000);
+      }
+      restante -= disponibles;
+    }
+    // Al día anterior, posicionado en su cierre.
+    const previo = new Date(t.getFullYear(), t.getMonth(), t.getDate() - 1);
+    const franjaPrevia = franjaDelDia(calendario, previo, noLaborables);
+    t = franjaPrevia
+      ? conHora(previo, minutosDe(franjaPrevia.hasta))
+      : conHora(previo, 23 * 60 + 59);
+  }
+  return null;
+}
+
 // ── Motor ────────────────────────────────────────────────────────────────
 
 type EstacionSim = {
@@ -181,6 +228,16 @@ type EstacionSim = {
   servers: Date[] | null;
   /** Corre con supuestos (calendario default o sin estación). */
   parcial: boolean;
+  /**
+   * Puestos NO son máquinas. Una estación puede tener 2 operarios y una sola
+   * guillotina: dos pasos de guillotina no van en paralelo aunque sobren
+   * puestos, pero guillotina + laminado sí. Cada centro de costo con máquinas
+   * en esta estación es un pool aparte, y su tamaño es cuántas máquinas lo
+   * comparten. Un paso ocupa SU máquina y UN puesto a la vez.
+   */
+  maquinas: Map<string, Date[]>;
+  /** Minutos de traslado/preparación antes de poder empezar acá. */
+  preparacionMin: number;
 };
 
 type ItemSim = {
@@ -226,12 +283,15 @@ export function simularFlujo({
   medianas,
   ahora = new Date(),
   noLaborables = new Set<string>(),
+  tiempoEntrePasosMin = 0,
 }: {
   items: TableroItemData[];
   estaciones: Estacion[];
   medianas: Map<string, number>;
   ahora?: Date;
   noLaborables?: Set<string>;
+  /** Default del tenant para las estaciones que no declaran el suyo. */
+  tiempoEntrePasosMin?: number;
 }): ResultadoSimulacion {
   const porItem = new Map<string, SimulacionItem>();
   const llegadasPorEstacion = new Map<string, LlegadaEstacion[]>();
@@ -244,11 +304,25 @@ export function simularFlujo({
   for (const estacion of estaciones) {
     if (!estacion.activo) continue;
     const sinCalendario = calendarioVacio(estacion.calendario);
+    /* Un pool por centro de costo con máquinas acá; su tamaño es cuántas
+       máquinas lo comparten (una guillotina → 1; si mañana hay dos → 2). */
+    const maquinas = new Map<string, Date[]>();
+    for (const maquina of estacion.maquinas) {
+      if (!maquina.centroCostoId) continue;
+      const pool = maquinas.get(maquina.centroCostoId) ?? [];
+      pool.push(new Date(ahora));
+      maquinas.set(maquina.centroCostoId, pool);
+    }
     registros.set(estacion.id, {
       key: estacion.id,
       calendario: sinCalendario ? calendarioDefault() : (estacion.calendario as CalendarioEstacion),
       servers: Array.from({ length: Math.max(1, estacion.capacidadConcurrente) }, () => new Date(ahora)),
       parcial: sinCalendario,
+      maquinas,
+      preparacionMin: Math.max(
+        0,
+        estacion.tiempoPreparacionMin ?? tiempoEntrePasosMin,
+      ),
     });
   }
   const sinEstacion: EstacionSim = {
@@ -256,6 +330,8 @@ export function simularFlujo({
     calendario: calendarioDefault(),
     servers: null,
     parcial: true,
+    maquinas: new Map(),
+    preparacionMin: Math.max(0, tiempoEntrePasosMin),
   };
 
   const estacionDe = (paso: TableroPasoData): EstacionSim => {
@@ -309,8 +385,11 @@ export function simularFlujo({
             pasoIndice: frontera.indice,
             estacionKey: est.key,
             inicio: new Date(ahora),
+            inicioTrabajo: new Date(ahora),
             fin,
             duracionMin: restanteMin,
+            // Ya está en curso: el material llegó hace rato.
+            preparacionMin: 0,
             plazoDias: null,
             esperaMin: 0,
             parcial: est.parcial,
@@ -363,8 +442,11 @@ export function simularFlujo({
           pasoIndice: paso.indice,
           estacionKey: PROVEEDOR_KEY,
           inicio: new Date(sim.readyAt),
+          inicioTrabajo: new Date(sim.readyAt),
           fin,
           duracionMin: null,
+          // Lo hace el proveedor: no hay traslado interno que modelar.
+          preparacionMin: 0,
           plazoDias: plazo,
           esperaMin: 0,
           parcial: false,
@@ -399,7 +481,30 @@ export function simularFlujo({
       const libreDesde = est.servers
         ? est.servers.reduce((min, s) => (s < min ? s : min), est.servers[0])
         : sim.readyAt;
-      const startRaw = libreDesde > sim.readyAt ? libreDesde : sim.readyAt;
+      /* La máquina es un recurso aparte del puesto. Pero no hace falta que
+         esté libre para ARRANCAR: durante la preparación el operario está
+         yendo a buscar el material, no usando la máquina. Basta con que esté
+         libre cuando el material llega, así que la preparación puede empezar
+         con esa anticipación. */
+      const pool = poolDeMaquina(est, paso);
+      const maquinaLibre = pool
+        ? pool.reduce((min, s) => (s < min ? s : min), pool[0])
+        : null;
+      let startRaw = libreDesde > sim.readyAt ? libreDesde : sim.readyAt;
+      if (maquinaLibre) {
+        const salidaParaLlegar =
+          est.preparacionMin > 0
+            ? restarMinutosLaborales(
+                est.calendario,
+                maquinaLibre,
+                est.preparacionMin,
+                noLaborables,
+              )
+            : maquinaLibre;
+        if (salidaParaLlegar && salidaParaLlegar > startRaw) {
+          startRaw = salidaParaLlegar;
+        }
+      }
       const start = avanzarAVentana(est.calendario, startRaw, noLaborables);
       if (start === null) {
         sim.done = true;
@@ -413,12 +518,26 @@ export function simularFlujo({
 
     const { sim, est, duracion, start } = mejor;
     const paso = sim.restantes[sim.idx];
-    const fin = sumarMinutosLaborales(est.calendario, start, duracion, noLaborables);
+    /* Ir a buscar el material es trabajo del operario: ocupa el puesto desde
+       el arranque, pero la máquina recién entra cuando el material llegó.
+       El primer paso de la simulación arranca donde ya está el material, así
+       que la preparación aplica igual: viene del depósito o del paso previo. */
+    const prep = est.preparacionMin;
+    const listo =
+      prep > 0
+        ? sumarMinutosLaborales(est.calendario, start, prep, noLaborables)
+        : start;
+    if (listo === null) {
+      sim.done = true;
+      continue;
+    }
+    const fin = sumarMinutosLaborales(est.calendario, listo, duracion, noLaborables);
     if (fin === null) {
       sim.done = true;
       continue;
     }
     ocupar(est, fin);
+    ocuparMaquina(est, paso, fin);
     if (est.parcial) sim.resultado.parcial = true;
     anotar({
       itemId: sim.data.id,
@@ -426,10 +545,13 @@ export function simularFlujo({
       pasoIndice: paso.indice,
       estacionKey: est.key,
       inicio: start,
+      inicioTrabajo: listo,
       fin,
       duracionMin: duracion,
+      preparacionMin: prep,
       plazoDias: null,
-      // El trabajo estaba listo en readyAt; si arrancó después, esperó puesto.
+      // El trabajo estaba listo en readyAt; si arrancó después, esperó puesto
+      // o máquina.
       esperaMin: Math.max(
         0,
         Math.round((start.getTime() - sim.readyAt.getTime()) / 60000),
@@ -455,6 +577,27 @@ export function simularFlujo({
   }
 
   return { porItem, llegadasPorEstacion, traza };
+}
+
+/**
+ * El pool de la máquina que usa este paso, o null si no usa ninguna. El
+ * vínculo paso→máquina es el centro de costo: la trazabilidad del paso guarda
+ * centroCostoId, no maquinaId.
+ */
+function poolDeMaquina(est: EstacionSim, paso: TableroPasoData): Date[] | null {
+  if (!paso.centroCostoId) return null;
+  return est.maquinas.get(paso.centroCostoId) ?? null;
+}
+
+/** Ocupa la máquina del paso, si usa alguna. */
+function ocuparMaquina(est: EstacionSim, paso: TableroPasoData, fin: Date) {
+  const pool = poolDeMaquina(est, paso);
+  if (!pool) return;
+  let idx = 0;
+  for (let i = 1; i < pool.length; i += 1) {
+    if (pool[i] < pool[idx]) idx = i;
+  }
+  pool[idx] = fin;
 }
 
 /** Reemplaza el puesto que se libera antes por el nuevo fin. */

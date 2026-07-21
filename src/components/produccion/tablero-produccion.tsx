@@ -1934,11 +1934,14 @@ export function TableroProduccion({
   estaciones,
   duracionesFamilias,
   diasNoLaborables,
+  tiempoEntrePasosMin = 0,
 }: {
   initialItems: TableroItemData[];
   estaciones: Estacion[];
   duracionesFamilias: DuracionFamilia[];
   diasNoLaborables: DiaNoLaborable[];
+  /** Default del tenant para el traslado entre pasos. */
+  tiempoEntrePasosMin?: number;
 }) {
   const [items, setItems] = React.useState<TableroItemData[]>(initialItems);
   const [mode, setMode] = React.useState<Mode>(DEFAULT_BOARD_MODE);
@@ -2051,8 +2054,9 @@ export function TableroProduccion({
 
   /** Simulación de flujo (fase 2b): ETA por item + llegadas por estación. */
   const sim = React.useMemo<ResultadoSimulacion>(
-    () => simularFlujo({ items, estaciones, medianas, noLaborables }),
-    [items, estaciones, medianas, noLaborables],
+    () =>
+      simularFlujo({ items, estaciones, medianas, noLaborables, tiempoEntrePasosMin }),
+    [items, estaciones, medianas, noLaborables, tiempoEntrePasosMin],
   );
 
   /** Minutos de carga en camino que LLEGAN HOY, por estación. */

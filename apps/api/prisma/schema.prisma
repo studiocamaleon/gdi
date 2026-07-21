@@ -1112,6 +1112,10 @@ model Estacion {
   /// (capacidad en tiempo), NO son denominador de conteo de pasos.
   /// Ver docs/capacidad-estaciones-diseno.md D4.
   capacidadConcurrente Int                @default(1)
+  /// Minutos que cuesta traer el material hasta acá y dejarlo listo antes de
+  /// empezar a trabajar. Ocupa un PUESTO (lo hace el operario), pero no la
+  /// máquina. null = usar el default del tenant (ConfiguracionProduccion).
+  tiempoPreparacionMin Int?
   /// Calendario semanal operativo (D2). Shape validado en el service:
   /// { dias: { lun: { desde: "08:00", hasta: "18:00" } | null, …, dom: null } }
   /// null = sin calendario (el tablero no proyecta la cola en días).
@@ -1187,6 +1191,10 @@ model ConfiguracionProduccion {
   /// Hora local "HH:mm" de corte de jornada: los tramos de trabajo abiertos
   /// se cierran solos a esta hora (registro-tiempos-produccion D9).
   corteJornada  String   @default("20:00")
+  /// Minutos entre pasos por defecto, para las estaciones que no declaran el
+  /// suyo. Nadie termina 9:35 y arranca otro paso 9:35: hay que ir a buscar
+  /// el material. 0 = sin colchón.
+  tiempoEntrePasosMin Int      @default(0)
   updatedAt     DateTime @updatedAt
   tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }

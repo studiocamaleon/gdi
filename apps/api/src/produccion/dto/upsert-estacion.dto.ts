@@ -59,6 +59,12 @@ export class UpsertEstacionDto {
   @Max(99)
   capacidadConcurrente?: number;
 
+  /** Minutos para traer el material hasta acá. null = default del tenant. */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  tiempoPreparacionMin?: number | null;
+
   /**
    * Calendario semanal operativo; el shape fino lo valida el service con
    * parseCalendario (formato HH:MM, desde < hasta, días conocidos).

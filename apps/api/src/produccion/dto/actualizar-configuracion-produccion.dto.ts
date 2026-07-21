@@ -7,6 +7,12 @@ export class ActualizarConfiguracionProduccionDto {
   @Max(15)
   margenEtaDias: number;
 
+  /** Minutos entre pasos por defecto, para estaciones sin el suyo. */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  tiempoEntrePasosMin?: number;
+
   /**
    * Hora local "HH:mm" de corte de jornada: los tramos de trabajo abiertos
    * se cierran solos a esta hora (registro-tiempos-produccion D9).

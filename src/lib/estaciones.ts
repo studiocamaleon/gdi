@@ -213,6 +213,11 @@ export type Estacion = {
   icono: string | null;
   /** PUESTOS de trabajo simultáneos: multiplican las horas del calendario. */
   capacidadConcurrente: number;
+  /**
+   * Minutos para traer el material hasta acá y dejarlo listo. Ocupa un PUESTO
+   * (lo hace el operario) pero no la máquina. null = default del tenant.
+   */
+  tiempoPreparacionMin: number | null;
   /** Calendario semanal operativo; null = sin proyección de cola en días. */
   calendario: CalendarioEstacion | null;
   /** Códigos de familias de pasos asignadas. */

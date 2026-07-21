@@ -36,6 +36,7 @@ const estacion = (id: string, familias: string[], cap = 1): Estacion => ({
   etapa: "impresion",
   icono: null,
   capacidadConcurrente: cap,
+  tiempoPreparacionMin: null,
   calendario: CAL,
   familias,
   empleados: [],
