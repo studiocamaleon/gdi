@@ -322,6 +322,40 @@ export function SimulacionView({
     return () => window.removeEventListener("keydown", alTeclear);
   }, [z, zoomear, ajustar]);
 
+  /* El panel de detalle se cierra con Esc o tocando afuera.
+     No lleva backdrop a propósito: es un panel de consulta, no un modal —
+     con el detalle abierto se puede seguir recorriendo el plano y clickear
+     otra decisión, que simplemente reemplaza el contenido en vez de
+     obligar a cerrar primero. */
+  React.useEffect(() => {
+    if (!sel) return;
+
+    const alTocarAfuera = (e: MouseEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (!t) return;
+      if (t.closest(".simu-insp")) return;
+      // Otra decisión: la cambia, no la cierra (si no, cerraría en mousedown
+      // y volvería a abrir en click, con un parpadeo).
+      if (t.closest(".simu-blk, .simu-prow")) return;
+      setSel(null);
+    };
+
+    const alEscape = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      // Con el foco en el buscador, Esc primero limpia la búsqueda.
+      const foco = document.activeElement;
+      if (foco instanceof HTMLInputElement && foco.type === "search") return;
+      setSel(null);
+    };
+
+    document.addEventListener("mousedown", alTocarAfuera);
+    document.addEventListener("keydown", alEscape);
+    return () => {
+      document.removeEventListener("mousedown", alTocarAfuera);
+      document.removeEventListener("keydown", alEscape);
+    };
+  }, [sel]);
+
   const q = consulta.trim().toLowerCase();
   const coincide = React.useCallback(
     (b: Bloque) =>
@@ -570,7 +604,10 @@ export function SimulacionView({
           total={tope}
           color={tintaDe(sel.ot, otsInfo)}
           onClose={() => setSel(null)}
-          onOpen={() => onOpen(sel.itemId)}
+          onOpen={() => {
+            onOpen(sel.itemId);
+            setSel(null);
+          }}
         />
       ) : null}
     </div>
