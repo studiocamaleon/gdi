@@ -423,6 +423,7 @@ export function SimulacionView({
             <div className="simu-ctl">
               <button
                 type="button"
+                className="simu-play"
                 onClick={() => {
                   if (tocando) return setTocando(false);
                   if (cursor >= tope) setCorte(0);

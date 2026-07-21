@@ -30306,6 +30306,15 @@ body:has(.t-app) {
   text-align: right;
 }
 
+/* Mismo motivo: el rótulo alterna entre "Reproducir" y "Pausar", y sin
+   ancho fijo apretar play corre toda la fila (la barra de decisiones tiene
+   flex:1 y absorbe cualquier cambio, moviendo todo lo que va después). */
+.tablero-produccion .simu-play {
+  flex: none;
+  width: 116px;
+  justify-content: center;
+}
+
 .tablero-produccion .simu-sugwrap { position: relative; }
 
 .tablero-produccion .simu-sugg {
