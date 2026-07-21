@@ -30480,6 +30480,9 @@ body:has(.t-app) {
   display: flex;
   align-items: center;
   padding-left: 8px;
+  /* Recorta en vez de derramarse sobre el día siguiente cuando la columna
+     es angosta (la primera jornada es parcial). */
+  overflow: hidden;
 }
 
 .tablero-produccion .simu-day.wk { border-left-color: var(--simu-line); }
@@ -30518,6 +30521,10 @@ body:has(.t-app) {
 .tablero-produccion .simu-day span {
   font-family: var(--simu-mono);
   font-size: 9.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
   color: var(--simu-ink-3);
   text-transform: uppercase;
   letter-spacing: 0.09em;
@@ -30568,6 +30575,9 @@ body:has(.t-app) {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* Sin esto un hijo flex no baja de su ancho de contenido y el ellipsis
+     nunca entra en juego: el texto desbordaría en vez de recortarse. */
+  min-width: 0;
 }
 
 .tablero-produccion .simu-blk:hover {

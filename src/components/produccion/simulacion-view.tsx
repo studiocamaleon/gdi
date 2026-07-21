@@ -74,6 +74,19 @@ function pasoHorario(jornadaPx: number): number | null {
 /** Debajo de esto la etiqueta se pisa con la de al lado: queda sólo el tick. */
 const ANCHO_MIN_ETIQUETA = 30;
 
+/**
+ * Opacidad de una etiqueta según el ancho que tiene para mostrarse.
+ * Es una rampa CONTINUA, no un umbral: con umbral, al mover el zoom saltan
+ * de golpe todas las etiquetas de bloques que duran lo mismo (hasta 11 a la
+ * vez con los datos reales); recortando sin más, en zoom apretado quedan
+ * fragmentos ilegibles tipo "0..". Desvaneciendo, ninguna de las dos.
+ */
+function opacidadEtiqueta(anchoPx: number, minimo: number, comodo: number) {
+  if (anchoPx <= minimo) return 0;
+  if (anchoPx >= comodo) return 1;
+  return (anchoPx - minimo) / (comodo - minimo);
+}
+
 const DIA_CORTO = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
 const hhmm = (d: Date) =>
   `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
@@ -746,7 +759,9 @@ function LineaDeTiempo({
                   className={`simu-day ${i % 5 === 0 ? "wk" : ""}`}
                   style={{ left: d.x * z, width: d.ancho * z }}
                 >
-                  {d.ancho * z > 46 ? <span>{d.etiqueta}</span> : null}
+                  <span style={{ opacity: opacidadEtiqueta(d.ancho * z, 34, 62) }}>
+                    {d.etiqueta}
+                  </span>
                 </div>
               ))}
               {ticks.map((t) => (
@@ -801,13 +816,17 @@ function LineaDeTiempo({
                         onMouseEnter={() => onHover(b.ot)}
                         onMouseLeave={() => onHover(null)}
                       >
-                        {w > 54 ? (
-                          <span className="t">
-                            {b.ot.replace(/^OT-\d{4}-/, "")} · {b.pasoNombre}
-                          </span>
-                        ) : w > 22 ? (
-                          <span className="t">{b.ot.replace(/^OT-\d{4}-/, "")}</span>
-                        ) : null}
+                        {/* Siempre la etiqueta completa: el recorte lo hace
+                            el CSS con ellipsis. Con umbrales de ancho, al
+                            mover el zoom saltaban hasta 11 bloques a la vez
+                            (muchos pasos duran lo mismo y cruzan el umbral
+                            juntos). Recortando, la transición es continua. */}
+                        <span
+                          className="t"
+                          style={{ opacity: opacidadEtiqueta(w, 26, 58) }}
+                        >
+                          {b.ot.replace(/^OT-\d{4}-/, "")} · {b.pasoNombre}
+                        </span>
                       </div>
                     );
                   })}
