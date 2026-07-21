@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { acotarZoom, anclarZoom, construirEje, Z_MAX, Z_MIN } from "@/lib/eje-laboral";
+import {
+  acotarZoom,
+  anclarZoom,
+  construirEje,
+  sliderDeZoom,
+  Z_MAX,
+  Z_MIN,
+  ZOOM_PASOS,
+  zoomDeSlider,
+} from "@/lib/eje-laboral";
 import type { CalendarioEstacion, Estacion } from "@/lib/estaciones";
 
 const franja = (desde: string, hasta: string) => ({ desde, hasta });
@@ -187,5 +196,33 @@ describe("acotarZoom", () => {
     // Puede salir de dividir por un ancho 0 al montar el contenedor.
     expect(acotarZoom(Number.NaN)).toBe(Z_MIN);
     expect(acotarZoom(Number.POSITIVE_INFINITY)).toBe(Z_MAX);
+  });
+});
+
+describe("deslizador de zoom", () => {
+  it("los extremos de la barra son los extremos del rango", () => {
+    expect(zoomDeSlider(0)).toBeCloseTo(Z_MIN, 6);
+    expect(zoomDeSlider(ZOOM_PASOS)).toBeCloseTo(Z_MAX, 6);
+  });
+
+  it("ida y vuelta sin deriva", () => {
+    for (const z of [0.02, 0.08, 0.16, 0.45, 1.6, 6]) {
+      expect(zoomDeSlider(sliderDeZoom(z))).toBeCloseTo(z, 2);
+    }
+  });
+
+  it("es logarítmico: cada mitad de la barra multiplica lo mismo", () => {
+    // Con escala lineal esto no se cumpliría: el primer tramo casi no
+    // cambiaría nada y el último saltaría de golpe.
+    const a = zoomDeSlider(0);
+    const b = zoomDeSlider(ZOOM_PASOS / 2);
+    const c = zoomDeSlider(ZOOM_PASOS);
+    expect(b / a).toBeCloseTo(c / b, 4);
+  });
+
+  it("el medio de la barra cae en un zoom de trabajo, no en un extremo", () => {
+    const medio = zoomDeSlider(ZOOM_PASOS / 2);
+    expect(medio).toBeGreaterThan(0.2);
+    expect(medio).toBeLessThan(0.8);
   });
 });

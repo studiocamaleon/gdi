@@ -14,7 +14,14 @@
 
 import * as React from "react";
 
-import { acotarZoom, anclarZoom, construirEje } from "@/lib/eje-laboral";
+import {
+  acotarZoom,
+  anclarZoom,
+  construirEje,
+  sliderDeZoom,
+  ZOOM_PASOS,
+  zoomDeSlider,
+} from "@/lib/eje-laboral";
 import { fuentesSimulacion } from "@/lib/fuentes-simulacion";
 import {
   PROVEEDOR_KEY,
@@ -40,15 +47,17 @@ const ACENTOS = ["#0E9F6E", "#0284C7", "#2E4BFF", "#6D28D9", "#EA580C", "#0891B2
 const ROW = 26;
 const PAD = 6;
 const AXIS_H = 34;
-const ZOOMS: Array<[string, number]> = [
-  ["Mes", 0.08],
-  ["Semana", 0.16],
-  ["Día", 0.45],
-  ["Hora", 1.6],
-];
-
-/** El preset se marca activo si el zoom continuo quedó cerca de él. */
-const esPreset = (z: number, val: number) => Math.abs(z - val) < val * 0.03;
+/** Cuánto tiempo entra en pantalla, para rotular el deslizador. */
+function loQueEntra(anchoPx: number, z: number, jornadaMin: number) {
+  if (!anchoPx || !z) return "";
+  const min = anchoPx / z;
+  if (min < 90) return `${Math.round(min)} min a la vista`;
+  if (min < jornadaMin) return `${(min / 60).toFixed(1)} h a la vista`;
+  const jornadas = min / jornadaMin;
+  return jornadas < 1.5
+    ? "1 jornada a la vista"
+    : `${jornadas.toFixed(jornadas < 10 ? 1 : 0)} jornadas a la vista`;
+}
 
 /**
  * Intervalo de los ticks horarios según cuánto mide una jornada en pantalla.
@@ -130,7 +139,7 @@ export function SimulacionView({
   noLaborables: Set<string>;
   onOpen: (itemId: string) => void;
   vistaInicial?: "mesa" | "proj";
-  /** px por minuto laboral. Ver ZOOMS. */
+  /** px por minuto laboral. Ver Z_MIN/Z_MAX en eje-laboral. */
   zoomInicial?: number;
 }) {
   const [vista, setVista] = React.useState<"mesa" | "proj">(vistaInicial);
@@ -142,6 +151,7 @@ export function SimulacionView({
   /* El zoom vigente, legible desde handlers que no se re-crean en cada
      render (la rueda dispara mucho más seguido que los renders). */
   const zRef = React.useRef(z);
+  const [anchoVisible, setAnchoVisible] = React.useState(0);
   const anclaRef = React.useRef<{
     scrollLeft: number;
     offsetX: number;
@@ -166,6 +176,17 @@ export function SimulacionView({
     },
     [],
   );
+
+  /* El ancho del lienzo cambia con el sidebar, el tab y la ventana: hay que
+     observarlo para que la etiqueta del zoom no mienta. */
+  React.useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setAnchoVisible(el.clientWidth);
+    const obs = new ResizeObserver(([e]) => setAnchoVisible(e.contentRect.width));
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [vista]);
 
   React.useLayoutEffect(() => {
     zRef.current = z;
@@ -410,22 +431,22 @@ export function SimulacionView({
             </span>
             <div className="simu-ctl simu-zoom">
               <span className="simu-eyebrow">Zoom</span>
-              {ZOOMS.map(([lbl, val]) => (
-                <button
-                  key={lbl}
-                  type="button"
-                  className={esPreset(z, val) ? "on" : ""}
-                  onClick={() => zoomear(val)}
-                >
-                  {lbl}
-                </button>
-              ))}
-              <button type="button" onClick={ajustar} title="Encuadrar el trabajo programado">
+              <input
+                type="range"
+                className="simu-zoom-range"
+                min={0}
+                max={ZOOM_PASOS}
+                value={sliderDeZoom(z)}
+                aria-label="Nivel de zoom"
+                title="También: ⌘/Ctrl + rueda, o las teclas + y −"
+                onChange={(e) => zoomear(zoomDeSlider(Number(e.target.value)))}
+              />
+              <span className="simu-cnt">
+                {loQueEntra(anchoVisible, z, eje.jornadaMin)}
+              </span>
+              <button type="button" onClick={ajustar} title="Encuadrar el trabajo del taller">
                 Ajustar
               </button>
-              <span className="simu-zoom-hint" aria-hidden="true">
-                ⌘/Ctrl+rueda
-              </span>
             </div>
           </>
         ) : (

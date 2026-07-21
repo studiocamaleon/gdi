@@ -171,6 +171,22 @@ export const Z_MAX = 6;
 export const acotarZoom = (v: number) =>
   Number.isNaN(v) ? Z_MIN : Math.min(Z_MAX, Math.max(Z_MIN, v));
 
+/** Pasos del deslizador de zoom. Más pasos = movimiento más fino. */
+export const ZOOM_PASOS = 1000;
+
+/**
+ * El deslizador es LOGARÍTMICO: el rango útil va de 0,02 a 6 px/min, o sea
+ * 300×. En escala lineal, la mitad izquierda de la barra no se distinguiría
+ * y todo el detalle quedaría amontonado contra el extremo derecho.
+ */
+export const zoomDeSlider = (v: number) =>
+  acotarZoom(Z_MIN * Math.pow(Z_MAX / Z_MIN, v / ZOOM_PASOS));
+
+export const sliderDeZoom = (z: number) =>
+  Math.round(
+    (ZOOM_PASOS * Math.log(acotarZoom(z) / Z_MIN)) / Math.log(Z_MAX / Z_MIN),
+  );
+
 /**
  * Scroll que deja QUIETO el punto que el usuario estaba mirando al cambiar
  * el zoom. Sin esto, acercarse tira el contenido fuera de la ventana y hay

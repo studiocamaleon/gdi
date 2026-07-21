@@ -30251,13 +30251,20 @@ body:has(.t-app) {
 
 .tablero-produccion .simu-zoom { margin-left: auto; }
 
-.tablero-produccion .simu-zoom-hint {
-  font-family: var(--simu-mono);
-  font-size: 9.5px;
-  color: var(--simu-ink-3);
-  letter-spacing: 0.04em;
-  white-space: nowrap;
-  margin-left: 2px;
+/* La barra de zoom: angosta y con ancho propio, para no competir con el
+   scrubber de decisiones (que es el que se lleva el espacio flexible).
+   El selector repite input[type="range"] a propósito: si no, la regla
+   genérica de .simu-console (flex:1 + min-width:200px) le gana por
+   especificidad y la barra se estira. */
+.tablero-produccion .simu-console input[type="range"].simu-zoom-range {
+  width: 132px;
+  min-width: 0;
+  flex: none;
+  padding: 0;
+  border: none;
+  background: transparent;
+  accent-color: var(--simu-accent);
+  cursor: pointer;
 }
 
 /* El lienzo toma foco para que + / − / 0 funcionen sin click previo. */
