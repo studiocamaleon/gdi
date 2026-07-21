@@ -1,10 +1,17 @@
 # Mesa de luz — visualizar la simulación del motor de ETA
 
 Documento de diseño para la vista que muestra **qué decidió el motor de ETA y
-por qué**. Estado: prototipo navegable con datos reales, sin implementar en la
-app.
+por qué**. Estado: **IMPLEMENTADO** como cuarto tab del Tablero de producción.
 
-Prototipo: artifact `96075f68` (45 bloques reales del taller, lun 20/07 08:00).
+- Motor: `simularFlujo` devuelve `traza` — [`src/lib/flujo-produccion.ts`](../src/lib/flujo-produccion.ts)
+- Eje: [`src/lib/eje-laboral.ts`](../src/lib/eje-laboral.ts)
+- Vista: [`src/components/produccion/simulacion-view.tsx`](../src/components/produccion/simulacion-view.tsx)
+- Diseño de origen: `mesa-luz-propuesta-clara.html` (Claude Design, proyecto Grafo V2)
+- Prototipo previo: artifact `96075f68` y [`mesa-de-luz-prototipo.html`](mesa-de-luz-prototipo.html)
+
+**Se actualiza sola.** El tablero ya polleaba cada 15 s y `simularFlujo` está
+memoizado sobre `items`: cuando un operario completa un paso, el plan se
+recalcula y la vista se redibuja. No hizo falta infraestructura de tiempo real.
 
 ---
 
@@ -178,18 +185,28 @@ de sistema sólo para prosa del inspector. `tabular-nums` en todo lo numérico.
 
 ---
 
-## 7. Pendiente / a resolver al implementar
+## 7. Resuelto al implementar
 
-- **Escala.** El prototipo son 45 bloques en DOM. Con 500+ conviene canvas o
+- **Calendarios heterogéneos.** El eje ya no asume L–V 08:00–18:00: toma la
+  **unión de las franjas de las estaciones activas** y salta los días en que no
+  trabaja ninguna, más los feriados del taller. En el taller real esto cambió
+  el resultado — *Corte y terminación trabaja los sábados 09:00–13:00*, así que
+  el sábado aparece en el eje (el prototipo lo escondía).
+- **`ahora` real.** La vista recalcula con cada poll del tablero. El replay
+  se re-ancla solo si el plan cambia de tamaño mientras se está mirando.
+- **Tipografías.** Space Grotesk + IBM Plex Mono entran por `next/font`
+  (auto-hospedadas), no por el `<link>` a Google Fonts del prototipo.
+
+## 8. Pendiente
+
+- **Escala.** 45 bloques en DOM andan bien. Con 500+ conviene canvas o
   virtualización por ventana visible.
 - **Ítems sin ETA.** Hoy no hay ninguno (se corrigió el bug de duración 0), pero
   la traza corta ahí. Deben dibujarse **truncados y señalados**, no omitidos, o
   el gráfico miente por omisión.
 - **Casos silenciosos.** Horizonte de 120 días agotado o guardia del loop:
   `finEstimado` queda null sin `sinEstimar`. En la vista tienen que verse.
-- **Calendarios heterogéneos.** El eje usa una jornada única (08:00–18:00); las
-  estaciones tienen calendarios propios y `calendarioDefault()` es 09:00–18:00.
-  Las franjas no laborables **de cada estación** deberían sombrearse en su
-  carril.
-- **`ahora` real vs. congelado.** Definir si la vista recalcula en vivo o
-  muestra un snapshot con timestamp.
+- **Franjas muertas por carril.** El eje da a cada día la jornada completa de
+  la unión; una estación que cierra antes (el sábado de Corte, 09–13 sobre una
+  jornada de 09–18) muestra espacio vacío que no se distingue de "ocioso".
+  Sombrear el fuera-de-franja **por carril** lo resolvería.

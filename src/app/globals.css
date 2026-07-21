@@ -30062,3 +30062,860 @@ body:has(.t-app) {
     min-width: 940px;
   }
 }
+
+/* ───────────────────────────────────────────────────────────────────────
+   Tablero · Simulación "Mesa de luz" — port del diseño de Claude Design
+   (mesa-luz-propuesta-clara.html). Prefijo simu-, scopeado bajo
+   .tablero-produccion. Tokens propios: el diseño es de papel cálido y no
+   comparte paleta con el resto del tablero. Variante oscura derivada
+   manteniendo los mismos pigmentos.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.tablero-produccion .simu {
+  --simu-paper: #f4f1ea;
+  --simu-surface: #ffffff;
+  --simu-surface-2: #faf8f2;
+  --simu-sunk: #ece7dd;
+  --simu-ink: #17140f;
+  --simu-ink-2: #6a6357;
+  --simu-ink-3: #9c9384;
+  --simu-line: #e5e0d5;
+  --simu-hair: #eeeae1;
+  --simu-accent: #2e4bff;
+  --simu-hot: #e11d48;
+  --simu-amber: #b45309;
+  --simu-good: #0e9f6e;
+  --simu-glow: 0 0 0 1px rgba(46, 75, 255, 0.45), 0 8px 22px -8px rgba(46, 75, 255, 0.45);
+  --simu-sans: var(--font-simu-sans), var(--font-sans), system-ui, sans-serif;
+  --simu-mono: var(--font-simu-mono), var(--font-mono), ui-monospace, monospace;
+
+  font-family: var(--simu-sans);
+  font-size: 13px;
+  color: var(--simu-ink);
+  background: var(--simu-paper);
+  border: 1px solid var(--simu-line);
+  border-radius: var(--r-4);
+  overflow: hidden;
+  position: relative;
+}
+
+.dark .tablero-produccion .simu {
+  --simu-paper: #14120e;
+  --simu-surface: #1c1a15;
+  --simu-surface-2: #211e18;
+  --simu-sunk: #2a2620;
+  --simu-ink: #f2efe7;
+  --simu-ink-2: #b3aa99;
+  --simu-ink-3: #8a8072;
+  --simu-line: #322d25;
+  --simu-hair: #29241d;
+  --simu-accent: #7c8cff;
+  --simu-hot: #ff5b7a;
+  --simu-amber: #e0a145;
+  --simu-good: #34d399;
+  --simu-glow: 0 0 0 1px rgba(124, 140, 255, 0.5), 0 8px 22px -8px rgba(124, 140, 255, 0.4);
+}
+
+.tablero-produccion .simu .simu-eyebrow {
+  font-family: var(--simu-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--simu-ink-3);
+}
+
+.tablero-produccion .simu button,
+.tablero-produccion .simu input {
+  font-family: var(--simu-mono);
+  font-size: 11.5px;
+  background: var(--simu-surface);
+  color: var(--simu-ink);
+  border: 1px solid var(--simu-line);
+  border-radius: 8px;
+  padding: 6px 11px;
+  cursor: pointer;
+  transition: 0.14s;
+}
+
+.tablero-produccion .simu button:hover {
+  border-color: var(--simu-accent);
+  color: var(--simu-accent);
+}
+
+.tablero-produccion .simu button.on {
+  background: var(--simu-accent);
+  border-color: var(--simu-accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.tablero-produccion .simu button:focus-visible,
+.tablero-produccion .simu input:focus-visible,
+.tablero-produccion .simu [role="button"]:focus-visible {
+  outline: 2px solid var(--simu-accent);
+  outline-offset: 2px;
+}
+
+/* Cabecera: sub-switch + estadísticas del plan */
+.tablero-produccion .simu-top {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  flex-wrap: wrap;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--simu-line);
+  background: var(--simu-surface);
+}
+
+.tablero-produccion .simu-switch {
+  display: flex;
+  gap: 4px;
+}
+
+.tablero-produccion .simu-switch button {
+  border: none;
+  background: transparent;
+  color: var(--simu-ink-2);
+  font-family: var(--simu-sans);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+
+.tablero-produccion .simu-switch button:hover {
+  background: var(--simu-surface-2);
+  color: var(--simu-ink);
+}
+
+.tablero-produccion .simu-switch button.on {
+  background: transparent;
+  color: var(--simu-ink);
+  font-weight: 600;
+  box-shadow: inset 0 -2.5px 0 var(--simu-accent);
+  border-radius: 0;
+}
+
+.tablero-produccion .simu-stats {
+  display: flex;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.tablero-produccion .simu-stat {
+  padding: 2px 16px;
+  border-left: 1px solid var(--simu-line);
+}
+
+.tablero-produccion .simu-stat:first-child {
+  border-left: none;
+}
+
+.tablero-produccion .simu-stat .k {
+  font-family: var(--simu-mono);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+
+.tablero-produccion .simu-stat .l {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+  color: var(--simu-ink-3);
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+.tablero-produccion .simu-stat.hot .k { color: var(--simu-hot); }
+.tablero-produccion .simu-stat.amber .k { color: var(--simu-amber); }
+.tablero-produccion .simu-stat.acc .k { color: var(--simu-accent); }
+
+/* Consola */
+.tablero-produccion .simu-console {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 18px;
+  background: var(--simu-surface);
+  border-bottom: 1px solid var(--simu-line);
+  flex-wrap: wrap;
+}
+
+.tablero-produccion .simu-ctl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tablero-produccion .simu-zoom { margin-left: auto; }
+
+.tablero-produccion .simu-console input[type="range"] {
+  flex: 1;
+  min-width: 200px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  accent-color: var(--simu-accent);
+}
+
+.tablero-produccion .simu-console input[type="search"] { width: 184px; }
+
+.tablero-produccion .simu-cnt {
+  font-family: var(--simu-mono);
+  font-size: 11px;
+  color: var(--simu-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.tablero-produccion .simu-sugwrap { position: relative; }
+
+.tablero-produccion .simu-sugg {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 55;
+  width: 290px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: var(--simu-surface);
+  border: 1px solid var(--simu-line);
+  border-radius: 11px;
+  padding: 5px;
+  box-shadow: 0 16px 40px -16px rgba(20, 17, 12, 0.35);
+}
+
+.tablero-produccion .simu-si {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 9px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.tablero-produccion .simu-si:hover { background: var(--simu-surface-2); }
+
+.tablero-produccion .simu-oi {
+  font-family: var(--simu-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  border-radius: 5px;
+  padding: 2px 6px;
+  flex: none;
+}
+
+.tablero-produccion .simu-sc { min-width: 0; }
+
+.tablero-produccion .simu-cn {
+  font-size: 12.5px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tablero-produccion .simu-it {
+  font-family: var(--simu-mono);
+  font-size: 9.5px;
+  color: var(--simu-ink-3);
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tablero-produccion .simu-readout {
+  flex-basis: 100%;
+  font-family: var(--simu-mono);
+  font-size: 11.5px;
+  color: var(--simu-ink-2);
+  line-height: 1.6;
+  min-height: 2.9em;
+}
+
+.tablero-produccion .simu-readout b { color: var(--simu-ink); font-weight: 600; }
+.tablero-produccion .simu-readout .acc { color: var(--simu-accent); }
+.tablero-produccion .simu-readout .hot { color: var(--simu-hot); }
+.tablero-produccion .simu-readout .amber { color: var(--simu-amber); }
+.tablero-produccion .simu-readout .good { color: var(--simu-good); }
+.tablero-produccion .simu-readout .muted { color: var(--simu-ink-3); }
+
+/* Leyenda */
+.tablero-produccion .simu-legend {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--simu-line);
+  background: var(--simu-paper);
+}
+
+.tablero-produccion .simu-lg {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--simu-mono);
+  font-size: 10px;
+  color: var(--simu-ink-3);
+  letter-spacing: 0.04em;
+}
+
+.tablero-produccion .simu-lg-end { margin-left: auto; }
+
+.tablero-produccion .simu-sw {
+  width: 16px;
+  height: 9px;
+  border-radius: 2px;
+  flex: none;
+}
+
+.tablero-produccion .simu-sw-hatch {
+  background: repeating-linear-gradient(
+    45deg, transparent, transparent 4px,
+    rgba(180, 83, 9, 0.5) 4px, rgba(180, 83, 9, 0.5) 8px
+  );
+}
+
+/* Cubierta */
+.tablero-produccion .simu-deck {
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  background: var(--simu-surface);
+}
+
+.tablero-produccion .simu-gutter {
+  flex: none;
+  width: 212px;
+  background: var(--simu-surface-2);
+  border-right: 1px solid var(--simu-line);
+  position: relative;
+  z-index: 20;
+}
+
+.tablero-produccion .simu-ghead {
+  height: 34px;
+  border-bottom: 1px solid var(--simu-line);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+}
+
+.tablero-produccion .simu-lane-lbl {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--simu-hair);
+}
+
+.tablero-produccion .simu-lane-lbl .n {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tablero-produccion .simu-lane-lbl .m {
+  font-family: var(--simu-mono);
+  font-size: 9.5px;
+  color: var(--simu-ink-3);
+  letter-spacing: 0.05em;
+}
+
+.tablero-produccion .simu-lane-lbl.warn {
+  background: linear-gradient(90deg, rgba(180, 83, 9, 0.09), transparent);
+}
+
+.tablero-produccion .simu-lane-lbl.warn .n { color: var(--simu-amber); }
+
+.tablero-produccion .simu-scroll {
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.tablero-produccion .simu-stage { position: relative; }
+
+.tablero-produccion .simu-axis {
+  height: 34px;
+  border-bottom: 1px solid var(--simu-line);
+  position: relative;
+  background: var(--simu-surface-2);
+}
+
+.tablero-produccion .simu-day {
+  position: absolute;
+  top: 0;
+  height: 34px;
+  border-left: 1px solid var(--simu-hair);
+  display: flex;
+  align-items: center;
+  padding-left: 8px;
+}
+
+.tablero-produccion .simu-day.wk { border-left-color: var(--simu-line); }
+
+.tablero-produccion .simu-day span {
+  font-family: var(--simu-mono);
+  font-size: 9.5px;
+  color: var(--simu-ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+}
+
+.tablero-produccion .simu-lanes { position: relative; }
+
+.tablero-produccion .simu-lane {
+  position: relative;
+  border-bottom: 1px solid var(--simu-hair);
+}
+
+.tablero-produccion .simu-lane.warn {
+  background: repeating-linear-gradient(
+    45deg, transparent, transparent 9px,
+    rgba(180, 83, 9, 0.04) 9px, rgba(180, 83, 9, 0.04) 18px
+  );
+}
+
+.tablero-produccion .simu-gridline {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--simu-hair);
+}
+
+/* Bloques */
+.tablero-produccion .simu-blk {
+  position: absolute;
+  height: 26px;
+  border-radius: 5px;
+  cursor: pointer;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  padding: 0 6px 0 9px;
+  border: 1px solid transparent;
+  transition: transform 0.16s, box-shadow 0.16s, opacity 0.18s;
+  min-width: 4px;
+  color: var(--simu-ink);
+}
+
+.tablero-produccion .simu-blk .t {
+  font-family: var(--simu-mono);
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tablero-produccion .simu-blk:hover {
+  transform: translateY(-1px);
+  z-index: 12;
+  box-shadow: 0 6px 16px -6px rgba(20, 17, 12, 0.3);
+}
+
+.tablero-produccion .simu-blk.dim { opacity: 0.16; }
+.tablero-produccion .simu-blk.sel { box-shadow: var(--simu-glow); z-index: 14; }
+.tablero-produccion .simu-blk.pend { opacity: 0; pointer-events: none; }
+
+.tablero-produccion .simu-blk.terc {
+  border-style: dashed;
+  border-width: 1.5px;
+  background-image: repeating-linear-gradient(
+    45deg, transparent, transparent 4px,
+    rgba(20, 17, 12, 0.055) 4px, rgba(20, 17, 12, 0.055) 8px
+  );
+}
+
+.tablero-produccion .simu-blk.tarde::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1.5px var(--simu-hot);
+}
+
+.tablero-produccion .simu-now {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--simu-accent);
+  box-shadow: 0 0 12px 1px rgba(46, 75, 255, 0.4);
+  z-index: 15;
+  pointer-events: none;
+}
+
+.tablero-produccion .simu-thread {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 13;
+  overflow: visible;
+}
+
+/* Inspector */
+.tablero-produccion .simu-insp {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(390px, 92vw);
+  z-index: 60;
+  background: var(--simu-surface);
+  color: var(--simu-ink);
+  font-family: var(--simu-sans);
+  border-left: 1px solid var(--simu-line);
+  display: flex;
+  flex-direction: column;
+  box-shadow: -26px 0 60px -30px rgba(20, 17, 12, 0.3);
+  animation: simu-slide 0.26s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes simu-slide {
+  from { transform: translateX(101%); }
+  to { transform: none; }
+}
+
+.tablero-produccion .simu-insp .h {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--simu-line);
+  position: relative;
+}
+
+.tablero-produccion .simu-insp .b {
+  padding: 16px 20px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.tablero-produccion .simu-insp h2 {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 6px 0 2px;
+  letter-spacing: -0.01em;
+}
+
+.tablero-produccion .simu-isub { font-size: 11.5px; color: var(--simu-ink-2); }
+
+.tablero-produccion .simu-insp .x {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  padding: 4px 9px;
+}
+
+.tablero-produccion .simu-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--simu-hair);
+  font-size: 12px;
+}
+
+.tablero-produccion .simu-row:last-child { border-bottom: none; }
+
+.tablero-produccion .simu-row .k {
+  color: var(--simu-ink-3);
+  font-family: var(--simu-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding-top: 1px;
+}
+
+.tablero-produccion .simu-row .v {
+  font-family: var(--simu-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  font-weight: 600;
+}
+
+.tablero-produccion .simu-note {
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--simu-ink-2);
+  border-left: 2px solid var(--simu-accent);
+  padding: 2px 0 2px 12px;
+}
+
+.tablero-produccion .simu-note.a { border-color: var(--simu-amber); }
+.tablero-produccion .simu-note.h { border-color: var(--simu-hot); }
+
+.tablero-produccion .simu-abrir {
+  margin-top: auto;
+  width: 100%;
+  justify-content: center;
+  padding: 9px 11px;
+}
+
+/* Proyección por estación */
+.tablero-produccion .simu-proj {
+  padding: 22px 18px 40px;
+  display: grid;
+  gap: 16px;
+  background: var(--simu-paper);
+}
+
+.tablero-produccion .simu-pintro {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--simu-ink-2);
+  max-width: 72ch;
+}
+
+.tablero-produccion .simu-proj-vacio,
+.tablero-produccion .simu-vacio {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--simu-ink-2);
+  font-size: 13px;
+}
+
+.tablero-produccion .simu-vacio h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  color: var(--simu-ink);
+}
+
+.tablero-produccion .simu-vacio p { margin: 0 auto; max-width: 42ch; line-height: 1.6; }
+
+.tablero-produccion .simu-st {
+  position: relative;
+  background: var(--simu-surface);
+  border: 1px solid var(--simu-line);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(20, 17, 12, 0.04), 0 14px 30px -22px rgba(20, 17, 12, 0.22);
+}
+
+.tablero-produccion .simu-st::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--simu-acc);
+}
+
+.tablero-produccion .simu-st.warn {
+  background: linear-gradient(180deg, rgba(180, 83, 9, 0.045), transparent 26%), var(--simu-surface);
+}
+
+.tablero-produccion .simu-sh {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 20px 16px 22px;
+  border-bottom: 1px solid var(--simu-hair);
+}
+
+.tablero-produccion .simu-sdot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--simu-acc);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--simu-acc) 14%, transparent);
+  flex: none;
+}
+
+.tablero-produccion .simu-sinfo { flex: 1; min-width: 0; }
+
+.tablero-produccion .simu-sinfo .nm {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.tablero-produccion .simu-sinfo .smeta {
+  font-family: var(--simu-mono);
+  font-size: 10px;
+  color: var(--simu-ink-3);
+  letter-spacing: 0.04em;
+  margin-top: 3px;
+}
+
+.tablero-produccion .simu-sflags { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.tablero-produccion .simu-load {
+  width: 112px;
+  height: 6px;
+  border-radius: 4px;
+  background: var(--simu-sunk);
+  overflow: hidden;
+  flex: none;
+}
+
+.tablero-produccion .simu-load span {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--simu-acc), color-mix(in oklab, var(--simu-acc) 55%, #fff));
+}
+
+.tablero-produccion .simu-sbody { padding: 6px 0 10px; }
+
+.tablero-produccion .simu-dsep {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px 6px 22px;
+}
+
+.tablero-produccion .simu-dsep .dd {
+  font-family: var(--simu-mono);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--simu-ink-3);
+}
+
+.tablero-produccion .simu-dsep::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--simu-hair);
+}
+
+.tablero-produccion .simu-prow {
+  display: grid;
+  grid-template-columns: 152px 1fr auto;
+  gap: 16px;
+  align-items: center;
+  padding: 11px 20px 11px 22px;
+  cursor: pointer;
+  transition: background 0.14s, box-shadow 0.14s;
+  border-left: 2px solid transparent;
+}
+
+.tablero-produccion .simu-prow:hover {
+  background: var(--simu-surface-2);
+  border-left-color: var(--simu-acc);
+}
+
+.tablero-produccion .simu-ptime {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 5px;
+  font-family: var(--simu-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tablero-produccion .simu-ptime .arr { color: var(--simu-ink-3); }
+.tablero-produccion .simu-ptime .h1 { color: var(--simu-ink-2); }
+
+.tablero-produccion .simu-ptime .dur {
+  flex-basis: 100%;
+  color: var(--simu-ink-3);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  margin-top: 1px;
+}
+
+.tablero-produccion .simu-ptime .pst {
+  font-size: 8.5px;
+  color: var(--simu-acc);
+  border: 1px solid color-mix(in oklab, var(--simu-acc) 45%, transparent);
+  border-radius: 4px;
+  padding: 1px 4px;
+  letter-spacing: 0.06em;
+}
+
+.tablero-produccion .simu-pmain { min-width: 0; }
+
+.tablero-produccion .simu-pmain .pt {
+  font-size: 13.5px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  letter-spacing: -0.01em;
+}
+
+.tablero-produccion .simu-pmain .psub {
+  font-family: var(--simu-mono);
+  font-size: 10.5px;
+  color: var(--simu-ink-3);
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tablero-produccion .simu-otchip {
+  font-family: var(--simu-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
+  border-radius: 5px;
+  padding: 2px 6px;
+  margin-right: 10px;
+  flex: none;
+}
+
+.tablero-produccion .simu-pflags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 240px;
+}
+
+.tablero-produccion .simu-badge {
+  font-family: var(--simu-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  padding: 3px 7px;
+  border-radius: 5px;
+  border: 1px solid var(--simu-line);
+  color: var(--simu-ink-2);
+  white-space: nowrap;
+}
+
+.tablero-produccion .simu-badge.wait {
+  color: var(--simu-amber);
+  border-color: color-mix(in oklab, var(--simu-amber) 40%, transparent);
+  background: color-mix(in oklab, var(--simu-amber) 9%, transparent);
+}
+
+.tablero-produccion .simu-badge.late {
+  color: var(--simu-hot);
+  border-color: color-mix(in oklab, var(--simu-hot) 45%, transparent);
+  background: color-mix(in oklab, var(--simu-hot) 9%, transparent);
+}
+
+.tablero-produccion .simu-badge.terc { border-style: dashed; }
+
+.tablero-produccion .simu-badge.sin {
+  color: var(--simu-amber);
+  border-color: color-mix(in oklab, var(--simu-amber) 35%, transparent);
+}
+
+@media (max-width: 760px) {
+  .tablero-produccion .simu-prow { grid-template-columns: 1fr; gap: 6px; }
+  .tablero-produccion .simu-pflags { justify-content: flex-start; max-width: none; }
+  .tablero-produccion .simu-stats { margin-left: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tablero-produccion .simu * { transition: none !important; animation: none !important; }
+}

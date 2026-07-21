@@ -15,10 +15,12 @@
 import { describe, expect, it } from "vitest";
 
 import type { CalendarioEstacion, Estacion } from "@/lib/estaciones";
+import { SIN_ESTACION_KEY } from "@/lib/tablero-produccion";
 import type { TableroItemData, TableroPasoData } from "@/lib/tablero-produccion";
 import {
   avanzarAVentana,
   estimarDemoraNuevos,
+  PROVEEDOR_KEY,
   simularFlujo,
   sumarDiasHabiles,
   sumarMinutosLaborales,
@@ -507,5 +509,93 @@ describe("estimarDemoraNuevos", () => {
     const eta = demoras.get("nuevo");
     expect(eta?.sinEstimar).toBe(true);
     expect(eta?.finEstimado).toBeNull();
+  });
+});
+
+// ── La traza: el plan, no sólo su resultado ──────────────────────────────
+
+describe("simularFlujo · traza", () => {
+  it("anota un bloque por cada paso colocado, en orden de decisión", () => {
+    const { traza } = correr([
+      item("A", [interno(0, "impresion", 60), interno(1, "impresion", 30)]),
+      item("B", [interno(0, "impresion", 45)]),
+    ]);
+
+    expect(traza).toHaveLength(3);
+    expect(traza.map((p) => p.orden)).toEqual([0, 1, 2]);
+    // Un solo puesto: el orden de decisión es el de ocupación del puesto.
+    expect(traza.map((p) => p.itemId)).toEqual(["A", "B", "A"]);
+  });
+
+  it("los bloques encadenan: el fin de uno es el inicio del siguiente", () => {
+    const { traza } = correr([
+      item("A", [interno(0, "impresion", 60), interno(1, "impresion", 30)]),
+    ]);
+
+    expect(traza[0].inicio).toEqual(jul(20, 8, 0));
+    expect(traza[0].fin).toEqual(jul(20, 9, 0));
+    expect(traza[1].inicio).toEqual(jul(20, 9, 0));
+    expect(traza[1].fin).toEqual(jul(20, 9, 30));
+  });
+
+  it("mide la espera por un puesto ocupado", () => {
+    const { traza } = correr([
+      item("A", [interno(0, "impresion", 120)]),
+      item("B", [interno(0, "impresion", 60)]),
+    ]);
+
+    const b = traza.find((p) => p.itemId === "B")!;
+    // B estaba listo a las 08:00 pero el único puesto se libera a las 10:00.
+    expect(b.esperaMin).toBe(120);
+    expect(traza.find((p) => p.itemId === "A")!.esperaMin).toBe(0);
+  });
+
+  it("registra el tercerizado en su propio carril, con el plazo", () => {
+    const { traza } = correr([item("A", [tercerizado(0, "impresion", 3)])]);
+
+    expect(traza).toHaveLength(1);
+    expect(traza[0].tercerizado).toBe(true);
+    expect(traza[0].estacionKey).toBe(PROVEEDOR_KEY);
+    expect(traza[0].plazoDias).toBe(3);
+    // No consume minutos de taller: su costo es el lead time.
+    expect(traza[0].duracionMin).toBeNull();
+  });
+
+  it("marca parcial el paso que cae en el carril sin estación", () => {
+    const { traza } = correr([item("A", [interno(0, "familia-huerfana", 30)])]);
+
+    expect(traza[0].estacionKey).toBe(SIN_ESTACION_KEY);
+    expect(traza[0].parcial).toBe(true);
+  });
+
+  it("no anota los pasos que no se pueden estimar", () => {
+    const { traza, porItem } = correr([
+      item("A", [interno(0, "impresion", 30), paso(1, "impresion")]),
+    ]);
+
+    // El primero sí entra al plan; el segundo corta la ruta.
+    expect(traza).toHaveLength(1);
+    expect(porItem.get("A")?.sinEstimar).toBe(true);
+  });
+
+  it("cuenta los candidatos que competían por el puesto", () => {
+    const { traza } = correr([
+      item("A", [interno(0, "impresion", 60)]),
+      item("B", [interno(0, "impresion", 60)]),
+      item("C", [interno(0, "impresion", 60)]),
+    ]);
+
+    expect(traza[0].candidatos).toBe(3);
+    expect(traza[1].candidatos).toBe(2);
+    expect(traza[2].candidatos).toBe(1);
+  });
+
+  it("el fin del último bloque de un item coincide con su ETA", () => {
+    const { traza, porItem } = correr([
+      item("A", [interno(0, "impresion", 60), interno(1, "impresion", 30)]),
+    ]);
+
+    const ultimo = traza.filter((p) => p.itemId === "A").at(-1)!;
+    expect(ultimo.fin).toEqual(porItem.get("A")!.finEstimado);
   });
 });
