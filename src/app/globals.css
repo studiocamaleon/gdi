@@ -30291,6 +30291,21 @@ body:has(.t-app) {
   font-variant-numeric: tabular-nums;
 }
 
+/* Los dos contadores llevan ancho FIJO. Su texto cambia de largo mientras
+   se usa el control de al lado, y en una fila flex con el grupo de zoom
+   alineado a la derecha, ese cambio corre los controles horizontalmente:
+   arrastrando la barra, se siente como si el click se soltara. */
+.tablero-produccion .simu-cnt.simu-vista {
+  flex: none;
+  width: 142px;
+}
+
+.tablero-produccion .simu-cnt.simu-decisiones {
+  flex: none;
+  width: 116px;
+  text-align: right;
+}
+
 .tablero-produccion .simu-sugwrap { position: relative; }
 
 .tablero-produccion .simu-sugg {

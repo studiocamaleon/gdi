@@ -443,7 +443,7 @@ export function SimulacionView({
               aria-label="Decisión del scheduler"
               onChange={(e) => { setTocando(false); setCorte(Number(e.target.value)); }}
             />
-            <span className="simu-cnt">
+            <span className="simu-cnt simu-decisiones">
               {cursor} / {tope} decisiones
             </span>
             <div className="simu-ctl simu-zoom">
@@ -458,7 +458,11 @@ export function SimulacionView({
                 title="También: ⌘/Ctrl + rueda, o las teclas + y −"
                 onChange={(e) => zoomear(zoomDeSlider(Number(e.target.value)))}
               />
-              <span className="simu-cnt">
+              {/* Ancho fijo: este texto cambia de largo con el zoom, y como
+                  el grupo está alineado a la derecha, cada cambio corría la
+                  barra ~43 px bajo el cursor mientras se arrastraba — se
+                  sentía como si el arrastre se soltara. */}
+              <span className="simu-cnt simu-vista">
                 {loQueEntra(anchoVisible, z, eje.jornadaMin)}
               </span>
               <button type="button" onClick={ajustar} title="Encuadrar el trabajo del taller">
