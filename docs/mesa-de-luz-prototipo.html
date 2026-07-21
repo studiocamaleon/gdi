@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--
+  ────────────────────────────────────────────────────────────────────────
+  MESA DE LUZ — visualizador de la simulación del motor de ETA
+  Grafoprint · prototipo para rediseño
+
+  QUÉ ES
+  Muestra qué decidió el motor de ETA: cada paso de cada orden, en qué
+  estación, a qué hora, y por qué esperó lo que esperó.
+
+  LOS DATOS SON REALES
+  45 bloques extraídos del taller de Grafica Corporearte (18 OTs, 5
+  estaciones, lun 20/07/2026 08:00). Están en la constante DATOS, más
+  abajo. NO son de ejemplo: la densidad que ves es la densidad real, y
+  el diseño tiene que aguantarla.
+
+  TRES RESTRICCIONES QUE NO SON NEGOCIABLES
+  1. El eje X NO es tiempo lineal: son MINUTOS LABORALES (L-V 08:00-18:00,
+     noches y fines de semana colapsados). El horizonte real son 15
+     jornadas con bloques de mediana 10 min; en tiempo lineal es
+     ilegible. Los valores x0/x1 ya vienen calculados en ese eje.
+  2. Las duraciones van de 0 a 500 min. Hace falta un ANCHO MÍNIMO de
+     bloque o la mitad desaparece — a cambio, dos pasos cortos seguidos
+     se solapan en pantalla. Es una tensión inherente, no un bug.
+  3. Cada carril reparte sus bloques en SUB-FILAS según los puestos
+     simultáneos de la estación (capacidadConcurrente). El carril "Sin
+     estación asignada" tiene capacidad infinita y necesita 4 filas.
+
+  CONTRATO DE DATOS COMPLETO
+  docs/simulacion-mesa-de-luz-diseno.md, sección 2.
+
+  LIBRE PARA REDISEÑAR
+  Toda la capa visual: paleta, tipografía, formas, densidad, motion,
+  la disposición del inspector, el tratamiento de la barra superior.
+  La estructura de DATOS y el cálculo de posiciones conviene conservarlos.
+  ────────────────────────────────────────────────────────────────────────
+-->
+<title>Mesa de luz · Simulación de producción</title>
+
+</head>
+<body>
+<style>
+:root{
+  /* Mesa encendida — tinta de imprenta, sesgo azul */
+  --ink:#070B14; --film:#0E1626; --film-2:#141F33; --haze:#1C2942;
+  --line:#22314E; --hair:#18243A;
+  --txt:#E8EEF9; --txt-2:#8FA3C4; --txt-3:#5C7099;
+  --cyan:#22D3EE;            /* la voz del sistema */
+  --hot:#FF3D8B;             /* no llega */
+  --amber:#FFB020;           /* supuesto */
+  --good:#2DD4A7;
+  --glow:0 0 0 1px rgba(34,211,238,.35), 0 0 22px -4px rgba(34,211,238,.55);
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,"JetBrains Mono",Menlo,Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",sans-serif;
+  --lane-pad:6px; --row-h:26px;
+}
+@media (prefers-color-scheme:light){
+  :root{
+    --ink:#F4F6FA; --film:#FFFFFF; --film-2:#EEF2F8; --haze:#E2E8F2;
+    --line:#CBD5E6; --hair:#DFE6F0;
+    --txt:#0D1526; --txt-2:#4A5B78; --txt-3:#7A89A6;
+    --cyan:#0284A8; --hot:#D6006B; --amber:#B26A00; --good:#0F9A78;
+    --glow:0 0 0 1px rgba(2,132,168,.4), 0 2px 12px -3px rgba(2,132,168,.35);
+  }
+}
+:root[data-theme="dark"]{
+  --ink:#070B14; --film:#0E1626; --film-2:#141F33; --haze:#1C2942;
+  --line:#22314E; --hair:#18243A;
+  --txt:#E8EEF9; --txt-2:#8FA3C4; --txt-3:#5C7099;
+  --cyan:#22D3EE; --hot:#FF3D8B; --amber:#FFB020; --good:#2DD4A7;
+  --glow:0 0 0 1px rgba(34,211,238,.35), 0 0 22px -4px rgba(34,211,238,.55);
+}
+:root[data-theme="light"]{
+  --ink:#F4F6FA; --film:#FFFFFF; --film-2:#EEF2F8; --haze:#E2E8F2;
+  --line:#CBD5E6; --hair:#DFE6F0;
+  --txt:#0D1526; --txt-2:#4A5B78; --txt-3:#7A89A6;
+  --cyan:#0284A8; --hot:#D6006B; --amber:#B26A00; --good:#0F9A78;
+  --glow:0 0 0 1px rgba(2,132,168,.4), 0 2px 12px -3px rgba(2,132,168,.35);
+}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--ink);color:var(--txt);font-family:var(--sans);
+  font-size:13px;-webkit-font-smoothing:antialiased}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.eyebrow{font-family:var(--mono);font-size:10px;text-transform:uppercase;
+  letter-spacing:.16em;color:var(--txt-3)}
+
+/* ── Barra de mando ── */
+.bar{display:flex;align-items:center;gap:18px;flex-wrap:wrap;
+  padding:14px 20px;border-bottom:1px solid var(--line);background:var(--film);
+  position:sticky;top:0;z-index:40}
+.brand h1{font-family:var(--mono);font-size:15px;font-weight:600;margin:0;
+  letter-spacing:-.01em}
+.brand .sub{font-size:11.5px;color:var(--txt-2);margin-top:2px}
+.stats{display:flex;gap:16px;margin-left:auto;flex-wrap:wrap}
+.stat .k{font-family:var(--mono);font-size:17px;font-weight:600;line-height:1.1;
+  font-variant-numeric:tabular-nums}
+.stat .l{font-family:var(--mono);font-size:9.5px;text-transform:uppercase;
+  letter-spacing:.13em;color:var(--txt-3);margin-top:3px}
+.stat.hot .k{color:var(--hot)} .stat.amber .k{color:var(--amber)}
+.stat.cyan .k{color:var(--cyan)}
+
+.ctl{display:flex;align-items:center;gap:6px}
+button,select{font:inherit;font-family:var(--mono);font-size:11.5px;
+  background:var(--film-2);color:var(--txt);border:1px solid var(--line);
+  border-radius:7px;padding:6px 11px;cursor:pointer;transition:.14s}
+button:hover,select:hover{border-color:var(--cyan);color:var(--cyan)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+button.on{background:var(--cyan);border-color:var(--cyan);color:var(--ink);font-weight:600}
+
+/* ── Cubierta ── */
+.deck{display:flex;align-items:stretch;overflow:hidden;border-bottom:1px solid var(--line)}
+.gutter{flex:none;width:208px;background:var(--film);border-right:1px solid var(--line);
+  z-index:20;position:relative}
+.gutter .head{height:34px;border-bottom:1px solid var(--line);display:flex;
+  align-items:center;padding:0 14px}
+.lane-lbl{display:flex;flex-direction:column;justify-content:center;gap:3px;
+  padding:0 14px;border-bottom:1px solid var(--hair)}
+.lane-lbl .n{font-size:12px;font-weight:600;letter-spacing:-.01em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lane-lbl .m{font-family:var(--mono);font-size:9.5px;color:var(--txt-3);
+  letter-spacing:.06em}
+.lane-lbl.warn{background:linear-gradient(90deg,rgba(255,176,32,.10),transparent)}
+.lane-lbl.warn .n{color:var(--amber)}
+
+.scroll{flex:1;overflow-x:auto;overflow-y:hidden}
+.stage{position:relative}
+.axis{height:34px;border-bottom:1px solid var(--line);position:relative;
+  background:var(--film)}
+.day{position:absolute;top:0;height:34px;border-left:1px solid var(--hair);
+  display:flex;align-items:center;padding-left:8px}
+.day span{font-family:var(--mono);font-size:9.5px;color:var(--txt-3);
+  text-transform:uppercase;letter-spacing:.1em}
+.day.wk{border-left-color:var(--line)}
+.lane{position:relative;border-bottom:1px solid var(--hair)}
+.lane.warn{background:repeating-linear-gradient(45deg,transparent,transparent 9px,
+  rgba(255,176,32,.045) 9px,rgba(255,176,32,.045) 18px)}
+.gridline{position:absolute;top:0;bottom:0;width:1px;background:var(--hair)}
+
+/* ── Bloques ── */
+.blk{position:absolute;height:var(--row-h);border-radius:4px;cursor:pointer;
+  overflow:hidden;display:flex;align-items:center;padding:0 5px;
+  border:1px solid transparent;transition:opacity .18s,transform .18s,box-shadow .18s;
+  min-width:4px}
+.blk .t{font-family:var(--mono);font-size:10px;font-weight:600;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;letter-spacing:-.01em}
+.blk:hover{transform:translateY(-1px);z-index:12}
+.blk.dim{opacity:.13}
+.blk.sel{box-shadow:var(--glow);z-index:14}
+.blk.terc{border-style:dashed;border-width:1.5px;background-image:
+  repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,.10) 4px,rgba(255,255,255,.10) 8px)}
+.blk.pend{opacity:0;pointer-events:none}
+.blk.tarde::after{content:"";position:absolute;inset:0;border-radius:3px;
+  box-shadow:inset 0 0 0 1.5px var(--hot)}
+
+.now{position:absolute;top:0;bottom:0;width:2px;background:var(--cyan);
+  box-shadow:0 0 14px 2px rgba(34,211,238,.55);z-index:15;pointer-events:none}
+.thread{position:absolute;inset:0;pointer-events:none;z-index:13;overflow:visible}
+
+/* ── Consola ── */
+.console{display:flex;align-items:center;gap:16px;padding:12px 20px;
+  background:var(--film);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.console input[type=range]{flex:1;min-width:220px;accent-color:var(--cyan);cursor:pointer}
+.readout{flex-basis:100%;font-family:var(--mono);font-size:11.5px;color:var(--txt-2);
+  line-height:1.6;min-height:2.9em}
+.readout b{color:var(--txt);font-weight:600}
+.readout .c{color:var(--cyan)} .readout .h{color:var(--hot)} .readout .a{color:var(--amber)}
+
+/* ── Inspector ── */
+.insp{position:fixed;top:0;right:0;bottom:0;width:min(380px,92vw);z-index:60;
+  background:var(--film);border-left:1px solid var(--line);
+  transform:translateX(101%);transition:transform .28s cubic-bezier(.4,0,.2,1);
+  display:flex;flex-direction:column;box-shadow:-20px 0 50px -20px rgba(0,0,0,.6)}
+.insp.open{transform:none}
+.insp .h{padding:16px 18px;border-bottom:1px solid var(--line)}
+.insp .b{padding:16px 18px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:16px}
+.insp h2{font-family:var(--mono);font-size:14px;margin:6px 0 2px;letter-spacing:-.01em}
+.row{display:flex;justify-content:space-between;gap:12px;padding:7px 0;
+  border-bottom:1px solid var(--hair);font-size:12px}
+.row:last-child{border-bottom:none}
+.row .k{color:var(--txt-3);font-family:var(--mono);font-size:10px;
+  text-transform:uppercase;letter-spacing:.1em;padding-top:1px}
+.row .v{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;font-weight:600}
+.note{font-size:12px;line-height:1.65;color:var(--txt-2);
+  border-left:2px solid var(--cyan);padding:2px 0 2px 12px}
+.note.a{border-color:var(--amber)} .note.h{border-color:var(--hot)}
+.x{position:absolute;top:14px;right:16px;padding:4px 9px}
+
+.legend{display:flex;gap:14px;flex-wrap:wrap;padding:10px 20px;
+  border-bottom:1px solid var(--line);background:var(--ink)}
+.lg{display:flex;align-items:center;gap:6px;font-family:var(--mono);
+  font-size:10px;color:var(--txt-3);letter-spacing:.05em}
+.sw{width:16px;height:9px;border-radius:2px;flex:none}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="bar">
+  <div class="brand">
+    <div class="eyebrow">Grafoprint · simulación de flujo</div>
+    <h1>Mesa de luz</h1>
+    <div class="sub">Lo que el motor de ETA decidió, paso por paso — lun 20/07 08:00</div>
+  </div>
+  <div class="stats" id="stats"></div>
+</div>
+
+<div class="console">
+  <div class="ctl">
+    <button id="play">▶ Reproducir</button>
+    <button id="all">Ver todo</button>
+  </div>
+  <input type="range" id="scrub" min="0" max="45" value="45" aria-label="Decisión del scheduler">
+  <span class="mono" id="cnt" style="color:var(--txt-3);font-size:11px"></span>
+  <div class="ctl" style="margin-left:auto">
+    <span class="eyebrow">Zoom</span>
+    <button data-z="0.08">Mes</button>
+    <button data-z="0.16" class="on">Semana</button>
+    <button data-z="0.45">Día</button>
+    <button data-z="1.6">Hora</button>
+  </div>
+  <div class="ctl">
+    <button id="late">Sólo los que no llegan</button>
+  </div>
+  <div class="readout" id="readout"></div>
+</div>
+
+<div class="legend" id="legend"></div>
+
+<div class="deck">
+  <div class="gutter" id="gutter"><div class="head"><span class="eyebrow">Estación</span></div></div>
+  <div class="scroll" id="scroll">
+    <div class="stage" id="stage">
+      <div class="axis" id="axis"></div>
+      <div id="lanes"></div>
+      <svg class="thread" id="thread"></svg>
+    </div>
+  </div>
+</div>
+
+<aside class="insp" id="insp" aria-hidden="true">
+  <div class="h"><button class="x" id="close">✕</button><div id="insphead"></div></div>
+  <div class="b" id="inspbody"></div>
+</aside>
+
+<script>const DATOS={"jornadaMin":600,"maxX":9000,"dias":[{"x":0,"lbl":"lun 20/07"},{"x":600,"lbl":"mar 21/07"},{"x":1200,"lbl":"mié 22/07"},{"x":1800,"lbl":"jue 23/07"},{"x":2400,"lbl":"vie 24/07"},{"x":3000,"lbl":"lun 27/07"},{"x":3600,"lbl":"mar 28/07"},{"x":4200,"lbl":"mié 29/07"},{"x":4800,"lbl":"jue 30/07"},{"x":5400,"lbl":"vie 31/07"},{"x":6000,"lbl":"lun 03/08"},{"x":6600,"lbl":"mar 04/08"},{"x":7200,"lbl":"mié 05/08"},{"x":7800,"lbl":"jue 06/08"},{"x":8400,"lbl":"vie 07/08"},{"x":9000,"lbl":"lun 10/08"},{"x":9600,"lbl":"mar 11/08"}],"estaciones":[{"key":"ed7c7403-50b0-459f-b314-36d5ad4101a2","nombre":"Corte y terminación","puestos":2,"parcial":false},{"key":"13f9829b-343e-42ca-960f-eb12f613776a","nombre":"Gran formato UV","puestos":1,"parcial":false},{"key":"93438c11-59e7-4276-b154-b82ff0c20995","nombre":"Impresión digital","puestos":1,"parcial":false},{"key":"429c2adf-3ab8-4c80-b787-8ab51bdc5841","nombre":"Pre-prensa & Diseño","puestos":2,"parcial":true},{"key":"562dc341-885e-40f7-b16a-a59f8e9f6cdd","nombre":"Textil","puestos":1,"parcial":true},{"key":"__sin_estacion__","nombre":"Sin estación asignada","puestos":null,"parcial":true},{"key":"__proveedor__","nombre":"Proveedor externo","puestos":null,"parcial":false}],"bloques":[{"i":0,"ot":"OT-2026-0022","item":"Folletos offset","cli":"Cliente RI de prueba","paso":"Impresion Offset","fam":"impresion_por_area","est":"Proveedor externo","estKey":"__proveedor__","x0":0,"x1":9000,"dur":null,"plazo":15,"espera":0,"parcial":false,"terc":true,"enCurso":false,"comp":null,"s":{"d":"lun 20/07","h":"08:00"},"e":{"d":"lun 10/08","h":"08:00"},"entrega":"dom 26/07","itemId":"557637f5-770e-4292-9cf9-9b6d8ad810d9","pasoIndice":0},{"i":1,"ot":"OT-2026-0023","item":"Folletos offset","cli":"Cliente RI de prueba","paso":"Impresion Offset","fam":"impresion_por_area","est":"Proveedor externo","estKey":"__proveedor__","x0":0,"x1":9000,"dur":null,"plazo":15,"espera":0,"parcial":false,"terc":true,"enCurso":false,"comp":null,"s":{"d":"lun 20/07","h":"08:00"},"e":{"d":"lun 10/08","h":"08:00"},"entrega":"dom 26/07","itemId":"06f79228-b4d3-41ec-a727-d1c84d67a7a1","pasoIndice":1},{"i":2,"ot":"OT-2026-0024","item":"Folletos offset","cli":"Imprenta Imagen","paso":"Impresion Offset","fam":"impresion_por_area","est":"Proveedor externo","estKey":"__proveedor__","x0":0,"x1":9000,"dur":null,"plazo":15,"espera":0,"parcial":false,"terc":true,"enCurso":false,"comp":null,"s":{"d":"lun 20/07","h":"08:00"},"e":{"d":"lun 10/08","h":"08:00"},"entrega":"dom 26/07","itemId":"655d8c42-1a56-4b5c-b067-98bb31560784","pasoIndice":1},{"i":3,"ot":"OT-2026-0002","item":"Tarjetas de visita","cli":"Imprenta Imagen","paso":"Corte guillotina","fam":"corte_guillotina","est":"Corte y terminación","estKey":"ed7c7403-50b0-459f-b314-36d5ad4101a2","x0":60,"x1":69,"dur":9,"plazo":null,"espera":60,"parcial":false,"terc":false,"enCurso":false,"comp":18,"s":{"d":"lun 20/07","h":"09:00"},"e":{"d":"lun 20/07","h":"09:09"},"entrega":"mar 21/07","itemId":"b423d643-e14f-4d4c-b1e1-d017aa400cae","pasoIndice":2},{"i":4,"ot":"OT-2026-0007","item":"Tarjetas de visita","cli":"Patagonia Packaging","paso":"Impresion por hoja CMYK","fam":"impresion_por_hoja","est":"Impresión digital","estKey":"93438c11-59e7-4276-b154-b82ff0c20995","x0":60,"x1":67,"dur":7,"plazo":null,"espera":60,"parcial":false,"terc":false,"enCurso":false,"comp":17,"s":{"d":"lun 20/07","h":"09:00"},"e":{"d":"lun 20/07","h":"09:07"},"entrega":"mié 22/07","itemId":"7aeb1e42-dc3d-441d-9c3b-50878e64b4b8","pasoIndice":1},{"i":5,"ot":"OT-2026-0007","item":"Vinilo impreso blanco","cli":"Patagonia Packaging","paso":"Colocacion de vinilos","fam":"trabajo_manual","est":"Sin estación asignada","estKey":"__sin_estacion__","x0":60,"x1":125,"dur":65,"plazo":null,"espera":60,"parcial":true,"terc":false,"enCurso":false,"comp":17,"s":{"d":"lun 20/07","h":"09:00"},"e":{"d":"lun 20/07","h":"10:05"},"entrega":"mié 22/07","itemId":"86bc1407-df26-4e54-b900-6d1afd029eee","pasoIndice":2},{"i":6,"ot":"OT-2026-0012","item":"PVC Espumado","cli":"Patagonia Packaging","paso":"Refilado de vinilo","fam":"trabajo_manual","est":"Sin estación asignada","estKey":"__sin_estacion__","x0":60,"x1":85,"dur":25,"plazo":null,"espera":60,"parcial":true,"terc":false,"enCurso":false,"comp":16,"s":{"d":"lun 20/07","h":"09:00"},"e":{"d":"lun 20/07","h":"09:25"},"entrega":"vie 24/07","itemId":"4d6f4b58-6a39-4421-a6f7-ba9b106b670a","pasoIndice":1},{"i":7,"ot":"OT-2026-0013","item":"Folletos / flyers","cli":"Patagonia Packaging","paso":"Pre prensa","fam":"pre_prensa","est":"Pre-prensa & Diseño","estKey":"429c2adf-3ab8-4c80-b787-8ab51bdc5841","x0":60,"x1":70,"dur":10,"plazo":null,"espera":60,"parcial":true,"terc":false,"enCurso":false,"comp":15,"s":{"d":"lun 20/07","h":"09:00"},"e":{"d":"lun 20/07","h":"09:10"},"entrega":"vie 24/07","itemId":"357d3da9-99eb-476e-8ba1-844d626c38a2","pasoIndice":1},{"i":8,"ot":"OT-2026-0014","item":"Carteleria PVC con vinilo","cli":"Patagonia Packaging","paso":"Montaje sobre sustrato","fam":"montaje_sobre_sustrato","est":"Sin estación asignada","estKey":"__sin_estacion__","x0":60,"x1":68,"dur":8,"plazo":null,"espera":60,"parcial":true,"terc":false,"enCurso":false,"comp":15,"s":{"d":"lun 20/07","h":"09:00"},"e":{"d":"lun 20/07","h":"09:08"},"entrega":"vie 24/07","itemId":"3ed332a2-c806-4756-b9ee-5bea0fcbc679","pasoIndice":1},{"i":9,"ot":"OT-2026-0015","item":"Carpetas con solapa para hojas A4","cli":"Patagonia Packaging","paso":"Pre prensa","fam":"pre_prensa","est":"Pre-prensa & Diseño","estKey":"429c2adf-3ab8-4c80-b787-8ab51bdc5841","x0":60,"x1":70,"dur":10,"plazo":null,"espera":60,"parcial":true,"terc":false,"enCurso":false,"comp":15,"s":{"d":"lun 20/07","h":"09:00"},"e":{"d":"lun 20/07","h":"09:10"},"entrega":"vie 24/07","itemId":"8ed8afff-a2bb-41c9-9dae-a8c521ddb566","pasoIndice":1},{"i":10,"ot":"OT-2026-0016","item":"Remera de algodon personalizada","cli":"Patagonia Packaging","paso":"Impresion en DTF Textil CMYK + Blanco","fam":"impresion_por_area","est":"Textil","estKey":"562dc341-885e-40f7-b16a-a59f8e9f6cdd","x0":60,"x1":98,"dur":38,"plazo":null,"espera":60,"parcial":true,"terc":false,"enCurso":false,"comp":15,"s":{"d":"lun 20/07","h":"09:00"},"e":{"d":"lun 20/07","h":"09:38"},"entrega":"vie 24/07","itemId":"8203f206-0345-4d73-9791-c8a4b10b2416","pasoIndice":0},{"i":11,"ot":"OT-2026-0018","item":"Vinilo impreso blanco","cli":"Patagonia Packaging","paso":"Refilado de vinilo","fam":"trabajo_manual","est":"Sin estación asignada","estKey":"__sin_estacion__","x0":60,"x1":71,"dur":11,"plazo":null,"espera":60,"parcial":true,"terc":false,"enCurso":false,"comp":15,"s":{"d":"lun 20/07","h":"09:00"},"e":{"d":"lun 20/07","h":"09:11"},"entrega":"vie 24/07","itemId":"01da0684-a344-4b19-b824-b3d003994d6b","pasoIndice":1},{"i":12,"ot":"OT-2026-0007","item":"Tarjetas de visita","cli":"Patagonia Packaging","paso":"Corte guillotina","fam":"corte_guillotina","est":"Corte y terminación","estKey":"ed7c7403-50b0-459f-b314-36d5ad4101a2","x0":67,"x1":76,"dur":9,"plazo":null,"espera":0,"parcial":false,"terc":false,"enCurso":false,"comp":14,"s":{"d":"lun 20/07","h":"09:07"},"e":{"d":"lun 20/07","h":"09:16"},"entrega":"mié 22/07","itemId":"7aeb1e42-dc3d-441d-9c3b-50878e64b4b8","pasoIndice":2},{"i":13,"ot":"OT-2026-0009","item":"Tarjetas de visita","cli":"Imprenta Imagen","paso":"Impresion por hoja CMYK","fam":"impresion_por_hoja","est":"Impresión digital","estKey":"93438c11-59e7-4276-b154-b82ff0c20995","x0":67,"x1":75,"dur":8,"plazo":null,"espera":67,"parcial":false,"terc":false,"enCurso":false,"comp":13,"s":{"d":"lun 20/07","h":"09:07"},"e":{"d":"lun 20/07","h":"09:15"},"entrega":"jue 23/07","itemId":"d177bcb0-5d19-4f67-ba3c-7e38ece520ad","pasoIndice":2},{"i":14,"ot":"OT-2026-0014","item":"Carteleria PVC con vinilo","cli":"Patagonia Packaging","paso":"Refilado de vinilo","fam":"trabajo_manual","est":"Sin estación asignada","estKey":"__sin_estacion__","x0":68,"x1":73,"dur":5,"plazo":null,"espera":0,"parcial":true,"terc":false,"enCurso":false,"comp":13,"s":{"d":"lun 20/07","h":"09:08"},"e":{"d":"lun 20/07","h":"09:13"},"entrega":"vie 24/07","itemId":"3ed332a2-c806-4756-b9ee-5bea0fcbc679","pasoIndice":2},{"i":15,"ot":"OT-2026-0025","item":"Carpetas con solapa para hojas A4","cli":"Patagonia Packaging","paso":"Pre prensa","fam":"pre_prensa","est":"Pre-prensa & Diseño","estKey":"429c2adf-3ab8-4c80-b787-8ab51bdc5841","x0":70,"x1":80,"dur":10,"plazo":null,"espera":70,"parcial":true,"terc":false,"enCurso":false,"comp":12,"s":{"d":"lun 20/07","h":"09:10"},"e":{"d":"lun 20/07","h":"09:20"},"entrega":"vie 24/07","itemId":"8e753743-34cc-4213-a8fd-ad0c7cabc0a4","pasoIndice":0},{"i":16,"ot":"OT-2026-0005","item":"Tarjetas de visita","cli":"Imprenta Imagen","paso":"Pre prensa","fam":"pre_prensa","est":"Pre-prensa & Diseño","estKey":"429c2adf-3ab8-4c80-b787-8ab51bdc5841","x0":70,"x1":80,"dur":10,"plazo":null,"espera":70,"parcial":true,"terc":false,"enCurso":false,"comp":12,"s":{"d":"lun 20/07","h":"09:10"},"e":{"d":"lun 20/07","h":"09:20"},"entrega":"sáb 25/07","itemId":"8ee38ba3-4bec-49a3-990c-204eaaaa76e1","pasoIndice":1},{"i":17,"ot":"OT-2026-0009","item":"Tarjetas de visita","cli":"Imprenta Imagen","paso":"Laminado","fam":"laminado","est":"Corte y terminación","estKey":"ed7c7403-50b0-459f-b314-36d5ad4101a2","x0":75,"x1":113,"dur":38,"plazo":null,"espera":0,"parcial":false,"terc":false,"enCurso":false,"comp":12,"s":{"d":"lun 20/07","h":"09:15"},"e":{"d":"lun 20/07","h":"09:53"},"entrega":"jue 23/07","itemId":"d177bcb0-5d19-4f67-ba3c-7e38ece520ad","pasoIndice":3},{"i":18,"ot":"OT-2026-0011","item":"Tarjetas de visita","cli":"Patagonia Packaging","paso":"Impresion por hoja Blanco y negro","fam":"impresion_por_hoja","est":"Impresión digital","estKey":"93438c11-59e7-4276-b154-b82ff0c20995","x0":75,"x1":80,"dur":5,"plazo":null,"espera":75,"parcial":false,"terc":false,"enCurso":false,"comp":12,"s":{"d":"lun 20/07","h":"09:15"},"e":{"d":"lun 20/07","h":"09:20"},"entrega":"jue 23/07","itemId":"5c9adc58-2cb2-40ce-ac12-5ad50b8391a8","pasoIndice":1},{"i":19,"ot":"OT-2026-0011","item":"Tarjetas de visita","cli":"Patagonia Packaging","paso":"Corte guillotina","fam":"corte_guillotina","est":"Corte y terminación","estKey":"ed7c7403-50b0-459f-b314-36d5ad4101a2","x0":80,"x1":89,"dur":9,"plazo":null,"espera":0,"parcial":false,"terc":false,"enCurso":false,"comp":12,"s":{"d":"lun 20/07","h":"09:20"},"e":{"d":"lun 20/07","h":"09:29"},"entrega":"jue 23/07","itemId":"5c9adc58-2cb2-40ce-ac12-5ad50b8391a8","pasoIndice":2},{"i":20,"ot":"OT-2026-0013","item":"Folletos / flyers","cli":"Patagonia Packaging","paso":"Impresion por hoja CMYK","fam":"impresion_por_hoja","est":"Impresión digital","estKey":"93438c11-59e7-4276-b154-b82ff0c20995","x0":80,"x1":87,"dur":7,"plazo":null,"espera":10,"parcial":false,"terc":false,"enCurso":false,"comp":11,"s":{"d":"lun 20/07","h":"09:20"},"e":{"d":"lun 20/07","h":"09:27"},"entrega":"vie 24/07","itemId":"357d3da9-99eb-476e-8ba1-844d626c38a2","pasoIndice":2},{"i":21,"ot":"OT-2026-0015","item":"Carpetas con solapa para hojas A4","cli":"Patagonia Packaging","paso":"Impresion por hoja CMYK","fam":"impresion_por_hoja","est":"Impresión digital","estKey":"93438c11-59e7-4276-b154-b82ff0c20995","x0":87,"x1":101,"dur":14,"plazo":null,"espera":17,"parcial":false,"terc":false,"enCurso":false,"comp":11,"s":{"d":"lun 20/07","h":"09:27"},"e":{"d":"lun 20/07","h":"09:41"},"entrega":"vie 24/07","itemId":"8ed8afff-a2bb-41c9-9dae-a8c521ddb566","pasoIndice":2},{"i":22,"ot":"OT-2026-0013","item":"Folletos / flyers","cli":"Patagonia Packaging","paso":"Corte guillotina","fam":"corte_guillotina","est":"Corte y terminación","estKey":"ed7c7403-50b0-459f-b314-36d5ad4101a2","x0":89,"x1":95,"dur":6,"plazo":null,"espera":2,"parcial":false,"terc":false,"enCurso":false,"comp":11,"s":{"d":"lun 20/07","h":"09:29"},"e":{"d":"lun 20/07","h":"09:35"},"entrega":"vie 24/07","itemId":"357d3da9-99eb-476e-8ba1-844d626c38a2","pasoIndice":3},{"i":23,"ot":"OT-2026-0016","item":"Remera de algodon personalizada","cli":"Patagonia Packaging","paso":"Aplicacion transfer","fam":"aplicacion_transfer","est":"Sin estación asignada","estKey":"__sin_estacion__","x0":98,"x1":598,"dur":500,"plazo":null,"espera":0,"parcial":true,"terc":false,"enCurso":false,"comp":10,"s":{"d":"lun 20/07","h":"09:38"},"e":{"d":"lun 20/07","h":"17:58"},"entrega":"vie 24/07","itemId":"8203f206-0345-4d73-9791-c8a4b10b2416","pasoIndice":1},{"i":24,"ot":"OT-2026-0005","item":"Remera de algodon personalizada","cli":"Imprenta Imagen","paso":"Impresion en DTF Textil CMYK + Blanco","fam":"impresion_por_area","est":"Textil","estKey":"562dc341-885e-40f7-b16a-a59f8e9f6cdd","x0":98,"x1":136,"dur":38,"plazo":null,"espera":98,"parcial":true,"terc":false,"enCurso":false,"comp":9,"s":{"d":"lun 20/07","h":"09:38"},"e":{"d":"lun 20/07","h":"10:16"},"entrega":"sáb 25/07","itemId":"f053ef41-6e20-4c61-8a6e-35ae8fcede19","pasoIndice":0},{"i":25,"ot":"OT-2026-0015","item":"Carpetas con solapa para hojas A4","cli":"Patagonia Packaging","paso":"Hendido de carpetas","fam":"trabajo_manual","est":"Sin estación asignada","estKey":"__sin_estacion__","x0":101,"x1":151,"dur":50,"plazo":null,"espera":0,"parcial":true,"terc":false,"enCurso":false,"comp":9,"s":{"d":"lun 20/07","h":"09:41"},"e":{"d":"lun 20/07","h":"10:31"},"entrega":"vie 24/07","itemId":"8ed8afff-a2bb-41c9-9dae-a8c521ddb566","pasoIndice":3},{"i":26,"ot":"OT-2026-0019","item":"Tarjetas de visita","cli":"Patagonia Packaging","paso":"Impresion por hoja CMYK","fam":"impresion_por_hoja","est":"Impresión digital","estKey":"93438c11-59e7-4276-b154-b82ff0c20995","x0":101,"x1":108,"dur":7,"plazo":null,"espera":101,"parcial":false,"terc":false,"enCurso":false,"comp":9,"s":{"d":"lun 20/07","h":"09:41"},"e":{"d":"lun 20/07","h":"09:48"},"entrega":"vie 24/07","itemId":"e0f221fe-f2aa-4011-9b2f-2fd5c9df1473","pasoIndice":1},{"i":27,"ot":"OT-2026-0019","item":"Tarjetas de visita","cli":"Patagonia Packaging","paso":"Corte guillotina","fam":"corte_guillotina","est":"Corte y terminación","estKey":"ed7c7403-50b0-459f-b314-36d5ad4101a2","x0":108,"x1":117,"dur":9,"plazo":null,"espera":0,"parcial":false,"terc":false,"enCurso":false,"comp":9,"s":{"d":"lun 20/07","h":"09:48"},"e":{"d":"lun 20/07","h":"09:57"},"entrega":"vie 24/07","itemId":"e0f221fe-f2aa-4011-9b2f-2fd5c9df1473","pasoIndice":2},{"i":28,"ot":"OT-2026-0025","item":"Carpetas con solapa para hojas A4","cli":"Patagonia Packaging","paso":"Material sin impresión","fam":"impresion_por_hoja","est":"Impresión digital","estKey":"93438c11-59e7-4276-b154-b82ff0c20995","x0":108,"x1":108,"dur":0,"plazo":null,"espera":28,"parcial":false,"terc":false,"enCurso":false,"comp":8,"s":{"d":"lun 20/07","h":"09:48"},"e":{"d":"lun 20/07","h":"09:48"},"entrega":"vie 24/07","itemId":"8e753743-34cc-4213-a8fd-ad0c7cabc0a4","pasoIndice":1},{"i":29,"ot":"OT-2026-0005","item":"Tarjetas de visita","cli":"Imprenta Imagen","paso":"Impresion por hoja CMYK","fam":"impresion_por_hoja","est":"Impresión digital","estKey":"93438c11-59e7-4276-b154-b82ff0c20995","x0":108,"x1":114,"dur":6,"plazo":null,"espera":28,"parcial":false,"terc":false,"enCurso":false,"comp":8,"s":{"d":"lun 20/07","h":"09:48"},"e":{"d":"lun 20/07","h":"09:54"},"entrega":"sáb 25/07","itemId":"8ee38ba3-4bec-49a3-990c-204eaaaa76e1","pasoIndice":2},{"i":30,"ot":"OT-2026-0009","item":"Tarjetas de visita","cli":"Imprenta Imagen","paso":"Corte guillotina","fam":"corte_guillotina","est":"Corte y terminación","estKey":"ed7c7403-50b0-459f-b314-36d5ad4101a2","x0":113,"x1":122,"dur":9,"plazo":null,"espera":0,"parcial":false,"terc":false,"enCurso":false,"comp":8,"s":{"d":"lun 20/07","h":"09:53"},"e":{"d":"lun 20/07","h":"10:02"},"entrega":"jue 23/07","itemId":"d177bcb0-5d19-4f67-ba3c-7e38ece520ad","pasoIndice":4},{"i":31,"ot":"OT-2026-0025","item":"Carpetas con solapa para hojas A4","cli":"Patagonia Packaging","paso":"Laminado","fam":"laminado","est":"Corte y terminación","estKey":"ed7c7403-50b0-459f-b314-36d5ad4101a2","x0":117,"x1":183,"dur":66,"plazo":null,"espera":9,"parcial":false,"terc":false,"enCurso":false,"comp":7,"s":{"d":"lun 20/07","h":"09:57"},"e":{"d":"lun 20/07","h":"11:03"},"entrega":"vie 24/07","itemId":"8e753743-34cc-4213-a8fd-ad0c7cabc0a4","pasoIndice":2},{"i":32,"ot":"OT-2026-0005","item":"Tarjetas de visita","cli":"Imprenta Imagen","paso":"Corte guillotina","fam":"corte_guillotina","est":"Corte y terminación","estKey":"ed7c7403-50b0-459f-b314-36d5ad4101a2","x0":122,"x1":131,"dur":9,"plazo":null,"espera":8,"parcial":false,"terc":false,"enCurso":false,"comp":7,"s":{"d":"lun 20/07","h":"10:02"},"e":{"d":"lun 20/07","h":"10:11"},"entrega":"sáb 25/07","itemId":"8ee38ba3-4bec-49a3-990c-204eaaaa76e1","pasoIndice":3},{"i":33,"ot":"OT-2026-0005","item":"Remera de algodon personalizada","cli":"Imprenta Imagen","paso":"Aplicacion transfer","fam":"aplicacion_transfer","est":"Sin estación asignada","estKey":"__sin_estacion__","x0":136,"x1":696,"dur":500,"plazo":null,"espera":0,"parcial":true,"terc":false,"enCurso":false,"comp":6,"s":{"d":"lun 20/07","h":"10:16"},"e":{"d":"mar 21/07","h":"09:36"},"entrega":"sáb 25/07","itemId":"f053ef41-6e20-4c61-8a6e-35ae8fcede19","pasoIndice":1},{"i":34,"ot":"OT-2026-0015","item":"Carpetas con solapa para hojas A4","cli":"Patagonia Packaging","paso":"Pegado de solapa","fam":"trabajo_manual","est":"Sin estación asignada","estKey":"__sin_estacion__","x0":151,"x1":201,"dur":50,"plazo":null,"espera":0,"parcial":true,"terc":false,"enCurso":false,"comp":5,"s":{"d":"lun 20/07","h":"10:31"},"e":{"d":"lun 20/07","h":"11:21"},"entrega":"vie 24/07","itemId":"8ed8afff-a2bb-41c9-9dae-a8c521ddb566","pasoIndice":4},{"i":35,"ot":"OT-2026-0025","item":"Carpetas con solapa para hojas A4","cli":"Patagonia Packaging","paso":"Hendido de carpetas","fam":"trabajo_manual","est":"Sin estación asignada","estKey":"__sin_estacion__","x0":183,"x1":233,"dur":50,"plazo":null,"espera":0,"parcial":true,"terc":false,"enCurso":false,"comp":4,"s":{"d":"lun 20/07","h":"11:03"},"e":{"d":"lun 20/07","h":"11:53"},"entrega":"vie 24/07","itemId":"8e753743-34cc-4213-a8fd-ad0c7cabc0a4","pasoIndice":3},{"i":36,"ot":"OT-2026-0025","item":"Carpetas con solapa para hojas A4","cli":"Patagonia Packaging","paso":"Pegado de solapa","fam":"trabajo_manual","est":"Sin estación asignada","estKey":"__sin_estacion__","x0":233,"x1":283,"dur":50,"plazo":null,"espera":0,"parcial":true,"terc":false,"enCurso":false,"comp":4,"s":{"d":"lun 20/07","h":"11:53"},"e":{"d":"lun 20/07","h":"12:43"},"entrega":"vie 24/07","itemId":"8e753743-34cc-4213-a8fd-ad0c7cabc0a4","pasoIndice":4},{"i":37,"ot":"OT-2026-0005","item":"Vinilo Microperforado","cli":"Imprenta Imagen","paso":"Impresion por area CMYK","fam":"impresion_por_area","est":"Gran formato UV","estKey":"13f9829b-343e-42ca-960f-eb12f613776a","x0":780,"x1":808,"dur":28,"plazo":null,"espera":1620,"parcial":false,"terc":false,"enCurso":false,"comp":3,"s":{"d":"mar 21/07","h":"11:00"},"e":{"d":"mar 21/07","h":"11:28"},"entrega":"sáb 25/07","itemId":"d55ba3a4-3b06-4212-9559-fab54708d326","pasoIndice":0},{"i":38,"ot":"OT-2026-0005","item":"Vinilo Microperforado","cli":"Imprenta Imagen","paso":"Refilado de vinilo","fam":"trabajo_manual","est":"Sin estación asignada","estKey":"__sin_estacion__","x0":808,"x1":813,"dur":5,"plazo":null,"espera":0,"parcial":true,"terc":false,"enCurso":false,"comp":3,"s":{"d":"mar 21/07","h":"11:28"},"e":{"d":"mar 21/07","h":"11:33"},"entrega":"sáb 25/07","itemId":"d55ba3a4-3b06-4212-9559-fab54708d326","pasoIndice":1},{"i":39,"ot":"OT-2026-0027","item":"Lona Frontlight","cli":"Imprenta Imagen","paso":"Impresion por area CMYK + Blanco","fam":"impresion_por_area","est":"Gran formato UV","estKey":"13f9829b-343e-42ca-960f-eb12f613776a","x0":808,"x1":836,"dur":28,"plazo":null,"espera":1648,"parcial":false,"terc":false,"enCurso":false,"comp":2,"s":{"d":"mar 21/07","h":"11:28"},"e":{"d":"mar 21/07","h":"11:56"},"entrega":"dom 26/07","itemId":"a62f04f6-5819-4f3d-994f-4c0a2f997a6d","pasoIndice":0},{"i":40,"ot":"OT-2026-0027","item":"Lona Frontlight","cli":"Imprenta Imagen","paso":"Refuerzo perimetral","fam":"modificacion_pre","est":"Sin estación asignada","estKey":"__sin_estacion__","x0":836,"x1":858,"dur":22,"plazo":null,"espera":0,"parcial":true,"terc":false,"enCurso":false,"comp":2,"s":{"d":"mar 21/07","h":"11:56"},"e":{"d":"mar 21/07","h":"12:18"},"entrega":"dom 26/07","itemId":"a62f04f6-5819-4f3d-994f-4c0a2f997a6d","pasoIndice":1},{"i":41,"ot":"OT-2026-0028","item":"Lona Frontlight","cli":"Cliente RI de prueba","paso":"Impresion por area CMYK + Blanco","fam":"impresion_por_area","est":"Gran formato UV","estKey":"13f9829b-343e-42ca-960f-eb12f613776a","x0":836,"x1":861,"dur":25,"plazo":null,"espera":1676,"parcial":false,"terc":false,"enCurso":false,"comp":2,"s":{"d":"mar 21/07","h":"11:56"},"e":{"d":"mar 21/07","h":"12:21"},"entrega":"dom 26/07","itemId":"b992ee86-9b0d-476f-8365-fe5b191b5186","pasoIndice":0},{"i":42,"ot":"OT-2026-0027","item":"Lona Frontlight","cli":"Imprenta Imagen","paso":"Colocacion ojales","fam":"colocacion_ojales","est":"Sin estación asignada","estKey":"__sin_estacion__","x0":858,"x1":868,"dur":10,"plazo":null,"espera":0,"parcial":true,"terc":false,"enCurso":false,"comp":2,"s":{"d":"mar 21/07","h":"12:18"},"e":{"d":"mar 21/07","h":"12:28"},"entrega":"dom 26/07","itemId":"a62f04f6-5819-4f3d-994f-4c0a2f997a6d","pasoIndice":2},{"i":43,"ot":"OT-2026-0028","item":"Lona Frontlight","cli":"Cliente RI de prueba","paso":"Refuerzo perimetral","fam":"modificacion_pre","est":"Sin estación asignada","estKey":"__sin_estacion__","x0":861,"x1":871,"dur":10,"plazo":null,"espera":0,"parcial":true,"terc":false,"enCurso":false,"comp":1,"s":{"d":"mar 21/07","h":"12:21"},"e":{"d":"mar 21/07","h":"12:31"},"entrega":"dom 26/07","itemId":"b992ee86-9b0d-476f-8365-fe5b191b5186","pasoIndice":1},{"i":44,"ot":"OT-2026-0028","item":"Lona Frontlight","cli":"Cliente RI de prueba","paso":"Colocacion ojales","fam":"colocacion_ojales","est":"Sin estación asignada","estKey":"__sin_estacion__","x0":871,"x1":877,"dur":6,"plazo":null,"espera":0,"parcial":true,"terc":false,"enCurso":false,"comp":1,"s":{"d":"mar 21/07","h":"12:31"},"e":{"d":"mar 21/07","h":"12:37"},"entrega":"dom 26/07","itemId":"b992ee86-9b0d-476f-8365-fe5b191b5186","pasoIndice":2}],"res":[{"itemId":"b423d643-e14f-4d4c-b1e1-d017aa400cae","ot":"OT-2026-0002","item":"Tarjetas de visita","cli":"Imprenta Imagen","fin":{"d":"lun 20/07","h":"09:09"},"finX":69,"entrega":"mar 21/07","entregaX":1200,"tarde":false,"sinEstimar":false,"parcial":false},{"itemId":"8ee38ba3-4bec-49a3-990c-204eaaaa76e1","ot":"OT-2026-0005","item":"Tarjetas de visita","cli":"Imprenta Imagen","fin":{"d":"lun 20/07","h":"10:11"},"finX":131,"entrega":"sáb 25/07","entregaX":3000,"tarde":false,"sinEstimar":false,"parcial":true},{"itemId":"d55ba3a4-3b06-4212-9559-fab54708d326","ot":"OT-2026-0005","item":"Vinilo Microperforado","cli":"Imprenta Imagen","fin":{"d":"mar 21/07","h":"11:33"},"finX":813,"entrega":"sáb 25/07","entregaX":3000,"tarde":false,"sinEstimar":false,"parcial":true},{"itemId":"f053ef41-6e20-4c61-8a6e-35ae8fcede19","ot":"OT-2026-0005","item":"Remera de algodon personalizada","cli":"Imprenta Imagen","fin":{"d":"mar 21/07","h":"09:36"},"finX":696,"entrega":"sáb 25/07","entregaX":3000,"tarde":false,"sinEstimar":false,"parcial":true},{"itemId":"7aeb1e42-dc3d-441d-9c3b-50878e64b4b8","ot":"OT-2026-0007","item":"Tarjetas de visita","cli":"Patagonia Packaging","fin":{"d":"lun 20/07","h":"09:16"},"finX":76,"entrega":"mié 22/07","entregaX":1800,"tarde":false,"sinEstimar":false,"parcial":false},{"itemId":"86bc1407-df26-4e54-b900-6d1afd029eee","ot":"OT-2026-0007","item":"Vinilo impreso blanco","cli":"Patagonia Packaging","fin":{"d":"lun 20/07","h":"10:05"},"finX":125,"entrega":"mié 22/07","entregaX":1800,"tarde":false,"sinEstimar":false,"parcial":true},{"itemId":"d177bcb0-5d19-4f67-ba3c-7e38ece520ad","ot":"OT-2026-0009","item":"Tarjetas de visita","cli":"Imprenta Imagen","fin":{"d":"lun 20/07","h":"10:02"},"finX":122,"entrega":"jue 23/07","entregaX":2400,"tarde":false,"sinEstimar":false,"parcial":false},{"itemId":"5c9adc58-2cb2-40ce-ac12-5ad50b8391a8","ot":"OT-2026-0011","item":"Tarjetas de visita","cli":"Patagonia Packaging","fin":{"d":"lun 20/07","h":"09:29"},"finX":89,"entrega":"jue 23/07","entregaX":2400,"tarde":false,"sinEstimar":false,"parcial":false},{"itemId":"4d6f4b58-6a39-4421-a6f7-ba9b106b670a","ot":"OT-2026-0012","item":"PVC Espumado","cli":"Patagonia Packaging","fin":{"d":"lun 20/07","h":"09:25"},"finX":85,"entrega":"vie 24/07","entregaX":3000,"tarde":false,"sinEstimar":false,"parcial":true},{"itemId":"357d3da9-99eb-476e-8ba1-844d626c38a2","ot":"OT-2026-0013","item":"Folletos / flyers","cli":"Patagonia Packaging","fin":{"d":"lun 20/07","h":"09:35"},"finX":95,"entrega":"vie 24/07","entregaX":3000,"tarde":false,"sinEstimar":false,"parcial":true},{"itemId":"3ed332a2-c806-4756-b9ee-5bea0fcbc679","ot":"OT-2026-0014","item":"Carteleria PVC con vinilo","cli":"Patagonia Packaging","fin":{"d":"lun 20/07","h":"09:13"},"finX":73,"entrega":"vie 24/07","entregaX":3000,"tarde":false,"sinEstimar":false,"parcial":true},{"itemId":"8ed8afff-a2bb-41c9-9dae-a8c521ddb566","ot":"OT-2026-0015","item":"Carpetas con solapa para hojas A4","cli":"Patagonia Packaging","fin":{"d":"lun 20/07","h":"11:21"},"finX":201,"entrega":"vie 24/07","entregaX":3000,"tarde":false,"sinEstimar":false,"parcial":true},{"itemId":"8203f206-0345-4d73-9791-c8a4b10b2416","ot":"OT-2026-0016","item":"Remera de algodon personalizada","cli":"Patagonia Packaging","fin":{"d":"lun 20/07","h":"17:58"},"finX":598,"entrega":"vie 24/07","entregaX":3000,"tarde":false,"sinEstimar":false,"parcial":true},{"itemId":"01da0684-a344-4b19-b824-b3d003994d6b","ot":"OT-2026-0018","item":"Vinilo impreso blanco","cli":"Patagonia Packaging","fin":{"d":"lun 20/07","h":"09:11"},"finX":71,"entrega":"vie 24/07","entregaX":3000,"tarde":false,"sinEstimar":false,"parcial":true},{"itemId":"e0f221fe-f2aa-4011-9b2f-2fd5c9df1473","ot":"OT-2026-0019","item":"Tarjetas de visita","cli":"Patagonia Packaging","fin":{"d":"lun 20/07","h":"09:57"},"finX":117,"entrega":"vie 24/07","entregaX":3000,"tarde":false,"sinEstimar":false,"parcial":false},{"itemId":"557637f5-770e-4292-9cf9-9b6d8ad810d9","ot":"OT-2026-0022","item":"Folletos offset","cli":"Cliente RI de prueba","fin":{"d":"lun 10/08","h":"08:00"},"finX":9000,"entrega":"dom 26/07","entregaX":3000,"tarde":true,"sinEstimar":false,"parcial":false},{"itemId":"06f79228-b4d3-41ec-a727-d1c84d67a7a1","ot":"OT-2026-0023","item":"Folletos offset","cli":"Cliente RI de prueba","fin":{"d":"lun 10/08","h":"08:00"},"finX":9000,"entrega":"dom 26/07","entregaX":3000,"tarde":true,"sinEstimar":false,"parcial":false},{"itemId":"655d8c42-1a56-4b5c-b067-98bb31560784","ot":"OT-2026-0024","item":"Folletos offset","cli":"Imprenta Imagen","fin":{"d":"lun 10/08","h":"08:00"},"finX":9000,"entrega":"dom 26/07","entregaX":3000,"tarde":true,"sinEstimar":false,"parcial":false},{"itemId":"8e753743-34cc-4213-a8fd-ad0c7cabc0a4","ot":"OT-2026-0025","item":"Carpetas con solapa para hojas A4","cli":"Patagonia Packaging","fin":{"d":"lun 20/07","h":"12:43"},"finX":283,"entrega":"vie 24/07","entregaX":3000,"tarde":false,"sinEstimar":false,"parcial":true},{"itemId":"a62f04f6-5819-4f3d-994f-4c0a2f997a6d","ot":"OT-2026-0027","item":"Lona Frontlight","cli":"Imprenta Imagen","fin":{"d":"mar 21/07","h":"12:28"},"finX":868,"entrega":"dom 26/07","entregaX":3000,"tarde":false,"sinEstimar":false,"parcial":true},{"itemId":"b992ee86-9b0d-476f-8365-fe5b191b5186","ot":"OT-2026-0028","item":"Lona Frontlight","cli":"Cliente RI de prueba","fin":{"d":"mar 21/07","h":"12:37"},"finX":877,"entrega":"dom 26/07","entregaX":3000,"tarde":false,"sinEstimar":false,"parcial":true}]};</script>
+<script>
+const D = DATOS;
+const TINTAS = ["#22D3EE","#FF3D8B","#FFB020","#8B7BFF","#2DD4A7","#FF7A45","#4CC2FF","#C77DFF"];
+const OTS = [...new Set(D.bloques.map(b=>b.ot))].sort();
+const tinta = ot => TINTAS[OTS.indexOf(ot) % TINTAS.length];
+const ROW = 26, PAD = 6;
+
+let z = 0.16, corte = D.bloques.length, soloTarde = false, sel = null, hov = null;
+
+/* Empaquetado: cada carril reparte sus bloques en sub-filas sin solaparse. */
+const carriles = D.estaciones.map(e=>{
+  const bs = D.bloques.filter(b=>b.est===e.nombre).sort((a,b)=>a.x0-b.x0);
+  const filas=[];
+  bs.forEach(b=>{
+    let f = filas.findIndex(r => r[r.length-1].x1 <= b.x0);
+    if(f<0){ filas.push([b]); f=filas.length-1; } else filas[f].push(b);
+    b._fila = f;
+  });
+  return {...e, bloques:bs, filas:Math.max(1,filas.length)};
+}).filter(c=>c.bloques.length>0);
+
+const alturaCarril = c => c.filas*ROW + (c.filas+1)*PAD;
+const resPorItem = new Map(D.res.map(r=>[r.itemId,r]));
+
+/* ── Render ── */
+function render(){
+  const W = D.maxX*z + 60;
+  document.getElementById("stage").style.width = W+"px";
+
+  /* Eje */
+  const ax = document.getElementById("axis");
+  ax.innerHTML = "";
+  D.dias.forEach((d,i)=>{
+    const el = document.createElement("div");
+    el.className = "day" + (i%5===0?" wk":"");
+    el.style.left = (d.x*z)+"px";
+    el.style.width = (D.jornadaMin*z)+"px";
+    if(D.jornadaMin*z > 46) el.innerHTML = "<span>"+d.lbl+"</span>";
+    ax.appendChild(el);
+  });
+
+  /* Carriles */
+  const g = document.getElementById("gutter");
+  const L = document.getElementById("lanes");
+  g.querySelectorAll(".lane-lbl").forEach(n=>n.remove());
+  L.innerHTML = "";
+
+  carriles.forEach(c=>{
+    const h = alturaCarril(c);
+    const warn = c.key==="__sin_estacion__";
+
+    const lbl = document.createElement("div");
+    lbl.className = "lane-lbl" + (warn?" warn":"");
+    lbl.style.height = h+"px";
+    const meta = c.key==="__proveedor__" ? "externo · "+c.bloques.length+" pasos"
+      : c.puestos ? c.puestos+" puesto"+(c.puestos>1?"s":"")+" · "+c.bloques.length+" pasos"
+      : "sin límite · "+c.bloques.length+" pasos";
+    lbl.innerHTML = '<div class="n">'+c.nombre+'</div><div class="m">'+meta+'</div>';
+    g.appendChild(lbl);
+
+    const lane = document.createElement("div");
+    lane.className = "lane" + (warn?" warn":"");
+    lane.style.height = h+"px";
+    D.dias.forEach(d=>{
+      const gl = document.createElement("div");
+      gl.className="gridline"; gl.style.left=(d.x*z)+"px"; lane.appendChild(gl);
+    });
+
+    c.bloques.forEach(b=>{
+      const r = resPorItem.get(b.itemId);
+      const el = document.createElement("div");
+      const col = tinta(b.ot);
+      el.className = "blk" + (b.terc?" terc":"") + (r&&r.tarde?" tarde":"");
+      el.style.left = (b.x0*z)+"px";
+      el.style.width = Math.max(4,(b.x1-b.x0)*z)+"px";
+      el.style.top = (PAD + b._fila*(ROW+PAD))+"px";
+      el.style.background = col+"26";
+      el.style.borderColor = col+"88";
+      el.style.color = col;
+      el.dataset.i = b.i;
+      const w = (b.x1-b.x0)*z;
+      if(w > 54) el.innerHTML = '<span class="t">'+b.ot.replace("OT-2026-","")+' · '+b.paso+'</span>';
+      else if(w > 22) el.innerHTML = '<span class="t">'+b.ot.replace("OT-2026-","")+'</span>';
+      el.title = b.ot+" · "+b.paso+"\n"+b.s.d+" "+b.s.h+" → "+b.e.h+
+        (b.dur!=null?"  ("+b.dur+" min)":"  ("+b.plazo+" días proveedor)");
+      el.addEventListener("click",()=>abrir(b));
+      el.addEventListener("mouseenter",()=>{hov=b.ot;pintar();});
+      el.addEventListener("mouseleave",()=>{hov=null;pintar();});
+      lane.appendChild(el);
+    });
+    L.appendChild(lane);
+  });
+
+  const now = document.createElement("div");
+  now.className="now"; now.style.left="0px";
+  document.getElementById("lanes").appendChild(now);
+
+  pintar();
+}
+
+/* Atenuado, corte del replay y el hilo del recorrido */
+function pintar(){
+  const foco = hov || (sel && sel.ot);
+  document.querySelectorAll(".blk").forEach(el=>{
+    const b = D.bloques[+el.dataset.i];
+    const r = resPorItem.get(b.itemId);
+    const fueraCorte = b.i >= corte;
+    const fueraFiltro = soloTarde && !(r&&r.tarde);
+    el.classList.toggle("pend", fueraCorte);
+    el.classList.toggle("dim", !fueraCorte && (fueraFiltro || (foco && b.ot!==foco)));
+    /* Por índice de decisión: es lo único único por bloque. */
+    el.classList.toggle("sel", !!(sel && sel.i===b.i));
+  });
+  hilo(foco);
+  document.getElementById("cnt").textContent = Math.min(corte,D.bloques.length)+" / "+D.bloques.length+" decisiones";
+}
+
+/* El hilo: une los pasos de una misma OT en el orden en que se producen. */
+function hilo(ot){
+  const svg = document.getElementById("thread");
+  svg.innerHTML="";
+  if(!ot) return;
+  const stage = document.getElementById("stage");
+  svg.setAttribute("width", stage.style.width);
+  svg.setAttribute("height", stage.scrollHeight);
+  const axH = 34;
+  let yOff = axH;
+  const pts=[];
+  carriles.forEach(c=>{
+    c.bloques.forEach(b=>{
+      if(b.ot!==ot || b.i>=corte) return;
+      pts.push({x0:b.x0*z, x1:Math.max(b.x0*z+4,b.x1*z),
+                y: yOff + PAD + b._fila*(ROW+PAD) + ROW/2,
+                idx:b.pasoIndice, item:b.itemId});
+    });
+    yOff += alturaCarril(c);
+  });
+  if(pts.length<1) return;
+  const col = tinta(ot);
+  /* Una OT puede tener varios items, y cada item tiene su propia secuencia
+     de pasos. Un solo hilo mezclándolos iría hacia atrás en el tiempo: se
+     dibuja un hilo por item. */
+  const porItem = new Map();
+  pts.forEach(p=>{ if(!porItem.has(p.item)) porItem.set(p.item,[]); porItem.get(p.item).push(p); });
+  porItem.forEach(grupo=>{
+    grupo.sort((a,b)=>a.idx-b.idx);
+    let dd="";
+    grupo.forEach((p,i)=>{
+      if(i>0){ const prev=grupo[i-1];
+        if(p.x0 >= prev.x1){
+          const mx=(prev.x1+p.x0)/2;
+          dd += " M "+prev.x1+" "+prev.y+
+                " C "+mx+" "+prev.y+", "+mx+" "+p.y+", "+p.x0+" "+p.y;
+        } else {
+          /* Pasos encadenados sin hueco: el ancho mínimo de bloque los hace
+             solaparse en pantalla. Un conector vertical dice la verdad
+             (la posta pasa de un carril al otro) sin dibujar hacia atrás. */
+          dd += " M "+p.x0+" "+prev.y+" L "+p.x0+" "+p.y;
+        } }
+    });
+    if(dd){
+      const path=document.createElementNS("http://www.w3.org/2000/svg","path");
+      path.setAttribute("d",dd.trim()); path.setAttribute("fill","none");
+      path.setAttribute("stroke",col); path.setAttribute("stroke-width","1.5");
+      path.setAttribute("stroke-dasharray","4 3"); path.setAttribute("opacity",".85");
+      svg.appendChild(path);
+    }
+    grupo.forEach(p=>{
+      const ci=document.createElementNS("http://www.w3.org/2000/svg","circle");
+      ci.setAttribute("cx",p.x0); ci.setAttribute("cy",p.y); ci.setAttribute("r","2.5");
+      ci.setAttribute("fill",col); svg.appendChild(ci);
+    });
+  });
+}
+
+/* ── Inspector ── */
+function abrir(b){
+  sel=b; pintar();
+  const r=resPorItem.get(b.itemId);
+  const col=tinta(b.ot);
+  document.getElementById("insphead").innerHTML =
+    '<div class="eyebrow">Decisión '+(b.i+1)+' de '+D.bloques.length+'</div>'+
+    '<h2 style="color:'+col+'">'+b.ot+' · '+b.paso+'</h2>'+
+    '<div style="font-size:11.5px;color:var(--txt-2)">'+b.item+' — '+b.cli+'</div>';
+
+  const esperaH=(b.espera/60);
+  let notas="";
+  if(b.espera>0) notas += '<div class="note">Esperó <b>'+esperaH.toFixed(1)+' h</b> a que se liberara un puesto en '+b.est+
+    '. El trabajo estaba listo antes, pero la estación estaba ocupada.</div>';
+  if(b.terc) notas += '<div class="note a">Paso tercerizado: no ocupa puesto del taller. Corre en el calendario del proveedor, <b>'+b.plazo+' días hábiles</b>.</div>';
+  if(b.est==="Sin estación asignada") notas += '<div class="note a">La familia <b>'+b.fam+'</b> no está asignada a ninguna estación. El motor lo programa con capacidad infinita — <b>esta parte del plan es optimista</b>.</div>';
+  if(b.dur===0) notas += '<div class="note">Duración cero real: el paso existe en la ruta pero no consume tiempo de máquina.</div>';
+  if(r&&r.tarde) notas += '<div class="note h">Este item termina el <b>'+r.fin.d+' '+r.fin.h+'</b> y la entrega comprometida es el <b>'+r.entrega+'</b>. No llega.</div>';
+  if(b.comp>1) notas += '<div class="note">En este turno el scheduler evaluó <b>'+b.comp+' candidatos</b> y eligió éste porque podía arrancar antes.</div>';
+
+  document.getElementById("inspbody").innerHTML =
+    '<div>'+
+      fila("Estación", b.est)+
+      fila("Familia", b.fam)+
+      fila("Arranca", b.s.d+" "+b.s.h)+
+      fila("Termina", b.e.d+" "+b.e.h)+
+      (b.dur!=null?fila("Duración", b.dur+" min"):fila("Plazo proveedor", b.plazo+" días"))+
+      fila("Espera previa", esperaH>0?esperaH.toFixed(1)+" h":"—")+
+      fila("Paso nº", b.pasoIndice)+
+    '</div>'+
+    (r?'<div><div class="eyebrow" style="margin-bottom:6px">Resultado del item</div>'+
+      fila("Fin estimado", r.fin? r.fin.d+" "+r.fin.h : "sin estimar")+
+      fila("Entrega", r.entrega??"—")+
+      fila("Estado", r.tarde?"NO LLEGA":"en fecha")+'</div>':'')+
+    notas;
+  document.getElementById("insp").classList.add("open");
+  document.getElementById("insp").setAttribute("aria-hidden","false");
+}
+const fila=(k,v)=>'<div class="row"><span class="k">'+k+'</span><span class="v">'+v+'</span></div>';
+
+document.getElementById("close").onclick=()=>{
+  sel=null;pintar();
+  const i=document.getElementById("insp");
+  i.classList.remove("open");i.setAttribute("aria-hidden","true");
+};
+
+/* ── Replay: en ORDEN DE DECISIÓN, no cronológico ── */
+const scrub=document.getElementById("scrub");
+scrub.max=D.bloques.length;
+function readout(){
+  const el=document.getElementById("readout");
+  if(corte===0){el.innerHTML='<span style="color:var(--txt-3)">Taller vacío. El scheduler todavía no colocó nada.</span>';return;}
+  if(corte>=D.bloques.length){
+    const t=D.res.filter(r=>r.tarde).length;
+    el.innerHTML='Plan completo: <b>'+D.bloques.length+' pasos</b> repartidos en <b>'+carriles.length+' carriles</b>. '+
+      '<span class="h">'+t+' items no llegan</span> a su fecha comprometida. '+
+      '<span style="color:var(--txt-3)">Pasá el mouse por un bloque para seguir el recorrido de esa orden.</span>';
+    return;}
+  const b=D.bloques[corte-1];
+  el.innerHTML='<b>Decisión '+corte+'</b> — coloca <span class="c">'+b.ot+' · '+b.paso+'</span> en <b>'+b.est+'</b>, '+
+    'arranca <b>'+b.s.d+' '+b.s.h+'</b>'+
+    (b.espera>0?' tras esperar <span class="a">'+(b.espera/60).toFixed(1)+' h</span> por un puesto libre':' apenas queda libre')+
+    (b.dur!=null?' · '+b.dur+' min':' · '+b.plazo+' d proveedor')+
+    (b.comp>1?' <span style="color:var(--txt-3)">('+b.comp+' candidatos en juego)</span>':'');
+}
+scrub.oninput=()=>{corte=+scrub.value;pintar();readout();};
+
+let tocando=null;
+document.getElementById("play").onclick=function(){
+  if(tocando){clearInterval(tocando);tocando=null;this.textContent="▶ Reproducir";return;}
+  if(corte>=D.bloques.length) corte=0;
+  this.textContent="⏸ Pausar";
+  tocando=setInterval(()=>{
+    corte++;scrub.value=corte;pintar();readout();
+    if(corte>=D.bloques.length){clearInterval(tocando);tocando=null;
+      document.getElementById("play").textContent="▶ Reproducir";}
+  },230);
+};
+document.getElementById("all").onclick=()=>{corte=D.bloques.length;scrub.value=corte;pintar();readout();};
+document.getElementById("late").onclick=function(){soloTarde=!soloTarde;this.classList.toggle("on",soloTarde);pintar();};
+document.querySelectorAll("[data-z]").forEach(btn=>{
+  btn.onclick=()=>{z=+btn.dataset.z;
+    document.querySelectorAll("[data-z]").forEach(b=>b.classList.remove("on"));
+    btn.classList.add("on");render();readout();};
+});
+
+/* ── KPIs y leyenda ── */
+const totalMin=D.bloques.reduce((s,b)=>s+(b.dur||0),0);
+const sinEst=D.bloques.filter(b=>b.est==="Sin estación asignada").reduce((s,b)=>s+(b.dur||0),0);
+document.getElementById("stats").innerHTML=[
+  ['<span class="k">'+D.res.length+'</span>','items en cola',''],
+  ['<span class="k">'+(totalMin/60).toFixed(1)+' h</span>','trabajo programado',''],
+  ['<span class="k">'+Math.round(sinEst/totalMin*100)+'%</span>','sin estación real','amber'],
+  ['<span class="k">'+D.res.filter(r=>r.tarde).length+'</span>','no llegan','hot'],
+  ['<span class="k">'+(D.maxX/D.jornadaMin).toFixed(0)+'</span>','jornadas de horizonte','cyan'],
+].map(([k,l,c])=>'<div class="stat '+c+'">'+k+'<div class="l">'+l+'</div></div>').join("");
+
+document.getElementById("legend").innerHTML =
+  OTS.slice(0,8).map(ot=>'<span class="lg"><span class="sw" style="background:'+tinta(ot)+'44;box-shadow:inset 0 0 0 1px '+tinta(ot)+'"></span>'+ot.replace("OT-2026-","OT ")+'</span>').join("")+
+  '<span class="lg" style="margin-left:auto"><span class="sw" style="box-shadow:inset 0 0 0 1.5px var(--hot)"></span>no llega a la fecha</span>'+
+  '<span class="lg"><span class="sw" style="border:1.5px dashed var(--txt-3)"></span>tercerizado</span>'+
+  '<span class="lg"><span class="sw" style="background:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,176,32,.5) 4px,rgba(255,176,32,.5) 8px)"></span>sin estación real</span>';
+
+render(); readout();
+</script>
+</body>
+</html>
