@@ -30482,7 +30482,14 @@ body:has(.t-app) {
   white-space: nowrap;
 }
 
-.tablero-produccion .simu-gridline.hora {
+/* Las horas se dibujan una sola vez sobre todos los carriles (hijas de
+   .simu-lanes, que es relative), no dentro de cada uno. */
+.tablero-produccion .simu-lanes > .simu-gridline.hora {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  z-index: 1;
   background: color-mix(in oklab, var(--simu-hair) 55%, transparent);
 }
 

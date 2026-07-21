@@ -607,9 +607,6 @@ function LineaDeTiempo({
                   {eje.dias.map((d) => (
                     <div key={d.fecha} className="simu-gridline" style={{ left: d.x * z }} />
                   ))}
-                  {ticks.map((t) => (
-                    <div key={t.key} className="simu-gridline hora" style={{ left: t.x * z }} />
-                  ))}
                   {c.bloques.map((b) => {
                     const col = tintaDe(b.ot, otsInfo);
                     const w = (b.x1 - b.x0) * z;
@@ -656,6 +653,11 @@ function LineaDeTiempo({
                     );
                   })}
                 </div>
+              ))}
+              {/* Las horas van una sola vez sobre todos los carriles: dentro
+                  de cada uno serían cientos de nodos repetidos. */}
+              {ticks.map((t) => (
+                <div key={t.key} className="simu-gridline hora" style={{ left: t.x * z }} />
               ))}
               <div className="simu-now" style={{ left: 0 }} />
             </div>
