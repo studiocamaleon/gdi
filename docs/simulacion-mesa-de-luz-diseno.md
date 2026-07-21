@@ -90,13 +90,17 @@ real medido es de **15 jornadas (9.000 min laborales)** con una **mediana de
 bloque de 10 min**. En tiempo lineal, tres semanas incluyen ~340 h de noches y
 fines de semana donde no pasa nada, y un paso de 10 min ocupa 0,05 % del ancho.
 
-El eje colapsa noches y fines de semana: `x` = minutos laborales acumulados
-desde el arranque, jornada L–V 08:00–18:00. Las marcas de día quedan
-equiespaciadas y el detalle intradiario se vuelve legible.
+El eje colapsa noches, fines de semana y feriados: `x` = minutos laborales
+acumulados desde el arranque. La jornada **no está hardcodeada**: sale de la
+unión de las franjas de las estaciones activas (`construirEje` en
+[`eje-laboral.ts`](../src/lib/eje-laboral.ts)), y un día entra al eje si alguna
+estación trabaja ese día. Las marcas de día quedan equiespaciadas y el detalle
+intradiario se vuelve legible.
 
-> Consecuencia: `x` hay que **precalcularlo en el servidor**, no en el navegador.
-> Si se calcula en el cliente, la vista cambia según la zona horaria de quien
-> mire. El prototipo ya lo hace así.
+> El motor y la vista corren en el navegador del taller, así que la hora local
+> es la del taller. Si alguna vez la simulación se mueve al backend, `x` tiene
+> que viajar precalculado o la vista cambiaría según la zona horaria de quien
+> mire.
 
 ### 3.2 Ancho mínimo de bloque, y el artefacto que genera
 
@@ -141,29 +145,34 @@ reales que hoy no se ven en ninguna pantalla.
 
 ## 5. Dirección visual
 
-**Anclaje:** la **mesa de luz** de una imprenta — donde se superponen
-transparencias para verificar registro. Un Gantt de trabajos solapados *es* eso.
-Justifica una estética luminosa sin caer en el "control room" de neón genérico.
+**La implementada es la propuesta clara del usuario** (`mesa-luz-propuesta-clara.html`,
+Claude Design). Papel cálido en vez de la mesa de luz encendida del prototipo:
+lee como una hoja de producción, no como un panel de control.
 
-**Paleta categórica: tintas de proceso.** Cian, magenta, amarillo + violeta,
-teal, naranja. Es el vocabulario cromático del propio oficio y resuelve la
-necesidad de ~18 colores distinguibles para las OTs.
+Tokens, todos con prefijo `--simu-` y scopeados a `.tablero-produccion .simu`
+(el resto del tablero tiene otra paleta y no comparte tokens):
 
-| token | dark | rol |
+| token | claro | rol |
 |---|---|---|
-| `--ink` | `#070B14` | fondo, tinta, sesgo azul (no gris) |
-| `--film` | `#0E1626` | panel |
-| `--cyan` | `#22D3EE` | la voz del sistema: línea "ahora", activo |
-| `--hot` | `#FF3D8B` | no llega a la fecha |
-| `--amber` | `#FFB020` | supuesto / sin estación real |
-| `--good` | `#2DD4A7` | en fecha |
+| `--simu-paper` | `#F4F1EA` | fondo de papel |
+| `--simu-surface` | `#FFFFFF` | panel |
+| `--simu-ink` | `#17140F` | texto |
+| `--simu-accent` | `#2E4BFF` | la voz del sistema: línea "ahora", activo |
+| `--simu-hot` | `#E11D48` | no llega a la fecha |
+| `--simu-amber` | `#B45309` | supuesto / sin estación real |
+| `--simu-good` | `#0E9F6E` | en fecha |
 
-Tema claro = la mesa apagada: pliego de papel con los mismos pigmentos. No es
-una inversión automática.
+**Variante oscura derivada** (`.dark .simu`): el diseño es claro, pero la app
+tiene dark mode y la vista no puede quedar rota ahí. Mantiene los mismos
+pigmentos sobre un papel oscuro cálido — no es una inversión automática.
 
-**Tipografía:** monoespaciada como *display*, no sólo para datos. Es la
-vernácula del instrumento y evita el Inter/Space-Grotesk por defecto. Grotesca
-de sistema sólo para prosa del inspector. `tabular-nums` en todo lo numérico.
+**Paleta categórica de OTs:** ocho tintas distinguibles, asignadas por orden de
+aparición. Se necesitan tantas porque hay ~18 OTs conviviendo en el mismo plano.
+
+**Tipografía:** Space Grotesk (display/UI) + IBM Plex Mono (todo lo numérico y
+las etiquetas técnicas), por `next/font` — auto-hospedadas, sin pedido a Google
+ni salto de layout. Se aplican sólo en el scope de la vista; el resto de la app
+sigue con Geist. `tabular-nums` en todo lo que sean cifras.
 
 ---
 
