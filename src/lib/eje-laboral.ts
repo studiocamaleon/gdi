@@ -29,6 +29,10 @@ const VENTANA_FALLBACK = { desde: 8 * 60, hasta: 18 * 60 };
 export type DiaEje = {
   /** Minuto laboral acumulado en que arranca el día. */
   x: number;
+  /** Minutos utilizables de ESTE día. El primero puede ser parcial. */
+  ancho: number;
+  /** Minuto del día en que empieza el tramo dibujado (08:00 → 480). */
+  desdeMin: number;
   /** "lun 20/07" */
   etiqueta: string;
   /** ISO "YYYY-MM-DD" */
@@ -36,8 +40,10 @@ export type DiaEje = {
 };
 
 export type EjeLaboral = {
-  /** Minutos utilizables por jornada. */
+  /** Minutos utilizables por jornada COMPLETA. */
   jornadaMin: number;
+  /** Ancho total del eje en minutos (la primera jornada puede ser parcial). */
+  totalMin: number;
   ventana: { desde: number; hasta: number };
   dias: DiaEje[];
   /** Fecha → minuto laboral acumulado desde el arranque del eje. */
@@ -127,35 +133,57 @@ export function construirEje({
   const limite = new Date(hasta);
   limite.setHours(23, 59, 59, 999);
 
+  /* El eje arranca EN `ahora`, no en la apertura del día: en el pasado
+     nunca se dibuja nada (el plan es hacia adelante), así que esas horas
+     serían píxeles muertos garantizados. La primera jornada queda parcial;
+     si `ahora` ya pasó el cierre, ese día no entra. */
+  const minutoDeAhora = ahora.getHours() * 60 + ahora.getMinutes();
+  const claveHoy = claveFecha(ahora);
+
   const dias: DiaEje[] = [];
-  const indicePorFecha = new Map<string, number>();
+  const porFecha = new Map<string, DiaEje>();
   let acumulado = 0;
   for (let i = 0; i < MAX_DIAS; i += 1) {
     if (cursor > limite && dias.length > 0) break;
     if (esLaborable(cursor, estaciones, noLaborables)) {
       const fecha = claveFecha(cursor);
-      indicePorFecha.set(fecha, acumulado);
-      dias.push({ x: acumulado, etiqueta: etiquetaDe(cursor), fecha });
-      acumulado += jornadaMin;
+      const esHoy = fecha === claveHoy;
+      const desdeMin = esHoy
+        ? Math.max(ventana.desde, minutoDeAhora)
+        : ventana.desde;
+      const ancho = ventana.hasta - desdeMin;
+      if (ancho > 0) {
+        const dia: DiaEje = {
+          x: acumulado,
+          ancho,
+          desdeMin,
+          etiqueta: etiquetaDe(cursor),
+          fecha,
+        };
+        dias.push(dia);
+        porFecha.set(fecha, dia);
+        acumulado += ancho;
+      }
     }
     cursor.setDate(cursor.getDate() + 1);
   }
 
   const aX = (fecha: Date) => {
-    const base = indicePorFecha.get(claveFecha(fecha));
-    if (base === undefined) {
-      // Cae en un día que el eje no dibuja (feriado, o fuera del rango):
-      // se ancla al borde del día laborable anterior para no inventar
-      // posición ni empujarlo al origen.
-      const previos = dias.filter((d) => d.fecha < claveFecha(fecha));
+    const clave = claveFecha(fecha);
+    const dia = porFecha.get(clave);
+    if (!dia) {
+      // Cae en un día que el eje no dibuja (feriado, fin de semana, o antes
+      // del arranque): se ancla al borde del día laborable anterior para no
+      // inventar posición ni empujarlo al origen.
+      const previos = dias.filter((d) => d.fecha < clave);
       const ultimo = previos.at(-1);
-      return ultimo ? ultimo.x + jornadaMin : 0;
+      return ultimo ? ultimo.x + ultimo.ancho : 0;
     }
     const min = fecha.getHours() * 60 + fecha.getMinutes();
-    return base + Math.max(0, Math.min(jornadaMin, min - ventana.desde));
+    return dia.x + Math.max(0, Math.min(dia.ancho, min - dia.desdeMin));
   };
 
-  return { jornadaMin, ventana, dias, aX };
+  return { jornadaMin, totalMin: acumulado, ventana, dias, aX };
 }
 
 /* ── Zoom ────────────────────────────────────────────────────────────── */

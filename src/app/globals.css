@@ -30615,6 +30615,7 @@ body:has(.t-app) {
   position: absolute;
   top: 2px;
   right: 5px;
+  z-index: 1;
   font-family: var(--simu-mono);
   font-size: 8.5px;
   text-transform: uppercase;
@@ -30624,6 +30625,12 @@ body:has(.t-app) {
   border-radius: 3px;
   padding: 1px 4px;
   white-space: nowrap;
+}
+
+/* Contra el origen no hay lugar a la izquierda: se voltea. */
+.tablero-produccion .simu-now.borde span {
+  right: auto;
+  left: 4px;
 }
 
 .tablero-produccion .simu-thread {

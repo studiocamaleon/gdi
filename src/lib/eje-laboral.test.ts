@@ -227,26 +227,85 @@ describe("deslizador de zoom", () => {
   });
 });
 
-/* La línea de "ahora" se ubica con aX(ahora). El eje arranca en la APERTURA
-   del día, así que a media jornada eso NO es 0 — el bug era darlo por hecho. */
-describe("construirEje · dónde cae ahora", () => {
+/* El eje arranca EN `ahora`: en el pasado nunca se dibuja nada, así que
+   esas horas serían píxeles muertos. La primera jornada queda parcial. */
+describe("construirEje · arranca en ahora", () => {
   const un = [estacion("a", cal("08:00", "18:00"))];
 
-  it("a media jornada cae adentro, no en el origen", () => {
+  it("ahora es el origen del eje", () => {
     const ahora = jul(20, 14, 0);
-    const eje = construirEje({ estaciones: un, ahora, hasta: jul(21, 18) });
-    expect(eje.aX(ahora)).toBe(360);
-  });
-
-  it("antes de abrir cae en el origen", () => {
-    const ahora = jul(20, 6, 30);
     const eje = construirEje({ estaciones: un, ahora, hasta: jul(21, 18) });
     expect(eje.aX(ahora)).toBe(0);
   });
 
-  it("después de cerrar cae al final del día, no en el siguiente", () => {
-    const ahora = jul(20, 21, 0);
+  it("la primera jornada es parcial: sólo lo que queda del día", () => {
+    const ahora = jul(20, 14, 0);
     const eje = construirEje({ estaciones: un, ahora, hasta: jul(21, 18) });
-    expect(eje.aX(ahora)).toBe(eje.jornadaMin);
+    // De 14:00 a 18:00 quedan 240 min, contra una jornada de 600.
+    expect(eje.dias[0].ancho).toBe(240);
+    expect(eje.dias[0].desdeMin).toBe(14 * 60);
+    expect(eje.jornadaMin).toBe(600);
+  });
+
+  it("las jornadas siguientes son completas y encadenan", () => {
+    const ahora = jul(20, 14, 0);
+    const eje = construirEje({ estaciones: un, ahora, hasta: jul(22, 18) });
+    expect(eje.dias[1].ancho).toBe(600);
+    expect(eje.dias[1].x).toBe(240);
+    expect(eje.dias[2].x).toBe(840);
+  });
+
+  it("si ya cerró, hoy no entra: el eje empieza mañana", () => {
+    const ahora = jul(20, 21, 0);
+    const eje = construirEje({ estaciones: un, ahora, hasta: jul(22, 18) });
+    expect(eje.dias[0].fecha).toBe("2026-07-21");
+    expect(eje.dias[0].ancho).toBe(600);
+  });
+
+  it("antes de abrir, hoy entra completo", () => {
+    const ahora = jul(20, 6, 30);
+    const eje = construirEje({ estaciones: un, ahora, hasta: jul(21, 18) });
+    expect(eje.dias[0].fecha).toBe("2026-07-20");
+    expect(eje.dias[0].ancho).toBe(600);
+    expect(eje.aX(ahora)).toBe(0);
+  });
+
+  it("una hora posterior del primer día se mide desde ahora", () => {
+    const ahora = jul(20, 14, 0);
+    const eje = construirEje({ estaciones: un, ahora, hasta: jul(21, 18) });
+    expect(eje.aX(jul(20, 16, 30))).toBe(150);
+  });
+
+  it("totalMin es la suma real, con la primera jornada recortada", () => {
+    const ahora = jul(20, 14, 0);
+    const eje = construirEje({ estaciones: un, ahora, hasta: jul(22, 18) });
+    // 240 del primer día + 600 + 600.
+    expect(eje.totalMin).toBe(1440);
+  });
+});
+
+describe("anclarZoom · borde izquierdo", () => {
+  it("mantiene quieto lo que está en el borde al acercar", () => {
+    // Es el caso de la barra de zoom: sin cursor, se ancla offsetX = 0.
+    const nuevo = anclarZoom({ scrollLeft: 900, offsetX: 0, zAnterior: 0.45, zNuevo: 0.9 });
+    // El minuto que estaba en el borde (2000) sigue en el borde.
+    expect(nuevo / 0.9).toBeCloseTo(900 / 0.45, 6);
+  });
+
+  it("anclar el centro sí expulsa el arranque por izquierda", () => {
+    // Documenta POR QUÉ no se usa el centro: con el trabajo pegado a la
+    // izquierda, al acercar se va de pantalla.
+    const anchoVentana = 1200;
+    const centro = anclarZoom({
+      scrollLeft: 171,
+      offsetX: anchoVentana / 2,
+      zAnterior: 0.45,
+      zNuevo: 0.9,
+    });
+    const borde = anclarZoom({ scrollLeft: 171, offsetX: 0, zAnterior: 0.45, zNuevo: 0.9 });
+    // "ahora" está en x=0 del eje: con centro queda muy a la izquierda del
+    // scroll (invisible); con borde, justo en el borde.
+    expect(0 - centro).toBeLessThan(-500);
+    expect(0 - borde).toBeGreaterThan(-400);
   });
 });

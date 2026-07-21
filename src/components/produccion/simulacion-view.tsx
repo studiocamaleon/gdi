@@ -165,10 +165,14 @@ export function SimulacionView({
     ) => {
       const el = scrollRef.current;
       if (el) {
-        // Sin cursor (botones, teclado): se ancla el centro de la ventana.
+        /* Sin cursor (barra, teclado) se ancla el BORDE IZQUIERDO, no el
+           centro: el trabajo arranca pegado a la izquierda y crece hacia la
+           derecha, así que anclar el centro lo expulsa de la pantalla por
+           izquierda al acercar. Anclando el borde, lo que estabas mirando se
+           queda quieto y el detalle se abre hacia la derecha. */
         anclaRef.current = ancla ?? {
           scrollLeft: el.scrollLeft,
-          offsetX: el.clientWidth / 2,
+          offsetX: 0,
           zAnterior: zRef.current,
         };
       }
@@ -226,18 +230,6 @@ export function SimulacionView({
     const id = window.setTimeout(() => setCorte(cursor + 1), 230);
     return () => window.clearTimeout(id);
   }, [tocando, cursor, tope]);
-
-  /* Al abrir, arrancar mirando "ahora": todo lo anterior está vacío por
-     construcción (el scheduler sólo programa de ahora en adelante), así que
-     abrir en el origen muestra una franja en blanco. Se hace una sola vez;
-     después el scroll es del usuario. */
-  const yaUbicado = React.useRef(false);
-  React.useEffect(() => {
-    const el = scrollRef.current;
-    if (!el || yaUbicado.current || vista !== "mesa" || bloques.length === 0) return;
-    yaUbicado.current = true;
-    el.scrollLeft = Math.max(0, xAhora * z - 24);
-  }, [vista, bloques.length, xAhora, z]);
 
   /* Encuadra el trabajo real. El horizonte puede ser de semanas mientras
      todo pasa en la primera jornada: abrir en "todo el horizonte" deja la
@@ -664,7 +656,7 @@ function LineaDeTiempo({
   scrollRef: React.RefObject<HTMLDivElement | null>;
   xAhora: number;
 }) {
-  const ancho = (eje.dias.length * eje.jornadaMin) * z + 60;
+  const ancho = eje.totalMin * z + 60;
   const hiloOT = focoOTs && focoOTs.size === 1 ? [...focoOTs][0] : null;
 
   /* Las horas reales del taller dentro de cada jornada. El eje son minutos
@@ -673,11 +665,12 @@ function LineaDeTiempo({
   const ticks: Array<{ key: string; x: number; etiqueta: string }> = [];
   if (intervalo) {
     for (const dia of eje.dias) {
-      // Primer múltiplo del intervalo dentro de la jornada, sin pisar el
-      // borde del día (que ya lleva la etiqueta de la fecha).
-      const primero = Math.ceil(eje.ventana.desde / intervalo) * intervalo;
-      for (let min = primero; min < eje.ventana.hasta; min += intervalo) {
-        const offset = min - eje.ventana.desde;
+      // Primer múltiplo del intervalo dentro del tramo dibujado de ESTE día
+      // (el primero puede arrancar a media jornada), sin pisar su borde
+      // izquierdo, que ya lleva la etiqueta de la fecha.
+      const primero = Math.ceil(dia.desdeMin / intervalo) * intervalo;
+      for (let min = primero; min < dia.desdeMin + dia.ancho; min += intervalo) {
+        const offset = min - dia.desdeMin;
         if (offset <= 0) continue;
         ticks.push({
           key: `${dia.fecha}-${min}`,
@@ -751,9 +744,9 @@ function LineaDeTiempo({
                 <div
                   key={d.fecha}
                   className={`simu-day ${i % 5 === 0 ? "wk" : ""}`}
-                  style={{ left: d.x * z, width: eje.jornadaMin * z }}
+                  style={{ left: d.x * z, width: d.ancho * z }}
                 >
-                  {eje.jornadaMin * z > 46 ? <span>{d.etiqueta}</span> : null}
+                  {d.ancho * z > 46 ? <span>{d.etiqueta}</span> : null}
                 </div>
               ))}
               {ticks.map((t) => (
@@ -825,7 +818,13 @@ function LineaDeTiempo({
               {ticks.map((t) => (
                 <div key={t.key} className="simu-gridline hora" style={{ left: t.x * z }} />
               ))}
-              <div className="simu-now" style={{ left: xAhora * z }}>
+              {/* La etiqueta va a la izquierda porque de ese lado no hay
+                  bloques; pero si la línea está contra el origen no entra y
+                  hay que voltearla. */}
+              <div
+                className={`simu-now ${xAhora * z < 46 ? "borde" : ""}`}
+                style={{ left: xAhora * z }}
+              >
                 <span>ahora</span>
               </div>
             </div>
