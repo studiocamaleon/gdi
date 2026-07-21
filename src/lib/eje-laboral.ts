@@ -157,3 +157,41 @@ export function construirEje({
 
   return { jornadaMin, ventana, dias, aX };
 }
+
+/* ── Zoom ────────────────────────────────────────────────────────────── */
+
+/** px por minuto laboral. El techo deja leer un paso de 10 min (60 px). */
+export const Z_MIN = 0.02;
+export const Z_MAX = 6;
+
+/**
+ * NaN cae al piso (puede salir de dividir por un ancho todavía sin medir:
+ * mostrar todo es recuperable). Infinity clampea normal al techo.
+ */
+export const acotarZoom = (v: number) =>
+  Number.isNaN(v) ? Z_MIN : Math.min(Z_MAX, Math.max(Z_MIN, v));
+
+/**
+ * Scroll que deja QUIETO el punto que el usuario estaba mirando al cambiar
+ * el zoom. Sin esto, acercarse tira el contenido fuera de la ventana y hay
+ * que volver a buscar dónde estaba uno.
+ *
+ * @param scrollLeft scroll actual del contenedor
+ * @param offsetX    posición del cursor dentro del contenedor
+ * @param zAnterior  px/min antes del zoom
+ * @param zNuevo     px/min después
+ */
+export function anclarZoom({
+  scrollLeft,
+  offsetX,
+  zAnterior,
+  zNuevo,
+}: {
+  scrollLeft: number;
+  offsetX: number;
+  zAnterior: number;
+  zNuevo: number;
+}): number {
+  const minutoBajoElCursor = (scrollLeft + offsetX) / zAnterior;
+  return Math.max(0, minutoBajoElCursor * zNuevo - offsetX);
+}

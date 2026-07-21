@@ -14,7 +14,7 @@
 
 import * as React from "react";
 
-import { construirEje } from "@/lib/eje-laboral";
+import { acotarZoom, anclarZoom, construirEje } from "@/lib/eje-laboral";
 import { fuentesSimulacion } from "@/lib/fuentes-simulacion";
 import {
   PROVEEDOR_KEY,
@@ -46,6 +46,9 @@ const ZOOMS: Array<[string, number]> = [
   ["Día", 0.45],
   ["Hora", 1.6],
 ];
+
+/** El preset se marca activo si el zoom continuo quedó cerca de él. */
+const esPreset = (z: number, val: number) => Math.abs(z - val) < val * 0.03;
 
 /**
  * Intervalo de los ticks horarios según cuánto mide una jornada en pantalla.
@@ -132,6 +135,46 @@ export function SimulacionView({
 }) {
   const [vista, setVista] = React.useState<"mesa" | "proj">(vistaInicial);
   const [z, setZ] = React.useState(zoomInicial);
+  /* Al hacer zoom hay que dejar quieto el punto que el usuario está mirando:
+     se anota qué minuto estaba bajo el cursor y a qué altura de la ventana,
+     y se restaura el scroll después de que el stage cambió de ancho. */
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  /* El zoom vigente, legible desde handlers que no se re-crean en cada
+     render (la rueda dispara mucho más seguido que los renders). */
+  const zRef = React.useRef(z);
+  const anclaRef = React.useRef<{
+    scrollLeft: number;
+    offsetX: number;
+    zAnterior: number;
+  } | null>(null);
+
+  const zoomear = React.useCallback(
+    (
+      nuevo: number,
+      ancla?: { scrollLeft: number; offsetX: number; zAnterior: number },
+    ) => {
+      const el = scrollRef.current;
+      if (el) {
+        // Sin cursor (botones, teclado): se ancla el centro de la ventana.
+        anclaRef.current = ancla ?? {
+          scrollLeft: el.scrollLeft,
+          offsetX: el.clientWidth / 2,
+          zAnterior: zRef.current,
+        };
+      }
+      setZ(acotarZoom(nuevo));
+    },
+    [],
+  );
+
+  React.useLayoutEffect(() => {
+    zRef.current = z;
+    const el = scrollRef.current;
+    const ancla = anclaRef.current;
+    if (!el || !ancla) return;
+    anclaRef.current = null;
+    el.scrollLeft = anclarZoom({ ...ancla, zNuevo: z });
+  }, [z]);
   const [corte, setCorte] = React.useState<number | null>(null);
   const [soloTarde, setSoloTarde] = React.useState(false);
   const [consulta, setConsulta] = React.useState("");
@@ -162,6 +205,84 @@ export function SimulacionView({
     const id = window.setTimeout(() => setCorte(cursor + 1), 230);
     return () => window.clearTimeout(id);
   }, [tocando, cursor, tope]);
+
+  /* Encuadra el trabajo real. El horizonte puede ser de semanas mientras
+     todo pasa en la primera jornada: abrir en "todo el horizonte" deja la
+     pantalla casi vacía. */
+  const ajustar = React.useCallback(() => {
+    const el = scrollRef.current;
+    if (!el || bloques.length === 0) return;
+    /* Sin los tercerizados: sus barras son lead time del proveedor y abarcan
+       semanas, así que encuadrarlas devuelve la vista de la que uno se
+       quiere alejar. Lo que interesa encuadrar es el trabajo del taller. */
+    const propios = bloques.filter((b) => !b.tercerizado);
+    const foco = propios.length > 0 ? propios : bloques;
+    const desde = Math.min(...foco.map((b) => b.x0));
+    const hasta = Math.max(...foco.map((b) => b.x1));
+    const span = Math.max(30, hasta - desde);
+    const nuevo = acotarZoom((el.clientWidth - 40) / span);
+    // Encuadrar = poner el arranque del trabajo a 20 px del borde izquierdo.
+    anclaRef.current = {
+      scrollLeft: desde * zRef.current - 20,
+      offsetX: 20,
+      zAnterior: zRef.current,
+    };
+    setZ(nuevo);
+  }, [bloques]);
+
+  /* Rueda con ⌘/Ctrl (y pinch de trackpad, que el navegador reporta igual)
+     para acercar sin perder de vista lo que estabas mirando. Sin modificador
+     la rueda scrollea, que es lo esperable en un lienzo horizontal.
+     Los eventos se acumulan y se aplican UNA vez por frame: si se aplicaran
+     de a uno, los que llegan antes del próximo render leerían el zoom viejo
+     y el acercamiento saltaría en vez de acumularse. */
+  React.useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    let pendiente = 0;
+    let frame = 0;
+    let offsetX = 0;
+
+    const aplicar = () => {
+      frame = 0;
+      const delta = pendiente;
+      pendiente = 0;
+      const zAnterior = zRef.current;
+      const zNuevo = acotarZoom(zAnterior * Math.exp(-delta * 0.0025));
+      if (zNuevo === zAnterior) return;
+      anclaRef.current = { scrollLeft: el.scrollLeft, offsetX, zAnterior };
+      setZ(zNuevo);
+    };
+
+    const alRodar = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      pendiente += e.deltaY;
+      offsetX = e.clientX - el.getBoundingClientRect().left;
+      if (!frame) frame = requestAnimationFrame(aplicar);
+    };
+
+    el.addEventListener("wheel", alRodar, { passive: false });
+    return () => {
+      el.removeEventListener("wheel", alRodar);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, []);
+
+  /* Teclado: + / − para acercar y alejar, 0 para encuadrar. */
+  React.useEffect(() => {
+    const alTeclear = (e: KeyboardEvent) => {
+      const foco = document.activeElement;
+      if (foco instanceof HTMLInputElement || foco instanceof HTMLTextAreaElement) return;
+      if (e.key === "+" || e.key === "=") zoomear(zRef.current * 1.4);
+      else if (e.key === "-" || e.key === "_") zoomear(zRef.current / 1.4);
+      else if (e.key === "0") ajustar();
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener("keydown", alTeclear);
+    return () => window.removeEventListener("keydown", alTeclear);
+  }, [z, zoomear, ajustar]);
 
   const q = consulta.trim().toLowerCase();
   const coincide = React.useCallback(
@@ -293,12 +414,18 @@ export function SimulacionView({
                 <button
                   key={lbl}
                   type="button"
-                  className={z === val ? "on" : ""}
-                  onClick={() => setZ(val)}
+                  className={esPreset(z, val) ? "on" : ""}
+                  onClick={() => zoomear(val)}
                 >
                   {lbl}
                 </button>
               ))}
+              <button type="button" onClick={ajustar} title="Encuadrar el trabajo programado">
+                Ajustar
+              </button>
+              <span className="simu-zoom-hint" aria-hidden="true">
+                ⌘/Ctrl+rueda
+              </span>
             </div>
           </>
         ) : (
@@ -381,6 +508,7 @@ export function SimulacionView({
           otsInfo={otsInfo}
           onHover={setHov}
           onSel={setSel}
+          scrollRef={scrollRef}
         />
       ) : (
         <Proyeccion
@@ -486,6 +614,7 @@ function LineaDeTiempo({
   otsInfo,
   onHover,
   onSel,
+  scrollRef,
 }: {
   carriles: Carril[];
   eje: ReturnType<typeof construirEje>;
@@ -497,6 +626,7 @@ function LineaDeTiempo({
   otsInfo: Array<{ ot: string }>;
   onHover: (ot: string | null) => void;
   onSel: (b: Bloque) => void;
+  scrollRef: React.RefObject<HTMLDivElement | null>;
 }) {
   const ancho = (eje.dias.length * eje.jornadaMin) * z + 60;
   const hiloOT = focoOTs && focoOTs.size === 1 ? [...focoOTs][0] : null;
@@ -578,7 +708,7 @@ function LineaDeTiempo({
           ))}
         </div>
 
-        <div className="simu-scroll">
+        <div className="simu-scroll" ref={scrollRef}>
           <div className="simu-stage" style={{ width: ancho }}>
             <div className="simu-axis">
               {eje.dias.map((d, i) => (

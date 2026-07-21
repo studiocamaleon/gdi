@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { construirEje } from "@/lib/eje-laboral";
+import { acotarZoom, anclarZoom, construirEje, Z_MAX, Z_MIN } from "@/lib/eje-laboral";
 import type { CalendarioEstacion, Estacion } from "@/lib/estaciones";
 
 const franja = (desde: string, hasta: string) => ({ desde, hasta });
@@ -130,5 +130,62 @@ describe("construirEje", () => {
     expect(eje.dias.at(-1)!.fecha).toBe("2026-08-10");
     // 3 semanas de lunes a viernes.
     expect(eje.dias).toHaveLength(16);
+  });
+});
+
+/* El zoom vive en la vista, pero se apoya en que el eje sea lineal en
+   minutos laborales: sin eso, anclar el cursor no tendría sentido. */
+describe("construirEje · linealidad (base del zoom)", () => {
+  it("un minuto laboral vale lo mismo en cualquier punto del eje", () => {
+    const eje = construirEje({
+      estaciones: [estacion("a", cal("08:00", "18:00"))],
+      ahora: jul(20, 8),
+      hasta: jul(24, 18),
+    });
+
+    const d1 = eje.aX(jul(20, 12, 0)) - eje.aX(jul(20, 11, 0));
+    const d2 = eje.aX(jul(23, 15, 0)) - eje.aX(jul(23, 14, 0));
+    expect(d1).toBe(60);
+    expect(d2).toBe(60);
+  });
+});
+
+describe("anclarZoom", () => {
+  const invariante = (scrollLeft: number, offsetX: number, za: number, zn: number) => {
+    const nuevo = anclarZoom({ scrollLeft, offsetX, zAnterior: za, zNuevo: zn });
+    // El minuto que estaba bajo el cursor tiene que seguir bajo el cursor.
+    return (nuevo + offsetX) / zn;
+  };
+
+  it("deja quieto el minuto bajo el cursor al acercar", () => {
+    const antes = (500 + 300) / 0.16;
+    expect(invariante(500, 300, 0.16, 0.45)).toBeCloseTo(antes, 6);
+  });
+
+  it("lo deja quieto también al alejar", () => {
+    const antes = (2000 + 120) / 1.6;
+    expect(invariante(2000, 120, 1.6, 0.2)).toBeCloseTo(antes, 6);
+  });
+
+  it("no devuelve scroll negativo cerca del origen", () => {
+    expect(anclarZoom({ scrollLeft: 0, offsetX: 400, zAnterior: 1.6, zNuevo: 0.02 })).toBe(0);
+  });
+
+  it("con el mismo zoom no mueve nada", () => {
+    expect(anclarZoom({ scrollLeft: 777, offsetX: 250, zAnterior: 0.45, zNuevo: 0.45 })).toBeCloseTo(777, 6);
+  });
+});
+
+describe("acotarZoom", () => {
+  it("respeta los límites", () => {
+    expect(acotarZoom(999)).toBe(Z_MAX);
+    expect(acotarZoom(0.0001)).toBe(Z_MIN);
+    expect(acotarZoom(0.45)).toBe(0.45);
+  });
+
+  it("no deja pasar NaN ni Infinity", () => {
+    // Puede salir de dividir por un ancho 0 al montar el contenedor.
+    expect(acotarZoom(Number.NaN)).toBe(Z_MIN);
+    expect(acotarZoom(Number.POSITIVE_INFINITY)).toBe(Z_MAX);
   });
 });
