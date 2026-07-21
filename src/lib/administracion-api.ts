@@ -1,6 +1,7 @@
 import { apiRequest } from "@/lib/api";
 import type {
   Cobro,
+  CobroPendienteAcreditacion,
   Comprobante,
   ComprobanteDetalle,
   ComprobanteItem,
@@ -370,6 +371,12 @@ export async function crearCobro(payload: CrearCobroPayload): Promise<Cobro> {
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export async function getCobrosPendientesAcreditacion(): Promise<
+  CobroPendienteAcreditacion[]
+> {
+  return apiRequest("/administracion/cobros/pendientes-acreditacion");
 }
 
 export async function acreditarCobro(id: string): Promise<Cobro> {

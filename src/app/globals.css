@@ -29640,3 +29640,425 @@ body:has(.t-app) {
 .terc .foot p:last-child{margin-bottom:0}
 .terc .foot b{color:var(--ink-2);font-weight:600}
 .terc .empty-grid{padding:32px 20px;text-align:center;color:var(--muted-2);font-size:12.5px}
+
+/* ───────────────────────────────────────────────────────────────────────
+   Administración · Acreditaciones pendientes (detalle del KPI "A acreditar"
+   de Tesorería). Prefijo aac-. Sigue el molde de acp- (comprobantes): head
+   + KPIs + toolbar + tabla en grid.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.aac-page {
+  --info: #1d4ed8;
+  --info-bg: #eef2ff;
+  --warn: #a16207;
+  --warn-bg: #fefce8;
+  font-size: 13.5px;
+  letter-spacing: -0.005em;
+  font-feature-settings: "ss01", "cv11";
+}
+
+.aac-wrap {
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.aac-page .btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+.aac-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.aac-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted-text);
+  margin-bottom: 8px;
+  text-decoration: none;
+}
+
+.aac-back:hover {
+  color: var(--ink);
+}
+
+.aac-back svg {
+  width: 14px;
+  height: 14px;
+}
+
+.aac-head h1 {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.aac-head .sub {
+  color: var(--muted-text);
+  font-size: 13.5px;
+  margin-top: 3px;
+  max-width: 620px;
+}
+
+/* KPIs */
+.aac-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.aac-kpi {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-4);
+  padding: 15px 17px;
+  position: relative;
+  overflow: hidden;
+}
+
+.aac-kpi::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--border-strong);
+}
+
+.aac-kpi.info::before {
+  background: var(--info);
+}
+
+.aac-kpi .l {
+  font-size: 11.5px;
+  color: var(--muted-text);
+  font-weight: 500;
+}
+
+.aac-kpi .v {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  margin-top: 3px;
+  line-height: 1.1;
+}
+
+.aac-kpi .s {
+  font-size: 11.5px;
+  color: var(--muted-text-2);
+  margin-top: 4px;
+}
+
+/* toolbar */
+.aac-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.aac-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.aac-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted-text);
+  cursor: pointer;
+}
+
+.aac-chip.on {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}
+
+.aac-chip .ct {
+  font-size: 11px;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+
+.aac-chip.on .ct {
+  opacity: 0.85;
+}
+
+.aac-search {
+  position: relative;
+  margin-left: auto;
+  min-width: 260px;
+}
+
+.aac-search svg {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 15px;
+  height: 15px;
+  color: var(--muted-text-2);
+}
+
+.aac-search input {
+  width: 100%;
+  padding: 8px 11px 8px 33px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+  background: var(--surface);
+  font: inherit;
+  font-size: 13px;
+}
+
+/* tabla */
+.aac-tbl {
+  border: 1px solid var(--border);
+  border-radius: var(--r-4);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.aac-tr {
+  display: grid;
+  grid-template-columns:
+    132px minmax(0, 1.1fr) minmax(0, 1.1fr) 108px
+    minmax(0, 0.9fr) 104px 104px 116px;
+  align-items: center;
+  gap: 14px;
+  padding: 0 18px;
+}
+
+.aac-th {
+  height: 42px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-text);
+  font-weight: 600;
+}
+
+.aac-th .r,
+.aac-row .r {
+  text-align: right;
+}
+
+.aac-row {
+  min-height: 62px;
+  border-bottom: 1px solid var(--hairline);
+  transition: background 0.12s;
+}
+
+.aac-row:last-child {
+  border-bottom: none;
+}
+
+.aac-row:hover {
+  background: var(--surface-2);
+}
+
+.aac-trunc {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* celda de fecha */
+.aac-fecha {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: flex-start;
+}
+
+.aac-fecha .d {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.aac-when {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.aac-when.neutro {
+  background: var(--surface-2);
+  color: var(--muted-text);
+  border-color: var(--border);
+}
+
+.aac-when.pronto {
+  background: var(--info-bg);
+  color: var(--info);
+  border-color: color-mix(in srgb, var(--info) 22%, transparent);
+}
+
+.aac-when.hoy {
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 30%, transparent);
+}
+
+.aac-when.warn {
+  background: var(--warn-bg);
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 26%, transparent);
+}
+
+/* celda de método */
+.aac-metodo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.aac-metodo .nm {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aac-metodo .mt {
+  font-size: 11.5px;
+  color: var(--muted-text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aac-ot {
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--info);
+  text-decoration: none;
+}
+
+.aac-ot:hover {
+  text-decoration: underline;
+}
+
+.aac-bruto {
+  font-size: 12.5px;
+  color: var(--muted-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.aac-neto {
+  font-size: 13.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.aac-btn {
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+  width: 100%;
+  justify-content: center;
+}
+
+.aac-cartera {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--muted-text-2);
+  white-space: nowrap;
+}
+
+.aac-cartera svg {
+  width: 13px;
+  height: 13px;
+}
+
+.aac-sin-resultados {
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--muted-text);
+  font-size: 13px;
+}
+
+.aac-empty {
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-4);
+  background: var(--surface);
+  padding: 56px 32px;
+  text-align: center;
+  max-width: 520px;
+  margin: 8px auto;
+}
+
+.aac-empty .ico {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  display: grid;
+  place-items: center;
+  margin: 0 auto 16px;
+  color: var(--muted-text);
+}
+
+.aac-empty .ico svg {
+  width: 24px;
+  height: 24px;
+}
+
+.aac-empty h3 {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.aac-empty p {
+  margin: 0 auto 18px;
+  color: var(--muted-text);
+  max-width: 360px;
+  font-size: 13px;
+}
+
+@media (max-width: 1100px) {
+  .aac-kpis {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .aac-tbl {
+    overflow-x: auto;
+  }
+
+  .aac-tr {
+    min-width: 940px;
+  }
+}

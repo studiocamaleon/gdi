@@ -353,6 +353,11 @@ export class AdministracionController {
     return this.cobrosService.findAll(auth, { ordenId });
   }
 
+  @Get('cobros/pendientes-acreditacion')
+  cobrosPendientesAcreditacion(@CurrentSession() auth: CurrentAuth) {
+    return this.cobrosService.pendientesAcreditacion(auth);
+  }
+
   @Post('cobros')
   crearCobro(
     @CurrentSession() auth: CurrentAuth,
