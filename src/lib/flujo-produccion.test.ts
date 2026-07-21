@@ -21,7 +21,6 @@ import {
   avanzarAVentana,
   estimarDemoraNuevos,
   PROVEEDOR_KEY,
-  restarMinutosLaborales,
   simularFlujo,
   sumarDiasHabiles,
   sumarMinutosLaborales,
@@ -752,20 +751,21 @@ describe("simularFlujo · la máquina es un recurso aparte del puesto", () => {
 
 // ── Tiempo de preparación entre pasos ────────────────────────────────────
 
-describe("simularFlujo · tiempo de preparación", () => {
-  it("corre el arranque del trabajo, no sólo el fin", () => {
+describe("simularFlujo · separación entre pasos", () => {
+  it("el bloque es sólo el trabajo: la separación no lo alarga", () => {
     const { traza, porItem } = correr([item("A", [interno(0, "impresion", 60)])], {
       tiempoEntrePasosMin: 15,
     });
 
-    // El puesto se toma a las 08:00 (el operario sale a buscar el material),
-    // pero el trabajo en sí termina 15 min más tarde que sin preparación.
+    // Un solo paso: arranca y termina el trabajo puro, sin colchón adelante.
     expect(traza[0].inicio).toEqual(jul(20, 8, 0));
+    expect(traza[0].fin).toEqual(jul(20, 9, 0));
     expect(traza[0].preparacionMin).toBe(15);
-    expect(porItem.get("A")?.finEstimado).toEqual(jul(20, 9, 15));
+    // La ETA del item es el fin del trabajo, no incluye la separación final.
+    expect(porItem.get("A")?.finEstimado).toEqual(jul(20, 9, 0));
   });
 
-  it("ocupa el puesto: el trabajo siguiente espera la preparación del anterior", () => {
+  it("deja un hueco visible entre dos pasos del mismo recurso", () => {
     const { traza } = correr(
       [
         item("A", [interno(0, "impresion", 60)]),
@@ -774,8 +774,38 @@ describe("simularFlujo · tiempo de preparación", () => {
       { tiempoEntrePasosMin: 15 },
     );
 
-    // Un solo puesto ocupado 15 + 60: B no arranca hasta las 09:15.
+    // A trabaja 08:00→09:00. B no arranca hasta 09:15: 15 min de aire.
+    expect(traza[0].fin).toEqual(jul(20, 9, 0));
     expect(traza[1].inicio).toEqual(jul(20, 9, 15));
+    expect(traza[1].fin).toEqual(jul(20, 10, 15));
+  });
+
+  it("separa los pasos de un mismo item (traslado entre estaciones)", () => {
+    const { traza, porItem } = correr(
+      [item("A", [interno(0, "impresion", 60), interno(1, "impresion", 30)])],
+      { tiempoEntrePasosMin: 10 },
+    );
+
+    // Paso 0: 08:00→09:00. Paso 1 arranca 09:10 (10 min de traslado).
+    expect(traza[0].fin).toEqual(jul(20, 9, 0));
+    expect(traza[1].inicio).toEqual(jul(20, 9, 10));
+    expect(porItem.get("A")?.finEstimado).toEqual(jul(20, 9, 40));
+  });
+
+  it("la separación cruza el cierre del día en minutos laborales", () => {
+    // A trabaja hasta 16:50 (530 min desde 08:00, jornada 08–17). Con 30 de
+    // separación, el recurso se libera 10 min hoy (cierra 17:00) + 20 mañana
+    // = 08:20.
+    const { traza } = correr(
+      [
+        item("A", [interno(0, "impresion", 530)]),
+        item("B", [interno(0, "impresion", 30)]),
+      ],
+      { tiempoEntrePasosMin: 30 },
+    );
+
+    const b = traza.find((t) => t.itemId === "B")!;
+    expect(b.inicio).toEqual(jul(21, 8, 20));
   });
 
   it("la estación puede pisar el default del tenant", () => {
@@ -802,7 +832,7 @@ describe("simularFlujo · tiempo de preparación", () => {
     expect(traza[0].preparacionMin).toBe(0);
   });
 
-  it("no se le cobra preparación al proveedor ni a lo que ya está en curso", () => {
+  it("no se le cobra separación al proveedor ni a lo que ya está en curso", () => {
     const { traza } = correr(
       [item("A", [tercerizado(0, "impresion", 2)])],
       { tiempoEntrePasosMin: 20 },
@@ -811,7 +841,7 @@ describe("simularFlujo · tiempo de preparación", () => {
     expect(traza[0].preparacionMin).toBe(0);
   });
 
-  it("la máquina no se ocupa durante la preparación", () => {
+  it("la separación va en la máquina: dos guillotinas quedan separadas", () => {
     const CORTE = [
       estacion({
         id: "corte",
@@ -828,66 +858,9 @@ describe("simularFlujo · tiempo de preparación", () => {
       { estaciones: CORTE, tiempoEntrePasosMin: 30 },
     );
 
-    // A: puesto 08:00, máquina 08:30–09:30. B tiene el otro puesto libre, así
-    // que su preparación (30 min) corre EN PARALELO con el trabajo de A, y
-    // sólo espera la máquina: arranca 09:00 y lamina de 09:30 a 10:30.
-    expect(traza[1].inicio).toEqual(jul(20, 9, 0));
-    expect(traza[1].fin).toEqual(jul(20, 10, 30));
-  });
-});
-
-describe("restarMinutosLaborales", () => {
-  it("resta dentro de la misma jornada", () => {
-    expect(restarMinutosLaborales(CALENDARIO, jul(20, 10, 0), 60)).toEqual(jul(20, 9, 0));
-  });
-
-  it("es la inversa exacta de sumar", () => {
-    const fin = sumarMinutosLaborales(CALENDARIO, jul(20, 16, 0), 120)!;
-    expect(restarMinutosLaborales(CALENDARIO, fin, 120)).toEqual(jul(20, 16, 0));
-  });
-
-  it("cruza hacia atrás el cierre del día", () => {
-    // Martes 08:30 − 60 min: 30 min del martes, 30 del cierre del lunes.
-    expect(restarMinutosLaborales(CALENDARIO, jul(21, 8, 30), 60)).toEqual(jul(20, 16, 30));
-  });
-
-  it("salta el fin de semana hacia atrás", () => {
-    // Lunes 08:30 − 60 min cae en el viernes anterior, no en el domingo.
-    expect(restarMinutosLaborales(CALENDARIO, jul(27, 8, 30), 60)).toEqual(jul(24, 16, 30));
-  });
-
-  it("con 0 minutos devuelve el mismo instante", () => {
-    expect(restarMinutosLaborales(CALENDARIO, jul(20, 10, 0), 0)).toEqual(jul(20, 10, 0));
-  });
-});
-
-describe("simularFlujo · inicioTrabajo", () => {
-  it("es el inicio más el traslado, en minutos laborales", () => {
-    const { traza } = correr([item("A", [interno(0, "impresion", 60)])], {
-      tiempoEntrePasosMin: 30,
-    });
-
-    expect(traza[0].inicio).toEqual(jul(20, 8, 0));
-    expect(traza[0].inicioTrabajo).toEqual(jul(20, 8, 30));
-  });
-
-  it("si el traslado cruza el cierre, el trabajo sigue al día siguiente", () => {
-    // El desempate del scheduler es por número de OT, así que el relleno se
-    // llama "A" para que tome el puesto primero. A también paga traslado:
-    // 08:00 sale, 08:30 empieza, 500 min → libera el puesto 16:50.
-    // "B" arranca 16:50 con 30 min de traslado: 10 min hoy (cierra 17:00) y
-    // 20 mañana. Sumar minutos de RELOJ daría 17:20, que no existe.
-    const { traza } = correr(
-      [
-        item("A", [interno(0, "impresion", 500)]),
-        item("B", [interno(0, "impresion", 30)]),
-      ],
-      { tiempoEntrePasosMin: 30 },
-    );
-
-    const b = traza.find((t) => t.itemId === "B")!;
-    expect(b.inicio).toEqual(jul(20, 16, 50));
-    expect(b.inicioTrabajo).toEqual(jul(21, 8, 20));
-    expect(b.fin).toEqual(jul(21, 8, 50));
+    // Sobran puestos, pero una sola guillotina: A 08:00→09:00, la máquina se
+    // libera 09:30, B arranca ahí. Un hueco de 30 min entre bloques.
+    expect(traza[0].fin).toEqual(jul(20, 9, 0));
+    expect(traza[1].inicio).toEqual(jul(20, 9, 30));
   });
 });

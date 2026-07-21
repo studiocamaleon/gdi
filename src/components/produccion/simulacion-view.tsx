@@ -118,8 +118,6 @@ type Bloque = {
   enCurso: boolean;
   candidatos: number | null;
   preparacionMin: number;
-  /** Cuándo entra la máquina: el inicio más el traslado. */
-  inicioTrabajo: Date;
   tarde: boolean;
   entrega: string | null;
   fila: number;
@@ -1174,9 +1172,9 @@ function Inspector({
   if (b.preparacionMin > 0)
     notas.push(
       <div key="p" className="simu-note">
-        Antes de trabajar hay <b>{b.preparacionMin} min</b> de traslado: el operario va a
-        buscar el material. Ocupa un puesto de {b.estNombre}, pero no su máquina — la
-        máquina recién entra a las <b>{hhmm(b.inicioTrabajo)}</b>.
+        Después de este paso quedan <b>{b.preparacionMin} min</b> de separación —
+        cambio de material y traslado — antes de que arranque el siguiente en{" "}
+        {b.estNombre}. Por eso hay aire entre este bloque y el próximo.
       </div>,
     );
   if (b.enCurso)
@@ -1235,7 +1233,7 @@ function Inspector({
           )}
           <Fila k="Espera previa" v={b.esperaMin > 0 ? horas(b.esperaMin) : "—"} />
           {b.preparacionMin > 0 ? (
-            <Fila k="Traslado" v={`${b.preparacionMin} min`} />
+            <Fila k="Separación" v={`${b.preparacionMin} min después`} />
           ) : null}
           <Fila k="Paso nº" v={String(b.pasoIndice)} />
           {b.entrega ? <Fila k="Entrega" v={b.entrega} /> : null}
@@ -1323,7 +1321,6 @@ function construir(
         enCurso: p.enCurso,
         candidatos: p.candidatos,
         preparacionMin: p.preparacionMin,
-        inicioTrabajo: p.inicioTrabajo,
         tarde: !!(entrega && eta?.finEstimado && eta.finEstimado > entrega),
         entrega: entrega ? diaCorto(entrega) : null,
         fila: 0,

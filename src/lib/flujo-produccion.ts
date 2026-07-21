@@ -71,16 +71,11 @@ export type PasoProgramado = {
   /** Id de estación, o SIN_ESTACION_KEY / PROVEEDOR_KEY. */
   estacionKey: string;
   inicio: Date;
-  /**
-   * Cuándo empieza el trabajo en sí: `inicio` más el traslado, en minutos
-   * LABORALES (si el traslado cruza el cierre, sigue al día siguiente).
-   * Es también cuándo entra la máquina.
-   */
-  inicioTrabajo: Date;
   fin: Date;
   /** Minutos de taller. null en tercerizados: su costo es el lead time. */
   duracionMin: number | null;
-  /** Minutos de traslado/preparación antes de empezar. Ocupan puesto, no máquina. */
+  /** Minutos de separación DESPUÉS del paso, antes del siguiente en el mismo
+   *  recurso (cambio de material, traslado). Se ve como aire entre bloques. */
   preparacionMin: number;
   plazoDias: number | null;
   /** Cuánto esperó el trabajo a que se liberara un puesto. */
@@ -176,45 +171,6 @@ export function sumarMinutosLaborales(
     if (restante <= disponibles) return new Date(t.getTime() + restante * 60000);
     restante -= disponibles;
     t = avanzarAVentana(calendario, finVentana, noLaborables);
-  }
-  return null;
-}
-
-/**
- * La inversa de `sumarMinutosLaborales`: el instante laboral que está N
- * minutos ANTES de `hasta`. Se usa para arrancar la preparación con la
- * anticipación justa — el operario sale a buscar el material mientras la
- * máquina todavía está ocupada, para llegar cuando se libera.
- * null si el horizonte hacia atrás no alcanza.
- */
-export function restarMinutosLaborales(
-  calendario: CalendarioEstacion,
-  hasta: Date,
-  minutos: number,
-  noLaborables: Set<string> = new Set(),
-): Date | null {
-  if (minutos <= 0) return hasta;
-  let restante = minutos;
-  let t = hasta;
-  for (let i = 0; i < HORIZONTE_DIAS; i += 1) {
-    const franja = franjaDelDia(calendario, t, noLaborables);
-    if (franja) {
-      const abre = conHora(t, minutosDe(franja.desde));
-      const cierra = conHora(t, minutosDe(franja.hasta));
-      // Sólo cuenta el tramo del día que queda por detrás de `t`.
-      const tope = t < cierra ? t : cierra;
-      const disponibles = Math.max(0, (tope.getTime() - abre.getTime()) / 60000);
-      if (restante <= disponibles) {
-        return new Date(tope.getTime() - restante * 60000);
-      }
-      restante -= disponibles;
-    }
-    // Al día anterior, posicionado en su cierre.
-    const previo = new Date(t.getFullYear(), t.getMonth(), t.getDate() - 1);
-    const franjaPrevia = franjaDelDia(calendario, previo, noLaborables);
-    t = franjaPrevia
-      ? conHora(previo, minutosDe(franjaPrevia.hasta))
-      : conHora(previo, 23 * 60 + 59);
   }
   return null;
 }
@@ -393,7 +349,6 @@ export function simularFlujo({
             pasoIndice: frontera.indice,
             estacionKey: est.key,
             inicio: new Date(ahora),
-            inicioTrabajo: new Date(ahora),
             fin,
             duracionMin: restanteMin,
             // Ya está en curso: el material llegó hace rato.
@@ -450,7 +405,6 @@ export function simularFlujo({
           pasoIndice: paso.indice,
           estacionKey: PROVEEDOR_KEY,
           inicio: new Date(sim.readyAt),
-          inicioTrabajo: new Date(sim.readyAt),
           fin,
           duracionMin: null,
           // Lo hace el proveedor: no hay traslado interno que modelar.
@@ -486,33 +440,19 @@ export function simularFlujo({
         continue;
       }
       const est = estacionDe(paso);
+      /* Hay que esperar a que se liberen los DOS recursos: el puesto y la
+         máquina. Cada uno ya viene con la separación del ocupante anterior
+         incorporada (se libera prep minutos después de terminar), así que
+         entre dos pasos del mismo recurso queda un hueco visible. */
       const libreDesde = est.servers
         ? est.servers.reduce((min, s) => (s < min ? s : min), est.servers[0])
         : sim.readyAt;
-      /* La máquina es un recurso aparte del puesto. Pero no hace falta que
-         esté libre para ARRANCAR: durante la preparación el operario está
-         yendo a buscar el material, no usando la máquina. Basta con que esté
-         libre cuando el material llega, así que la preparación puede empezar
-         con esa anticipación. */
       const pool = poolDeMaquina(est, paso, ahora);
       const maquinaLibre = pool
         ? pool.reduce((min, s) => (s < min ? s : min), pool[0])
         : null;
       let startRaw = libreDesde > sim.readyAt ? libreDesde : sim.readyAt;
-      if (maquinaLibre) {
-        const salidaParaLlegar =
-          est.preparacionMin > 0
-            ? restarMinutosLaborales(
-                est.calendario,
-                maquinaLibre,
-                est.preparacionMin,
-                noLaborables,
-              )
-            : maquinaLibre;
-        if (salidaParaLlegar && salidaParaLlegar > startRaw) {
-          startRaw = salidaParaLlegar;
-        }
-      }
+      if (maquinaLibre && maquinaLibre > startRaw) startRaw = maquinaLibre;
       const start = avanzarAVentana(est.calendario, startRaw, noLaborables);
       if (start === null) {
         sim.done = true;
@@ -526,26 +466,24 @@ export function simularFlujo({
 
     const { sim, est, duracion, start } = mejor;
     const paso = sim.restantes[sim.idx];
-    /* Ir a buscar el material es trabajo del operario: ocupa el puesto desde
-       el arranque, pero la máquina recién entra cuando el material llegó.
-       El primer paso de la simulación arranca donde ya está el material, así
-       que la preparación aplica igual: viene del depósito o del paso previo. */
     const prep = est.preparacionMin;
-    const listo =
-      prep > 0
-        ? sumarMinutosLaborales(est.calendario, start, prep, noLaborables)
-        : start;
-    if (listo === null) {
-      sim.done = true;
-      continue;
-    }
-    const fin = sumarMinutosLaborales(est.calendario, listo, duracion, noLaborables);
+    const fin = sumarMinutosLaborales(est.calendario, start, duracion, noLaborables);
     if (fin === null) {
       sim.done = true;
       continue;
     }
-    ocupar(est, fin);
-    ocuparMaquina(est, paso, fin, ahora);
+    /* La separación entre pasos es un hueco DESPUÉS del trabajo: cambio de
+       material, traslado, el operario que no arranca lo siguiente en el mismo
+       instante. Se aplica liberando el puesto, la máquina y el item `prep`
+       minutos más tarde que el fin, así que el próximo paso de ese recurso
+       arranca con un hueco visible. El bloque que se dibuja es sólo el
+       trabajo (start → fin); la separación queda como aire entre bloques. */
+    const finSeparado =
+      prep > 0
+        ? (sumarMinutosLaborales(est.calendario, fin, prep, noLaborables) ?? fin)
+        : fin;
+    ocupar(est, finSeparado);
+    ocuparMaquina(est, paso, finSeparado, ahora);
     if (est.parcial) sim.resultado.parcial = true;
     anotar({
       itemId: sim.data.id,
@@ -553,7 +491,6 @@ export function simularFlujo({
       pasoIndice: paso.indice,
       estacionKey: est.key,
       inicio: start,
-      inicioTrabajo: listo,
       fin,
       duracionMin: duracion,
       preparacionMin: prep,
@@ -576,7 +513,9 @@ export function simularFlujo({
       lista.push({ pasoId: paso.id, itemId: sim.data.id, llegada: sim.readyAt, duracionMin: duracion });
       llegadasPorEstacion.set(est.key, lista);
     }
-    sim.readyAt = fin;
+    // El item queda libre para su próximo paso `prep` después (traslado),
+    // pero su ETA es el fin del trabajo real, no incluye la separación final.
+    sim.readyAt = finSeparado;
     sim.idx += 1;
     if (sim.idx === sim.restantes.length) {
       sim.resultado.finEstimado = fin;
