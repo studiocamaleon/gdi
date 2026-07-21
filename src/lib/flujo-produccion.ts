@@ -231,11 +231,22 @@ type EstacionSim = {
   /**
    * Puestos NO son máquinas. Una estación puede tener 2 operarios y una sola
    * guillotina: dos pasos de guillotina no van en paralelo aunque sobren
-   * puestos, pero guillotina + laminado sí. Cada centro de costo con máquinas
-   * en esta estación es un pool aparte, y su tamaño es cuántas máquinas lo
-   * comparten. Un paso ocupa SU máquina y UN puesto a la vez.
+   * puestos, pero guillotina + laminado sí. Un paso ocupa SU máquina y UN
+   * puesto a la vez.
+   *
+   * La máquina se identifica por (centro de costo + familia): el centro de
+   * costo solo no alcanza porque en un taller real varias máquinas físicas
+   * distintas comparten un mismo centro (guillotina + laminadora + plotter en
+   * "Corte y terminación"), y la familia es lo que las separa. Capacidad 1
+   * por clave: si hay dos guillotinas, se modelan con centros distintos.
+   *
+   * Los pools se crean bajo demanda (no se conoce la familia de una máquina
+   * desde su ficha, sólo su centro de costo).
    */
   maquinas: Map<string, Date[]>;
+  /** Centros de costo que TIENEN máquina acá: un paso es máquina-dependiente
+   *  sólo si su centro de costo cae en este conjunto. */
+  ccsConMaquina: Set<string>;
   /** Minutos de traslado/preparación antes de poder empezar acá. */
   preparacionMin: number;
 };
@@ -304,21 +315,17 @@ export function simularFlujo({
   for (const estacion of estaciones) {
     if (!estacion.activo) continue;
     const sinCalendario = calendarioVacio(estacion.calendario);
-    /* Un pool por centro de costo con máquinas acá; su tamaño es cuántas
-       máquinas lo comparten (una guillotina → 1; si mañana hay dos → 2). */
-    const maquinas = new Map<string, Date[]>();
+    const ccsConMaquina = new Set<string>();
     for (const maquina of estacion.maquinas) {
-      if (!maquina.centroCostoId) continue;
-      const pool = maquinas.get(maquina.centroCostoId) ?? [];
-      pool.push(new Date(ahora));
-      maquinas.set(maquina.centroCostoId, pool);
+      if (maquina.centroCostoId) ccsConMaquina.add(maquina.centroCostoId);
     }
     registros.set(estacion.id, {
       key: estacion.id,
       calendario: sinCalendario ? calendarioDefault() : (estacion.calendario as CalendarioEstacion),
       servers: Array.from({ length: Math.max(1, estacion.capacidadConcurrente) }, () => new Date(ahora)),
       parcial: sinCalendario,
-      maquinas,
+      maquinas: new Map(),
+      ccsConMaquina,
       preparacionMin: Math.max(
         0,
         estacion.tiempoPreparacionMin ?? tiempoEntrePasosMin,
@@ -331,6 +338,7 @@ export function simularFlujo({
     servers: null,
     parcial: true,
     maquinas: new Map(),
+    ccsConMaquina: new Set(),
     preparacionMin: Math.max(0, tiempoEntrePasosMin),
   };
 
@@ -486,7 +494,7 @@ export function simularFlujo({
          yendo a buscar el material, no usando la máquina. Basta con que esté
          libre cuando el material llega, así que la preparación puede empezar
          con esa anticipación. */
-      const pool = poolDeMaquina(est, paso);
+      const pool = poolDeMaquina(est, paso, ahora);
       const maquinaLibre = pool
         ? pool.reduce((min, s) => (s < min ? s : min), pool[0])
         : null;
@@ -537,7 +545,7 @@ export function simularFlujo({
       continue;
     }
     ocupar(est, fin);
-    ocuparMaquina(est, paso, fin);
+    ocuparMaquina(est, paso, fin, ahora);
     if (est.parcial) sim.resultado.parcial = true;
     anotar({
       itemId: sim.data.id,
@@ -580,18 +588,36 @@ export function simularFlujo({
 }
 
 /**
- * El pool de la máquina que usa este paso, o null si no usa ninguna. El
- * vínculo paso→máquina es el centro de costo: la trazabilidad del paso guarda
- * centroCostoId, no maquinaId.
+ * El pool de la máquina que usa este paso, o null si no usa ninguna. La
+ * máquina se identifica por (centro de costo + familia): el centro de costo
+ * solo no basta porque varias máquinas físicas comparten uno (guillotina +
+ * laminadora + plotter en la misma estación), y la familia las separa. El
+ * pool tiene capacidad 1 y se crea la primera vez que un paso lo pide.
  */
-function poolDeMaquina(est: EstacionSim, paso: TableroPasoData): Date[] | null {
-  if (!paso.centroCostoId) return null;
-  return est.maquinas.get(paso.centroCostoId) ?? null;
+function poolDeMaquina(
+  est: EstacionSim,
+  paso: TableroPasoData,
+  ahora: Date,
+): Date[] | null {
+  const cc = paso.centroCostoId;
+  if (!cc || !est.ccsConMaquina.has(cc)) return null;
+  const clave = `${cc}::${paso.familiaCodigo}`;
+  let pool = est.maquinas.get(clave);
+  if (!pool) {
+    pool = [new Date(ahora)];
+    est.maquinas.set(clave, pool);
+  }
+  return pool;
 }
 
 /** Ocupa la máquina del paso, si usa alguna. */
-function ocuparMaquina(est: EstacionSim, paso: TableroPasoData, fin: Date) {
-  const pool = poolDeMaquina(est, paso);
+function ocuparMaquina(
+  est: EstacionSim,
+  paso: TableroPasoData,
+  fin: Date,
+  ahora: Date,
+) {
+  const pool = poolDeMaquina(est, paso, ahora);
   if (!pool) return;
   let idx = 0;
   for (let i = 1; i < pool.length; i += 1) {

@@ -656,19 +656,53 @@ describe("simularFlujo · la máquina es un recurso aparte del puesto", () => {
     expect(traza[1].inicio).toEqual(jul(20, 8, 0));
   });
 
-  it("con dos guillotinas los dos pasos arrancan juntos", () => {
+  it("misma familia + mismo centro = una sola máquina: serializan", () => {
+    // El caso real de "Corte y terminación": tres máquinas físicas distintas
+    // comparten UN centro de costo. Antes el motor las contaba como pool 3 y
+    // dejaba dos guillotinas en paralelo. La familia las separa.
+    const compartido = [
+      estacion({
+        id: "corte",
+        familias: ["guillotina", "laminado"],
+        capacidadConcurrente: 2,
+        // Guillotina, laminadora y plotter, todas con el mismo centro.
+        maquinas: [
+          maquina("cc-corte", 0),
+          maquina("cc-corte", 1),
+          maquina("cc-corte", 2),
+        ],
+      }),
+    ];
+    const { traza } = correr(
+      [
+        item("A", [enMaquina(0, "guillotina", 60, "cc-corte")]),
+        item("B", [enMaquina(0, "guillotina", 60, "cc-corte")]),
+        item("C", [enMaquina(0, "laminado", 60, "cc-corte")]),
+      ],
+      { estaciones: compartido },
+    );
+
+    const g = traza.filter((t) => t.itemId !== "C");
+    // Las dos guillotinas van en fila (una sola guillotina)...
+    expect(g[0].inicio).toEqual(jul(20, 8, 0));
+    expect(g[1].inicio).toEqual(jul(20, 9, 0));
+    // ...pero el laminado, otra máquina, corre en paralelo con la primera.
+    expect(traza.find((t) => t.itemId === "C")!.inicio).toEqual(jul(20, 8, 0));
+  });
+
+  it("dos guillotinas de verdad = dos centros de costo → en paralelo", () => {
     const dos = [
       estacion({
         id: "corte",
         familias: ["guillotina"],
         capacidadConcurrente: 2,
-        maquinas: [maquina("cc-guillotina", 0), maquina("cc-guillotina", 1)],
+        maquinas: [maquina("cc-guillo-1"), maquina("cc-guillo-2")],
       }),
     ];
     const { traza } = correr(
       [
-        item("A", [enMaquina(0, "guillotina", 60, "cc-guillotina")]),
-        item("B", [enMaquina(0, "guillotina", 60, "cc-guillotina")]),
+        item("A", [enMaquina(0, "guillotina", 60, "cc-guillo-1")]),
+        item("B", [enMaquina(0, "guillotina", 60, "cc-guillo-2")]),
       ],
       { estaciones: dos },
     );
