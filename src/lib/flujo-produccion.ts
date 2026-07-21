@@ -173,7 +173,11 @@ function duracionDePaso(paso: TableroPasoData, medianas: Map<string, number>): n
   // Un tercerizado nunca toma la mediana de la familia: esa mediana se midió
   // sobre pasos INTERNOS y no dice nada del proveedor. Se programa aparte.
   if (esTercerizado(paso)) return null;
-  if (paso.duracionEstimadaMin != null && paso.duracionEstimadaMin > 0) return paso.duracionEstimadaMin;
+  // Ojo con el cero: 0 es una duración REAL ("Material sin impresión" sale del
+  // motor con tiempoCero), distinta de null = "no sabemos cuánto tarda". Sólo
+  // null cae a la mediana; tratar el 0 como desconocido dejaba sin ETA a toda
+  // la orden, o peor, le sumaba la mediana de impresión a un paso que no imprime.
+  if (paso.duracionEstimadaMin != null) return paso.duracionEstimadaMin;
   return medianas.get(paso.familiaCodigo) ?? null;
 }
 

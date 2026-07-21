@@ -1273,10 +1273,12 @@ function taskId(task: StationTask) {
  * Duración estimada del paso para la cola: la propia del snapshot, o la
  * mediana histórica de su familia (D6 del doc de capacidad). null = sin
  * estimar (suma 0 a la cola y se señala aparte, sin inventar defaults).
+ * Un 0 explícito SÍ es duración conocida — ver duracionDePaso en
+ * flujo-produccion.ts, misma regla.
  */
 function duracionDeTask(task: { step: StepView }, medianas: Map<string, number>): number | null {
   const propia = task.step.paso.duracionEstimadaMin;
-  if (propia != null && propia > 0) return propia;
+  if (propia != null) return propia;
   return medianas.get(task.step.paso.familiaCodigo) ?? null;
 }
 

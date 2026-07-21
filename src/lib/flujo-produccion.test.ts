@@ -262,6 +262,31 @@ describe("simularFlujo · pasos internos", () => {
     expect(porItem.get("A")?.finEstimado).toBeNull();
   });
 
+  it("trata la duración 0 como duración conocida, no como sin estimar", () => {
+    // Caso real (OT-2026-0025 · A): el motor materializa "Material sin
+    // impresión" con tiempoCero, y ese 0 se leía como "no sé cuánto tarda".
+    // Sin mediana para su familia, un solo paso de 0 min dejaba sin ETA a
+    // toda la orden aunque el resto de la ruta estuviera perfectamente
+    // estimada.
+    const { porItem } = correr([
+      item("A", [interno(0, "impresion", 0), interno(1, "impresion", 60)]),
+    ]);
+
+    const eta = porItem.get("A");
+    expect(eta?.sinEstimar).toBe(false);
+    expect(eta?.finEstimado).toEqual(jul(20, 9, 0));
+  });
+
+  it("un paso de 0 min no toma la mediana de su familia", () => {
+    // Peor que quedarse sin ETA: inventarle a un paso que NO imprime el
+    // tiempo mediano de los que sí imprimen.
+    const { porItem } = correr([item("A", [interno(0, "impresion", 0)])], {
+      medianas: new Map([["impresion", 240]]),
+    });
+
+    expect(porItem.get("A")?.finEstimado).toEqual(jul(20, 8, 0));
+  });
+
   it("no le inventa ETA a un item sin ventana en el horizonte (D8)", () => {
     const soloLunes: CalendarioEstacion = {
       dias: {
