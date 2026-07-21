@@ -17187,6 +17187,24 @@ button.est-card {
   font-weight: 500;
 }
 
+.est-field .est-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  cursor: pointer;
+  margin: 2px 0 6px;
+}
+
+.est-field .est-check input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--signal);
+  cursor: pointer;
+}
+
 .icon-picker.compact {
   flex: 0 0 auto;
   flex-wrap: nowrap;

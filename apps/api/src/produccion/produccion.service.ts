@@ -936,6 +936,9 @@ export class ProduccionService {
       },
       update: {
         margenEtaDias: payload.margenEtaDias,
+        ...(payload.tiempoEntrePasosMin !== undefined
+          ? { tiempoEntrePasosMin: payload.tiempoEntrePasosMin }
+          : {}),
         ...(payload.corteJornada ? { corteJornada: payload.corteJornada } : {}),
       },
     });

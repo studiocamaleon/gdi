@@ -235,6 +235,8 @@ export type EstacionPayload = {
   etapa: string;
   icono?: string;
   capacidadConcurrente?: number;
+  /** Minutos de traslado hasta esta estación. null = default del taller. */
+  tiempoPreparacionMin?: number | null;
   calendario?: CalendarioEstacion | null;
   /** Reemplazo completo de las tres listas. */
   familias: string[];
@@ -263,6 +265,7 @@ export function createEmptyEstacion(): EstacionPayload {
     etapa: "preprensa",
     icono: "Tool",
     capacidadConcurrente: 1,
+    tiempoPreparacionMin: null,
     calendario: calendarioDefault(),
     familias: [],
     empleadoIds: [],

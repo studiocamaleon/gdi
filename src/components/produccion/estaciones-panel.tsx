@@ -124,7 +124,7 @@ function iniciales(nombre: string): string {
 function Stepper({ label, value, min, step, unit, help, onChange }: { label: string; value: number; min: number; step: number; unit?: string; help: string; onChange: (value: number) => void }) {
   return (
     <div className="est-field">
-      <label>{label}</label>
+      {label ? <label>{label}</label> : null}
       <div className="est-stepper">
         <button type="button" onClick={() => onChange(Math.max(min, value - step))}>−</button>
         <input type="number" value={value} onChange={(event) => onChange(Math.max(min, Number.parseInt(event.target.value, 10) || min))} />
@@ -475,6 +475,7 @@ function StationForm({
   empleados,
   maquinas,
   maquinaEnEstacion,
+  entrePasosDefault,
   saving,
   error,
   onSave,
@@ -490,6 +491,8 @@ function StationForm({
   maquinas: MaquinaRef[];
   /** maquinaId → nombre de la estación donde vive hoy. */
   maquinaEnEstacion: Map<string, string>;
+  /** Tiempo entre pasos del taller, para mostrar qué se hereda. */
+  entrePasosDefault: number;
   saving: boolean;
   error: string | null;
   onSave: (draft: EstacionPayload) => void;
@@ -505,6 +508,7 @@ function StationForm({
           etapa: initial.etapa,
           icono: initial.icono ?? "Tool",
           capacidadConcurrente: initial.capacidadConcurrente,
+          tiempoPreparacionMin: initial.tiempoPreparacionMin,
           calendario: initial.calendario,
           familias: initial.familias,
           empleadoIds: initial.empleados.map((entry) => entry.id),
@@ -694,6 +698,36 @@ function StationForm({
           <section className="est-section">
             <div className="est-section-head"><span className="num">04</span><div><div className="ttl">Capacidad y planificación</div><div className="sub">Puestos y calendario: la cola del tablero se mide en horas.</div></div></div>
             <Stepper label="Puestos de trabajo" value={draft.capacidadConcurrente ?? 1} min={1} step={1} onChange={(value) => update({ capacidadConcurrente: value })} help="Cuántos pasos avanzan EN PARALELO de verdad (2 mesas con 2 operarios = 2). Una impresora es 1, aunque tenga cola." />
+            <div className="est-field">
+              <label>Tiempo entre pasos</label>
+              <label className="est-check">
+                <input
+                  type="checkbox"
+                  checked={draft.tiempoPreparacionMin == null}
+                  onChange={(event) =>
+                    update({
+                      tiempoPreparacionMin: event.target.checked
+                        ? null
+                        : entrePasosDefault,
+                    })
+                  }
+                />
+                <span>Usar el del taller ({entrePasosDefault} min)</span>
+              </label>
+              {draft.tiempoPreparacionMin != null ? (
+                <Stepper
+                  label=""
+                  value={draft.tiempoPreparacionMin}
+                  min={0}
+                  step={5}
+                  unit="min"
+                  onChange={(value) => update({ tiempoPreparacionMin: value })}
+                  help="Minutos para traer el material hasta acá. Ocupa un puesto (lo hace el operario), no la máquina."
+                />
+              ) : (
+                <div className="help">Traslado hasta esta estación antes de empezar un paso. Destildá para darle un valor propio.</div>
+              )}
+            </div>
             <CalendarioEditor
               value={draft.calendario ?? null}
               onChange={(calendario) => update({ calendario })}
@@ -775,6 +809,22 @@ export function EstacionesPanel({
   const [error, setError] = React.useState<string | null>(null);
   const [query, setQuery] = React.useState("");
   const [filterCategoria, setFilterCategoria] = React.useState<string>("all");
+  /* El tiempo entre pasos del taller, sólo para mostrar qué hereda una
+     estación sin valor propio. Se refresca al abrir un formulario porque
+     puede haberse cambiado en la hoja del calendario. */
+  const [entrePasosDefault, setEntrePasosDefault] = React.useState(0);
+  React.useEffect(() => {
+    if (!sheet) return;
+    let vivo = true;
+    getConfiguracionProduccion()
+      .then((cfg) => {
+        if (vivo) setEntrePasosDefault(cfg.tiempoEntrePasosMin);
+      })
+      .catch(() => {});
+    return () => {
+      vivo = false;
+    };
+  }, [sheet]);
 
   // maquinaId → estación dueña (para avisar el "movimiento" en el picker).
   const maquinaEnEstacion = React.useMemo(() => {
@@ -896,6 +946,7 @@ export function EstacionesPanel({
           empleados={empleados}
           maquinas={maquinas}
           maquinaEnEstacion={maquinaEnEstacion}
+          entrePasosDefault={entrePasosDefault}
           saving={saving}
           error={error}
           onSave={(draft) => void handleSave(draft)}
