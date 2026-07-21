@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CurrentAuth } from '../auth/auth.types';
+import { CobrosService } from './cobros.service';
 import type {
   ArqueoDto,
   TransferenciaDto,
@@ -13,10 +14,17 @@ import type {
 
 @Injectable()
 export class TesoreriaService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cobros: CobrosService,
+  ) {}
 
   /** Cuentas + KPIs de posición (por moneda, efectivo, bancos, a acreditar). */
   async resumen(auth: CurrentAuth) {
+    // Antes de mostrar saldos, poner al día lo que ya venció: si el cron
+    // no corrió (deploy nuevo, instancia caída), la vista igual es fiel.
+    await this.cobros.barrerVencidos(auth.tenantId);
+
     const [cuentas, pendientes] = await Promise.all([
       this.prisma.cuentaFondos.findMany({
         where: { tenantId: auth.tenantId, activo: true },

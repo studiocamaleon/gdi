@@ -1,0 +1,133 @@
+import { describe, expect, it } from "vitest";
+
+import { construirEje } from "@/lib/eje-laboral";
+import type { CalendarioEstacion, Estacion } from "@/lib/estaciones";
+
+const franja = (desde: string, hasta: string) => ({ desde, hasta });
+
+const cal = (desde: string, hasta: string): CalendarioEstacion => ({
+  dias: {
+    lun: franja(desde, hasta),
+    mar: franja(desde, hasta),
+    mie: franja(desde, hasta),
+    jue: franja(desde, hasta),
+    vie: franja(desde, hasta),
+    sab: null,
+    dom: null,
+  },
+});
+
+function estacion(id: string, calendario: CalendarioEstacion | null): Estacion {
+  return {
+    id,
+    nombre: id,
+    descripcion: "",
+    activo: true,
+    etapa: "impresion",
+    icono: null,
+    capacidadConcurrente: 1,
+    calendario,
+    familias: [],
+    empleados: [],
+    maquinas: [],
+    createdAt: "",
+    updatedAt: "",
+  };
+}
+
+const jul = (dia: number, hora = 0, minuto = 0) =>
+  new Date(2026, 6, dia, hora, minuto);
+
+describe("construirEje", () => {
+  it("toma la unión de las franjas de las estaciones activas", () => {
+    const eje = construirEje({
+      estaciones: [estacion("a", cal("08:00", "17:00")), estacion("b", cal("09:00", "18:00"))],
+      ahora: jul(20, 8),
+      hasta: jul(21, 12),
+    });
+
+    expect(eje.ventana).toEqual({ desde: 8 * 60, hasta: 18 * 60 });
+    expect(eje.jornadaMin).toBe(600);
+  });
+
+  it("usa el calendario por defecto cuando la estación no tiene", () => {
+    const eje = construirEje({
+      estaciones: [estacion("a", null)],
+      ahora: jul(20, 9),
+      hasta: jul(20, 12),
+    });
+
+    // calendarioDefault() es 09:00–18:00.
+    expect(eje.ventana).toEqual({ desde: 9 * 60, hasta: 18 * 60 });
+  });
+
+  it("colapsa el fin de semana: el lunes sigue al viernes", () => {
+    const eje = construirEje({
+      estaciones: [estacion("a", cal("08:00", "18:00"))],
+      ahora: jul(24, 8), // viernes
+      hasta: jul(27, 12), // lunes
+    });
+
+    expect(eje.dias.map((d) => d.etiqueta)).toEqual(["vie 24/07", "lun 27/07"]);
+    // El lunes arranca justo donde termina la jornada del viernes.
+    expect(eje.dias[1].x).toBe(600);
+  });
+
+  it("saltea los feriados del taller", () => {
+    const eje = construirEje({
+      estaciones: [estacion("a", cal("08:00", "18:00"))],
+      ahora: jul(20, 8),
+      hasta: jul(22, 12),
+      noLaborables: new Set(["2026-07-21"]),
+    });
+
+    expect(eje.dias.map((d) => d.fecha)).toEqual(["2026-07-20", "2026-07-22"]);
+  });
+
+  it("mapea una hora del día a su minuto laboral", () => {
+    const eje = construirEje({
+      estaciones: [estacion("a", cal("08:00", "18:00"))],
+      ahora: jul(20, 8),
+      hasta: jul(21, 18),
+    });
+
+    expect(eje.aX(jul(20, 8, 0))).toBe(0);
+    expect(eje.aX(jul(20, 9, 30))).toBe(90);
+    // Segundo día: una jornada completa + el offset dentro del día.
+    expect(eje.aX(jul(21, 10, 0))).toBe(600 + 120);
+  });
+
+  it("recorta lo que cae fuera de la franja en vez de estirar el eje", () => {
+    const eje = construirEje({
+      estaciones: [estacion("a", cal("08:00", "18:00"))],
+      ahora: jul(20, 8),
+      hasta: jul(20, 18),
+    });
+
+    expect(eje.aX(jul(20, 6, 0))).toBe(0); // antes de abrir
+    expect(eje.aX(jul(20, 23, 0))).toBe(600); // después de cerrar
+  });
+
+  it("ancla al borde del día anterior lo que cae en un día no dibujado", () => {
+    const eje = construirEje({
+      estaciones: [estacion("a", cal("08:00", "18:00"))],
+      ahora: jul(20, 8),
+      hasta: jul(24, 18),
+    });
+
+    // El sábado no existe en el eje: se ancla al cierre del viernes.
+    expect(eje.aX(jul(25, 10, 0))).toBe(eje.dias.at(-1)!.x + 600);
+  });
+
+  it("cubre el horizonte que se le pide", () => {
+    const eje = construirEje({
+      estaciones: [estacion("a", cal("08:00", "18:00"))],
+      ahora: jul(20, 8),
+      hasta: new Date(2026, 7, 10, 12),
+    });
+
+    expect(eje.dias.at(-1)!.fecha).toBe("2026-08-10");
+    // 3 semanas de lunes a viernes.
+    expect(eje.dias).toHaveLength(16);
+  });
+});

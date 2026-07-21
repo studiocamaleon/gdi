@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
 import { LoggerModule } from 'nestjs-pino';
 import { randomUUID } from 'crypto';
 import { AppController } from './app.controller';
@@ -31,6 +32,7 @@ import { ReportesModule } from './reportes/reportes.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     LoggerModule.forRoot({
       pinoHttp: {
         level:

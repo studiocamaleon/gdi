@@ -618,6 +618,24 @@ export type TesoreriaKpis = {
   aAcreditar: number;
 };
 
+/** Una fila del detalle de "A acreditar": qué cobro es y cuándo entra. */
+export type CobroPendienteAcreditacion = {
+  id: string;
+  fecha: string;
+  fechaAcreditacionEstimada: string | null;
+  metodoNombre: string;
+  metodoTipo: string;
+  cuentaDestinoNombre: string;
+  clienteNombre: string | null;
+  ordenId: string | null;
+  ordenNumero: string | null;
+  montoBruto: number;
+  netoAcreditado: number;
+  esCheque: boolean;
+  valorEstado: string | null;
+  valorNumero: string | null;
+};
+
 export type MovimientoFondos = {
   id: string;
   fecha: string;

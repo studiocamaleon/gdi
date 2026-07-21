@@ -83,9 +83,10 @@ import {
 } from "@/lib/estaciones";
 import type { DiaNoLaborable, DuracionFamilia } from "@/lib/estaciones-api";
 import { etiquetaEta, simularFlujo, type ResultadoSimulacion, type SimulacionItem } from "@/lib/flujo-produccion";
+import { SimulacionView } from "@/components/produccion/simulacion-view";
 
 type IconComponent = React.ComponentType<React.SVGProps<SVGSVGElement>>;
-type Mode = "items" | "estacion" | "kanban";
+type Mode = "items" | "estacion" | "kanban" | "simulacion";
 type StatusFilter = "all" | "in-progress" | "blocked" | "delayed" | "due-today";
 type PriorityFilter = "all" | TableroPrioridad;
 type KanbanBucketKey = "not-started" | "today" | "delayed" | "active";
@@ -98,10 +99,16 @@ const BOARD_MODE_LABELS: Record<Mode, string> = {
   items: "Por items",
   estacion: "Por estación",
   kanban: "Kanban",
+  simulacion: "Simulación",
 };
 
 function isBoardMode(value: string | null): value is Mode {
-  return value === "items" || value === "estacion" || value === "kanban";
+  return (
+    value === "items" ||
+    value === "estacion" ||
+    value === "kanban" ||
+    value === "simulacion"
+  );
 }
 
 function readStoredBoardMode(): Mode {
@@ -1273,10 +1280,12 @@ function taskId(task: StationTask) {
  * Duración estimada del paso para la cola: la propia del snapshot, o la
  * mediana histórica de su familia (D6 del doc de capacidad). null = sin
  * estimar (suma 0 a la cola y se señala aparte, sin inventar defaults).
+ * Un 0 explícito SÍ es duración conocida — ver duracionDePaso en
+ * flujo-produccion.ts, misma regla.
  */
 function duracionDeTask(task: { step: StepView }, medianas: Map<string, number>): number | null {
   const propia = task.step.paso.duracionEstimadaMin;
-  if (propia != null && propia > 0) return propia;
+  if (propia != null) return propia;
   return medianas.get(task.step.paso.familiaCodigo) ?? null;
 }
 
@@ -2123,6 +2132,7 @@ export function TableroProduccion({
     { mode: "items", label: BOARD_MODE_LABELS.items, count: views.length },
     { mode: "estacion", label: BOARD_MODE_LABELS.estacion },
     { mode: "kanban", label: BOARD_MODE_LABELS.kanban },
+    { mode: "simulacion", label: BOARD_MODE_LABELS.simulacion },
   ];
 
   const tabMenuStyle = React.useMemo<React.CSSProperties | undefined>(() => {
@@ -2235,7 +2245,16 @@ export function TableroProduccion({
               </>
             ) : null}
             {mode === "estacion" ? <ByStationView items={views} estaciones={estaciones} medianas={medianas} noLaborables={noLaborables} llegadasHoyMin={llegadasHoyMin} onMesa={handleMesa} onOpen={setSelectedId} /> : null}
-            {mode === "kanban" ? (
+            {mode === "simulacion" ? (
+          <SimulacionView
+            items={items}
+            estaciones={estaciones}
+            sim={sim}
+            noLaborables={noLaborables}
+            onOpen={setSelectedId}
+          />
+        ) : null}
+        {mode === "kanban" ? (
               <>
                 <FiltersBar filters={filters} setFilters={setFilters} counts={counts} />
                 <KanbanView items={filtered} onOpen={setSelectedId} />

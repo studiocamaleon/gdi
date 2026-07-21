@@ -54,9 +54,43 @@ export type LlegadaEstacion = {
   duracionMin: number;
 };
 
+/** Clave del carril sintético de los pasos que hace un proveedor. */
+export const PROVEEDOR_KEY = "__proveedor__";
+
+/**
+ * Un paso ya colocado en el plan: el registro de UNA decisión del
+ * scheduler. El motor calculaba todo esto y lo descartaba; anotarlo es
+ * lo que permite mostrar la simulación en vez de sólo su resultado.
+ */
+export type PasoProgramado = {
+  /** Orden en que el scheduler tomó la decisión — NO es cronológico. */
+  orden: number;
+  itemId: string;
+  pasoId: string;
+  pasoIndice: number;
+  /** Id de estación, o SIN_ESTACION_KEY / PROVEEDOR_KEY. */
+  estacionKey: string;
+  inicio: Date;
+  fin: Date;
+  /** Minutos de taller. null en tercerizados: su costo es el lead time. */
+  duracionMin: number | null;
+  plazoDias: number | null;
+  /** Cuánto esperó el trabajo a que se liberara un puesto. */
+  esperaMin: number;
+  /** Corrió con calendario asumido o sin estación real. */
+  parcial: boolean;
+  tercerizado: boolean;
+  /** Ya estaba en curso al arrancar la simulación. */
+  enCurso: boolean;
+  /** Candidatos que competían por el puesto en ese turno. */
+  candidatos: number | null;
+};
+
 export type ResultadoSimulacion = {
   porItem: Map<string, SimulacionItem>;
   llegadasPorEstacion: Map<string, LlegadaEstacion[]>;
+  /** El plan completo, en orden de decisión. */
+  traza: PasoProgramado[];
 };
 
 // ── Aritmética de calendario ─────────────────────────────────────────────
@@ -173,7 +207,11 @@ function duracionDePaso(paso: TableroPasoData, medianas: Map<string, number>): n
   // Un tercerizado nunca toma la mediana de la familia: esa mediana se midió
   // sobre pasos INTERNOS y no dice nada del proveedor. Se programa aparte.
   if (esTercerizado(paso)) return null;
-  if (paso.duracionEstimadaMin != null && paso.duracionEstimadaMin > 0) return paso.duracionEstimadaMin;
+  // Ojo con el cero: 0 es una duración REAL ("Material sin impresión" sale del
+  // motor con tiempoCero), distinta de null = "no sabemos cuánto tarda". Sólo
+  // null cae a la mediana; tratar el 0 como desconocido dejaba sin ETA a toda
+  // la orden, o peor, le sumaba la mediana de impresión a un paso que no imprime.
+  if (paso.duracionEstimadaMin != null) return paso.duracionEstimadaMin;
   return medianas.get(paso.familiaCodigo) ?? null;
 }
 
@@ -197,6 +235,9 @@ export function simularFlujo({
 }): ResultadoSimulacion {
   const porItem = new Map<string, SimulacionItem>();
   const llegadasPorEstacion = new Map<string, LlegadaEstacion[]>();
+  const traza: PasoProgramado[] = [];
+  const anotar = (p: Omit<PasoProgramado, "orden">) =>
+    traza.push({ orden: traza.length, ...p });
 
   // Estaciones simulables: las activas, con calendario default si falta (D5).
   const registros = new Map<string, EstacionSim>();
@@ -262,6 +303,21 @@ export function simularFlujo({
         } else {
           ocupar(est, fin);
           if (est.parcial) sim.resultado.parcial = true;
+          anotar({
+            itemId: item.id,
+            pasoId: frontera.id,
+            pasoIndice: frontera.indice,
+            estacionKey: est.key,
+            inicio: new Date(ahora),
+            fin,
+            duracionMin: restanteMin,
+            plazoDias: null,
+            esperaMin: 0,
+            parcial: est.parcial,
+            tercerizado: false,
+            enCurso: true,
+            candidatos: null,
+          });
           sim.readyAt = fin;
           sim.idx = 1;
           if (sim.idx === restantes.length) {
@@ -301,6 +357,21 @@ export function simularFlujo({
           break;
         }
         const fin = sumarDiasHabiles(sim.readyAt, plazo, noLaborables);
+        anotar({
+          itemId: sim.data.id,
+          pasoId: paso.id,
+          pasoIndice: paso.indice,
+          estacionKey: PROVEEDOR_KEY,
+          inicio: new Date(sim.readyAt),
+          fin,
+          duracionMin: null,
+          plazoDias: plazo,
+          esperaMin: 0,
+          parcial: false,
+          tercerizado: true,
+          enCurso: false,
+          candidatos: null,
+        });
         sim.readyAt = fin;
         sim.idx += 1;
         if (sim.idx === sim.restantes.length) {
@@ -311,6 +382,9 @@ export function simularFlujo({
     }
 
     let mejor: { sim: ItemSim; est: EstacionSim; duracion: number; start: Date } | null = null;
+    /* Cuántos trabajos competían por un puesto en este turno: es el "por
+       qué" de la decisión, no una métrica de performance. */
+    let candidatos = 0;
 
     for (const sim of sims) {
       if (sim.done || sim.idx >= sim.restantes.length) continue;
@@ -332,6 +406,7 @@ export function simularFlujo({
         continue;
       }
       const candidato = { sim, est, duracion, start };
+      candidatos += 1;
       if (!mejor || antesQue(candidato, mejor)) mejor = candidato;
     }
     if (!mejor) break;
@@ -345,6 +420,25 @@ export function simularFlujo({
     }
     ocupar(est, fin);
     if (est.parcial) sim.resultado.parcial = true;
+    anotar({
+      itemId: sim.data.id,
+      pasoId: paso.id,
+      pasoIndice: paso.indice,
+      estacionKey: est.key,
+      inicio: start,
+      fin,
+      duracionMin: duracion,
+      plazoDias: null,
+      // El trabajo estaba listo en readyAt; si arrancó después, esperó puesto.
+      esperaMin: Math.max(
+        0,
+        Math.round((start.getTime() - sim.readyAt.getTime()) / 60000),
+      ),
+      parcial: est.parcial,
+      tercerizado: false,
+      enCurso: false,
+      candidatos,
+    });
     // Llegada = cuando el paso queda listo (no cuando arranca): los pasos
     // que NO son la frontera actual son la "carga en camino" con timing.
     if (sim.idx > 0 || !pasoActivo(sim.data, paso)) {
@@ -360,7 +454,7 @@ export function simularFlujo({
     }
   }
 
-  return { porItem, llegadasPorEstacion };
+  return { porItem, llegadasPorEstacion, traza };
 }
 
 /** Reemplaza el puesto que se libera antes por el nuevo fin. */

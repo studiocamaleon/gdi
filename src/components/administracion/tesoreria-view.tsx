@@ -483,14 +483,19 @@ export function TesoreriaView({
               {kpis.cuentasArs} cuenta{kpis.cuentasArs === 1 ? "" : "s"} ARS
             </div>
           </div>
-          <div className="ats-kpi acc">
+          <Link
+            className="ats-kpi acc"
+            href="/administracion/tesoreria/acreditaciones"
+            style={{ display: "block", color: "inherit", textDecoration: "none" }}
+            title="Ver el detalle de las acreditaciones pendientes"
+          >
             <div className="l">A acreditar</div>
             <div className="v sm">{fmt(kpis.aAcreditar)}</div>
             <div className="s">
               <span className="dot" style={{ background: "#1d4ed8" }} />
-              Cobros con plazo pendiente
+              Cobros con plazo pendiente · ver detalle
             </div>
-          </div>
+          </Link>
         </div>
 
         {cuentas.length === 0 ? (

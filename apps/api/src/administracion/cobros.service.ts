@@ -268,24 +268,133 @@ export class CobrosService {
         'Los cheques se acreditan desde la cartera de valores.',
       );
     }
-    await this.prisma.$transaction(async (tx) => {
-      await tx.cobro.update({
-        where: { id: cobro.id },
-        data: { estadoAcreditacion: 'acreditado' },
-      });
-      await this.registrarMovimientoEntrada(tx, {
-        tenantId: auth.tenantId,
-        cuentaId: cobro.cuentaDestinoId,
-        fecha: new Date(),
-        monto: Number(cobro.netoAcreditado),
-        concepto: cobro.orden
-          ? `Acreditación cobro ${cobro.orden.numero}`
-          : 'Acreditación de cobro',
-        cobroId: cobro.id,
-        ordenId: cobro.orden?.id ?? null,
-      });
+    await this.acreditarUno({
+      id: cobro.id,
+      tenantId: auth.tenantId,
+      cuentaDestinoId: cobro.cuentaDestinoId,
+      netoAcreditado: Number(cobro.netoAcreditado),
+      ordenId: cobro.orden?.id ?? null,
+      ordenNumero: cobro.orden?.numero ?? null,
     });
     return this.findOne(auth, cobro.id);
+  }
+
+  /** Los cobros electrónicos que todavía no acreditaron, con su fecha. */
+  async pendientesAcreditacion(auth: CurrentAuth) {
+    await this.barrerVencidos(auth.tenantId);
+    const cobros = await this.prisma.cobro.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        anuladoEl: null,
+        estadoAcreditacion: 'pendiente',
+      },
+      include: {
+        metodoPago: { select: { nombre: true, tipo: true } },
+        cuentaDestino: { select: { nombre: true } },
+        cliente: { select: { nombre: true } },
+        orden: { select: { id: true, numero: true } },
+        valores: { select: { estado: true, numero: true } },
+      },
+      orderBy: [{ fechaAcreditacionEstimada: 'asc' }, { fecha: 'asc' }],
+    });
+    return cobros.map((cobro) => ({
+      id: cobro.id,
+      fecha: cobro.fecha.toISOString(),
+      fechaAcreditacionEstimada:
+        cobro.fechaAcreditacionEstimada?.toISOString() ?? null,
+      metodoNombre: cobro.metodoPago.nombre,
+      metodoTipo: cobro.metodoPago.tipo,
+      cuentaDestinoNombre: cobro.cuentaDestino.nombre,
+      clienteNombre: cobro.cliente?.nombre ?? null,
+      ordenId: cobro.orden?.id ?? null,
+      ordenNumero: cobro.orden?.numero ?? null,
+      montoBruto: Number(cobro.montoBruto),
+      netoAcreditado: Number(cobro.netoAcreditado),
+      // Los cheques no se acreditan desde acá: van por la cartera de valores.
+      esCheque: cobro.metodoPago.tipo === 'cheque_echeq',
+      valorEstado: cobro.valores[0]?.estado ?? null,
+      valorNumero: cobro.valores[0]?.numero ?? null,
+    }));
+  }
+
+  /**
+   * Acredita los cobros electrónicos cuya fecha estimada ya pasó.
+   * Idempotente y seguro ante concurrencia (el UPDATE condicional decide
+   * quién gana), así que lo pueden llamar a la vez el cron y una lectura
+   * de Tesorería. Los cheques quedan afuera: acreditan vía su Valor.
+   * @param tenantId acota a un tenant; sin él barre todos (cron nocturno).
+   */
+  async barrerVencidos(tenantId?: string) {
+    const vencidos = await this.prisma.cobro.findMany({
+      where: {
+        ...(tenantId ? { tenantId } : {}),
+        anuladoEl: null,
+        estadoAcreditacion: 'pendiente',
+        fechaAcreditacionEstimada: { not: null, lte: new Date() },
+        metodoPago: { tipo: { not: 'cheque_echeq' } },
+      },
+      select: {
+        id: true,
+        tenantId: true,
+        cuentaDestinoId: true,
+        netoAcreditado: true,
+        fechaAcreditacionEstimada: true,
+        orden: { select: { id: true, numero: true } },
+      },
+      take: 500,
+    });
+
+    let acreditados = 0;
+    for (const cobro of vencidos) {
+      const ok = await this.acreditarUno({
+        id: cobro.id,
+        tenantId: cobro.tenantId,
+        cuentaDestinoId: cobro.cuentaDestinoId,
+        netoAcreditado: Number(cobro.netoAcreditado),
+        ordenId: cobro.orden?.id ?? null,
+        ordenNumero: cobro.orden?.numero ?? null,
+        // El movimiento lleva la fecha en que la plata realmente entró,
+        // no la del barrido: si el job corrió tarde, el saldo corrido
+        // igual queda ordenado.
+        fecha: cobro.fechaAcreditacionEstimada ?? undefined,
+      });
+      if (ok) acreditados += 1;
+    }
+    return acreditados;
+  }
+
+  /**
+   * Transición pendiente → acreditado + movimiento de entrada, en una sola
+   * transacción. Devuelve false si otro proceso la hizo primero.
+   */
+  private async acreditarUno(cobro: {
+    id: string;
+    tenantId: string;
+    cuentaDestinoId: string;
+    netoAcreditado: number;
+    ordenId: string | null;
+    ordenNumero: string | null;
+    fecha?: Date;
+  }) {
+    return this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.cobro.updateMany({
+        where: { id: cobro.id, estadoAcreditacion: 'pendiente' },
+        data: { estadoAcreditacion: 'acreditado' },
+      });
+      if (count === 0) return false;
+      await this.registrarMovimientoEntrada(tx, {
+        tenantId: cobro.tenantId,
+        cuentaId: cobro.cuentaDestinoId,
+        fecha: cobro.fecha ?? new Date(),
+        monto: cobro.netoAcreditado,
+        concepto: cobro.ordenNumero
+          ? `Acreditación cobro ${cobro.ordenNumero}`
+          : 'Acreditación de cobro',
+        cobroId: cobro.id,
+        ordenId: cobro.ordenId,
+      });
+      return true;
+    });
   }
 
   async findOne(auth: CurrentAuth, id: string) {
@@ -337,6 +446,46 @@ export class CobrosService {
         saldoPosterior: Number(cuenta.saldo),
       },
     });
+    // Una acreditación entra con la fecha en que la plata realmente llegó,
+    // que puede ser anterior a movimientos ya registrados. El saldo total
+    // de la cuenta sigue bien (es un increment), pero el saldo corrido de
+    // las filas posteriores queda viejo: hay que rehacerlo.
+    await this.recalcularSaldoCorrido(tx, input.cuentaId, input.fecha);
+  }
+
+  /**
+   * Rehace `saldoPosterior` desde una fecha hacia adelante, en el mismo
+   * orden en que la vista de movimientos los lee ([fecha, createdAt]).
+   * Se ancla en el saldo de la última fila anterior, así no depende de
+   * reconstruir toda la historia de la cuenta.
+   */
+  private async recalcularSaldoCorrido(
+    tx: Prisma.TransactionClient,
+    cuentaId: string,
+    desde: Date,
+  ) {
+    const [ancla, posteriores] = await Promise.all([
+      tx.movimientoFondos.findFirst({
+        where: { cuentaId, fecha: { lt: desde } },
+        orderBy: [{ fecha: 'desc' }, { createdAt: 'desc' }],
+        select: { saldoPosterior: true },
+      }),
+      tx.movimientoFondos.findMany({
+        where: { cuentaId, fecha: { gte: desde } },
+        orderBy: [{ fecha: 'asc' }, { createdAt: 'asc' }],
+        select: { id: true, tipo: true, monto: true, saldoPosterior: true },
+      }),
+    ]);
+
+    let saldo = Number(ancla?.saldoPosterior ?? 0);
+    for (const mov of posteriores) {
+      saldo += (mov.tipo === 'entrada' ? 1 : -1) * Number(mov.monto);
+      if (Number(mov.saldoPosterior) === saldo) continue;
+      await tx.movimientoFondos.update({
+        where: { id: mov.id },
+        data: { saldoPosterior: saldo },
+      });
+    }
   }
 
   private toResponse(cobro: {
