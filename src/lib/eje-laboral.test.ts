@@ -226,3 +226,27 @@ describe("deslizador de zoom", () => {
     expect(medio).toBeLessThan(0.8);
   });
 });
+
+/* La línea de "ahora" se ubica con aX(ahora). El eje arranca en la APERTURA
+   del día, así que a media jornada eso NO es 0 — el bug era darlo por hecho. */
+describe("construirEje · dónde cae ahora", () => {
+  const un = [estacion("a", cal("08:00", "18:00"))];
+
+  it("a media jornada cae adentro, no en el origen", () => {
+    const ahora = jul(20, 14, 0);
+    const eje = construirEje({ estaciones: un, ahora, hasta: jul(21, 18) });
+    expect(eje.aX(ahora)).toBe(360);
+  });
+
+  it("antes de abrir cae en el origen", () => {
+    const ahora = jul(20, 6, 30);
+    const eje = construirEje({ estaciones: un, ahora, hasta: jul(21, 18) });
+    expect(eje.aX(ahora)).toBe(0);
+  });
+
+  it("después de cerrar cae al final del día, no en el siguiente", () => {
+    const ahora = jul(20, 21, 0);
+    const eje = construirEje({ estaciones: un, ahora, hasta: jul(21, 18) });
+    expect(eje.aX(ahora)).toBe(eje.jornadaMin);
+  });
+});

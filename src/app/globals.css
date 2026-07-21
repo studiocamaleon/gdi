@@ -30608,6 +30608,24 @@ body:has(.t-app) {
   pointer-events: none;
 }
 
+/* Una línea azul sola es ambigua: se rotula. La etiqueta va a la IZQUIERDA
+   porque de ese lado nunca hay bloques — el pasado no se programa — y a la
+   derecha arranca el trabajo pegado a la línea. */
+.tablero-produccion .simu-now span {
+  position: absolute;
+  top: 2px;
+  right: 5px;
+  font-family: var(--simu-mono);
+  font-size: 8.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #fff;
+  background: var(--simu-accent);
+  border-radius: 3px;
+  padding: 1px 4px;
+  white-space: nowrap;
+}
+
 .tablero-produccion .simu-thread {
   position: absolute;
   left: 0;

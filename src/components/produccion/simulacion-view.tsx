@@ -204,7 +204,7 @@ export function SimulacionView({
   const [hov, setHov] = React.useState<string | null>(null);
   const [tocando, setTocando] = React.useState(false);
 
-  const { carriles, eje, total, bloques } = React.useMemo(
+  const { carriles, eje, total, bloques, xAhora } = React.useMemo(
     () => construir(items, estaciones, sim, noLaborables),
     [items, estaciones, sim, noLaborables],
   );
@@ -226,6 +226,18 @@ export function SimulacionView({
     const id = window.setTimeout(() => setCorte(cursor + 1), 230);
     return () => window.clearTimeout(id);
   }, [tocando, cursor, tope]);
+
+  /* Al abrir, arrancar mirando "ahora": todo lo anterior está vacío por
+     construcción (el scheduler sólo programa de ahora en adelante), así que
+     abrir en el origen muestra una franja en blanco. Se hace una sola vez;
+     después el scroll es del usuario. */
+  const yaUbicado = React.useRef(false);
+  React.useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || yaUbicado.current || vista !== "mesa" || bloques.length === 0) return;
+    yaUbicado.current = true;
+    el.scrollLeft = Math.max(0, xAhora * z - 24);
+  }, [vista, bloques.length, xAhora, z]);
 
   /* Encuadra el trabajo real. El horizonte puede ser de semanas mientras
      todo pasa en la primera jornada: abrir en "todo el horizonte" deja la
@@ -530,6 +542,7 @@ export function SimulacionView({
           onHover={setHov}
           onSel={setSel}
           scrollRef={scrollRef}
+          xAhora={xAhora}
         />
       ) : (
         <Proyeccion
@@ -636,6 +649,7 @@ function LineaDeTiempo({
   onHover,
   onSel,
   scrollRef,
+  xAhora,
 }: {
   carriles: Carril[];
   eje: ReturnType<typeof construirEje>;
@@ -648,6 +662,7 @@ function LineaDeTiempo({
   onHover: (ot: string | null) => void;
   onSel: (b: Bloque) => void;
   scrollRef: React.RefObject<HTMLDivElement | null>;
+  xAhora: number;
 }) {
   const ancho = (eje.dias.length * eje.jornadaMin) * z + 60;
   const hiloOT = focoOTs && focoOTs.size === 1 ? [...focoOTs][0] : null;
@@ -810,7 +825,9 @@ function LineaDeTiempo({
               {ticks.map((t) => (
                 <div key={t.key} className="simu-gridline hora" style={{ left: t.x * z }} />
               ))}
-              <div className="simu-now" style={{ left: 0 }} />
+              <div className="simu-now" style={{ left: xAhora * z }}>
+                <span>ahora</span>
+              </div>
             </div>
 
             <Hilo carriles={carriles} ot={hiloOT} z={z} cursor={cursor} otsInfo={otsInfo} />
@@ -1205,6 +1222,9 @@ function construir(
     ahora,
   );
   const eje = construirEje({ estaciones, ahora, hasta: finMax, noLaborables });
+  /* El eje arranca en la APERTURA del día, no en este instante: la línea de
+     "ahora" hay que ubicarla, no dejarla en el origen. */
+  const xAhora = eje.aX(ahora);
 
   const crudos = sim.traza
     .map((p: PasoProgramado) => {
@@ -1294,6 +1314,7 @@ function construir(
     bloques: crudos,
     carriles,
     eje,
+    xAhora,
     total: {
       items: new Set(crudos.map((b) => b.itemId)).size,
       minutos,
