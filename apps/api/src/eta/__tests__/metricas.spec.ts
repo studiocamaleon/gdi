@@ -1,8 +1,10 @@
 import {
   descomponerCiclo,
+  evaluarSesgoFamilias,
   percentil,
   resumirPrecision,
   type FilaPrecision,
+  type FilaSesgo,
   type PasoCierre,
 } from '../metricas';
 
@@ -105,5 +107,47 @@ describe('resumirPrecision', () => {
     expect(r.dentro4hPct).toBe(50); // |30|,|30| ≤ 240 → 2 de 4
     expect(r.dentro1dPct).toBe(75); // todos menos el -1500
     expect(r.tardePct).toBe(50); // 30 y 300 son > 0
+  });
+});
+
+describe('evaluarSesgoFamilias', () => {
+  const fila = (
+    familiaCodigo: string,
+    muestras: number,
+    est: number,
+    real: number,
+  ): FilaSesgo => ({
+    familiaCodigo,
+    muestras,
+    medianaEstimadoMin: est,
+    medianaRealMin: real,
+  });
+
+  it('sugiere la mediana real cuando el sesgo es material y hay evidencia', () => {
+    // Estimado 10, real 15 → +50%, 8 muestras: sugiere 15.
+    const [r] = evaluarSesgoFamilias([fila('corte_laser', 8, 10, 15)]);
+    expect(r.sesgoMin).toBe(5);
+    expect(r.sesgoPct).toBe(50);
+    expect(r.duracionSugeridaMin).toBe(15);
+  });
+
+  it('no sugiere con pocas muestras aunque el sesgo sea grande', () => {
+    const [r] = evaluarSesgoFamilias([fila('cnc', 3, 10, 20)]);
+    expect(r.duracionSugeridaMin).toBeNull();
+  });
+
+  it('no sugiere si el estimado está bien calibrado (<20%)', () => {
+    const [r] = evaluarSesgoFamilias([fila('impresion', 20, 100, 110)]);
+    expect(r.sesgoPct).toBe(10);
+    expect(r.duracionSugeridaMin).toBeNull();
+  });
+
+  it('ordena por magnitud del sesgo', () => {
+    const rs = evaluarSesgoFamilias([
+      fila('a', 10, 100, 110), // 10%
+      fila('b', 10, 100, 160), // 60%
+      fila('c', 10, 100, 70), // -30%
+    ]);
+    expect(rs.map((r) => r.familiaCodigo)).toEqual(['b', 'c', 'a']);
   });
 });

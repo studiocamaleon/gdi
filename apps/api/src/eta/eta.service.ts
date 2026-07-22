@@ -3,7 +3,12 @@ import type { Prisma } from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProduccionService } from '../produccion/produccion.service';
-import { descomponerCiclo, resumirPrecision } from './metricas';
+import {
+  descomponerCiclo,
+  evaluarSesgoFamilias,
+  resumirPrecision,
+  type FilaSesgo,
+} from './metricas';
 import {
   construirSnapshotsEstacion,
   construirSnapshotsItem,
@@ -350,5 +355,61 @@ export class EtaService {
       select: { errorMin: true, sinEstimar: true },
     });
     return resumirPrecision(promesas);
+  }
+
+  // ── Reporte: salud del modelo (F3) ───────────────────────────────────────
+
+  /**
+   * Salud del pronóstico: cobertura (qué fracción de las promesas tuvo ETA y
+   * cuánta corrió con supuestos) + sesgo de duración por familia con el
+   * sugeridor de correcciones. El sugeridor sólo PROPONE (D9): aplicar la
+   * corrección sigue siendo decisión humana.
+   */
+  async saludModelo(tenantId: string) {
+    const promesas = await this.prisma.etaPromesa.findMany({
+      where: { tenantId },
+      select: { sinEstimar: true, parcial: true },
+    });
+    const total = promesas.length;
+    const sinEstimar = promesas.filter((p) => p.sinEstimar).length;
+    const parcial = promesas.filter((p) => p.parcial).length;
+    const un = (n: number) => Math.round(n * 10) / 10;
+    const cobertura = {
+      promesas: total,
+      conEtaPct: total > 0 ? un(((total - sinEstimar) / total) * 100) : 0,
+      sinEstimarPct: total > 0 ? un((sinEstimar / total) * 100) : 0,
+      parcialPct: total > 0 ? un((parcial / total) * 100) : 0,
+    };
+
+    // Estimado vs real por familia, sólo tiempos MEDIDOS (mismo filtro que la
+    // mediana de duraciones): el sugeridor se apoya en medición, no percepción.
+    const filas = await this.prisma.$queryRaw<FilaSesgo[]>`
+      SELECT "familiaCodigo",
+             COUNT(*)::int AS "muestras",
+             percentile_cont(0.5) WITHIN GROUP (
+               ORDER BY "duracionEstimadaMin"
+             ) AS "medianaEstimadoMin",
+             percentile_cont(0.5) WITHIN GROUP (
+               ORDER BY "tiempoRealMin"
+             ) AS "medianaRealMin"
+      FROM "OrdenTrabajoItemPaso"
+      WHERE "tenantId" = ${tenantId}::uuid
+        AND "estado" = 'hecho'
+        AND "tiempoRealMin" IS NOT NULL
+        AND "duracionEstimadaMin" IS NOT NULL
+        AND "tiempoFuente" IN ('medido', 'medido_lote')
+      GROUP BY "familiaCodigo"
+      HAVING COUNT(*) >= 3
+    `;
+    const sesgoFamilias = evaluarSesgoFamilias(
+      filas.map((f) => ({
+        familiaCodigo: f.familiaCodigo,
+        muestras: Number(f.muestras),
+        medianaEstimadoMin: Number(f.medianaEstimadoMin),
+        medianaRealMin: Number(f.medianaRealMin),
+      })),
+    );
+
+    return { cobertura, sesgoFamilias };
   }
 }

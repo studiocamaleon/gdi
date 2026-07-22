@@ -108,6 +108,63 @@ export type ResumenPrecision = {
   tardePct: number | null;
 };
 
+// ── Salud del modelo: sesgo de duración por familia (F3) ─────────────────
+
+/** Umbrales del sugeridor de correcciones de duración. */
+export const SESGO_MIN_MUESTRAS = 5;
+export const SESGO_PCT_UMBRAL = 20;
+
+export type FilaSesgo = {
+  familiaCodigo: string;
+  muestras: number;
+  medianaEstimadoMin: number;
+  medianaRealMin: number;
+};
+
+export type SesgoFamilia = {
+  familiaCodigo: string;
+  muestras: number;
+  medianaEstimadoMin: number;
+  medianaRealMin: number;
+  /** Real − estimado (min; + = el paso tarda MÁS de lo estimado). */
+  sesgoMin: number;
+  sesgoPct: number;
+  /**
+   * Corrección SUGERIDA (nunca aplicada, D9): la mediana real, cuando el
+   * sesgo supera el umbral y hay muestras suficientes. null = el estimado
+   * está bien calibrado o falta evidencia.
+   */
+  duracionSugeridaMin: number | null;
+};
+
+/**
+ * Evalúa el sesgo estimado-vs-real por familia y propone (no aplica) una
+ * corrección de duración cuando el desvío es material y hay evidencia.
+ */
+export function evaluarSesgoFamilias(filas: FilaSesgo[]): SesgoFamilia[] {
+  return filas
+    .map((f) => {
+      const sesgoMin = Math.round(f.medianaRealMin - f.medianaEstimadoMin);
+      const sesgoPct =
+        f.medianaEstimadoMin > 0
+          ? Math.round((sesgoMin / f.medianaEstimadoMin) * 1000) / 10
+          : 0;
+      const sugerir =
+        f.muestras >= SESGO_MIN_MUESTRAS &&
+        Math.abs(sesgoPct) >= SESGO_PCT_UMBRAL;
+      return {
+        familiaCodigo: f.familiaCodigo,
+        muestras: f.muestras,
+        medianaEstimadoMin: Math.round(f.medianaEstimadoMin * 10) / 10,
+        medianaRealMin: Math.round(f.medianaRealMin * 10) / 10,
+        sesgoMin,
+        sesgoPct,
+        duracionSugeridaMin: sugerir ? Math.round(f.medianaRealMin) : null,
+      };
+    })
+    .sort((a, b) => Math.abs(b.sesgoPct) - Math.abs(a.sesgoPct));
+}
+
 /** Percentil por interpolación lineal sobre un array YA ordenado ascendente. */
 export function percentil(ordenado: number[], p: number): number {
   if (ordenado.length === 1) return ordenado[0];

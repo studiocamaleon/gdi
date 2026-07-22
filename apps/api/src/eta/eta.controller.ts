@@ -28,6 +28,12 @@ export class EtaController {
     return this.eta.seriesColas(auth.tenantId, { estacionKey, desde, hasta });
   }
 
+  /** Salud del modelo: cobertura + sesgo de duración por familia (F3). */
+  @Get('salud')
+  salud(@CurrentSession() auth: CurrentAuth) {
+    return this.eta.saludModelo(auth.tenantId);
+  }
+
   /** Dispara la foto del día para este tenant (backfill / "actualizar ahora"). */
   @Post('snapshot')
   async snapshot(@CurrentSession() auth: CurrentAuth) {

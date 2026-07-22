@@ -209,15 +209,23 @@ vuelo sobre datos vivos ni reconstrucciones.
 
 ## 7. Fases
 
-- **F1 — Promesa + cierre** (sin cron, sin porteo… con recorte): congelar en
-  la emisión requiere el motor en el API ⇒ el porteo (D1) entra acá sí o sí.
-  Entrega: tabla 4.1, campos 4.4, captura en emisión y cierre, y el reporte
-  de precisión básico. Es lo urgente: cada OT emitida sin esto es historia
-  perdida.
-- **F2 — Cron + fotos diarias**: scheduler, tablas 4.2/4.3, series de colas
-  y drift.
-- **F3 — Cotizador + panel "Salud del ETA"**: promesa en cotización,
-  cobertura, sesgos por familia con sugeridor de correcciones de duración.
+- **F1 — Promesa + cierre** ✅ IMPLEMENTADA (2026-07-22): motor portado al API
+  (`apps/api/src/eta/motor/`), `EtaService` (correr/capturarEmision/
+  capturarCierre), tabla 4.1, campos 4.4, captura en los 3 hooks de
+  OrdenesTrabajo (post-commit, best-effort) y `GET /eta/precision`.
+- **F2 — Cron + fotos diarias** ✅ IMPLEMENTADA (2026-07-22): tablas 4.2/4.3,
+  `snapshots.ts` (armado puro con capacidad/horizonte multi-franja),
+  `snapshotDiario` idempotente, `EtaSnapshotScheduler` (03:00),
+  `GET /eta/colas` y `POST /eta/snapshot` (backfill manual). Los 4 reads de
+  ProduccionService pasaron a `tenantId` (el cron no tiene usuario).
+- **F3 — Salud del ETA** ✅ PARCIAL (2026-07-22): `GET /eta/salud` = cobertura
+  (% con ETA / sin estimar / parcial) + sesgo de duración por familia
+  (estimado vs real medido) con **sugeridor de correcciones** (`evaluarSesgo
+  Familias`, sólo propone — D9). PENDIENTE: la promesa en cotización
+  (`EtaPromesa('cotizacion')`) — requiere portar `estimarDemoraNuevos` y
+  engancharlo en la aceptación de la propuesta (módulo Presupuestos). Se
+  difirió: es plomería de bajo rédito (F1 ya congela la promesa de emisión,
+  que es la operativamente vinculante) y toca un módulo no relevado acá.
 
 ## 8. Casos borde
 
