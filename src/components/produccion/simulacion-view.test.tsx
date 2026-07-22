@@ -18,11 +18,11 @@ import type { TableroItemData, TableroPasoData } from "@/lib/tablero-produccion"
 
 const CAL: CalendarioEstacion = {
   dias: {
-    lun: { desde: "08:00", hasta: "18:00" },
-    mar: { desde: "08:00", hasta: "18:00" },
-    mie: { desde: "08:00", hasta: "18:00" },
-    jue: { desde: "08:00", hasta: "18:00" },
-    vie: { desde: "08:00", hasta: "18:00" },
+    lun: [{ desde: "08:00", hasta: "18:00" }],
+    mar: [{ desde: "08:00", hasta: "18:00" }],
+    mie: [{ desde: "08:00", hasta: "18:00" }],
+    jue: [{ desde: "08:00", hasta: "18:00" }],
+    vie: [{ desde: "08:00", hasta: "18:00" }],
     sab: null,
     dom: null,
   },

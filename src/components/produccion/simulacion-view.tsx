@@ -712,6 +712,29 @@ function LineaDeTiempo({
   const ancho = eje.totalMin * z + 60;
   const hiloOT = focoOTs && focoOTs.size === 1 ? [...focoOTs][0] : null;
 
+  /* Tooltip propio en lugar del title nativo: un solo nodo fixed que sigue
+     al puntero. La posición se escribe directo sobre el DOM (ref) para no
+     re-renderizar cientos de bloques en cada mousemove; el estado sólo
+     cambia al entrar/salir de un bloque, igual que el hover de OT. */
+  const tipRef = React.useRef<HTMLDivElement>(null);
+  const ratonRef = React.useRef({ x: 0, y: 0 });
+  const [tip, setTip] = React.useState<Bloque | null>(null);
+
+  const ubicarTip = React.useCallback(() => {
+    const el = tipRef.current;
+    if (!el) return;
+    const { x, y } = ratonRef.current;
+    let px = x + 14;
+    let py = y + 18;
+    if (px + el.offsetWidth > window.innerWidth - 8) px = x - el.offsetWidth - 14;
+    if (py + el.offsetHeight > window.innerHeight - 8) py = y - el.offsetHeight - 12;
+    el.style.transform = `translate(${px}px, ${py}px)`;
+  }, []);
+
+  React.useLayoutEffect(() => {
+    if (tip) ubicarTip();
+  }, [tip, ubicarTip]);
+
   /* Las horas reales del taller dentro de cada jornada. El eje son minutos
      laborales, así que la hora se reconstruye desde el inicio de la ventana. */
   const intervalo = pasoHorario(eje.jornadaMin * z);
@@ -847,14 +870,20 @@ function LineaDeTiempo({
                           borderColor: `${col}3A`,
                           boxShadow: `inset 3px 0 0 ${col}`,
                         }}
-                        title={`${b.ot} · ${b.pasoNombre}\n${diaCorto(b.inicio)} ${hhmm(b.inicio)} → ${hhmm(b.fin)}${
-                          b.duracionMin != null
-                            ? `  (${b.duracionMin} min)`
-                            : `  (${b.plazoDias} días proveedor)`
-                        }`}
                         onClick={() => onSel(b)}
-                        onMouseEnter={() => onHover(b.ot)}
-                        onMouseLeave={() => onHover(null)}
+                        onMouseEnter={(e) => {
+                          ratonRef.current = { x: e.clientX, y: e.clientY };
+                          setTip(b);
+                          onHover(b.ot);
+                        }}
+                        onMouseMove={(e) => {
+                          ratonRef.current = { x: e.clientX, y: e.clientY };
+                          ubicarTip();
+                        }}
+                        onMouseLeave={() => {
+                          setTip(null);
+                          onHover(null);
+                        }}
                       >
                         {/* Siempre la etiqueta completa: el recorte lo hace
                             el CSS con ellipsis. Con umbrales de ancho, al
@@ -892,6 +921,24 @@ function LineaDeTiempo({
           </div>
         </div>
       </div>
+
+      {/* Fixed escapa del overflow:hidden de .simu sin perder los tokens
+          (que viven scopeados en .tablero-produccion .simu). */}
+      {tip !== null && (
+        <div className="simu-tip" ref={tipRef} role="tooltip">
+          <span className="t1">
+            {tip.ot} · {tip.pasoNombre}
+          </span>
+          <span className="t2">
+            {diaCorto(tip.inicio)} {hhmm(tip.inicio)} → {hhmm(tip.fin)}
+            <b className={tip.tarde ? "hot" : ""}>
+              {tip.duracionMin != null
+                ? `${tip.duracionMin} min`
+                : `${tip.plazoDias} días proveedor`}
+            </b>
+          </span>
+        </div>
+      )}
     </>
   );
 }
