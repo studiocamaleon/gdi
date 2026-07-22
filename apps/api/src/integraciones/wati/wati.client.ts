@@ -200,22 +200,27 @@ export class WatiClient {
         // llegaba null en silencio; con esto queda
         // {key:"Spanish (ARG)", value:"es_AR", text:"Spanish (ARG)"}.
         language: p.idioma,
-        // PENDIENTE — la plantilla queda inservible del lado de Wati.
+        // Van los DOS, y no es redundancia: son campos distintos que alimentan
+        // pantallas distintas del dashboard de Wati.
         //
-        // El editor del dashboard lee `bodyOriginal` y el preview renderiza
-        // `body`. Como el alta por API nunca puebla `bodyOriginal`, el
-        // usuario ve el dibujo con el texto completo y el textarea VACÍO, y
-        // al guardar le salta "el cuerpo no puede estar vacío".
+        //   `hsm`  → lo que muestra el TEXTAREA del editor.
+        //   `body` → lo que renderiza el PREVIEW.
         //
-        // Mandar `bodyOriginal` explícitamente NO alcanza: se probó contra la
-        // cuenta real y Wati lo descarta, volvió "" igual. Falta saber cómo
-        // se llama de verdad ese campo en el alta, y eso sale de mirar qué
-        // manda el propio dashboard al guardar.
+        // Llenar sólo `body` —lo que hacíamos— dejaba la plantilla en un
+        // estado absurdo: el dibujo con el texto completo y el campo de
+        // edición vacío, y al guardar saltaba "el cuerpo no puede estar
+        // vacío". El nombre `hsm` no aparece en la documentación; salió de
+        // mirar qué manda el propio dashboard al guardar.
         //
-        // Se deja el cuerpo NOMBRADO acá porque es el que hace que el preview
-        // se lea, que es lo único que hoy funciona bien.
-        body: cuerpoNombrado,
+        // `bodyOriginal` (el nombrado) NO se manda: Wati lo deriva solo a
+        // partir de `body` y el orden de `customParams`. Mandarlo se descarta
+        // en silencio.
+        hsm: cuerpoNombrado,
+        body: p.cuerpo,
         footer: p.footer,
+        header: null,
+        type: 'hsm',
+        buttonsType: 'none',
         buttons: [],
         customParams: p.parametros.map((x) => ({
           paramName: x.nombre,
