@@ -25,6 +25,19 @@ import { cruzar, type EstadoPlantillas } from './wati/plantillas';
 import { POR_CODIGO, validar } from './wati/catalogo';
 
 /**
+ * `esperaMinutos` sólo viene cuando Wati frenó por cupo: Meta acepta 10
+ * plantillas por hora y un catálogo de 13 nunca entra de una. No es un error
+ * a reintentar, es una espera — quien llame tiene que dejar de insistir.
+ */
+export type ResultadoSometer = {
+  codigo: string;
+  ok: boolean;
+  estado: string;
+  motivo?: string;
+  esperaMinutos?: number;
+};
+
+/**
  * Conexiones del tenant con proveedores externos.
  *
  * El servicio es genérico sobre el proveedor a propósito: AFIP y Mercado Pago
@@ -228,9 +241,7 @@ export class IntegracionesService {
    * exists". Por eso el estado real se lee de la lista DESPUÉS de intentar, y
    * esa relectura —no la respuesta del POST— es la que manda.
    */
-  async someterPlantillaWati(
-    codigo: string,
-  ): Promise<{ codigo: string; ok: boolean; estado: string; motivo?: string }> {
+  async someterPlantillaWati(codigo: string): Promise<ResultadoSometer> {
     const cred = await this.credencialesWati();
     if (!cred) throw new NotFoundException('Wati no está conectada.');
 

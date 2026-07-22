@@ -531,6 +531,7 @@ function BotonCrear({
     let ok = 0;
     let seguidos = 0;
     let cortado = false;
+    let espera: number | null = null;
     const fallos: string[] = [];
 
     for (const [i, p] of pendientes.entries()) {
@@ -540,6 +541,12 @@ function BotonCrear({
         if (res.ok) {
           ok++;
           seguidos = 0;
+        } else if (res.esperaMinutos) {
+          // Cupo de Meta: 10 plantillas por hora. Las que faltan van a
+          // rebotar igual, así que no se intentan. Las que ya se crearon
+          // quedan en borrador y el próximo intento las retoma.
+          espera = res.esperaMinutos;
+          break;
         } else {
           fallos.push(`${p.titulo}: ${res.motivo ?? "sin motivo"}`);
           seguidos++;
@@ -558,12 +565,17 @@ function BotonCrear({
     }
 
     setProgreso(null);
-    if (cortado) {
+    if (espera !== null) {
+      toast.warning(
+        `Wati permite 10 plantillas por hora. Se enviaron ${ok}; volvé en ${espera} minutos y dale de nuevo para las que faltan.`,
+        { duration: 12000 },
+      );
+    } else if (cortado) {
       toast.error(
         "Se cortó: tres fallos seguidos. Revisá el motivo y volvé a intentar.",
       );
     }
-    if (ok > 0) toast.success(`Se crearon ${ok} plantilla(s) en Wati.`);
+    if (ok > 0) toast.success(`Se enviaron ${ok} plantilla(s) a revisión.`);
     // Se muestran hasta tres para no tapar la pantalla; el detalle de cada
     // una queda en su fila del listado.
     for (const f of fallos.slice(0, 3)) toast.error(f);
@@ -588,7 +600,13 @@ function BotonCrear({
         descripcion="Se crean en tu cuenta de Wati con los textos de Grafo. Wati no permite borrarlas por API: si después querés sacarlas, hay que hacerlo desde su dashboard."
         requiereTipear={false}
         accionLabel="Crear"
-        onConfirmar={() => void crear()}
+        onConfirmar={() => {
+          // Se cierra ACÁ y no al terminar: el diálogo no se cierra solo, y
+          // el lote tarda un rato largo. Dejarlo abierto tapaba justo la
+          // línea de progreso que dice por cuál va.
+          setConfirmar(false);
+          void crear();
+        }}
       />
     </div>
   );

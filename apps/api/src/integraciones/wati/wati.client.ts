@@ -255,7 +255,9 @@ export class WatiClient {
   async enviarAAprobacion(
     cred: CredencialesWati,
     id: string,
-  ): Promise<{ ok: true } | { ok: false; motivo: string }> {
+  ): Promise<
+    { ok: true } | { ok: false; motivo: string; esperaMinutos?: number }
+  > {
     try {
       const json = await this.pedir<{
         ok?: boolean;
@@ -269,11 +271,13 @@ export class WatiClient {
         {},
       );
       if (json?.ok === false) {
-        return { ok: false, motivo: motivoDeAlta(json) };
+        const motivo = motivoDeAlta(json);
+        return { ok: false, motivo, esperaMinutos: minutosDeEspera(motivo) };
       }
       return { ok: true };
     } catch (error) {
-      return { ok: false, motivo: mensajeDeError(error) };
+      const motivo = mensajeDeError(error);
+      return { ok: false, motivo, esperaMinutos: minutosDeEspera(motivo) };
     }
   }
 
@@ -401,6 +405,24 @@ function motivoDeAlta(json: {
     if (c && typeof c === 'object') return JSON.stringify(c).slice(0, 300);
   }
   return 'Wati rechazó el alta sin dar motivo.';
+}
+
+/**
+ * Cuánto hay que esperar, si Wati frenó por el cupo de envíos.
+ *
+ * **Meta acepta 10 plantillas por hora**, así que un catálogo de 13 nunca
+ * entra de una. No es un error a reintentar: es un límite del que hay que
+ * salirse y volver. Se extraen los minutos del mensaje —"please wait for 22
+ * minutes"— para poder decirle a la persona cuándo volver en vez de dejarla
+ * probando.
+ *
+ * Devuelve `undefined` si el fallo es cualquier otra cosa.
+ */
+export function minutosDeEspera(motivo: string): number | undefined {
+  if (!/per hour|rate limit|too many/i.test(motivo)) return undefined;
+  const m = motivo.match(/(\d+)\s*minute/i);
+  // Si frenó por cupo pero no dice cuánto, una hora es el peor caso.
+  return m ? Number(m[1]) : 60;
 }
 
 function mensajeDeError(error: unknown): string {

@@ -54,6 +54,11 @@ export type ResultadoSometer = {
   ok: boolean;
   estado: string;
   motivo?: string;
+  /**
+   * Sólo viene cuando Wati frenó por cupo: Meta acepta 10 plantillas por
+   * hora. No es un error a reintentar, es una espera.
+   */
+  esperaMinutos?: number;
 };
 
 export async function someterPlantillaWati(

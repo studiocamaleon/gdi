@@ -1,4 +1,4 @@
-import { baseDe, WatiClient } from '../wati.client';
+import { baseDe, minutosDeEspera, WatiClient } from '../wati.client';
 
 /**
  * Los dos lugares donde este cliente se rompe en la práctica: cómo se arma la
@@ -130,5 +130,33 @@ describe('WatiClient', () => {
       expect(r.ok).toBe(false);
       if (!r.ok) expect(r.motivo).toMatch(/no respondió/i);
     });
+  });
+});
+
+describe('minutosDeEspera', () => {
+  it('reconoce el cupo de plantillas por hora y saca los minutos', () => {
+    expect(
+      minutosDeEspera(
+        'Only 10 templates can be submitted per hour, please wait for 22 minutes before submit again.',
+      ),
+    ).toBe(22);
+  });
+
+  it('cae a una hora si frena por cupo pero no dice cuánto', () => {
+    expect(minutosDeEspera('Rate limit reached.')).toBe(60);
+  });
+
+  /**
+   * El punto de la función: distinguir "esperá" de "está roto". Un fallo
+   * común no puede leerse como cupo, porque el front deja de intentar.
+   */
+  it('no confunde un error cualquiera con una espera', () => {
+    expect(minutosDeEspera('Wati rechazó el token.')).toBeUndefined();
+    expect(
+      minutosDeEspera('template with current name already exists'),
+    ).toBeUndefined();
+    expect(
+      minutosDeEspera('Wati tuvo un error interno (500).'),
+    ).toBeUndefined();
   });
 });
