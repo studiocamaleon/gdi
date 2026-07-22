@@ -412,9 +412,40 @@ detrás del login.
 - **Comprobante**: se congela al emitir y se rehace al cargar el CAE a mano
   (el manual emite sin CAE y lo carga después).
 - Los dos endpoints pasan de renderizar a un 302 a la URL firmada.
-- **Chrome se apaga solo** tras 5 minutos sin renders (`PDF_CHROME_IDLE_MIN`).
-  Con los PDF guardados los renders vienen de a ráfagas, así que tener ~150 MB
-  de navegador residente el resto del día no tiene sentido.
+- ~~Chrome se apaga solo tras 5 minutos sin renders.~~ **Superado**: Puppeteer
+  se sacó del proyecto (ver abajo).
+
+### Epílogo: fuera Puppeteer (decisión 2026-07-22)
+
+F3 resolvió el costo *por PDF*, pero el usuario decidió sacar Chrome del todo,
+y el argumento que pesó no fue el de performance sino el de **deploy**: el
+binario son **193 MB** en la imagen del contenedor y un piso de memoria por
+instancia. El PDF de presupuesto se re-dibujó con jsPDF, el mismo motor que ya
+usaban factura y estado de cuenta.
+
+| | Puppeteer | jsPDF |
+|---|---|---|
+| Render | 2,23 s | **10 ms** |
+| Dependencia | 193 MB de Chrome | ninguna |
+| Texto | rasterizado | **vectorial** (se busca y se copia) |
+| Determinismo | atado a la versión de Chrome | total |
+
+Lo que se paga: no hay motor de layout. Las medidas están todas derivadas del
+CSS original con un factor explícito (`px()`/`pt()` en el service) en vez de
+números mágicos, así que si el diseño cambia se re-traduce leyendo el CSS —
+pero se re-traduce a mano.
+
+Tres defectos que aparecieron al comparar contra el render de Chrome, todos
+del tipo que sólo se ve mirando el PDF:
+
+- `getTextWidth` mide con el cuerpo **vigente**: medir el ancho de "…c/u"
+  después de achicar la fuente para "IVA incl." daba corto y las dos leyendas
+  se pisaban.
+- Las pastillas de specs alineaban bajo el badge del índice en vez de bajo el
+  nombre del item.
+- Los nombres largos se cortaban sin aviso a media palabra. Ahora usan hasta
+  dos renglones (y el alto de la tarjeta se recalcula, que es lo que la
+  paginación necesita para no partir tarjetas al medio).
 
 **Efecto medido** sobre el PDF de un presupuesto:
 
