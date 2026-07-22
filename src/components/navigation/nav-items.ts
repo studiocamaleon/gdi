@@ -132,6 +132,7 @@ export const NAV: NavItem[] = [
         href: "/produccion/simulador-laser",
       },
       { key: "estaciones", label: "Estaciones", href: "/produccion/estaciones" },
+      { key: "salud-eta", label: "Salud del ETA", href: "/produccion/eta" },
     ],
   },
   {
