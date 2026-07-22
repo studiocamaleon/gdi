@@ -10,11 +10,13 @@
  * prácticamente inmutable: si cambia el texto, se somete una nueva y conviven
  * (decisión D2). Nunca se edita el `cuerpo` de un código ya sometido.
  *
- * `orden_recibida` y `orden_en_produccion` van en `_v2` por eso mismo: sus
- * `_v1` quedaron registradas en Meta con texto de prueba durante el desarrollo
- * de la integración. Borrarlas no arregla nada —Meta bloquea reutilizar el
- * nombre de una plantilla borrada por unos 30 días—, así que se sube la
- * versión y listo. Es exactamente el caso que D2 anticipaba.
+ * Todo el catálogo arranca en `_v2`, y no es que haya habido una v1 del texto:
+ * las `_v1` se quemaron durante el desarrollo de la integración —algunas
+ * llegaron a Meta con texto de prueba— y Meta bloquea reutilizar el nombre de
+ * una plantilla borrada por unos 30 días. Empezar todos en la misma versión
+ * evita esa espera y deja el catálogo parejo, que se razona mejor que una
+ * mezcla de v1 y v2. La numeración vuelve a significar "revisión del texto"
+ * a partir de acá.
  *
  * Textos y fundamentos: docs/notificaciones-whatsapp-textos.md
  */
@@ -68,7 +70,7 @@ const IDIOMA = 'es_AR';
 export const CATALOGO: PlantillaCanonica[] = [
   {
     evento: 'presupuesto_enviado',
-    codigo: 'grafo_presupuesto_enviado_v1',
+    codigo: 'grafo_presupuesto_enviado_v2',
     titulo: 'Presupuesto enviado',
     cuando: 'Cuando el presupuesto pasa a enviado',
     categoria: 'UTILITY',
@@ -93,7 +95,7 @@ Si no lo pediste, ignorá este mensaje.`,
   },
   {
     evento: 'presupuesto_por_vencer',
-    codigo: 'grafo_presupuesto_por_vencer_v1',
+    codigo: 'grafo_presupuesto_por_vencer_v2',
     titulo: 'Presupuesto por vencer',
     cuando: 'Unos días antes de que venza',
     categoria: 'MARKETING',
@@ -114,7 +116,7 @@ Si ya no te interesa, no hace falta que hagas nada.`,
   },
   {
     evento: 'presupuesto_aprobado',
-    codigo: 'grafo_presupuesto_aprobado_v1',
+    codigo: 'grafo_presupuesto_aprobado_v2',
     titulo: 'Presupuesto aprobado',
     cuando: 'Cuando el cliente aprueba desde el link público',
     categoria: 'UTILITY',
@@ -181,7 +183,7 @@ No necesitás hacer nada por ahora.`,
   },
   {
     evento: 'orden_demorada',
-    codigo: 'grafo_orden_demorada_v1',
+    codigo: 'grafo_orden_demorada_v2',
     titulo: 'Entrega demorada',
     cuando: 'Cuando el ETA se corre más de lo tolerado',
     categoria: 'UTILITY',
@@ -205,7 +207,7 @@ Si necesitás coordinar algo, respondenos por acá.`,
   },
   {
     evento: 'orden_lista',
-    codigo: 'grafo_orden_lista_v1',
+    codigo: 'grafo_orden_lista_v2',
     titulo: 'Orden lista',
     cuando: 'Cuando la orden se finaliza y no quedó saldo',
     categoria: 'UTILITY',
@@ -227,7 +229,7 @@ No tenés saldo pendiente por este trabajo.`,
   },
   {
     evento: 'orden_lista_con_saldo',
-    codigo: 'grafo_orden_lista_con_saldo_v1',
+    codigo: 'grafo_orden_lista_con_saldo_v2',
     titulo: 'Orden lista (con saldo)',
     cuando: 'Cuando la orden se finaliza y queda saldo pendiente',
     categoria: 'UTILITY',
@@ -252,7 +254,7 @@ Si ya lo abonaste, puede que todavía no lo hayamos registrado.`,
   },
   {
     evento: 'orden_entregada',
-    codigo: 'grafo_orden_entregada_v1',
+    codigo: 'grafo_orden_entregada_v2',
     titulo: 'Orden entregada',
     cuando: 'Cuando se marca la entrega',
     categoria: 'UTILITY',
@@ -270,7 +272,7 @@ Guardá este mensaje como constancia.`,
   },
   {
     evento: 'pago_recibido',
-    codigo: 'grafo_pago_recibido_v1',
+    codigo: 'grafo_pago_recibido_v2',
     titulo: 'Pago recibido',
     cuando: 'Cuando el cobro se acredita',
     categoria: 'UTILITY',
@@ -294,7 +296,7 @@ Este mensaje es la constancia de que registramos el pago.`,
   },
   {
     evento: 'saldo_vencido',
-    codigo: 'grafo_saldo_vencido_v1',
+    codigo: 'grafo_saldo_vencido_v2',
     titulo: 'Saldo vencido',
     cuando: 'Cuando queda deuda vencida en la cuenta corriente',
     categoria: 'UTILITY',
@@ -318,7 +320,7 @@ Si ya lo abonaste, avisanos y lo regularizamos.`,
   },
   {
     evento: 'comprobante_emitido',
-    codigo: 'grafo_comprobante_emitido_v1',
+    codigo: 'grafo_comprobante_emitido_v2',
     titulo: 'Comprobante emitido',
     cuando: 'Cuando se emite la factura con CAE',
     categoria: 'UTILITY',
@@ -340,7 +342,7 @@ También te queda disponible en el seguimiento de tu orden.`,
   },
   {
     evento: 'resena',
-    codigo: 'grafo_resena_v1',
+    codigo: 'grafo_resena_v2',
     titulo: 'Pedido de reseña',
     cuando: 'Unos días después de la entrega',
     categoria: 'MARKETING',

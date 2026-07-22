@@ -55,7 +55,7 @@ Dos plantillas es explícito y las dos se aprueban igual de fácil.
 
 ## 2. Los textos
 
-### 1 · `grafo_presupuesto_enviado_v1` — UTILITY · default ON
+### 1 · `grafo_presupuesto_enviado_v2` — UTILITY · default ON
 
 > **El limítrofe.** Puede leerse como venta. Es el candidato número uno para
 > probar en tu cuenta: si Meta lo baja a MARKETING, lo sabemos antes de que
@@ -82,7 +82,7 @@ Si no lo pediste, ignorá este mensaje.
 
 ---
 
-### 2 · `grafo_presupuesto_por_vencer_v1` — MARKETING · default OFF
+### 2 · `grafo_presupuesto_por_vencer_v2` — MARKETING · default OFF
 
 > Es un empujón comercial. Va como marketing porque **lo es**.
 
@@ -103,7 +103,7 @@ Si ya no te interesa, no hace falta que hagas nada.
 
 ---
 
-### 3 · `grafo_presupuesto_aprobado_v1` — UTILITY · default ON
+### 3 · `grafo_presupuesto_aprobado_v2` — UTILITY · default ON
 
 ```
 Hola {{1}}, recibimos tu aprobación del presupuesto {{2}} por ${{3}}. ✅
@@ -164,7 +164,7 @@ No necesitás hacer nada por ahora.
 
 ---
 
-### 6 · `grafo_orden_demorada_v1` — UTILITY · default ON
+### 6 · `grafo_orden_demorada_v2` — UTILITY · default ON
 
 > **El que más valor tiene.** El motor de ETA ya calcula esto todos los
 > días; sólo falta que salga. Nadie en el rubro avisa una demora antes de
@@ -194,7 +194,7 @@ Si necesitás coordinar algo, respondenos por acá.
 
 ---
 
-### 7 · `grafo_orden_lista_v1` — UTILITY · default ON
+### 7 · `grafo_orden_lista_v2` — UTILITY · default ON
 
 > Sin saldo pendiente.
 
@@ -216,7 +216,7 @@ No tenés saldo pendiente por este trabajo.
 
 ---
 
-### 8 · `grafo_orden_lista_con_saldo_v1` — UTILITY · default ON
+### 8 · `grafo_orden_lista_con_saldo_v2` — UTILITY · default ON
 
 ```
 Hola {{1}}, tu orden {{2}} ya está lista. 📦
@@ -239,7 +239,7 @@ Si ya lo abonaste, puede que todavía no lo hayamos registrado.
 
 ---
 
-### 9 · `grafo_orden_entregada_v1` — UTILITY · default OFF
+### 9 · `grafo_orden_entregada_v2` — UTILITY · default OFF
 
 ```
 Hola {{1}}, confirmamos la entrega de tu orden {{2}} el {{3}}. ✅
@@ -255,7 +255,7 @@ Guardá este mensaje como constancia.
 
 ---
 
-### 10 · `grafo_pago_recibido_v1` — UTILITY · default ON
+### 10 · `grafo_pago_recibido_v2` — UTILITY · default ON
 
 > Reemplaza a `recibo_pago_v2`, que ya es UTILITY. El cambio: suma el saldo
 > restante, que es la pregunta que el cliente se hace justo después de pagar.
@@ -280,7 +280,7 @@ Este mensaje es la constancia de que registramos el pago.
 
 ---
 
-### 11 · `grafo_saldo_vencido_v1` — UTILITY · default OFF
+### 11 · `grafo_saldo_vencido_v2` — UTILITY · default OFF
 
 > Recordar una deuda **existente** es utility para Meta. Lo que la volvería
 > marketing es aprovechar el mensaje para ofrecer algo.
@@ -305,7 +305,7 @@ Si ya lo abonaste, avisanos y lo regularizamos.
 
 ---
 
-### 12 · `grafo_comprobante_emitido_v1` — UTILITY · default OFF
+### 12 · `grafo_comprobante_emitido_v2` — UTILITY · default OFF
 
 ```
 Hola {{1}}, emitimos tu {{2}} N° {{3}} por ${{4}}. 🧾
@@ -325,7 +325,7 @@ También te queda disponible en el seguimiento de tu orden.
 
 ---
 
-### 13 · `grafo_resena_v1` — MARKETING · default OFF
+### 13 · `grafo_resena_v2` — MARKETING · default OFF
 
 > Marketing de verdad, y está bien que lo sea. Forzarlo a utility es
 > exactamente lo que baja la calidad de la cuenta.
