@@ -200,23 +200,26 @@ export class WatiClient {
         // llegaba null en silencio; con esto queda
         // {key:"Spanish (ARG)", value:"es_AR", text:"Spanish (ARG)"}.
         language: p.idioma,
-        // Van los DOS, y no es redundancia: son campos distintos que alimentan
-        // pantallas distintas del dashboard de Wati.
+        // Los dos campos van NOMBRADOS, y los dos hacen falta.
         //
-        //   `hsm`  → lo que muestra el TEXTAREA del editor.
-        //   `body` → lo que renderiza el PREVIEW.
+        //   `hsm`  → el TEXTAREA del editor.
+        //   `body` → el PREVIEW y, sobre todo, los campos de "contenido de
+        //            muestra" que Meta exige para revisar la plantilla.
         //
-        // Llenar sólo `body` —lo que hacíamos— dejaba la plantilla en un
-        // estado absurdo: el dibujo con el texto completo y el campo de
-        // edición vacío, y al guardar saltaba "el cuerpo no puede estar
-        // vacío". El nombre `hsm` no aparece en la documentación; salió de
-        // mirar qué manda el propio dashboard al guardar.
+        // El nombre `hsm` no aparece en la documentación; salió de mirar qué
+        // manda el propio dashboard al guardar. Sin él, el editor abre con el
+        // textarea VACÍO y al guardar salta "el cuerpo no puede estar vacío".
         //
-        // `bodyOriginal` (el nombrado) NO se manda: Wati lo deriva solo a
-        // partir de `body` y el orden de `customParams`. Mandarlo se descarta
-        // en silencio.
+        // Y `body` tiene que ser el nombrado, no el posicional: con `{{1}}`
+        // el editor pide "contenido para {{1}}" y deja los ejemplos en blanco
+        // —los busca por nombre en `customParams`—, así que la plantilla no
+        // se puede mandar a revisión. Con el nombrado toma los ejemplos solo.
+        //
+        // El posicional que ve Meta lo arma Wati al someter, junto con
+        // `bodyOriginal`. Mandar cualquiera de los dos se descarta en
+        // silencio.
         hsm: cuerpoNombrado,
-        body: p.cuerpo,
+        body: cuerpoNombrado,
         footer: p.footer,
         header: null,
         type: 'hsm',
