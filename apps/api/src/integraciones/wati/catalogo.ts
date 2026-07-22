@@ -10,6 +10,12 @@
  * prácticamente inmutable: si cambia el texto, se somete una nueva y conviven
  * (decisión D2). Nunca se edita el `cuerpo` de un código ya sometido.
  *
+ * `orden_recibida` y `orden_en_produccion` van en `_v2` por eso mismo: sus
+ * `_v1` quedaron registradas en Meta con texto de prueba durante el desarrollo
+ * de la integración. Borrarlas no arregla nada —Meta bloquea reutilizar el
+ * nombre de una plantilla borrada por unos 30 días—, así que se sube la
+ * versión y listo. Es exactamente el caso que D2 anticipaba.
+ *
  * Textos y fundamentos: docs/notificaciones-whatsapp-textos.md
  */
 
@@ -129,7 +135,7 @@ Ya preparamos la orden de trabajo y te avisamos cuando entre en producción.`,
   },
   {
     evento: 'orden_recibida',
-    codigo: 'grafo_orden_recibida_v1',
+    codigo: 'grafo_orden_recibida_v2',
     titulo: 'Orden recibida',
     cuando: 'Cuando la orden pasa a pendiente',
     categoria: 'UTILITY',
@@ -152,7 +158,7 @@ Si la fecha cambia, te avisamos por este medio.`,
   },
   {
     evento: 'orden_en_produccion',
-    codigo: 'grafo_orden_en_produccion_v1',
+    codigo: 'grafo_orden_en_produccion_v2',
     titulo: 'Orden en producción',
     cuando: 'Cuando arranca el primer paso',
     categoria: 'UTILITY',

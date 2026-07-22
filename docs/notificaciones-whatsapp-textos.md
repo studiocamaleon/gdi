@@ -122,7 +122,7 @@ Ya preparamos la orden de trabajo y te avisamos cuando entre en producción.
 
 ---
 
-### 4 · `grafo_orden_recibida_v1` — UTILITY · default ON
+### 4 · `grafo_orden_recibida_v2` — UTILITY · default ON
 
 ```
 Hola {{1}}, recibimos tu orden {{2}}. 🧾
@@ -143,7 +143,7 @@ Si la fecha cambia, te avisamos por este medio.
 
 ---
 
-### 5 · `grafo_orden_en_produccion_v1` — UTILITY · default OFF
+### 5 · `grafo_orden_en_produccion_v2` — UTILITY · default OFF
 
 ```
 Hola {{1}}, ya empezamos a producir tu orden {{2}}. 🖨️
