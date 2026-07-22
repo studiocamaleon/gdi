@@ -200,6 +200,20 @@ export class WatiClient {
         // llegaba null en silencio; con esto queda
         // {key:"Spanish (ARG)", value:"es_AR", text:"Spanish (ARG)"}.
         language: p.idioma,
+        // PENDIENTE — la plantilla queda inservible del lado de Wati.
+        //
+        // El editor del dashboard lee `bodyOriginal` y el preview renderiza
+        // `body`. Como el alta por API nunca puebla `bodyOriginal`, el
+        // usuario ve el dibujo con el texto completo y el textarea VACÍO, y
+        // al guardar le salta "el cuerpo no puede estar vacío".
+        //
+        // Mandar `bodyOriginal` explícitamente NO alcanza: se probó contra la
+        // cuenta real y Wati lo descarta, volvió "" igual. Falta saber cómo
+        // se llama de verdad ese campo en el alta, y eso sale de mirar qué
+        // manda el propio dashboard al guardar.
+        //
+        // Se deja el cuerpo NOMBRADO acá porque es el que hace que el preview
+        // se lea, que es lo único que hoy funciona bien.
         body: cuerpoNombrado,
         footer: p.footer,
         buttons: [],
