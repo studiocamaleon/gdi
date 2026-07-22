@@ -421,8 +421,25 @@ function PlantillasTab() {
   const r = datos.resumen;
   return (
     <div className="int-content">
+      {/*
+        Los contadores cuentan SÓLO el catálogo de Grafo, y por eso viven
+        adentro de esta sección y no arriba de todo: puestos al tope se leían
+        como el estado de la cuenta entera, y un "Aprobadas 0" con seis
+        plantillas propias aprobadas parece un error. Sumarlas tampoco sirve
+        —"Aprobadas 6 · Sin enviar 13" no dice si el despliegue terminó—, así
+        que lo que se arregla es el encuadre, no el número.
+      */}
+      <div className="int-section-intro">
+        <h3>Plantillas de Grafo</h3>
+        <p>
+          Las escribe y mantiene Grafo. Son {r.total} y se envían a Meta para
+          aprobación; los números de abajo son el estado de esas {r.total} en tu
+          cuenta.
+        </p>
+      </div>
+
       <div className="int-tpl-stats">
-        <Stat v={r.aprobadas} k="Aprobadas" />
+        <Stat v={r.aprobadas} k={`Aprobadas de ${r.total}`} />
         <Stat v={r.pendientes} k="En revisión" />
         <Stat v={r.conProblema} k="Con problema" alerta={r.conProblema > 0} />
         <Stat v={r.sinSometer} k="Sin enviar" />
@@ -441,14 +458,6 @@ function PlantillasTab() {
           conversación.
         </div>
       )}
-
-      <div className="int-section-intro">
-        <h3>Plantillas de Grafo</h3>
-        <p>
-          Las escribe y mantiene Grafo. Se envían a Meta para aprobación y el
-          estado se refleja acá.
-        </p>
-      </div>
       <div className="int-tpl-list" style={{ marginBottom: 26 }}>
         {datos.gestionadas.map((p) => (
           <FilaGestionada key={p.codigo} p={p} />
@@ -456,11 +465,13 @@ function PlantillasTab() {
       </div>
 
       <div className="int-section-intro">
-        <h3>Tus plantillas</h3>
+        <h3>Tus plantillas ({datos.propias.length})</h3>
         <p>
           {datos.propias.length === 0
             ? "No hay plantillas propias en esta cuenta de Wati."
-            : "Las creaste vos en el dashboard de Wati. Grafo no las administra ni las usa para notificar."}
+            : `Las creaste vos en el dashboard de Wati — ${
+                datos.propias.filter((p) => p.estado === "APPROVED").length
+              } aprobada(s). No entran en los números de arriba: Grafo no las administra ni las usa para notificar.`}
         </p>
       </div>
       {datos.propias.length > 0 && (
