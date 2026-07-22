@@ -22,6 +22,7 @@ import type {
 } from './dto/integraciones.dto';
 import { aE164 } from './telefono';
 import { cruzar, type EstadoPlantillas } from './wati/plantillas';
+import { POR_CODIGO, validar } from './wati/catalogo';
 
 /**
  * Conexiones del tenant con proveedores externos.
@@ -204,6 +205,75 @@ export class IntegracionesService {
       throw new NotFoundException('Wati no está conectada.');
     }
     return cruzar(await this.wati.listarPlantillas(cred));
+  }
+
+  /**
+   * Crea UNA plantilla del catálogo en la cuenta de Wati del tenant.
+   *
+   * De a una y no las 13 de un saque a propósito: son 13 llamadas a un
+   * tercero con timeout de 10 s cada una, y meterlas en un solo request HTTP
+   * daría una pantalla congelada un minuto que además pierde todo si se
+   * corta. Con esto el front muestra el avance y reintenta sólo la que falló.
+   *
+   * OJO con lo que devuelve Wati acá. Verificado contra la cuenta real: el
+   * alta contesta **500 "An error occurred" pero igual crea la plantilla**,
+   * en estado DRAFT. Confiar en el código de respuesta reportaría un fallo
+   * sobre algo que sí se creó, y el reintento chocaría con "template with
+   * current name already exists". Por eso el estado real se lee de la lista
+   * DESPUÉS de intentar, y esa relectura —no la respuesta del POST— es la
+   * que manda.
+   */
+  async someterPlantillaWati(
+    codigo: string,
+  ): Promise<{ codigo: string; ok: boolean; estado: string; motivo?: string }> {
+    const cred = await this.credencialesWati();
+    if (!cred) throw new NotFoundException('Wati no está conectada.');
+
+    const canonica = POR_CODIGO.get(codigo);
+    if (!canonica) {
+      throw new NotFoundException(
+        `"${codigo}" no está en el catálogo de Grafo.`,
+      );
+    }
+
+    // Última red antes de gastar un ciclo de revisión de 24-48 h.
+    const errores = validar(canonica);
+    if (errores.length) {
+      return {
+        codigo,
+        ok: false,
+        estado: 'SIN_SOMETER',
+        motivo: errores.join(' '),
+      };
+    }
+
+    // Si ya existe no se recrea: Wati rechaza el duplicado. Para cambiar un
+    // texto ya aprobado hay que subir la versión del código (D2).
+    const previas = await this.wati.listarPlantillas(cred);
+    const previa = previas.find((r) => r.nombre === canonica.codigo);
+    if (previa) {
+      return {
+        codigo,
+        ok: false,
+        estado: previa.estado,
+        motivo: 'Ya existe en la cuenta de Wati.',
+      };
+    }
+
+    const res = await this.wati.crearPlantilla(cred, canonica);
+
+    const despues = await this.wati.listarPlantillas(cred);
+    const creada = despues.find((r) => r.nombre === canonica.codigo);
+    if (creada) {
+      // Existe: se creó, más allá de lo que haya contestado el POST.
+      return { codigo, ok: true, estado: creada.estado };
+    }
+
+    const motivo = res.ok
+      ? 'Wati respondió que la creó, pero no aparece en la cuenta.'
+      : res.motivo;
+    this.logger.warn(`No se pudo crear ${codigo}: ${motivo}`);
+    return { codigo, ok: false, estado: 'SIN_SOMETER', motivo };
   }
 
   /**

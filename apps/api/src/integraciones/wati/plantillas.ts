@@ -60,8 +60,15 @@ export type EstadoPlantillas = {
   };
 };
 
-/** Estados de Meta que piden acción del usuario. */
-const CON_PROBLEMA = new Set(['REJECTED', 'PAUSED', 'DISABLED']);
+/**
+ * Estados que piden acción del usuario.
+ *
+ * `DRAFT` está acá y no entre los buenos: Wati crea las plantillas de la API
+ * como borrador y **no las manda a Meta**. Una plantilla en DRAFT parece
+ * hecha en el listado y no sirve para notificar a nadie, así que cuenta como
+ * problema hasta que alguien la envíe a aprobación.
+ */
+const CON_PROBLEMA = new Set(['REJECTED', 'PAUSED', 'DISABLED', 'DRAFT']);
 
 export function cruzar(remotas: PlantillaRemota[]): EstadoPlantillas {
   const porNombre = new Map(remotas.map((r) => [r.nombre, r]));

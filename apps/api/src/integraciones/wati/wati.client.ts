@@ -151,6 +151,74 @@ export class WatiClient {
     }
   }
 
+  /**
+   * Somete una plantilla a Meta a través de Wati.
+   *
+   * El cuerpo va con variables NOMBRADAS (`{{nombre_cliente}}`), que es como
+   * se autorea en el dashboard; Wati las traduce a `{{1}}` para Meta. Por eso
+   * el catálogo guarda el posicional y acá se genera el nombrado: la fuente
+   * de verdad de qué posición es cada nombre queda en un solo lugar.
+   *
+   * No lanza. Un rechazo de Wati es información para mostrar en la pantalla,
+   * no una excepción: si la número 7 falla, las otras 12 tienen que seguir.
+   */
+  async crearPlantilla(
+    cred: CredencialesWati,
+    p: {
+      codigo: string;
+      categoria: string;
+      idioma: string;
+      /** Posicional: "Hola {{1}}". */
+      cuerpo: string;
+      footer: string;
+      parametros: Array<{ nombre: string; ejemplo: string }>;
+    },
+  ): Promise<{ ok: true; id: string | null } | { ok: false; motivo: string }> {
+    const cuerpoNombrado = p.cuerpo.replace(
+      /\{\{\s*(\d+)\s*\}\}/g,
+      (original, n: string) => {
+        const nombre = p.parametros[Number(n) - 1]?.nombre;
+        return nombre ? `{{${nombre}}}` : original;
+      },
+    );
+
+    try {
+      const json = await this.pedir<{
+        result?: boolean;
+        ok?: boolean;
+        info?: string;
+        message?: string;
+        error?: unknown;
+        errors?: unknown;
+        id?: string;
+        data?: { id?: string };
+      }>(cred, 'POST', '/api/v1/whatsApp/templates', {
+        elementName: p.codigo,
+        category: p.categoria,
+        // `language` como STRING plano, no `languageCode` ni un objeto.
+        // Verificado contra la cuenta real: con `languageCode` el idioma
+        // llegaba null en silencio; con esto queda
+        // {key:"Spanish (ARG)", value:"es_AR", text:"Spanish (ARG)"}.
+        language: p.idioma,
+        body: cuerpoNombrado,
+        footer: p.footer,
+        buttons: [],
+        customParams: p.parametros.map((x) => ({
+          paramName: x.nombre,
+          paramValue: x.ejemplo,
+        })),
+      });
+
+      // Mismo patrón que el envío: Wati contesta 200 con `result: false`.
+      if (json?.result === false || json?.ok === false) {
+        return { ok: false, motivo: motivoDeAlta(json) };
+      }
+      return { ok: true, id: json?.id ?? json?.data?.id ?? null };
+    } catch (error) {
+      return { ok: false, motivo: mensajeDeError(error) };
+    }
+  }
+
   // ── Interno ─────────────────────────────────────────────────────────
 
   private async pedir<T>(
@@ -251,6 +319,30 @@ function interpretar(status: number, texto: string): string {
     return `Wati tuvo un error interno (${status}).`;
   }
   return `Wati respondió ${status}: ${texto.slice(0, 200)}`;
+}
+
+/**
+ * El motivo de un alta rechazada.
+ *
+ * Wati lo pone en `info`, en `error` o en `errors`, según el caso, y a veces
+ * es un objeto. Se prueba en orden y se cae a JSON antes que a un mensaje
+ * vacío: al someter una plantilla, el texto exacto del rechazo es lo único
+ * que permite arreglarla.
+ */
+function motivoDeAlta(json: {
+  info?: string;
+  message?: string;
+  error?: unknown;
+  errors?: unknown;
+}): string {
+  // `message` va primero: es el que usa el alta ("template with current name
+  // already exists"), mientras que `info` es el del envío.
+  const candidatos = [json.message, json.info, json.error, json.errors];
+  for (const c of candidatos) {
+    if (typeof c === 'string' && c.trim()) return c.trim();
+    if (c && typeof c === 'object') return JSON.stringify(c).slice(0, 300);
+  }
+  return 'Wati rechazó el alta sin dar motivo.';
 }
 
 function mensajeDeError(error: unknown): string {

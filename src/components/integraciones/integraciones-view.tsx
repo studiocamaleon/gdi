@@ -23,6 +23,7 @@ import {
   getIntegraciones,
   getPlantillasWati,
   probarIntegracion,
+  someterPlantillaWati,
   type EstadoIntegraciones,
 } from "@/lib/integraciones-api";
 
@@ -438,6 +439,11 @@ function PlantillasTab() {
         </p>
       </div>
 
+      <BotonCrear
+        pendientes={datos.gestionadas.filter((g) => g.estado === "SIN_SOMETER")}
+        onListo={cargar}
+      />
+
       <div className="int-tpl-stats">
         <Stat v={r.aprobadas} k={`Aprobadas de ${r.total}`} />
         <Stat v={r.pendientes} k="En revisión" />
@@ -449,6 +455,18 @@ function PlantillasTab() {
           alerta={r.recategorizadas > 0}
         />
       </div>
+
+      {datos.gestionadas.some((g) => g.estado === "DRAFT") && (
+        <div className="int-info-box" style={{ marginBottom: 16 }}>
+          <Ico.Alerta />
+          <div>
+            <strong>Hay plantillas en borrador.</strong> Wati crea por API en
+            borrador y no las manda a Meta. Para que sirvan hay que abrirlas en
+            el dashboard de Wati y enviarlas a aprobación; el texto, las
+            variables y la categoría ya están cargados.
+          </div>
+        </div>
+      )}
 
       {r.recategorizadas > 0 && (
         <div className="int-info-box" style={{ marginBottom: 16 }}>
@@ -485,6 +503,75 @@ function PlantillasTab() {
   );
 }
 
+/**
+ * Crea en Wati las plantillas del catálogo que faltan.
+ *
+ * Va de a una y no en un solo request: son N llamadas a un tercero con
+ * timeout de 10 s, y agruparlas daría una pantalla congelada que además
+ * pierde todo si se corta. Así se ve el avance y una que falle no se lleva
+ * puestas a las demás.
+ *
+ * Pide confirmación porque escribe en una cuenta ajena a Grafo y **Wati no
+ * expone borrado por API**: lo que se crea acá sólo se saca desde su
+ * dashboard.
+ */
+function BotonCrear({
+  pendientes,
+  onListo,
+}: {
+  pendientes: PlantillaGestionada[];
+  onListo: () => Promise<void>;
+}) {
+  const [confirmar, setConfirmar] = React.useState(false);
+  const [progreso, setProgreso] = React.useState<string | null>(null);
+
+  if (pendientes.length === 0) return null;
+
+  const crear = async () => {
+    let ok = 0;
+    const fallos: string[] = [];
+    for (const [i, p] of pendientes.entries()) {
+      setProgreso(`Creando ${i + 1} de ${pendientes.length}: ${p.titulo}…`);
+      try {
+        const res = await someterPlantillaWati(p.codigo);
+        if (res.ok) ok++;
+        else fallos.push(`${p.titulo}: ${res.motivo ?? "sin motivo"}`);
+      } catch (e) {
+        fallos.push(`${p.titulo}: ${e instanceof Error ? e.message : "falló"}`);
+      }
+    }
+    setProgreso(null);
+    if (ok > 0) toast.success(`Se crearon ${ok} plantilla(s) en Wati.`);
+    // Se muestran hasta tres para no tapar la pantalla; el detalle de cada
+    // una queda en su fila del listado.
+    for (const f of fallos.slice(0, 3)) toast.error(f);
+    if (fallos.length > 3) toast.error(`Y ${fallos.length - 3} más.`);
+    await onListo();
+  };
+
+  return (
+    <div className="int-actions-strip" style={{ marginBottom: 16 }}>
+      <button
+        className="btn"
+        onClick={() => setConfirmar(true)}
+        disabled={progreso !== null}
+      >
+        {progreso ?? `Crear en Wati las ${pendientes.length} que faltan`}
+      </button>
+
+      <ConfirmacionDestructiva
+        open={confirmar}
+        onOpenChange={setConfirmar}
+        titulo={`Crear ${pendientes.length} plantillas en Wati`}
+        descripcion="Se crean en tu cuenta de Wati con los textos de Grafo. Wati no permite borrarlas por API: si después querés sacarlas, hay que hacerlo desde su dashboard."
+        requiereTipear={false}
+        accionLabel="Crear"
+        onConfirmar={() => void crear()}
+      />
+    </div>
+  );
+}
+
 function Stat({ v, k, alerta }: { v: number; k: string; alerta?: boolean }) {
   return (
     <div className={`int-tpl-stat${alerta ? " int-tpl-stat-alerta" : ""}`}>
@@ -503,6 +590,9 @@ function pillEstado(estado: string): { clase: string; texto: string } {
     PAUSED: { clase: "int-pill-bad", texto: "Pausada" },
     DISABLED: { clase: "int-pill-bad", texto: "Deshabilitada" },
     SIN_SOMETER: { clase: "", texto: "Sin enviar" },
+    // Wati crea por API en borrador y NO lo manda a Meta. Parece hecha en el
+    // listado y no sirve para notificar: se marca como pendiente de acción.
+    DRAFT: { clase: "int-pill-warn", texto: "Borrador en Wati" },
   };
   // Un estado que Meta agregue mañana se muestra tal cual en vez de romper.
   return mapa[estado] ?? { clase: "", texto: estado };

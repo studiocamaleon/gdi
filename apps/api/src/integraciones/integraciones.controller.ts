@@ -47,6 +47,13 @@ export class IntegracionesController {
     return this.service.plantillasWati();
   }
 
+  /** Somete una plantilla del catálogo de Grafo a Meta. */
+  @Post('wati/plantillas/:codigo/someter')
+  @Roles(RolSistema.ADMINISTRADOR)
+  someterPlantillaWati(@Param('codigo') codigo: string) {
+    return this.service.someterPlantillaWati(codigo);
+  }
+
   /** Envío de prueba a un número propio, antes de encender la integración. */
   @Post('wati/probar-envio')
   @Roles(RolSistema.ADMINISTRADOR)

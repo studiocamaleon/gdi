@@ -48,3 +48,18 @@ export async function desconectarIntegracion(
 export async function getPlantillasWati(): Promise<EstadoPlantillas> {
   return apiRequest<EstadoPlantillas>("/integraciones/wati/plantillas");
 }
+
+export type ResultadoSometer = {
+  codigo: string;
+  ok: boolean;
+  estado: string;
+  motivo?: string;
+};
+
+export async function someterPlantillaWati(
+  codigo: string,
+): Promise<ResultadoSometer> {
+  return apiRequest(`/integraciones/wati/plantillas/${codigo}/someter`, {
+    method: "POST",
+  });
+}
