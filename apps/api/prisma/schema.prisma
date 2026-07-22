@@ -3,11 +3,11 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider  = "postgresql"
   // La APP se conecta con un rol sin superusuario ni DDL (`grafo_app`): si
   // alguna vez se agrega RLS, un superusuario la saltearía por completo y el
   // trabajo sería invisible. Ver docs/rol-base-sin-superusuario.md
-  url      = env("DATABASE_URL")
+  url       = env("DATABASE_URL")
   // Las MIGRACIONES necesitan DDL, así que van con un rol aparte. Prisma usa
   // `directUrl` para todo lo que requiere conexión directa (migrate, db push,
   // introspect) y `url` para el runtime.
@@ -408,6 +408,20 @@ enum ArchivoEstado {
   ELIMINADO
 }
 
+/// Qué proveedor externo. Una fila de IntegracionTenant por cada uno que el
+/// tenant conecte.
+enum ProveedorIntegracion {
+  WATI
+  AFIP
+  MERCADOPAGO
+}
+
+enum EstadoIntegracion {
+  DESCONECTADA
+  CONECTADA
+  ERROR
+}
+
 model Tenant {
   id                                               String                                            @id @default(uuid()) @db.Uuid
   nombre                                           String
@@ -426,6 +440,7 @@ model Tenant {
   updatedAt                                        DateTime                                          @updatedAt
   logoArchivo                                      Archivo?                                          @relation("TenantLogo", fields: [logoArchivoId], references: [id], onDelete: SetNull)
   archivos                                         Archivo[]                                         @relation("ArchivosDelTenant")
+  integraciones                                    IntegracionTenant[]
   memberships                                      Membership[]
   authSessions                                     AuthSession[]
   invitations                                      Invitation[]
@@ -514,24 +529,25 @@ model Tenant {
 }
 
 model User {
-  id                   String                  @id @default(uuid()) @db.Uuid
-  email                String                  @unique
-  passwordHash         String?
-  nombreCompleto       String?
-  activo               Boolean                 @default(true)
-  createdAt            DateTime                @default(now())
-  updatedAt            DateTime                @updatedAt
-  memberships          Membership[]
-  authSessions         AuthSession[]
-  invitations          Invitation[]
-  empleados            Empleado[]
-  ordenTrabajoEventos  OrdenTrabajoEvento[]
-  archivosSubidos      Archivo[]               @relation("ArchivosSubidos")
-  pasosEnMesa          OrdenTrabajoItemPaso[]  @relation("PasosEnMesa")
-  pasosIniciados       OrdenTrabajoItemPaso[]  @relation("PasosIniciados")
-  pasosCompletados     OrdenTrabajoItemPaso[]  @relation("PasosCompletados")
-  tramosPaso           OrdenTrabajoPasoTramo[] @relation("TramosPaso")
-  ahorrosConsolidacion AhorroConsolidacion[]   @relation("AhorrosConsolidacion")
+  id                      String                  @id @default(uuid()) @db.Uuid
+  email                   String                  @unique
+  passwordHash            String?
+  nombreCompleto          String?
+  activo                  Boolean                 @default(true)
+  createdAt               DateTime                @default(now())
+  updatedAt               DateTime                @updatedAt
+  memberships             Membership[]
+  authSessions            AuthSession[]
+  invitations             Invitation[]
+  empleados               Empleado[]
+  ordenTrabajoEventos     OrdenTrabajoEvento[]
+  archivosSubidos         Archivo[]               @relation("ArchivosSubidos")
+  integracionesConectadas IntegracionTenant[]     @relation("IntegracionesConectadas")
+  pasosEnMesa             OrdenTrabajoItemPaso[]  @relation("PasosEnMesa")
+  pasosIniciados          OrdenTrabajoItemPaso[]  @relation("PasosIniciados")
+  pasosCompletados        OrdenTrabajoItemPaso[]  @relation("PasosCompletados")
+  tramosPaso              OrdenTrabajoPasoTramo[] @relation("TramosPaso")
+  ahorrosConsolidacion    AhorroConsolidacion[]   @relation("AhorrosConsolidacion")
 }
 
 model Membership {
@@ -2994,37 +3010,37 @@ model ComprobanteOrden {
 /// seteada, según `scope` (ninguna para TENANT_BRANDING).
 /// Ver docs/archivos-r2-diseno.md
 model Archivo {
-  id             String        @id @default(uuid()) @db.Uuid
-  tenantId       String        @db.Uuid
-  scope          ArchivoScope
+  id                String        @id @default(uuid()) @db.Uuid
+  tenantId          String        @db.Uuid
+  scope             ArchivoScope
   /// Clave en el bucket: t/{tenantId}/{scope}/{entidadId}/{archivoId}{ext}.
   /// El nombre original NUNCA va acá (path traversal, unicode, colisiones).
-  key            String        @unique
+  key               String        @unique
   /// Nombre con el que el usuario lo subió; se devuelve en el
   /// Content-Disposition de la descarga.
-  nombreOriginal String
+  nombreOriginal    String
   /// MIME verificado contra el objeto real en el confirmar, no el declarado.
-  mimeType       String
-  bytes          BigInt        @default(0)
+  mimeType          String
+  bytes             BigInt        @default(0)
   /// sha256 en hex del contenido, si el cliente lo aportó. Dedupe futuro.
-  hash           String?
+  hash              String?
   /// Subida en partes en curso. Se guarda para poder abortarla desde el
   /// barrido: S3 y R2 cobran las partes de un multipart que nunca cerró.
   multipartUploadId String?
-  estado         ArchivoEstado @default(PENDIENTE)
+  estado            ArchivoEstado @default(PENDIENTE)
   /// Opt-in explícito: sólo los marcados así se ven en el link público de
   /// seguimiento del cliente. El arte de producción no se filtra por defecto.
-  publico        Boolean       @default(false)
+  publico           Boolean       @default(false)
   /// Lo produjo el sistema (PDF de presupuesto, de comprobante), no lo subió
   /// una persona. No aparece en el tab de archivos, no se re-vincula al
   /// convertir y no se borra a mano: es una proyección de otra fila, y
   /// mezclarlo con el arte del cliente confundiría las dos cosas.
-  generado       Boolean       @default(false)
-  descripcion    String?
-  subidoPorId    String?       @db.Uuid
-  eliminadoEl    DateTime?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  generado          Boolean       @default(false)
+  descripcion       String?
+  subidoPorId       String?       @db.Uuid
+  eliminadoEl       DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 
   clienteId     String? @db.Uuid
   ordenId       String? @db.Uuid
@@ -3055,4 +3071,47 @@ model Archivo {
   @@index([tenantId, clienteId])
   @@index([tenantId, cotizacionId])
   @@index([estado, createdAt])
+}
+
+/// Conexión de un tenant con un proveedor externo.
+///
+/// Una fila por (tenant, proveedor). Es compartida a propósito: Wati, AFIP y
+/// Mercado Pago guardan secretos con las mismas exigencias, y tres tablas
+/// distintas significarían tres implementaciones distintas del cifrado.
+///
+/// Ver docs/integraciones-wati-diseno.md
+model IntegracionTenant {
+  id        String               @id @default(uuid()) @db.Uuid
+  tenantId  String               @db.Uuid
+  proveedor ProveedorIntegracion
+  estado    EstadoIntegracion    @default(DESCONECTADA)
+
+  /// Credenciales CIFRADAS (AES-256-GCM): { v, iv, tag, ct }. La clave vive
+  /// en el entorno, nunca acá — si vivieran juntas, cifrar no protegería de
+  /// lo único de lo que tiene que proteger: que se lleven la base.
+  /// El token NUNCA vuelve por la API: para la UI está `pista`.
+  credencialesCifradas Json?
+  /// Últimos caracteres del secreto, para que la UI diga cuál está cargado
+  /// sin poder revelarlo.
+  pista                String?
+
+  /// Metadata NO sensible y mostrable: número de WhatsApp, nombre visible,
+  /// id de la cuenta en el proveedor. Se puede leer y loguear sin riesgo.
+  metadataJson     Json?
+  /// Última vez que se verificó que la conexión responde.
+  ultimoChequeoEl  DateTime?
+  /// Por qué está en ERROR, en castellano y mostrable al usuario.
+  ultimoErrorTexto String?
+
+  conectadaEl    DateTime?
+  conectadaPorId String?   @db.Uuid
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  tenant       Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conectadaPor User?  @relation("IntegracionesConectadas", fields: [conectadaPorId], references: [id], onDelete: SetNull)
+
+  /// Un tenant no puede tener dos conexiones al mismo proveedor.
+  @@unique([tenantId, proveedor])
+  @@index([tenantId, estado])
 }

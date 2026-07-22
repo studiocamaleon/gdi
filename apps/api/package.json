@@ -44,6 +44,7 @@
     "json-logic-js": "^2.0.5",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
+    "libphonenumber-js": "^1.13.9",
     "maxrects-packer": "^2.7.3",
     "nestjs-pino": "^4.6.1",
     "pino": "^10.3.1",
