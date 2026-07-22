@@ -28,6 +28,7 @@ import { OrdenesTrabajoModule } from './ordenes-trabajo/ordenes-trabajo.module';
 import { PresupuestosModule } from './presupuestos/presupuestos.module';
 import { AdministracionModule } from './administracion/administracion.module';
 import { ReportesModule } from './reportes/reportes.module';
+import { EtaModule } from './eta/eta.module';
 
 @Module({
   imports: [
@@ -84,6 +85,7 @@ import { ReportesModule } from './reportes/reportes.module';
     PresupuestosModule,
     AdministracionModule,
     ReportesModule,
+    EtaModule,
   ],
   controllers: [AppController],
   providers: [

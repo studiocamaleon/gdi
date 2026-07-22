@@ -1,0 +1,134 @@
+/**
+ * Espejo backend de src/lib/tablero-produccion.ts — SOLO lo que consume el
+ * motor de simulación de flujo (ETA). Mantener en sync con el front: todo
+ * cambio a estos tipos/funciones toca los dos lados y sus specs.
+ *
+ * El front tiene un `TableroPasoData`/`TableroItemData` más gordo (campos de
+ * presentación y registro de tiempos). Acá viven sólo los campos que el motor
+ * lee: la ficha de emisión/cron arma exactamente este subconjunto desde la DB.
+ */
+
+export type TableroPasoEstado =
+  | 'pendiente'
+  | 'en_curso'
+  | 'pausado'
+  | 'hecho'
+  | 'bloqueado';
+
+/** Campos de un paso que el motor de ETA necesita. */
+export type TableroPasoData = {
+  id: string;
+  indice: number;
+  nombre: string;
+  familiaCodigo: string;
+  centroCostoId: string | null;
+  duracionEstimadaMin: number | null;
+  estado: TableroPasoEstado;
+  /** ISO datetime o null (para el restante de un paso en curso). */
+  iniciadoEl: string | null;
+  /** 'interno' | 'tercerizado'. */
+  tipoEjecucion: string;
+  plazoProveedorDias: number | null;
+};
+
+/** Campos de un item que el motor de ETA necesita. */
+export type TableroItemData = {
+  id: string;
+  ordenId: string;
+  /** Número de OT — desempate final del scheduler (FIFO por emisión). */
+  ordenNumero: string;
+  ordenEstado: string;
+  /** ISO date o null (a nivel orden). */
+  fechaEntrega: string | null;
+  /** Item manual/histórico sin snapshot: no tiene ruta de producción. */
+  sinRuta: boolean;
+  pasos: TableroPasoData[];
+};
+
+export type TableroPrioridad = 'urgent' | 'high' | 'normal';
+
+/** Clave del bucket de pasos sin estación asignada. */
+export const SIN_ESTACION_KEY = 'sin-estacion';
+
+/** Días entre la fecha de entrega (date-only ISO) y hoy. */
+export function diasHastaEntrega(
+  fechaEntrega: string | null,
+  ahora: Date = new Date(),
+): number | null {
+  if (!fechaEntrega) return null;
+  const [y, m, d] = fechaEntrega.slice(0, 10).split('-').map(Number);
+  if (!y || !m || !d) return null;
+  const entrega = new Date(y, m - 1, d);
+  const hoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+  return Math.round((entrega.getTime() - hoy.getTime()) / 86_400_000);
+}
+
+/**
+ * Prioridad DERIVADA del vencimiento (no hay campo real todavía):
+ * vencida u hoy → urgente · ≤2 días → alta · resto → normal.
+ */
+export function prioridadDerivada(
+  fechaEntrega: string | null,
+  ahora: Date = new Date(),
+): TableroPrioridad {
+  const dias = diasHastaEntrega(fechaEntrega, ahora);
+  if (dias === null) return 'normal';
+  if (dias <= 0) return 'urgent';
+  if (dias <= 2) return 'high';
+  return 'normal';
+}
+
+/**
+ * La ruta es una SECUENCIA: el paso ACTIVO es el que está listo para hacerse
+ * (es el primero o todos los anteriores ya están hechos).
+ */
+export function pasoActivo(
+  item: TableroItemData,
+  paso: TableroPasoData,
+): boolean {
+  if (paso.estado === 'hecho') return false;
+  return item.pasos
+    .filter((otro) => otro.indice < paso.indice)
+    .every((otro) => otro.estado === 'hecho');
+}
+
+type EstacionRuteo = {
+  id: string;
+  activo: boolean;
+  familias: string[];
+  maquinas: Array<{ centroCostoId: string | null }>;
+};
+
+/**
+ * Ruteo paso → estación (estaciones ACTIVAS): el paso llega por su FAMILIA, y
+ * las máquinas de la estación son FILTROS. Resolución determinista:
+ *   1. estación con la familia cuya máquina matchea el centro del paso;
+ *   2. estación general (con la familia y sin máquinas);
+ *   3. paso manual (sin centro) con única candidata;
+ *   4. sin estación (null).
+ */
+export function resolverEstacionDePaso<T extends EstacionRuteo>(
+  estaciones: T[],
+  paso: Pick<TableroPasoData, 'familiaCodigo' | 'centroCostoId'>,
+): T | null {
+  const candidatas = estaciones.filter(
+    (estacion) =>
+      estacion.activo && estacion.familias.includes(paso.familiaCodigo),
+  );
+  if (candidatas.length === 0) return null;
+
+  if (paso.centroCostoId) {
+    const porMaquina = candidatas.find((estacion) =>
+      estacion.maquinas.some(
+        (maquina) => maquina.centroCostoId === paso.centroCostoId,
+      ),
+    );
+    if (porMaquina) return porMaquina;
+  }
+
+  const general = candidatas.find((estacion) => estacion.maquinas.length === 0);
+  if (general) return general;
+
+  if (!paso.centroCostoId && candidatas.length === 1) return candidatas[0];
+  return null;
+}

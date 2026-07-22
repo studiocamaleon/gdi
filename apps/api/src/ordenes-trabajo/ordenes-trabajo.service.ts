@@ -3,10 +3,12 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { EtaService } from '../eta/eta.service';
 import type { CurrentAuth } from '../auth/auth.types';
 import { paginatedResponse } from '../common/dto/pagination.dto';
 import {
@@ -225,7 +227,40 @@ export function ordenSeFinaliza(
 
 @Injectable()
 export class OrdenesTrabajoService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(OrdenesTrabajoService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly eta: EtaService,
+  ) {}
+
+  /**
+   * Captura de métricas del ETA (docs/eta-metricas-historicas-diseno.md):
+   * SIEMPRE post-commit y con el error tragado, para que ni la emisión ni la
+   * finalización fallen por la telemetría. Se `await`ea (no fire-and-forget)
+   * para que la promesa/cierre ya estén escritos cuando la acción responde.
+   */
+  private async capturarEtaEmision(auth: CurrentAuth, ordenId: string) {
+    try {
+      await this.eta.capturarEmision(auth, ordenId);
+    } catch (error) {
+      this.logger.error(
+        `Falló la captura de promesa de ETA (orden ${ordenId}).`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
+  }
+
+  private async capturarEtaCierre(tenantId: string, ordenId: string) {
+    try {
+      await this.eta.capturarCierre(tenantId, ordenId);
+    } catch (error) {
+      this.logger.error(
+        `Falló la captura de cierre de ETA (orden ${ordenId}).`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
+  }
 
   // ── Listado ──────────────────────────────────────────────────────────
 
@@ -580,6 +615,11 @@ export class OrdenesTrabajoService {
 
       return orden;
     });
+
+    // Emitida directo al taller: congela la promesa de ETA (post-commit).
+    if (emitida) {
+      await this.capturarEtaEmision(auth, creada.id);
+    }
 
     return this.findOne(auth, creada.id);
   }
@@ -1216,6 +1256,14 @@ export class OrdenesTrabajoService {
         },
       });
     });
+
+    // Salir de borrador es emitir → congela la promesa; finalizar → cierra.
+    if (desde === 'borrador') {
+      await this.capturarEtaEmision(auth, orden.id);
+    }
+    if (hacia === 'finalizada' && desde !== 'finalizada') {
+      await this.capturarEtaCierre(auth.tenantId, orden.id);
+    }
 
     return this.findOne(auth, orden.id);
   }
@@ -1928,7 +1976,7 @@ export class OrdenesTrabajoService {
       (payload.accion === 'iniciar' || payload.accion === 'completar');
     const letraItem = String.fromCharCode(65 + (paso.item.ordenIndice % 26));
 
-    await this.prisma.$transaction(async (tx) => {
+    const ordenFinalizada = await this.prisma.$transaction(async (tx) => {
       await tx.ordenTrabajoItemPaso.update({
         where: { id: paso.id },
         data,
@@ -2059,7 +2107,14 @@ export class OrdenesTrabajoService {
           },
         });
       }
+      return nuevoEstadoOrden === 'finalizada';
     });
+
+    // La orden se finalizó sola (último paso completado): cierra el ciclo real
+    // y completa las promesas abiertas. Post-commit, best-effort.
+    if (ordenFinalizada) {
+      await this.capturarEtaCierre(auth.tenantId, ordenId);
+    }
 
     return this.tableroItemActualizado(auth, itemId);
   }
