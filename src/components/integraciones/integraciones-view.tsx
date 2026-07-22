@@ -529,18 +529,40 @@ function BotonCrear({
 
   const crear = async () => {
     let ok = 0;
+    let seguidos = 0;
+    let cortado = false;
     const fallos: string[] = [];
+
     for (const [i, p] of pendientes.entries()) {
       setProgreso(`Creando ${i + 1} de ${pendientes.length}: ${p.titulo}…`);
       try {
         const res = await someterPlantillaWati(p.codigo);
-        if (res.ok) ok++;
-        else fallos.push(`${p.titulo}: ${res.motivo ?? "sin motivo"}`);
+        if (res.ok) {
+          ok++;
+          seguidos = 0;
+        } else {
+          fallos.push(`${p.titulo}: ${res.motivo ?? "sin motivo"}`);
+          seguidos++;
+        }
       } catch (e) {
         fallos.push(`${p.titulo}: ${e instanceof Error ? e.message : "falló"}`);
+        seguidos++;
+      }
+      // Tres seguidas fallando no es mala suerte: es el token, el límite de
+      // llamadas o Wati caído. Cada intento son dos llamadas más a un
+      // tercero, así que insistir con las que faltan sólo empeora las cosas.
+      if (seguidos >= 3) {
+        cortado = true;
+        break;
       }
     }
+
     setProgreso(null);
+    if (cortado) {
+      toast.error(
+        "Se cortó: tres fallos seguidos. Revisá el motivo y volvé a intentar.",
+      );
+    }
     if (ok > 0) toast.success(`Se crearon ${ok} plantilla(s) en Wati.`);
     // Se muestran hasta tres para no tapar la pantalla; el detalle de cada
     // una queda en su fila del listado.
