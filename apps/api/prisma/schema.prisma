@@ -4,7 +4,14 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  // La APP se conecta con un rol sin superusuario ni DDL (`grafo_app`): si
+  // alguna vez se agrega RLS, un superusuario la saltearía por completo y el
+  // trabajo sería invisible. Ver docs/rol-base-sin-superusuario.md
   url      = env("DATABASE_URL")
+  // Las MIGRACIONES necesitan DDL, así que van con un rol aparte. Prisma usa
+  // `directUrl` para todo lo que requiere conexión directa (migrate, db push,
+  // introspect) y `url` para el runtime.
+  directUrl = env("MIGRATE_DATABASE_URL")
 }
 
 enum TipoDireccion {

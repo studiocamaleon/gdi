@@ -19,7 +19,9 @@ import {
 } from './storage/storage.driver';
 import { UMBRAL_MULTIPART } from './storage/multipart';
 import {
+  BYTES_DE_FIRMA,
   construirKey,
+  contenidoCoincide,
   dispositionDe,
   esExtensionDeLogo,
   esExtensionPermitida,
@@ -256,6 +258,21 @@ export class ArchivosService {
       await this.prisma.archivo.delete({ where: { id: archivo.id } });
       throw new BadRequestException(
         `El contenido subido (${meta.contentType}) no coincide con la extensión .${ext}.`,
+      );
+    }
+
+    // La verificación que NO depende del cliente. La extensión la elige quien
+    // sube y el Content-Type también, así que hasta acá un .exe renombrado a
+    // .pdf pasaba las dos. Esto mira los bytes reales del archivo.
+    const cabecera = await this.storage.leerCabecera(
+      archivo.key,
+      BYTES_DE_FIRMA,
+    );
+    if (cabecera && contenidoCoincide(ext, cabecera) === false) {
+      await this.storage.borrar(archivo.key);
+      await this.prisma.archivo.delete({ where: { id: archivo.id } });
+      throw new BadRequestException(
+        `El archivo no es un .${ext} de verdad: su contenido no corresponde a ese formato.`,
       );
     }
 

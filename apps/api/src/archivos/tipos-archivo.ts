@@ -140,3 +140,103 @@ export function construirKey(params: {
   const sufijo = params.ext ? `.${params.ext}` : '';
   return `t/${params.tenantId}/${carpeta}/${entidad}/${params.archivoId}${sufijo}`;
 }
+
+// ── Verificación por contenido (magic bytes) ─────────────────────────────
+
+/**
+ * Firmas del comienzo del archivo. Es la única validación que NO depende de
+ * lo que dijo el cliente: la extensión la elige quien sube y el `Content-Type`
+ * también, así que un `.exe` renombrado a `.pdf` pasa las dos.
+ *
+ * Cada entrada devuelve si el buffer corresponde a ese formato. Las que
+ * devuelven `null` son formatos que no tienen firma —texto plano, sobre todo—
+ * y no se pueden verificar así; para esos la defensa sigue siendo el
+ * `Content-Disposition: attachment`.
+ */
+type Verificador = (b: Buffer) => boolean;
+
+const empiezaCon = (...bytes: number[]): Verificador => {
+  return (b) => b.length >= bytes.length && bytes.every((v, i) => b[i] === v);
+};
+
+const alguno =
+  (...vs: Verificador[]): Verificador =>
+  (b) =>
+    vs.some((v) => v(b));
+
+/** RIFF con un tipo específico en los bytes 8..11 (WEBP, CDR). */
+const riff = (tipo: string): Verificador => {
+  const t = Buffer.from(tipo, 'ascii');
+  return (b) =>
+    b.length >= 12 &&
+    b.subarray(0, 4).toString('ascii') === 'RIFF' &&
+    b.subarray(8, 12).equals(t);
+};
+
+const PDF = empiezaCon(0x25, 0x50, 0x44, 0x46); // %PDF
+const ZIP = alguno(
+  empiezaCon(0x50, 0x4b, 0x03, 0x04),
+  empiezaCon(0x50, 0x4b, 0x05, 0x06), // vacío
+  empiezaCon(0x50, 0x4b, 0x07, 0x08), // spanned
+);
+/** Formato OLE de Office viejo (.doc, .xls). */
+const OLE = empiezaCon(0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1);
+
+const FIRMAS: Record<string, Verificador> = {
+  pdf: PDF,
+  png: empiezaCon(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a),
+  jpg: empiezaCon(0xff, 0xd8, 0xff),
+  jpeg: empiezaCon(0xff, 0xd8, 0xff),
+  gif: alguno(
+    empiezaCon(0x47, 0x49, 0x46, 0x38, 0x37, 0x61), // GIF87a
+    empiezaCon(0x47, 0x49, 0x46, 0x38, 0x39, 0x61), // GIF89a
+  ),
+  webp: riff('WEBP'),
+  cdr: riff('CDRA'),
+  psd: empiezaCon(0x38, 0x42, 0x50, 0x53), // 8BPS
+  tif: alguno(
+    empiezaCon(0x49, 0x49, 0x2a, 0x00), // little endian
+    empiezaCon(0x4d, 0x4d, 0x00, 0x2a), // big endian
+  ),
+  zip: ZIP,
+  rar: alguno(
+    empiezaCon(0x52, 0x61, 0x72, 0x21, 0x1a, 0x07, 0x00),
+    empiezaCon(0x52, 0x61, 0x72, 0x21, 0x1a, 0x07, 0x01, 0x00), // v5
+  ),
+  // Office moderno es un zip; el viejo es OLE. Se aceptan los dos.
+  docx: ZIP,
+  xlsx: ZIP,
+  doc: OLE,
+  xls: OLE,
+  // Illustrator moderno ES un PDF; el viejo, PostScript. EPS suma su
+  // cabecera binaria de DOS.
+  ai: alguno(PDF, empiezaCon(0x25, 0x21, 0x50, 0x53)), // %!PS
+  eps: alguno(
+    empiezaCon(0x25, 0x21, 0x50, 0x53), // %!PS
+    empiezaCon(0xc5, 0xd0, 0xd3, 0xc6), // EPS binario
+    PDF,
+  ),
+};
+
+FIRMAS.tiff = FIRMAS.tif;
+
+/**
+ * Cuántos bytes del principio alcanzan para decidir. 12 cubren la firma más
+ * larga (RIFF, que mira los bytes 8..11); se leen 64 por margen.
+ */
+export const BYTES_DE_FIRMA = 64;
+
+/**
+ * ¿El contenido real corresponde a la extensión declarada?
+ *
+ * `null` = ese formato no tiene firma verificable (texto plano: csv, dxf, svg,
+ * plt) y no se puede afirmar ni negar.
+ */
+export function contenidoCoincide(
+  ext: string,
+  cabecera: Buffer,
+): boolean | null {
+  const verificador = FIRMAS[ext];
+  if (!verificador) return null;
+  return verificador(cabecera);
+}

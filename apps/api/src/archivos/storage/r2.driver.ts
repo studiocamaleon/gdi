@@ -209,6 +209,25 @@ export class R2Driver implements StorageDriver {
     }
   }
 
+  async leerCabecera(key: string, bytes: number): Promise<Buffer | null> {
+    try {
+      const r = await this.cliente.send(
+        new GetObjectCommand({
+          Bucket: this.bucket,
+          Key: key,
+          // Rango HTTP: R2 devuelve sólo ese tramo, así que el costo es el
+          // mismo para un archivo de 1 KB que para uno de 2 GB.
+          Range: `bytes=0-${bytes - 1}`,
+        }),
+      );
+      if (!r.Body) return null;
+      return Buffer.from(await r.Body.transformToByteArray());
+    } catch (error) {
+      if (esNoEncontrado(error)) return null;
+      throw error;
+    }
+  }
+
   async leer(key: string): Promise<Buffer | null> {
     try {
       const r = await this.cliente.send(

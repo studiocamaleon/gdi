@@ -143,6 +143,11 @@ export class LocalDriver implements StorageDriver {
     await rm(this.rutaDe(key), { force: true });
   }
 
+  async leerCabecera(key: string, bytes: number): Promise<Buffer | null> {
+    const contenido = await this.leer(key);
+    return contenido ? contenido.subarray(0, bytes) : null;
+  }
+
   async leer(key: string): Promise<Buffer | null> {
     try {
       return await readFile(this.rutaDe(key));

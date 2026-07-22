@@ -104,4 +104,11 @@ export interface StorageDriver {
 
   /** Bytes crudos. Sólo para uso del servidor (embeber el logo en un PDF). */
   leer(key: string): Promise<Buffer | null>;
+
+  /**
+   * Los primeros N bytes del objeto, con un GET por rango. Es para verificar
+   * la firma del formato al confirmar una subida: bajar un arte de 800 MB
+   * entero para mirarle 64 bytes no es una opción.
+   */
+  leerCabecera(key: string, bytes: number): Promise<Buffer | null>;
 }
