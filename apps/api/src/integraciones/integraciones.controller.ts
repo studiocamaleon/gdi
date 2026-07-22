@@ -41,6 +41,12 @@ export class IntegracionesController {
     };
   }
 
+  /** Sólo lectura: qué plantillas hay hoy en la cuenta de Wati del tenant. */
+  @Get('wati/plantillas')
+  plantillasWati() {
+    return this.service.plantillasWati();
+  }
+
   @Get(':proveedor')
   obtener(
     @Param('proveedor', new ParseEnumPipe(ProveedorIntegracion))

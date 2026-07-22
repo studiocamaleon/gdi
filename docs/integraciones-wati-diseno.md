@@ -1,7 +1,8 @@
 # Integraciones · Wati (WhatsApp Business API) — análisis y plan
 
 **Fecha:** 2026-07-22
-**Estado:** diseño, sin implementar.
+**Estado:** F0 y F1 implementadas. F2 en diseño, con la API ya verificada
+contra una cuenta real (ver §8).
 
 ---
 
@@ -47,7 +48,7 @@ en el dashboard de Wati y se muestra una sola vez.
 | En el diseño | La realidad |
 |---|---|
 | "Creá los templates en el dashboard" (×2) | Se crean por API desde acá. Es el corazón de la feature. |
-| Parámetros posicionales `{{1}}`, `{{2}}` | Wati usa **variables nombradas** (`{{nombre}}`) declaradas en `customParams`. Hay que verificarlo contra una cuenta real: la doc pública no es concluyente sobre el shape exacto al enviar. |
+| Parámetros posicionales `{{1}}`, `{{2}}` | Resultó estar BIEN: Meta los ve posicionales. Wati además guarda una versión nombrada para autoría. Ver §8.1. |
 | "Cupo del plan · 1.842/5.000 mensajes" | Meta no cobra por mensaje sino por **conversación de 24 h**, y el precio varía por categoría (Utility ≠ Marketing). El KPI honesto es conversaciones y costo estimado, no "mensajes del cupo". |
 | Botón "Rotar token" | Wati no rota tokens por API. El botón sólo puede llevar al dashboard. |
 | Eventos `message.delivered`, `message.read`… | Los nombres reales son otros (`templateMessageSent_v2`, etc.). Hay que mapear los de verdad. |
@@ -259,22 +260,56 @@ tasa de entrega, y el detalle de errores.
 
 ---
 
-## 8. Lo que hay que verificar contra una cuenta real
+## 8. Verificado contra una cuenta real (2026-07-22)
 
-La documentación pública de Wati es incompleta en tres puntos que sólo se
-resuelven probando:
+Los tres puntos que la documentación pública no resolvía quedaron
+contestados con la cuenta de Corporearte, y **dos de las tres respuestas
+contradicen lo que decía la doc**.
 
-1. **El shape exacto de las variables.** Named vs posicional, y cómo se
-   declaran en `customParams` al crear vs cómo se pasan al enviar.
-2. **La respuesta de crear template**: si devuelve un id utilizable para
-   consultar el estado después.
-3. **Los nombres y el payload exacto de los webhooks** de cambio de estado de
-   template.
+### 8.1 Las variables son las dos cosas a la vez
 
-Ninguno bloquea el diseño, pero los tres bloquean F2. Conviene tener una
-cuenta de Wati (aunque sea de prueba) antes de arrancar esa fase.
+Wati guarda **dos cuerpos** para cada plantilla:
 
----
+| Campo | Contenido | Para qué |
+|---|---|---|
+| `body` | `¡Hola {{1}}! Tu orden #{{2}}…` | posicional, es lo que ve Meta |
+| `bodyOriginal` | `¡Hola {{nombre_cliente}}! Tu orden #{{numero_orden}}…` | nombrado, como se escribió en Wati |
+| `customParams` | `[{paramName, paramValue}]` | los nombres, con un valor de ejemplo |
+
+O sea que se autorea con nombres y Wati los traduce a números para Meta.
+
+### 8.2 El orden de `customParams` NO es el orden de los parámetros
+
+**Este es el hallazgo que evita un bug serio.** En `nueva_orden_v4`,
+`customParams` llega como
+`[nombre_cliente, fecha_entrega, subtotal, total_iva, url_tracking, nombre_empresa, numero_orden]`
+pero el cuerpo dice `¡Hola {{1}}! Tu orden #{{2}}` — y ese `{{2}}` es
+`numero_orden`, el **séptimo** de la lista. Además `customParams` arrastra
+basura de autoría: parámetros llamados `"1"` que no aparecen en ningún cuerpo.
+
+Mandar los parámetros en el orden de `customParams` no falla de forma
+visible: Meta acepta el envío y al cliente le llega **su número de orden
+donde va el nombre**.
+
+La única fuente confiable es **alinear los dos cuerpos**: la k-ésima variable
+de `bodyOriginal` es la k-ésima de `body`. Implementado en `mapearParametros`
+y verificado posición por posición contra los siete parámetros de
+`nueva_orden_v4`.
+
+### 8.3 Los campos no son los que sugiere la doc
+
+- `language` es un **objeto** `{key, value, text}`, no un string. Leerlo como
+  string devuelve null en silencio.
+- La plantilla trae `id` propio de Wati (`69ac44f2e674…`), así que sí se puede
+  consultar el estado después de crearla.
+- Hay un campo `quality` — la señal de calidad de Meta, que es por lo que un
+  template puede pasar a pausado sin que nadie lo toque.
+
+### 8.4 Lo que sigue sin verificar
+
+El payload real de los **webhooks** de cambio de estado, y la respuesta de
+**crear** una plantilla. Los dos requieren, respectivamente, recibir un
+webhook y crear una plantilla de prueba — se resuelven al arrancar F2.
 
 ## Fuentes
 

@@ -15,6 +15,7 @@ import {
   exigirHttps,
   WatiClient,
   type CredencialesWati,
+  type PlantillaRemota,
 } from './wati/wati.client';
 import type { ConectarWatiDto } from './dto/integraciones.dto';
 
@@ -182,6 +183,19 @@ export class IntegracionesService {
         conectadaEl: null,
       },
     });
+  }
+
+  /**
+   * Las plantillas que existen HOY en la cuenta del tenant, tal como las
+   * devuelve Wati. Es sólo lectura y sin efectos: sirve para ver qué hay
+   * antes de que F2 empiece a crear las suyas.
+   */
+  async plantillasWati(): Promise<PlantillaRemota[]> {
+    const cred = await this.credencialesWati();
+    if (!cred) {
+      throw new NotFoundException('Wati no está conectada.');
+    }
+    return this.wati.listarPlantillas(cred);
   }
 
   /**

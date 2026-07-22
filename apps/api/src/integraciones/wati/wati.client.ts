@@ -32,11 +32,24 @@ export type ResultadoConexion =
   | { ok: false; motivo: string };
 
 export type PlantillaRemota = {
+  /** Id de Wati. Sirve para consultar el estado después de crearla. */
+  id: string | null;
+  /** `elementName`: el nombre con el que se la invoca al enviar. */
   nombre: string;
   estado: string;
   idioma: string | null;
   categoria: string | null;
+  /** Cuerpo POSICIONAL, tal como lo ve Meta: "Hola {{1}}". */
   cuerpo: string | null;
+  /** Cuerpo NOMBRADO, como se autoreó en Wati: "Hola {{name}}". */
+  cuerpoNombrado: string | null;
+  /**
+   * Parámetros declarados, EN ORDEN. La posición en este array es el número
+   * que aparece en `cuerpo`: el primero es {{1}}.
+   */
+  parametros: string[];
+  /** Señal de calidad de Meta. Un template puede pausarse por bajarla. */
+  calidad: string | null;
 };
 
 @Injectable()
@@ -180,19 +193,80 @@ function mensajeDeError(error: unknown): string {
 }
 
 /**
- * La forma exacta que devuelve Wati no está documentada del todo y varía
- * entre v1 y v3, así que se lee defensivamente: lo que no venga queda null y
- * la UI lo muestra como desconocido, en vez de romper el listado entero.
+ * Normaliza lo que devuelve Wati, cuyos campos NO son los que sugiere su
+ * documentación. Verificado contra una cuenta real (2026-07-22):
+ *
+ *  - `language` es un OBJETO `{key, value, text}`, no un string.
+ *  - Hay DOS cuerpos: `body` con variables posicionales ({{1}}), que es lo
+ *    que ve Meta, y `bodyOriginal` con las nombradas ({{name}}), que es como
+ *    se escribió en Wati.
+ *
+ * Lo que no venga queda en null: una plantilla rara no puede romper el
+ * listado entero.
  */
 function normalizarPlantilla(cruda: unknown): PlantillaRemota {
   const o = (cruda ?? {}) as Record<string, unknown>;
   const texto = (v: unknown): string | null =>
     typeof v === 'string' && v.trim() ? v.trim() : null;
+
+  // `language` viene como objeto; se busca el código (es_AR) y no la etiqueta.
+  const lang = o.language;
+  const idioma =
+    texto(lang) ??
+    (lang && typeof lang === 'object'
+      ? texto((lang as Record<string, unknown>).value)
+      : null);
+
+  const params = mapearParametros(texto(o.body), texto(o.bodyOriginal));
+
   return {
+    id: texto(o.id),
     nombre: texto(o.elementName) ?? texto(o.name) ?? '(sin nombre)',
     estado: (texto(o.status) ?? 'DESCONOCIDO').toUpperCase(),
-    idioma: texto(o.language) ?? texto(o.languageCode),
+    idioma,
     categoria: texto(o.category),
-    cuerpo: texto(o.body) ?? texto(o.bodyOriginal),
+    cuerpo: texto(o.body),
+    cuerpoNombrado: texto(o.bodyOriginal),
+    parametros: params,
+    calidad: texto(o.quality),
   };
+}
+
+/**
+ * Qué nombre le corresponde a cada posición.
+ *
+ * OJO: NO se puede usar el orden de `customParams`. Verificado contra una
+ * cuenta real — en `nueva_orden_v4`, customParams viene
+ * [nombre_cliente, fecha_entrega, …, numero_orden] pero el cuerpo dice
+ * "¡Hola {{1}}! Tu orden #{{2}}" y ese {{2}} es `numero_orden`, el SÉPTIMO
+ * de la lista. Además `customParams` arrastra basura de autoría (parámetros
+ * llamados "1" que no aparecen en ningún lado).
+ *
+ * La única fuente confiable es alinear los dos cuerpos: la k-ésima variable
+ * de `bodyOriginal` es la k-ésima de `body`. Mandar los parámetros en el
+ * orden equivocado no falla — Meta acepta el envío y al cliente le llega su
+ * número de orden donde va el nombre.
+ */
+export function mapearParametros(
+  cuerpo: string | null,
+  cuerpoNombrado: string | null,
+): string[] {
+  if (!cuerpo || !cuerpoNombrado) return [];
+  const posiciones = cuerpo.match(/\{\{\s*(\d+)\s*\}\}/g) ?? [];
+  const nombres = cuerpoNombrado.match(/\{\{\s*([^}]+?)\s*\}\}/g) ?? [];
+  if (posiciones.length !== nombres.length) return [];
+
+  const porNumero = new Map<number, string>();
+  posiciones.forEach((p, i) => {
+    const n = Number(p.replace(/[^\d]/g, ''));
+    const nombre = nombres[i].replace(/^\{\{\s*|\s*\}\}$/g, '');
+    // Una variable puede repetirse; vale la primera aparición.
+    if (!porNumero.has(n)) porNumero.set(n, nombre);
+  });
+
+  const max = Math.max(0, ...porNumero.keys());
+  return Array.from(
+    { length: max },
+    (_, i) => porNumero.get(i + 1) ?? `param${i + 1}`,
+  );
 }
