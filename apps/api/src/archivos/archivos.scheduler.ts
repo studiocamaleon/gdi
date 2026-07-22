@@ -29,9 +29,11 @@ export class ArchivosScheduler {
     try {
       const pendientes = await this.archivos.barrerPendientes();
       const purgados = await this.archivos.purgarPapelera();
-      if (pendientes > 0 || purgados > 0) {
+      // Al final: recién después de purgar tiene sentido recontar.
+      const corregidos = await this.archivos.resincronizarContadores();
+      if (pendientes > 0 || purgados > 0 || corregidos > 0) {
         this.logger.log(
-          `Higiene de archivos: ${pendientes} subidas abandonadas, ${purgados} de papelera.`,
+          `Higiene de archivos: ${pendientes} subidas abandonadas, ${purgados} de papelera, ${corregidos} contadores corregidos.`,
         );
       }
     } catch (error) {

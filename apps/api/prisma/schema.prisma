@@ -3001,6 +3001,9 @@ model Archivo {
   bytes          BigInt        @default(0)
   /// sha256 en hex del contenido, si el cliente lo aportó. Dedupe futuro.
   hash           String?
+  /// Subida en partes en curso. Se guarda para poder abortarla desde el
+  /// barrido: S3 y R2 cobran las partes de un multipart que nunca cerró.
+  multipartUploadId String?
   estado         ArchivoEstado @default(PENDIENTE)
   /// Opt-in explícito: sólo los marcados así se ven en el link público de
   /// seguimiento del cliente. El arte de producción no se filtra por defecto.

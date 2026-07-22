@@ -13,9 +13,11 @@ import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   STORAGE_DRIVER,
+  type MultipartIniciado,
   type StorageDriver,
   type UrlFirmada,
 } from './storage/storage.driver';
+import { UMBRAL_MULTIPART } from './storage/multipart';
 import {
   construirKey,
   dispositionDe,
@@ -27,11 +29,17 @@ import {
 } from './tipos-archivo';
 import type {
   ActualizarArchivoDto,
+  ConfirmarSubidaDto,
   IniciarSubidaDto,
   ListarArchivosDto,
 } from './dto/archivos.dto';
 
-const MAX_BYTES_DEFAULT = 100 * 1024 * 1024; // 100 MB
+/**
+ * Tope por archivo. Con multipart ya no lo limita el tamaño de un request:
+ * 2 GB cubre un arte de gran formato a resolución real sin volverse una
+ * invitación a usar el storage de backup.
+ */
+const MAX_BYTES_DEFAULT = 2 * 1024 * 1024 * 1024;
 /** Una subida abandonada deja la fila PENDIENTE; se limpia al día siguiente. */
 const HORAS_PARA_BARRER_PENDIENTES = 24;
 /** Papelera: el objeto sobrevive un mes al borrado lógico. */
@@ -61,6 +69,28 @@ export type ArchivoDto = {
   esImagen: boolean;
   createdAt: string;
   subidoPor: string | null;
+};
+
+export type IniciarSubidaResultado =
+  | { archivoId: string; subida: UrlFirmada; multipart?: never }
+  | { archivoId: string; multipart: MultipartIniciado; subida?: never };
+
+export type UsoAlmacenamiento = {
+  /** Contador denormalizado del tenant: el que consulta la cuota. */
+  bytes: number;
+  cuotaBytes: number | null;
+  porcentaje: number | null;
+  /** Suma del desglose. Si difiere de `bytes`, el contador se desincronizó. */
+  bytesDetalle: number;
+  porScope: Array<{ scope: ArchivoScope; bytes: number; cantidad: number }>;
+  /** Ocupa bucket pero NO cuota: ya se liberó al borrar. */
+  papelera: { bytes: number; cantidad: number };
+};
+
+export type ArchivoEnPapelera = ArchivoDto & {
+  eliminadoEl: string;
+  /** Cuánto queda antes de que el cron lo borre del bucket. */
+  diasRestantes: number;
 };
 
 export type ArchivosDeOrden = {
@@ -95,7 +125,7 @@ export class ArchivosService {
   async iniciar(
     auth: CurrentAuth,
     dto: IniciarSubidaDto,
-  ): Promise<{ archivoId: string; subida: UrlFirmada }> {
+  ): Promise<IniciarSubidaResultado> {
     const ext = extensionDe(dto.nombre);
     if (!esExtensionPermitida(ext)) {
       throw new BadRequestException(
@@ -134,6 +164,17 @@ export class ArchivosService {
     });
     const campo = CAMPO_POR_SCOPE[dto.scope];
 
+    // Por encima del umbral la subida va en partes: un solo PUT de 800 MB no
+    // sobrevive a una conexión de imprenta, y no hay forma de reintentar el
+    // pedazo que falló sin volver a mandar todo.
+    const enPartes = dto.bytes > UMBRAL_MULTIPART;
+    const multipart = enPartes
+      ? await this.storage.iniciarMultipart(key, {
+          contentType: dto.mimeType,
+          bytes: dto.bytes,
+        })
+      : null;
+
     await this.prisma.archivo.create({
       data: {
         id: archivoId,
@@ -147,9 +188,12 @@ export class ArchivosService {
         publico: dto.publico ?? false,
         descripcion: dto.descripcion ?? null,
         subidoPorId: auth.userId,
+        multipartUploadId: multipart?.uploadId ?? null,
         ...(campo && dto.entidadId ? { [campo]: dto.entidadId } : {}),
       },
     });
+
+    if (multipart) return { archivoId, multipart };
 
     const subida = await this.storage.firmarSubida(key, {
       contentType: dto.mimeType,
@@ -162,11 +206,34 @@ export class ArchivosService {
    * cliente: el tamaño y el tipo salen del HEAD. Si vino más grande que el
    * máximo, se borra y se rechaza — el presign no lo puede impedir por sí solo.
    */
-  async confirmar(auth: CurrentAuth, id: string): Promise<ArchivoDto> {
+  async confirmar(
+    auth: CurrentAuth,
+    id: string,
+    dto?: ConfirmarSubidaDto,
+  ): Promise<ArchivoDto> {
     const archivo = await this.buscarPropio(id);
     if (archivo.estado === ArchivoEstado.LISTO) return this.aDto(archivo);
     if (archivo.estado === ArchivoEstado.ELIMINADO) {
       throw new NotFoundException('El archivo fue eliminado.');
+    }
+
+    // Subida en partes: hay que cerrarla antes de que el objeto exista. Si
+    // falta el listado de partes, el archivo no está y nunca va a estar.
+    if (archivo.multipartUploadId) {
+      if (!dto?.partes?.length) {
+        throw new BadRequestException(
+          'Falta el detalle de las partes para cerrar la subida.',
+        );
+      }
+      await this.storage.completarMultipart(
+        archivo.key,
+        archivo.multipartUploadId,
+        dto.partes.map((p) => ({ numero: p.numero, etag: p.etag })),
+      );
+      await this.prisma.archivo.update({
+        where: { id },
+        data: { multipartUploadId: null },
+      });
     }
 
     const meta = await this.storage.cabecera(archivo.key);
@@ -593,6 +660,138 @@ export class ArchivosService {
     ]);
   }
 
+  // ── Papelera ─────────────────────────────────────────────────────────
+
+  /**
+   * Lo eliminado que todavía se puede recuperar. Sin esto, la papelera de 30
+   * días no existía: el diálogo de borrado la prometía y no había forma de
+   * volver atrás — el objeto seguía en el bucket pero era inalcanzable.
+   */
+  async papelera(query: ListarArchivosDto): Promise<ArchivoEnPapelera[]> {
+    const campo = CAMPO_POR_SCOPE[query.scope];
+    const archivos = await this.prisma.archivo.findMany({
+      where: {
+        scope: query.scope,
+        estado: ArchivoEstado.ELIMINADO,
+        generado: false,
+        eliminadoEl: { not: null },
+        ...(campo && query.entidadId ? { [campo]: query.entidadId } : {}),
+      },
+      orderBy: { eliminadoEl: 'desc' },
+      include: { subidoPor: { select: { nombreCompleto: true, email: true } } },
+    });
+    const ahora = Date.now();
+    return (
+      archivos
+        .map((a) => {
+          const vence =
+            a.eliminadoEl!.getTime() + DIAS_DE_PAPELERA * 24 * 60 * 60 * 1000;
+          return {
+            ...this.aDto(a),
+            eliminadoEl: a.eliminadoEl!.toISOString(),
+            diasRestantes: Math.ceil((vence - ahora) / (24 * 60 * 60 * 1000)),
+          };
+        })
+        // Los ya vencidos siguen en la base hasta que pase el cron: no tiene
+        // sentido ofrecer restaurar algo que se va esta noche.
+        .filter((a) => a.diasRestantes > 0)
+    );
+  }
+
+  /** Devuelve un archivo de la papelera a la vista. */
+  async restaurar(auth: CurrentAuth, id: string): Promise<ArchivoDto> {
+    const archivo = await this.buscarPropio(id);
+    if (archivo.estado === ArchivoEstado.LISTO) return this.aDto(archivo);
+    if (archivo.estado !== ArchivoEstado.ELIMINADO || !archivo.eliminadoEl) {
+      throw new BadRequestException('Ese archivo no está en la papelera.');
+    }
+
+    // El objeto puede no estar: si el cron ya pasó, la fila sigue unos
+    // minutos pero el byte no. Mejor decirlo que restaurar un fantasma.
+    const meta = await this.storage.cabecera(archivo.key);
+    if (!meta) {
+      throw new NotFoundException(
+        'El archivo ya se purgó del almacenamiento y no se puede recuperar.',
+      );
+    }
+
+    // Vuelve a ocupar cuota, así que vuelve a chequearse: si el tenant llenó
+    // el espacio mientras tanto, restaurar no puede pasarlo de largo.
+    await this.verificarCuota(auth.tenantId, Number(archivo.bytes));
+
+    const [actualizado] = await this.prisma.$transaction([
+      this.prisma.archivo.update({
+        where: { id },
+        data: { estado: ArchivoEstado.LISTO, eliminadoEl: null },
+        include: {
+          subidoPor: { select: { nombreCompleto: true, email: true } },
+        },
+      }),
+      this.prisma.tenant.update({
+        where: { id: auth.tenantId },
+        data: { bytesArchivos: { increment: archivo.bytes } },
+      }),
+    ]);
+    return this.aDto(actualizado);
+  }
+
+  // ── Uso ──────────────────────────────────────────────────────────────
+
+  /**
+   * Cuánto espacio ocupa el tenant y en qué. Hasta ahora la cuota sólo se
+   * manifestaba como un error al subir; esto la hace legible antes de chocar.
+   *
+   * El total sale del contador denormalizado (que es el que la cuota
+   * consulta) y el desglose de un groupBy, así que si alguna vez se
+   * desincronizan se ve acá, comparando `bytes` contra `bytesDetalle`.
+   */
+  async uso(tenantId: string): Promise<UsoAlmacenamiento> {
+    const [tenant, porScope, papelera] = await Promise.all([
+      this.prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { bytesArchivos: true, cuotaBytesArchivos: true },
+      }),
+      this.prisma.archivo.groupBy({
+        by: ['scope'],
+        where: { estado: ArchivoEstado.LISTO },
+        _sum: { bytes: true },
+        _count: { _all: true },
+      }),
+      this.prisma.archivo.aggregate({
+        where: { estado: ArchivoEstado.ELIMINADO },
+        _sum: { bytes: true },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const detalle = porScope
+      .map((s) => ({
+        scope: s.scope,
+        bytes: Number(s._sum.bytes ?? 0),
+        cantidad: s._count._all,
+      }))
+      .sort((a, b) => b.bytes - a.bytes);
+
+    const bytes = Number(tenant?.bytesArchivos ?? 0);
+    const cuota = tenant?.cuotaBytesArchivos
+      ? Number(tenant.cuotaBytesArchivos)
+      : null;
+
+    return {
+      bytes,
+      cuotaBytes: cuota,
+      porcentaje: cuota
+        ? Math.min(100, Math.round((bytes / cuota) * 100))
+        : null,
+      bytesDetalle: detalle.reduce((n, s) => n + s.bytes, 0),
+      porScope: detalle,
+      papelera: {
+        bytes: Number(papelera._sum.bytes ?? 0),
+        cantidad: papelera._count._all,
+      },
+    };
+  }
+
   // ── Mantenimiento (corre sin contexto de tenant: es cross-tenant) ─────
 
   /** Filas PENDIENTE viejas: subidas que el usuario abandonó a mitad. */
@@ -602,10 +801,63 @@ export class ArchivosService {
     );
     const huerfanos = await this.prisma.archivo.findMany({
       where: { estado: ArchivoEstado.PENDIENTE, createdAt: { lt: corte } },
-      select: { id: true, key: true },
+      select: { id: true, key: true, multipartUploadId: true },
       take: 500,
     });
+
+    // Las subidas en partes que nunca cerraron hay que ABORTARLAS: S3 y R2
+    // cobran el espacio de las partes ya subidas de un multipart abierto, y
+    // borrar la clave final no las toca porque ese objeto nunca existió.
+    for (const h of huerfanos) {
+      if (!h.multipartUploadId) continue;
+      await this.storage
+        .abortarMultipart(h.key, h.multipartUploadId)
+        .catch((error: unknown) => {
+          this.logger.warn(
+            `No pude abortar el multipart de ${h.key}: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        });
+    }
+
     return this.purgar(huerfanos);
+  }
+
+  /**
+   * Recalcula `Tenant.bytesArchivos` desde la suma real de sus archivos.
+   *
+   * El contador se mantiene transaccionalmente en cada alta y baja, así que en
+   * régimen normal coincide. Pero es un denormalizado: cualquier escritura que
+   * no pase por el service (una corrección a mano en la base, una migración,
+   * un borrado en cascada de una entidad padre) lo deja corrido, y a partir de
+   * ahí la cuota mide mal para siempre sin que nada lo note. Corre de noche y
+   * sólo escribe los que difieren.
+   */
+  async resincronizarContadores(): Promise<number> {
+    const sumas = await this.prisma.archivo.groupBy({
+      by: ['tenantId'],
+      where: { estado: ArchivoEstado.LISTO },
+      _sum: { bytes: true },
+    });
+    const reales = new Map(sumas.map((s) => [s.tenantId, s._sum.bytes ?? 0n]));
+
+    const tenants = await this.prisma.tenant.findMany({
+      select: { id: true, bytesArchivos: true },
+    });
+
+    let corregidos = 0;
+    for (const t of tenants) {
+      const real = reales.get(t.id) ?? 0n;
+      if (t.bytesArchivos === real) continue;
+      await this.prisma.tenant.update({
+        where: { id: t.id },
+        data: { bytesArchivos: real },
+      });
+      this.logger.warn(
+        `Contador de archivos corregido en ${t.id}: ${t.bytesArchivos} → ${real}.`,
+      );
+      corregidos += 1;
+    }
+    return corregidos;
   }
 
   /** Papelera vencida: acá sí se borra el objeto y la fila. */

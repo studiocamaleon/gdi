@@ -3,9 +3,108 @@
 import * as React from "react";
 import { toast } from "sonner";
 
+import { RotateCcwIcon, Trash2Icon } from "lucide-react";
+
 import { ArchivoUploader } from "@/components/archivos/archivo-uploader";
-import type { Archivo } from "@/lib/archivos";
-import { getArchivosDeOrden, type ArchivosDeOrden } from "@/lib/archivos-api";
+import { formatBytes, type Archivo } from "@/lib/archivos";
+import {
+  getArchivosDeOrden,
+  getPapelera,
+  restaurarArchivo,
+  type ArchivoEnPapelera,
+  type ArchivosDeOrden,
+} from "@/lib/archivos-api";
+
+/**
+ * Lo borrado que todavía se puede recuperar. Va colapsada y sólo aparece si
+ * hay algo: el diálogo de borrado promete 30 días de gracia, y hasta ahora esa
+ * promesa no se podía cumplir — el objeto seguía en el bucket pero no había
+ * ninguna forma de traerlo de vuelta.
+ */
+function PapeleraOrden({
+  ordenId,
+  onRestaurado,
+}: {
+  ordenId: string;
+  onRestaurado: () => void;
+}) {
+  const [items, setItems] = React.useState<ArchivoEnPapelera[]>([]);
+  const [abierta, setAbierta] = React.useState(false);
+
+  React.useEffect(() => {
+    let vivo = true;
+    getPapelera("ORDEN", ordenId)
+      .then((r) => {
+        if (vivo) setItems(r);
+      })
+      .catch(() => {
+        // La papelera es accesoria: si falla, el tab sigue sirviendo.
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [ordenId]);
+
+  if (items.length === 0) return null;
+
+  const restaurar = async (a: ArchivoEnPapelera) => {
+    try {
+      await restaurarArchivo(a.id);
+      setItems((s) => s.filter((x) => x.id !== a.id));
+      toast.success(`${a.nombre} restaurado.`);
+      onRestaurado();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "No se pudo restaurar.",
+      );
+    }
+  };
+
+  return (
+    <div className="arch-bloque">
+      <button
+        type="button"
+        className="arch-papelera-head"
+        onClick={() => setAbierta((v) => !v)}
+        aria-expanded={abierta}
+      >
+        <Trash2Icon />
+        <span>Papelera</span>
+        <span className="n">{items.length}</span>
+        <span className="s">
+          {abierta ? "Ocultar" : "Se borran solos a los 30 días"}
+        </span>
+      </button>
+      {abierta ? (
+        <div className="arch-lista">
+          {items.map((a) => (
+            <div key={a.id} className="arch-row">
+              <span className="arch-ico">
+                <Trash2Icon />
+              </span>
+              <div className="arch-nom">
+                <b>{a.nombre}</b>
+                <span>
+                  {formatBytes(a.bytes)} · quedan {a.diasRestantes}{" "}
+                  {a.diasRestantes === 1 ? "día" : "días"}
+                </span>
+              </div>
+              <div className="arch-acc">
+                <button
+                  type="button"
+                  title="Restaurar"
+                  onClick={() => void restaurar(a)}
+                >
+                  <RotateCcwIcon />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 /**
  * Archivos de una orden: los del documento entero arriba, y un bloque por
@@ -29,6 +128,8 @@ export function ArchivosOrdenTab({
 }) {
   const [data, setData] = React.useState<ArchivosDeOrden | null>(null);
   const [cargando, setCargando] = React.useState(true);
+  const [token, setToken] = React.useState(0);
+  const recargar = React.useCallback(() => setToken((n) => n + 1), []);
 
   React.useEffect(() => {
     let vivo = true;
@@ -52,7 +153,7 @@ export function ArchivosOrdenTab({
     return () => {
       vivo = false;
     };
-  }, [ordenId]);
+  }, [ordenId, token]);
 
   const total = React.useMemo(
     () =>
@@ -112,6 +213,8 @@ export function ArchivosOrdenTab({
           vacio="Todavía no hay archivos generales de esta orden."
         />
       </div>
+
+      <PapeleraOrden ordenId={ordenId} onRestaurado={recargar} />
 
       {data.items.map((item) => (
         <div key={item.itemId} className="arch-bloque">

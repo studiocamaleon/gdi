@@ -17,6 +17,7 @@ import { CurrentSession } from '../auth/current-auth.decorator';
 import { ArchivosService } from './archivos.service';
 import {
   ActualizarArchivoDto,
+  ConfirmarSubidaDto,
   IniciarSubidaDto,
   ListarArchivosDto,
 } from './dto/archivos.dto';
@@ -40,19 +41,44 @@ export class ArchivosController {
     return this.service.deOrden(ordenId);
   }
 
+  /** Cuánto espacio ocupa el tenant y en qué. */
+  @Get('uso')
+  uso(@CurrentSession() auth: CurrentAuth) {
+    return this.service.uso(auth.tenantId);
+  }
+
+  /** Lo borrado que todavía se puede recuperar. */
+  @Get('papelera')
+  papelera(@Query() query: ListarArchivosDto) {
+    return this.service.papelera(query);
+  }
+
+  @Post(':id/restaurar')
+  restaurar(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.service.restaurar(auth, id);
+  }
+
   /** Paso 1 de la subida: devuelve la URL firmada para el PUT directo. */
   @Post('iniciar')
   iniciar(@CurrentSession() auth: CurrentAuth, @Body() dto: IniciarSubidaDto) {
     return this.service.iniciar(auth, dto);
   }
 
-  /** Paso 2: el objeto ya está arriba; se verifica y se hace visible. */
+  /**
+   * Paso 2: el objeto ya está arriba; se verifica y se hace visible. En las
+   * subidas en partes, el body trae los ETags que devolvió cada PUT — sin
+   * ellos el multipart no se puede cerrar.
+   */
   @Post(':id/confirmar')
   confirmar(
     @CurrentSession() auth: CurrentAuth,
     @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ConfirmarSubidaDto,
   ) {
-    return this.service.confirmar(auth, id);
+    return this.service.confirmar(auth, id, dto);
   }
 
   /**

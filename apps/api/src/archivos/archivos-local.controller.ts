@@ -12,12 +12,22 @@ import {
   Res,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { createHash } from 'node:crypto';
 
 import { Public } from '../auth/public.decorator';
 import { LocalDriver } from './storage/local.driver';
+import { topeDeRequest } from './storage/multipart';
 import { STORAGE_DRIVER, type StorageDriver } from './storage/storage.driver';
 
-const MAX_BYTES_DEFAULT = 100 * 1024 * 1024;
+/**
+ * Tope por REQUEST, no por archivo: o un archivo entero que no llegó al umbral
+ * de multipart, o una parte del más grande que aceptamos. Un archivo de 2 GB
+ * entra igual — en 250 pedidos.
+ */
+const MAX_ARCHIVO = Number(
+  process.env.ARCHIVOS_MAX_BYTES ?? 2 * 1024 * 1024 * 1024,
+);
+const MAX_BYTES_REQUEST = topeDeRequest(MAX_ARCHIVO);
 
 /**
  * "El bucket" cuando no hay credenciales de R2 (desarrollo y tests).
@@ -32,9 +42,7 @@ const MAX_BYTES_DEFAULT = 100 * 1024 * 1024;
  */
 @Controller('archivos/local')
 export class ArchivosLocalController {
-  private readonly maxBytes = Number(
-    process.env.ARCHIVOS_MAX_BYTES ?? MAX_BYTES_DEFAULT,
-  );
+  private readonly maxBytes = MAX_BYTES_REQUEST;
 
   constructor(
     private readonly local: LocalDriver,
@@ -47,11 +55,20 @@ export class ArchivosLocalController {
     @Param('key') key: string | string[],
     @Query() query: Record<string, string>,
     @Req() req: Request,
-  ): Promise<{ ok: true; bytes: number }> {
+    @Res() res: Response,
+  ): Promise<void> {
     const clave = this.claveDe(key, query);
     const cuerpo = await this.leerCuerpo(req);
     await this.local.escribir(clave, cuerpo);
-    return { ok: true, bytes: cuerpo.length };
+    // ETag como lo devuelve S3/R2 (md5 entre comillas). La subida en partes
+    // lo necesita para cerrar el multipart, así que el front usa el mismo
+    // código en dev que en producción.
+    res.setHeader(
+      'ETag',
+      `"${createHash('md5').update(cuerpo).digest('hex')}"`,
+    );
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.json({ ok: true, bytes: cuerpo.length });
   }
 
   @Public()

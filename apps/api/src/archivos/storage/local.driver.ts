@@ -1,12 +1,21 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 
-import type { ObjetoMeta, StorageDriver, UrlFirmada } from './storage.driver';
+import { calcularTamanioParte } from './multipart';
+import type {
+  MultipartIniciado,
+  ObjetoMeta,
+  ParteSubida,
+  StorageDriver,
+  UrlFirmada,
+} from './storage.driver';
 
 const SUBIDA_SEGUNDOS = 15 * 60;
 const DESCARGA_SEGUNDOS = 60;
+/** Tope del barrido de partes al abortar (es dev: no hace falta ser exacto). */
+const MAX_PARTES_A_BARRER = 200;
 
 /**
  * Driver de desarrollo: los objetos van a disco bajo `apps/api/.storage/`.
@@ -60,6 +69,63 @@ export class LocalDriver implements StorageDriver {
 
   subir(key: string, contenido: Buffer): Promise<void> {
     return this.escribir(key, contenido);
+  }
+
+  // ── Multipart (simulado: cada parte es un archivo suelto) ───────────
+
+  iniciarMultipart(
+    key: string,
+    opciones: { contentType: string; bytes: number },
+  ): Promise<MultipartIniciado> {
+    // El uploadId es determinístico a partir de la clave: no hay servidor de
+    // objetos que lleve estado, y la clave ya es única por archivo.
+    const uploadId = createHash('sha1').update(key).digest('hex').slice(0, 16);
+    const tamanioParte = calcularTamanioParte(opciones.bytes);
+    const cantidad = Math.max(1, Math.ceil(opciones.bytes / tamanioParte));
+    const partes = Array.from({ length: cantidad }, (_, i) => ({
+      numero: i + 1,
+      url: this.firmar('PUT', `${key}.parte${i + 1}`, SUBIDA_SEGUNDOS, {
+        ct: opciones.contentType,
+      }),
+    }));
+    return Promise.resolve({ uploadId, partes, tamanioParte });
+  }
+
+  async completarMultipart(
+    key: string,
+    _uploadId: string,
+    partes: ParteSubida[],
+  ): Promise<void> {
+    const ordenadas = [...partes].sort((a, b) => a.numero - b.numero);
+    const trozos: Buffer[] = [];
+    for (const p of ordenadas) {
+      const trozo = await this.leer(`${key}.parte${p.numero}`);
+      if (!trozo) {
+        throw new Error(`Falta la parte ${p.numero} de ${key}.`);
+      }
+      trozos.push(trozo);
+    }
+    await this.escribir(key, Buffer.concat(trozos));
+    await this.borrarPartes(key, ordenadas.length);
+  }
+
+  async abortarMultipart(key: string): Promise<void> {
+    // No se sabe cuántas partes llegaron: se barre hasta el primer hueco
+    // largo. Es dev, no hace falta más precisión.
+    await this.borrarPartes(key, MAX_PARTES_A_BARRER);
+  }
+
+  private async borrarPartes(key: string, hasta: number): Promise<void> {
+    let faltantesSeguidas = 0;
+    for (let i = 1; i <= hasta && faltantesSeguidas < 5; i += 1) {
+      const ruta = this.rutaDe(`${key}.parte${i}`);
+      try {
+        await rm(ruta);
+        faltantesSeguidas = 0;
+      } catch {
+        faltantesSeguidas += 1;
+      }
+    }
   }
 
   async cabecera(key: string): Promise<ObjetoMeta | null> {

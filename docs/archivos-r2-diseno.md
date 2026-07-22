@@ -439,8 +439,33 @@ borrarlo a mano da 400; re-materializar reemplaza en vez de acumular; el
 apagado de Chrome medido con el contador de procesos (0 → 1 tras el render → 0
 tras el ocio, con su línea de log).
 
-**F4 — Operación.** Cuotas por tenant, papelera + purga, multipart para > 100 MB,
-métricas de uso, dedupe por hash.
+**F4 — Operación. ✅ HECHA** (salvo dedupe, ver abajo).
+
+- **Papelera funcional**: listar y restaurar dentro de los 30 días. Hasta ahora
+  el diálogo de borrado prometía la papelera y esa promesa no se podía cumplir
+  — el objeto seguía en el bucket pero no había forma de traerlo de vuelta.
+  Restaurar re-chequea la cuota: si el tenant llenó el espacio mientras tanto,
+  no puede pasarla de largo por la puerta de atrás.
+- **Uso visible**: `GET /archivos/uso` con total, cuota, % y desglose por
+  scope, más el panel en Administración → Datos fiscales. Antes la cuota sólo
+  se manifestaba como un error repentino a mitad de una subida.
+- **Multipart**: el tope pasa de 100 MB a **2 GB**. Por encima de 64 MB
+  (`ARCHIVOS_UMBRAL_MULTIPART`) la subida va en partes de 8 MB, tres en
+  paralelo, con progreso agregado.
+- **Resincronización de contadores** en el barrido nocturno (ver abajo).
+- El barrido ahora **aborta** los multipart abandonados: S3 y R2 cobran las
+  partes de una subida que nunca cerró, y borrar la clave final no las toca
+  porque ese objeto nunca llegó a existir.
+
+**Verificado**: subida en partes de un archivo de 12 MB (2 partes) y descarga
+byte-a-byte idéntica, sin partes sueltas en el storage; ciclo completo de
+papelera (borrar → baja la cuota → aparece con 30 días → ausente del listado →
+restaurar → la cuota vuelve al valor exacto → papelera vacía); resincronización
+corrigiendo una deriva real.
+
+**Dedupe por hash: NO se hizo.** La columna `hash` sigue sin poblarse. El caso
+—el mismo arte subido dos veces a dos órdenes distintas— es raro y el ahorro no
+justifica la complejidad de manejar el conteo de referencias al borrar.
 
 ---
 
@@ -486,6 +511,24 @@ lo garantiza un índice único parcial (`Archivo_generado_vigente_unico`, sobre
 `scope` + COALESCE de las FK, `WHERE generado AND estado='LISTO'`) y el service
 atrapa el P2002, tira su objeto y devuelve el que ganó. Verificado con 5
 requests concurrentes: 1 fila vigente, 0 objetos huérfanos.
+
+**El tope por request no podía atarse al umbral de multipart (F4).** Parecía
+razonable —"por debajo del umbral va entero, y por arriba viene partido en
+trozos más chicos"— pero es falso: el tamaño de parte (8 MB) es independiente
+del umbral. Bajando el umbral a 1 MB para probar, las partes de 8 MB pasaban a
+superar el tope y el servidor cortaba la conexión: **broken pipe, sin ningún
+error interpretable del lado del cliente**. Con la configuración por defecto
+(umbral 64 MB > parte 8 MB) nunca se habría visto. El tope ahora es
+`max(umbral, tamaño de parte)`.
+
+**El contador de bytes se puede desincronizar y nada lo reparaba (F4).** Se
+mantiene transaccionalmente en cada alta y baja, pero es un denormalizado:
+cualquier escritura que no pase por el service —una corrección a mano, una
+migración, un borrado en cascada de la entidad padre— lo deja corrido, y desde
+ahí la cuota mide mal para siempre. Apareció solo: el campo `bytesDetalle` que
+agregué al endpoint de uso como diagnóstico mostró 13.027.527 contra 12.704.722
+reales, por los `UPDATE` directos de mis propias pruebas. Ahora el barrido
+nocturno recalcula desde la suma real y loguea cada corrección.
 
 Un tercero, no de código: Turbopack sirvió el `globals.css` viejo después de
 una edición in-place (el bloque agregado al final sí estaba, la regla insertada

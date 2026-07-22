@@ -27,6 +27,21 @@ export type ObjetoMeta = {
   contentType: string | null;
 };
 
+/**
+ * Subida en partes, para archivos que no entran en un solo PUT. Cada parte se
+ * sube con su propia URL firmada y devuelve un ETag; el `completar` los junta.
+ *
+ * S3/R2 exigen partes de al menos 5 MB (salvo la última) y como máximo 10.000
+ * partes, lo que fija el techo real del sistema.
+ */
+export type MultipartIniciado = {
+  uploadId: string;
+  partes: Array<{ numero: number; url: string }>;
+  tamanioParte: number;
+};
+
+export type ParteSubida = { numero: number; etag: string };
+
 export interface StorageDriver {
   readonly nombre: 'r2' | 'local';
 
@@ -57,6 +72,29 @@ export interface StorageDriver {
    * Las subidas de usuarios siguen yendo por `firmarSubida`.
    */
   subir(key: string, contenido: Buffer, contentType: string): Promise<void>;
+
+  /**
+   * Abre una subida en partes y firma una URL por parte. El navegador las
+   * sube en paralelo y guarda los ETags que devuelve cada PUT.
+   *
+   * OJO EN R2: el bucket tiene que exponer el header `ETag` por CORS
+   * (`ExposeHeaders`), o el navegador no puede leerlo y el completar falla
+   * sin síntoma claro.
+   */
+  iniciarMultipart(
+    key: string,
+    opciones: { contentType: string; bytes: number },
+  ): Promise<MultipartIniciado>;
+
+  /** Cierra la subida en partes y deja el objeto final armado. */
+  completarMultipart(
+    key: string,
+    uploadId: string,
+    partes: ParteSubida[],
+  ): Promise<void>;
+
+  /** Descarta una subida en partes a medias (libera lo ya subido). */
+  abortarMultipart(key: string, uploadId: string): Promise<void>;
 
   /** Metadata REAL del objeto. Null si no existe. Es la fuente de verdad. */
   cabecera(key: string): Promise<ObjetoMeta | null>;

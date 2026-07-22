@@ -1,14 +1,25 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
+  AbortMultipartUploadCommand,
+  CompleteMultipartUploadCommand,
+  CreateMultipartUploadCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
   S3Client,
+  UploadPartCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
-import type { ObjetoMeta, StorageDriver, UrlFirmada } from './storage.driver';
+import { calcularTamanioParte } from './multipart';
+import type {
+  MultipartIniciado,
+  ObjetoMeta,
+  ParteSubida,
+  StorageDriver,
+  UrlFirmada,
+} from './storage.driver';
 
 const SUBIDA_SEGUNDOS = 15 * 60;
 /**
@@ -98,6 +109,78 @@ export class R2Driver implements StorageDriver {
         ContentLength: contenido.length,
       }),
     );
+  }
+
+  async iniciarMultipart(
+    key: string,
+    opciones: { contentType: string; bytes: number },
+  ): Promise<MultipartIniciado> {
+    const { UploadId: uploadId } = await this.cliente.send(
+      new CreateMultipartUploadCommand({
+        Bucket: this.bucket,
+        Key: key,
+        ContentType: opciones.contentType,
+      }),
+    );
+    if (!uploadId) {
+      throw new Error(
+        'R2 no devolvió uploadId al iniciar la subida en partes.',
+      );
+    }
+
+    const tamanioParte = calcularTamanioParte(opciones.bytes);
+    const cantidad = Math.max(1, Math.ceil(opciones.bytes / tamanioParte));
+    const partes = await Promise.all(
+      Array.from({ length: cantidad }, (_, i) => i + 1).map(async (numero) => ({
+        numero,
+        url: await getSignedUrl(
+          this.cliente,
+          new UploadPartCommand({
+            Bucket: this.bucket,
+            Key: key,
+            UploadId: uploadId,
+            PartNumber: numero,
+          }),
+          { expiresIn: SUBIDA_SEGUNDOS },
+        ),
+      })),
+    );
+    return { uploadId, partes, tamanioParte };
+  }
+
+  async completarMultipart(
+    key: string,
+    uploadId: string,
+    partes: ParteSubida[],
+  ): Promise<void> {
+    await this.cliente.send(
+      new CompleteMultipartUploadCommand({
+        Bucket: this.bucket,
+        Key: key,
+        UploadId: uploadId,
+        MultipartUpload: {
+          // S3 exige las partes ordenadas por número.
+          Parts: [...partes]
+            .sort((a, b) => a.numero - b.numero)
+            .map((p) => ({ PartNumber: p.numero, ETag: p.etag })),
+        },
+      }),
+    );
+  }
+
+  async abortarMultipart(key: string, uploadId: string): Promise<void> {
+    try {
+      await this.cliente.send(
+        new AbortMultipartUploadCommand({
+          Bucket: this.bucket,
+          Key: key,
+          UploadId: uploadId,
+        }),
+      );
+    } catch (error) {
+      if (esNoEncontrado(error)) return;
+      throw error;
+    }
   }
 
   async cabecera(key: string): Promise<ObjetoMeta | null> {

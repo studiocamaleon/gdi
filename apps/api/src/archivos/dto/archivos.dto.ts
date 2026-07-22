@@ -1,5 +1,7 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsEnum,
   IsInt,
@@ -9,6 +11,7 @@ import {
   MaxLength,
   Min,
   ValidateIf,
+  ValidateNested,
 } from 'class-validator';
 import { ArchivoScope } from '@prisma/client';
 
@@ -47,6 +50,28 @@ export class IniciarSubidaDto {
   @IsOptional()
   @IsBoolean()
   publico?: boolean;
+}
+
+export class ParteSubidaDto {
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  numero!: number;
+
+  /** ETag que devolvió el PUT de esa parte (S3 lo manda entre comillas). */
+  @IsString()
+  @MaxLength(200)
+  etag!: string;
+}
+
+export class ConfirmarSubidaDto {
+  /** Sólo en subidas en partes: sin esto el multipart no se puede cerrar. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10_000)
+  @ValidateNested({ each: true })
+  @Type(() => ParteSubidaDto)
+  partes?: ParteSubidaDto[];
 }
 
 export class ActualizarArchivoDto {
