@@ -206,8 +206,10 @@ export function ArchivoUploader({
           }}
         >
           <UploadCloudIcon />
-          <div className="arch-drop-t">{titulo}</div>
-          {ayuda ? <div className="arch-drop-s">{ayuda}</div> : null}
+          <div className="arch-drop-txt">
+            <div className="arch-drop-t">{titulo}</div>
+            {ayuda ? <div className="arch-drop-s">{ayuda}</div> : null}
+          </div>
           <input
             ref={inputRef}
             type="file"

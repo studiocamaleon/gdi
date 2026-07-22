@@ -31133,73 +31133,136 @@ body:has(.t-app) {
 
 /* ───────────────────────────────────────────────────────────────────────
    Archivos — uploader y grilla de adjuntos. Prefijo arch-.
-   Se apoya en los tokens del sistema (--border, --muted-foreground…) para
-   que herede el tema claro/oscuro sin paleta propia.
+
+   OJO CON LOS TOKENS: `--muted` está sobrecargado en este codebase. En
+   :root es una SUPERFICIE casi blanca (#efede9), pero `.ot-v1` —el scope
+   de la ficha de orden— lo redefine como el COLOR DE TEXTO gris
+   (var(--muted-text), #6e6e76). Un color-mix sobre `--muted` sale casi
+   blanco en Datos fiscales y un bloque gris pesado en la ficha. Por eso acá
+   se usan los tokens propios del sistema (--surface-2, --hairline, --ink,
+   --muted-text, --signal), que ningún scope reinterpreta.
    Ver docs/archivos-r2-diseno.md
    ─────────────────────────────────────────────────────────────────────── */
 
 .arch-drop {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 26px 20px;
-  border: 1.5px dashed var(--border);
-  border-radius: 12px;
-  background: color-mix(in oklab, var(--muted) 35%, transparent);
-  color: var(--muted-foreground);
-  font-size: 13px;
-  text-align: center;
+  gap: 10px;
+  padding: 15px 18px;
+  border: 1px dashed var(--border, #e7e5e2);
+  border-radius: 11px;
+  background: var(--surface-2, #fafaf9);
+  color: var(--muted-text, #6e6e76);
+  font-size: 12.5px;
+  text-align: left;
   cursor: pointer;
-  transition: border-color .15s ease, background .15s ease, color .15s ease;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
 .arch-drop:hover,
 .arch-drop:focus-visible {
-  border-color: color-mix(in oklab, var(--primary) 55%, var(--border));
-  color: var(--foreground);
+  border-color: var(--border-strong, #d4d2cd);
+  background: var(--surface, #fff);
+  color: var(--ink-2, #2c2c33);
+  outline: none;
 }
 
+/* Arrastrando encima: el único momento donde vale gritar. */
 .arch-drop.dentro {
-  border-color: var(--primary);
+  border-color: var(--signal, #c2410c);
   border-style: solid;
-  background: color-mix(in oklab, var(--primary) 8%, transparent);
-  color: var(--foreground);
+  background: var(--signal-bg, #fef3ed);
+  color: var(--signal, #c2410c);
 }
 
-.arch-drop.ocupado { cursor: progress; opacity: .75; }
-.arch-drop svg { width: 22px; height: 22px; opacity: .7; }
-.arch-drop .arch-drop-t { font-weight: 600; color: var(--foreground); }
-.arch-drop .arch-drop-s { font-size: 11.5px; line-height: 1.45; }
+.arch-drop.ocupado {
+  cursor: progress;
+  opacity: 0.6;
+}
 
-.arch-lista { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.arch-drop svg {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  opacity: 0.65;
+}
+
+.arch-drop.dentro svg {
+  opacity: 1;
+}
+
+/* Ícono a la izquierda y texto apilado al lado: en una sola línea el hint
+   del logo (dos renglones de requisitos) desbordaba, y apilando también el
+   ícono el dropzone se convertía en un cartel de tres pisos. */
+.arch-drop .arch-drop-txt {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.arch-drop .arch-drop-t {
+  font-weight: 600;
+  color: inherit;
+}
+
+.arch-drop .arch-drop-s {
+  font-size: 11.5px;
+  color: var(--muted-text-2, #92929b);
+  line-height: 1.4;
+}
+
+.arch-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 8px;
+}
 
 .arch-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
+  padding: 7px 10px;
+  border: 1px solid var(--hairline, #efece8);
   border-radius: 10px;
-  background: var(--card);
+  background: var(--surface, #fff);
   font-size: 12.5px;
+  color: var(--ink, #14141a);
+  transition: border-color 0.12s ease;
+}
+
+.arch-row:hover {
+  border-color: var(--border, #e7e5e2);
 }
 
 .arch-row .arch-ico {
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   flex: 0 0 auto;
-  border-radius: 8px;
-  background: color-mix(in oklab, var(--muted) 60%, transparent);
-  color: var(--muted-foreground);
+  border-radius: 7px;
+  background: var(--surface-2, #fafaf9);
+  border: 1px solid var(--hairline, #efece8);
+  color: var(--muted-text, #6e6e76);
   overflow: hidden;
 }
 
-.arch-row .arch-ico svg { width: 15px; height: 15px; }
-.arch-row .arch-ico img { width: 100%; height: 100%; object-fit: cover; }
+.arch-row .arch-ico svg {
+  width: 14px;
+  height: 14px;
+}
+
+.arch-row .arch-ico img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 
 .arch-row .arch-nom {
   flex: 1;
@@ -31216,7 +31279,10 @@ body:has(.t-app) {
   white-space: nowrap;
 }
 
-.arch-row .arch-nom span { color: var(--muted-foreground); font-size: 11px; }
+.arch-row .arch-nom span {
+  color: var(--muted-text-2, #92929b);
+  font-size: 11px;
+}
 
 .arch-row .arch-acc {
   display: flex;
@@ -31229,39 +31295,46 @@ body:has(.t-app) {
 .arch-row .arch-acc a {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border: 0;
   border-radius: 7px;
   background: transparent;
-  color: var(--muted-foreground);
+  color: var(--muted-text-2, #92929b);
   cursor: pointer;
-  transition: background .12s ease, color .12s ease;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
 }
 
 .arch-row .arch-acc button:hover,
 .arch-row .arch-acc a:hover {
-  background: color-mix(in oklab, var(--muted) 70%, transparent);
-  color: var(--foreground);
+  background: var(--surface-2, #fafaf9);
+  color: var(--ink, #14141a);
 }
 
 .arch-row .arch-acc button.peligro:hover {
-  background: color-mix(in oklab, var(--destructive) 12%, transparent);
-  color: var(--destructive);
+  background: #fef2f2;
+  color: #b42318;
 }
 
 .arch-row .arch-acc button svg,
-.arch-row .arch-acc a svg { width: 14px; height: 14px; }
+.arch-row .arch-acc a svg {
+  width: 14px;
+  height: 14px;
+}
 
-/* Progreso de subida: una fila más, con la barra debajo del nombre. */
-.arch-row.subiendo { border-style: dashed; }
+/* Fila en curso de subida: la barra vive debajo del nombre. */
+.arch-row.subiendo {
+  border-style: dashed;
+}
 
 .arch-bar {
   position: relative;
   height: 3px;
   margin-top: 4px;
   border-radius: 3px;
-  background: color-mix(in oklab, var(--muted) 80%, transparent);
+  background: var(--hairline, #efece8);
   overflow: hidden;
 }
 
@@ -31270,11 +31343,137 @@ body:has(.t-app) {
   inset: 0 auto 0 0;
   display: block;
   border-radius: 3px;
-  background: var(--primary);
-  transition: width .18s ease;
+  background: var(--ink, #14141a);
+  transition: width 0.18s ease;
 }
 
-.arch-error { color: var(--destructive); font-size: 11px; margin-top: 4px; }
+.arch-error {
+  color: #b42318;
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+/* Switch de visibilidad para el cliente (sólo en archivos de una OT). */
+.arch-row .arch-vis {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  padding: 3px 9px 3px 7px;
+  border: 1px solid var(--hairline, #efece8);
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--muted-text-2, #92929b);
+  cursor: pointer;
+  user-select: none;
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease,
+    background 0.12s ease;
+}
+
+.arch-row .arch-vis input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.arch-row .arch-vis svg {
+  width: 12px;
+  height: 12px;
+}
+
+.arch-row .arch-vis:hover {
+  border-color: var(--border, #e7e5e2);
+  color: var(--ink-2, #2c2c33);
+}
+
+.arch-row .arch-vis.on {
+  color: var(--signal, #c2410c);
+  border-color: color-mix(in oklab, var(--signal, #c2410c) 35%, transparent);
+  background: var(--signal-bg, #fef3ed);
+}
+
+/* Vacío: pegado al dropzone, no como párrafo suelto abajo. */
+.arch-vacio {
+  margin-top: 6px;
+  padding-left: 2px;
+  font-size: 11.5px;
+  color: var(--muted-text-2, #92929b);
+  line-height: 1.5;
+}
+
+/* Tab de Archivos de una orden: documento arriba, un bloque por item. */
+.arch-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.arch-tab .arch-bloque {
+  display: flex;
+  flex-direction: column;
+}
+
+.arch-tab .arch-bloque-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.arch-tab .arch-bloque-head .t {
+  font-size: 12.5px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--ink, #14141a);
+}
+
+.arch-tab .arch-bloque-head .n {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--muted-text, #6e6e76);
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--surface-2, #fafaf9);
+  border: 1px solid var(--hairline, #efece8);
+}
+
+.arch-tab .arch-bloque-head .s {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted-text-2, #92929b);
+}
+
+/* Clip con contador para el paso del tablero. */
+.arch-clip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px 2px 5px;
+  border: 1px solid var(--hairline, #efece8);
+  border-radius: 999px;
+  background: var(--surface, #fff);
+  color: var(--muted-text, #6e6e76);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.arch-clip:hover {
+  color: var(--ink, #14141a);
+  border-color: var(--border, #e7e5e2);
+}
+
+.arch-clip svg {
+  width: 12px;
+  height: 12px;
+}
 
 /* Logo del tenant: preview grande y acciones al costado. */
 .arch-logo {
@@ -31290,9 +31489,9 @@ body:has(.t-app) {
   width: 108px;
   height: 108px;
   flex: 0 0 auto;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border, #e7e5e2);
   border-radius: 14px;
-  background: var(--card);
+  background: var(--surface, #fff);
   overflow: hidden;
 }
 
@@ -31309,125 +31508,59 @@ body:has(.t-app) {
   height: 100%;
   display: grid;
   place-items: center;
-  background: var(--foreground);
-  color: var(--background);
+  background: var(--ink, #14141a);
+  color: #fff;
   font-weight: 700;
   font-size: 30px;
-  letter-spacing: -.03em;
+  letter-spacing: -0.03em;
 }
 
-.arch-logo-body { flex: 1; min-width: 240px; display: flex; flex-direction: column; gap: 10px; }
-.arch-logo-body .arch-logo-hint { font-size: 11.5px; color: var(--muted-foreground); line-height: 1.5; }
-.arch-logo-acc { display: flex; gap: 8px; flex-wrap: wrap; }
-/* archivos: r2 - f2 */
-
-/* Switch de visibilidad para el cliente (sólo en archivos de una OT). */
-.arch-row .arch-vis {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  flex: 0 0 auto;
-  padding: 3px 8px 3px 6px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: .01em;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  user-select: none;
-  transition: color .12s ease, border-color .12s ease, background .12s ease;
-}
-
-.arch-row .arch-vis input { position: absolute; opacity: 0; pointer-events: none; }
-.arch-row .arch-vis svg { width: 12px; height: 12px; }
-.arch-row .arch-vis:hover { color: var(--foreground); }
-
-.arch-row .arch-vis.on {
-  color: var(--primary);
-  border-color: color-mix(in oklab, var(--primary) 45%, transparent);
-  background: color-mix(in oklab, var(--primary) 9%, transparent);
-}
-
-.arch-vacio {
-  padding: 14px 4px 2px;
-  font-size: 12px;
-  color: var(--muted-foreground);
-  line-height: 1.55;
-}
-
-/* Tab de Archivos de una orden: documento arriba, un bloque por item. */
-.arch-tab { display: flex; flex-direction: column; gap: 18px; }
-.arch-tab .arch-bloque { display: flex; flex-direction: column; gap: 2px; }
-
-.arch-tab .arch-bloque-head {
+.arch-logo-body {
+  flex: 1;
+  min-width: 240px;
   display: flex;
-  align-items: baseline;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.arch-logo-body .arch-logo-hint {
+  font-size: 11.5px;
+  color: var(--muted-text-2, #92929b);
+  line-height: 1.5;
+}
+
+.arch-logo-acc {
+  display: flex;
   gap: 8px;
-  margin-bottom: 8px;
+  flex-wrap: wrap;
 }
-
-.arch-tab .arch-bloque-head .t {
-  font-size: 12.5px;
-  font-weight: 650;
-  letter-spacing: -.01em;
-}
-
-.arch-tab .arch-bloque-head .n {
-  font-size: 10.5px;
-  font-weight: 600;
-  color: var(--muted-foreground);
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: color-mix(in oklab, var(--muted) 60%, transparent);
-}
-
-.arch-tab .arch-bloque-head .s {
-  margin-left: auto;
-  font-size: 11px;
-  color: var(--muted-foreground);
-}
-
-/* Clip con contador para el paso del tablero. */
-.arch-clip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 7px 2px 5px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--card);
-  color: var(--muted-foreground);
-  font-size: 10.5px;
-  font-weight: 600;
-  text-decoration: none;
-  cursor: pointer;
-  transition: color .12s ease, border-color .12s ease;
-}
-
-.arch-clip:hover {
-  color: var(--foreground);
-  border-color: color-mix(in oklab, var(--primary) 45%, var(--border));
-}
-
-.arch-clip svg { width: 12px; height: 12px; }
 
 /* Archivos compartidos con el cliente en el seguimiento público. */
-.t-archivos { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px 14px; }
-.t-archivos.compacto { padding: 10px 0 0; }
+.t-archivos {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px 14px;
+}
+
+.t-archivos.compacto {
+  padding: 10px 0 0;
+}
 
 .t-archivos .t-archivo {
   display: flex;
   align-items: center;
   gap: 9px;
   padding: 9px 11px;
-  border: 1px solid var(--t-hairline, rgba(0,0,0,.08));
+  border: 1px solid var(--t-hairline, #efece8);
   border-radius: 10px;
   background: var(--t-surface, #fff);
   color: inherit;
   text-decoration: none;
   font-size: 12.5px;
-  transition: border-color .14s ease, transform .14s ease;
+  transition:
+    border-color 0.14s ease,
+    transform 0.14s ease;
 }
 
 .t-archivos .t-archivo:hover {
@@ -31435,6 +31568,25 @@ body:has(.t-app) {
   transform: translateY(-1px);
 }
 
-.t-archivos .t-archivo .ico { display: grid; place-items: center; flex: 0 0 auto; color: var(--t-muted, #6b7280); }
-.t-archivos .t-archivo .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 550; }
-.t-archivos .t-archivo .sz { flex: 0 0 auto; font-size: 10.5px; color: var(--t-muted, #6b7280); }
+.t-archivos .t-archivo .ico {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  color: var(--t-muted, #6b7280);
+}
+
+.t-archivos .t-archivo .nm {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 550;
+}
+
+.t-archivos .t-archivo .sz {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  color: var(--t-muted, #6b7280);
+}
+/* archivos: r2 - f2b */
