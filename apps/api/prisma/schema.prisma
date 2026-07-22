@@ -378,13 +378,47 @@ enum OrigenMovimientoStockMateriaPrima {
   OTRO
 }
 
+/// A qué entidad se adjunta el archivo. Cada valor se corresponde con
+/// exactamente una FK del modelo Archivo (salvo TENANT_BRANDING, que no
+/// cuelga de nada: es del tenant). Ver docs/archivos-r2-diseno.md §D3.
+enum ArchivoScope {
+  TENANT_BRANDING
+  CLIENTE
+  ORDEN
+  ORDEN_ITEM
+  COTIZACION
+  COMPROBANTE
+  COBRO
+  PRODUCTO
+  PROVEEDOR
+}
+
+/// PENDIENTE: fila creada, presigned firmado, bytes todavía no verificados.
+/// El barrido diario borra las pendientes de más de 24 h (subidas abandonadas).
+enum ArchivoEstado {
+  PENDIENTE
+  LISTO
+  ELIMINADO
+}
+
 model Tenant {
   id                                               String                                            @id @default(uuid()) @db.Uuid
   nombre                                           String
   slug                                             String                                            @unique
   activo                                           Boolean                                           @default(true)
+  /// Logo de la imprenta. Null = se dibujan las iniciales del nombre
+  /// (fallback histórico del PDF de presupuesto y del tracking público).
+  logoArchivoId                                    String?                                           @db.Uuid
+  /// Suma de bytes de los archivos LISTO. Denormalizado y mantenido en la
+  /// misma transacción que el confirmar/eliminar — mismo patrón que
+  /// Comprobante.saldoPendiente y OrdenTrabajo.facturadoTotal.
+  bytesArchivos                                    BigInt                                            @default(0)
+  /// Tope de almacenamiento. Null = sin límite.
+  cuotaBytesArchivos                               BigInt?
   createdAt                                        DateTime                                          @default(now())
   updatedAt                                        DateTime                                          @updatedAt
+  logoArchivo                                      Archivo?                                          @relation("TenantLogo", fields: [logoArchivoId], references: [id], onDelete: SetNull)
+  archivos                                         Archivo[]                                         @relation("ArchivosDelTenant")
   memberships                                      Membership[]
   authSessions                                     AuthSession[]
   invitations                                      Invitation[]
@@ -485,6 +519,7 @@ model User {
   invitations          Invitation[]
   empleados            Empleado[]
   ordenTrabajoEventos  OrdenTrabajoEvento[]
+  archivosSubidos      Archivo[]               @relation("ArchivosSubidos")
   pasosEnMesa          OrdenTrabajoItemPaso[]  @relation("PasosEnMesa")
   pasosIniciados       OrdenTrabajoItemPaso[]  @relation("PasosIniciados")
   pasosCompletados     OrdenTrabajoItemPaso[]  @relation("PasosCompletados")
@@ -578,6 +613,7 @@ model Cliente {
   cobros              Cobro[]
   valores             Valor[]
   comprobantes        Comprobante[]
+  archivos            Archivo[]
 
   @@unique([tenantId, nombre])
   @@index([tenantId, nombre])
@@ -600,7 +636,8 @@ model Proveedor {
   materiaPrimaVariantesReferencia MateriaPrimaVariante[] @relation("MateriaPrimaVarianteProveedorReferencia")
   configPasosTercerizados         ProductoConfigPaso[]   @relation("ProductoConfigPasoProveedor")
 
-  valores Valor[]
+  valores  Valor[]
+  archivos Archivo[]
 
   @@unique([tenantId, nombre])
   @@index([tenantId, nombre])
@@ -1669,6 +1706,7 @@ model Producto {
   impuestosAplicados        ProductoImpuestoAplicado[]
   comisionesAplicadas       ProductoComisionAplicada[]
   cotizacionItems           CotizacionItem[]
+  archivos                  Archivo[]
 
   @@unique([tenantId, codigo])
   @@index([tenantId, activo])
@@ -2065,6 +2103,7 @@ model Cotizacion {
   items                        CotizacionItem[]
   ordenesTrabajo               OrdenTrabajo[]
   eventos                      CotizacionEvento[]
+  archivos                     Archivo[]
 
   @@unique([tenantId, numero])
   @@index([tenantId, estado])
@@ -2223,6 +2262,7 @@ model OrdenTrabajo {
   movimientosFondos  MovimientoFondos[]
   comprobantes       Comprobante[]
   comprobanteOrdenes ComprobanteOrden[]
+  archivos           Archivo[]
 
   @@unique([tenantId, numero])
   @@index([tenantId, estado])
@@ -2272,6 +2312,7 @@ model OrdenTrabajoItem {
   cotizacionItem        CotizacionItem?        @relation(fields: [cotizacionItemId], references: [id])
   pasos                 OrdenTrabajoItemPaso[]
   etaPromesas           EtaPromesa[]
+  archivos              Archivo[]
 
   @@index([tenantId, ordenId])
 }
@@ -2653,6 +2694,7 @@ model Cobro {
   movimientos               MovimientoFondos[]
   valores                   Valor[]
   imputaciones              CobroImputacion[]
+  archivos                  Archivo[]
 
   @@index([tenantId, ordenId])
   @@index([tenantId, clienteId])
@@ -2869,6 +2911,7 @@ model Comprobante {
   correcciones      Comprobante[]      @relation("ComprobanteCorrige")
   imputaciones      CobroImputacion[]
   ordenes           ComprobanteOrden[]
+  archivos          Archivo[]
 
   @@unique([tenantId, puntoVentaId, tipo, letra, numero])
   @@index([tenantId, estado])
@@ -2931,4 +2974,69 @@ model ComprobanteOrden {
 
   @@unique([comprobanteId, ordenId])
   @@index([tenantId, ordenId])
+}
+
+/// Archivo almacenado en object storage (Cloudflare R2 en producción, disco
+/// en dev). La fila es la fuente de verdad: el objeto sólo se alcanza por una
+/// URL presignada de vida corta que el API firma DESPUÉS de validar esta fila
+/// contra el tenant. El bucket es privado siempre.
+///
+/// Adjuntable a varias entidades con FKs tipadas nullables en vez de un
+/// `entidadId` polimórfico: así el borrado en cascada es real y no quedan
+/// huérfanos que sólo un barrido pueda descubrir. Exactamente una FK está
+/// seteada, según `scope` (ninguna para TENANT_BRANDING).
+/// Ver docs/archivos-r2-diseno.md
+model Archivo {
+  id             String        @id @default(uuid()) @db.Uuid
+  tenantId       String        @db.Uuid
+  scope          ArchivoScope
+  /// Clave en el bucket: t/{tenantId}/{scope}/{entidadId}/{archivoId}{ext}.
+  /// El nombre original NUNCA va acá (path traversal, unicode, colisiones).
+  key            String        @unique
+  /// Nombre con el que el usuario lo subió; se devuelve en el
+  /// Content-Disposition de la descarga.
+  nombreOriginal String
+  /// MIME verificado contra el objeto real en el confirmar, no el declarado.
+  mimeType       String
+  bytes          BigInt        @default(0)
+  /// sha256 en hex del contenido, si el cliente lo aportó. Dedupe futuro.
+  hash           String?
+  estado         ArchivoEstado @default(PENDIENTE)
+  /// Opt-in explícito: sólo los marcados así se ven en el link público de
+  /// seguimiento del cliente. El arte de producción no se filtra por defecto.
+  publico        Boolean       @default(false)
+  descripcion    String?
+  subidoPorId    String?       @db.Uuid
+  eliminadoEl    DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  clienteId     String? @db.Uuid
+  ordenId       String? @db.Uuid
+  ordenItemId   String? @db.Uuid
+  cotizacionId  String? @db.Uuid
+  comprobanteId String? @db.Uuid
+  cobroId       String? @db.Uuid
+  productoId    String? @db.Uuid
+  proveedorId   String? @db.Uuid
+
+  tenant      Tenant            @relation("ArchivosDelTenant", fields: [tenantId], references: [id], onDelete: Cascade)
+  subidoPor   User?             @relation("ArchivosSubidos", fields: [subidoPorId], references: [id], onDelete: SetNull)
+  cliente     Cliente?          @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  orden       OrdenTrabajo?     @relation(fields: [ordenId], references: [id], onDelete: Cascade)
+  ordenItem   OrdenTrabajoItem? @relation(fields: [ordenItemId], references: [id], onDelete: Cascade)
+  cotizacion  Cotizacion?       @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
+  comprobante Comprobante?      @relation(fields: [comprobanteId], references: [id], onDelete: Cascade)
+  cobro       Cobro?            @relation(fields: [cobroId], references: [id], onDelete: Cascade)
+  producto    Producto?         @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  proveedor   Proveedor?        @relation(fields: [proveedorId], references: [id], onDelete: Cascade)
+
+  tenantsConEsteLogo Tenant[] @relation("TenantLogo")
+
+  @@index([tenantId, scope, estado])
+  @@index([tenantId, ordenItemId])
+  @@index([tenantId, ordenId])
+  @@index([tenantId, clienteId])
+  @@index([tenantId, cotizacionId])
+  @@index([estado, createdAt])
 }

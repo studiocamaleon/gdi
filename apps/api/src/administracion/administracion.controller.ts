@@ -24,6 +24,7 @@ import { CuentaCorrienteService } from './cuenta-corriente.service';
 import { FacturaService } from './factura.service';
 import { FacturaPdfService } from './factura-pdf.service';
 import { EstadoCuentaPdfService } from './estado-cuenta-pdf.service';
+import { ArchivosService } from '../archivos/archivos.service';
 import { UpsertMetodoPagoDto } from './dto/metodo-pago.dto';
 import { CrearCobroDto } from './dto/cobro.dto';
 import {
@@ -59,6 +60,7 @@ export class AdministracionController {
     private readonly facturaPdfService: FacturaPdfService,
     private readonly estadoCuentaPdfService: EstadoCuentaPdfService,
     private readonly facturacionOrdenesService: FacturacionOrdenesService,
+    private readonly archivos: ArchivosService,
   ) {}
 
   /**
@@ -71,8 +73,11 @@ export class AdministracionController {
     @Param('id') id: string,
     @Res({ passthrough: true }) res: Response,
   ): Promise<StreamableFile> {
-    const doc = await this.facturaService.documento(auth, id);
-    const pdf = await this.facturaPdfService.generar(doc);
+    const [doc, logo] = await Promise.all([
+      this.facturaService.documento(auth, id),
+      this.archivos.logoDataUri(auth.tenantId),
+    ]);
+    const pdf = await this.facturaPdfService.generar(doc, logo);
     const nombre = `${doc.letra}-${doc.puntoVenta}-${doc.numero}.pdf`;
     res.set({
       'Content-Type': 'application/pdf',

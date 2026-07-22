@@ -27982,6 +27982,12 @@ body:has(.t-app) {
   font-family: var(--t-font-sans);
   letter-spacing: -0.02em;
 }
+/* Con logo real: sin fondo oscuro ni recorte, el logo trae lo suyo. */
+.t-brandbar .imprenta-logo .mark.mark-img {
+  background: transparent;
+  object-fit: contain;
+  border-radius: 6px;
+}
 .t-brandbar .imprenta-logo .nm { font-weight: 600; font-size: 13.5px; letter-spacing: -0.01em; }
 .t-brandbar .imprenta-logo .sub { font-size: 10.5px; color: var(--t-muted); }
 .t-brandbar .powered {
@@ -31124,3 +31130,193 @@ body:has(.t-app) {
 @media (prefers-reduced-motion: reduce) {
   .tablero-produccion .simu * { transition: none !important; animation: none !important; }
 }
+
+/* ───────────────────────────────────────────────────────────────────────
+   Archivos — uploader y grilla de adjuntos. Prefijo arch-.
+   Se apoya en los tokens del sistema (--border, --muted-foreground…) para
+   que herede el tema claro/oscuro sin paleta propia.
+   Ver docs/archivos-r2-diseno.md
+   ─────────────────────────────────────────────────────────────────────── */
+
+.arch-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 26px 20px;
+  border: 1.5px dashed var(--border);
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--muted) 35%, transparent);
+  color: var(--muted-foreground);
+  font-size: 13px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease, color .15s ease;
+}
+
+.arch-drop:hover,
+.arch-drop:focus-visible {
+  border-color: color-mix(in oklab, var(--primary) 55%, var(--border));
+  color: var(--foreground);
+}
+
+.arch-drop.dentro {
+  border-color: var(--primary);
+  border-style: solid;
+  background: color-mix(in oklab, var(--primary) 8%, transparent);
+  color: var(--foreground);
+}
+
+.arch-drop.ocupado { cursor: progress; opacity: .75; }
+.arch-drop svg { width: 22px; height: 22px; opacity: .7; }
+.arch-drop .arch-drop-t { font-weight: 600; color: var(--foreground); }
+.arch-drop .arch-drop-s { font-size: 11.5px; line-height: 1.45; }
+
+.arch-lista { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+
+.arch-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  font-size: 12.5px;
+}
+
+.arch-row .arch-ico {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  background: color-mix(in oklab, var(--muted) 60%, transparent);
+  color: var(--muted-foreground);
+  overflow: hidden;
+}
+
+.arch-row .arch-ico svg { width: 15px; height: 15px; }
+.arch-row .arch-ico img { width: 100%; height: 100%; object-fit: cover; }
+
+.arch-row .arch-nom {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.arch-row .arch-nom b {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.arch-row .arch-nom span { color: var(--muted-foreground); font-size: 11px; }
+
+.arch-row .arch-acc {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.arch-row .arch-acc button,
+.arch-row .arch-acc a {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: background .12s ease, color .12s ease;
+}
+
+.arch-row .arch-acc button:hover,
+.arch-row .arch-acc a:hover {
+  background: color-mix(in oklab, var(--muted) 70%, transparent);
+  color: var(--foreground);
+}
+
+.arch-row .arch-acc button.peligro:hover {
+  background: color-mix(in oklab, var(--destructive) 12%, transparent);
+  color: var(--destructive);
+}
+
+.arch-row .arch-acc button svg,
+.arch-row .arch-acc a svg { width: 14px; height: 14px; }
+
+/* Progreso de subida: una fila más, con la barra debajo del nombre. */
+.arch-row.subiendo { border-style: dashed; }
+
+.arch-bar {
+  position: relative;
+  height: 3px;
+  margin-top: 4px;
+  border-radius: 3px;
+  background: color-mix(in oklab, var(--muted) 80%, transparent);
+  overflow: hidden;
+}
+
+.arch-bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  display: block;
+  border-radius: 3px;
+  background: var(--primary);
+  transition: width .18s ease;
+}
+
+.arch-error { color: var(--destructive); font-size: 11px; margin-top: 4px; }
+
+/* Logo del tenant: preview grande y acciones al costado. */
+.arch-logo {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.arch-logo-preview {
+  display: grid;
+  place-items: center;
+  width: 108px;
+  height: 108px;
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  overflow: hidden;
+}
+
+.arch-logo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 10px;
+}
+
+/* Fallback: el cuadrado con iniciales que hoy sale en el PDF y el tracking. */
+.arch-logo-iniciales {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  background: var(--foreground);
+  color: var(--background);
+  font-weight: 700;
+  font-size: 30px;
+  letter-spacing: -.03em;
+}
+
+.arch-logo-body { flex: 1; min-width: 240px; display: flex; flex-direction: column; gap: 10px; }
+.arch-logo-body .arch-logo-hint { font-size: 11.5px; color: var(--muted-foreground); line-height: 1.5; }
+.arch-logo-acc { display: flex; gap: 8px; flex-wrap: wrap; }
+/* archivos: r2 */

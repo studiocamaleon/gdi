@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { ArchivosService } from '../archivos/archivos.service';
 import { EtaService } from '../eta/eta.service';
 import type { CurrentAuth } from '../auth/auth.types';
 import { paginatedResponse } from '../common/dto/pagination.dto';
@@ -232,7 +233,22 @@ export class OrdenesTrabajoService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly eta: EtaService,
+    private readonly archivos: ArchivosService,
   ) {}
+
+  /**
+   * Logo de la imprenta para el seguimiento público. El token de la orden es
+   * la credencial: se resuelve la orden, se toma SU tenant y se firma. Nunca
+   * se acepta un id de archivo del cliente.
+   */
+  async logoPublicoPorToken(token: string): Promise<string | null> {
+    const orden = await this.prisma.ordenTrabajo.findUnique({
+      where: { publicToken: token },
+      select: { tenantId: true },
+    });
+    if (!orden) return null;
+    return this.archivos.urlDeLogoPublico(orden.tenantId);
+  }
 
   /**
    * Captura de métricas del ETA (docs/eta-metricas-historicas-diseno.md):
@@ -2675,7 +2691,7 @@ export class OrdenesTrabajoService {
             telefonoNumero: true,
           },
         },
-        tenant: { select: { nombre: true } },
+        tenant: { select: { nombre: true, logoArchivoId: true } },
         items: {
           orderBy: { ordenIndice: 'asc' as const },
           select: {
@@ -2782,6 +2798,10 @@ export class OrdenesTrabajoService {
       imprenta: {
         nombre: orden.tenant.nombre,
         iniciales: inicialesDe(orden.tenant.nombre),
+        // Sólo el flag: la URL la arma el front con su propio prefijo de
+        // proxy (el token ya lo tiene, es el parámetro de la página). El API
+        // no tiene por qué saber cómo rutea Next.
+        tieneLogo: orden.tenant.logoArchivoId !== null,
       },
       cliente: {
         primerNombre: orden.cliente

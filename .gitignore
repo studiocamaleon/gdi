@@ -24,6 +24,10 @@
 # NestJS API build artifacts (never commit compiled output)
 /apps/api/dist/
 
+# Storage local de archivos (driver de dev, sin R2). Son archivos de los
+# tenants: nunca al repo.
+/apps/api/.storage/
+
 # misc
 .DS_Store
 *.pem

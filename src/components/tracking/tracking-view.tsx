@@ -303,7 +303,18 @@ export function TrackingView({
       {/* Marca de la imprenta */}
       <div className="t-brandbar">
         <div className="imprenta-logo">
-          <span className="mark">{data.imprenta.iniciales}</span>
+          {data.imprenta.tieneLogo ? (
+            // Va por el proxy BFF, que reenvía el 302 a la URL firmada. El
+            // endpoint es @Public: acá el cliente no tiene sesión.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              className="mark mark-img"
+              src={`/api/backend/ordenes-trabajo/track/${token}/logo`}
+              alt={data.imprenta.nombre}
+            />
+          ) : (
+            <span className="mark">{data.imprenta.iniciales}</span>
+          )}
           <div>
             <div className="nm">{data.imprenta.nombre}</div>
             <div className="sub">Tu pedido en producción</div>

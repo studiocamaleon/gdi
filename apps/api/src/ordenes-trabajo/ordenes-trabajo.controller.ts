@@ -7,7 +7,9 @@ import {
   Patch,
   Post,
   Query,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
 import { OrdenesTrabajoService } from './ordenes-trabajo.service';
@@ -37,6 +39,25 @@ export class OrdenesTrabajoController {
   @Get('track/:token')
   trackingPublico(@Param('token') token: string) {
     return this.ordenesTrabajoService.trackingPublico(token);
+  }
+
+  /**
+   * Logo de la imprenta en el seguimiento del cliente. Redirige a una URL
+   * firmada de 60 s: el bucket es privado y acá no hay sesión, así que el
+   * token de la orden es lo único que autoriza.
+   */
+  @Public()
+  @Get('track/:token/logo')
+  async logoPublico(
+    @Param('token') token: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const url = await this.ordenesTrabajoService.logoPublicoPorToken(token);
+    if (!url) {
+      res.status(404).end();
+      return;
+    }
+    res.redirect(302, url);
   }
 
   @Get()

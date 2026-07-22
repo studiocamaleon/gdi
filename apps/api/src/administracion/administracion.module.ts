@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ArchivosModule } from '../archivos/archivos.module';
 import { AdministracionController } from './administracion.controller';
 import { MetodosPagoService } from './metodos-pago.service';
 import { CobrosService } from './cobros.service';
@@ -16,6 +17,7 @@ import { ManualProvider } from './invoicing/manual.provider';
 import { AfipSdkProvider } from './invoicing/afip-sdk.provider';
 
 @Module({
+  imports: [ArchivosModule],
   controllers: [AdministracionController],
   providers: [
     MetodosPagoService,

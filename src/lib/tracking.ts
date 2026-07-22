@@ -41,7 +41,8 @@ export type TrackingPublico = {
   creadaEl: string;
   fechaEntrega: string | null;
   progresoPct: number;
-  imprenta: { nombre: string; iniciales: string };
+  /** Sin logo cargado van las iniciales, como antes de que existiera. */
+  imprenta: { nombre: string; iniciales: string; tieneLogo: boolean };
   cliente: { primerNombre: string; iniciales: string };
   vendedor: { nombre: string; iniciales: string; telefono: string | null } | null;
   items: TrackingItem[];

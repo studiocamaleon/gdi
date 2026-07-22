@@ -61,6 +61,13 @@ const inicialesDe = (nombre: string) =>
 export type PresupuestoPdfDatos = {
   numero: string;
   negocio: string;
+  /**
+   * Logo del tenant embebido como data URI. Null = se dibuja el cuadrado con
+   * las iniciales (el fallback original del diseño). Va embebido y no como
+   * URL porque el render corre con `waitUntil: 'domcontentloaded'` y no
+   * espera recursos remotos: una `<img src="https://…">` saldría vacía.
+   */
+  logoDataUri?: string | null;
   cliente: string | null;
   vendedor: string | null;
   fechaEmision: string | null;

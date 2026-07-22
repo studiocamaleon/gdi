@@ -12,6 +12,7 @@ import {
   StreamableFile,
 } from '@nestjs/common';
 import { RolSistema } from '@prisma/client';
+import { ArchivosService } from '../archivos/archivos.service';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
 import { Public } from '../auth/public.decorator';
@@ -35,6 +36,7 @@ export class PresupuestosController {
     private readonly service: PresupuestosService,
     private readonly pdf: PresupuestoPdfService,
     private readonly prisma: PrismaService,
+    private readonly archivos: ArchivosService,
   ) {}
 
   // ── Link público (sin sesión; el token es la credencial) ───────────
@@ -121,14 +123,16 @@ export class PresupuestosController {
     @CurrentSession() auth: CurrentAuth,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<StreamableFile> {
-    const [detalle, cfg, tenant] = await Promise.all([
+    const [detalle, cfg, tenant, logoDataUri] = await Promise.all([
       this.service.detalle(auth, id),
       this.service.config(auth.tenantId),
       this.pdfTenantNombre(auth.tenantId),
+      this.archivos.logoDataUri(auth.tenantId),
     ]);
     const buffer = await this.pdf.generar({
       numero: detalle.numero!,
       negocio: tenant,
+      logoDataUri,
       cliente: detalle.cliente?.nombre ?? null,
       vendedor: detalle.vendedor?.nombre ?? null,
       fechaEmision: detalle.fechaEmision,

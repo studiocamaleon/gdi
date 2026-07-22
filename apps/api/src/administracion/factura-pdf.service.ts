@@ -84,13 +84,19 @@ export class FacturaPdfService {
   /** 'Geist' si se pudo incrustar; si no, la Helvetica de jsPDF. */
   private familia = 'helvetica';
 
-  async generar(doc: Documento): Promise<Buffer> {
+  /**
+   * `logoDataUri` sólo se dibuja si es PNG o JPEG: jsPDF no rasteriza SVG ni
+   * WEBP, y los otros dos formatos que aceptamos como logo terminarían en un
+   * cuadro negro. Cuando no se puede, el comprobante sale como siempre — sin
+   * logo. Ver docs/archivos-r2-diseno.md
+   */
+  async generar(doc: Documento, logoDataUri?: string | null): Promise<Buffer> {
     const pdf = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
     this.registrarFuente(pdf);
     pdf.setFont(this.familia, 'normal');
 
     let y = MARGEN;
-    y = this.bandaSuperior(pdf, doc, y);
+    y = this.bandaSuperior(pdf, doc, y, this.logoDibujable(logoDataUri));
     y = this.receptor(pdf, doc, y);
     y = this.condiciones(pdf, doc, y);
     y = this.items(pdf, doc, y);
@@ -125,22 +131,49 @@ export class FacturaPdfService {
     });
   }
 
+  /** PNG/JPEG o nada: los demás formatos jsPDF los dibuja como un cuadro negro. */
+  private logoDibujable(dataUri?: string | null): string | null {
+    if (!dataUri) return null;
+    return /^data:image\/(png|jpe?g);base64,/i.test(dataUri) ? dataUri : null;
+  }
+
   /** Emisor · recuadro de la letra · datos del comprobante. */
-  private bandaSuperior(pdf: jsPDF, d: Documento, y0: number): number {
+  private bandaSuperior(
+    pdf: jsPDF,
+    d: Documento,
+    y0: number,
+    logo: string | null,
+  ): number {
     const anchoLetra = 22;
     const xLetra = MARGEN + (CONTENIDO - anchoLetra) / 2;
     const xComp = xLetra + anchoLetra + 8;
     let y = y0;
 
     // ── Emisor
+    const LADO_LOGO = 11;
+    if (logo) {
+      try {
+        pdf.addImage(logo, MARGEN, y - 1, LADO_LOGO, LADO_LOGO, undefined, 'FAST');
+      } catch (error) {
+        // Un logo corrupto no puede impedir emitir un comprobante fiscal.
+        this.log.warn(
+          `No pude dibujar el logo en la factura: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        logo = null;
+      }
+    }
+    const xEmisor = logo ? MARGEN + LADO_LOGO + 3 : MARGEN;
+
     pdf
       .setFont(this.familia, 'bold')
       .setFontSize(13)
       .setTextColor(...INK);
-    pdf.text(d.emisor.razonSocial, MARGEN, y + 4);
+    pdf.text(d.emisor.razonSocial, xEmisor, y + 4);
 
     pdf.setFont(this.familia, 'normal').setFontSize(7.5);
-    let yy = y + 11;
+    // Con logo las filas arrancan más abajo para no meterse debajo de él; el
+    // bloque es elástico (`Math.max` al final), así que no rompe lo de abajo.
+    let yy = y + (logo ? 14 : 11);
     const fila = (k: string, v: string | null) => {
       if (!v) return;
       pdf.setTextColor(...MUTED);
