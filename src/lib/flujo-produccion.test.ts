@@ -31,11 +31,11 @@ import {
 /** L–V 08:00–17:00 (9 h por día), sábado y domingo cerrados. */
 const CALENDARIO: CalendarioEstacion = {
   dias: {
-    lun: { desde: "08:00", hasta: "17:00" },
-    mar: { desde: "08:00", hasta: "17:00" },
-    mie: { desde: "08:00", hasta: "17:00" },
-    jue: { desde: "08:00", hasta: "17:00" },
-    vie: { desde: "08:00", hasta: "17:00" },
+    lun: [{ desde: "08:00", hasta: "17:00" }],
+    mar: [{ desde: "08:00", hasta: "17:00" }],
+    mie: [{ desde: "08:00", hasta: "17:00" }],
+    jue: [{ desde: "08:00", hasta: "17:00" }],
+    vie: [{ desde: "08:00", hasta: "17:00" }],
     sab: null,
     dom: null,
   },
@@ -201,7 +201,7 @@ describe("avanzarAVentana", () => {
   it("devuelve null si no hay ninguna ventana en el horizonte (D8)", () => {
     // Franja degenerada: el día existe pero no tiene minutos utilizables.
     const imposible: CalendarioEstacion = {
-      dias: { ...CALENDARIO.dias, lun: { desde: "08:00", hasta: "08:00" } },
+      dias: { ...CALENDARIO.dias, lun: [{ desde: "08:00", hasta: "08:00" }] },
     };
     const soloLunes: CalendarioEstacion = {
       dias: { ...imposible.dias, mar: null, mie: null, jue: null, vie: null },
@@ -227,6 +227,53 @@ describe("sumarMinutosLaborales", () => {
 
   it("avanza a la ventana antes de empezar a contar", () => {
     expect(sumarMinutosLaborales(CALENDARIO, jul(20, 5, 0), 30)).toEqual(jul(20, 8, 30));
+  });
+});
+
+describe("jornada cortada (varias franjas por día)", () => {
+  /** L–V 09:00–12:00 y 15:00–19:00 (7 h por día). */
+  const CORTADO: CalendarioEstacion = {
+    dias: {
+      lun: [{ desde: "09:00", hasta: "12:00" }, { desde: "15:00", hasta: "19:00" }],
+      mar: [{ desde: "09:00", hasta: "12:00" }, { desde: "15:00", hasta: "19:00" }],
+      mie: [{ desde: "09:00", hasta: "12:00" }, { desde: "15:00", hasta: "19:00" }],
+      jue: [{ desde: "09:00", hasta: "12:00" }, { desde: "15:00", hasta: "19:00" }],
+      vie: [{ desde: "09:00", hasta: "12:00" }, { desde: "15:00", hasta: "19:00" }],
+      sab: null,
+      dom: null,
+    },
+  };
+
+  it("un instante dentro del corte del mediodía cae en la franja de la tarde", () => {
+    expect(avanzarAVentana(CORTADO, jul(20, 13, 0))).toEqual(jul(20, 15, 0));
+  });
+
+  it("un instante dentro de la segunda franja se respeta tal cual", () => {
+    expect(avanzarAVentana(CORTADO, jul(20, 16, 30))).toEqual(jul(20, 16, 30));
+  });
+
+  it("después del cierre de la tarde salta a la mañana siguiente", () => {
+    expect(avanzarAVentana(CORTADO, jul(20, 19, 30))).toEqual(jul(21, 9, 0));
+  });
+
+  it("el trabajo que no entra a la mañana sigue a la tarde, sin contar el corte", () => {
+    // 11:00 + 120 min: 60 hasta las 12:00, 60 desde las 15:00.
+    expect(sumarMinutosLaborales(CORTADO, jul(20, 11, 0), 120)).toEqual(jul(20, 16, 0));
+  });
+
+  it("cruza el corte y el fin del día encadenando franjas", () => {
+    // Viernes 11:00 + 6 h: 1 h mañana + 4 h tarde del viernes, 1 h lunes.
+    expect(sumarMinutosLaborales(CORTADO, jul(24, 11, 0), 360)).toEqual(jul(27, 10, 0));
+  });
+
+  it("franjas contiguas (9–12 y 12–18) equivalen a una jornada corrida", () => {
+    const contiguo: CalendarioEstacion = {
+      dias: {
+        ...CORTADO.dias,
+        lun: [{ desde: "09:00", hasta: "12:00" }, { desde: "12:00", hasta: "18:00" }],
+      },
+    };
+    expect(sumarMinutosLaborales(contiguo, jul(20, 9, 0), 240)).toEqual(jul(20, 13, 0));
   });
 });
 
@@ -307,7 +354,7 @@ describe("simularFlujo · pasos internos", () => {
   it("no le inventa ETA a un item sin ventana en el horizonte (D8)", () => {
     const soloLunes: CalendarioEstacion = {
       dias: {
-        lun: { desde: "08:00", hasta: "08:00" },
+        lun: [{ desde: "08:00", hasta: "08:00" }],
         mar: null,
         mie: null,
         jue: null,

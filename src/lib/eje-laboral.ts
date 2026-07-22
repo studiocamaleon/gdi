@@ -76,7 +76,8 @@ function ventanaUnion(estaciones: Estacion[]) {
     .filter((e) => e.activo)
     .map((e) => {
       const vacio =
-        !e.calendario || DIAS_SEMANA.every((d) => e.calendario!.dias[d] === null);
+        !e.calendario ||
+        DIAS_SEMANA.every((d) => (e.calendario!.dias[d] ?? []).length === 0);
       return vacio ? calendarioDefault() : (e.calendario as CalendarioEstacion);
     });
 
@@ -84,10 +85,13 @@ function ventanaUnion(estaciones: Estacion[]) {
   let hasta = -Infinity;
   for (const cal of calendarios) {
     for (const dia of DIAS_SEMANA) {
-      const franja = cal.dias[dia];
-      if (!franja) continue;
-      desde = Math.min(desde, minutosDe(franja.desde));
-      hasta = Math.max(hasta, minutosDe(franja.hasta));
+      // La envolvente cubre TODAS las franjas del día: con jornada cortada
+      // el eje dibuja también el corte del mediodía (queda como aire, nada
+      // se programa ahí).
+      for (const franja of cal.dias[dia] ?? []) {
+        desde = Math.min(desde, minutosDe(franja.desde));
+        hasta = Math.max(hasta, minutosDe(franja.hasta));
+      }
     }
   }
   if (!Number.isFinite(desde) || !Number.isFinite(hasta) || hasta <= desde) {
@@ -107,9 +111,10 @@ function esLaborable(
   return estaciones.some((e) => {
     if (!e.activo) return false;
     const vacio =
-      !e.calendario || DIAS_SEMANA.every((d) => e.calendario!.dias[d] === null);
+      !e.calendario ||
+      DIAS_SEMANA.every((d) => (e.calendario!.dias[d] ?? []).length === 0);
     const cal = vacio ? calendarioDefault() : (e.calendario as CalendarioEstacion);
-    return cal.dias[dia] !== null;
+    return (cal.dias[dia] ?? []).length > 0;
   });
 }
 

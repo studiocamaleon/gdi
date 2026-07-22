@@ -17923,12 +17923,40 @@ textarea.est-input { resize: vertical; min-height: 60px; font-family: inherit; }
 }
 .cal-row.on .cal-day .dot { background: var(--ok); }
 .cal-row.invalid .cal-day .dot { background: var(--signal); }
+/* Las franjas del día apiladas (jornada cortada: 9–12 y 15–19) + los
+   botones de agregar/quitar franja alineados a los inputs. */
+.cal-franjas {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
 .cal-times {
   display: inline-flex;
   align-items: center;
   gap: 6px;
 }
 .cal-times .sep { color: var(--muted-text); font-size: 12px; }
+.cal-agregar,
+.cal-quitar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 27px;
+  height: 27px;
+  padding: 0;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--muted-text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+  cursor: pointer;
+}
+.cal-agregar:hover { color: var(--ink); border-color: var(--ink); }
+.cal-quitar:hover { color: var(--signal); border-color: var(--signal); }
 .cal-times input[type="time"] {
   font: inherit;
   font-size: 12.5px;
@@ -30647,6 +30675,53 @@ body:has(.t-app) {
   inset: 0;
   border-radius: 4px;
   box-shadow: inset 0 0 0 1.5px var(--simu-hot);
+}
+
+/* Tooltip propio de los bloques (reemplaza el title nativo del navegador).
+   Un solo nodo fixed que sigue al puntero; se posiciona por transform desde
+   el componente. Mismo lenguaje que .simu-sugg: superficie, línea y sombra
+   del sistema, hora en mono como el resto de la mesa de luz. */
+.tablero-produccion .simu-tip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 80;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 320px;
+  padding: 8px 11px;
+  background: var(--simu-surface);
+  border: 1px solid var(--simu-line);
+  border-radius: 9px;
+  box-shadow: 0 16px 40px -16px rgba(20, 17, 12, 0.35);
+}
+
+.tablero-produccion .simu-tip .t1 {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--simu-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tablero-produccion .simu-tip .t2 {
+  font-family: var(--simu-mono);
+  font-size: 11px;
+  color: var(--simu-ink-2);
+  white-space: nowrap;
+}
+
+.tablero-produccion .simu-tip .t2 b {
+  font-weight: 600;
+  color: var(--simu-accent);
+  margin-left: 8px;
+}
+
+.tablero-produccion .simu-tip .t2 b.hot {
+  color: var(--simu-hot);
 }
 
 .tablero-produccion .simu-now {

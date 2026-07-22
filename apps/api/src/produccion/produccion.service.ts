@@ -12,7 +12,11 @@ import type { CrearDiaNoLaborableDto } from './dto/crear-dia-no-laborable.dto';
 import type { ActualizarConfiguracionProduccionDto } from './dto/actualizar-configuracion-produccion.dto';
 import { FAMILIAS } from '../productos-servicios/pasos/familias';
 import type { FamiliaCodigo } from '../productos-servicios/pasos/types';
-import { parseCalendario, type CalendarioEstacion } from './calendario';
+import {
+  normalizarCalendarioAlmacenado,
+  parseCalendario,
+  type CalendarioEstacion,
+} from './calendario';
 import { evaluateRollLayoutForConfiguredAlgorithm } from '../motor-universal/nesting-dispatcher';
 import type { SimularNestingDto } from './dto/simular-nesting.dto';
 
@@ -1274,7 +1278,8 @@ export class ProduccionService {
       icono: item.icono,
       capacidadConcurrente: item.capacidadConcurrente,
       tiempoPreparacionMin: item.tiempoPreparacionMin,
-      calendario: (item.calendarioJson as CalendarioEstacion | null) ?? null,
+      // Normaliza el shape legado (una franja suelta por día) al de listas.
+      calendario: normalizarCalendarioAlmacenado(item.calendarioJson),
       familias: item.familias.map((fila) => fila.familiaCodigo),
       empleados: item.empleados.map((fila) => ({
         id: fila.empleado.id,

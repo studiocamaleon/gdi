@@ -12,7 +12,7 @@ import {
 } from "@/lib/eje-laboral";
 import type { CalendarioEstacion, Estacion } from "@/lib/estaciones";
 
-const franja = (desde: string, hasta: string) => ({ desde, hasta });
+const franja = (desde: string, hasta: string) => [{ desde, hasta }];
 
 const cal = (desde: string, hasta: string): CalendarioEstacion => ({
   dias: {

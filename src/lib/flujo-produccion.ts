@@ -109,13 +109,13 @@ function claveFecha(fecha: Date) {
   return `${fecha.getFullYear()}-${mes}-${dia}`;
 }
 
-function franjaDelDia(
+function franjasDelDia(
   calendario: CalendarioEstacion,
   fecha: Date,
   noLaborables: Set<string>,
-): CalendarioDia | null {
-  if (noLaborables.has(claveFecha(fecha))) return null;
-  return calendario.dias[JS_DIA[fecha.getDay()]];
+): CalendarioDia {
+  if (noLaborables.has(claveFecha(fecha))) return [];
+  return calendario.dias[JS_DIA[fecha.getDay()]] ?? [];
 }
 
 function conHora(fecha: Date, minutos: number) {
@@ -126,7 +126,8 @@ function conHora(fecha: Date, minutos: number) {
 
 /**
  * Avanza `t` al próximo instante laboral (t mismo si ya cae dentro de una
- * franja). null si no hay ventana en el horizonte (D8).
+ * franja del día — puede haber varias: jornada cortada). null si no hay
+ * ventana en el horizonte (D8).
  */
 export function avanzarAVentana(
   calendario: CalendarioEstacion,
@@ -135,20 +136,37 @@ export function avanzarAVentana(
 ): Date | null {
   for (let i = 0; i < HORIZONTE_DIAS; i += 1) {
     const dia = new Date(t.getFullYear(), t.getMonth(), t.getDate() + i);
-    const franja = franjaDelDia(calendario, dia, noLaborables);
-    if (!franja) continue;
-    const inicio = conHora(dia, minutosDe(franja.desde));
-    const fin = conHora(dia, minutosDe(franja.hasta));
-    const candidato = i === 0 && t > inicio ? t : inicio;
-    if (candidato < fin) return candidato;
+    for (const franja of franjasDelDia(calendario, dia, noLaborables)) {
+      const inicio = conHora(dia, minutosDe(franja.desde));
+      const fin = conHora(dia, minutosDe(franja.hasta));
+      const candidato = i === 0 && t > inicio ? t : inicio;
+      if (candidato < fin) return candidato;
+    }
+  }
+  return null;
+}
+
+/**
+ * El cierre de la franja que contiene a `t` (que ya debe caer dentro de una:
+ * es el invariante de avanzarAVentana). null si t no cae en ninguna.
+ */
+function finDeFranjaActual(
+  calendario: CalendarioEstacion,
+  t: Date,
+  noLaborables: Set<string>,
+): Date | null {
+  for (const franja of franjasDelDia(calendario, t, noLaborables)) {
+    const inicio = conHora(t, minutosDe(franja.desde));
+    const fin = conHora(t, minutosDe(franja.hasta));
+    if (t >= inicio && t < fin) return fin;
   }
   return null;
 }
 
 /**
  * Suma minutos laborales desde `desde` (se avanza solo a ventana si hace
- * falta), saltando cierres y días sin franja. null si el horizonte no
- * alcanza.
+ * falta), saltando cierres, cortes de mediodía y días sin franjas. null si
+ * el horizonte no alcanza.
  */
 export function sumarMinutosLaborales(
   calendario: CalendarioEstacion,
@@ -158,15 +176,17 @@ export function sumarMinutosLaborales(
 ): Date | null {
   let t = avanzarAVentana(calendario, desde, noLaborables);
   let restante = minutos;
+  // Antes la guardia contaba días; con jornada cortada hay más de una
+  // iteración por día (una por franja).
   let guardia = 0;
-  while (t && guardia < HORIZONTE_DIAS + 7) {
+  const limite = (HORIZONTE_DIAS + 7) * 6;
+  while (t && guardia < limite) {
     guardia += 1;
-    const franja = franjaDelDia(calendario, t, noLaborables);
-    if (!franja) {
+    const finVentana = finDeFranjaActual(calendario, t, noLaborables);
+    if (!finVentana) {
       t = avanzarAVentana(calendario, t, noLaborables);
       continue;
     }
-    const finVentana = conHora(t, minutosDe(franja.hasta));
     const disponibles = (finVentana.getTime() - t.getTime()) / 60000;
     if (restante <= disponibles) return new Date(t.getTime() + restante * 60000);
     restante -= disponibles;
@@ -241,7 +261,10 @@ function duracionDePaso(paso: TableroPasoData, medianas: Map<string, number>): n
 
 function calendarioVacio(calendario: CalendarioEstacion | null): boolean {
   if (!calendario) return true;
-  return DIAS_SEMANA.every((dia) => calendario.dias[dia] === null);
+  return DIAS_SEMANA.every((dia) => {
+    const franjas = calendario.dias[dia];
+    return franjas === null || franjas.length === 0;
+  });
 }
 
 export function simularFlujo({

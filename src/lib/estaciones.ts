@@ -32,15 +32,20 @@ export function etapaDeEstacion(key: string) {
 }
 
 // ── Calendario semanal operativo ─────────────────────────────────────────
-// Espejo del backend (apps/api/src/produccion/calendario.ts). Una franja
-// desde/hasta ("HH:MM") por día; null = no se trabaja ese día.
+// Espejo del backend (apps/api/src/produccion/calendario.ts). Cada día lleva
+// una LISTA de franjas desde/hasta ("HH:MM") — jornada cortada: 09–12 y
+// 15–19 —; null = no se trabaja ese día. La API normaliza el shape legado
+// (una franja suelta) a lista, así que acá sólo existe el nuevo.
 // Ver docs/capacidad-estaciones-diseno.md D2.
 
 export const DIAS_SEMANA = ["lun", "mar", "mie", "jue", "vie", "sab", "dom"] as const;
 
 export type DiaSemana = (typeof DIAS_SEMANA)[number];
 
-export type CalendarioDia = { desde: string; hasta: string };
+export type CalendarioFranja = { desde: string; hasta: string };
+
+/** Franjas del día, ordenadas por `desde` y sin solaparse. */
+export type CalendarioDia = CalendarioFranja[];
 
 export type CalendarioEstacion = {
   dias: Record<DiaSemana, CalendarioDia | null>;
@@ -60,7 +65,7 @@ export const DIAS_SEMANA_LABEL: Record<DiaSemana, string> = {
 export function calendarioDefault(): CalendarioEstacion {
   const franja = { desde: "09:00", hasta: "18:00" };
   return {
-    dias: { lun: { ...franja }, mar: { ...franja }, mie: { ...franja }, jue: { ...franja }, vie: { ...franja }, sab: null, dom: null },
+    dias: { lun: [{ ...franja }], mar: [{ ...franja }], mie: [{ ...franja }], jue: [{ ...franja }], vie: [{ ...franja }], sab: null, dom: null },
   };
 }
 
@@ -69,24 +74,30 @@ function horaCorta(hora: string) {
   return hora.startsWith("0") ? hora.slice(1) : hora;
 }
 
+/** "9:00–12:00 y 15:00–19:00" (las franjas de un día, ya ordenadas). */
+function etiquetaFranjas(franjas: CalendarioDia) {
+  return franjas
+    .map((franja) => `${horaCorta(franja.desde)}–${horaCorta(franja.hasta)}`)
+    .join(" y ");
+}
+
 /**
- * Label compacto del calendario: agrupa días consecutivos con la misma
- * franja — "L–V 8:00–18:00 · S 9:00–13:00". null si no hay calendario.
+ * Label compacto del calendario: agrupa días consecutivos con las mismas
+ * franjas — "L–V 8:00–18:00 · S 9:00–13:00". null si no hay calendario.
  */
 export function etiquetaCalendario(calendario: CalendarioEstacion | null | undefined): string | null {
   if (!calendario) return null;
-  const grupos: Array<{ desdeDia: DiaSemana; hastaDia: DiaSemana; franja: CalendarioDia }> = [];
+  const grupos: Array<{ desdeDia: DiaSemana; hastaDia: DiaSemana; franjas: CalendarioDia }> = [];
   for (const dia of DIAS_SEMANA) {
-    const franja = calendario.dias[dia];
-    if (!franja) continue;
+    const franjas = calendario.dias[dia];
+    if (!franjas || franjas.length === 0) continue;
     const previo = grupos[grupos.length - 1];
     const contiguo =
       previo &&
       DIAS_SEMANA.indexOf(dia) === DIAS_SEMANA.indexOf(previo.hastaDia) + 1 &&
-      previo.franja.desde === franja.desde &&
-      previo.franja.hasta === franja.hasta;
+      etiquetaFranjas(previo.franjas) === etiquetaFranjas(franjas);
     if (contiguo) previo.hastaDia = dia;
-    else grupos.push({ desdeDia: dia, hastaDia: dia, franja });
+    else grupos.push({ desdeDia: dia, hastaDia: dia, franjas });
   }
   if (grupos.length === 0) return null;
   return grupos
@@ -95,7 +106,7 @@ export function etiquetaCalendario(calendario: CalendarioEstacion | null | undef
         grupo.desdeDia === grupo.hastaDia
           ? DIAS_SEMANA_LABEL[grupo.desdeDia]
           : `${DIAS_SEMANA_LABEL[grupo.desdeDia]}–${DIAS_SEMANA_LABEL[grupo.hastaDia]}`;
-      return `${dias} ${horaCorta(grupo.franja.desde)}–${horaCorta(grupo.franja.hasta)}`;
+      return `${dias} ${etiquetaFranjas(grupo.franjas)}`;
     })
     .join(" · ");
 }
@@ -109,13 +120,17 @@ function minutosDesdeMedianoche(hora: string) {
   return hh * 60 + mm;
 }
 
-/** Duración de una franja en minutos. */
-function minutosDeFranja(franja: CalendarioDia) {
-  return minutosDesdeMedianoche(franja.hasta) - minutosDesdeMedianoche(franja.desde);
+/** Minutos laborales del día: suma de sus franjas. */
+function minutosDeDia(franjas: CalendarioDia) {
+  return franjas.reduce(
+    (acc, franja) =>
+      acc + minutosDesdeMedianoche(franja.hasta) - minutosDesdeMedianoche(franja.desde),
+    0,
+  );
 }
 
 /**
- * Capacidad del día más largo del calendario, en minutos-persona (franja ×
+ * Capacidad del día más largo del calendario, en minutos-persona (franjas ×
  * puestos). Escala la LoadBar del tablero: "un día lleno" = barra llena.
  */
 export function capacidadDiariaMaxMin(
@@ -125,8 +140,8 @@ export function capacidadDiariaMaxMin(
   if (!calendario) return null;
   let max = 0;
   for (const dia of DIAS_SEMANA) {
-    const franja = calendario.dias[dia];
-    if (franja) max = Math.max(max, minutosDeFranja(franja));
+    const franjas = calendario.dias[dia];
+    if (franjas) max = Math.max(max, minutosDeDia(franjas));
   }
   return max > 0 ? max * Math.max(1, puestos) : null;
 }
@@ -161,14 +176,18 @@ export function proyectarColaDias(
   for (let i = 0; i < 365; i += 1) {
     const fecha = new Date(desde.getFullYear(), desde.getMonth(), desde.getDate() + i);
     if (noLaborables.has(claveFechaLocal(fecha))) continue;
-    const franja = calendario.dias[JS_DIA[fecha.getDay()]];
-    if (!franja) continue;
-    const capacidadDia = minutosDeFranja(franja) * puestosEfectivos;
+    const franjas = calendario.dias[JS_DIA[fecha.getDay()]];
+    if (!franjas || franjas.length === 0) continue;
+    const capacidadDia = minutosDeDia(franjas) * puestosEfectivos;
     let disponibles = capacidadDia;
     if (i === 0) {
+      // Hoy aporta sólo lo que queda: de cada franja, la parte no consumida.
       const ahora = desde.getHours() * 60 + desde.getMinutes();
-      const arranque = Math.max(ahora, minutosDesdeMedianoche(franja.desde));
-      disponibles = Math.max(0, minutosDesdeMedianoche(franja.hasta) - arranque) * puestosEfectivos;
+      const restanMin = franjas.reduce((acc, franja) => {
+        const arranque = Math.max(ahora, minutosDesdeMedianoche(franja.desde));
+        return acc + Math.max(0, minutosDesdeMedianoche(franja.hasta) - arranque);
+      }, 0);
+      disponibles = restanMin * puestosEfectivos;
     }
     if (disponibles <= 0) continue;
     const consumo = Math.min(restante, disponibles);
