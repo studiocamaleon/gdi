@@ -49,8 +49,10 @@ UTILITY desde el arranque.
 Las reglas prácticas que salen de ahí:
 
 - Sólo hechos sobre una transacción que el cliente ya inició.
-- El nombre de la empresa se puede usar para **identificar** al remitente
-  ("Tu orden en {{empresa}} está lista"), no para agradecer ni invitar.
+- La empresa habla en **primera persona**: el mensaje sale de su número, así
+  que es "recibimos tu orden", no "{{empresa}} recibió tu orden". Como
+  consecuencia `nombre_empresa` no hace falta en ningún texto — WhatsApp ya
+  muestra el remitente en el encabezado del chat.
 - Nada de eslóganes, emojis de celebración al comienzo, ni llamadas a la
   acción que no sean el link de la propia transacción.
 - Si el mensaje existe para que el cliente **vuelva a comprar** o para pedir

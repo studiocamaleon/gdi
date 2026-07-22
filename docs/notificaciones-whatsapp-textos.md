@@ -6,12 +6,20 @@
 
 ---
 
-## 0. Las reglas que se siguieron, y cuáles no
+## 0. Las reglas que se siguieron
+
+**La empresa habla en primera persona.** El mensaje sale del número del
+tenant: para el cliente, es su imprenta escribiéndole. Entonces es "recibimos
+tu orden", nunca "{{empresa}} recibió tu orden" — eso último suena a que
+habla un tercero, y delata que atrás hay un sistema.
+
+**Por eso `nombre_empresa` no existe en ninguna plantilla.** Quien habla no
+necesita nombrarse, y WhatsApp ya muestra el nombre del remitente en el
+encabezado del chat. Sacarlo eliminó **8 parámetros** del catálogo: 61 → 53.
 
 **Sin eslóganes.** Es lo único que tumbó las plantillas actuales a MARKETING
 (`catalogo` §1.1). Ninguno de estos textos agradece la elección, invita a
-volver ni celebra la marca. El nombre de la empresa aparece para
-**identificar** al remitente.
+volver ni celebra la marca.
 
 **Con emojis.** Mi instinto era sacarlos todos, y estaba mal: tu
 `recibo_pago_v2` tiene 💳, ⬇️ y 😀 **y Meta lo categorizó UTILITY**. La
@@ -20,8 +28,8 @@ Así que se usan, moderados y funcionales — sacarlos habría sido superstició
 disfrazada de prudencia.
 
 **Cerrar con una línea que confirme que es transaccional.** "Si no lo
-solicitaste, ignorá este mensaje", "no necesitás hacer nada por ahora". Es
-barato y refuerza la lectura de utility.
+pediste, ignorá este mensaje", "no necesitás hacer nada por ahora". Es barato
+y refuerza la lectura de utility.
 
 **Restricciones de Meta que condicionan la redacción:**
 
@@ -54,24 +62,23 @@ Dos plantillas es explícito y las dos se aprueban igual de fácil.
 > lo tenga ningún tenant.
 
 ```
-Hola {{1}}, acá está el presupuesto {{2}} que solicitaste a {{3}}. 📄
+Hola {{1}}, acá va el presupuesto {{2}} que nos pediste. 📄
 
-Importe total: ${{4}}
-Válido hasta: {{5}}
+Importe total: ${{3}}
+Válido hasta: {{4}}
 
-Para verlo en detalle y aprobarlo: {{6}}
+Para verlo en detalle y aprobarlo: {{5}}
 
-Si no lo solicitaste, ignorá este mensaje.
+Si no lo pediste, ignorá este mensaje.
 ```
 
 | # | Parámetro | Ejemplo |
 |---|---|---|
 | 1 | `nombre_cliente` | Marcela |
 | 2 | `numero_presupuesto` | P-00142 |
-| 3 | `nombre_empresa` | Corporearte |
-| 4 | `total` | 185.400,00 |
-| 5 | `fecha_vencimiento` | 05/08/2026 |
-| 6 | `url_presupuesto` | https://app.grafo.ar/p/a1b2c3 |
+| 3 | `total` | 185.400,00 |
+| 4 | `fecha_vencimiento` | 05/08/2026 |
+| 5 | `url_presupuesto` | https://app.grafo.ar/p/a1b2c3 |
 
 ---
 
@@ -80,7 +87,7 @@ Si no lo solicitaste, ignorá este mensaje.
 > Es un empujón comercial. Va como marketing porque **lo es**.
 
 ```
-Hola {{1}}, el presupuesto {{2}} vence el {{3}}.
+Hola {{1}}, te recordamos que el presupuesto {{2}} vence el {{3}}.
 
 Si querés avanzar, podés aprobarlo acá: {{4}}
 
@@ -99,11 +106,11 @@ Si ya no te interesa, no hace falta que hagas nada.
 ### 3 · `grafo_presupuesto_aprobado_v1` — UTILITY · default ON
 
 ```
-Hola {{1}}, registramos tu aprobación del presupuesto {{2}} por ${{3}}. ✅
+Hola {{1}}, recibimos tu aprobación del presupuesto {{2}} por ${{3}}. ✅
 
 Copia del presupuesto aprobado: {{4}}
 
-{{5}} va a preparar la orden de trabajo y te avisamos cuando entre en producción.
+Ya preparamos la orden de trabajo y te avisamos cuando entre en producción.
 ```
 
 | # | Parámetro | Ejemplo |
@@ -112,18 +119,17 @@ Copia del presupuesto aprobado: {{4}}
 | 2 | `numero_presupuesto` | P-00142 |
 | 3 | `total` | 185.400,00 |
 | 4 | `url_presupuesto` | https://app.grafo.ar/p/a1b2c3 |
-| 5 | `nombre_empresa` | Corporearte |
 
 ---
 
 ### 4 · `grafo_orden_recibida_v1` — UTILITY · default ON
 
 ```
-Hola {{1}}, tu orden {{2}} quedó registrada en {{3}}. 🧾
+Hola {{1}}, recibimos tu orden {{2}}. 🧾
 
-📅 Entrega estimada: {{4}}
+📅 Entrega estimada: {{3}}
 
-Podés seguir el avance acá: {{5}}
+Podés seguir el avance acá: {{4}}
 
 Si la fecha cambia, te avisamos por este medio.
 ```
@@ -132,16 +138,15 @@ Si la fecha cambia, te avisamos por este medio.
 |---|---|---|
 | 1 | `nombre_cliente` | Marcela |
 | 2 | `numero_orden` | OT-01285 |
-| 3 | `nombre_empresa` | Corporearte |
-| 4 | `fecha_estimada` | 29/07/2026 |
-| 5 | `url_seguimiento` | https://app.grafo.ar/s/x7y8z9 |
+| 3 | `fecha_estimada` | 29/07/2026 |
+| 4 | `url_seguimiento` | https://app.grafo.ar/s/x7y8z9 |
 
 ---
 
 ### 5 · `grafo_orden_en_produccion_v1` — UTILITY · default OFF
 
 ```
-Hola {{1}}, tu orden {{2}} entró en producción. 🖨️
+Hola {{1}}, ya empezamos a producir tu orden {{2}}. 🖨️
 
 📅 Entrega estimada: {{3}}
 
@@ -166,13 +171,13 @@ No necesitás hacer nada por ahora.
 > que el cliente la descubra.
 
 ```
-Hola {{1}}, hay un cambio en la fecha de tu orden {{2}}.
+Hola {{1}}, te avisamos de un cambio en la fecha de tu orden {{2}}.
 
 📅 Entrega estimada: pasó del {{3}} al {{4}}.
 
 Detalle actualizado: {{5}}
 
-Si necesitás coordinar algo, respondé este mensaje.
+Si necesitás coordinar algo, respondenos por acá.
 ```
 
 > La respuesta cae en la bandeja de Wati del tenant, que ya usa. Grafo no la
@@ -194,11 +199,11 @@ Si necesitás coordinar algo, respondé este mensaje.
 > Sin saldo pendiente.
 
 ```
-Hola {{1}}, tu orden {{2}} está lista. 📦
+Hola {{1}}, tu orden {{2}} ya está lista. 📦
 
-Ya podés retirarla por {{3}} o, si pediste envío, te avisamos cuando salga.
+Podés pasar a retirarla por nuestro local o, si pediste envío, te avisamos cuando salga.
 
-Detalle: {{4}}
+Detalle: {{3}}
 
 No tenés saldo pendiente por este trabajo.
 ```
@@ -207,23 +212,22 @@ No tenés saldo pendiente por este trabajo.
 |---|---|---|
 | 1 | `nombre_cliente` | Marcela |
 | 2 | `numero_orden` | OT-01285 |
-| 3 | `nombre_empresa` | Corporearte |
-| 4 | `url_seguimiento` | https://app.grafo.ar/s/x7y8z9 |
+| 3 | `url_seguimiento` | https://app.grafo.ar/s/x7y8z9 |
 
 ---
 
 ### 8 · `grafo_orden_lista_con_saldo_v1` — UTILITY · default ON
 
 ```
-Hola {{1}}, tu orden {{2}} está lista. 📦
+Hola {{1}}, tu orden {{2}} ya está lista. 📦
 
 💰 Saldo pendiente: ${{3}}
 
-Ya podés retirarla por {{4}} o, si pediste envío, te avisamos cuando salga.
+Podés pasar a retirarla por nuestro local o, si pediste envío, te avisamos cuando salga.
 
-Detalle: {{5}}
+Detalle: {{4}}
 
-Si ya abonaste, puede que el pago todavía no esté registrado.
+Si ya lo abonaste, puede que todavía no lo hayamos registrado.
 ```
 
 | # | Parámetro | Ejemplo |
@@ -231,25 +235,23 @@ Si ya abonaste, puede que el pago todavía no esté registrado.
 | 1 | `nombre_cliente` | Marcela |
 | 2 | `numero_orden` | OT-01285 |
 | 3 | `saldo_pendiente` | 92.700,00 |
-| 4 | `nombre_empresa` | Corporearte |
-| 5 | `url_seguimiento` | https://app.grafo.ar/s/x7y8z9 |
+| 4 | `url_seguimiento` | https://app.grafo.ar/s/x7y8z9 |
 
 ---
 
 ### 9 · `grafo_orden_entregada_v1` — UTILITY · default OFF
 
 ```
-Hola {{1}}, {{2}} confirma la entrega de tu orden {{3}} el {{4}}. ✅
+Hola {{1}}, confirmamos la entrega de tu orden {{2}} el {{3}}. ✅
 
-Guardá este mensaje como constancia de la entrega.
+Guardá este mensaje como constancia.
 ```
 
 | # | Parámetro | Ejemplo |
 |---|---|---|
 | 1 | `nombre_cliente` | Marcela |
-| 2 | `nombre_empresa` | Corporearte |
-| 3 | `numero_orden` | OT-01285 |
-| 4 | `fecha_entrega` | 29/07/2026 |
+| 2 | `numero_orden` | OT-01285 |
+| 3 | `fecha_entrega` | 29/07/2026 |
 
 ---
 
@@ -265,7 +267,7 @@ Saldo restante: ${{4}}
 
 *Ver recibo:* {{5}}
 
-Este mensaje es la constancia de que el pago quedó registrado.
+Este mensaje es la constancia de que registramos el pago.
 ```
 
 | # | Parámetro | Ejemplo |
@@ -284,12 +286,12 @@ Este mensaje es la constancia de que el pago quedó registrado.
 > marketing es aprovechar el mensaje para ofrecer algo.
 
 ```
-Hola {{1}}, figura un saldo vencido en tu cuenta con {{2}}.
+Hola {{1}}, nos figura un saldo vencido en tu cuenta.
 
-💰 Importe: ${{3}}
-📅 Venció el: {{4}}
+💰 Importe: ${{2}}
+📅 Venció el: {{3}}
 
-Detalle de la cuenta: {{5}}
+Detalle de la cuenta: {{4}}
 
 Si ya lo abonaste, avisanos y lo regularizamos.
 ```
@@ -297,10 +299,9 @@ Si ya lo abonaste, avisanos y lo regularizamos.
 | # | Parámetro | Ejemplo |
 |---|---|---|
 | 1 | `nombre_cliente` | Marcela |
-| 2 | `nombre_empresa` | Corporearte |
-| 3 | `monto_vencido` | 92.700,00 |
-| 4 | `fecha_vencimiento` | 15/07/2026 |
-| 5 | `url_cuenta` | https://app.grafo.ar/c/p9q8r7 |
+| 2 | `monto_vencido` | 92.700,00 |
+| 3 | `fecha_vencimiento` | 15/07/2026 |
+| 4 | `url_cuenta` | https://app.grafo.ar/c/p9q8r7 |
 
 ---
 
@@ -309,9 +310,9 @@ Si ya lo abonaste, avisanos y lo regularizamos.
 ```
 Hola {{1}}, emitimos tu {{2}} N° {{3}} por ${{4}}. 🧾
 
-Descargala desde acá: {{5}}
+Podés descargarla acá: {{5}}
 
-El comprobante también queda disponible en tu seguimiento.
+También te queda disponible en el seguimiento de tu orden.
 ```
 
 | # | Parámetro | Ejemplo |
@@ -332,7 +333,7 @@ El comprobante también queda disponible en tu seguimiento.
 ```
 Hola {{1}}, ¿cómo te fue con tu orden {{2}}? 🙂
 
-En {{3}} nos ayuda mucho saber tu opinión. Si tenés un minuto, podés dejarnos una reseña acá: {{4}}
+Nos ayuda mucho saber tu opinión. Si tenés un minuto, podés dejarnos una reseña acá: {{3}}
 
 Si preferís no hacerlo, no hay problema.
 ```
@@ -341,12 +342,17 @@ Si preferís no hacerlo, no hay problema.
 |---|---|---|
 | 1 | `nombre_cliente` | Marcela |
 | 2 | `numero_orden` | OT-01285 |
-| 3 | `nombre_empresa` | Corporearte |
-| 4 | `url_resena` | https://g.page/r/ejemplo/review |
+| 3 | `url_resena` | https://g.page/r/ejemplo/review |
 
 ---
 
 ## 3. Decisiones para revisar
+
+**"Nuestro local" en las dos de orden lista.** Es lo único que asume algo
+del tenant: que tiene local donde retirar. La frase cubre las dos ramas
+("o, si pediste envío, te avisamos cuando salga"), así que no queda mal para
+uno que sólo despacha, pero si aparece un tenant 100 % delivery habrá que
+desdoblarla.
 
 **`{{nombre_cliente}}` es el nombre de pila o la razón social.** `Cliente`
 guarda un solo nombre y para empresas es la razón social, así que "Hola
