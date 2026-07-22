@@ -241,6 +241,41 @@ export class WatiClient {
     }
   }
 
+  /**
+   * Manda a Meta un borrador ya creado.
+   *
+   * El alta y el envío son dos pasos: `crearPlantilla` deja la plantilla en
+   * DRAFT y recién esto la somete a revisión. El botón "Guardar y enviar" del
+   * dashboard hace exactamente lo mismo, en dos requests.
+   *
+   * El id va en el PATH. Sin él la ruta ni siquiera existe —contesta 405—,
+   * que es lo que despistó cuando se la buscó a ciegas.
+   */
+  async enviarAAprobacion(
+    cred: CredencialesWati,
+    id: string,
+  ): Promise<{ ok: true } | { ok: false; motivo: string }> {
+    try {
+      const json = await this.pedir<{
+        ok?: boolean;
+        result?: unknown;
+        info?: string;
+        message?: string;
+      }>(
+        cred,
+        'POST',
+        `/api/v1/templates/submit/${encodeURIComponent(id)}`,
+        {},
+      );
+      if (json?.ok === false) {
+        return { ok: false, motivo: motivoDeAlta(json) };
+      }
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, motivo: mensajeDeError(error) };
+    }
+  }
+
   // ── Interno ─────────────────────────────────────────────────────────
 
   private async pedir<T>(

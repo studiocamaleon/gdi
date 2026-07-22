@@ -208,20 +208,25 @@ export class IntegracionesService {
   }
 
   /**
-   * Crea UNA plantilla del catálogo en la cuenta de Wati del tenant.
+   * Deja UNA plantilla del catálogo lista y enviada a revisión de Meta.
    *
-   * De a una y no las 13 de un saque a propósito: son 13 llamadas a un
+   * Son dos pasos contra Wati y hacen falta los dos: el alta crea la
+   * plantilla en DRAFT y no la manda a ningún lado; recién
+   * `POST /templates/submit/{id}` la somete. Una plantilla en DRAFT parece
+   * hecha en el listado y no sirve para notificar a nadie, así que acá se
+   * hacen los dos o se informa dónde se cortó.
+   *
+   * De a una y no las 13 de un saque a propósito: son varias llamadas a un
    * tercero con timeout de 10 s cada una, y meterlas en un solo request HTTP
    * daría una pantalla congelada un minuto que además pierde todo si se
    * corta. Con esto el front muestra el avance y reintenta sólo la que falló.
    *
-   * OJO con lo que devuelve Wati acá. Verificado contra la cuenta real: el
-   * alta contesta **500 "An error occurred" pero igual crea la plantilla**,
-   * en estado DRAFT. Confiar en el código de respuesta reportaría un fallo
-   * sobre algo que sí se creó, y el reintento chocaría con "template with
-   * current name already exists". Por eso el estado real se lee de la lista
-   * DESPUÉS de intentar, y esa relectura —no la respuesta del POST— es la
-   * que manda.
+   * OJO con lo que devuelve Wati en el alta. Verificado contra la cuenta
+   * real: contesta **500 "An error occurred" y aun así crea la plantilla**.
+   * Confiar en el código de respuesta reportaría un fallo sobre algo que sí
+   * se creó, y el reintento chocaría con "template with current name already
+   * exists". Por eso el estado real se lee de la lista DESPUÉS de intentar, y
+   * esa relectura —no la respuesta del POST— es la que manda.
    */
   async someterPlantillaWati(
     codigo: string,
@@ -247,10 +252,16 @@ export class IntegracionesService {
       };
     }
 
-    // Si ya existe no se recrea: Wati rechaza el duplicado. Para cambiar un
-    // texto ya aprobado hay que subir la versión del código (D2).
-    const previas = await this.wati.listarPlantillas(cred);
-    const previa = previas.find((r) => r.nombre === canonica.codigo);
+    const previa = (await this.wati.listarPlantillas(cred)).find(
+      (r) => r.nombre === canonica.codigo,
+    );
+
+    // Ya existe pero quedó en borrador —un intento anterior que se cortó, o
+    // una creada a mano—: se envía en vez de fallar. Recrearla no se puede,
+    // Wati rechaza el duplicado.
+    if (previa?.estado === 'DRAFT' && previa.id) {
+      return this.enviarBorrador(cred, codigo, previa.id);
+    }
     if (previa) {
       return {
         codigo,
@@ -260,20 +271,44 @@ export class IntegracionesService {
       };
     }
 
-    const res = await this.wati.crearPlantilla(cred, canonica);
-
-    const despues = await this.wati.listarPlantillas(cred);
-    const creada = despues.find((r) => r.nombre === canonica.codigo);
-    if (creada) {
-      // Existe: se creó, más allá de lo que haya contestado el POST.
-      return { codigo, ok: true, estado: creada.estado };
+    const alta = await this.wati.crearPlantilla(cred, canonica);
+    const creada = (await this.wati.listarPlantillas(cred)).find(
+      (r) => r.nombre === canonica.codigo,
+    );
+    if (!creada?.id) {
+      const motivo = alta.ok
+        ? 'Wati respondió que la creó, pero no aparece en la cuenta.'
+        : alta.motivo;
+      this.logger.warn(`No se pudo crear ${codigo}: ${motivo}`);
+      return { codigo, ok: false, estado: 'SIN_SOMETER', motivo };
     }
 
-    const motivo = res.ok
-      ? 'Wati respondió que la creó, pero no aparece en la cuenta.'
-      : res.motivo;
-    this.logger.warn(`No se pudo crear ${codigo}: ${motivo}`);
-    return { codigo, ok: false, estado: 'SIN_SOMETER', motivo };
+    return this.enviarBorrador(cred, codigo, creada.id);
+  }
+
+  /**
+   * Manda el borrador a revisión y devuelve el estado que quedó.
+   *
+   * Si el envío falla, la plantilla NO se pierde: queda en DRAFT y el próximo
+   * intento la retoma desde ahí. Por eso se informa `DRAFT` y no un error a
+   * secas — el trabajo hecho sigue estando.
+   */
+  private async enviarBorrador(
+    cred: CredencialesWati,
+    codigo: string,
+    id: string,
+  ): Promise<{ codigo: string; ok: boolean; estado: string; motivo?: string }> {
+    const envio = await this.wati.enviarAAprobacion(cred, id);
+    if (!envio.ok) {
+      this.logger.warn(
+        `No se pudo enviar a revisión ${codigo}: ${envio.motivo}`,
+      );
+      return { codigo, ok: false, estado: 'DRAFT', motivo: envio.motivo };
+    }
+    const final = (await this.wati.listarPlantillas(cred)).find(
+      (r) => r.nombre === codigo,
+    );
+    return { codigo, ok: true, estado: final?.estado ?? 'PENDING' };
   }
 
   /**
