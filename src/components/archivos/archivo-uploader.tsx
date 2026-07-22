@@ -3,6 +3,8 @@
 import * as React from "react";
 import {
   DownloadIcon,
+  EyeIcon,
+  EyeOffIcon,
   FileIcon,
   ImageIcon,
   Trash2Icon,
@@ -19,7 +21,11 @@ import {
   type Archivo,
   type ArchivoScope,
 } from "@/lib/archivos";
-import { eliminarArchivo, subirArchivo } from "@/lib/archivos-api";
+import {
+  actualizarArchivo,
+  eliminarArchivo,
+  subirArchivo,
+} from "@/lib/archivos-api";
 
 type EnCurso = {
   clave: string;
@@ -44,6 +50,14 @@ export type ArchivoUploaderProps = {
   soloLectura?: boolean;
   /** Oculta la lista: para cuando el consumidor pinta su propia vista. */
   sinLista?: boolean;
+  /**
+   * Muestra el switch "visible para el cliente" en cada fila. Sólo donde el
+   * archivo puede llegar al link público de seguimiento (una OT); en el logo
+   * o en la ficha de un producto no tiene sentido.
+   */
+  permitirPublico?: boolean;
+  /** Texto del vacío. Sin esto, un tab sin archivos no dice nada. */
+  vacio?: string;
 };
 
 /**
@@ -66,6 +80,8 @@ export function ArchivoUploader({
   ayuda,
   soloLectura = false,
   sinLista = false,
+  permitirPublico = false,
+  vacio,
 }: ArchivoUploaderProps) {
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [dentro, setDentro] = React.useState(false);
@@ -129,6 +145,24 @@ export function ArchivoUploader({
     [archivos, entidadId, extensiones, onCambio, scope, unico],
   );
 
+  const cambiarVisibilidad = async (archivo: Archivo, publico: boolean) => {
+    // Optimista: el switch tiene que responder al toque, no medio segundo
+    // después. Si el PATCH falla se revierte y se avisa.
+    onCambio(
+      archivos.map((a) => (a.id === archivo.id ? { ...a, publico } : a)),
+    );
+    try {
+      await actualizarArchivo(archivo.id, { publico });
+    } catch (error) {
+      onCambio(archivos);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudo cambiar la visibilidad.",
+      );
+    }
+  };
+
   const borrar = async () => {
     if (!aBorrar) return;
     try {
@@ -190,6 +224,10 @@ export function ArchivoUploader({
         </div>
       ) : null}
 
+      {!sinLista && vacio && archivos.length === 0 && enCurso.length === 0 ? (
+        <div className="arch-vacio">{vacio}</div>
+      ) : null}
+
       {!sinLista && (archivos.length > 0 || enCurso.length > 0) ? (
         <div className="arch-lista">
           {enCurso.map((s) => (
@@ -239,6 +277,26 @@ export function ArchivoUploader({
                   {a.subidoPor ? ` · ${a.subidoPor}` : ""}
                 </span>
               </div>
+              {permitirPublico && !soloLectura ? (
+                <label
+                  className={`arch-vis${a.publico ? " on" : ""}`}
+                  title={
+                    a.publico
+                      ? "El cliente lo ve en el link de seguimiento"
+                      : "Sólo interno: el cliente no lo ve"
+                  }
+                >
+                  <input
+                    type="checkbox"
+                    checked={a.publico}
+                    onChange={(e) =>
+                      void cambiarVisibilidad(a, e.target.checked)
+                    }
+                  />
+                  {a.publico ? <EyeIcon /> : <EyeOffIcon />}
+                  <span>{a.publico ? "Cliente" : "Interno"}</span>
+                </label>
+              ) : null}
               <div className="arch-acc">
                 <a
                   href={urlDeArchivo(a.id)}

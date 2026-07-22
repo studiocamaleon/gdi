@@ -10,10 +10,13 @@ import {
   fechaLarga,
   getTrackingPublico,
   haceCuanto,
+  urlArchivoTracking,
+  type TrackingArchivo,
   type TrackingItem,
   type TrackingPaso,
   type TrackingPublico,
 } from "@/lib/tracking";
+import { formatBytes } from "@/lib/archivos";
 
 /** Cada cuánto se sincroniza el avance con la planta (sin recargar). */
 const POLL_MS = 15000;
@@ -33,6 +36,19 @@ const IcoPhone = () => (
 const IcoWa = () => (
   <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
     <path d="M17.5 14.4c-.3-.2-1.7-.8-2-.9-.3-.1-.5-.2-.7.2-.2.3-.7.9-.9 1.1-.2.2-.3.2-.6 0-.3-.2-1.3-.5-2.4-1.5-.9-.8-1.5-1.8-1.7-2.1-.2-.3 0-.5.1-.6.1-.1.3-.4.4-.5.1-.2.2-.3.3-.5.1-.2 0-.4 0-.5-.1-.2-.7-1.6-.9-2.2-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.4 0 1.4 1 2.7 1.2 2.9.2.2 2 3.1 4.8 4.2.7.3 1.2.5 1.6.6.7.2 1.3.2 1.8.1.5-.1 1.7-.7 2-1.4.2-.7.2-1.2.2-1.3 0-.1-.3-.2-.6-.4Z M12 2C6.5 2 2 6.5 2 12c0 1.7.4 3.4 1.3 4.8L2 22l5.3-1.3c1.4.8 3 1.2 4.7 1.2 5.5 0 10-4.5 10-10S17.5 2 12 2Zm6 16-.2.2c-1.5 1.5-3.6 2.4-5.8 2.4-1.5 0-2.9-.4-4.2-1.1l-.3-.2-3.2.8.8-3.1-.2-.3c-.8-1.3-1.2-2.8-1.2-4.4 0-4.6 3.7-8.3 8.3-8.3 2.2 0 4.3.9 5.9 2.4 1.6 1.6 2.4 3.7 2.4 5.9 0 2.2-.9 4.3-2.3 5.7Z" />
+  </svg>
+);
+const IcoDoc = () => (
+  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <path d="M14 2v6h6" />
+  </svg>
+);
+const IcoImagen = () => (
+  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <circle cx="9" cy="9" r="1.6" />
+    <path d="m21 15-4.5-4.5L7 20" />
   </svg>
 );
 const IcoChevron = ({ open }: { open: boolean }) => (
@@ -180,16 +196,52 @@ function ProdHero({ item, total }: { item: TrackingItem; total: number }) {
 
 // ── Panel de acordeón por item ───────────────────────────────────────────
 
+/**
+ * Adjuntos que la imprenta compartió con el cliente: prueba de color, foto
+ * del trabajo terminado, lo que haya marcado como visible. La descarga la
+ * autoriza el token de la orden — el bucket es privado y acá no hay sesión.
+ */
+function ArchivosCliente({
+  archivos,
+  token,
+  compacto = false,
+}: {
+  archivos: TrackingArchivo[];
+  token: string;
+  compacto?: boolean;
+}) {
+  if (archivos.length === 0) return null;
+  return (
+    <div className={`t-archivos${compacto ? " compacto" : ""}`}>
+      {archivos.map((a) => (
+        <a
+          key={a.id}
+          className="t-archivo"
+          href={urlArchivoTracking(token, a.id)}
+          target="_blank"
+          rel="noreferrer"
+        >
+          <span className="ico">{a.esImagen ? <IcoImagen /> : <IcoDoc />}</span>
+          <span className="nm">{a.nombre}</span>
+          <span className="sz">{formatBytes(a.bytes)}</span>
+        </a>
+      ))}
+    </div>
+  );
+}
+
 function ItemPanel({
   item,
   index,
   open,
   onToggle,
+  token,
 }: {
   item: TrackingItem;
   index: number;
   open: boolean;
   onToggle: () => void;
+  token: string;
 }) {
   const enProduccion = item.progresoPct > 0 && item.progresoPct < 100;
   const listo = item.progresoPct >= 100;
@@ -223,6 +275,7 @@ function ItemPanel({
               ))}
             </div>
           ) : null}
+          <ArchivosCliente archivos={item.archivos} token={token} compacto />
         </div>
       ) : null}
     </div>
@@ -379,6 +432,7 @@ export function TrackingView({
                 index={i}
                 open={unItem || abiertos.has(item.id)}
                 onToggle={() => toggle(item.id)}
+                token={token}
               />
             ))}
           </div>
@@ -399,6 +453,21 @@ export function TrackingView({
                 <a className="ic-btn wa" title="WhatsApp" href={`https://wa.me/${telDigits}`} target="_blank" rel="noreferrer"><IcoWa /></a>
               </div>
             ) : null}
+          </div>
+        ) : null}
+
+        {/* Archivos compartidos por la imprenta */}
+        {data.archivos.length > 0 ? (
+          <div className="t-card">
+            <div className="t-card-head">
+              <span className="ttl">Archivos</span>
+              <span className="sub">
+                {data.archivos.length === 1
+                  ? "1 archivo"
+                  : `${data.archivos.length} archivos`}
+              </span>
+            </div>
+            <ArchivosCliente archivos={data.archivos} token={token} />
           </div>
         ) : null}
 

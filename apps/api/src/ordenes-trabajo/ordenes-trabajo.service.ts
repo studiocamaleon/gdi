@@ -6,7 +6,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { ArchivoEstado, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ArchivosService } from '../archivos/archivos.service';
 import { EtaService } from '../eta/eta.service';
@@ -52,6 +52,39 @@ function generarPublicToken(): string {
 /** Primer nombre visible ("Carolina Méndez" → "Carolina"). */
 function primerNombre(nombre: string): string {
   return nombre.trim().split(/\s+/)[0] || nombre;
+}
+
+/**
+ * Qué archivos de una orden puede ver el cliente en el link de seguimiento:
+ * los que alguien marcó explícitamente como públicos, y nada más. El default
+ * de `publico` es false, así que el arte de producción, la orden de compra y
+ * los remitos internos quedan afuera salvo decisión expresa.
+ */
+const ARCHIVOS_VISIBLES_AL_CLIENTE = {
+  publico: true,
+  estado: ArchivoEstado.LISTO,
+} as const;
+
+const ARCHIVO_PUBLICO = {
+  id: true,
+  nombreOriginal: true,
+  bytes: true,
+  mimeType: true,
+} as const;
+
+/** `bytes` es BigInt en la base y JSON.stringify no lo sabe serializar. */
+function archivoPublico(a: {
+  id: string;
+  nombreOriginal: string;
+  bytes: bigint;
+  mimeType: string;
+}) {
+  return {
+    id: a.id,
+    nombre: a.nombreOriginal,
+    bytes: Number(a.bytes),
+    esImagen: a.mimeType.startsWith('image/'),
+  };
 }
 
 /** Hasta 2 iniciales ("Gráfica Corporearte" → "GC"). */
@@ -248,6 +281,40 @@ export class OrdenesTrabajoService {
     });
     if (!orden) return null;
     return this.archivos.urlDeLogoPublico(orden.tenantId);
+  }
+
+  /**
+   * Descarga de un adjunto desde el link público del cliente.
+   *
+   * Acá no hay sesión ni tenant en contexto, así que la autorización se hace
+   * a mano y con las tres condiciones juntas: el archivo tiene que estar
+   * marcado `publico`, estar LISTO, y colgar de ESA orden (o de uno de sus
+   * items). Sin el último chequeo, cualquiera con un link de seguimiento
+   * podría bajar el adjunto público de otra orden pasando su id.
+   */
+  async archivoPublicoPorToken(
+    token: string,
+    archivoId: string,
+  ): Promise<string | null> {
+    const orden = await this.prisma.ordenTrabajo.findUnique({
+      where: { publicToken: token },
+      select: { id: true, items: { select: { id: true } } },
+    });
+    if (!orden) return null;
+
+    const archivo = await this.prisma.archivo.findFirst({
+      where: {
+        id: archivoId,
+        publico: true,
+        estado: ArchivoEstado.LISTO,
+        OR: [
+          { ordenId: orden.id },
+          { ordenItemId: { in: orden.items.map((i) => i.id) } },
+        ],
+      },
+    });
+    if (!archivo) return null;
+    return this.archivos.firmarDescargaDe(archivo);
   }
 
   /**
@@ -1662,6 +1729,12 @@ export class OrdenesTrabajoService {
         items: {
           orderBy: { ordenIndice: 'asc' as const },
           include: {
+            // Sólo el conteo de archivos LISTO: el tablero muestra un clip
+            // con el número, no la lista. Traer las filas para contarlas
+            // sería N+1 disfrazado.
+            _count: {
+              select: { archivos: { where: { estado: ArchivoEstado.LISTO } } },
+            },
             pasos: {
               orderBy: { indice: 'asc' as const },
               include: {
@@ -1731,6 +1804,12 @@ export class OrdenesTrabajoService {
         items: {
           orderBy: { ordenIndice: 'asc' as const },
           include: {
+            // Sólo el conteo de archivos LISTO: el tablero muestra un clip
+            // con el número, no la lista. Traer las filas para contarlas
+            // sería N+1 disfrazado.
+            _count: {
+              select: { archivos: { where: { estado: ArchivoEstado.LISTO } } },
+            },
             pasos: {
               orderBy: { indice: 'asc' as const },
               include: {
@@ -2409,6 +2488,8 @@ export class OrdenesTrabajoService {
       cantidadUnidad: string;
       specsJson: Prisma.JsonValue;
       cotizacionItemId: string | null;
+      /** Sólo el conteo: el tablero muestra un clip, no la lista. */
+      _count?: { archivos: number };
       pasos: Array<{
         id: string;
         indice: number;
@@ -2466,6 +2547,7 @@ export class OrdenesTrabajoService {
       fechaEntrega: orden.fechaEntrega
         ? orden.fechaEntrega.toISOString().slice(0, 10)
         : null,
+      archivosCount: item._count?.archivos ?? 0,
       sinRuta: item.pasos.length === 0,
       pasos: item.pasos.map((paso) => ({
         id: paso.id,
@@ -2692,12 +2774,20 @@ export class OrdenesTrabajoService {
           },
         },
         tenant: { select: { nombre: true, logoArchivoId: true } },
+        // Sólo los marcados `publico`: el arte de producción y los adjuntos
+        // internos NUNCA salen por acá. El filtro va en la relación, así que
+        // un archivo privado no llega ni a materializarse en memoria.
+        archivos: { where: ARCHIVOS_VISIBLES_AL_CLIENTE, select: ARCHIVO_PUBLICO },
         items: {
           orderBy: { ordenIndice: 'asc' as const },
           select: {
             id: true,
             nombre: true,
             specsJson: true,
+            archivos: {
+              where: ARCHIVOS_VISIBLES_AL_CLIENTE,
+              select: ARCHIVO_PUBLICO,
+            },
             pasos: {
               orderBy: { indice: 'asc' as const },
               select: {
@@ -2746,6 +2836,7 @@ export class OrdenesTrabajoService {
         progresoPct: total > 0 ? Math.round((hechos / total) * 100) : 0,
         pasoActual: actual?.nombre ?? null,
         estacionActual: actual?.centroCostoNombre ?? null,
+        archivos: item.archivos.map(archivoPublico),
         pasos: item.pasos.map((p) => ({
           indice: p.indice,
           nombre: p.nombre,
@@ -2817,6 +2908,7 @@ export class OrdenesTrabajoService {
           }
         : null,
       items,
+      archivos: orden.archivos.map(archivoPublico),
       actividad: actividad.slice(0, 8),
     };
   }

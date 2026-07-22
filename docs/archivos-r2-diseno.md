@@ -310,12 +310,22 @@ contra DB aislada; el storage sigue el mismo criterio.
 
 ## 4. Journey del caso principal (arte en la OT)
 
-1. **Comercial cotiza.** En el item, arrastra el PDF del cliente. Sube directo a
-   R2 mientras sigue cargando el resto (barra de progreso, no bloquea).
-2. **Se emite la OT.** Los archivos de la cotización se *re-vinculan* al
-   `OrdenTrabajoItem` correspondiente — no se copian bytes, se agrega la FK.
-   (Decisión: el `Archivo` gana `ordenItemId` y conserva `cotizacionId`; queda
-   la traza de que ese arte vino del presupuesto.)
+1. **Comercial cotiza.** Arrastra el PDF del cliente al presupuesto. Sube
+   directo a R2 mientras sigue cargando el resto (barra de progreso, no
+   bloquea).
+
+   *Corrección sobre el diseño original (F2):* acá el adjunto va **a nivel
+   documento**, no por item. Los items de la ficha son borradores locales hasta
+   que se guarda: sus ids no existen todavía en la base, y no se puede colgar
+   una FK de una fila inexistente. Obligar a "guardá primero para poder
+   adjuntar" es peor UX que adjuntar al presupuesto entero. **Por item se
+   adjunta en la OT**, donde los `OrdenTrabajoItem` sí existen — que además es
+   donde producción lo necesita.
+
+2. **Se convierte en OT.** Los archivos del presupuesto se *re-vinculan* a la
+   orden — no se copian bytes, se agrega la FK. El `Archivo` gana `ordenId` y
+   **conserva `cotizacionId`**: queda la traza de que ese arte vino del
+   presupuesto. Es la excepción que contempla el CHECK de §D3.
 3. **Producción abre el tablero.** El paso muestra un clip con la cantidad de
    archivos. Un click abre el visor; el PDF se ve inline (presigned de 60 s).
 4. **El operario descarga** el archivo listo para el RIP. Queda registrado
@@ -358,9 +368,37 @@ incoherente rechazados; SVG con `<script>` servido como `attachment`; contador
 de bytes sube y baja; borrado lógico oculta de la lista pero deja el objeto.
 Los dos PDF y el tracking, inspeccionados a ojo con el logo puesto.
 
-**F2 — Archivos en OT e item.** El tab real reemplaza el `EmptyTab`, con el
-contador de verdad. Re-vinculación cotización → OT. Clip en el paso del tablero.
-Flag `publico` + archivos en el tracking del cliente.
+**F2 — Archivos en OT e item. ✅ HECHA.**
+
+- `GET /archivos/de-orden/:id` devuelve documento + cada item de una sola vez
+  (el tab los muestra juntos; pedirlos por item sería N+1 y haría parpadear la
+  vista).
+- Tab **Archivos** real en la ficha, con el contador de verdad en la pestaña
+  (antes: `count: 2` hardcodeado). Un bloque para la orden y uno por producto:
+  el arte es *del item* — es lo que el operario abre en la mesa — mientras que
+  la orden de compra es del documento. Mezclarlos obligaría a adivinar cuál de
+  siete PDFs es el suyo.
+- Switch **Interno / Cliente** por archivo. El default es interno: el arte de
+  producción y los remitos no se filtran al link que se manda por WhatsApp.
+- Re-vinculación al convertir presupuesto → OT (migración
+  `20260722060000_archivos_revinculacion_orden` para que el CHECK admita
+  `cotizacionId` junto a `ORDEN`).
+- Tab **Archivos** en el detalle del tablero, de sólo lectura: desde la mesa se
+  consume el arte, no se administra. El contador viene del `_count` filtrado de
+  la query del tablero, no de traer las filas para contarlas.
+- Sección de archivos en el seguimiento público, sólo con los marcados
+  `publico`.
+
+**Verificado**: el tracking muestra únicamente el archivo público y el arte
+privado no aparece; con el token de la orden, bajar el arte **privado** da 404,
+y bajar un archivo **público de otra orden** también da 404 (probado desde el
+propio navegador, no sólo por curl); token inventado da 404; el contador del
+tablero da 1 para el item con arte; la transición de scope de la re-vinculación
+pasa el CHECK — que importa porque el método traga los errores y, sin la
+segunda migración, habría fallado en silencio.
+
+*No verificado en navegador*: el tab de la ficha y el del tablero, que están
+detrás del login.
 
 **F3 — PDFs persistidos.** Presupuesto al emitir, comprobante al obtener CAE.
 Es acá donde el tema Puppeteer se vuelve barato de resolver.

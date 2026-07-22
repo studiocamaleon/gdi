@@ -63,6 +63,13 @@ export type ArchivoDto = {
   subidoPor: string | null;
 };
 
+export type ArchivosDeOrden = {
+  /** Adjuntos de la orden entera (incluye los heredados del presupuesto). */
+  documento: ArchivoDto[];
+  /** Un entry por item, en el orden de la orden — aunque no tenga archivos. */
+  items: Array<{ itemId: string; nombre: string; archivos: ArchivoDto[] }>;
+};
+
 @Injectable()
 export class ArchivosService {
   private readonly logger = new Logger(ArchivosService.name);
@@ -218,6 +225,89 @@ export class ArchivosService {
       include: { subidoPor: { select: { nombreCompleto: true, email: true } } },
     });
     return archivos.map((a) => this.aDto(a));
+  }
+
+  /**
+   * Todos los archivos de una orden en una sola request: los del documento y
+   * los de cada item. El tab de la ficha los necesita juntos, y pedirlos con
+   * N+1 requests (una por item) haría parpadear la vista item por item.
+   */
+  async deOrden(ordenId: string): Promise<ArchivosDeOrden> {
+    const orden = await this.prisma.ordenTrabajo.findFirst({
+      where: { id: ordenId },
+      select: {
+        id: true,
+        items: {
+          orderBy: { ordenIndice: 'asc' },
+          select: { id: true, nombre: true, ordenIndice: true },
+        },
+      },
+    });
+    if (!orden) throw new NotFoundException('Orden no encontrada.');
+
+    const archivos = await this.prisma.archivo.findMany({
+      where: {
+        estado: ArchivoEstado.LISTO,
+        OR: [
+          { ordenId, scope: ArchivoScope.ORDEN },
+          { ordenItemId: { in: orden.items.map((i) => i.id) } },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      include: { subidoPor: { select: { nombreCompleto: true, email: true } } },
+    });
+
+    const porItem = new Map<string, ArchivoDto[]>();
+    const documento: ArchivoDto[] = [];
+    for (const a of archivos) {
+      const dto = this.aDto(a);
+      if (a.ordenItemId) {
+        const lista = porItem.get(a.ordenItemId) ?? [];
+        lista.push(dto);
+        porItem.set(a.ordenItemId, lista);
+      } else {
+        documento.push(dto);
+      }
+    }
+
+    return {
+      documento,
+      items: orden.items.map((i) => ({
+        itemId: i.id,
+        nombre: i.nombre,
+        archivos: porItem.get(i.id) ?? [],
+      })),
+    };
+  }
+
+  /**
+   * Convertir presupuesto → OT: los archivos del presupuesto pasan a colgar de
+   * la orden. NO se copian bytes ni se duplican filas: se agrega `ordenId` y
+   * se conserva `cotizacionId` como traza de origen (el CHECK de la tabla lo
+   * contempla). Corre dentro de la conversión, así que un fallo acá no puede
+   * dejar la orden a medias — por eso traga el error y sólo loguea: perder el
+   * vínculo de un adjunto no justifica abortar la conversión de una venta.
+   */
+  async revincularCotizacionAOrden(
+    cotizacionId: string,
+    ordenId: string,
+  ): Promise<number> {
+    try {
+      const { count } = await this.prisma.archivo.updateMany({
+        where: {
+          cotizacionId,
+          scope: ArchivoScope.COTIZACION,
+          estado: ArchivoEstado.LISTO,
+        },
+        data: { scope: ArchivoScope.ORDEN, ordenId },
+      });
+      return count;
+    } catch (error) {
+      this.logger.warn(
+        `No pude re-vincular los archivos del presupuesto ${cotizacionId} a la orden ${ordenId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return 0;
+    }
   }
 
   /**

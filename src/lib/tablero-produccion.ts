@@ -96,6 +96,8 @@ export type TableroItemData = {
   specs: Array<{ etiqueta: string; valor: string }>;
   /** ISO date o null (a nivel orden). */
   fechaEntrega: string | null;
+  /** Cuántos archivos tiene el item (arte de producción). */
+  archivosCount: number;
   /** Item manual/histórico sin snapshot: no tiene ruta de producción. */
   sinRuta: boolean;
   pasos: TableroPasoData[];

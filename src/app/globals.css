@@ -31319,4 +31319,122 @@ body:has(.t-app) {
 .arch-logo-body { flex: 1; min-width: 240px; display: flex; flex-direction: column; gap: 10px; }
 .arch-logo-body .arch-logo-hint { font-size: 11.5px; color: var(--muted-foreground); line-height: 1.5; }
 .arch-logo-acc { display: flex; gap: 8px; flex-wrap: wrap; }
-/* archivos: r2 */
+/* archivos: r2 - f2 */
+
+/* Switch de visibilidad para el cliente (sólo en archivos de una OT). */
+.arch-row .arch-vis {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  padding: 3px 8px 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .01em;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  user-select: none;
+  transition: color .12s ease, border-color .12s ease, background .12s ease;
+}
+
+.arch-row .arch-vis input { position: absolute; opacity: 0; pointer-events: none; }
+.arch-row .arch-vis svg { width: 12px; height: 12px; }
+.arch-row .arch-vis:hover { color: var(--foreground); }
+
+.arch-row .arch-vis.on {
+  color: var(--primary);
+  border-color: color-mix(in oklab, var(--primary) 45%, transparent);
+  background: color-mix(in oklab, var(--primary) 9%, transparent);
+}
+
+.arch-vacio {
+  padding: 14px 4px 2px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  line-height: 1.55;
+}
+
+/* Tab de Archivos de una orden: documento arriba, un bloque por item. */
+.arch-tab { display: flex; flex-direction: column; gap: 18px; }
+.arch-tab .arch-bloque { display: flex; flex-direction: column; gap: 2px; }
+
+.arch-tab .arch-bloque-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.arch-tab .arch-bloque-head .t {
+  font-size: 12.5px;
+  font-weight: 650;
+  letter-spacing: -.01em;
+}
+
+.arch-tab .arch-bloque-head .n {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--muted) 60%, transparent);
+}
+
+.arch-tab .arch-bloque-head .s {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+
+/* Clip con contador para el paso del tablero. */
+.arch-clip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px 2px 5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--muted-foreground);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color .12s ease, border-color .12s ease;
+}
+
+.arch-clip:hover {
+  color: var(--foreground);
+  border-color: color-mix(in oklab, var(--primary) 45%, var(--border));
+}
+
+.arch-clip svg { width: 12px; height: 12px; }
+
+/* Archivos compartidos con el cliente en el seguimiento público. */
+.t-archivos { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px 14px; }
+.t-archivos.compacto { padding: 10px 0 0; }
+
+.t-archivos .t-archivo {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 11px;
+  border: 1px solid var(--t-hairline, rgba(0,0,0,.08));
+  border-radius: 10px;
+  background: var(--t-surface, #fff);
+  color: inherit;
+  text-decoration: none;
+  font-size: 12.5px;
+  transition: border-color .14s ease, transform .14s ease;
+}
+
+.t-archivos .t-archivo:hover {
+  border-color: var(--t-ink, #14141a);
+  transform: translateY(-1px);
+}
+
+.t-archivos .t-archivo .ico { display: grid; place-items: center; flex: 0 0 auto; color: var(--t-muted, #6b7280); }
+.t-archivos .t-archivo .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 550; }
+.t-archivos .t-archivo .sz { flex: 0 0 auto; font-size: 10.5px; color: var(--t-muted, #6b7280); }

@@ -7,6 +7,7 @@ import { randomBytes } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
+import { ArchivosService } from '../archivos/archivos.service';
 import { OrdenesTrabajoService } from '../ordenes-trabajo/ordenes-trabajo.service';
 import type { CrearOrdenTrabajoItemDto } from '../ordenes-trabajo/dto/crear-orden-trabajo.dto';
 import { evaluarAprobacion } from './aprobacion';
@@ -60,6 +61,7 @@ export class PresupuestosService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ordenes: OrdenesTrabajoService,
+    private readonly archivos: ArchivosService,
   ) {}
 
   // ── Configuración por tenant ───────────────────────────────────────
@@ -543,6 +545,10 @@ export class PresupuestosService {
       observaciones: c.observaciones ?? undefined,
       items,
     });
+
+    // El arte que el cliente mandó con el presupuesto tiene que seguir a la
+    // orden: producción lo necesita ahí, no en un documento ya cerrado.
+    await this.archivos.revincularCotizacionAOrden(id, orden.id);
 
     await this.prisma.cotizacion.update({
       where: { id },

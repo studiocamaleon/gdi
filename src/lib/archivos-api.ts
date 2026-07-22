@@ -16,6 +16,18 @@ export async function listarArchivos(
   return apiRequest<Archivo[]>(`/archivos?${qs.toString()}`);
 }
 
+export type ArchivosDeOrden = {
+  documento: Archivo[];
+  items: Array<{ itemId: string; nombre: string; archivos: Archivo[] }>;
+};
+
+/** Documento + todos los items en una sola request (el tab los muestra juntos). */
+export async function getArchivosDeOrden(
+  ordenId: string,
+): Promise<ArchivosDeOrden> {
+  return apiRequest<ArchivosDeOrden>(`/archivos/de-orden/${ordenId}`);
+}
+
 export async function actualizarArchivo(
   id: string,
   dto: { publico?: boolean; descripcion?: string },

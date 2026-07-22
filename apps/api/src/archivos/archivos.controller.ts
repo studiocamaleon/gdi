@@ -30,6 +30,16 @@ export class ArchivosController {
     return this.service.listar(query);
   }
 
+  /**
+   * Todo lo adjunto a una orden (documento + cada item) de una sola vez.
+   * Declarado antes de `:id/...`: "de-orden" no es un uuid, pero mejor no
+   * depender del orden de evaluación de rutas para eso.
+   */
+  @Get('de-orden/:ordenId')
+  deOrden(@Param('ordenId', ParseUUIDPipe) ordenId: string) {
+    return this.service.deOrden(ordenId);
+  }
+
   /** Paso 1 de la subida: devuelve la URL firmada para el PUT directo. */
   @Post('iniciar')
   iniciar(@CurrentSession() auth: CurrentAuth, @Body() dto: IniciarSubidaDto) {

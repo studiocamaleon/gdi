@@ -671,6 +671,7 @@ export function estimarDemoraNuevos({
       cantidadUnidad: "u",
       specs: [],
       fechaEntrega: null,
+      archivosCount: 0,
       sinRuta: false,
       pasos: nuevo.pasos.map((paso, indice) => ({
         id: `${nuevo.id}-paso-${indice}`,

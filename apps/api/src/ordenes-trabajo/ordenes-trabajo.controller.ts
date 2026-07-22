@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -53,6 +54,29 @@ export class OrdenesTrabajoController {
     @Res() res: Response,
   ): Promise<void> {
     const url = await this.ordenesTrabajoService.logoPublicoPorToken(token);
+    if (!url) {
+      res.status(404).end();
+      return;
+    }
+    res.redirect(302, url);
+  }
+
+  /**
+   * Adjunto que la imprenta marcó visible para el cliente (prueba de color,
+   * foto del trabajo terminado). El token autoriza, y el service comprueba
+   * además que el archivo sea de ESA orden.
+   */
+  @Public()
+  @Get('track/:token/archivos/:archivoId')
+  async archivoPublico(
+    @Param('token') token: string,
+    @Param('archivoId', ParseUUIDPipe) archivoId: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const url = await this.ordenesTrabajoService.archivoPublicoPorToken(
+      token,
+      archivoId,
+    );
     if (!url) {
       res.status(404).end();
       return;

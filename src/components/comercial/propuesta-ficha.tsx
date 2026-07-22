@@ -119,6 +119,7 @@ import {
   resumenOjales,
   tieneDemasia,
 } from "@/lib/modificaciones-fisicas";
+import { ArchivosOrdenTab } from "@/components/archivos/archivos-orden-tab";
 import { NestingViewer } from "@/components/nesting/nesting-viewer";
 import { listClientes } from "@/lib/clientes-api";
 import { getCurrentPeriodo } from "@/lib/costos";
@@ -700,6 +701,7 @@ function OrdenTabs({
   count,
   historialCount,
   comprobantesCount,
+  archivosCount,
 }: {
   value: OrdenTab;
   onChange: (value: OrdenTab) => void;
@@ -708,6 +710,8 @@ function OrdenTabs({
   historialCount?: number;
   /** Presente sólo en modo orden: agrega el tab Comprobantes. */
   comprobantesCount?: number;
+  /** null hasta que el tab de Archivos se abre y los cuenta. */
+  archivosCount?: number | null;
 }) {
   const tabs: Array<{
     key: OrdenTab;
@@ -727,7 +731,14 @@ function OrdenTabs({
           },
         ]
       : []),
-    { key: "archivos", label: "Archivos", count: 2, icon: <FolderIcon /> },
+    {
+      key: "archivos",
+      label: "Archivos",
+      // Sin badge hasta que se sepa el número de verdad: un contador que
+      // miente es peor que no tenerlo.
+      count: archivosCount ?? undefined,
+      icon: <FolderIcon />,
+    },
     { key: "costos", label: "Costos", icon: <CircleDollarSignIcon /> },
     ...(historialCount !== undefined
       ? [
@@ -4768,6 +4779,9 @@ export function PropuestaFicha({
       .catch(() => {});
   }, [ordenProp?.id]);
   const modoOrden = Boolean(orden);
+  // null hasta que el tab de Archivos se abre y los cuenta: la pestaña no
+  // muestra badge mientras no sepa el número real.
+  const [archivosCount, setArchivosCount] = React.useState<number | null>(null);
   // Tag "RECIÉN EMITIDA": sólo en la visita inmediata a la emisión (llegada
   // con ?emitida=1, o al emitir un borrador acá mismo). El param se limpia
   // de la URL para que un refresh/compartir no lo arrastre.
@@ -6067,6 +6081,7 @@ export function PropuestaFicha({
             count={items.length}
             historialCount={orden ? orden.eventos.length : undefined}
             comprobantesCount={orden ? 0 : undefined}
+            archivosCount={archivosCount}
           />
           {!modoOrden || itemsEnEdicion ? (
             <div className="orden-actions">
@@ -6324,10 +6339,20 @@ export function PropuestaFicha({
           />
         ) : null}
         {tab === "archivos" ? (
-          <EmptyTab
-            title="Archivos del cliente"
-            description="Subi PDFs, vectores o referencias para que produccion los tenga a mano."
-          />
+          orden ? (
+            <ArchivosOrdenTab
+              ordenId={orden.id}
+              onTotalCambio={setArchivosCount}
+            />
+          ) : (
+            // Todavía es una propuesta sin persistir: los items son
+            // borradores locales sin fila en la base, así que no hay dónde
+            // colgar un archivo. Ver docs/archivos-r2-diseno.md §4.
+            <EmptyTab
+              title="Archivos"
+              description="Guardá la propuesta o emitila como orden para poder adjuntar el arte y las referencias del cliente."
+            />
+          )
         ) : null}
         {tab === "costos" ? (
           <EmptyTab
