@@ -22,7 +22,7 @@ export class ProduccionController {
 
   @Get('estaciones')
   findEstaciones(@CurrentSession() auth: CurrentAuth) {
-    return this.service.findEstaciones(auth);
+    return this.service.findEstaciones(auth.tenantId);
   }
 
   /** Catálogo de familias de pasos + qué estación tiene tomada cada una. */
@@ -37,7 +37,7 @@ export class ProduccionController {
    */
   @Get('duraciones-familias')
   findDuracionesFamilias(@CurrentSession() auth: CurrentAuth) {
-    return this.service.findDuracionesFamilias(auth);
+    return this.service.findDuracionesFamilias(auth.tenantId);
   }
 
   /**
@@ -69,7 +69,7 @@ export class ProduccionController {
 
   @Get('configuracion')
   getConfiguracion(@CurrentSession() auth: CurrentAuth) {
-    return this.service.getConfiguracion(auth);
+    return this.service.getConfiguracion(auth.tenantId);
   }
 
   @Put('configuracion')
@@ -84,7 +84,7 @@ export class ProduccionController {
 
   @Get('dias-no-laborables')
   findDiasNoLaborables(@CurrentSession() auth: CurrentAuth) {
-    return this.service.findDiasNoLaborables(auth);
+    return this.service.findDiasNoLaborables(auth.tenantId);
   }
 
   @Post('dias-no-laborables')

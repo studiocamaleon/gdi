@@ -4,6 +4,11 @@ import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProduccionService } from '../produccion/produccion.service';
 import { descomponerCiclo, resumirPrecision } from './metricas';
+import {
+  construirSnapshotsEstacion,
+  construirSnapshotsItem,
+  type EstacionInfo,
+} from './snapshots';
 import type { Estacion } from './motor/estaciones-tipos';
 import {
   simularFlujo,
@@ -37,13 +42,13 @@ export class EtaService {
   // ── Ensamblado de entradas + corrida del motor ─────────────────────────
 
   /** Arma las 5 entradas desde la DB y corre la simulación de todo el taller. */
-  async correr(auth: CurrentAuth): Promise<ResultadoSimulacion> {
+  async correr(tenantId: string): Promise<ResultadoSimulacion> {
     const [items, estaciones, duraciones, dias, config] = await Promise.all([
-      this.assembleItems(auth.tenantId),
-      this.produccion.findEstaciones(auth),
-      this.produccion.findDuracionesFamilias(auth),
-      this.produccion.findDiasNoLaborables(auth),
-      this.produccion.getConfiguracion(auth),
+      this.assembleItems(tenantId),
+      this.produccion.findEstaciones(tenantId),
+      this.produccion.findDuracionesFamilias(tenantId),
+      this.produccion.findDiasNoLaborables(tenantId),
+      this.produccion.getConfiguracion(tenantId),
     ]);
     const medianas = new Map(
       duraciones.map((d) => [d.familiaCodigo, d.medianaMin]),
@@ -138,7 +143,7 @@ export class EtaService {
 
     let porItem: ResultadoSimulacion['porItem'] | null = null;
     try {
-      porItem = (await this.correr(auth)).porItem;
+      porItem = (await this.correr(auth.tenantId)).porItem;
     } catch (error) {
       this.logger.error(
         `No se pudo correr el motor para la promesa de emisión (orden ${ordenId}).`,
@@ -218,6 +223,107 @@ export class EtaService {
         });
       }
     }
+  }
+
+  // ── Foto diaria (F2): cron por tenant ──────────────────────────────────
+
+  /** Tenants con algo que snapshotear (órdenes vivas en el tablero). */
+  async tenantsConActividad(): Promise<string[]> {
+    const filas = await this.prisma.ordenTrabajo.groupBy({
+      by: ['tenantId'],
+      where: { estado: { in: ESTADOS_TABLERO } },
+    });
+    return filas.map((f) => f.tenantId);
+  }
+
+  /**
+   * Corre el motor una vez y escribe las fotos del día por estación y por
+   * item. Idempotente: upsert por (tenant, fecha, clave) — re-correr el mismo
+   * día pisa, no duplica.
+   */
+  async snapshotDiario(tenantId: string, ahora = new Date()): Promise<void> {
+    const [{ porItem, traza }, estaciones, dias, entregas] = await Promise.all([
+      this.correr(tenantId),
+      this.produccion.findEstaciones(tenantId),
+      this.produccion.findDiasNoLaborables(tenantId),
+      this.prisma.ordenTrabajoItem.findMany({
+        where: {
+          tenantId,
+          orden: { estado: { in: ESTADOS_TABLERO } },
+        },
+        select: { id: true, orden: { select: { fechaEntrega: true } } },
+      }),
+    ]);
+    const noLaborables = new Set(dias.map((d) => d.fecha));
+    const fecha = new Date(
+      Date.UTC(ahora.getFullYear(), ahora.getMonth(), ahora.getDate()),
+    );
+
+    const estacionesInfo: EstacionInfo[] = estaciones.map((e) => ({
+      id: e.id,
+      nombre: e.nombre,
+      calendario: e.calendario,
+      capacidadConcurrente: e.capacidadConcurrente,
+    }));
+    const fotosEstacion = construirSnapshotsEstacion(
+      traza.map((p) => ({
+        estacionKey: p.estacionKey,
+        duracionMin: p.duracionMin,
+        esperaMin: p.esperaMin,
+        candidatos: p.candidatos,
+        inicio: p.inicio,
+        tercerizado: p.tercerizado,
+      })),
+      estacionesInfo,
+      ahora,
+      noLaborables,
+    );
+    const entregaPorItem = new Map(
+      entregas.map((e) => [
+        e.id,
+        e.orden.fechaEntrega
+          ? e.orden.fechaEntrega.toISOString().slice(0, 10)
+          : null,
+      ]),
+    );
+    const fotosItem = construirSnapshotsItem(porItem, entregaPorItem);
+
+    for (const foto of fotosEstacion) {
+      const { estacionKey, ...campos } = foto;
+      await this.prisma.etaSnapshotEstacion.upsert({
+        where: {
+          tenantId_fecha_estacionKey: { tenantId, fecha, estacionKey },
+        },
+        create: { tenantId, fecha, estacionKey, ...campos },
+        update: campos,
+      });
+    }
+    for (const foto of fotosItem) {
+      const { itemId, ...campos } = foto;
+      await this.prisma.etaSnapshotItem.upsert({
+        where: { tenantId_fecha_itemId: { tenantId, fecha, itemId } },
+        create: { tenantId, fecha, itemId, ...campos },
+        update: campos,
+      });
+    }
+  }
+
+  /** Serie diaria de la cola por estación (opcional: una estación / rango). */
+  async seriesColas(
+    tenantId: string,
+    filtro?: { estacionKey?: string; desde?: string; hasta?: string },
+  ) {
+    const fecha: Prisma.DateTimeFilter = {};
+    if (filtro?.desde) fecha.gte = new Date(`${filtro.desde}T00:00:00.000Z`);
+    if (filtro?.hasta) fecha.lte = new Date(`${filtro.hasta}T00:00:00.000Z`);
+    return this.prisma.etaSnapshotEstacion.findMany({
+      where: {
+        tenantId,
+        ...(filtro?.estacionKey ? { estacionKey: filtro.estacionKey } : {}),
+        ...(filtro?.desde || filtro?.hasta ? { fecha } : {}),
+      },
+      orderBy: [{ fecha: 'asc' }, { estacionNombre: 'asc' }],
+    });
   }
 
   // ── Reporte: precisión de las promesas ───────────────────────────────────

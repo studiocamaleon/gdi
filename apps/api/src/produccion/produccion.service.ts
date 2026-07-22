@@ -556,9 +556,9 @@ export class ProduccionService {
   // La estación agrupa familias de pasos (ruteo del tablero), máquinas y
   // empleados habilitados. Ver docs/estaciones-diseno.md
 
-  async findEstaciones(auth: CurrentAuth) {
+  async findEstaciones(tenantId: string) {
     const rows = await this.prisma.estacion.findMany({
-      where: { tenantId: auth.tenantId },
+      where: { tenantId: tenantId },
       include: ESTACION_INCLUDE,
       orderBy: [{ nombre: 'asc' }],
     });
@@ -613,7 +613,7 @@ export class ProduccionService {
    * estimado→"real"→estimado, y 'declarado' es percepción, no medición).
    * Mediana y no promedio: resiste el outlier.
    */
-  async findDuracionesFamilias(auth: CurrentAuth) {
+  async findDuracionesFamilias(tenantId: string) {
     const rows = await this.prisma.$queryRaw<
       Array<{ familiaCodigo: string; medianaMin: number; muestras: number }>
     >`
@@ -623,7 +623,7 @@ export class ProduccionService {
              ) AS "medianaMin",
              COUNT(*)::int AS "muestras"
       FROM "OrdenTrabajoItemPaso"
-      WHERE "tenantId" = ${auth.tenantId}::uuid
+      WHERE "tenantId" = ${tenantId}::uuid
         AND "estado" = 'hecho'
         AND "tiempoRealMin" IS NOT NULL
         AND "tiempoFuente" IN ('medido', 'medido_lote')
@@ -915,9 +915,9 @@ export class ProduccionService {
 
   // ── Configuración de producción (margen de la ETA sugerida) ──────────
 
-  async getConfiguracion(auth: CurrentAuth) {
+  async getConfiguracion(tenantId: string) {
     const row = await this.prisma.configuracionProduccion.findUnique({
-      where: { tenantId: auth.tenantId },
+      where: { tenantId: tenantId },
     });
     return {
       margenEtaDias: row?.margenEtaDias ?? 0,
@@ -957,9 +957,9 @@ export class ProduccionService {
   // Fechas puntuales a nivel tenant que la proyección de cola y la
   // simulación de flujo saltan. Ver docs/capacidad-estaciones-diseno.md D8.
 
-  async findDiasNoLaborables(auth: CurrentAuth) {
+  async findDiasNoLaborables(tenantId: string) {
     const rows = await this.prisma.diaNoLaborable.findMany({
-      where: { tenantId: auth.tenantId },
+      where: { tenantId: tenantId },
       orderBy: { fecha: 'asc' },
     });
     return rows.map((row) => this.toDiaNoLaborable(row));

@@ -452,6 +452,8 @@ model Tenant {
   ordenTrabajoItems                                OrdenTrabajoItem[]
   ordenTrabajoItemPasos                            OrdenTrabajoItemPaso[]
   etaPromesas                                      EtaPromesa[]
+  etaSnapshotsEstacion                             EtaSnapshotEstacion[]
+  etaSnapshotsItem                                 EtaSnapshotItem[]
   ordenTrabajoPasoTramos                           OrdenTrabajoPasoTramo[]
   ahorrosConsolidacion                             AhorroConsolidacion[]
   ordenTrabajoEventos                              OrdenTrabajoEvento[]
@@ -2302,6 +2304,52 @@ model EtaPromesa {
 
   @@index([tenantId, congeladaEl])
   @@index([tenantId, itemId])
+}
+
+/// Foto diaria de la cola proyectada por estación (F2, §4.2). Una fila por
+/// tenant/fecha/estación; el cron la escribe con upsert (idempotente). De la
+/// serie salen las colas históricas y el ranking de cuello de botella.
+model EtaSnapshotEstacion {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String   @db.Uuid
+  /// Fecha local del taller (DATE).
+  fecha            DateTime @db.Date
+  /// Id real de estación, o los buckets sintéticos sin-estacion/proveedor.
+  estacionKey      String
+  estacionNombre   String
+  /// Cola de trabajo encolado (min).
+  colaMin          Int
+  /// Proyección de vaciado (jornadas; null = sin calendario).
+  horizonteDias    Decimal? @db.Decimal(6, 1)
+  esperaP50Min     Int
+  esperaP90Min     Int
+  /// Máximo de trabajos compitiendo por un puesto en el plan.
+  contencionMax    Int
+  /// Min programados próximos 5 días / capacidad × puestos.
+  utilizacion5dPct Decimal  @db.Decimal(5, 1)
+  pasosEnPlan      Int
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, fecha, estacionKey])
+  @@index([tenantId, estacionKey, fecha])
+}
+
+/// Foto diaria del ETA por item (F2, §4.3). La serie de `finEstimado` por item
+/// es el DRIFT; `margenMin` vs la entrega alimenta la alerta temprana.
+model EtaSnapshotItem {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @db.Uuid
+  itemId      String    @db.Uuid
+  fecha       DateTime  @db.Date
+  finEstimado DateTime?
+  sinEstimar  Boolean
+  parcial     Boolean
+  /// finEstimado − fechaEntrega (min; + = proyecta tarde). null sin entrega.
+  margenMin   Int?
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, fecha, itemId])
+  @@index([tenantId, itemId, fecha])
 }
 
 /// Paso de producción de un item de OT: la unidad de trabajo del Tablero.
