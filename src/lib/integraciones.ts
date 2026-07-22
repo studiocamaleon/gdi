@@ -82,3 +82,48 @@ export function fechaCorta(iso: string | null): string {
   const p = (n: number) => String(n).padStart(2, "0");
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
+
+/**
+ * Estado de las plantillas: el catálogo canónico de Grafo cruzado con lo que
+ * hay de verdad en la cuenta de Wati del tenant.
+ */
+export type PlantillaGestionada = {
+  evento: string;
+  codigo: string;
+  titulo: string;
+  cuando: string;
+  activoPorDefecto: boolean;
+  /** La categoría que Grafo le pide a Meta. */
+  categoriaPedida: string;
+  /** La que Meta asignó. Distinta = el texto se leyó como promoción. */
+  categoriaAsignada: string | null;
+  estado: string;
+  calidad: string | null;
+  idRemoto: string | null;
+  parametros: string[];
+  cuerpo: string;
+};
+
+export type PlantillaPropia = {
+  codigo: string;
+  estado: string;
+  categoria: string | null;
+  idioma: string | null;
+  calidad: string | null;
+  parametros: string[];
+  cuerpo: string | null;
+  footer: string | null;
+};
+
+export type EstadoPlantillas = {
+  gestionadas: PlantillaGestionada[];
+  propias: PlantillaPropia[];
+  resumen: {
+    total: number;
+    aprobadas: number;
+    pendientes: number;
+    conProblema: number;
+    sinSometer: number;
+    recategorizadas: number;
+  };
+};

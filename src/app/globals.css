@@ -33004,3 +33004,124 @@ body:has(.t-app) {
 }
 
 /* fin integraciones */
+
+/* ── Integraciones · plantillas ────────────────────────────────────────
+   Tabla de estado del catálogo de Grafo contra la cuenta de Wati del
+   tenant. Sigue la estética del resto de la vista (mono para metadatos,
+   pills para estados). */
+.int-tpl-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.int-tpl-stat {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 11px 13px;
+  background: var(--surface-2);
+}
+.int-tpl-stat .v {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--ink);
+}
+.int-tpl-stat .k {
+  font-size: 11px;
+  color: var(--muted-text);
+  margin-top: 3px;
+}
+.int-tpl-stat.alerta .v { color: var(--danger, #b91c1c); }
+
+.int-tpl-list {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.int-tpl-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+  padding: 13px 15px;
+  border-bottom: 1px solid var(--border);
+}
+.int-tpl-row:last-child { border-bottom: none; }
+.int-tpl-row > .main { min-width: 0; }
+.int-tpl-row .nm {
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.int-tpl-row .cuando {
+  font-size: 11.5px;
+  color: var(--muted-text);
+  margin-top: 2px;
+}
+.int-tpl-row .cod {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--muted-text);
+  margin-top: 5px;
+  word-break: break-all;
+}
+.int-tpl-row .side {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.int-tpl-cuerpo {
+  margin-top: 9px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  color: var(--ink-2);
+}
+.int-tpl-cuerpo .foot {
+  display: block;
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid var(--border);
+  font-size: 10.5px;
+  color: var(--muted-text);
+}
+.int-tpl-toggle {
+  background: none;
+  border: none;
+  padding: 0;
+  margin-top: 6px;
+  font-family: inherit;
+  font-size: 11.5px;
+  color: var(--muted-text);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.int-tpl-toggle:hover { color: var(--ink); }
+
+.int-pill {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--muted-text);
+  white-space: nowrap;
+}
+.int-pill.ok { background: var(--ok-bg); color: var(--ok); border-color: #cfe6d8; }
+.int-pill.warn { background: var(--warn-bg); color: var(--warn, #a16207); border-color: #f0e2a0; }
+.int-pill.bad { background: #fdecec; color: var(--danger, #b91c1c); border-color: #f3cccc; }

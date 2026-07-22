@@ -15,13 +15,13 @@ import {
   exigirHttps,
   WatiClient,
   type CredencialesWati,
-  type PlantillaRemota,
 } from './wati/wati.client';
 import type {
   ConectarWatiDto,
   ProbarEnvioWatiDto,
 } from './dto/integraciones.dto';
 import { aE164 } from './telefono';
+import { cruzar, type EstadoPlantillas } from './wati/plantillas';
 
 /**
  * Conexiones del tenant con proveedores externos.
@@ -194,12 +194,16 @@ export class IntegracionesService {
    * devuelve Wati. Es sólo lectura y sin efectos: sirve para ver qué hay
    * antes de que F2 empiece a crear las suyas.
    */
-  async plantillasWati(): Promise<PlantillaRemota[]> {
+  /**
+   * El estado de las plantillas del tenant: las del catálogo de Grafo con su
+   * estado real en Meta, y las propias que ya tenía.
+   */
+  async plantillasWati(): Promise<EstadoPlantillas> {
     const cred = await this.credencialesWati();
     if (!cred) {
       throw new NotFoundException('Wati no está conectada.');
     }
-    return this.wati.listarPlantillas(cred);
+    return cruzar(await this.wati.listarPlantillas(cred));
   }
 
   /**

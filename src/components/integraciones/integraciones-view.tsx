@@ -12,12 +12,16 @@ import {
   type CatalogoItem,
   type EstadoIntegracion,
   type Integracion,
+  type EstadoPlantillas,
+  type PlantillaGestionada,
+  type PlantillaPropia,
   type ProveedorIntegracion,
 } from "@/lib/integraciones";
 import {
   conectarWati,
   desconectarIntegracion,
   getIntegraciones,
+  getPlantillasWati,
   probarIntegracion,
   type EstadoIntegraciones,
 } from "@/lib/integraciones-api";
@@ -289,6 +293,9 @@ function WatiDetalle({
   onCambio: () => Promise<void>;
 }) {
   const [actual, setActual] = React.useState(integracion);
+  const [tab, setTab] = React.useState<"credenciales" | "plantillas">(
+    "credenciales",
+  );
   const conectada = actual?.estado === "CONECTADA";
 
   return (
@@ -331,15 +338,244 @@ function WatiDetalle({
         </div>
       </div>
 
-      <CredencialesTab
-        integracion={actual}
-        cifradoDisponible={cifradoDisponible}
-        conectada={conectada}
-        onActualizada={async (i) => {
-          setActual(i);
-          await onCambio();
-        }}
-      />
+      <nav className="int-tabs">
+        <button
+          className={tab === "credenciales" ? "on" : ""}
+          onClick={() => setTab("credenciales")}
+        >
+          Credenciales
+        </button>
+        <button
+          className={tab === "plantillas" ? "on" : ""}
+          onClick={() => setTab("plantillas")}
+          disabled={!conectada}
+          title={
+            conectada ? undefined : "Conectá la integración para ver las plantillas"
+          }
+          style={conectada ? undefined : { opacity: 0.45, cursor: "not-allowed" }}
+        >
+          Plantillas
+        </button>
+      </nav>
+
+      {tab === "credenciales" ? (
+        <CredencialesTab
+          integracion={actual}
+          cifradoDisponible={cifradoDisponible}
+          conectada={conectada}
+          onActualizada={async (i) => {
+            setActual(i);
+            await onCambio();
+          }}
+        />
+      ) : (
+        <PlantillasTab />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Las plantillas del tenant: las 13 del catálogo de Grafo con su estado real
+ * en Meta, y las que ya tenía escritas a mano.
+ *
+ * Se pide al abrir el tab y no con la vista: es una llamada a un tercero con
+ * timeout de 10 s, y la mayoría de las visitas a esta pantalla son para tocar
+ * las credenciales.
+ */
+function PlantillasTab() {
+  const [datos, setDatos] = React.useState<EstadoPlantillas | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const [cargando, setCargando] = React.useState(true);
+
+  const cargar = React.useCallback(async () => {
+    setCargando(true);
+    setError(null);
+    try {
+      setDatos(await getPlantillasWati());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudieron leer las plantillas.");
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    void cargar();
+  }, [cargar]);
+
+  if (cargando) {
+    return <p style={{ color: "var(--muted-text)", fontSize: 13 }}>Consultando Wati…</p>;
+  }
+  if (error || !datos) {
+    return (
+      <div className="int-section">
+        <p style={{ color: "var(--danger, #b91c1c)", fontSize: 13 }}>{error}</p>
+        <button className="btn ghost" onClick={() => void cargar()}>
+          Reintentar
+        </button>
+      </div>
+    );
+  }
+
+  const r = datos.resumen;
+  return (
+    <div className="int-content">
+      <div className="int-tpl-stats">
+        <Stat v={r.aprobadas} k="Aprobadas" />
+        <Stat v={r.pendientes} k="En revisión" />
+        <Stat v={r.conProblema} k="Con problema" alerta={r.conProblema > 0} />
+        <Stat v={r.sinSometer} k="Sin enviar" />
+        <Stat
+          v={r.recategorizadas}
+          k="Recategorizadas"
+          alerta={r.recategorizadas > 0}
+        />
+      </div>
+
+      {r.recategorizadas > 0 && (
+        <div className="int-info-box" style={{ marginBottom: 16 }}>
+          <strong>Meta cambió la categoría de {r.recategorizadas} plantilla(s).</strong>{" "}
+          Pedimos UTILITY y quedaron como MARKETING: significa que el texto se
+          leyó como promocional. Siguen funcionando, pero cuestan más por
+          conversación.
+        </div>
+      )}
+
+      <div className="int-section-intro">
+        <h3>Plantillas de Grafo</h3>
+        <p>
+          Las escribe y mantiene Grafo. Se envían a Meta para aprobación y el
+          estado se refleja acá.
+        </p>
+      </div>
+      <div className="int-tpl-list" style={{ marginBottom: 26 }}>
+        {datos.gestionadas.map((p) => (
+          <FilaGestionada key={p.codigo} p={p} />
+        ))}
+      </div>
+
+      <div className="int-section-intro">
+        <h3>Tus plantillas</h3>
+        <p>
+          {datos.propias.length === 0
+            ? "No hay plantillas propias en esta cuenta de Wati."
+            : "Las creaste vos en el dashboard de Wati. Grafo no las administra ni las usa para notificar."}
+        </p>
+      </div>
+      {datos.propias.length > 0 && (
+        <div className="int-tpl-list">
+          {datos.propias.map((p) => (
+            <FilaPropia key={p.codigo} p={p} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Stat({ v, k, alerta }: { v: number; k: string; alerta?: boolean }) {
+  return (
+    <div className={`int-tpl-stat${alerta ? " alerta" : ""}`}>
+      <div className="v">{v}</div>
+      <div className="k">{k}</div>
+    </div>
+  );
+}
+
+/** APPROVED → verde, PENDING → ámbar, el resto pide acción → rojo. */
+function pillEstado(estado: string): { clase: string; texto: string } {
+  const mapa: Record<string, { clase: string; texto: string }> = {
+    APPROVED: { clase: "ok", texto: "Aprobada" },
+    PENDING: { clase: "warn", texto: "En revisión" },
+    REJECTED: { clase: "bad", texto: "Rechazada" },
+    PAUSED: { clase: "bad", texto: "Pausada" },
+    DISABLED: { clase: "bad", texto: "Deshabilitada" },
+    SIN_SOMETER: { clase: "", texto: "Sin enviar" },
+  };
+  // Un estado que Meta agregue mañana se muestra tal cual en vez de romper.
+  return mapa[estado] ?? { clase: "", texto: estado };
+}
+
+function FilaGestionada({ p }: { p: PlantillaGestionada }) {
+  const [abierta, setAbierta] = React.useState(false);
+  const est = pillEstado(p.estado);
+  const recategorizada =
+    p.categoriaAsignada !== null && p.categoriaAsignada !== p.categoriaPedida;
+
+  return (
+    <div className="int-tpl-row">
+      <div className="main">
+        <div className="nm">{p.titulo}</div>
+        <div className="cuando">{p.cuando}</div>
+        <div className="cod">{p.codigo}</div>
+        <button className="int-tpl-toggle" onClick={() => setAbierta((v) => !v)}>
+          {abierta ? "Ocultar el mensaje" : "Ver el mensaje"}
+        </button>
+        {abierta && (
+          <div className="int-tpl-cuerpo">
+            {p.cuerpo.replace(/\{\{(\d+)\}\}/g, (_, n: string) => {
+              const nombre = p.parametros[Number(n) - 1];
+              return nombre ? `[${nombre}]` : `{{${n}}}`;
+            })}
+            <span className="foot">Tecnología desarrollada por Grafoprint</span>
+          </div>
+        )}
+      </div>
+      <div className="side">
+        {recategorizada ? (
+          <span
+            className="int-pill warn"
+            title={`Pedimos ${p.categoriaPedida} y Meta asignó ${p.categoriaAsignada}`}
+          >
+            {p.categoriaAsignada} ≠ {p.categoriaPedida}
+          </span>
+        ) : (
+          <span className="int-pill">{p.categoriaAsignada ?? p.categoriaPedida}</span>
+        )}
+        {p.calidad && <span className="int-pill">{p.calidad}</span>}
+        <span className={`int-pill ${est.clase}`}>{est.texto}</span>
+      </div>
+    </div>
+  );
+}
+
+function FilaPropia({ p }: { p: PlantillaPropia }) {
+  const [abierta, setAbierta] = React.useState(false);
+  const est = pillEstado(p.estado);
+  return (
+    <div className="int-tpl-row">
+      <div className="main">
+        <div className="nm" style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>
+          {p.codigo}
+        </div>
+        <div className="cuando">
+          {p.parametros.length === 0
+            ? "Sin parámetros"
+            : `${p.parametros.length} parámetro(s): ${p.parametros.join(", ")}`}
+        </div>
+        {p.cuerpo && (
+          <>
+            <button className="int-tpl-toggle" onClick={() => setAbierta((v) => !v)}>
+              {abierta ? "Ocultar el mensaje" : "Ver el mensaje"}
+            </button>
+            {abierta && (
+              <div className="int-tpl-cuerpo">
+                {p.cuerpo.replace(/\{\{(\d+)\}\}/g, (_, n: string) => {
+                  const nombre = p.parametros[Number(n) - 1];
+                  return nombre ? `[${nombre}]` : `{{${n}}}`;
+                })}
+                {p.footer && <span className="foot">{p.footer}</span>}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+      <div className="side">
+        {p.idioma && <span className="int-pill">{p.idioma}</span>}
+        {p.categoria && <span className="int-pill">{p.categoria}</span>}
+        <span className={`int-pill ${est.clase}`}>{est.texto}</span>
+      </div>
     </div>
   );
 }

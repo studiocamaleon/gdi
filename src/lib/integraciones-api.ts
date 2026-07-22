@@ -1,5 +1,9 @@
 import { apiRequest } from "@/lib/api";
-import type { Integracion, ProveedorIntegracion } from "@/lib/integraciones";
+import type {
+  EstadoPlantillas,
+  Integracion,
+  ProveedorIntegracion,
+} from "@/lib/integraciones";
 
 export type EstadoIntegraciones = {
   integraciones: Integracion[];
@@ -39,4 +43,8 @@ export async function desconectarIntegracion(
   proveedor: ProveedorIntegracion,
 ): Promise<void> {
   await apiRequest(`/integraciones/${proveedor}`, { method: "DELETE" });
+}
+
+export async function getPlantillasWati(): Promise<EstadoPlantillas> {
+  return apiRequest<EstadoPlantillas>("/integraciones/wati/plantillas");
 }

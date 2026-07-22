@@ -50,6 +50,8 @@ export type PlantillaRemota = {
   parametros: string[];
   /** Señal de calidad de Meta. Un template puede pausarse por bajarla. */
   calidad: string | null;
+  /** Fijo, sin variables. Grafo pone el mismo en todas las suyas. */
+  footer: string | null;
 };
 
 @Injectable()
@@ -293,6 +295,7 @@ function normalizarPlantilla(cruda: unknown): PlantillaRemota {
     cuerpoNombrado: texto(o.bodyOriginal),
     parametros: params,
     calidad: texto(o.quality),
+    footer: texto(o.footer),
   };
 }
 
