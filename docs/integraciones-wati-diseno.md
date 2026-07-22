@@ -305,11 +305,65 @@ y verificado posición por posición contra los siete parámetros de
 - Hay un campo `quality` — la señal de calidad de Meta, que es por lo que un
   template puede pasar a pausado sin que nadie lo toque.
 
-### 8.4 Lo que sigue sin verificar
+### 8.4 Crear y someter plantillas: funciona, y casi nada era como parecía
 
-El payload real de los **webhooks** de cambio de estado, y la respuesta de
-**crear** una plantilla. Los dos requieren, respectivamente, recibir un
-webhook y crear una plantilla de prueba — se resuelven al arrancar F2.
+Este apartado es el más caro de todos: salió de reversar contra la cuenta
+real una API cuya documentación no alcanza. Vale la pena dejarlo escrito
+completo para no repetirlo.
+
+**Son dos pasos:**
+
+1. `POST /api/v1/whatsApp/templates` — crea el borrador.
+2. `POST /api/v1/templates/submit/{id}` — lo manda a revisión de Meta.
+
+El id del submit va en el **path**. Sin él la ruta ni siquiera existe
+—contesta 405—, que es lo que despistó cuando se la buscó a ciegas.
+
+**El payload que sirve:**
+
+| Campo | Valor |
+|---|---|
+| `type` | `"template"` — **no** `"hsm"` |
+| `subCategory` | `"STANDARD"` |
+| `language` | string plano: `"es_AR"` |
+| `body` | el cuerpo **nombrado** (`{{nombre_cliente}}`) |
+| `customParams` | `[{paramName, paramValue}]` — los ejemplos que Meta exige |
+| `hsm` | no se manda; los borradores legítimos lo tienen en `null` |
+| `bodyOriginal` | no se manda; lo deriva Wati |
+
+Al someter, Wati convierte solo: `body` pasa a posicional (`{{1}}`) y
+`bodyOriginal` queda con el nombrado.
+
+**Las trampas, en orden de aparición:**
+
+- `languageCode` no existe: el campo es `language` y va como **string
+  plano**. Con el nombre equivocado el idioma quedaba `null` **en silencio**.
+- El alta contesta **500 "An error occurred" y aun así crea la plantilla**.
+  Confiar en el status reporta un fallo sobre algo que sí se creó, y el
+  reintento choca con "template with current name already exists". Por eso el
+  estado real se lee de la lista **después** de intentar.
+- El motivo de un rechazo viene en `message`, no en `info`.
+- **`type: "hsm"` fue el que costó más caro.** Con ese valor la plantilla se
+  crea, se ve bien en el editor y **no se puede enviar a revisión ni siquiera
+  desde el dashboard de Wati**: hay que borrarle el cuerpo y escribir texto
+  plano sin variables para que deje. El valor malo salió de una captura del
+  `update` del dashboard… que estaba devolviendo el valor que habíamos
+  escrito nosotros.
+
+**Lo que destrabó todo no fue probar otra combinación.** Fueron cinco
+intentos de adivinar nombres de campo, cada uno arreglando una cosa y
+rompiendo otra. Se resolvió creando un borrador **a mano** en el dashboard y
+comparándolo campo por campo contra uno nuestro: las únicas diferencias
+reales eran `type` y `subCategory`. Cuando una API no está documentada,
+conviene ir al diff antes que a la sexta hipótesis.
+
+Verificado con `grafo_comprobante_emitido_v1`: alta + envío en un paso,
+`status: PENDING`, sin tocar el dashboard.
+
+### 8.5 Lo que sigue sin verificar
+
+El payload real de los **webhooks** de cambio de estado. Requiere recibir uno
+— se resuelve al conectar la reconciliación de F2.
 
 ## Fuentes
 
