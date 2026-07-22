@@ -8,7 +8,8 @@ export type NavIconKey =
   | "Coin"
   | "Factory"
   | "Wallet"
-  | "Cube";
+  | "Cube"
+  | "Cog";
 
 export type NavChild = {
   key: string;
@@ -183,6 +184,18 @@ export const NAV: NavItem[] = [
         href: "/inventario/materias-primas",
       },
       { key: "movimientos", label: "Movimientos", href: "/inventario/movimientos" },
+    ],
+  },
+  {
+    key: "configuracion",
+    label: "Configuración",
+    icon: "Cog",
+    children: [
+      {
+        key: "integraciones",
+        label: "Integraciones",
+        href: "/configuracion/integraciones",
+      },
     ],
   },
 ];

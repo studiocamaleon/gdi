@@ -1,0 +1,84 @@
+/**
+ * Configuración › Integraciones.
+ *
+ * El diseño trae un marketplace de diez integraciones con contadores de
+ * instalaciones ("Slack · 6.3k instalaciones · Conectar"). Eso es una maqueta:
+ * mostrar un botón "Conectar" que no conecta nada, con un número inventado al
+ * lado, es mentirle al usuario. Acá van sólo las que existen o están
+ * decididas, y el estado dice la verdad.
+ *
+ * Google Drive quedó descartado (decisión 2026-07-22).
+ *
+ * Ver docs/integraciones-wati-diseno.md
+ */
+
+export type ProveedorIntegracion = "WATI" | "AFIP" | "MERCADOPAGO";
+
+export type EstadoIntegracion = "DESCONECTADA" | "CONECTADA" | "ERROR";
+
+export type Integracion = {
+  proveedor: ProveedorIntegracion;
+  estado: EstadoIntegracion;
+  /** Últimos caracteres del token. El completo no vuelve nunca del API. */
+  pista: string | null;
+  metadata: Record<string, unknown> | null;
+  ultimoChequeoEl: string | null;
+  ultimoErrorTexto: string | null;
+  conectadaEl: string | null;
+};
+
+export type CatalogoItem = {
+  proveedor: ProveedorIntegracion;
+  nombre: string;
+  categoria: string;
+  descripcion: string;
+  color: string;
+  /** false = todavía no se puede conectar desde acá. */
+  disponible: boolean;
+};
+
+export const CATALOGO: CatalogoItem[] = [
+  {
+    proveedor: "WATI",
+    nombre: "Wati",
+    categoria: "Mensajería",
+    descripcion:
+      "WhatsApp Business API · avisá a tus clientes cuando su trabajo avanza",
+    color: "#25d366",
+    disponible: true,
+  },
+  {
+    proveedor: "AFIP",
+    nombre: "ARCA",
+    categoria: "Facturación",
+    descripcion:
+      "Facturación electrónica por delegación · verificá que tu CUIT esté habilitado",
+    color: "#0066b2",
+    disponible: false,
+  },
+  {
+    proveedor: "MERCADOPAGO",
+    nombre: "Mercado Pago",
+    categoria: "Cobros",
+    descripcion: "Links de pago y conciliación automática de cobros",
+    color: "#009ee3",
+    disponible: false,
+  },
+];
+
+export const ETIQUETA_ESTADO: Record<EstadoIntegracion, string> = {
+  CONECTADA: "Conectada",
+  ERROR: "Con problemas",
+  DESCONECTADA: "Sin conectar",
+};
+
+export function itemDe(proveedor: ProveedorIntegracion): CatalogoItem {
+  return CATALOGO.find((c) => c.proveedor === proveedor)!;
+}
+
+export function fechaCorta(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
