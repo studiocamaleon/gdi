@@ -1,6 +1,9 @@
 import { Global, Module } from '@nestjs/common';
 
 import { SecretosService } from './cripto/secretos.service';
+import { IntegracionesController } from './integraciones.controller';
+import { IntegracionesService } from './integraciones.service';
+import { WatiClient } from './wati/wati.client';
 
 /**
  * Cimientos compartidos por todas las integraciones con terceros.
@@ -14,7 +17,8 @@ import { SecretosService } from './cripto/secretos.service';
  */
 @Global()
 @Module({
-  providers: [SecretosService],
-  exports: [SecretosService],
+  controllers: [IntegracionesController],
+  providers: [SecretosService, IntegracionesService, WatiClient],
+  exports: [SecretosService, IntegracionesService, WatiClient],
 })
 export class IntegracionesModule {}
