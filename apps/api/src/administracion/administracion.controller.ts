@@ -22,7 +22,6 @@ import { ComprobantesService } from './comprobantes.service';
 import { ImputacionesService } from './imputaciones.service';
 import { CuentaCorrienteService } from './cuenta-corriente.service';
 import { FacturaService } from './factura.service';
-import { FacturaPdfService } from './factura-pdf.service';
 import { EstadoCuentaPdfService } from './estado-cuenta-pdf.service';
 import { ArchivosService } from '../archivos/archivos.service';
 import { UpsertMetodoPagoDto } from './dto/metodo-pago.dto';
@@ -57,33 +56,27 @@ export class AdministracionController {
     private readonly imputacionesService: ImputacionesService,
     private readonly cuentaCorrienteService: CuentaCorrienteService,
     private readonly facturaService: FacturaService,
-    private readonly facturaPdfService: FacturaPdfService,
+    // El PDF del comprobante ya no se arma acá: lo materializa y lo guarda
+    // ComprobantesService (el controller sólo redirige al storage).
     private readonly estadoCuentaPdfService: EstadoCuentaPdfService,
     private readonly facturacionOrdenesService: FacturacionOrdenesService,
     private readonly archivos: ArchivosService,
   ) {}
 
   /**
-   * El PDF del comprobante. Se genera en el server para que sea el mismo
-   * archivo que se descarga y el que se le mande por mail al cliente.
+   * El PDF del comprobante. Sale del storage: se congela al emitir (y se
+   * rehace al cargar el CAE a mano), así que es el MISMO archivo cada vez —
+   * el que se descarga y el que se le manda al cliente. Antes se
+   * re-renderizaba en cada request contra la configuración fiscal viva.
    */
   @Get('comprobantes/:id/pdf')
   async facturaPdf(
     @CurrentSession() auth: CurrentAuth,
     @Param('id') id: string,
-    @Res({ passthrough: true }) res: Response,
-  ): Promise<StreamableFile> {
-    const [doc, logo] = await Promise.all([
-      this.facturaService.documento(auth, id),
-      this.archivos.logoDataUri(auth.tenantId),
-    ]);
-    const pdf = await this.facturaPdfService.generar(doc, logo);
-    const nombre = `${doc.letra}-${doc.puntoVenta}-${doc.numero}.pdf`;
-    res.set({
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': `inline; filename="${nombre}"`,
-    });
-    return new StreamableFile(pdf);
+    @Res() res: Response,
+  ): Promise<void> {
+    const archivo = await this.comprobantesService.pdfDe(auth, id);
+    res.redirect(302, await this.archivos.urlDeDescarga(archivo.id));
   }
 
   /** El comprobante impreso: todo lo que la ley exige que figure. */

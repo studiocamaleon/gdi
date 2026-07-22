@@ -1,13 +1,15 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
-import { Prisma } from '@prisma/client';
+import { Archivo, ArchivoScope, Prisma } from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { ArchivosService } from '../archivos/archivos.service';
+import { PresupuestoPdfService } from './presupuesto-pdf.service';
 import { OrdenesTrabajoService } from '../ordenes-trabajo/ordenes-trabajo.service';
 import type { CrearOrdenTrabajoItemDto } from '../ordenes-trabajo/dto/crear-orden-trabajo.dto';
 import { evaluarAprobacion } from './aprobacion';
@@ -58,10 +60,13 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 
 @Injectable()
 export class PresupuestosService {
+  private readonly logger = new Logger(PresupuestosService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly ordenes: OrdenesTrabajoService,
     private readonly archivos: ArchivosService,
+    private readonly pdf: PresupuestoPdfService,
   ) {}
 
   // ── Configuración por tenant ───────────────────────────────────────
@@ -174,7 +179,82 @@ export class PresupuestosService {
       return nro;
     });
 
+    // El PDF se arma acá y no en la primera visita: así el cliente que abre
+    // el link no espera a que arranque Chrome. Best-effort — si falla, el
+    // endpoint lo genera al pedirlo.
+    await this.materializarPdf(auth, dto.cotizacionId).catch((error: unknown) => {
+      this.logger.warn(
+        `No pude materializar el PDF de ${numero}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    });
+
     return this.detalle(auth, dto.cotizacionId, { numero });
+  }
+
+  // ── PDF ────────────────────────────────────────────────────────────
+
+  /**
+   * Devuelve el PDF ya guardado, y si todavía no existe lo genera y lo
+   * guarda. Antes se renderizaba con Chrome headless en CADA request: cada
+   * vez que el cliente abría el link público del presupuesto se levantaba un
+   * navegador. Ahora es un render por presupuesto.
+   *
+   * Nota de comportamiento: el PDF pasa a ser una FOTO del documento. Los
+   * items y los totales ya venían congelados en `emisionJson`, así que eso no
+   * cambia; lo que sí queda fijo ahora son el nombre del negocio, el texto de
+   * condiciones y el logo vigentes al emitir. Para un documento comercial que
+   * el cliente aprueba, congelarlos es lo correcto: si mañana cambian las
+   * condiciones de pago, el presupuesto que ya se mandó no debería mutar.
+   */
+  async pdfDe(auth: CurrentAuth, id: string): Promise<Archivo> {
+    const existente = await this.archivos.generadoDe(ArchivoScope.COTIZACION, id);
+    if (existente) return existente;
+    return this.materializarPdf(auth, id);
+  }
+
+  /** Rehace el PDF y reemplaza el anterior. */
+  async materializarPdf(auth: CurrentAuth, id: string): Promise<Archivo> {
+    const [detalle, cfg, negocio, logoDataUri] = await Promise.all([
+      this.detalle(auth, id),
+      this.config(auth.tenantId),
+      this.nombreDelNegocio(auth.tenantId),
+      this.archivos.logoDataUri(auth.tenantId),
+    ]);
+
+    const contenido = await this.pdf.generar({
+      numero: detalle.numero!,
+      negocio,
+      logoDataUri,
+      cliente: detalle.cliente?.nombre ?? null,
+      vendedor: detalle.vendedor?.nombre ?? null,
+      fechaEmision: detalle.fechaEmision,
+      fechaValidez: detalle.fechaValidez,
+      observaciones: detalle.observaciones,
+      senaSugeridaPct: detalle.senaSugeridaPct,
+      condicionesTexto: cfg.condicionesTexto,
+      subtotal: detalle.subtotal,
+      impuestos: detalle.impuestos,
+      cargosDirectos: detalle.cargosDirectos,
+      total: detalle.total,
+      items: detalle.items,
+    });
+
+    return this.archivos.materializar({
+      tenantId: auth.tenantId,
+      scope: ArchivoScope.COTIZACION,
+      entidadId: id,
+      nombre: `${detalle.numero}.pdf`,
+      mimeType: 'application/pdf',
+      contenido,
+    });
+  }
+
+  private async nombreDelNegocio(tenantId: string): Promise<string> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { nombre: true },
+    });
+    return tenant?.nombre ?? 'Presupuesto';
   }
 
   // ── Listado + stats (pipeline en $) ────────────────────────────────

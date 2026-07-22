@@ -3005,6 +3005,11 @@ model Archivo {
   /// Opt-in explícito: sólo los marcados así se ven en el link público de
   /// seguimiento del cliente. El arte de producción no se filtra por defecto.
   publico        Boolean       @default(false)
+  /// Lo produjo el sistema (PDF de presupuesto, de comprobante), no lo subió
+  /// una persona. No aparece en el tab de archivos, no se re-vincula al
+  /// convertir y no se borra a mano: es una proyección de otra fila, y
+  /// mezclarlo con el arte del cliente confundiría las dos cosas.
+  generado       Boolean       @default(false)
   descripcion    String?
   subidoPorId    String?       @db.Uuid
   eliminadoEl    DateTime?
@@ -3034,6 +3039,7 @@ model Archivo {
   tenantsConEsteLogo Tenant[] @relation("TenantLogo")
 
   @@index([tenantId, scope, estado])
+  @@index([tenantId, scope, generado])
   @@index([tenantId, ordenItemId])
   @@index([tenantId, ordenId])
   @@index([tenantId, clienteId])

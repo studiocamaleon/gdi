@@ -50,6 +50,14 @@ export interface StorageDriver {
     },
   ): Promise<string>;
 
+  /**
+   * Subida desde el servidor, sin presign. Es para lo que GENERA el sistema
+   * (el PDF de un presupuesto, el de un comprobante): no hay un navegador
+   * del otro lado que pueda hacer el PUT, y los bytes ya están en memoria.
+   * Las subidas de usuarios siguen yendo por `firmarSubida`.
+   */
+  subir(key: string, contenido: Buffer, contentType: string): Promise<void>;
+
   /** Metadata REAL del objeto. Null si no existe. Es la fuente de verdad. */
   cabecera(key: string): Promise<ObjetoMeta | null>;
 

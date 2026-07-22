@@ -58,6 +58,10 @@ export class LocalDriver implements StorageDriver {
     );
   }
 
+  subir(key: string, contenido: Buffer): Promise<void> {
+    return this.escribir(key, contenido);
+  }
+
   async cabecera(key: string): Promise<ObjetoMeta | null> {
     try {
       const s = await stat(this.rutaDe(key));

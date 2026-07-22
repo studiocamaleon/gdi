@@ -2,15 +2,15 @@ import {
   Body,
   Controller,
   Get,
-  Header,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
   Put,
   Query,
-  StreamableFile,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { RolSistema } from '@prisma/client';
 import { ArchivosService } from '../archivos/archivos.service';
 import { CurrentSession } from '../auth/current-auth.decorator';
@@ -117,45 +117,18 @@ export class PresupuestosController {
     return this.service.convertir(auth, id, dto);
   }
 
+  /**
+   * El PDF del presupuesto. Sale del storage: se genera una vez (al emitir, o
+   * en el primer pedido si el presupuesto es anterior a esto) y después es un
+   * 302 a una URL firmada. Antes se lanzaba Chrome headless en cada request.
+   */
   @Get(':id/pdf')
-  @Header('Content-Type', 'application/pdf')
   async pdfPresupuesto(
     @CurrentSession() auth: CurrentAuth,
     @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<StreamableFile> {
-    const [detalle, cfg, tenant, logoDataUri] = await Promise.all([
-      this.service.detalle(auth, id),
-      this.service.config(auth.tenantId),
-      this.pdfTenantNombre(auth.tenantId),
-      this.archivos.logoDataUri(auth.tenantId),
-    ]);
-    const buffer = await this.pdf.generar({
-      numero: detalle.numero!,
-      negocio: tenant,
-      logoDataUri,
-      cliente: detalle.cliente?.nombre ?? null,
-      vendedor: detalle.vendedor?.nombre ?? null,
-      fechaEmision: detalle.fechaEmision,
-      fechaValidez: detalle.fechaValidez,
-      observaciones: detalle.observaciones,
-      senaSugeridaPct: detalle.senaSugeridaPct,
-      condicionesTexto: cfg.condicionesTexto,
-      subtotal: detalle.subtotal,
-      impuestos: detalle.impuestos,
-      cargosDirectos: detalle.cargosDirectos,
-      total: detalle.total,
-      items: detalle.items,
-    });
-    return new StreamableFile(buffer, {
-      disposition: `inline; filename="${detalle.numero}.pdf"`,
-    });
-  }
-
-  private async pdfTenantNombre(tenantId: string): Promise<string> {
-    const tenant = await this.prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: { nombre: true },
-    });
-    return tenant?.nombre ?? 'Presupuesto';
+    @Res() res: Response,
+  ): Promise<void> {
+    const archivo = await this.service.pdfDe(auth, id);
+    res.redirect(302, await this.archivos.urlDeDescarga(archivo.id));
   }
 }

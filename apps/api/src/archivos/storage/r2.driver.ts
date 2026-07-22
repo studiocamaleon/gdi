@@ -84,6 +84,22 @@ export class R2Driver implements StorageDriver {
     });
   }
 
+  async subir(
+    key: string,
+    contenido: Buffer,
+    contentType: string,
+  ): Promise<void> {
+    await this.cliente.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: contenido,
+        ContentType: contentType,
+        ContentLength: contenido.length,
+      }),
+    );
+  }
+
   async cabecera(key: string): Promise<ObjetoMeta | null> {
     try {
       const r = await this.cliente.send(

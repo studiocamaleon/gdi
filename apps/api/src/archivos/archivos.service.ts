@@ -6,7 +6,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { Archivo, ArchivoEstado, ArchivoScope } from '@prisma/client';
+import { Archivo, ArchivoEstado, ArchivoScope, Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 
 import type { CurrentAuth } from '../auth/auth.types';
@@ -211,6 +211,120 @@ export class ArchivosService {
     return this.aDto(actualizado);
   }
 
+  // ── Documentos que produce el sistema ────────────────────────────────
+
+  /**
+   * Guarda un archivo generado por el servidor (el PDF de un presupuesto, el
+   * de un comprobante) y devuelve la fila.
+   *
+   * No pasa por presign: no hay navegador del otro lado y los bytes ya están
+   * en memoria. Reemplaza al generado anterior de la misma entidad —
+   * "el PDF del presupuesto X" es uno solo, no una colección.
+   *
+   * El objeto se sube ANTES de tocar la base: si la subida falla, la fila
+   * vieja sigue siendo válida y el endpoint la sigue sirviendo. Al revés
+   * dejaríamos apuntando a un objeto que no existe.
+   */
+  async materializar(params: {
+    tenantId: string;
+    scope: ArchivoScope;
+    entidadId: string;
+    nombre: string;
+    mimeType: string;
+    contenido: Buffer;
+  }): Promise<Archivo> {
+    const campo = CAMPO_POR_SCOPE[params.scope];
+    if (!campo) {
+      throw new BadRequestException(
+        `El scope ${params.scope} no admite documentos generados.`,
+      );
+    }
+
+    const archivoId = randomUUID();
+    const key = construirKey({
+      tenantId: params.tenantId,
+      scope: params.scope,
+      entidadId: params.entidadId,
+      archivoId,
+      ext: extensionDe(params.nombre),
+    });
+    await this.storage.subir(key, params.contenido, params.mimeType);
+
+    const anterior = await this.generadoDe(params.scope, params.entidadId);
+    const bytes = BigInt(params.contenido.length);
+
+    let fila: Archivo;
+    try {
+      [fila] = await this.prisma.$transaction([
+        this.prisma.archivo.create({
+          data: {
+            id: archivoId,
+            tenantId: params.tenantId,
+            scope: params.scope,
+            key,
+            nombreOriginal: params.nombre,
+            mimeType: params.mimeType,
+            bytes,
+            estado: ArchivoEstado.LISTO,
+            generado: true,
+            [campo]: params.entidadId,
+          },
+        }),
+        this.prisma.tenant.update({
+          where: { id: params.tenantId },
+          data: { bytesArchivos: { increment: bytes } },
+        }),
+      ]);
+    } catch (error) {
+      // El índice parcial `Archivo_generado_vigente_unico` dice que hay a lo
+      // sumo un documento generado vigente por entidad. Si dos pedidos
+      // simultáneos generaron el mismo PDF, el que llega segundo choca acá:
+      // tira su objeto y devuelve el que ganó. Antes los dos quedaban
+      // vigentes y el perdedor se filtraba en el bucket para siempre.
+      if (esConflictoDeUnicidad(error)) {
+        await this.storage.borrar(key).catch(() => undefined);
+        const ganador = await this.generadoDe(params.scope, params.entidadId);
+        if (ganador) return ganador;
+      }
+      throw error;
+    }
+
+    // El viejo se va a la papelera con el camino normal (el cron purga el
+    // objeto), así que un fallo acá no deja el nuevo sin registrar.
+    if (anterior) {
+      await this.prisma.$transaction([
+        this.prisma.archivo.update({
+          where: { id: anterior.id },
+          data: { estado: ArchivoEstado.ELIMINADO, eliminadoEl: new Date() },
+        }),
+        this.prisma.tenant.update({
+          where: { id: params.tenantId },
+          data: { bytesArchivos: { decrement: anterior.bytes } },
+        }),
+      ]);
+    }
+
+    return fila;
+  }
+
+  /** El documento vigente que el sistema generó para esa entidad, si existe. */
+  async generadoDe(
+    scope: ArchivoScope,
+    entidadId: string,
+  ): Promise<Archivo | null> {
+    const campo = CAMPO_POR_SCOPE[scope];
+    if (!campo) return null;
+    return this.prisma.archivo.findFirst({
+      where: {
+        scope,
+        generado: true,
+        estado: ArchivoEstado.LISTO,
+        [campo]: entidadId,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   // ── Lectura ──────────────────────────────────────────────────────────
 
   async listar(query: ListarArchivosDto): Promise<ArchivoDto[]> {
@@ -219,6 +333,9 @@ export class ArchivosService {
       where: {
         scope: query.scope,
         estado: ArchivoEstado.LISTO,
+        // Los PDF que genera el sistema no son adjuntos del usuario: no van
+        // en la misma lista que el arte que subió.
+        generado: false,
         ...(campo && query.entidadId ? { [campo]: query.entidadId } : {}),
       },
       orderBy: { createdAt: 'desc' },
@@ -248,6 +365,7 @@ export class ArchivosService {
     const archivos = await this.prisma.archivo.findMany({
       where: {
         estado: ArchivoEstado.LISTO,
+        generado: false,
         OR: [
           { ordenId, scope: ArchivoScope.ORDEN },
           { ordenItemId: { in: orden.items.map((i) => i.id) } },
@@ -298,6 +416,9 @@ export class ArchivosService {
           cotizacionId,
           scope: ArchivoScope.COTIZACION,
           estado: ArchivoEstado.LISTO,
+          // El PDF del presupuesto se queda en el presupuesto: es SU
+          // documento. La orden genera el suyo cuando corresponde.
+          generado: false,
         },
         data: { scope: ArchivoScope.ORDEN, ordenId },
       });
@@ -446,6 +567,14 @@ export class ArchivosService {
   async eliminar(auth: CurrentAuth, id: string): Promise<void> {
     const archivo = await this.buscarPropio(id);
     if (archivo.estado === ArchivoEstado.ELIMINADO) return;
+    if (archivo.generado) {
+      // Borrarlo a mano dejaría al presupuesto o al comprobante sin su
+      // documento hasta que alguien lo vuelva a pedir. Si el contenido
+      // cambió, se re-materializa: no se borra.
+      throw new BadRequestException(
+        'Ese documento lo genera el sistema y no se borra a mano.',
+      );
+    }
 
     const eraListo = archivo.estado === ArchivoEstado.LISTO;
     await this.prisma.$transaction([
@@ -609,4 +738,12 @@ export class ArchivosService {
         archivo.subidoPor?.nombreCompleto ?? archivo.subidoPor?.email ?? null,
     };
   }
+}
+
+/** P2002: violación de índice único (incluye los parciales hechos a mano). */
+function esConflictoDeUnicidad(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === 'P2002'
+  );
 }

@@ -15,8 +15,6 @@ import { construirHtmlPresupuesto } from './presupuesto-pdf-html';
  * el PDF sale idéntico. El HTML vive en `presupuesto-pdf-html.ts`.
  */
 
-
-
 let geistCache: { regular: string; bold: string } | null | undefined;
 
 function cargarGeist(log: Logger): { regular: string; bold: string } | null {
@@ -37,26 +35,8 @@ function cargarGeist(log: Logger): { regular: string; bold: string } | null {
   return geistCache;
 }
 
-const money = (n: number) =>
-  '$' +
-  n.toLocaleString('es-AR', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-
-const fechaCorta = (iso: string | null) => {
-  if (!iso) return '—';
-  const [y, m, d] = iso.slice(0, 10).split('-');
-  return `${d}/${m}/${y}`;
-};
-
-const inicialesDe = (nombre: string) =>
-  nombre
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? '')
-    .join('');
+// (Acá vivían `money`, `fechaCorta` e `inicialesDe`: sobras de cuando el PDF
+// se dibujaba a mano con jsPDF. El formateo ahora lo hace el HTML del port.)
 
 export type PresupuestoPdfDatos = {
   numero: string;
@@ -89,11 +69,23 @@ export type PresupuestoPdfDatos = {
   }>;
 };
 
+/**
+ * Cuánto sobrevive Chrome sin que nadie le pida un PDF. Desde que los PDF se
+ * guardan (F3), los renders vienen de a ráfagas —se emiten tres presupuestos
+ * seguidos y después no pasa nada por horas—, así que mantener ~150 MB de
+ * navegador residente el resto del día no tiene sentido. Cinco minutos cubren
+ * la ráfaga sin pagar el relanzamiento (~1 s) dentro de ella.
+ */
+const MINUTOS_OCIOSO = Number(process.env.PDF_CHROME_IDLE_MIN ?? 5);
+
 @Injectable()
 export class PresupuestoPdfService implements OnModuleDestroy {
   private readonly log = new Logger(PresupuestoPdfService.name);
   /** Chrome se reusa entre requests: levantarlo por PDF cuesta ~1s. */
   private navegador: Promise<Browser> | null = null;
+  private apagado: NodeJS.Timeout | null = null;
+  /** Renders en vuelo: no se cierra el navegador con una página abierta. */
+  private enUso = 0;
 
   private browser(): Promise<Browser> {
     if (!this.navegador) {
@@ -101,7 +93,11 @@ export class PresupuestoPdfService implements OnModuleDestroy {
         .launch({
           headless: true,
           // --no-sandbox es necesario en contenedores sin user namespaces.
-          args: ['--no-sandbox', '--disable-dev-shm-usage', '--font-render-hinting=none'],
+          args: [
+            '--no-sandbox',
+            '--disable-dev-shm-usage',
+            '--font-render-hinting=none',
+          ],
         })
         .catch((e) => {
           // Si falla el launch no dejamos la promesa rota cacheada.
@@ -112,8 +108,32 @@ export class PresupuestoPdfService implements OnModuleDestroy {
     return this.navegador;
   }
 
+  /** Reprograma el apagado; si hay un render en curso, no arma nada. */
+  private programarApagado() {
+    if (this.apagado) clearTimeout(this.apagado);
+    this.apagado = null;
+    if (this.enUso > 0 || !this.navegador) return;
+    this.apagado = setTimeout(() => {
+      void this.cerrar('inactividad');
+    }, MINUTOS_OCIOSO * 60_000);
+    // Un navegador ocioso no puede ser la razón por la que el proceso no
+    // termina: sin unref, este timer mantiene vivo el event loop.
+    this.apagado.unref();
+  }
+
+  private async cerrar(motivo: string) {
+    const pendiente = this.navegador;
+    if (!pendiente || this.enUso > 0) return;
+    this.navegador = null;
+    const b = await pendiente.catch(() => null);
+    await b?.close().catch(() => undefined);
+    this.log.debug(`Chrome cerrado por ${motivo}.`);
+  }
+
   async onModuleDestroy() {
+    if (this.apagado) clearTimeout(this.apagado);
     const b = await this.navegador?.catch(() => null);
+    this.navegador = null;
     await b?.close().catch(() => undefined);
   }
 
@@ -124,20 +144,32 @@ export class PresupuestoPdfService implements OnModuleDestroy {
    */
   async generar(d: PresupuestoPdfDatos): Promise<Buffer> {
     const html = construirHtmlPresupuesto(d, cargarGeist(this.log));
-    const navegador = await this.browser();
-    const page = await navegador.newPage();
+    // El contador sube ANTES del await: si dos requests entran juntas, la
+    // segunda no puede encontrarse con el navegador cerrado por el timer.
+    this.enUso += 1;
+    if (this.apagado) {
+      clearTimeout(this.apagado);
+      this.apagado = null;
+    }
     try {
-      // `domcontentloaded` alcanza: no hay recursos remotos (fuentes embebidas).
-      await page.setContent(html, { waitUntil: 'domcontentloaded' });
-      await page.evaluateHandle('document.fonts.ready');
-      const pdf = await page.pdf({
-        format: 'a4',
-        printBackground: true,
-        preferCSSPageSize: true,
-      });
-      return Buffer.from(pdf);
+      const navegador = await this.browser();
+      const page = await navegador.newPage();
+      try {
+        // `domcontentloaded` alcanza: no hay recursos remotos (fuentes embebidas).
+        await page.setContent(html, { waitUntil: 'domcontentloaded' });
+        await page.evaluateHandle('document.fonts.ready');
+        const pdf = await page.pdf({
+          format: 'a4',
+          printBackground: true,
+          preferCSSPageSize: true,
+        });
+        return Buffer.from(pdf);
+      } finally {
+        await page.close().catch(() => undefined);
+      }
     } finally {
-      await page.close().catch(() => undefined);
+      this.enUso -= 1;
+      this.programarApagado();
     }
   }
 }

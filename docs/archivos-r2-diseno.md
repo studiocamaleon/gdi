@@ -400,8 +400,44 @@ segunda migración, habría fallado en silencio.
 *No verificado en navegador*: el tab de la ficha y el del tablero, que están
 detrás del login.
 
-**F3 — PDFs persistidos.** Presupuesto al emitir, comprobante al obtener CAE.
-Es acá donde el tema Puppeteer se vuelve barato de resolver.
+**F3 — PDFs persistidos. ✅ HECHA.**
+
+- `StorageDriver.subir()` para lo que genera el servidor (sin presign: no hay
+  navegador del otro lado y los bytes ya están en memoria).
+- `Archivo.generado`: los documentos del sistema no aparecen en el tab, no se
+  re-vinculan al convertir y no se borran a mano. Son proyecciones de otra
+  fila, no adjuntos de una persona.
+- **Presupuesto**: se materializa al emitir (así el cliente que abre el link no
+  espera a Chrome) y, para los ya emitidos, en el primer pedido.
+- **Comprobante**: se congela al emitir y se rehace al cargar el CAE a mano
+  (el manual emite sin CAE y lo carga después).
+- Los dos endpoints pasan de renderizar a un 302 a la URL firmada.
+- **Chrome se apaga solo** tras 5 minutos sin renders (`PDF_CHROME_IDLE_MIN`).
+  Con los PDF guardados los renders vienen de a ráfagas, así que tener ~150 MB
+  de navegador residente el resto del día no tiene sentido.
+
+**Efecto medido** sobre el PDF de un presupuesto:
+
+| | Antes | Ahora |
+|---|---|---|
+| 1er pedido | 2.23 s | 2.23 s (una vez) |
+| 2º pedido en adelante | 2.23 s | **0.01 s** |
+| Chrome residente | siempre | sólo 5 min tras el último render |
+
+**Cambio de comportamiento a tener en cuenta**: el PDF pasa de render vivo a
+foto. Los items y los totales ya venían congelados en `emisionJson`, así que
+eso no cambia. Lo que **sí** queda fijo ahora son el nombre del negocio, el
+texto de condiciones y el logo del momento de emitir — y, en el comprobante,
+los datos del emisor. Esto último era directamente un bug: `ConfiguracionFiscal`
+está viva, así que cambiar el domicilio fiscal reescribía el domicilio de todas
+las facturas ya emitidas. Un comprobante autorizado por ARCA no puede mutar.
+
+El estado de cuenta **no** se persiste: es un resumen a hoy, no un documento.
+
+**Verificado**: 2.23 s → 0.01 s; el generado no aparece en el listado y
+borrarlo a mano da 400; re-materializar reemplaza en vez de acumular; el
+apagado de Chrome medido con el contador de procesos (0 → 1 tras el render → 0
+tras el ocio, con su línea de log).
 
 **F4 — Operación.** Cuotas por tenant, papelera + purga, multipart para > 100 MB,
 métricas de uso, dedupe por hash.
@@ -441,6 +477,15 @@ front corre en otro origen, así que el `<img>` del logo moría con
 sirve R2, que no manda CORP), o sea: **es un bug que sólo existe en dev**. Se
 arregló en el controller del driver local, para que dev y prod se comporten
 igual — que es la única razón por la que el driver local vale la pena.
+
+**Dos pedidos simultáneos generaban dos documentos vigentes (F3).** Cada uno
+leía "no hay anterior" antes de que el otro insertara, así que los dos quedaban
+LISTO: se servía el más nuevo, pero el otro objeto y su cuota quedaban colgados
+para siempre. No se cierra con cuidado en el código — es un invariante, así que
+lo garantiza un índice único parcial (`Archivo_generado_vigente_unico`, sobre
+`scope` + COALESCE de las FK, `WHERE generado AND estado='LISTO'`) y el service
+atrapa el P2002, tira su objeto y devuelve el que ganó. Verificado con 5
+requests concurrentes: 1 fila vigente, 0 objetos huérfanos.
 
 Un tercero, no de código: Turbopack sirvió el `globals.css` viejo después de
 una edición in-place (el bloque agregado al final sí estaba, la regla insertada
