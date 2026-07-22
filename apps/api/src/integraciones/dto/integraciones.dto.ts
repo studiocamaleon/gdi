@@ -1,4 +1,10 @@
-import { IsString, MaxLength, MinLength, Matches } from 'class-validator';
+import {
+  IsArray,
+  IsString,
+  MaxLength,
+  MinLength,
+  Matches,
+} from 'class-validator';
 
 export class ConectarWatiDto {
   /**
@@ -29,4 +35,32 @@ export class ConectarWatiDto {
   @MinLength(20)
   @MaxLength(4000)
   token!: string;
+}
+
+/**
+ * Envío de prueba: manda una plantilla real a un número que el admin
+ * controla, para verificar la integración de punta a punta antes de que la
+ * use un cliente.
+ */
+export class ProbarEnvioWatiDto {
+  /** Teléfono tal como se escribe acá; se normaliza a E.164 en el service. */
+  @IsString()
+  @MinLength(6)
+  @MaxLength(30)
+  telefono!: string;
+
+  /** `elementName` de la plantilla en Wati. */
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  plantilla!: string;
+
+  /**
+   * Valores POR POSICIÓN: el primero es el {{1}}. Los nombres los resuelve
+   * el service contra la plantilla real — ver `mapearParametros`.
+   */
+  @IsArray()
+  @IsString({ each: true })
+  @MaxLength(300, { each: true })
+  parametros!: string[];
 }

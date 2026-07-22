@@ -85,6 +85,70 @@ export class WatiClient {
     return crudas.map((t) => normalizarPlantilla(t));
   }
 
+  /**
+   * Envía una plantilla a UN número.
+   *
+   * Los parámetros se mandan **por nombre**, no por posición: Wati los
+   * resuelve contra el cuerpo nombrado. Por eso `mapearParametros` es
+   * imprescindible — nosotros calculamos los valores por posición (el {{1}}
+   * es el nombre del cliente, el {{2}} el número de orden) y necesitamos
+   * saber con qué nombre viaja cada uno.
+   *
+   * `broadcastName` es lo que Wati muestra en su propio panel para agrupar
+   * envíos. Se manda algo identificable para que el tenant pueda auditar
+   * desde el lado de Wati qué salió de Grafo.
+   */
+  async enviarPlantilla(
+    cred: CredencialesWati,
+    envio: {
+      /** E.164 sin `+`. Ver `aE164`. */
+      telefono: string;
+      plantilla: string;
+      /** `{ nombre_del_parametro: valor }`. */
+      parametros: Record<string, string>;
+      broadcastName?: string;
+    },
+  ): Promise<{ ok: true; id: string | null } | { ok: false; motivo: string }> {
+    try {
+      const json = await this.pedir<{
+        result?: boolean;
+        info?: string;
+        validWhatsAppNumber?: boolean;
+        message?: unknown;
+      }>(
+        cred,
+        'POST',
+        `/api/v1/sendTemplateMessage?whatsappNumber=${encodeURIComponent(envio.telefono)}`,
+        {
+          template_name: envio.plantilla,
+          broadcast_name: envio.broadcastName ?? `grafo_${envio.plantilla}`,
+          parameters: Object.entries(envio.parametros).map(([name, value]) => ({
+            name,
+            value,
+          })),
+        },
+      );
+
+      // Wati responde 200 con `result: false` cuando rechaza el envío: la
+      // plantilla no existe, el número no tiene WhatsApp, falta un parámetro.
+      // Sin este chequeo un envío fallido pasa por exitoso.
+      if (json?.result === false) {
+        return {
+          ok: false,
+          motivo:
+            typeof json.info === 'string' && json.info.trim()
+              ? json.info.trim()
+              : 'Wati rechazó el envío sin dar motivo.',
+        };
+      }
+      const msg = (json?.message ?? {}) as Record<string, unknown>;
+      const id = typeof msg.id === 'string' ? msg.id : null;
+      return { ok: true, id };
+    } catch (error) {
+      return { ok: false, motivo: mensajeDeError(error) };
+    }
+  }
+
   // ── Interno ─────────────────────────────────────────────────────────
 
   private async pedir<T>(

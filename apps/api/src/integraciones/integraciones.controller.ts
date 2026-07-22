@@ -13,7 +13,7 @@ import { ProveedorIntegracion, RolSistema } from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import { Roles } from '../auth/roles.decorator';
-import { ConectarWatiDto } from './dto/integraciones.dto';
+import { ConectarWatiDto, ProbarEnvioWatiDto } from './dto/integraciones.dto';
 import { IntegracionesService } from './integraciones.service';
 
 /**
@@ -45,6 +45,13 @@ export class IntegracionesController {
   @Get('wati/plantillas')
   plantillasWati() {
     return this.service.plantillasWati();
+  }
+
+  /** Envío de prueba a un número propio, antes de encender la integración. */
+  @Post('wati/probar-envio')
+  @Roles(RolSistema.ADMINISTRADOR)
+  probarEnvioWati(@Body() dto: ProbarEnvioWatiDto) {
+    return this.service.probarEnvioWati(dto);
   }
 
   @Get(':proveedor')

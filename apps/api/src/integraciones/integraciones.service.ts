@@ -17,7 +17,11 @@ import {
   type CredencialesWati,
   type PlantillaRemota,
 } from './wati/wati.client';
-import type { ConectarWatiDto } from './dto/integraciones.dto';
+import type {
+  ConectarWatiDto,
+  ProbarEnvioWatiDto,
+} from './dto/integraciones.dto';
+import { aE164 } from './telefono';
 
 /**
  * Conexiones del tenant con proveedores externos.
@@ -196,6 +200,66 @@ export class IntegracionesService {
       throw new NotFoundException('Wati no está conectada.');
     }
     return this.wati.listarPlantillas(cred);
+  }
+
+  /**
+   * Envío de prueba a un número del propio admin.
+   *
+   * Hace tres cosas que el envío real también va a hacer, y por eso sirve
+   * como prueba: normaliza el teléfono a E.164, busca la plantilla en la
+   * cuenta del tenant para saber **con qué nombre viaja cada posición**, y
+   * recién ahí envía. Los valores llegan por posición porque es como los
+   * piensa el sistema ({{1}} = nombre del cliente); Wati los quiere por
+   * nombre. Traducir eso acá es exactamente lo que evita que al cliente le
+   * llegue el número de orden donde va el nombre.
+   */
+  async probarEnvioWati(dto: ProbarEnvioWatiDto): Promise<{
+    ok: boolean;
+    telefono?: string;
+    motivo?: string;
+    parametros?: Record<string, string>;
+  }> {
+    const cred = await this.credencialesWati();
+    if (!cred) throw new NotFoundException('Wati no está conectada.');
+
+    const tel = aE164({ telefonoNumero: dto.telefono });
+    if (!tel.ok) return { ok: false, motivo: tel.motivo };
+
+    const plantillas = await this.wati.listarPlantillas(cred);
+    const plantilla = plantillas.find((p) => p.nombre === dto.plantilla);
+    if (!plantilla) {
+      return {
+        ok: false,
+        motivo: `No existe la plantilla "${dto.plantilla}" en la cuenta de Wati.`,
+      };
+    }
+    if (plantilla.estado !== 'APPROVED') {
+      return {
+        ok: false,
+        motivo: `La plantilla está ${plantilla.estado}: Meta sólo entrega las aprobadas.`,
+      };
+    }
+    if (plantilla.parametros.length !== dto.parametros.length) {
+      return {
+        ok: false,
+        motivo: `La plantilla espera ${plantilla.parametros.length} parámetros y recibí ${dto.parametros.length}.`,
+      };
+    }
+
+    const parametros = Object.fromEntries(
+      plantilla.parametros.map((nombre, i) => [nombre, dto.parametros[i]]),
+    );
+
+    const res = await this.wati.enviarPlantilla(cred, {
+      telefono: tel.e164,
+      plantilla: plantilla.nombre,
+      parametros,
+      broadcastName: `grafo_prueba_${plantilla.nombre}`,
+    });
+
+    return res.ok
+      ? { ok: true, telefono: tel.e164, parametros }
+      : { ok: false, telefono: tel.e164, motivo: res.motivo, parametros };
   }
 
   /**
