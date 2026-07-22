@@ -101,6 +101,7 @@ const item = (
   cantidadUnidad: "u",
   specs: [],
   fechaEntrega,
+  archivosCount: 0,
   sinRuta: false,
   pasos,
 });

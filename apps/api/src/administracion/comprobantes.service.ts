@@ -2,9 +2,10 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Archivo, ArchivoScope, Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
@@ -17,6 +18,9 @@ import {
   type ComprobanteTipo,
 } from './dto/comprobante.dto';
 import { FacturacionOrdenesService } from './facturacion-ordenes.service';
+import { FacturaService } from './factura.service';
+import { FacturaPdfService } from './factura-pdf.service';
+import { ArchivosService } from '../archivos/archivos.service';
 import {
   bloqueoEmision,
   letraComprobante,
@@ -80,7 +84,9 @@ function leerIvaPorAlicuota(
     const o = raw as Record<string, unknown>;
     const alicuota = Number(o.alicuota);
     if (!Number.isFinite(alicuota)) return [];
-    return [{ alicuota, base: Number(o.base) || 0, monto: Number(o.monto) || 0 }];
+    return [
+      { alicuota, base: Number(o.base) || 0, monto: Number(o.monto) || 0 },
+    ];
   });
 }
 
@@ -94,12 +100,69 @@ const DIAS_POR_CONDICION: Record<string, number> = {
 
 @Injectable()
 export class ComprobantesService {
+  private readonly logger = new Logger(ComprobantesService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly manualProvider: ManualProvider,
     private readonly afipSdkProvider: AfipSdkProvider,
     private readonly facturacionOrdenes: FacturacionOrdenesService,
+    private readonly factura: FacturaService,
+    private readonly facturaPdf: FacturaPdfService,
+    private readonly archivos: ArchivosService,
   ) {}
+
+  // ── PDF del comprobante ─────────────────────────────────────────────
+
+  /**
+   * El PDF ya guardado, o generado y guardado si todavía no existe.
+   *
+   * Que sea una foto y no un render vivo importa más acá que en el
+   * presupuesto: los items, el receptor y el CAE ya estaban congelados en la
+   * fila, pero los datos del EMISOR salían de `ConfiguracionFiscal`, que está
+   * viva. Es decir: cambiar el domicilio fiscal reescribía el domicilio de
+   * todas las facturas ya emitidas. Un comprobante autorizado por ARCA no
+   * puede mutar.
+   */
+  async pdfDe(auth: CurrentAuth, id: string): Promise<Archivo> {
+    const existente = await this.archivos.generadoDe(
+      ArchivoScope.COMPROBANTE,
+      id,
+    );
+    if (existente) return existente;
+    return this.materializarPdf(auth, id);
+  }
+
+  async materializarPdf(auth: CurrentAuth, id: string): Promise<Archivo> {
+    const [doc, logo] = await Promise.all([
+      this.factura.documento(auth, id),
+      this.archivos.logoDataUri(auth.tenantId),
+    ]);
+    const contenido = await this.facturaPdf.generar(doc, logo);
+    return this.archivos.materializar({
+      tenantId: auth.tenantId,
+      scope: ArchivoScope.COMPROBANTE,
+      entidadId: id,
+      nombre: `${doc.letra}-${doc.puntoVenta}-${doc.numero}.pdf`,
+      mimeType: 'application/pdf',
+      contenido,
+    });
+  }
+
+  /**
+   * Congela el PDF apenas el comprobante queda emitido. Best-effort y con el
+   * error tragado: que falle el archivo no puede tumbar una emisión fiscal
+   * que ARCA ya autorizó — el endpoint lo genera después si hace falta.
+   */
+  private async congelarPdf(auth: CurrentAuth, id: string): Promise<void> {
+    try {
+      await this.materializarPdf(auth, id);
+    } catch (error) {
+      this.logger.warn(
+        `No pude congelar el PDF del comprobante ${id}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
 
   /**
    * Qué provider usa el tenant. Si pide AFIP SDK pero falta el token, cae
@@ -552,6 +615,9 @@ export class ComprobantesService {
     // Recién emitido cuenta para el facturado de sus órdenes (una NC
     // resta), y una factura absorbe los cobros libres de sus órdenes.
     await this.facturacionOrdenes.alEmitirComprobante(auth.tenantId, id);
+    // El comprobante queda congelado con los datos del emisor de ESTE
+    // momento; si mañana cambia el domicilio fiscal, éste no muta.
+    await this.congelarPdf(auth, id);
     return this.toResponse(actualizado);
   }
 
@@ -587,6 +653,9 @@ export class ComprobantesService {
         },
       },
     });
+    // El PDF congelado al emitir salió sin CAE (el manual lo carga después):
+    // se rehace para que el guardado tenga el número de autorización.
+    await this.congelarPdf(auth, id);
     return this.toResponse(actualizado);
   }
 
@@ -664,8 +733,7 @@ export class ComprobantesService {
     const item = this.renglonPorMonto(
       letra,
       monto,
-      payload.concepto?.trim() ||
-        `Trabajos de impresión — ${orden.numero}`,
+      payload.concepto?.trim() || `Trabajos de impresión — ${orden.numero}`,
     );
     // El vínculo lleva el total RECALCULADO del renglón (en A el redondeo
     // del neto puede correr un centavo) para que el reparto cierre exacto.
@@ -811,8 +879,7 @@ export class ComprobantesService {
     return {
       descripcion,
       cantidad: 1,
-      precioUnitarioSinIva:
-        letra === 'A' ? redondear2(monto / 1.21) : monto,
+      precioUnitarioSinIva: letra === 'A' ? redondear2(monto / 1.21) : monto,
       alicuotaIva: 21,
     };
   }
@@ -853,7 +920,8 @@ export class ComprobantesService {
       : null;
     const resultado = letraComprobante(
       config.condicionFiscal as CondicionFiscalEmisor,
-      (cliente?.condicionFiscal ?? 'consumidor_final') as CondicionFiscalReceptor,
+      (cliente?.condicionFiscal ??
+        'consumidor_final') as CondicionFiscalReceptor,
       config.leyendaFacturaA as LeyendaA | null,
     );
     return resultado.letra as LetraProvider;

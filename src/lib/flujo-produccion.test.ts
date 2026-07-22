@@ -138,6 +138,7 @@ function item(
     cantidadUnidad: "u",
     specs: [],
     fechaEntrega: null,
+    archivosCount: 0,
     sinRuta: false,
     pasos,
     ...overrides,

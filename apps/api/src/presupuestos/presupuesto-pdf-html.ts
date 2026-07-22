@@ -142,6 +142,9 @@ body{background:var(--surface-3);color:var(--ink);font-family:var(--font-sans);f
 .hd{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;padding:40px 48px 26px}
 .hd .tenant{display:flex;align-items:center;gap:15px}
 .hd .logo{width:52px;height:52px;border-radius:14px;background:var(--ink);color:#fff;display:grid;place-items:center;font-weight:700;font-size:19px;letter-spacing:-.03em;flex:0 0 auto}
+/* Con logo cargado el cuadrado no pinta fondo: el logo suele traer el suyo. */
+.hd .logo.logo-img{background:transparent;overflow:hidden}
+.hd .logo.logo-img img{width:100%;height:100%;object-fit:contain}
 .hd .tn{font-size:21px;font-weight:600;letter-spacing:-.02em;line-height:1.1}
 .hd .ts{font-size:12.5px;color:var(--muted);margin-top:3px}
 .hd .doc{text-align:right}
@@ -211,7 +214,11 @@ body{background:var(--surface-3);color:var(--ink);font-family:var(--font-sans);f
 <div class="sheet">
   <div class="hd">
     <div class="tenant">
-      <div class="logo">${esc(iniciales(d.negocio))}</div>
+      ${
+        d.logoDataUri
+          ? `<div class="logo logo-img"><img src="${esc(d.logoDataUri)}" alt=""></div>`
+          : `<div class="logo">${esc(iniciales(d.negocio))}</div>`
+      }
       <div>
         <div class="tn">${esc(d.negocio)}</div>
         <div class="ts">Presupuesto comercial</div>

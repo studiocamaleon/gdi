@@ -30,7 +30,15 @@ async function bootstrap() {
     .map((item) => item.trim())
     .filter(Boolean);
   if (origins && origins.length > 0) {
-    app.enableCors({ origin: origins, credentials: true });
+    app.enableCors({
+      origin: origins,
+      credentials: true,
+      // La subida en partes necesita leer el ETag que devuelve cada PUT para
+      // poder cerrar el multipart. Sin exponerlo, el navegador lo esconde y
+      // el completar falla sin síntoma claro. El bucket de R2 necesita la
+      // misma configuración (ExposeHeaders).
+      exposedHeaders: ['ETag'],
+    });
   }
 
   app.useGlobalPipes(

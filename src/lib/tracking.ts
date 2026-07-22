@@ -25,6 +25,18 @@ export type TrackingPaso = {
   duracionEstimadaMin: number | null;
 };
 
+/**
+ * Adjunto que la imprenta marcó visible para el cliente. Los privados (el
+ * arte de producción, la orden de compra, los remitos) no llegan acá: el
+ * backend los filtra en la query, no en el render.
+ */
+export type TrackingArchivo = {
+  id: string;
+  nombre: string;
+  bytes: number;
+  esImagen: boolean;
+};
+
 export type TrackingItem = {
   id: string;
   nombre: string;
@@ -33,6 +45,7 @@ export type TrackingItem = {
   pasoActual: string | null;
   estacionActual: string | null;
   pasos: TrackingPaso[];
+  archivos: TrackingArchivo[];
 };
 
 export type TrackingPublico = {
@@ -41,12 +54,20 @@ export type TrackingPublico = {
   creadaEl: string;
   fechaEntrega: string | null;
   progresoPct: number;
-  imprenta: { nombre: string; iniciales: string };
+  /** Sin logo cargado van las iniciales, como antes de que existiera. */
+  imprenta: { nombre: string; iniciales: string; tieneLogo: boolean };
   cliente: { primerNombre: string; iniciales: string };
   vendedor: { nombre: string; iniciales: string; telefono: string | null } | null;
   items: TrackingItem[];
+  /** Adjuntos públicos de la orden entera (no de un producto puntual). */
+  archivos: TrackingArchivo[];
   actividad: Array<{ fecha: string; texto: string }>;
 };
+
+/** La descarga la autoriza el token de la orden; el bucket es privado. */
+export function urlArchivoTracking(token: string, archivoId: string): string {
+  return `/api/backend/ordenes-trabajo/track/${encodeURIComponent(token)}/archivos/${archivoId}`;
+}
 
 export async function getTrackingPublico(token: string): Promise<TrackingPublico> {
   // Ruta pública: sin sesión (auth: false → no adjunta token de staff).

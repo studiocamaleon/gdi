@@ -46,6 +46,12 @@ async function handler(
       headers,
       body: hasBody ? await request.arrayBuffer() : undefined,
       cache: "no-store",
+      // Sin esto, `fetch` sigue el redirect ACÁ DENTRO: la descarga de un
+      // archivo se resolvería en el proceso de Next y volveríamos a bufferear
+      // el contenido entero en memoria, que es justo lo que evita el 302 a la
+      // URL firmada del storage. Se propaga el Location y que lo siga el
+      // navegador. Ver docs/archivos-r2-diseno.md §D4.
+      redirect: "manual",
     });
   } catch {
     return new Response(
@@ -66,9 +72,18 @@ async function handler(
     responseHeaders.set("content-disposition", disposition);
   }
 
+  const status = response.status;
+
+  // Redirect: se reenvía tal cual, con el Location, para que lo siga el
+  // navegador. El body de un 3xx no interesa.
+  const location = response.headers.get("location");
+  if (status >= 300 && status < 400 && location) {
+    responseHeaders.set("location", location);
+    return new Response(null, { status, headers: responseHeaders });
+  }
+
   // 204/304 no pueden llevar body: construir Response con body nulo, o el
   // constructor lanza y el proxy devolvería 500 (rompía todos los DELETE).
-  const status = response.status;
   const body =
     status === 204 || status === 304 ? null : await response.arrayBuffer();
 

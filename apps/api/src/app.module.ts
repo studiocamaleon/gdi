@@ -29,6 +29,7 @@ import { PresupuestosModule } from './presupuestos/presupuestos.module';
 import { AdministracionModule } from './administracion/administracion.module';
 import { ReportesModule } from './reportes/reportes.module';
 import { EtaModule } from './eta/eta.module';
+import { ArchivosModule } from './archivos/archivos.module';
 
 @Module({
   imports: [
@@ -86,6 +87,7 @@ import { EtaModule } from './eta/eta.module';
     AdministracionModule,
     ReportesModule,
     EtaModule,
+    ArchivosModule,
   ],
   controllers: [AppController],
   providers: [

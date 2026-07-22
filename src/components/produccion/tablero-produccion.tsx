@@ -15,6 +15,7 @@ import {
   ClockIcon,
   CogIcon,
   FactoryIcon,
+  FileTextIcon,
   GripVerticalIcon,
   LayersIcon,
   LayoutDashboardIcon,
@@ -84,6 +85,8 @@ import {
 import type { DiaNoLaborable, DuracionFamilia } from "@/lib/estaciones-api";
 import { etiquetaEta, simularFlujo, type ResultadoSimulacion, type SimulacionItem } from "@/lib/flujo-produccion";
 import { SimulacionView } from "@/components/produccion/simulacion-view";
+import { formatBytes, urlDeArchivo, type Archivo } from "@/lib/archivos";
+import { listarArchivos } from "@/lib/archivos-api";
 
 type IconComponent = React.ComponentType<React.SVGProps<SVGSVGElement>>;
 type Mode = "items" | "estacion" | "kanban" | "simulacion";
@@ -955,6 +958,67 @@ function materialesDeDetalle(detalle: OrdenTrabajoDetalle, itemId: string): Mate
   return rows;
 }
 
+/**
+ * El arte del item, al alcance de la mano en la mesa. Se carga recién al
+ * abrir el tab: el tablero ya trae bastante payload y el operario abre los
+ * archivos de un item por vez, no de los cuarenta.
+ *
+ * Es de sólo lectura a propósito — desde el tablero se consume el arte, no se
+ * administra. Subir y borrar viven en la ficha de la orden.
+ */
+function DetailArchivos({ itemId }: { itemId: string }) {
+  const [archivos, setArchivos] = React.useState<Archivo[] | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    let vivo = true;
+    setArchivos(null);
+    setError(null);
+    listarArchivos("ORDEN_ITEM", itemId)
+      .then((r) => {
+        if (vivo) setArchivos(r);
+      })
+      .catch((e: unknown) => {
+        if (vivo) {
+          setError(e instanceof Error ? e.message : "No se pudieron cargar.");
+        }
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [itemId]);
+
+  if (error) return <div className="detail-route-empty">{error}</div>;
+  if (!archivos) return <div className="detail-route-empty">Cargando archivos…</div>;
+  if (archivos.length === 0) {
+    return (
+      <div className="detail-route-empty">
+        Este item no tiene arte cargado. Se sube desde la ficha de la orden.
+      </div>
+    );
+  }
+  return (
+    <div className="arch-lista" style={{ marginTop: 0 }}>
+      {archivos.map((a) => (
+        <a key={a.id} className="arch-row" href={urlDeArchivo(a.id)} target="_blank" rel="noreferrer" style={{ textDecoration: "none", color: "inherit" }}>
+          <span className="arch-ico">
+            {a.esImagen ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={urlDeArchivo(a.id)} alt="" />
+            ) : (
+              <FileTextIcon />
+            )}
+          </span>
+          <div className="arch-nom">
+            <b>{a.nombre}</b>
+            <span>{formatBytes(a.bytes)}{a.subidoPor ? ` · ${a.subidoPor}` : ""}</span>
+          </div>
+        </a>
+      ))}
+    </div>
+  );
+}
+
 function DetailMateriales({ materiales, cargando }: { materiales: MaterialRow[]; cargando: boolean }) {
   if (cargando) return <div className="detail-route-empty">Cargando materiales…</div>;
   if (materiales.length === 0) {
@@ -1126,6 +1190,7 @@ function ItemDetailSheet({
             {[
               { k: "ruta", l: "Ruta de producción", n: totalSteps },
               { k: "materiales", l: "Materiales", n: materiales.length },
+              { k: "archivos", l: "Archivos", n: item.data.archivosCount },
               { k: "actividad", l: "Actividad", n: eventos.length },
             ].map((entry) => (
               <button key={entry.k} type="button" className={tab === entry.k ? "on" : ""} onClick={() => setTab(entry.k)}>
@@ -1138,6 +1203,7 @@ function ItemDetailSheet({
         <div className="sheet-body">
           {tab === "ruta" ? <DetailRuta item={item} busy={busy} onAccion={onAccion} /> : null}
           {tab === "materiales" ? <DetailMateriales materiales={materiales} cargando={cargandoDetalle} /> : null}
+          {tab === "archivos" ? <DetailArchivos itemId={item.id} /> : null}
           {tab === "actividad" ? <DetailActividad eventos={eventos} cargando={cargandoDetalle} /> : null}
         </div>
 

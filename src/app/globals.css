@@ -27982,6 +27982,12 @@ body:has(.t-app) {
   font-family: var(--t-font-sans);
   letter-spacing: -0.02em;
 }
+/* Con logo real: sin fondo oscuro ni recorte, el logo trae lo suyo. */
+.t-brandbar .imprenta-logo .mark.mark-img {
+  background: transparent;
+  object-fit: contain;
+  border-radius: 6px;
+}
 .t-brandbar .imprenta-logo .nm { font-weight: 600; font-size: 13.5px; letter-spacing: -0.01em; }
 .t-brandbar .imprenta-logo .sub { font-size: 10.5px; color: var(--t-muted); }
 .t-brandbar .powered {
@@ -31124,3 +31130,590 @@ body:has(.t-app) {
 @media (prefers-reduced-motion: reduce) {
   .tablero-produccion .simu * { transition: none !important; animation: none !important; }
 }
+
+/* ───────────────────────────────────────────────────────────────────────
+   Archivos — uploader y grilla de adjuntos. Prefijo arch-.
+
+   OJO CON LOS TOKENS: `--muted` está sobrecargado en este codebase. En
+   :root es una SUPERFICIE casi blanca (#efede9), pero `.ot-v1` —el scope
+   de la ficha de orden— lo redefine como el COLOR DE TEXTO gris
+   (var(--muted-text), #6e6e76). Un color-mix sobre `--muted` sale casi
+   blanco en Datos fiscales y un bloque gris pesado en la ficha. Por eso acá
+   se usan los tokens propios del sistema (--surface-2, --hairline, --ink,
+   --muted-text, --signal), que ningún scope reinterpreta.
+   Ver docs/archivos-r2-diseno.md
+   ─────────────────────────────────────────────────────────────────────── */
+
+.arch-drop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 15px 18px;
+  border: 1px dashed var(--border, #e7e5e2);
+  border-radius: 11px;
+  background: var(--surface-2, #fafaf9);
+  color: var(--muted-text, #6e6e76);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.arch-drop:hover,
+.arch-drop:focus-visible {
+  border-color: var(--border-strong, #d4d2cd);
+  background: var(--surface, #fff);
+  color: var(--ink-2, #2c2c33);
+  outline: none;
+}
+
+/* Arrastrando encima: el único momento donde vale gritar. */
+.arch-drop.dentro {
+  border-color: var(--signal, #c2410c);
+  border-style: solid;
+  background: var(--signal-bg, #fef3ed);
+  color: var(--signal, #c2410c);
+}
+
+.arch-drop.ocupado {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.arch-drop svg {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  opacity: 0.65;
+}
+
+.arch-drop.dentro svg {
+  opacity: 1;
+}
+
+/* Ícono a la izquierda y texto apilado al lado: en una sola línea el hint
+   del logo (dos renglones de requisitos) desbordaba, y apilando también el
+   ícono el dropzone se convertía en un cartel de tres pisos. */
+.arch-drop .arch-drop-txt {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.arch-drop .arch-drop-t {
+  font-weight: 600;
+  color: inherit;
+}
+
+.arch-drop .arch-drop-s {
+  font-size: 11.5px;
+  color: var(--muted-text-2, #92929b);
+  line-height: 1.4;
+}
+
+.arch-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.arch-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--hairline, #efece8);
+  border-radius: 10px;
+  background: var(--surface, #fff);
+  font-size: 12.5px;
+  color: var(--ink, #14141a);
+  transition: border-color 0.12s ease;
+}
+
+.arch-row:hover {
+  border-color: var(--border, #e7e5e2);
+}
+
+.arch-row .arch-ico {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border-radius: 7px;
+  background: var(--surface-2, #fafaf9);
+  border: 1px solid var(--hairline, #efece8);
+  color: var(--muted-text, #6e6e76);
+  overflow: hidden;
+}
+
+.arch-row .arch-ico svg {
+  width: 14px;
+  height: 14px;
+}
+
+.arch-row .arch-ico img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.arch-row .arch-nom {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.arch-row .arch-nom b {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.arch-row .arch-nom span {
+  color: var(--muted-text-2, #92929b);
+  font-size: 11px;
+}
+
+.arch-row .arch-acc {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.arch-row .arch-acc button,
+.arch-row .arch-acc a {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted-text-2, #92929b);
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+
+.arch-row .arch-acc button:hover,
+.arch-row .arch-acc a:hover {
+  background: var(--surface-2, #fafaf9);
+  color: var(--ink, #14141a);
+}
+
+.arch-row .arch-acc button.peligro:hover {
+  background: #fef2f2;
+  color: #b42318;
+}
+
+.arch-row .arch-acc button svg,
+.arch-row .arch-acc a svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Fila en curso de subida: la barra vive debajo del nombre. */
+.arch-row.subiendo {
+  border-style: dashed;
+}
+
+.arch-bar {
+  position: relative;
+  height: 3px;
+  margin-top: 4px;
+  border-radius: 3px;
+  background: var(--hairline, #efece8);
+  overflow: hidden;
+}
+
+.arch-bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  display: block;
+  border-radius: 3px;
+  background: var(--ink, #14141a);
+  transition: width 0.18s ease;
+}
+
+.arch-error {
+  color: #b42318;
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+/* Switch de visibilidad para el cliente (sólo en archivos de una OT). */
+.arch-row .arch-vis {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  padding: 3px 9px 3px 7px;
+  border: 1px solid var(--hairline, #efece8);
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--muted-text-2, #92929b);
+  cursor: pointer;
+  user-select: none;
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease,
+    background 0.12s ease;
+}
+
+.arch-row .arch-vis input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.arch-row .arch-vis svg {
+  width: 12px;
+  height: 12px;
+}
+
+.arch-row .arch-vis:hover {
+  border-color: var(--border, #e7e5e2);
+  color: var(--ink-2, #2c2c33);
+}
+
+.arch-row .arch-vis.on {
+  color: var(--signal, #c2410c);
+  border-color: color-mix(in oklab, var(--signal, #c2410c) 35%, transparent);
+  background: var(--signal-bg, #fef3ed);
+}
+
+/* Vacío: pegado al dropzone, no como párrafo suelto abajo. */
+.arch-vacio {
+  margin-top: 6px;
+  padding-left: 2px;
+  font-size: 11.5px;
+  color: var(--muted-text-2, #92929b);
+  line-height: 1.5;
+}
+
+/* Tab de Archivos de una orden: documento arriba, un bloque por item. */
+.arch-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.arch-tab .arch-bloque {
+  display: flex;
+  flex-direction: column;
+}
+
+.arch-tab .arch-bloque-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.arch-tab .arch-bloque-head .t {
+  font-size: 12.5px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--ink, #14141a);
+}
+
+.arch-tab .arch-bloque-head .n {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--muted-text, #6e6e76);
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--surface-2, #fafaf9);
+  border: 1px solid var(--hairline, #efece8);
+}
+
+.arch-tab .arch-bloque-head .s {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted-text-2, #92929b);
+}
+
+/* Clip con contador para el paso del tablero. */
+.arch-clip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px 2px 5px;
+  border: 1px solid var(--hairline, #efece8);
+  border-radius: 999px;
+  background: var(--surface, #fff);
+  color: var(--muted-text, #6e6e76);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.arch-clip:hover {
+  color: var(--ink, #14141a);
+  border-color: var(--border, #e7e5e2);
+}
+
+.arch-clip svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* Logo del tenant: preview grande y acciones al costado. */
+.arch-logo {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.arch-logo-preview {
+  display: grid;
+  place-items: center;
+  width: 108px;
+  height: 108px;
+  flex: 0 0 auto;
+  border: 1px solid var(--border, #e7e5e2);
+  border-radius: 14px;
+  background: var(--surface, #fff);
+  overflow: hidden;
+}
+
+.arch-logo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 10px;
+}
+
+/* Fallback: el cuadrado con iniciales que hoy sale en el PDF y el tracking. */
+.arch-logo-iniciales {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  background: var(--ink, #14141a);
+  color: #fff;
+  font-weight: 700;
+  font-size: 30px;
+  letter-spacing: -0.03em;
+}
+
+.arch-logo-body {
+  flex: 1;
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.arch-logo-body .arch-logo-hint {
+  font-size: 11.5px;
+  color: var(--muted-text-2, #92929b);
+  line-height: 1.5;
+}
+
+.arch-logo-acc {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Archivos compartidos con el cliente en el seguimiento público. */
+.t-archivos {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px 14px;
+}
+
+.t-archivos.compacto {
+  padding: 10px 0 0;
+}
+
+.t-archivos .t-archivo {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 11px;
+  border: 1px solid var(--t-hairline, #efece8);
+  border-radius: 10px;
+  background: var(--t-surface, #fff);
+  color: inherit;
+  text-decoration: none;
+  font-size: 12.5px;
+  transition:
+    border-color 0.14s ease,
+    transform 0.14s ease;
+}
+
+.t-archivos .t-archivo:hover {
+  border-color: var(--t-ink, #14141a);
+  transform: translateY(-1px);
+}
+
+.t-archivos .t-archivo .ico {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  color: var(--t-muted, #6b7280);
+}
+
+.t-archivos .t-archivo .nm {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 550;
+}
+
+.t-archivos .t-archivo .sz {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  color: var(--t-muted, #6b7280);
+}
+
+/* Papelera dentro del tab de archivos. */
+.arch-papelera-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 2px;
+  border: 0;
+  background: transparent;
+  color: var(--muted-text, #6e6e76);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.arch-papelera-head:hover { color: var(--ink, #14141a); }
+.arch-papelera-head svg { width: 13px; height: 13px; }
+
+.arch-papelera-head .n {
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--surface-2, #fafaf9);
+  border: 1px solid var(--hairline, #efece8);
+}
+
+.arch-papelera-head .s {
+  margin-left: auto;
+  font-weight: 500;
+  font-size: 11px;
+  color: var(--muted-text-2, #92929b);
+}
+
+/* Panel de uso de almacenamiento. */
+.arch-uso { display: flex; flex-direction: column; gap: 12px; }
+
+.arch-uso-head { display: flex; align-items: center; gap: 12px; }
+
+.arch-uso-head .ico {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  border-radius: 10px;
+  background: var(--surface-2, #fafaf9);
+  border: 1px solid var(--hairline, #efece8);
+  color: var(--muted-text, #6e6e76);
+}
+
+.arch-uso-head .ico svg { width: 17px; height: 17px; }
+.arch-uso-head .tot { display: flex; flex-direction: column; gap: 1px; }
+.arch-uso-head .tot b { font-size: 17px; font-weight: 650; letter-spacing: -.02em; }
+.arch-uso-head .tot span { font-size: 11.5px; color: var(--muted-text-2, #92929b); }
+
+.arch-uso-head .pap {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--muted-text-2, #92929b);
+}
+
+.arch-uso-head .pap svg { width: 12px; height: 12px; }
+
+.arch-uso-bar {
+  position: relative;
+  height: 6px;
+  border-radius: 6px;
+  background: var(--hairline, #efece8);
+  overflow: hidden;
+}
+
+.arch-uso-bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  display: block;
+  border-radius: 6px;
+  background: var(--ink, #14141a);
+  transition: width .3s ease;
+}
+
+.arch-uso-bar.alerta i { background: var(--signal, #c2410c); }
+
+.arch-uso-alerta {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--signal, #c2410c);
+  background: var(--signal-bg, #fef3ed);
+  border: 1px solid color-mix(in oklab, var(--signal, #c2410c) 25%, transparent);
+  border-radius: 9px;
+  padding: 9px 11px;
+}
+
+.arch-uso-detalle {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--hairline, #efece8);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.arch-uso-detalle .fila {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 11px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--hairline, #efece8);
+}
+
+.arch-uso-detalle .fila:last-child { border-bottom: 0; }
+.arch-uso-detalle .fila .k { flex: 1; }
+
+.arch-uso-detalle .fila .c {
+  font-size: 10.5px;
+  color: var(--muted-text-2, #92929b);
+  font-variant-numeric: tabular-nums;
+}
+
+.arch-uso-detalle .fila .v {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+/* archivos: r2 - f4 (rev) */
