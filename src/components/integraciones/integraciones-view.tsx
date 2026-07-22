@@ -476,9 +476,9 @@ function PlantillasTab() {
 
 function Stat({ v, k, alerta }: { v: number; k: string; alerta?: boolean }) {
   return (
-    <div className={`int-tpl-stat${alerta ? " alerta" : ""}`}>
-      <div className="v">{v}</div>
-      <div className="k">{k}</div>
+    <div className={`int-tpl-stat${alerta ? " int-tpl-stat-alerta" : ""}`}>
+      <div className="int-tpl-stat-v">{v}</div>
+      <div className="int-tpl-stat-k">{k}</div>
     </div>
   );
 }
@@ -486,11 +486,11 @@ function Stat({ v, k, alerta }: { v: number; k: string; alerta?: boolean }) {
 /** APPROVED → verde, PENDING → ámbar, el resto pide acción → rojo. */
 function pillEstado(estado: string): { clase: string; texto: string } {
   const mapa: Record<string, { clase: string; texto: string }> = {
-    APPROVED: { clase: "ok", texto: "Aprobada" },
-    PENDING: { clase: "warn", texto: "En revisión" },
-    REJECTED: { clase: "bad", texto: "Rechazada" },
-    PAUSED: { clase: "bad", texto: "Pausada" },
-    DISABLED: { clase: "bad", texto: "Deshabilitada" },
+    APPROVED: { clase: "int-pill-ok", texto: "Aprobada" },
+    PENDING: { clase: "int-pill-warn", texto: "En revisión" },
+    REJECTED: { clase: "int-pill-bad", texto: "Rechazada" },
+    PAUSED: { clase: "int-pill-bad", texto: "Pausada" },
+    DISABLED: { clase: "int-pill-bad", texto: "Deshabilitada" },
     SIN_SOMETER: { clase: "", texto: "Sin enviar" },
   };
   // Un estado que Meta agregue mañana se muestra tal cual en vez de romper.
@@ -505,10 +505,10 @@ function FilaGestionada({ p }: { p: PlantillaGestionada }) {
 
   return (
     <div className="int-tpl-row">
-      <div className="main">
-        <div className="nm">{p.titulo}</div>
-        <div className="cuando">{p.cuando}</div>
-        <div className="cod">{p.codigo}</div>
+      <div className="int-tpl-main">
+        <div className="int-tpl-nm">{p.titulo}</div>
+        <div className="int-tpl-cuando">{p.cuando}</div>
+        <div className="int-tpl-cod">{p.codigo}</div>
         <button className="int-tpl-toggle" onClick={() => setAbierta((v) => !v)}>
           {abierta ? "Ocultar el mensaje" : "Ver el mensaje"}
         </button>
@@ -518,14 +518,14 @@ function FilaGestionada({ p }: { p: PlantillaGestionada }) {
               const nombre = p.parametros[Number(n) - 1];
               return nombre ? `[${nombre}]` : `{{${n}}}`;
             })}
-            <span className="foot">Tecnología desarrollada por Grafoprint</span>
+            <span className="int-tpl-footer">Tecnología desarrollada por Grafoprint</span>
           </div>
         )}
       </div>
-      <div className="side">
+      <div className="int-tpl-side">
         {recategorizada ? (
           <span
-            className="int-pill warn"
+            className="int-pill int-pill-warn"
             title={`Pedimos ${p.categoriaPedida} y Meta asignó ${p.categoriaAsignada}`}
           >
             {p.categoriaAsignada} ≠ {p.categoriaPedida}
@@ -545,11 +545,9 @@ function FilaPropia({ p }: { p: PlantillaPropia }) {
   const est = pillEstado(p.estado);
   return (
     <div className="int-tpl-row">
-      <div className="main">
-        <div className="nm" style={{ fontFamily: "var(--font-mono)", fontSize: 12.5 }}>
-          {p.codigo}
-        </div>
-        <div className="cuando">
+      <div className="int-tpl-main">
+        <div className="int-tpl-nm int-tpl-mono">{p.codigo}</div>
+        <div className="int-tpl-cuando">
           {p.parametros.length === 0
             ? "Sin parámetros"
             : `${p.parametros.length} parámetro(s): ${p.parametros.join(", ")}`}
@@ -565,13 +563,13 @@ function FilaPropia({ p }: { p: PlantillaPropia }) {
                   const nombre = p.parametros[Number(n) - 1];
                   return nombre ? `[${nombre}]` : `{{${n}}}`;
                 })}
-                {p.footer && <span className="foot">{p.footer}</span>}
+                {p.footer && <span className="int-tpl-footer">{p.footer}</span>}
               </div>
             )}
           </>
         )}
       </div>
-      <div className="side">
+      <div className="int-tpl-side">
         {p.idioma && <span className="int-pill">{p.idioma}</span>}
         {p.categoria && <span className="int-pill">{p.categoria}</span>}
         <span className={`int-pill ${est.clase}`}>{est.texto}</span>
