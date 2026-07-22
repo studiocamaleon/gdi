@@ -36,7 +36,7 @@ y refuerza la lectura de utility.
 - El cuerpo **no puede empezar ni terminar con una variable**. Por eso todos
   arrancan con "Hola" y cierran con texto fijo.
 - Dos variables no pueden ir pegadas.
-- Máximo 1024 caracteres de cuerpo.
+- Máximo 1024 caracteres de cuerpo y 60 de footer.
 - Al someter hay que mandar un valor de ejemplo por variable — están abajo.
 
 **Idioma:** `es_AR`, igual que las actuales.
@@ -364,9 +364,28 @@ con sufijo variable, que se ve mejor y acorta el cuerpo. No lo uso en v1
 porque suma superficie de aprobación y configuración en el alta. Es una
 mejora clara para v2, cuando el camino canónico ya funcione.
 
-**Sin footer.** Un footer tipo "Mensaje automático" refuerza la lectura
-transaccional, pero no admite variables, así que sería idéntico para todos
-los tenants. Queda como opción si algún texto vuelve rechazado.
+**Footer fijo: `Tecnología desarrollada por Grafoprint`** (38 de los 60
+caracteres que permite Meta). Va en las 13.
+
+Que no admita variables —lo que antes anoté como limitación— acá es
+justamente lo que se busca: idéntico en todos los tenants.
+
+Y no es una apuesta. Tu `recibo_pago_v2` **es UTILITY** y ya lleva
+`"Tecnologia desarrollada por Corporearte."`, así que sabemos que un footer
+de atribución no mueve la categoría. Se escribe con tilde: los cuerpos ya
+llevan emojis, el encoding no es problema.
+
+Dos cosas que conviene tener presentes, ninguna bloqueante:
+
+- El tenant paga cada conversación y el mensaje sale de **su** número, así
+  que está pagando por mostrar la marca de Grafo a sus propios clientes.
+  Alguno lo va a plantear. Es una decisión comercial, no técnica.
+- Si alguna vez se vende "sacá la marca" como plan superior, el footer no se
+  puede cambiar por tenant: hace falta un **segundo juego de 13 plantillas**
+  sin footer, sometido aparte. Caro de retrofitear, gratis de prever — y el
+  diseño ya lo contempla, porque la plantilla que un tenant usa para un
+  evento quedó definida como una **referencia** y no como un nombre fijo
+  (`catalogo` §2).
 
 **Los importes van formateados desde Grafo** (`185.400,00`), sin el `$` —
 el símbolo está en el texto fijo. Si el importe viniera con `$`, saldría
