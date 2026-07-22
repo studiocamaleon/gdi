@@ -200,29 +200,30 @@ export class WatiClient {
         // llegaba null en silencio; con esto queda
         // {key:"Spanish (ARG)", value:"es_AR", text:"Spanish (ARG)"}.
         language: p.idioma,
-        // Los dos campos van NOMBRADOS, y los dos hacen falta.
+        // Estos dos campos son los que hacen que la plantilla sea revisable.
+        // Salieron de comparar, campo por campo, un borrador hecho a mano en
+        // el dashboard contra uno creado por acá.
         //
-        //   `hsm`  → el TEXTAREA del editor.
-        //   `body` → el PREVIEW y, sobre todo, los campos de "contenido de
-        //            muestra" que Meta exige para revisar la plantilla.
+        // Con `type: "hsm"` —que es lo que parecía correcto porque el
+        // dashboard lo manda al guardar— la plantilla se crea, se ve bien en
+        // el editor y **no se puede enviar a revisión ni siquiera desde
+        // Wati**. Un borrador legítimo es `type: "template"`. El dashboard
+        // mandaba "hsm" simplemente porque estaba devolviéndonos el valor
+        // malo que habíamos escrito nosotros.
+        type: 'template',
+        subCategory: 'STANDARD',
+        // El cuerpo va en `body`, NOMBRADO, y es lo único que se manda: es lo
+        // que muestra el editor, lo que renderiza el preview y de donde salen
+        // los campos de "contenido de muestra" que Meta exige para revisar.
+        // Los borradores del dashboard tienen `hsm` en null.
         //
-        // El nombre `hsm` no aparece en la documentación; salió de mirar qué
-        // manda el propio dashboard al guardar. Sin él, el editor abre con el
-        // textarea VACÍO y al guardar salta "el cuerpo no puede estar vacío".
-        //
-        // Y `body` tiene que ser el nombrado, no el posicional: con `{{1}}`
-        // el editor pide "contenido para {{1}}" y deja los ejemplos en blanco
-        // —los busca por nombre en `customParams`—, así que la plantilla no
-        // se puede mandar a revisión. Con el nombrado toma los ejemplos solo.
-        //
-        // El posicional que ve Meta lo arma Wati al someter, junto con
-        // `bodyOriginal`. Mandar cualquiera de los dos se descarta en
-        // silencio.
-        hsm: cuerpoNombrado,
+        // Nombrado y no posicional: con `{{1}}` el editor pide "contenido
+        // para {{1}}" y deja los ejemplos en blanco, porque los busca por
+        // nombre en `customParams`. El posicional que ve Meta lo arma Wati al
+        // someter, junto con `bodyOriginal`.
         body: cuerpoNombrado,
         footer: p.footer,
         header: null,
-        type: 'hsm',
         buttonsType: 'none',
         buttons: [],
         customParams: p.parametros.map((x) => ({
