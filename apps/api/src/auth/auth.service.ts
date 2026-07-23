@@ -99,6 +99,89 @@ export class AuthService {
     this.sessionCache.invalidate(auth.sessionId);
   }
 
+  /**
+   * Emite el token de una sesión de impersonación ya creada. Vive acá porque
+   * AuthService es el dueño de los tokens y de AuthSession — el control plane
+   * crea la SesionImpersonacion y delega la emisión.
+   *
+   * La AuthSession lleva `impersonacionId` (sin membership) y expira JUNTO con
+   * la impersonación, no a los 7 días: el token no puede sobrevivir a la
+   * sesión que lo justifica. El staff opera con rol ADMINISTRADOR del tenant.
+   * Ver docs/control-plane-diseno.md
+   */
+  async emitirTokenImpersonacion(params: {
+    tenantId: string;
+    sesionImpersonacionId: string;
+    expiraEl: Date;
+    actorUserId: string;
+    actorNombre: string;
+  }): Promise<string> {
+    const session = await this.prisma.authSession.create({
+      data: {
+        userId: params.actorUserId,
+        currentTenantId: params.tenantId,
+        currentMembershipId: null,
+        impersonacionId: params.sesionImpersonacionId,
+        expiresAt: params.expiraEl,
+      },
+    });
+    return this.issueToken({
+      sub: params.actorUserId,
+      sessionId: session.id,
+      tenantId: params.tenantId,
+      membershipId: '',
+      role: RolSistema.ADMINISTRADOR,
+      email: 'impersonacion@grafo',
+      imp: {
+        sesionId: params.sesionImpersonacionId,
+        actorUserId: params.actorUserId,
+        actorNombre: params.actorNombre,
+      },
+    });
+  }
+
+  /**
+   * Cierra la impersonación y devuelve al staff a SU cuenta: re-emite un token
+   * de su primera membership activa. Corre con el token de impersonación (que
+   * prueba que es el staff), así que no necesita password. Si el staff no
+   * tiene ninguna empresa, se queda sin sesión (el front lo manda a /login).
+   */
+  async salirDeImpersonacion(auth: CurrentAuth): Promise<{
+    accessToken: string | null;
+  }> {
+    if (!auth.impersonacion) {
+      throw new BadRequestException('No hay una impersonación en curso.');
+    }
+    // Revoca la sesión de impersonación actual (defensa; el control plane ya
+    // la cerró al pedir salir, pero el token podría reusarse).
+    await this.prisma.authSession.update({
+      where: { id: auth.sessionId },
+      data: { revokedAt: new Date() },
+    });
+
+    const membership = await this.prisma.membership.findFirst({
+      where: {
+        userId: auth.impersonacion.actorUserId,
+        activa: true,
+        tenant: { activo: true },
+      },
+      include: { tenant: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (!membership) return { accessToken: null };
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: auth.impersonacion.actorUserId },
+      select: { email: true },
+    });
+    const resp = await this.createSessionResponse(
+      membership.userId,
+      user!.email,
+      membership,
+    );
+    return { accessToken: resp.accessToken };
+  }
+
   async getInvitation(token: string) {
     const invitation = await this.findInvitationOrThrow(token);
 
@@ -214,6 +297,47 @@ export class AuthService {
   }
 
   async getCurrentContext(auth: CurrentAuth) {
+    // Impersonación: el staff no tiene membership en este tenant, así que la
+    // respuesta se arma aparte, con el tenant impersonado y el flag que la
+    // app usa para mostrar el banner "estás dentro de X".
+    if (auth.impersonacion) {
+      const [tenant, sesion] = await Promise.all([
+        this.prisma.tenant.findUnique({
+          where: { id: auth.tenantId },
+          select: { id: true, nombre: true, slug: true },
+        }),
+        this.prisma.sesionImpersonacion.findUnique({
+          where: { id: auth.impersonacion.sesionId },
+          select: { expiraEl: true },
+        }),
+      ]);
+      if (!tenant || !sesion) {
+        throw new UnauthorizedException('La sesión de impersonación terminó.');
+      }
+      const tenantActual = {
+        id: tenant.id,
+        nombre: tenant.nombre,
+        slug: tenant.slug,
+        rol: 'administrador' as const,
+      };
+      return {
+        accessToken: null,
+        sessionId: auth.sessionId,
+        currentUser: {
+          id: auth.impersonacion.actorUserId,
+          email: auth.email,
+          nombreCompleto: auth.impersonacion.actorNombre,
+          rolPlataforma: null,
+          impersonacion: {
+            actorNombre: auth.impersonacion.actorNombre,
+            expiraEl: sesion.expiraEl.toISOString(),
+          },
+          tenantActual,
+          tenants: [tenantActual],
+        },
+      };
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { id: auth.userId },
       include: {

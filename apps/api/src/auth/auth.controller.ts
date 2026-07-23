@@ -51,4 +51,10 @@ export class AuthController {
   ) {
     return this.authService.switchTenant(auth, payload.tenantId);
   }
+
+  /** Salir de una impersonación: cierra la sesión y vuelve a la cuenta staff. */
+  @Post('salir-impersonacion')
+  salirDeImpersonacion(@CurrentSession() auth: CurrentAuth) {
+    return this.authService.salirDeImpersonacion(auth);
+  }
 }

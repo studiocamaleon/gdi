@@ -8,6 +8,7 @@ import {
   Post,
   Put,
 } from '@nestjs/common';
+import { ProhibidoImpersonando } from '../auth/prohibido-impersonando.decorator';
 import { ProveedorIntegracion, RolSistema } from '@prisma/client';
 
 import type { CurrentAuth } from '../auth/auth.types';
@@ -69,6 +70,7 @@ export class IntegracionesController {
     return this.service.obtener(proveedor);
   }
 
+  @ProhibidoImpersonando()
   @Put('wati')
   @Roles(RolSistema.ADMINISTRADOR)
   conectarWati(
@@ -78,6 +80,7 @@ export class IntegracionesController {
     return this.service.conectarWati(auth, dto);
   }
 
+  @ProhibidoImpersonando()
   @Post(':proveedor/probar')
   @Roles(RolSistema.ADMINISTRADOR)
   probar(
@@ -88,6 +91,7 @@ export class IntegracionesController {
     return this.service.probar(auth, proveedor);
   }
 
+  @ProhibidoImpersonando()
   @Delete(':proveedor')
   @Roles(RolSistema.ADMINISTRADOR)
   async desconectar(

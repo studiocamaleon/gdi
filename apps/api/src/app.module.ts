@@ -8,6 +8,7 @@ import { randomUUID } from 'crypto';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthGuard } from './auth/auth.guard';
+import { ImpersonacionGuard } from './auth/impersonacion.guard';
 import { RolesGuard } from './auth/roles.guard';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { TenantContextInterceptor } from './common/interceptors/tenant-context.interceptor';
@@ -111,6 +112,10 @@ import { IntegracionesModule } from './integraciones/integraciones.module';
     {
       provide: APP_GUARD,
       useClass: AuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: ImpersonacionGuard,
     },
     {
       provide: APP_GUARD,

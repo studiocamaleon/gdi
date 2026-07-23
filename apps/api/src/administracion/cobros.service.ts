@@ -6,6 +6,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CurrentAuth } from '../auth/auth.types';
+import { firmaActor } from '../common/firma-actor';
 import type { CrearCobroDto } from './dto/cobro.dto';
 import { FacturacionOrdenesService } from './facturacion-ordenes.service';
 import { RecibosService } from './recibos.service';
@@ -140,7 +141,7 @@ export class CobrosService {
       Promise.resolve(null),
     ]);
     void emisorEmpleado;
-    const usuarioNombre = actor?.nombreCompleto ?? auth.email;
+    const usuarioNombre = firmaActor(auth, actor?.nombreCompleto ?? auth.email);
 
     const cobroId = await this.prisma.$transaction(async (tx) => {
       // El número de recibo se asigna acá y no después: un cobro registrado

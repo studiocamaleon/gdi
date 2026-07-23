@@ -3,8 +3,10 @@
 import * as React from "react";
 import Link from "next/link";
 
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
+import { setSessionToken } from "@/lib/session";
 import {
   AreaChart,
   Bars,
@@ -25,15 +27,19 @@ import {
 } from "@/components/plataforma/kit";
 import {
   cambiarPlanTenant,
+  cerrarImpersonacion,
   crearTenantPlataforma,
   generarBillingPlataforma,
   getBillingPlataforma,
   getPlanesPlataforma,
+  getSesionesImpersonacion,
+  iniciarImpersonacion,
   reactivarTenant,
   suspenderTenant,
   type BillingPlataforma,
   type ConsolaPlataforma,
   type PlanCatalogo,
+  type SesionImpersonacion,
   type TenantConsola,
 } from "@/lib/plataforma-api";
 
@@ -138,9 +144,7 @@ export function ConsolaPlataformaView({
                     {it.k === "tenants" ? (
                       <span className="cnt">{datos.tenants.length}</span>
                     ) : null}
-                    {it.k === "impersonacion" ? (
-                      <span className="soon">etapa C</span>
-                    ) : null}
+
                   </button>
                 );
               })}
@@ -192,7 +196,9 @@ export function ConsolaPlataformaView({
           />
         ) : null}
         {vista === "billing" ? <Billing esAdmin={esAdmin} /> : null}
-        {vista === "impersonacion" ? <Impersonacion datos={datos} /> : null}
+        {vista === "impersonacion" ? (
+          <Impersonacion datos={datos} esAdmin={esAdmin} />
+        ) : null}
       </main>
     </div>
   );
@@ -1468,20 +1474,83 @@ function Billing({ esAdmin }: { esAdmin: boolean }) {
 
 // ── Impersonación y auditoría ──────────────────────────────────────────
 
-function Impersonacion({ datos }: { datos: ConsolaPlataforma }) {
+function Impersonacion({
+  datos,
+  esAdmin,
+}: {
+  datos: ConsolaPlataforma;
+  esAdmin: boolean;
+}) {
+  const router = useRouter();
   const nombreDe = new Map(datos.tenants.map((t) => [t.id, t.nombre]));
+  const [sesiones, setSesiones] = React.useState<SesionImpersonacion[]>([]);
+  const [modal, setModal] = React.useState(false);
+
+  const cargar = React.useCallback(async () => {
+    try {
+      setSesiones(await getSesionesImpersonacion());
+    } catch {
+      setSesiones([]);
+    }
+  }, []);
+  React.useEffect(() => {
+    void cargar();
+    // El countdown de la UI baja solo; refrescamos del server cada 20 s por
+    // si otra sesión de staff cerró/abrió algo.
+    const id = window.setInterval(() => void cargar(), 20000);
+    return () => window.clearInterval(id);
+  }, [cargar]);
+
+  const entrar = async (tenantId: string, motivo: string) => {
+    const r = await iniciarImpersonacion(tenantId, motivo);
+    await setSessionToken(r.token);
+    toast.success(`Entrando a ${r.tenantNombre}…`);
+    router.push("/");
+    router.refresh();
+  };
+
+  const cerrar = async (id: string) => {
+    try {
+      await cerrarImpersonacion(id);
+      await cargar();
+      toast.success("Sesión cerrada.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo cerrar.");
+    }
+  };
+
   return (
     <div className="cpl-page">
-      <Panel title="Sesiones activas" sub="etapa C">
-        <div className="cpl-callout info" style={{ marginBottom: 4 }}>
-          <BIco.eye />
-          <div>
-            Las sesiones de impersonación llegan con la <b>etapa C</b>: cada
-            entrada a un tenant con motivo obligatorio, vencimiento de 60
-            minutos, acciones firmadas “en nombre de” y visibles para el
-            cliente.
+      <Panel
+        title="Sesiones activas"
+        sub={sesiones.length ? `${sesiones.length}` : "ninguna"}
+        right={
+          esAdmin ? (
+            <button
+              type="button"
+              className="cpl-btn pri"
+              onClick={() => setModal(true)}
+            >
+              <BIco.eye style={{ width: 15 }} />
+              Nueva sesión
+            </button>
+          ) : null
+        }
+      >
+        {sesiones.length === 0 ? (
+          <div className="cpl-empty" style={{ padding: "28px 10px" }}>
+            <BIco.eye />
+            <div className="t">Nadie dentro de un tenant</div>
+            <div className="s">
+              Entrar a un tenant queda registrado, con motivo y vencimiento de
+              60 minutos.
+            </div>
           </div>
-        </div>
+        ) : (
+          sesiones.map((sesion) => (
+            <SesionActivaCard key={sesion.id} sesion={sesion} onCerrar={cerrar} />
+          ))
+        )}
       </Panel>
 
       <div style={{ height: 14 }} />
@@ -1534,7 +1603,144 @@ function Impersonacion({ datos }: { datos: ConsolaPlataforma }) {
           </div>
         )}
       </Panel>
+
+      {modal ? (
+        <ImpersonarModal
+          tenants={datos.tenants.filter((t) => t.activo)}
+          onCerrar={() => setModal(false)}
+          onEntrar={entrar}
+        />
+      ) : null}
     </div>
+  );
+}
+
+function SesionActivaCard({
+  sesion,
+  onCerrar,
+}: {
+  sesion: SesionImpersonacion;
+  onCerrar: (id: string) => void;
+}) {
+  const [seg, setSeg] = React.useState(sesion.expiraEnSeg);
+  React.useEffect(() => {
+    const id = window.setInterval(
+      () => setSeg((s) => Math.max(0, s - 1)),
+      1000,
+    );
+    return () => window.clearInterval(id);
+  }, []);
+  const mm = String(Math.floor(seg / 60)).padStart(2, "0");
+  const ss = String(seg % 60).padStart(2, "0");
+  return (
+    <div className="cpl-sess">
+      <span className="live" />
+      <div className="sm">
+        <div className="t">
+          {sesion.staffNombre ?? "Staff"} → {sesion.tenantNombre}
+        </div>
+        <div className="s">{sesion.motivo}</div>
+      </div>
+      <div className="exp">
+        <div className="big">
+          {mm}:{ss}
+        </div>
+        <div className="lbl">expira</div>
+      </div>
+      <button
+        type="button"
+        className="cpl-btn"
+        onClick={() => onCerrar(sesion.id)}
+      >
+        Cerrar
+      </button>
+    </div>
+  );
+}
+
+function ImpersonarModal({
+  tenants,
+  onCerrar,
+  onEntrar,
+}: {
+  tenants: TenantConsola[];
+  onCerrar: () => void;
+  onEntrar: (tenantId: string, motivo: string) => Promise<void>;
+}) {
+  const [tenantId, setTenantId] = React.useState("");
+  const [motivo, setMotivo] = React.useState("");
+  const [ocupado, setOcupado] = React.useState(false);
+  const valido = tenantId !== "" && motivo.trim().length >= 5;
+
+  const entrar = async () => {
+    if (!valido || ocupado) return;
+    setOcupado(true);
+    try {
+      await onEntrar(tenantId, motivo.trim());
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo entrar.");
+      setOcupado(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="cpl-scrim" style={{ zIndex: 90 }} onClick={onCerrar} />
+      <div className="cpl-modal">
+        <div className="cpl-mh">
+          <div className="mt">Entrar a un tenant</div>
+          <div className="ms">
+            Vas a operar como soporte dentro de la cuenta. Todo queda firmado
+            “en nombre de” y el cliente ve que entraste. Expira en 60 minutos.
+          </div>
+        </div>
+        <div className="cpl-mb">
+          <div className="cpl-field">
+            <label>Tenant</label>
+            <select value={tenantId} onChange={(e) => setTenantId(e.target.value)}>
+              <option value="" disabled>
+                Elegí un tenant…
+              </option>
+              {tenants.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="cpl-field">
+            <label>Motivo (obligatorio, queda en la auditoría)</label>
+            <textarea
+              rows={3}
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              placeholder="Ticket 412: el cliente reporta que no le sale el PDF de la factura."
+              autoFocus
+            />
+          </div>
+          <div className="cpl-callout" style={{ marginTop: 4 }}>
+            <BIco.alert />
+            <div>
+              Impersonando NO podés tocar integraciones, administrar usuarios ni
+              borrar archivos: soporte diagnostica, no toma la cuenta.
+            </div>
+          </div>
+        </div>
+        <div className="cpl-mf">
+          <button type="button" className="cpl-btn" onClick={onCerrar}>
+            Cancelar
+          </button>
+          <button
+            type="button"
+            className="cpl-btn pri"
+            disabled={!valido || ocupado}
+            onClick={() => void entrar()}
+          >
+            {ocupado ? "Entrando…" : "Entrar al tenant"}
+          </button>
+        </div>
+      </div>
+    </>
   );
 }
 

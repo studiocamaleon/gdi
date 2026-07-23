@@ -75,8 +75,10 @@ describe('PlataformaService.consola', () => {
     await prisma.tenant.deleteMany({
       where: { id: { in: [tenantVivoId, tenantDormidoId] } },
     });
+    // Sólo los usuarios de ESTA suite (no todos los @test.local, que otros
+    // specs paralelos están usando).
     await prisma.user.deleteMany({
-      where: { email: { endsWith: '@test.local' } },
+      where: { email: { startsWith: 'cpl-' } },
     });
     await prisma.$disconnect();
   });

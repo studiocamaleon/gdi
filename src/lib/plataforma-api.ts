@@ -183,6 +183,40 @@ export async function generarBillingPlataforma(dto: {
   });
 }
 
+export type SesionImpersonacion = {
+  id: string;
+  tenantId: string;
+  tenantNombre: string;
+  staffUserId: string;
+  staffNombre: string | null;
+  motivo: string;
+  creadaEl: string;
+  expiraEl: string;
+  expiraEnSeg: number;
+};
+
+export async function getSesionesImpersonacion(): Promise<SesionImpersonacion[]> {
+  return apiRequest("/plataforma/impersonacion", { cache: "no-store" });
+}
+
+export async function iniciarImpersonacion(
+  tenantId: string,
+  motivo: string,
+): Promise<{ token: string; tenantNombre: string; expiraEl: string }> {
+  return apiRequest("/plataforma/impersonacion", {
+    method: "POST",
+    body: JSON.stringify({ tenantId, motivo }),
+  });
+}
+
+export async function cerrarImpersonacion(
+  sesionId: string,
+): Promise<{ ok: true }> {
+  return apiRequest(`/plataforma/impersonacion/${sesionId}/cerrar`, {
+    method: "POST",
+  });
+}
+
 export function formatBytesPlataforma(bytes: number): string {
   if (bytes <= 0) return "0 MB";
   const gb = bytes / 1024 ** 3;

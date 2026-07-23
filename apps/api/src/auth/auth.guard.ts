@@ -52,17 +52,23 @@ export class AuthGuard implements CanActivate {
     }
 
     // Cache hit: evita el query con 3 joins. Requiere que el tenant/membership
-    // cacheados coincidan con el token (tras switch-tenant el token cambia y
-    // el cache se invalida, así que un mismatch fuerza revalidación en DB).
-    const cached = this.sessionCache.get(payload.sessionId);
-    if (
-      cached &&
-      cached.userId === payload.sub &&
-      cached.tenantId === payload.tenantId &&
-      cached.membershipId === payload.membershipId
-    ) {
-      request.auth = cached;
-      return true;
+    // La impersonación NO se cachea: la sesión puede cerrarse o expirar en
+    // cualquier momento y el corte tiene que ser inmediato (a diferencia del
+    // camino normal, que tolera el cache de 30 s). Va siempre a la base.
+    if (!payload.imp) {
+      // cacheados coincidan con el token (tras switch-tenant el token cambia y
+      // el cache se invalida, así que un mismatch fuerza revalidación en DB).
+      const cached = this.sessionCache.get(payload.sessionId);
+      if (
+        cached &&
+        !cached.impersonacion &&
+        cached.userId === payload.sub &&
+        cached.tenantId === payload.tenantId &&
+        cached.membershipId === payload.membershipId
+      ) {
+        request.auth = cached;
+        return true;
+      }
     }
 
     const session = await this.prisma.authSession.findUnique({
@@ -71,18 +77,58 @@ export class AuthGuard implements CanActivate {
         user: true,
         currentTenant: true,
         currentMembership: true,
+        impersonacion: true,
       },
     });
 
+    // Base común a los dos caminos.
     if (
       !session ||
       session.revokedAt ||
       session.expiresAt <= new Date() ||
       !session.user.activo ||
       !session.currentTenant.activo ||
-      !session.currentMembership.activa ||
       session.userId !== payload.sub ||
-      session.currentTenantId !== payload.tenantId ||
+      session.currentTenantId !== payload.tenantId
+    ) {
+      throw new UnauthorizedException('Sesion expirada o revocada.');
+    }
+
+    // ── Impersonación ──────────────────────────────────────────────────
+    if (payload.imp) {
+      const imp = session.impersonacion;
+      if (
+        !imp ||
+        imp.id !== payload.imp.sesionId ||
+        imp.cerradaEl ||
+        imp.expiraEl <= new Date() ||
+        imp.tenantId !== payload.tenantId
+      ) {
+        throw new UnauthorizedException(
+          'La sesión de impersonación terminó o expiró.',
+        );
+      }
+      // El staff opera con rol ADMINISTRADOR del tenant, pero el actor real
+      // viaja aparte: es lo que firma lo que el tenant ve.
+      request.auth = {
+        userId: payload.sub,
+        sessionId: payload.sessionId,
+        tenantId: payload.tenantId,
+        membershipId: '',
+        role: payload.role,
+        email: payload.email,
+        impersonacion: {
+          sesionId: imp.id,
+          actorUserId: payload.imp.actorUserId,
+          actorNombre: payload.imp.actorNombre,
+        },
+      };
+      return true;
+    }
+
+    // ── Sesión normal ──────────────────────────────────────────────────
+    if (
+      !session.currentMembership?.activa ||
       session.currentMembershipId !== payload.membershipId
     ) {
       throw new UnauthorizedException('Sesion expirada o revocada.');
