@@ -358,7 +358,6 @@ export function Delta({ actual, previo }: { actual: number; previo: number }) {
   );
 }
 
-let sparkSeq = 0;
 export function Spark({
   data,
   color = "var(--acc)",
@@ -381,7 +380,9 @@ export function Spark({
   const line = pts
     .map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1))
     .join(" ");
-  const gid = React.useMemo(() => `cpl-sp${sparkSeq++}`, []);
+  // useId: estable entre SSR e hidratación. Un contador de módulo acá
+  // producía ids distintos en server y cliente → hydration mismatch.
+  const gid = `cpl-sp${React.useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   return (
     <svg className="spark" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
       <defs>
@@ -404,7 +405,6 @@ export function Spark({
   );
 }
 
-let chartSeq = 0;
 export function AreaChart({
   data,
   series,
@@ -423,7 +423,7 @@ export function AreaChart({
   const ih = height - padT - padB;
   const n = data.length;
   const xAt = (i: number) => padL + (n <= 1 ? iw / 2 : (i / (n - 1)) * iw);
-  const uid = React.useMemo(() => `cpl-ac${chartSeq++}`, []);
+  const uid = `cpl-ac${React.useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const todos = series.flatMap((s) => data.map((d) => Number(d[s.key])));
   const mx = Math.max(...todos, 1) * 1.08;
   const yAt = (v: number) => padT + ih - (v / mx) * ih;
