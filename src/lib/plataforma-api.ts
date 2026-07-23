@@ -60,7 +60,12 @@ export type EventoPlataforma = {
 
 export type ConsolaPlataforma = {
   /** Quién está mirando (pie del rail). */
-  staff: { nombre: string | null; email: string; rol: string } | null;
+  staff: {
+    nombre: string | null;
+    email: string;
+    rol: string;
+    esSesionPlataforma: boolean;
+  } | null;
   /** Últimos movimientos del control plane (PlataformaEvento, real desde A). */
   auditoria: EventoPlataforma[];
   resumen: {

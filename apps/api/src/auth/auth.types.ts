@@ -14,6 +14,8 @@ export type JwtPayload = {
     actorUserId: string;
     actorNombre: string;
   };
+  /** true = sesión de PLATAFORMA (backoffice): sin tenant. */
+  plat?: boolean;
 };
 
 export type CurrentAuth = {
@@ -35,4 +37,11 @@ export type CurrentAuth = {
     /** "Soporte Grafo (Nombre)" — se firma con esto lo que el tenant ve. */
     actorNombre: string;
   };
+  /**
+   * Sesión de plataforma (backoffice): el staff NO está en un tenant. En esta
+   * sesión `tenantId` es '' y el AuthGuard sólo deja pasar rutas @SinTenant —
+   * así una sesión de plataforma no puede operar como tenant (que, sin
+   * contexto, leería todos). undefined = sesión de tenant.
+   */
+  esPlataforma?: boolean;
 };

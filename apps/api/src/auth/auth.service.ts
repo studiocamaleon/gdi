@@ -91,6 +91,72 @@ export class AuthService {
     );
   }
 
+  /**
+   * Login del BACKOFFICE (opción A): autentica al staff de plataforma sin
+   * exigirle una empresa. Emite una sesión de plataforma —sin tenant— que el
+   * AuthGuard sólo deja usar en las rutas del control plane.
+   *
+   * Misma tabla User y mismas credenciales que el login de tenant: una persona
+   * de Grupo Idea puede entrar por acá para operar la plataforma y por el login
+   * normal para operar su imprenta. Ver docs/control-plane-diseno.md
+   */
+  async loginPlataforma(payload: LoginDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: payload.email.trim().toLowerCase() },
+      select: {
+        id: true,
+        email: true,
+        nombreCompleto: true,
+        activo: true,
+        passwordHash: true,
+        rolPlataforma: true,
+      },
+    });
+
+    if (!user?.passwordHash || !user.activo) {
+      await bcrypt.compare(payload.password, DUMMY_PASSWORD_HASH);
+      throw new UnauthorizedException('Credenciales invalidas.');
+    }
+    const ok = await bcrypt.compare(payload.password, user.passwordHash);
+    if (!ok) throw new UnauthorizedException('Credenciales invalidas.');
+
+    // El corte del backoffice: sin rol de plataforma no se entra, aunque las
+    // credenciales sean válidas (es un usuario de tenant común).
+    if (!user.rolPlataforma) {
+      throw new UnauthorizedException(
+        'Esta cuenta no tiene acceso al equipo de Grafo.',
+      );
+    }
+
+    const session = await this.prisma.authSession.create({
+      data: {
+        userId: user.id,
+        currentTenantId: null,
+        currentMembershipId: null,
+        expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7),
+      },
+    });
+    const accessToken = await this.issueToken({
+      sub: user.id,
+      sessionId: session.id,
+      tenantId: '',
+      membershipId: '',
+      role: RolSistema.ADMINISTRADOR,
+      email: user.email,
+      plat: true,
+    });
+    return {
+      accessToken,
+      sessionId: session.id,
+      staff: {
+        id: user.id,
+        email: user.email,
+        nombreCompleto: user.nombreCompleto,
+        rolPlataforma: user.rolPlataforma,
+      },
+    };
+  }
+
   async logout(auth: CurrentAuth) {
     await this.prisma.authSession.update({
       where: { id: auth.sessionId },

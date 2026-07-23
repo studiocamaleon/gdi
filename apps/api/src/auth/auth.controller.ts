@@ -6,6 +6,7 @@ import { AcceptInvitationDto } from './dto/accept-invitation.dto';
 import { LoginDto } from './dto/login.dto';
 import { SwitchTenantDto } from './dto/switch-tenant.dto';
 import { Public } from './public.decorator';
+import { SinTenant } from '../common/sin-tenant.decorator';
 import type { CurrentAuth } from './auth.types';
 
 @Controller('auth')
@@ -19,6 +20,19 @@ export class AuthController {
     return this.authService.login(payload);
   }
 
+  /** Login del backoffice: staff de plataforma, sin exigir empresa. */
+  @Public()
+  @Throttle({ default: { ttl: 60000, limit: 10 } })
+  @Post('login-plataforma')
+  loginPlataforma(@Body() payload: LoginDto) {
+    return this.authService.loginPlataforma(payload);
+  }
+
+  // @SinTenant: el logout no necesita contexto de tenant (revoca la AuthSession
+  // por id) y así también lo pueden llamar las sesiones de plataforma, que sólo
+  // tienen permitidas las rutas @SinTenant. Sin esto, el staff del backoffice no
+  // podía cerrar sesión.
+  @SinTenant()
   @Post('logout')
   logout(@CurrentSession() auth: CurrentAuth) {
     return this.authService.logout(auth);

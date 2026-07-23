@@ -92,8 +92,16 @@ export type SemanaActividad = {
 };
 
 export type ConsolaPlataforma = {
-  /** Quién está mirando (para el pie del rail). Null en usos internos. */
-  staff: { nombre: string | null; email: string; rol: string } | null;
+  /** Quién está mirando (para el pie del rail). Null en usos internos.
+   *  esSesionPlataforma distingue al staff que entró por el backoffice (sin
+   *  tenant) del que llegó desde su propio dashboard: define si el rail ofrece
+   *  "Volver a la app" o sólo "Cerrar sesión". */
+  staff: {
+    nombre: string | null;
+    email: string;
+    rol: string;
+    esSesionPlataforma: boolean;
+  } | null;
   /** Los últimos movimientos del control plane (PlataformaEvento). */
   auditoria: EventoPlataforma[];
   resumen: {
@@ -125,7 +133,10 @@ export type ConsolaPlataforma = {
 export class PlataformaService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async consola(staffUserId?: string): Promise<ConsolaPlataforma> {
+  async consola(
+    staffUserId?: string,
+    esSesionPlataforma = false,
+  ): Promise<ConsolaPlataforma> {
     const ahora = Date.now();
     const corte30 = new Date(ahora - 30 * DIA_MS);
     const corte14 = new Date(ahora - 14 * DIA_MS);
@@ -338,6 +349,7 @@ export class PlataformaService {
             nombre: staff.nombreCompleto,
             email: staff.email,
             rol: staff.rolPlataforma ?? 'SOPORTE',
+            esSesionPlataforma,
           }
         : null,
       auditoria: eventos.map((e) => ({

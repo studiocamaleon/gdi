@@ -6,7 +6,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
-import { setSessionToken } from "@/lib/session";
+import { logout } from "@/lib/auth";
+import { clearSessionToken, setSessionToken } from "@/lib/session";
 import {
   AreaChart,
   Bars,
@@ -90,7 +91,25 @@ export function ConsolaPlataformaView({
   const [datos, setDatos] = React.useState(datosIniciales);
   const [vista, setVista] = React.useState<Vista>("observabilidad");
   const [tenantAbierto, setTenantAbierto] = React.useState<string | null>(null);
+  const [cerrando, setCerrando] = React.useState(false);
+  const router = useRouter();
   const esAdmin = datos.staff?.rol === "ADMIN";
+  // El staff del backoffice no tiene tenant: no puede "volver a la app", sólo
+  // cerrar sesión (que lo deja en su propio login). El que llegó desde su
+  // dashboard sí conserva "Volver a la app".
+  const esSesionPlataforma = datos.staff?.esSesionPlataforma === true;
+
+  const cerrarSesion = async () => {
+    if (cerrando) return;
+    setCerrando(true);
+    try {
+      await logout();
+    } finally {
+      await clearSessionToken();
+      router.replace(esSesionPlataforma ? "/backoffice" : "/login");
+      router.refresh();
+    }
+  };
 
   const meta = TITULOS[vista];
   const abierto = tenantAbierto
@@ -150,10 +169,21 @@ export function ConsolaPlataformaView({
               })}
             </React.Fragment>
           ))}
-          <Link className="cpl-nav-i cpl-nav-volver" href="/">
+          {esSesionPlataforma ? null : (
+            <Link className="cpl-nav-i cpl-nav-volver" href="/">
+              <BIco.arrowLeft />
+              <span>Volver a la app</span>
+            </Link>
+          )}
+          <button
+            type="button"
+            className="cpl-nav-i cpl-nav-salir"
+            onClick={cerrarSesion}
+            disabled={cerrando}
+          >
             <BIco.logout />
-            <span>Volver a la app</span>
-          </Link>
+            <span>{cerrando ? "Cerrando sesión…" : "Cerrar sesión"}</span>
+          </button>
         </nav>
         <div className="cpl-rail-user">
           <span className="av">{iniciales}</span>

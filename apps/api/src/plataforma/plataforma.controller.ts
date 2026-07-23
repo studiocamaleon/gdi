@@ -98,7 +98,7 @@ export class PlataformaController {
   /** La consola completa: resumen + tenants + auditoría + quién mira. */
   @Get('consola')
   consola(@CurrentSession() auth: CurrentAuth) {
-    return this.service.consola(auth.userId);
+    return this.service.consola(auth.userId, auth.esPlataforma === true);
   }
 
   @Get('planes')

@@ -51,6 +51,26 @@ export async function login(email: string, password: string) {
   );
 }
 
+export async function loginPlataforma(email: string, password: string) {
+  return apiRequest<{
+    accessToken: string | null;
+    sessionId: string;
+    staff: {
+      id: string;
+      email: string;
+      nombreCompleto: string | null;
+      rolPlataforma: "ADMIN" | "SOPORTE";
+    };
+  }>(
+    "/auth/login-plataforma",
+    {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    },
+    { auth: false },
+  );
+}
+
 export async function logout() {
   return apiRequest<void>("/auth/logout", {
     method: "POST",
