@@ -117,10 +117,29 @@ export class NotificacionesService {
     if (!cliente) {
       return { encolada: false, motivo: 'La operación no tiene cliente.' };
     }
-    if (!cliente.aceptaWhatsapp) {
+    // Consentimiento proporcionado a lo que se manda.
+    //
+    // Wati no exige opt-in —manda a cualquier número— pero la política de Meta
+    // sí lo pide, y el castigo es indirecto: la gente bloquea, baja la calidad
+    // del número, Meta pausa plantillas. Lo que la gente bloquea es el
+    // marketing, no el aviso de su propia orden.
+    //
+    // Por eso: un cliente al que nunca se le preguntó recibe lo transaccional
+    // y no el marketing. Uno que pidió no recibir no recibe NADA — eso se
+    // respeta siempre, es lo único que no admite matices.
+    if (cliente.aceptaWhatsapp === false) {
       return {
         encolada: false,
-        motivo: 'El cliente no aceptó recibir WhatsApp.',
+        motivo: 'El cliente pidió no recibir WhatsApp.',
+      };
+    }
+    if (
+      plantilla.categoria === 'MARKETING' &&
+      cliente.aceptaWhatsapp !== true
+    ) {
+      return {
+        encolada: false,
+        motivo: 'Es un mensaje promocional y el cliente no lo aceptó.',
       };
     }
 

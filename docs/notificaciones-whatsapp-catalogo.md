@@ -138,16 +138,36 @@ cada capa tapa un agujero distinto.
 Lo que pediste. `NotificacionConfig(tenantId, evento, activo, plantillaId)`.
 Los defaults de la tabla de arriba.
 
-### 4.2 Consentimiento del cliente final
+### 4.2 Consentimiento, pero proporcionado
 
-**No existe hoy**: `Cliente` tiene `telefonoCodigo`, `telefonoNumero` y
-`paisCodigo`, y ningún campo de consentimiento. Meta exige opt-in y la ley
-25.326 también. Sin esto, encender la integración es trasladarle un riesgo
-legal al tenant.
+La primera versión de esto pedía opt-in explícito para todo, con
+`aceptaWhatsapp` en `false` por defecto. Está mal, y el costo es concreto: el
+módulo no manda **nada** hasta juntar consentimientos uno por uno, y un
+sistema mudo se termina apagando.
 
-Hace falta `Cliente.aceptaWhatsapp` + cuándo y cómo se registró. Y una forma
-de recolectarlo que no sea una migración masiva a `true`, que sería
-exactamente la trampa.
+Los hechos, sin adornos: **Wati no exige opt-in** — manda a cualquier número
+y no hay ningún control técnico. La política de Meta sí lo pide, y el castigo
+es indirecto pero real: la gente bloquea, baja la calidad del número, Meta
+pausa plantillas y en el peor caso restringe el número.
+
+Y lo que la gente bloquea es **el marketing**, no el aviso de su propia
+orden. Un cliente que dejó su teléfono para trabajar con la imprenta y recibe
+"tu orden está lista" no es a quien protege el opt-in.
+
+Por eso el campo tiene **tres estados** y no dos:
+
+| `aceptaWhatsapp` | Qué recibe |
+|---|---|
+| `null` — nunca se preguntó | Los 11 transaccionales. **No** los 2 promocionales. |
+| `true` — aceptó | Todo. |
+| `false` — pidió no recibir | **Nada**, ni siquiera lo transaccional. |
+
+El tercero es el único que no admite matices: si alguien pidió que no le
+escriban, no se le escribe.
+
+La consecuencia práctica es que un tenant tiene el módulo andando el día que
+conecta Wati, sin pedirle nada a nadie, y el opt-in queda donde de verdad
+hace falta.
 
 ### 4.3 Idempotencia — el problema concreto que tenemos
 
