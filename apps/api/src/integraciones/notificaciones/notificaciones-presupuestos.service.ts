@@ -3,6 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificacionesService } from './notificaciones.service';
 import { primerNombre } from './notificaciones-ordenes.service';
+import { enContextoDe } from './contexto';
 import type { EventoNotificacion } from '../wati/catalogo';
 
 /**
@@ -48,6 +49,7 @@ export class NotificacionesPresupuestosService {
     const p = await this.prisma.cotizacion.findFirst({
       where: { id: cotizacionId },
       select: {
+        tenantId: true,
         id: true,
         numero: true,
         estado: true,
@@ -76,13 +78,17 @@ export class NotificacionesPresupuestosService {
         ? [nombre, p.numero, total, fecha(p.fechaValidez), url]
         : [nombre, p.numero, total, url];
 
-    await this.notificaciones.encolar({
-      evento,
-      entidadId: p.id,
-      clienteId: p.clienteId,
-      cotizacionId: p.id,
-      parametros,
-    });
+    // La aprobación llega desde el link público, que no tiene contexto de
+    // tenant. Sin esto el encolado falla y el aviso se pierde callado.
+    await enContextoDe(p.tenantId, () =>
+      this.notificaciones.encolar({
+        evento,
+        entidadId: p.id,
+        clienteId: p.clienteId!,
+        cotizacionId: p.id,
+        parametros,
+      }),
+    );
   }
 }
 

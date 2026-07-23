@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificacionesService } from './notificaciones.service';
+import { enContextoDe } from './contexto';
 import type { EventoNotificacion } from '../wati/catalogo';
 
 /**
@@ -58,6 +59,7 @@ export class NotificacionesOrdenesService {
     const orden = await this.prisma.ordenTrabajo.findFirst({
       where: { id: ordenId },
       select: {
+        tenantId: true,
         id: true,
         numero: true,
         estado: true,
@@ -111,12 +113,15 @@ export class NotificacionesOrdenesService {
     })();
     if (!parametros) return;
 
-    await this.notificaciones.encolar({
-      evento,
-      entidadId: orden.id,
-      ...comun,
-      parametros,
-    });
+    // Igual que en presupuestos: puede venir de una ruta pública sin contexto.
+    await enContextoDe(orden.tenantId, () =>
+      this.notificaciones.encolar({
+        evento,
+        entidadId: orden.id,
+        ...comun,
+        parametros,
+      }),
+    );
   }
 }
 
