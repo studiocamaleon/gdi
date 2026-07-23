@@ -582,6 +582,7 @@ model Tenant {
   notificacionesWhatsapp                           NotificacionWhatsapp[]
   enlacesPublicos                                  EnlacePublico[]
   reciboContadores                                 ReciboContador[]
+  suscripcion                                      Suscripcion?
   id                                               String                                            @id @default(uuid()) @db.Uuid
   nombre                                           String
   slug                                             String                                            @unique
@@ -752,7 +753,9 @@ model Invitation {
   tenantId              String     @db.Uuid
   userId                String?    @db.Uuid
   empleadoId            String?    @db.Uuid
-  invitedByMembershipId String     @db.Uuid
+  /// Null = invitación emitida desde el CONTROL PLANE (alta de tenant): el
+  /// staff no tiene membership. Las de tenant siempre lo llevan.
+  invitedByMembershipId String?    @db.Uuid
   email                 String
   rol                   RolSistema
   tokenHash             String     @unique
@@ -764,7 +767,7 @@ model Invitation {
   tenant                Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user                  User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
   empleado              Empleado?  @relation(fields: [empleadoId], references: [id], onDelete: SetNull)
-  invitedByMembership   Membership @relation("InvitationSender", fields: [invitedByMembershipId], references: [id], onDelete: Cascade)
+  invitedByMembership   Membership? @relation("InvitationSender", fields: [invitedByMembershipId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, email])
   @@index([empleadoId])
@@ -3388,4 +3391,44 @@ model PlataformaEvento {
 
   @@index([staffUserId, createdAt])
   @@index([tenantAfectadoId])
+}
+
+/// Catálogo de planes del SaaS. Nivel plataforma (sin tenantId), como
+/// MaterialPreset: los mismos planes para todos los tenants.
+/// Ver docs/control-plane-diseno.md
+model Plan {
+  id            String        @id @default(uuid()) @db.Uuid
+  /// "trial" | "taller" | "estudio" | "diamante" — estable, es la clave.
+  codigo        String        @unique
+  nombre        String
+  precioMensual Decimal       @db.Decimal(14, 2)
+  /// Qué habilita y hasta dónde: { afip, whatsapp, usuariosMax,
+  /// ordenesMesMax, storageGb }. JSON a propósito: los features cambian más
+  /// rápido que el schema. NADIE lo lee directo salvo SuscripcionesService.
+  featuresJson  Json
+  activo        Boolean       @default(true)
+  orden         Int           @default(0)
+  suscripciones Suscripcion[]
+}
+
+/// La suscripción del tenant: una por tenant. CON tenantId y SIN eximir del
+/// guard, a propósito: el propio tenant la lee (para sus feature gates) y el
+/// control plane —sin contexto— la escribe. Sin suscripción = tenant legacy:
+/// se lo trata como ilimitado (grandfathered) hasta que se le asigne plan.
+model Suscripcion {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @unique @db.Uuid
+  planId    String    @db.Uuid
+  /// 'activa' | 'suspendida' | 'baja'
+  estado    String    @default("activa")
+  desde     DateTime  @default(now())
+  hasta     DateTime?
+  notas     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan   Plan   @relation(fields: [planId], references: [id])
+
+  @@index([planId])
 }

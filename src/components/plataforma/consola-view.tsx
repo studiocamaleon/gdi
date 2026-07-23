@@ -3,15 +3,19 @@
 import * as React from "react";
 import Link from "next/link";
 
+import { toast } from "sonner";
+
 import {
   AreaChart,
   Bars,
   BIco,
-  colorDe,
   Donut,
   EstadoPill,
   Kpi,
+  mk,
   Panel,
+  PLAN_COLORS,
+  PlanBadge,
   TLogo,
   fechaCorta,
   fmtBytes,
@@ -19,9 +23,15 @@ import {
   haceCuanto,
   riesgoDe,
 } from "@/components/plataforma/kit";
-import type {
-  ConsolaPlataforma,
-  TenantConsola,
+import {
+  cambiarPlanTenant,
+  crearTenantPlataforma,
+  getPlanesPlataforma,
+  reactivarTenant,
+  suspenderTenant,
+  type ConsolaPlataforma,
+  type PlanCatalogo,
+  type TenantConsola,
 } from "@/lib/plataforma-api";
 
 /**
@@ -60,14 +70,18 @@ const TITULOS: Record<Vista, { crumb: string; title: string }> = {
 };
 
 export function ConsolaPlataformaView({
-  datos,
+  datos: datosIniciales,
   ambiente,
 }: {
   datos: ConsolaPlataforma;
   ambiente: "produccion" | "desarrollo";
 }) {
+  // Estado local: las acciones del control plane (cambiar plan, suspender…)
+  // devuelven la consola actualizada y se refresca sin recargar.
+  const [datos, setDatos] = React.useState(datosIniciales);
   const [vista, setVista] = React.useState<Vista>("observabilidad");
   const [tenantAbierto, setTenantAbierto] = React.useState<string | null>(null);
+  const esAdmin = datos.staff?.rol === "ADMIN";
 
   const meta = TITULOS[vista];
   const abierto = tenantAbierto
@@ -170,8 +184,10 @@ export function ConsolaPlataformaView({
           <Tenants
             tenants={datos.tenants}
             abierto={abierto}
+            esAdmin={esAdmin}
             onAbrir={setTenantAbierto}
             onCerrar={() => setTenantAbierto(null)}
+            onConsola={setDatos}
           />
         ) : null}
         {vista === "billing" ? <BillingBloqueado /> : null}
@@ -233,23 +249,35 @@ function Observabilidad({
     [],
   );
 
-  const donutActividad = (() => {
-    const conActividad = [...tenants]
-      .filter((t) => t.ots30d > 0)
-      .sort((a, b) => b.ots30d - a.ots30d);
-    const top = conActividad.slice(0, 4).map((t) => ({
-      label: t.nombre,
-      value: t.ots30d,
-      color: colorDe(t.slug),
-    }));
-    const resto = conActividad.slice(4).reduce((s, t) => s + t.ots30d, 0);
-    if (resto > 0) top.push({ label: "Otros", value: resto, color: "#63636d" });
-    return top;
+  // Distribución por plan — real desde la etapa B1. "Sin plan" = legacy.
+  const donutPlanes = (() => {
+    const porPlan = new Map<string, { label: string; value: number; color: string }>();
+    for (const t of tenants) {
+      const clave = t.plan?.codigo ?? "sin-plan";
+      const actual = porPlan.get(clave);
+      if (actual) actual.value += 1;
+      else
+        porPlan.set(clave, {
+          label: t.plan?.nombre ?? "Sin plan",
+          value: 1,
+          color: t.plan ? (PLAN_COLORS[t.plan.codigo] ?? "#63636d") : "#3c3c46",
+        });
+    }
+    return [...porPlan.values()].sort((a, b) => b.value - a.value);
   })();
 
   return (
     <div className="cpl-page">
       <div className="cpl-kgrid">
+        <Kpi
+          label="MRR"
+          value={mk(resumen.mrr)}
+          sub={
+            resumen.sinPlan > 0
+              ? `${resumen.sinPlan} tenant${resumen.sinPlan === 1 ? "" : "s"} sin plan`
+              : "mensual recurrente"
+          }
+        />
         <Kpi
           label="OTs emitidas · 30d"
           value={fmtN(resumen.ots30d)}
@@ -286,12 +314,7 @@ function Observabilidad({
         <Kpi
           label="Usuarios activos"
           value={fmtN(resumen.usuariosActivos)}
-          sub="en todos los tenants"
-        />
-        <Kpi
-          label="Storage total"
-          value={fmtBytes(resumen.storageBytes)}
-          sub="archivos en R2"
+          sub={`storage ${fmtBytes(resumen.storageBytes)}`}
         />
       </div>
 
@@ -370,20 +393,14 @@ function Observabilidad({
       </div>
 
       <div className="cpl-grid cpl-g-3">
-        <Panel title="Actividad por tenant" sub="OTs emitidas · 30d">
-          {donutActividad.length === 0 ? (
-            <div className="cpl-empty" style={{ padding: "24px 10px" }}>
-              <div className="t">Sin OTs en 30 días</div>
-            </div>
-          ) : (
-            <div style={{ paddingTop: 8 }}>
-              <Donut
-                segs={donutActividad}
-                centerV={fmtN(resumen.ots30d)}
-                centerL="OTs 30d"
-              />
-            </div>
-          )}
+        <Panel title="Tenants por plan" sub={`${resumen.tenants} cuentas`}>
+          <div style={{ paddingTop: 8 }}>
+            <Donut
+              segs={donutPlanes}
+              centerV={String(resumen.tenants)}
+              centerL="tenants"
+            />
+          </div>
         </Panel>
 
         <Panel title="Altas de tenants" sub="Últimos 6 meses">
@@ -565,16 +582,33 @@ const FILTROS: Array<{ k: Filtro; label: string }> = [
 function Tenants({
   tenants,
   abierto,
+  esAdmin,
   onAbrir,
   onCerrar,
+  onConsola,
 }: {
   tenants: TenantConsola[];
   abierto: TenantConsola | null;
+  esAdmin: boolean;
   onAbrir: (id: string) => void;
   onCerrar: () => void;
+  onConsola: (c: ConsolaPlataforma) => void;
 }) {
   const [q, setQ] = React.useState("");
   const [filtro, setFiltro] = React.useState<Filtro>("todos");
+  const [creando, setCreando] = React.useState(false);
+  // El catálogo se pide una vez, cuando un ADMIN lo va a necesitar.
+  const [planes, setPlanes] = React.useState<PlanCatalogo[] | null>(null);
+  React.useEffect(() => {
+    if (!esAdmin) return;
+    let vivo = true;
+    getPlanesPlataforma()
+      .then((p) => vivo && setPlanes(p))
+      .catch(() => vivo && setPlanes([]));
+    return () => {
+      vivo = false;
+    };
+  }, [esAdmin]);
 
   const filas = tenants.filter((t) => {
     if (filtro === "activos" && (!t.activo || riesgoDe(t))) return false;
@@ -609,6 +643,17 @@ function Tenants({
             </button>
           ))}
         </div>
+        <span style={{ flex: 1 }} />
+        {esAdmin ? (
+          <button
+            type="button"
+            className="cpl-btn pri"
+            onClick={() => setCreando(true)}
+          >
+            <BIco.building style={{ width: 15 }} />
+            Nuevo tenant
+          </button>
+        ) : null}
       </div>
 
       <Panel flush>
@@ -623,14 +668,13 @@ function Tenants({
             <thead>
               <tr>
                 <th>Tenant</th>
+                <th>Plan</th>
                 <th>Estado</th>
+                <th className="r">MRR</th>
                 <th className="r">Usuarios</th>
                 <th className="r">OTs 30d</th>
-                <th className="r">Cotiz. 30d</th>
-                <th className="r">Cobros 30d</th>
                 <th className="r">Storage</th>
                 <th>Integraciones</th>
-                <th className="r">Alta</th>
                 <th className="r">Últ. actividad</th>
               </tr>
             </thead>
@@ -647,12 +691,32 @@ function Tenants({
                     </div>
                   </td>
                   <td>
+                    {t.plan ? (
+                      <PlanBadge codigo={t.plan.codigo} nombre={t.plan.nombre} />
+                    ) : (
+                      <span style={{ color: "var(--muted-2)", fontSize: 11.5 }}>
+                        sin plan
+                      </span>
+                    )}
+                  </td>
+                  <td>
                     <EstadoPill t={t} />
                   </td>
-                  <td className="r cpl-mono">{t.usuariosActivos}</td>
+                  <td className="r cpl-mono">
+                    {t.plan && t.plan.estado === "activa" && t.plan.precioMensual > 0
+                      ? mk(t.plan.precioMensual)
+                      : "—"}
+                  </td>
+                  <td className="r cpl-mono">
+                    {t.usuariosActivos}
+                    {t.plan?.usuariosMax ? (
+                      <span style={{ color: "var(--muted-2)" }}>
+                        {" "}
+                        / {t.plan.usuariosMax}
+                      </span>
+                    ) : null}
+                  </td>
                   <td className="r cpl-mono">{t.ots30d}</td>
-                  <td className="r cpl-mono">{t.cotizaciones30d}</td>
-                  <td className="r cpl-mono">{t.cobros30d}</td>
                   <td className="r cpl-mono">{fmtBytes(t.storageBytes)}</td>
                   <td>
                     <span className="cpl-ints">
@@ -671,7 +735,6 @@ function Tenants({
                       )}
                     </span>
                   </td>
-                  <td className="r cpl-mono muted">{fechaCorta(t.creadoEl)}</td>
                   <td
                     className="r"
                     style={{
@@ -692,24 +755,101 @@ function Tenants({
       </Panel>
 
       <div className="cpl-note">
-        {filas.length} de {tenants.length} tenants. El control plane lee los
-        datos de cada tenant pero no muta su operación — las acciones de ciclo
-        de vida llegan con la etapa B, registradas en auditoría.
+        {filas.length} de {tenants.length} tenants. Las acciones de ciclo de
+        vida (plan, suspensión, alta) son de ADMIN y quedan en la auditoría.
       </div>
 
-      {abierto ? <TenantDrawer t={abierto} onCerrar={onCerrar} /> : null}
+      {abierto ? (
+        <TenantDrawer
+          t={abierto}
+          esAdmin={esAdmin}
+          planes={planes ?? []}
+          onCerrar={onCerrar}
+          onConsola={onConsola}
+        />
+      ) : null}
+      {creando ? (
+        <CrearTenantModal
+          planes={planes ?? []}
+          onCerrar={() => setCreando(false)}
+        />
+      ) : null}
     </div>
   );
 }
 
 function TenantDrawer({
   t,
+  esAdmin,
+  planes,
   onCerrar,
+  onConsola,
 }: {
   t: TenantConsola;
+  esAdmin: boolean;
+  planes: PlanCatalogo[];
   onCerrar: () => void;
+  onConsola: (c: ConsolaPlataforma) => void;
 }) {
   const riesgo = riesgoDe(t);
+  const [suspendiendo, setSuspendiendo] = React.useState(false);
+  const [ocupado, setOcupado] = React.useState(false);
+
+  const cambiar = async (planId: string) => {
+    if (!planId || ocupado) return;
+    setOcupado(true);
+    try {
+      onConsola(await cambiarPlanTenant(t.id, planId));
+      toast.success("Plan actualizado.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo cambiar el plan.");
+    } finally {
+      setOcupado(false);
+    }
+  };
+
+  const reactivar = async () => {
+    if (ocupado) return;
+    setOcupado(true);
+    try {
+      onConsola(await reactivarTenant(t.id));
+      toast.success("Tenant reactivado.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo reactivar.");
+    } finally {
+      setOcupado(false);
+    }
+  };
+
+  const gb = (n: number) => n / 1024 ** 3;
+  const limites: Array<{
+    k: string;
+    usado: number;
+    tope: number | null;
+    texto: string;
+  }> = t.plan
+    ? [
+        {
+          k: "Usuarios",
+          usado: t.usuariosActivos,
+          tope: t.plan.usuariosMax,
+          texto: `${t.usuariosActivos} / ${t.plan.usuariosMax ?? "∞"}`,
+        },
+        {
+          k: "Órdenes / mes",
+          usado: t.ots30d,
+          tope: t.plan.ordenesMesMax,
+          texto: `${t.ots30d} / ${t.plan.ordenesMesMax ?? "∞"}`,
+        },
+        {
+          k: "Almacenamiento",
+          usado: gb(t.storageBytes),
+          tope: t.plan.storageGb,
+          texto: `${fmtBytes(t.storageBytes)} / ${t.plan.storageGb ?? "∞"} GB`,
+        },
+      ]
+    : [];
+
   return (
     <>
       <div className="cpl-scrim" onClick={onCerrar} />
@@ -720,6 +860,9 @@ function TenantDrawer({
             <div className="dh-title">{t.nombre}</div>
             <div className="dh-sub">{t.slug}</div>
             <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+              {t.plan ? (
+                <PlanBadge codigo={t.plan.codigo} nombre={t.plan.nombre} />
+              ) : null}
               <EstadoPill t={t} />
             </div>
           </div>
@@ -750,35 +893,11 @@ function TenantDrawer({
                 <div className="v">{haceCuanto(t.ultimoAccesoEl)}</div>
               </div>
               <div className="c">
-                <div className="k">Usuarios activos</div>
-                <div className="v cpl-mono">{t.usuariosActivos}</div>
-              </div>
-              <div className="c">
-                <div className="k">Storage</div>
+                <div className="k">Actividad 30d</div>
                 <div className="v cpl-mono">
-                  {fmtBytes(t.storageBytes)}
-                  {t.storageCuotaBytes
-                    ? ` / ${fmtBytes(t.storageCuotaBytes)}`
-                    : ""}
+                  {t.ots30d} OTs · {t.cotizaciones30d} cotiz. · {t.cobros30d}{" "}
+                  cobros
                 </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="cpl-dsec">
-            <div className="dsec-t">Actividad · 30 días</div>
-            <div className="cpl-kv2">
-              <div className="c">
-                <div className="k">OTs emitidas</div>
-                <div className="v cpl-mono">{t.ots30d}</div>
-              </div>
-              <div className="c">
-                <div className="k">Cotizaciones</div>
-                <div className="v cpl-mono">{t.cotizaciones30d}</div>
-              </div>
-              <div className="c">
-                <div className="k">Cobros</div>
-                <div className="v cpl-mono">{t.cobros30d}</div>
               </div>
               <div className="c">
                 <div className="k">WhatsApp</div>
@@ -788,6 +907,60 @@ function TenantDrawer({
                     : t.whatsappPendientes > 0
                       ? `${t.whatsappPendientes} pend.`
                       : "ok"}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="cpl-dsec">
+            <div className="dsec-t">Plan y límites</div>
+            {t.plan ? (
+              <div className="cpl-limits">
+                {limites.map((l) => {
+                  const pct = l.tope
+                    ? Math.min(100, (l.usado / l.tope) * 100)
+                    : 0;
+                  const tono = pct >= 90 ? "dng" : pct >= 75 ? "warn" : "";
+                  return (
+                    <div className="cpl-limit" key={l.k}>
+                      <div className="lt">
+                        <span className="lk">{l.k}</span>
+                        <span className="lv">{l.texto}</span>
+                      </div>
+                      <div className={`cpl-meter ${tono}`}>
+                        <span style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="cpl-callout info">
+                <BIco.card />
+                <div>
+                  <b>Sin plan asignado (legacy).</b> Se lo trata como ilimitado
+                  hasta que se le asigne uno — los gates recién muerden con el
+                  plan puesto.
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="cpl-dsec">
+            <div className="dsec-t">Suscripción · facturación de Grupo Idea</div>
+            <div className="cpl-kv2">
+              <div className="c">
+                <div className="k">MRR</div>
+                <div className="v cpl-mono">
+                  {t.plan && t.plan.estado === "activa"
+                    ? mk(t.plan.precioMensual)
+                    : "—"}
+                </div>
+              </div>
+              <div className="c">
+                <div className="k">Facturas</div>
+                <div className="v" style={{ fontSize: 13 }}>
+                  llegan con la etapa B2
                 </div>
               </div>
             </div>
@@ -827,20 +1000,256 @@ function TenantDrawer({
               </div>
             )}
           </div>
+        </div>
 
-          <div className="cpl-dsec">
-            <div className="dsec-t">Suscripción · facturación de Grupo Idea</div>
-            <div className="cpl-callout info">
-              <BIco.card />
-              <div>
-                Plan, cupos, MRR y facturas viven en la <b>etapa B</b>. La
-                impersonación (“entrar como”) llega con la <b>etapa C</b>, con
-                motivo, vencimiento y rastro visible para el cliente.
-              </div>
-            </div>
+        {esAdmin ? (
+          <div className="cpl-dactions">
+            <select
+              className="cpl-select"
+              value=""
+              disabled={ocupado}
+              onChange={(e) => void cambiar(e.target.value)}
+            >
+              <option value="" disabled>
+                {t.plan ? `Cambiar plan (${t.plan.nombre})…` : "Asignar plan…"}
+              </option>
+              {planes.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nombre} · {mk(p.precioMensual)}/mes
+                </option>
+              ))}
+            </select>
+            <span style={{ flex: 1 }} />
+            {t.activo ? (
+              <button
+                type="button"
+                className="cpl-btn dng"
+                disabled={ocupado}
+                onClick={() => setSuspendiendo(true)}
+              >
+                Suspender
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="cpl-btn"
+                disabled={ocupado}
+                onClick={() => void reactivar()}
+              >
+                Reactivar
+              </button>
+            )}
+          </div>
+        ) : null}
+      </aside>
+
+      {suspendiendo ? (
+        <SuspenderModal
+          t={t}
+          onCerrar={() => setSuspendiendo(false)}
+          onConsola={(c) => {
+            onConsola(c);
+            setSuspendiendo(false);
+            onCerrar();
+          }}
+        />
+      ) : null}
+    </>
+  );
+}
+
+/** Suspender pide MOTIVO: va a la auditoría y el cliente puede preguntarlo. */
+function SuspenderModal({
+  t,
+  onCerrar,
+  onConsola,
+}: {
+  t: TenantConsola;
+  onCerrar: () => void;
+  onConsola: (c: ConsolaPlataforma) => void;
+}) {
+  const [motivo, setMotivo] = React.useState("");
+  const [ocupado, setOcupado] = React.useState(false);
+
+  const confirmar = async () => {
+    if (motivo.trim().length < 3 || ocupado) return;
+    setOcupado(true);
+    try {
+      onConsola(await suspenderTenant(t.id, motivo.trim()));
+      toast.success(`${t.nombre} suspendido.`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo suspender.");
+      setOcupado(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="cpl-scrim" style={{ zIndex: 90 }} onClick={onCerrar} />
+      <div className="cpl-modal">
+        <div className="cpl-mh">
+          <div className="mt">Suspender {t.nombre}</div>
+          <div className="ms">
+            Corta el acceso de todos sus usuarios en el acto y pausa la
+            suscripción. No borra nada: reactivar lo deja como estaba.
           </div>
         </div>
-      </aside>
+        <div className="cpl-mb">
+          <div className="cpl-field">
+            <label>Motivo (queda en la auditoría)</label>
+            <textarea
+              rows={3}
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              placeholder="Falta de pago desde…"
+              autoFocus
+            />
+          </div>
+        </div>
+        <div className="cpl-mf">
+          <button type="button" className="cpl-btn" onClick={onCerrar}>
+            Cancelar
+          </button>
+          <button
+            type="button"
+            className="cpl-btn dng"
+            disabled={motivo.trim().length < 3 || ocupado}
+            onClick={() => void confirmar()}
+          >
+            {ocupado ? "Suspendiendo…" : "Suspender tenant"}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** Alta de tenant: crea empresa + suscripción + invitación del primer admin. */
+function CrearTenantModal({
+  planes,
+  onCerrar,
+}: {
+  planes: PlanCatalogo[];
+  onCerrar: () => void;
+}) {
+  const [nombre, setNombre] = React.useState("");
+  const [slug, setSlug] = React.useState("");
+  const [email, setEmail] = React.useState("");
+  const [planId, setPlanId] = React.useState("");
+  const [ocupado, setOcupado] = React.useState(false);
+  const [invitacionUrl, setInvitacionUrl] = React.useState<string | null>(null);
+
+  const valido =
+    nombre.trim().length >= 2 &&
+    /^[a-z0-9][a-z0-9-]{1,40}$/.test(slug) &&
+    /.+@.+\..+/.test(email) &&
+    planId !== "";
+
+  const crear = async () => {
+    if (!valido || ocupado) return;
+    setOcupado(true);
+    try {
+      const r = await crearTenantPlataforma({
+        nombre: nombre.trim(),
+        slug,
+        planId,
+        adminEmail: email.trim(),
+      });
+      setInvitacionUrl(r.invitacionUrl);
+      toast.success("Tenant creado. Mandale el link de invitación.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo crear.");
+      setOcupado(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="cpl-scrim" style={{ zIndex: 90 }} onClick={onCerrar} />
+      <div className="cpl-modal">
+        <div className="cpl-mh">
+          <div className="mt">Nuevo tenant</div>
+          <div className="ms">
+            Crea la empresa con su plan e invita al primer administrador. El
+            link de invitación se lo mandás vos — vence en 7 días.
+          </div>
+        </div>
+        {invitacionUrl ? (
+          <div className="cpl-mb">
+            <div className="cpl-field">
+              <label>Link de invitación</label>
+              <div className="cpl-invlink">{invitacionUrl}</div>
+            </div>
+            <button
+              type="button"
+              className="cpl-btn pri"
+              onClick={() => {
+                void navigator.clipboard?.writeText(invitacionUrl);
+                toast.success("Link copiado.");
+              }}
+            >
+              Copiar link
+            </button>
+          </div>
+        ) : (
+          <div className="cpl-mb">
+            <div className="cpl-field">
+              <label>Nombre de la imprenta</label>
+              <input
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
+                placeholder="Gráfica del Sur SRL"
+                autoFocus
+              />
+            </div>
+            <div className="cpl-field">
+              <label>Slug (identificador corto)</label>
+              <input
+                value={slug}
+                onChange={(e) => setSlug(e.target.value.toLowerCase())}
+                placeholder="grafica-del-sur"
+              />
+            </div>
+            <div className="cpl-field">
+              <label>Email del administrador</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="duenio@imprenta.com"
+              />
+            </div>
+            <div className="cpl-field">
+              <label>Plan</label>
+              <select value={planId} onChange={(e) => setPlanId(e.target.value)}>
+                <option value="" disabled>
+                  Elegí un plan…
+                </option>
+                {planes.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nombre} · {mk(p.precioMensual)}/mes
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
+        <div className="cpl-mf">
+          <button type="button" className="cpl-btn" onClick={onCerrar}>
+            {invitacionUrl ? "Cerrar" : "Cancelar"}
+          </button>
+          {!invitacionUrl ? (
+            <button
+              type="button"
+              className="cpl-btn pri"
+              disabled={!valido || ocupado}
+              onClick={() => void crear()}
+            >
+              {ocupado ? "Creando…" : "Crear tenant"}
+            </button>
+          ) : null}
+        </div>
+      </div>
     </>
   );
 }

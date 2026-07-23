@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { CurrentAuth } from '../auth/auth.types';
 import { ConfiguracionFiscalService } from './configuracion-fiscal.service';
 import { AfipSdkProvider } from './invoicing/afip-sdk.provider';
+import { SuscripcionesService } from '../suscripciones/suscripciones.service';
 
 /**
  * La integración con AFIP, que NO es "conectar con credenciales": es
@@ -52,6 +53,12 @@ export type AfipIntegracionDto = {
    * La vista muestra "sos el titular" en vez del instructivo de delegación.
    */
   esCuitPropio: boolean;
+  /**
+   * ¿El plan del tenant incluye facturación electrónica? Sin suscripción
+   * (tenant legacy) es true. Con false, la vista reemplaza el interruptor
+   * por el aviso de plan — y activar() lo rechaza aunque la UI se salte.
+   */
+  planPermiteAfip: boolean;
   /** Datos fiscales del emisor (de ConfiguracionFiscal). */
   emisor: {
     cuit: string | null;
@@ -73,6 +80,7 @@ export class AfipIntegracionService {
     private readonly prisma: PrismaService,
     private readonly configFiscal: ConfiguracionFiscalService,
     private readonly afip: AfipSdkProvider,
+    private readonly suscripciones: SuscripcionesService,
   ) {}
 
   private get representanteCuit(): string | null {
@@ -88,11 +96,12 @@ export class AfipIntegracionService {
 
   /** El estado + los datos que la vista necesita. */
   async obtener(auth: CurrentAuth): Promise<AfipIntegracionDto> {
-    const [fila, config] = await Promise.all([
+    const [fila, config, planPermiteAfip] = await Promise.all([
       this.prisma.integracionTenant.findFirst({
         where: { proveedor: ProveedorIntegracion.AFIP },
       }),
       this.configFiscal.obtener(auth),
+      this.suscripciones.feature(auth.tenantId, 'afip'),
     ]);
 
     return {
@@ -103,6 +112,7 @@ export class AfipIntegracionService {
         config?.cuit ?? null,
         this.representanteCuit,
       ),
+      planPermiteAfip,
       emisor: {
         cuit: config?.cuit ?? null,
         razonSocial: config?.razonSocial ?? null,
@@ -181,6 +191,17 @@ export class AfipIntegracionService {
    * no → ERROR con el motivo.
    */
   async activar(auth: CurrentAuth): Promise<AfipIntegracionDto> {
+    // El gate del plan va ANTES que el de ARCA: si el plan no lo incluye, no
+    // tiene sentido verificar la delegación — y el motivo es comercial, no
+    // técnico. Ver docs/control-plane-diseno.md (etapa B).
+    if (!(await this.suscripciones.feature(auth.tenantId, 'afip'))) {
+      await this.upsert(auth, {
+        estado: EstadoIntegracion.DESCONECTADA,
+        ultimoErrorTexto:
+          'Tu plan no incluye facturación electrónica. Hablá con Grafo para pasar a un plan superior.',
+      });
+      return this.obtener(auth);
+    }
     const res = await this.verificar(auth);
     if (res.ok) {
       await this.upsert(auth, {
@@ -215,13 +236,18 @@ export class AfipIntegracionService {
     return this.obtener(auth);
   }
 
-  /** ¿Se puede facturar? La usa el gate del botón y la red del backend. */
-  async facturacionHabilitada(): Promise<boolean> {
+  /**
+   * ¿Se puede facturar? La usa el gate del botón y la red del backend.
+   * Dos condiciones: la integración CONECTADA y el plan que lo incluya — un
+   * downgrade corta la facturación aunque la delegación siga verificada.
+   */
+  async facturacionHabilitada(tenantId?: string): Promise<boolean> {
     const fila = await this.prisma.integracionTenant.findFirst({
       where: { proveedor: ProveedorIntegracion.AFIP },
-      select: { estado: true },
+      select: { estado: true, tenantId: true },
     });
-    return fila?.estado === EstadoIntegracion.CONECTADA;
+    if (fila?.estado !== EstadoIntegracion.CONECTADA) return false;
+    return this.suscripciones.feature(tenantId ?? fila.tenantId, 'afip');
   }
 
   // ── internos ─────────────────────────────────────────────────────────

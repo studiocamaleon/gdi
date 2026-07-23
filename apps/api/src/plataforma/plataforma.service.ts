@@ -1,5 +1,11 @@
-import { Injectable } from '@nestjs/common';
-import type { EstadoIntegracion } from '@prisma/client';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { RolSistema, type EstadoIntegracion } from '@prisma/client';
+import { createHash, randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -47,6 +53,24 @@ export type TenantConsola = {
   }>;
   whatsappPendientes: number;
   whatsappFallidas: number;
+  /** Null = tenant legacy sin plan asignado (grandfathered). */
+  plan: {
+    codigo: string;
+    nombre: string;
+    precioMensual: number;
+    estado: string;
+    usuariosMax: number | null;
+    ordenesMesMax: number | null;
+    storageGb: number | null;
+  } | null;
+};
+
+export type PlanCatalogo = {
+  id: string;
+  codigo: string;
+  nombre: string;
+  precioMensual: number;
+  features: Record<string, unknown>;
 };
 
 export type EventoPlataforma = {
@@ -79,6 +103,10 @@ export type ConsolaPlataforma = {
     ots30d: number;
     storageBytes: number;
     sinActividad14d: number;
+    /** Σ precio de las suscripciones ACTIVAS. Real desde la etapa B1. */
+    mrr: number;
+    /** Tenants sin plan asignado (legacy): la consola los muestra aparte. */
+    sinPlan: number;
     /** Los 30 días ANTERIORES a los últimos 30: el denominador de los deltas. */
     ots30dPrev: number;
     cotizaciones30d: number;
@@ -129,6 +157,19 @@ export class PlataformaService {
           cuotaBytesArchivos: true,
           _count: {
             select: { memberships: { where: { activa: true } } },
+          },
+          suscripcion: {
+            select: {
+              estado: true,
+              plan: {
+                select: {
+                  codigo: true,
+                  nombre: true,
+                  precioMensual: true,
+                  featuresJson: true,
+                },
+              },
+            },
           },
         },
       }),
@@ -230,6 +271,24 @@ export class PlataformaService {
           wa.find((w) => w.estado === 'pendiente')?._count._all ?? 0,
         whatsappFallidas:
           wa.find((w) => w.estado === 'fallida')?._count._all ?? 0,
+        plan: t.suscripcion
+          ? (() => {
+              const f = (t.suscripcion.plan.featuresJson ?? {}) as {
+                usuariosMax?: number;
+                ordenesMesMax?: number;
+                storageGb?: number;
+              };
+              return {
+                codigo: t.suscripcion.plan.codigo,
+                nombre: t.suscripcion.plan.nombre,
+                precioMensual: Number(t.suscripcion.plan.precioMensual),
+                estado: t.suscripcion.estado,
+                usuariosMax: f.usuariosMax ?? null,
+                ordenesMesMax: f.ordenesMesMax ?? null,
+                storageGb: f.storageGb ?? null,
+              };
+            })()
+          : null,
       };
     });
 
@@ -266,9 +325,8 @@ export class PlataformaService {
       const sig = new Date(hoy.getFullYear(), hoy.getMonth() - i + 1, 1);
       altasMensuales.push({
         mes: d.toISOString().slice(0, 7),
-        altas: tenants.filter(
-          (t) => t.createdAt >= d && t.createdAt < sig,
-        ).length,
+        altas: tenants.filter((t) => t.createdAt >= d && t.createdAt < sig)
+          .length,
       });
     }
 
@@ -304,8 +362,203 @@ export class PlataformaService {
         cotizaciones30dPrev: enVentana(dCot, corte60, corte30ms),
         cobros30d: filas.reduce((s, f) => s + f.cobros30d, 0),
         cobros30dPrev: enVentana(dCob, corte60, corte30ms),
+        mrr: filas.reduce(
+          (s, f) =>
+            s +
+            (f.plan && f.plan.estado === 'activa' ? f.plan.precioMensual : 0),
+          0,
+        ),
+        sinPlan: filas.filter((f) => f.plan === null).length,
       },
       tenants: filas,
+    };
+  }
+
+  // ── Escrituras (ADMIN, auditadas en PlataformaEvento) ────────────────
+  // Ver docs/control-plane-diseno.md — etapa B1: ciclo de vida y planes.
+
+  async planes(): Promise<PlanCatalogo[]> {
+    const planes = await this.prisma.plan.findMany({
+      where: { activo: true },
+      orderBy: { orden: 'asc' },
+    });
+    return planes.map((p) => ({
+      id: p.id,
+      codigo: p.codigo,
+      nombre: p.nombre,
+      precioMensual: Number(p.precioMensual),
+      features: (p.featuresJson ?? {}) as Record<string, unknown>,
+    }));
+  }
+
+  /** Asigna (o cambia) el plan del tenant. Upsert: una suscripción por tenant. */
+  async cambiarPlan(staffUserId: string, tenantId: string, planId: string) {
+    const [tenant, plan] = await Promise.all([
+      this.prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: {
+          id: true,
+          nombre: true,
+          suscripcion: { select: { plan: { select: { nombre: true } } } },
+        },
+      }),
+      this.prisma.plan.findUnique({ where: { id: planId } }),
+    ]);
+    if (!tenant) throw new NotFoundException('El tenant no existe.');
+    if (!plan || !plan.activo) {
+      throw new BadRequestException('El plan no existe o no está activo.');
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.suscripcion.upsert({
+        where: { tenantId },
+        create: { tenantId, planId, estado: 'activa' },
+        update: { planId, estado: 'activa', hasta: null },
+      }),
+      this.prisma.plataformaEvento.create({
+        data: {
+          staffUserId,
+          tipo: 'plan_cambiado',
+          tenantAfectadoId: tenantId,
+          descripcion: `Plan de ${tenant.nombre}: ${tenant.suscripcion?.plan.nombre ?? 'sin plan'} → ${plan.nombre}.`,
+          datosJson: { planId, planCodigo: plan.codigo },
+        },
+      }),
+    ]);
+  }
+
+  /**
+   * Suspende el tenant: el auth guard valida `tenant.activo` en cada request,
+   * así que el corte es inmediato (módulo el cache de sesión de 30 s). No
+   * borra nada; reactivar lo deja como estaba.
+   */
+  async suspenderTenant(staffUserId: string, tenantId: string, motivo: string) {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { id: true, nombre: true, activo: true },
+    });
+    if (!tenant) throw new NotFoundException('El tenant no existe.');
+    if (!tenant.activo) {
+      throw new BadRequestException('El tenant ya está suspendido.');
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.tenant.update({
+        where: { id: tenantId },
+        data: { activo: false },
+      }),
+      this.prisma.suscripcion.updateMany({
+        where: { tenantId },
+        data: { estado: 'suspendida' },
+      }),
+      this.prisma.plataformaEvento.create({
+        data: {
+          staffUserId,
+          tipo: 'tenant_suspendido',
+          tenantAfectadoId: tenantId,
+          descripcion: `Suspendió ${tenant.nombre}: ${motivo}`,
+        },
+      }),
+    ]);
+  }
+
+  async reactivarTenant(staffUserId: string, tenantId: string) {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { id: true, nombre: true, activo: true },
+    });
+    if (!tenant) throw new NotFoundException('El tenant no existe.');
+    if (tenant.activo) {
+      throw new BadRequestException('El tenant ya está activo.');
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.tenant.update({
+        where: { id: tenantId },
+        data: { activo: true },
+      }),
+      this.prisma.suscripcion.updateMany({
+        where: { tenantId },
+        data: { estado: 'activa' },
+      }),
+      this.prisma.plataformaEvento.create({
+        data: {
+          staffUserId,
+          tipo: 'tenant_reactivado',
+          tenantAfectadoId: tenantId,
+          descripcion: `Reactivó ${tenant.nombre}.`,
+        },
+      }),
+    ]);
+  }
+
+  /**
+   * Alta de un tenant: tenant + suscripción + invitación del primer admin,
+   * en una transacción. La invitación va SIN sender (el staff no tiene
+   * membership; por eso Invitation.invitedByMembershipId es nullable) y el
+   * link se devuelve para mandárselo al cliente.
+   */
+  async crearTenant(
+    staffUserId: string,
+    dto: { nombre: string; slug: string; planId: string; adminEmail: string },
+  ): Promise<{ tenantId: string; invitacionUrl: string }> {
+    const slug = dto.slug.trim().toLowerCase();
+    if (!/^[a-z0-9][a-z0-9-]{1,40}$/.test(slug)) {
+      throw new BadRequestException(
+        'El slug: minúsculas, números y guiones (2 a 41 caracteres).',
+      );
+    }
+    const existente = await this.prisma.tenant.findUnique({
+      where: { slug },
+      select: { id: true },
+    });
+    if (existente) throw new ConflictException('Ese slug ya está en uso.');
+    const plan = await this.prisma.plan.findUnique({
+      where: { id: dto.planId },
+    });
+    if (!plan || !plan.activo) {
+      throw new BadRequestException('El plan no existe o no está activo.');
+    }
+
+    const email = dto.adminEmail.trim().toLowerCase();
+    const rawToken = randomBytes(32).toString('hex');
+    const tokenHash = createHash('sha256').update(rawToken).digest('hex');
+
+    const tenant = await this.prisma.$transaction(async (tx) => {
+      const creado = await tx.tenant.create({
+        data: { nombre: dto.nombre.trim(), slug },
+        select: { id: true, nombre: true },
+      });
+      await tx.suscripcion.create({
+        data: { tenantId: creado.id, planId: plan.id, estado: 'activa' },
+      });
+      await tx.invitation.create({
+        data: {
+          tenantId: creado.id,
+          email,
+          rol: RolSistema.ADMINISTRADOR,
+          tokenHash,
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        },
+      });
+      await tx.plataformaEvento.create({
+        data: {
+          staffUserId,
+          tipo: 'tenant_creado',
+          tenantAfectadoId: creado.id,
+          descripcion: `Creó ${creado.nombre} (${slug}) en plan ${plan.nombre}; invitó a ${email}.`,
+          datosJson: { planCodigo: plan.codigo, adminEmail: email },
+        },
+      });
+      return creado;
+    });
+
+    const base =
+      process.env.FRONTEND_URL?.split(',')[0]?.trim() ??
+      'http://localhost:3000';
+    return {
+      tenantId: tenant.id,
+      invitacionUrl: `${base}/aceptar-invitacion?token=${rawToken}`,
     };
   }
 }

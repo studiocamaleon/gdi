@@ -108,6 +108,8 @@ export type AfipIntegracion = {
   representanteCuit: string | null;
   /** El tenant factura con el CUIT del certificado: no hay nada que delegar. */
   esCuitPropio: boolean;
+  /** false = el plan del tenant no incluye facturación electrónica. */
+  planPermiteAfip: boolean;
   emisor: {
     cuit: string | null;
     razonSocial: string | null;

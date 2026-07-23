@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { PlataformaController } from './plataforma.controller';
+import { PlataformaAdminGuard } from './plataforma-admin.guard';
 import { PlataformaGuard } from './plataforma.guard';
 import { PlataformaService } from './plataforma.service';
 
@@ -11,6 +12,6 @@ import { PlataformaService } from './plataforma.service';
 @Module({
   imports: [PrismaModule],
   controllers: [PlataformaController],
-  providers: [PlataformaService, PlataformaGuard],
+  providers: [PlataformaService, PlataformaGuard, PlataformaAdminGuard],
 })
 export class PlataformaModule {}
