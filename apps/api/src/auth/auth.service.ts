@@ -6,7 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService, JwtSignOptions } from '@nestjs/jwt';
-import { Membership, Prisma, RolSistema } from '@prisma/client';
+import { Membership, Prisma, RolPlataforma, RolSistema } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -87,6 +87,7 @@ export class AuthService {
       membership,
       this.prisma,
       user.nombreCompleto ?? null,
+      user.rolPlataforma ?? null,
     );
   }
 
@@ -207,6 +208,7 @@ export class AuthService {
         membership,
         tx,
         user.nombreCompleto ?? null,
+        user.rolPlataforma ?? null,
       );
     });
   }
@@ -254,6 +256,7 @@ export class AuthService {
       currentMembership,
       user.memberships,
       null,
+      user.rolPlataforma ?? null,
     );
   }
 
@@ -312,7 +315,7 @@ export class AuthService {
 
     const user = await this.prisma.user.findUnique({
       where: { id: auth.userId },
-      select: { nombreCompleto: true },
+      select: { nombreCompleto: true, rolPlataforma: true },
     });
 
     return this.buildAuthResponse(
@@ -323,6 +326,7 @@ export class AuthService {
       membership,
       allMemberships,
       token,
+      user?.rolPlataforma ?? null,
     );
   }
 
@@ -502,6 +506,7 @@ export class AuthService {
     membership: MembershipWithTenant,
     db: PrismaService | Prisma.TransactionClient = this.prisma,
     nombreCompleto: string | null = null,
+    rolPlataforma: RolPlataforma | null = null,
   ) {
     const session = await db.authSession.create({
       data: {
@@ -545,6 +550,7 @@ export class AuthService {
       membership,
       memberships,
       token,
+      rolPlataforma,
     );
   }
 
@@ -592,6 +598,7 @@ export class AuthService {
     currentMembership: MembershipWithTenant,
     memberships: MembershipWithTenant[],
     accessToken: string | null,
+    rolPlataforma: RolPlataforma | null = null,
   ) {
     return {
       accessToken,
@@ -600,6 +607,9 @@ export class AuthService {
         id: userId,
         email,
         nombreCompleto,
+        // Sólo para que la UI muestre (o no) el acceso a /plataforma. La
+        // autorización real la hace PlataformaGuard contra la base.
+        rolPlataforma,
         tenantActual: {
           id: currentMembership.tenant.id,
           nombre: currentMembership.tenant.nombre,

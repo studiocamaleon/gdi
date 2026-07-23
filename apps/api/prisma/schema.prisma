@@ -33,6 +33,17 @@ enum RolSistema {
   OPERADOR
 }
 
+/// Rol en el CONTROL PLANE: la consola de Grupo Idea sobre todos los tenants.
+/// Ortogonal a RolSistema, que vive en Membership y es POR empresa — acá no
+/// hay membership de por medio: el staff está arriba de las empresas.
+/// Ver docs/control-plane-diseno.md
+enum RolPlataforma {
+  /// Todo: ciclo de vida de tenants, planes, billing, impersonation.
+  ADMIN
+  /// Consola de sólo lectura (+ impersonation cuando exista).
+  SOPORTE
+}
+
 enum TipoComision {
   PORCENTAJE
   FIJO
@@ -682,10 +693,14 @@ model User {
   passwordHash            String?
   nombreCompleto          String?
   activo                  Boolean                 @default(true)
+  /// Rol en el control plane. Null = usuario común (la enorme mayoría).
+  /// Se otorga por script/consola y todo cambio queda en PlataformaEvento.
+  rolPlataforma           RolPlataforma?
   createdAt               DateTime                @default(now())
   updatedAt               DateTime                @updatedAt
   memberships             Membership[]
   authSessions            AuthSession[]
+  plataformaEventos       PlataformaEvento[]      @relation("EventosDeStaff")
   invitations             Invitation[]
   empleados               Empleado[]
   ordenTrabajoEventos     OrdenTrabajoEvento[]
@@ -3345,4 +3360,32 @@ model EnlacePublico {
   /// Un link vivo por entidad: re-emitir pisa el token anterior.
   @@unique([tipo, entidadId])
   @@index([tenantId, tipo])
+}
+
+/// Auditoría del control plane: todo lo que el staff ESCRIBE queda acá,
+/// append-only (la app nunca lo edita ni borra). Nivel plataforma: vive por
+/// encima de los tenants y está exento del tenant-guard.
+///
+/// `tenantAfectadoId` se llama así y NO `tenantId` a propósito: no es el
+/// scoping multi-tenant, es una referencia al tenant sobre el que se actuó —
+/// y llamarlo tenantId lo metería en la excepción peligrosa del spec de
+/// aislamiento (modelos con tenantId exentos del guard, confinados a auth).
+/// Sin FK: el evento tiene que sobrevivir a la baja del tenant.
+/// Ver docs/control-plane-diseno.md
+model PlataformaEvento {
+  id               String   @id @default(uuid()) @db.Uuid
+  staffUserId      String   @db.Uuid
+  /// 'rol_otorgado' | 'rol_revocado' | 'tenant_creado' | 'tenant_suspendido' | …
+  tipo             String
+  tenantAfectadoId String?  @db.Uuid
+  descripcion      String
+  datosJson        Json?
+  createdAt        DateTime @default(now())
+
+  /// Restrict: quien actuó como staff no se borra (se desactiva). Borrar al
+  /// actor dejaría auditoría sin autor.
+  staff User @relation("EventosDeStaff", fields: [staffUserId], references: [id], onDelete: Restrict)
+
+  @@index([staffUserId, createdAt])
+  @@index([tenantAfectadoId])
 }

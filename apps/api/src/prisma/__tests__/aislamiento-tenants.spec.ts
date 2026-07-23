@@ -48,6 +48,10 @@ const SIN_TENANT_ID_JUSTIFICADOS = new Set([
   'Tenant',
   // Infraestructura: coordina qué instancia corre cada job programado.
   'CronLock',
+  // Auditoría del control plane: lo que hace el staff de la plataforma vive
+  // por encima de los tenants (referencia al afectado en tenantAfectadoId,
+  // que se llama así justamente para no caer en la excepción de abajo).
+  'PlataformaEvento',
   'User',
   'AuthSession',
   // Catálogo compartido: mismos datos para todos los tenants.
@@ -79,6 +83,7 @@ const ARCHIVO_AUTORIZADO = 'auth/auth.service.ts';
 const MODELOS_EXENTOS = new Set([
   'Tenant',
   'CronLock',
+  'PlataformaEvento',
   'User',
   'AuthSession',
   'Membership',

@@ -18,6 +18,9 @@ export type CurrentUser = {
   id: string;
   email: string;
   nombreCompleto?: string | null;
+  /** Rol en el control plane (staff de Grafo). Sólo decide si la UI muestra
+   *  el acceso a /plataforma; la autorización real la hace el API. */
+  rolPlataforma?: "ADMIN" | "SOPORTE" | null;
   tenantActual: TenantSummary;
   tenants: TenantSummary[];
 };

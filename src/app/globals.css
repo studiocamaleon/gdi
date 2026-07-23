@@ -33501,3 +33501,50 @@ body:has(.t-app) {
 .afip-toggle:disabled { opacity: .55; cursor: default; }
 
 
+
+/* ═══════════════════════════════════════════════════════════════════════
+   CONTROL PLANE · consola de la Plataforma (/plataforma)
+   Chrome propio y mínimo: es la superficie del staff de Grafo, no una vista
+   del dashboard de tenant — que se note al entrar. Prefijo cpl- en TODAS
+   las clases (hoja global). Ver docs/control-plane-diseno.md
+   ═══════════════════════════════════════════════════════════════════════ */
+.cpl-page { min-height: 100vh; background: #14141a; color: #e8e8ec; padding: 34px clamp(18px, 4vw, 48px) 60px; font-size: 14px; }
+.cpl-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; margin-bottom: 22px; }
+.cpl-eyebrow { font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #8a8a94; font-weight: 600; }
+.cpl-page h1 { font-size: 24px; font-weight: 650; letter-spacing: -.02em; margin: 4px 0 2px; color: #fff; }
+.cpl-sub { font-size: 12.5px; color: #9a9aa4; }
+.cpl-volver { font-size: 12.5px; color: #b8b8c2; text-decoration: none; border: 1px solid #34343c; border-radius: 9px; padding: 7px 12px; white-space: nowrap; }
+.cpl-volver:hover { color: #fff; border-color: #4a4a54; }
+
+.cpl-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 22px; }
+.cpl-card { background: #1d1d24; border: 1px solid #2b2b33; border-radius: 12px; padding: 13px 15px; }
+.cpl-card .k { font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase; color: #8a8a94; font-weight: 600; }
+.cpl-card .v { font-family: var(--font-geist-mono, ui-monospace, Menlo, monospace); font-size: 21px; font-weight: 700; margin-top: 6px; color: #fff; }
+.cpl-card.alerta { border-color: #5c3a22; }
+.cpl-card.alerta .v { color: #f0a36b; }
+
+.cpl-tabla-wrap { overflow-x: auto; border: 1px solid #2b2b33; border-radius: 12px; background: #1a1a21; }
+.cpl-tabla { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 880px; }
+.cpl-tabla th { text-align: left; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: #8a8a94; font-weight: 600; padding: 11px 14px; border-bottom: 1px solid #2b2b33; white-space: nowrap; }
+.cpl-tabla td { padding: 11px 14px; border-bottom: 1px solid #232329; vertical-align: middle; }
+.cpl-tabla tbody tr:last-child td { border-bottom: none; }
+.cpl-tabla tbody tr:hover { background: #1f1f27; }
+.cpl-inactivo td { opacity: .45; }
+.cpl-tenant { display: flex; align-items: center; gap: 9px; }
+.cpl-tenant .n { font-weight: 600; color: #fff; }
+.cpl-tenant .s { font-size: 11px; color: #8a8a94; font-family: var(--font-geist-mono, ui-monospace, Menlo, monospace); }
+.cpl-dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; }
+.cpl-dot.ok { background: #28a06a; }
+.cpl-dot.off { background: #55555f; }
+.cpl-num { font-family: var(--font-geist-mono, ui-monospace, Menlo, monospace); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cpl-muted { color: #71717b; }
+.cpl-alerta { color: #f0a36b; font-weight: 600; }
+.cpl-ints { display: inline-flex; gap: 5px; flex-wrap: wrap; }
+.cpl-int { font-size: 10px; font-weight: 700; letter-spacing: .04em; padding: 3px 7px; border-radius: 6px; border: 1px solid #34343c; color: #8a8a94; }
+.cpl-int.conectada { color: #4fc48f; border-color: #234534; }
+.cpl-int.error { color: #f0a36b; border-color: #5c3a22; }
+
+.cpl-noacceso { max-width: 440px; margin: 12vh auto 0; text-align: center; }
+.cpl-noacceso h1 { font-size: 20px; margin-bottom: 10px; }
+.cpl-noacceso p { font-size: 13.5px; color: #9a9aa4; line-height: 1.55; margin-bottom: 18px; }
+

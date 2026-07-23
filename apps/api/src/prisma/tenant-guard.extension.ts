@@ -9,6 +9,8 @@ import { getCurrentTenantId } from '../common/tenant-context';
 const MODELOS_EXENTOS = new Set<string>([
   'Tenant',
   'CronLock',
+  // Auditoría del control plane: vive por encima de los tenants.
+  'PlataformaEvento',
   'User',
   'AuthSession',
   'Membership',
