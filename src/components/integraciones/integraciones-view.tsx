@@ -16,7 +16,12 @@ import {
   type PlantillaGestionada,
   type PlantillaPropia,
   type ProveedorIntegracion,
+  DIAS_SEMANA,
+  type ConfigNotificaciones,
+  type EstadoNotificaciones,
+  type LineaLog,
 } from "@/lib/integraciones";
+import { Switch } from "@/components/ui/switch";
 import {
   conectarWati,
   desconectarIntegracion,
@@ -24,6 +29,10 @@ import {
   getPlantillasWati,
   probarIntegracion,
   someterPlantillaWati,
+  cambiarEventoNotificacion,
+  getLogNotificaciones,
+  getNotificaciones,
+  guardarConfigNotificaciones,
   type EstadoIntegraciones,
 } from "@/lib/integraciones-api";
 
@@ -294,9 +303,9 @@ function WatiDetalle({
   onCambio: () => Promise<void>;
 }) {
   const [actual, setActual] = React.useState(integracion);
-  const [tab, setTab] = React.useState<"credenciales" | "plantillas">(
-    "credenciales",
-  );
+  const [tab, setTab] = React.useState<
+    "credenciales" | "plantillas" | "notificaciones"
+  >("credenciales");
   const conectada = actual?.estado === "CONECTADA";
 
   return (
@@ -357,6 +366,19 @@ function WatiDetalle({
         >
           Plantillas
         </button>
+        <button
+          className={tab === "notificaciones" ? "on" : ""}
+          onClick={() => setTab("notificaciones")}
+          disabled={!conectada}
+          title={
+            conectada
+              ? undefined
+              : "Conectá la integración para configurar los avisos"
+          }
+          style={conectada ? undefined : { opacity: 0.45, cursor: "not-allowed" }}
+        >
+          Notificaciones
+        </button>
       </nav>
 
       {tab === "credenciales" ? (
@@ -369,8 +391,10 @@ function WatiDetalle({
             await onCambio();
           }}
         />
-      ) : (
+      ) : tab === "plantillas" ? (
         <PlantillasTab />
+      ) : (
+        <NotificacionesTab />
       )}
     </div>
   );
@@ -977,4 +1001,271 @@ function CredencialesTab({
       />
     </div>
   );
+}
+
+/* ═══════════════ Notificaciones ═══════════════ */
+
+/**
+ * El tablero de control de los avisos: qué se manda, cuándo, y qué pasó.
+ *
+ * Tres bloques en un solo tab a propósito. Son preguntas que se hacen juntas
+ * —"¿está prendido?", "¿a qué hora sale?", "¿por qué a éste no le llegó?"— y
+ * repartirlas en pantallas separadas obliga a rebotar entre ellas.
+ */
+function NotificacionesTab() {
+  const [datos, setDatos] = React.useState<EstadoNotificaciones | null>(null);
+  const [log, setLog] = React.useState<LineaLog[]>([]);
+  const [error, setError] = React.useState<string | null>(null);
+  const [cargando, setCargando] = React.useState(true);
+  const [guardando, setGuardando] = React.useState(false);
+
+  const cargar = React.useCallback(async () => {
+    setCargando(true);
+    setError(null);
+    try {
+      const [estado, lineas] = await Promise.all([
+        getNotificaciones(),
+        getLogNotificaciones().catch(() => [] as LineaLog[]),
+      ]);
+      setDatos(estado);
+      setLog(lineas);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo cargar.");
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    void cargar();
+  }, [cargar]);
+
+  const guardar = async (cambios: Partial<ConfigNotificaciones>) => {
+    if (!datos) return;
+    // Optimista: el switch tiene que responder al toque. Si falla se revierte
+    // recargando, que además trae lo que haya cambiado por otro lado.
+    setDatos({ ...datos, configuracion: { ...datos.configuracion, ...cambios } });
+    setGuardando(true);
+    try {
+      await guardarConfigNotificaciones(cambios);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo guardar.");
+      await cargar();
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const cambiarEvento = async (evento: string, activo: boolean) => {
+    if (!datos) return;
+    setDatos({
+      ...datos,
+      eventos: datos.eventos.map((e) =>
+        e.evento === evento ? { ...e, activo, porDefecto: false } : e,
+      ),
+    });
+    try {
+      await cambiarEventoNotificacion(evento, activo);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo guardar.");
+      await cargar();
+    }
+  };
+
+  if (cargando) {
+    return <p style={{ color: "var(--muted-text)", fontSize: 13 }}>Cargando…</p>;
+  }
+  if (error || !datos) {
+    return (
+      <div className="int-section">
+        <p style={{ color: "var(--danger, #b91c1c)", fontSize: 13 }}>{error}</p>
+        <button className="btn ghost" onClick={() => void cargar()}>
+          Reintentar
+        </button>
+      </div>
+    );
+  }
+
+  const { configuracion: cfg, consentimiento: cons } = datos;
+  const dias = new Set(
+    cfg.diasAtencion.split(",").filter(Boolean).map(Number),
+  );
+
+  const alternarDia = (iso: number) => {
+    const nuevo = new Set(dias);
+    if (nuevo.has(iso)) nuevo.delete(iso);
+    else nuevo.add(iso);
+    void guardar({
+      diasAtencion: [...nuevo].sort((a, b) => a - b).join(","),
+    });
+  };
+
+  return (
+    <div className="int-content">
+      <div className={`int-nt-panel${cfg.pausado ? " alerta" : ""}`}>
+        <div className="int-nt-fila">
+          <div>
+            <div className="int-nt-label">
+              {cfg.pausado ? "Avisos pausados" : "Avisos activos"}
+            </div>
+            <div className="int-nt-hint">
+              {cfg.pausado
+                ? "No sale ningún mensaje. Lo que se genere mientras tanto queda en espera, no se pierde."
+                : "El freno de mano corta todos los envíos de una sin perder la configuración ni desconectar Wati."}
+            </div>
+          </div>
+          <Switch
+            checked={!cfg.pausado}
+            disabled={guardando}
+            onCheckedChange={(v) => void guardar({ pausado: !v })}
+          />
+        </div>
+
+        <div className="int-nt-fila">
+          <div>
+            <div className="int-nt-label">Horario de envío</div>
+            <div className="int-nt-hint">
+              Vale para todos los avisos. Lo que se genere fuera de esta franja
+              espera al día siguiente en vez de despertar a nadie.
+            </div>
+          </div>
+          <div className="int-nt-horas">
+            <input
+              className="int-nt-hora"
+              type="time"
+              value={cfg.horaDesde}
+              onChange={(e) => void guardar({ horaDesde: e.target.value })}
+            />
+            <span style={{ color: "var(--muted-text)", fontSize: 12 }}>a</span>
+            <input
+              className="int-nt-hora"
+              type="time"
+              value={cfg.horaHasta}
+              onChange={(e) => void guardar({ horaHasta: e.target.value })}
+            />
+          </div>
+        </div>
+
+        <div className="int-nt-fila">
+          <div>
+            <div className="int-nt-label">Días con el local abierto</div>
+            <div className="int-nt-hint">
+              Sólo lo usan los avisos de <strong>orden lista</strong>, que
+              invitan al cliente a pasar a retirar. Si producís un sábado con el
+              local cerrado, el aviso espera al lunes. Un pago o una factura
+              salen cualquier día.
+            </div>
+          </div>
+          <div className="int-nt-dias">
+            {DIAS_SEMANA.map((d) => (
+              <button
+                key={d.iso}
+                className={`int-nt-dia${dias.has(d.iso) ? " on" : ""}`}
+                onClick={() => alternarDia(d.iso)}
+                disabled={guardando}
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="int-section-intro">
+        <h3>Qué se avisa</h3>
+        <p>
+          Los textos los escribe y mantiene Grafo. Acá elegís cuáles de tus
+          clientes reciben.
+        </p>
+      </div>
+      <div className="int-tpl-list" style={{ marginBottom: 26 }}>
+        {datos.eventos.map((e) => (
+          <div className="int-nt-evento" key={e.evento}>
+            <div className="int-nt-evento-main">
+              <div className="int-nt-evento-nm">{e.titulo}</div>
+              <div className="int-nt-evento-cuando">{e.cuando}</div>
+            </div>
+            <div className="int-nt-evento-side">
+              {e.categoria === "MARKETING" && (
+                <span
+                  className="int-pill"
+                  title="Promocional: sólo lo reciben los clientes que lo aceptaron explícitamente."
+                >
+                  PROMO
+                </span>
+              )}
+              <Switch
+                checked={e.activo}
+                disabled={cfg.pausado}
+                onCheckedChange={(v) => void cambiarEvento(e.evento, v)}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="int-section-intro">
+        <h3>Consentimiento de tus clientes</h3>
+        <p>
+          Los avisos de su propia operación —orden, pago, factura— llegan salvo
+          que el cliente haya pedido lo contrario. Los promocionales necesitan
+          que lo haya aceptado.
+        </p>
+      </div>
+      <div className="int-tpl-stats" style={{ marginBottom: 26 }}>
+        <Stat v={cons.total} k="Clientes" />
+        <Stat v={cons.sinPreguntar} k="Sin preguntar" />
+        <Stat v={cons.aceptaron} k="Aceptaron promociones" />
+        <Stat
+          v={cons.rechazaron}
+          k="Pidieron no recibir"
+          alerta={cons.rechazaron > 0}
+        />
+      </div>
+
+      <div className="int-section-intro">
+        <h3>Últimos mensajes</h3>
+        <p>
+          Incluye los que NO se mandaron y por qué. Es donde se responde
+          &ldquo;¿por qué a este cliente no le llegó nada?&rdquo;.
+        </p>
+      </div>
+      <div className="int-tpl-list">
+        {log.length === 0 ? (
+          <div className="int-nt-vacio">Todavía no se generó ningún aviso.</div>
+        ) : (
+          log.map((l) => (
+            <div className="int-nt-log-fila" key={l.id}>
+              <span className="int-nt-log-fecha">
+                {new Date(l.createdAt).toLocaleString("es-AR", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </span>
+              <div>
+                <div>
+                  {l.titulo}
+                  {l.cliente ? (
+                    <span style={{ color: "var(--muted-text)" }}> · {l.cliente}</span>
+                  ) : null}
+                </div>
+                {l.motivo && <div className="int-nt-log-motivo">{l.motivo}</div>}
+              </div>
+              <span className={`int-pill ${pillLog(l.estado)}`}>{l.estado}</span>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Enviada verde, fallida roja, el resto neutro. */
+function pillLog(estado: string): string {
+  if (estado === "enviada") return "int-pill-ok";
+  if (estado === "fallida") return "int-pill-bad";
+  if (estado === "pendiente") return "int-pill-warn";
+  return "";
 }

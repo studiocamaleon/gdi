@@ -250,11 +250,69 @@ export class NotificacionesService {
     pausado?: boolean;
     horaDesde?: string;
     horaHasta?: string;
+    diasAtencion?: string;
   }) {
     const config = await this.configuracion();
     return this.prisma.configuracionNotificaciones.update({
       where: { id: config.id },
       data: datos,
     });
+  }
+
+  /**
+   * Las últimas notificaciones, con el nombre del cliente resuelto.
+   *
+   * Es el "log de mensajes" del diseño y sale gratis de la misma tabla que
+   * hace de cola. Incluye lo descartado con su motivo: la pregunta que se le
+   * hace a esta pantalla es "¿por qué a este cliente no le llegó nada?", y sin
+   * los descartes no tiene respuesta.
+   */
+  async log(limite = 100) {
+    const filas = await this.prisma.notificacionWhatsapp.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(limite, 500),
+    });
+
+    const ids = [...new Set(filas.map((f) => f.clienteId).filter(Boolean))];
+    const clientes = ids.length
+      ? await this.prisma.cliente.findMany({
+          where: { id: { in: ids as string[] } },
+          select: { id: true, razonSocial: true },
+        })
+      : [];
+    const nombre = new Map(clientes.map((c) => [c.id, c.razonSocial]));
+
+    return filas.map((f) => ({
+      id: f.id,
+      evento: f.evento,
+      titulo: POR_EVENTO.get(f.evento as never)?.titulo ?? f.evento,
+      estado: f.estado,
+      cliente: f.clienteId ? (nombre.get(f.clienteId) ?? null) : null,
+      telefono: f.telefono,
+      motivo: f.motivo,
+      intentos: f.intentos,
+      programadaPara: f.programadaPara,
+      enviadaEl: f.enviadaEl,
+      createdAt: f.createdAt,
+    }));
+  }
+
+  /**
+   * Cuántos clientes hay en cada estado de consentimiento. La UI lo necesita
+   * para poder decir "3 clientes pidieron no recibir" sin que haya que ir a
+   * buscarlos de a uno.
+   */
+  async resumenConsentimiento() {
+    const [total, aceptaron, rechazaron] = await Promise.all([
+      this.prisma.cliente.count(),
+      this.prisma.cliente.count({ where: { aceptaWhatsapp: true } }),
+      this.prisma.cliente.count({ where: { aceptaWhatsapp: false } }),
+    ]);
+    return {
+      total,
+      aceptaron,
+      rechazaron,
+      sinPreguntar: total - aceptaron - rechazaron,
+    };
   }
 }

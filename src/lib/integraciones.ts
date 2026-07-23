@@ -127,3 +127,66 @@ export type EstadoPlantillas = {
     recategorizadas: number;
   };
 };
+
+/* ─────────────── Notificaciones por WhatsApp ─────────────── */
+
+export type ConfigNotificaciones = {
+  /** Freno de mano: corta todos los envíos sin perder la configuración. */
+  pausado: boolean;
+  /** Cortesía, para todos los mensajes. */
+  horaDesde: string;
+  horaHasta: string;
+  /**
+   * Días con el local abierto al público, ISO (1 = lunes … 7 = domingo).
+   * Sólo lo respetan los avisos que invitan al cliente a venir a retirar.
+   */
+  diasAtencion: string;
+};
+
+export type EventoNotificacion = {
+  evento: string;
+  titulo: string;
+  cuando: string;
+  categoria: string;
+  codigo: string;
+  activo: boolean;
+  /** true = el tenant nunca lo tocó y está en el default de Grafo. */
+  porDefecto: boolean;
+};
+
+export type ResumenConsentimiento = {
+  total: number;
+  aceptaron: number;
+  rechazaron: number;
+  sinPreguntar: number;
+};
+
+export type EstadoNotificaciones = {
+  configuracion: ConfigNotificaciones;
+  eventos: EventoNotificacion[];
+  consentimiento: ResumenConsentimiento;
+};
+
+export type LineaLog = {
+  id: string;
+  evento: string;
+  titulo: string;
+  estado: string;
+  cliente: string | null;
+  telefono: string;
+  motivo: string | null;
+  intentos: number;
+  programadaPara: string | null;
+  enviadaEl: string | null;
+  createdAt: string;
+};
+
+export const DIAS_SEMANA = [
+  { iso: 1, label: "Lun" },
+  { iso: 2, label: "Mar" },
+  { iso: 3, label: "Mié" },
+  { iso: 4, label: "Jue" },
+  { iso: 5, label: "Vie" },
+  { iso: 6, label: "Sáb" },
+  { iso: 7, label: "Dom" },
+] as const;

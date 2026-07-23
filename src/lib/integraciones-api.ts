@@ -1,7 +1,10 @@
 import { apiRequest } from "@/lib/api";
 import type {
+  ConfigNotificaciones,
+  EstadoNotificaciones,
   EstadoPlantillas,
   Integracion,
+  LineaLog,
   ProveedorIntegracion,
 } from "@/lib/integraciones";
 
@@ -66,5 +69,32 @@ export async function someterPlantillaWati(
 ): Promise<ResultadoSometer> {
   return apiRequest(`/integraciones/wati/plantillas/${codigo}/someter`, {
     method: "POST",
+  });
+}
+
+export async function getNotificaciones(): Promise<EstadoNotificaciones> {
+  return apiRequest<EstadoNotificaciones>("/integraciones/notificaciones");
+}
+
+export async function getLogNotificaciones(): Promise<LineaLog[]> {
+  return apiRequest<LineaLog[]>("/integraciones/notificaciones/log");
+}
+
+export async function guardarConfigNotificaciones(
+  datos: Partial<ConfigNotificaciones>,
+): Promise<ConfigNotificaciones> {
+  return apiRequest("/integraciones/notificaciones/configuracion", {
+    method: "PUT",
+    body: JSON.stringify(datos),
+  });
+}
+
+export async function cambiarEventoNotificacion(
+  evento: string,
+  activo: boolean,
+): Promise<void> {
+  await apiRequest(`/integraciones/notificaciones/eventos/${evento}`, {
+    method: "PUT",
+    body: JSON.stringify({ activo }),
   });
 }

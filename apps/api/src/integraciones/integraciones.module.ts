@@ -5,6 +5,7 @@ import { IntegracionesController } from './integraciones.controller';
 import { IntegracionesService } from './integraciones.service';
 import { WatiClient } from './wati/wati.client';
 import { DespachoService } from './notificaciones/despacho.service';
+import { NotificacionesController } from './notificaciones/notificaciones.controller';
 import { NotificacionesScheduler } from './notificaciones/notificaciones.scheduler';
 import { NotificacionesService } from './notificaciones/notificaciones.service';
 import { WatiScheduler } from './wati/wati.scheduler';
@@ -21,7 +22,7 @@ import { WatiScheduler } from './wati/wati.scheduler';
  */
 @Global()
 @Module({
-  controllers: [IntegracionesController],
+  controllers: [IntegracionesController, NotificacionesController],
   providers: [
     SecretosService,
     IntegracionesService,
