@@ -22,7 +22,13 @@ import { WatiScheduler } from './wati/wati.scheduler';
  */
 @Global()
 @Module({
-  controllers: [IntegracionesController, NotificacionesController],
+  // El ORDEN importa y no es cosmético: IntegracionesController tiene
+  // `@Get(':proveedor')`, que matchea cualquier segmento — incluido
+  // `/integraciones/notificaciones`. Registrado primero, se comía la ruta y el
+  // ParseEnumPipe contestaba "Validation failed (enum string is expected)".
+  // Nest resuelve por orden de registro, así que las rutas concretas van antes
+  // que las que tienen comodín.
+  controllers: [NotificacionesController, IntegracionesController],
   providers: [
     SecretosService,
     IntegracionesService,
