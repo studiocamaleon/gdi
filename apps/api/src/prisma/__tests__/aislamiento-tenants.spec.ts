@@ -56,6 +56,7 @@ const SIN_TENANT_ID_JUSTIFICADOS = new Set([
   'AuthSession',
   // Catálogo compartido: mismos datos para todos los tenants.
   'MaterialPreset',
+  'Plan',
   'MaterialPresetVariante',
   'ProductoCategoriaComercial',
   'ProductoSubcategoriaComercial',
@@ -76,14 +77,25 @@ const SIN_TENANT_ID_JUSTIFICADOS = new Set([
  */
 const EXENTOS_CON_TENANT_ID = new Set(['Membership', 'Invitation']);
 
-/** Único archivo autorizado a consultar los modelos de arriba. */
-const ARCHIVO_AUTORIZADO = 'auth/auth.service.ts';
+/**
+ * Archivos autorizados a tocar los modelos de arriba.
+ *  - auth: el login pregunta "¿de qué tenants es este usuario?" antes de
+ *    tener contexto.
+ *  - plataforma: el control plane CREA invitaciones al dar de alta un tenant
+ *    (con tenantId explícito, staff-only y auditado). Nunca las lista sin
+ *    filtro — si algún día lo necesita, ese código va a auth.
+ */
+const ARCHIVOS_AUTORIZADOS = new Set([
+  'auth/auth.service.ts',
+  'plataforma/plataforma.service.ts',
+]);
 
 /** Copiado del guard: los que quedan fuera de la inyección automática. */
 const MODELOS_EXENTOS = new Set([
   'Tenant',
   'CronLock',
   'PlataformaEvento',
+  'Plan',
   'User',
   'AuthSession',
   'Membership',
@@ -145,7 +157,7 @@ describe('Aislamiento entre tenants — cobertura del datamodel', () => {
         }
         if (!entrada.name.endsWith('.ts')) continue;
         const relativo = relative(raiz, ruta);
-        if (relativo === ARCHIVO_AUTORIZADO) continue;
+        if (ARCHIVOS_AUTORIZADOS.has(relativo)) continue;
 
         const codigo = readFileSync(ruta, 'utf8');
         for (const modelo of EXENTOS_CON_TENANT_ID) {

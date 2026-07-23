@@ -28,6 +28,24 @@ export type TenantConsola = {
   }>;
   whatsappPendientes: number;
   whatsappFallidas: number;
+  /** Null = tenant legacy sin plan (grandfathered). */
+  plan: {
+    codigo: string;
+    nombre: string;
+    precioMensual: number;
+    estado: string;
+    usuariosMax: number | null;
+    ordenesMesMax: number | null;
+    storageGb: number | null;
+  } | null;
+};
+
+export type PlanCatalogo = {
+  id: string;
+  codigo: string;
+  nombre: string;
+  precioMensual: number;
+  features: Record<string, unknown>;
 };
 
 export type EventoPlataforma = {
@@ -52,6 +70,8 @@ export type ConsolaPlataforma = {
     ots30d: number;
     storageBytes: number;
     sinActividad14d: number;
+    mrr: number;
+    sinPlan: number;
     ots30dPrev: number;
     cotizaciones30d: number;
     cotizaciones30dPrev: number;
@@ -72,6 +92,50 @@ export type ConsolaPlataforma = {
 
 export async function getConsolaPlataforma(): Promise<ConsolaPlataforma> {
   return apiRequest("/plataforma/consola", { cache: "no-store" });
+}
+
+export async function getPlanesPlataforma(): Promise<PlanCatalogo[]> {
+  return apiRequest("/plataforma/planes");
+}
+
+export async function cambiarPlanTenant(
+  tenantId: string,
+  planId: string,
+): Promise<ConsolaPlataforma> {
+  return apiRequest(`/plataforma/tenants/${tenantId}/plan`, {
+    method: "PUT",
+    body: JSON.stringify({ planId }),
+  });
+}
+
+export async function suspenderTenant(
+  tenantId: string,
+  motivo: string,
+): Promise<ConsolaPlataforma> {
+  return apiRequest(`/plataforma/tenants/${tenantId}/suspender`, {
+    method: "POST",
+    body: JSON.stringify({ motivo }),
+  });
+}
+
+export async function reactivarTenant(
+  tenantId: string,
+): Promise<ConsolaPlataforma> {
+  return apiRequest(`/plataforma/tenants/${tenantId}/reactivar`, {
+    method: "POST",
+  });
+}
+
+export async function crearTenantPlataforma(dto: {
+  nombre: string;
+  slug: string;
+  planId: string;
+  adminEmail: string;
+}): Promise<{ tenantId: string; invitacionUrl: string }> {
+  return apiRequest("/plataforma/tenants", {
+    method: "POST",
+    body: JSON.stringify(dto),
+  });
 }
 
 export function formatBytesPlataforma(bytes: number): string {

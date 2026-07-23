@@ -255,6 +255,18 @@ export function AfipDetalle({
           </div>
         </div>
 
+        {!datos.planPermiteAfip ? (
+          // El gate del plan (etapa B): sin el feature, el interruptor ni
+          // aparece — y el backend rechaza activar aunque la UI se salte.
+          <div className="int-info-box" style={{ marginTop: 22 }}>
+            <span className="afip-i">i</span>
+            <div>
+              <strong>Tu plan no incluye facturación electrónica.</strong>{" "}
+              Hablá con Grafo para pasar a un plan superior y activar la
+              emisión de comprobantes desde el sistema.
+            </div>
+          </div>
+        ) : (
         <div className="afip-activar">
           <div className="afip-activar-txt">
             <div className="t">Facturación electrónica activa</div>
@@ -276,6 +288,7 @@ export function AfipDetalle({
             <span className="knob" />
           </button>
         </div>
+        )}
 
         <div className="int-info-box" style={{ marginTop: 12 }}>
           <span className="afip-i">i</span>

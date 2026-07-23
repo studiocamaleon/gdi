@@ -16,6 +16,8 @@ const MODELOS_EXENTOS = new Set<string>([
   'Membership',
   'Invitation',
   'MaterialPreset',
+  // Catálogo del SaaS: mismos planes para todos los tenants.
+  'Plan',
   'MaterialPresetVariante',
   'ProductoCategoriaComercial',
   'ProductoSubcategoriaComercial',

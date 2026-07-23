@@ -3,6 +3,7 @@ import { AfipIntegracionService } from '../afip-integracion.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { ConfiguracionFiscalService } from '../configuracion-fiscal.service';
 import type { AfipSdkProvider } from '../invoicing/afip-sdk.provider';
+import type { SuscripcionesService } from '../../suscripciones/suscripciones.service';
 import type { CurrentAuth } from '../../auth/auth.types';
 
 /**
@@ -28,6 +29,8 @@ function armar(opts: {
   disponible?: boolean;
   verificar?: { ok: boolean; numero: number | null; motivo?: string };
   filaEstado?: EstadoIntegracion | null;
+  /** ¿El plan incluye AFIP? Default true (tenant legacy / plan con AFIP). */
+  planAfip?: boolean;
 }) {
   type UpsertArg = { update?: { estado?: EstadoIntegracion } };
   const upsert = jest.fn<Promise<unknown>, [UpsertArg]>().mockResolvedValue({});
@@ -71,7 +74,16 @@ function armar(opts: {
     verificarDelegacion,
   } as unknown as AfipSdkProvider;
 
-  const svc = new AfipIntegracionService(prisma, configFiscal, afip);
+  const suscripciones = {
+    feature: jest.fn().mockResolvedValue(opts.planAfip ?? true),
+  } as unknown as SuscripcionesService;
+
+  const svc = new AfipIntegracionService(
+    prisma,
+    configFiscal,
+    afip,
+    suscripciones,
+  );
   return { svc, upsert, update, verificarDelegacion };
 }
 
@@ -178,6 +190,45 @@ describe('AfipIntegracionService.facturacionHabilitada', () => {
 
     const sinFila = armar({ filaEstado: null });
     await expect(sinFila.svc.facturacionHabilitada()).resolves.toBe(false);
+  });
+
+  it('un downgrade corta la facturación aunque la delegación siga verificada', async () => {
+    const { svc } = armar({
+      filaEstado: EstadoIntegracion.CONECTADA,
+      planAfip: false,
+    });
+    await expect(svc.facturacionHabilitada()).resolves.toBe(false);
+  });
+});
+
+describe('AfipIntegracionService — gate por plan (etapa B)', () => {
+  it('activar rechaza si el plan no incluye AFIP, sin llamar a ARCA', async () => {
+    const { svc, verificarDelegacion, upsert } = armar({
+      cuit: '20111111112',
+      puntosVenta: PV_OK,
+      planAfip: false,
+    });
+    await svc.activar(AUTH);
+    // No se verificó delegación: el motivo es comercial, no técnico.
+    expect(verificarDelegacion).not.toHaveBeenCalled();
+    const estados = upsert.mock.calls
+      .map((c) => c[0].update?.estado)
+      .filter(Boolean);
+    expect(estados).not.toContain(EstadoIntegracion.CONECTADA);
+  });
+
+  it('con el plan que lo incluye, activar sigue el camino normal', async () => {
+    const { svc, upsert } = armar({
+      cuit: '20111111112',
+      puntosVenta: PV_OK,
+      verificar: { ok: true, numero: 0 },
+      planAfip: true,
+    });
+    await svc.activar(AUTH);
+    const estados = upsert.mock.calls
+      .map((c) => c[0].update?.estado)
+      .filter(Boolean);
+    expect(estados).toContain(EstadoIntegracion.CONECTADA);
   });
 });
 

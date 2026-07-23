@@ -110,6 +110,40 @@ export const BIco = {
 
 export const fmtN = (n: number) => n.toLocaleString("es-AR");
 
+/** "$5,04M" / "$189k" — el formato compacto de plata del diseño. */
+export function mk(n: number): string {
+  const a = Math.abs(n);
+  if (a >= 1e6)
+    return (
+      "$" + (n / 1e6).toFixed(a >= 1e7 ? 1 : 2).replace(/[.,]?0+$/, "") + "M"
+    );
+  if (a >= 1e3) return "$" + Math.round(n / 1e3) + "k";
+  return "$" + fmtN(n);
+}
+
+export const PLAN_COLORS: Record<string, string> = {
+  trial: "#63636d",
+  taller: "#37d39b",
+  estudio: "#5aa2f5",
+  diamante: "#8b7cff",
+};
+
+export function PlanBadge({
+  codigo,
+  nombre,
+}: {
+  codigo: string;
+  nombre: string;
+}) {
+  const c = PLAN_COLORS[codigo] ?? "#63636d";
+  return (
+    <span className="cpl-plan" style={{ color: c, background: c + "1f" }}>
+      <span className="g" style={{ background: c }} />
+      {nombre}
+    </span>
+  );
+}
+
 export function fmtBytes(bytes: number): string {
   if (bytes <= 0) return "0 MB";
   const gb = bytes / 1024 ** 3;
@@ -212,6 +246,14 @@ export function EstadoPill({ t }: { t: TenantConsola }) {
       <span className="cpl-pill dng">
         <span className="d" />
         Suspendido
+      </span>
+    );
+  }
+  if (t.plan?.codigo === "trial") {
+    return (
+      <span className="cpl-pill trial">
+        <span className="d" />
+        Trial
       </span>
     );
   }
