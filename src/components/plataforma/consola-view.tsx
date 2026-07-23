@@ -26,9 +26,12 @@ import {
 import {
   cambiarPlanTenant,
   crearTenantPlataforma,
+  generarBillingPlataforma,
+  getBillingPlataforma,
   getPlanesPlataforma,
   reactivarTenant,
   suspenderTenant,
+  type BillingPlataforma,
   type ConsolaPlataforma,
   type PlanCatalogo,
   type TenantConsola,
@@ -135,10 +138,8 @@ export function ConsolaPlataformaView({
                     {it.k === "tenants" ? (
                       <span className="cnt">{datos.tenants.length}</span>
                     ) : null}
-                    {it.k === "billing" || it.k === "impersonacion" ? (
-                      <span className="soon">
-                        {it.k === "billing" ? "etapa B" : "etapa C"}
-                      </span>
+                    {it.k === "impersonacion" ? (
+                      <span className="soon">etapa C</span>
                     ) : null}
                   </button>
                 );
@@ -190,7 +191,7 @@ export function ConsolaPlataformaView({
             onConsola={setDatos}
           />
         ) : null}
-        {vista === "billing" ? <BillingBloqueado /> : null}
+        {vista === "billing" ? <Billing esAdmin={esAdmin} /> : null}
         {vista === "impersonacion" ? <Impersonacion datos={datos} /> : null}
       </main>
     </div>
@@ -1254,24 +1255,213 @@ function CrearTenantModal({
   );
 }
 
-// ── Facturación (etapa B) ──────────────────────────────────────────────
+// ── Facturación de suscripciones (B2) ─────────────────────────────────
 
-function BillingBloqueado() {
+function Billing({ esAdmin }: { esAdmin: boolean }) {
+  const [datos, setDatos] = React.useState<BillingPlataforma | null>(null);
+  const [pvId, setPvId] = React.useState("");
+  const [generando, setGenerando] = React.useState(false);
+
+  const cargar = React.useCallback(async () => {
+    try {
+      const d = await getBillingPlataforma();
+      setDatos(d);
+      setPvId((prev) => prev || (d.puntosVenta[0]?.id ?? ""));
+    } catch {
+      setDatos(null);
+    }
+  }, []);
+  React.useEffect(() => {
+    void cargar();
+  }, [cargar]);
+
+  const generar = async () => {
+    if (!pvId || generando) return;
+    setGenerando(true);
+    try {
+      const r = await generarBillingPlataforma({ puntoVentaId: pvId });
+      toast.success(
+        `Billing ${r.periodo}: ${r.generadas} borrador(es) nuevo(s), ${r.yaExistian} ya existían.`,
+      );
+      if (r.salteadas.length > 0) {
+        toast.error(
+          `Salteadas: ${r.salteadas.map((x) => x.tenantNombre).join(", ")}.`,
+        );
+      }
+      await cargar();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo generar.");
+    } finally {
+      setGenerando(false);
+    }
+  };
+
+  if (!datos) {
+    return (
+      <div className="cpl-page">
+        <div className="cpl-empty">
+          <div className="t">Cargando…</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!datos.tenantPlataforma) {
+    return (
+      <div className="cpl-page">
+        <Panel>
+          <div className="cpl-callout" style={{ marginTop: 16 }}>
+            <BIco.alert />
+            <div>
+              <b>Falta el tenant plataforma.</b> Las facturas de suscripción se
+              emiten desde el tenant de Grupo Idea: marcá uno con
+              Tenant.esPlataforma (una sola vez, por script).
+            </div>
+          </div>
+        </Panel>
+      </div>
+    );
+  }
+
+  const totalPendiente = datos.pendientes.reduce((s, p) => s + p.monto, 0);
+
   return (
     <div className="cpl-page">
-      <Panel>
-        <div className="cpl-empty" style={{ padding: "60px 20px" }}>
-          <BIco.card />
-          <div className="t">Requiere planes y suscripciones (etapa B)</div>
-          <div className="s" style={{ maxWidth: 520, margin: "6px auto 0" }}>
-            El diseño está cerrado: MRR con su serie y movimientos, distribución
-            por plan, estados moroso/trial, cupos por plan y las facturas
-            GI-AAAA-NNNN emitidas desde el tenant de Grupo Idea con punto de
-            venta dedicado. Cuando la etapa B exista, esta sección se enciende
-            con números reales.
+      <div className="cpl-grid cpl-g-2" style={{ marginTop: 0 }}>
+        <Panel
+          title={`Período ${datos.periodoActual}`}
+          sub={`emite ${datos.tenantPlataforma.nombre}`}
+        >
+          {datos.pendientes.length === 0 ? (
+            <div className="cpl-empty" style={{ padding: "20px 10px" }}>
+              <BIco.check />
+              <div className="t">Nada pendiente</div>
+              <div className="s">
+                Todas las suscripciones con precio ya tienen su factura del
+                período.
+              </div>
+            </div>
+          ) : (
+            <>
+              {datos.pendientes.map((p) => (
+                <div className="cpl-mov" key={p.tenantId}>
+                  <span
+                    className="mi"
+                    style={{ background: "var(--surface-3)", color: "var(--acc-2)" }}
+                  >
+                    <BIco.building />
+                  </span>
+                  <div className="ml">
+                    <div className="t">{p.tenantNombre}</div>
+                    <div className="s">plan {p.planNombre}</div>
+                  </div>
+                  <span className="mval">{mk(p.monto)}</span>
+                </div>
+              ))}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  paddingTop: 12,
+                  borderTop: "1px solid var(--hair)",
+                  fontSize: 12.5,
+                }}
+              >
+                <span style={{ color: "var(--muted)" }}>Total del período</span>
+                <span className="cpl-mono" style={{ fontWeight: 600 }}>
+                  {mk(totalPendiente)}
+                </span>
+              </div>
+            </>
+          )}
+          {esAdmin ? (
+            <div style={{ display: "flex", gap: 9, marginTop: 14 }}>
+              <select
+                className="cpl-select"
+                value={pvId}
+                onChange={(e) => setPvId(e.target.value)}
+              >
+                {datos.puntosVenta.length === 0 ? (
+                  <option value="">sin puntos de venta activos</option>
+                ) : null}
+                {datos.puntosVenta.map((pv) => (
+                  <option key={pv.id} value={pv.id}>
+                    PV {String(pv.numero).padStart(4, "0")}
+                    {pv.nombre ? ` · ${pv.nombre}` : ""}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="cpl-btn pri"
+                disabled={!pvId || generando || datos.pendientes.length === 0}
+                onClick={() => void generar()}
+              >
+                {generando ? "Generando…" : "Generar borradores"}
+              </button>
+            </div>
+          ) : null}
+          <div className="cpl-note" style={{ marginTop: 14 }}>
+            El generador crea BORRADORES (reentrante: no duplica). La emisión
+            con CAE sigue el flujo normal en Administración → Comprobantes del
+            tenant {datos.tenantPlataforma.nombre}, con un punto de venta
+            dedicado al SaaS para que la numeración y el libro IVA queden
+            separables de la imprenta.
           </div>
-        </div>
-      </Panel>
+        </Panel>
+
+        <Panel
+          title="Facturas de suscripción"
+          sub={`${datos.facturas.length} registradas`}
+          flush
+        >
+          {datos.facturas.length === 0 ? (
+            <div className="cpl-empty">
+              <BIco.card />
+              <div className="t">Todavía sin facturas</div>
+              <div className="s">Generá el período para ver los borradores acá.</div>
+            </div>
+          ) : (
+            <table className="cpl-tbl compacta">
+              <thead>
+                <tr>
+                  <th>Período</th>
+                  <th>Tenant</th>
+                  <th className="r">Monto</th>
+                  <th>Comprobante</th>
+                </tr>
+              </thead>
+              <tbody>
+                {datos.facturas.map((f) => (
+                  <tr key={f.id}>
+                    <td className="cpl-mono">{f.periodo}</td>
+                    <td>{f.tenantClienteNombre}</td>
+                    <td className="r cpl-mono">{mk(f.monto)}</td>
+                    <td>
+                      {f.comprobante.estado === "emitido" ? (
+                        <span className="cpl-pill ok">
+                          <span className="d" />
+                          {f.comprobante.letra} {f.comprobante.numeroCompleto}
+                        </span>
+                      ) : f.comprobante.estado === "borrador" ? (
+                        <span className="cpl-pill warn">
+                          <span className="d" />
+                          Borrador
+                        </span>
+                      ) : (
+                        <span className="cpl-pill dng">
+                          <span className="d" />
+                          {f.comprobante.estado}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Panel>
+      </div>
     </div>
   );
 }

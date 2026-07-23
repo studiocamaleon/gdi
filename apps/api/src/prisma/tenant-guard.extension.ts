@@ -11,6 +11,8 @@ const MODELOS_EXENTOS = new Set<string>([
   'CronLock',
   // Auditoría del control plane: vive por encima de los tenants.
   'PlataformaEvento',
+  // Billing de suscripciones: junta tenant cliente + comprobante plataforma.
+  'FacturaSuscripcion',
   'User',
   'AuthSession',
   'Membership',

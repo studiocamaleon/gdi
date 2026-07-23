@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import {
   IsEmail,
+  IsOptional,
   IsString,
   IsUUID,
   Matches,
@@ -20,6 +21,7 @@ import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
 import { SinTenant } from '../common/sin-tenant.decorator';
 import { PlataformaAdminGuard } from './plataforma-admin.guard';
+import { PlataformaBillingService } from './plataforma-billing.service';
 import { PlataformaGuard } from './plataforma.guard';
 import { PlataformaService } from './plataforma.service';
 
@@ -33,6 +35,16 @@ export class SuspenderTenantDto {
   @MinLength(3)
   @MaxLength(300)
   motivo: string;
+}
+
+export class GenerarBillingDto {
+  @IsUUID()
+  puntoVentaId: string;
+
+  /** YYYY-MM; default el período actual. */
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}$/)
+  periodo?: string;
 }
 
 export class CrearTenantDto {
@@ -66,7 +78,10 @@ export class CrearTenantDto {
 @UseGuards(PlataformaGuard)
 @SinTenant()
 export class PlataformaController {
-  constructor(private readonly service: PlataformaService) {}
+  constructor(
+    private readonly service: PlataformaService,
+    private readonly billing: PlataformaBillingService,
+  ) {}
 
   /** La consola completa: resumen + tenants + auditoría + quién mira. */
   @Get('consola')
@@ -109,6 +124,25 @@ export class PlataformaController {
   ) {
     await this.service.reactivarTenant(auth.userId, id);
     return this.service.consola(auth.userId);
+  }
+
+  @Get('billing')
+  billingEstado() {
+    return this.billing.estado();
+  }
+
+  /** Genera los borradores del período. Reentrante: no duplica. */
+  @Post('billing/generar')
+  @UseGuards(PlataformaAdminGuard)
+  async generarBilling(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() dto: GenerarBillingDto,
+  ) {
+    return this.billing.generarPeriodo(
+      auth.userId,
+      dto.puntoVentaId,
+      dto.periodo,
+    );
   }
 
   /** Alta de tenant + invitación del primer admin. Devuelve el link. */
