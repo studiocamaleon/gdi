@@ -52,7 +52,21 @@ export type ConsolaPlataforma = {
     ots30d: number;
     storageBytes: number;
     sinActividad14d: number;
+    ots30dPrev: number;
+    cotizaciones30d: number;
+    cotizaciones30dPrev: number;
+    cobros30d: number;
+    cobros30dPrev: number;
   };
+  /** 12 semanas de actividad agregada (lunes ISO + conteos). */
+  actividadSemanal: Array<{
+    semana: string;
+    ots: number;
+    cotizaciones: number;
+    cobros: number;
+  }>;
+  /** Altas de tenants por mes, últimos 6 ("YYYY-MM"). */
+  altasMensuales: Array<{ mes: string; altas: number }>;
   tenants: TenantConsola[];
 };
 

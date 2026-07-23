@@ -59,6 +59,14 @@ export type EventoPlataforma = {
   creadoEl: string;
 };
 
+export type SemanaActividad = {
+  /** Lunes de la semana, ISO (YYYY-MM-DD). El front lo rotula. */
+  semana: string;
+  ots: number;
+  cotizaciones: number;
+  cobros: number;
+};
+
 export type ConsolaPlataforma = {
   /** Quién está mirando (para el pie del rail). Null en usos internos. */
   staff: { nombre: string | null; email: string; rol: string } | null;
@@ -71,7 +79,17 @@ export type ConsolaPlataforma = {
     ots30d: number;
     storageBytes: number;
     sinActividad14d: number;
+    /** Los 30 días ANTERIORES a los últimos 30: el denominador de los deltas. */
+    ots30dPrev: number;
+    cotizaciones30d: number;
+    cotizaciones30dPrev: number;
+    cobros30d: number;
+    cobros30dPrev: number;
   };
+  /** 12 semanas de actividad agregada — la serie del gráfico grande. */
+  actividadSemanal: SemanaActividad[];
+  /** Altas de tenants por mes, últimos 6 (de Tenant.createdAt). */
+  altasMensuales: Array<{ mes: string; altas: number }>;
   tenants: TenantConsola[];
 };
 
@@ -83,6 +101,7 @@ export class PlataformaService {
     const ahora = Date.now();
     const corte30 = new Date(ahora - 30 * DIA_MS);
     const corte14 = new Date(ahora - 14 * DIA_MS);
+    const corte84 = new Date(ahora - 84 * DIA_MS);
 
     const [
       tenants,
@@ -92,6 +111,9 @@ export class PlataformaService {
       cobros,
       integraciones,
       whatsapp,
+      fechasOts,
+      fechasCotizaciones,
+      fechasCobros,
       eventos,
       staff,
     ] = await Promise.all([
@@ -141,6 +163,18 @@ export class PlataformaService {
         by: ['tenantId', 'estado'],
         where: { estado: { in: ['pendiente', 'fallida'] } },
         _count: { _all: true },
+      }),
+      this.prisma.ordenTrabajo.findMany({
+        where: { fechaEmision: { gte: corte84 } },
+        select: { fechaEmision: true },
+      }),
+      this.prisma.cotizacion.findMany({
+        where: { createdAt: { gte: corte84 } },
+        select: { createdAt: true },
+      }),
+      this.prisma.cobro.findMany({
+        where: { fecha: { gte: corte84 }, anuladoEl: null },
+        select: { fecha: true },
       }),
       this.prisma.plataformaEvento.findMany({
         orderBy: { createdAt: 'desc' },
@@ -199,7 +233,48 @@ export class PlataformaService {
       };
     });
 
+    // ── Series reales (12 semanas / deltas 30d vs 30d previos) ─────────
+    const dOts = fechasOts.map((f) => f.fechaEmision!).filter(Boolean);
+    const dCot = fechasCotizaciones.map((f) => f.createdAt);
+    const dCob = fechasCobros.map((f) => f.fecha);
+    const enVentana = (fechas: Date[], desde: number, hasta: number) =>
+      fechas.filter((f) => f.getTime() >= desde && f.getTime() < hasta).length;
+    const corte60 = ahora - 60 * DIA_MS;
+    const corte30ms = corte30.getTime();
+
+    // Lunes de la semana actual, y 12 buckets hacia atrás.
+    const hoy = new Date(ahora);
+    const lunes = new Date(hoy);
+    lunes.setHours(0, 0, 0, 0);
+    lunes.setDate(lunes.getDate() - ((lunes.getDay() + 6) % 7));
+    const semanas: SemanaActividad[] = [];
+    for (let i = 11; i >= 0; i--) {
+      const ini = new Date(lunes.getTime() - i * 7 * DIA_MS);
+      const fin = ini.getTime() + 7 * DIA_MS;
+      semanas.push({
+        semana: ini.toISOString().slice(0, 10),
+        ots: enVentana(dOts, ini.getTime(), fin),
+        cotizaciones: enVentana(dCot, ini.getTime(), fin),
+        cobros: enVentana(dCob, ini.getTime(), fin),
+      });
+    }
+
+    // Altas de tenants por mes (6 meses), del createdAt ya traído.
+    const altasMensuales: Array<{ mes: string; altas: number }> = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+      const sig = new Date(hoy.getFullYear(), hoy.getMonth() - i + 1, 1);
+      altasMensuales.push({
+        mes: d.toISOString().slice(0, 7),
+        altas: tenants.filter(
+          (t) => t.createdAt >= d && t.createdAt < sig,
+        ).length,
+      });
+    }
+
     return {
+      actividadSemanal: semanas,
+      altasMensuales,
       staff: staff
         ? {
             nombre: staff.nombreCompleto,
@@ -224,6 +299,11 @@ export class PlataformaService {
         storageBytes: filas.reduce((s, f) => s + f.storageBytes, 0),
         sinActividad14d: filas.filter((f) => f.activo && f.sinActividad14d)
           .length,
+        ots30dPrev: enVentana(dOts, corte60, corte30ms),
+        cotizaciones30d: filas.reduce((s, f) => s + f.cotizaciones30d, 0),
+        cotizaciones30dPrev: enVentana(dCot, corte60, corte30ms),
+        cobros30d: filas.reduce((s, f) => s + f.cobros30d, 0),
+        cobros30dPrev: enVentana(dCob, corte60, corte30ms),
       },
       tenants: filas,
     };

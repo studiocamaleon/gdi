@@ -4,7 +4,11 @@ import * as React from "react";
 import Link from "next/link";
 
 import {
+  AreaChart,
+  Bars,
   BIco,
+  colorDe,
+  Donut,
   EstadoPill,
   Kpi,
   Panel,
@@ -186,9 +190,7 @@ function Observabilidad({
   datos: ConsolaPlataforma;
   onVerTenant: (id: string) => void;
 }) {
-  const { resumen, tenants } = datos;
-  const cotiz30d = tenants.reduce((s, t) => s + t.cotizaciones30d, 0);
-  const cobros30d = tenants.reduce((s, t) => s + t.cobros30d, 0);
+  const { resumen, tenants, actividadSemanal, altasMensuales } = datos;
   const waPend = tenants.reduce((s, t) => s + t.whatsappPendientes, 0);
   const waFall = tenants.reduce((s, t) => s + t.whatsappFallidas, 0);
   const intsError = tenants.flatMap((t) =>
@@ -199,84 +201,268 @@ function Observabilidad({
   ).length;
   const enRiesgo = tenants
     .map((t) => ({ t, riesgo: riesgoDe(t) }))
-    .filter((x) => x.riesgo !== null);
+    .filter((x) => x.riesgo !== null)
+    .sort((a) => (!a.t.activo ? -1 : 0));
+  const topUso = [...tenants]
+    .filter((t) => t.ots30d > 0)
+    .sort((a, b) => b.ots30d - a.ots30d)
+    .slice(0, 6);
+  const maxUso = topUso[0]?.ots30d ?? 1;
+
+  const labelSemana = (iso: string) => {
+    const d = new Date(`${iso}T00:00:00`);
+    return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+  };
+  const labelMes = (ym: string) =>
+    new Date(`${ym}-01T00:00:00`)
+      .toLocaleDateString("es-AR", { month: "short" })
+      .replace(".", "");
+
+  const serieChart = actividadSemanal.map((sem) => ({
+    x: labelSemana(sem.semana),
+    ots: sem.ots,
+    cotizaciones: sem.cotizaciones,
+  }));
+  const sparkOts = actividadSemanal.map((sem) => sem.ots);
+  const sparkCotiz = actividadSemanal.map((sem) => sem.cotizaciones);
+  const sparkCobros = actividadSemanal.map((sem) => sem.cobros);
+  // Tenants acumulados: el spark del KPI, desde las altas mensuales reales.
+  const base = resumen.tenants - altasMensuales.reduce((s, m) => s + m.altas, 0);
+  const sparkTenants = altasMensuales.reduce<number[]>(
+    (arr, m) => [...arr, (arr[arr.length - 1] ?? base) + m.altas],
+    [],
+  );
+
+  const donutActividad = (() => {
+    const conActividad = [...tenants]
+      .filter((t) => t.ots30d > 0)
+      .sort((a, b) => b.ots30d - a.ots30d);
+    const top = conActividad.slice(0, 4).map((t) => ({
+      label: t.nombre,
+      value: t.ots30d,
+      color: colorDe(t.slug),
+    }));
+    const resto = conActividad.slice(4).reduce((s, t) => s + t.ots30d, 0);
+    if (resto > 0) top.push({ label: "Otros", value: resto, color: "#63636d" });
+    return top;
+  })();
 
   return (
     <div className="cpl-page">
       <div className="cpl-kgrid">
         <Kpi
-          label="Tenants activos"
-          value={`${resumen.tenantsActivos}`}
-          unit={`/ ${resumen.tenants}`}
+          label="OTs emitidas · 30d"
+          value={fmtN(resumen.ots30d)}
+          delta={{ actual: resumen.ots30d, previo: resumen.ots30dPrev }}
+          sub="vs. 30d previos"
+          spark={sparkOts}
         />
-        <Kpi label="Usuarios activos" value={fmtN(resumen.usuariosActivos)} />
-        <Kpi label="OTs emitidas · 30d" value={fmtN(resumen.ots30d)} />
-        <Kpi label="Cotizaciones · 30d" value={fmtN(cotiz30d)} />
-        <Kpi label="Cobros · 30d" value={fmtN(cobros30d)} />
-        <Kpi label="Storage total" value={fmtBytes(resumen.storageBytes)} />
+        <Kpi
+          label="Cotizaciones · 30d"
+          value={fmtN(resumen.cotizaciones30d)}
+          delta={{
+            actual: resumen.cotizaciones30d,
+            previo: resumen.cotizaciones30dPrev,
+          }}
+          sub="vs. 30d previos"
+          spark={sparkCotiz}
+          sparkColor="var(--info, #5aa2f5)"
+        />
+        <Kpi
+          label="Cobros · 30d"
+          value={fmtN(resumen.cobros30d)}
+          delta={{ actual: resumen.cobros30d, previo: resumen.cobros30dPrev }}
+          sub="vs. 30d previos"
+          spark={sparkCobros}
+          sparkColor="var(--ok)"
+        />
+        <Kpi
+          label="Tenants activos"
+          value={String(resumen.tenantsActivos)}
+          sub={`${resumen.tenants} en total`}
+          spark={sparkTenants}
+          sparkColor="var(--ok)"
+        />
+        <Kpi
+          label="Usuarios activos"
+          value={fmtN(resumen.usuariosActivos)}
+          sub="en todos los tenants"
+        />
+        <Kpi
+          label="Storage total"
+          value={fmtBytes(resumen.storageBytes)}
+          sub="archivos en R2"
+        />
       </div>
 
-      <div className="cpl-grid">
-        <div className="cpl-health">
-          <div className="cpl-htile">
-            <div className="ht">
+      <div className="cpl-grid cpl-g-mrr">
+        <Panel
+          title="Actividad de la plataforma"
+          sub="Últimas 12 semanas"
+          right={
+            <span className="cpl-legend">
+              <span>
+                <i style={{ background: "var(--acc)" }} />
+                OTs emitidas
+              </span>
+              <span>
+                <i style={{ background: "var(--info, #5aa2f5)" }} />
+                Cotizaciones
+              </span>
+            </span>
+          }
+        >
+          <AreaChart
+            data={serieChart}
+            height={200}
+            series={[
+              { key: "ots", color: "var(--acc)" },
+              { key: "cotizaciones", color: "var(--info, #5aa2f5)" },
+            ]}
+          />
+          <div className="cpl-chartfoot">
+            <div>
+              <div className="k">OTs 30d</div>
+              <div className="v cpl-mono">{fmtN(resumen.ots30d)}</div>
+            </div>
+            <div>
+              <div className="k">Cotizaciones 30d</div>
+              <div className="v cpl-mono">{fmtN(resumen.cotizaciones30d)}</div>
+            </div>
+            <div>
+              <div className="k">Cobros 30d</div>
+              <div className="v cpl-mono">{fmtN(resumen.cobros30d)}</div>
+            </div>
+          </div>
+        </Panel>
+
+        <Panel title="Movimientos de MRR" sub="requiere etapa B">
+          {[
+            { t: "Nuevos", s: "altas del mes", c: "var(--ok)" },
+            { t: "Expansión", s: "upgrades de plan", c: "var(--acc-2)" },
+            { t: "Contracción", s: "downgrades", c: "var(--warn)" },
+            { t: "Churn", s: "bajas", c: "var(--dng)" },
+          ].map((m) => (
+            <div className="cpl-mov" key={m.t}>
               <span
-                className="hd"
-                style={{ background: waFall > 0 ? "var(--dng)" : "var(--ok)" }}
+                className="mi"
+                style={{ background: "var(--surface-3)", color: m.c }}
+              >
+                <BIco.card />
+              </span>
+              <div className="ml">
+                <div className="t">{m.t}</div>
+                <div className="s">{m.s}</div>
+              </div>
+              <span className="mval" style={{ color: "var(--muted-2)" }}>
+                —
+              </span>
+            </div>
+          ))}
+          <div className="cpl-callout info" style={{ marginTop: 12 }}>
+            <BIco.card />
+            <div>
+              Se enciende con <b>planes y suscripciones</b> (etapa B): MRR real,
+              no estimado.
+            </div>
+          </div>
+        </Panel>
+      </div>
+
+      <div className="cpl-grid cpl-g-3">
+        <Panel title="Actividad por tenant" sub="OTs emitidas · 30d">
+          {donutActividad.length === 0 ? (
+            <div className="cpl-empty" style={{ padding: "24px 10px" }}>
+              <div className="t">Sin OTs en 30 días</div>
+            </div>
+          ) : (
+            <div style={{ paddingTop: 8 }}>
+              <Donut
+                segs={donutActividad}
+                centerV={fmtN(resumen.ots30d)}
+                centerL="OTs 30d"
               />
-              Cola WhatsApp
             </div>
-            <div className="hv cpl-mono">
-              {waPend} <span style={{ color: "var(--muted-2)" }}>pend.</span>
+          )}
+        </Panel>
+
+        <Panel title="Altas de tenants" sub="Últimos 6 meses">
+          <Bars
+            data={altasMensuales.map((m) => ({
+              x: labelMes(m.mes),
+              v: m.altas,
+            }))}
+            height={168}
+          />
+        </Panel>
+
+        <Panel title="Salud de plataforma" sub="lo que medimos de verdad">
+          <div className="cpl-health dos">
+            <div className="cpl-htile">
+              <div className="ht">
+                <span
+                  className="hd"
+                  style={{
+                    background: waFall > 0 ? "var(--dng)" : "var(--ok)",
+                  }}
+                />
+                Cola WhatsApp
+              </div>
+              <div className="hv cpl-mono">{waPend}</div>
+              <div className="hs">
+                pendientes · {waFall > 0 ? `${waFall} fallidas` : "0 fallidas"}
+              </div>
             </div>
-            <div className="hs">
-              {waFall > 0 ? `${waFall} fallidas` : "0 fallidas"}
+            <div className="cpl-htile">
+              <div className="ht">
+                <span
+                  className="hd"
+                  style={{
+                    background: intsError > 0 ? "var(--warn)" : "var(--ok)",
+                  }}
+                />
+                Integraciones
+              </div>
+              <div className="hv cpl-mono">{intsConectadas}</div>
+              <div className="hs">
+                conectadas ·{" "}
+                {intsError > 0 ? `${intsError} en error` : "0 en error"}
+              </div>
+            </div>
+            <div className="cpl-htile">
+              <div className="ht">
+                <span
+                  className="hd"
+                  style={{
+                    background:
+                      resumen.sinActividad14d > 0 ? "var(--warn)" : "var(--ok)",
+                  }}
+                />
+                Sin actividad 14d
+              </div>
+              <div className="hv cpl-mono">{resumen.sinActividad14d}</div>
+              <div className="hs">señal temprana de churn</div>
+            </div>
+            <div className="cpl-htile">
+              <div className="ht">
+                <span className="hd" style={{ background: "var(--ok)" }} />
+                Auditoría
+              </div>
+              <div className="hv cpl-mono">{datos.auditoria.length}</div>
+              <div className="hs">eventos del control plane</div>
             </div>
           </div>
-          <div className="cpl-htile">
-            <div className="ht">
-              <span
-                className="hd"
-                style={{
-                  background: intsError > 0 ? "var(--warn)" : "var(--ok)",
-                }}
-              />
-              Integraciones
-            </div>
-            <div className="hv cpl-mono">{intsConectadas}</div>
-            <div className="hs">
-              conectadas · {intsError > 0 ? `${intsError} en error` : "0 en error"}
-            </div>
-          </div>
-          <div className="cpl-htile">
-            <div className="ht">
-              <span
-                className="hd"
-                style={{
-                  background:
-                    resumen.sinActividad14d > 0 ? "var(--warn)" : "var(--ok)",
-                }}
-              />
-              Sin actividad 14d
-            </div>
-            <div className="hv cpl-mono">{resumen.sinActividad14d}</div>
-            <div className="hs">señal temprana de churn</div>
-          </div>
-          <div className="cpl-htile">
-            <div className="ht">
-              <span className="hd" style={{ background: "var(--ok)" }} />
-              Auditoría
-            </div>
-            <div className="hv cpl-mono">{datos.auditoria.length}</div>
-            <div className="hs">eventos del control plane</div>
-          </div>
-        </div>
+        </Panel>
       </div>
 
       <div className="cpl-grid cpl-g-2">
         <Panel
           title="Tenants en riesgo"
-          sub={enRiesgo.length ? `${enRiesgo.length}` : "ninguno"}
+          sub={
+            enRiesgo.length
+              ? `${enRiesgo.length} requieren atención`
+              : "ninguno"
+          }
           flush
         >
           {enRiesgo.length === 0 ? (
@@ -289,7 +475,7 @@ function Observabilidad({
               </div>
             </div>
           ) : (
-            <table className="cpl-tbl">
+            <table className="cpl-tbl compacta">
               <tbody>
                 {enRiesgo.map(({ t, riesgo }) => (
                   <tr key={t.id} onClick={() => onVerTenant(t.id)}>
@@ -298,15 +484,14 @@ function Observabilidad({
                         <TLogo nombre={t.nombre} slug={t.slug} />
                         <div>
                           <div className="n">{t.nombre}</div>
-                          <div className="sub">{t.slug}</div>
+                          <div className="sub" style={{ color: "var(--warn)" }}>
+                            {riesgo}
+                          </div>
                         </div>
                       </div>
                     </td>
-                    <td style={{ color: "var(--warn)", fontSize: 12 }}>
-                      {riesgo}
-                    </td>
-                    <td className="r" style={{ width: 30 }}>
-                      <BIco.arrow style={{ width: 14, color: "var(--muted-2)" }} />
+                    <td className="r">
+                      <EstadoPill t={t} />
                     </td>
                   </tr>
                 ))}
@@ -315,24 +500,52 @@ function Observabilidad({
           )}
         </Panel>
 
-        <Panel title="MRR y crecimiento" sub="requiere etapa B">
-          <div className="cpl-callout info">
-            <BIco.card />
-            <div>
-              <b>Todavía no hay planes ni suscripciones.</b> Cuando exista la
-              etapa B (planes, MRR, movimientos nuevo/expansión/churn y
-              facturas de Grupo Idea), este panel se enciende con esos números
-              — reales, no estimados. La salud de infraestructura (uptime,
-              latencia) necesita además APM, que tampoco vamos a inventar.
+        <Panel title="Mayor uso" sub="OTs emitidas · 30d" flush>
+          {topUso.length === 0 ? (
+            <div className="cpl-empty">
+              <div className="t">Sin actividad en 30 días</div>
             </div>
-          </div>
+          ) : (
+            <table className="cpl-tbl compacta">
+              <tbody>
+                {topUso.map((t) => (
+                  <tr key={t.id} onClick={() => onVerTenant(t.id)}>
+                    <td style={{ width: "48%" }}>
+                      <div className="cpl-tname">
+                        <TLogo nombre={t.nombre} slug={t.slug} />
+                        <div>
+                          <div className="n">{t.nombre}</div>
+                          <div className="sub">{t.usuariosActivos} usuarios</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="cpl-usebar">
+                        <div className="cpl-meter">
+                          <span
+                            style={{
+                              width: `${Math.round((t.ots30d / maxUso) * 100)}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="r cpl-mono" style={{ color: "var(--muted)" }}>
+                      {fmtN(t.ots30d)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </Panel>
       </div>
 
       <div className="cpl-note">
-        Todo lo que se ve acá sale de la base: tenants, sesiones, órdenes,
-        cotizaciones, cobros, storage, integraciones y la cola de WhatsApp. La
-        consola es de sólo lectura.
+        Lectura agregada cross-tenant, todo desde la base: sesiones, órdenes,
+        cotizaciones, cobros, storage, integraciones y la cola de WhatsApp. Los
+        deltas comparan contra los 30 días anteriores. MRR, planes y salud de
+        infraestructura (uptime, latencia) llegan con la etapa B y con APM.
       </div>
     </div>
   );

@@ -106,6 +106,16 @@ describe('PlataformaService.consola', () => {
     expect(dormido.sinActividad14d).toBe(true);
   });
 
+  it('las series del gráfico tienen su forma: 12 semanas y 6 meses', async () => {
+    const c = await servicio.consola();
+    expect(c.actividadSemanal).toHaveLength(12);
+    expect(c.altasMensuales).toHaveLength(6);
+    // La OT emitida hoy cae en la última semana de la serie.
+    expect(c.actividadSemanal[11].ots).toBeGreaterThanOrEqual(1);
+    // Los dos tenants de esta suite se dieron de alta este mes.
+    expect(c.altasMensuales[5].altas).toBeGreaterThanOrEqual(2);
+  });
+
   it('el resumen agrega por encima de los tenants propios', async () => {
     const { resumen } = await servicio.consola();
     expect(resumen.tenants).toBeGreaterThanOrEqual(2);

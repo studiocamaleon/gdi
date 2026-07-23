@@ -237,12 +237,20 @@ export function Kpi({
   unit,
   sub,
   alerta,
+  spark,
+  sparkColor,
+  delta,
 }: {
   label: string;
   value: string;
   unit?: string;
   sub?: string;
   alerta?: boolean;
+  /** Serie chica de fondo (como el diseño); sólo si es un dato real. */
+  spark?: number[];
+  sparkColor?: string;
+  /** Delta % contra el período anterior equivalente. */
+  delta?: { actual: number; previo: number };
 }) {
   return (
     <div className="cpl-kpi">
@@ -251,10 +259,14 @@ export function Kpi({
         {value}
         {unit ? <span className="u">{unit}</span> : null}
       </div>
-      {sub ? (
+      {sub || delta ? (
         <div className="kf">
-          <span className="ksub">{sub}</span>
+          {delta ? <Delta actual={delta.actual} previo={delta.previo} /> : null}
+          {sub ? <span className="ksub">{sub}</span> : null}
         </div>
+      ) : null}
+      {spark && spark.length > 1 ? (
+        <Spark data={spark} color={sparkColor} />
       ) : null}
     </div>
   );
@@ -285,5 +297,366 @@ export function Panel({
       ) : null}
       <div className={`cpl-panel-b ${flush ? "flush" : ""}`}>{children}</div>
     </section>
+  );
+}
+
+// ── gráficos (port de bo-kit.jsx, mismos trazos) ───────────────────────
+
+export function Delta({ actual, previo }: { actual: number; previo: number }) {
+  if (previo <= 0) {
+    return <span className="cpl-delta flat">—</span>;
+  }
+  const v = Math.round(((actual - previo) / previo) * 100);
+  if (v === 0) return <span className="cpl-delta flat">0%</span>;
+  return (
+    <span className={`cpl-delta ${v > 0 ? "up" : "down"}`}>
+      {v > 0 ? "↑" : "↓"}
+      {Math.abs(v)}%
+    </span>
+  );
+}
+
+let sparkSeq = 0;
+export function Spark({
+  data,
+  color = "var(--acc)",
+}: {
+  data: number[];
+  color?: string;
+}) {
+  const w = 88;
+  const h = 34;
+  const mn = Math.min(...data);
+  const mx = Math.max(...data);
+  const rng = mx - mn || 1;
+  const pts = data.map(
+    (v, i) =>
+      [
+        (i / (data.length - 1 || 1)) * w,
+        h - 3 - ((v - mn) / rng) * (h - 6),
+      ] as const,
+  );
+  const line = pts
+    .map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1))
+    .join(" ");
+  const gid = React.useMemo(() => `cpl-sp${sparkSeq++}`, []);
+  return (
+    <svg className="spark" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+      <defs>
+        <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={color} stopOpacity=".28" />
+          <stop offset="1" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={`${line} L ${w} ${h} L 0 ${h} Z`} fill={`url(#${gid})`} />
+      <path
+        d={line}
+        fill="none"
+        stroke={color}
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+  );
+}
+
+let chartSeq = 0;
+export function AreaChart({
+  data,
+  series,
+  height = 200,
+}: {
+  data: Array<Record<string, number | string>>;
+  series: Array<{ key: string; color: string }>;
+  height?: number;
+}) {
+  const w = 640;
+  const padL = 6;
+  const padR = 6;
+  const padT = 14;
+  const padB = 22;
+  const iw = w - padL - padR;
+  const ih = height - padT - padB;
+  const n = data.length;
+  const xAt = (i: number) => padL + (n <= 1 ? iw / 2 : (i / (n - 1)) * iw);
+  const uid = React.useMemo(() => `cpl-ac${chartSeq++}`, []);
+  const todos = series.flatMap((s) => data.map((d) => Number(d[s.key])));
+  const mx = Math.max(...todos, 1) * 1.08;
+  const yAt = (v: number) => padT + ih - (v / mx) * ih;
+  return (
+    <svg
+      className="cpl-chart"
+      viewBox={`0 0 ${w} ${height}`}
+      preserveAspectRatio="none"
+      style={{ height }}
+    >
+      {[0.25, 0.5, 0.75, 1].map((g) => (
+        <line
+          key={g}
+          x1={padL}
+          x2={w - padR}
+          y1={padT + ih * g}
+          y2={padT + ih * g}
+          stroke="var(--hair)"
+          strokeWidth="1"
+        />
+      ))}
+      {series.map((s, si) => {
+        const pts = data.map(
+          (d, i) => [xAt(i), yAt(Number(d[s.key]))] as const,
+        );
+        const line = pts
+          .map(
+            (p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1),
+          )
+          .join(" ");
+        return (
+          <g key={s.key}>
+            {si === 0 ? (
+              <>
+                <defs>
+                  <linearGradient id={uid + si} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stopColor={s.color} stopOpacity=".2" />
+                    <stop offset="1" stopColor={s.color} stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                <path
+                  d={`${line} L ${xAt(n - 1)} ${padT + ih} L ${xAt(0)} ${padT + ih} Z`}
+                  fill={`url(#${uid + si})`}
+                />
+              </>
+            ) : null}
+            <path
+              d={line}
+              fill="none"
+              stroke={s.color}
+              strokeWidth="2.4"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              vectorEffect="non-scaling-stroke"
+            />
+            {pts.map((p, i) => (
+              <circle
+                key={i}
+                cx={p[0]}
+                cy={p[1]}
+                r="2.4"
+                fill="var(--bg)"
+                stroke={s.color}
+                strokeWidth="1.8"
+              />
+            ))}
+          </g>
+        );
+      })}
+      {data.map((d, i) => (
+        <text
+          key={i}
+          x={xAt(i)}
+          y={height - 6}
+          textAnchor="middle"
+          className="cpl-chart-x"
+        >
+          {String(d.x)}
+        </text>
+      ))}
+    </svg>
+  );
+}
+
+export function Bars({
+  data,
+  color = "var(--ok)",
+  height = 168,
+}: {
+  data: Array<{ x: string; v: number }>;
+  color?: string;
+  height?: number;
+}) {
+  const w = 640;
+  const padT = 12;
+  const padB = 22;
+  const padX = 8;
+  const ih = height - padT - padB;
+  const n = data.length || 1;
+  const mx = Math.max(...data.map((d) => d.v), 1) * 1.15;
+  const slot = (w - padX * 2) / n;
+  const bw = Math.min(26, slot * 0.4);
+  return (
+    <svg
+      className="cpl-chart"
+      viewBox={`0 0 ${w} ${height}`}
+      preserveAspectRatio="none"
+      style={{ height }}
+    >
+      {[0, 0.5, 1].map((g) => (
+        <line
+          key={g}
+          x1={padX}
+          x2={w - padX}
+          y1={padT + ih * g}
+          y2={padT + ih * g}
+          stroke="var(--hair)"
+          strokeWidth="1"
+        />
+      ))}
+      {data.map((d, i) => {
+        const cx = padX + slot * i + slot / 2;
+        const hv = (d.v / mx) * ih;
+        return (
+          <g key={i}>
+            <rect
+              x={cx - bw / 2}
+              y={padT + ih - hv}
+              width={bw}
+              height={hv}
+              rx="2.5"
+              fill={color}
+            />
+            {d.v > 0 ? (
+              <text
+                x={cx}
+                y={padT + ih - hv - 5}
+                textAnchor="middle"
+                className="cpl-chart-x"
+                style={{ fill: "var(--muted)" }}
+              >
+                {d.v}
+              </text>
+            ) : null}
+            <text
+              x={cx}
+              y={height - 6}
+              textAnchor="middle"
+              className="cpl-chart-x"
+            >
+              {d.x}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+export function Donut({
+  segs,
+  centerV,
+  centerL,
+}: {
+  segs: Array<{ label: string; value: number; color: string }>;
+  centerV: string;
+  centerL: string;
+}) {
+  const size = 130;
+  const thick = 18;
+  const total = segs.reduce((s, x) => s + x.value, 0) || 1;
+  const r = (size - thick) / 2;
+  const c = 2 * Math.PI * r;
+  const cx = size / 2;
+  // Offsets precalculados: nada de mutar acumuladores dentro del render.
+  const offsets = segs.reduce<number[]>(
+    (arr, seg) => [...arr, (arr[arr.length - 1] ?? 0) + seg.value / total],
+    [],
+  );
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        style={{ flex: "none" }}
+      >
+        <circle
+          cx={cx}
+          cy={cx}
+          r={r}
+          fill="none"
+          stroke="var(--surface-3)"
+          strokeWidth={thick}
+        />
+        {segs.map((s, i) => {
+          const frac = s.value / total;
+          const len = frac * c;
+          const off = (i === 0 ? 0 : offsets[i - 1]) * c;
+          return (
+            <circle
+              key={i}
+              cx={cx}
+              cy={cx}
+              r={r}
+              fill="none"
+              stroke={s.color}
+              strokeWidth={thick}
+              strokeDasharray={`${len} ${c - len}`}
+              strokeDashoffset={-off}
+              transform={`rotate(-90 ${cx} ${cx})`}
+            />
+          );
+        })}
+        <g>
+          <text
+            x={cx}
+            y={cx - 1}
+            textAnchor="middle"
+            fill="var(--ink)"
+            fontSize="21"
+            fontWeight="600"
+            fontFamily="var(--font-mono)"
+          >
+            {centerV}
+          </text>
+          <text
+            x={cx}
+            y={cx + 15}
+            textAnchor="middle"
+            fill="var(--muted-2)"
+            fontSize="10"
+          >
+            {centerL}
+          </text>
+        </g>
+      </svg>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 9 }}>
+        {segs.map((s, i) => (
+          <div
+            key={i}
+            style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 12 }}
+          >
+            <i
+              style={{
+                width: 9,
+                height: 9,
+                borderRadius: 3,
+                background: s.color,
+                flex: "none",
+              }}
+            />
+            <span style={{ color: "var(--ink-2)" }}>{s.label}</span>
+            <span
+              style={{
+                marginLeft: "auto",
+                fontFamily: "var(--font-mono)",
+                color: "var(--muted)",
+              }}
+            >
+              {s.value}
+            </span>
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                color: "var(--muted-2)",
+                width: 34,
+                textAlign: "right",
+              }}
+            >
+              {Math.round((s.value / total) * 100)}%
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
