@@ -89,7 +89,7 @@ export class NotificacionesOrdenesService {
       ? `${baseFront()}/track/${orden.publicToken}`
       : null;
 
-    const nombre = primerNombre(orden.cliente?.razonSocial);
+    const nombre = nombreDelCliente(orden.cliente?.razonSocial);
     const comun = { clienteId: orden.clienteId, ordenId: orden.id };
 
     const parametros = (() => {
@@ -126,17 +126,15 @@ export class NotificacionesOrdenesService {
 }
 
 /**
- * "Distribuidora del Sur S.R.L." → "Distribuidora".
+ * El nombre del cliente para el saludo del mensaje.
  *
- * `Cliente` guarda un solo nombre y para empresas es la razón social, así que
- * sin esto el mensaje arranca con "Hola Distribuidora del Sur S.R.L.". Cortar
- * al primer token no es perfecto —parte los nombres compuestos— pero se lee
- * mejor que la razón social entera en un WhatsApp.
+ * Va COMPLETO. La primera versión cortaba al primer token para que no saliera
+ * "Hola Distribuidora del Sur S.R.L.", y el resultado fue peor: "Imprenta
+ * Imagen SRL" llegaba como "Hola Imprenta", que suena a que le erramos al
+ * nombre. Un nombre largo se lee raro; uno cortado se lee mal.
  */
-export function primerNombre(razonSocial?: string | null): string {
-  const limpio = (razonSocial ?? '').trim();
-  if (!limpio) return 'Hola';
-  return limpio.split(/\s+/)[0];
+export function nombreDelCliente(razonSocial?: string | null): string {
+  return (razonSocial ?? '').trim() || 'Hola';
 }
 
 /** `dd/mm/aaaa`, o un guion si la orden no tiene fecha comprometida. */

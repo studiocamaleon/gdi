@@ -49,11 +49,6 @@ function generarPublicToken(): string {
   return randomBytes(16).toString('base64url');
 }
 
-/** Primer nombre visible ("Carolina Méndez" → "Carolina"). */
-function primerNombre(nombre: string): string {
-  return nombre.trim().split(/\s+/)[0] || nombre;
-}
-
 /**
  * Qué archivos de una orden puede ver el cliente en el link de seguimiento:
  * los que alguien marcó explícitamente como públicos, y nada más. El default
@@ -2937,9 +2932,11 @@ export class OrdenesTrabajoService {
         tieneLogo: orden.tenant.logoArchivoId !== null,
       },
       cliente: {
-        primerNombre: orden.cliente
-          ? primerNombre(orden.cliente.nombre)
-          : 'Hola',
+        // COMPLETO. Antes se recortaba al primer token para que no saliera
+        // "Hola Distribuidora del Sur S.R.L.", y el resultado fue peor:
+        // "Imprenta Imagen SRL" saludaba "Hola Imprenta", que se lee como si
+        // le hubiéramos errado al nombre.
+        nombre: orden.cliente ? orden.cliente.nombre.trim() : 'Hola',
         iniciales: orden.cliente ? inicialesDe(orden.cliente.nombre) : '·',
       },
       vendedor: orden.vendedor

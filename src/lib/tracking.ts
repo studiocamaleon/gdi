@@ -56,7 +56,7 @@ export type TrackingPublico = {
   progresoPct: number;
   /** Sin logo cargado van las iniciales, como antes de que existiera. */
   imprenta: { nombre: string; iniciales: string; tieneLogo: boolean };
-  cliente: { primerNombre: string; iniciales: string };
+  cliente: { nombre: string; iniciales: string };
   vendedor: { nombre: string; iniciales: string; telefono: string | null } | null;
   items: TrackingItem[];
   /** Adjuntos públicos de la orden entera (no de un producto puntual). */

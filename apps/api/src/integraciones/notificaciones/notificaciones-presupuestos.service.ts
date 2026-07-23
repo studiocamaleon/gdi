@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificacionesService } from './notificaciones.service';
-import { primerNombre } from './notificaciones-ordenes.service';
+import { nombreDelCliente } from './notificaciones-ordenes.service';
 import { enContextoDe } from './contexto';
 import type { EventoNotificacion } from '../wati/catalogo';
 
@@ -70,7 +70,7 @@ export class NotificacionesPresupuestosService {
     if (!p.publicToken) return;
     const url = `${baseFront()}/presupuesto/${p.publicToken}`;
 
-    const nombre = primerNombre(p.cliente?.razonSocial);
+    const nombre = nombreDelCliente(p.cliente?.razonSocial);
     const total = money(Number(p.total ?? 0));
 
     const parametros =

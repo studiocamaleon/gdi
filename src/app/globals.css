@@ -33265,3 +33265,13 @@ body:has(.t-app) {
   font-size: 12.5px;
   color: var(--muted-text);
 }
+
+/* El estado del pedido, resaltado en el saludo del seguimiento público.
+   Es el único dato que el cliente vino a buscar: en negro sobre negro se
+   pierde dentro de la frase. Toma los mismos colores que la pastilla de
+   arriba, así el hero y la pastilla dicen lo mismo con el mismo código.
+
+   Sólo color, sin fondo: la frase es larga y en mobile parte en dos líneas,
+   y un fondo con padding se ve como dos bloques sueltos en vez de una frase. */
+.t-hero-title strong.t-hero-estado { color: var(--t-warm); }
+.t-hero-title strong.t-hero-estado.ok { color: var(--t-ok); }

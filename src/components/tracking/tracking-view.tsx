@@ -396,8 +396,11 @@ export function TrackingView({
           </span>
         </div>
         <h1 className="t-hero-title">
-          Hola {data.cliente.primerNombre},<br />
-          tu pedido está <strong>{estadoNarrativo(data.estado)}</strong>.
+          Hola {data.cliente.nombre},<br />
+          tu pedido está{" "}
+          <strong
+            className={`t-hero-estado${pill.tone === "ok" ? " ok" : ""}`}
+          >{estadoNarrativo(data.estado)}</strong>.
         </h1>
         <div className="t-hero-sub">
           {data.progresoPct}% completado. Te avisaremos ni bien esté listo para retirar.
