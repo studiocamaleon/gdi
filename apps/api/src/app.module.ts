@@ -20,6 +20,7 @@ import { MaquinariaModule } from './maquinaria/maquinaria.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProveedoresModule } from './proveedores/proveedores.module';
 import { TenantsModule } from './tenants/tenants.module';
+import { PlataformaModule } from './plataforma/plataforma.module';
 import { InventarioModule } from './inventario/inventario.module';
 import { ProduccionModule } from './produccion/produccion.module';
 import { ProductosServiciosModule } from './productos-servicios/productos-servicios.module';
@@ -73,6 +74,7 @@ import { IntegracionesModule } from './integraciones/integraciones.module';
     PrismaModule,
     AuthModule,
     TenantsModule,
+    PlataformaModule,
     ClientesModule,
     EmpleadosModule,
     ProveedoresModule,

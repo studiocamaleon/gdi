@@ -1,3 +1,8 @@
+// OJO dónde vive este archivo: con estructura `src/`, Next SÓLO ejecuta el
+// middleware desde `src/middleware.ts`. Estuvo meses en la raíz del proyecto
+// sin correr nunca — todo lo que "protegía" lo estaban protegiendo en
+// realidad los layouts (redirect del dashboard) y los 401 del API. Se
+// descubrió cuando /plataforma devolvió 500 en vez de rebotar a /login.
 import { NextResponse, type NextRequest } from "next/server";
 
 import { SESSION_COOKIE_NAME } from "@/lib/session";

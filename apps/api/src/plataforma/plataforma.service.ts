@@ -1,0 +1,311 @@
+import { Injectable } from '@nestjs/common';
+import type { EstadoIntegracion } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
+
+/**
+ * Lecturas del control plane: la consola de la Plataforma (etapa A).
+ *
+ * Todo acá corre SIN contexto de tenant — el controller lleva @SinTenant() —
+ * y por eso el tenant-guard no filtra: los groupBy por tenantId ven todos los
+ * tenants, que es exactamente lo que la consola necesita. Es la misma base
+ * que usan los crons.
+ *
+ * Dos reglas de este módulo:
+ *  - SÓLO lectura (la etapa A no escribe nada; las escrituras llegan en B con
+ *    su auditoría en PlataformaEvento).
+ *  - No se reusan services de negocio: llamados sin contexto leerían todos
+ *    los tenants sin que se note. Las queries de acá son propias y explícitas.
+ *
+ * Detalle del spec de aislamiento: Membership sólo puede consultarse desde
+ * auth.service.ts (lo refuerza un escaneo de archivos), así que los usuarios
+ * por tenant salen de `Tenant._count.memberships` — la relación no dispara el
+ * escaneo y el resultado es el mismo. Ver docs/control-plane-diseno.md
+ */
+
+const DIA_MS = 24 * 60 * 60 * 1000;
+
+export type TenantConsola = {
+  id: string;
+  nombre: string;
+  slug: string;
+  activo: boolean;
+  creadoEl: string;
+  usuariosActivos: number;
+  /** Última sesión iniciada apuntando a este tenant. Null = nunca. */
+  ultimoAccesoEl: string | null;
+  /** Sin logins en 14 días: la señal temprana de churn. */
+  sinActividad14d: boolean;
+  ots30d: number;
+  cotizaciones30d: number;
+  cobros30d: number;
+  storageBytes: number;
+  storageCuotaBytes: number | null;
+  integraciones: Array<{
+    proveedor: string;
+    estado: EstadoIntegracion;
+    ultimoErrorTexto: string | null;
+  }>;
+  whatsappPendientes: number;
+  whatsappFallidas: number;
+};
+
+export type EventoPlataforma = {
+  id: string;
+  tipo: string;
+  descripcion: string;
+  tenantAfectadoId: string | null;
+  staffNombre: string | null;
+  staffEmail: string;
+  creadoEl: string;
+};
+
+export type SemanaActividad = {
+  /** Lunes de la semana, ISO (YYYY-MM-DD). El front lo rotula. */
+  semana: string;
+  ots: number;
+  cotizaciones: number;
+  cobros: number;
+};
+
+export type ConsolaPlataforma = {
+  /** Quién está mirando (para el pie del rail). Null en usos internos. */
+  staff: { nombre: string | null; email: string; rol: string } | null;
+  /** Los últimos movimientos del control plane (PlataformaEvento). */
+  auditoria: EventoPlataforma[];
+  resumen: {
+    tenants: number;
+    tenantsActivos: number;
+    usuariosActivos: number;
+    ots30d: number;
+    storageBytes: number;
+    sinActividad14d: number;
+    /** Los 30 días ANTERIORES a los últimos 30: el denominador de los deltas. */
+    ots30dPrev: number;
+    cotizaciones30d: number;
+    cotizaciones30dPrev: number;
+    cobros30d: number;
+    cobros30dPrev: number;
+  };
+  /** 12 semanas de actividad agregada — la serie del gráfico grande. */
+  actividadSemanal: SemanaActividad[];
+  /** Altas de tenants por mes, últimos 6 (de Tenant.createdAt). */
+  altasMensuales: Array<{ mes: string; altas: number }>;
+  tenants: TenantConsola[];
+};
+
+@Injectable()
+export class PlataformaService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async consola(staffUserId?: string): Promise<ConsolaPlataforma> {
+    const ahora = Date.now();
+    const corte30 = new Date(ahora - 30 * DIA_MS);
+    const corte14 = new Date(ahora - 14 * DIA_MS);
+    const corte84 = new Date(ahora - 84 * DIA_MS);
+
+    const [
+      tenants,
+      accesos,
+      ots,
+      cotizaciones,
+      cobros,
+      integraciones,
+      whatsapp,
+      fechasOts,
+      fechasCotizaciones,
+      fechasCobros,
+      eventos,
+      staff,
+    ] = await Promise.all([
+      this.prisma.tenant.findMany({
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          nombre: true,
+          slug: true,
+          activo: true,
+          createdAt: true,
+          bytesArchivos: true,
+          cuotaBytesArchivos: true,
+          _count: {
+            select: { memberships: { where: { activa: true } } },
+          },
+        },
+      }),
+      this.prisma.authSession.groupBy({
+        by: ['currentTenantId'],
+        _max: { createdAt: true },
+      }),
+      this.prisma.ordenTrabajo.groupBy({
+        by: ['tenantId'],
+        where: { fechaEmision: { gte: corte30 } },
+        _count: { _all: true },
+      }),
+      this.prisma.cotizacion.groupBy({
+        by: ['tenantId'],
+        where: { createdAt: { gte: corte30 } },
+        _count: { _all: true },
+      }),
+      this.prisma.cobro.groupBy({
+        by: ['tenantId'],
+        where: { fecha: { gte: corte30 }, anuladoEl: null },
+        _count: { _all: true },
+      }),
+      this.prisma.integracionTenant.findMany({
+        select: {
+          tenantId: true,
+          proveedor: true,
+          estado: true,
+          ultimoErrorTexto: true,
+        },
+      }),
+      this.prisma.notificacionWhatsapp.groupBy({
+        by: ['tenantId', 'estado'],
+        where: { estado: { in: ['pendiente', 'fallida'] } },
+        _count: { _all: true },
+      }),
+      this.prisma.ordenTrabajo.findMany({
+        where: { fechaEmision: { gte: corte84 } },
+        select: { fechaEmision: true },
+      }),
+      this.prisma.cotizacion.findMany({
+        where: { createdAt: { gte: corte84 } },
+        select: { createdAt: true },
+      }),
+      this.prisma.cobro.findMany({
+        where: { fecha: { gte: corte84 }, anuladoEl: null },
+        select: { fecha: true },
+      }),
+      this.prisma.plataformaEvento.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 30,
+        include: {
+          staff: { select: { nombreCompleto: true, email: true } },
+        },
+      }),
+      staffUserId
+        ? this.prisma.user.findUnique({
+            where: { id: staffUserId },
+            select: { nombreCompleto: true, email: true, rolPlataforma: true },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    const porTenant = <T extends { tenantId: string }>(filas: T[]) =>
+      new Map(filas.map((f) => [f.tenantId, f]));
+
+    const accesoDe = new Map(
+      accesos.map((a) => [a.currentTenantId, a._max.createdAt]),
+    );
+    const otsDe = porTenant(ots);
+    const cotizacionesDe = porTenant(cotizaciones);
+    const cobrosDe = porTenant(cobros);
+
+    const filas: TenantConsola[] = tenants.map((t) => {
+      const acceso = accesoDe.get(t.id) ?? null;
+      const wa = whatsapp.filter((w) => w.tenantId === t.id);
+      return {
+        id: t.id,
+        nombre: t.nombre,
+        slug: t.slug,
+        activo: t.activo,
+        creadoEl: t.createdAt.toISOString(),
+        usuariosActivos: t._count.memberships,
+        ultimoAccesoEl: acceso?.toISOString() ?? null,
+        sinActividad14d: !acceso || acceso < corte14,
+        ots30d: otsDe.get(t.id)?._count._all ?? 0,
+        cotizaciones30d: cotizacionesDe.get(t.id)?._count._all ?? 0,
+        cobros30d: cobrosDe.get(t.id)?._count._all ?? 0,
+        storageBytes: Number(t.bytesArchivos),
+        storageCuotaBytes:
+          t.cuotaBytesArchivos === null ? null : Number(t.cuotaBytesArchivos),
+        integraciones: integraciones
+          .filter((i) => i.tenantId === t.id)
+          .map((i) => ({
+            proveedor: i.proveedor,
+            estado: i.estado,
+            ultimoErrorTexto: i.ultimoErrorTexto,
+          })),
+        whatsappPendientes:
+          wa.find((w) => w.estado === 'pendiente')?._count._all ?? 0,
+        whatsappFallidas:
+          wa.find((w) => w.estado === 'fallida')?._count._all ?? 0,
+      };
+    });
+
+    // ── Series reales (12 semanas / deltas 30d vs 30d previos) ─────────
+    const dOts = fechasOts.map((f) => f.fechaEmision!).filter(Boolean);
+    const dCot = fechasCotizaciones.map((f) => f.createdAt);
+    const dCob = fechasCobros.map((f) => f.fecha);
+    const enVentana = (fechas: Date[], desde: number, hasta: number) =>
+      fechas.filter((f) => f.getTime() >= desde && f.getTime() < hasta).length;
+    const corte60 = ahora - 60 * DIA_MS;
+    const corte30ms = corte30.getTime();
+
+    // Lunes de la semana actual, y 12 buckets hacia atrás.
+    const hoy = new Date(ahora);
+    const lunes = new Date(hoy);
+    lunes.setHours(0, 0, 0, 0);
+    lunes.setDate(lunes.getDate() - ((lunes.getDay() + 6) % 7));
+    const semanas: SemanaActividad[] = [];
+    for (let i = 11; i >= 0; i--) {
+      const ini = new Date(lunes.getTime() - i * 7 * DIA_MS);
+      const fin = ini.getTime() + 7 * DIA_MS;
+      semanas.push({
+        semana: ini.toISOString().slice(0, 10),
+        ots: enVentana(dOts, ini.getTime(), fin),
+        cotizaciones: enVentana(dCot, ini.getTime(), fin),
+        cobros: enVentana(dCob, ini.getTime(), fin),
+      });
+    }
+
+    // Altas de tenants por mes (6 meses), del createdAt ya traído.
+    const altasMensuales: Array<{ mes: string; altas: number }> = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+      const sig = new Date(hoy.getFullYear(), hoy.getMonth() - i + 1, 1);
+      altasMensuales.push({
+        mes: d.toISOString().slice(0, 7),
+        altas: tenants.filter(
+          (t) => t.createdAt >= d && t.createdAt < sig,
+        ).length,
+      });
+    }
+
+    return {
+      actividadSemanal: semanas,
+      altasMensuales,
+      staff: staff
+        ? {
+            nombre: staff.nombreCompleto,
+            email: staff.email,
+            rol: staff.rolPlataforma ?? 'SOPORTE',
+          }
+        : null,
+      auditoria: eventos.map((e) => ({
+        id: e.id,
+        tipo: e.tipo,
+        descripcion: e.descripcion,
+        tenantAfectadoId: e.tenantAfectadoId,
+        staffNombre: e.staff.nombreCompleto,
+        staffEmail: e.staff.email,
+        creadoEl: e.createdAt.toISOString(),
+      })),
+      resumen: {
+        tenants: filas.length,
+        tenantsActivos: filas.filter((f) => f.activo).length,
+        usuariosActivos: filas.reduce((s, f) => s + f.usuariosActivos, 0),
+        ots30d: filas.reduce((s, f) => s + f.ots30d, 0),
+        storageBytes: filas.reduce((s, f) => s + f.storageBytes, 0),
+        sinActividad14d: filas.filter((f) => f.activo && f.sinActividad14d)
+          .length,
+        ots30dPrev: enVentana(dOts, corte60, corte30ms),
+        cotizaciones30d: filas.reduce((s, f) => s + f.cotizaciones30d, 0),
+        cotizaciones30dPrev: enVentana(dCot, corte60, corte30ms),
+        cobros30d: filas.reduce((s, f) => s + f.cobros30d, 0),
+        cobros30dPrev: enVentana(dCob, corte60, corte30ms),
+      },
+      tenants: filas,
+    };
+  }
+}

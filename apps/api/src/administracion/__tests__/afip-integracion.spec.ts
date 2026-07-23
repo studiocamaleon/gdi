@@ -183,11 +183,15 @@ describe('AfipIntegracionService.facturacionHabilitada', () => {
 
 describe('AfipIntegracionService.obtener — CUIT propio', () => {
   const REPRESENTANTE = '30717654321';
-  const conRepresentante = <T>(fn: () => T): T => {
+  // Con `await` adentro: en un `return fn()` sin await, el finally corre con
+  // la promesa PENDIENTE y restaura el env antes de que el servicio lo lea.
+  // Así este test pasaba o fallaba según qué .env hubiera cargado Prisma en
+  // el worker — determinista sólo de casualidad.
+  const conRepresentante = async <T>(fn: () => Promise<T>): Promise<T> => {
     const antes = process.env.AFIP_REPRESENTANTE_CUIT;
     process.env.AFIP_REPRESENTANTE_CUIT = REPRESENTANTE;
     try {
-      return fn();
+      return await fn();
     } finally {
       if (antes === undefined) delete process.env.AFIP_REPRESENTANTE_CUIT;
       else process.env.AFIP_REPRESENTANTE_CUIT = antes;

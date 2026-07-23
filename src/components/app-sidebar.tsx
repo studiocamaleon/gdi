@@ -353,6 +353,24 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
             Sin resultados para “{query}”.
           </div>
         ) : null}
+
+        {/* Control plane: sólo el staff de Grafo lo ve. La autorización real
+            la hace el API — esto es descubribilidad, no seguridad. */}
+        {currentUser.rolPlataforma ? (
+          <NavLink
+            href="/plataforma"
+            title="Plataforma"
+            className="nav-item"
+            style={{
+              marginTop: 10,
+              borderTop: "1px solid var(--side-hairline, rgba(255,255,255,.08))",
+              paddingTop: 12,
+            }}
+          >
+            <span className="ico"><Ico.Grid /></span>
+            <span className="label">Plataforma</span>
+          </NavLink>
+        ) : null}
       </nav>
 
       <button
