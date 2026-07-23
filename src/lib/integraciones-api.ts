@@ -106,6 +106,8 @@ export type AfipIntegracion = {
   estado: "DESCONECTADA" | "CONECTADA" | "ERROR";
   ambiente: "dev" | "prod";
   representanteCuit: string | null;
+  /** El tenant factura con el CUIT del certificado: no hay nada que delegar. */
+  esCuitPropio: boolean;
   emisor: {
     cuit: string | null;
     razonSocial: string | null;

@@ -45,6 +45,13 @@ export type AfipIntegracionDto = {
   ambiente: 'dev' | 'prod';
   /** El CUIT de Grafo que el cliente delega en ARCA. */
   representanteCuit: string | null;
+  /**
+   * El tenant factura con el MISMO CUIT que el certificado (Grupo Idea, dueño
+   * de la plataforma, facturando como Corporearte). No hay nada que delegar —
+   * a uno mismo no se delega—: el cert ya está autorizado para su propio CUIT.
+   * La vista muestra "sos el titular" en vez del instructivo de delegación.
+   */
+  esCuitPropio: boolean;
   /** Datos fiscales del emisor (de ConfiguracionFiscal). */
   emisor: {
     cuit: string | null;
@@ -72,6 +79,13 @@ export class AfipIntegracionService {
     return process.env.AFIP_REPRESENTANTE_CUIT?.trim() || null;
   }
 
+  /** Compara CUITs por sus dígitos: uno puede venir con guiones y el otro no. */
+  private mismoCuit(a: string | null, b: string | null): boolean {
+    if (!a || !b) return false;
+    const soloDigitos = (s: string) => s.replace(/\D/g, '');
+    return soloDigitos(a) === soloDigitos(b);
+  }
+
   /** El estado + los datos que la vista necesita. */
   async obtener(auth: CurrentAuth): Promise<AfipIntegracionDto> {
     const [fila, config] = await Promise.all([
@@ -85,6 +99,10 @@ export class AfipIntegracionService {
       estado: fila?.estado ?? EstadoIntegracion.DESCONECTADA,
       ambiente: this.afip.environment,
       representanteCuit: this.representanteCuit,
+      esCuitPropio: this.mismoCuit(
+        config?.cuit ?? null,
+        this.representanteCuit,
+      ),
       emisor: {
         cuit: config?.cuit ?? null,
         razonSocial: config?.razonSocial ?? null,

@@ -208,8 +208,9 @@ export function AfipDetalle({
             <div className="int-section-intro">
               <h3>Delegación de webservices</h3>
               <p>
-                No subís ningún certificado: el certificado es de Grafo. Delegás
-                tu facturación a nuestro CUIT desde ARCA.
+                {datos.esCuitPropio
+                  ? "Facturás con el mismo CUIT que el certificado, así que no hay delegación: verificás que ARCA responda y activás."
+                  : "No subís ningún certificado: el certificado es de Grafo. Delegás tu facturación a nuestro CUIT desde ARCA."}
               </p>
             </div>
             <div className={`afip-deleg ${estadoPill.tono}`}>
@@ -227,17 +228,29 @@ export function AfipDetalle({
               {datos.estado === "ERROR" && datos.ultimoErrorTexto && (
                 <div className="afip-deleg-err">{datos.ultimoErrorTexto}</div>
               )}
-              <div className="afip-deleg-body">
-                <div className="k">Qué delegar en ARCA</div>
-                <div className="afip-deleg-row">
-                  <span className="l">Representante</span>
-                  <code>{datos.representanteCuit ?? "—"} · Grafo</code>
+              {datos.esCuitPropio ? (
+                // Facturás con el mismo CUIT que el certificado (Grupo Idea como
+                // Corporearte): a uno mismo no se delega y no hace falta.
+                <div className="afip-deleg-body">
+                  <div className="afip-deleg-propio">
+                    Sos el titular del certificado. No hay nada que delegar:
+                    facturás con el CUIT propietario de la plataforma. Verificá y
+                    activá.
+                  </div>
                 </div>
-                <div className="afip-deleg-row">
-                  <span className="l">Servicio</span>
-                  <code>Facturación Electrónica · wsfe</code>
+              ) : (
+                <div className="afip-deleg-body">
+                  <div className="k">Qué delegar en ARCA</div>
+                  <div className="afip-deleg-row">
+                    <span className="l">Representante</span>
+                    <code>{datos.representanteCuit ?? "—"} · Grafo</code>
+                  </div>
+                  <div className="afip-deleg-row">
+                    <span className="l">Servicio</span>
+                    <code>Facturación Electrónica · wsfe</code>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
@@ -247,7 +260,8 @@ export function AfipDetalle({
             <div className="t">Facturación electrónica activa</div>
             <div className="m">
               Con esto encendido aparece el botón <strong>Facturar</strong> en
-              órdenes y comprobantes. Sólo se activa con la delegación verificada.
+              órdenes y comprobantes. Sólo se activa con{" "}
+              {datos.esCuitPropio ? "la conexión verificada" : "la delegación verificada"}.
             </div>
           </div>
           <button
@@ -267,8 +281,9 @@ export function AfipDetalle({
           <span className="afip-i">i</span>
           <div>
             <strong>No necesitás subir tu certificado ni generar un CSR.</strong>{" "}
-            Grafo factura con su propio certificado en representación de tu CUIT.
-            Lo único que hacés es la delegación en ARCA, una sola vez.
+            {datos.esCuitPropio
+              ? "Facturás con el certificado propietario de la plataforma, ya asociado a tu CUIT. No hay ningún paso en ARCA."
+              : "Grafo factura con su propio certificado en representación de tu CUIT. Lo único que hacés es la delegación en ARCA, una sola vez."}
           </div>
         </div>
       </div>

@@ -180,3 +180,41 @@ describe('AfipIntegracionService.facturacionHabilitada', () => {
     await expect(sinFila.svc.facturacionHabilitada()).resolves.toBe(false);
   });
 });
+
+describe('AfipIntegracionService.obtener — CUIT propio', () => {
+  const REPRESENTANTE = '30717654321';
+  const conRepresentante = <T>(fn: () => T): T => {
+    const antes = process.env.AFIP_REPRESENTANTE_CUIT;
+    process.env.AFIP_REPRESENTANTE_CUIT = REPRESENTANTE;
+    try {
+      return fn();
+    } finally {
+      if (antes === undefined) delete process.env.AFIP_REPRESENTANTE_CUIT;
+      else process.env.AFIP_REPRESENTANTE_CUIT = antes;
+    }
+  };
+
+  it('marca esCuitPropio cuando el emisor factura con el CUIT del certificado', async () => {
+    await conRepresentante(async () => {
+      const { svc } = armar({ cuit: '30717654321', puntosVenta: PV_OK });
+      const dto = await svc.obtener(AUTH);
+      expect(dto.esCuitPropio).toBe(true);
+    });
+  });
+
+  it('compara por dígitos: da igual que uno venga con guiones', async () => {
+    await conRepresentante(async () => {
+      const { svc } = armar({ cuit: '30-71765432-1', puntosVenta: PV_OK });
+      const dto = await svc.obtener(AUTH);
+      expect(dto.esCuitPropio).toBe(true);
+    });
+  });
+
+  it('un tenant de tercero NO es CUIT propio', async () => {
+    await conRepresentante(async () => {
+      const { svc } = armar({ cuit: '20111111112', puntosVenta: PV_OK });
+      const dto = await svc.obtener(AUTH);
+      expect(dto.esCuitPropio).toBe(false);
+    });
+  });
+});
