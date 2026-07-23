@@ -65,19 +65,43 @@ export class DespachoService {
         `Falló el despacho de la notificación ${id}.`,
         error instanceof Error ? error.stack : String(error),
       );
+      // Se suelta la reserva para que el cron la vuelva a tomar. El envío a
+      // Wati no lanza (devuelve {ok, motivo}), así que si llegamos acá es casi
+      // seguro que fue ANTES de mandar nada; y si no, el barrido de reservas
+      // vencidas es el que decide, no este catch.
+      await this.liberar(id);
       return { estado: 'pendiente', motivo: 'Error interno al despachar.' };
     }
   }
 
   private async intentar(id: string, ahora: Date): Promise<ResultadoDespacho> {
-    const n = await this.prisma.notificacionWhatsapp.findFirst({
+    // ── Reserva atómica ────────────────────────────────────────────────
+    // Este update condicional ES el candado. Antes se leía la fila y se
+    // mandaba, y entre la lectura y el `marcar(enviada)` había una ventana de
+    // segundos —incluye una llamada de red a Wati para listar plantillas— en
+    // la que otro proceso leía la misma fila todavía en `pendiente` y la
+    // mandaba de nuevo: el cliente recibía el mensaje dos veces y la base no
+    // mostraba nada raro, porque los dos escribían `intentos: 1`.
+    //
+    // Pasa de verdad en dos casos: dos instancias de la API drenando la cola,
+    // y el intento inmediato del encolado solapándose con el tick del cron.
+    // En Postgres el updateMany toma el lock de la fila, así que de N
+    // competidores exactamente uno se lleva count === 1.
+    const reserva = await this.prisma.notificacionWhatsapp.updateMany({
       where: { id, estado: ESTADOS.pendiente },
+      data: { estado: ESTADOS.enviando, reservadaEl: new Date() },
+    });
+    if (reserva.count === 0) return { estado: 'nada' };
+
+    const n = await this.prisma.notificacionWhatsapp.findFirst({
+      where: { id },
     });
     if (!n) return { estado: 'nada' };
 
     // Mismo criterio que al encolar: sin fila, apagado.
     const config = await this.prisma.configuracionNotificaciones.findFirst();
     if (config?.pausado ?? true) {
+      await this.liberar(id);
       return { estado: 'pendiente', motivo: 'Los avisos están pausados.' };
     }
 
@@ -99,15 +123,22 @@ export class DespachoService {
       requiereLocalAbierto: plantilla.requiereLocalAbierto ?? false,
     });
     if (proxima) {
+      // Vuelve a `pendiente`: correrla no es mandarla, y si quedara reservada
+      // el cron de mañana no la miraría nunca.
       await this.prisma.notificacionWhatsapp.updateMany({
         where: { id },
-        data: { programadaPara: proxima },
+        data: {
+          estado: ESTADOS.pendiente,
+          reservadaEl: null,
+          programadaPara: proxima,
+        },
       });
       return { estado: 'reprogramada', para: proxima };
     }
 
     const cred = await this.integraciones.credencialesWati();
     if (!cred) {
+      await this.liberar(id);
       return { estado: 'pendiente', motivo: 'Wati no está conectada.' };
     }
 
@@ -174,6 +205,20 @@ export class DespachoService {
       : { estado: 'pendiente', motivo: res.motivo };
   }
 
+  /**
+   * Suelta una reserva sin consumir un intento: la fila no llegó a mandarse,
+   * así que vuelve a la cola tal como estaba.
+   *
+   * El `where` con `enviando` importa: si otro camino ya la marcó `enviada`,
+   * esto no la puede resucitar.
+   */
+  private async liberar(id: string): Promise<void> {
+    await this.prisma.notificacionWhatsapp.updateMany({
+      where: { id, estado: ESTADOS.enviando },
+      data: { estado: ESTADOS.pendiente, reservadaEl: null },
+    });
+  }
+
   private async marcar(
     id: string,
     estado: string,
@@ -186,7 +231,7 @@ export class DespachoService {
   ): Promise<void> {
     await this.prisma.notificacionWhatsapp.updateMany({
       where: { id },
-      data: { estado, ...datos },
+      data: { estado, reservadaEl: null, ...datos },
     });
   }
 }

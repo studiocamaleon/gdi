@@ -519,7 +519,12 @@ model NotificacionWhatsapp {
   id       String @id @default(uuid()) @db.Uuid
   tenantId String @db.Uuid
   evento   String
-  /// 'pendiente' | 'enviada' | 'fallida' | 'descartada'
+  /// 'pendiente' | 'enviando' | 'enviada' | 'fallida' | 'descartada'
+  ///
+  /// `enviando` es la RESERVA: el despachador pasa la fila a ese estado en un
+  /// update condicional antes de llamar a Wati, y por eso dos procesos que
+  /// compiten por la misma fila no la mandan dos veces.
+  /// Ver docs/notificaciones-whatsapp-catalogo.md
   estado   String @default("pendiente")
 
   clienteId    String? @db.Uuid
@@ -547,6 +552,9 @@ model NotificacionWhatsapp {
   /// Cuándo se puede mandar. Fuera de la ventana horaria se corre al día
   /// siguiente en vez de descartarse.
   programadaPara DateTime?
+  /// Cuándo se reservó para enviar. Si un proceso muere con la fila en
+  /// `enviando`, esto es lo que permite soltarla en vez de dejarla colgada.
+  reservadaEl    DateTime?
   enviadaEl      DateTime?
   createdAt      DateTime  @default(now())
 
