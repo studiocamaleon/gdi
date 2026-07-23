@@ -2408,7 +2408,7 @@ export class OrdenesTrabajoService {
     if (!VALIDOS.includes(estadoCompra)) {
       throw new BadRequestException('Estado de compra inválido.');
     }
-    return this.prisma.$transaction(async (tx) => {
+    const resultado = await this.prisma.$transaction(async (tx) => {
       const paso = await tx.ordenTrabajoItemPaso.findFirst({
         where: { id: pasoId, tenantId: auth.tenantId },
         include: { item: { select: { nombre: true } } },
@@ -2492,8 +2492,20 @@ export class OrdenesTrabajoService {
           datosJson: { pasoId, estadoCompra },
         },
       });
-      return { ok: true, pasoId, estadoCompra };
+      return { ok: true, pasoId, estadoCompra, ordenId };
     });
+
+    // Recibir una compra tercerizada puede promover la orden a producción o
+    // finalizarla —ver el cálculo de `promueve`/`finaliza` de arriba—, así que
+    // también tiene que avisar. Es la TERCERA puerta por la que se mueve una
+    // orden; las otras dos son `cambiarEstado` y `accionPaso`.
+    this.avisarAlCliente(resultado.ordenId);
+
+    return {
+      ok: resultado.ok,
+      pasoId: resultado.pasoId,
+      estadoCompra: resultado.estadoCompra,
+    };
   }
 
   private toTableroItem(
