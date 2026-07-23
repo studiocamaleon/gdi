@@ -54,7 +54,7 @@ export const CATALOGO: CatalogoItem[] = [
     descripcion:
       "Facturación electrónica por delegación · verificá que tu CUIT esté habilitado",
     color: "#0066b2",
-    disponible: false,
+    disponible: true,
   },
   {
     proveedor: "MERCADOPAGO",

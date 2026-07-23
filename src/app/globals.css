@@ -33456,3 +33456,46 @@ body:has(.t-app) {
 .mov-recibo { color: var(--acc, #d9642a); text-decoration: none; font-weight: 500; }
 .mov-recibo:hover { text-decoration: underline; }
 
+
+/* Gate del botón Facturar: cuando la integración AFIP no está activa. */
+.otd-fact-off { font-size: 12.5px; font-weight: 600; color: var(--acc, #d9642a); text-decoration: none; }
+.otd-fact-off:hover { text-decoration: underline; }
+
+/* ── Integración AFIP · delegación (afip-detalle.tsx) ─────────────────── */
+.afip-logo { width: 64px; height: 64px; border-radius: 16px; background: var(--ink, #14141a); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 15px; letter-spacing: .02em; flex: 0 0 auto; }
+.afip-cc-cuit { margin: 10px 0 11px; }
+.afip-cc-cuit .c { font-family: var(--font-mono, ui-monospace, Menlo, monospace); font-size: 13px; font-weight: 700; }
+.afip-cc-cuit .r { font-size: 11px; color: var(--muted-text, #6e6e76); margin-top: 2px; }
+.afip-i { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 999px; border: 1.4px solid var(--muted-text, #6e6e76); color: var(--muted-text, #6e6e76); font-size: 11px; font-weight: 700; flex: 0 0 auto; }
+.cred-value.afip-plain { font-size: 13.5px; color: var(--ink-2, #2c2c33); }
+
+.afip-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media (max-width: 860px) { .afip-cols { grid-template-columns: 1fr; } }
+
+.afip-deleg { border: 1px solid var(--border, #e7e5e2); border-radius: 12px; background: var(--surface, #fff); padding: 15px 16px; }
+.afip-deleg.ok { border-color: #c9e6d6; }
+.afip-deleg.warn { border-color: #f2d3c1; }
+.afip-deleg-head { display: flex; align-items: center; gap: 9px; padding-bottom: 12px; border-bottom: 1px solid var(--hairline, #eeece8); }
+.afip-deleg-head .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+.afip-deleg-head .dot.ok { background: #28a06a; }
+.afip-deleg-head .dot.warn { background: #d9642a; }
+.afip-deleg-head .dot.off { background: #b4b2a9; }
+.afip-deleg-head .b .t { font-size: 13.5px; font-weight: 600; }
+.afip-deleg-head .b .m { font-size: 11.5px; color: var(--muted-text, #6e6e76); }
+.afip-deleg-err { margin-top: 11px; font-size: 12px; color: #993c1d; background: #fdf1ea; border: 1px solid #f2d3c1; border-radius: 8px; padding: 8px 11px; }
+.afip-deleg-body { padding-top: 12px; }
+.afip-deleg-body .k { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted-2, #9a9aa2); font-weight: 600; margin-bottom: 8px; }
+.afip-deleg-row { display: flex; align-items: center; gap: 8px; background: var(--surface-2, #f6f5f2); border: 1px solid var(--border, #e7e5e2); border-radius: 9px; padding: 9px 11px; margin-bottom: 7px; }
+.afip-deleg-row:last-child { margin-bottom: 0; }
+.afip-deleg-row .l { font-size: 10.5px; color: var(--muted-2, #9a9aa2); min-width: 92px; }
+.afip-deleg-row code { font-family: var(--font-mono, ui-monospace, Menlo, monospace); font-size: 12.5px; font-weight: 600; }
+
+.afip-activar { display: flex; align-items: center; justify-content: space-between; gap: 16px; background: var(--surface, #fff); border: 1px solid var(--border-strong, #d9d7d2); border-radius: 12px; padding: 15px 18px; margin-top: 22px; }
+.afip-activar-txt .t { font-size: 14px; font-weight: 600; }
+.afip-activar-txt .m { font-size: 12px; color: var(--muted-text, #6e6e76); margin-top: 2px; }
+.afip-toggle { width: 44px; height: 26px; border-radius: 999px; background: #d3d1c7; border: none; position: relative; flex: 0 0 auto; cursor: pointer; padding: 0; transition: background .15s ease; }
+.afip-toggle.on { background: #28a06a; }
+.afip-toggle .knob { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: left .15s ease; }
+.afip-toggle.on .knob { left: 21px; }
+.afip-toggle:disabled { opacity: .55; cursor: default; }
+

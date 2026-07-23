@@ -8,6 +8,7 @@ import { CobrosService } from './cobros.service';
 import { AcreditacionesScheduler } from './acreditaciones.scheduler';
 import { TesoreriaService } from './tesoreria.service';
 import { ConfiguracionFiscalService } from './configuracion-fiscal.service';
+import { AfipIntegracionService } from './afip-integracion.service';
 import { ComprobantesService } from './comprobantes.service';
 import { ImputacionesService } from './imputaciones.service';
 import { CuentaCorrienteService } from './cuenta-corriente.service';
@@ -31,6 +32,7 @@ import { AfipSdkProvider } from './invoicing/afip-sdk.provider';
     AcreditacionesScheduler,
     TesoreriaService,
     ConfiguracionFiscalService,
+    AfipIntegracionService,
     ComprobantesService,
     ImputacionesService,
     CuentaCorrienteService,

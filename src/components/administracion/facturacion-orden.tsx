@@ -21,6 +21,7 @@ import {
   facturarOrden,
   getCobros,
   getComprobantes,
+  getFacturacionHabilitada,
   reciboPdfUrl,
 } from "@/lib/administracion-api";
 import { formatFechaOrden, formatMonedaOrden } from "@/lib/ordenes-trabajo";
@@ -278,6 +279,11 @@ export function ComprobantesOrdenTab({
   const [cobros, setCobros] = React.useState<Cobro[] | null>(null);
   const [facturarOpen, setFacturarOpen] = React.useState(false);
   const [refrescos, setRefrescos] = React.useState(0);
+  // El botón Facturar sólo aparece con la integración AFIP activa. null =
+  // todavía no sabemos, así que no se muestra ni el botón ni el aviso.
+  const [facturacionActiva, setFacturacionActiva] = React.useState<
+    boolean | null
+  >(null);
 
   React.useEffect(() => {
     let activo = true;
@@ -287,6 +293,9 @@ export function ComprobantesOrdenTab({
     getCobros({ ordenId })
       .then((data) => activo && setCobros(data))
       .catch(() => activo && setCobros([]));
+    getFacturacionHabilitada()
+      .then((h: boolean) => activo && setFacturacionActiva(h))
+      .catch(() => activo && setFacturacionActiva(false));
     return () => {
       activo = false;
     };
@@ -323,7 +332,7 @@ export function ComprobantesOrdenTab({
           <span className="ttl">
             Comprobantes fiscales <span className="ct">{listaComp.length}</span>
           </span>
-          {puedeFacturar && saldoSinFacturar > 0.01 ? (
+          {puedeFacturar && facturacionActiva && saldoSinFacturar > 0.01 ? (
             <button
               type="button"
               className="btn btn-primary sm"
@@ -332,6 +341,13 @@ export function ComprobantesOrdenTab({
               <ReceiptTextIcon />
               Facturar
             </button>
+          ) : puedeFacturar &&
+            facturacionActiva === false &&
+            saldoSinFacturar > 0.01 ? (
+            // No se esconde sin explicar: se dice por qué y adónde ir.
+            <a className="otd-fact-off" href="/configuracion/integraciones">
+              Activá la facturación electrónica →
+            </a>
           ) : null}
         </div>
         {comprobantes === null ? (
