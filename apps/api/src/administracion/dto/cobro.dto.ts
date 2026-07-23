@@ -122,6 +122,12 @@ export class CrearCobroDto {
   @Type(() => ValorCobroDto)
   valor?: ValorCobroDto;
 
+  /** "N° de operación": lo que devuelve la transferencia, el cupón o el ticket. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  referencia?: string;
+
   @IsOptional()
   @IsString()
   @MaxLength(500)

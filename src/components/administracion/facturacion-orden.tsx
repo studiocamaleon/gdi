@@ -21,8 +21,12 @@ import {
   facturarOrden,
   getCobros,
   getComprobantes,
+  reciboPdfUrl,
 } from "@/lib/administracion-api";
 import { formatFechaOrden, formatMonedaOrden } from "@/lib/ordenes-trabajo";
+
+/** Fecha · método · recibo · acreditación · monto. */
+const COLS_COBRO = "84px 1fr 118px 96px 108px";
 
 /**
  * Facturación desde la ficha de la orden. La factura es OPCIONAL y "sigue"
@@ -415,16 +419,32 @@ export function ComprobantesOrdenTab({
           </div>
         ) : (
           <div className="mov-table">
-            <div className="mov-th">
+            <div className="mov-th" style={{ gridTemplateColumns: COLS_COBRO }}>
               <span>Fecha</span>
               <span>Método</span>
+              <span>Recibo</span>
               <span>Acreditación</span>
               <span className="r">Monto</span>
             </div>
             {listaCobros.map((c) => (
-              <div key={c.id} className="mov-row" style={{ gridTemplateColumns: "90px 1fr 1fr 110px" }}>
+              <div key={c.id} className="mov-row" style={{ gridTemplateColumns: COLS_COBRO }}>
                 <span className="mov-fecha">{formatFechaOrden(c.fecha)}</span>
                 <span className="mov-metodo">{c.metodoNombre}</span>
+                <span className="mov-comp">
+                  {c.numeroRecibo ? (
+                    <a
+                      className="mov-recibo"
+                      href={reciboPdfUrl(c.id)}
+                      target="_blank"
+                      rel="noreferrer"
+                      title="Ver el recibo en PDF"
+                    >
+                      {c.numeroRecibo}
+                    </a>
+                  ) : (
+                    "—"
+                  )}
+                </span>
                 <span className="mov-comp">
                   {c.estadoAcreditacion === "acreditado"
                     ? "Acreditado"

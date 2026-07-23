@@ -354,6 +354,8 @@ export type CrearCobroPayload = {
     fechaEmision?: string;
     fechaPago?: string;
   };
+  /** "N° de operación" del medio de pago; sale impreso en el recibo. */
+  referencia?: string;
   notas?: string;
 };
 
@@ -371,6 +373,21 @@ export async function crearCobro(payload: CrearCobroPayload): Promise<Cobro> {
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+/**
+ * El PDF del recibo de un cobro (endpoint privado, redirige a URL firmada).
+ * El del CLIENTE es otro: sale del link público `/c/<token>`.
+ */
+export function reciboPdfUrl(cobroId: string): string {
+  return `/api/backend/administracion/cobros/${cobroId}/recibo/pdf`;
+}
+
+/** El link `/c/<token>` para compartirle el recibo al cliente. */
+export async function getReciboEnlace(
+  cobroId: string,
+): Promise<{ url: string | null }> {
+  return apiRequest(`/administracion/cobros/${cobroId}/recibo/enlace`);
 }
 
 export async function getCobrosPendientesAcreditacion(): Promise<

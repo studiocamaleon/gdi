@@ -115,6 +115,9 @@ export function CobroFormulario({
   const esCheque = metodo?.tipo === "cheque_echeq";
 
   const [monto, setMonto] = React.useState(saldo > 0 ? String(saldo) : "");
+  // "N° de operación": va impreso en el recibo, que es donde el cliente lo
+  // reconoce (el ID de la transferencia, el cupón de la tarjeta, el ticket).
+  const [referencia, setReferencia] = React.useState("");
   const [fecha, setFecha] = React.useState(hoyIso());
   const [comEdit, setComEdit] = React.useState<number | null>(null);
   const [cuentaId, setCuentaId] = React.useState<string | null>(null);
@@ -196,6 +199,7 @@ export function CobroFormulario({
         cuentaDestinoId: cuentaUsadaId,
         montoBruto: bruto,
         comisionPctAplicada: comPct,
+        referencia: referencia.trim() || undefined,
         retenciones: rets
           .filter((r) => Number(r.monto) > 0)
           .map((r) => ({
@@ -324,6 +328,16 @@ export function CobroFormulario({
               <label>Fecha estimada</label>
               <input type="text" disabled value={fechaAcreditacion} />
             </div>
+          </div>
+          <div className="arc-field">
+            <label>N° de operación</label>
+            <input
+              type="text"
+              maxLength={60}
+              placeholder="ID de transferencia, cupón, ticket…"
+              value={referencia}
+              onChange={(e) => setReferencia(e.target.value)}
+            />
           </div>
           <div className="arc-field" style={{ marginBottom: 0 }}>
             <label>Cuenta destino</label>

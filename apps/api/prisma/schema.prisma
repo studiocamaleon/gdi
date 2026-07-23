@@ -562,6 +562,7 @@ model Tenant {
   notificacionEventos                              NotificacionEvento[]
   notificacionesWhatsapp                           NotificacionWhatsapp[]
   enlacesPublicos                                  EnlacePublico[]
+  reciboContadores                                 ReciboContador[]
   id                                               String                                            @id @default(uuid()) @db.Uuid
   nombre                                           String
   slug                                             String                                            @unique
@@ -2851,6 +2852,15 @@ model Cobro {
   estadoAcreditacion        String                @default("pendiente")
   moneda                    String                @default("ARS") @db.VarChar(3)
   notas                     String?
+  /// REC-AAAA-NNNN (ReciboContador). El recibo es el documento del cobro:
+  /// 1:1 con él, sin entidad propia. Ver docs/recibos-pago-diseno.md
+  numeroRecibo              String?               @unique
+  /// "N° de operación" del medio de pago: el identificador que devuelve la
+  /// transferencia, el cupón o el ticket. Es lo que el cliente reconoce.
+  referencia                String?               @db.VarChar(60)
+  /// Quién tomó el cobro, CONGELADO: el recibo se comparte y no puede mutar
+  /// porque después alguien editó el legajo del empleado.
+  registradoPorNombre       String?
   anuladoEl                 DateTime?
   createdAt                 DateTime              @default(now())
   updatedAt                 DateTime              @updatedAt
@@ -2868,6 +2878,16 @@ model Cobro {
   @@index([tenantId, ordenId])
   @@index([tenantId, clienteId])
   @@index([tenantId, estadoAcreditacion])
+}
+
+/// Numeración de recibos de pago por tenant y año (patrón OrdenTrabajoContador).
+model ReciboContador {
+  tenantId String @db.Uuid
+  anio     Int
+  ultimo   Int    @default(0)
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, anio])
 }
 
 model RetencionPercepcion {
