@@ -719,6 +719,8 @@ export class OrdenesTrabajoService {
       await this.capturarEtaEmision(auth, creada.id);
     }
 
+    this.avisarAlCliente(creada.id);
+
     return this.findOne(auth, creada.id);
   }
 
