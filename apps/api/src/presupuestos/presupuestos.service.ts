@@ -23,6 +23,7 @@ import {
   ActualizarConfigPresupuestosDto,
   type PresupuestoEstado,
 } from './dto/presupuestos.dto';
+import { NotificacionesPresupuestosService } from '../integraciones/notificaciones/notificaciones-presupuestos.service';
 
 /**
  * Presupuestos — el ciclo comercial de la cotización
@@ -67,7 +68,20 @@ export class PresupuestosService {
     private readonly ordenes: OrdenesTrabajoService,
     private readonly archivos: ArchivosService,
     private readonly pdf: PresupuestoPdfService,
+    private readonly avisos: NotificacionesPresupuestosService,
   ) {}
+
+  /**
+   * Le avisa al cliente por WhatsApp si el estado del presupuesto lo amerita.
+   *
+   * Post-commit y sin `await`: enviar un presupuesto no puede tardar lo que
+   * tarde Wati, y un aviso que falla no puede voltear la operación. Se puede
+   * llamar de más — `sincronizar` lee el estado actual y la clave única
+   * descarta el repetido.
+   */
+  private avisarAlCliente(cotizacionId: string): void {
+    void this.avisos.sincronizar(cotizacionId);
+  }
 
   // ── Configuración por tenant ───────────────────────────────────────
   async config(tenantId: string) {
@@ -82,11 +96,16 @@ export class PresupuestosService {
       aprobacionMontoMax:
         row?.aprobacionMontoMax != null ? Number(row.aprobacionMontoMax) : null,
       aprobacionMargenMinPct:
-        row?.aprobacionMargenMinPct != null ? Number(row.aprobacionMargenMinPct) : null,
+        row?.aprobacionMargenMinPct != null
+          ? Number(row.aprobacionMargenMinPct)
+          : null,
     };
   }
 
-  async actualizarConfig(tenantId: string, dto: ActualizarConfigPresupuestosDto) {
+  async actualizarConfig(
+    tenantId: string,
+    dto: ActualizarConfigPresupuestosDto,
+  ) {
     await this.prisma.configuracionPresupuestos.upsert({
       where: { tenantId },
       create: { tenantId, ...dto },
@@ -182,11 +201,13 @@ export class PresupuestosService {
     // El PDF se arma acá y no en la primera visita: así el cliente que abre
     // el link no espera a que arranque Chrome. Best-effort — si falla, el
     // endpoint lo genera al pedirlo.
-    await this.materializarPdf(auth, dto.cotizacionId).catch((error: unknown) => {
-      this.logger.warn(
-        `No pude materializar el PDF de ${numero}: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    });
+    await this.materializarPdf(auth, dto.cotizacionId).catch(
+      (error: unknown) => {
+        this.logger.warn(
+          `No pude materializar el PDF de ${numero}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      },
+    );
 
     return this.detalle(auth, dto.cotizacionId, { numero });
   }
@@ -207,7 +228,10 @@ export class PresupuestosService {
    * condiciones de pago, el presupuesto que ya se mandó no debería mutar.
    */
   async pdfDe(auth: CurrentAuth, id: string): Promise<Archivo> {
-    const existente = await this.archivos.generadoDe(ArchivoScope.COTIZACION, id);
+    const existente = await this.archivos.generadoDe(
+      ArchivoScope.COTIZACION,
+      id,
+    );
     if (existente) return existente;
     return this.materializarPdf(auth, id);
   }
@@ -268,7 +292,11 @@ export class PresupuestosService {
         ? {
             OR: [
               { numero: { contains: filtros.busqueda, mode: 'insensitive' } },
-              { cliente: { nombre: { contains: filtros.busqueda, mode: 'insensitive' } } },
+              {
+                cliente: {
+                  nombre: { contains: filtros.busqueda, mode: 'insensitive' },
+                },
+              },
             ],
           }
         : {}),
@@ -368,7 +396,9 @@ export class PresupuestosService {
       id: c.id,
       numero: extra?.numero ?? c.numero,
       estado: c.estado as PresupuestoEstado,
-      cliente: c.cliente ? { id: c.cliente.id, nombre: c.cliente.nombre } : null,
+      cliente: c.cliente
+        ? { id: c.cliente.id, nombre: c.cliente.nombre }
+        : null,
       vendedor: c.vendedor
         ? { id: c.vendedor.id, nombre: c.vendedor.nombreCompleto }
         : null,
@@ -380,11 +410,15 @@ export class PresupuestosService {
       primeraVistaEl: c.primeraVistaEl?.toISOString() ?? null,
       motivoPerdida: c.motivoPerdida,
       motivoPerdidaDetalle: c.motivoPerdidaDetalle,
-      aprobacionMotivos: (c.aprobacionMotivosJson ?? []) as Array<{ regla: string; detalle: string }>,
+      aprobacionMotivos: (c.aprobacionMotivosJson ?? []) as Array<{
+        regla: string;
+        detalle: string;
+      }>,
       aprobacionSolicitadaEl: c.aprobacionSolicitadaEl?.toISOString() ?? null,
       aprobacionResueltaPor: c.aprobacionResueltaPorNombre,
       observaciones: c.observaciones,
-      senaSugeridaPct: c.senaSugeridaPct != null ? Number(c.senaSugeridaPct) : null,
+      senaSugeridaPct:
+        c.senaSugeridaPct != null ? Number(c.senaSugeridaPct) : null,
       subtotal: Number(c.subtotal ?? 0),
       impuestos: Number(c.impuestos ?? 0),
       total: Number(c.total ?? 0),
@@ -428,7 +462,11 @@ export class PresupuestosService {
     }
 
     if (c.estado === 'borrador') {
-      const motivos = await this.evaluarReglas(auth.tenantId, id, Number(c.total ?? 0));
+      const motivos = await this.evaluarReglas(
+        auth.tenantId,
+        id,
+        Number(c.total ?? 0),
+      );
       if (motivos.length > 0) {
         const detalleMotivos = motivos.map((m) => m.detalle).join(' ');
         if (auth.role === 'OPERADOR') {
@@ -436,7 +474,8 @@ export class PresupuestosService {
             where: { id },
             data: {
               estado: 'pendiente_aprobacion',
-              aprobacionMotivosJson: motivos as unknown as Prisma.InputJsonValue,
+              aprobacionMotivosJson:
+                motivos as unknown as Prisma.InputJsonValue,
               aprobacionSolicitadaEl: new Date(),
               aprobacionResueltaPorId: null,
               aprobacionResueltaPorNombre: null,
@@ -453,7 +492,9 @@ export class PresupuestosService {
         // Exento por rol: envía igual, pero queda dicho.
         await this.prisma.cotizacion.update({
           where: { id },
-          data: { aprobacionMotivosJson: motivos as unknown as Prisma.InputJsonValue },
+          data: {
+            aprobacionMotivosJson: motivos as unknown as Prisma.InputJsonValue,
+          },
         });
         await this.evento(auth, id, {
           tipo: 'envio_asumido',
@@ -463,7 +504,11 @@ export class PresupuestosService {
       }
     }
 
-    return this.ejecutarEnvio(auth, c, { reenvio: c.estado === 'enviado' });
+    const enviado = await this.ejecutarEnvio(auth, c, {
+      reenvio: c.estado === 'enviado',
+    });
+    this.avisarAlCliente(c.id);
+    return enviado;
   }
 
   /** El acto de envío en sí (token + fecha + estado + evento). */
@@ -493,7 +538,11 @@ export class PresupuestosService {
   }
 
   /** Reglas de aprobación contra los items con costo del snapshot. */
-  private async evaluarReglas(tenantId: string, cotizacionId: string, total: number) {
+  private async evaluarReglas(
+    tenantId: string,
+    cotizacionId: string,
+    total: number,
+  ) {
     const [cfg, items] = await Promise.all([
       this.config(tenantId),
       this.prisma.cotizacionItem.findMany({
@@ -502,7 +551,10 @@ export class PresupuestosService {
       }),
     ]);
     return evaluarAprobacion(
-      { aprobacionMontoMax: cfg.aprobacionMontoMax, aprobacionMargenMinPct: cfg.aprobacionMargenMinPct },
+      {
+        aprobacionMontoMax: cfg.aprobacionMontoMax,
+        aprobacionMargenMinPct: cfg.aprobacionMargenMinPct,
+      },
       {
         total,
         items: items.map((i) => ({
@@ -543,10 +595,14 @@ export class PresupuestosService {
       tipo: 'aprobacion_aprobada',
       descripcion: `Aprobación interna otorgada por ${nombre}.`,
     });
-    return this.ejecutarEnvio(auth, { id: c.id, publicToken: c.publicToken }, {
-      reenvio: false,
-      descripcion: 'Presupuesto enviado al cliente (con aprobación interna).',
-    });
+    return this.ejecutarEnvio(
+      auth,
+      { id: c.id, publicToken: c.publicToken },
+      {
+        reenvio: false,
+        descripcion: 'Presupuesto enviado al cliente (con aprobación interna).',
+      },
+    );
   }
 
   // ── Resolver: el vendedor marca la decisión ────────────────────────
@@ -558,7 +614,10 @@ export class PresupuestosService {
       );
     }
     if (dto.resultado === 'rechazado') {
-      if (!dto.motivoPerdida || !MOTIVOS_PERDIDA.includes(dto.motivoPerdida as never)) {
+      if (
+        !dto.motivoPerdida ||
+        !MOTIVOS_PERDIDA.includes(dto.motivoPerdida as never)
+      ) {
         throw new BadRequestException(
           'Elegí el motivo de la pérdida (sirve para las métricas comerciales).',
         );
@@ -581,6 +640,7 @@ export class PresupuestosService {
           ? 'Marcado como aprobado por el cliente.'
           : `Marcado como perdido: ${ETIQUETA_MOTIVO[dto.motivoPerdida!] ?? dto.motivoPerdida}${dto.motivoPerdidaDetalle ? ` — ${dto.motivoPerdidaDetalle}` : ''}.`,
     });
+    this.avisarAlCliente(id);
     return this.detalle(auth, id);
   }
 
@@ -601,7 +661,9 @@ export class PresupuestosService {
         (i) => i.cotizacionItemId && dto.itemIds!.includes(i.cotizacionItemId),
       );
       if (items.length === 0) {
-        throw new BadRequestException('Ningún item seleccionado para convertir.');
+        throw new BadRequestException(
+          'Ningún item seleccionado para convertir.',
+        );
       }
     }
     const parcial = items.length < emision.items.length;
@@ -655,13 +717,17 @@ export class PresupuestosService {
         vendedor: { select: { nombreCompleto: true } },
       },
     });
-    if (!c || !c.numero) throw new NotFoundException('Presupuesto no encontrado.');
+    if (!c || !c.numero)
+      throw new NotFoundException('Presupuesto no encontrado.');
 
     // Vencimiento lazy también por acá (el cliente puede abrir tarde).
     let estado = c.estado;
     if (estado === 'enviado' && c.fechaValidez && c.fechaValidez < new Date()) {
       estado = 'vencido';
-      await this.prisma.cotizacion.update({ where: { id: c.id }, data: { estado } });
+      await this.prisma.cotizacion.update({
+        where: { id: c.id },
+        data: { estado },
+      });
       await this.eventoSistema(c.tenantId, c.id, {
         tipo: 'vencido',
         descripcion: 'El presupuesto venció (fecha de validez cumplida).',
@@ -690,7 +756,8 @@ export class PresupuestosService {
       fechaEmision: c.fechaEmision?.toISOString().slice(0, 10) ?? null,
       fechaValidez: c.fechaValidez?.toISOString().slice(0, 10) ?? null,
       observaciones: c.observaciones,
-      senaSugeridaPct: c.senaSugeridaPct != null ? Number(c.senaSugeridaPct) : null,
+      senaSugeridaPct:
+        c.senaSugeridaPct != null ? Number(c.senaSugeridaPct) : null,
       subtotal: Number(c.subtotal ?? 0),
       impuestos: Number(c.impuestos ?? 0),
       cargosDirectos: emision.cargosDirectos ?? 0,
@@ -709,9 +776,16 @@ export class PresupuestosService {
   async decisionPublica(token: string, dto: DecisionPublicaDto) {
     const c = await this.prisma.cotizacion.findUnique({
       where: { publicToken: token },
-      select: { id: true, tenantId: true, numero: true, estado: true, fechaValidez: true },
+      select: {
+        id: true,
+        tenantId: true,
+        numero: true,
+        estado: true,
+        fechaValidez: true,
+      },
     });
-    if (!c || !c.numero) throw new NotFoundException('Presupuesto no encontrado.');
+    if (!c || !c.numero)
+      throw new NotFoundException('Presupuesto no encontrado.');
     if (c.estado !== 'enviado') {
       throw new BadRequestException(
         c.estado === 'vencido'
@@ -750,6 +824,7 @@ export class PresupuestosService {
       origen: 'cliente',
       datosJson: { comentario: dto.comentario ?? null },
     });
+    this.avisarAlCliente(c.id);
     return { estado: dto.decision };
   }
 
@@ -761,7 +836,11 @@ export class PresupuestosService {
     if (!c) throw new NotFoundException('El presupuesto no existe.');
     // Vencimiento lazy SIEMPRE antes de validar la transición: un enviado
     // con validez cumplida no se puede convertir ni reenviar sin recotizar.
-    if (c.estado === 'enviado' && c.fechaValidez && c.fechaValidez < new Date()) {
+    if (
+      c.estado === 'enviado' &&
+      c.fechaValidez &&
+      c.fechaValidez < new Date()
+    ) {
       await this.prisma.cotizacion.update({
         where: { id },
         data: { estado: 'vencido' },
@@ -821,7 +900,9 @@ export class PresupuestosService {
         descripcion: e.descripcion,
         usuarioId: auth.userId,
         usuarioNombre: await this.nombreDe(auth),
-        datosJson: (e.datosJson ?? undefined) as Prisma.InputJsonValue | undefined,
+        datosJson: (e.datosJson ?? undefined) as
+          | Prisma.InputJsonValue
+          | undefined,
       },
     });
   }
@@ -829,7 +910,12 @@ export class PresupuestosService {
   private async eventoSistema(
     tenantId: string,
     cotizacionId: string,
-    e: { tipo: string; descripcion: string; origen?: string; datosJson?: unknown },
+    e: {
+      tipo: string;
+      descripcion: string;
+      origen?: string;
+      datosJson?: unknown;
+    },
   ) {
     await this.prisma.cotizacionEvento.create({
       data: {
@@ -839,7 +925,9 @@ export class PresupuestosService {
         descripcion: e.descripcion,
         usuarioNombre: e.origen === 'cliente' ? 'Cliente' : 'Sistema',
         origen: e.origen ?? 'sistema',
-        datosJson: (e.datosJson ?? undefined) as Prisma.InputJsonValue | undefined,
+        datosJson: (e.datosJson ?? undefined) as
+          | Prisma.InputJsonValue
+          | undefined,
       },
     });
   }

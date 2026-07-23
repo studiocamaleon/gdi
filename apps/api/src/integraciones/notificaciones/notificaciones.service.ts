@@ -228,6 +228,8 @@ export class NotificacionesService {
       categoria: p.categoria,
       codigo: p.codigo,
       activo: porEvento.get(p.evento) ?? p.activoPorDefecto,
+      /** false = todavía no hay nada que lo dispare. La UI lo deshabilita. */
+      cableado: p.cableado ?? false,
       /** Si el tenant nunca lo tocó, muestra que está en el default. */
       porDefecto: !porEvento.has(p.evento),
     }));

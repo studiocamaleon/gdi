@@ -58,6 +58,15 @@ export type PlantillaCanonica = {
    * dependen de que haya alguien en el mostrador.
    */
   requiereLocalAbierto?: boolean;
+  /**
+   * ¿Hay código que efectivamente lo dispare?
+   *
+   * Existe porque el tab de Notificaciones ofrece un switch por evento, y un
+   * switch que se puede prender pero no hace nada es peor que no tenerlo: el
+   * usuario cree que configuró algo. Mientras esto sea `false`, la UI lo
+   * muestra deshabilitado y dice que todavía no está disponible.
+   */
+  cableado?: boolean;
   /** Cuerpo posicional, tal como lo ve Meta. */
   cuerpo: string;
   footer: string;
@@ -85,6 +94,7 @@ export const CATALOGO: PlantillaCanonica[] = [
     categoria: 'UTILITY',
     idioma: IDIOMA,
     activoPorDefecto: true,
+    cableado: true,
     cuerpo: `Hola {{1}}, acá va el presupuesto {{2}} que nos pediste. 📄
 
 Importe total: \${{3}}
@@ -131,6 +141,7 @@ Si ya no te interesa, no hace falta que hagas nada.`,
     categoria: 'UTILITY',
     idioma: IDIOMA,
     activoPorDefecto: true,
+    cableado: true,
     cuerpo: `Hola {{1}}, recibimos tu aprobación del presupuesto {{2}} por \${{3}}. ✅
 
 Copia del presupuesto aprobado: {{4}}
@@ -152,6 +163,7 @@ Ya preparamos la orden de trabajo y te avisamos cuando entre en producción.`,
     categoria: 'UTILITY',
     idioma: IDIOMA,
     activoPorDefecto: true,
+    cableado: true,
     cuerpo: `Hola {{1}}, recibimos tu orden {{2}}. 🧾
 
 📅 Entrega estimada: {{3}}
@@ -175,6 +187,7 @@ Si la fecha cambia, te avisamos por este medio.`,
     categoria: 'UTILITY',
     idioma: IDIOMA,
     activoPorDefecto: false,
+    cableado: true,
     cuerpo: `Hola {{1}}, ya empezamos a producir tu orden {{2}}. 🖨️
 
 📅 Entrega estimada: {{3}}
@@ -222,6 +235,7 @@ Si necesitás coordinar algo, respondenos por acá.`,
     categoria: 'UTILITY',
     idioma: IDIOMA,
     activoPorDefecto: true,
+    cableado: true,
     requiereLocalAbierto: true,
     cuerpo: `Hola {{1}}, tu orden {{2}} ya está lista. 📦
 
@@ -245,6 +259,7 @@ No tenés saldo pendiente por este trabajo.`,
     categoria: 'UTILITY',
     idioma: IDIOMA,
     activoPorDefecto: true,
+    cableado: true,
     requiereLocalAbierto: true,
     cuerpo: `Hola {{1}}, tu orden {{2}} ya está lista. 📦
 
@@ -271,6 +286,7 @@ Si ya lo abonaste, puede que todavía no lo hayamos registrado.`,
     categoria: 'UTILITY',
     idioma: IDIOMA,
     activoPorDefecto: false,
+    cableado: true,
     cuerpo: `Hola {{1}}, confirmamos la entrega de tu orden {{2}} el {{3}}. ✅
 
 Guardá este mensaje como constancia.`,

@@ -48,7 +48,10 @@ export class PresupuestosController {
 
   @Public()
   @Post('track/:token/decision')
-  decisionPublica(@Param('token') token: string, @Body() dto: DecisionPublicaDto) {
+  decisionPublica(
+    @Param('token') token: string,
+    @Body() dto: DecisionPublicaDto,
+  ) {
     return this.service.decisionPublica(token, dto);
   }
 
@@ -70,22 +73,34 @@ export class PresupuestosController {
 
   // ── Ciclo ──────────────────────────────────────────────────────────
   @Get()
-  listado(@CurrentSession() auth: CurrentAuth, @Query() filtros: ListarPresupuestosDto) {
+  listado(
+    @CurrentSession() auth: CurrentAuth,
+    @Query() filtros: ListarPresupuestosDto,
+  ) {
     return this.service.listado(auth, filtros);
   }
 
   @Post('emitir')
-  emitir(@CurrentSession() auth: CurrentAuth, @Body() dto: EmitirPresupuestoDto) {
+  emitir(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() dto: EmitirPresupuestoDto,
+  ) {
     return this.service.emitir(auth, dto);
   }
 
   @Get(':id')
-  detalle(@CurrentSession() auth: CurrentAuth, @Param('id', ParseUUIDPipe) id: string) {
+  detalle(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
     return this.service.detalle(auth, id);
   }
 
   @Patch(':id/enviar')
-  enviar(@CurrentSession() auth: CurrentAuth, @Param('id', ParseUUIDPipe) id: string) {
+  enviar(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
     return this.service.enviar(auth, id);
   }
 

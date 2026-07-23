@@ -32,7 +32,10 @@ export function evaluarAprobacion(
 ): MotivoAprobacion[] {
   const motivos: MotivoAprobacion[] = [];
 
-  if (config.aprobacionMontoMax != null && presupuesto.total > config.aprobacionMontoMax) {
+  if (
+    config.aprobacionMontoMax != null &&
+    presupuesto.total > config.aprobacionMontoMax
+  ) {
     motivos.push({
       regla: 'monto',
       detalle: `El total ${pesos(presupuesto.total)} supera el umbral de ${pesos(config.aprobacionMontoMax)}.`,
@@ -40,7 +43,9 @@ export function evaluarAprobacion(
   }
 
   if (config.aprobacionMargenMinPct != null) {
-    const sinCosto = presupuesto.items.filter((i) => i.costoTotal == null).length;
+    const sinCosto = presupuesto.items.filter(
+      (i) => i.costoTotal == null,
+    ).length;
     if (sinCosto > 0) {
       // Sin costo verificable no se puede garantizar el margen mínimo.
       motivos.push({
@@ -49,7 +54,10 @@ export function evaluarAprobacion(
       });
     }
     const neto = presupuesto.items.reduce((a, i) => a + i.subtotal, 0);
-    const costo = presupuesto.items.reduce((a, i) => a + (i.costoTotal ?? 0), 0);
+    const costo = presupuesto.items.reduce(
+      (a, i) => a + (i.costoTotal ?? 0),
+      0,
+    );
     if (sinCosto === 0 && neto > 0) {
       const margenPct = ((neto - costo) / neto) * 100;
       if (margenPct < config.aprobacionMargenMinPct) {

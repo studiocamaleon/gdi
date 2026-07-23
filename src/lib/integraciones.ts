@@ -152,6 +152,8 @@ export type EventoNotificacion = {
   activo: boolean;
   /** true = el tenant nunca lo tocó y está en el default de Grafo. */
   porDefecto: boolean;
+  /** false = todavía no hay nada en el sistema que lo dispare. */
+  cableado: boolean;
 };
 
 export type ResumenConsentimiento = {

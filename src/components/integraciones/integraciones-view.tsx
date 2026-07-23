@@ -1183,7 +1183,11 @@ function NotificacionesTab() {
           <div className="int-nt-evento" key={e.evento}>
             <div className="int-nt-evento-main">
               <div className="int-nt-evento-nm">{e.titulo}</div>
-              <div className="int-nt-evento-cuando">{e.cuando}</div>
+              <div className="int-nt-evento-cuando">
+                {e.cableado
+                  ? e.cuando
+                  : "Todavía no está conectado a la operación: el sistema no lo dispara."}
+              </div>
             </div>
             <div className="int-nt-evento-side">
               {e.categoria === "MARKETING" && (
@@ -1194,9 +1198,15 @@ function NotificacionesTab() {
                   PROMO
                 </span>
               )}
+              {!e.cableado && <span className="int-pill">EN CAMINO</span>}
+              {/*
+                Un switch que se puede prender pero no hace nada es peor que no
+                tenerlo: el usuario cree que configuró algo y espera mensajes
+                que nunca van a salir.
+              */}
               <Switch
-                checked={e.activo}
-                disabled={cfg.pausado}
+                checked={e.activo && e.cableado}
+                disabled={cfg.pausado || !e.cableado}
                 onCheckedChange={(v) => void cambiarEvento(e.evento, v)}
               />
             </div>
