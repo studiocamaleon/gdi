@@ -1,24 +1,20 @@
-import { PresupuestoPublicoView } from "@/components/comercial/presupuesto-publico";
-import { getPresupuestoPublico, type PresupuestoPublico } from "@/lib/presupuestos-api";
+import { permanentRedirect } from "next/navigation";
+
+import { enlacePublicoPath } from "@/lib/enlaces-publicos";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Vista PÚBLICA del presupuesto (sin sesión — el token es la credencial).
- * El cliente lo ve, y si está vigente puede aprobarlo o rechazarlo: esa
- * decisión queda registrada con timestamp en el timeline (firma virtual).
+ * Ruta vieja del presupuesto público, ahora en /p/<token>.
+ *
+ * No se puede borrar: cada link que ya se le mandó a un cliente apunta acá.
+ * Redirige permanente y se queda.
  */
-export default async function PresupuestoPublicoPage({
+export default async function PresupuestoLegacyPage({
   params,
 }: {
   params: Promise<{ token: string }>;
 }) {
   const { token } = await params;
-  let datos: PresupuestoPublico | null = null;
-  try {
-    datos = await getPresupuestoPublico(token);
-  } catch {
-    // null → estado "no encontrado".
-  }
-  return <PresupuestoPublicoView token={token} initial={datos} />;
+  permanentRedirect(enlacePublicoPath("presupuesto", token));
 }

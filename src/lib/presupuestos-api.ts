@@ -1,3 +1,4 @@
+import { enlacePublicoPath, enlacePublicoUrl } from "@/lib/enlaces-publicos";
 import { apiRequest } from "@/lib/api";
 
 /**
@@ -251,21 +252,12 @@ export function presupuestoPdfUrl(id: string): string {
   return `/api/backend/presupuestos/${id}/pdf`;
 }
 
-/**
- * Ruta pública relativa. Da lo mismo en server y en cliente, así que es la
- * única forma segura de armar un href: con el origin metido adentro, el HTML
- * del server y el del cliente difieren y React tira hydration mismatch.
- */
+/** Ruta pública del presupuesto: /p/<token>. */
 export function presupuestoPublicPath(token: string): string {
-  return `/presupuesto/${token}`;
+  return enlacePublicoPath("presupuesto", token);
 }
 
-/**
- * URL absoluta para compartir con el cliente (copiar al portapapeles, mandar
- * por mail). Usa window, así que sólo se puede llamar desde un handler o un
- * efecto — nunca durante el render.
- */
+/** URL absoluta para compartir con el cliente (copiar, mandar por mail). */
 export function presupuestoPublicUrl(token: string): string {
-  const origin = typeof window === "undefined" ? "" : window.location.origin;
-  return `${origin}${presupuestoPublicPath(token)}`;
+  return enlacePublicoUrl("presupuesto", token);
 }

@@ -1,10 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { TipoEnlacePublico } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificacionesService } from './notificaciones.service';
 import { nombreDelCliente } from './notificaciones-ordenes.service';
 import { enContextoDe } from './contexto';
 import type { EventoNotificacion } from '../wati/catalogo';
+import { urlEnlacePublico } from '../../enlaces-publicos/enlaces-publicos.urls';
 
 /**
  * Traduce el estado de un presupuesto al aviso que le corresponde.
@@ -68,7 +70,7 @@ export class NotificacionesPresupuestosService {
     // Sin link público el mensaje no sirve: los dos avisos existen para que el
     // cliente ABRA el presupuesto.
     if (!p.publicToken) return;
-    const url = `${baseFront()}/presupuesto/${p.publicToken}`;
+    const url = urlEnlacePublico(TipoEnlacePublico.PRESUPUESTO, p.publicToken);
 
     const nombre = nombreDelCliente(p.cliente?.razonSocial);
     const total = money(Number(p.total ?? 0));
@@ -108,10 +110,4 @@ function money(n: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-}
-
-function baseFront(): string {
-  return (
-    process.env.FRONTEND_URL?.split(',')[0]?.trim() ?? 'http://localhost:3000'
-  );
 }
