@@ -448,7 +448,104 @@ model CronLock {
   instancia String?
 }
 
+/// Configuración de las notificaciones por WhatsApp. Una fila por tenant.
+///
+/// La ventana horaria es propia y no reusa el calendario de producción a
+/// propósito: ése es POR ESTACIÓN —una imprenta puede tener corte y laminado
+/// con horarios distintos— y "¿a qué hora se le puede escribir a un cliente?"
+/// es una sola pregunta por empresa.
+model ConfiguracionNotificaciones {
+  id        String  @id @default(uuid()) @db.Uuid
+  tenantId  String  @unique @db.Uuid
+  /// Freno de mano: corta TODOS los envíos sin desconectar la integración ni
+  /// perder los toggles. Cuando algo se dispara mal hay que poder frenarlo en
+  /// un click, no razonando qué evento apagar.
+  pausado   Boolean @default(false)
+  /// Hora local del tenant. Lo que caiga afuera espera en la cola: un
+  /// WhatsApp automático a las 23:40 se lee como spam.
+  horaDesde String  @default("09:00")
+  horaHasta String  @default("20:00")
+
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+/// Qué eventos del catálogo están encendidos para este tenant.
+///
+/// Sólo se guardan los que el tenant TOCÓ: si no hay fila, vale el
+/// `activoPorDefecto` del catálogo. Así, sumar un evento nuevo lo enciende
+/// según lo que decidió Grafo sin tener que backfillear a nadie.
+model NotificacionEvento {
+  id       String  @id @default(uuid()) @db.Uuid
+  tenantId String  @db.Uuid
+  /// `EventoNotificacion` del catálogo (`orden_lista`, `pago_recibido`, …).
+  evento   String
+  activo   Boolean
+
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, evento])
+}
+
+/// Cola de envíos y registro de lo que salió (decisión D5).
+///
+/// Es una cola pobre —una tabla y el cron que ya existe— y es a propósito: el
+/// checklist pedía BullMQ + Redis, que no hay, y montarlos para esto sería
+/// desproporcionado. Esto sobrevive a un reinicio, es observable desde la UI y
+/// los puntos de enganche no cambian el día que aparezca Redis.
+///
+/// El evento de negocio NUNCA falla por la notificación (D4): encolar es un
+/// insert, y todo lo que puede salir mal —plantilla sin aprobar, teléfono
+/// inválido, cliente sin consentimiento— se resuelve acá y queda registrado.
+model NotificacionWhatsapp {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  evento   String
+  /// 'pendiente' | 'enviada' | 'fallida' | 'descartada'
+  estado   String @default("pendiente")
+
+  clienteId    String? @db.Uuid
+  ordenId      String? @db.Uuid
+  cotizacionId String? @db.Uuid
+
+  /// Idempotencia. `evento:idDeLaEntidad` — el índice único con `tenantId` es
+  /// lo que hace que reentrar a un estado no vuelva a notificar.
+  ///
+  /// Hace falta de verdad: reabrir un paso de una OT finalizada la devuelve a
+  /// producción (ordenes-trabajo.service.ts), y con la mesa de trabajo eso es
+  /// operación normal. Sin esto, "tu orden está lista" sale dos veces.
+  claveUnica String
+
+  /// E.164 resuelto al encolar, no al enviar: si el cliente cambia el teléfono
+  /// después, el mensaje sale al que estaba vigente cuando pasó el hecho.
+  telefono   String
+  plantilla  String
+  parametros Json
+
+  intentos Int     @default(0)
+  /// Por qué se descartó o falló. Es lo que se muestra en el log.
+  motivo   String?
+
+  /// Cuándo se puede mandar. Fuera de la ventana horaria se corre al día
+  /// siguiente en vez de descartarse.
+  programadaPara DateTime?
+  enviadaEl      DateTime?
+  createdAt      DateTime  @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, claveUnica])
+  @@index([tenantId, estado, programadaPara])
+  @@index([tenantId, createdAt])
+}
+
 model Tenant {
+  configuracionNotificaciones                      ConfiguracionNotificaciones?
+  notificacionEventos                              NotificacionEvento[]
+  notificacionesWhatsapp                           NotificacionWhatsapp[]
   id                                               String                                            @id @default(uuid()) @db.Uuid
   nombre                                           String
   slug                                             String                                            @unique
@@ -634,6 +731,13 @@ model Invitation {
 }
 
 model Cliente {
+  /// Consentimiento para recibir WhatsApp. Arranca en false y NO se
+  /// backfillea: WhatsApp exige opt-in y la ley 25.326 también, así que
+  /// marcarlos a todos en true de una migración sería exactamente la trampa.
+  aceptaWhatsapp      Boolean                           @default(false)
+  /// Cuándo se registró el consentimiento. Sin esto no hay nada que mostrar
+  /// el día que un cliente pregunte por qué le escriben.
+  aceptaWhatsappEl    DateTime?
   id                  String                            @id @default(uuid()) @db.Uuid
   tenantId            String                            @db.Uuid
   nombre              String

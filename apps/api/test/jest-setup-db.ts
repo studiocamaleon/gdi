@@ -15,7 +15,16 @@
  *
  * - La base de test se crea una vez con:
  *     docker exec gdi-saas-postgres psql -U postgres -c 'CREATE DATABASE gdi_saas_test;'
- *     DATABASE_URL="postgresql://postgres:postgres@localhost:5436/gdi_saas_test?schema=public" npx prisma migrate deploy
+ * - Para MIGRARLA no alcanza con exportar DATABASE_URL: el datasource declara
+ *   `directUrl = env("MIGRATE_DATABASE_URL")` y `prisma migrate` usa ESA, así
+ *   que un `DATABASE_URL=...test prisma migrate deploy` se aplica calladito a
+ *   la base de desarrollo. Hay que pisar las dos:
+ *     DATABASE_URL="postgresql://postgres:postgres@localhost:5436/gdi_saas_test?schema=public" \
+ *     MIGRATE_DATABASE_URL="postgresql://postgres:postgres@localhost:5436/gdi_saas_test?schema=public" \
+ *     npx prisma migrate deploy
+ *   (y ojo: el `.env` de apps/api le gana a la variable del shell, así que
+ *   conviene verificar la línea "Datasource ... database ..." que imprime
+ *   Prisma antes de creer que se aplicó donde uno quería).
  * - Sin seed, los specs de integración (que buscan el tenant `gdi-demo`) se
  *   saltean solos y corren únicamente los tests unitarios. Si querés correr
  *   la suite de integración completa, seedeá `gdi_saas_test`.

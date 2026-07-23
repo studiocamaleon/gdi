@@ -4,6 +4,8 @@ import { SecretosService } from './cripto/secretos.service';
 import { IntegracionesController } from './integraciones.controller';
 import { IntegracionesService } from './integraciones.service';
 import { WatiClient } from './wati/wati.client';
+import { NotificacionesScheduler } from './notificaciones/notificaciones.scheduler';
+import { NotificacionesService } from './notificaciones/notificaciones.service';
 import { WatiScheduler } from './wati/wati.scheduler';
 
 /**
@@ -19,7 +21,19 @@ import { WatiScheduler } from './wati/wati.scheduler';
 @Global()
 @Module({
   controllers: [IntegracionesController],
-  providers: [SecretosService, IntegracionesService, WatiClient, WatiScheduler],
-  exports: [SecretosService, IntegracionesService, WatiClient],
+  providers: [
+    SecretosService,
+    IntegracionesService,
+    WatiClient,
+    WatiScheduler,
+    NotificacionesService,
+    NotificacionesScheduler,
+  ],
+  exports: [
+    NotificacionesService,
+    SecretosService,
+    IntegracionesService,
+    WatiClient,
+  ],
 })
 export class IntegracionesModule {}

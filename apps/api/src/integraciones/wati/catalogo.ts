@@ -365,6 +365,13 @@ Si preferís no hacerlo, no hay problema.`,
 export const POR_CODIGO = new Map(CATALOGO.map((p) => [p.codigo, p]));
 
 /**
+ * Por evento de negocio. El alta y el estado de las plantillas se manejan por
+ * `codigo` —que lleva versión—, pero quien encola una notificación piensa en
+ * "la orden está lista", no en `grafo_orden_lista_v2`.
+ */
+export const POR_EVENTO = new Map(CATALOGO.map((p) => [p.evento, p]));
+
+/**
  * Valida un texto contra las reglas de Meta ANTES de someterlo.
  *
  * Existe porque el ciclo de error del otro lado es carísimo: Meta tarda
