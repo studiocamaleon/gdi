@@ -30,6 +30,7 @@ import {
 } from './letra-comprobante';
 import { ManualProvider } from './invoicing/manual.provider';
 import { AfipSdkProvider } from './invoicing/afip-sdk.provider';
+import { AfipIntegracionService } from './afip-integracion.service';
 import { texto } from './invoicing/codigos-arca';
 import type {
   ComprobanteItemProvider,
@@ -106,6 +107,7 @@ export class ComprobantesService {
     private readonly prisma: PrismaService,
     private readonly manualProvider: ManualProvider,
     private readonly afipSdkProvider: AfipSdkProvider,
+    private readonly afipIntegracion: AfipIntegracionService,
     private readonly facturacionOrdenes: FacturacionOrdenesService,
     private readonly factura: FacturaService,
     private readonly facturaPdf: FacturaPdfService,
@@ -710,6 +712,13 @@ export class ComprobantesService {
     if (orden.estado === 'borrador') {
       throw new BadRequestException(
         'No se puede facturar una orden en borrador: emitila primero.',
+      );
+    }
+    // La red del gate de UI: aunque el botón se filtre, sin la integración AFIP
+    // activa no se emite. Ver docs/integracion-afip-delegacion-diseno.md
+    if (!(await this.afipIntegracion.facturacionHabilitada())) {
+      throw new BadRequestException(
+        'La facturación electrónica no está activa. Verificá la delegación de AFIP en Configuración → Integraciones.',
       );
     }
     const saldo = redondear2(

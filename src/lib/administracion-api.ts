@@ -401,3 +401,11 @@ export async function acreditarCobro(id: string): Promise<Cobro> {
     method: "POST",
   });
 }
+
+/** El gate del botón Facturar: ¿está activa la facturación electrónica (AFIP)? */
+export async function getFacturacionHabilitada(): Promise<boolean> {
+  const r = await apiRequest<{ habilitada: boolean }>(
+    "/administracion/facturacion/estado",
+  );
+  return r.habilitada;
+}

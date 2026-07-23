@@ -165,6 +165,35 @@ export class AfipSdkProvider implements InvoicingProvider {
     return id;
   }
 
+  /**
+   * ¿ARCA nos deja operar en nombre de este CUIT? Es la verificación de la
+   * delegación: no hay un webservice que la consulte, así que se USA —
+   * `FECompUltimoAutorizado` sobre un punto de venta del tenant—. Si responde
+   * (incluso 0 = "autorizado, nada emitido aún"), la delegación está hecha; si
+   * el `/auth` o el wsfe rechazan, no, y el motivo se devuelve tal cual para
+   * mostrarlo. Nunca lanza: el error es un resultado, no una excepción.
+   *
+   * `numero` es null cuando no se pudo verificar; `ok` distingue los dos casos.
+   */
+  async verificarDelegacion(
+    cuitEmisor: string,
+    puntoVenta: number,
+  ): Promise<{ ok: boolean; numero: number | null; motivo?: string }> {
+    try {
+      const numero = await this.ultimoNumero(
+        puntoVenta,
+        'factura',
+        'B',
+        cuitEmisor,
+      );
+      return { ok: numero !== null, numero };
+    } catch (error) {
+      const motivo =
+        error instanceof Error ? error.message : 'ARCA no respondió.';
+      return { ok: false, numero: null, motivo };
+    }
+  }
+
   async ultimoNumero(
     puntoVenta: number,
     tipo: EmitirInput['tipo'],

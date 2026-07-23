@@ -98,3 +98,49 @@ export async function cambiarEventoNotificacion(
     body: JSON.stringify({ activo }),
   });
 }
+
+// ── AFIP (facturación electrónica por delegación) ──────────────────────
+// Ver docs/integracion-afip-delegacion-diseno.md
+
+export type AfipIntegracion = {
+  estado: "DESCONECTADA" | "CONECTADA" | "ERROR";
+  ambiente: "dev" | "prod";
+  representanteCuit: string | null;
+  /** El tenant factura con el CUIT del certificado: no hay nada que delegar. */
+  esCuitPropio: boolean;
+  emisor: {
+    cuit: string | null;
+    razonSocial: string | null;
+    condicionFiscal: string | null;
+    domicilioFiscal: string | null;
+    puntosVenta: Array<{ numero: number; numeroFormateado: string }>;
+  };
+  ultimoChequeoEl: string | null;
+  ultimoErrorTexto: string | null;
+  conectadaEl: string | null;
+};
+
+export type ResultadoVerificacionAfip = {
+  ok: boolean;
+  cuit: string | null;
+  puntoVenta: number | null;
+  ultimoNumero: number | null;
+  motivo: string | null;
+};
+
+export async function getAfip(): Promise<AfipIntegracion> {
+  return apiRequest("/administracion/afip");
+}
+
+export async function verificarAfip(): Promise<ResultadoVerificacionAfip> {
+  return apiRequest("/administracion/afip/verificar", { method: "POST" });
+}
+
+export async function activarAfip(): Promise<AfipIntegracion> {
+  return apiRequest("/administracion/afip/activar", { method: "POST" });
+}
+
+export async function desactivarAfip(): Promise<AfipIntegracion> {
+  return apiRequest("/administracion/afip/desactivar", { method: "POST" });
+}
+

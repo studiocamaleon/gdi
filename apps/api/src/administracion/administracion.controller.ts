@@ -19,6 +19,7 @@ import { MetodosPagoService } from './metodos-pago.service';
 import { CobrosService } from './cobros.service';
 import { TesoreriaService } from './tesoreria.service';
 import { ConfiguracionFiscalService } from './configuracion-fiscal.service';
+import { AfipIntegracionService } from './afip-integracion.service';
 import { ComprobantesService } from './comprobantes.service';
 import { ImputacionesService } from './imputaciones.service';
 import { CuentaCorrienteService } from './cuenta-corriente.service';
@@ -53,6 +54,7 @@ export class AdministracionController {
     private readonly metodosPagoService: MetodosPagoService,
     private readonly cobrosService: CobrosService,
     private readonly recibosService: RecibosService,
+    private readonly afipIntegracion: AfipIntegracionService,
     private readonly tesoreriaService: TesoreriaService,
     private readonly configuracionFiscalService: ConfiguracionFiscalService,
     private readonly comprobantesService: ComprobantesService,
@@ -162,6 +164,37 @@ export class AdministracionController {
   }
 
   // ── Facturación sobre órdenes ────────────────────────────────────────
+
+  // ── Integración AFIP (facturación electrónica por delegación) ────────
+  // Ver docs/integracion-afip-delegacion-diseno.md
+
+  @Get('afip')
+  afip(@CurrentSession() auth: CurrentAuth) {
+    return this.afipIntegracion.obtener(auth);
+  }
+
+  /** Verifica la delegación sin encender nada (chequeo en seco). */
+  @Post('afip/verificar')
+  verificarAfip(@CurrentSession() auth: CurrentAuth) {
+    return this.afipIntegracion.verificar(auth);
+  }
+
+  /** Enciende la facturación: verifica y, si pasa, activa. */
+  @Post('afip/activar')
+  activarAfip(@CurrentSession() auth: CurrentAuth) {
+    return this.afipIntegracion.activar(auth);
+  }
+
+  @Post('afip/desactivar')
+  desactivarAfip(@CurrentSession() auth: CurrentAuth) {
+    return this.afipIntegracion.desactivar(auth);
+  }
+
+  /** El gate del botón Facturar. Liviano: sólo el booleano. */
+  @Get('facturacion/estado')
+  async estadoFacturacion() {
+    return { habilitada: await this.afipIntegracion.facturacionHabilitada() };
+  }
 
   /** Órdenes finalizadas con saldo sin facturar (vista Facturación). */
   @Get('facturacion/pendientes')

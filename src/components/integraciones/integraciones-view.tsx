@@ -25,6 +25,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   conectarWati,
   desconectarIntegracion,
+  getAfip,
   getIntegraciones,
   getPlantillasWati,
   probarIntegracion,
@@ -33,8 +34,10 @@ import {
   getLogNotificaciones,
   getNotificaciones,
   guardarConfigNotificaciones,
+  type AfipIntegracion,
   type EstadoIntegraciones,
 } from "@/lib/integraciones-api";
+import { AfipDetalle } from "@/components/integraciones/afip-detalle";
 
 /* ─────────── Iconos (calcados del diseño, sin dependencias) ─────────── */
 
@@ -127,6 +130,24 @@ function Logo({ proveedor, size = 44 }: { proveedor: ProveedorIntegracion; size?
 export function IntegracionesView({ inicial }: { inicial: EstadoIntegraciones }) {
   const [datos, setDatos] = React.useState(inicial);
   const [abierta, setAbierta] = React.useState<ProveedorIntegracion | null>(null);
+  const [afip, setAfip] = React.useState<AfipIntegracion | null>(null);
+
+  // AFIP se carga on-demand al abrir (la lista no trae su detalle enriquecido);
+  // el resto abre directo por estado.
+  const abrir = React.useCallback((p: ProveedorIntegracion) => {
+    if (p !== "AFIP") {
+      setAbierta(p);
+      return;
+    }
+    getAfip()
+      .then((d) => {
+        setAfip(d);
+        setAbierta("AFIP");
+      })
+      .catch(() => {
+        // El botón sigue disponible; no rompemos la grilla por esto.
+      });
+  }, []);
 
   const recargar = React.useCallback(async () => {
     try {
@@ -149,6 +170,19 @@ export function IntegracionesView({ inicial }: { inicial: EstadoIntegraciones })
           void recargar();
         }}
         onCambio={recargar}
+      />
+    );
+  }
+
+  if (abierta === "AFIP" && afip) {
+    return (
+      <AfipDetalle
+        inicial={afip}
+        onVolver={() => {
+          setAbierta(null);
+          setAfip(null);
+          void recargar();
+        }}
       />
     );
   }
@@ -186,7 +220,7 @@ export function IntegracionesView({ inicial }: { inicial: EstadoIntegraciones })
               key={c.proveedor}
               item={c}
               integracion={datos.integraciones.find((i) => i.proveedor === c.proveedor)}
-              onAbrir={setAbierta}
+              onAbrir={abrir}
             />
           ))}
         </Seccion>
@@ -198,7 +232,7 @@ export function IntegracionesView({ inicial }: { inicial: EstadoIntegraciones })
             key={c.proveedor}
             item={c}
             integracion={datos.integraciones.find((i) => i.proveedor === c.proveedor)}
-            onAbrir={setAbierta}
+            onAbrir={abrir}
           />
         ))}
       </Seccion>
