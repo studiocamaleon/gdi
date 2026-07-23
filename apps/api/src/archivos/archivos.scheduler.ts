@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 
+import { conLockDeCron } from '../common/cron-lock';
+import { PrismaService } from '../prisma/prisma.service';
 import { ArchivosService } from './archivos.service';
 
 /**
@@ -20,22 +22,29 @@ export class ArchivosScheduler {
   private readonly logger = new Logger(ArchivosScheduler.name);
   private corriendo = false;
 
-  constructor(private readonly archivos: ArchivosService) {}
+  constructor(
+    private readonly archivos: ArchivosService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Cron('0 4 * * *', { name: 'higiene-archivos' })
   async higiene(): Promise<void> {
     if (this.corriendo) return;
     this.corriendo = true;
     try {
-      const pendientes = await this.archivos.barrerPendientes();
-      const purgados = await this.archivos.purgarPapelera();
-      // Al final: recién después de purgar tiene sentido recontar.
-      const corregidos = await this.archivos.resincronizarContadores();
-      if (pendientes > 0 || purgados > 0 || corregidos > 0) {
-        this.logger.log(
-          `Higiene de archivos: ${pendientes} subidas abandonadas, ${purgados} de papelera, ${corregidos} contadores corregidos.`,
-        );
-      }
+      // TTL holgado: la purga habla con R2 archivo por archivo y el tiempo
+      // depende de cuánto se acumuló, no de nuestro código.
+      await conLockDeCron(this.prisma, 'higiene-archivos', 900, async () => {
+        const pendientes = await this.archivos.barrerPendientes();
+        const purgados = await this.archivos.purgarPapelera();
+        // Al final: recién después de purgar tiene sentido recontar.
+        const corregidos = await this.archivos.resincronizarContadores();
+        if (pendientes > 0 || purgados > 0 || corregidos > 0) {
+          this.logger.log(
+            `Higiene de archivos: ${pendientes} subidas abandonadas, ${purgados} de papelera, ${corregidos} contadores corregidos.`,
+          );
+        }
+      });
     } catch (error) {
       this.logger.error(
         'Falló la higiene de archivos.',

@@ -8,6 +8,7 @@ import { getCurrentTenantId } from '../common/tenant-context';
  */
 const MODELOS_EXENTOS = new Set<string>([
   'Tenant',
+  'CronLock',
   'User',
   'AuthSession',
   'Membership',

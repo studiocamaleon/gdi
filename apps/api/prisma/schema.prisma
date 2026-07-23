@@ -422,6 +422,32 @@ enum EstadoIntegracion {
   ERROR
 }
 
+/// Lease de ejecución para los jobs programados.
+///
+/// Los crons corren DENTRO del proceso del API (`ScheduleModule.forRoot()`),
+/// así que con más de una instancia cada job se dispara una vez por instancia:
+/// el barrido de acreditaciones acreditaría dos veces, y el alta de plantillas
+/// de Wati quemaría el doble del cupo de 10 por hora que impone Meta. El guard
+/// `corriendo` de cada scheduler sólo protege dentro de un proceso.
+///
+/// Es un lease y no un advisory lock de Postgres a propósito: el lock de
+/// sesión no sobrevive al pool de Prisma, y el de transacción obligaría a
+/// mantener una transacción abierta durante todo el job —minutos de I/O de red
+/// en el caso de Wati— pinchando una conexión y bloqueando el vacuum.
+///
+/// `expiraEl` es lo que hace que una instancia que se murió a mitad del job no
+/// deje el lock tomado para siempre.
+model CronLock {
+  /// Nombre del job. Igual al `name` del decorador @Cron.
+  nombre    String   @id
+  tomadoEl  DateTime
+  /// Hasta cuándo vale. Pasada esta fecha, otra instancia lo puede tomar.
+  expiraEl  DateTime
+  /// Qué proceso lo tiene. Evita que una instancia libere un lease ajeno
+  /// cuando el suyo ya venció y otro lo tomó.
+  instancia String?
+}
+
 model Tenant {
   id                                               String                                            @id @default(uuid()) @db.Uuid
   nombre                                           String

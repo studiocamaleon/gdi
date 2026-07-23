@@ -46,6 +46,8 @@ import { tenantGuardExtension } from '../tenant-guard.extension';
 const SIN_TENANT_ID_JUSTIFICADOS = new Set([
   // Plataforma / auth: existen por encima de cualquier tenant.
   'Tenant',
+  // Infraestructura: coordina qué instancia corre cada job programado.
+  'CronLock',
   'User',
   'AuthSession',
   // Catálogo compartido: mismos datos para todos los tenants.
@@ -76,6 +78,7 @@ const ARCHIVO_AUTORIZADO = 'auth/auth.service.ts';
 /** Copiado del guard: los que quedan fuera de la inyección automática. */
 const MODELOS_EXENTOS = new Set([
   'Tenant',
+  'CronLock',
   'User',
   'AuthSession',
   'Membership',

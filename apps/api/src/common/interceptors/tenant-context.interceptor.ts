@@ -20,9 +20,7 @@ import { tenantContext } from '../tenant-context';
 @Injectable()
 export class TenantContextInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
-    const req = context
-      .switchToHttp()
-      .getRequest<{ auth?: CurrentAuth }>();
+    const req = context.switchToHttp().getRequest<{ auth?: CurrentAuth }>();
     const tenantId = req.auth?.tenantId;
 
     if (!tenantId) {
