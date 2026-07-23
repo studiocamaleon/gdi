@@ -461,10 +461,20 @@ model ConfiguracionNotificaciones {
   /// perder los toggles. Cuando algo se dispara mal hay que poder frenarlo en
   /// un click, no razonando qué evento apagar.
   pausado   Boolean @default(false)
-  /// Hora local del tenant. Lo que caiga afuera espera en la cola: un
-  /// WhatsApp automático a las 23:40 se lee como spam.
+  /// Cortesía: a qué hora es aceptable escribirle a alguien. Vale para TODOS
+  /// los mensajes; lo que caiga afuera espera, porque un WhatsApp automático a
+  /// las 23:40 se lee como spam.
   horaDesde String  @default("09:00")
   horaHasta String  @default("20:00")
+
+  /// Días con el local abierto al público, ISO (1 = lunes … 7 = domingo).
+  ///
+  /// Es una pregunta DISTINTA de la de arriba, y por eso es un campo aparte:
+  /// "tu orden está lista, pasá a retirarla" mandado un sábado que la imprenta
+  /// produce pero no atiende hace que el cliente viaje al pedo. Sólo lo
+  /// respetan los eventos marcados `requiereLocalAbierto` en el catálogo; un
+  /// pago acreditado o una factura salen cualquier día dentro del horario.
+  diasAtencion String @default("1,2,3,4,5")
 
   updatedAt DateTime @updatedAt
 

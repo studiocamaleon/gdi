@@ -4,6 +4,7 @@ import { SecretosService } from './cripto/secretos.service';
 import { IntegracionesController } from './integraciones.controller';
 import { IntegracionesService } from './integraciones.service';
 import { WatiClient } from './wati/wati.client';
+import { DespachoService } from './notificaciones/despacho.service';
 import { NotificacionesScheduler } from './notificaciones/notificaciones.scheduler';
 import { NotificacionesService } from './notificaciones/notificaciones.service';
 import { WatiScheduler } from './wati/wati.scheduler';
@@ -26,6 +27,7 @@ import { WatiScheduler } from './wati/wati.scheduler';
     IntegracionesService,
     WatiClient,
     WatiScheduler,
+    DespachoService,
     NotificacionesService,
     NotificacionesScheduler,
   ],

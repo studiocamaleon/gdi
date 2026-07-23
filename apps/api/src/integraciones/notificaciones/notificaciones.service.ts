@@ -9,6 +9,8 @@ import {
   type EventoNotificacion,
 } from '../wati/catalogo';
 import { aE164 } from '../telefono';
+import { DespachoService } from './despacho.service';
+import { ESTADOS } from './estados';
 
 /**
  * Encola notificaciones de WhatsApp y decide cuáles NO salen.
@@ -42,19 +44,14 @@ export type ResultadoEncolar =
   | { encolada: true; id: string }
   | { encolada: false; motivo: string };
 
-/** Estados de una fila de la cola. */
-export const ESTADOS = {
-  pendiente: 'pendiente',
-  enviada: 'enviada',
-  fallida: 'fallida',
-  descartada: 'descartada',
-} as const;
-
 @Injectable()
 export class NotificacionesService {
   private readonly logger = new Logger(NotificacionesService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly despacho: DespachoService,
+  ) {}
 
   /**
    * El guard inyecta el tenant solo, pero los tipos de Prisma lo exigen en el
@@ -148,6 +145,11 @@ export class NotificacionesService {
           parametros: ctx.parametros,
         },
       });
+      // Se intenta mandar YA, sin esperar al cron. No se hace `await` a
+      // propósito: quien cerró la orden no tiene por qué esperar a que Wati
+      // conteste, y si esto falla la fila queda pendiente y el cron la levanta
+      // dentro de cinco minutos.
+      void this.despacho.despachar(fila.id).catch(() => undefined);
       return { encolada: true, id: fila.id };
     } catch (error) {
       // P2002 = ya existe una notificación para (evento, entidad). NO es un

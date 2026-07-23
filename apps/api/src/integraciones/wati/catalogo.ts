@@ -49,6 +49,15 @@ export type PlantillaCanonica = {
   categoria: CategoriaPlantilla;
   idioma: string;
   activoPorDefecto: boolean;
+  /**
+   * ¿Invita al cliente a venir al local?
+   *
+   * Los que sí esperan a un día de atención al público: mandar "pasá a
+   * retirarla" un sábado que la imprenta produce pero no atiende hace que el
+   * cliente viaje al pedo. Los demás —un pago acreditado, una factura— no
+   * dependen de que haya alguien en el mostrador.
+   */
+  requiereLocalAbierto?: boolean;
   /** Cuerpo posicional, tal como lo ve Meta. */
   cuerpo: string;
   footer: string;
@@ -213,6 +222,7 @@ Si necesitás coordinar algo, respondenos por acá.`,
     categoria: 'UTILITY',
     idioma: IDIOMA,
     activoPorDefecto: true,
+    requiereLocalAbierto: true,
     cuerpo: `Hola {{1}}, tu orden {{2}} ya está lista. 📦
 
 Podés pasar a retirarla por nuestro local o, si pediste envío, te avisamos cuando salga.
@@ -235,6 +245,7 @@ No tenés saldo pendiente por este trabajo.`,
     categoria: 'UTILITY',
     idioma: IDIOMA,
     activoPorDefecto: true,
+    requiereLocalAbierto: true,
     cuerpo: `Hola {{1}}, tu orden {{2}} ya está lista. 📦
 
 💰 Saldo pendiente: \${{3}}
