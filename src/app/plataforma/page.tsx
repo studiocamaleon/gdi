@@ -36,5 +36,10 @@ export default async function PlataformaPage() {
 
   if (sinSesion) redirect("/login");
   if (!datos) return <PlataformaSinAcceso />;
-  return <ConsolaPlataformaView datos={datos} />;
+  return (
+    <ConsolaPlataformaView
+      datos={datos}
+      ambiente={process.env.NODE_ENV === "production" ? "produccion" : "desarrollo"}
+    />
+  );
 }

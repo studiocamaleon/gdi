@@ -1,4 +1,6 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
+import { CurrentSession } from '../auth/current-auth.decorator';
+import type { CurrentAuth } from '../auth/auth.types';
 import { SinTenant } from '../common/sin-tenant.decorator';
 import { PlataformaGuard } from './plataforma.guard';
 import { PlataformaService } from './plataforma.service';
@@ -17,9 +19,9 @@ import { PlataformaService } from './plataforma.service';
 export class PlataformaController {
   constructor(private readonly service: PlataformaService) {}
 
-  /** La consola completa: cards de resumen + la tabla de tenants. */
+  /** La consola completa: resumen + tenants + auditoría + quién mira. */
   @Get('consola')
-  consola() {
-    return this.service.consola();
+  consola(@CurrentSession() auth: CurrentAuth) {
+    return this.service.consola(auth.userId);
   }
 }

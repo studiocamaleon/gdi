@@ -49,7 +49,21 @@ export type TenantConsola = {
   whatsappFallidas: number;
 };
 
+export type EventoPlataforma = {
+  id: string;
+  tipo: string;
+  descripcion: string;
+  tenantAfectadoId: string | null;
+  staffNombre: string | null;
+  staffEmail: string;
+  creadoEl: string;
+};
+
 export type ConsolaPlataforma = {
+  /** Quién está mirando (para el pie del rail). Null en usos internos. */
+  staff: { nombre: string | null; email: string; rol: string } | null;
+  /** Los últimos movimientos del control plane (PlataformaEvento). */
+  auditoria: EventoPlataforma[];
   resumen: {
     tenants: number;
     tenantsActivos: number;
@@ -65,7 +79,7 @@ export type ConsolaPlataforma = {
 export class PlataformaService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async consola(): Promise<ConsolaPlataforma> {
+  async consola(staffUserId?: string): Promise<ConsolaPlataforma> {
     const ahora = Date.now();
     const corte30 = new Date(ahora - 30 * DIA_MS);
     const corte14 = new Date(ahora - 14 * DIA_MS);
@@ -78,6 +92,8 @@ export class PlataformaService {
       cobros,
       integraciones,
       whatsapp,
+      eventos,
+      staff,
     ] = await Promise.all([
       this.prisma.tenant.findMany({
         orderBy: { createdAt: 'asc' },
@@ -126,6 +142,19 @@ export class PlataformaService {
         where: { estado: { in: ['pendiente', 'fallida'] } },
         _count: { _all: true },
       }),
+      this.prisma.plataformaEvento.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 30,
+        include: {
+          staff: { select: { nombreCompleto: true, email: true } },
+        },
+      }),
+      staffUserId
+        ? this.prisma.user.findUnique({
+            where: { id: staffUserId },
+            select: { nombreCompleto: true, email: true, rolPlataforma: true },
+          })
+        : Promise.resolve(null),
     ]);
 
     const porTenant = <T extends { tenantId: string }>(filas: T[]) =>
@@ -171,6 +200,22 @@ export class PlataformaService {
     });
 
     return {
+      staff: staff
+        ? {
+            nombre: staff.nombreCompleto,
+            email: staff.email,
+            rol: staff.rolPlataforma ?? 'SOPORTE',
+          }
+        : null,
+      auditoria: eventos.map((e) => ({
+        id: e.id,
+        tipo: e.tipo,
+        descripcion: e.descripcion,
+        tenantAfectadoId: e.tenantAfectadoId,
+        staffNombre: e.staff.nombreCompleto,
+        staffEmail: e.staff.email,
+        creadoEl: e.createdAt.toISOString(),
+      })),
       resumen: {
         tenants: filas.length,
         tenantsActivos: filas.filter((f) => f.activo).length,

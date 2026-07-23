@@ -30,7 +30,21 @@ export type TenantConsola = {
   whatsappFallidas: number;
 };
 
+export type EventoPlataforma = {
+  id: string;
+  tipo: string;
+  descripcion: string;
+  tenantAfectadoId: string | null;
+  staffNombre: string | null;
+  staffEmail: string;
+  creadoEl: string;
+};
+
 export type ConsolaPlataforma = {
+  /** Quién está mirando (pie del rail). */
+  staff: { nombre: string | null; email: string; rol: string } | null;
+  /** Últimos movimientos del control plane (PlataformaEvento, real desde A). */
+  auditoria: EventoPlataforma[];
   resumen: {
     tenants: number;
     tenantsActivos: number;
