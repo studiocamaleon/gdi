@@ -4,8 +4,12 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { randomBytes } from 'node:crypto';
-import { Archivo, ArchivoScope, Prisma } from '@prisma/client';
+import {
+  Archivo,
+  ArchivoScope,
+  Prisma,
+  TipoEnlacePublico,
+} from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { ArchivosService } from '../archivos/archivos.service';
@@ -24,6 +28,10 @@ import {
   type PresupuestoEstado,
 } from './dto/presupuestos.dto';
 import { NotificacionesPresupuestosService } from '../integraciones/notificaciones/notificaciones-presupuestos.service';
+import {
+  EnlacesPublicosService,
+  generarTokenPublico,
+} from '../enlaces-publicos/enlaces-publicos.service';
 
 /**
  * Presupuestos — el ciclo comercial de la cotización
@@ -53,10 +61,6 @@ type EmisionJson = {
   items: CrearOrdenTrabajoItemDto[];
 };
 
-function generarPublicToken(): string {
-  return randomBytes(16).toString('base64url');
-}
-
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 @Injectable()
@@ -69,6 +73,7 @@ export class PresupuestosService {
     private readonly archivos: ArchivosService,
     private readonly pdf: PresupuestoPdfService,
     private readonly avisos: NotificacionesPresupuestosService,
+    private readonly enlaces: EnlacesPublicosService,
   ) {}
 
   /**
@@ -517,14 +522,24 @@ export class PresupuestosService {
     c: { id: string; publicToken: string | null },
     opts: { reenvio: boolean; descripcion?: string },
   ) {
-    const token = c.publicToken ?? generarPublicToken();
-    await this.prisma.cotizacion.update({
-      where: { id: c.id },
-      data: {
-        estado: 'enviado',
-        fechaEnvio: new Date(),
-        publicToken: token,
-      },
+    const token = c.publicToken ?? generarTokenPublico();
+    await this.prisma.$transaction(async (tx) => {
+      await tx.cotizacion.update({
+        where: { id: c.id },
+        data: {
+          estado: 'enviado',
+          fechaEnvio: new Date(),
+          publicToken: token,
+        },
+      });
+      // Reenviar no acuña token nuevo: `emitir` es idempotente por entidad, así
+      // que el link que el cliente ya tiene sigue siendo el mismo.
+      await this.enlaces.emitir(tx, {
+        tenantId: auth.tenantId,
+        tipo: TipoEnlacePublico.PRESUPUESTO,
+        entidadId: c.id,
+        token,
+      });
     });
     await this.evento(auth, c.id, {
       tipo: 'enviado',
@@ -706,11 +721,18 @@ export class PresupuestosService {
   }
 
   // ── Link público: ver + decidir ────────────────────────────────────
-  /** findUnique por token global (sin sesión no hay tenantContext — el
-   *  token único ES la credencial; mismo patrón que el tracking de OT). */
+  /** El token se resuelve contra EnlacePublico (sin sesión no hay
+   *  tenantContext — el token ES la credencial; mismo patrón que el
+   *  tracking de OT). Ver docs/enlaces-publicos-diseno.md */
   async publico(token: string) {
+    const enlace = await this.enlaces.resolver(
+      token,
+      TipoEnlacePublico.PRESUPUESTO,
+      { contarVisita: true },
+    );
+    if (!enlace) throw new NotFoundException('Presupuesto no encontrado.');
     const c = await this.prisma.cotizacion.findUnique({
-      where: { publicToken: token },
+      where: { id: enlace.entidadId },
       include: {
         tenant: { select: { nombre: true } },
         cliente: { select: { nombre: true } },
@@ -774,8 +796,13 @@ export class PresupuestosService {
   }
 
   async decisionPublica(token: string, dto: DecisionPublicaDto) {
+    const enlace = await this.enlaces.resolver(
+      token,
+      TipoEnlacePublico.PRESUPUESTO,
+    );
+    if (!enlace) throw new NotFoundException('Presupuesto no encontrado.');
     const c = await this.prisma.cotizacion.findUnique({
-      where: { publicToken: token },
+      where: { id: enlace.entidadId },
       select: {
         id: true,
         tenantId: true,

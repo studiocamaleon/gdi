@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Put,
@@ -23,6 +24,7 @@ import { ImputacionesService } from './imputaciones.service';
 import { CuentaCorrienteService } from './cuenta-corriente.service';
 import { FacturaService } from './factura.service';
 import { EstadoCuentaPdfService } from './estado-cuenta-pdf.service';
+import { RecibosService } from './recibos.service';
 import { ArchivosService } from '../archivos/archivos.service';
 import { UpsertMetodoPagoDto } from './dto/metodo-pago.dto';
 import { CrearCobroDto } from './dto/cobro.dto';
@@ -50,6 +52,7 @@ export class AdministracionController {
   constructor(
     private readonly metodosPagoService: MetodosPagoService,
     private readonly cobrosService: CobrosService,
+    private readonly recibosService: RecibosService,
     private readonly tesoreriaService: TesoreriaService,
     private readonly configuracionFiscalService: ConfiguracionFiscalService,
     private readonly comprobantesService: ComprobantesService,
@@ -362,6 +365,31 @@ export class AdministracionController {
     @Body() payload: CrearCobroDto,
   ) {
     return this.cobrosService.create(auth, payload);
+  }
+
+  /**
+   * El PDF del recibo. Sale del storage: se genera al registrar el cobro y
+   * después es un 302 a una URL firmada. Si el render de fondo falló, este
+   * pedido lo rehace.
+   */
+  @Get('cobros/:id/recibo/pdf')
+  async pdfRecibo(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const archivo = await this.recibosService.pdfDe(id, auth.tenantId);
+    res.redirect(302, await this.archivos.urlDeDescarga(archivo.id));
+  }
+
+  /** El link que se comparte con el cliente (`/c/<token>`), si ya se emitió. */
+  @Get('cobros/:id/recibo/enlace')
+  async enlaceRecibo(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    void auth;
+    return { url: await this.recibosService.urlPublica(id) };
   }
 
   @Post('cobros/:id/acreditar')

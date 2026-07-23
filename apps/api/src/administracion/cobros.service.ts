@@ -8,6 +8,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { CurrentAuth } from '../auth/auth.types';
 import type { CrearCobroDto } from './dto/cobro.dto';
 import { FacturacionOrdenesService } from './facturacion-ordenes.service';
+import { RecibosService } from './recibos.service';
+import { NotificacionesCobrosService } from '../integraciones/notificaciones/notificaciones-cobros.service';
 
 /**
  * Cobros — el registro de cómo entra la plata, con las tres cifras:
@@ -20,6 +22,8 @@ export class CobrosService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly facturacionOrdenes: FacturacionOrdenesService,
+    private readonly recibos: RecibosService,
+    private readonly avisos: NotificacionesCobrosService,
   ) {}
 
   /** Cálculo canónico de las tres cifras. */
@@ -139,12 +143,18 @@ export class CobrosService {
     const usuarioNombre = actor?.nombreCompleto ?? auth.email;
 
     const cobroId = await this.prisma.$transaction(async (tx) => {
+      // El número de recibo se asigna acá y no después: un cobro registrado
+      // sin comprobante sería un cobro sin respaldo para el cliente.
+      const numeroRecibo = await this.recibos.numerar(tx, auth.tenantId, fecha);
       const cobro = await tx.cobro.create({
         data: {
           tenantId: auth.tenantId,
           clienteId,
           ordenId: orden?.id ?? null,
           fecha,
+          numeroRecibo,
+          referencia: payload.referencia ?? null,
+          registradoPorNombre: usuarioNombre,
           metodoPagoId: metodo.id,
           cuentaDestinoId: cuenta.id,
           montoBruto: payload.montoBruto,
@@ -244,8 +254,17 @@ export class CobrosService {
         });
       }
 
+      // El link del recibo nace con el cobro: el aviso de WhatsApp sale
+      // enseguida y sin link no hay nada que mostrarle al cliente.
+      await this.recibos.emitirEnlace(tx, auth.tenantId, cobro.id);
+
       return cobro.id;
     });
+
+    // Post-commit y sin `await`: ni el PDF ni Wati pueden voltear un cobro ya
+    // registrado. El PDF se puede rehacer desde el endpoint si falla.
+    this.recibos.materializarPdfEnSegundoPlano(cobroId);
+    void this.avisos.avisar(cobroId);
 
     return this.findOne(auth, cobroId);
   }
@@ -503,6 +522,8 @@ export class CobrosService {
     fechaAcreditacionEstimada: Date | null;
     estadoAcreditacion: string;
     notas: string | null;
+    numeroRecibo?: string | null;
+    referencia?: string | null;
     metodoPago: { nombre: string; tipo: string };
     cuentaDestino: { nombre: string };
     cliente: { nombre: string } | null;
@@ -522,6 +543,8 @@ export class CobrosService {
       ordenId: cobro.ordenId,
       clienteId: cobro.clienteId,
       clienteNombre: cobro.cliente?.nombre ?? null,
+      numeroRecibo: cobro.numeroRecibo ?? null,
+      referencia: cobro.referencia ?? null,
       metodoNombre: cobro.metodoPago.nombre,
       metodoTipo: cobro.metodoPago.tipo,
       cuentaDestinoNombre: cobro.cuentaDestino.nombre,

@@ -6,14 +6,21 @@ import { SESSION_COOKIE_NAME } from "@/lib/session";
 // rebota al home (no tiene sentido re-loguearse).
 const AUTH_PATHS = ["/login", "/aceptar-invitacion"];
 // Contenido ABIERTO: accesible por cualquiera con o sin sesión (no rebota al
-// usuario logueado). El seguimiento público de OT vive acá.
-const OPEN_PATHS = ["/track"];
+// usuario logueado). Son los links públicos: /t/ seguimiento, /p/ presupuesto,
+// /f/ factura, /r/ remito, /c/ cobro, /e/ encuesta — más las dos rutas viejas
+// (/track, /presupuesto) que todavía redirigen.
+//
+// Se matchea con regex ANCLADA, no con startsWith: `startsWith("/p")` dejaría
+// abiertas /panel, /produccion y /presupuestos del dashboard. La ruta pública
+// es exactamente prefijo + token, nada más.
+// Ver docs/enlaces-publicos-diseno.md
+const OPEN_PATH_RE = /^\/(?:[tpfrce]|track|presupuesto)\/[A-Za-z0-9_-]+\/?$/;
 
 export function middleware(request: NextRequest) {
   const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
   const { pathname } = request.nextUrl;
   const isAuthPath = AUTH_PATHS.some((path) => pathname.startsWith(path));
-  const isOpenPath = OPEN_PATHS.some((path) => pathname.startsWith(path));
+  const isOpenPath = OPEN_PATH_RE.test(pathname);
 
   if (isOpenPath) {
     return NextResponse.next();

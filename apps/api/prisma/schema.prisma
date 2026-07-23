@@ -519,7 +519,12 @@ model NotificacionWhatsapp {
   id       String @id @default(uuid()) @db.Uuid
   tenantId String @db.Uuid
   evento   String
-  /// 'pendiente' | 'enviada' | 'fallida' | 'descartada'
+  /// 'pendiente' | 'enviando' | 'enviada' | 'fallida' | 'descartada'
+  ///
+  /// `enviando` es la RESERVA: el despachador pasa la fila a ese estado en un
+  /// update condicional antes de llamar a Wati, y por eso dos procesos que
+  /// compiten por la misma fila no la mandan dos veces.
+  /// Ver docs/notificaciones-whatsapp-catalogo.md
   estado   String @default("pendiente")
 
   clienteId    String? @db.Uuid
@@ -547,6 +552,9 @@ model NotificacionWhatsapp {
   /// Cuándo se puede mandar. Fuera de la ventana horaria se corre al día
   /// siguiente en vez de descartarse.
   programadaPara DateTime?
+  /// Cuándo se reservó para enviar. Si un proceso muere con la fila en
+  /// `enviando`, esto es lo que permite soltarla en vez de dejarla colgada.
+  reservadaEl    DateTime?
   enviadaEl      DateTime?
   createdAt      DateTime  @default(now())
 
@@ -561,6 +569,8 @@ model Tenant {
   configuracionNotificaciones                      ConfiguracionNotificaciones?
   notificacionEventos                              NotificacionEvento[]
   notificacionesWhatsapp                           NotificacionWhatsapp[]
+  enlacesPublicos                                  EnlacePublico[]
+  reciboContadores                                 ReciboContador[]
   id                                               String                                            @id @default(uuid()) @db.Uuid
   nombre                                           String
   slug                                             String                                            @unique
@@ -2850,6 +2860,15 @@ model Cobro {
   estadoAcreditacion        String                @default("pendiente")
   moneda                    String                @default("ARS") @db.VarChar(3)
   notas                     String?
+  /// REC-AAAA-NNNN (ReciboContador). El recibo es el documento del cobro:
+  /// 1:1 con él, sin entidad propia. Ver docs/recibos-pago-diseno.md
+  numeroRecibo              String?               @unique
+  /// "N° de operación" del medio de pago: el identificador que devuelve la
+  /// transferencia, el cupón o el ticket. Es lo que el cliente reconoce.
+  referencia                String?               @db.VarChar(60)
+  /// Quién tomó el cobro, CONGELADO: el recibo se comparte y no puede mutar
+  /// porque después alguien editó el legajo del empleado.
+  registradoPorNombre       String?
   anuladoEl                 DateTime?
   createdAt                 DateTime              @default(now())
   updatedAt                 DateTime              @updatedAt
@@ -2867,6 +2886,16 @@ model Cobro {
   @@index([tenantId, ordenId])
   @@index([tenantId, clienteId])
   @@index([tenantId, estadoAcreditacion])
+}
+
+/// Numeración de recibos de pago por tenant y año (patrón OrdenTrabajoContador).
+model ReciboContador {
+  tenantId String @db.Uuid
+  anio     Int
+  ultimo   Int    @default(0)
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, anio])
 }
 
 model RetencionPercepcion {
@@ -3259,4 +3288,61 @@ model IntegracionTenant {
   /// Un tenant no puede tener dos conexiones al mismo proveedor.
   @@unique([tenantId, proveedor])
   @@index([tenantId, estado])
+}
+
+/// Tipos de link público que emite el sistema. Cada uno tiene su prefijo de
+/// una letra en la URL que ve el cliente (grafoprint.com.ar/<letra>/<token>);
+/// el mapa vive en src/lib/enlaces-publicos.ts y NO se repinta: cambiar una
+/// letra invalida links ya enviados por WhatsApp.
+enum TipoEnlacePublico {
+  /// /t/ — seguimiento de una OT.
+  SEGUIMIENTO_OT
+  /// /p/ — ver y aprobar un presupuesto.
+  PRESUPUESTO
+  /// /f/ — comprobante (factura, NC).
+  FACTURA
+  /// /r/ — remito de entrega.
+  REMITO
+  /// /c/ — link de pago (cobro). La `p` ya se la lleva presupuesto.
+  COBRO
+  /// /e/ — encuesta de satisfacción.
+  ENCUESTA
+}
+
+/// Credencial de TODO link público del sistema, en una sola tabla.
+///
+/// El token ES la autorización: quien lo tiene ve la entidad, sin sesión. Por
+/// eso vive acá y no como una columna por entidad — así un tipo de link nuevo
+/// (factura, remito, encuesta) es una fila más y no una migración, y todos
+/// heredan gratis caducidad, revocación y métrica de apertura.
+///
+/// `OrdenTrabajo.publicToken` y `Cotizacion.publicToken` siguen existiendo
+/// como puntero denormalizado para la UI (mismo patrón que
+/// OrdenTrabajo.facturadoTotal), pero la RESOLUCIÓN pública pasa siempre por
+/// acá. Ver docs/enlaces-publicos-diseno.md
+model EnlacePublico {
+  id             String            @id @default(uuid()) @db.Uuid
+  tenantId       String            @db.Uuid
+  /// 12 chars url-safe (9 bytes aleatorios en base64url, 72 bits). Los
+  /// tokens históricos de 22 chars siguen siendo válidos: el lookup es por
+  /// igualdad exacta, no por largo.
+  token          String            @unique
+  tipo           TipoEnlacePublico
+  /// Id de la entidad apuntada. Sin FK: el tipo decide a qué tabla mira.
+  entidadId      String            @db.Uuid
+  /// Null = no caduca (hoy el caso de todos).
+  expiraEl       DateTime?
+  /// Cortar el acceso sin borrar la fila ni perder la métrica.
+  revocadoEl     DateTime?
+  visitas        Int               @default(0)
+  /// Primera apertura: el "visto" del cliente, dato comercial.
+  primeraVistaEl DateTime?
+  ultimaVistaEl  DateTime?
+  createdAt      DateTime          @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// Un link vivo por entidad: re-emitir pisa el token anterior.
+  @@unique([tipo, entidadId])
+  @@index([tenantId, tipo])
 }

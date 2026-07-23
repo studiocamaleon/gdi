@@ -684,6 +684,10 @@ export type Cobro = {
   ordenId: string | null;
   clienteId: string | null;
   clienteNombre: string | null;
+  /** REC-AAAA-NNNN. El recibo es el documento del cobro. */
+  numeroRecibo: string | null;
+  /** "N° de operación" del medio de pago. */
+  referencia: string | null;
   metodoNombre: string;
   metodoTipo: string;
   cuentaDestinoNombre: string;

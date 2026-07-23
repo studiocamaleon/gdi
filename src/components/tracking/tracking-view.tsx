@@ -379,10 +379,16 @@ export function TrackingView({
         </div>
       </div>
 
+      {/* Los dos textos hablan de cosas distintas y hay que decirlo: a la
+          izquierda la CONEXIÓN (la página se re-consulta sola cada POLL_MS), a
+          la derecha la última novedad del PEDIDO. Sin nombrar el sujeto se leía
+          como una contradicción ("en vivo" al lado de "act. hace 13 h"). */}
       <div className="t-live-strip">
         <span className="live-dot" />
-        <span>{sincronizando ? "Sincronizando con planta…" : "En vivo · sincronizado con planta"}</span>
-        <span className="upd">{ultimaAct ? `act. ${haceCuanto(ultimaAct)}` : "en vivo"}</span>
+        <span>{sincronizando ? "Sincronizando…" : "En vivo desde planta"}</span>
+        <span className="upd">
+          {ultimaAct ? `última novedad ${haceCuanto(ultimaAct)}` : "sin novedades todavía"}
+        </span>
       </div>
 
       <div className="t-body">

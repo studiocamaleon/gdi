@@ -1,9 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { TipoEnlacePublico } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificacionesService } from './notificaciones.service';
 import { enContextoDe } from './contexto';
 import type { EventoNotificacion } from '../wati/catalogo';
+import { urlEnlacePublico } from '../../enlaces-publicos/enlaces-publicos.urls';
 
 /**
  * Traduce el estado de una orden al aviso que le corresponde.
@@ -86,7 +88,7 @@ export class NotificacionesOrdenesService {
     // la orden. Sin token no hay nada que mostrarle al cliente, así que el
     // aviso pierde la mitad de su gracia: mejor no mandarlo.
     const seguimiento = orden.publicToken
-      ? `${baseFront()}/track/${orden.publicToken}`
+      ? urlEnlacePublico(TipoEnlacePublico.SEGUIMIENTO_OT, orden.publicToken)
       : null;
 
     const nombre = nombreDelCliente(orden.cliente?.razonSocial);
@@ -157,11 +159,4 @@ function money(n: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-}
-
-/** La primera de FRONTEND_URL: es la que ve el cliente final. */
-function baseFront(): string {
-  return (
-    process.env.FRONTEND_URL?.split(',')[0]?.trim() ?? 'http://localhost:3000'
-  );
 }

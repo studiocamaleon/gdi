@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ArchivosModule } from '../archivos/archivos.module';
+import { EnlacesPublicosModule } from '../enlaces-publicos/enlaces-publicos.module';
 import { AdministracionController } from './administracion.controller';
+import { RecibosController } from './recibos.controller';
 import { MetodosPagoService } from './metodos-pago.service';
 import { CobrosService } from './cobros.service';
 import { AcreditacionesScheduler } from './acreditaciones.scheduler';
@@ -12,13 +14,17 @@ import { CuentaCorrienteService } from './cuenta-corriente.service';
 import { FacturaService } from './factura.service';
 import { FacturaPdfService } from './factura-pdf.service';
 import { EstadoCuentaPdfService } from './estado-cuenta-pdf.service';
+import { RecibosService } from './recibos.service';
+import { ReciboPdfService } from './recibo-pdf.service';
 import { FacturacionOrdenesService } from './facturacion-ordenes.service';
 import { ManualProvider } from './invoicing/manual.provider';
 import { AfipSdkProvider } from './invoicing/afip-sdk.provider';
 
 @Module({
-  imports: [ArchivosModule],
-  controllers: [AdministracionController],
+  imports: [ArchivosModule, EnlacesPublicosModule],
+  // El público primero: `administracion` no tiene comodines hoy, pero el
+  // orden de registro es el que resuelve Nest y no cuesta nada dejarlo claro.
+  controllers: [RecibosController, AdministracionController],
   providers: [
     MetodosPagoService,
     CobrosService,
@@ -31,9 +37,13 @@ import { AfipSdkProvider } from './invoicing/afip-sdk.provider';
     FacturaService,
     FacturaPdfService,
     EstadoCuentaPdfService,
+    RecibosService,
+    ReciboPdfService,
     FacturacionOrdenesService,
     ManualProvider,
     AfipSdkProvider,
   ],
+  // El seguimiento público del recibo lo sirve su propio controller.
+  exports: [RecibosService],
 })
 export class AdministracionModule {}

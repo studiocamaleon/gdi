@@ -55,6 +55,7 @@ import {
   quitarOrdenItem,
 } from "@/lib/ordenes-trabajo-api";
 import { emitirPresupuesto } from "@/lib/presupuestos-api";
+import { enlacePublicoUrl } from "@/lib/enlaces-publicos";
 import {
   getConfiguracionProduccion,
   getDiasNoLaborables,
@@ -4951,11 +4952,11 @@ export function PropuestaFicha({
   const [guardandoEdicion, setGuardandoEdicion] = React.useState(false);
   const [trackCopiado, setTrackCopiado] = React.useState(false);
 
-  // Copia el link público de seguimiento del cliente (/track/<token>).
+  // Copia el link público de seguimiento del cliente (/t/<token>).
   const publicToken = orden?.publicToken ?? null;
   const compartirSeguimiento = React.useCallback(() => {
     if (!publicToken) return;
-    const url = `${window.location.origin}/track/${publicToken}`;
+    const url = enlacePublicoUrl("seguimiento", publicToken);
     void navigator.clipboard?.writeText(url).then(() => {
       setTrackCopiado(true);
       window.setTimeout(() => setTrackCopiado(false), 2000);

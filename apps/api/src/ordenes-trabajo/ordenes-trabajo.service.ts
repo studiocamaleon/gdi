@@ -1,4 +1,3 @@
-import { randomBytes } from 'crypto';
 import {
   BadRequestException,
   ConflictException,
@@ -6,9 +5,13 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { ArchivoEstado, Prisma } from '@prisma/client';
+import { ArchivoEstado, Prisma, TipoEnlacePublico } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ArchivosService } from '../archivos/archivos.service';
+import {
+  EnlacesPublicosService,
+  generarTokenPublico,
+} from '../enlaces-publicos/enlaces-publicos.service';
 import { EtaService } from '../eta/eta.service';
 import type { CurrentAuth } from '../auth/auth.types';
 import { paginatedResponse } from '../common/dto/pagination.dto';
@@ -39,15 +42,6 @@ import {
   modoRegistroDeFamilia,
 } from '../productos-servicios/pasos/familias';
 import type { FamiliaCodigo } from '../productos-servicios/pasos/types';
-
-/**
- * Token url-safe (~22 chars) para el link público de seguimiento del cliente.
- * base64url de 16 bytes aleatorios: sin colisiones prácticas, sin caracteres
- * que rompan una URL. Ver docs/tracking-publico-diseno.md
- */
-function generarPublicToken(): string {
-  return randomBytes(16).toString('base64url');
-}
 
 /**
  * Qué archivos de una orden puede ver el cliente en el link de seguimiento:
@@ -260,6 +254,7 @@ export class OrdenesTrabajoService {
     private readonly eta: EtaService,
     private readonly archivos: ArchivosService,
     private readonly avisos: NotificacionesOrdenesService,
+    private readonly enlaces: EnlacesPublicosService,
   ) {}
 
   /**
@@ -285,12 +280,13 @@ export class OrdenesTrabajoService {
    * se acepta un id de archivo del cliente.
    */
   async logoPublicoPorToken(token: string): Promise<string | null> {
-    const orden = await this.prisma.ordenTrabajo.findUnique({
-      where: { publicToken: token },
-      select: { tenantId: true },
-    });
-    if (!orden) return null;
-    return this.archivos.urlDeLogoPublico(orden.tenantId);
+    // El tenant sale del propio enlace: no hace falta ni tocar la orden.
+    const enlace = await this.enlaces.resolver(
+      token,
+      TipoEnlacePublico.SEGUIMIENTO_OT,
+    );
+    if (!enlace) return null;
+    return this.archivos.urlDeLogoPublico(enlace.tenantId);
   }
 
   /**
@@ -306,8 +302,13 @@ export class OrdenesTrabajoService {
     token: string,
     archivoId: string,
   ): Promise<string | null> {
+    const enlace = await this.enlaces.resolver(
+      token,
+      TipoEnlacePublico.SEGUIMIENTO_OT,
+    );
+    if (!enlace) return null;
     const orden = await this.prisma.ordenTrabajo.findUnique({
-      where: { publicToken: token },
+      where: { id: enlace.entidadId },
       select: { id: true, items: { select: { id: true } } },
     });
     if (!orden) return null;
@@ -520,10 +521,18 @@ export class OrdenesTrabajoService {
     // para que "Compartir seguimiento" siempre tenga link.
     let publicToken = orden.publicToken;
     if (!publicToken && orden.estado !== 'borrador') {
-      publicToken = generarPublicToken();
-      await this.prisma.ordenTrabajo.update({
-        where: { id: orden.id },
-        data: { publicToken },
+      publicToken = generarTokenPublico();
+      await this.prisma.$transaction(async (tx) => {
+        await tx.ordenTrabajo.update({
+          where: { id: orden.id },
+          data: { publicToken },
+        });
+        await this.enlaces.emitir(tx, {
+          tenantId: auth.tenantId,
+          tipo: TipoEnlacePublico.SEGUIMIENTO_OT,
+          entidadId: orden.id,
+          token: publicToken!,
+        });
       });
     }
     return this.toDetalle({ ...orden, publicToken });
@@ -607,6 +616,9 @@ export class OrdenesTrabajoService {
     const usuarioNombre =
       vendedor?.nombreCompleto ?? emisor?.nombreCompleto ?? auth.email;
     const ahora = new Date();
+    // Emitida al taller → link público de seguimiento del cliente. Se acuña
+    // acá para poder registrarlo en EnlacePublico dentro de la misma tx.
+    const tokenSeguimiento = emitida ? generarTokenPublico() : null;
 
     const creada = await this.prisma.$transaction(async (tx) => {
       const anio = ahora.getFullYear();
@@ -626,8 +638,7 @@ export class OrdenesTrabajoService {
           cotizacionId: payload.cotizacionId ?? null,
           estado: estadoInicial,
           fechaEmision: emitida ? ahora : null,
-          // Emitida al taller → link público de seguimiento del cliente.
-          publicToken: emitida ? generarPublicToken() : null,
+          publicToken: tokenSeguimiento,
           fechaEntrega: payload.fechaEntrega
             ? new Date(payload.fechaEntrega)
             : null,
@@ -663,6 +674,15 @@ export class OrdenesTrabajoService {
           },
         },
       });
+
+      if (tokenSeguimiento) {
+        await this.enlaces.emitir(tx, {
+          tenantId: auth.tenantId,
+          tipo: TipoEnlacePublico.SEGUIMIENTO_OT,
+          entidadId: orden.id,
+          token: tokenSeguimiento,
+        });
+      }
 
       // Emitir al taller materializa los pasos de producción del Tablero
       // desde la trazabilidad del snapshot (el borrador espera a emitirse).
@@ -1292,6 +1312,10 @@ export class OrdenesTrabajoService {
           ? 100
           : orden.progresoPct;
 
+    // Salir de borrador es emitir → link público de seguimiento.
+    const tokenSeguimiento =
+      desde === 'borrador' && !orden.publicToken ? generarTokenPublico() : null;
+
     await this.prisma.$transaction(async (tx) => {
       await tx.ordenTrabajo.update({
         where: { id: orden.id },
@@ -1303,13 +1327,17 @@ export class OrdenesTrabajoService {
             desde === 'borrador' && !orden.fechaEmision
               ? new Date()
               : undefined,
-          // Salir de borrador es emitir → link público de seguimiento.
-          publicToken:
-            desde === 'borrador' && !orden.publicToken
-              ? generarPublicToken()
-              : undefined,
+          publicToken: tokenSeguimiento ?? undefined,
         },
       });
+      if (tokenSeguimiento) {
+        await this.enlaces.emitir(tx, {
+          tenantId: auth.tenantId,
+          tipo: TipoEnlacePublico.SEGUIMIENTO_OT,
+          entidadId: orden.id,
+          token: tokenSeguimiento,
+        });
+      }
       // Primera finalización: nace la deuda comercial y arranca su aging.
       // Sólo la primera (reabrir y re-finalizar no la resetea).
       if (hacia === 'finalizada') {
@@ -2780,18 +2808,26 @@ export class OrdenesTrabajoService {
   }
 
   // ── Seguimiento público (cliente) ────────────────────────────────────
-  // Vista pública por link privado (token). SIN sesión: se resuelve la OT
-  // por su publicToken único (que ES el scope) y se devuelve SÓLO una
-  // proyección cliente-facing — nunca montos, costos ni datos internos.
-  // Ver docs/tracking-publico-diseno.md
+  // Vista pública por link privado (token). SIN sesión: el token se resuelve
+  // contra EnlacePublico (que ES el scope) y se devuelve SÓLO una proyección
+  // cliente-facing — nunca montos, costos ni datos internos.
+  // Ver docs/enlaces-publicos-diseno.md y docs/tracking-publico-diseno.md
 
   async trackingPublico(token: string) {
-    // findUnique por token global-único: sin sesión no hay tenantContext, así
-    // que la extensión de aislamiento no filtra — está bien, el token único
-    // identifica una sola orden y sus relaciones son FK de esa orden (no
-    // pueden cruzar tenants).
+    // El enlace traduce token → orden. Sin sesión no hay tenantContext, así
+    // que la extensión de aislamiento no filtra — está bien, el token es
+    // único global y las relaciones de la orden son FK suyas (no pueden
+    // cruzar tenants). Esta es la apertura que cuenta como visita.
+    const enlace = await this.enlaces.resolver(
+      token,
+      TipoEnlacePublico.SEGUIMIENTO_OT,
+      { contarVisita: true },
+    );
+    if (!enlace) {
+      throw new NotFoundException('No encontramos ese pedido.');
+    }
     const orden = await this.prisma.ordenTrabajo.findUnique({
-      where: { publicToken: token },
+      where: { id: enlace.entidadId },
       select: {
         numero: true,
         estado: true,

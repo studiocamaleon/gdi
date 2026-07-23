@@ -26,6 +26,13 @@ import { ESTADOS } from './estados';
 /** Techo por corrida y por tenant, para no vaciar la cola de golpe. */
 const POR_CORRIDA = 25;
 
+/**
+ * Cuánto puede estar una fila reservada (`enviando`) antes de darla por
+ * abandonada. Una llamada a Wati tarda segundos: diez minutos sólo se
+ * alcanzan si el proceso que la reservó se murió en el medio.
+ */
+const RESERVA_VENCIDA_MIN = 10;
+
 @Injectable()
 export class NotificacionesScheduler {
   private readonly logger = new Logger(NotificacionesScheduler.name);
@@ -46,6 +53,7 @@ export class NotificacionesScheduler {
         'notificaciones-whatsapp',
         600,
         async () => {
+          await this.soltarReservasVencidas();
           for (const tenantId of await this.tenantsConWati()) {
             await this.drenarTenant(tenantId);
           }
@@ -58,6 +66,34 @@ export class NotificacionesScheduler {
       );
     } finally {
       this.corriendo = false;
+    }
+  }
+
+  /**
+   * Devuelve a la cola las filas que quedaron reservadas por un proceso que se
+   * murió mientras hablaba con Wati.
+   *
+   * Es la contracara de la reserva: sin esto, un deploy en el momento justo
+   * dejaría un aviso colgado para siempre. El corte de diez minutos es lo que
+   * hace que soltar una fila signifique "el proceso murió" y no "todavía está
+   * mandando" — que es el caso en el que reintentar duplicaría el mensaje.
+   *
+   * Cross-tenant y sin contexto, igual que `tenantsConWati`.
+   */
+  private async soltarReservasVencidas(): Promise<void> {
+    const corte = new Date(Date.now() - RESERVA_VENCIDA_MIN * 60 * 1000);
+    const filas = await this.prisma.$executeRawUnsafe(
+      `UPDATE "NotificacionWhatsapp"
+          SET "estado" = $1, "reservadaEl" = NULL
+        WHERE "estado" = $2 AND ("reservadaEl" IS NULL OR "reservadaEl" < $3)`,
+      ESTADOS.pendiente,
+      ESTADOS.enviando,
+      corte,
+    );
+    if (filas > 0) {
+      this.logger.warn(
+        `${filas} notificación(es) quedaron reservadas sin terminar y vuelven a la cola.`,
+      );
     }
   }
 
