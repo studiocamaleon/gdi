@@ -4,6 +4,7 @@ import { SecretosService } from './cripto/secretos.service';
 import { IntegracionesController } from './integraciones.controller';
 import { IntegracionesService } from './integraciones.service';
 import { WatiClient } from './wati/wati.client';
+import { WatiScheduler } from './wati/wati.scheduler';
 
 /**
  * Cimientos compartidos por todas las integraciones con terceros.
@@ -18,7 +19,7 @@ import { WatiClient } from './wati/wati.client';
 @Global()
 @Module({
   controllers: [IntegracionesController],
-  providers: [SecretosService, IntegracionesService, WatiClient],
+  providers: [SecretosService, IntegracionesService, WatiClient, WatiScheduler],
   exports: [SecretosService, IntegracionesService, WatiClient],
 })
 export class IntegracionesModule {}

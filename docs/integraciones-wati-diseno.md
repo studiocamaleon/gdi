@@ -360,7 +360,36 @@ conviene ir al diff antes que a la sexta hipótesis.
 Verificado con `grafo_comprobante_emitido_v1`: alta + envío en un paso,
 `status: PENDING`, sin tocar el dashboard.
 
-### 8.5 Lo que sigue sin verificar
+### 8.5 El alta corre sola (cron `wati-plantillas`)
+
+El tenant conecta Wati con sus credenciales y no hace nada más: cada 15
+minutos el cron busca las plantillas del catálogo que le faltan a cada tenant
+conectado, las crea y las manda a revisión.
+
+**No lleva la cuenta del cupo a propósito.** Sería estado nuestro que se
+desincroniza del de Meta. En vez de eso intenta y **para en el primer
+"esperá N minutos"**: una corrida mete 10, rebota, y alguna de las siguientes
+ya pasó la hora y mete el resto. Wati es la fuente de verdad del cupo.
+
+Mira a **todos** los tenants conectados y no sólo al que recién conectó,
+porque eso cubre gratis tres casos más: una conexión que se cortó a la mitad,
+un tenant viejo cuando sumemos plantillas nuevas al catálogo, y una plantilla
+que Meta rechazó y volvió a DRAFT. Los DRAFT entran en la selección junto a
+las que no existen — son las baratas de completar.
+
+Corre bajo el lease de `CronLock` (ver `src/common/cron-lock.ts`): con dos
+instancias del API, sin eso se quemaría el doble del cupo.
+
+**Verificado contra la cuenta real:** con 4 plantillas faltantes, una corrida
+del cron las creó, las sometió y quedaron aprobadas. Estado final del
+catálogo en Corporearte: **13 de 13 APPROVED, 0 recategorizadas** — las 11
+UTILITY entraron como UTILITY y las 2 MARKETING como MARKETING.
+
+Eso contesta la pregunta que abrió todo esto: **los textos están bien
+escritos**, y validarlos contra una cuenta antes de soltarlos al resto de los
+tenants funciona.
+
+### 8.7 Lo que sigue sin verificar
 
 El payload real de los **webhooks** de cambio de estado. Requiere recibir uno
 — se resuelve al conectar la reconciliación de F2.
