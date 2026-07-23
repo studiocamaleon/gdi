@@ -47,6 +47,7 @@ import { AfipSdkProvider } from './invoicing/afip-sdk.provider';
     AfipSdkProvider,
   ],
   // El seguimiento público del recibo lo sirve su propio controller.
-  exports: [RecibosService],
+  // Recibos: seguimiento público. Comprobantes: el billing del control plane.
+  exports: [RecibosService, ComprobantesService],
 })
 export class AdministracionModule {}

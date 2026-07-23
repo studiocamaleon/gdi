@@ -52,6 +52,9 @@ const SIN_TENANT_ID_JUSTIFICADOS = new Set([
   // por encima de los tenants (referencia al afectado en tenantAfectadoId,
   // que se llama así justamente para no caer en la excepción de abajo).
   'PlataformaEvento',
+  // Billing de suscripciones: tenantClienteId (sin FK) + comprobante del
+  // tenant plataforma. Mismo criterio que PlataformaEvento.
+  'FacturaSuscripcion',
   'User',
   'AuthSession',
   // Catálogo compartido: mismos datos para todos los tenants.
@@ -95,6 +98,7 @@ const MODELOS_EXENTOS = new Set([
   'Tenant',
   'CronLock',
   'PlataformaEvento',
+  'FacturaSuscripcion',
   'Plan',
   'User',
   'AuthSession',

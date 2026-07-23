@@ -880,6 +880,33 @@ export class ComprobantesService {
   }
 
   /** El renglón de "facturar por monto": total elegido → precio según letra. */
+  /**
+   * Borrador de UN renglón por monto final (IVA incluido), sin orden de por
+   * medio. Lo usa el billing de suscripciones del control plane: mismo
+   * camino fiscal que facturarOrden (letra por receptor, neto/IVA por
+   * totales-comprobante), sin duplicar la matemática.
+   */
+  async crearBorradorPorMonto(
+    auth: CurrentAuth,
+    payload: {
+      clienteId?: string;
+      puntoVentaId: string;
+      monto: number;
+      concepto: string;
+      condicionVenta?: string;
+    },
+  ) {
+    const letra = await this.letraParaCliente(auth, payload.clienteId ?? null);
+    const item = this.renglonPorMonto(letra, payload.monto, payload.concepto);
+    return this.crear(auth, {
+      tipo: 'factura',
+      puntoVentaId: payload.puntoVentaId,
+      clienteId: payload.clienteId,
+      items: [item],
+      condicionVenta: payload.condicionVenta ?? 'cuenta_corriente',
+    } as CrearComprobanteDto);
+  }
+
   private renglonPorMonto(
     letra: LetraProvider,
     monto: number,
