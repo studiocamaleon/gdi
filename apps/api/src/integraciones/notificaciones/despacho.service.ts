@@ -243,13 +243,26 @@ export function proximaVentana(
   const iso =
     ISO_POR_DIA[partes.find((p) => p.type === 'weekday')?.value ?? ''];
 
-  if (sirveElDia(iso) && actual >= inicio && actual < fin) return null;
+  // La ventana puede CRUZAR LA MEDIANOCHE: "de 09:00 a 01:00" es una
+  // configuración legítima —la imprenta que se queda trabajando de noche— y
+  // con la comparación ingenua `actual >= inicio && actual < fin` nunca da
+  // adentro, así que no saldría un solo mensaje después de las 9 de la mañana.
+  const cruzaMedianoche = fin <= inicio;
+  const dentroDelHorario = cruzaMedianoche
+    ? actual >= inicio || actual < fin
+    : actual >= inicio && actual < fin;
+
+  if (sirveElDia(iso) && dentroDelHorario) return null;
 
   // Cuánto falta hasta la próxima apertura útil. Se avanza día por día en vez
   // de calcularlo: son como mucho siete vueltas y no hay que razonar sobre
   // fines de semana largos ni sobre qué pasa si no hay ningún día habilitado.
-  let faltan = actual < inicio ? inicio - actual : 24 * 60 - actual + inicio;
-  let diaCandidato = actual < inicio ? iso : siguiente(iso);
+  // Cuánto falta hasta la próxima apertura. Con ventana que cruza la
+  // medianoche sólo se llega acá si el día no sirve, porque el horario ya se
+  // resolvió arriba.
+  const antesDeAbrirHoy = actual < inicio;
+  let faltan = antesDeAbrirHoy ? inicio - actual : 24 * 60 - actual + inicio;
+  let diaCandidato = antesDeAbrirHoy ? iso : siguiente(iso);
   for (let i = 0; i < 8; i += 1) {
     if (sirveElDia(diaCandidato))
       return new Date(ahora.getTime() + faltan * 60_000);

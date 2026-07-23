@@ -111,3 +111,54 @@ describe('proximaVentana — días de atención al público', () => {
     expect(p).not.toBeNull();
   });
 });
+
+/**
+ * "De 09:00 a 01:00" es una configuración legítima: la imprenta que se queda
+ * trabajando de noche. Con la comparación ingenua `actual >= inicio && actual
+ * < fin` nunca da adentro, así que no saldría un solo mensaje en todo el día.
+ */
+describe('proximaVentana — ventana que cruza la medianoche', () => {
+  const reglas = {
+    horaDesde: '09:00',
+    horaHasta: '01:00',
+    diasAtencion: LUN_A_VIE,
+    requiereLocalAbierto: false,
+  };
+
+  it('a las 23:57 está ADENTRO', () => {
+    // 02:57 UTC del viernes = 23:57 del jueves en Buenos Aires.
+    const ahora = new Date(Date.UTC(2026, 6, 24, 2, 57));
+    expect(proximaVentana(ahora, reglas)).toBeNull();
+  });
+
+  it('a las 00:30 sigue adentro (ya es el día siguiente)', () => {
+    // 03:30 UTC del viernes = 00:30 del viernes.
+    const ahora = new Date(Date.UTC(2026, 6, 24, 3, 30));
+    expect(proximaVentana(ahora, reglas)).toBeNull();
+  });
+
+  it('a las 02:00 está afuera y espera hasta las 09:00', () => {
+    // 05:00 UTC = 02:00 en Buenos Aires.
+    const ahora = new Date(Date.UTC(2026, 6, 24, 5, 0));
+    const p = proximaVentana(ahora, reglas)!;
+    expect(horas(p.getTime() - ahora.getTime())).toBe(7);
+  });
+
+  it('a las 08:00 espera una hora', () => {
+    const ahora = new Date(Date.UTC(2026, 6, 24, 11, 0)); // 08:00
+    const p = proximaVentana(ahora, reglas)!;
+    expect(horas(p.getTime() - ahora.getTime())).toBe(1);
+  });
+
+  /** Una ventana de 24 h: desde y hasta iguales. No debe dejar todo afuera. */
+  it('con desde == hasta no bloquea nada', () => {
+    const ahora = new Date(Date.UTC(2026, 6, 24, 5, 0));
+    expect(
+      proximaVentana(ahora, {
+        ...reglas,
+        horaDesde: '00:00',
+        horaHasta: '00:00',
+      }),
+    ).toBeNull();
+  });
+});
