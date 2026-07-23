@@ -460,7 +460,12 @@ model ConfiguracionNotificaciones {
   /// Freno de mano: corta TODOS los envíos sin desconectar la integración ni
   /// perder los toggles. Cuando algo se dispara mal hay que poder frenarlo en
   /// un click, no razonando qué evento apagar.
-  pausado   Boolean @default(false)
+  ///
+  /// Arranca en `true` — es decir, PAUSADO. Conectar Wati y aprobar plantillas
+  /// no puede ser lo mismo que empezar a escribirle a todos los clientes de la
+  /// imprenta: eso tiene que ser un acto deliberado, con alguien mirando. El
+  /// tenant lo enciende cuando está listo.
+  pausado   Boolean @default(true)
   /// Cortesía: a qué hora es aceptable escribirle a alguien. Vale para TODOS
   /// los mensajes; lo que caiga afuera espera, porque un WhatsApp automático a
   /// las 23:40 se lee como spam.
@@ -744,7 +749,7 @@ model Cliente {
   /// Consentimiento para recibir WhatsApp. Arranca en false y NO se
   /// backfillea: WhatsApp exige opt-in y la ley 25.326 también, así que
   /// marcarlos a todos en true de una migración sería exactamente la trampa.
-  aceptaWhatsapp      Boolean                           @default(false)
+  aceptaWhatsapp      Boolean?
   /// Cuándo se registró el consentimiento. Sin esto no hay nada que mostrar
   /// el día que un cliente pregunte por qué le escriben.
   aceptaWhatsappEl    DateTime?

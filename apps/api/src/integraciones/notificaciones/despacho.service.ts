@@ -75,9 +75,10 @@ export class DespachoService {
     });
     if (!n) return { estado: 'nada' };
 
+    // Mismo criterio que al encolar: sin fila, apagado.
     const config = await this.prisma.configuracionNotificaciones.findFirst();
-    if (config?.pausado) {
-      return { estado: 'pendiente', motivo: 'Notificaciones pausadas.' };
+    if (config?.pausado ?? true) {
+      return { estado: 'pendiente', motivo: 'Los avisos están pausados.' };
     }
 
     const plantilla = POR_EVENTO.get(n.evento as never);

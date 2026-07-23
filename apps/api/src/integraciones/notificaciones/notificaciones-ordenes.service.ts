@@ -1,0 +1,164 @@
+import { Injectable, Logger } from '@nestjs/common';
+
+import { PrismaService } from '../../prisma/prisma.service';
+import { NotificacionesService } from './notificaciones.service';
+import type { EventoNotificacion } from '../wati/catalogo';
+
+/**
+ * Traduce el estado de una orden al aviso que le corresponde.
+ *
+ * **Por qué lee el estado en vez de engancharse a la transición.** La orden
+ * cambia de estado en media docena de lugares distintos —completar un paso,
+ * recibir una compra tercerizada, emitirla a mano— y sólo uno de ellos deja
+ * registro. Engancharse a cada uno significa perder el que se agregue mañana.
+ *
+ * Acá se hace al revés: se pregunta "¿en qué estado está?" y se encola lo que
+ * corresponda. Y **llamarlo de más es gratis**, porque la clave única
+ * `(evento, orden)` descarta el repetido — eso es lo que permite sembrarlo sin
+ * miedo después de cualquier operación que *pueda* haber movido la orden, y
+ * que el cron lo vuelva a llamar como red sin duplicar nada.
+ *
+ * Nunca lanza: una notificación no puede voltear la operación que la disparó.
+ */
+
+/** Qué aviso va con cada estado. Los que no están acá no notifican. */
+const EVENTO_POR_ESTADO: Record<string, EventoNotificacion> = {
+  pendiente: 'orden_recibida',
+  produccion: 'orden_en_produccion',
+  entregada: 'orden_entregada',
+  // `finalizada` se resuelve aparte: hay dos plantillas según quede saldo.
+};
+
+@Injectable()
+export class NotificacionesOrdenesService {
+  private readonly logger = new Logger(NotificacionesOrdenesService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificaciones: NotificacionesService,
+  ) {}
+
+  /**
+   * Encola el aviso que corresponda al estado actual de la orden.
+   *
+   * Pensado para llamarse sin `await` desde el flujo de negocio.
+   */
+  async sincronizar(ordenId: string): Promise<void> {
+    try {
+      await this.intentar(ordenId);
+    } catch (error) {
+      this.logger.error(
+        `Falló al sincronizar avisos de la orden ${ordenId}.`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
+  }
+
+  private async intentar(ordenId: string): Promise<void> {
+    const orden = await this.prisma.ordenTrabajo.findFirst({
+      where: { id: ordenId },
+      select: {
+        id: true,
+        numero: true,
+        estado: true,
+        fechaEntrega: true,
+        total: true,
+        cobradoTotal: true,
+        publicToken: true,
+        clienteId: true,
+        cliente: { select: { razonSocial: true } },
+      },
+    });
+    if (!orden?.clienteId) return;
+
+    const saldo = Number(orden.total ?? 0) - Number(orden.cobradoTotal ?? 0);
+    const evento =
+      orden.estado === 'finalizada'
+        ? saldo > 0
+          ? 'orden_lista_con_saldo'
+          : 'orden_lista'
+        : EVENTO_POR_ESTADO[orden.estado];
+    if (!evento) return;
+
+    // El link de seguimiento sale del token público, que se genera al emitir
+    // la orden. Sin token no hay nada que mostrarle al cliente, así que el
+    // aviso pierde la mitad de su gracia: mejor no mandarlo.
+    const seguimiento = orden.publicToken
+      ? `${baseFront()}/track/${orden.publicToken}`
+      : null;
+
+    const nombre = primerNombre(orden.cliente?.razonSocial);
+    const comun = { clienteId: orden.clienteId, ordenId: orden.id };
+
+    const parametros = (() => {
+      switch (evento) {
+        case 'orden_recibida':
+        case 'orden_en_produccion':
+          return seguimiento
+            ? [nombre, orden.numero, fecha(orden.fechaEntrega), seguimiento]
+            : null;
+        case 'orden_lista':
+          return seguimiento ? [nombre, orden.numero, seguimiento] : null;
+        case 'orden_lista_con_saldo':
+          return seguimiento
+            ? [nombre, orden.numero, money(saldo), seguimiento]
+            : null;
+        case 'orden_entregada':
+          return [nombre, orden.numero, fecha(orden.fechaEntrega)];
+        default:
+          return null;
+      }
+    })();
+    if (!parametros) return;
+
+    await this.notificaciones.encolar({
+      evento,
+      entidadId: orden.id,
+      ...comun,
+      parametros,
+    });
+  }
+}
+
+/**
+ * "Distribuidora del Sur S.R.L." → "Distribuidora".
+ *
+ * `Cliente` guarda un solo nombre y para empresas es la razón social, así que
+ * sin esto el mensaje arranca con "Hola Distribuidora del Sur S.R.L.". Cortar
+ * al primer token no es perfecto —parte los nombres compuestos— pero se lee
+ * mejor que la razón social entera en un WhatsApp.
+ */
+export function primerNombre(razonSocial?: string | null): string {
+  const limpio = (razonSocial ?? '').trim();
+  if (!limpio) return 'Hola';
+  return limpio.split(/\s+/)[0];
+}
+
+/** `dd/mm/aaaa`, o un guion si la orden no tiene fecha comprometida. */
+function fecha(d: Date | null): string {
+  if (!d) return 'a confirmar';
+  return new Date(d).toLocaleDateString('es-AR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone: 'America/Argentina/Buenos_Aires',
+  });
+}
+
+/**
+ * Sin el `$`: el símbolo ya está en el texto fijo de la plantilla, y
+ * mandarlo acá saldría "$$92.700,00".
+ */
+function money(n: number): string {
+  return n.toLocaleString('es-AR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+/** La primera de FRONTEND_URL: es la que ve el cliente final. */
+function baseFront(): string {
+  return (
+    process.env.FRONTEND_URL?.split(',')[0]?.trim() ?? 'http://localhost:3000'
+  );
+}

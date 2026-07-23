@@ -6,6 +6,7 @@ import { IntegracionesService } from './integraciones.service';
 import { WatiClient } from './wati/wati.client';
 import { DespachoService } from './notificaciones/despacho.service';
 import { NotificacionesController } from './notificaciones/notificaciones.controller';
+import { NotificacionesOrdenesService } from './notificaciones/notificaciones-ordenes.service';
 import { NotificacionesScheduler } from './notificaciones/notificaciones.scheduler';
 import { NotificacionesService } from './notificaciones/notificaciones.service';
 import { WatiScheduler } from './wati/wati.scheduler';
@@ -36,10 +37,12 @@ import { WatiScheduler } from './wati/wati.scheduler';
     WatiScheduler,
     DespachoService,
     NotificacionesService,
+    NotificacionesOrdenesService,
     NotificacionesScheduler,
   ],
   exports: [
     NotificacionesService,
+    NotificacionesOrdenesService,
     SecretosService,
     IntegracionesService,
     WatiClient,

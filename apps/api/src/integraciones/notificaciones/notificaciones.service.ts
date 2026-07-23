@@ -93,9 +93,13 @@ export class NotificacionesService {
       return { encolada: false, motivo: `Evento desconocido: ${ctx.evento}.` };
     }
 
+    // `?? true` y no `?? false`: si el tenant nunca abrió la pantalla no hay
+    // fila, y "sin configurar" tiene que significar apagado. Al revés,
+    // conectar Wati empezaría a escribirle a todos los clientes sin que nadie
+    // lo haya decidido.
     const config = await this.prisma.configuracionNotificaciones.findFirst();
-    if (config?.pausado) {
-      return { encolada: false, motivo: 'Notificaciones pausadas.' };
+    if (config?.pausado ?? true) {
+      return { encolada: false, motivo: 'Los avisos están pausados.' };
     }
 
     if (!(await this.eventoActivo(ctx.evento))) {

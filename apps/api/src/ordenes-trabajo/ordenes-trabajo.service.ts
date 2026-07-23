@@ -107,6 +107,7 @@ function formatFechaCorta(iso: string | null): string {
 }
 import type { OrdenesTrabajoQueryDto } from './dto/ordenes-trabajo-query.dto';
 import { filtrarSpecsPublicas } from './tracking-publico-specs';
+import { NotificacionesOrdenesService } from '../integraciones/notificaciones/notificaciones-ordenes.service';
 
 type OrdenConRelaciones = Prisma.OrdenTrabajoGetPayload<{
   include: {
@@ -153,8 +154,7 @@ type PasoTrazabilidad = {
 };
 
 function pasosActivados(trazabilidad: unknown): PasoTrazabilidad[] {
-  const pasos = (trazabilidad as { pasos?: unknown } | null | undefined)
-    ?.pasos;
+  const pasos = (trazabilidad as { pasos?: unknown } | null | undefined)?.pasos;
   if (!Array.isArray(pasos)) return [];
   return (pasos as PasoTrazabilidad[]).filter((paso) => paso?.activado);
 }
@@ -237,10 +237,7 @@ export function pasoEjecutable(
  * posterior ya arrancó (o también está hecho/bloqueado), reabrir éste
  * dejaría la secuencia inconsistente.
  */
-export function pasoReabrible(
-  pasos: PasoSecuencia[],
-  indice: number,
-): boolean {
+export function pasoReabrible(pasos: PasoSecuencia[], indice: number): boolean {
   return pasos
     .filter((paso) => paso.indice > indice)
     .every((paso) => paso.estado === 'pendiente');
@@ -267,7 +264,25 @@ export class OrdenesTrabajoService {
     private readonly prisma: PrismaService,
     private readonly eta: EtaService,
     private readonly archivos: ArchivosService,
+    private readonly avisos: NotificacionesOrdenesService,
   ) {}
+
+  /**
+   * Le avisa al cliente por WhatsApp si el estado de la orden lo amerita.
+   *
+   * Se llama DESPUÉS del commit y sin `await` a propósito. Dos razones, y las
+   * dos importan: cerrar una orden no puede tardar lo que tarde Wati en
+   * contestar, y una notificación que falla no puede voltear una operación de
+   * producción que ya se guardó.
+   *
+   * Se puede llamar de más sin miedo: `sincronizar` lee el estado actual y la
+   * clave única `(evento, orden)` descarta el repetido. Eso es lo que permite
+   * sembrarlo después de cualquier operación que PUEDA haber movido la orden
+   * en vez de tener que acertar exactamente cuáles la mueven.
+   */
+  private avisarAlCliente(ordenId: string): void {
+    void this.avisos.sincronizar(ordenId);
+  }
 
   /**
    * Logo de la imprenta para el seguimiento público. El token de la orden es
@@ -1347,6 +1362,7 @@ export class OrdenesTrabajoService {
     if (hacia === 'finalizada' && desde !== 'finalizada') {
       await this.capturarEtaCierre(auth.tenantId, orden.id);
     }
+    this.avisarAlCliente(orden.id);
 
     return this.findOne(auth, orden.id);
   }
@@ -1468,7 +1484,9 @@ export class OrdenesTrabajoService {
           esTercerizado && paso.proveedorId
             ? (proveedorNombrePorId.get(paso.proveedorId) ?? null)
             : null,
-        plazoProveedorDias: esTercerizado ? (paso.plazoProveedorDias ?? null) : null,
+        plazoProveedorDias: esTercerizado
+          ? (paso.plazoProveedorDias ?? null)
+          : null,
         estadoCompra: esTercerizado ? 'pendiente' : null,
       };
     });
@@ -1856,7 +1874,9 @@ export class OrdenesTrabajoService {
       throw new NotFoundException('No se encontró el paso de producción.');
     }
     if (en && paso.estado === 'hecho') {
-      throw new BadRequestException('El paso ya está hecho: no va a ninguna mesa.');
+      throw new BadRequestException(
+        'El paso ya está hecho: no va a ninguna mesa.',
+      );
     }
     await this.prisma.ordenTrabajoItemPaso.update({
       where: { id: paso.id },
@@ -1945,7 +1965,10 @@ export class OrdenesTrabajoService {
         `"${paso.nombre}" todavía no está listo: la ruta es secuencial y hay pasos anteriores sin completar.`,
       );
     }
-    if (payload.accion === 'reabrir' && !pasoReabrible(pasosItem, paso.indice)) {
+    if (
+      payload.accion === 'reabrir' &&
+      !pasoReabrible(pasosItem, paso.indice)
+    ) {
       throw new BadRequestException(
         `No se puede reabrir "${paso.nombre}": hay pasos posteriores que ya arrancaron.`,
       );
@@ -2210,6 +2233,7 @@ export class OrdenesTrabajoService {
     if (ordenFinalizada) {
       await this.capturarEtaCierre(auth.tenantId, ordenId);
     }
+    this.avisarAlCliente(ordenId);
 
     return this.tableroItemActualizado(auth, itemId);
   }
@@ -2589,8 +2613,7 @@ export class OrdenesTrabajoService {
             : null,
         // Minutos ya trabajados (tramos CERRADOS): la UI evalúa con esto si
         // completar dejaría el tiempo inválido y ofrece declarar (D8).
-        tiempoAcumuladoMin:
-          Math.round(sumaTramosMin(paso.tramos) * 100) / 100,
+        tiempoAcumuladoMin: Math.round(sumaTramosMin(paso.tramos) * 100) / 100,
         motivoPausa:
           paso.estado === 'pausado' && paso.tramos[0]
             ? etiquetaMotivoFin(
@@ -2777,7 +2800,10 @@ export class OrdenesTrabajoService {
         // Sólo los marcados `publico`: el arte de producción y los adjuntos
         // internos NUNCA salen por acá. El filtro va en la relación, así que
         // un archivo privado no llega ni a materializarse en memoria.
-        archivos: { where: ARCHIVOS_VISIBLES_AL_CLIENTE, select: ARCHIVO_PUBLICO },
+        archivos: {
+          where: ARCHIVOS_VISIBLES_AL_CLIENTE,
+          select: ARCHIVO_PUBLICO,
+        },
         items: {
           orderBy: { ordenIndice: 'asc' as const },
           select: {
@@ -2844,7 +2870,9 @@ export class OrdenesTrabajoService {
           estado: p.estado,
           completadoEl: p.completadoEl ? p.completadoEl.toISOString() : null,
           duracionEstimadaMin:
-            p.duracionEstimadaMin != null ? Number(p.duracionEstimadaMin) : null,
+            p.duracionEstimadaMin != null
+              ? Number(p.duracionEstimadaMin)
+              : null,
         })),
       };
     });

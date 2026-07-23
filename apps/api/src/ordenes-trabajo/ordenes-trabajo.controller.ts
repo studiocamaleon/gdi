@@ -120,7 +120,10 @@ export class OrdenesTrabajoController {
 
   /** Pausa automática por inactividad (D13): sin respuesta al countdown. */
   @Patch('tablero/pasos/:pasoId/auto-pausa')
-  autoPausa(@CurrentSession() auth: CurrentAuth, @Param('pasoId') pasoId: string) {
+  autoPausa(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('pasoId') pasoId: string,
+  ) {
     return this.ordenesTrabajoService.autoPausarPaso(auth, pasoId);
   }
 
