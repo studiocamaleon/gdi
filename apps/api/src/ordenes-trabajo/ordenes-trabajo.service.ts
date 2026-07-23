@@ -14,6 +14,7 @@ import {
 } from '../enlaces-publicos/enlaces-publicos.service';
 import { EtaService } from '../eta/eta.service';
 import type { CurrentAuth } from '../auth/auth.types';
+import { firmaActor } from '../common/firma-actor';
 import { paginatedResponse } from '../common/dto/pagination.dto';
 import {
   etiquetaMotivoFin,
@@ -613,8 +614,10 @@ export class OrdenesTrabajoService {
     const cargosDirectos = payload.cargosDirectos ?? 0;
     const total = subtotal + impuestos + cargosDirectos;
     const vendedorEmpleadoId = payload.vendedorEmpleadoId ?? emisor?.id ?? null;
-    const usuarioNombre =
-      vendedor?.nombreCompleto ?? emisor?.nombreCompleto ?? auth.email;
+    const usuarioNombre = firmaActor(
+      auth,
+      vendedor?.nombreCompleto ?? emisor?.nombreCompleto ?? auth.email,
+    );
     const ahora = new Date();
     // Emitida al taller → link público de seguimiento del cliente. Se acuña
     // acá para poder registrarlo en EnlacePublico dentro de la misma tx.
@@ -897,7 +900,7 @@ export class OrdenesTrabajoService {
 
     if (cambios.length === 0) return this.findOne(auth, orden.id);
 
-    const usuarioNombre = actor?.nombreCompleto ?? auth.email;
+    const usuarioNombre = firmaActor(auth, actor?.nombreCompleto ?? auth.email);
     const ahora = new Date();
     await this.prisma.$transaction([
       this.prisma.ordenTrabajo.update({
@@ -965,7 +968,10 @@ export class OrdenesTrabajoService {
         `Con la orden en estado "${ORDEN_TRABAJO_ESTADO_LABELS[estado]}" no se pueden modificar los productos.`,
       );
     }
-    return { orden, usuarioNombre: actor?.nombreCompleto ?? auth.email };
+    return {
+      orden,
+      usuarioNombre: firmaActor(auth, actor?.nombreCompleto ?? auth.email),
+    };
   }
 
   /** Recalcula los denormalizados de la orden a partir de sus items. */
@@ -1365,7 +1371,7 @@ export class OrdenesTrabajoService {
               ? 'OT emitida al taller'
               : `Estado: ${ORDEN_TRABAJO_ESTADO_LABELS[desde]} → ${ORDEN_TRABAJO_ESTADO_LABELS[hacia]}`,
           // El evento registra a QUIEN ejecutó el cambio, no al vendedor.
-          usuarioNombre: actor?.nombreCompleto ?? auth.email,
+          usuarioNombre: firmaActor(auth, actor?.nombreCompleto ?? auth.email),
           usuarioId: auth.userId,
           origen: 'usuario',
           datosJson: {
@@ -2028,7 +2034,7 @@ export class OrdenesTrabajoService {
       );
     }
 
-    const usuarioNombre = actor?.nombreCompleto ?? auth.email;
+    const usuarioNombre = firmaActor(auth, actor?.nombreCompleto ?? auth.email);
     const ahora = new Date();
 
     // Tiempo asentado al completar (D3): medido = suma de tramos (cerrando
@@ -2363,7 +2369,7 @@ export class OrdenesTrabajoService {
         data: {
           tenantId: auth.tenantId,
           usuarioId: auth.userId,
-          usuarioNombre: actor?.nombreCompleto ?? auth.email,
+          usuarioNombre: firmaActor(auth, actor?.nombreCompleto ?? auth.email),
           materiaPrimaId: ahorro.materiaPrimaId ?? null,
           materiaPrimaNombre: ahorro.materiaPrimaNombre,
           tecnologia: ahorro.tecnologia ?? null,

@@ -10,6 +10,7 @@ import {
   Query,
   Res,
 } from '@nestjs/common';
+import { ProhibidoImpersonando } from '../auth/prohibido-impersonando.decorator';
 import type { Response } from 'express';
 
 import type { CurrentAuth } from '../auth/auth.types';
@@ -107,6 +108,7 @@ export class ArchivosController {
     return this.service.actualizar(id, dto);
   }
 
+  @ProhibidoImpersonando()
   @Delete(':id')
   async eliminar(
     @CurrentSession() auth: CurrentAuth,

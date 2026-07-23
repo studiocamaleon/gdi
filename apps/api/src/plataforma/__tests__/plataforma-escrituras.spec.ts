@@ -45,9 +45,7 @@ describe('Control plane — escrituras y feature gates', () => {
       where: { staffUserId: staffId },
     });
     await prisma.tenant.deleteMany({ where: { id: { in: tenantsCreados } } });
-    await prisma.user.deleteMany({
-      where: { email: { endsWith: '@test.local' } },
-    });
+    await prisma.user.deleteMany({ where: { id: staffId } });
     await prisma.$disconnect();
   });
 

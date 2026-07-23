@@ -738,15 +738,23 @@ model Membership {
 model AuthSession {
   id                  String     @id @default(uuid()) @db.Uuid
   userId              String     @db.Uuid
-  currentTenantId     String     @db.Uuid
-  currentMembershipId String     @db.Uuid
+  /// Null en sesiones de PLATAFORMA (backoffice): el staff no está parado en
+  /// ningún tenant. Toda sesión de tenant (normal o impersonación) lo lleva.
+  currentTenantId     String?    @db.Uuid
+  /// Null en sesiones de plataforma y de impersonación: el staff no tiene
+  /// membership en el tenant. Toda sesión normal lo lleva.
+  currentMembershipId String?    @db.Uuid
+  /// Presente = esta sesión ES una impersonación del control plane. El guard
+  /// resuelve el rol y el actor desde SesionImpersonacion, no desde membership.
+  impersonacionId     String?    @unique @db.Uuid
   expiresAt           DateTime
   revokedAt           DateTime?
   createdAt           DateTime   @default(now())
   updatedAt           DateTime   @updatedAt
   user                User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  currentTenant       Tenant     @relation(fields: [currentTenantId], references: [id], onDelete: Cascade)
-  currentMembership   Membership @relation(fields: [currentMembershipId], references: [id], onDelete: Cascade)
+  currentTenant       Tenant?    @relation(fields: [currentTenantId], references: [id], onDelete: Cascade)
+  currentMembership   Membership? @relation(fields: [currentMembershipId], references: [id], onDelete: Cascade)
+  impersonacion       SesionImpersonacion? @relation(fields: [impersonacionId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([currentTenantId])
@@ -3462,4 +3470,32 @@ model FacturaSuscripcion {
   @@unique([suscripcionId, periodo])
   @@index([periodo])
   @@index([tenantClienteId])
+}
+
+/// Una entrada de staff a un tenant (etapa C). Nivel plataforma: junta al
+/// STAFF que entra y al TENANT al que entra, con motivo obligatorio y
+/// vencimiento. Nunca es god-mode silencioso — todo queda acá y el cliente
+/// lo ve. Ver docs/control-plane-diseno.md
+///
+/// `tenantId`/`staffUserId` sin FK y con esos nombres: sobreviven a la baja
+/// del tenant/usuario (el rastro no se borra) y no caen en la excepción del
+/// spec de aislamiento.
+model SesionImpersonacion {
+  id          String    @id @default(uuid()) @db.Uuid
+  staffUserId String    @db.Uuid
+  tenantId    String    @db.Uuid
+  /// Obligatorio y visible al tenant: "ticket #412, no le sale el PDF".
+  motivo      String
+  creadaEl    DateTime  @default(now())
+  /// Corta sola. Renovar = otra sesión (otro registro), nunca extender.
+  expiraEl    DateTime
+  /// Cierre explícito (salir) o por el barrido de expiradas.
+  cerradaEl   DateTime?
+  /// Cómo terminó: 'salida' | 'expirada' | null (activa).
+  motivoCierre String?
+
+  authSession AuthSession?
+
+  @@index([tenantId, creadaEl])
+  @@index([staffUserId])
 }

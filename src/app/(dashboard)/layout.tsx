@@ -7,6 +7,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { NavigationFeedbackProvider } from "@/components/navigation/navigation-feedback";
 import { PasosEnCursoWidget } from "@/components/produccion/pasos-en-curso-widget";
 import { UserTenantMenu } from "@/components/user-tenant-menu";
+import { ImpersonacionBanner } from "@/components/plataforma/impersonacion-banner";
 import {
   SidebarInset,
   SidebarProvider,
@@ -38,6 +39,7 @@ export default async function DashboardLayout({
 
   return (
     <NavigationFeedbackProvider>
+      <ImpersonacionBanner currentUser={currentUser} />
       <SidebarProvider
         defaultOpen
         style={{ height: "100dvh", overflow: "hidden" }}

@@ -100,6 +100,7 @@ export const BIco = {
     1.6,
   ),
   arrow: icon(<path d="M5 12h14M13 6l6 6-6 6" />, 1.9),
+  arrowLeft: icon(<path d="M19 12H5M11 6l-6 6 6 6" />, 1.9),
   check: icon(<path d="M5 12l4 4 10-10" />, 2.4),
   logout: icon(
     <path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l-5-5 5-5M5 12h10" />,

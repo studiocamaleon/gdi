@@ -33554,6 +33554,15 @@ body:has(.t-app) {
 .cpl-nav-i.on .cnt{color:var(--acc-2);background:var(--acc-bg)}
 .cpl-nav-i .soon{margin-left:auto;font-family:var(--font-mono);font-size:9.5px;color:var(--muted-2);border:1px solid var(--line-2);border-radius:6px;padding:1px 6px}
 .cpl-nav-volver{margin-top:16px;border-top:1px solid var(--line);border-radius:0;padding-top:14px;color:var(--muted)}
+/* "Cerrar sesión" al pie del rail. Si va solo (staff del backoffice, sin
+   "Volver a la app") arrastra el separador superior con :first-of-type. */
+.cpl-nav-salir{color:var(--muted)}
+.cpl-nav-salir:hover{background:var(--dng-bg);color:var(--dng)}
+.cpl-nav-salir:hover svg{color:var(--dng)}
+.cpl-nav-salir:disabled{opacity:.6;cursor:default}
+.cpl-nav-salir:disabled:hover{background:none;color:var(--muted)}
+.cpl-nav-volver+.cpl-nav-salir{margin-top:4px}
+.cpl-rail-nav>.cpl-nav-salir:not(.cpl-nav-volver+.cpl-nav-salir){margin-top:16px;border-top:1px solid var(--line);border-radius:0;padding-top:14px}
 .cpl-rail-user{padding:12px 14px;border-top:1px solid var(--line);display:flex;align-items:center;gap:10px}
 .cpl-rail-user .av{width:30px;height:30px;border-radius:8px;background:var(--surface-3);display:grid;place-items:center;font-size:11px;font-weight:600;color:var(--ink-2);flex:none}
 .cpl-rail-user .nm{font-size:12.5px;font-weight:500;line-height:1.2;color:#fff}
@@ -33759,3 +33768,47 @@ body:has(.t-app) {
 /* acciones del drawer + select (B1) */
 .cpl-dactions{display:flex;gap:9px;align-items:center;padding:16px 24px;border-top:1px solid var(--line, #25252e);background:var(--surface, #131318)}
 .cpl-select{background:var(--surface-2, #181820);border:1px solid var(--line-2, #30303b);border-radius:9px;padding:8px 11px;color:var(--ink, #f4f3f0);font:inherit;font-size:12.5px;max-width:260px}
+
+/* impersonación: banner global (dashboard) + session cards (consola) */
+.imp-banner{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:14px;padding:9px 20px;background:linear-gradient(90deg,#3a2a12,#2a1f10);border-bottom:1px solid #5a4416;color:#ffe6b0;font-size:12.5px}
+.imp-live{width:8px;height:8px;border-radius:50%;background:#f5b544;box-shadow:0 0 0 0 rgba(245,181,68,.6);animation:imp-pulse 1.8s infinite;flex:none}
+.imp-banner b{color:#fff;font-weight:600}
+.imp-time{font-family:var(--font-geist-mono, ui-monospace, Menlo, monospace);color:#ffcf7a}
+.imp-grow{flex:1}
+.imp-txt{min-width:0}
+.imp-salir{display:inline-flex;align-items:center;gap:7px;padding:6px 13px;border-radius:8px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.22);color:#fff;font-weight:600;font-size:12px;white-space:nowrap;cursor:pointer}
+.imp-salir:hover{background:rgba(255,255,255,.18)}
+.imp-salir:disabled{opacity:.6;cursor:default}
+@keyframes imp-pulse{0%{box-shadow:0 0 0 0 rgba(245,181,68,.55)}70%{box-shadow:0 0 0 7px rgba(245,181,68,0)}100%{box-shadow:0 0 0 0 rgba(245,181,68,0)}}
+
+.cpl-sess{display:flex;align-items:center;gap:14px;padding:15px 18px;border:1px solid var(--warn-bord, rgba(245,181,68,.28));border-radius:10px;background:var(--warn-bg, rgba(245,181,68,.12))}
+.cpl-sess+.cpl-sess{margin-top:10px}
+.cpl-sess .live{width:9px;height:9px;border-radius:50%;background:var(--warn, #f5b544);box-shadow:0 0 0 0 rgba(245,181,68,.6);animation:imp-pulse 1.8s infinite;flex:none}
+.cpl-sess .sm{flex:1;min-width:0}
+.cpl-sess .sm .t{font-size:13px;font-weight:600;color:#fff}
+.cpl-sess .sm .s{font-size:11.5px;color:#e6c98f;margin-top:3px}
+.cpl-sess .exp{text-align:right;font-family:var(--font-geist-mono, ui-monospace, Menlo, monospace)}
+.cpl-sess .exp .big{font-size:17px;font-weight:600;color:var(--warn, #f5b544)}
+.cpl-sess .exp .lbl{font-size:10px;color:var(--muted-2, #63636d);text-transform:uppercase;letter-spacing:.06em}
+
+/* login del backoffice (/backoffice): mismo lenguaje oscuro del control plane,
+   pero centrado tipo card. Ver docs/control-plane-diseno.md */
+.bo-login-page{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:24px;background:radial-gradient(1200px 600px at 50% -10%,#16131f,#0a0a0d 60%);color:#f4f3f0;font-size:13px;-webkit-font-smoothing:antialiased}
+.bo-login{width:100%;max-width:390px;background:#131318;border:1px solid #25252e;border-radius:16px;padding:30px 28px 24px;box-shadow:0 30px 80px -30px rgba(0,0,0,.7)}
+.bo-login-brand{display:flex;align-items:center;gap:12px;margin-bottom:22px}
+.bo-login-brand .nm{font-size:16px;font-weight:600;letter-spacing:-.02em;line-height:1;color:#fff}
+.bo-login-brand .sub{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#63636d;font-weight:600;margin-top:4px}
+.bo-login h1{margin:0 0 6px;font-size:19px;font-weight:600;letter-spacing:-.02em;color:#fff}
+.bo-login .lead{margin:0 0 20px;font-size:12.5px;line-height:1.5;color:#8d8d97}
+.bo-field{display:block;margin-bottom:14px}
+.bo-field>span{display:block;font-size:11px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:#8d8d97;margin-bottom:6px}
+.bo-field input{width:100%;background:#0d0d11;border:1px solid #30303b;border-radius:9px;padding:10px 12px;color:#f4f3f0;font:inherit;font-size:13px}
+.bo-field input:focus{outline:none;border-color:#8b7cff;box-shadow:0 0 0 3px rgba(139,124,255,.18)}
+.bo-field input::placeholder{color:#4c4c56}
+.bo-field input:disabled{opacity:.55}
+.bo-login-error{margin:2px 0 14px;font-size:12px;color:#fb7185;background:rgba(251,113,133,.1);border:1px solid rgba(251,113,133,.28);border-radius:8px;padding:9px 11px}
+.bo-login .cpl-btn.pri{margin-top:6px}
+.bo-login-alt{display:block;text-align:center;margin-top:16px;font-size:12px;color:#8d8d97;text-decoration:none}
+.bo-login-alt:hover{color:#cbcac6}
+
+

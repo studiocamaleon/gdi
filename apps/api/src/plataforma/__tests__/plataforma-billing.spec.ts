@@ -127,9 +127,7 @@ describe('PlataformaBillingService', () => {
     // FacturaSuscripcion cae por cascade del Comprobante, que cae con la
     // config fiscal del tenant plataforma… no: Comprobante cae con el tenant.
     await prisma.tenant.deleteMany({ where: { id: { in: tenants } } });
-    await prisma.user.deleteMany({
-      where: { email: { endsWith: '@test.local' } },
-    });
+    await prisma.user.deleteMany({ where: { id: staffId } });
     await prisma.$disconnect();
   });
 
@@ -144,8 +142,12 @@ describe('PlataformaBillingService', () => {
 
   it('generar deja el borrador fiscal real, el registro y el Cliente', async () => {
     const r = await billing.generarPeriodo(staffId, pvId);
-    expect(r.generadas).toBe(1);
-    expect(r.salteadas).toEqual([]);
+    // generadas es un total global (otros specs corren en paralelo): lo que
+    // importa es que ESTE tenant quedó facturado. La salteada propia sí es 0.
+    expect(r.generadas).toBeGreaterThanOrEqual(1);
+    expect(r.salteadas.some((x) => x.tenantNombre === 'Imprenta RI Test')).toBe(
+      false,
+    );
 
     const factura = await prisma.facturaSuscripcion.findFirst({
       where: { tenantClienteId: clienteRiId },
@@ -171,9 +173,8 @@ describe('PlataformaBillingService', () => {
   });
 
   it('correrlo de nuevo no duplica: el período ya está', async () => {
-    const r = await billing.generarPeriodo(staffId, pvId);
-    expect(r.generadas).toBe(0);
-    expect(r.yaExistian).toBe(1);
+    await billing.generarPeriodo(staffId, pvId);
+    // La idempotencia se mide en ESTE tenant: sigue con una sola factura.
     expect(
       await prisma.facturaSuscripcion.count({
         where: { tenantClienteId: clienteRiId },

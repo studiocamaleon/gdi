@@ -9,6 +9,7 @@ import {
   Put,
   Query,
 } from '@nestjs/common';
+import { ProhibidoImpersonando } from '../auth/prohibido-impersonando.decorator';
 import { RolSistema } from '@prisma/client';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import { Roles } from '../auth/roles.decorator';
@@ -52,6 +53,7 @@ export class EmpleadosController {
     return this.empleadosService.update(auth, id, payload);
   }
 
+  @ProhibidoImpersonando()
   @Post(':id/invitar-acceso')
   @Roles(RolSistema.ADMINISTRADOR)
   invitarAcceso(

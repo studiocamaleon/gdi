@@ -21,6 +21,7 @@ import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
 import { SinTenant } from '../common/sin-tenant.decorator';
 import { PlataformaAdminGuard } from './plataforma-admin.guard';
+import { ImpersonacionService } from './impersonacion.service';
 import { PlataformaBillingService } from './plataforma-billing.service';
 import { PlataformaGuard } from './plataforma.guard';
 import { PlataformaService } from './plataforma.service';
@@ -33,6 +34,16 @@ export class CambiarPlanDto {
 export class SuspenderTenantDto {
   @IsString()
   @MinLength(3)
+  @MaxLength(300)
+  motivo: string;
+}
+
+export class IniciarImpersonacionDto {
+  @IsUUID()
+  tenantId: string;
+
+  @IsString()
+  @MinLength(5)
   @MaxLength(300)
   motivo: string;
 }
@@ -81,17 +92,44 @@ export class PlataformaController {
   constructor(
     private readonly service: PlataformaService,
     private readonly billing: PlataformaBillingService,
+    private readonly impersonacion: ImpersonacionService,
   ) {}
 
   /** La consola completa: resumen + tenants + auditoría + quién mira. */
   @Get('consola')
   consola(@CurrentSession() auth: CurrentAuth) {
-    return this.service.consola(auth.userId);
+    return this.service.consola(auth.userId, auth.esPlataforma === true);
   }
 
   @Get('planes')
   planes() {
     return this.service.planes();
+  }
+
+  // ── Impersonación (etapa C) ──────────────────────────────────────────
+
+  @Get('impersonacion')
+  sesionesActivas() {
+    return this.impersonacion.activas();
+  }
+
+  /** Entra a un tenant. Devuelve el token con el que el front "entra". */
+  @Post('impersonacion')
+  @UseGuards(PlataformaAdminGuard)
+  iniciarImpersonacion(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() dto: IniciarImpersonacionDto,
+  ) {
+    return this.impersonacion.iniciar(auth.userId, dto.tenantId, dto.motivo);
+  }
+
+  @Post('impersonacion/:id/cerrar')
+  async cerrarImpersonacion(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    await this.impersonacion.cerrar(auth.userId, id);
+    return { ok: true };
   }
 
   @Put('tenants/:id/plan')

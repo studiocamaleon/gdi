@@ -60,7 +60,12 @@ export type EventoPlataforma = {
 
 export type ConsolaPlataforma = {
   /** Quién está mirando (pie del rail). */
-  staff: { nombre: string | null; email: string; rol: string } | null;
+  staff: {
+    nombre: string | null;
+    email: string;
+    rol: string;
+    esSesionPlataforma: boolean;
+  } | null;
   /** Últimos movimientos del control plane (PlataformaEvento, real desde A). */
   auditoria: EventoPlataforma[];
   resumen: {
@@ -180,6 +185,40 @@ export async function generarBillingPlataforma(dto: {
   return apiRequest("/plataforma/billing/generar", {
     method: "POST",
     body: JSON.stringify(dto),
+  });
+}
+
+export type SesionImpersonacion = {
+  id: string;
+  tenantId: string;
+  tenantNombre: string;
+  staffUserId: string;
+  staffNombre: string | null;
+  motivo: string;
+  creadaEl: string;
+  expiraEl: string;
+  expiraEnSeg: number;
+};
+
+export async function getSesionesImpersonacion(): Promise<SesionImpersonacion[]> {
+  return apiRequest("/plataforma/impersonacion", { cache: "no-store" });
+}
+
+export async function iniciarImpersonacion(
+  tenantId: string,
+  motivo: string,
+): Promise<{ token: string; tenantNombre: string; expiraEl: string }> {
+  return apiRequest("/plataforma/impersonacion", {
+    method: "POST",
+    body: JSON.stringify({ tenantId, motivo }),
+  });
+}
+
+export async function cerrarImpersonacion(
+  sesionId: string,
+): Promise<{ ok: true }> {
+  return apiRequest(`/plataforma/impersonacion/${sesionId}/cerrar`, {
+    method: "POST",
   });
 }
 

@@ -121,6 +121,10 @@ export function LoginForm() {
         <div className="footnote">
           <div className="sep" />
           Acceso administrado por invitación y asignación de empresa.
+          <br />
+          <a className="link" href="/backoffice">
+            ¿Sos del equipo de Grafo? Acceso del backoffice
+          </a>
         </div>
       </form>
   );

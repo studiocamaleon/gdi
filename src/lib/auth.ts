@@ -21,6 +21,8 @@ export type CurrentUser = {
   /** Rol en el control plane (staff de Grafo). Sólo decide si la UI muestra
    *  el acceso a /plataforma; la autorización real la hace el API. */
   rolPlataforma?: "ADMIN" | "SOPORTE" | null;
+  /** Presente = esta sesión es una impersonación del control plane. */
+  impersonacion?: { actorNombre: string; expiraEl: string } | null;
   tenantActual: TenantSummary;
   tenants: TenantSummary[];
 };
@@ -49,6 +51,26 @@ export async function login(email: string, password: string) {
   );
 }
 
+export async function loginPlataforma(email: string, password: string) {
+  return apiRequest<{
+    accessToken: string | null;
+    sessionId: string;
+    staff: {
+      id: string;
+      email: string;
+      nombreCompleto: string | null;
+      rolPlataforma: "ADMIN" | "SOPORTE";
+    };
+  }>(
+    "/auth/login-plataforma",
+    {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    },
+    { auth: false },
+  );
+}
+
 export async function logout() {
   return apiRequest<void>("/auth/logout", {
     method: "POST",
@@ -66,6 +88,13 @@ export async function switchTenant(tenantId: string) {
     method: "POST",
     body: JSON.stringify({ tenantId }),
   });
+}
+
+export async function salirDeImpersonacion() {
+  return apiRequest<{ accessToken: string | null }>(
+    "/auth/salir-impersonacion",
+    { method: "POST" },
+  );
 }
 
 export async function getInvitationState(token: string) {

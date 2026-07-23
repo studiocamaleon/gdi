@@ -12,6 +12,7 @@ import {
   Res,
   StreamableFile,
 } from '@nestjs/common';
+import { ProhibidoImpersonando } from '../auth/prohibido-impersonando.decorator';
 import type { Response } from 'express';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
@@ -174,17 +175,20 @@ export class AdministracionController {
   }
 
   /** Verifica la delegación sin encender nada (chequeo en seco). */
+  @ProhibidoImpersonando()
   @Post('afip/verificar')
   verificarAfip(@CurrentSession() auth: CurrentAuth) {
     return this.afipIntegracion.verificar(auth);
   }
 
   /** Enciende la facturación: verifica y, si pasa, activa. */
+  @ProhibidoImpersonando()
   @Post('afip/activar')
   activarAfip(@CurrentSession() auth: CurrentAuth) {
     return this.afipIntegracion.activar(auth);
   }
 
+  @ProhibidoImpersonando()
   @Post('afip/desactivar')
   desactivarAfip(@CurrentSession() auth: CurrentAuth) {
     return this.afipIntegracion.desactivar(auth);
