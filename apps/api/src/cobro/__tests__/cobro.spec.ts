@@ -147,6 +147,8 @@ describe('Cobro · normalización a nuestra suscripción', () => {
       proximoCobro: null,
       precios: [priceId],
       tenantId,
+      cambioProgramado: null,
+      cambioProgramadoEl: null,
     });
     expect(r).toMatchObject({ aplicado: true, estado: 'activa' });
     const s = await prisma.suscripcion.findFirst({ where: { tenantId } });
@@ -163,6 +165,8 @@ describe('Cobro · normalización a nuestra suscripción', () => {
       proximoCobro: null,
       precios: [priceId],
       tenantId: null, // resuelve por la referencia ya vinculada
+      cambioProgramado: null,
+      cambioProgramadoEl: null,
     });
     const s = await prisma.suscripcion.findFirst({ where: { tenantId } });
     expect(s?.estado).toBe('activa');
@@ -177,6 +181,8 @@ describe('Cobro · normalización a nuestra suscripción', () => {
       proximoCobro: null,
       precios: [priceId],
       tenantId: null,
+      cambioProgramado: null,
+      cambioProgramadoEl: null,
     });
     const s = await prisma.suscripcion.findFirst({ where: { tenantId } });
     expect(s?.estado).toBe('baja');
@@ -191,6 +197,8 @@ describe('Cobro · normalización a nuestra suscripción', () => {
       proximoCobro: null,
       precios: [priceId],
       tenantId: null,
+      cambioProgramado: null,
+      cambioProgramadoEl: null,
     });
     expect(r.aplicado).toBe(false);
   });
@@ -203,6 +211,8 @@ describe('Cobro · normalización a nuestra suscripción', () => {
       proximoCobro: null,
       precios: [priceId],
       tenantId,
+      cambioProgramado: null,
+      cambioProgramadoEl: null,
     });
     expect(r.aplicado).toBe(false);
   });

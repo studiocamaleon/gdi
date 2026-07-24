@@ -4,6 +4,7 @@ import { PlataformaService } from '../plataforma.service';
 import { SuscripcionesService } from '../../suscripciones/suscripciones.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { PaddleService } from '../../cobro/paddle.service';
+import { SuscripcionSyncService } from '../../cobro/suscripcion-sync.service';
 
 /**
  * Las escrituras del control plane (etapa B1) y el lector de features, contra
@@ -23,6 +24,7 @@ describe('Control plane — escrituras y feature gates', () => {
   const suscripciones = new SuscripcionesService(
     prisma as unknown as PrismaService,
     new PaddleService(),
+    new SuscripcionSyncService(prisma as unknown as PrismaService),
   );
   let staffId: string;
   let tenantId: string;
