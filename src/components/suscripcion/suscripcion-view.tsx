@@ -11,6 +11,7 @@ import {
   getSuscripcion,
   previsualizarCambio,
   reactivarSuscripcion,
+  urlFacturaPdf,
   sincronizarSuscripcion,
   type EstadoSuscripcion,
   type PlanContratable,
@@ -36,6 +37,110 @@ import {
  * nunca vemos los datos de la tarjeta.
  * Ver docs/suscripciones-cobro-diseno.md
  */
+
+/**
+ * Estados de una transacción de Paddle, en castellano.
+ *
+ * `billed` y `ready` son PROVISORIOS: Paddle crea la transacción al instante
+ * pero el cobro se concreta unos segundos después. Mostrar "Billed" en inglés
+ * y dejarlo ahí para siempre era doblemente malo — jerga del proveedor, y una
+ * foto vieja que sólo se corregía recargando la página.
+ */
+const ESTADO_FACTURA: Record<string, { texto: string; tono: string }> = {
+  completed: { texto: "Pagada", tono: "ok" },
+  paid: { texto: "Pagada", tono: "ok" },
+  billed: { texto: "Procesando", tono: "" },
+  ready: { texto: "Procesando", tono: "" },
+  past_due: { texto: "Vencida", tono: "warn" },
+  canceled: { texto: "Anulada", tono: "" },
+  draft: { texto: "Borrador", tono: "" },
+};
+const PROVISORIOS = new Set(["billed", "ready", "draft"]);
+
+const NOMBRE_MARCA: Record<string, string> = {
+  visa: "Visa",
+  mastercard: "Mastercard",
+  american_express: "American Express",
+  discover: "Discover",
+  diners_club: "Diners Club",
+  jcb: "JCB",
+  union_pay: "UnionPay",
+  maestro: "Maestro",
+  elo: "Elo",
+  hipercard: "Hipercard",
+  mada: "mada",
+};
+
+/**
+ * Marca de la tarjeta. Se dibujan versiones simples y reconocibles —no
+ * reproducciones de los logos registrados— que es lo que se estila en las
+ * interfaces de pago. La que no se reconoce cae a un ícono de tarjeta genérico.
+ */
+function LogoTarjeta({ marca }: { marca: string }) {
+  const comun = { viewBox: "0 0 40 26", width: 40, height: 26 } as const;
+  const fondo = (
+    <rect width="40" height="26" rx="4" fill="#fff" stroke="#e7e5e2" />
+  );
+  if (marca === "visa") {
+    return (
+      <svg {...comun} aria-label="Visa">
+        {fondo}
+        <text
+          x="20"
+          y="17.5"
+          textAnchor="middle"
+          fontSize="10.5"
+          fontWeight="700"
+          fontStyle="italic"
+          fontFamily="Georgia, serif"
+          fill="#1434CB"
+          letterSpacing="0.5"
+        >
+          VISA
+        </text>
+      </svg>
+    );
+  }
+  if (marca === "mastercard" || marca === "maestro") {
+    return (
+      <svg {...comun} aria-label="Mastercard">
+        {fondo}
+        <circle cx="16" cy="13" r="7" fill="#EB001B" />
+        <circle cx="24" cy="13" r="7" fill="#F79E1B" opacity="0.9" />
+        <path
+          d="M20 7.9a7 7 0 000 10.2 7 7 0 000-10.2z"
+          fill="#FF5F00"
+        />
+      </svg>
+    );
+  }
+  if (marca === "american_express") {
+    return (
+      <svg {...comun} aria-label="American Express">
+        <rect width="40" height="26" rx="4" fill="#006FCF" />
+        <text
+          x="20"
+          y="16.5"
+          textAnchor="middle"
+          fontSize="7.5"
+          fontWeight="700"
+          fontFamily="Helvetica, Arial, sans-serif"
+          fill="#fff"
+          letterSpacing="0.4"
+        >
+          AMEX
+        </text>
+      </svg>
+    );
+  }
+  return (
+    <svg {...comun} aria-label={NOMBRE_MARCA[marca] ?? "Tarjeta"}>
+      {fondo}
+      <rect x="4" y="9" width="32" height="3" fill="#d4d2cd" />
+      <rect x="4" y="16" width="12" height="2.5" rx="1.2" fill="#e7e5e2" />
+    </svg>
+  );
+}
 
 const ETIQUETA_FEATURE: Record<string, string> = {
   afip: "Facturación electrónica (ARCA)",
@@ -90,6 +195,18 @@ const Tick = () => (
   </svg>
 );
 
+const IcoDescarga = () => (
+  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <path
+      d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
 const LogoPaddle = ({ s = 26 }: { s?: number }) => (
   <svg viewBox="0 0 32 32" width={s} height={s} aria-label="Paddle">
     <rect width="32" height="32" rx="8" fill="#0a0a0c" />
@@ -121,6 +238,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
   } | null>(null);
   const [cargandoPrevio, setCargandoPrevio] = React.useState(false);
   const [reactivando, setReactivando] = React.useState(false);
+  const [bajando, setBajando] = React.useState<string | null>(null);
   const [ciclo, setCiclo] = React.useState<"mensual" | "anual">("mensual");
   const [elegido, setElegido] = React.useState<string | null>(
     () => inicial.actual?.planCodigo ?? inicial.planes.at(-1)?.codigo ?? null,
@@ -155,6 +273,9 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
           ? `Tu plan ${fresco.actual.planNombre} está activo.`
           : "Pago registrado.",
       );
+      if (fresco.facturas.some((f) => PROVISORIOS.has(f.estado))) {
+        seguirFacturasProvisorias();
+      }
     } catch {
       // Si la lectura falla, el pago igual se hizo y el webhook lo va a
       // aplicar: se lo decimos en vez de dejarlo con una pantalla colgada.
@@ -233,6 +354,10 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
       setDatos(fresco);
       if (fresco.actual) setElegido(fresco.actual.planCodigo);
       toast.success(`Tu plan ${plan.nombre} está activo.`);
+      // El cobro del ajuste tarda unos segundos en confirmarse: se sigue solo.
+      if (fresco.facturas.some((f) => PROVISORIOS.has(f.estado))) {
+        seguirFacturasProvisorias();
+      }
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : "No se pudo cambiar el plan.",
@@ -277,6 +402,46 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
       setReactivando(false);
     }
   };
+
+  const descargarFactura = async (id: string) => {
+    if (bajando) return;
+    setBajando(id);
+    try {
+      const { url } = await urlFacturaPdf(id);
+      // La URL de Paddle es firmada y temporal: se abre en el momento, no se
+      // guarda ni se cachea.
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch {
+      toast.error("No se pudo abrir la factura. Probá desde el portal.");
+    } finally {
+      setBajando(null);
+    }
+  };
+
+  /**
+   * Refresca mientras haya facturas en estado provisorio.
+   *
+   * Paddle crea la transacción al instante en `billed` y la cobra unos
+   * segundos después. Sin esto, el cliente ve "Procesando" hasta que recarga
+   * la página a mano. Se reintenta poco y con corte: es un ajuste cosmético,
+   * no puede quedar consultando para siempre.
+   */
+  const seguirFacturasProvisorias = React.useCallback(() => {
+    let intentos = 0;
+    const tick = async () => {
+      intentos += 1;
+      await new Promise((r) => setTimeout(r, intentos === 1 ? 3000 : 6000));
+      try {
+        const fresco = await getSuscripcion();
+        setDatos(fresco);
+        const sigue = fresco.facturas.some((f) => PROVISORIOS.has(f.estado));
+        if (sigue && intentos < 3) void tick();
+      } catch {
+        // Si falla, queda lo que ya se ve: recargar lo resuelve.
+      }
+    };
+    void tick();
+  }, []);
 
   const irAlPortal = async () => {
     if (yendoAlPortal) return;
@@ -608,6 +773,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
                   <span>Fecha</span>
                   <span>Estado</span>
                   <span className="right">Importe</span>
+                  <span />
                 </div>
                 {datos.facturas.map((f) => (
                   <div key={f.id} className="sub-inv-row">
@@ -617,13 +783,31 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
                     <span>{fechaLarga(f.fecha)}</span>
                     <span>
                       <em
-                        className={`sub-chip ${f.estado === "completed" ? "ok" : ""}`}
+                        className={`sub-chip ${ESTADO_FACTURA[f.estado]?.tono ?? ""}`}
                       >
-                        {f.estado === "completed" ? "Pagada" : f.estado}
+                        {ESTADO_FACTURA[f.estado]?.texto ?? f.estado}
                       </em>
                     </span>
                     <span className="mono right">
                       {precio(f.total, f.moneda)}
+                    </span>
+                    <span className="right">
+                      <button
+                        type="button"
+                        className="sub-inv-pdf"
+                        onClick={() => descargarFactura(f.id)}
+                        disabled={bajando === f.id}
+                        title="Descargar el PDF"
+                      >
+                        {bajando === f.id ? (
+                          "…"
+                        ) : (
+                          <>
+                            <IcoDescarga />
+                            PDF
+                          </>
+                        )}
+                      </button>
                     </span>
                   </div>
                 ))}
@@ -722,6 +906,23 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
                   {datos.puedePortal ? "Conectado" : "Sin activar"}
                 </span>
               </div>
+              {datos.tarjeta ? (
+                <div className="sub-pay-card">
+                  <LogoTarjeta marca={datos.tarjeta.marca} />
+                  <div className="sub-pay-card-txt">
+                    <div className="nro">
+                      <span className="ptos">•••• •••• ••••</span>
+                      {datos.tarjeta.ultimos4}
+                    </div>
+                    <div className="meta">
+                      {NOMBRE_MARCA[datos.tarjeta.marca] ?? "Tarjeta"}
+                      {datos.tarjeta.vence
+                        ? ` · vence ${datos.tarjeta.vence}`
+                        : ""}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
               <div className="sub-pay-empty">
                 Paddle procesa el pago, calcula los impuestos del país de tu
                 empresa y emite la factura.

@@ -192,6 +192,23 @@ resultado; para lo que pasa solo, se espera el aviso.** Una pantalla de espera
 que depende de una llamada externa que puede fallar en silencio no genera
 confianza — y de hecho falló en dev cuando se cayó el túnel.
 
+## Facturas y medio de pago en la vista del tenant
+
+- **Descarga del PDF**: `GET /suscripcion/facturas/:id/pdf` devuelve la URL que
+  firma Paddle. Se pide en el momento porque **es temporal**: guardarla dejaría
+  al cliente con un botón roto. Antes de pedirla se verifica que la transacción
+  sea del tenant — sin ese chequeo, un id ajeno devolvería la factura de otro.
+- **Estados**: se traducen (`billed` → "Procesando", `completed` → "Pagada"…).
+  `billed`/`ready`/`draft` son PROVISORIOS: Paddle crea la transacción al
+  instante y cobra unos segundos después, así que la vista se refresca sola
+  hasta 3 veces mientras alguna siga provisoria. Antes decía "Billed" en inglés
+  y se quedaba así hasta recargar a mano.
+- **Tarjeta registrada** (VISA •••• 4242, vence 12/30): sale del pago de la
+  última transacción cobrada, NO de `/customers/:id/payment-methods` — ese
+  endpoint pide el permiso `payment_method.read`, que deliberadamente no tiene
+  la API key. El dato es el mismo sin ampliar permisos. Es informativo:
+  cambiarla se hace en el portal de Paddle.
+
 ## Cancelación
 
 La cancela el cliente desde el portal de Paddle (ahí están la tarjeta y los

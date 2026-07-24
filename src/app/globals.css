@@ -33912,7 +33912,7 @@ body:has(.t-app) {
    SUPERFICIE beige (shadcn) → acá van --muted-text/--muted-text-2.
    Ver docs/suscripciones-cobro-diseno.md
    ═══════════════════════════════════════════════════════════════════════ */
-.sub-page{padding:24px 30px 60px;max-width:1240px}
+.sub-page{padding:24px 30px 60px;max-width:1240px;margin:0 auto}
 .sub-page .page-head{display:flex;align-items:flex-start;gap:18px;margin-bottom:18px}
 .sub-page .page-head .title-block{flex:1;min-width:0}
 .sub-page .page-head h1{margin:0;font-size:23px;font-weight:600;letter-spacing:-.02em}
@@ -33990,7 +33990,11 @@ body:has(.t-app) {
 
 /* Facturas */
 .sub-inv-table{border:1px solid var(--border,#e7e5e2);border-radius:var(--r-3,10px);overflow:hidden}
-.sub-inv-row{display:grid;grid-template-columns:1.4fr 1fr .9fr .8fr;gap:12px;align-items:center;padding:11px 14px;font-size:12.5px;border-top:1px solid var(--hairline,#efece8)}
+.sub-inv-row{display:grid;grid-template-columns:1.4fr 1fr .9fr .8fr 82px;gap:12px;align-items:center;padding:11px 14px;font-size:12.5px;border-top:1px solid var(--hairline,#efece8)}
+.sub-inv-pdf{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--border,#e7e5e2);background:var(--surface,#fff);border-radius:7px;padding:5px 9px;font:inherit;font-size:11px;font-weight:600;color:var(--muted-text,#6e6e76);cursor:pointer;white-space:nowrap;line-height:1}
+.sub-inv-pdf svg{width:13px;height:13px;flex:none}
+.sub-inv-pdf:hover:not(:disabled){border-color:var(--ink,#14141a);color:var(--ink,#14141a);background:var(--surface-2,#fafaf9)}
+.sub-inv-pdf:disabled{opacity:.5;cursor:default}
 .sub-inv-row:first-child{border-top:none}
 .sub-inv-row.head{background:var(--surface-2,#fafaf9);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-text-2,#92929b);font-weight:600}
 .sub-inv-row .mono{font-family:var(--font-mono,ui-monospace,Menlo,monospace)}
@@ -34021,6 +34025,13 @@ body:has(.t-app) {
 .sub-pay-tt .sub{font-size:11px;color:var(--muted-text-2,#92929b);margin-top:2px}
 .sub-chip{font-style:normal;font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:999px;background:var(--muted,#efede9);color:var(--muted-text,#6e6e76);white-space:nowrap}
 .sub-chip.ok{background:var(--ok-bg,#e9f4ee);color:var(--ok,#16794a)}
+/* La tarjeta registrada: logo de la marca + número enmascarado */
+.sub-pay-card{display:flex;align-items:center;gap:12px;background:var(--surface-2,#fafaf9);border:1px solid var(--border,#e7e5e2);border-radius:var(--r-2,8px);padding:11px 12px;margin-bottom:11px}
+.sub-pay-card>svg{flex:none;border-radius:4px}
+.sub-pay-card-txt{min-width:0}
+.sub-pay-card-txt .nro{display:flex;align-items:baseline;gap:6px;font-family:var(--font-mono,ui-monospace,Menlo,monospace);font-size:13px;font-weight:600;color:var(--ink,#14141a);letter-spacing:.02em}
+.sub-pay-card-txt .ptos{font-size:10px;color:var(--muted-text-2,#92929b);letter-spacing:.1em}
+.sub-pay-card-txt .meta{margin-top:3px;font-size:11px;color:var(--muted-text-2,#92929b)}
 .sub-pay-empty{font-size:11.5px;color:var(--muted-text,#6e6e76);line-height:1.55;background:var(--surface-2,#fafaf9);border:1px solid var(--hairline,#efece8);border-radius:var(--r-2,8px);padding:10px 12px;margin-bottom:11px}
 
 /* Gestión */
@@ -34050,3 +34061,4 @@ body:has(.t-app) {
 /* Aviso con acción al costado (cancelación pendiente) */
 .sub-alert-accion{align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap}
 .sub-alert-accion .btn-primary{flex:none;white-space:nowrap}
+

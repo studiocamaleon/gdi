@@ -201,6 +201,77 @@ export class PaddleService {
   }
 
   /**
+   * URL del PDF de una factura. Es FIRMADA Y TEMPORAL, así que se pide en el
+   * momento y no se guarda: un link almacenado se vence y deja al cliente con
+   * un botón roto.
+   */
+  async urlFacturaPdf(transaccionId: string): Promise<string | null> {
+    if (!this.cliente) return null;
+    try {
+      const r = await this.cliente.transactions.getInvoicePDF(transaccionId);
+      return r.url ?? null;
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo obtener el PDF de ${transaccionId}: ${
+          error instanceof Error ? error.message : 'error desconocido'
+        }`,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * La tarjeta con la que se cobró la última vez: marca, últimos 4 y
+   * vencimiento.
+   *
+   * Sale del pago de la última transacción cobrada, NO de
+   * /customers/:id/payment-methods — ese endpoint necesita el permiso
+   * `payment_method.read`, que deliberadamente no le dimos a la API key. El
+   * dato es el mismo y por acá no hace falta ampliar permisos.
+   *
+   * Es informativo: el cliente necesita saber qué tarjeta tiene registrada.
+   * Cambiarla se hace en el portal de Paddle, no acá.
+   */
+  async tarjetaDelCliente(clienteId: string): Promise<{
+    marca: string;
+    ultimos4: string;
+    vence: string;
+  } | null> {
+    if (!this.cliente) return null;
+    try {
+      // No alcanza con mirar la última transacción: un cambio de plan que se
+      // salda con el saldo a favor queda "completed" pero SIN pagos, y la
+      // tarjeta desaparecía de la vista. Se recorren las últimas y se toma la
+      // primera que haya pasado de verdad por la tarjeta.
+      const col = this.cliente.transactions.list({
+        customerId: [clienteId],
+        status: ['completed'],
+        orderBy: 'billed_at[DESC]',
+        perPage: 20,
+      });
+      const recientes = await col.next();
+      const tarjeta = recientes
+        .flatMap((t) => t.payments ?? [])
+        .find((p) => p.methodDetails?.card?.last4)?.methodDetails?.card;
+      if (!tarjeta?.last4) return null;
+      const mes = String(tarjeta.expiryMonth ?? '').padStart(2, '0');
+      const anio = String(tarjeta.expiryYear ?? '').slice(-2);
+      return {
+        marca: tarjeta.type ?? 'card',
+        ultimos4: tarjeta.last4,
+        vence: mes && anio ? `${mes}/${anio}` : '',
+      };
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo leer la tarjeta de ${clienteId}: ${
+          error instanceof Error ? error.message : 'error desconocido'
+        }`,
+      );
+      return null;
+    }
+  }
+
+  /**
    * Sesión del portal del cliente de Paddle: ahí el tenant cambia el medio de
    * pago, descarga sus facturas y cancela. Se delega a propósito — son datos
    * de tarjeta y flujos fiscales que no queremos tocar ni almacenar.
