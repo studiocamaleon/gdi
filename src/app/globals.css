@@ -34047,3 +34047,6 @@ body:has(.t-app) {
 .cpl-precios .cpl-invlink{display:inline-flex;align-items:center;gap:7px;font-size:10.5px;padding:5px 9px}
 .cpl-precios .cpl-invlink b{font-family:var(--font-sans);font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-2,#63636d);font-weight:700}
 .cpl-anualmonto{font-style:normal;color:var(--ok,#37d39b);font-weight:600}
+/* Aviso con acción al costado (cancelación pendiente) */
+.sub-alert-accion{align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap}
+.sub-alert-accion .btn-primary{flex:none;white-space:nowrap}

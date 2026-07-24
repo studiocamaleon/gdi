@@ -102,6 +102,14 @@ export class SuscripcionController {
     );
   }
 
+  /** Deshace la cancelación pendiente. */
+  @Post('reactivar')
+  @Roles(RolSistema.ADMINISTRADOR)
+  @ProhibidoImpersonando()
+  reactivar(@CurrentSession() auth: CurrentAuth) {
+    return this.suscripciones.reactivarSuscripcion(auth.tenantId);
+  }
+
   /**
    * Abre el portal de Paddle (medio de pago, facturas, cancelación). Devuelve
    * la URL para que el front redirija; la sesión es de un solo uso y expira,

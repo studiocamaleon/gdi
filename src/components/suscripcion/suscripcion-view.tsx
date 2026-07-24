@@ -10,6 +10,7 @@ import {
   cambiarPlanSuscripcion,
   getSuscripcion,
   previsualizarCambio,
+  reactivarSuscripcion,
   sincronizarSuscripcion,
   type EstadoSuscripcion,
   type PlanContratable,
@@ -119,6 +120,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
     moneda: string;
   } | null>(null);
   const [cargandoPrevio, setCargandoPrevio] = React.useState(false);
+  const [reactivando, setReactivando] = React.useState(false);
   const [ciclo, setCiclo] = React.useState<"mensual" | "anual">("mensual");
   const [elegido, setElegido] = React.useState<string | null>(
     () => inicial.actual?.planCodigo ?? inicial.planes.at(-1)?.codigo ?? null,
@@ -261,6 +263,21 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
     setTimeout(() => setAbriendo(null), 1500);
   };
 
+  const reactivar = async () => {
+    if (reactivando) return;
+    setReactivando(true);
+    try {
+      setDatos(await reactivarSuscripcion());
+      toast.success("Tu suscripción sigue activa. No se va a cancelar.");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "No se pudo reactivar.",
+      );
+    } finally {
+      setReactivando(false);
+    }
+  };
+
   const irAlPortal = async () => {
     if (yendoAlPortal) return;
     setYendoAlPortal(true);
@@ -278,6 +295,11 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
 
   const actual = datos.actual;
   const enMora = actual?.estadoProveedor === "past_due";
+  // Paddle deja la suscripción en `active` con un cambio programado hasta el
+  // fin del período: sin esto la pantalla diría "Activa" y el cliente no
+  // sabría que se termina.
+  const cancelaEl =
+    actual?.cambioProgramado === "cancel" ? actual.cambioProgramadoEl : null;
   const planElegido =
     datos.planes.find((p) => p.codigo === elegido) ??
     datos.planes.at(-1) ??
@@ -312,6 +334,24 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
         <div className="sub-alert danger">
           <b>No se pudo cargar el checkout.</b> {errorPaddle} — recargá la
           página; si sigue, avisanos.
+        </div>
+      ) : null}
+
+      {cancelaEl ? (
+        <div className="sub-alert warn sub-alert-accion">
+          <div>
+            <b>Tu suscripción termina el {fechaLarga(cancelaEl)}.</b> Hasta esa
+            fecha seguís con todo lo de tu plan. Después no se renueva y no se
+            te cobra más.
+          </div>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={reactivar}
+            disabled={reactivando}
+          >
+            {reactivando ? "Reactivando…" : "Reactivar suscripción"}
+          </button>
         </div>
       ) : null}
 
@@ -620,23 +660,38 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
               </div>
               <div className="sub-sum-div" />
               <div className="sub-sum-row big">
-                <span>{actual ? "Próximo cobro" : "Primer cobro"}</span>
+                <span>
+                  {cancelaEl
+                    ? "Termina el"
+                    : actual
+                      ? "Próximo cobro"
+                      : "Primer cobro"}
+                </span>
                 <strong>
-                  {actual
-                    ? precio(actual.precioMensual, actual.moneda)
-                    : planElegido
-                      ? precio(planElegido.precioMensual, planElegido.moneda)
-                      : "—"}
+                  {cancelaEl
+                    ? fechaLarga(cancelaEl)
+                    : actual
+                      ? precio(actual.precioMensual, actual.moneda)
+                      : planElegido
+                        ? precio(planElegido.precioMensual, planElegido.moneda)
+                        : "—"}
                 </strong>
               </div>
-              <div className="sub-sum-row muted">
-                <span>Fecha</span>
-                <span>
-                  {actual?.proximoCobro
-                    ? fechaLarga(actual.proximoCobro)
-                    : "al activar"}
-                </span>
-              </div>
+              {cancelaEl ? (
+                <div className="sub-sum-row muted">
+                  <span>Después de esa fecha</span>
+                  <span>no se te cobra más</span>
+                </div>
+              ) : (
+                <div className="sub-sum-row muted">
+                  <span>Fecha</span>
+                  <span>
+                    {actual?.proximoCobro
+                      ? fechaLarga(actual.proximoCobro)
+                      : "al activar"}
+                  </span>
+                </div>
+              )}
             </div>
             {!actual && planElegido ? (
               <button
@@ -695,14 +750,16 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
               >
                 Ver facturas y datos de facturación
               </button>
-              <button
-                type="button"
-                className="sub-manage danger"
-                onClick={irAlPortal}
-                disabled={yendoAlPortal}
-              >
-                Cancelar suscripción
-              </button>
+              {cancelaEl ? null : (
+                <button
+                  type="button"
+                  className="sub-manage danger"
+                  onClick={irAlPortal}
+                  disabled={yendoAlPortal}
+                >
+                  Cancelar suscripción
+                </button>
+              )}
             </div>
           ) : null}
         </aside>
@@ -714,16 +771,18 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
 function Cabecera({ actual }: { actual: EstadoSuscripcion["actual"] }) {
   const etiqueta =
     actual?.estado === "activa"
-      ? actual.estadoProveedor === "past_due"
-        ? "Pago pendiente"
-        : "Activa"
+      ? actual.cambioProgramado === "cancel"
+        ? "Se cancela"
+        : actual.estadoProveedor === "past_due"
+          ? "Pago pendiente"
+          : "Activa"
       : actual?.estado === "suspendida"
         ? "Suspendida"
         : actual
           ? "Dada de baja"
           : "Sin plan";
   const tono =
-    actual?.estadoProveedor === "past_due"
+    actual?.cambioProgramado === "cancel" || actual?.estadoProveedor === "past_due"
       ? "warn"
       : actual?.estado === "activa"
         ? "ok"

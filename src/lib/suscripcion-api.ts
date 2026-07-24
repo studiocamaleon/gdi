@@ -37,6 +37,9 @@ export type EstadoSuscripcion = {
     proveedor: string;
     proximoCobro: string | null;
     desde: string;
+    /** Cancelación programada: sigue activa hasta esta fecha. */
+    cambioProgramado: string | null;
+    cambioProgramadoEl: string | null;
   } | null;
   planes: PlanContratable[];
   checkout: { tenantId: string; email: string };
@@ -95,6 +98,11 @@ export async function sincronizarSuscripcion(
     method: "POST",
     body: JSON.stringify({ transaccionId }),
   });
+}
+
+/** Deshace la cancelación pendiente. */
+export async function reactivarSuscripcion(): Promise<EstadoSuscripcion> {
+  return apiRequest("/suscripcion/reactivar", { method: "POST" });
 }
 
 /** Abre el portal de Paddle: medio de pago, facturas y cancelación. */

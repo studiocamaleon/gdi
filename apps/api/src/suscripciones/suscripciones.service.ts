@@ -84,6 +84,10 @@ export type EstadoSuscripcion = {
     proveedor: string;
     proximoCobro: string | null;
     desde: string;
+    /** Cancelación (o pausa) programada: la suscripción sigue activa hasta
+     *  esta fecha. Sin esto la pantalla diría "Activa" a secas. */
+    cambioProgramado: string | null;
+    cambioProgramadoEl: string | null;
   } | null;
   planes: PlanContratable[];
   checkout: { tenantId: string; email: string };
@@ -208,6 +212,9 @@ export class SuscripcionesService {
             proveedor: suscripcion.proveedor,
             proximoCobro: suscripcion.proximoCobro?.toISOString() ?? null,
             desde: suscripcion.desde.toISOString(),
+            cambioProgramado: suscripcion.cambioProgramado,
+            cambioProgramadoEl:
+              suscripcion.cambioProgramadoEl?.toISOString() ?? null,
           }
         : null,
       planes: contratables.map((p) => {
@@ -356,6 +363,28 @@ export class SuscripcionesService {
       if (externa) await this.sync.aplicar(externa);
     }
     return this.estadoParaTenant(tenantId, '');
+  }
+
+  /**
+   * Deshace la cancelación pendiente. Mientras no llegue la fecha efectiva, el
+   * cliente vuelve atrás y sigue como si nada.
+   */
+  async reactivarSuscripcion(tenantId: string): Promise<EstadoSuscripcion> {
+    const s = await this.prisma.suscripcion.findFirst({
+      where: { tenantId },
+      select: { referenciaExterna: true, cambioProgramado: true },
+    });
+    if (!s?.referenciaExterna || !s.cambioProgramado) {
+      throw new BadRequestException('No hay ninguna cancelación pendiente.');
+    }
+    const actualizada = await this.paddle.quitarCambioProgramado(
+      s.referenciaExterna,
+    );
+    if (actualizada) {
+      const externa = this.sync.extraer(actualizada);
+      if (externa) await this.sync.aplicar(externa);
+    }
+    return this.estadoParaTenant(tenantId);
   }
 
   /**

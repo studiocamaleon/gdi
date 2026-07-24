@@ -318,6 +318,20 @@ export class PaddleService {
     }
   }
 
+  /**
+   * Quita el cambio programado (típicamente una cancelación pendiente).
+   *
+   * Recuperar a alguien que se arrepintió es lo más barato que hay: mientras
+   * no llegue la fecha efectiva, la cancelación se deshace con esto y el
+   * cliente sigue como si nada.
+   */
+  async quitarCambioProgramado(suscripcionId: string): Promise<unknown> {
+    if (!this.cliente) return null;
+    return this.cliente.subscriptions.update(suscripcionId, {
+      scheduledChange: null,
+    });
+  }
+
   /** El SDK crudo, para lo que no valga la pena envolver. */
   get sdk(): Paddle | null {
     return this.cliente;
