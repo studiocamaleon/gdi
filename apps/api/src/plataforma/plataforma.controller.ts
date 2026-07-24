@@ -6,6 +6,7 @@ import {
   ParseUUIDPipe,
   Post,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -22,6 +23,7 @@ import type { CurrentAuth } from '../auth/auth.types';
 import { SinTenant } from '../common/sin-tenant.decorator';
 import { PlataformaAdminGuard } from './plataforma-admin.guard';
 import { ImpersonacionService } from './impersonacion.service';
+import { NegocioService } from './negocio.service';
 import { PlataformaBillingService } from './plataforma-billing.service';
 import { PlataformaGuard } from './plataforma.guard';
 import { PlataformaService } from './plataforma.service';
@@ -93,12 +95,23 @@ export class PlataformaController {
     private readonly service: PlataformaService,
     private readonly billing: PlataformaBillingService,
     private readonly impersonacion: ImpersonacionService,
+    private readonly negocio: NegocioService,
   ) {}
 
   /** La consola completa: resumen + tenants + auditoría + quién mira. */
   @Get('consola')
   consola(@CurrentSession() auth: CurrentAuth) {
     return this.service.consola(auth.userId, auth.esPlataforma === true);
+  }
+
+  /**
+   * Inteligencia de negocio del ecosistema: ventas/facturación/categorías
+   * agregadas cross-tenant. Endpoint aparte (lazy) para no frenar la consola.
+   * Ver docs/control-plane-negocio-diseno.md
+   */
+  @Get('negocio')
+  negocioEcosistema(@Query('periodo') periodo?: string) {
+    return this.negocio.negocio(periodo);
   }
 
   @Get('planes')
