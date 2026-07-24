@@ -157,6 +157,33 @@ argentino: `preapproval_plan`/`preapproval`, webhooks, y ahí sí Grupo Idea le
 factura al tenant (Factura A con crédito fiscal) — para eso se conservó
 `crearBorradorPorMonto`.
 
+## Contratar vs. cambiar de plan — y por qué no se espera el webhook
+
+Dos caminos DISTINTOS, y confundirlos cobraba de más:
+
+**Contratar (sin suscripción previa).** Hace falta el checkout: hay que cargar
+una tarjeta. Pero al cerrarse, NO se espera el webhook — el front toma el
+`transaction_id` del evento `checkout.completed` y llama a
+`POST /suscripcion/sincronizar`, que lee la transacción en Paddle, resuelve la
+suscripción y la aplica. Un segundo, no cuarenta.
+
+**Cambiar de plan (ya hay suscripción).** NO abre checkout: `POST
+/suscripcion/cambiar-plan` modifica la suscripción existente vía
+`subscriptions.update` con `prorated_immediately`, usando la tarjeta en archivo.
+Antes esto abría un checkout nuevo, lo que **le creaba al cliente una SEGUNDA
+suscripción en Paddle y le cobraban las dos**. Se previsualiza el ajuste
+(`previewUpdate`) antes de confirmar, así el usuario ve cuánto se le cobra ahora.
+
+El webhook NO desaparece: queda para lo que pasa **sin el usuario delante** —
+renovaciones, cobros fallidos, dunning, cancelaciones desde el portal. Es
+idempotente, así que si llega después de la sincronización activa no duplica
+nada.
+
+La regla general: **para lo que el usuario acaba de pedir, se va a buscar el
+resultado; para lo que pasa solo, se espera el aviso.** Una pantalla de espera
+que depende de una llamada externa que puede fallar en silencio no genera
+confianza — y de hecho falló en dev cuando se cayó el túnel.
+
 ## Prueba gratuita y ciclo anual (2026-07-24)
 
 **Prueba con vencimiento.** `Plan.trialDias` (cuántos días otorga el plan) y

@@ -2,11 +2,15 @@
 
 import * as React from "react";
 import { toast } from "sonner";
+import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import type { Paddle } from "@paddle/paddle-js";
 
 import {
   abrirPortalSuscripcion,
+  cambiarPlanSuscripcion,
   getSuscripcion,
+  previsualizarCambio,
+  sincronizarSuscripcion,
   type EstadoSuscripcion,
   type PlanContratable,
 } from "@/lib/suscripcion-api";
@@ -107,6 +111,13 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
   const [abriendo, setAbriendo] = React.useState<string | null>(null);
   const [yendoAlPortal, setYendoAlPortal] = React.useState(false);
   const [errorPaddle, setErrorPaddle] = React.useState<string | null>(null);
+  const [confirmarCambio, setConfirmarCambio] =
+    React.useState<PlanContratable | null>(null);
+  const [previo, setPrevio] = React.useState<{
+    monto: number;
+    moneda: string;
+  } | null>(null);
+  const [cargandoPrevio, setCargandoPrevio] = React.useState(false);
   const [ciclo, setCiclo] = React.useState<"mensual" | "anual">("mensual");
   const [elegido, setElegido] = React.useState<string | null>(
     () => inicial.actual?.planCodigo ?? inicial.planes.at(-1)?.codigo ?? null,
@@ -118,33 +129,38 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
       ? "production"
       : "sandbox";
 
-  // Espera a que el webhook aterrice: el checkout cierra ANTES de que la
-  // suscripción exista de nuestro lado. Consulta cada 2s hasta ~40s.
-  const esperarWebhook = React.useCallback(async (planPrevio: string | null) => {
+  /**
+   * Cierra el checkout → vamos a BUSCAR el resultado a la pasarela.
+   *
+   * Antes esto esperaba a que llegara el webhook, consultando cada 2s hasta 40.
+   * Estaba mal por dos motivos: el usuario acaba de pagar y quedaba mirando una
+   * pantalla de espera sin saber si salió bien, y si el webhook fallaba (o
+   * tardaba) no se enteraba nunca. Ahora se resuelve en una llamada: leemos la
+   * transacción en Paddle y aplicamos el resultado. El webhook sigue existiendo
+   * como respaldo —es idempotente— para lo que pasa sin nadie mirando.
+   */
+  const traerResultado = React.useCallback(async (transaccionId?: string) => {
     setConfirmando(true);
-    for (let intento = 0; intento < 20; intento += 1) {
-      await new Promise((r) => setTimeout(r, 2000));
-      try {
-        const fresco = await getSuscripcion();
-        if (
-          fresco.actual &&
-          (fresco.actual.planCodigo !== planPrevio ||
-            fresco.actual.proveedor === "paddle")
-        ) {
-          setDatos(fresco);
-          setElegido(fresco.actual.planCodigo);
-          setConfirmando(false);
-          toast.success(`Tu plan ${fresco.actual.planNombre} está activo.`);
-          return;
-        }
-      } catch {
-        // Reintenta en la vuelta siguiente.
-      }
+    try {
+      const fresco = transaccionId
+        ? await sincronizarSuscripcion(transaccionId)
+        : await getSuscripcion();
+      setDatos(fresco);
+      if (fresco.actual) setElegido(fresco.actual.planCodigo);
+      toast.success(
+        fresco.actual
+          ? `Tu plan ${fresco.actual.planNombre} está activo.`
+          : "Pago registrado.",
+      );
+    } catch {
+      // Si la lectura falla, el pago igual se hizo y el webhook lo va a
+      // aplicar: se lo decimos en vez de dejarlo con una pantalla colgada.
+      toast.info(
+        "El pago se registró. Si no ves el cambio en un minuto, recargá la página.",
+      );
+    } finally {
+      setConfirmando(false);
     }
-    setConfirmando(false);
-    toast.info(
-      "El pago se registró. La activación puede demorar un momento — recargá la página en unos minutos.",
-    );
   }, []);
 
   React.useEffect(() => {
@@ -158,7 +174,11 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
           token,
           eventCallback: (evento) => {
             if (evento.name === "checkout.completed") {
-              void esperarWebhook(datos.actual?.planCodigo ?? null);
+              // El id de la transacción viene en el evento: con eso resolvemos
+              // la suscripción en Paddle sin depender del webhook.
+              const tx = (evento.data as { transaction_id?: string } | undefined)
+                ?.transaction_id;
+              void traerResultado(tx);
             }
           },
         }),
@@ -179,6 +199,45 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, entorno]);
+
+  /**
+   * Dos caminos, y la diferencia importa: si el tenant YA tiene suscripción en
+   * la pasarela, cambiar de plan NO abre checkout — se modifica la existente
+   * con prorrateo y la tarjeta en archivo. Abrir un checkout le crearía una
+   * SEGUNDA suscripción y le cobrarían las dos.
+   */
+  const elegirPlan = (plan: PlanContratable) => {
+    if (datos.puedeCambiarSinPago) {
+      setConfirmarCambio(plan);
+      setPrevio(null);
+      setCargandoPrevio(true);
+      previsualizarCambio(plan.codigo, ciclo)
+        .then((p) => setPrevio(p))
+        .catch(() => setPrevio(null))
+        .finally(() => setCargandoPrevio(false));
+      return;
+    }
+    contratar(plan);
+  };
+
+  const aplicarCambio = async () => {
+    if (!confirmarCambio || confirmando) return;
+    const plan = confirmarCambio;
+    setConfirmarCambio(null);
+    setConfirmando(true);
+    try {
+      const fresco = await cambiarPlanSuscripcion(plan.codigo, ciclo);
+      setDatos(fresco);
+      if (fresco.actual) setElegido(fresco.actual.planCodigo);
+      toast.success(`Tu plan ${plan.nombre} está activo.`);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "No se pudo cambiar el plan.",
+      );
+    } finally {
+      setConfirmando(false);
+    }
+  };
 
   const contratar = (plan: PlanContratable) => {
     if (!paddle) {
@@ -324,6 +383,38 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
         </div>
       ) : null}
 
+      {confirmarCambio ? (
+        <ConfirmacionDestructiva
+          open
+          onOpenChange={(o) => {
+            if (!o) setConfirmarCambio(null);
+          }}
+          titulo={`Cambiar al plan ${confirmarCambio.nombre}`}
+          nombreItem={confirmarCambio.nombre}
+          requiereTipear={false}
+          accionLabel="Confirmar cambio"
+          descripcion={
+            cargandoPrevio
+              ? "Calculando el ajuste con Paddle…"
+              : "Se usa la tarjeta que ya tenés registrada. No hace falta cargarla de nuevo."
+          }
+          impacto={[
+            ciclo === "anual" && confirmarCambio.anual
+              ? `Nuevo precio: ${precio(confirmarCambio.anual.precio, confirmarCambio.moneda)} al año`
+              : `Nuevo precio: ${precio(confirmarCambio.precioMensual, confirmarCambio.moneda)} por mes`,
+            previo
+              ? previo.monto > 0
+                ? `Se te cobra ahora ${precio(previo.monto, previo.moneda)} por el ajuste proporcional`
+                : "Sin cargo ahora: el ajuste queda a favor tuyo para el próximo período"
+              : cargandoPrevio
+                ? "Calculando el ajuste…"
+                : "Paddle ajusta el cobro de forma proporcional al período en curso",
+            "El cambio es inmediato",
+          ]}
+          onConfirmar={aplicarCambio}
+        />
+      ) : null}
+
       <div className="sub-grid">
         {/* ── Columna principal ── */}
         <div className="sub-main">
@@ -430,7 +521,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
                           className="btn sm w"
                           onClick={(e) => {
                             e.stopPropagation();
-                            contratar(p);
+                            elegirPlan(p);
                           }}
                           disabled={confirmando || abriendo === p.codigo}
                         >

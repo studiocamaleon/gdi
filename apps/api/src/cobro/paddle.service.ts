@@ -236,6 +236,75 @@ export class PaddleService {
     }
   }
 
+  /**
+   * Cambia el plan de una suscripción EXISTENTE, con prorrateo inmediato.
+   *
+   * Es la diferencia entre cambiar de plan y contratar: abrir un checkout
+   * nuevo le crearía al cliente una SEGUNDA suscripción y le cobrarían las
+   * dos. Acá se modifica la que ya tiene, Paddle prorratea contra lo que ya
+   * pagó, y usa la tarjeta que está en archivo — sin pedirle nada.
+   *
+   * Devuelve la suscripción actualizada para aplicarla en el acto, sin
+   * esperar el webhook.
+   */
+  async cambiarPlan(suscripcionId: string, priceId: string): Promise<unknown> {
+    if (!this.cliente) return null;
+    return this.cliente.subscriptions.update(suscripcionId, {
+      items: [{ priceId, quantity: 1 }],
+      prorationBillingMode: 'prorated_immediately',
+    });
+  }
+
+  /** Qué se le va a cobrar ahora por el cambio, ANTES de confirmarlo. */
+  async previsualizarCambio(
+    suscripcionId: string,
+    priceId: string,
+  ): Promise<{ monto: number; moneda: string } | null> {
+    if (!this.cliente) return null;
+    try {
+      const p = await this.cliente.subscriptions.previewUpdate(suscripcionId, {
+        items: [{ priceId, quantity: 1 }],
+        prorationBillingMode: 'prorated_immediately',
+      });
+      const t = p.immediateTransaction?.details?.totals;
+      if (!t) return { monto: 0, moneda: p.currencyCode ?? 'USD' };
+      return {
+        monto: Number(t.total ?? '0') / 100,
+        moneda: p.currencyCode ?? 'USD',
+      };
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo previsualizar el cambio de ${suscripcionId}: ${
+          error instanceof Error ? error.message : 'error desconocido'
+        }`,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Lee la suscripción que creó una transacción. Se usa apenas cierra el
+   * checkout para reflejar el alta EN EL ACTO en vez de esperar el webhook:
+   * el usuario acaba de pagar y merece ver el resultado, no una pantalla de
+   * espera. El webhook queda como respaldo para lo que pasa sin nadie
+   * mirando (renovaciones, mora, cancelaciones desde el portal).
+   */
+  async suscripcionDeTransaccion(transaccionId: string): Promise<unknown> {
+    if (!this.cliente) return null;
+    try {
+      const t = await this.cliente.transactions.get(transaccionId);
+      if (!t.subscriptionId) return null;
+      return await this.cliente.subscriptions.get(t.subscriptionId);
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo resolver la suscripción de ${transaccionId}: ${
+          error instanceof Error ? error.message : 'error desconocido'
+        }`,
+      );
+      return null;
+    }
+  }
+
   /** El SDK crudo, para lo que no valga la pena envolver. */
   get sdk(): Paddle | null {
     return this.cliente;
