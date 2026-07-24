@@ -1904,6 +1904,9 @@ function PlanFila({
   onGuardado: (planes: PlanCatalogo[]) => void;
 }) {
   const [priceId, setPriceId] = React.useState(plan.paddlePriceId ?? "");
+  const [priceIdAnual, setPriceIdAnual] = React.useState(
+    plan.paddlePriceIdAnual ?? "",
+  );
   const [productId, setProductId] = React.useState(plan.paddleProductId ?? "");
   const [guardando, setGuardando] = React.useState(false);
 
@@ -1911,11 +1914,23 @@ function PlanFila({
     if (guardando) return;
     setGuardando(true);
     try {
-      const lista = await vincularPlanPaddle(
+      // Cada ciclo es un precio distinto en Paddle y se valida por separado
+      // (que el id exista y traer el monto real). Se manda el mensual primero
+      // porque es el que también fija el productId.
+      let lista = await vincularPlanPaddle(
         plan.id,
         priceId.trim() || null,
         productId.trim() || null,
+        "mensual",
       );
+      if ((priceIdAnual.trim() || "") !== (plan.paddlePriceIdAnual ?? "")) {
+        lista = await vincularPlanPaddle(
+          plan.id,
+          priceIdAnual.trim() || null,
+          null,
+          "anual",
+        );
+      }
       toast.success(
         priceId.trim()
           ? `${plan.nombre} quedó vinculado a Paddle.`
@@ -1945,6 +1960,15 @@ function PlanFila({
                 onChange={(e) => setPriceId(e.target.value)}
                 placeholder="pri_01j…"
                 autoFocus
+                disabled={guardando}
+              />
+            </label>
+            <label>
+              <span>Price ID anual (opcional)</span>
+              <input
+                value={priceIdAnual}
+                onChange={(e) => setPriceIdAnual(e.target.value)}
+                placeholder="pri_01j…"
                 disabled={guardando}
               />
             </label>
@@ -1996,9 +2020,24 @@ function PlanFila({
       <td className="cpl-mono">{fmtN(plan.tenants)}</td>
       <td>
         {plan.paddlePriceId ? (
-          <span className="cpl-invlink" style={{ display: "inline-flex" }}>
-            {plan.paddlePriceId}
-          </span>
+          <div className="cpl-precios">
+            <span className="cpl-invlink">
+              <b>mes</b> {plan.paddlePriceId}
+            </span>
+            {plan.paddlePriceIdAnual ? (
+              <span className="cpl-invlink">
+                <b>año</b> {plan.paddlePriceIdAnual}
+                {plan.precioAnual !== null ? (
+                  <em className="cpl-anualmonto">
+                    {plan.moneda === "USD" ? "US$" : "$"}
+                    {fmtN(plan.precioAnual)}
+                  </em>
+                ) : null}
+              </span>
+            ) : (
+              <span className="cpl-sinvinculo">sin precio anual</span>
+            )}
+          </div>
         ) : (
           <span className="cpl-sinvinculo">sin vincular</span>
         )}

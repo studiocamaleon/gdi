@@ -34042,3 +34042,8 @@ body:has(.t-app) {
 .cpl-bajada-edit textarea{background:var(--surface-2,#181820);border:1px solid var(--line-2,#30303b);border-radius:8px;padding:7px 10px;color:var(--ink,#f4f3f0);font:inherit;font-size:12px;resize:vertical}
 .cpl-bajada-edit textarea:focus{outline:none;border-color:var(--acc,#8b7cff)}
 .cpl-bajada-edit .acc{display:flex;gap:7px}
+/* Los dos precios de Paddle (mensual y anual) en la tabla de planes */
+.cpl-precios{display:flex;flex-direction:column;gap:5px;align-items:flex-start}
+.cpl-precios .cpl-invlink{display:inline-flex;align-items:center;gap:7px;font-size:10.5px;padding:5px 9px}
+.cpl-precios .cpl-invlink b{font-family:var(--font-sans);font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-2,#63636d);font-weight:700}
+.cpl-anualmonto{font-style:normal;color:var(--ok,#37d39b);font-weight:600}
