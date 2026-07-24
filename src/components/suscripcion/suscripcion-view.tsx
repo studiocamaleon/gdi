@@ -57,12 +57,12 @@ const ESTADO_FACTURA: Record<string, { texto: string; tono: string }> = {
 };
 const PROVISORIOS = new Set(["billed", "ready", "draft"]);
 
-const MARCA_TARJETA: Record<string, string> = {
-  visa: "VISA",
+const NOMBRE_MARCA: Record<string, string> = {
+  visa: "Visa",
   mastercard: "Mastercard",
-  american_express: "Amex",
+  american_express: "American Express",
   discover: "Discover",
-  diners_club: "Diners",
+  diners_club: "Diners Club",
   jcb: "JCB",
   union_pay: "UnionPay",
   maestro: "Maestro",
@@ -70,6 +70,77 @@ const MARCA_TARJETA: Record<string, string> = {
   hipercard: "Hipercard",
   mada: "mada",
 };
+
+/**
+ * Marca de la tarjeta. Se dibujan versiones simples y reconocibles —no
+ * reproducciones de los logos registrados— que es lo que se estila en las
+ * interfaces de pago. La que no se reconoce cae a un ícono de tarjeta genérico.
+ */
+function LogoTarjeta({ marca }: { marca: string }) {
+  const comun = { viewBox: "0 0 40 26", width: 40, height: 26 } as const;
+  const fondo = (
+    <rect width="40" height="26" rx="4" fill="#fff" stroke="#e7e5e2" />
+  );
+  if (marca === "visa") {
+    return (
+      <svg {...comun} aria-label="Visa">
+        {fondo}
+        <text
+          x="20"
+          y="17.5"
+          textAnchor="middle"
+          fontSize="10.5"
+          fontWeight="700"
+          fontStyle="italic"
+          fontFamily="Georgia, serif"
+          fill="#1434CB"
+          letterSpacing="0.5"
+        >
+          VISA
+        </text>
+      </svg>
+    );
+  }
+  if (marca === "mastercard" || marca === "maestro") {
+    return (
+      <svg {...comun} aria-label="Mastercard">
+        {fondo}
+        <circle cx="16" cy="13" r="7" fill="#EB001B" />
+        <circle cx="24" cy="13" r="7" fill="#F79E1B" opacity="0.9" />
+        <path
+          d="M20 7.9a7 7 0 000 10.2 7 7 0 000-10.2z"
+          fill="#FF5F00"
+        />
+      </svg>
+    );
+  }
+  if (marca === "american_express") {
+    return (
+      <svg {...comun} aria-label="American Express">
+        <rect width="40" height="26" rx="4" fill="#006FCF" />
+        <text
+          x="20"
+          y="16.5"
+          textAnchor="middle"
+          fontSize="7.5"
+          fontWeight="700"
+          fontFamily="Helvetica, Arial, sans-serif"
+          fill="#fff"
+          letterSpacing="0.4"
+        >
+          AMEX
+        </text>
+      </svg>
+    );
+  }
+  return (
+    <svg {...comun} aria-label={NOMBRE_MARCA[marca] ?? "Tarjeta"}>
+      {fondo}
+      <rect x="4" y="9" width="32" height="3" fill="#d4d2cd" />
+      <rect x="4" y="16" width="12" height="2.5" rx="1.2" fill="#e7e5e2" />
+    </svg>
+  );
+}
 
 const ETIQUETA_FEATURE: Record<string, string> = {
   afip: "Facturación electrónica (ARCA)",
@@ -837,14 +908,19 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
               </div>
               {datos.tarjeta ? (
                 <div className="sub-pay-card">
-                  <span className="marca">
-                    {MARCA_TARJETA[datos.tarjeta.marca] ??
-                      datos.tarjeta.marca.toUpperCase()}
-                  </span>
-                  <span className="digitos">•••• {datos.tarjeta.ultimos4}</span>
-                  {datos.tarjeta.vence ? (
-                    <span className="vence">{datos.tarjeta.vence}</span>
-                  ) : null}
+                  <LogoTarjeta marca={datos.tarjeta.marca} />
+                  <div className="sub-pay-card-txt">
+                    <div className="nro">
+                      <span className="ptos">•••• •••• ••••</span>
+                      {datos.tarjeta.ultimos4}
+                    </div>
+                    <div className="meta">
+                      {NOMBRE_MARCA[datos.tarjeta.marca] ?? "Tarjeta"}
+                      {datos.tarjeta.vence
+                        ? ` · vence ${datos.tarjeta.vence}`
+                        : ""}
+                    </div>
+                  </div>
                 </div>
               ) : null}
               <div className="sub-pay-empty">
