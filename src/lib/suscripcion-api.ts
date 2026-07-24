@@ -30,8 +30,24 @@ export type EstadoSuscripcion = {
   } | null;
   planes: PlanContratable[];
   checkout: { tenantId: string; email: string };
+  facturas: FacturaSuscripcion[];
+  puedePortal: boolean;
+};
+
+export type FacturaSuscripcion = {
+  id: string;
+  numero: string | null;
+  fecha: string | null;
+  total: number;
+  moneda: string;
+  estado: string;
 };
 
 export async function getSuscripcion(): Promise<EstadoSuscripcion> {
   return apiRequest("/suscripcion", { cache: "no-store" });
+}
+
+/** Abre el portal de Paddle: medio de pago, facturas y cancelación. */
+export async function abrirPortalSuscripcion(): Promise<{ url: string }> {
+  return apiRequest("/suscripcion/portal", { method: "POST" });
 }

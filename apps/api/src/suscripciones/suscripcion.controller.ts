@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Post } from '@nestjs/common';
 import { RolSistema } from '@prisma/client';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import { Roles } from '../auth/roles.decorator';
@@ -26,5 +26,23 @@ export class SuscripcionController {
   @ProhibidoImpersonando()
   estado(@CurrentSession() auth: CurrentAuth) {
     return this.suscripciones.estadoParaTenant(auth.tenantId, auth.email);
+  }
+
+  /**
+   * Abre el portal de Paddle (medio de pago, facturas, cancelación). Devuelve
+   * la URL para que el front redirija; la sesión es de un solo uso y expira,
+   * así que se pide en el momento y no se guarda.
+   */
+  @Post('portal')
+  @Roles(RolSistema.ADMINISTRADOR)
+  @ProhibidoImpersonando()
+  async portal(@CurrentSession() auth: CurrentAuth) {
+    const r = await this.suscripciones.portalDeTenant(auth.tenantId);
+    if (!r) {
+      throw new BadRequestException(
+        'Todavía no hay una suscripción activa en la pasarela de pago.',
+      );
+    }
+    return r;
   }
 }

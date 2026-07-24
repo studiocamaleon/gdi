@@ -156,8 +156,87 @@ export class PaddleService {
     }
   }
 
-  /** El SDK crudo, para las operaciones de las fases siguientes (checkout,
-   *  portal del cliente). */
+  /**
+   * Las facturas del cliente (transacciones cobradas). Paddle es Merchant of
+   * Record: estos comprobantes los emite Paddle, no nosotros — acá sólo se
+   * listan para que el tenant las tenga a mano.
+   */
+  async listarFacturas(
+    clienteId: string,
+    limite = 12,
+  ): Promise<
+    Array<{
+      id: string;
+      numero: string | null;
+      fecha: string | null;
+      total: number;
+      moneda: string;
+      estado: string;
+    }>
+  > {
+    if (!this.cliente) return [];
+    try {
+      const coleccion = this.cliente.transactions.list({
+        customerId: [clienteId],
+        status: ['completed', 'billed', 'past_due'],
+        perPage: limite,
+      });
+      const filas = await coleccion.next();
+      return filas.map((t) => ({
+        id: t.id,
+        numero: t.invoiceNumber ?? null,
+        fecha: t.billedAt ?? t.createdAt ?? null,
+        total: Number(t.details?.totals?.total ?? '0') / 100,
+        moneda: t.currencyCode ?? 'USD',
+        estado: t.status,
+      }));
+    } catch (error) {
+      this.logger.warn(
+        `No se pudieron listar las facturas de ${clienteId}: ${
+          error instanceof Error ? error.message : 'error desconocido'
+        }`,
+      );
+      return [];
+    }
+  }
+
+  /**
+   * Sesión del portal del cliente de Paddle: ahí el tenant cambia el medio de
+   * pago, descarga sus facturas y cancela. Se delega a propósito — son datos
+   * de tarjeta y flujos fiscales que no queremos tocar ni almacenar.
+   *
+   * Pasando `subscriptionIds` el portal habilita las acciones sobre esas
+   * suscripciones puntuales.
+   */
+  async crearSesionPortal(
+    clienteId: string,
+    suscripcionIds: string[] = [],
+  ): Promise<{ general: string; suscripcion: string | null } | null> {
+    if (!this.cliente) return null;
+    try {
+      const sesion = await this.cliente.customerPortalSessions.create(
+        clienteId,
+        suscripcionIds,
+      );
+      const deSuscripcion =
+        sesion.urls?.subscriptions?.[0]?.cancelSubscription ??
+        sesion.urls?.subscriptions?.[0]?.updateSubscriptionPaymentMethod ??
+        null;
+      return {
+        general: sesion.urls?.general?.overview ?? '',
+        suscripcion: deSuscripcion,
+      };
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo abrir el portal de ${clienteId}: ${
+          error instanceof Error ? error.message : 'error desconocido'
+        }`,
+      );
+      return null;
+    }
+  }
+
+  /** El SDK crudo, para lo que no valga la pena envolver. */
   get sdk(): Paddle | null {
     return this.cliente;
   }

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { PaddleService } from '../cobro/paddle.service';
 
 /**
  * Lecturas de la suscripción de un tenant — el ÚNICO lugar que interpreta
@@ -67,11 +68,28 @@ export type EstadoSuscripcion = {
   } | null;
   planes: PlanContratable[];
   checkout: { tenantId: string; email: string };
+  /** Comprobantes que emitió PADDLE (es Merchant of Record, no los emitimos
+   *  nosotros). Vacío mientras no haya cobros. */
+  facturas: FacturaSuscripcion[];
+  /** Hay cliente en la pasarela → se puede abrir el portal de autogestión. */
+  puedePortal: boolean;
+};
+
+export type FacturaSuscripcion = {
+  id: string;
+  numero: string | null;
+  fecha: string | null;
+  total: number;
+  moneda: string;
+  estado: string;
 };
 
 @Injectable()
 export class SuscripcionesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly paddle: PaddleService,
+  ) {}
 
   /** La suscripción del tenant con su plan, o null (legacy, sin plan). */
   async de(tenantId: string): Promise<SuscripcionDe> {
@@ -145,6 +163,14 @@ export class SuscripcionesService {
 
     const contratables = planes.filter((p) => p.paddlePriceId !== null);
 
+    // Las facturas se piden sólo si el tenant ya es cliente en la pasarela.
+    // Si Paddle no responde, la lista viene vacía y la vista lo dice — nunca
+    // se rompe la pantalla por una lectura auxiliar.
+    const clienteExterno = suscripcion?.clienteExternoId ?? null;
+    const facturas = clienteExterno
+      ? await this.paddle.listarFacturas(clienteExterno)
+      : [];
+
     return {
       actual: suscripcion
         ? {
@@ -172,6 +198,27 @@ export class SuscripcionesService {
       // no de la pantalla: es lo que el webhook usa para saber a quién
       // corresponde la suscripción que se acaba de crear.
       checkout: { tenantId, email },
+      facturas,
+      puedePortal: clienteExterno !== null,
     };
+  }
+
+  /**
+   * Abre el portal de autogestión de Paddle para este tenant: medio de pago,
+   * facturas y cancelación. Se delega a propósito — son datos de tarjeta y
+   * flujos fiscales que no queremos tocar ni almacenar.
+   */
+  async portalDeTenant(tenantId: string): Promise<{ url: string } | null> {
+    const s = await this.prisma.suscripcion.findFirst({
+      where: { tenantId },
+      select: { clienteExternoId: true, referenciaExterna: true },
+    });
+    if (!s?.clienteExternoId) return null;
+    const urls = await this.paddle.crearSesionPortal(
+      s.clienteExternoId,
+      s.referenciaExterna ? [s.referenciaExterna] : [],
+    );
+    const url = urls?.general || urls?.suscripcion;
+    return url ? { url } : null;
   }
 }
