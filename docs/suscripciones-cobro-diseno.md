@@ -271,6 +271,37 @@ cuenta en dos lugares termina divergiendo. Devuelve `doceMeses` (la referencia),
 mensual y debajo "US$500 al año · ahorrás US$100 frente a US$600 pagando mes a
 mes" — el monto solo no dice nada, la comparación sí.
 
+## La card del sidebar: plan y días restantes (2026-07-24)
+
+La card mostraba **"Plan diamante · 14/30 días" a todos los tenants**: valores
+fijos escritos en el front, porque el backend nunca mandó el dato. Se habían
+quitado para no mentir; ahora se traen de verdad.
+
+El contexto de sesión (`/tenants/current`) pasa a llevar `tenantActual.suscripcion`
+con plan, estado, días restantes y largo del período. Se lee en `auth.service`
+—y no en `SuscripcionesService`— porque la sesión se arma **antes** de que haya
+tenant en el AsyncLocalStorage, así que el `tenantId` va explícito.
+
+**Por qué hizo falta una columna nueva.** Sólo se conocía el FIN del período
+(`proximoCobro`). Para decir "faltan X de N días" hace falta también el
+principio, y asumir N=30 sería falso en los planes anuales —el mismo tipo de
+número inventado que se estaba corrigiendo. Paddle manda
+`current_billing_period.starts_at` en cada evento de suscripción: se guarda en
+`Suscripcion.periodoDesde` y de ahí sale el largo real del ciclo.
+
+Reglas de la vista (`ciclo.ts`, con la misma disciplina que `trial.ts`: los días
+se **calculan**, nunca se guardan):
+
+- **En prueba** tiene prioridad sobre el cobro — lo que importa mientras dura es
+  cuánto queda de prueba. El total sale de `Plan.trialDias`.
+- **Sin `periodoDesde`** (filas anteriores a la columna) se muestran los días
+  restantes **sin fracción**, y la barra queda llena. Se completa solo con el
+  próximo evento de la pasarela.
+- **Sin suscripción** (tenants legacy sin plan) la card no inventa nada: cae al
+  texto neutro "Ver plan y facturación".
+- Los restantes acotan el total, para que la barra nunca se pase de largo tras
+  un reintento de cobro que corre `proximoCobro`.
+
 ## Fuera de alcance
 
 Automatizar la Factura E (una por mes, manual es razonable). Precios por país con

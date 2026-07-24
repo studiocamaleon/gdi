@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { type CurrentUser } from "@/lib/auth";
+import { type CurrentUser, type TenantSummary } from "@/lib/auth";
 import { NavLink } from "@/components/navigation/nav-link";
 import { hasChildren, NAV, type NavItem } from "@/components/navigation/nav-items";
 import { useSidebar } from "@/components/ui/sidebar";
@@ -158,31 +158,39 @@ function getParentKey(activeKey: string | undefined) {
   return NAV.find((item) => hasChildren(item) && item.children.some((child) => child.key === activeKey))?.key;
 }
 
-// El backend no manda todavía los días restantes de la suscripción, así que
-// acá NO se inventa un contador: se muestra sólo lo que se sabe y el detalle
-// real vive en /configuracion/suscripcion. Antes esto mostraba "14 / 30 dias
-// restantes" a TODOS los tenants —un número fijo inventado— y una barra de
-// progreso acorde. Ver docs/suscripciones-cobro-diseno.md
-function formatPlanTier(diasRestantes: number | null | undefined) {
-  if (diasRestantes == null) {
+// La card muestra plan y días SÓLO con datos reales del backend. Antes esto
+// mostraba "14 / 30 dias restantes" a TODOS los tenants —un número fijo
+// inventado— y una barra acorde; por eso las funciones de abajo devuelven un
+// texto neutro cuando el dato no está, en vez de rellenar con un supuesto.
+// Ver docs/suscripciones-cobro-diseno.md
+function formatPlanTier(susc: TenantSummary["suscripcion"]) {
+  const dias = susc?.diasRestantes;
+  if (dias == null) {
     return "Ver plan y facturación";
   }
-  if (diasRestantes <= 0) {
-    return "Vencida";
+  if (dias <= 0) {
+    return susc?.enPrueba ? "Prueba vencida" : "Vencida";
   }
-  return `${diasRestantes} / 30 dias restantes`;
+  const unidad = dias === 1 ? "día" : "días";
+  // Sin el largo del período no se arma la fracción: un plan anual con "/ 30"
+  // sería falso. Se dice lo que se sabe.
+  const total = susc?.diasTotales;
+  const cuenta = total ? `${dias} / ${total} ${unidad}` : `${dias} ${unidad}`;
+  return susc?.enPrueba ? `Prueba · ${cuenta}` : `Renueva en ${cuenta}`;
 }
 
-function getSuscripcionProgress(diasRestantes: number | null | undefined) {
-  if (diasRestantes == null) {
+function getSuscripcionProgress(susc: TenantSummary["suscripcion"]) {
+  const dias = susc?.diasRestantes;
+  const total = susc?.diasTotales;
+  if (dias == null || !total) {
     return 100;
   }
 
-  if (diasRestantes <= 0) {
+  if (dias <= 0) {
     return 0;
   }
 
-  return Math.min(100, Math.max(8, Math.round((diasRestantes / 30) * 100)));
+  return Math.min(100, Math.max(8, Math.round((dias / total) * 100)));
 }
 
 export function AppSidebar({ currentUser }: AppSidebarProps) {
@@ -193,9 +201,9 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
   // al abrir otro, el anterior se colapsa.
   const [openKey, setOpenKey] = React.useState<string | null>(() => parentKey ?? null);
   // Sin dato real no se inventa un nombre de plan (antes caía a "Plan diamante").
-  const planNombre = currentUser.tenantActual.suscripcion?.planNombre?.trim() || "Suscripción";
-  const diasRestantes = currentUser.tenantActual.suscripcion?.diasRestantes ?? null;
-  const suscripcionProgress = getSuscripcionProgress(diasRestantes);
+  const suscripcion = currentUser.tenantActual.suscripcion;
+  const planNombre = suscripcion?.planNombre?.trim() || "Suscripción";
+  const suscripcionProgress = getSuscripcionProgress(suscripcion);
   const { state, setOpen } = useSidebar();
   const collapsed = state === "collapsed";
   const [query, setQuery] = React.useState("");
@@ -383,7 +391,7 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
             <span className="dot" />
             <div>
               <div className="name">{planNombre}</div>
-              <div className="tier">{formatPlanTier(diasRestantes)}</div>
+              <div className="tier">{formatPlanTier(suscripcion)}</div>
             </div>
           </div>
         </div>

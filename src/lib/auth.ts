@@ -7,10 +7,17 @@ export type TenantSummary = {
   nombre: string;
   slug: string;
   rol: MembershipRole;
+  /** Null cuando el tenant no tiene plan asignado (legacy): la card no
+   *  inventa un plan ni un contador, muestra su texto neutro. */
   suscripcion?: {
     planNombre?: string | null;
+    estado?: string | null;
     diasRestantes?: number | null;
+    /** Largo del período. Null si no se conoce su inicio — ahí se muestran
+     *  sólo los días restantes, sin fracción. */
+    diasTotales?: number | null;
     venceEl?: string | null;
+    enPrueba?: boolean;
   } | null;
 };
 
