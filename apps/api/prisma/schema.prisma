@@ -3414,11 +3414,23 @@ model Plan {
   /// "trial" | "taller" | "estudio" | "diamante" — estable, es la clave.
   codigo        String        @unique
   nombre        String
+  /// ESPEJO del precio que vive en Paddle, cacheado para mostrarlo (consola,
+  /// MRR, vista del tenant) sin pegarle a la API. La fuente de verdad del
+  /// monto es el catálogo de Paddle: esto se sincroniza, no se edita a mano.
   precioMensual Decimal       @db.Decimal(14, 2)
+  /// Moneda del precio. Paddle cobra en USD; el riel argentino (MercadoPago)
+  /// llegará con ARS. Ver docs/suscripciones-cobro-diseno.md
+  moneda        String        @default("USD")
   /// Qué habilita y hasta dónde: { afip, whatsapp, usuariosMax,
   /// ordenesMesMax, storageGb }. JSON a propósito: los features cambian más
   /// rápido que el schema. NADIE lo lee directo salvo SuscripcionesService.
+  /// Esto NO va a Paddle: es el patrón que recomienda su propia doc — precio
+  /// en Paddle, entitlements en nuestro código.
   featuresJson  Json
+  /// Precio y producto en el catálogo de Paddle. Null = plan no vendible por
+  /// Paddle todavía (p. ej. "trial", o los planes legacy).
+  paddlePriceId   String?     @unique
+  paddleProductId String?
   activo        Boolean       @default(true)
   orden         Int           @default(0)
   suscripciones Suscripcion[]
@@ -3432,8 +3444,23 @@ model Suscripcion {
   id        String    @id @default(uuid()) @db.Uuid
   tenantId  String    @unique @db.Uuid
   planId    String    @db.Uuid
-  /// 'activa' | 'suspendida' | 'baja'
+  /// 'activa' | 'suspendida' | 'baja' — estado NORMALIZADO nuestro, el que
+  /// mira el gate por plan. No es el de Paddle: ver estadoProveedor.
   estado    String    @default("activa")
+  /// Quién cobra: 'paddle' | 'mercadopago' | 'manual'. "manual" son los
+  /// legacy/cortesía que no pasan por ninguna pasarela.
+  proveedor String    @default("manual")
+  /// Id de la suscripción en el proveedor (subscription_id de Paddle).
+  referenciaExterna String? @unique
+  /// Id del cliente en el proveedor (customer_id de Paddle), para abrir el
+  /// customer portal sin volver a buscarlo.
+  clienteExternoId  String?
+  /// El estado CRUDO del proveedor (active | trialing | past_due | paused |
+  /// canceled). Se guarda sin traducir para no perder información: 'past_due'
+  /// mapea a estado 'activa' (hay ventana de dunning) pero enciende el banner.
+  estadoProveedor   String?
+  /// Próximo cobro informado por el proveedor (para la vista del tenant).
+  proximoCobro      DateTime?
   desde     DateTime  @default(now())
   hasta     DateTime?
   notas     String?
@@ -3444,6 +3471,31 @@ model Suscripcion {
   plan   Plan   @relation(fields: [planId], references: [id])
 
   @@index([planId])
+}
+
+/// Eventos de cobro recibidos de una pasarela (webhooks). Existe para dos
+/// cosas: IDEMPOTENCIA (Paddle reintenta, y un reintento no debe duplicar
+/// efectos) y rastro de auditoría de por qué una suscripción cambió de estado.
+/// Sin tenantId a propósito: el webhook llega sin contexto de tenant, y el
+/// tenant se resuelve después mirando la referencia externa.
+/// Ver docs/suscripciones-cobro-diseno.md
+model EventoCobro {
+  id          String   @id @default(uuid()) @db.Uuid
+  /// 'paddle' | 'mercadopago'
+  proveedor   String
+  /// Id del evento en el proveedor. UNIQUE = la idempotencia.
+  eventoId    String   @unique
+  /// p. ej. 'subscription.updated', 'transaction.completed'
+  tipo        String
+  payloadJson Json
+  /// Null mientras no se procesó; con fecha una vez aplicado.
+  procesadoEl DateTime?
+  /// Si el procesamiento falló, queda acá para poder reintentar a mano.
+  errorTexto  String?
+  recibidoEl  DateTime @default(now())
+
+  @@index([proveedor, tipo])
+  @@index([recibidoEl])
 }
 
 /// Una factura de suscripción por (suscripción, período). Nivel plataforma:
