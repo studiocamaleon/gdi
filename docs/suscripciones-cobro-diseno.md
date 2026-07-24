@@ -138,14 +138,24 @@ Plan ↔ `price_id` administrable desde la consola.
 próximo cobro. Las acciones transaccionales (medio de pago, facturas, cancelar)
 delegan en el customer portal de Paddle vía portal session. Banner de `past_due`.
 
-**F4 · Lado plataforma.** La tab Facturación de la consola pasa a reflejar el
-estado real de Paddle; B2 se vuelve consciente del proveedor (no emitir factura a
-tenants cobrados por Paddle); MRR en USD. La **Factura E a Paddle** por el payout
-arranca manual (es una por mes) y se documenta.
+**F4 · RETIRADO (2026-07-24).** Se eliminó el billing de suscripciones del
+control plane en vez de adaptarlo. Con Paddle como Merchant of Record el
+comprobante al tenant lo emite Paddle, así que "pendientes de facturar" ya no
+significa nada — y peor: el filtro no miraba el proveedor, con lo que un tenant
+que ya pagó por Paddle habría aparecido para facturarle otra vez. La **Factura E
+a Paddle** por el payout se hace a mano fuera del sistema, por decisión del
+negocio (una por mes, y su tratamiento fiscal —bruto o neto— todavía depende del
+contador).
+
+Se borró: `PlataformaBillingService`, sus rutas, la tab de la consola y la tabla
+`FacturaSuscripcion` (que nunca tuvo datos). Sobrevive `Tenant.esPlataforma`
+(lo usan impersonación y auth) y `ComprobantesService.crearBorradorPorMonto`,
+que queda sin uso pero es genérico y lo va a necesitar F5.
 
 **F5 · MercadoPago.** Segundo proveedor detrás de la misma capa, para el riel
-argentino: `preapproval_plan`/`preapproval`, webhooks, y ahí sí la Factura A/B
-que B2 ya sabe emitir.
+argentino: `preapproval_plan`/`preapproval`, webhooks, y ahí sí Grupo Idea le
+factura al tenant (Factura A con crédito fiscal) — para eso se conservó
+`crearBorradorPorMonto`.
 
 ## Prueba gratuita y ciclo anual (2026-07-24)
 

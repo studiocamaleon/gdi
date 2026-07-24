@@ -52,9 +52,6 @@ const SIN_TENANT_ID_JUSTIFICADOS = new Set([
   // por encima de los tenants (referencia al afectado en tenantAfectadoId,
   // que se llama así justamente para no caer en la excepción de abajo).
   'PlataformaEvento',
-  // Billing de suscripciones: tenantClienteId (sin FK) + comprobante del
-  // tenant plataforma. Mismo criterio que PlataformaEvento.
-  'FacturaSuscripcion',
   // Webhooks de las pasarelas de cobro (Paddle/MercadoPago): el evento llega
   // sin contexto de tenant — el tenant se resuelve después, por la referencia
   // externa de la suscripción. Ver docs/suscripciones-cobro-diseno.md
@@ -102,7 +99,6 @@ const MODELOS_EXENTOS = new Set([
   'Tenant',
   'CronLock',
   'PlataformaEvento',
-  'FacturaSuscripcion',
   'EventoCobro',
   'Plan',
   'User',

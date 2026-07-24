@@ -25,7 +25,6 @@ import { SinTenant } from '../common/sin-tenant.decorator';
 import { PlataformaAdminGuard } from './plataforma-admin.guard';
 import { ImpersonacionService } from './impersonacion.service';
 import { NegocioService } from './negocio.service';
-import { PlataformaBillingService } from './plataforma-billing.service';
 import { PlataformaGuard } from './plataforma.guard';
 import { PlataformaService } from './plataforma.service';
 
@@ -82,16 +81,6 @@ export class IniciarImpersonacionDto {
   motivo: string;
 }
 
-export class GenerarBillingDto {
-  @IsUUID()
-  puntoVentaId: string;
-
-  /** YYYY-MM; default el período actual. */
-  @IsOptional()
-  @Matches(/^\d{4}-\d{2}$/)
-  periodo?: string;
-}
-
 export class CrearTenantDto {
   @IsString()
   @MinLength(2)
@@ -125,7 +114,6 @@ export class CrearTenantDto {
 export class PlataformaController {
   constructor(
     private readonly service: PlataformaService,
-    private readonly billing: PlataformaBillingService,
     private readonly impersonacion: ImpersonacionService,
     private readonly negocio: NegocioService,
   ) {}
@@ -235,25 +223,6 @@ export class PlataformaController {
   ) {
     await this.service.reactivarTenant(auth.userId, id);
     return this.service.consola(auth.userId);
-  }
-
-  @Get('billing')
-  billingEstado() {
-    return this.billing.estado();
-  }
-
-  /** Genera los borradores del período. Reentrante: no duplica. */
-  @Post('billing/generar')
-  @UseGuards(PlataformaAdminGuard)
-  async generarBilling(
-    @CurrentSession() auth: CurrentAuth,
-    @Body() dto: GenerarBillingDto,
-  ) {
-    return this.billing.generarPeriodo(
-      auth.userId,
-      dto.puntoVentaId,
-      dto.periodo,
-    );
   }
 
   /** Alta de tenant + invitación del primer admin. Devuelve el link. */

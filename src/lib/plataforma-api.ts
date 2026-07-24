@@ -267,50 +267,8 @@ export async function crearTenantPlataforma(dto: {
   });
 }
 
-export type BillingPlataforma = {
-  tenantPlataforma: { id: string; nombre: string; slug: string } | null;
-  puntosVenta: Array<{ id: string; numero: number; nombre: string | null }>;
-  periodoActual: string;
-  pendientes: Array<{
-    tenantId: string;
-    tenantNombre: string;
-    planNombre: string;
-    monto: number;
-  }>;
-  facturas: Array<{
-    id: string;
-    periodo: string;
-    tenantClienteId: string;
-    tenantClienteNombre: string;
-    monto: number;
-    comprobante: {
-      id: string;
-      estado: string;
-      letra: string;
-      numeroCompleto: string | null;
-    };
-    creadaEl: string;
-  }>;
-};
 
-export async function getBillingPlataforma(): Promise<BillingPlataforma> {
-  return apiRequest("/plataforma/billing", { cache: "no-store" });
-}
 
-export async function generarBillingPlataforma(dto: {
-  puntoVentaId: string;
-  periodo?: string;
-}): Promise<{
-  periodo: string;
-  generadas: number;
-  yaExistian: number;
-  salteadas: Array<{ tenantNombre: string; motivo: string }>;
-}> {
-  return apiRequest("/plataforma/billing/generar", {
-    method: "POST",
-    body: JSON.stringify(dto),
-  });
-}
 
 export type SesionImpersonacion = {
   id: string;
