@@ -45,7 +45,11 @@ export type PlanCatalogo = {
   codigo: string;
   nombre: string;
   precioMensual: number;
+  moneda: string;
   features: Record<string, unknown>;
+  paddlePriceId: string | null;
+  paddleProductId: string | null;
+  tenants: number;
 };
 
 export type EventoPlataforma = {
@@ -188,7 +192,22 @@ export async function getNegocioPlataforma(
 }
 
 export async function getPlanesPlataforma(): Promise<PlanCatalogo[]> {
-  return apiRequest("/plataforma/planes");
+  return apiRequest("/plataforma/planes", { cache: "no-store" });
+}
+
+/** Vincula un plan con su precio de Paddle (vacío = desvincular). */
+export async function vincularPlanPaddle(
+  planId: string,
+  priceId: string | null,
+  productId: string | null,
+): Promise<PlanCatalogo[]> {
+  return apiRequest(`/plataforma/planes/${planId}/paddle`, {
+    method: "PUT",
+    body: JSON.stringify({
+      ...(priceId ? { priceId } : {}),
+      ...(productId ? { productId } : {}),
+    }),
+  });
 }
 
 export async function cambiarPlanTenant(

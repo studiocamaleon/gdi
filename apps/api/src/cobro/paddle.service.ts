@@ -120,8 +120,44 @@ export class PaddleService {
     }
   }
 
+  /**
+   * Lee un precio del catálogo de Paddle. Devuelve null si no existe (o si
+   * Paddle no está configurado).
+   *
+   * Se usa al vincular un plan: valida que el id exista de verdad —un typo se
+   * detecta en el acto y no cuando falla un checkout— y trae el monto real
+   * para que el espejo local no muestre un número inventado.
+   *
+   * Paddle expresa los montos en la unidad mínima (centavos) y como string.
+   */
+  async leerPrecio(priceId: string): Promise<{
+    monto: number;
+    moneda: string;
+    productId: string | null;
+    descripcion: string;
+  } | null> {
+    if (!this.cliente) return null;
+    try {
+      const precio = await this.cliente.prices.get(priceId);
+      const bruto = Number(precio.unitPrice?.amount ?? '0');
+      return {
+        monto: Number.isFinite(bruto) ? bruto / 100 : 0,
+        moneda: precio.unitPrice?.currencyCode ?? 'USD',
+        productId: precio.productId ?? null,
+        descripcion: precio.description ?? '',
+      };
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo leer el precio ${priceId} de Paddle: ${
+          error instanceof Error ? error.message : 'error desconocido'
+        }`,
+      );
+      return null;
+    }
+  }
+
   /** El SDK crudo, para las operaciones de las fases siguientes (checkout,
-   *  portal del cliente, sincronización de precios). */
+   *  portal del cliente). */
   get sdk(): Paddle | null {
     return this.cliente;
   }

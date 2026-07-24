@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AdministracionModule } from '../administracion/administracion.module';
 import { AuthModule } from '../auth/auth.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { CobroModule } from '../cobro/cobro.module';
 import { ImpersonacionService } from './impersonacion.service';
 import { NegocioService } from './negocio.service';
 import { PlataformaBillingService } from './plataforma-billing.service';
@@ -15,7 +16,7 @@ import { PlataformaService } from './plataforma.service';
  * Ver docs/control-plane-diseno.md
  */
 @Module({
-  imports: [PrismaModule, AdministracionModule, AuthModule],
+  imports: [PrismaModule, AdministracionModule, AuthModule, CobroModule],
   controllers: [PlataformaController],
   providers: [
     PlataformaService,

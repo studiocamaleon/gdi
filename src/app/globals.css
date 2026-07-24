@@ -33693,6 +33693,17 @@ body:has(.t-app) {
 .cpl-neg-insights .ins.oportunidad{border-left-color:var(--acc)}
 .cpl-neg-insights .ins.positivo{border-left-color:var(--ok)}
 .cpl-neg-insights .ins.info{border-left-color:var(--muted-2)}
+/* Planes y precios · mapeo con el catálogo de Paddle */
+.cpl-planes .cpl-tbl tbody tr{cursor:default}  /* estas filas no se abren */
+.cpl-sub{font-size:10.5px;color:var(--muted-2);margin-top:3px}
+.cpl-sinvinculo{font-size:11.5px;color:var(--muted-2);font-style:italic}
+.cpl-nota{background:var(--acc-bg);border:1px solid var(--acc-bord);border-radius:var(--r2);padding:12px 15px;font-size:12px;color:var(--ink-2);line-height:1.5}
+.cpl-planedit{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}
+.cpl-planedit label{display:flex;flex-direction:column;gap:5px}
+.cpl-planedit label span{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted-2);font-weight:600}
+.cpl-planedit input{background:var(--surface-2);border:1px solid var(--line-2);border-radius:8px;padding:7px 10px;color:var(--ink);font:inherit;font-size:12.5px;font-family:var(--font-mono);min-width:230px}
+.cpl-planedit input:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-bg)}
+.cpl-planedit input:disabled{opacity:.55}
 .cpl-neg-rank .nm .s .vsmed{margin-left:8px;font-family:var(--font-mono);font-size:10px;padding:1px 5px;border-radius:5px}
 .cpl-neg-rank .nm .s .vsmed.up{color:var(--ok);background:var(--ok-bg)}
 .cpl-neg-rank .nm .s .vsmed.down{color:var(--warn);background:var(--warn-bg)}

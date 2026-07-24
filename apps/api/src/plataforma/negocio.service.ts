@@ -37,7 +37,12 @@ type Ventana = {
 };
 
 export type NegocioPlataforma = {
-  periodo: { clave: PeriodoClave; etiqueta: string; desde: string; hasta: string };
+  periodo: {
+    clave: PeriodoClave;
+    etiqueta: string;
+    desde: string;
+    hasta: string;
+  };
   kpis: {
     ventas: number;
     ventasPrev: number;
@@ -257,7 +262,9 @@ export class NegocioService {
       embudo,
       insights,
       distribucionTamano: this.distribucionTamano(tenConPct),
-      medianaTicket: this.mediana(tenConPct.map((t) => t.ticket).filter((n) => n > 0)),
+      medianaTicket: this.mediana(
+        tenConPct.map((t) => t.ticket).filter((n) => n > 0),
+      ),
     };
   }
 
@@ -378,7 +385,10 @@ export class NegocioService {
     }
 
     // Activación: imprentas sin ventas.
-    if (adopcion.totalTenants > 1 && adopcion.conVentas < adopcion.totalTenants) {
+    if (
+      adopcion.totalTenants > 1 &&
+      adopcion.conVentas < adopcion.totalTenants
+    ) {
       const inactivas = adopcion.totalTenants - adopcion.conVentas;
       out.push({
         clave: 'activacion',
@@ -423,7 +433,8 @@ export class NegocioService {
     // Fuga dominante del embudo.
     const totalFugas = embudo.fugas.reduce((a, f) => a + f.cantidad, 0);
     if (totalFugas >= 3 && embudo.fugas[0].cantidad / totalFugas >= 0.4) {
-      const motivo = FUGA_LABEL[embudo.fugas[0].motivo] ?? embudo.fugas[0].motivo;
+      const motivo =
+        FUGA_LABEL[embudo.fugas[0].motivo] ?? embudo.fugas[0].motivo;
       out.push({
         clave: 'fuga',
         severidad: 'info',
@@ -455,7 +466,9 @@ export class NegocioService {
     }
 
     const rank = { riesgo: 0, oportunidad: 1, positivo: 2, info: 3 };
-    return out.sort((a, b) => rank[a.severidad] - rank[b.severidad]).slice(0, 6);
+    return out
+      .sort((a, b) => rank[a.severidad] - rank[b.severidad])
+      .slice(0, 6);
   }
 
   /** Ventas y órdenes del período y del período anterior (un solo scan). */
@@ -771,7 +784,8 @@ export class NegocioService {
       top: top.map((a) => ({
         etiqueta: a.etiqueta,
         items: Number(a.items),
-        pctItems: itemsTotales > 0 ? r2((Number(a.items) / itemsTotales) * 100) : 0,
+        pctItems:
+          itemsTotales > 0 ? r2((Number(a.items) / itemsTotales) * 100) : 0,
       })),
     };
   }

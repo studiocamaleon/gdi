@@ -33,6 +33,25 @@ export class CambiarPlanDto {
   planId: string;
 }
 
+/** Vincular un plan con su precio en Paddle. Vacío = desvincular. */
+export class VincularPaddleDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  @Matches(/^pri_[a-zA-Z0-9]+$/, {
+    message: 'El id de precio de Paddle tiene la forma pri_xxxxxxxx.',
+  })
+  priceId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  @Matches(/^pro_[a-zA-Z0-9]+$/, {
+    message: 'El id de producto de Paddle tiene la forma pro_xxxxxxxx.',
+  })
+  productId?: string;
+}
+
 export class SuspenderTenantDto {
   @IsString()
   @MinLength(3)
@@ -117,6 +136,22 @@ export class PlataformaController {
   @Get('planes')
   planes() {
     return this.service.planes();
+  }
+
+  /** Vincula un plan con su precio de Paddle. Devuelve el catálogo actualizado. */
+  @Put('planes/:id/paddle')
+  @UseGuards(PlataformaAdminGuard)
+  vincularPlanPaddle(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: VincularPaddleDto,
+  ) {
+    return this.service.vincularPlanPaddle(
+      auth.userId,
+      id,
+      dto.priceId ?? null,
+      dto.productId ?? null,
+    );
   }
 
   // ── Impersonación (etapa C) ──────────────────────────────────────────

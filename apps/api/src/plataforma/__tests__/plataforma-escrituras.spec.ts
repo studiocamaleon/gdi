@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { PlataformaService } from '../plataforma.service';
 import { SuscripcionesService } from '../../suscripciones/suscripciones.service';
 import type { PrismaService } from '../../prisma/prisma.service';
+import { PaddleService } from '../../cobro/paddle.service';
 
 /**
  * Las escrituras del control plane (etapa B1) y el lector de features, contra
@@ -15,7 +16,10 @@ import type { PrismaService } from '../../prisma/prisma.service';
 const prisma = new PrismaClient();
 
 describe('Control plane — escrituras y feature gates', () => {
-  const plataforma = new PlataformaService(prisma as unknown as PrismaService);
+  const plataforma = new PlataformaService(
+    prisma as unknown as PrismaService,
+    new PaddleService(),
+  );
   const suscripciones = new SuscripcionesService(
     prisma as unknown as PrismaService,
   );
