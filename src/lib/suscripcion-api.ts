@@ -37,11 +37,16 @@ export type EstadoSuscripcion = {
     proveedor: string;
     proximoCobro: string | null;
     desde: string;
+    /** Cancelación programada: sigue activa hasta esta fecha. */
+    cambioProgramado: string | null;
+    cambioProgramadoEl: string | null;
   } | null;
   planes: PlanContratable[];
   checkout: { tenantId: string; email: string };
   facturas: FacturaSuscripcion[];
   puedePortal: boolean;
+  /** Ya hay suscripción en la pasarela → cambiar de plan NO pide tarjeta. */
+  puedeCambiarSinPago: boolean;
   prueba: {
     enPrueba: boolean;
     diasRestantes: number | null;
@@ -61,6 +66,43 @@ export type FacturaSuscripcion = {
 
 export async function getSuscripcion(): Promise<EstadoSuscripcion> {
   return apiRequest("/suscripcion", { cache: "no-store" });
+}
+
+/** Cambia el plan sin checkout (usa la tarjeta en archivo, con prorrateo). */
+export async function cambiarPlanSuscripcion(
+  planCodigo: string,
+  ciclo: "mensual" | "anual",
+): Promise<EstadoSuscripcion> {
+  return apiRequest("/suscripcion/cambiar-plan", {
+    method: "POST",
+    body: JSON.stringify({ planCodigo, ciclo }),
+  });
+}
+
+/** Cuánto se cobra ahora por el cambio, antes de confirmarlo. */
+export async function previsualizarCambio(
+  planCodigo: string,
+  ciclo: "mensual" | "anual",
+): Promise<{ aCobrar: number; aCredito: number; moneda: string } | null> {
+  return apiRequest("/suscripcion/cambiar-plan/previsualizar", {
+    method: "POST",
+    body: JSON.stringify({ planCodigo, ciclo }),
+  });
+}
+
+/** Trae el alta desde la pasarela apenas cierra el checkout. */
+export async function sincronizarSuscripcion(
+  transaccionId: string,
+): Promise<EstadoSuscripcion> {
+  return apiRequest("/suscripcion/sincronizar", {
+    method: "POST",
+    body: JSON.stringify({ transaccionId }),
+  });
+}
+
+/** Deshace la cancelación pendiente. */
+export async function reactivarSuscripcion(): Promise<EstadoSuscripcion> {
+  return apiRequest("/suscripcion/reactivar", { method: "POST" });
 }
 
 /** Abre el portal de Paddle: medio de pago, facturas y cancelación. */

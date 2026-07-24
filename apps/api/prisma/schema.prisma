@@ -3472,6 +3472,12 @@ model Suscripcion {
   estadoProveedor   String?
   /// Próximo cobro informado por el proveedor (para la vista del tenant).
   proximoCobro      DateTime?
+  /// Cambio PROGRAMADO en la pasarela: 'cancel' | 'pause' | 'resume', con la
+  /// fecha en que se hace efectivo. Existe porque al cancelar, Paddle deja la
+  /// suscripción en `active` con un scheduled_change hasta el fin del período:
+  /// sin esto la pantalla diría "Activa" y el cliente no vería que se termina.
+  cambioProgramado   String?
+  cambioProgramadoEl DateTime?
   /// Fin de la prueba gratuita. Los días restantes NO se guardan: se calculan
   /// contra esta fecha, así nunca quedan desactualizados. Al vencer, el cron
   /// pasa la suscripción a 'suspendida' — cierra los gates por plan pero el

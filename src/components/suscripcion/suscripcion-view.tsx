@@ -2,11 +2,16 @@
 
 import * as React from "react";
 import { toast } from "sonner";
+import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import type { Paddle } from "@paddle/paddle-js";
 
 import {
   abrirPortalSuscripcion,
+  cambiarPlanSuscripcion,
   getSuscripcion,
+  previsualizarCambio,
+  reactivarSuscripcion,
+  sincronizarSuscripcion,
   type EstadoSuscripcion,
   type PlanContratable,
 } from "@/lib/suscripcion-api";
@@ -107,6 +112,15 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
   const [abriendo, setAbriendo] = React.useState<string | null>(null);
   const [yendoAlPortal, setYendoAlPortal] = React.useState(false);
   const [errorPaddle, setErrorPaddle] = React.useState<string | null>(null);
+  const [confirmarCambio, setConfirmarCambio] =
+    React.useState<PlanContratable | null>(null);
+  const [previo, setPrevio] = React.useState<{
+    aCobrar: number;
+    aCredito: number;
+    moneda: string;
+  } | null>(null);
+  const [cargandoPrevio, setCargandoPrevio] = React.useState(false);
+  const [reactivando, setReactivando] = React.useState(false);
   const [ciclo, setCiclo] = React.useState<"mensual" | "anual">("mensual");
   const [elegido, setElegido] = React.useState<string | null>(
     () => inicial.actual?.planCodigo ?? inicial.planes.at(-1)?.codigo ?? null,
@@ -118,33 +132,38 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
       ? "production"
       : "sandbox";
 
-  // Espera a que el webhook aterrice: el checkout cierra ANTES de que la
-  // suscripción exista de nuestro lado. Consulta cada 2s hasta ~40s.
-  const esperarWebhook = React.useCallback(async (planPrevio: string | null) => {
+  /**
+   * Cierra el checkout → vamos a BUSCAR el resultado a la pasarela.
+   *
+   * Antes esto esperaba a que llegara el webhook, consultando cada 2s hasta 40.
+   * Estaba mal por dos motivos: el usuario acaba de pagar y quedaba mirando una
+   * pantalla de espera sin saber si salió bien, y si el webhook fallaba (o
+   * tardaba) no se enteraba nunca. Ahora se resuelve en una llamada: leemos la
+   * transacción en Paddle y aplicamos el resultado. El webhook sigue existiendo
+   * como respaldo —es idempotente— para lo que pasa sin nadie mirando.
+   */
+  const traerResultado = React.useCallback(async (transaccionId?: string) => {
     setConfirmando(true);
-    for (let intento = 0; intento < 20; intento += 1) {
-      await new Promise((r) => setTimeout(r, 2000));
-      try {
-        const fresco = await getSuscripcion();
-        if (
-          fresco.actual &&
-          (fresco.actual.planCodigo !== planPrevio ||
-            fresco.actual.proveedor === "paddle")
-        ) {
-          setDatos(fresco);
-          setElegido(fresco.actual.planCodigo);
-          setConfirmando(false);
-          toast.success(`Tu plan ${fresco.actual.planNombre} está activo.`);
-          return;
-        }
-      } catch {
-        // Reintenta en la vuelta siguiente.
-      }
+    try {
+      const fresco = transaccionId
+        ? await sincronizarSuscripcion(transaccionId)
+        : await getSuscripcion();
+      setDatos(fresco);
+      if (fresco.actual) setElegido(fresco.actual.planCodigo);
+      toast.success(
+        fresco.actual
+          ? `Tu plan ${fresco.actual.planNombre} está activo.`
+          : "Pago registrado.",
+      );
+    } catch {
+      // Si la lectura falla, el pago igual se hizo y el webhook lo va a
+      // aplicar: se lo decimos en vez de dejarlo con una pantalla colgada.
+      toast.info(
+        "El pago se registró. Si no ves el cambio en un minuto, recargá la página.",
+      );
+    } finally {
+      setConfirmando(false);
     }
-    setConfirmando(false);
-    toast.info(
-      "El pago se registró. La activación puede demorar un momento — recargá la página en unos minutos.",
-    );
   }, []);
 
   React.useEffect(() => {
@@ -158,7 +177,11 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
           token,
           eventCallback: (evento) => {
             if (evento.name === "checkout.completed") {
-              void esperarWebhook(datos.actual?.planCodigo ?? null);
+              // El id de la transacción viene en el evento: con eso resolvemos
+              // la suscripción en Paddle sin depender del webhook.
+              const tx = (evento.data as { transaction_id?: string } | undefined)
+                ?.transaction_id;
+              void traerResultado(tx);
             }
           },
         }),
@@ -179,6 +202,45 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, entorno]);
+
+  /**
+   * Dos caminos, y la diferencia importa: si el tenant YA tiene suscripción en
+   * la pasarela, cambiar de plan NO abre checkout — se modifica la existente
+   * con prorrateo y la tarjeta en archivo. Abrir un checkout le crearía una
+   * SEGUNDA suscripción y le cobrarían las dos.
+   */
+  const elegirPlan = (plan: PlanContratable) => {
+    if (datos.puedeCambiarSinPago) {
+      setConfirmarCambio(plan);
+      setPrevio(null);
+      setCargandoPrevio(true);
+      previsualizarCambio(plan.codigo, ciclo)
+        .then((p) => setPrevio(p))
+        .catch(() => setPrevio(null))
+        .finally(() => setCargandoPrevio(false));
+      return;
+    }
+    contratar(plan);
+  };
+
+  const aplicarCambio = async () => {
+    if (!confirmarCambio || confirmando) return;
+    const plan = confirmarCambio;
+    setConfirmarCambio(null);
+    setConfirmando(true);
+    try {
+      const fresco = await cambiarPlanSuscripcion(plan.codigo, ciclo);
+      setDatos(fresco);
+      if (fresco.actual) setElegido(fresco.actual.planCodigo);
+      toast.success(`Tu plan ${plan.nombre} está activo.`);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "No se pudo cambiar el plan.",
+      );
+    } finally {
+      setConfirmando(false);
+    }
+  };
 
   const contratar = (plan: PlanContratable) => {
     if (!paddle) {
@@ -201,6 +263,21 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
     setTimeout(() => setAbriendo(null), 1500);
   };
 
+  const reactivar = async () => {
+    if (reactivando) return;
+    setReactivando(true);
+    try {
+      setDatos(await reactivarSuscripcion());
+      toast.success("Tu suscripción sigue activa. No se va a cancelar.");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "No se pudo reactivar.",
+      );
+    } finally {
+      setReactivando(false);
+    }
+  };
+
   const irAlPortal = async () => {
     if (yendoAlPortal) return;
     setYendoAlPortal(true);
@@ -218,6 +295,11 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
 
   const actual = datos.actual;
   const enMora = actual?.estadoProveedor === "past_due";
+  // Paddle deja la suscripción en `active` con un cambio programado hasta el
+  // fin del período: sin esto la pantalla diría "Activa" y el cliente no
+  // sabría que se termina.
+  const cancelaEl =
+    actual?.cambioProgramado === "cancel" ? actual.cambioProgramadoEl : null;
   const planElegido =
     datos.planes.find((p) => p.codigo === elegido) ??
     datos.planes.at(-1) ??
@@ -252,6 +334,24 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
         <div className="sub-alert danger">
           <b>No se pudo cargar el checkout.</b> {errorPaddle} — recargá la
           página; si sigue, avisanos.
+        </div>
+      ) : null}
+
+      {cancelaEl ? (
+        <div className="sub-alert warn sub-alert-accion">
+          <div>
+            <b>Tu suscripción termina el {fechaLarga(cancelaEl)}.</b> Hasta esa
+            fecha seguís con todo lo de tu plan. Después no se renueva y no se
+            te cobra más.
+          </div>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={reactivar}
+            disabled={reactivando}
+          >
+            {reactivando ? "Reactivando…" : "Reactivar suscripción"}
+          </button>
         </div>
       ) : null}
 
@@ -322,6 +422,40 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
           <span className="sub-spin" aria-hidden="true" />
           Confirmando el pago con Paddle… no cierres esta página.
         </div>
+      ) : null}
+
+      {confirmarCambio ? (
+        <ConfirmacionDestructiva
+          open
+          onOpenChange={(o) => {
+            if (!o) setConfirmarCambio(null);
+          }}
+          titulo={`Cambiar al plan ${confirmarCambio.nombre}`}
+          nombreItem={confirmarCambio.nombre}
+          requiereTipear={false}
+          accionLabel="Confirmar cambio"
+          descripcion={
+            cargandoPrevio
+              ? "Calculando el ajuste con Paddle…"
+              : "Se usa la tarjeta que ya tenés registrada. No hace falta cargarla de nuevo."
+          }
+          impacto={[
+            ciclo === "anual" && confirmarCambio.anual
+              ? `Nuevo precio: ${precio(confirmarCambio.anual.precio, confirmarCambio.moneda)} al año`
+              : `Nuevo precio: ${precio(confirmarCambio.precioMensual, confirmarCambio.moneda)} por mes`,
+            previo
+              ? previo.aCobrar > 0
+                ? `Se te cobra ahora ${precio(previo.aCobrar, previo.moneda)} por lo que resta del período`
+                : previo.aCredito > 0
+                  ? `Te queda ${precio(previo.aCredito, previo.moneda)} a favor, que se descuenta solo de tus próximos cobros`
+                  : "Sin cargo ahora"
+              : cargandoPrevio
+                ? "Calculando el ajuste…"
+                : "Paddle ajusta el cobro de forma proporcional al período en curso",
+            "El cambio es inmediato",
+          ]}
+          onConfirmar={aplicarCambio}
+        />
       ) : null}
 
       <div className="sub-grid">
@@ -430,7 +564,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
                           className="btn sm w"
                           onClick={(e) => {
                             e.stopPropagation();
-                            contratar(p);
+                            elegirPlan(p);
                           }}
                           disabled={confirmando || abriendo === p.codigo}
                         >
@@ -526,23 +660,38 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
               </div>
               <div className="sub-sum-div" />
               <div className="sub-sum-row big">
-                <span>{actual ? "Próximo cobro" : "Primer cobro"}</span>
+                <span>
+                  {cancelaEl
+                    ? "Termina el"
+                    : actual
+                      ? "Próximo cobro"
+                      : "Primer cobro"}
+                </span>
                 <strong>
-                  {actual
-                    ? precio(actual.precioMensual, actual.moneda)
-                    : planElegido
-                      ? precio(planElegido.precioMensual, planElegido.moneda)
-                      : "—"}
+                  {cancelaEl
+                    ? fechaLarga(cancelaEl)
+                    : actual
+                      ? precio(actual.precioMensual, actual.moneda)
+                      : planElegido
+                        ? precio(planElegido.precioMensual, planElegido.moneda)
+                        : "—"}
                 </strong>
               </div>
-              <div className="sub-sum-row muted">
-                <span>Fecha</span>
-                <span>
-                  {actual?.proximoCobro
-                    ? fechaLarga(actual.proximoCobro)
-                    : "al activar"}
-                </span>
-              </div>
+              {cancelaEl ? (
+                <div className="sub-sum-row muted">
+                  <span>Después de esa fecha</span>
+                  <span>no se te cobra más</span>
+                </div>
+              ) : (
+                <div className="sub-sum-row muted">
+                  <span>Fecha</span>
+                  <span>
+                    {actual?.proximoCobro
+                      ? fechaLarga(actual.proximoCobro)
+                      : "al activar"}
+                  </span>
+                </div>
+              )}
             </div>
             {!actual && planElegido ? (
               <button
@@ -601,14 +750,16 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
               >
                 Ver facturas y datos de facturación
               </button>
-              <button
-                type="button"
-                className="sub-manage danger"
-                onClick={irAlPortal}
-                disabled={yendoAlPortal}
-              >
-                Cancelar suscripción
-              </button>
+              {cancelaEl ? null : (
+                <button
+                  type="button"
+                  className="sub-manage danger"
+                  onClick={irAlPortal}
+                  disabled={yendoAlPortal}
+                >
+                  Cancelar suscripción
+                </button>
+              )}
             </div>
           ) : null}
         </aside>
@@ -620,16 +771,18 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
 function Cabecera({ actual }: { actual: EstadoSuscripcion["actual"] }) {
   const etiqueta =
     actual?.estado === "activa"
-      ? actual.estadoProveedor === "past_due"
-        ? "Pago pendiente"
-        : "Activa"
+      ? actual.cambioProgramado === "cancel"
+        ? "Se cancela"
+        : actual.estadoProveedor === "past_due"
+          ? "Pago pendiente"
+          : "Activa"
       : actual?.estado === "suspendida"
         ? "Suspendida"
         : actual
           ? "Dada de baja"
           : "Sin plan";
   const tono =
-    actual?.estadoProveedor === "past_due"
+    actual?.cambioProgramado === "cancel" || actual?.estadoProveedor === "past_due"
       ? "warn"
       : actual?.estado === "activa"
         ? "ok"

@@ -236,6 +236,102 @@ export class PaddleService {
     }
   }
 
+  /**
+   * Cambia el plan de una suscripción EXISTENTE, con prorrateo inmediato.
+   *
+   * Es la diferencia entre cambiar de plan y contratar: abrir un checkout
+   * nuevo le crearía al cliente una SEGUNDA suscripción y le cobrarían las
+   * dos. Acá se modifica la que ya tiene, Paddle prorratea contra lo que ya
+   * pagó, y usa la tarjeta que está en archivo — sin pedirle nada.
+   *
+   * Devuelve la suscripción actualizada para aplicarla en el acto, sin
+   * esperar el webhook.
+   */
+  async cambiarPlan(suscripcionId: string, priceId: string): Promise<unknown> {
+    if (!this.cliente) return null;
+    return this.cliente.subscriptions.update(suscripcionId, {
+      items: [{ priceId, quantity: 1 }],
+      prorationBillingMode: 'prorated_immediately',
+    });
+  }
+
+  /**
+   * Qué implica el cambio en plata, ANTES de confirmarlo.
+   *
+   * Son DOS cosas distintas y hay que mostrarlas separadas:
+   *  - `aCobrar` (grand_total): lo que se le debita ahora. Upgrade.
+   *  - `aCredito` (credit_to_balance): lo que queda a su favor. Downgrade.
+   *
+   * El crédito NO es una devolución a la tarjeta: queda como saldo del cliente
+   * y Paddle lo aplica solo a los cobros siguientes ("credit balances are
+   * automatically used to pay for future transactions", su doc). Decirlo bien
+   * importa: es plata del cliente y el diálogo se la está prometiendo.
+   */
+  async previsualizarCambio(
+    suscripcionId: string,
+    priceId: string,
+  ): Promise<{ aCobrar: number; aCredito: number; moneda: string } | null> {
+    if (!this.cliente) return null;
+    try {
+      const p = await this.cliente.subscriptions.previewUpdate(suscripcionId, {
+        items: [{ priceId, quantity: 1 }],
+        prorationBillingMode: 'prorated_immediately',
+      });
+      const t = p.immediateTransaction?.details?.totals;
+      const moneda = p.currencyCode ?? 'USD';
+      if (!t) return { aCobrar: 0, aCredito: 0, moneda };
+      return {
+        aCobrar: Number(t.grandTotal ?? '0') / 100,
+        aCredito: Number(t.creditToBalance ?? '0') / 100,
+        moneda,
+      };
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo previsualizar el cambio de ${suscripcionId}: ${
+          error instanceof Error ? error.message : 'error desconocido'
+        }`,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Lee la suscripción que creó una transacción. Se usa apenas cierra el
+   * checkout para reflejar el alta EN EL ACTO en vez de esperar el webhook:
+   * el usuario acaba de pagar y merece ver el resultado, no una pantalla de
+   * espera. El webhook queda como respaldo para lo que pasa sin nadie
+   * mirando (renovaciones, mora, cancelaciones desde el portal).
+   */
+  async suscripcionDeTransaccion(transaccionId: string): Promise<unknown> {
+    if (!this.cliente) return null;
+    try {
+      const t = await this.cliente.transactions.get(transaccionId);
+      if (!t.subscriptionId) return null;
+      return await this.cliente.subscriptions.get(t.subscriptionId);
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo resolver la suscripción de ${transaccionId}: ${
+          error instanceof Error ? error.message : 'error desconocido'
+        }`,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Quita el cambio programado (típicamente una cancelación pendiente).
+   *
+   * Recuperar a alguien que se arrepintió es lo más barato que hay: mientras
+   * no llegue la fecha efectiva, la cancelación se deshace con esto y el
+   * cliente sigue como si nada.
+   */
+  async quitarCambioProgramado(suscripcionId: string): Promise<unknown> {
+    if (!this.cliente) return null;
+    return this.cliente.subscriptions.update(suscripcionId, {
+      scheduledChange: null,
+    });
+  }
+
   /** El SDK crudo, para lo que no valga la pena envolver. */
   get sdk(): Paddle | null {
     return this.cliente;

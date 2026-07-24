@@ -157,6 +157,75 @@ argentino: `preapproval_plan`/`preapproval`, webhooks, y ahí sí Grupo Idea le
 factura al tenant (Factura A con crédito fiscal) — para eso se conservó
 `crearBorradorPorMonto`.
 
+## Contratar vs. cambiar de plan — y por qué no se espera el webhook
+
+Dos caminos DISTINTOS, y confundirlos cobraba de más:
+
+**Contratar (sin suscripción previa).** Hace falta el checkout: hay que cargar
+una tarjeta. Pero al cerrarse, NO se espera el webhook — el front toma el
+`transaction_id` del evento `checkout.completed` y llama a
+`POST /suscripcion/sincronizar`, que lee la transacción en Paddle, resuelve la
+suscripción y la aplica. Un segundo, no cuarenta.
+
+**Cambiar de plan (ya hay suscripción).** NO abre checkout: `POST
+/suscripcion/cambiar-plan` modifica la suscripción existente vía
+`subscriptions.update` con `prorated_immediately`, usando la tarjeta en archivo.
+Antes esto abría un checkout nuevo, lo que **le creaba al cliente una SEGUNDA
+suscripción en Paddle y le cobraban las dos**. Se previsualiza el ajuste
+(`previewUpdate`) antes de confirmar, así el usuario ve cuánto se le cobra ahora.
+
+**Qué se le muestra antes de confirmar** (verificado contra la API, no supuesto):
+`previewUpdate` devuelve dos cosas distintas y hay que separarlas —
+`grand_total` es lo que se le **debita ahora** (upgrade) y `credit_to_balance`
+lo que le queda **a favor** (downgrade). El crédito NO vuelve a la tarjeta:
+queda como saldo del cliente y Paddle lo aplica solo a los cobros siguientes
+(*"credit balances are automatically used to pay for future transactions"*, su
+doc). Ejemplo real: de Diamante 290 a Estudio 100 → cobra 0, acredita US$189,92.
+
+El webhook NO desaparece: queda para lo que pasa **sin el usuario delante** —
+renovaciones, cobros fallidos, dunning, cancelaciones desde el portal. Es
+idempotente, así que si llega después de la sincronización activa no duplica
+nada.
+
+La regla general: **para lo que el usuario acaba de pedir, se va a buscar el
+resultado; para lo que pasa solo, se espera el aviso.** Una pantalla de espera
+que depende de una llamada externa que puede fallar en silencio no genera
+confianza — y de hecho falló en dev cuando se cayó el túnel.
+
+## Cancelación
+
+La cancela el cliente desde el portal de Paddle (ahí están la tarjeta y los
+comprobantes). Paddle la programa para el **fin del período**: el cliente usa lo
+que pagó hasta el último día.
+
+**La trampa**: al cancelar, Paddle deja la suscripción en `status: active` y
+pone un `scheduled_change: {action:'cancel', effective_at}`. Si sólo se mira
+`status` —como se hacía— la pantalla dice "Activa" y el cliente **no ve que su
+suscripción se termina**: hizo algo y nada lo refleja. Por eso `extraer()` lee
+también `scheduled_change` y se guarda en `Suscripcion.cambioProgramado(El)`.
+
+La vista lo dice fuerte ("Tu suscripción termina el 24 de agosto"), la píldora
+del header pasa a "Se cancela", el resumen cambia "Próximo cobro" por "Termina
+el", y se oculta el botón de cancelar. Y hay un **"Reactivar suscripción"** que
+hace `scheduled_change: null` — recuperar a alguien que se arrepintió es lo más
+barato que hay en un SaaS.
+
+### Downgrade: por qué queda crédito y no se difiere
+
+Decisión del negocio (2026-07-24): el downgrade es **inmediato con crédito a
+favor**, proporcional a los días que quedan.
+
+Se evaluó diferirlo al fin del período (lo estándar en la industria) y se
+descartó por costo: **Paddle no lo soporta nativamente**, verificado contra la
+API — `effective_from: next_billing_period` cambia el plan igual y sólo difiere
+la plata; `scheduled_change` sólo admite cancel/pause/resume; y `do_not_bill`
+cambia el plan sin dar crédito, que es lo peor. Implementarlo requeriría
+programarlo por nuestra cuenta (campos de cambio pendiente + cron que aplique
+poco antes del cobro).
+
+El crédito NO vuelve a la tarjeta: queda como saldo del cliente y Paddle lo
+aplica solo a los cobros siguientes.
+
 ## Prueba gratuita y ciclo anual (2026-07-24)
 
 **Prueba con vencimiento.** `Plan.trialDias` (cuántos días otorga el plan) y

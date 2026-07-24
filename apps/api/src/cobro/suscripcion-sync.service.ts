@@ -34,6 +34,12 @@ export type SuscripcionExterna = {
   precios: string[];
   /** tenantId que viajó en custom_data (lo pone nuestro checkout). */
   tenantId: string | null;
+  /** Cambio programado ('cancel' | 'pause' | 'resume') y cuándo se hace
+   *  efectivo. Al cancelar, Paddle deja la suscripción en `active` con esto
+   *  puesto hasta el fin del período: si sólo miráramos `status`, el cliente
+   *  vería "Activa" y no sabría que se termina. */
+  cambioProgramado: string | null;
+  cambioProgramadoEl: Date | null;
 };
 
 export type ResultadoSync =
@@ -95,6 +101,20 @@ export class SuscripcionSyncService {
     const proximoCobro =
       proximo && !Number.isNaN(Date.parse(proximo)) ? new Date(proximo) : null;
 
+    const programado = campo('scheduledChange', 'scheduled_change') as
+      | Record<string, unknown>
+      | null
+      | undefined;
+    const accion =
+      programado && typeof programado.action === 'string'
+        ? programado.action
+        : null;
+    const efectivo =
+      programado &&
+      typeof (programado.effectiveAt ?? programado.effective_at) === 'string'
+        ? String(programado.effectiveAt ?? programado.effective_at)
+        : null;
+
     return {
       referencia,
       estadoProveedor,
@@ -102,6 +122,11 @@ export class SuscripcionSyncService {
       proximoCobro,
       precios,
       tenantId,
+      cambioProgramado: accion,
+      cambioProgramadoEl:
+        efectivo && !Number.isNaN(Date.parse(efectivo))
+          ? new Date(efectivo)
+          : null,
     };
   }
 
@@ -153,6 +178,8 @@ export class SuscripcionSyncService {
       clienteExternoId: externa.clienteExterno,
       estadoProveedor: externa.estadoProveedor,
       proximoCobro: externa.proximoCobro,
+      cambioProgramado: externa.cambioProgramado,
+      cambioProgramadoEl: externa.cambioProgramadoEl,
       ...(plan ? { planId: plan.id } : {}),
       ...(estado === 'baja' ? { hasta: new Date() } : { hasta: null }),
     };

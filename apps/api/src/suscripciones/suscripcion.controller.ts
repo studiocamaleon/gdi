@@ -1,10 +1,33 @@
-import { BadRequestException, Controller, Get, Post } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Post,
+} from '@nestjs/common';
+import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 import { RolSistema } from '@prisma/client';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import { Roles } from '../auth/roles.decorator';
 import { ProhibidoImpersonando } from '../auth/prohibido-impersonando.decorator';
 import { SuscripcionesService } from './suscripciones.service';
 import type { CurrentAuth } from '../auth/auth.types';
+
+export class CambiarPlanTenantDto {
+  @IsString()
+  @MaxLength(40)
+  planCodigo: string;
+
+  @IsOptional()
+  @IsIn(['mensual', 'anual'])
+  ciclo?: 'mensual' | 'anual';
+}
+
+export class SincronizarDto {
+  @IsString()
+  @MaxLength(80)
+  transaccionId: string;
+}
 
 /**
  * La suscripción vista POR EL TENANT (su plan, y a qué puede pasarse).
@@ -26,6 +49,65 @@ export class SuscripcionController {
   @ProhibidoImpersonando()
   estado(@CurrentSession() auth: CurrentAuth) {
     return this.suscripciones.estadoParaTenant(auth.tenantId, auth.email);
+  }
+
+  /**
+   * Cambia el plan sin pedir tarjeta: modifica la suscripción existente con
+   * prorrateo. Abrir un checkout crearía una SEGUNDA suscripción y le
+   * cobrarían las dos.
+   */
+  @Post('cambiar-plan')
+  @Roles(RolSistema.ADMINISTRADOR)
+  @ProhibidoImpersonando()
+  cambiarPlan(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() dto: CambiarPlanTenantDto,
+  ) {
+    return this.suscripciones.cambiarPlanDeTenant(
+      auth.tenantId,
+      dto.planCodigo,
+      dto.ciclo ?? 'mensual',
+    );
+  }
+
+  /** Cuánto se le cobra ahora por ese cambio, antes de confirmarlo. */
+  @Post('cambiar-plan/previsualizar')
+  @Roles(RolSistema.ADMINISTRADOR)
+  @ProhibidoImpersonando()
+  previsualizar(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() dto: CambiarPlanTenantDto,
+  ) {
+    return this.suscripciones.previsualizarCambio(
+      auth.tenantId,
+      dto.planCodigo,
+      dto.ciclo ?? 'mensual',
+    );
+  }
+
+  /**
+   * Trae el alta desde la pasarela apenas cierra el checkout, sin esperar el
+   * webhook: el usuario pagó y tiene que ver el resultado ya.
+   */
+  @Post('sincronizar')
+  @Roles(RolSistema.ADMINISTRADOR)
+  @ProhibidoImpersonando()
+  sincronizar(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() dto: SincronizarDto,
+  ) {
+    return this.suscripciones.sincronizarDesdeTransaccion(
+      auth.tenantId,
+      dto.transaccionId,
+    );
+  }
+
+  /** Deshace la cancelación pendiente. */
+  @Post('reactivar')
+  @Roles(RolSistema.ADMINISTRADOR)
+  @ProhibidoImpersonando()
+  reactivar(@CurrentSession() auth: CurrentAuth) {
+    return this.suscripciones.reactivarSuscripcion(auth.tenantId);
   }
 
   /**

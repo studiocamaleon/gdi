@@ -1,6 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaddleService } from '../cobro/paddle.service';
+import { SuscripcionSyncService } from '../cobro/suscripcion-sync.service';
 import { estadoDePrueba, type EstadoPrueba } from './trial';
 
 /**
@@ -79,6 +84,10 @@ export type EstadoSuscripcion = {
     proveedor: string;
     proximoCobro: string | null;
     desde: string;
+    /** Cancelación (o pausa) programada: la suscripción sigue activa hasta
+     *  esta fecha. Sin esto la pantalla diría "Activa" a secas. */
+    cambioProgramado: string | null;
+    cambioProgramadoEl: string | null;
   } | null;
   planes: PlanContratable[];
   checkout: { tenantId: string; email: string };
@@ -89,6 +98,9 @@ export type EstadoSuscripcion = {
   facturas: FacturaSuscripcion[];
   /** Hay cliente en la pasarela → se puede abrir el portal de autogestión. */
   puedePortal: boolean;
+  /** Ya hay suscripción viva en la pasarela: cambiar de plan NO abre checkout,
+   *  se modifica la existente con prorrateo y la tarjeta en archivo. */
+  puedeCambiarSinPago: boolean;
 };
 
 export type FacturaSuscripcion = {
@@ -105,6 +117,7 @@ export class SuscripcionesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly paddle: PaddleService,
+    private readonly sync: SuscripcionSyncService,
   ) {}
 
   /** La suscripción del tenant con su plan, o null (legacy, sin plan). */
@@ -164,7 +177,7 @@ export class SuscripcionesService {
    */
   async estadoParaTenant(
     tenantId: string,
-    email: string,
+    email = '',
   ): Promise<EstadoSuscripcion> {
     const [suscripcion, planes] = await Promise.all([
       this.prisma.suscripcion.findFirst({
@@ -199,6 +212,9 @@ export class SuscripcionesService {
             proveedor: suscripcion.proveedor,
             proximoCobro: suscripcion.proximoCobro?.toISOString() ?? null,
             desde: suscripcion.desde.toISOString(),
+            cambioProgramado: suscripcion.cambioProgramado,
+            cambioProgramadoEl:
+              suscripcion.cambioProgramadoEl?.toISOString() ?? null,
           }
         : null,
       planes: contratables.map((p) => {
@@ -229,6 +245,10 @@ export class SuscripcionesService {
       checkout: { tenantId, email },
       facturas,
       puedePortal: clienteExterno !== null,
+      puedeCambiarSinPago:
+        suscripcion?.proveedor === 'paddle' &&
+        !!suscripcion.referenciaExterna &&
+        suscripcion.estado !== 'baja',
       prueba: estadoDePrueba(suscripcion?.trialHasta),
     };
   }
@@ -251,6 +271,120 @@ export class SuscripcionesService {
       ahorroPct: doceMeses > 0 ? Math.round((ahorro / doceMeses) * 100) : 0,
       equivalenteMensual: Math.round((anual / 12) * 100) / 100,
     };
+  }
+
+  /**
+   * Cambia el plan de un tenant que YA tiene suscripción en la pasarela.
+   *
+   * No abre checkout: modifica la suscripción existente con prorrateo y usa la
+   * tarjeta en archivo. Abrir un checkout nuevo le crearía una SEGUNDA
+   * suscripción y le cobrarían las dos — ese es el bug que esto evita.
+   *
+   * Aplica el resultado EN EL ACTO (no espera el webhook): el usuario acaba de
+   * pedir el cambio y tiene que verlo hecho.
+   */
+  async cambiarPlanDeTenant(
+    tenantId: string,
+    planCodigo: string,
+    ciclo: 'mensual' | 'anual',
+  ): Promise<EstadoSuscripcion> {
+    const [suscripcion, plan] = await Promise.all([
+      this.prisma.suscripcion.findFirst({
+        where: { tenantId },
+        select: { referenciaExterna: true, proveedor: true },
+      }),
+      this.prisma.plan.findFirst({
+        where: { codigo: planCodigo, activo: true },
+      }),
+    ]);
+    if (!plan) throw new NotFoundException('El plan no existe.');
+    if (!suscripcion?.referenciaExterna || suscripcion.proveedor !== 'paddle') {
+      throw new BadRequestException(
+        'Todavía no hay una suscripción activa en la pasarela: contratá un plan primero.',
+      );
+    }
+    const priceId =
+      ciclo === 'anual' ? plan.paddlePriceIdAnual : plan.paddlePriceId;
+    if (!priceId) {
+      throw new BadRequestException(
+        `El plan ${plan.nombre} no tiene precio ${ciclo} configurado.`,
+      );
+    }
+
+    const actualizada = await this.paddle.cambiarPlan(
+      suscripcion.referenciaExterna,
+      priceId,
+    );
+    if (!actualizada) {
+      throw new BadRequestException(
+        'La pasarela no pudo aplicar el cambio de plan. Probá de nuevo en un momento.',
+      );
+    }
+    const externa = this.sync.extraer(actualizada);
+    if (externa) await this.sync.aplicar(externa);
+    return this.estadoParaTenant(tenantId, '');
+  }
+
+  /** Qué le van a cobrar ahora por el cambio, antes de confirmarlo. */
+  async previsualizarCambio(
+    tenantId: string,
+    planCodigo: string,
+    ciclo: 'mensual' | 'anual',
+  ): Promise<{ aCobrar: number; aCredito: number; moneda: string } | null> {
+    const [s, plan] = await Promise.all([
+      this.prisma.suscripcion.findFirst({
+        where: { tenantId },
+        select: { referenciaExterna: true },
+      }),
+      this.prisma.plan.findFirst({
+        where: { codigo: planCodigo, activo: true },
+      }),
+    ]);
+    const priceId =
+      ciclo === 'anual' ? plan?.paddlePriceIdAnual : plan?.paddlePriceId;
+    if (!s?.referenciaExterna || !priceId) return null;
+    return this.paddle.previsualizarCambio(s.referenciaExterna, priceId);
+  }
+
+  /**
+   * Trae el alta recién hecha desde la pasarela, sin esperar el webhook.
+   *
+   * Se llama apenas cierra el checkout: el usuario pagó y tiene que ver el
+   * resultado ya. El webhook sigue existiendo como respaldo y es idempotente,
+   * así que si llega después no duplica nada.
+   */
+  async sincronizarDesdeTransaccion(
+    tenantId: string,
+    transaccionId: string,
+  ): Promise<EstadoSuscripcion> {
+    const sub = await this.paddle.suscripcionDeTransaccion(transaccionId);
+    if (sub) {
+      const externa = this.sync.extraer(sub);
+      if (externa) await this.sync.aplicar(externa);
+    }
+    return this.estadoParaTenant(tenantId, '');
+  }
+
+  /**
+   * Deshace la cancelación pendiente. Mientras no llegue la fecha efectiva, el
+   * cliente vuelve atrás y sigue como si nada.
+   */
+  async reactivarSuscripcion(tenantId: string): Promise<EstadoSuscripcion> {
+    const s = await this.prisma.suscripcion.findFirst({
+      where: { tenantId },
+      select: { referenciaExterna: true, cambioProgramado: true },
+    });
+    if (!s?.referenciaExterna || !s.cambioProgramado) {
+      throw new BadRequestException('No hay ninguna cancelación pendiente.');
+    }
+    const actualizada = await this.paddle.quitarCambioProgramado(
+      s.referenciaExterna,
+    );
+    if (actualizada) {
+      const externa = this.sync.extraer(actualizada);
+      if (externa) await this.sync.aplicar(externa);
+    }
+    return this.estadoParaTenant(tenantId);
   }
 
   /**
