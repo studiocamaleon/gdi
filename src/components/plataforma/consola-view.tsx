@@ -256,6 +256,30 @@ const PERIODOS_NEG: Array<{ k: PeriodoNegocio; label: string }> = [
   { k: "12m", label: "12 meses" },
 ];
 
+const TECNOLOGIA_LABEL: Record<string, string> = {
+  dtf_textil: "DTF textil",
+  dtf_uv: "DTF UV",
+  uv: "UV",
+  offset: "Offset",
+  laser: "Láser",
+  inkjet: "Inkjet",
+  eco: "Ecosolvente",
+  ecosolvente: "Ecosolvente",
+  solvente: "Solvente",
+  sublimacion: "Sublimación",
+};
+const tecLabel = (t: string) => TECNOLOGIA_LABEL[t] ?? t;
+
+const FUGA_LABEL: Record<string, string> = {
+  precio: "Precio",
+  plazo: "Plazo",
+  sin_respuesta: "Sin respuesta",
+  competencia: "Competencia",
+  otro: "Otro",
+  vencido: "Vencidas",
+};
+const fugaLabel = (m: string) => FUGA_LABEL[m] ?? m;
+
 function Negocio() {
   const [periodo, setPeriodo] = React.useState<PeriodoNegocio>("90d");
   const [data, setData] = React.useState<NegocioPlataforma | null>(null);
@@ -318,6 +342,11 @@ function Negocio() {
   const donutCat = (data?.porCategoria ?? []).slice(0, 6).map((c, i) => ({
     label: c.categoria,
     value: c.ventas,
+    color: PALETA[i % PALETA.length],
+  }));
+  const donutTec = (data?.porTecnologia ?? []).slice(0, 6).map((t, i) => ({
+    label: tecLabel(t.tecnologia),
+    value: t.ventas,
     color: PALETA[i % PALETA.length],
   }));
   const maxTenant = Math.max(1, ...(data?.porTenant ?? []).map((t) => t.ventas));
@@ -434,6 +463,78 @@ function Negocio() {
             </Panel>
           </div>
 
+          <div className="cpl-neg-grid">
+            <Panel title="Mix por tecnología" sub="cómo se produce">
+              {donutTec.length ? (
+                <div className="cpl-neg-mix">
+                  <Donut
+                    segs={donutTec}
+                    centerV={mk(k.ventas)}
+                    centerL="ventas"
+                    hideLegend
+                  />
+                  <div className="cpl-neg-legend">
+                    {data.porTecnologia.slice(0, 6).map((t, i) => (
+                      <div key={t.tecnologia} className="row">
+                        <i style={{ background: PALETA[i % PALETA.length] }} />
+                        <span className="nm">{tecLabel(t.tecnologia)}</span>
+                        <span className="val cpl-mono">{mk(t.ventas)}</span>
+                        <span className="pc cpl-mono">{t.pct}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="cpl-empty">Sin datos de tecnología.</div>
+              )}
+            </Panel>
+
+            <Panel title="Producto" sub="medida y adicionales">
+              <div className="cpl-neg-prod">
+                <div className="blk">
+                  <div className="h">Estándar vs a medida</div>
+                  <div className="big cpl-mono">
+                    {data.medidas.pctEstandar ?? "—"}
+                    <span> % estándar</span>
+                  </div>
+                  <div className="stack2">
+                    <span
+                      className="est"
+                      style={{ flexGrow: data.medidas.estandar || 0 }}
+                    />
+                    <span
+                      className="per"
+                      style={{ flexGrow: data.medidas.personalizada || 0 }}
+                    />
+                  </div>
+                  <div className="sub">
+                    {fmtN(data.medidas.estandar)} estándar ·{" "}
+                    {fmtN(data.medidas.personalizada)} a medida
+                  </div>
+                </div>
+                <div className="blk">
+                  <div className="h">Adicionales · attach rate</div>
+                  <div className="big cpl-mono">
+                    {data.adicionales.pctCon}
+                    <span> % de los ítems</span>
+                  </div>
+                  {data.adicionales.top.length ? (
+                    <div className="chips">
+                      {data.adicionales.top.slice(0, 6).map((a) => (
+                        <span key={a.etiqueta} className="chip">
+                          {a.etiqueta}
+                          <b>{a.pctItems}%</b>
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="sub">Sin adicionales registrados.</div>
+                  )}
+                </div>
+              </div>
+            </Panel>
+          </div>
+
           <Panel
             title="Ranking de imprentas"
             sub="por ventas del período"
@@ -486,6 +587,87 @@ function Negocio() {
               total={data.adopcion.totalTenants}
             />
           </div>
+
+          <Panel
+            title="Embudo comercial del ecosistema"
+            sub="conversión de presupuestos (benchmark)"
+          >
+            {data.embudo.emitidas > 0 ? (
+              <div className="cpl-neg-funnel-wrap">
+                <div className="cpl-neg-funnel">
+                  {[
+                    {
+                      label: "Emitidas",
+                      n: data.embudo.emitidas,
+                      monto: data.embudo.emitidasMonto,
+                    },
+                    {
+                      label: "Aprobadas",
+                      n: data.embudo.aprobadas,
+                      monto: data.embudo.aprobadasMonto,
+                    },
+                    {
+                      label: "En producción",
+                      n: data.embudo.produccion,
+                      monto: null,
+                    },
+                    {
+                      label: "Entregadas",
+                      n: data.embudo.entregadas,
+                      monto: null,
+                    },
+                  ].map((e) => (
+                    <div className="stage" key={e.label}>
+                      <div className="n cpl-mono">{fmtN(e.n)}</div>
+                      <div className="bar">
+                        <span
+                          style={{
+                            height: `${(e.n / data.embudo.emitidas) * 100}%`,
+                          }}
+                        />
+                      </div>
+                      <div className="l">{e.label}</div>
+                      {e.monto != null ? (
+                        <div className="m cpl-mono">{mk(e.monto)}</div>
+                      ) : (
+                        <div className="m" />
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div className="cpl-neg-funnel-side">
+                  <div className="fk">
+                    <b className="cpl-mono">{data.embudo.tasaAprobacion ?? "—"}%</b>
+                    <span>tasa de aprobación</span>
+                  </div>
+                  <div className="fk">
+                    <b className="cpl-mono">{data.embudo.tasaEntrega ?? "—"}%</b>
+                    <span>emitida → entregada</span>
+                  </div>
+                  {data.embudo.fugas.length ? (
+                    <div className="fugas">
+                      <div className="ttl">Fugas</div>
+                      {data.embudo.fugas.map((f) => (
+                        <div key={f.motivo} className="frow">
+                          <span>{fugaLabel(f.motivo)}</span>
+                          <b className="cpl-mono">{f.cantidad}</b>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="fugas">
+                      <div className="ttl">Fugas</div>
+                      <div className="frow vacio">Ninguna en el período.</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="cpl-empty">
+                No se enviaron presupuestos formales en el período.
+              </div>
+            )}
+          </Panel>
         </div>
       ) : null}
     </div>

@@ -72,6 +72,36 @@ export type NegocioPlataforma = {
     conPresupuestos: number;
     conFacturacion: number;
   };
+  // ── F2 ──────────────────────────────────────────────────────────────
+  /** Mix por tecnología (láser/UV/DTF/eco…). Vive en el jobContext del ítem
+   *  cotizado; los ítems sin cotización caen en "Sin especificar". */
+  porTecnologia: Array<{ tecnologia: string; ventas: number; pct: number }>;
+  /** Estándar vs a medida — sólo sobre ítems cotizados (con jobContext). */
+  medidas: {
+    estandar: number;
+    personalizada: number;
+    sinDato: number;
+    pctEstandar: number | null;
+  };
+  /** Attach rate de adicionales/acabados opcionales. */
+  adicionales: {
+    itemsTotales: number;
+    itemsCon: number;
+    pctCon: number;
+    top: Array<{ etiqueta: string; items: number; pctItems: number }>;
+  };
+  /** Embudo comercial agregado: benchmark de conversión y fugas del ecosistema. */
+  embudo: {
+    emitidas: number;
+    aprobadas: number;
+    produccion: number;
+    entregadas: number;
+    emitidasMonto: number;
+    aprobadasMonto: number;
+    tasaAprobacion: number | null;
+    tasaEntrega: number | null;
+    fugas: Array<{ motivo: string; cantidad: number }>;
+  };
 };
 
 @Injectable()
@@ -112,6 +142,10 @@ export class NegocioService {
       porCategoria,
       porTenant,
       adopcion,
+      porTecnologia,
+      medidas,
+      adicionales,
+      embudo,
     ] = await Promise.all([
       this.kpisVentas(v),
       this.kpisFacturado(v),
@@ -122,6 +156,10 @@ export class NegocioService {
       this.porCategoria(v),
       this.porTenant(v),
       this.adopcion(v),
+      this.porTecnologia(v),
+      this.medidas(v),
+      this.adicionales(v),
+      this.embudo(v),
     ]);
 
     const serie = this.zipSerie(serieVentas, serieFacturado);
@@ -161,6 +199,10 @@ export class NegocioService {
         pct: totalTen > 0 ? r2((t.ventas / totalTen) * 100) : 0,
       })),
       adopcion,
+      porTecnologia,
+      medidas,
+      adicionales,
+      embudo,
     };
   }
 
@@ -375,5 +417,173 @@ export class NegocioService {
           .then((r) => r.length),
       ]);
     return { totalTenants, conVentas, conPresupuestos, conFacturacion };
+  }
+
+  /**
+   * Mix por tecnología (láser/UV/DTF/eco…). Vive en el jobContext del ítem
+   * cotizado; ítems sin cotización caen en "Sin especificar". Top 6 + resto.
+   */
+  private async porTecnologia(v: Ventana) {
+    const rows = await this.prisma.$queryRaw<
+      Array<{ tecnologia: string; ventas: number }>
+    >`
+      SELECT COALESCE(ci."jobContextJson"->>'tecnologia', 'Sin especificar') AS tecnologia,
+             COALESCE(SUM(oti.subtotal), 0)::float8 AS ventas
+      FROM "OrdenTrabajoItem" oti
+      JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
+      LEFT JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
+      WHERE ot.estado <> 'borrador'
+        AND ot."fechaEmision" >= ${v.desde} AND ot."fechaEmision" < ${v.hasta}
+      GROUP BY 1 ORDER BY ventas DESC
+    `;
+    const total = rows.reduce((a, r) => a + r.ventas, 0);
+    const top = rows.slice(0, 6);
+    const resto = rows.slice(6).reduce((a, r) => a + r.ventas, 0);
+    const salida = top.map((r) => ({
+      tecnologia: r.tecnologia,
+      ventas: r2(r.ventas),
+      pct: total > 0 ? r2((r.ventas / total) * 100) : 0,
+    }));
+    if (resto > 0) {
+      salida.push({
+        tecnologia: 'Otras',
+        ventas: r2(resto),
+        pct: total > 0 ? r2((resto / total) * 100) : 0,
+      });
+    }
+    return salida;
+  }
+
+  /** Estándar vs a medida — sobre ítems cotizados (con jobContext). */
+  private async medidas(v: Ventana) {
+    const rows = await this.prisma.$queryRaw<
+      Array<{ modo: string | null; items: bigint }>
+    >`
+      SELECT ci."jobContextJson"->>'medidaModo' AS modo, COUNT(*) AS items
+      FROM "OrdenTrabajoItem" oti
+      JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
+      JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
+      WHERE ot.estado <> 'borrador'
+        AND ot."fechaEmision" >= ${v.desde} AND ot."fechaEmision" < ${v.hasta}
+      GROUP BY 1
+    `;
+    let estandar = 0;
+    let personalizada = 0;
+    let sinDato = 0;
+    for (const r of rows) {
+      const n = Number(r.items);
+      if (r.modo === 'predefinida') estandar += n;
+      else if (r.modo === 'personalizada') personalizada += n;
+      else sinDato += n;
+    }
+    const conDato = estandar + personalizada;
+    return {
+      estandar,
+      personalizada,
+      sinDato,
+      pctEstandar: conDato > 0 ? r2((estandar / conDato) * 100) : null,
+    };
+  }
+
+  /** Attach rate de adicionales/acabados opcionales, y el top de etiquetas. */
+  private async adicionales(v: Ventana) {
+    const [resumen, top] = await Promise.all([
+      this.prisma.$queryRaw<Array<{ items: bigint; con: bigint }>>`
+        SELECT COUNT(*) AS items,
+               COUNT(*) FILTER (
+                 WHERE jsonb_typeof(oti."adicionalesJson") = 'array'
+                   AND jsonb_array_length(oti."adicionalesJson") > 0
+               ) AS con
+        FROM "OrdenTrabajoItem" oti
+        JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
+        WHERE ot.estado <> 'borrador'
+          AND ot."fechaEmision" >= ${v.desde} AND ot."fechaEmision" < ${v.hasta}
+      `,
+      this.prisma.$queryRaw<Array<{ etiqueta: string; items: bigint }>>`
+        SELECT et.etiqueta, COUNT(*) AS items
+        FROM "OrdenTrabajoItem" oti
+        JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
+        CROSS JOIN LATERAL jsonb_array_elements_text(oti."adicionalesJson") et(etiqueta)
+        WHERE ot.estado <> 'borrador'
+          AND jsonb_typeof(oti."adicionalesJson") = 'array'
+          AND ot."fechaEmision" >= ${v.desde} AND ot."fechaEmision" < ${v.hasta}
+        GROUP BY 1 ORDER BY items DESC LIMIT 8
+      `,
+    ]);
+    const itemsTotales = Number(resumen[0]?.items ?? 0);
+    const itemsCon = Number(resumen[0]?.con ?? 0);
+    return {
+      itemsTotales,
+      itemsCon,
+      pctCon: itemsTotales > 0 ? r2((itemsCon / itemsTotales) * 100) : 0,
+      top: top.map((a) => ({
+        etiqueta: a.etiqueta,
+        items: Number(a.items),
+        pctItems: itemsTotales > 0 ? r2((Number(a.items) / itemsTotales) * 100) : 0,
+      })),
+    };
+  }
+
+  /**
+   * Embudo comercial AGREGADO: benchmark de conversión del ecosistema sobre la
+   * cohorte de presupuestos formales enviados en el período. Produccion y
+   * entregadas salen de la OT convertida; fugas por motivo de pérdida.
+   * Ver docs/embudo-comercial-panel-diseno.md
+   */
+  private async embudo(v: Ventana) {
+    const [cohorte, avance, fugasRows] = await Promise.all([
+      this.prisma.$queryRaw<
+        Array<{
+          emitidas: bigint;
+          emitidasmonto: number;
+          aprobadas: bigint;
+          aprobadasmonto: number;
+        }>
+      >`
+        SELECT COUNT(*) AS emitidas,
+               COALESCE(SUM(subtotal), 0)::float8 AS emitidasmonto,
+               COUNT(*) FILTER (WHERE estado IN ('aprobado', 'convertido')) AS aprobadas,
+               COALESCE(SUM(subtotal) FILTER (WHERE estado IN ('aprobado', 'convertido')), 0)::float8 AS aprobadasmonto
+        FROM "Cotizacion"
+        WHERE numero IS NOT NULL
+          AND "fechaEnvio" >= ${v.desde} AND "fechaEnvio" < ${v.hasta}
+      `,
+      this.prisma.$queryRaw<Array<{ produccion: bigint; entregadas: bigint }>>`
+        SELECT COUNT(*) FILTER (WHERE ot.estado IN ('produccion', 'finalizada', 'entregada')) AS produccion,
+               COUNT(*) FILTER (WHERE ot.estado = 'entregada') AS entregadas
+        FROM "Cotizacion" cz
+        JOIN "OrdenTrabajo" ot ON ot.id = cz."convertidaOrdenId"
+        WHERE cz.numero IS NOT NULL
+          AND cz."fechaEnvio" >= ${v.desde} AND cz."fechaEnvio" < ${v.hasta}
+      `,
+      this.prisma.$queryRaw<Array<{ motivo: string; cantidad: bigint }>>`
+        SELECT CASE WHEN estado = 'vencido' THEN 'vencido'
+                    ELSE COALESCE(NULLIF("motivoPerdida", ''), 'otro') END AS motivo,
+               COUNT(*) AS cantidad
+        FROM "Cotizacion"
+        WHERE numero IS NOT NULL
+          AND estado IN ('rechazado', 'vencido')
+          AND "fechaEnvio" >= ${v.desde} AND "fechaEnvio" < ${v.hasta}
+        GROUP BY 1 ORDER BY cantidad DESC
+      `,
+    ]);
+    const emitidas = Number(cohorte[0]?.emitidas ?? 0);
+    const aprobadas = Number(cohorte[0]?.aprobadas ?? 0);
+    const produccion = Number(avance[0]?.produccion ?? 0);
+    const entregadas = Number(avance[0]?.entregadas ?? 0);
+    return {
+      emitidas,
+      aprobadas,
+      produccion,
+      entregadas,
+      emitidasMonto: r2(cohorte[0]?.emitidasmonto ?? 0),
+      aprobadasMonto: r2(cohorte[0]?.aprobadasmonto ?? 0),
+      tasaAprobacion: emitidas > 0 ? r2((aprobadas / emitidas) * 100) : null,
+      tasaEntrega: emitidas > 0 ? r2((entregadas / emitidas) * 100) : null,
+      fugas: fugasRows.map((f) => ({
+        motivo: f.motivo,
+        cantidad: Number(f.cantidad),
+      })),
+    };
   }
 }

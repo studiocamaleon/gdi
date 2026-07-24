@@ -27,6 +27,7 @@ async function crearTenantConVenta(
   nombre: string,
   categoria: string,
   subtotal: number,
+  adicionales: string[] = [],
 ): Promise<string> {
   const t = await prisma.tenant.create({
     data: { nombre, slug: `test-neg-${randomUUID()}` },
@@ -54,15 +55,29 @@ async function crearTenantConVenta(
       subtotal,
       impuestos: 0,
       total: subtotal,
+      adicionalesJson: adicionales,
     },
   });
   return t.id;
 }
 
 describe('NegocioService — agregación cross-tenant', () => {
+  // Etiqueta de adicional única, para encontrarla sin ruido de otros suites.
+  const adic = `TEST-ADIC-${randomUUID().slice(0, 8)}`;
+
   beforeAll(async () => {
-    tenantAId = await crearTenantConVenta('Imprenta Neg A', catA, 1000);
+    tenantAId = await crearTenantConVenta('Imprenta Neg A', catA, 1000, [adic]);
     tenantBId = await crearTenantConVenta('Imprenta Neg B', catB, 2000);
+    // Un presupuesto formal aprobado del tenant A → entra al embudo agregado.
+    await prisma.cotizacion.create({
+      data: {
+        tenantId: tenantAId,
+        numero: `PRES-NEG-${randomUUID().slice(0, 8)}`,
+        estado: 'aprobado',
+        subtotal: 1000,
+        fechaEnvio: new Date(),
+      },
+    });
   });
 
   afterAll(async () => {
@@ -98,6 +113,23 @@ describe('NegocioService — agregación cross-tenant', () => {
     const r = await servicio.negocio('12m');
     expect(r.adopcion.conVentas).toBeGreaterThanOrEqual(2);
     expect(r.adopcion.totalTenants).toBeGreaterThanOrEqual(2);
+  });
+
+  it('F2 · attach rate de adicionales cuenta la etiqueta del ítem', async () => {
+    const r = await servicio.negocio('12m');
+    expect(r.adicionales.itemsCon).toBeGreaterThanOrEqual(1);
+    const top = r.adicionales.top.find((a) => a.etiqueta === adic);
+    expect(top?.items).toBe(1);
+  });
+
+  it('F2 · embudo agregado suma la cohorte de presupuestos formales', async () => {
+    const r = await servicio.negocio('12m');
+    expect(r.embudo.emitidas).toBeGreaterThanOrEqual(1);
+    expect(r.embudo.aprobadas).toBeGreaterThanOrEqual(1);
+    expect(r.embudo.tasaAprobacion).not.toBeNull();
+    // La forma F2 siempre viaja, aunque no haya ítems cotizados en dev.
+    expect(Array.isArray(r.porTecnologia)).toBe(true);
+    expect(r.medidas).toHaveProperty('pctEstandar');
   });
 
   it('respeta el período: 30 días no incluye ventas viejas', async () => {

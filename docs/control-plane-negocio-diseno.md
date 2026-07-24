@@ -161,8 +161,33 @@ Cada pantalla apunta a una decisión de PRODUCTO, no a un cobro.
   doble de ventana y bucketizar en memoria (patrón `enVentana` de la consola),
   no N queries por ventana.
 
-## Fuera de alcance F1
+## F2 — implementado 2026-07-24
 
-F2: mix por tecnología/medida/adicionales, embudo agregado, histograma de
-tamaño. F3: insights en lenguaje de producto + benchmarking por tenant.
-Materialización de rollups si el volumen lo pide.
+Se sumaron al mismo endpoint (`GET /plataforma/negocio`) y al mismo payload:
+- **`porTecnologia`**: mix por tecnología (láser/UV/DTF/eco…) desde
+  `CotizacionItem.jobContextJson->>'tecnologia'` (LEFT JOIN; ítems sin cotización
+  → "Sin especificar"). Top 6 + "Otras". Front: donut como el de categoría, con
+  mapa de etiquetas (`dtf_textil` → "DTF textil", etc.).
+- **`medidas`**: estándar vs a medida desde `jobContextJson->>'medidaModo'`
+  (`predefinida`/`personalizada`), sobre ítems cotizados. Front: barra apilada +
+  `pctEstandar`.
+- **`adicionales`**: attach rate (`itemsCon/itemsTotales`) + top de etiquetas
+  vía `jsonb_array_elements_text(oti.adicionalesJson)`. Front: chips.
+- **`embudo`**: benchmark de conversión del ecosistema sobre la cohorte de
+  presupuestos formales (`Cotizacion.numero != null`, por `fechaEnvio`):
+  emitidas → aprobadas → producción → entregadas (producción/entrega salen de la
+  OT convertida), tasas y fugas por `motivoPerdida`. Front: funnel de barras +
+  KPIs laterales.
+
+Verificado E2E (DTF 48% / UV 18% / Offset 17%; 64% estándar; attach 39%; embudo
+4→4→1→0, 100% aprobación) + 2 casos nuevos en `negocio.spec.ts` (adicionales y
+embudo con fixtures). El histograma de tamaño de tenant se dejó afuera (se deriva
+del ranking; bajo valor con pocos tenants).
+
+## Fuera de alcance (queda F3)
+
+Histograma de distribución de tamaño de tenant (client-side desde el ranking
+cuando haya más tenants). **F3**: insights en lenguaje de producto ("el 48% del
+GMV es textil → priorizar DTF"), benchmarking por tenant (percentil de
+conversión/ticket vs. ecosistema), y materialización de rollups diarios si el
+volumen lo pide (OrdenTrabajoItem.categoriaComercial no tiene índice dedicado).

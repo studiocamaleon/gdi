@@ -145,6 +145,30 @@ export type NegocioPlataforma = {
     conPresupuestos: number;
     conFacturacion: number;
   };
+  porTecnologia: Array<{ tecnologia: string; ventas: number; pct: number }>;
+  medidas: {
+    estandar: number;
+    personalizada: number;
+    sinDato: number;
+    pctEstandar: number | null;
+  };
+  adicionales: {
+    itemsTotales: number;
+    itemsCon: number;
+    pctCon: number;
+    top: Array<{ etiqueta: string; items: number; pctItems: number }>;
+  };
+  embudo: {
+    emitidas: number;
+    aprobadas: number;
+    produccion: number;
+    entregadas: number;
+    emitidasMonto: number;
+    aprobadasMonto: number;
+    tasaAprobacion: number | null;
+    tasaEntrega: number | null;
+    fugas: Array<{ motivo: string; cantidad: number }>;
+  };
 };
 
 export async function getNegocioPlataforma(
