@@ -323,7 +323,7 @@ export class SuscripcionesService {
     tenantId: string,
     planCodigo: string,
     ciclo: 'mensual' | 'anual',
-  ): Promise<{ monto: number; moneda: string } | null> {
+  ): Promise<{ aCobrar: number; aCredito: number; moneda: string } | null> {
     const [s, plan] = await Promise.all([
       this.prisma.suscripcion.findFirst({
         where: { tenantId },

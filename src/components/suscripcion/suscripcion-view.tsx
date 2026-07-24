@@ -114,7 +114,8 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
   const [confirmarCambio, setConfirmarCambio] =
     React.useState<PlanContratable | null>(null);
   const [previo, setPrevio] = React.useState<{
-    monto: number;
+    aCobrar: number;
+    aCredito: number;
     moneda: string;
   } | null>(null);
   const [cargandoPrevio, setCargandoPrevio] = React.useState(false);
@@ -403,9 +404,11 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
               ? `Nuevo precio: ${precio(confirmarCambio.anual.precio, confirmarCambio.moneda)} al año`
               : `Nuevo precio: ${precio(confirmarCambio.precioMensual, confirmarCambio.moneda)} por mes`,
             previo
-              ? previo.monto > 0
-                ? `Se te cobra ahora ${precio(previo.monto, previo.moneda)} por el ajuste proporcional`
-                : "Sin cargo ahora: el ajuste queda a favor tuyo para el próximo período"
+              ? previo.aCobrar > 0
+                ? `Se te cobra ahora ${precio(previo.aCobrar, previo.moneda)} por lo que resta del período`
+                : previo.aCredito > 0
+                  ? `Te queda ${precio(previo.aCredito, previo.moneda)} a favor, que se descuenta solo de tus próximos cobros`
+                  : "Sin cargo ahora"
               : cargandoPrevio
                 ? "Calculando el ajuste…"
                 : "Paddle ajusta el cobro de forma proporcional al período en curso",

@@ -80,7 +80,7 @@ export async function cambiarPlanSuscripcion(
 export async function previsualizarCambio(
   planCodigo: string,
   ciclo: "mensual" | "anual",
-): Promise<{ monto: number; moneda: string } | null> {
+): Promise<{ aCobrar: number; aCredito: number; moneda: string } | null> {
   return apiRequest("/suscripcion/cambiar-plan/previsualizar", {
     method: "POST",
     body: JSON.stringify({ planCodigo, ciclo }),

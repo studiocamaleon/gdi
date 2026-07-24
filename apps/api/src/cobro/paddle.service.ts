@@ -255,11 +255,22 @@ export class PaddleService {
     });
   }
 
-  /** Qué se le va a cobrar ahora por el cambio, ANTES de confirmarlo. */
+  /**
+   * Qué implica el cambio en plata, ANTES de confirmarlo.
+   *
+   * Son DOS cosas distintas y hay que mostrarlas separadas:
+   *  - `aCobrar` (grand_total): lo que se le debita ahora. Upgrade.
+   *  - `aCredito` (credit_to_balance): lo que queda a su favor. Downgrade.
+   *
+   * El crédito NO es una devolución a la tarjeta: queda como saldo del cliente
+   * y Paddle lo aplica solo a los cobros siguientes ("credit balances are
+   * automatically used to pay for future transactions", su doc). Decirlo bien
+   * importa: es plata del cliente y el diálogo se la está prometiendo.
+   */
   async previsualizarCambio(
     suscripcionId: string,
     priceId: string,
-  ): Promise<{ monto: number; moneda: string } | null> {
+  ): Promise<{ aCobrar: number; aCredito: number; moneda: string } | null> {
     if (!this.cliente) return null;
     try {
       const p = await this.cliente.subscriptions.previewUpdate(suscripcionId, {
@@ -267,10 +278,12 @@ export class PaddleService {
         prorationBillingMode: 'prorated_immediately',
       });
       const t = p.immediateTransaction?.details?.totals;
-      if (!t) return { monto: 0, moneda: p.currencyCode ?? 'USD' };
+      const moneda = p.currencyCode ?? 'USD';
+      if (!t) return { aCobrar: 0, aCredito: 0, moneda };
       return {
-        monto: Number(t.total ?? '0') / 100,
-        moneda: p.currencyCode ?? 'USD',
+        aCobrar: Number(t.grandTotal ?? '0') / 100,
+        aCredito: Number(t.creditToBalance ?? '0') / 100,
+        moneda,
       };
     } catch (error) {
       this.logger.warn(

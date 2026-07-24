@@ -174,6 +174,14 @@ Antes esto abría un checkout nuevo, lo que **le creaba al cliente una SEGUNDA
 suscripción en Paddle y le cobraban las dos**. Se previsualiza el ajuste
 (`previewUpdate`) antes de confirmar, así el usuario ve cuánto se le cobra ahora.
 
+**Qué se le muestra antes de confirmar** (verificado contra la API, no supuesto):
+`previewUpdate` devuelve dos cosas distintas y hay que separarlas —
+`grand_total` es lo que se le **debita ahora** (upgrade) y `credit_to_balance`
+lo que le queda **a favor** (downgrade). El crédito NO vuelve a la tarjeta:
+queda como saldo del cliente y Paddle lo aplica solo a los cobros siguientes
+(*"credit balances are automatically used to pay for future transactions"*, su
+doc). Ejemplo real: de Diamante 290 a Estudio 100 → cobra 0, acredita US$189,92.
+
 El webhook NO desaparece: queda para lo que pasa **sin el usuario delante** —
 renovaciones, cobros fallidos, dunning, cancelaciones desde el portal. Es
 idempotente, así que si llega después de la sincronización activa no duplica
