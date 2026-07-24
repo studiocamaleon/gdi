@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import {
   IsEmail,
+  IsIn,
   IsOptional,
   IsString,
   IsUUID,
@@ -31,6 +32,37 @@ import { PlataformaService } from './plataforma.service';
 export class CambiarPlanDto {
   @IsUUID()
   planId: string;
+}
+
+export class DescribirPlanDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(220)
+  descripcion?: string;
+}
+
+/** Vincular un plan con su precio en Paddle. Vacío = desvincular. */
+export class VincularPaddleDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  @Matches(/^pri_[a-zA-Z0-9]+$/, {
+    message: 'El id de precio de Paddle tiene la forma pri_xxxxxxxx.',
+  })
+  priceId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  @Matches(/^pro_[a-zA-Z0-9]+$/, {
+    message: 'El id de producto de Paddle tiene la forma pro_xxxxxxxx.',
+  })
+  productId?: string;
+
+  /** 'mensual' (default) o 'anual': el mismo plan tiene un precio por ciclo. */
+  @IsOptional()
+  @IsIn(['mensual', 'anual'])
+  ciclo?: 'mensual' | 'anual';
 }
 
 export class SuspenderTenantDto {
@@ -117,6 +149,34 @@ export class PlataformaController {
   @Get('planes')
   planes() {
     return this.service.planes();
+  }
+
+  /** Edita la bajada comercial del plan. */
+  @Put('planes/:id/descripcion')
+  @UseGuards(PlataformaAdminGuard)
+  describirPlan(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: DescribirPlanDto,
+  ) {
+    return this.service.describirPlan(auth.userId, id, dto.descripcion ?? null);
+  }
+
+  /** Vincula un plan con su precio de Paddle. Devuelve el catálogo actualizado. */
+  @Put('planes/:id/paddle')
+  @UseGuards(PlataformaAdminGuard)
+  vincularPlanPaddle(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: VincularPaddleDto,
+  ) {
+    return this.service.vincularPlanPaddle(
+      auth.userId,
+      id,
+      dto.priceId ?? null,
+      dto.productId ?? null,
+      dto.ciclo ?? 'mensual',
+    );
   }
 
   // ── Impersonación (etapa C) ──────────────────────────────────────────

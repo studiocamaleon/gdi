@@ -20,8 +20,22 @@ async function bootstrap() {
   app.use(compression());
 
   // Límite de tamaño de body (evita DoS por payloads gigantes).
+  //
+  // `verify` guarda el body CRUDO sólo en las rutas de webhook: la firma de
+  // Paddle es un HMAC sobre el texto exacto que llegó, así que verificarla
+  // contra el JSON re-serializado falla (cambia el orden o el espaciado).
+  // Se acota por path para no retener un Buffer extra en cada request.
   const bodyLimit = process.env.BODY_LIMIT ?? '1mb';
-  app.use(json({ limit: bodyLimit }));
+  app.use(
+    json({
+      limit: bodyLimit,
+      verify: (req: { url?: string; rawBody?: Buffer }, _res, buf: Buffer) => {
+        if (req.url?.startsWith('/api/webhooks/')) {
+          req.rawBody = buf;
+        }
+      },
+    }),
+  );
   app.use(urlencoded({ extended: true, limit: bodyLimit }));
 
   // CORS: sin fallback permisivo. Si falta FRONTEND_URL, no se habilita ningún

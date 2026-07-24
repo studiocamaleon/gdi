@@ -35,6 +35,8 @@ import {
   getBillingPlataforma,
   getNegocioPlataforma,
   getPlanesPlataforma,
+  describirPlan,
+  vincularPlanPaddle,
   getSesionesImpersonacion,
   iniciarImpersonacion,
   reactivarTenant,
@@ -60,6 +62,7 @@ type Vista =
   | "observabilidad"
   | "negocio"
   | "tenants"
+  | "planes"
   | "billing"
   | "impersonacion";
 
@@ -73,6 +76,7 @@ const NAV: Array<{
       { k: "observabilidad", label: "Observabilidad", ic: "gauge" },
       { k: "negocio", label: "Negocio", ic: "chart" },
       { k: "tenants", label: "Tenants", ic: "building" },
+      { k: "planes", label: "Planes", ic: "check" },
       { k: "billing", label: "Facturación", ic: "card" },
     ],
   },
@@ -86,6 +90,7 @@ const TITULOS: Record<Vista, { crumb: string; title: string }> = {
   observabilidad: { crumb: "Plataforma", title: "Observabilidad" },
   negocio: { crumb: "Plataforma", title: "Negocio del ecosistema" },
   tenants: { crumb: "Plataforma", title: "Tenants" },
+  planes: { crumb: "Plataforma", title: "Planes y precios" },
   billing: { crumb: "Plataforma", title: "Facturación de suscripciones" },
   impersonacion: { crumb: "Operaciones", title: "Impersonación y auditoría" },
 };
@@ -237,6 +242,7 @@ export function ConsolaPlataformaView({
             onConsola={setDatos}
           />
         ) : null}
+        {vista === "planes" ? <Planes esAdmin={esAdmin} /> : null}
         {vista === "billing" ? <Billing esAdmin={esAdmin} /> : null}
         {vista === "impersonacion" ? (
           <Impersonacion datos={datos} esAdmin={esAdmin} />
@@ -1800,6 +1806,322 @@ function CrearTenantModal({
         </div>
       </div>
     </>
+  );
+}
+
+// ── Planes y precios ───────────────────────────────────────────────────
+// El mapeo con el catálogo de Paddle se carga acá y no en un seed porque
+// sandbox y producción tienen catálogos distintos: migrar de uno a otro tiene
+// que ser cargar un campo, no deployar. Ver docs/suscripciones-cobro-diseno.md
+
+function Planes({ esAdmin }: { esAdmin: boolean }) {
+  const [planes, setPlanes] = React.useState<PlanCatalogo[] | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const [editando, setEditando] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    let vivo = true;
+    getPlanesPlataforma()
+      .then((p) => vivo && setPlanes(p))
+      .catch(() => vivo && setError("No se pudieron cargar los planes."));
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
+  if (error) return <div className="cpl-page"><div className="cpl-empty">{error}</div></div>;
+  if (!planes) return <div className="cpl-page"><div className="cpl-empty">Cargando…</div></div>;
+
+  const vinculados = planes.filter((p) => p.paddlePriceId).length;
+
+  return (
+    <div className="cpl-page cpl-planes">
+      <p className="cpl-neg-intro" style={{ marginBottom: 18 }}>
+        Cada plan se vende a través de su precio en Paddle. El <b>monto</b> vive
+        en el catálogo de Paddle; las <b>features y los límites</b> viven acá.
+        El id del precio los une — cargalo abajo.
+      </p>
+
+      <Panel
+        title="Planes"
+        sub={`${vinculados} de ${planes.length} vinculados a Paddle`}
+        flush
+      >
+        <table className="cpl-tbl">
+          <thead>
+            <tr>
+              <th>Plan</th>
+              <th>Bajada (la ve el tenant)</th>
+              <th>Precio</th>
+              <th>Tenants</th>
+              <th>Precio en Paddle</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {planes.map((p) => (
+              <PlanFila
+                key={p.id}
+                plan={p}
+                esAdmin={esAdmin}
+                editando={editando === p.id}
+                onEditar={() => setEditando(p.id)}
+                onCerrar={() => setEditando(null)}
+                onGuardado={(lista) => {
+                  setPlanes(lista);
+                  setEditando(null);
+                }}
+              />
+            ))}
+          </tbody>
+        </table>
+      </Panel>
+
+      {vinculados === 0 ? (
+        <div className="cpl-nota" style={{ marginTop: 14 }}>
+          Todavía no hay ningún plan vinculado. Hasta que al menos uno lo esté,
+          el checkout no puede dar de alta suscripciones: el webhook resuelve el
+          plan por el id del precio.
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function PlanFila({
+  plan,
+  esAdmin,
+  editando,
+  onEditar,
+  onCerrar,
+  onGuardado,
+}: {
+  plan: PlanCatalogo;
+  esAdmin: boolean;
+  editando: boolean;
+  onEditar: () => void;
+  onCerrar: () => void;
+  onGuardado: (planes: PlanCatalogo[]) => void;
+}) {
+  const [priceId, setPriceId] = React.useState(plan.paddlePriceId ?? "");
+  const [priceIdAnual, setPriceIdAnual] = React.useState(
+    plan.paddlePriceIdAnual ?? "",
+  );
+  const [productId, setProductId] = React.useState(plan.paddleProductId ?? "");
+  const [guardando, setGuardando] = React.useState(false);
+
+  const guardar = async () => {
+    if (guardando) return;
+    setGuardando(true);
+    try {
+      // Cada ciclo es un precio distinto en Paddle y se valida por separado
+      // (que el id exista y traer el monto real). Se manda el mensual primero
+      // porque es el que también fija el productId.
+      let lista = await vincularPlanPaddle(
+        plan.id,
+        priceId.trim() || null,
+        productId.trim() || null,
+        "mensual",
+      );
+      if ((priceIdAnual.trim() || "") !== (plan.paddlePriceIdAnual ?? "")) {
+        lista = await vincularPlanPaddle(
+          plan.id,
+          priceIdAnual.trim() || null,
+          null,
+          "anual",
+        );
+      }
+      toast.success(
+        priceId.trim()
+          ? `${plan.nombre} quedó vinculado a Paddle.`
+          : `${plan.nombre} se desvinculó de Paddle.`,
+      );
+      onGuardado(lista);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "No se pudo guardar el vínculo.",
+      );
+      setGuardando(false);
+    }
+  };
+
+  if (editando) {
+    return (
+      <tr>
+        <td>
+          <b>{plan.nombre}</b>
+        </td>
+        <td colSpan={5}>
+          <div className="cpl-planedit">
+            <label>
+              <span>Price ID</span>
+              <input
+                value={priceId}
+                onChange={(e) => setPriceId(e.target.value)}
+                placeholder="pri_01j…"
+                autoFocus
+                disabled={guardando}
+              />
+            </label>
+            <label>
+              <span>Price ID anual (opcional)</span>
+              <input
+                value={priceIdAnual}
+                onChange={(e) => setPriceIdAnual(e.target.value)}
+                placeholder="pri_01j…"
+                disabled={guardando}
+              />
+            </label>
+            <label>
+              <span>Product ID (opcional)</span>
+              <input
+                value={productId}
+                onChange={(e) => setProductId(e.target.value)}
+                placeholder="pro_01j…"
+                disabled={guardando}
+              />
+            </label>
+            <button
+              type="button"
+              className="cpl-btn pri"
+              onClick={guardar}
+              disabled={guardando}
+            >
+              {guardando ? "Guardando…" : "Guardar"}
+            </button>
+            <button
+              type="button"
+              className="cpl-btn"
+              onClick={onCerrar}
+              disabled={guardando}
+            >
+              Cancelar
+            </button>
+          </div>
+        </td>
+      </tr>
+    );
+  }
+
+  return (
+    <tr>
+      <td>
+        <b>{plan.nombre}</b>
+        <div className="cpl-sub">{plan.codigo}</div>
+      </td>
+      <td>
+        <BajadaPlan plan={plan} esAdmin={esAdmin} onGuardado={onGuardado} />
+      </td>
+      <td className="cpl-mono">
+        {plan.moneda === "USD" ? "US$" : "$"}
+        {fmtN(plan.precioMensual)}
+        <div className="cpl-sub">por mes</div>
+      </td>
+      <td className="cpl-mono">{fmtN(plan.tenants)}</td>
+      <td>
+        {plan.paddlePriceId ? (
+          <div className="cpl-precios">
+            <span className="cpl-invlink">
+              <b>mes</b> {plan.paddlePriceId}
+            </span>
+            {plan.paddlePriceIdAnual ? (
+              <span className="cpl-invlink">
+                <b>año</b> {plan.paddlePriceIdAnual}
+                {plan.precioAnual !== null ? (
+                  <em className="cpl-anualmonto">
+                    {plan.moneda === "USD" ? "US$" : "$"}
+                    {fmtN(plan.precioAnual)}
+                  </em>
+                ) : null}
+              </span>
+            ) : (
+              <span className="cpl-sinvinculo">sin precio anual</span>
+            )}
+          </div>
+        ) : (
+          <span className="cpl-sinvinculo">sin vincular</span>
+        )}
+      </td>
+      <td style={{ textAlign: "right" }}>
+        {esAdmin ? (
+          <button type="button" className="cpl-btn" onClick={onEditar}>
+            {plan.paddlePriceId ? "Cambiar" : "Vincular"}
+          </button>
+        ) : null}
+      </td>
+    </tr>
+  );
+}
+
+/** Edición inline de la bajada comercial del plan (es copy de producto: se
+ *  cambia sin deploy y la ve el tenant en su tarjeta). */
+function BajadaPlan({
+  plan,
+  esAdmin,
+  onGuardado,
+}: {
+  plan: PlanCatalogo;
+  esAdmin: boolean;
+  onGuardado: (planes: PlanCatalogo[]) => void;
+}) {
+  const [editando, setEditando] = React.useState(false);
+  const [texto, setTexto] = React.useState(plan.descripcion ?? "");
+  const [guardando, setGuardando] = React.useState(false);
+
+  const guardar = async () => {
+    if (guardando) return;
+    setGuardando(true);
+    try {
+      onGuardado(await describirPlan(plan.id, texto.trim() || null));
+      setEditando(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo guardar.");
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  if (!editando) {
+    return (
+      <button
+        type="button"
+        className="cpl-bajada"
+        onClick={() => esAdmin && setEditando(true)}
+        disabled={!esAdmin}
+        title={esAdmin ? "Editar la bajada" : undefined}
+      >
+        {plan.descripcion ?? <span className="cpl-sinvinculo">sin bajada</span>}
+      </button>
+    );
+  }
+  return (
+    <div className="cpl-bajada-edit">
+      <textarea
+        value={texto}
+        onChange={(e) => setTexto(e.target.value)}
+        placeholder="Para imprentas que arrancan a ordenar su producción."
+        maxLength={220}
+        rows={2}
+        autoFocus
+        disabled={guardando}
+      />
+      <div className="acc">
+        <button type="button" className="cpl-btn pri" onClick={guardar} disabled={guardando}>
+          {guardando ? "…" : "Guardar"}
+        </button>
+        <button
+          type="button"
+          className="cpl-btn"
+          onClick={() => {
+            setTexto(plan.descripcion ?? "");
+            setEditando(false);
+          }}
+          disabled={guardando}
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>
   );
 }
 

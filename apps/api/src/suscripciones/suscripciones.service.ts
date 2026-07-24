@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { PaddleService } from '../cobro/paddle.service';
+import { estadoDePrueba, type EstadoPrueba } from './trial';
 
 /**
  * Lecturas de la suscripción de un tenant — el ÚNICO lugar que interpreta
@@ -40,9 +42,70 @@ export type SuscripcionDe = {
   desde: string;
 } | null;
 
+export type PlanContratable = {
+  codigo: string;
+  nombre: string;
+  descripcion: string | null;
+  precioMensual: number;
+  moneda: string;
+  features: Record<string, unknown>;
+  /** El precio en Paddle: sin esto el plan no se puede contratar. */
+  priceId: string;
+  esActual: boolean;
+  /** Variante anual. Null si el plan sólo se vende mensual. */
+  anual: {
+    priceId: string;
+    precio: number;
+    /** Lo que costaría un año pagando mes a mes: la referencia del ahorro. */
+    doceMeses: number;
+    /** Cuánto se ahorra en el año. */
+    ahorro: number;
+    ahorroPct: number;
+    /** El anual prorrateado, para comparar peras con peras. */
+    equivalenteMensual: number;
+  } | null;
+};
+
+export type EstadoSuscripcion = {
+  actual: {
+    planCodigo: string;
+    planNombre: string;
+    precioMensual: number;
+    moneda: string;
+    /** Nuestro estado normalizado: el que manda para el acceso. */
+    estado: string;
+    /** El crudo de la pasarela — 'past_due' enciende el aviso de pago. */
+    estadoProveedor: string | null;
+    proveedor: string;
+    proximoCobro: string | null;
+    desde: string;
+  } | null;
+  planes: PlanContratable[];
+  checkout: { tenantId: string; email: string };
+  /** Estado de la prueba gratuita (calculado, nunca guardado). */
+  prueba: EstadoPrueba;
+  /** Comprobantes que emitió PADDLE (es Merchant of Record, no los emitimos
+   *  nosotros). Vacío mientras no haya cobros. */
+  facturas: FacturaSuscripcion[];
+  /** Hay cliente en la pasarela → se puede abrir el portal de autogestión. */
+  puedePortal: boolean;
+};
+
+export type FacturaSuscripcion = {
+  id: string;
+  numero: string | null;
+  fecha: string | null;
+  total: number;
+  moneda: string;
+  estado: string;
+};
+
 @Injectable()
 export class SuscripcionesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly paddle: PaddleService,
+  ) {}
 
   /** La suscripción del tenant con su plan, o null (legacy, sin plan). */
   async de(tenantId: string): Promise<SuscripcionDe> {
@@ -88,5 +151,124 @@ export class SuscripcionesService {
       ordenesMesMax: f.ordenesMesMax ?? null,
       storageGb: f.storageGb ?? null,
     };
+  }
+
+  /**
+   * Todo lo que la vista de suscripción del tenant necesita: su plan actual y
+   * a cuáles puede pasarse.
+   *
+   * Sólo se ofrecen los planes VINCULADOS a Paddle (`paddlePriceId`): sin
+   * precio en la pasarela no hay checkout posible. Por eso el plan "trial",
+   * que es gratis y se asigna desde el control plane, no aparece como opción
+   * contratable — aparece sólo si es el actual.
+   */
+  async estadoParaTenant(
+    tenantId: string,
+    email: string,
+  ): Promise<EstadoSuscripcion> {
+    const [suscripcion, planes] = await Promise.all([
+      this.prisma.suscripcion.findFirst({
+        where: { tenantId },
+        include: { plan: true },
+      }),
+      this.prisma.plan.findMany({
+        where: { activo: true },
+        orderBy: { orden: 'asc' },
+      }),
+    ]);
+
+    const contratables = planes.filter((p) => p.paddlePriceId !== null);
+
+    // Las facturas se piden sólo si el tenant ya es cliente en la pasarela.
+    // Si Paddle no responde, la lista viene vacía y la vista lo dice — nunca
+    // se rompe la pantalla por una lectura auxiliar.
+    const clienteExterno = suscripcion?.clienteExternoId ?? null;
+    const facturas = clienteExterno
+      ? await this.paddle.listarFacturas(clienteExterno)
+      : [];
+
+    return {
+      actual: suscripcion
+        ? {
+            planCodigo: suscripcion.plan.codigo,
+            planNombre: suscripcion.plan.nombre,
+            precioMensual: Number(suscripcion.plan.precioMensual),
+            moneda: suscripcion.plan.moneda,
+            estado: suscripcion.estado,
+            estadoProveedor: suscripcion.estadoProveedor,
+            proveedor: suscripcion.proveedor,
+            proximoCobro: suscripcion.proximoCobro?.toISOString() ?? null,
+            desde: suscripcion.desde.toISOString(),
+          }
+        : null,
+      planes: contratables.map((p) => {
+        const mensual = Number(p.precioMensual);
+        const anual =
+          p.paddlePriceIdAnual && p.precioAnual !== null
+            ? this.compararAnual(
+                mensual,
+                Number(p.precioAnual),
+                p.paddlePriceIdAnual,
+              )
+            : null;
+        return {
+          codigo: p.codigo,
+          nombre: p.nombre,
+          descripcion: p.descripcion,
+          precioMensual: mensual,
+          moneda: p.moneda,
+          features: (p.featuresJson ?? {}) as Record<string, unknown>,
+          priceId: p.paddlePriceId as string,
+          esActual: p.id === suscripcion?.planId,
+          anual,
+        };
+      }),
+      // Lo que el front le pasa a Paddle.js. El tenantId sale de la SESIÓN,
+      // no de la pantalla: es lo que el webhook usa para saber a quién
+      // corresponde la suscripción que se acaba de crear.
+      checkout: { tenantId, email },
+      facturas,
+      puedePortal: clienteExterno !== null,
+      prueba: estadoDePrueba(suscripcion?.trialHasta),
+    };
+  }
+
+  /**
+   * El ahorro del ciclo anual contra pagar doce meses sueltos.
+   *
+   * Se calcula acá y no en el front para que el número sea uno solo: la misma
+   * cuenta en dos lugares termina divergiendo. "US$500/año" no dice nada;
+   * "ahorrás US$100" sí.
+   */
+  private compararAnual(mensual: number, anual: number, priceId: string) {
+    const doceMeses = mensual * 12;
+    const ahorro = doceMeses - anual;
+    return {
+      priceId,
+      precio: anual,
+      doceMeses,
+      ahorro: Math.round(ahorro * 100) / 100,
+      ahorroPct: doceMeses > 0 ? Math.round((ahorro / doceMeses) * 100) : 0,
+      equivalenteMensual: Math.round((anual / 12) * 100) / 100,
+    };
+  }
+
+  /**
+   * Abre el portal de autogestión de Paddle para este tenant: medio de pago,
+   * facturas y cancelación. Se delega a propósito — son datos de tarjeta y
+   * flujos fiscales que no queremos tocar ni almacenar.
+   */
+  async portalDeTenant(tenantId: string): Promise<{ url: string } | null> {
+    const s = await this.prisma.suscripcion.findFirst({
+      where: { tenantId },
+      select: { clienteExternoId: true, referenciaExterna: true },
+    });
+    if (!s?.clienteExternoId) return null;
+    const urls = await this.paddle.crearSesionPortal(
+      s.clienteExternoId,
+      s.referenciaExterna ? [s.referenciaExterna] : [],
+    );
+    const url = urls?.general || urls?.suscripcion;
+    return url ? { url } : null;
   }
 }

@@ -1,8 +1,8 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { toast } from "sonner";
 
 import { type CurrentUser } from "@/lib/auth";
 import { NavLink } from "@/components/navigation/nav-link";
@@ -158,15 +158,18 @@ function getParentKey(activeKey: string | undefined) {
   return NAV.find((item) => hasChildren(item) && item.children.some((child) => child.key === activeKey))?.key;
 }
 
+// El backend no manda todavía los días restantes de la suscripción, así que
+// acá NO se inventa un contador: se muestra sólo lo que se sabe y el detalle
+// real vive en /configuracion/suscripcion. Antes esto mostraba "14 / 30 dias
+// restantes" a TODOS los tenants —un número fijo inventado— y una barra de
+// progreso acorde. Ver docs/suscripciones-cobro-diseno.md
 function formatPlanTier(diasRestantes: number | null | undefined) {
   if (diasRestantes == null) {
-    return "Sin vencimiento";
+    return "Ver plan y facturación";
   }
-
   if (diasRestantes <= 0) {
     return "Vencida";
   }
-
   return `${diasRestantes} / 30 dias restantes`;
 }
 
@@ -189,8 +192,9 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
   // Acordeón: un solo grupo abierto a la vez. Se abre el del módulo actual;
   // al abrir otro, el anterior se colapsa.
   const [openKey, setOpenKey] = React.useState<string | null>(() => parentKey ?? null);
-  const planNombre = currentUser.tenantActual.suscripcion?.planNombre?.trim() || "Plan diamante";
-  const diasRestantes = currentUser.tenantActual.suscripcion?.diasRestantes ?? 14;
+  // Sin dato real no se inventa un nombre de plan (antes caía a "Plan diamante").
+  const planNombre = currentUser.tenantActual.suscripcion?.planNombre?.trim() || "Suscripción";
+  const diasRestantes = currentUser.tenantActual.suscripcion?.diasRestantes ?? null;
   const suscripcionProgress = getSuscripcionProgress(diasRestantes);
   const { state, setOpen } = useSidebar();
   const collapsed = state === "collapsed";
@@ -373,11 +377,7 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
         ) : null}
       </nav>
 
-      <button
-        type="button"
-        className="plan-card"
-        onClick={() => toast.info("Administración de suscripción disponible próximamente.")}
-      >
+      <Link href="/suscripcion" className="plan-card">
         <div className="plan-row">
           <div className="plan-title">
             <span className="dot" />
@@ -389,7 +389,7 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
         </div>
         <div className="plan-meter"><span style={{ width: `${suscripcionProgress}%` }} /></div>
         <div className="plan-admin">Administrar suscripción</div>
-      </button>
+      </Link>
     </aside>
   );
 }

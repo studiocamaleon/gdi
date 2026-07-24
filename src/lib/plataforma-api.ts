@@ -44,8 +44,16 @@ export type PlanCatalogo = {
   id: string;
   codigo: string;
   nombre: string;
+  descripcion: string | null;
   precioMensual: number;
+  moneda: string;
   features: Record<string, unknown>;
+  paddlePriceId: string | null;
+  paddleProductId: string | null;
+  paddlePriceIdAnual: string | null;
+  precioAnual: number | null;
+  trialDias: number | null;
+  tenants: number;
 };
 
 export type EventoPlataforma = {
@@ -188,7 +196,35 @@ export async function getNegocioPlataforma(
 }
 
 export async function getPlanesPlataforma(): Promise<PlanCatalogo[]> {
-  return apiRequest("/plataforma/planes");
+  return apiRequest("/plataforma/planes", { cache: "no-store" });
+}
+
+/** Edita la bajada comercial del plan (la que ve el tenant). */
+export async function describirPlan(
+  planId: string,
+  descripcion: string | null,
+): Promise<PlanCatalogo[]> {
+  return apiRequest(`/plataforma/planes/${planId}/descripcion`, {
+    method: "PUT",
+    body: JSON.stringify(descripcion ? { descripcion } : {}),
+  });
+}
+
+/** Vincula un plan con su precio de Paddle (vacío = desvincular). */
+export async function vincularPlanPaddle(
+  planId: string,
+  priceId: string | null,
+  productId: string | null,
+  ciclo: "mensual" | "anual" = "mensual",
+): Promise<PlanCatalogo[]> {
+  return apiRequest(`/plataforma/planes/${planId}/paddle`, {
+    method: "PUT",
+    body: JSON.stringify({
+      ...(priceId ? { priceId } : {}),
+      ...(productId ? { productId } : {}),
+      ciclo,
+    }),
+  });
 }
 
 export async function cambiarPlanTenant(

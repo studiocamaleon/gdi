@@ -13,6 +13,8 @@ const MODELOS_EXENTOS = new Set<string>([
   'PlataformaEvento',
   // Billing de suscripciones: junta tenant cliente + comprobante plataforma.
   'FacturaSuscripcion',
+  // Webhooks de las pasarelas de cobro: llegan sin contexto de tenant.
+  'EventoCobro',
   'User',
   'AuthSession',
   'Membership',
