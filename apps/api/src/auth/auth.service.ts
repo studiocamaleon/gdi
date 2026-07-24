@@ -10,6 +10,7 @@ import { Membership, Prisma, RolPlataforma, RolSistema } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { estadoDeCiclo } from '../suscripciones/ciclo';
 import { AcceptInvitationDto } from './dto/accept-invitation.dto';
 import { LoginDto } from './dto/login.dto';
 import { CurrentAuth, JwtPayload } from './auth.types';
@@ -385,6 +386,9 @@ export class AuthService {
         nombre: tenant.nombre,
         slug: tenant.slug,
         rol: 'administrador' as const,
+        // El staff dentro del tenant ve la suscripción DE ESE tenant: es parte
+        // de lo que vino a mirar.
+        suscripcion: await this.resumenSuscripcion(tenant.id),
       };
       return {
         accessToken: null,
@@ -744,6 +748,38 @@ export class AuthService {
     );
   }
 
+  /**
+   * Lo que la card del sidebar muestra de la suscripción: qué plan y cuánto
+   * falta para que venza.
+   *
+   * Se lee acá y no desde SuscripcionesService porque el contexto de sesión se
+   * arma ANTES de que haya tenant en el AsyncLocalStorage (el login todavía no
+   * sabe a qué tenant entra), así que el tenantId va explícito a propósito.
+   *
+   * Sin suscripción devuelve null y NO se inventa nada: son los tenants legacy
+   * sin plan asignado, y la card cae a su texto neutro. Ese fue el bug de
+   * origen —mostraba "Plan diamante · 14/30 días" a todo el mundo.
+   */
+  private async resumenSuscripcion(tenantId: string) {
+    const suscripcion = await this.prisma.suscripcion.findFirst({
+      where: { tenantId },
+      select: {
+        estado: true,
+        trialHasta: true,
+        periodoDesde: true,
+        proximoCobro: true,
+        plan: { select: { nombre: true, trialDias: true } },
+      },
+    });
+    if (!suscripcion) return null;
+
+    return {
+      planNombre: suscripcion.plan.nombre,
+      estado: suscripcion.estado,
+      ...estadoDeCiclo(suscripcion, suscripcion.plan.trialDias),
+    };
+  }
+
   private async issueToken(payload: JwtPayload) {
     return this.jwtService.signAsync(payload, {
       secret: process.env.JWT_SECRET,
@@ -780,7 +816,7 @@ export class AuthService {
     return invitation;
   }
 
-  private buildAuthResponse(
+  private async buildAuthResponse(
     sessionId: string,
     userId: string,
     email: string,
@@ -790,6 +826,10 @@ export class AuthService {
     accessToken: string | null,
     rolPlataforma: RolPlataforma | null = null,
   ) {
+    const suscripcion = await this.resumenSuscripcion(
+      currentMembership.tenant.id,
+    );
+
     return {
       accessToken,
       sessionId,
@@ -805,6 +845,7 @@ export class AuthService {
           nombre: currentMembership.tenant.nombre,
           slug: currentMembership.tenant.slug,
           rol: this.fromPrismaRol(currentMembership.rol),
+          suscripcion,
         },
         tenants: memberships.map((membership) => ({
           id: membership.tenant.id,

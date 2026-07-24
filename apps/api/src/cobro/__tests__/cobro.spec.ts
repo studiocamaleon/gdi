@@ -139,6 +139,34 @@ describe('Cobro · normalización a nuestra suscripción', () => {
     expect(sync.extraer({ status: 'active' })).toBeNull();
   });
 
+  // Payload real de Paddle (snake_case, el camino del JSON crudo). El período
+  // en curso es lo que permite contar "faltan X de N días" sin asumir 30.
+  it('lee el período de facturación en las dos convenciones', () => {
+    const crudo = sync.extraer({
+      id: 'sub_1',
+      status: 'active',
+      current_billing_period: {
+        starts_at: '2026-07-24T22:36:57.567517Z',
+        ends_at: '2026-08-24T22:36:57.567517Z',
+      },
+    });
+    expect(crudo?.periodoDesde?.toISOString()).toBe(
+      '2026-07-24T22:36:57.567Z',
+    );
+
+    const camel = sync.extraer({
+      id: 'sub_1',
+      status: 'active',
+      currentBillingPeriod: { startsAt: '2026-07-24T22:36:57.567517Z' },
+    });
+    expect(camel?.periodoDesde?.toISOString()).toBe('2026-07-24T22:36:57.567Z');
+
+    // Sin período no se rompe: queda null y la vista omite la fracción.
+    expect(sync.extraer({ id: 'sub_1', status: 'active' })?.periodoDesde).toBe(
+      null,
+    );
+  });
+
   it('da de alta la suscripción resolviendo tenant y plan', async () => {
     const r = await sync.aplicar({
       referencia: 'sub_alta',

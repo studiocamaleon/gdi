@@ -30,6 +30,9 @@ export type SuscripcionExterna = {
   estadoProveedor: string;
   clienteExterno: string | null;
   proximoCobro: Date | null;
+  /** Inicio del período en curso. Con `proximoCobro` da el largo real del
+   *  ciclo, que es lo que permite contar los días sin asumir que son 30. */
+  periodoDesde: Date | null;
   /** price_ids del evento, para resolver a qué plan corresponde. */
   precios: string[];
   /** tenantId que viajó en custom_data (lo pone nuestro checkout). */
@@ -101,6 +104,15 @@ export class SuscripcionSyncService {
     const proximoCobro =
       proximo && !Number.isNaN(Date.parse(proximo)) ? new Date(proximo) : null;
 
+    const periodo = campo('currentBillingPeriod', 'current_billing_period') as
+      | Record<string, unknown>
+      | null
+      | undefined;
+    const inicio =
+      periodo && typeof (periodo.startsAt ?? periodo.starts_at) === 'string'
+        ? String(periodo.startsAt ?? periodo.starts_at)
+        : null;
+
     const programado = campo('scheduledChange', 'scheduled_change') as
       | Record<string, unknown>
       | null
@@ -120,6 +132,8 @@ export class SuscripcionSyncService {
       estadoProveedor,
       clienteExterno: texto('customerId', 'customer_id'),
       proximoCobro,
+      periodoDesde:
+        inicio && !Number.isNaN(Date.parse(inicio)) ? new Date(inicio) : null,
       precios,
       tenantId,
       cambioProgramado: accion,
@@ -178,6 +192,7 @@ export class SuscripcionSyncService {
       clienteExternoId: externa.clienteExterno,
       estadoProveedor: externa.estadoProveedor,
       proximoCobro: externa.proximoCobro,
+      periodoDesde: externa.periodoDesde,
       cambioProgramado: externa.cambioProgramado,
       cambioProgramadoEl: externa.cambioProgramadoEl,
       ...(plan ? { planId: plan.id } : {}),

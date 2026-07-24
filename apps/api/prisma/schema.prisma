@@ -3472,6 +3472,11 @@ model Suscripcion {
   estadoProveedor   String?
   /// Próximo cobro informado por el proveedor (para la vista del tenant).
   proximoCobro      DateTime?
+  /// Inicio del período de facturación en curso (current_billing_period de
+  /// Paddle). Junto con `proximoCobro` da el largo REAL del ciclo, que es lo
+  /// que permite mostrar "faltan X de N días" sin asumir 30 —un plan anual
+  /// tiene 365. Nullable: las filas viejas se completan con el próximo evento.
+  periodoDesde      DateTime?
   /// Cambio PROGRAMADO en la pasarela: 'cancel' | 'pause' | 'resume', con la
   /// fecha en que se hace efectivo. Existe porque al cancelar, Paddle deja la
   /// suscripción en `active` con un scheduled_change hasta el fin del período:
