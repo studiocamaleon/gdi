@@ -39,6 +39,22 @@ Verificado contra doc oficial de Paddle:
   Paddle 5% + USD 0,50. Argentina **no** está en la lista de países excluidos
   para vender.
 
+### Trampas de la configuración de Paddle (costaron tiempo)
+
+- **`traffic_source` de la destination.** Una notification destination puede
+  recibir tráfico de *simulación*, de *plataforma* (eventos reales) o ambos. Si
+  queda en simulación, se comporta de forma desconcertante: responde perfecto a
+  los simulados y **ignora en silencio todo lo real** — el log de notificaciones
+  queda vacío aunque el pago haya salido bien. Si un pago real no dispara nada
+  pero el simulador sí, mirar esto primero.
+- **Default payment link.** Sin él configurado (Checkout → Checkout settings),
+  el overlay abre y muestra "Something went wrong" sin más detalle. Para sandbox
+  vale `localhost`; la aprobación de dominio recién hace falta en producción.
+- **El dominio de ngrok es `.ngrok-free.dev`**, no `.app`. Con el equivocado da
+  `ERR_NGROK_3200 endpoint offline`, que parece un túnel caído y no lo es.
+- Escribir el MISMO `custom_data` por API no emite `subscription.updated`:
+  Paddle sólo notifica si algo cambió de verdad.
+
 ### Riesgo conocido del riel argentino (parked)
 
 Una imprenta argentina es Responsable Inscripto: queda **fuera** de la percepción
