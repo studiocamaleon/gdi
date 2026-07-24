@@ -350,6 +350,13 @@ function Negocio() {
     color: PALETA[i % PALETA.length],
   }));
   const maxTenant = Math.max(1, ...(data?.porTenant ?? []).map((t) => t.ventas));
+  const mediana = data?.medianaTicket ?? 0;
+  // El benchmark ticket-vs-mediana sólo tiene sentido con varias imprentas.
+  const mostrarBenchmark = (data?.porTenant.length ?? 0) >= 2 && mediana > 0;
+  const distTamano = (data?.distribucionTamano ?? []).map((b) => ({
+    x: b.rango,
+    v: b.tenants,
+  }));
 
   return (
     <div className="cpl-page cpl-neg">
@@ -407,6 +414,23 @@ function Negocio() {
               sub="activas en el período"
             />
           </div>
+
+          {data.insights.length ? (
+            <div className="cpl-neg-insights">
+              <div className="cpl-neg-insights-h">
+                <BIco.alert />
+                Lecturas para el producto
+              </div>
+              <div className="cards">
+                {data.insights.map((i) => (
+                  <div key={i.clave} className={`ins ${i.severidad}`}>
+                    <div className="t">{i.titulo}</div>
+                    <div className="d">{i.detalle}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           <div className="cpl-neg-grid">
             <Panel
@@ -537,31 +561,45 @@ function Negocio() {
 
           <Panel
             title="Ranking de imprentas"
-            sub="por ventas del período"
+            sub={
+              mediana > 0
+                ? `por ventas · ticket mediano ${mk(mediana)}`
+                : "por ventas del período"
+            }
             flush
           >
             {data.porTenant.length ? (
               <div className="cpl-neg-rank">
-                {data.porTenant.slice(0, 12).map((t) => (
-                  <div key={t.tenantId} className="r">
-                    <TLogo nombre={t.nombre} slug={t.slug} />
-                    <div className="nm">
-                      <div className="n">{t.nombre}</div>
-                      <div className="s">
-                        {fmtN(t.ordenes)} órdenes · ticket {mk(t.ticket)}
+                {data.porTenant.slice(0, 12).map((t) => {
+                  const ratio = mediana > 0 ? t.ticket / mediana : 1;
+                  return (
+                    <div key={t.tenantId} className="r">
+                      <TLogo nombre={t.nombre} slug={t.slug} />
+                      <div className="nm">
+                        <div className="n">{t.nombre}</div>
+                        <div className="s">
+                          {fmtN(t.ordenes)} órdenes · ticket {mk(t.ticket)}
+                          {mostrarBenchmark ? (
+                            <span
+                              className={`vsmed ${ratio >= 1 ? "up" : "down"}`}
+                            >
+                              {ratio.toFixed(1)}× mediana
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                      <div className="bar">
+                        <span
+                          style={{ width: `${(t.ventas / maxTenant) * 100}%` }}
+                        />
+                      </div>
+                      <div className="v cpl-mono">
+                        {mk(t.ventas)}
+                        <span className="pc">{t.pct}%</span>
                       </div>
                     </div>
-                    <div className="bar">
-                      <span
-                        style={{ width: `${(t.ventas / maxTenant) * 100}%` }}
-                      />
-                    </div>
-                    <div className="v cpl-mono">
-                      {mk(t.ventas)}
-                      <span className="pc">{t.pct}%</span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="cpl-empty">
@@ -569,6 +607,15 @@ function Negocio() {
               </div>
             )}
           </Panel>
+
+          {data.porTenant.length ? (
+            <Panel
+              title="Tamaño de las imprentas"
+              sub="cuántas caen en cada tramo de facturación"
+            >
+              <Bars data={distTamano} color="var(--acc)" height={150} />
+            </Panel>
+          ) : null}
 
           <div className="cpl-neg-adopt">
             <AdoptTile

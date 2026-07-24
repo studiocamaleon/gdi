@@ -132,6 +132,22 @@ describe('NegocioService — agregación cross-tenant', () => {
     expect(r.medidas).toHaveProperty('pctEstandar');
   });
 
+  it('F3 · devuelve insights, distribución de tamaño y mediana', async () => {
+    const r = await servicio.negocio('12m');
+    expect(Array.isArray(r.insights)).toBe(true);
+    r.insights.forEach((i) => {
+      expect(i).toHaveProperty('severidad');
+      expect(i).toHaveProperty('titulo');
+    });
+    // 5 tramos de GMV; las dos ventas de prueba caen en algún tramo.
+    expect(r.distribucionTamano).toHaveLength(5);
+    expect(
+      r.distribucionTamano.reduce((a, b) => a + b.tenants, 0),
+    ).toBeGreaterThanOrEqual(2);
+    expect(typeof r.medianaTicket).toBe('number');
+    expect(r.medianaTicket).toBeGreaterThan(0);
+  });
+
   it('respeta el período: 30 días no incluye ventas viejas', async () => {
     // Movemos la OT de A a hace 200 días y pedimos 30d: no debe aparecer.
     await prisma.ordenTrabajo.updateMany({

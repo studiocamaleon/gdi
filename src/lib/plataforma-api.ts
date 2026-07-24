@@ -169,6 +169,14 @@ export type NegocioPlataforma = {
     tasaEntrega: number | null;
     fugas: Array<{ motivo: string; cantidad: number }>;
   };
+  insights: Array<{
+    clave: string;
+    severidad: "riesgo" | "oportunidad" | "positivo" | "info";
+    titulo: string;
+    detalle: string;
+  }>;
+  distribucionTamano: Array<{ rango: string; tenants: number }>;
+  medianaTicket: number;
 };
 
 export async function getNegocioPlataforma(

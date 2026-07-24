@@ -102,6 +102,42 @@ export type NegocioPlataforma = {
     tasaEntrega: number | null;
     fugas: Array<{ motivo: string; cantidad: number }>;
   };
+  // ── F3 ──────────────────────────────────────────────────────────────
+  /** Lecturas accionables en lenguaje de producto (el "¿y entonces qué?"). */
+  insights: Insight[];
+  /** Histograma: cuántas imprentas caen en cada tramo de GMV. */
+  distribucionTamano: Array<{ rango: string; tenants: number }>;
+  /** Referencia del ecosistema: ticket mediano (para comparar imprentas). */
+  medianaTicket: number;
+};
+
+export type Insight = {
+  clave: string;
+  severidad: 'riesgo' | 'oportunidad' | 'positivo' | 'info';
+  titulo: string;
+  detalle: string;
+};
+
+/** Etiquetas legibles para armar las frases de los insights (backend). */
+const TEC_LABEL: Record<string, string> = {
+  dtf_textil: 'DTF textil',
+  dtf_uv: 'DTF UV',
+  uv: 'UV',
+  offset: 'offset',
+  laser: 'láser',
+  inkjet: 'inkjet',
+  eco: 'ecosolvente',
+  ecosolvente: 'ecosolvente',
+  solvente: 'solvente',
+  sublimacion: 'sublimación',
+};
+const FUGA_LABEL: Record<string, string> = {
+  precio: 'precio',
+  plazo: 'plazo',
+  sin_respuesta: 'sin respuesta',
+  competencia: 'competencia',
+  otro: 'otro',
+  vencido: 'vencidas',
 };
 
 @Injectable()
@@ -166,6 +202,43 @@ export class NegocioService {
     const totalCat = porCategoria.reduce((a, c) => a + c.ventas, 0);
     const totalTen = porTenant.reduce((a, t) => a + t.ventas, 0);
 
+    const kpis = {
+      ventas: r2(kpisVentas.ventas),
+      ventasPrev: r2(kpisVentas.ventasPrev),
+      ordenes: kpisVentas.ordenes,
+      ordenesPrev: kpisVentas.ordenesPrev,
+      ticketPromedio:
+        kpisVentas.ordenes > 0 ? r2(kpisVentas.ventas / kpisVentas.ordenes) : 0,
+      facturado: r2(kpisFacturado.facturado),
+      facturadoPrev: r2(kpisFacturado.facturadoPrev),
+      cobrado: r2(kpisCobrado.cobrado),
+      cobradoPrev: r2(kpisCobrado.cobradoPrev),
+      presupuestos,
+    };
+    const catConPct = porCategoria.map((c) => ({
+      ...c,
+      ventas: r2(c.ventas),
+      pct: totalCat > 0 ? r2((c.ventas / totalCat) * 100) : 0,
+    }));
+    const tenConPct = porTenant.map((t) => ({
+      ...t,
+      ventas: r2(t.ventas),
+      ticket: t.ordenes > 0 ? r2(t.ventas / t.ordenes) : 0,
+      pct: totalTen > 0 ? r2((t.ventas / totalTen) * 100) : 0,
+    }));
+
+    // F3: la inteligencia se deriva de lo ya agregado (sin más queries).
+    const insights = this.construirInsights({
+      kpis,
+      porCategoria: catConPct,
+      porTecnologia,
+      medidas,
+      adicionales,
+      embudo,
+      adopcion,
+      porTenant: tenConPct,
+    });
+
     return {
       periodo: {
         clave: v.clave,
@@ -173,37 +246,216 @@ export class NegocioService {
         desde: v.desde.toISOString(),
         hasta: v.hasta.toISOString(),
       },
-      kpis: {
-        ventas: r2(kpisVentas.ventas),
-        ventasPrev: r2(kpisVentas.ventasPrev),
-        ordenes: kpisVentas.ordenes,
-        ordenesPrev: kpisVentas.ordenesPrev,
-        ticketPromedio:
-          kpisVentas.ordenes > 0 ? r2(kpisVentas.ventas / kpisVentas.ordenes) : 0,
-        facturado: r2(kpisFacturado.facturado),
-        facturadoPrev: r2(kpisFacturado.facturadoPrev),
-        cobrado: r2(kpisCobrado.cobrado),
-        cobradoPrev: r2(kpisCobrado.cobradoPrev),
-        presupuestos,
-      },
+      kpis,
       serie,
-      porCategoria: porCategoria.map((c) => ({
-        ...c,
-        ventas: r2(c.ventas),
-        pct: totalCat > 0 ? r2((c.ventas / totalCat) * 100) : 0,
-      })),
-      porTenant: porTenant.map((t) => ({
-        ...t,
-        ventas: r2(t.ventas),
-        ticket: t.ordenes > 0 ? r2(t.ventas / t.ordenes) : 0,
-        pct: totalTen > 0 ? r2((t.ventas / totalTen) * 100) : 0,
-      })),
+      porCategoria: catConPct,
+      porTenant: tenConPct,
       adopcion,
       porTecnologia,
       medidas,
       adicionales,
       embudo,
+      insights,
+      distribucionTamano: this.distribucionTamano(tenConPct),
+      medianaTicket: this.mediana(tenConPct.map((t) => t.ticket).filter((n) => n > 0)),
     };
+  }
+
+  /** Buckets de GMV por imprenta (histograma de tamaño del ecosistema). */
+  private distribucionTamano(
+    tenants: Array<{ ventas: number }>,
+  ): Array<{ rango: string; tenants: number }> {
+    const buckets = [
+      { rango: '< $100k', max: 100_000 },
+      { rango: '$100k–500k', max: 500_000 },
+      { rango: '$500k–1M', max: 1_000_000 },
+      { rango: '$1M–5M', max: 5_000_000 },
+      { rango: '≥ $5M', max: Infinity },
+    ];
+    const out = buckets.map((b) => ({ rango: b.rango, tenants: 0 }));
+    for (const t of tenants) {
+      const i = buckets.findIndex((b) => t.ventas < b.max);
+      if (i >= 0) out[i].tenants += 1;
+    }
+    return out;
+  }
+
+  private mediana(valores: number[]): number {
+    if (valores.length === 0) return 0;
+    const orden = [...valores].sort((a, b) => a - b);
+    const mid = Math.floor(orden.length / 2);
+    return orden.length % 2
+      ? r2(orden[mid])
+      : r2((orden[mid - 1] + orden[mid]) / 2);
+  }
+
+  /**
+   * El motor de insights: reglas sobre lo ya agregado que producen lecturas
+   * accionables PARA EL EQUIPO DE GRAFO (decisiones de producto, no del tenant).
+   * Ordenadas por severidad y acotadas. Ver docs/control-plane-negocio-diseno.md
+   */
+  private construirInsights(d: {
+    kpis: NegocioPlataforma['kpis'];
+    porCategoria: NegocioPlataforma['porCategoria'];
+    porTecnologia: NegocioPlataforma['porTecnologia'];
+    medidas: NegocioPlataforma['medidas'];
+    adicionales: NegocioPlataforma['adicionales'];
+    embudo: NegocioPlataforma['embudo'];
+    adopcion: NegocioPlataforma['adopcion'];
+    porTenant: NegocioPlataforma['porTenant'];
+  }): Insight[] {
+    const out: Insight[] = [];
+    const {
+      kpis,
+      porCategoria,
+      porTecnologia,
+      medidas,
+      adicionales,
+      embudo,
+      adopcion,
+      porTenant,
+    } = d;
+
+    // Crecimiento del GMV vs período anterior.
+    if (kpis.ventasPrev > 0) {
+      const delta = ((kpis.ventas - kpis.ventasPrev) / kpis.ventasPrev) * 100;
+      if (delta <= -15) {
+        out.push({
+          clave: 'gmv_baja',
+          severidad: 'riesgo',
+          titulo: `El GMV del ecosistema cayó ${Math.round(Math.abs(delta))}%`,
+          detalle:
+            'Bajó respecto al período anterior. Vale identificar qué imprentas se enfriaron.',
+        });
+      } else if (delta >= 15) {
+        out.push({
+          clave: 'gmv_sube',
+          severidad: 'positivo',
+          titulo: `El GMV del ecosistema creció ${Math.round(delta)}%`,
+          detalle:
+            'El negocio que corre sobre la plataforma está en expansión: buen momento para invertir en capacidad.',
+        });
+      }
+    }
+
+    // Categoría dominante → dónde rinde invertir tooling.
+    const cat0 = porCategoria.find((c) => c.categoria !== 'Sin categoría');
+    if (cat0 && cat0.pct >= 35) {
+      out.push({
+        clave: 'cat_dom',
+        severidad: 'oportunidad',
+        titulo: `${cat0.pct}% del GMV es ${cat0.categoria}`,
+        detalle: `Es la categoría dominante del ecosistema. Invertir en herramientas de esa vertical es lo que más mueve la aguja.`,
+      });
+    }
+
+    // Tecnología dominante.
+    const tec0 = porTecnologia.find(
+      (t) => t.tecnologia !== 'Sin especificar' && t.tecnologia !== 'Otras',
+    );
+    if (tec0 && tec0.pct >= 30) {
+      const nombre = TEC_LABEL[tec0.tecnologia] ?? tec0.tecnologia;
+      out.push({
+        clave: 'tec_dom',
+        severidad: 'oportunidad',
+        titulo: `${tec0.pct}% del GMV se produce en ${nombre}`,
+        detalle: `Concentra la producción del ecosistema. Priorizar features de ${nombre} (simuladores, presets, nesting) rinde para casi todos.`,
+      });
+    }
+
+    // Adopción de facturación electrónica.
+    if (adopcion.totalTenants > 0) {
+      const pct = (adopcion.conFacturacion / adopcion.totalTenants) * 100;
+      if (pct < 60) {
+        out.push({
+          clave: 'adopcion_fact',
+          severidad: 'oportunidad',
+          titulo: `Solo ${Math.round(pct)}% de las imprentas factura electrónicamente`,
+          detalle:
+            'Mejorar el onboarding de facturación (AFIP) subiría la adopción y el valor percibido de la plataforma.',
+        });
+      }
+    }
+
+    // Activación: imprentas sin ventas.
+    if (adopcion.totalTenants > 1 && adopcion.conVentas < adopcion.totalTenants) {
+      const inactivas = adopcion.totalTenants - adopcion.conVentas;
+      out.push({
+        clave: 'activacion',
+        severidad: 'riesgo',
+        titulo: `${inactivas} de ${adopcion.totalTenants} imprentas no vendieron en el período`,
+        detalle:
+          'Señal de activación/retención floja. Conviene mirar el onboarding y el uso real de esas cuentas.',
+      });
+    }
+
+    // Attach rate de adicionales.
+    if (adicionales.itemsTotales >= 10 && adicionales.pctCon < 30) {
+      out.push({
+        clave: 'attach_bajo',
+        severidad: 'oportunidad',
+        titulo: `Attach rate de adicionales en ${adicionales.pctCon}%`,
+        detalle:
+          'Pocos ítems llevan acabados opcionales. Un sugeridor de adicionales podría subir el ticket del ecosistema.',
+      });
+    }
+
+    // Embudo: conversión del ecosistema.
+    if (embudo.tasaAprobacion != null && embudo.emitidas >= 5) {
+      if (embudo.tasaAprobacion < 50) {
+        out.push({
+          clave: 'conv_baja',
+          severidad: 'riesgo',
+          titulo: `El ecosistema aprueba solo ${embudo.tasaAprobacion}% de los presupuestos`,
+          detalle:
+            'Conversión baja. Herramientas de seguimiento/recordatorio de presupuestos podrían recuperar ventas.',
+        });
+      } else if (embudo.tasaAprobacion >= 80) {
+        out.push({
+          clave: 'conv_alta',
+          severidad: 'positivo',
+          titulo: `Los presupuestos convierten al ${embudo.tasaAprobacion}%`,
+          detalle: 'El pipeline comercial del ecosistema está sano.',
+        });
+      }
+    }
+
+    // Fuga dominante del embudo.
+    const totalFugas = embudo.fugas.reduce((a, f) => a + f.cantidad, 0);
+    if (totalFugas >= 3 && embudo.fugas[0].cantidad / totalFugas >= 0.4) {
+      const motivo = FUGA_LABEL[embudo.fugas[0].motivo] ?? embudo.fugas[0].motivo;
+      out.push({
+        clave: 'fuga',
+        severidad: 'info',
+        titulo: `La principal causa de pérdida de presupuestos es "${motivo}"`,
+        detalle:
+          'Concentra la mayoría de las fugas del ecosistema: puede marcar dónde falla el pipeline comercial.',
+      });
+    }
+
+    // Trabajo a medida.
+    if (medidas.pctEstandar != null && medidas.pctEstandar < 50) {
+      out.push({
+        clave: 'a_medida',
+        severidad: 'info',
+        titulo: `${100 - Math.round(medidas.pctEstandar)}% de los ítems son a medida`,
+        detalle:
+          'El configurador y la herramienta de medidas son piezas críticas: buena parte del trabajo no es estándar.',
+      });
+    }
+
+    // Concentración del GMV en una imprenta.
+    if (porTenant.length >= 2 && porTenant[0].pct >= 50) {
+      out.push({
+        clave: 'concentracion',
+        severidad: 'riesgo',
+        titulo: `${porTenant[0].pct}% del GMV lo genera una sola imprenta`,
+        detalle: `${porTenant[0].nombre} concentra el negocio del ecosistema. Diversificar la base reduce el riesgo de la plataforma.`,
+      });
+    }
+
+    const rank = { riesgo: 0, oportunidad: 1, positivo: 2, info: 3 };
+    return out.sort((a, b) => rank[a.severidad] - rank[b.severidad]).slice(0, 6);
   }
 
   /** Ventas y órdenes del período y del período anterior (un solo scan). */

@@ -184,10 +184,30 @@ Verificado E2E (DTF 48% / UV 18% / Offset 17%; 64% estándar; attach 39%; embudo
 embudo con fixtures). El histograma de tamaño de tenant se dejó afuera (se deriva
 del ranking; bajo valor con pocos tenants).
 
-## Fuera de alcance (queda F3)
+## F3 — implementado 2026-07-24
 
-Histograma de distribución de tamaño de tenant (client-side desde el ranking
-cuando haya más tenants). **F3**: insights en lenguaje de producto ("el 48% del
-GMV es textil → priorizar DTF"), benchmarking por tenant (percentil de
-conversión/ticket vs. ecosistema), y materialización de rollups diarios si el
-volumen lo pide (OrdenTrabajoItem.categoriaComercial no tiene índice dedicado).
+La capa de inteligencia (el "¿y entonces qué?"), toda derivada de lo ya agregado
+(sin queries nuevas):
+- **`insights`**: motor de reglas sobre las métricas de F1/F2 → lecturas
+  accionables PARA EL EQUIPO DE GRAFO (decisiones de producto, no del tenant).
+  Reglas: crecimiento del GMV, categoría/tecnología dominante, adopción de
+  facturación, activación (imprentas sin ventas), attach rate bajo, conversión
+  del embudo, fuga dominante, trabajo a medida, concentración del GMV en una
+  imprenta. Cada insight lleva severidad (riesgo/oportunidad/positivo/info),
+  título y detalle; ordenadas por severidad, tope 6. Render: cards con borde de
+  color, arriba de todo ("Lecturas para el producto").
+- **`distribucionTamano`**: histograma de imprentas por tramo de GMV (5 buckets).
+  Render: Bars.
+- **`medianaTicket`**: ticket mediano del ecosistema; el ranking muestra cada
+  imprenta vs. mediana (badge ×), sólo con ≥2 imprentas (con N=1 no informa).
+
+Verificado E2E (con la data de dev disparan 2 insights: "47.81% del GMV es
+Textil → invertir en la vertical" y "47.81% en DTF textil → priorizar features")
++ caso F3 en `negocio.spec.ts`. MÓDULO COMPLETO (F1+F2+F3).
+
+## Fuera de alcance (futuro)
+
+Materialización de rollups diarios si el volumen lo pide
+(OrdenTrabajoItem.categoriaComercial no tiene índice dedicado). Benchmarking por
+tenant más rico (percentiles de conversión, perfil de mix) cuando haya suficiente
+masa de imprentas para que la comparación sea significativa.
