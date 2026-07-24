@@ -8,6 +8,7 @@ import { RolSistema, type EstadoIntegracion } from '@prisma/client';
 import { createHash, randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaddleService } from '../cobro/paddle.service';
+import { finDePrueba } from '../suscripciones/trial';
 
 /**
  * Lecturas del control plane: la consola de la Plataforma (etapa A).
@@ -80,6 +81,11 @@ export type PlanCatalogo = {
    *  catálogos distintos: así migrar de uno a otro no requiere deploy. */
   paddlePriceId: string | null;
   paddleProductId: string | null;
+  /** Variante anual: otro precio de Paddle para el mismo plan. */
+  paddlePriceIdAnual: string | null;
+  precioAnual: number | null;
+  /** Días de prueba que otorga el plan al asignarse. */
+  trialDias: number | null;
   /** Cuántos tenants están hoy en este plan (para no cambiar a ciegas). */
   tenants: number;
 };
@@ -419,6 +425,9 @@ export class PlataformaService {
       features: (p.featuresJson ?? {}) as Record<string, unknown>,
       paddlePriceId: p.paddlePriceId,
       paddleProductId: p.paddleProductId,
+      paddlePriceIdAnual: p.paddlePriceIdAnual,
+      precioAnual: p.precioAnual === null ? null : Number(p.precioAnual),
+      trialDias: p.trialDias,
       tenants: p._count.suscripciones,
     }));
   }
@@ -467,10 +476,17 @@ export class PlataformaService {
     planId: string,
     priceId: string | null,
     productId: string | null,
+    ciclo: 'mensual' | 'anual' = 'mensual',
   ): Promise<PlanCatalogo[]> {
+    const esAnual = ciclo === 'anual';
     const plan = await this.prisma.plan.findUnique({
       where: { id: planId },
-      select: { id: true, nombre: true, paddlePriceId: true },
+      select: {
+        id: true,
+        nombre: true,
+        paddlePriceId: true,
+        paddlePriceIdAnual: true,
+      },
     });
     if (!plan) throw new NotFoundException('El plan no existe.');
 
@@ -478,8 +494,16 @@ export class PlataformaService {
     const productLimpio = productId?.trim() || null;
 
     if (priceLimpio) {
+      // Un precio corresponde a UN plan y a UN ciclo: si el mismo id apareciera
+      // dos veces, el webhook no sabría a cuál asignar la suscripción.
       const ocupado = await this.prisma.plan.findFirst({
-        where: { paddlePriceId: priceLimpio, id: { not: planId } },
+        where: {
+          OR: [
+            { paddlePriceId: priceLimpio },
+            { paddlePriceIdAnual: priceLimpio },
+          ],
+          id: { not: planId },
+        },
         select: { nombre: true },
       });
       if (ocupado) {
@@ -493,7 +517,7 @@ export class PlataformaService {
     // se ve acá y no cuando falla un checkout) y para traer el monto real: el
     // precioMensual local es un espejo, y un espejo con un número inventado es
     // peor que no tenerlo. Si Paddle no está configurado, se vincula igual.
-    let espejo: { precioMensual: number; moneda: string } | null = null;
+    let espejo: Record<string, number | string> | null = null;
     if (priceLimpio && this.paddle.habilitado) {
       const precio = await this.paddle.leerPrecio(priceLimpio);
       if (!precio) {
@@ -501,15 +525,18 @@ export class PlataformaService {
           `Paddle no reconoce el precio ${priceLimpio}. Revisá el id y que sea del mismo entorno (sandbox/producción) que la API key.`,
         );
       }
-      espejo = { precioMensual: precio.monto, moneda: precio.moneda };
+      espejo = esAnual
+        ? { precioAnual: precio.monto, moneda: precio.moneda }
+        : { precioMensual: precio.monto, moneda: precio.moneda };
     }
 
     await this.prisma.$transaction([
       this.prisma.plan.update({
         where: { id: planId },
         data: {
-          paddlePriceId: priceLimpio,
-          paddleProductId: productLimpio,
+          ...(esAnual
+            ? { paddlePriceIdAnual: priceLimpio }
+            : { paddlePriceId: priceLimpio, paddleProductId: productLimpio }),
           ...(espejo ?? {}),
         },
       }),
@@ -518,11 +545,12 @@ export class PlataformaService {
           staffUserId,
           tipo: 'plan_vinculado_paddle',
           descripcion: priceLimpio
-            ? `Plan ${plan.nombre} vinculado al precio ${priceLimpio} de Paddle.`
-            : `Plan ${plan.nombre} desvinculado de Paddle.`,
+            ? `Plan ${plan.nombre} (${ciclo}) vinculado al precio ${priceLimpio} de Paddle.`
+            : `Plan ${plan.nombre} (${ciclo}) desvinculado de Paddle.`,
           datosJson: {
             planId,
-            anterior: plan.paddlePriceId,
+            ciclo,
+            anterior: esAnual ? plan.paddlePriceIdAnual : plan.paddlePriceId,
             nuevo: priceLimpio,
           },
         },
@@ -549,10 +577,15 @@ export class PlataformaService {
       throw new BadRequestException('El plan no existe o no está activo.');
     }
 
+    // Si el plan otorga prueba, se le pone fecha de fin al asignarlo. Sólo al
+    // dar de ALTA la suscripción: cambiarle el plan a alguien que ya está
+    // adentro no le regala una prueba nueva.
+    const trialHasta = finDePrueba(plan.trialDias);
+
     await this.prisma.$transaction([
       this.prisma.suscripcion.upsert({
         where: { tenantId },
-        create: { tenantId, planId, estado: 'activa' },
+        create: { tenantId, planId, estado: 'activa', trialHasta },
         update: { planId, estado: 'activa', hasta: null },
       }),
       this.prisma.plataformaEvento.create({

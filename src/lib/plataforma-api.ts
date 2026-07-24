@@ -50,6 +50,9 @@ export type PlanCatalogo = {
   features: Record<string, unknown>;
   paddlePriceId: string | null;
   paddleProductId: string | null;
+  paddlePriceIdAnual: string | null;
+  precioAnual: number | null;
+  trialDias: number | null;
   tenants: number;
 };
 
@@ -212,12 +215,14 @@ export async function vincularPlanPaddle(
   planId: string,
   priceId: string | null,
   productId: string | null,
+  ciclo: "mensual" | "anual" = "mensual",
 ): Promise<PlanCatalogo[]> {
   return apiRequest(`/plataforma/planes/${planId}/paddle`, {
     method: "PUT",
     body: JSON.stringify({
       ...(priceId ? { priceId } : {}),
       ...(productId ? { productId } : {}),
+      ciclo,
     }),
   });
 }

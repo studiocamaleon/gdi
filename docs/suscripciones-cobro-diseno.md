@@ -147,6 +147,34 @@ arranca manual (es una por mes) y se documenta.
 argentino: `preapproval_plan`/`preapproval`, webhooks, y ahí sí la Factura A/B
 que B2 ya sabe emitir.
 
+## Prueba gratuita y ciclo anual (2026-07-24)
+
+**Prueba con vencimiento.** `Plan.trialDias` (cuántos días otorga el plan) y
+`Suscripcion.trialHasta` (cuándo termina, se fija al ASIGNAR el plan; cambiarle
+el plan a alguien que ya está adentro no le regala una prueba nueva).
+
+Los días restantes **se calculan, nunca se guardan** (`suscripciones/trial.ts`).
+Un contador persistido se desactualiza solo y termina mostrándole "14 días" a
+todo el mundo — que es literalmente el bug que tenía el sidebar. Si se calcula,
+no puede mentir.
+
+Al vencer, un cron diario pasa la suscripción a `suspendida`: cierra los gates
+por plan (AFIP, WhatsApp) pero el tenant **sigue entrando y viendo todos sus
+datos**, y con un pago vuelve a `activa` al instante por el webhook. Una prueba
+que nunca termina no es una prueba; bloquearle el sistema a una imprenta sería
+desproporcionado. El barrido sólo toca `proveedor: 'manual'`: si ya pagó, el
+estado lo manda Paddle.
+
+**Ciclo anual.** `Plan.paddlePriceIdAnual` + `Plan.precioAnual`: son DOS precios
+distintos del mismo plan en Paddle, no un descuento aplicado sobre el mensual.
+El checkout usa el priceId del ciclo elegido.
+
+El **ahorro lo calcula el backend** (`compararAnual`), no el front: la misma
+cuenta en dos lugares termina divergiendo. Devuelve `doceMeses` (la referencia),
+`ahorro`, `ahorroPct` y `equivalenteMensual`. La tarjeta muestra el prorrateado
+mensual y debajo "US$500 al año · ahorrás US$100 frente a US$600 pagando mes a
+mes" — el monto solo no dice nada, la comparación sí.
+
 ## Fuera de alcance
 
 Automatizar la Factura E (una por mes, manual es razonable). Precios por país con

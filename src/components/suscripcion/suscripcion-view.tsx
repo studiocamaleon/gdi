@@ -18,14 +18,14 @@ import {
  * Qué se portó y qué NO, y por qué. El diseño se dibujó antes de decidir la
  * pasarela, así que mostraba cosas que hoy no existen; se dejaron afuera en vez
  * de rellenarlas con datos inventados:
- *  - Contador de prueba ("14 de 30 días"): el modelo no tiene vencimiento de
- *    trial. Se muestra el estado real y nada más.
- *  - Toggle Mensual/Anual: en Paddle sólo hay precios mensuales. Vuelve solo
- *    en cuanto se creen los anuales (un segundo priceId por plan).
  *  - Toggle Argentina/Internacional (Mercado Pago vs Paddle): MP todavía no
  *    está implementado — es F5. Hoy la pasarela es una sola.
  *  - Tarjeta "•••• 4509" y datos fiscales editables: esos datos los tiene
  *    Paddle, no nosotros. Se delega en su portal de cliente.
+ *
+ * El banner de prueba y el toggle Mensual/Anual SÍ están: los días salen
+ * calculados de `trialHasta` (nunca guardados) y el ahorro anual lo calcula el
+ * backend contra doce meses sueltos.
  *
  * El cobro lo hace Paddle (Merchant of Record): emite el comprobante y nosotros
  * nunca vemos los datos de la tarjeta.
@@ -107,6 +107,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
   const [abriendo, setAbriendo] = React.useState<string | null>(null);
   const [yendoAlPortal, setYendoAlPortal] = React.useState(false);
   const [errorPaddle, setErrorPaddle] = React.useState<string | null>(null);
+  const [ciclo, setCiclo] = React.useState<"mensual" | "anual">("mensual");
   const [elegido, setElegido] = React.useState<string | null>(
     () => inicial.actual?.planCodigo ?? inicial.planes.at(-1)?.codigo ?? null,
   );
@@ -185,8 +186,12 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
       return;
     }
     setAbriendo(plan.codigo);
+    // El ciclo define QUÉ precio de Paddle se cobra: son dos precios distintos
+    // del mismo plan, no un descuento aplicado sobre el mensual.
+    const priceId =
+      ciclo === "anual" && plan.anual ? plan.anual.priceId : plan.priceId;
     paddle.Checkout.open({
-      items: [{ priceId: plan.priceId, quantity: 1 }],
+      items: [{ priceId, quantity: 1 }],
       // El tenantId sale de la SESIÓN (lo puso el backend): es lo que el
       // webhook usa para saber a qué imprenta corresponde el pago.
       customData: { tenantId: datos.checkout.tenantId },
@@ -217,6 +222,13 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
     datos.planes.find((p) => p.codigo === elegido) ??
     datos.planes.at(-1) ??
     null;
+  // El toggle sólo aparece si hay al menos un plan con precio anual cargado.
+  const hayAnual = datos.planes.some((p) => p.anual !== null);
+  const ahorroMaxPct = Math.max(
+    0,
+    ...datos.planes.map((p) => p.anual?.ahorroPct ?? 0),
+  );
+  const anualActivo = ciclo === "anual";
 
   if (!token) {
     return (
@@ -251,6 +263,53 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
         </div>
       ) : null}
 
+      {datos.prueba.enPrueba && actual ? (
+        <div className="sub-trial">
+          <div className="sub-trial-info">
+            <div className="sub-trial-badge">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" aria-hidden="true">
+                <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+                <path d="M12 3v18M4 7.5l8 4.5 8-4.5" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <div>
+              <div className="sub-trial-title">
+                Estás probando el <strong>plan {actual.planNombre}</strong>
+              </div>
+              <div className="sub-trial-sub">
+                {datos.prueba.diasRestantes === 1
+                  ? "Te queda 1 día"
+                  : `Te quedan ${datos.prueba.diasRestantes} días`}
+                {" · tu prueba finaliza el "}
+                <strong>{fechaLarga(datos.prueba.hasta)}</strong>. Activá antes
+                para no perder acceso.
+              </div>
+            </div>
+          </div>
+          <div className="sub-trial-cta">
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => planElegido && contratar(planElegido)}
+              disabled={confirmando || !planElegido}
+            >
+              Activar suscripción
+            </button>
+            <span className="sub-trial-note">
+              Sin cargo hasta el {fechaLarga(datos.prueba.hasta)}
+            </span>
+          </div>
+        </div>
+      ) : null}
+
+      {datos.prueba.vencida && actual?.estado !== "activa" ? (
+        <div className="sub-alert warn">
+          <b>Tu prueba terminó.</b> Podés seguir entrando y viendo todo lo que
+          cargaste, pero algunas funciones quedaron en pausa. Elegí un plan para
+          reactivarlas.
+        </div>
+      ) : null}
+
       {!actual ? (
         <div className="sub-alert">
           <b>Todavía no tenés un plan contratado.</b> Elegí uno abajo para
@@ -277,6 +336,27 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
                   proporcional al período.
                 </p>
               </div>
+              {hayAnual ? (
+                <div className="sub-seg" role="tablist">
+                  <button
+                    type="button"
+                    className={`sub-seg-btn ${ciclo === "mensual" ? "active" : ""}`}
+                    onClick={() => setCiclo("mensual")}
+                  >
+                    Mensual
+                  </button>
+                  <button
+                    type="button"
+                    className={`sub-seg-btn ${ciclo === "anual" ? "active" : ""}`}
+                    onClick={() => setCiclo("anual")}
+                  >
+                    Anual
+                    {ahorroMaxPct > 0 ? (
+                      <span className="sub-seg-note">−{ahorroMaxPct}%</span>
+                    ) : null}
+                  </button>
+                </div>
+              ) : null}
             </div>
 
             <div className="sub-plans">
@@ -311,10 +391,23 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
                     </div>
                     <div className="sub-plan-price">
                       <span className="amt">
-                        {precio(p.precioMensual, p.moneda)}
+                        {precio(
+                          anualActivo && p.anual
+                            ? p.anual.equivalenteMensual
+                            : p.precioMensual,
+                          p.moneda,
+                        )}
                       </span>
                       <span className="per">/mes</span>
                     </div>
+                    {anualActivo && p.anual ? (
+                      <div className="sub-plan-billed">
+                        {precio(p.anual.precio, p.moneda)} al año ·{" "}
+                        <b>ahorrás {precio(p.anual.ahorro, p.moneda)}</b> frente
+                        a {precio(p.anual.doceMeses, p.moneda)} pagando mes a
+                        mes
+                      </div>
+                    ) : null}
                     {p.descripcion ? (
                       <p className="sub-plan-tagline">{p.descripcion}</p>
                     ) : null}
@@ -418,7 +511,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
               </div>
               <div className="sub-sum-row">
                 <span>Ciclo</span>
-                <strong>Mensual</strong>
+                <strong>{anualActivo ? "Anual" : "Mensual"}</strong>
               </div>
               <div className="sub-sum-row">
                 <span>Precio</span>

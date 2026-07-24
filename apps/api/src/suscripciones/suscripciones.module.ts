@@ -3,6 +3,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { CobroModule } from '../cobro/cobro.module';
 import { SuscripcionController } from './suscripcion.controller';
 import { SuscripcionesService } from './suscripciones.service';
+import { TrialScheduler } from './trial.scheduler';
 
 /**
  * Lecturas de plan/suscripción, compartidas entre el tenant plane (feature
@@ -11,7 +12,7 @@ import { SuscripcionesService } from './suscripciones.service';
 @Module({
   imports: [PrismaModule, CobroModule],
   controllers: [SuscripcionController],
-  providers: [SuscripcionesService],
-  exports: [SuscripcionesService],
+  providers: [SuscripcionesService, TrialScheduler],
+  exports: [SuscripcionesService, TrialScheduler],
 })
 export class SuscripcionesModule {}

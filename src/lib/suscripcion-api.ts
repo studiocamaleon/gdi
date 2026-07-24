@@ -15,6 +15,15 @@ export type PlanContratable = {
   features: Record<string, unknown>;
   priceId: string;
   esActual: boolean;
+  /** Variante anual con el ahorro ya calculado por el backend. */
+  anual: {
+    priceId: string;
+    precio: number;
+    doceMeses: number;
+    ahorro: number;
+    ahorroPct: number;
+    equivalenteMensual: number;
+  } | null;
 };
 
 export type EstadoSuscripcion = {
@@ -33,6 +42,12 @@ export type EstadoSuscripcion = {
   checkout: { tenantId: string; email: string };
   facturas: FacturaSuscripcion[];
   puedePortal: boolean;
+  prueba: {
+    enPrueba: boolean;
+    diasRestantes: number | null;
+    hasta: string | null;
+    vencida: boolean;
+  };
 };
 
 export type FacturaSuscripcion = {

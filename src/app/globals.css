@@ -33932,6 +33932,29 @@ body:has(.t-app) {
 .sub-spin{width:14px;height:14px;border:2px solid #bfdbfe;border-top-color:#1d4ed8;border-radius:50%;animation:sub-giro .7s linear infinite;flex:none}
 @keyframes sub-giro{to{transform:rotate(360deg)}}
 
+/* Banner de prueba — el motor de conversión del diseño (oscuro, destacado) */
+.sub-trial{display:flex;align-items:center;gap:20px;background:var(--side-bg,#0a0a0c);color:#f2f1ee;border-radius:var(--r-4,14px);padding:18px 22px;margin-bottom:16px;flex-wrap:wrap}
+.sub-trial-info{flex:1;display:flex;align-items:flex-start;gap:14px;min-width:260px}
+.sub-trial-badge{flex:none;width:38px;height:38px;border-radius:10px;background:rgba(255,106,43,.16);color:var(--side-accent,#ff6a2b);display:grid;place-items:center}
+.sub-trial-title{font-size:15px;font-weight:500}
+.sub-trial-title strong{color:var(--side-accent,#ff6a2b);font-weight:600}
+.sub-trial-sub{margin-top:5px;font-size:12.5px;color:var(--side-ink-2,#c8c6c0);line-height:1.5}
+.sub-trial-sub strong{color:#fff;font-weight:600}
+.sub-trial-cta{flex:none;display:flex;flex-direction:column;align-items:stretch;gap:6px}
+.sub-trial-cta .btn-primary{background:#fff;color:#14141a;border-color:#fff;white-space:nowrap}
+.sub-trial-cta .btn-primary:hover{background:#f2f1ee}
+.sub-trial-note{font-size:11px;color:var(--side-muted,#74747c);text-align:center}
+
+/* Segmented control Mensual/Anual */
+.sub-seg{flex:none;display:inline-flex;gap:2px;background:var(--surface-2,#fafaf9);border:1px solid var(--border,#e7e5e2);border-radius:9px;padding:3px}
+.sub-seg-btn{display:inline-flex;align-items:center;gap:7px;padding:6px 13px;border-radius:7px;border:none;background:none;font:inherit;font-size:12.5px;color:var(--muted-text,#6e6e76);cursor:pointer}
+.sub-seg-btn.active{background:var(--surface,#fff);color:var(--ink,#14141a);font-weight:600;box-shadow:var(--shadow-sm)}
+.sub-seg-note{font-size:10.5px;font-weight:700;color:var(--ok,#16794a);background:var(--ok-bg,#e9f4ee);border-radius:5px;padding:1px 6px}
+
+/* Nota del precio anual dentro de la tarjeta */
+.sub-plan-billed{margin:-6px 0 12px;font-size:11px;color:var(--muted-text,#6e6e76);line-height:1.5}
+.sub-plan-billed b{color:var(--ok,#16794a);font-weight:600}
+
 /* Grilla principal + aside (del diseño) */
 .sub-grid{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:18px;align-items:start}
 .sub-main{display:flex;flex-direction:column;gap:18px;min-width:0}

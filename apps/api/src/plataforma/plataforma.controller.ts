@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import {
   IsEmail,
+  IsIn,
   IsOptional,
   IsString,
   IsUUID,
@@ -57,6 +58,11 @@ export class VincularPaddleDto {
     message: 'El id de producto de Paddle tiene la forma pro_xxxxxxxx.',
   })
   productId?: string;
+
+  /** 'mensual' (default) o 'anual': el mismo plan tiene un precio por ciclo. */
+  @IsOptional()
+  @IsIn(['mensual', 'anual'])
+  ciclo?: 'mensual' | 'anual';
 }
 
 export class SuspenderTenantDto {
@@ -169,6 +175,7 @@ export class PlataformaController {
       id,
       dto.priceId ?? null,
       dto.productId ?? null,
+      dto.ciclo ?? 'mensual',
     );
   }
 
