@@ -98,6 +98,8 @@ export type EstadoSuscripcion = {
   facturas: FacturaSuscripcion[];
   /** Hay cliente en la pasarela → se puede abrir el portal de autogestión. */
   puedePortal: boolean;
+  /** La tarjeta registrada, para que el cliente sepa con cuál se le cobra. */
+  tarjeta: { marca: string; ultimos4: string; vence: string } | null;
   /** Ya hay suscripción viva en la pasarela: cambiar de plan NO abre checkout,
    *  se modifica la existente con prorrateo y la tarjeta en archivo. */
   puedeCambiarSinPago: boolean;
@@ -196,9 +198,12 @@ export class SuscripcionesService {
     // Si Paddle no responde, la lista viene vacía y la vista lo dice — nunca
     // se rompe la pantalla por una lectura auxiliar.
     const clienteExterno = suscripcion?.clienteExternoId ?? null;
-    const facturas = clienteExterno
-      ? await this.paddle.listarFacturas(clienteExterno)
-      : [];
+    const [facturas, tarjeta] = clienteExterno
+      ? await Promise.all([
+          this.paddle.listarFacturas(clienteExterno),
+          this.paddle.tarjetaDelCliente(clienteExterno),
+        ])
+      : [[], null];
 
     return {
       actual: suscripcion
@@ -244,6 +249,7 @@ export class SuscripcionesService {
       // corresponde la suscripción que se acaba de crear.
       checkout: { tenantId, email },
       facturas,
+      tarjeta,
       puedePortal: clienteExterno !== null,
       puedeCambiarSinPago:
         suscripcion?.proveedor === 'paddle' &&
@@ -287,6 +293,7 @@ export class SuscripcionesService {
     tenantId: string,
     planCodigo: string,
     ciclo: 'mensual' | 'anual',
+    email = '',
   ): Promise<EstadoSuscripcion> {
     const [suscripcion, plan] = await Promise.all([
       this.prisma.suscripcion.findFirst({
@@ -322,7 +329,7 @@ export class SuscripcionesService {
     }
     const externa = this.sync.extraer(actualizada);
     if (externa) await this.sync.aplicar(externa);
-    return this.estadoParaTenant(tenantId, '');
+    return this.estadoParaTenant(tenantId, email);
   }
 
   /** Qué le van a cobrar ahora por el cambio, antes de confirmarlo. */
@@ -356,13 +363,35 @@ export class SuscripcionesService {
   async sincronizarDesdeTransaccion(
     tenantId: string,
     transaccionId: string,
+    email = '',
   ): Promise<EstadoSuscripcion> {
     const sub = await this.paddle.suscripcionDeTransaccion(transaccionId);
     if (sub) {
       const externa = this.sync.extraer(sub);
       if (externa) await this.sync.aplicar(externa);
     }
-    return this.estadoParaTenant(tenantId, '');
+    return this.estadoParaTenant(tenantId, email);
+  }
+
+  /**
+   * URL del PDF de una factura del tenant.
+   *
+   * Se verifica que la transacción sea SUYA antes de pedirla: sin este chequeo,
+   * un id de otro cliente devolvería su factura.
+   */
+  async urlFacturaDeTenant(
+    tenantId: string,
+    transaccionId: string,
+  ): Promise<{ url: string } | null> {
+    const s = await this.prisma.suscripcion.findFirst({
+      where: { tenantId },
+      select: { clienteExternoId: true },
+    });
+    if (!s?.clienteExternoId) return null;
+    const propias = await this.paddle.listarFacturas(s.clienteExternoId, 50);
+    if (!propias.some((f) => f.id === transaccionId)) return null;
+    const url = await this.paddle.urlFacturaPdf(transaccionId);
+    return url ? { url } : null;
   }
 
   /**

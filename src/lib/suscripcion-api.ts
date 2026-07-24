@@ -47,6 +47,8 @@ export type EstadoSuscripcion = {
   puedePortal: boolean;
   /** Ya hay suscripción en la pasarela → cambiar de plan NO pide tarjeta. */
   puedeCambiarSinPago: boolean;
+  /** La tarjeta registrada en la pasarela (marca, últimos 4, vencimiento). */
+  tarjeta: { marca: string; ultimos4: string; vence: string } | null;
   prueba: {
     enPrueba: boolean;
     diasRestantes: number | null;
@@ -98,6 +100,11 @@ export async function sincronizarSuscripcion(
     method: "POST",
     body: JSON.stringify({ transaccionId }),
   });
+}
+
+/** URL de descarga del PDF de una factura (Paddle la firma con vencimiento). */
+export async function urlFacturaPdf(id: string): Promise<{ url: string }> {
+  return apiRequest(`/suscripcion/facturas/${id}/pdf`);
 }
 
 /** Deshace la cancelación pendiente. */

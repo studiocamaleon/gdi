@@ -3,6 +3,8 @@ import {
   Body,
   Controller,
   Get,
+  NotFoundException,
+  Param,
   Post,
 } from '@nestjs/common';
 import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
@@ -67,6 +69,7 @@ export class SuscripcionController {
       auth.tenantId,
       dto.planCodigo,
       dto.ciclo ?? 'mensual',
+      auth.email,
     );
   }
 
@@ -99,7 +102,24 @@ export class SuscripcionController {
     return this.suscripciones.sincronizarDesdeTransaccion(
       auth.tenantId,
       dto.transaccionId,
+      auth.email,
     );
+  }
+
+  /**
+   * URL de descarga del PDF de una factura. Se pide en el momento porque
+   * Paddle la firma con vencimiento.
+   */
+  @Get('facturas/:id/pdf')
+  @Roles(RolSistema.ADMINISTRADOR)
+  @ProhibidoImpersonando()
+  async facturaPdf(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+  ) {
+    const r = await this.suscripciones.urlFacturaDeTenant(auth.tenantId, id);
+    if (!r) throw new NotFoundException('La factura no existe.');
+    return r;
   }
 
   /** Deshace la cancelación pendiente. */
