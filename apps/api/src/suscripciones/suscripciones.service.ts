@@ -44,6 +44,7 @@ export type SuscripcionDe = {
 export type PlanContratable = {
   codigo: string;
   nombre: string;
+  descripcion: string | null;
   precioMensual: number;
   moneda: string;
   features: Record<string, unknown>;
@@ -188,6 +189,7 @@ export class SuscripcionesService {
       planes: contratables.map((p) => ({
         codigo: p.codigo,
         nombre: p.nombre,
+        descripcion: p.descripcion,
         precioMensual: Number(p.precioMensual),
         moneda: p.moneda,
         features: (p.featuresJson ?? {}) as Record<string, unknown>,

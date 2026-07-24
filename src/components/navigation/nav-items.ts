@@ -196,11 +196,6 @@ export const NAV: NavItem[] = [
         label: "Integraciones",
         href: "/configuracion/integraciones",
       },
-      {
-        key: "suscripcion",
-        label: "Suscripción",
-        href: "/configuracion/suscripcion",
-      },
     ],
   },
 ];

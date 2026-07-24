@@ -302,7 +302,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
                       <div className="sub-plan-nm">
                         {p.nombre}
                         {destacado ? (
-                          <span className="sub-plan-tag">Completo</span>
+                          <span className="sub-plan-tag">Recomendado</span>
                         ) : null}
                       </div>
                       <div className={`sub-radio ${activo ? "on" : ""}`}>
@@ -315,6 +315,9 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
                       </span>
                       <span className="per">/mes</span>
                     </div>
+                    {p.descripcion ? (
+                      <p className="sub-plan-tagline">{p.descripcion}</p>
+                    ) : null}
                     <ul className="sub-plan-feats">
                       {detallesDe(p.features).map((f) => (
                         <li key={f}>

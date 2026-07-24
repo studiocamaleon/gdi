@@ -44,6 +44,7 @@ export type PlanCatalogo = {
   id: string;
   codigo: string;
   nombre: string;
+  descripcion: string | null;
   precioMensual: number;
   moneda: string;
   features: Record<string, unknown>;
@@ -193,6 +194,17 @@ export async function getNegocioPlataforma(
 
 export async function getPlanesPlataforma(): Promise<PlanCatalogo[]> {
   return apiRequest("/plataforma/planes", { cache: "no-store" });
+}
+
+/** Edita la bajada comercial del plan (la que ve el tenant). */
+export async function describirPlan(
+  planId: string,
+  descripcion: string | null,
+): Promise<PlanCatalogo[]> {
+  return apiRequest(`/plataforma/planes/${planId}/descripcion`, {
+    method: "PUT",
+    body: JSON.stringify(descripcion ? { descripcion } : {}),
+  });
 }
 
 /** Vincula un plan con su precio de Paddle (vacío = desvincular). */

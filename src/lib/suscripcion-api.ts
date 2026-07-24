@@ -9,6 +9,7 @@ import { apiRequest } from "@/lib/api";
 export type PlanContratable = {
   codigo: string;
   nombre: string;
+  descripcion: string | null;
   precioMensual: number;
   moneda: string;
   features: Record<string, unknown>;

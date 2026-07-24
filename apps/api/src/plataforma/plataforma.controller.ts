@@ -33,6 +33,13 @@ export class CambiarPlanDto {
   planId: string;
 }
 
+export class DescribirPlanDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(220)
+  descripcion?: string;
+}
+
 /** Vincular un plan con su precio en Paddle. Vacío = desvincular. */
 export class VincularPaddleDto {
   @IsOptional()
@@ -136,6 +143,17 @@ export class PlataformaController {
   @Get('planes')
   planes() {
     return this.service.planes();
+  }
+
+  /** Edita la bajada comercial del plan. */
+  @Put('planes/:id/descripcion')
+  @UseGuards(PlataformaAdminGuard)
+  describirPlan(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: DescribirPlanDto,
+  ) {
+    return this.service.describirPlan(auth.userId, id, dto.descripcion ?? null);
   }
 
   /** Vincula un plan con su precio de Paddle. Devuelve el catálogo actualizado. */

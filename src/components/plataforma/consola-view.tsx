@@ -35,6 +35,7 @@ import {
   getBillingPlataforma,
   getNegocioPlataforma,
   getPlanesPlataforma,
+  describirPlan,
   vincularPlanPaddle,
   getSesionesImpersonacion,
   iniciarImpersonacion,
@@ -1850,6 +1851,7 @@ function Planes({ esAdmin }: { esAdmin: boolean }) {
           <thead>
             <tr>
               <th>Plan</th>
+              <th>Bajada (la ve el tenant)</th>
               <th>Precio</th>
               <th>Tenants</th>
               <th>Precio en Paddle</th>
@@ -1934,7 +1936,7 @@ function PlanFila({
         <td>
           <b>{plan.nombre}</b>
         </td>
-        <td colSpan={4}>
+        <td colSpan={5}>
           <div className="cpl-planedit">
             <label>
               <span>Price ID</span>
@@ -1983,6 +1985,9 @@ function PlanFila({
         <b>{plan.nombre}</b>
         <div className="cpl-sub">{plan.codigo}</div>
       </td>
+      <td>
+        <BajadaPlan plan={plan} esAdmin={esAdmin} onGuardado={onGuardado} />
+      </td>
       <td className="cpl-mono">
         {plan.moneda === "USD" ? "US$" : "$"}
         {fmtN(plan.precioMensual)}
@@ -2006,6 +2011,78 @@ function PlanFila({
         ) : null}
       </td>
     </tr>
+  );
+}
+
+/** Edición inline de la bajada comercial del plan (es copy de producto: se
+ *  cambia sin deploy y la ve el tenant en su tarjeta). */
+function BajadaPlan({
+  plan,
+  esAdmin,
+  onGuardado,
+}: {
+  plan: PlanCatalogo;
+  esAdmin: boolean;
+  onGuardado: (planes: PlanCatalogo[]) => void;
+}) {
+  const [editando, setEditando] = React.useState(false);
+  const [texto, setTexto] = React.useState(plan.descripcion ?? "");
+  const [guardando, setGuardando] = React.useState(false);
+
+  const guardar = async () => {
+    if (guardando) return;
+    setGuardando(true);
+    try {
+      onGuardado(await describirPlan(plan.id, texto.trim() || null));
+      setEditando(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo guardar.");
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  if (!editando) {
+    return (
+      <button
+        type="button"
+        className="cpl-bajada"
+        onClick={() => esAdmin && setEditando(true)}
+        disabled={!esAdmin}
+        title={esAdmin ? "Editar la bajada" : undefined}
+      >
+        {plan.descripcion ?? <span className="cpl-sinvinculo">sin bajada</span>}
+      </button>
+    );
+  }
+  return (
+    <div className="cpl-bajada-edit">
+      <textarea
+        value={texto}
+        onChange={(e) => setTexto(e.target.value)}
+        placeholder="Para imprentas que arrancan a ordenar su producción."
+        maxLength={220}
+        rows={2}
+        autoFocus
+        disabled={guardando}
+      />
+      <div className="acc">
+        <button type="button" className="cpl-btn pri" onClick={guardar} disabled={guardando}>
+          {guardando ? "…" : "Guardar"}
+        </button>
+        <button
+          type="button"
+          className="cpl-btn"
+          onClick={() => {
+            setTexto(plan.descripcion ?? "");
+            setEditando(false);
+          }}
+          disabled={guardando}
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>
   );
 }
 

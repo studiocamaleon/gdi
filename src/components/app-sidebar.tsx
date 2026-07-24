@@ -377,7 +377,7 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
         ) : null}
       </nav>
 
-      <Link href="/configuracion/suscripcion" className="plan-card">
+      <Link href="/suscripcion" className="plan-card">
         <div className="plan-row">
           <div className="plan-title">
             <span className="dot" />

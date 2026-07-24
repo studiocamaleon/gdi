@@ -3414,6 +3414,10 @@ model Plan {
   /// "trial" | "taller" | "estudio" | "diamante" — estable, es la clave.
   codigo        String        @unique
   nombre        String
+  /// La bajada comercial que ve el tenant en la tarjeta del plan ("Para
+  /// imprentas que arrancan a ordenar su producción"). Editable desde la
+  /// consola: es copy de producto, cambia sin deploy.
+  descripcion   String?
   /// ESPEJO del precio que vive en Paddle, cacheado para mostrarlo (consola,
   /// MRR, vista del tenant) sin pegarle a la API. La fuente de verdad del
   /// monto es el catálogo de Paddle: esto se sincroniza, no se edita a mano.

@@ -70,6 +70,8 @@ export type PlanCatalogo = {
   id: string;
   codigo: string;
   nombre: string;
+  /** Bajada comercial que ve el tenant en la tarjeta del plan. */
+  descripcion: string | null;
   precioMensual: number;
   moneda: string;
   features: Record<string, unknown>;
@@ -411,6 +413,7 @@ export class PlataformaService {
       id: p.id,
       codigo: p.codigo,
       nombre: p.nombre,
+      descripcion: p.descripcion,
       precioMensual: Number(p.precioMensual),
       moneda: p.moneda,
       features: (p.featuresJson ?? {}) as Record<string, unknown>,
@@ -418,6 +421,34 @@ export class PlataformaService {
       paddleProductId: p.paddleProductId,
       tenants: p._count.suscripciones,
     }));
+  }
+
+  /** Edita la bajada comercial del plan (copy de producto, sin deploy). */
+  async describirPlan(
+    staffUserId: string,
+    planId: string,
+    descripcion: string | null,
+  ): Promise<PlanCatalogo[]> {
+    const plan = await this.prisma.plan.findUnique({
+      where: { id: planId },
+      select: { nombre: true },
+    });
+    if (!plan) throw new NotFoundException('El plan no existe.');
+    await this.prisma.$transaction([
+      this.prisma.plan.update({
+        where: { id: planId },
+        data: { descripcion: descripcion?.trim() || null },
+      }),
+      this.prisma.plataformaEvento.create({
+        data: {
+          staffUserId,
+          tipo: 'plan_descripcion',
+          descripcion: `Bajada del plan ${plan.nombre} actualizada.`,
+          datosJson: { planId },
+        },
+      }),
+    ]);
+    return this.planes();
   }
 
   /**
