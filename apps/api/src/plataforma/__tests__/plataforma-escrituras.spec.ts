@@ -22,6 +22,7 @@ describe('Control plane — escrituras y feature gates', () => {
   );
   const suscripciones = new SuscripcionesService(
     prisma as unknown as PrismaService,
+    new PaddleService(),
   );
   let staffId: string;
   let tenantId: string;
