@@ -239,14 +239,20 @@ export class PaddleService {
   } | null> {
     if (!this.cliente) return null;
     try {
+      // No alcanza con mirar la última transacción: un cambio de plan que se
+      // salda con el saldo a favor queda "completed" pero SIN pagos, y la
+      // tarjeta desaparecía de la vista. Se recorren las últimas y se toma la
+      // primera que haya pasado de verdad por la tarjeta.
       const col = this.cliente.transactions.list({
         customerId: [clienteId],
         status: ['completed'],
-        perPage: 1,
+        orderBy: 'billed_at[DESC]',
+        perPage: 20,
       });
-      const [ultima] = await col.next();
-      const tarjeta = ultima?.payments?.find((p) => p.methodDetails?.card)
-        ?.methodDetails?.card;
+      const recientes = await col.next();
+      const tarjeta = recientes
+        .flatMap((t) => t.payments ?? [])
+        .find((p) => p.methodDetails?.card?.last4)?.methodDetails?.card;
       if (!tarjeta?.last4) return null;
       const mes = String(tarjeta.expiryMonth ?? '').padStart(2, '0');
       const anio = String(tarjeta.expiryYear ?? '').slice(-2);
