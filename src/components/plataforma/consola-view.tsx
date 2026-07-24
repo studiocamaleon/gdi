@@ -16,6 +16,7 @@ import {
   EstadoPill,
   Kpi,
   mk,
+  PALETA,
   Panel,
   PLAN_COLORS,
   PlanBadge,
@@ -32,6 +33,7 @@ import {
   crearTenantPlataforma,
   generarBillingPlataforma,
   getBillingPlataforma,
+  getNegocioPlataforma,
   getPlanesPlataforma,
   getSesionesImpersonacion,
   iniciarImpersonacion,
@@ -39,6 +41,8 @@ import {
   suspenderTenant,
   type BillingPlataforma,
   type ConsolaPlataforma,
+  type NegocioPlataforma,
+  type PeriodoNegocio,
   type PlanCatalogo,
   type SesionImpersonacion,
   type TenantConsola,
@@ -52,7 +56,12 @@ import {
  * no muestra datos inventados. Ver docs/control-plane-diseno.md
  */
 
-type Vista = "observabilidad" | "tenants" | "billing" | "impersonacion";
+type Vista =
+  | "observabilidad"
+  | "negocio"
+  | "tenants"
+  | "billing"
+  | "impersonacion";
 
 const NAV: Array<{
   grupo: string;
@@ -62,6 +71,7 @@ const NAV: Array<{
     grupo: "Plataforma",
     items: [
       { k: "observabilidad", label: "Observabilidad", ic: "gauge" },
+      { k: "negocio", label: "Negocio", ic: "chart" },
       { k: "tenants", label: "Tenants", ic: "building" },
       { k: "billing", label: "Facturación", ic: "card" },
     ],
@@ -74,6 +84,7 @@ const NAV: Array<{
 
 const TITULOS: Record<Vista, { crumb: string; title: string }> = {
   observabilidad: { crumb: "Plataforma", title: "Observabilidad" },
+  negocio: { crumb: "Plataforma", title: "Negocio del ecosistema" },
   tenants: { crumb: "Plataforma", title: "Tenants" },
   billing: { crumb: "Plataforma", title: "Facturación de suscripciones" },
   impersonacion: { crumb: "Operaciones", title: "Impersonación y auditoría" },
@@ -215,6 +226,7 @@ export function ConsolaPlataformaView({
             }}
           />
         ) : null}
+        {vista === "negocio" ? <Negocio /> : null}
         {vista === "tenants" ? (
           <Tenants
             tenants={datos.tenants}
@@ -230,6 +242,277 @@ export function ConsolaPlataformaView({
           <Impersonacion datos={datos} esAdmin={esAdmin} />
         ) : null}
       </main>
+    </div>
+  );
+}
+
+// ── Negocio del ecosistema ─────────────────────────────────────────────
+// Inteligencia de producto: qué negocio mueven juntas las imprentas sobre la
+// plataforma, para decidir dónde invertir. Ver docs/control-plane-negocio-diseno.md
+
+const PERIODOS_NEG: Array<{ k: PeriodoNegocio; label: string }> = [
+  { k: "30d", label: "30 días" },
+  { k: "90d", label: "90 días" },
+  { k: "12m", label: "12 meses" },
+];
+
+function Negocio() {
+  const [periodo, setPeriodo] = React.useState<PeriodoNegocio>("90d");
+  const [data, setData] = React.useState<NegocioPlataforma | null>(null);
+  const [cargando, setCargando] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    let vivo = true;
+    setCargando(true);
+    setError(null);
+    getNegocioPlataforma(periodo)
+      .then((d) => {
+        if (vivo) {
+          setData(d);
+          setCargando(false);
+        }
+      })
+      .catch(() => {
+        if (vivo) {
+          setError("No se pudo cargar el negocio del ecosistema.");
+          setCargando(false);
+        }
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [periodo]);
+
+  const selector = (
+    <div className="cpl-seg">
+      {PERIODOS_NEG.map((p) => (
+        <button
+          key={p.k}
+          type="button"
+          className={periodo === p.k ? "on" : ""}
+          onClick={() => setPeriodo(p.k)}
+        >
+          {p.label}
+        </button>
+      ))}
+    </div>
+  );
+
+  const k = data?.kpis;
+  // Serie: etiquetas x ralas (máx ~8 visibles) y compactas según el período.
+  const serie = data?.serie ?? [];
+  const paso = Math.max(1, Math.ceil(serie.length / 8));
+  const fmtX = (iso: string) =>
+    periodo === "12m"
+      ? new Date(iso).toLocaleDateString("es-AR", { month: "short" })
+      : new Date(iso).toLocaleDateString("es-AR", {
+          day: "2-digit",
+          month: "2-digit",
+        });
+  const serieChart = serie.map((s, i) => ({
+    x: i % paso === 0 || i === serie.length - 1 ? fmtX(s.periodo) : "",
+    ventas: s.ventas,
+    facturado: s.facturado,
+  }));
+  const donutCat = (data?.porCategoria ?? []).slice(0, 6).map((c, i) => ({
+    label: c.categoria,
+    value: c.ventas,
+    color: PALETA[i % PALETA.length],
+  }));
+  const maxTenant = Math.max(1, ...(data?.porTenant ?? []).map((t) => t.ventas));
+
+  return (
+    <div className="cpl-page cpl-neg">
+      <div className="cpl-neg-top">
+        <p className="cpl-neg-intro">
+          El negocio agregado que mueven las imprentas sobre la plataforma.
+          Ventas = neto sin IVA (órdenes emitidas); facturado = comprobantes
+          fiscales. Sirve para decidir dónde invertir el producto.
+        </p>
+        {selector}
+      </div>
+
+      {error ? <div className="cpl-empty">{error}</div> : null}
+      {!error && !data && cargando ? (
+        <div className="cpl-empty">Cargando…</div>
+      ) : null}
+
+      {data && k ? (
+        <div style={{ opacity: cargando ? 0.55 : 1, transition: "opacity .15s" }}>
+          <div className="cpl-kgrid">
+            <Kpi
+              label="Ventas del ecosistema"
+              value={mk(k.ventas)}
+              sub="neto sin IVA"
+              delta={{ actual: k.ventas, previo: k.ventasPrev }}
+              spark={serie.map((s) => s.ventas)}
+              sparkColor="var(--acc)"
+            />
+            <Kpi
+              label="Facturado"
+              value={mk(k.facturado)}
+              sub="fiscal emitido"
+              delta={{ actual: k.facturado, previo: k.facturadoPrev }}
+            />
+            <Kpi
+              label="Cobrado"
+              value={mk(k.cobrado)}
+              sub="caja del ecosistema"
+              delta={{ actual: k.cobrado, previo: k.cobradoPrev }}
+            />
+            <Kpi
+              label="Órdenes"
+              value={fmtN(k.ordenes)}
+              sub={`ticket ${mk(k.ticketPromedio)}`}
+              delta={{ actual: k.ordenes, previo: k.ordenesPrev }}
+            />
+            <Kpi
+              label="Presupuestos"
+              value={fmtN(k.presupuestos)}
+              sub="enviados en el período"
+            />
+            <Kpi
+              label="Imprentas con ventas"
+              value={`${data.adopcion.conVentas}/${data.adopcion.totalTenants}`}
+              sub="activas en el período"
+            />
+          </div>
+
+          <div className="cpl-neg-grid">
+            <Panel
+              title="Ventas y facturación"
+              sub={data.periodo.etiqueta}
+              right={
+                <div className="cpl-legend">
+                  <span>
+                    <i style={{ background: "var(--acc)" }} /> Ventas
+                  </span>
+                  <span>
+                    <i style={{ background: "var(--ok)" }} /> Facturado
+                  </span>
+                </div>
+              }
+            >
+              {serieChart.length ? (
+                <AreaChart
+                  data={serieChart}
+                  series={[
+                    { key: "ventas", color: "var(--acc)" },
+                    { key: "facturado", color: "var(--ok)" },
+                  ]}
+                  height={220}
+                />
+              ) : (
+                <div className="cpl-empty">Sin ventas en el período.</div>
+              )}
+            </Panel>
+
+            <Panel title="Mix por categoría" sub="qué se vende">
+              {donutCat.length ? (
+                <div className="cpl-neg-mix">
+                  <Donut
+                    segs={donutCat}
+                    centerV={mk(k.ventas)}
+                    centerL="ventas"
+                    hideLegend
+                  />
+                  <div className="cpl-neg-legend">
+                    {data.porCategoria.slice(0, 6).map((c, i) => (
+                      <div key={c.categoria} className="row">
+                        <i style={{ background: PALETA[i % PALETA.length] }} />
+                        <span className="nm">{c.categoria}</span>
+                        <span className="val cpl-mono">{mk(c.ventas)}</span>
+                        <span className="pc cpl-mono">{c.pct}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="cpl-empty">Sin datos de categoría.</div>
+              )}
+            </Panel>
+          </div>
+
+          <Panel
+            title="Ranking de imprentas"
+            sub="por ventas del período"
+            flush
+          >
+            {data.porTenant.length ? (
+              <div className="cpl-neg-rank">
+                {data.porTenant.slice(0, 12).map((t) => (
+                  <div key={t.tenantId} className="r">
+                    <TLogo nombre={t.nombre} slug={t.slug} />
+                    <div className="nm">
+                      <div className="n">{t.nombre}</div>
+                      <div className="s">
+                        {fmtN(t.ordenes)} órdenes · ticket {mk(t.ticket)}
+                      </div>
+                    </div>
+                    <div className="bar">
+                      <span
+                        style={{ width: `${(t.ventas / maxTenant) * 100}%` }}
+                      />
+                    </div>
+                    <div className="v cpl-mono">
+                      {mk(t.ventas)}
+                      <span className="pc">{t.pct}%</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="cpl-empty">
+                Ninguna imprenta registró ventas en el período.
+              </div>
+            )}
+          </Panel>
+
+          <div className="cpl-neg-adopt">
+            <AdoptTile
+              label="Con ventas"
+              n={data.adopcion.conVentas}
+              total={data.adopcion.totalTenants}
+            />
+            <AdoptTile
+              label="Con presupuestos"
+              n={data.adopcion.conPresupuestos}
+              total={data.adopcion.totalTenants}
+            />
+            <AdoptTile
+              label="Con facturación electrónica"
+              n={data.adopcion.conFacturacion}
+              total={data.adopcion.totalTenants}
+            />
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function AdoptTile({
+  label,
+  n,
+  total,
+}: {
+  label: string;
+  n: number;
+  total: number;
+}) {
+  const pct = total > 0 ? Math.round((n / total) * 100) : 0;
+  return (
+    <div className="cpl-adopt">
+      <div className="t">{label}</div>
+      <div className="v cpl-mono">
+        {n}
+        <span className="of">/ {total}</span>
+      </div>
+      <div className="bar">
+        <span style={{ width: `${pct}%` }} />
+      </div>
+      <div className="p cpl-mono">{pct}% de las imprentas</div>
     </div>
   );
 }

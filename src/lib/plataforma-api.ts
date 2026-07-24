@@ -99,6 +99,62 @@ export async function getConsolaPlataforma(): Promise<ConsolaPlataforma> {
   return apiRequest("/plataforma/consola", { cache: "no-store" });
 }
 
+// ── Negocio del ecosistema (inteligencia de producto cross-tenant) ──────────
+// Ver docs/control-plane-negocio-diseno.md
+
+export type PeriodoNegocio = "30d" | "90d" | "12m";
+
+export type NegocioPlataforma = {
+  periodo: {
+    clave: PeriodoNegocio;
+    etiqueta: string;
+    desde: string;
+    hasta: string;
+  };
+  kpis: {
+    ventas: number;
+    ventasPrev: number;
+    ordenes: number;
+    ordenesPrev: number;
+    ticketPromedio: number;
+    facturado: number;
+    facturadoPrev: number;
+    cobrado: number;
+    cobradoPrev: number;
+    presupuestos: number;
+  };
+  serie: Array<{ periodo: string; ventas: number; facturado: number }>;
+  porCategoria: Array<{
+    categoria: string;
+    ventas: number;
+    ordenes: number;
+    pct: number;
+  }>;
+  porTenant: Array<{
+    tenantId: string;
+    nombre: string;
+    slug: string;
+    ventas: number;
+    ordenes: number;
+    ticket: number;
+    pct: number;
+  }>;
+  adopcion: {
+    totalTenants: number;
+    conVentas: number;
+    conPresupuestos: number;
+    conFacturacion: number;
+  };
+};
+
+export async function getNegocioPlataforma(
+  periodo: PeriodoNegocio,
+): Promise<NegocioPlataforma> {
+  return apiRequest(`/plataforma/negocio?periodo=${periodo}`, {
+    cache: "no-store",
+  });
+}
+
 export async function getPlanesPlataforma(): Promise<PlanCatalogo[]> {
   return apiRequest("/plataforma/planes");
 }

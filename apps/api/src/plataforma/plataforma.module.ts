@@ -3,6 +3,7 @@ import { AdministracionModule } from '../administracion/administracion.module';
 import { AuthModule } from '../auth/auth.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ImpersonacionService } from './impersonacion.service';
+import { NegocioService } from './negocio.service';
 import { PlataformaBillingService } from './plataforma-billing.service';
 import { PlataformaController } from './plataforma.controller';
 import { PlataformaAdminGuard } from './plataforma-admin.guard';
@@ -20,6 +21,7 @@ import { PlataformaService } from './plataforma.service';
     PlataformaService,
     PlataformaBillingService,
     ImpersonacionService,
+    NegocioService,
     PlataformaGuard,
     PlataformaAdminGuard,
   ],
