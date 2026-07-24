@@ -3076,7 +3076,6 @@ model PuntoVenta {
 /// emisor×receptor (letra-comprobante.ts) y se congela al crear.
 model Comprobante {
   id                  String    @id @default(uuid()) @db.Uuid
-  facturaSuscripcion  FacturaSuscripcion?
   tenantId            String    @db.Uuid
   /// 'factura' | 'nota_credito' | 'nota_debito'
   tipo                String
@@ -3513,32 +3512,6 @@ model EventoCobro {
 
   @@index([proveedor, tipo])
   @@index([recibidoEl])
-}
-
-/// Una factura de suscripción por (suscripción, período). Nivel plataforma:
-/// junta las dos puntas —el tenant CLIENTE al que se le cobra y el
-/// Comprobante emitido EN el tenant plataforma— y su unique es la
-/// idempotencia del generador mensual (correrlo dos veces no duplica).
-///
-/// `tenantClienteId` sin FK y con ese nombre a propósito: sobrevive a la
-/// baja del tenant (el comprobante fiscal queda) y no cae en la excepción
-/// del spec de aislamiento. `suscripcionId` sin FK por lo mismo.
-/// El comprobante SÍ lleva FK con cascade: si el staff borra el borrador,
-/// la fila muere y el período se puede regenerar.
-model FacturaSuscripcion {
-  id              String      @id @default(uuid()) @db.Uuid
-  suscripcionId   String      @db.Uuid
-  tenantClienteId String      @db.Uuid
-  /// 'YYYY-MM'
-  periodo         String
-  comprobanteId   String      @unique @db.Uuid
-  monto           Decimal     @db.Decimal(14, 2)
-  createdAt       DateTime    @default(now())
-  comprobante     Comprobante @relation(fields: [comprobanteId], references: [id], onDelete: Cascade)
-
-  @@unique([suscripcionId, periodo])
-  @@index([periodo])
-  @@index([tenantClienteId])
 }
 
 /// Una entrada de staff a un tenant (etapa C). Nivel plataforma: junta al
