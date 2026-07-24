@@ -34,6 +34,7 @@ import { EtaModule } from './eta/eta.module';
 import { ArchivosModule } from './archivos/archivos.module';
 import { IntegracionesModule } from './integraciones/integraciones.module';
 import { CobroModule } from './cobro/cobro.module';
+import { SuscripcionesModule } from './suscripciones/suscripciones.module';
 
 @Module({
   imports: [
@@ -78,6 +79,7 @@ import { CobroModule } from './cobro/cobro.module';
     TenantsModule,
     PlataformaModule,
     CobroModule,
+    SuscripcionesModule,
     ClientesModule,
     EmpleadosModule,
     ProveedoresModule,

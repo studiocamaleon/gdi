@@ -40,6 +40,35 @@ export type SuscripcionDe = {
   desde: string;
 } | null;
 
+export type PlanContratable = {
+  codigo: string;
+  nombre: string;
+  precioMensual: number;
+  moneda: string;
+  features: Record<string, unknown>;
+  /** El precio en Paddle: sin esto el plan no se puede contratar. */
+  priceId: string;
+  esActual: boolean;
+};
+
+export type EstadoSuscripcion = {
+  actual: {
+    planCodigo: string;
+    planNombre: string;
+    precioMensual: number;
+    moneda: string;
+    /** Nuestro estado normalizado: el que manda para el acceso. */
+    estado: string;
+    /** El crudo de la pasarela — 'past_due' enciende el aviso de pago. */
+    estadoProveedor: string | null;
+    proveedor: string;
+    proximoCobro: string | null;
+    desde: string;
+  } | null;
+  planes: PlanContratable[];
+  checkout: { tenantId: string; email: string };
+};
+
 @Injectable()
 export class SuscripcionesService {
   constructor(private readonly prisma: PrismaService) {}
@@ -87,6 +116,62 @@ export class SuscripcionesService {
       usuariosMax: f.usuariosMax ?? null,
       ordenesMesMax: f.ordenesMesMax ?? null,
       storageGb: f.storageGb ?? null,
+    };
+  }
+
+  /**
+   * Todo lo que la vista de suscripción del tenant necesita: su plan actual y
+   * a cuáles puede pasarse.
+   *
+   * Sólo se ofrecen los planes VINCULADOS a Paddle (`paddlePriceId`): sin
+   * precio en la pasarela no hay checkout posible. Por eso el plan "trial",
+   * que es gratis y se asigna desde el control plane, no aparece como opción
+   * contratable — aparece sólo si es el actual.
+   */
+  async estadoParaTenant(
+    tenantId: string,
+    email: string,
+  ): Promise<EstadoSuscripcion> {
+    const [suscripcion, planes] = await Promise.all([
+      this.prisma.suscripcion.findFirst({
+        where: { tenantId },
+        include: { plan: true },
+      }),
+      this.prisma.plan.findMany({
+        where: { activo: true },
+        orderBy: { orden: 'asc' },
+      }),
+    ]);
+
+    const contratables = planes.filter((p) => p.paddlePriceId !== null);
+
+    return {
+      actual: suscripcion
+        ? {
+            planCodigo: suscripcion.plan.codigo,
+            planNombre: suscripcion.plan.nombre,
+            precioMensual: Number(suscripcion.plan.precioMensual),
+            moneda: suscripcion.plan.moneda,
+            estado: suscripcion.estado,
+            estadoProveedor: suscripcion.estadoProveedor,
+            proveedor: suscripcion.proveedor,
+            proximoCobro: suscripcion.proximoCobro?.toISOString() ?? null,
+            desde: suscripcion.desde.toISOString(),
+          }
+        : null,
+      planes: contratables.map((p) => ({
+        codigo: p.codigo,
+        nombre: p.nombre,
+        precioMensual: Number(p.precioMensual),
+        moneda: p.moneda,
+        features: (p.featuresJson ?? {}) as Record<string, unknown>,
+        priceId: p.paddlePriceId as string,
+        esActual: p.id === suscripcion?.planId,
+      })),
+      // Lo que el front le pasa a Paddle.js. El tenantId sale de la SESIÓN,
+      // no de la pantalla: es lo que el webhook usa para saber a quién
+      // corresponde la suscripción que se acaba de crear.
+      checkout: { tenantId, email },
     };
   }
 }

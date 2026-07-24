@@ -33900,3 +33900,39 @@ body:has(.t-app) {
 .bo-login-alt:hover{color:#cbcac6}
 
 
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SUSCRIPCIÓN DEL TENANT (/configuracion/suscripcion)
+   El plan contratado y el cambio de plan. El cobro lo hace Paddle sobre
+   esta misma página (overlay). Todas las clases con prefijo sus-.
+   Ver docs/suscripciones-cobro-diseno.md
+   ═══════════════════════════════════════════════════════════════════════ */
+.sus-wrap{padding:28px 32px 60px;max-width:1080px}
+.sus-head{margin-bottom:22px}
+.sus-head h1{margin:6px 0 0;font-size:26px;font-weight:600;letter-spacing:-.02em}
+.sus-aviso{background:var(--muted,#efede9);border:1px solid var(--border,#e7e5e2);border-radius:12px;padding:16px 18px;font-size:13.5px;color:var(--muted-text,#6e6e76)}
+.sus-mora{background:#fff7ed;border:1px solid #fdba74;border-left:3px solid #f97316;border-radius:10px;padding:13px 16px;font-size:13.5px;color:#7c2d12;margin-bottom:16px;line-height:1.5}
+.sus-actual{display:flex;align-items:center;gap:18px;background:var(--surface,#fff);border:1px solid var(--border,#e7e5e2);border-radius:14px;padding:20px 22px;margin-bottom:18px}
+.sus-actual-info{flex:1;min-width:0}
+.sus-actual-info h2{margin:4px 0 0;font-size:21px;font-weight:600;letter-spacing:-.01em}
+.sus-actual-meta{margin-top:6px;font-size:13px;color:var(--muted-text,#6e6e76)}
+.sus-estado{flex:none;font-size:12px;font-weight:600;padding:5px 12px;border-radius:999px}
+.sus-estado.activa{color:#166534;background:#dcfce7}
+.sus-estado.suspendida{color:#92400e;background:#fef3c7}
+.sus-estado.baja{color:#991b1b;background:#fee2e2}
+.sus-confirmando{display:flex;align-items:center;gap:11px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:13px 16px;font-size:13.5px;color:#1e40af;margin-bottom:18px}
+.sus-spin{width:15px;height:15px;border:2px solid #bfdbfe;border-top-color:#2563eb;border-radius:50%;animation:sus-giro .7s linear infinite;flex:none}
+@keyframes sus-giro{to{transform:rotate(360deg)}}
+.sus-tit{margin:26px 0 14px;font-size:15px;font-weight:600}
+.sus-planes{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}
+.sus-plan{display:flex;flex-direction:column;background:var(--surface,#fff);border:1px solid var(--border,#e7e5e2);border-radius:14px;padding:20px}
+.sus-plan.actual{border-color:#111827;box-shadow:0 0 0 1px #111827}
+.sus-plan-nom{font-size:14px;font-weight:600}
+.sus-plan-precio{margin:8px 0 14px;font-size:28px;font-weight:600;letter-spacing:-.02em}
+.sus-plan-precio span{font-size:13px;font-weight:400;color:var(--muted-text,#6e6e76);letter-spacing:0}
+.sus-plan-feats{list-style:none;margin:0 0 18px;padding:0;flex:1;display:flex;flex-direction:column;gap:8px}
+.sus-plan-feats li{font-size:12.5px;color:var(--muted-text,#6e6e76);padding-left:19px;position:relative;line-height:1.4}
+.sus-plan-feats li::before{content:"";position:absolute;left:0;top:5px;width:11px;height:6px;border-left:2px solid #16a34a;border-bottom:2px solid #16a34a;transform:rotate(-45deg)}
+.sus-plan-actual{text-align:center;font-size:12.5px;font-weight:600;color:var(--muted-text,#6e6e76);padding:9px}
+.sus-plan .btn{width:100%;justify-content:center}
+.sus-pie{margin-top:24px;font-size:12px;color:var(--muted-text,#6e6e76);line-height:1.6}
