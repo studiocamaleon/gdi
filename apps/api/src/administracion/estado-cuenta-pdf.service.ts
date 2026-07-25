@@ -91,13 +91,14 @@ export class EstadoCuentaPdfService {
     cc: CuentaCorriente,
     emisor: EmisorEstadoCuenta = null,
     generadoEl: Date = new Date(),
+    logoDataUri: string | null = null,
   ): Buffer {
     const pdf = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
     this.registrarFuente(pdf);
     pdf.setFont(this.familia, 'normal');
 
     let y = MARGEN;
-    y = this.encabezado(pdf, cc, emisor, generadoEl, y);
+    y = this.encabezado(pdf, cc, emisor, generadoEl, y, logoDataUri);
     y = this.resumen(pdf, cc, y);
     y = this.aging(pdf, cc, y);
     this.movimientos(pdf, cc, y);
@@ -126,8 +127,26 @@ export class EstadoCuentaPdfService {
     emisor: EmisorEstadoCuenta,
     generadoEl: Date,
     y0: number,
+    logoDataUri: string | null,
   ): number {
     let y = y0;
+
+    // El logo del tenant, arriba a la izquierda. Empuja al emisor a la derecha
+    // del logo en vez de superponerse. Mismo criterio que la factura y el
+    // recibo: sólo PNG/JPEG —jsPDF no rasteriza SVG— y un logo roto no puede
+    // impedir que salga el documento.
+    let xEmisor = MARGEN;
+    if (logoDataUri && /^data:image\/(png|jpe?g);base64,/i.test(logoDataUri)) {
+      const LADO = 13.8;
+      try {
+        pdf.addImage(logoDataUri, MARGEN, y, LADO, LADO, undefined, 'FAST');
+        xEmisor = MARGEN + LADO + 4;
+      } catch (error) {
+        this.log.warn(
+          `No pude dibujar el logo en el estado de cuenta: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
 
     // Columna derecha: rótulo del documento + fecha de generación.
     pdf.setFont(this.familia, 'bold');
@@ -145,7 +164,7 @@ export class EstadoCuentaPdfService {
       pdf.setFont(this.familia, 'bold');
       pdf.setFontSize(12);
       pdf.setTextColor(...INK);
-      pdf.text(emisor.razonSocial, MARGEN, y + 4);
+      pdf.text(emisor.razonSocial, xEmisor, y + 4);
       pdf.setFont(this.familia, 'normal');
       pdf.setFontSize(8.5);
       pdf.setTextColor(...MUTED);
@@ -156,7 +175,7 @@ export class EstadoCuentaPdfService {
         emisor.ingresosBrutos ? `IIBB ${emisor.ingresosBrutos}` : null,
       ].filter((l): l is string => Boolean(l));
       for (const l of lineas) {
-        pdf.text(l, MARGEN, yy);
+        pdf.text(l, xEmisor, yy);
         yy += 4.2;
       }
       y = Math.max(yy - 4.2, y + 9);

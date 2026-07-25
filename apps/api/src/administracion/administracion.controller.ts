@@ -118,9 +118,10 @@ export class AdministracionController {
     @Param('clienteId') clienteId: string,
     @Res({ passthrough: true }) res: Response,
   ): Promise<StreamableFile> {
-    const [cc, config] = await Promise.all([
+    const [cc, config, logo] = await Promise.all([
       this.cuentaCorrienteService.obtener(auth, clienteId),
       this.configuracionFiscalService.obtener(auth),
+      this.archivos.logoDataUri(auth.tenantId),
     ]);
     const emisor = config
       ? {
@@ -131,7 +132,7 @@ export class AdministracionController {
           ingresosBrutos: config.ingresosBrutos,
         }
       : null;
-    const pdf = this.estadoCuentaPdfService.generar(cc, emisor);
+    const pdf = this.estadoCuentaPdfService.generar(cc, emisor, new Date(), logo);
     const slug =
       (cc.cliente.nombre || 'cliente')
         .normalize('NFD')
