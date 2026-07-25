@@ -12,6 +12,7 @@ import {
   quitarLogoTenant,
   type LogoTenant,
 } from "@/lib/archivos-api";
+import { rasterizarLogo } from "@/lib/rasterizar-logo";
 
 /** Mismas iniciales que dibuja el PDF cuando no hay logo cargado. */
 function iniciales(nombre: string): string {
@@ -37,6 +38,25 @@ export function LogoTenantCard({
   const [logo, setLogo] = React.useState<LogoTenant>(logoInicial);
   const [confirmarQuitar, setConfirmarQuitar] = React.useState(false);
   const [guardando, setGuardando] = React.useState(false);
+
+  /**
+   * Los PDF sólo dibujan PNG y JPEG. Un SVG o un WEBP se ven bien en la web y
+   * desaparecen de los documentos sin decir nada, así que se convierten acá,
+   * antes de subir: se guarda un solo archivo y sirve en los dos lados.
+   */
+  const prepararLogo = React.useCallback(async (file: File) => {
+    const { archivo, convertido } = await rasterizarLogo(file);
+    if (convertido) {
+      toast.info("Convertimos el logo a PNG para que salga en los PDF.");
+    } else if (!/^image\/(png|jpe?g)$/i.test(file.type)) {
+      // Falló la conversión (un SVG que tira de fuentes o imágenes externas
+      // ensucia el canvas). Se sube igual, pero hay que decir qué va a pasar.
+      toast.warning(
+        "No pudimos convertir este logo: se va a ver en la web pero no en los PDF. Probá subirlo en PNG.",
+      );
+    }
+    return archivo;
+  }, []);
 
   const alSubir = async (archivos: Archivo[]) => {
     const nuevo = archivos[0];
@@ -84,16 +104,18 @@ export function LogoTenantCard({
           scope="TENANT_BRANDING"
           archivos={[]}
           onCambio={(a) => void alSubir(a)}
+          transformar={prepararLogo}
           extensiones={EXTENSIONES_LOGO}
           unico
           sinLista
           soloLectura={guardando}
           titulo={logo ? "Reemplazar el logo" : "Subí el logo del negocio"}
-          ayuda="PNG, JPG, WEBP o SVG. Fondo transparente y al menos 400 px de lado para que salga nítido en el PDF."
+          ayuda="PNG, JPG, WEBP o SVG. Fondo transparente y al menos 400 px de lado. Si subís SVG o WEBP lo convertimos a PNG, que es lo único que los PDF saben dibujar."
         />
         <div className="arch-logo-hint">
-          Aparece en el PDF del presupuesto, en la factura y en el seguimiento
-          que ve el cliente. Sin logo se dibujan las iniciales del negocio.
+          Aparece en el presupuesto, la factura, el recibo, el estado de cuenta
+          y el seguimiento que ve el cliente. Sin logo se dibujan las iniciales
+          del negocio.
         </div>
         {logo ? (
           <div className="arch-logo-acc">
@@ -121,3 +143,4 @@ export function LogoTenantCard({
     </div>
   );
 }
+

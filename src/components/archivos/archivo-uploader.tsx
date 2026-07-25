@@ -41,6 +41,12 @@ export type ArchivoUploaderProps = {
   entidadId?: string;
   archivos: Archivo[];
   onCambio: (archivos: Archivo[]) => void;
+  /**
+   * Última chance de cambiar el archivo antes de subirlo. La usa el logo, que
+   * convierte a PNG lo que los PDF no saben dibujar. Genérica a propósito: el
+   * uploader no tiene por qué saber qué es un logo.
+   */
+  transformar?: (file: File) => Promise<File>;
   /** Restringe el tipo aceptado (el logo sólo admite imágenes). */
   extensiones?: readonly string[];
   /** Un solo archivo: el nuevo reemplaza al anterior. */
@@ -74,6 +80,7 @@ export function ArchivoUploader({
   entidadId,
   archivos,
   onCambio,
+  transformar,
   extensiones,
   unico = false,
   titulo = "Arrastrá archivos o hacé click para elegirlos",
@@ -101,12 +108,16 @@ export function ArchivoUploader({
     async (files: File[]) => {
       const elegidos = unico ? files.slice(0, 1) : files;
 
-      for (const file of elegidos) {
-        const invalido = validarArchivo(file, { extensiones });
+      for (const original of elegidos) {
+        // Se valida el ORIGINAL: es lo que el usuario eligió y sobre lo que
+        // tiene que leer el error si no sirve.
+        const invalido = validarArchivo(original, { extensiones });
         if (invalido) {
-          toast.error(`${file.name}: ${invalido}`);
+          toast.error(`${original.name}: ${invalido}`);
           continue;
         }
+
+        const file = transformar ? await transformar(original) : original;
 
         const clave = `${file.name}-${file.size}-${Date.now()}`;
         const abort = new AbortController();
@@ -142,7 +153,7 @@ export function ArchivoUploader({
         }
       }
     },
-    [archivos, entidadId, extensiones, onCambio, scope, unico],
+    [archivos, entidadId, extensiones, onCambio, scope, transformar, unico],
   );
 
   const cambiarVisibilidad = async (archivo: Archivo, publico: boolean) => {
