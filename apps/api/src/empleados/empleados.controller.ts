@@ -62,18 +62,6 @@ export class EmpleadosController {
     return this.empleadosService.update(auth, id, payload);
   }
 
-  @ProhibidoImpersonando()
-  @Permiso('registros.gestionar')
-  @Post(':id/invitar-acceso')
-  @Roles(RolSistema.ADMINISTRADOR)
-  invitarAcceso(
-    @CurrentSession() auth: CurrentAuth,
-    @Param('id') id: string,
-    @Body() payload: InvitarAccesoDto,
-  ) {
-    return this.empleadosService.invitarAcceso(auth, id, payload);
-  }
-
   @Permiso('registros.gestionar')
   @Delete(':id')
   @Roles(RolSistema.ADMINISTRADOR)

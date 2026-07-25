@@ -41,6 +41,10 @@ export type EmpleadoDetalle = {
   sexo: SexoEmpleado | "";
   fechaIngreso: string;
   fechaNacimiento: string;
+  /* ── Espejo del acceso al sistema ──────────────────────────────────────
+   * El legajo NO los escribe: el alta y el rol viven en Configuración →
+   * Usuarios. Vienen para poder mostrar si la persona entra al sistema y con
+   * qué cuenta. Ver docs/usuarios-roles-permisos-diseno.md */
   usuarioSistema: boolean;
   emailAcceso: string;
   rolSistema: RolSistema | "";
@@ -60,9 +64,6 @@ export type EmpleadoPayload = {
   sexo?: SexoEmpleado;
   fechaIngreso: string;
   fechaNacimiento?: string;
-  usuarioSistema: boolean;
-  emailAcceso?: string;
-  rolSistema?: RolSistema;
   comisionesHabilitadas: boolean;
   direcciones: Array<{
     descripcion: string;

@@ -60,17 +60,6 @@ export class UpsertEmpleadoDto {
   fechaNacimiento?: string;
 
   @IsBoolean()
-  usuarioSistema: boolean;
-
-  @IsOptional()
-  @IsEmail()
-  emailAcceso?: string;
-
-  @IsOptional()
-  @IsEnum(RolSistemaDto)
-  rolSistema?: RolSistemaDto;
-
-  @IsBoolean()
   comisionesHabilitadas: boolean;
 
   @IsArray()

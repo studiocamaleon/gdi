@@ -30,7 +30,6 @@ import {
   EmpleadoDetalle,
   EmpleadoDireccion,
   EmpleadoPayload,
-  RolSistema,
   sexoItems,
   SexoEmpleado,
   TipoComision,
@@ -80,7 +79,6 @@ type DatosPrincipalesState = {
   telefonoNumero: string;
   email: string;
   sector: string;
-  usuarioSistema: boolean;
 };
 
 type InformacionGeneralState = {
@@ -88,11 +86,6 @@ type InformacionGeneralState = {
   sexo: SexoEmpleado | "";
   fechaIngreso: string;
   fechaNacimiento: string;
-};
-
-type UsuarioSistemaState = {
-  emailAcceso: string;
-  rolSistema: RolSistema | "";
 };
 
 const countryItems = latamCountries.map((country) => ({
@@ -129,7 +122,6 @@ function formatWhatsappPhone(phoneCode: string, phoneNumber: string) {
 function buildPayload(
   datosPrincipales: DatosPrincipalesState,
   informacionGeneral: InformacionGeneralState,
-  usuarioSistema: UsuarioSistemaState,
   direcciones: EmpleadoDireccion[],
   comisionesHabilitadas: boolean,
   comisiones: EmpleadoComision[],
@@ -144,9 +136,6 @@ function buildPayload(
     sexo: informacionGeneral.sexo || undefined,
     fechaIngreso: informacionGeneral.fechaIngreso,
     fechaNacimiento: informacionGeneral.fechaNacimiento || undefined,
-    usuarioSistema: datosPrincipales.usuarioSistema,
-    emailAcceso: usuarioSistema.emailAcceso.trim() || undefined,
-    rolSistema: usuarioSistema.rolSistema || undefined,
     comisionesHabilitadas,
     direcciones: direcciones.map((direccion) => ({
       descripcion: direccion.descripcion.trim(),
@@ -175,10 +164,6 @@ function validatePayload(payload: EmpleadoPayload) {
     !payload.fechaIngreso
   ) {
     return "Completa nombre, correo principal, telefono principal, sector y fecha de ingreso.";
-  }
-
-  if (payload.usuarioSistema && (!payload.emailAcceso || !payload.rolSistema)) {
-    return "Completa el email de acceso y el rol del usuario del sistema.";
   }
 
   const direccionInvalida = payload.direcciones.findIndex(
@@ -217,7 +202,6 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
       telefonoNumero: empleado.telefonoNumero,
       email: empleado.email,
       sector: empleado.sector,
-      usuarioSistema: empleado.usuarioSistema,
     });
   const [informacionGeneral, setInformacionGeneral] =
     React.useState<InformacionGeneralState>({
@@ -226,10 +210,6 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
       fechaIngreso: empleado.fechaIngreso,
       fechaNacimiento: empleado.fechaNacimiento,
     });
-  const [usuarioSistema, setUsuarioSistema] = React.useState<UsuarioSistemaState>({
-    emailAcceso: empleado.emailAcceso,
-    rolSistema: empleado.rolSistema,
-  });
   const [direcciones, setDirecciones] = React.useState(empleado.direcciones);
   const [activeDireccionId, setActiveDireccionId] = React.useState(
     empleado.direcciones[0]?.id ?? "",
@@ -326,21 +306,6 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
     );
   };
 
-  const handleToggleUsuarioSistema = (checked: boolean) => {
-    setDatosPrincipales((current) => ({ ...current, usuarioSistema: checked }));
-
-    if (!checked) {
-      setUsuarioSistema({
-        emailAcceso: "",
-        rolSistema: "",
-      });
-    } else if (!usuarioSistema.emailAcceso) {
-      setUsuarioSistema({
-        emailAcceso: datosPrincipales.email,
-        rolSistema: "",
-      });
-    }
-  };
 
   const handleToggleComisiones = (checked: boolean) => {
     setComisionesHabilitadas(checked);
@@ -360,7 +325,6 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
     const payload = buildPayload(
       datosPrincipales,
       informacionGeneral,
-      usuarioSistema,
       direcciones,
       comisionesHabilitadas,
       comisiones,
@@ -420,8 +384,8 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
               {mode === "create" ? "Nuevo empleado" : "Ficha de empleado"}
             </h1>
             <p className="max-w-3xl text-sm text-muted-foreground">
-              Consolida datos personales, acceso al sistema, direccion y
-              esquema de comisiones dentro de una sola ficha operativa.
+              Datos personales, remuneración, dirección y esquema de
+              comisiones en una sola ficha.
             </p>
             {errorMessage ? (
               <p className="text-sm font-medium text-destructive">{errorMessage}</p>
@@ -445,8 +409,8 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
             Datos principales
           </CardTitle>
           <CardDescription>
-            Define la identidad principal del empleado y si tendra acceso al
-            sistema.
+            Quién es y cómo ubicarlo. El acceso al sistema se administra
+            aparte, en Configuración → Usuarios.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -555,24 +519,6 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
               </Field>
             </FieldGroup>
 
-            <Field className="lg:col-span-2">
-              <div className="flex items-center justify-between rounded-2xl border border-border/70 bg-muted/20 px-4 py-3">
-                <div className="flex flex-col gap-1">
-                  <FieldLabel htmlFor="empleado-usuario-sistema">
-                    Usuario del sistema
-                  </FieldLabel>
-                  <FieldDescription>
-                    Habilita el acceso del empleado al ERP y la definicion de su
-                    rol.
-                  </FieldDescription>
-                </div>
-                <Switch
-                  id="empleado-usuario-sistema"
-                  checked={datosPrincipales.usuarioSistema}
-                  onCheckedChange={handleToggleUsuarioSistema}
-                />
-              </div>
-            </Field>
           </FieldGroup>
         </CardContent>
       </Card>
@@ -915,45 +861,64 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
         </CardContent>
       </Card>
 
-      {datosPrincipales.usuarioSistema ? (
+      {/* Espejo del acceso, sólo lectura. El alta, el rol y la baja viven en
+          Configuración → Usuarios: un usuario NO es un empleado —el contador
+          externo entra sin legajo y casi todo el taller tiene legajo y no
+          entra—, y tener dos formularios que creaban la misma cuenta terminaba
+          en dos verdades sobre quién puede qué. Peor: el de acá creaba la
+          membresía con el rol viejo del enum y sin `rolId`, así que la persona
+          nacía esquivando el editor de roles.
+          Ver docs/usuarios-roles-permisos-diseno.md */}
+      {mode === "edit" ? (
         <Card className="rounded-2xl border-border/70 shadow-sm">
           <CardHeader className="gap-4">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <CardTitle className="text-lg font-bold tracking-tight">
-                  Usuario del sistema
+                  Acceso al sistema
                 </CardTitle>
-                {/*
-                  El acceso ya no se da desde acá. Un usuario no es un empleado
-                  —el contador externo entra sin legajo, casi todo el taller
-                  tiene legajo y no entra— y tener dos formularios que crean la
-                  misma cuenta terminaba en dos verdades sobre quién puede qué.
-                  Ver docs/usuarios-roles-permisos-diseno.md
-                */}
                 <CardDescription>
-                  El acceso al sistema y el rol se administran en{" "}
-                  <Link
-                    href="/configuracion/usuarios"
-                    className="font-medium underline underline-offset-4"
-                  >
-                    Configuración → Usuarios
-                  </Link>
-                  , junto con el resto de las cuentas de la empresa.
+                  {empleado?.usuarioSistema ? (
+                    <>
+                      Entra al sistema como{" "}
+                      <b className="text-foreground">{empleado.emailAcceso}</b>.
+                      El rol y la baja se administran en{" "}
+                      <Link
+                        href="/configuracion/usuarios"
+                        className="font-medium underline underline-offset-4"
+                      >
+                        Configuración → Usuarios
+                      </Link>
+                      .
+                    </>
+                  ) : (
+                    <>
+                      Esta persona no entra al sistema. Casi todo el taller está
+                      en esta situación y está bien: el legajo existe para
+                      costear y administrar, no para dar acceso. Si necesita
+                      entrar, se le crea la cuenta en{" "}
+                      <Link
+                        href="/configuracion/usuarios"
+                        className="font-medium underline underline-offset-4"
+                      >
+                        Configuración → Usuarios
+                      </Link>{" "}
+                      y se la vincula a este legajo.
+                    </>
+                  )}
                 </CardDescription>
               </div>
               {/* Con router y no con un <Link> envolviendo al Button: un <a>
                   con un <button> adentro es HTML inválido. */}
-              {mode === "edit" ? (
-                <Button
-                  type="button"
-                  variant="sidebar"
-                  className="w-full sm:w-auto"
-                  onClick={() => router.push("/configuracion/usuarios")}
-                >
-                  <ShieldCheckIcon />
-                  Administrar accesos
-                </Button>
-              ) : null}
+              <Button
+                type="button"
+                variant="sidebar"
+                className="w-full sm:w-auto"
+                onClick={() => router.push("/configuracion/usuarios")}
+              >
+                <ShieldCheckIcon />
+                {empleado?.usuarioSistema ? "Administrar acceso" : "Dar acceso"}
+              </Button>
             </div>
           </CardHeader>
         </Card>
@@ -1090,15 +1055,16 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
         ) : null}
       </Card>
 
+
       {/* Sólo en un legajo que ya existe: el sueldo cuelga del empleado, así
           que antes de crearlo no hay a qué colgarlo. */}
       {mode === "edit" && empleado ? (
         <RemuneracionSection empleadoId={empleado.id} />
       ) : null}
 
-      {(datosPrincipales.usuarioSistema || comisionesHabilitadas) && (
+      {(empleado?.usuarioSistema || comisionesHabilitadas) && (
         <div className="flex flex-wrap gap-2">
-          {datosPrincipales.usuarioSistema ? (
+          {empleado?.usuarioSistema ? (
             <Badge variant="secondary">
               <ShieldCheckIcon data-icon="inline-start" />
               Usuario del sistema habilitado
@@ -1115,3 +1081,4 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
     </div>
   );
 }
+

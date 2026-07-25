@@ -128,7 +128,6 @@ export class EmpleadosService {
       },
     });
 
-    await this.syncAccess(auth, empleado.id, normalized);
 
     const fresh = await this.findEmpleadoOrThrow(
       auth,
@@ -198,25 +197,9 @@ export class EmpleadosService {
       }
     });
 
-    await this.syncAccess(auth, id, normalized);
 
     const empleado = await this.findEmpleadoOrThrow(auth, id, this.prisma);
     return this.toResponse(empleado);
-  }
-
-  async invitarAcceso(
-    auth: CurrentAuth,
-    id: string,
-    payload: InvitarAccesoDto,
-  ) {
-    await this.findEmpleadoOrThrow(auth, id, this.prisma);
-
-    return this.authService.provisionEmployeeAccess(
-      auth,
-      id,
-      payload.email,
-      this.toPrismaRol(payload.rolSistema),
-    );
   }
 
   async remove(auth: CurrentAuth, id: string) {
@@ -225,28 +208,6 @@ export class EmpleadosService {
     await this.prisma.empleado.delete({
       where: { id },
     });
-  }
-
-  private async syncAccess(
-    auth: CurrentAuth,
-    empleadoId: string,
-    normalized: ReturnType<EmpleadosService['normalizePayload']>,
-  ) {
-    if (
-      !normalized.usuarioSistema ||
-      !normalized.emailAcceso ||
-      !normalized.rolSistema
-    ) {
-      await this.authService.revokeEmployeeAccess(auth, empleadoId);
-      return;
-    }
-
-    await this.authService.provisionEmployeeAccess(
-      auth,
-      empleadoId,
-      normalized.emailAcceso,
-      normalized.rolSistema,
-    );
   }
 
   private async findEmpleadoOrThrow(
@@ -297,14 +258,6 @@ export class EmpleadosService {
       fechaNacimiento: payload.fechaNacimiento
         ? new Date(payload.fechaNacimiento)
         : null,
-      usuarioSistema: payload.usuarioSistema,
-      emailAcceso: payload.usuarioSistema
-        ? payload.emailAcceso?.trim().toLowerCase() || null
-        : null,
-      rolSistema:
-        payload.usuarioSistema && payload.rolSistema
-          ? this.toPrismaRol(payload.rolSistema)
-          : null,
       comisionesHabilitadas: payload.comisionesHabilitadas,
       direcciones: this.normalizeDirecciones(payload.direcciones),
       comisiones: payload.comisionesHabilitadas

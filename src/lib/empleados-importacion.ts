@@ -1,4 +1,4 @@
-import type { EmpleadoPayload, RolSistema, SexoEmpleado } from "@/lib/empleados";
+import type { EmpleadoPayload, SexoEmpleado } from "@/lib/empleados";
 
 export interface EmpleadoImportRowResult {
   rowNumber: number;
@@ -21,9 +21,6 @@ const EMPLEADOS_IMPORT_HEADERS = [
   "sexo",
   "fechaIngreso",
   "fechaNacimiento",
-  "usuarioSistema",
-  "emailAcceso",
-  "rolSistema",
   "comisionesHabilitadas",
   "direccionDescripcion",
   "pais",
@@ -85,7 +82,6 @@ const SEXO_VALUES = new Set<SexoEmpleado>([
   "prefiero_no_decir",
 ]);
 
-const ROL_VALUES = new Set<RolSistema>(["administrador", "supervisor", "operador"]);
 
 export function downloadEmpleadosImportTemplate() {
   const helpRows = [
@@ -161,11 +157,7 @@ function recordToEmpleadoPayload(
     if (!record[header]) errors.push(`Falta ${header}.`);
   }
 
-  const usuarioSistema = parseBoolean(record.usuarioSistema);
   const comisionesHabilitadas = parseBoolean(record.comisionesHabilitadas);
-  if (usuarioSistema === null) {
-    errors.push("usuarioSistema debe ser si/no.");
-  }
   if (comisionesHabilitadas === null) {
     errors.push("comisionesHabilitadas debe ser si/no.");
   }
@@ -175,13 +167,6 @@ function recordToEmpleadoPayload(
     errors.push("sexo debe ser masculino, femenino, no_binario o prefiero_no_decir.");
   }
 
-  const rolSistema = record.rolSistema as RolSistema;
-  if (record.rolSistema && !ROL_VALUES.has(rolSistema)) {
-    errors.push("rolSistema debe ser administrador, supervisor u operador.");
-  }
-  if (usuarioSistema && (!record.emailAcceso || !record.rolSistema)) {
-    errors.push("Si usuarioSistema es si, completá emailAcceso y rolSistema.");
-  }
 
   if (!isIsoDate(record.fechaIngreso)) {
     errors.push("fechaIngreso debe tener formato YYYY-MM-DD.");
@@ -222,9 +207,6 @@ function recordToEmpleadoPayload(
       sexo: record.sexo ? sexo : undefined,
       fechaIngreso: record.fechaIngreso,
       fechaNacimiento: record.fechaNacimiento || undefined,
-      usuarioSistema: usuarioSistema ?? false,
-      emailAcceso: record.emailAcceso || undefined,
-      rolSistema: record.rolSistema ? rolSistema : undefined,
       comisionesHabilitadas: comisionesHabilitadas ?? false,
       direcciones: [
         {

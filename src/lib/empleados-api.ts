@@ -38,19 +38,6 @@ export async function deleteEmpleado(id: string) {
   });
 }
 
-export async function inviteEmpleadoAccess(
-  id: string,
-  payload: { email: string; rolSistema: EmpleadoPayload["rolSistema"] },
-) {
-  return apiRequest<{ invitationState: string; invitationUrl: string | null }>(
-    `/empleados/${id}/invitar-acceso`,
-    {
-      method: "POST",
-      body: JSON.stringify(payload),
-    },
-  );
-}
-
 /* ─── Remuneraciones ─────────────────────────────────────────────────────────
  * El sueldo vive en el legajo, no en cada centro de costo. Los centros
  * consumen de acá. Ver docs/legajos-nomina-diseno.md
