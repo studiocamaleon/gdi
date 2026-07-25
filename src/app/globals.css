@@ -33371,9 +33371,13 @@ body:has(.t-app) {
 .usr-rol:disabled { opacity: 0.55; cursor: not-allowed; }
 .usr-acciones { display: flex; gap: 8px; white-space: nowrap; }
 
+/* Grid y no flex. Con space-between, la cuenta de usuarios se corría con el
+   largo del nombre y la descripción de cada rol, y las cinco filas quedaban
+   con el dato en cinco lugares distintos. Con la columna fija se leen como
+   una columna. */
 .usr-rol-fila {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px auto;
   align-items: center;
   gap: 16px;
   padding: 13px 15px;
@@ -33384,6 +33388,7 @@ body:has(.t-app) {
   font-size: 12px;
   color: var(--muted-text);
   white-space: nowrap;
+  text-align: right;
 }
 
 .usr-form {
@@ -33471,8 +33476,6 @@ body:has(.t-app) {
 
 /* ── Editor de roles ─── */
 .usr-roles-top { display: flex; justify-content: flex-end; margin-bottom: 12px; }
-.usr-rol-fila { grid-template-columns: minmax(0, 1fr) auto auto; }
-
 .usr-matriz {
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -33536,7 +33539,10 @@ body:has(.t-app) {
 @media (max-width: 900px) {
   .usr-fila { grid-template-columns: minmax(0, 1fr) auto; }
   .usr-rol, .usr-acciones { grid-column: 1 / -1; }
-  .usr-rol-fila { flex-wrap: wrap; }
+  /* El nombre arriba, la cuenta y el botón abajo compartiendo la línea. */
+  .usr-rol-fila { grid-template-columns: 1fr auto; }
+  .usr-rol-fila > :first-child { grid-column: 1 / -1; }
+  .usr-rol-cuenta { text-align: left; }
   .usr-mod { flex-direction: column; align-items: flex-start; gap: 10px; }
 }
 
