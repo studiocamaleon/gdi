@@ -21,21 +21,27 @@ import {
 } from "@/lib/usuarios-api";
 import { RolEditor } from "@/components/usuarios/rol-editor";
 import { TabSeguridad } from "@/components/usuarios/tab-seguridad";
+import { TabSesiones } from "@/components/usuarios/tab-sesiones";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 
 type EmpleadoOpcion = { id: string; nombreCompleto: string };
 
-type TabUsuarios = "usuarios" | "roles" | "seguridad" | "logs";
+type TabUsuarios =
+  | "usuarios"
+  | "roles"
+  | "seguridad"
+  | "sesiones"
+  | "logs";
 
 /**
- * Cuatro preguntas distintas, cuatro pestañas. Antes era un scroll largo con
- * los tres bloques apilados y había que bajar hasta el fondo para ver quién
- * había tocado qué.
+ * Una pregunta por pestaña. Antes era un scroll largo con todo apilado y había
+ * que bajar hasta el fondo para ver quién había tocado qué.
  */
 const TABS: Array<{ key: TabUsuarios; label: string }> = [
   { key: "usuarios", label: "Usuarios" },
   { key: "roles", label: "Roles y permisos" },
   { key: "seguridad", label: "Seguridad" },
+  { key: "sesiones", label: "Sesiones" },
   { key: "logs", label: "Registro de actividad" },
 ];
 
@@ -446,6 +452,8 @@ export function UsuariosView({
       {tab === "seguridad" && (
         <TabSeguridad usuarios={datos.usuarios} onCambio={recargar} />
       )}
+
+      {tab === "sesiones" && <TabSesiones onCambio={recargar} />}
 
       {tab === "logs" && (
       <>

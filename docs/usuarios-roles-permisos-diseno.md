@@ -166,12 +166,12 @@ en el modelo: el desacople no pide migración, pide pantalla.
 
 **Propuesta:**
 
-- **Configuración → Usuarios** es el lugar canónico, en cuatro pestañas —cuatro
-  preguntas distintas, y antes era un scroll largo con todo apilado:
-  **Usuarios** (quién entra, con qué rol, en qué estado), **Roles y permisos**
-  (el editor), **Seguridad** (por ahora, quién está conectado y cerrarle la
-  sesión; después, vigencia, segundo factor y desde dónde se puede entrar) y
-  **Registro de actividad** (la auditoría).
+- **Configuración → Usuarios** es el lugar canónico, con una pregunta por
+  pestaña —antes era un scroll largo con todo apilado—: **Usuarios** (quién
+  entra, con qué rol, en qué estado), **Roles y permisos** (el editor),
+  **Seguridad** (desde qué IP pública puede entrar cada uno), **Sesiones**
+  (quién está conectado ahora y cerrarle la sesión) y **Registro de actividad**
+  (la auditoría).
 - Vincular a un empleado es un campo **opcional** del usuario (un select). Sirve
   para lo que ya usa `Empleado.userId`: fichar en la mesa, atribuir comisiones,
   medir desempeño.
