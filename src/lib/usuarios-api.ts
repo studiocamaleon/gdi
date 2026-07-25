@@ -108,6 +108,18 @@ export async function reenviarInvitacion(
   });
 }
 
+/**
+ * Le pone una clave provisoria y devuelve la que hay que dictarle. Se muestra
+ * una sola vez: no queda guardada en ningún lado legible.
+ */
+export async function restablecerPassword(
+  userId: string,
+): Promise<{ provisoria: string; email: string }> {
+  return apiRequest(`/usuarios/${encodeURIComponent(userId)}/password`, {
+    method: "POST",
+  });
+}
+
 export async function crearRol(datos: {
   nombre: string;
   descripcion?: string;

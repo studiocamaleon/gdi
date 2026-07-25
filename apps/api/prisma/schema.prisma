@@ -698,6 +698,11 @@ model User {
   id                      String                  @id @default(uuid()) @db.Uuid
   email                   String                  @unique
   passwordHash            String?
+  /// La clave que tiene es provisoria: la puso un administrador al
+  /// restablecerla y el sistema obliga a cambiarla antes de dejar entrar a
+  /// ningún lado. Así el admin puede devolverle el acceso a alguien sin quedar
+  /// sabiendo con qué clave trabaja después.
+  debeCambiarPassword     Boolean                 @default(false)
   nombreCompleto          String?
   activo                  Boolean                 @default(true)
   /// Rol en el control plane. Null = usuario común (la enorme mayoría).

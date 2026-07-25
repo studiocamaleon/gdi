@@ -177,6 +177,37 @@ en el modelo: el desacople no pide migración, pide pantalla.
   empleado preseleccionado. No se pierde el camino corto; deja de haber dos
   formularios que hacen lo mismo.
 
+### 4.2 La contraseña (agregado después de F3)
+
+Preguntado: *¿la clave no debería poder crearse desde Usuarios?* Mirando el
+código apareció algo peor que la pregunta: **no había forma de cambiar una
+contraseña**. Ni el propio usuario podía —no existía el endpoint— ni el admin
+podía ayudarlo, y sin correo tampoco hay "olvidé mi clave". El link de
+invitación no servía: `acceptInvitation` sólo fija la clave si el usuario
+**no tiene** una. Al que se la olvidaba no lo sacaba nadie.
+
+Cómo quedó, y por qué así:
+
+- **El admin restablece, no elige.** Aprieta "Restablecer clave" y el sistema
+  genera una provisoria —tres bloques de cuatro, sin caracteres que se confundan
+  al dictarlos por teléfono— que se muestra **una sola vez**. No necesita saber
+  la clave anterior: el caso es justamente que la persona la olvidó.
+- **La provisoria muere en el primer ingreso.** `User.debeCambiarPassword`
+  bloquea todo el sistema hasta que la persona elija una propia. Así el que
+  administra puede devolver el acceso sin quedar sabiendo con qué clave trabaja
+  su gente después — que es lo que volvería discutible la auditoría de §F3: si
+  el admin conoce la clave de todos, "esa factura no la anulé yo" es una defensa
+  válida.
+- **Restablecer corta las sesiones abiertas** de esa persona. Si le cambiás la
+  clave a alguien, lo que quedó abierto en otra máquina deja de valer.
+- **Cambiar la propia clave pide la actual**, aunque la sesión esté abierta: una
+  sesión olvidada en una máquina prestada no puede alcanzar para quedarse con la
+  cuenta. Y cierra las demás sesiones del usuario, porque cambiar la clave es lo
+  que hace quien sospecha que se la sabe otro.
+
+Quitar el acceso del todo —el empleado que se fue— ya estaba en F1: desactiva la
+membership y revoca sus sesiones en el acto.
+
 ### 4.1 Dos cosas del flujo actual que hay que arreglar de paso
 
 1. **El acceso se otorga antes de aceptar.** `provisionEmployeeAccess` hace

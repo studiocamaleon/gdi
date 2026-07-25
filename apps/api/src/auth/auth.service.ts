@@ -12,6 +12,7 @@ import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { estadoDeCiclo } from '../suscripciones/ciclo';
 import { AcceptInvitationDto } from './dto/accept-invitation.dto';
+import { CambiarPasswordDto } from './dto/cambiar-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { CurrentAuth, JwtPayload } from './auth.types';
 import { expandir, permisosDeRolBase } from './permisos';
@@ -157,6 +158,52 @@ export class AuthService {
         rolPlataforma: user.rolPlataforma,
       },
     };
+  }
+
+  /**
+   * El usuario cambia SU clave. Pide la actual aunque ya esté logueado: una
+   * sesión abierta en una máquina prestada no puede alcanzar para quedarse con
+   * la cuenta.
+   *
+   * Es también la salida del estado "clave provisoria": cuando un administrador
+   * se la restablece, ésta es la única pantalla a la que el sistema lo deja
+   * entrar hasta que la cambie.
+   */
+  async cambiarPassword(auth: CurrentAuth, dto: CambiarPasswordDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: auth.userId },
+      select: { id: true, passwordHash: true },
+    });
+    if (!user?.passwordHash) {
+      throw new BadRequestException('Tu cuenta todavía no tiene una clave.');
+    }
+    const ok = await bcrypt.compare(dto.actual, user.passwordHash);
+    if (!ok) {
+      throw new BadRequestException('La clave actual no es esa.');
+    }
+    if (dto.actual === dto.nueva) {
+      throw new BadRequestException('La clave nueva tiene que ser distinta.');
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash: await bcrypt.hash(dto.nueva, 10),
+        debeCambiarPassword: false,
+      },
+    });
+
+    // Las demás sesiones se caen: cambiar la clave es lo que hace alguien que
+    // sospecha que se la sabe otro, y dejar vivas las sesiones abiertas lo
+    // dejaría igual que antes. La actual sigue, para no echarlo de la pantalla
+    // en la que está.
+    await this.prisma.authSession.updateMany({
+      where: { userId: user.id, revokedAt: null, id: { not: auth.sessionId } },
+      data: { revokedAt: new Date() },
+    });
+    this.sessionCache.invalidate(auth.sessionId);
+
+    return { ok: true as const };
   }
 
   async logout(auth: CurrentAuth) {
@@ -827,7 +874,7 @@ export class AuthService {
     accessToken: string | null,
     rolPlataforma: RolPlataforma | null = null,
   ) {
-    const [suscripcion, rolDelTenant] = await Promise.all([
+    const [suscripcion, rolDelTenant, usuario] = await Promise.all([
       this.resumenSuscripcion(currentMembership.tenant.id),
       currentMembership.rolId
         ? this.prisma.rol.findUnique({
@@ -835,6 +882,10 @@ export class AuthService {
             select: { nombre: true, permisos: true },
           })
         : Promise.resolve(null),
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { debeCambiarPassword: true },
+      }),
     ]);
 
     // Los mismos que evalúa el guard, para que la UI esconda lo que el API va
@@ -858,6 +909,9 @@ export class AuthService {
         // Sólo para que la UI muestre (o no) el acceso a /plataforma. La
         // autorización real la hace PlataformaGuard contra la base.
         rolPlataforma,
+        /** Clave provisoria puesta por un admin: el front lo manda a cambiarla
+         *  antes de dejarlo entrar a ningún lado. */
+        debeCambiarPassword: usuario?.debeCambiarPassword ?? false,
         tenantActual: {
           id: currentMembership.tenant.id,
           nombre: currentMembership.tenant.nombre,

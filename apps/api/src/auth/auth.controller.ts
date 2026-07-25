@@ -3,6 +3,7 @@ import { Throttle } from '@nestjs/throttler';
 import { CurrentSession } from './current-auth.decorator';
 import { AuthService } from './auth.service';
 import { AcceptInvitationDto } from './dto/accept-invitation.dto';
+import { CambiarPasswordDto } from './dto/cambiar-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { SwitchTenantDto } from './dto/switch-tenant.dto';
 import { Public } from './public.decorator';
@@ -59,6 +60,15 @@ export class AuthController {
     @Body() payload: AcceptInvitationDto,
   ) {
     return this.authService.acceptInvitation(token, payload);
+  }
+
+  /** El usuario cambia su propia clave. Pide la actual. */
+  @Post('password')
+  cambiarPassword(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() payload: CambiarPasswordDto,
+  ) {
+    return this.authService.cambiarPassword(auth, payload);
   }
 
   @Get('me')

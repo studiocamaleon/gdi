@@ -6,7 +6,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { RolSistema } from '@prisma/client';
-import { randomBytes, createHash } from 'node:crypto';
+import { randomBytes, createHash, randomInt } from 'node:crypto';
+import * as bcrypt from 'bcryptjs';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { SessionCacheService } from '../auth/session-cache.service';
@@ -352,6 +353,51 @@ export class UsuariosService {
     });
 
     return { invitacionUrl: this.urlDeInvitacion(rawToken) };
+  }
+
+  /**
+   * Le pone una clave PROVISORIA y obliga a cambiarla al entrar.
+   *
+   * El admin no elige la clave ni necesita saber la que tenía: la genera el
+   * sistema, se muestra una sola vez para dictarla y deja de servir apenas la
+   * persona entra. Así el que administra puede devolverle el acceso a
+   * cualquiera —el operario que la olvidó, el que volvió de vacaciones— sin
+   * quedar sabiendo con qué clave trabaja después, que es lo que haría
+   * discutible la auditoría de quién hizo qué.
+   *
+   * Corta las sesiones abiertas: si a alguien le restablecen la clave, lo que
+   * estuviera abierto en otra máquina deja de valer.
+   */
+  async restablecerPassword(auth: CurrentAuth, userId: string) {
+    const membership = await this.prisma.membership.findUnique({
+      where: { userId_tenantId: { userId, tenantId: auth.tenantId } },
+      include: { user: { select: { email: true, nombreCompleto: true } } },
+    });
+    if (!membership) throw new NotFoundException('Ese usuario no existe acá.');
+
+    const provisoria = generarProvisoria();
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        passwordHash: await bcrypt.hash(provisoria, 10),
+        debeCambiarPassword: true,
+      },
+    });
+    await this.prisma.authSession.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    this.sessionCache.invalidarTenant(auth.tenantId);
+
+    const quien = membership.user.nombreCompleto || membership.user.email;
+    await this.registrar(auth, {
+      tipo: 'password_restablecida',
+      usuarioAfectadoId: userId,
+      usuarioAfectadoNombre: quien,
+      descripcion: `Le restableció la contraseña a ${quien}`,
+    });
+
+    return { provisoria, email: membership.user.email };
   }
 
   // ── Roles ───────────────────────────────────────────────────────────
@@ -766,6 +812,23 @@ export class UsuariosService {
       'http://localhost:3000';
     return `${base}/aceptar-invitacion?token=${token}`;
   }
+}
+
+/**
+ * Clave provisoria para dictar por teléfono o anotar en un papel.
+ *
+ * Sin caracteres que se confunden al leerlos en voz alta (0/O, 1/l/I) y en
+ * bloques de cuatro: la van a pasar hablando, no copiando. La entropía alcanza
+ * de sobra para algo que muere en el primer ingreso.
+ */
+const ALFABETO = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+
+function generarProvisoria(): string {
+  const bloque = () =>
+    Array.from({ length: 4 }, () => ALFABETO[randomInt(ALFABETO.length)]).join(
+      '',
+    );
+  return `${bloque()}-${bloque()}-${bloque()}`;
 }
 
 /** Valida un array de permisos contra el catálogo. Lo usa el DTO. */
