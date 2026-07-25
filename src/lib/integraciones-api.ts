@@ -76,8 +76,10 @@ export async function getNotificaciones(): Promise<EstadoNotificaciones> {
   return apiRequest<EstadoNotificaciones>("/integraciones/notificaciones");
 }
 
-export async function getLogNotificaciones(): Promise<LineaLog[]> {
-  return apiRequest<LineaLog[]>("/integraciones/notificaciones/log");
+export async function getLogNotificaciones(limite = 100): Promise<LineaLog[]> {
+  return apiRequest<LineaLog[]>(
+    `/integraciones/notificaciones/log?limite=${limite}`,
+  );
 }
 
 export async function guardarConfigNotificaciones(
