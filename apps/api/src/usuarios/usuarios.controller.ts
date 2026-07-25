@@ -107,6 +107,20 @@ export class UsuariosController {
     return this.usuarios.editar(auth, userId, dto);
   }
 
+  /**
+   * Le pone una clave provisoria. El admin no necesita saber la que tenía —
+   * justamente el caso es "se la olvidó"— y la provisoria muere en el primer
+   * ingreso.
+   */
+  @Permiso('configuracion.gestionar')
+  @Post(':userId/password')
+  restablecerPassword(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('userId') userId: string,
+  ) {
+    return this.usuarios.restablecerPassword(auth, userId);
+  }
+
   @Permiso('configuracion.gestionar')
   @Post(':userId/invitacion')
   reenviar(

@@ -69,6 +69,9 @@ function armar({
       count: jest.fn().mockResolvedValue(otrosConLlaves),
       updateMany: membershipUpdateMany,
     },
+    // El registro de auditoría es best-effort: sin este mock los tests pasan
+    // igual (por diseño), pero llenan la salida de errores tragados.
+    eventoAcceso: { create: jest.fn().mockResolvedValue({}) },
     $transaction: (fn: (tx: unknown) => unknown) =>
       Promise.resolve(
         fn({

@@ -11,6 +11,7 @@ import {
   getRoles,
   getUsuarios,
   reenviarInvitacion,
+  restablecerPassword,
   type CatalogoPermisos,
   type EventoAcceso,
   type ListadoUsuarios,
@@ -53,6 +54,11 @@ export function UsuariosView({
     rol: RolDelTenant | null;
   } | null>(null);
   const [aBorrar, setABorrar] = React.useState<RolDelTenant | null>(null);
+  /** La provisoria recién generada: se muestra una vez y no vuelve. */
+  const [provisoria, setProvisoria] = React.useState<{
+    email: string;
+    clave: string;
+  } | null>(null);
   const [destinoBorrado, setDestinoBorrado] = React.useState("");
   const [invitando, setInvitando] = React.useState(false);
   const [aDesactivar, setADesactivar] = React.useState<UsuarioDelTenant | null>(
@@ -88,6 +94,21 @@ export function UsuariosView({
       await recargar();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo generar el link.");
+    } finally {
+      setGuardando(null);
+    }
+  };
+
+  const restablecer = async (usuario: UsuarioDelTenant) => {
+    setGuardando(usuario.id);
+    try {
+      const r = await restablecerPassword(usuario.id);
+      setProvisoria({ email: r.email, clave: r.provisoria });
+      await recargar();
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "No se pudo restablecer la clave.",
+      );
     } finally {
       setGuardando(null);
     }
@@ -180,6 +201,34 @@ export function UsuariosView({
         </div>
       )}
 
+      {provisoria && (
+        <div className="usr-form">
+          <div className="int-section-intro">
+            <h3>Clave provisoria de {provisoria.email}</h3>
+            <p>
+              Dictásela o pasásela por donde puedas. Cuando entre con ella, el
+              sistema le va a pedir que elija una propia — vos no vas a saber
+              cuál. No se muestra de nuevo: si se pierde, generá otra.
+            </p>
+          </div>
+          <code className="usr-link">{provisoria.clave}</code>
+          <div className="usr-form-acciones">
+            <button
+              className="btn ghost"
+              onClick={() => {
+                void navigator.clipboard?.writeText(provisoria.clave);
+                toast.success("Copiada.");
+              }}
+            >
+              Copiar
+            </button>
+            <button className="btn primary" onClick={() => setProvisoria(null)}>
+              Listo
+            </button>
+          </div>
+        </div>
+      )}
+
       {invitando && (
         <FormularioInvitacion
           roles={roles}
@@ -244,6 +293,16 @@ export function UsuariosView({
                   title="Genera un link nuevo y copia al portapapeles. El anterior deja de servir."
                 >
                   Link de acceso
+                </button>
+              ) : null}
+              {u.activa && u.estado !== "pendiente" ? (
+                <button
+                  className="btn ghost"
+                  disabled={guardando === u.id}
+                  onClick={() => void restablecer(u)}
+                  title="Le pone una clave provisoria. No hace falta saber la que tiene."
+                >
+                  Restablecer clave
                 </button>
               ) : null}
               {u.activa ? (

@@ -33439,6 +33439,31 @@ body:has(.t-app) {
   color: var(--ink-2);
 }
 
+/* Cambiar la clave propia. Se usa suelta (sin sidebar) cuando un admin la
+   restableció: ahí es la única pantalla del sistema. */
+.cp-caja {
+  max-width: 420px;
+  margin: 60px auto;
+  padding: 32px 28px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+}
+.cp-caja h1 {
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  margin: 0 0 8px;
+}
+.cp-caja > p {
+  font-size: 13px;
+  color: var(--muted-text);
+  line-height: 1.55;
+  margin: 0 0 22px;
+}
+.cp-form { display: grid; gap: 14px; }
+.cp-form .btn { margin-top: 4px; justify-content: center; }
+
 /* Puerta cerrada: el módulo existe pero el rol no lo incluye. */
 .sp-caja {
   max-width: 440px;

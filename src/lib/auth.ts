@@ -40,6 +40,8 @@ export type CurrentUser = {
   /** Rol en el control plane (staff de Grafo). Sólo decide si la UI muestra
    *  el acceso a /plataforma; la autorización real la hace el API. */
   rolPlataforma?: "ADMIN" | "SOPORTE" | null;
+  /** Un admin le puso una clave provisoria: hay que cambiarla antes de seguir. */
+  debeCambiarPassword?: boolean;
   /** Presente = esta sesión es una impersonación del control plane. */
   impersonacion?: { actorNombre: string; expiraEl: string } | null;
   tenantActual: TenantSummary;
@@ -143,4 +145,15 @@ export async function tryGetCurrentUser() {
 
     throw error;
   }
+}
+
+/** El usuario cambia su propia clave. Pide la actual. */
+export async function cambiarPassword(datos: {
+  actual: string;
+  nueva: string;
+}): Promise<{ ok: true }> {
+  return apiRequest("/auth/password", {
+    method: "POST",
+    body: JSON.stringify(datos),
+  });
 }

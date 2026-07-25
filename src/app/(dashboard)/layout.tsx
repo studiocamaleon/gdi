@@ -38,6 +38,15 @@ export default async function DashboardLayout({
     throw error;
   }
 
+  // Clave provisoria puesta por un administrador: la sabe otra persona, así que
+  // no se entra a ningún lado hasta cambiarla. El redirect vive acá y no en el
+  // middleware porque el middleware sólo ve la cookie, no la sesión resuelta —
+  // y /cambiar-clave está FUERA de este grupo justamente para que mandarlo ahí
+  // no rebote contra este mismo layout.
+  if (currentUser.debeCambiarPassword) {
+    redirect("/cambiar-clave");
+  }
+
   return (
     <PermisosProvider permisos={currentUser.tenantActual?.permisos}>
       <NavigationFeedbackProvider>

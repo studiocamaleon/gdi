@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeftRightIcon,
@@ -8,6 +9,7 @@ import {
   ChevronDownIcon,
   CheckIcon,
   LogOutIcon,
+  KeyRoundIcon,
 } from "lucide-react";
 
 import { logout, switchTenant, type CurrentUser } from "@/lib/auth";
@@ -162,6 +164,18 @@ export function UserTenantMenu({ currentUser }: UserTenantMenuProps) {
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <div className="p-1">
+          {/* La única forma de cambiar la clave propia: antes no existía
+              ninguna, ni siquiera para el que la había elegido al entrar. */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            render={<Link href="/cambiar-clave" />}
+            className="h-9 w-full justify-start rounded-xl"
+          >
+            <KeyRoundIcon />
+            Cambiar mi clave
+          </Button>
           <Button
             type="button"
             variant="ghost"
