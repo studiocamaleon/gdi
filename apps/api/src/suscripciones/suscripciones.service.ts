@@ -26,6 +26,8 @@ import { estadoDePrueba, type EstadoPrueba } from './trial';
 export type FeaturePlan = 'afip' | 'whatsapp';
 
 export type LimitesPlan = {
+  /** Nombre del plan que fija estos topes. `null` = sin suscripción (legacy). */
+  planNombre: string | null;
   usuariosMax: number | null;
   ordenesMesMax: number | null;
   storageGb: number | null;
@@ -158,10 +160,11 @@ export class SuscripcionesService {
   async limites(tenantId: string): Promise<LimitesPlan> {
     const s = await this.prisma.suscripcion.findFirst({
       where: { tenantId },
-      include: { plan: { select: { featuresJson: true } } },
+      include: { plan: { select: { nombre: true, featuresJson: true } } },
     });
     const f = (s?.plan.featuresJson ?? {}) as Features;
     return {
+      planNombre: s?.plan.nombre ?? null,
       usuariosMax: f.usuariosMax ?? null,
       ordenesMesMax: f.ordenesMesMax ?? null,
       storageGb: f.storageGb ?? null,

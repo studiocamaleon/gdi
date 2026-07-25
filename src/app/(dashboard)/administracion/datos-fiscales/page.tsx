@@ -1,14 +1,11 @@
-import { ConfiguracionFiscalView } from "@/components/administracion/configuracion-fiscal-view";
-import type { ConfiguracionFiscal } from "@/lib/administracion";
-import { getConfiguracionFiscal } from "@/lib/administracion-api";
-import { getLogoTenant, type LogoTenant } from "@/lib/archivos-api";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
-export default async function DatosFiscalesPage() {
-  const [config, logo] = await Promise.all([
-    getConfiguracionFiscal().catch((): ConfiguracionFiscal | null => null),
-    getLogoTenant().catch((): LogoTenant => null),
-  ]);
-  return <ConfiguracionFiscalView initialConfig={config} logoInicial={logo} />;
+/**
+ * Los datos fiscales se mudaron a Configuración: son la puesta a punto del
+ * emisor, no una operación de Administración. Esta ruta queda porque el link
+ * vivió meses en favoritos y en los avisos de "falta configurar la
+ * facturación"; un 404 ahí se lee como que la pantalla desapareció.
+ */
+export default function DatosFiscalesMudados() {
+  redirect("/configuracion/datos-fiscales");
 }

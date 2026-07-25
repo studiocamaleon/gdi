@@ -16,10 +16,15 @@ import { RolSistema } from '@prisma/client';
 
 /** Módulos del sistema, en el orden del sidebar. */
 export const MODULOS = [
+  /**
+   * El home. Hoy está vacío —lo que vaya a mostrar se diseña aparte—, pero es
+   * de todos: a diferencia del viejo `panel.ver`, que en realidad gateaba los
+   * reportes y por eso el Operario no lo tenía, este lo tienen los cinco roles.
+   */
   {
     clave: 'panel',
     label: 'Panel general',
-    descripcion: 'Métricas del negocio, ventas y producción.',
+    descripcion: 'La pantalla de inicio del sistema.',
   },
   {
     clave: 'comercial',
@@ -48,6 +53,11 @@ export const MODULOS = [
     descripcion: 'Cobros, comprobantes, facturación y deudores.',
   },
   {
+    clave: 'reportes',
+    label: 'Reportes',
+    descripcion: 'Métricas del negocio, ventas y producción.',
+  },
+  {
     clave: 'inventario',
     label: 'Inventario',
     descripcion: 'Materiales y movimientos de stock.',
@@ -65,8 +75,8 @@ export type ModuloClave = (typeof MODULOS)[number]['clave'];
  * El permiso que no pertenece a un módulo: ver la plata.
  *
  * Está aparte porque el margen no vive en un solo lugar — se filtra en el
- * cotizador (Comercial), en el desglose de la orden (Producción), en el panel y
- * en los reportes. Derivarlo de "acceso a Costos" no alcanza: el vendedor tiene
+ * cotizador (Comercial), en el desglose de la orden (Producción) y en Reportes.
+ * Derivarlo de "acceso a Costos" no alcanza: el vendedor tiene
  * que poder cotizar sin ver cuánto gana la imprenta en cada renglón.
  */
 export const PERMISOS_TRANSVERSALES = [
@@ -93,6 +103,19 @@ export const PERMISOS_TRANSVERSALES = [
     label: 'Anular comprobantes y cobros',
     descripcion:
       'Descartar un comprobante o anular un cobro registrado. Es lo que deshace un movimiento de plata.',
+  },
+  /**
+   * El Resumen ejecutivo es el reporte que junta TODO el negocio en una
+   * pantalla —facturación, margen, punto de equilibrio, alertas—. Es la lectura
+   * del dueño, no la del equipo: por eso se separa del resto de Reportes en vez
+   * de entrar con `reportes.ver`. De fábrica lo tiene sólo el Administrador;
+   * quien quiera dárselo a su encargado lo hace desde el editor de roles.
+   */
+  {
+    clave: 'reportes.ver_resumen',
+    label: 'Ver el Resumen ejecutivo',
+    descripcion:
+      'El tablero que resume el negocio entero: facturación, margen, punto de equilibrio y alertas. Ver los demás reportes no alcanza.',
   },
 ] as const;
 
@@ -179,6 +202,7 @@ export const ROLES_PREDEFINIDOS: RolPredefinido[] = [
     rolBase: RolSistema.SUPERVISOR,
     permisos: [
       'panel.ver',
+      'reportes.ver',
       'comercial.ver',
       'registros.ver',
       'costos.ver',
@@ -195,6 +219,7 @@ export const ROLES_PREDEFINIDOS: RolPredefinido[] = [
     rolBase: RolSistema.SUPERVISOR,
     permisos: [
       'panel.ver',
+      'reportes.ver',
       'comercial.gestionar',
       'registros.gestionar',
       'produccion.ver',
@@ -208,6 +233,7 @@ export const ROLES_PREDEFINIDOS: RolPredefinido[] = [
     rolBase: RolSistema.SUPERVISOR,
     permisos: [
       'panel.ver',
+      'reportes.ver',
       'comercial.ver',
       'registros.ver',
       'administracion.gestionar',
@@ -225,7 +251,7 @@ export const ROLES_PREDEFINIDOS: RolPredefinido[] = [
     // `gestionar` y no `ver`: el operario no mira producción, la ejecuta —
     // reclama pasos en la mesa, los inicia y los completa. Lo que lo acota no
     // es el permiso sino el tablero, que sólo le deja tocar el paso activo.
-    permisos: ['produccion.gestionar'],
+    permisos: ['panel.ver', 'produccion.gestionar'],
   },
 ];
 

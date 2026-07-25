@@ -11,6 +11,7 @@ import { randomUUID } from 'node:crypto';
 
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
+import { SuscripcionesService } from '../suscripciones/suscripciones.service';
 import {
   STORAGE_DRIVER,
   type MultipartIniciado,
@@ -80,13 +81,20 @@ export type IniciarSubidaResultado =
 export type UsoAlmacenamiento = {
   /** Contador denormalizado del tenant: el que consulta la cuota. */
   bytes: number;
+  /** La que rige: el ajuste del tenant si lo hay, si no la del plan. */
   cuotaBytes: number | null;
+  /** De dónde sale `cuotaBytes`, para poder decirlo en pantalla. */
+  cuotaOrigen: 'plan' | 'ajuste' | 'sin_limite';
+  /** Lo que falta para llenarla. `null` si no hay cuota. */
+  restanteBytes: number | null;
   porcentaje: number | null;
   /** Suma del desglose. Si difiere de `bytes`, el contador se desincronizó. */
   bytesDetalle: number;
   porScope: Array<{ scope: ArchivoScope; bytes: number; cantidad: number }>;
   /** Ocupa bucket pero NO cuota: ya se liberó al borrar. */
   papelera: { bytes: number; cantidad: number };
+  /** El plan que da el espacio. `storageGb: null` = el plan no lo declara. */
+  plan: { nombre: string; storageGb: number | null } | null;
 };
 
 export type ArchivoEnPapelera = ArchivoDto & {
@@ -114,7 +122,48 @@ export class ArchivosService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(STORAGE_DRIVER) private readonly storage: StorageDriver,
+    private readonly suscripciones: SuscripcionesService,
   ) {}
+
+  /**
+   * La cuota que rige de verdad, y de dónde sale.
+   *
+   * `Tenant.cuotaBytesArchivos` es un AJUSTE que pone el control plane para un
+   * tenant puntual (una migración grande, una cortesía); si no está, manda el
+   * `storageGb` del plan. Hasta que esto existió, el plan no lo aplicaba nadie:
+   * el guard salía temprano cuando el ajuste era null, así que un tenant sin
+   * ajuste no tenía tope aunque su plan dijera 5 GB, y la pantalla mostraba
+   * "sin límite configurado" mientras la suscripción vendía un número.
+   */
+  private async cuotaEfectiva(tenantId: string): Promise<{
+    bytes: number | null;
+    origen: 'plan' | 'ajuste' | 'sin_limite';
+    plan: { nombre: string; storageGb: number | null } | null;
+  }> {
+    const [tenant, limites] = await Promise.all([
+      this.prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { cuotaBytesArchivos: true },
+      }),
+      this.suscripciones.limites(tenantId),
+    ]);
+
+    const plan = limites.planNombre
+      ? { nombre: limites.planNombre, storageGb: limites.storageGb }
+      : null;
+
+    if (tenant?.cuotaBytesArchivos) {
+      return {
+        bytes: Number(tenant.cuotaBytesArchivos),
+        origen: 'ajuste',
+        plan,
+      };
+    }
+    if (limites.storageGb) {
+      return { bytes: limites.storageGb * 1024 ** 3, origen: 'plan', plan };
+    }
+    return { bytes: null, origen: 'sin_limite', plan };
+  }
 
   // ── Subida ───────────────────────────────────────────────────────────
 
@@ -763,11 +812,12 @@ export class ArchivosService {
    * desincronizan se ve acá, comparando `bytes` contra `bytesDetalle`.
    */
   async uso(tenantId: string): Promise<UsoAlmacenamiento> {
-    const [tenant, porScope, papelera] = await Promise.all([
+    const [tenant, cuota, porScope, papelera] = await Promise.all([
       this.prisma.tenant.findUnique({
         where: { id: tenantId },
-        select: { bytesArchivos: true, cuotaBytesArchivos: true },
+        select: { bytesArchivos: true },
       }),
+      this.cuotaEfectiva(tenantId),
       this.prisma.archivo.groupBy({
         by: ['scope'],
         where: { estado: ArchivoEstado.LISTO },
@@ -790,22 +840,23 @@ export class ArchivosService {
       .sort((a, b) => b.bytes - a.bytes);
 
     const bytes = Number(tenant?.bytesArchivos ?? 0);
-    const cuota = tenant?.cuotaBytesArchivos
-      ? Number(tenant.cuotaBytesArchivos)
-      : null;
+    const tope = cuota.bytes;
 
     return {
       bytes,
-      cuotaBytes: cuota,
-      porcentaje: cuota
-        ? Math.min(100, Math.round((bytes / cuota) * 100))
-        : null,
+      cuotaBytes: tope,
+      cuotaOrigen: cuota.origen,
+      // No baja de cero: pasarse de la cuota es posible (el ajuste puede
+      // bajarse después de subidas ya hechas) y "-1,2 GB restantes" no dice nada.
+      restanteBytes: tope === null ? null : Math.max(0, tope - bytes),
+      porcentaje: tope ? Math.min(100, Math.round((bytes / tope) * 100)) : null,
       bytesDetalle: detalle.reduce((n, s) => n + s.bytes, 0),
       porScope: detalle,
       papelera: {
         bytes: Number(papelera._sum.bytes ?? 0),
         cantidad: papelera._count._all,
       },
+      plan: cuota.plan,
     };
   }
 
@@ -970,15 +1021,24 @@ export class ArchivosService {
   }
 
   private async verificarCuota(tenantId: string, bytes: number): Promise<void> {
-    const tenant = await this.prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: { bytesArchivos: true, cuotaBytesArchivos: true },
-    });
-    if (!tenant?.cuotaBytesArchivos) return;
-    if (tenant.bytesArchivos + BigInt(bytes) > tenant.cuotaBytesArchivos) {
-      const gb = Number(tenant.cuotaBytesArchivos) / 1024 ** 3;
+    const [tenant, cuota] = await Promise.all([
+      this.prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { bytesArchivos: true },
+      }),
+      this.cuotaEfectiva(tenantId),
+    ]);
+    if (cuota.bytes === null) return;
+    if (Number(tenant?.bytesArchivos ?? 0) + bytes > cuota.bytes) {
+      const gb = cuota.bytes / 1024 ** 3;
+      // El mensaje cambia según de dónde salga el tope: "ampliá el plan" no
+      // sirve si el que frena es un ajuste puesto a mano para este tenant.
+      const salida =
+        cuota.origen === 'plan'
+          ? 'Borrá archivos o pasate a un plan con más espacio.'
+          : 'Borrá archivos o pedí que te amplíen el espacio.';
       throw new ForbiddenException(
-        `Te quedaste sin espacio (cuota: ${gb.toFixed(1)} GB). Borrá archivos o ampliá el plan.`,
+        `Te quedaste sin espacio (cuota: ${gb.toFixed(1)} GB). ${salida}`,
       );
     }
   }

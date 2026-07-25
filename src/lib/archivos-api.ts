@@ -38,11 +38,15 @@ export type ArchivoEnPapelera = Archivo & {
 
 export type UsoAlmacenamiento = {
   bytes: number;
+  /** La cuota que rige: el ajuste de la cuenta si lo hay, si no la del plan. */
   cuotaBytes: number | null;
+  cuotaOrigen: "plan" | "ajuste" | "sin_limite";
+  restanteBytes: number | null;
   porcentaje: number | null;
   bytesDetalle: number;
   porScope: Array<{ scope: ArchivoScope; bytes: number; cantidad: number }>;
   papelera: { bytes: number; cantidad: number };
+  plan: { nombre: string; storageGb: number | null } | null;
 };
 
 export async function getUsoAlmacenamiento(): Promise<UsoAlmacenamiento> {

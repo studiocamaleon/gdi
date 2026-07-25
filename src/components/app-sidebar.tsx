@@ -22,6 +22,14 @@ type IconProps = React.SVGProps<SVGSVGElement>;
 type IconComponent = (props: IconProps) => React.ReactElement;
 
 const Ico = {
+  Chart: (props: IconProps) => (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M4 3v16a2 2 0 0 0 2 2h15" />
+      <rect x="7" y="12" width="3.5" height="5" rx="1" />
+      <rect x="13" y="8" width="3.5" height="9" rx="1" />
+      <path d="m7.5 8 3-3 3 2.5 4.5-5" />
+    </svg>
+  ),
   Grid: (props: IconProps) => (
     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" {...props}>
       <rect x="3" y="3" width="7" height="7" rx="1.5" />

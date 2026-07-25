@@ -18,14 +18,17 @@ import { Permiso } from '../auth/permiso.decorator';
 import { OcultaMargenes } from '../auth/margenes.decorator';
 
 /**
- * Panel general (Inteligencia de negocio) — un endpoint por TAB. Los
- * cimientos: cada endpoint ya resuelve el rango y devuelve la `meta`
- * honesta; el cuerpo de cada tab se completa cuando aterriza su service
- * de dominio (rentabilidad → cobranza → ventas → producto → producción).
- * Ver docs/reportes-plan-backend.md §7.
+ * Reportes (Inteligencia de negocio) — un endpoint por REPORTE. Cada uno
+ * resuelve el rango y devuelve la `meta` honesta (fuente, límites, si hay
+ * comparativa) junto a los datos. Ver docs/reportes-plan-backend.md §7.
+ *
+ * Entrar al módulo pide `reportes.ver`; el Resumen ejecutivo pide además el
+ * suyo, porque junta el negocio entero en una pantalla y de fábrica es sólo
+ * del Administrador. Los márgenes se podan aparte con @OcultaMargenes: un
+ * vendedor puede leer sus ventas sin ver cuánto gana la imprenta en cada una.
  */
 @OcultaMargenes()
-@Permiso('panel.ver')
+@Permiso('reportes.ver')
 @Controller('reportes/panel')
 export class ReportesController {
   constructor(
@@ -41,6 +44,13 @@ export class ReportesController {
     private readonly embudoSvc: EmbudoService,
   ) {}
 
+  /**
+   * Resumen ejecutivo. Pide su propio permiso —pisa al `reportes.ver` del
+   * controller—: es el único reporte que junta facturación, margen, punto de
+   * equilibrio y alertas en una pantalla, y esa lectura completa del negocio
+   * de fábrica la tiene sólo el Administrador.
+   */
+  @Permiso('reportes.ver_resumen')
   @Get('resumen')
   async resumen(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
     const { rango, anterior } = this.service.resolverRango(query);
@@ -110,6 +120,14 @@ export class ReportesController {
     };
   }
 
+  /**
+   * Finanzas es rentabilidad pura: acá el margen no viaja de arrastre, ES el
+   * contenido. Podarlo con @OcultaMargenes dejaría una pantalla de cascarones
+   * vacíos, así que el permiso decide la puerta, no el relleno. Hasta ahora
+   * esto lo tapaba sólo el front escondiendo el tab; ahora que es una ruta con
+   * URL propia, el gate tiene que estar acá.
+   */
+  @Permiso('finanzas.ver_margenes')
   @Get('finanzas')
   async finanzas(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
     const { rango, anterior } = this.service.resolverRango(query);
@@ -206,19 +224,6 @@ export class ReportesController {
         limites: this.equipoSvc.limites(),
       }),
       ...equipo,
-    };
-  }
-
-  /**
-   * "Mi desempeño": SIEMPRE scoped al usuario logueado (auth.userId) —
-   * la vista del propio operario, ventana fija de 8 semanas.
-   */
-  @Get('mi-desempeno')
-  async miDesempeno(@CurrentSession() auth: CurrentAuth) {
-    const datos = await this.equipoSvc.miDesempeno(auth.tenantId, auth.userId);
-    return {
-      limites: this.equipoSvc.limitesMiDesempeno(),
-      ...datos,
     };
   }
 

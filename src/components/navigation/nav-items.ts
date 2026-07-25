@@ -8,6 +8,7 @@
 import type { PermisoClave } from "@/lib/permisos";
 
 export type NavIconKey =
+  | "Chart"
   | "Grid"
   | "Briefcase"
   | "Users"
@@ -45,6 +46,8 @@ export type NavItem =
     };
 
 export const NAV: NavItem[] = [
+  // El home. Vacío por ahora: qué muestra —y para quién— se diseña aparte.
+  // Lo tienen todos los roles, incluido el Operario.
   { key: "panel", label: "Panel general", icon: "Grid",
     permiso: "panel.ver", href: "/" },
   {
@@ -183,11 +186,41 @@ export const NAV: NavItem[] = [
         label: "Métodos de pago",
         href: "/administracion/metodos-pago",
       },
+    ],
+  },
+  // Reportes fue durante un tiempo el "Panel general": ocho vistas como tabs de
+  // la home, sin URL propia. Como tabs no se podían linkear ni compartir, y el
+  // buscador —que come de este árbol— no las encontraba. Ahora cada reporte es
+  // una ruta.
+  {
+    key: "reportes",
+    label: "Reportes",
+    icon: "Chart",
+    permiso: "reportes.ver",
+    children: [
+      // El único con permiso propio: junta el negocio entero en una pantalla
+      // (facturación, margen, punto de equilibrio, alertas) y de fábrica lo
+      // tiene sólo el Administrador.
       {
-        key: "datos-fiscales",
-        label: "Datos fiscales",
-        href: "/administracion/datos-fiscales",
+        key: "reporte-resumen",
+        label: "Resumen ejecutivo",
+        href: "/reportes/resumen",
+        permiso: "reportes.ver_resumen",
       },
+      { key: "reporte-comercial", label: "Comercial", href: "/reportes/comercial" },
+      { key: "reporte-embudo", label: "Embudo", href: "/reportes/embudo" },
+      { key: "reporte-clientes", label: "Clientes", href: "/reportes/clientes" },
+      { key: "reporte-produccion", label: "Producción", href: "/reportes/produccion" },
+      { key: "reporte-equipo", label: "Equipo", href: "/reportes/equipo" },
+      // Rentabilidad pura: acá el margen es el contenido, no un dato de
+      // arrastre que se pueda podar. Sin el permiso, la pantalla no existe.
+      {
+        key: "reporte-finanzas",
+        label: "Finanzas",
+        href: "/reportes/finanzas",
+        permiso: "finanzas.ver_margenes",
+      },
+      { key: "reporte-producto", label: "Ventas & Producto", href: "/reportes/producto" },
     ],
   },
   {
@@ -214,6 +247,19 @@ export const NAV: NavItem[] = [
         key: "usuarios",
         label: "Usuarios",
         href: "/configuracion/usuarios",
+      },
+      // Vive acá y no en Administración: es la puesta a punto del emisor
+      // —quién factura, con qué logo, desde qué punto de venta—, no una
+      // operación del día a día. Se lo configura una vez y se lo olvida.
+      {
+        key: "datos-fiscales",
+        label: "Datos fiscales",
+        href: "/configuracion/datos-fiscales",
+      },
+      {
+        key: "almacenamiento",
+        label: "Almacenamiento",
+        href: "/configuracion/almacenamiento",
       },
       {
         key: "integraciones",

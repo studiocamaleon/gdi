@@ -217,7 +217,7 @@ export async function avanzarCompraProduccion(
 /**
  * Ahorro de material concretado al consolidar la tanda (simulador gran
  * formato): se persiste como valor generado por el sistema y alimenta el
- * acumulado del Panel general.
+ * acumulado de Reportes.
  */
 export type AhorroConsolidacionPayload = {
   materiaPrimaId?: string;

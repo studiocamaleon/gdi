@@ -1,37 +1,22 @@
 "use client";
 
 /**
- * Panel general (Inteligencia de negocio) — portado VERBATIM del diseño
- * del usuario (Grafoprint: panel.jsx/panel-tabs.jsx/panel-charts.jsx),
- * conectado a los contratos reales de panel-api.ts. Clases .dash/.d-* y
- * primitivos de gráfico idénticos al diseño. Ver docs/reportes-panel-analisis-diseno.md
+ * Reportes (Inteligencia de negocio) — el CUERPO de cada reporte y el kit de
+ * gráficos que comparten, portado VERBATIM del diseño del usuario (Grafoprint:
+ * panel.jsx/panel-tabs.jsx/panel-charts.jsx) y conectado a los contratos reales
+ * de panel-api.ts. Clases .dash/.d-* idénticas al diseño.
+ *
+ * Acá NO hay navegación ni fetching: cada `Tab*` recibe sus datos ya resueltos
+ * por su página en `app/(dashboard)/reportes/`, y el cromo (título, período,
+ * tira de reportes) vive en `reportes-shell.tsx`. Antes esto era un solo
+ * componente con 9 tabs en `useState` sobre la home.
+ * Ver docs/reportes-panel-analisis-diseno.md
  */
 
 import * as React from "react";
-import {
-  LayoutGridIcon,
-  BriefcaseIcon,
-  FactoryIcon,
-  CircleDollarSignIcon,
-  FilterIcon,
-  HardHatIcon,
-  PackageIcon,
-  UserRoundIcon,
-  UsersIcon,
-} from "lucide-react";
-import { TabMiDesempeno } from "@/components/produccion/mi-desempeno";
 import { technologyCodeLabel } from "@/lib/maquinaria-tecnologias";
 import {
-  getMiDesempeno,
-  getPanelClientes,
-  getPanelComercial,
-  getPanelEmbudo,
-  getPanelEquipo,
-  getPanelFinanzas,
   getPanelMixCategoria,
-  getPanelProduccion,
-  getPanelProducto,
-  getPanelResumen,
   type AlertaPanel,
   type CeldaEstacionalidadPanel,
   type ClientesPanel,
@@ -40,7 +25,6 @@ import {
   type EmbudoPanel,
   type EquipoPanel,
   type MetaPanel,
-  type MiDesempenoPanel,
   type MixCategoriaPanel,
   type ProduccionPanel,
   type ProductoPanel,
@@ -50,7 +34,6 @@ import {
   type RentabilidadPanel,
   type ResumenProduccionKpis,
 } from "@/lib/panel-api";
-import { usePuede } from "@/components/navigation/permisos-provider";
 
 /* ─── Formato es-AR ─── */
 export const fmtAR = (n: number, d = 0) =>
@@ -553,7 +536,7 @@ function RankList({ rows, cols = "18px 1fr 90px" }: { rows: RankingPanel[]; cols
 }
 
 /* ═══════════ TAB · Resumen ═══════════ */
-type ResumenData = {
+export type ResumenData = {
   meta: MetaPanel;
   rentabilidad: RentabilidadPanel;
   produccion: ResumenProduccionKpis;
@@ -563,7 +546,7 @@ type ResumenData = {
   alertas: AlertaPanel[];
 };
 
-function TabResumen({ d }: { d: ResumenData }) {
+export function TabResumen({ d }: { d: ResumenData }) {
   const r = d.rentabilidad;
   const labels = d.serie.map((s) => s.fecha.slice(5));
   const costos = d.serie.map((s) => s.costo);
@@ -630,7 +613,7 @@ function TabResumen({ d }: { d: ResumenData }) {
 }
 
 /* ═══════════ TAB · Comercial ═══════════ */
-function TabComercial({ d }: { d: ComercialPanel }) {
+export function TabComercial({ d }: { d: ComercialPanel }) {
   const k = d.kpis;
   const labels = d.serie.map((s) => s.fecha.slice(5));
   const maxCatMix = Math.max(...d.mixCategoria.map((m) => m.monto), 1);
@@ -702,7 +685,7 @@ function TabComercial({ d }: { d: ComercialPanel }) {
  * funnel decrece de forma monótona. Cierra en Entregadas.
  * Ver docs/embudo-comercial-panel-diseno.md
  */
-function TabEmbudo({ d }: { d: EmbudoPanel }) {
+export function TabEmbudo({ d }: { d: EmbudoPanel }) {
   const k = d.kpis;
   const [modo, setModo] = React.useState<"cant" | "monto">("cant");
   const valDe = (e: { cantidad: number; monto: number }) => (modo === "cant" ? e.cantidad : e.monto);
@@ -793,7 +776,7 @@ export function fmtMinutos(min: number): string {
   return min < 90 ? `${fmtAR(min, 0)}m` : `${fmtAR(min / 60, 1)}h`;
 }
 
-function TabProduccion({ d }: { d: ProduccionPanel }) {
+export function TabProduccion({ d }: { d: ProduccionPanel }) {
   const k = d.kpis;
   const registro = d.registroTiempos;
   const ahorros = d.ahorros;
@@ -922,13 +905,13 @@ function TabProduccion({ d }: { d: ProduccionPanel }) {
 }
 
 /* ═══════════ TAB · Finanzas ═══════════ */
-type FinanzasData = { meta: MetaPanel; rentabilidad: RentabilidadPanel; cobranza: CobranzaPanel };
+export type FinanzasData = { meta: MetaPanel; rentabilidad: RentabilidadPanel; cobranza: CobranzaPanel };
 const AGING_COLORS: Record<string, string> = { "0-30": "var(--ok)", "31-60": "#c8c6c0", "61-90": "#d97757", "+90": "var(--signal)" };
 const CATEGORIA_GASTO_LABEL: Record<string, string> = {
   ALQUILER: "Alquiler", SUELDOS: "Sueldos", SERVICIOS: "Servicios", AMORTIZACION: "Amortización",
   FINANCIEROS: "Financieros", IMPUESTOS: "Impuestos", MARKETING: "Marketing", OTROS: "Otros",
 };
-function TabFinanzas({ d }: { d: FinanzasData }) {
+export function TabFinanzas({ d }: { d: FinanzasData }) {
   const r = d.rentabilidad, co = d.cobranza;
   const gasto = r.gastoPorCategoria ?? [];
   return (
@@ -1074,7 +1057,7 @@ function fmtCantidadMaterial(m: { cantidad: number; unidad: string; formato: str
 
 const COLOR_A_MEDIDA = PALETA_SERIES[1];
 
-function TabProducto({ d, rango }: { d: ProductoPanel; rango: RangoPanel }) {
+export function TabProducto({ d, rango }: { d: ProductoPanel; rango: RangoPanel }) {
   const maxTec = Math.max(...d.porTecnologia.map((m) => m.monto), 1);
   const ad = d.adicionales;
   const med = d.medidas;
@@ -1218,7 +1201,7 @@ function MatrizPolivalencia({ celdas }: { celdas: EquipoPanel["polivalencia"] })
   );
 }
 
-function TabEquipo({ d }: { d: EquipoPanel }) {
+export function TabEquipo({ d }: { d: EquipoPanel }) {
   const k = d.kpis;
   return (
     <>
@@ -1336,7 +1319,7 @@ const SEGMENTO_RFM_COLOR: Record<string, string> = {
   en_riesgo: "#d97757", perdidos: "var(--signal)", ocasionales: "#c8c6c0",
 };
 
-function TabClientes({ d }: { d: ClientesPanel }) {
+export function TabClientes({ d }: { d: ClientesPanel }) {
   const k = d.kpis;
   const serieNR = d.serieNuevosRecurrentes;
   const maxSeg = Math.max(...d.rfm.segmentos.map((s) => s.clientes), 1);
@@ -1429,117 +1412,18 @@ function TabClientes({ d }: { d: ClientesPanel }) {
   );
 }
 
-/* ═══════════ Shell ═══════════ */
-type TabKey = "resumen" | "comercial" | "embudo" | "clientes" | "produccion" | "equipo" | "finanzas" | "producto" | "midesempeno";
-const TABS: Array<{ key: TabKey; label: string; Icon: React.ComponentType<React.SVGProps<SVGSVGElement>> }> = [
-  { key: "resumen", label: "Resumen ejecutivo", Icon: LayoutGridIcon },
-  { key: "comercial", label: "Comercial", Icon: BriefcaseIcon },
-  { key: "embudo", label: "Embudo", Icon: FilterIcon },
-  { key: "clientes", label: "Clientes", Icon: UsersIcon },
-  { key: "produccion", label: "Producción", Icon: FactoryIcon },
-  { key: "equipo", label: "Equipo", Icon: HardHatIcon },
-  { key: "finanzas", label: "Finanzas", Icon: CircleDollarSignIcon },
-  { key: "producto", label: "Ventas & Producto", Icon: PackageIcon },
-  // Vista personal del usuario logueado. El gating por rol llega después.
-  { key: "midesempeno", label: "Mi desempeño", Icon: UserRoundIcon },
-];
-type PeriodoKey = "mes" | "mesPasado" | "trimestre" | "anio";
-const PERIODOS: Array<{ key: PeriodoKey; label: string }> = [
-  { key: "mes", label: "Este mes" },
-  { key: "mesPasado", label: "Mes pasado" },
-  { key: "trimestre", label: "Trimestre" },
-  { key: "anio", label: "Año" },
-];
-function iso(f: Date) { return `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, "0")}-${String(f.getDate()).padStart(2, "0")}`; }
-function rangoDe(p: PeriodoKey): RangoPanel {
-  const hoy = new Date(), y = hoy.getFullYear(), m = hoy.getMonth();
-  if (p === "mes") return {};
-  if (p === "mesPasado") return { desde: iso(new Date(y, m - 1, 1)), hasta: iso(new Date(y, m, 0)) };
-  if (p === "trimestre") { const q = Math.floor(m / 3) * 3; return { desde: iso(new Date(y, q, 1)), hasta: iso(new Date(y, q + 3, 0)) }; }
-  return { desde: iso(new Date(y, 0, 1)), hasta: iso(new Date(y, 11, 31)) };
-}
-const FETCHERS: Record<TabKey, (r: RangoPanel) => Promise<unknown>> = {
-  resumen: getPanelResumen, comercial: getPanelComercial, embudo: getPanelEmbudo, clientes: getPanelClientes, produccion: getPanelProduccion, equipo: getPanelEquipo, finanzas: getPanelFinanzas, producto: getPanelProducto,
-  // Ventana fija de 8 semanas: ignora el selector de período.
-  midesempeno: () => getMiDesempeno(),
-};
-
-export function PanelGeneral({ initialResumen }: { initialResumen: ResumenData }) {
-  // Finanzas es rentabilidad pura: facturado contra costo, margen y
-  // contribución. Sin el permiso el tab no se muestra —y si llegara igual, el
-  // API ya devuelve la respuesta sin esos campos.
-  const verMargenes = usePuede("finanzas.ver_margenes");
-  const tabs = React.useMemo(
-    () => (verMargenes ? TABS : TABS.filter((t) => t.key !== "finanzas")),
-    [verMargenes],
-  );
-  const [tab, setTab] = React.useState<TabKey>("resumen");
-  const [periodo, setPeriodo] = React.useState<PeriodoKey>("mes");
-  const [cache, setCache] = React.useState<Record<string, unknown>>({ "resumen|mes": initialResumen });
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-  const key = `${tab}|${periodo}`;
-  const data = cache[key];
-  // Identidad estable del rango: evita re-fetches del drill por objeto nuevo.
-  const rango = React.useMemo(() => rangoDe(periodo), [periodo]);
-
-  React.useEffect(() => {
-    if (data) return;
-    let vivo = true; setLoading(true); setError(null);
-    FETCHERS[tab](rangoDe(periodo))
-      .then((res) => { if (vivo) setCache((c) => ({ ...c, [key]: res })); })
-      .catch((err) => { if (vivo) setError(err instanceof Error ? err.message : "No se pudo cargar el reporte."); })
-      .finally(() => { if (vivo) setLoading(false); });
-    return () => { vivo = false; };
-  }, [key, tab, periodo, data]);
-
-  const meta = (data as { meta?: MetaPanel } | undefined)?.meta;
-
+/* ═══════════ Pie de fuente ═══════════ */
+/**
+ * La letra chica de cada reporte: de dónde salen los números y qué NO
+ * incluyen. La regla de la casa es que un reporte declare su fuente y sus
+ * límites antes que quede lindo — un dato sin contexto se lee como verdad.
+ */
+export function MetaPie({ meta }: { meta: MetaPanel | undefined }) {
+  if (!meta || meta.limites.length === 0) return null;
   return (
-    <div className="dash-scroll" style={{ padding: "26px 30px 44px" }}>
-      <div className="dash">
-        <div className="dash-head">
-          <div className="title-block">
-            <h1>Panel general</h1>
-            <div className="sub">Inteligencia de negocio de tu taller, con datos reales.</div>
-          </div>
-          <div className="actions">
-            <div className="dash-period">
-              {PERIODOS.map((p) => <button key={p.key} className={periodo === p.key ? "on" : ""} onClick={() => setPeriodo(p.key)}>{p.label}</button>)}
-            </div>
-          </div>
-        </div>
-
-        <div className="dash-tabs">
-          {tabs.map((t) => (
-            <button key={t.key} className={`dash-tab ${tab === t.key ? "on" : ""}`} onClick={() => setTab(t.key)}>
-              <span className="ico"><t.Icon width={15} height={15} /></span><span>{t.label}</span>
-            </button>
-          ))}
-        </div>
-
-        {error ? <div className="d-empty">{error}</div> : null}
-        {loading && !data ? <div className="d-empty">Calculando el período…</div> : null}
-
-        {data ? (
-          <>
-            {tab === "resumen" ? <TabResumen d={data as ResumenData} /> : null}
-            {tab === "comercial" ? <TabComercial d={data as ComercialPanel} /> : null}
-            {tab === "embudo" ? <TabEmbudo d={data as EmbudoPanel} /> : null}
-            {tab === "clientes" ? <TabClientes d={data as ClientesPanel} /> : null}
-            {tab === "produccion" ? <TabProduccion d={data as ProduccionPanel} /> : null}
-            {tab === "equipo" ? <TabEquipo d={data as EquipoPanel} /> : null}
-            {tab === "finanzas" ? <TabFinanzas d={data as FinanzasData} /> : null}
-            {tab === "producto" ? <TabProducto d={data as ProductoPanel} rango={rango} /> : null}
-            {tab === "midesempeno" ? <TabMiDesempeno d={data as MiDesempenoPanel} /> : null}
-            {meta && meta.limites.length > 0 ? (
-              <div style={{ fontSize: 11, color: "var(--muted-text)", lineHeight: 1.5, marginTop: 4 }}>
-                <strong>Fuente:</strong> {meta.fuente}. {meta.limites.join(" ")}{meta.sinComparativa ? " Sin período anterior para comparar." : ""}
-              </div>
-            ) : null}
-          </>
-        ) : null}
-      </div>
+    <div style={{ fontSize: 11, color: "var(--muted-text)", lineHeight: 1.5, marginTop: 4 }}>
+      <strong>Fuente:</strong> {meta.fuente}. {meta.limites.join(" ")}
+      {meta.sinComparativa ? " Sin período anterior para comparar." : ""}
     </div>
   );
 }

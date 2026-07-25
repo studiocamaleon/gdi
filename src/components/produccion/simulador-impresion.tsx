@@ -433,7 +433,7 @@ function SimMaterialCard({
   );
 
   // Ahorro CONCRETADO de la tanda: se persiste al marcar impresos para el
-  // acumulado del Panel general. Sin baseline cotizado no hay qué asentar.
+  // acumulado de Reportes. Sin baseline cotizado no hay qué asentar.
   const materiaPrimaId = material.key.split("|")[1];
   const ahorroPayload: AhorroConsolidacionPayload | undefined =
     ahorroMl !== null && consolidadoMl !== null
