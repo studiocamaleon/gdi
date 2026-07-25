@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { EyeIcon, EyeOffIcon, LogInIcon } from "lucide-react";
 
 import { login } from "@/lib/auth";
@@ -12,8 +12,22 @@ const wait = (milliseconds: number) =>
     window.setTimeout(resolve, milliseconds);
   });
 
+/**
+ * Por qué la persona terminó acá sin pedirlo.
+ *
+ * `/salir` y el middleware mandan al login cuando la sesión ya no sirve. Sin
+ * este cartel, aparecer de golpe en la pantalla de login se lee como que el
+ * sistema se cayó — que es exactamente lo que pasó la primera vez.
+ */
+const MOTIVOS: Record<string, string> = {
+  sesion:
+    "Tu sesión se cerró por inactividad. Volvé a entrar y seguís donde estabas.",
+};
+
 export function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const motivo = MOTIVOS[searchParams.get("motivo") ?? ""] ?? null;
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [isPasswordVisible, setIsPasswordVisible] = React.useState(false);
@@ -62,6 +76,14 @@ export function LoginForm() {
           Accedé con tu correo corporativo y la clave asociada a tu usuario. El sistema te redirige a tu entorno activo al validar la sesión.
         </p>
         <hr />
+
+        {/* Se esconde apenas hay un error de credenciales: dos carteles
+            juntos compiten y el que importa es el del intento actual. */}
+        {motivo && !errorMessage ? (
+          <p className="login-aviso" role="status">
+            {motivo}
+          </p>
+        ) : null}
 
         <div className="field">
           <label htmlFor="login-email">Correo</label>

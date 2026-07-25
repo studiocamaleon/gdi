@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { tryGetCurrentUser } from "@/lib/auth";
 import { LoginConstellation } from "@/components/auth/login-constellation";
@@ -59,7 +60,11 @@ export default async function LoginPage() {
       </aside>
 
       <section className="pane-right">
-        <LoginForm />
+        {/* `useSearchParams` del formulario —lee el motivo por el que la
+            persona terminó acá— necesita un límite de Suspense. */}
+        <Suspense fallback={null}>
+          <LoginForm />
+        </Suspense>
       </section>
 
       <div className="ingress-lockup" aria-hidden="true">

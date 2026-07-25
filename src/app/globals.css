@@ -4234,6 +4234,19 @@ body {
     background: var(--border);
   }
 
+  /* Por qué caíste acá sin pedirlo (sesión vencida, logout). Informativo, no
+     un error: el color de alerta lo reserva el fallo de credenciales. */
+  .gp-login .login-form .login-aviso {
+    margin: 0 0 20px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface-2, rgba(255, 255, 255, 0.04));
+    color: var(--muted-text);
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+
   .gp-login .login-form .field {
     display: flex;
     flex-direction: column;
@@ -34528,5 +34541,6 @@ body:has(.t-app) {
 /* Aviso con acción al costado (cancelación pendiente) */
 .sub-alert-accion{align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap}
 .sub-alert-accion .btn-primary{flex:none;white-space:nowrap}
+
 
 
