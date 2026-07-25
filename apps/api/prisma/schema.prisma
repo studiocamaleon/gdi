@@ -901,6 +901,14 @@ model Cliente {
   condicionFiscal     String                            @default("consumidor_final")
   /// Tope de deuda en cta. cte. (null = sin límite definido).
   limiteCredito       Decimal?                          @db.Decimal(14, 2)
+  /// Inhabilitado: sigue existiendo y sus órdenes, comprobantes y cobros
+  /// quedan enteros, pero desaparece de las listas y de los buscadores.
+  ///
+  /// Es la única forma de "sacar" a un cliente que ya operó. Borrarlo dejaba
+  /// las órdenes sin cliente EN SILENCIO: la relación es opcional, así que
+  /// Postgres pone null y nadie se entera hasta que alguien busca de quién era
+  /// una orden. Ver docs/clientes-inhabilitar-diseno.md
+  activo              Boolean                           @default(true)
   createdAt           DateTime                          @default(now())
   updatedAt           DateTime                          @updatedAt
   tenant              Tenant                            @relation(fields: [tenantId], references: [id], onDelete: Cascade)

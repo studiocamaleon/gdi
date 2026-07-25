@@ -5,6 +5,12 @@ type ClientesQuery = {
   q?: string;
   page?: number;
   limit?: number;
+  /**
+   * Traer también los inhabilitados. Sólo lo pide la pantalla de Clientes
+   * cuando alguien lo marca: en el resto del sistema —selectores del cotizador,
+   * buscadores— un inhabilitado no tiene que aparecer.
+   */
+  incluirInactivos?: boolean;
 };
 
 export type ClientesListResponse = {
@@ -20,6 +26,7 @@ function buildClientesPath(params: ClientesQuery = {}) {
   searchParams.set("limit", String(params.limit ?? 200));
   if (params.page) searchParams.set("page", String(params.page));
   if (params.q?.trim()) searchParams.set("q", params.q.trim());
+  if (params.incluirInactivos) searchParams.set("incluirInactivos", "true");
   return `/clientes?${searchParams.toString()}`;
 }
 
@@ -61,5 +68,15 @@ export async function updateCliente(id: string, payload: ClientePayload) {
 export async function deleteCliente(id: string) {
   return apiRequest<void>(`/clientes/${id}`, {
     method: "DELETE",
+  });
+}
+
+/**
+ * Inhabilitar o volver a habilitar. Es la salida para el cliente que ya operó:
+ * borrarlo dejaría sus órdenes sin dueño.
+ */
+export async function toggleCliente(id: string) {
+  return apiRequest<ClienteDetalle>(`/clientes/${id}/toggle`, {
+    method: "PATCH",
   });
 }

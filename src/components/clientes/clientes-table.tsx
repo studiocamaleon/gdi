@@ -15,7 +15,12 @@ import { toast } from "sonner";
 
 import { NavLink } from "@/components/navigation/nav-link";
 import { useNavigationFeedback } from "@/components/navigation/navigation-feedback";
-import { createCliente, deleteCliente } from "@/lib/clientes-api";
+import {
+  createCliente,
+  deleteCliente,
+  getClientes,
+  toggleCliente,
+} from "@/lib/clientes-api";
 import { ClienteDetalle } from "@/lib/clientes";
 import {
   downloadContactImportTemplate,
@@ -31,6 +36,8 @@ import {
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -76,6 +83,8 @@ export function ClientesTable({ initialClientes }: ClientesTableProps) {
   const { startNavigation } = useNavigationFeedback();
   const [clientes, setClientes] = React.useState(initialClientes);
   const [search, setSearch] = React.useState("");
+  // Los inhabilitados no vienen por defecto: aparecen sólo si se piden.
+  const [verInactivos, setVerInactivos] = React.useState(false);
   const [confirmandoEliminar, setConfirmandoEliminar] = React.useState(false);
   const [selectedClientes, setSelectedClientes] = React.useState<Set<string>>(
     new Set(),
@@ -148,6 +157,39 @@ export function ClientesTable({ initialClientes }: ClientesTableProps) {
     URL.revokeObjectURL(url);
   };
 
+  React.useEffect(() => {
+    let vivo = true;
+    getClientes({ incluirInactivos: verInactivos })
+      .then((r) => vivo && setClientes(r))
+      .catch(() => toast.error("No se pudo actualizar la lista."));
+    return () => {
+      vivo = false;
+    };
+  }, [verInactivos]);
+
+  const alternar = (cliente: ClienteDetalle) => {
+    startDeleteTransition(async () => {
+      try {
+        await toggleCliente(cliente.id);
+        setClientes((current) =>
+          verInactivos
+            ? current.map((c) =>
+                c.id === cliente.id ? { ...c, activo: !c.activo } : c,
+              )
+            : current.filter((c) => c.id !== cliente.id),
+        );
+        toast.success(
+          cliente.activo
+            ? `${cliente.nombre} quedó inhabilitado.`
+            : `${cliente.nombre} vuelve a estar activo.`,
+        );
+        router.refresh();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "No se pudo cambiar el estado.");
+      }
+    });
+  };
+
   const handleDeleteSelection = () => {
     if (selectedRows.length === 0) {
       return;
@@ -159,11 +201,32 @@ export function ClientesTable({ initialClientes }: ClientesTableProps) {
   const confirmarEliminarSeleccion = () => {
     setConfirmandoEliminar(false);
     startDeleteTransition(async () => {
-      await Promise.all(selectedRows.map((cliente) => deleteCliente(cliente.id)));
-      setClientes((current) =>
-        current.filter((cliente) => !selectedClientes.has(cliente.id)),
+      // Los que ya operaron no se borran: el API los rechaza uno por uno. Se
+      // sigue con el resto y se dice cuáles quedaron — un Promise.all pelado
+      // abortaba todo con el primer rechazo y no se borraba ni el que podía.
+      const resultados = await Promise.allSettled(
+        selectedRows.map((c) => deleteCliente(c.id)),
       );
+      const borrados = new Set<string>();
+      const frenados: string[] = [];
+      resultados.forEach((r, i) => {
+        if (r.status === "fulfilled") borrados.add(selectedRows[i].id);
+        else frenados.push(selectedRows[i].nombre);
+      });
+
+      setClientes((current) => current.filter((c) => !borrados.has(c.id)));
       setSelectedClientes(new Set());
+
+      if (borrados.size > 0) {
+        toast.success(
+          `${borrados.size} cliente${borrados.size === 1 ? "" : "s"} eliminado${borrados.size === 1 ? "" : "s"}.`,
+        );
+      }
+      if (frenados.length > 0) {
+        toast.error(
+          `${frenados.join(", ")} tiene${frenados.length === 1 ? "" : "n"} historial y no se puede${frenados.length === 1 ? "" : "n"} eliminar. Inhabilitalo${frenados.length === 1 ? "" : "s"} desde la fila.`,
+        );
+      }
       router.refresh();
     });
   };
@@ -227,12 +290,24 @@ export function ClientesTable({ initialClientes }: ClientesTableProps) {
                 estructura para futuras altas, ediciones y acciones masivas.
               </CardDescription>
             </div>
-            <Input
-              placeholder="Buscar por nombre, email o ciudad..."
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              className="max-w-xs"
-            />
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <Input
+                placeholder="Buscar por nombre, email o ciudad..."
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                className="max-w-xs"
+              />
+              <label className="flex items-center gap-2 whitespace-nowrap text-sm text-muted-foreground">
+                <Switch
+                  checked={verInactivos}
+                  onCheckedChange={(v) => {
+                    setVerInactivos(v);
+                    setPage(1);
+                  }}
+                />
+                Ver inhabilitados
+              </label>
+            </div>
 
             <div className="flex flex-col gap-2 sm:flex-row">
               <input
@@ -327,6 +402,7 @@ export function ClientesTable({ initialClientes }: ClientesTableProps) {
                 <TableHead>Contacto</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Ciudad</TableHead>
+                <TableHead className="text-right">Estado</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -354,11 +430,27 @@ export function ClientesTable({ initialClientes }: ClientesTableProps) {
                       >
                         {cliente.nombre}
                       </NavLink>
+                      {!cliente.activo ? (
+                        <Badge variant="outline" className="ml-2 text-[11px]">
+                          Inhabilitado
+                        </Badge>
+                      ) : null}
                     </TableCell>
                     <TableCell>{cliente.razonSocial}</TableCell>
                     <TableCell>{cliente.contacto}</TableCell>
                     <TableCell>{cliente.email}</TableCell>
                     <TableCell>{cliente.ciudad}</TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={isDeleting}
+                        onClick={() => alternar(cliente)}
+                      >
+                        {cliente.activo ? "Inhabilitar" : "Habilitar"}
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 );
               })}
@@ -382,3 +474,4 @@ export function ClientesTable({ initialClientes }: ClientesTableProps) {
     </div>
   );
 }
+

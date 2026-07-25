@@ -32,6 +32,9 @@ export class ClientesService {
     const query = pagination.q?.trim();
     const where: Prisma.ClienteWhereInput = {
       tenantId: auth.tenantId,
+      // Los inhabilitados quedan afuera salvo que los pidan: es lo que hace
+      // que "inhabilitar" signifique algo en el resto del sistema.
+      ...(pagination.incluirInactivos === 'true' ? {} : { activo: true }),
       ...(query
         ? {
             OR: [
@@ -188,11 +191,74 @@ export class ClientesService {
     });
   }
 
+  /**
+   * Borra al cliente SÓLO si no dejó rastro. Si operó, se inhabilita.
+   *
+   * Antes borraba siempre, y como las relaciones a Cliente son opcionales,
+   * Postgres dejaba las órdenes con `clienteId = null` sin decir nada: la orden
+   * seguía ahí, con su plata y su producción, y sin saber de quién era. Los
+   * comprobantes zafaban de casualidad porque congelan el receptor al emitir.
+   */
   async remove(auth: CurrentAuth, id: string) {
-    await this.findClienteOrThrow(auth, id, this.prisma);
-    await this.prisma.cliente.delete({
+    const cliente = await this.findClienteOrThrow(auth, id, this.prisma);
+    const rastro = await this.contarRastro(auth.tenantId, id);
+
+    if (rastro.total > 0) {
+      throw new BadRequestException(
+        `${cliente.nombre} no se puede eliminar porque tiene ${rastro.detalle}. ` +
+          'Inhabilitalo: desaparece de las listas y de los buscadores, y su ' +
+          'historial queda intacto.',
+      );
+    }
+
+    await this.prisma.cliente.delete({ where: { id } });
+  }
+
+  /** Inhabilitar / volver a habilitar. */
+  async alternarActivo(auth: CurrentAuth, id: string) {
+    const cliente = await this.findClienteOrThrow(auth, id, this.prisma);
+    const actualizado = await this.prisma.cliente.update({
       where: { id },
+      data: { activo: !cliente.activo },
+      include: {
+        contactos: { orderBy: [{ principal: 'desc' }, { createdAt: 'asc' }] },
+        direcciones: { orderBy: [{ principal: 'desc' }, { createdAt: 'asc' }] },
+      },
     });
+    return this.toResponse(actualizado);
+  }
+
+  /**
+   * Qué dejaría huérfano borrarlo. Se cuenta todo lo que lo referencia con una
+   * relación OPCIONAL —las que Postgres pone en null sin avisar—; las que
+   * cascadean (contactos, direcciones) no cuentan: se van con él, que es lo
+   * que corresponde.
+   */
+  private async contarRastro(tenantId: string, clienteId: string) {
+    const [ordenes, cotizaciones, comprobantes, cobros] = await Promise.all([
+      this.prisma.ordenTrabajo.count({ where: { tenantId, clienteId } }),
+      this.prisma.cotizacion.count({ where: { tenantId, clienteId } }),
+      this.prisma.comprobante.count({ where: { tenantId, clienteId } }),
+      this.prisma.cobro.count({ where: { tenantId, clienteId } }),
+    ]);
+
+    const partes: string[] = [];
+    const sumar = (n: number, singular: string, plural: string) => {
+      if (n > 0) partes.push(`${n} ${n === 1 ? singular : plural}`);
+    };
+    sumar(ordenes, 'orden de trabajo', 'órdenes de trabajo');
+    sumar(cotizaciones, 'presupuesto', 'presupuestos');
+    sumar(comprobantes, 'comprobante', 'comprobantes');
+    sumar(cobros, 'cobro', 'cobros');
+
+    return {
+      total: ordenes + cotizaciones + comprobantes + cobros,
+      detalle: partes.join(', '),
+      ordenes,
+      cotizaciones,
+      comprobantes,
+      cobros,
+    };
   }
 
   private async findClienteOrThrow(
@@ -315,6 +381,7 @@ export class ClientesService {
       razonSocial: cliente.razonSocial ?? '',
       cuit: cliente.cuit ?? '',
       condicionFiscal: cliente.condicionFiscal,
+      activo: cliente.activo,
       limiteCredito:
         cliente.limiteCredito === null ? null : Number(cliente.limiteCredito),
       email: cliente.emailPrincipal,

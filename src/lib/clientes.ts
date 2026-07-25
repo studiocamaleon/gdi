@@ -65,6 +65,8 @@ export function formatCuit(cuit: string): string {
 }
 
 export type ClienteDetalle = {
+  /** Inhabilitado: no aparece en listas ni buscadores, su historial queda. */
+  activo: boolean;
   id: string;
   nombre: string;
   razonSocial: string;
@@ -142,6 +144,7 @@ export function createEmptyCliente(): ClienteDetalle {
     razonSocial: "",
     cuit: "",
     condicionFiscal: "consumidor_final",
+    activo: true,
     limiteCredito: null,
     contacto: "",
     email: "",

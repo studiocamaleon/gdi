@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   Param,
+  Patch,
   Post,
   Put,
   Query,
@@ -51,6 +52,13 @@ export class ClientesController {
     @Body() payload: UpsertClienteDto,
   ) {
     return this.clientesService.update(auth, id, payload);
+  }
+
+  /** Inhabilitar o volver a habilitar: la salida para el que ya operó. */
+  @Permiso('registros.gestionar')
+  @Patch(':id/toggle')
+  toggle(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
+    return this.clientesService.alternarActivo(auth, id);
   }
 
   @Permiso('registros.gestionar')
