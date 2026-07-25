@@ -15,6 +15,8 @@ export type UsuarioDelTenant = {
   nombreCompleto: string | null;
   rolId: string | null;
   rolNombre: string;
+  /** Vacío = entra desde cualquier lado. IP exacta o CIDR v4. */
+  ipsPermitidas: string[];
   activa: boolean;
   empleado: { id: string; nombreCompleto: string } | null;
   estado: EstadoUsuario;
@@ -80,6 +82,22 @@ export type SesionAbierta = {
   esLaMia: boolean;
   esImpersonacion: boolean;
 };
+
+/** Desde qué IP está mirando quien pregunta: la UI la ofrece con un click. */
+export async function getMiIp(): Promise<{ ip: string }> {
+  return apiRequest("/usuarios/mi-ip", { cache: "no-store" });
+}
+
+/** Vacío = puede entrar desde cualquier lado. */
+export async function cambiarIps(
+  userId: string,
+  ips: string[],
+): Promise<{ ipsPermitidas: string[] }> {
+  return apiRequest(`/usuarios/${encodeURIComponent(userId)}/ips`, {
+    method: "PUT",
+    body: JSON.stringify({ ips }),
+  });
+}
 
 export async function getSesiones(): Promise<SesionAbierta[]> {
   return apiRequest("/usuarios/sesiones", { cache: "no-store" });

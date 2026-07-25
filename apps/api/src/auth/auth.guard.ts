@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { IS_PUBLIC_KEY } from './public.decorator';
 import { SIN_TENANT_KEY } from '../common/sin-tenant.decorator';
 import { CurrentAuth, JwtPayload } from './auth.types';
+import { ipDeRequest, ipPermitida } from './ip';
 import { expandir, permisosDeRolBase } from './permisos';
 import { SessionCacheService } from './session-cache.service';
 
@@ -35,6 +36,8 @@ export class AuthGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<{
       headers: Record<string, string | undefined>;
       auth?: CurrentAuth;
+      ip?: string;
+      socket?: { remoteAddress?: string };
     }>();
 
     const token = this.extractBearerToken(request.headers.authorization);
@@ -113,6 +116,14 @@ export class AuthGuard implements CanActivate {
         cached.tenantId === payload.tenantId &&
         cached.membershipId === payload.membershipId
       ) {
+        // La IP se compara también contra el cache: sin esto, un usuario
+        // restringido que ya pasó una vez seguiría entrando desde cualquier
+        // lado durante los 30 s del TTL.
+        if (!ipPermitida(ipDeRequest(request), cached.ipsPermitidas ?? [])) {
+          throw new UnauthorizedException(
+            'Tu cuenta sólo puede usarse desde la red autorizada de tu empresa.',
+          );
+        }
         request.auth = cached;
         return true;
       }
@@ -187,6 +198,25 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException('Sesion expirada o revocada.');
     }
 
+    /**
+     * La restricción de IP se revisa en CADA request, no sólo al entrar.
+     *
+     * Si sólo se mirara en el login, el que se lleva la notebook a su casa
+     * sigue trabajando con la sesión abierta y la restricción no significa
+     * nada. Es una comparación de strings contra un array que ya vino en el
+     * mismo query: no agrega una consulta.
+     */
+    if (
+      !ipPermitida(
+        ipDeRequest(request),
+        session.currentMembership.ipsPermitidas,
+      )
+    ) {
+      throw new UnauthorizedException(
+        'Tu cuenta sólo puede usarse desde la red autorizada de tu empresa.',
+      );
+    }
+
     const rol = session.currentMembership.rolDelTenant;
     const auth: CurrentAuth = {
       userId: payload.sub,
@@ -201,6 +231,7 @@ export class AuthGuard implements CanActivate {
       permisos: expandir(
         rol ? rol.permisos : permisosDeRolBase(session.currentMembership.rol),
       ),
+      ipsPermitidas: session.currentMembership.ipsPermitidas,
     };
 
     this.sessionCache.set(auth);

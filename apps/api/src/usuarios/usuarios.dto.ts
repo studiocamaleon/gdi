@@ -53,6 +53,14 @@ export class EditarUsuarioDto {
   empleadoId?: string | null;
 }
 
+export class CambiarIpsDto {
+  /** Vacío = puede entrar desde cualquier lado. */
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  ips!: string[];
+}
+
 export class CrearRolDto {
   @IsString()
   @MinLength(2, { message: 'El rol necesita un nombre.' })
