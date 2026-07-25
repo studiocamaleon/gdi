@@ -13,7 +13,7 @@ import type { Request } from 'express';
 
 import { CurrentSession } from '../auth/current-auth.decorator';
 import { Permiso } from '../auth/permiso.decorator';
-import { ipDeRequest } from '../auth/ip';
+import { esIpPrivada, ipDeRequest } from '../auth/ip';
 import {
   CambiarIpsDto,
   CrearRolDto,
@@ -52,7 +52,16 @@ export class UsuariosController {
    */
   @Get('mi-ip')
   miIp(@Req() req: Request) {
-    return { ip: ipDeRequest(req) };
+    const ip = ipDeRequest(req);
+    return {
+      ip,
+      /**
+       * false = el servidor NO está viendo el origen real (falta TRUST_PROXY,
+       * o se está probando en local). La UI lo avisa: restringir contra una IP
+       * interna no protege nada.
+       */
+      esPublica: !esIpPrivada(ip),
+    };
   }
 
   /** Quién está conectado ahora mismo. */

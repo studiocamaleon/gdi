@@ -84,7 +84,7 @@ export type SesionAbierta = {
 };
 
 /** Desde qué IP está mirando quien pregunta: la UI la ofrece con un click. */
-export async function getMiIp(): Promise<{ ip: string }> {
+export async function getMiIp(): Promise<{ ip: string; esPublica: boolean }> {
   return apiRequest("/usuarios/mi-ip", { cache: "no-store" });
 }
 

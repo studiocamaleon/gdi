@@ -1,5 +1,6 @@
 import {
   esIpOrangoValido,
+  esIpPrivada,
   ipDeRequest,
   ipPermitida,
   normalizarIp,
@@ -104,6 +105,46 @@ describe('¿puede entrar?', () => {
       expect(ipPermitida('255.255.255.255', ['128.0.0.0/1'])).toBe(true);
       expect(ipPermitida('127.255.255.255', ['128.0.0.0/1'])).toBe(false);
     });
+  });
+});
+
+describe('¿el servidor está viendo el origen real?', () => {
+  /**
+   * Ver una IP interna significa que falta TRUST_PROXY: el proxy le está
+   * mostrando la suya. Restringir contra eso no protege —no coincide con
+   * ningún cliente real, o coincide con todos—, así que la UI lo avisa.
+   */
+  it('reconoce las redes internas', () => {
+    for (const v of [
+      '127.0.0.1',
+      '10.0.0.5',
+      '192.168.1.10',
+      '172.16.0.1',
+      '172.31.255.255',
+      '169.254.1.1',
+      '::1',
+      'fd00::1',
+      'fe80::1',
+    ]) {
+      expect(esIpPrivada(v)).toBe(true);
+    }
+  });
+
+  it('una IP pública de verdad no lo es', () => {
+    for (const v of ['190.1.2.3', '8.8.8.8', '172.32.0.1', '2001:db8::1']) {
+      expect(esIpPrivada(v)).toBe(false);
+    }
+  });
+
+  /** 172.16–172.31 son privadas; 172.15 y 172.32 no. El borde se equivoca solo. */
+  it('acierta el borde del bloque 172', () => {
+    expect(esIpPrivada('172.15.0.1')).toBe(false);
+    expect(esIpPrivada('172.16.0.1')).toBe(true);
+    expect(esIpPrivada('172.32.0.1')).toBe(false);
+  });
+
+  it('sin origen conocido, se trata como no público', () => {
+    expect(esIpPrivada('')).toBe(true);
   });
 });
 

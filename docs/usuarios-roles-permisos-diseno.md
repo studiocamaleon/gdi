@@ -260,6 +260,12 @@ Está, con las decisiones que lo hacen seguro y no un cartel:
   no puede entrar llama por teléfono y del otro lado no hay nada que mirar.
 - Se aceptan IPs exactas (v4 y v6) y **rangos CIDR v4** — una oficina se
   describe con `/24`, no IP por IP.
+- **Se compara contra la IP PÚBLICA**, la que se ve en "cuál es mi IP". Y la
+  pantalla avisa cuando lo que el servidor está viendo es una IP interna
+  (`10.x`, `192.168.x`, `172.16–31.x`, loopback): eso significa que le falta
+  `TRUST_PROXY` y le está viendo la cara al proxy, no al cliente. Guardar una
+  interna en ese estado es peor que no restringir: no coincide con ningún
+  cliente real, o —si el proxy queda del mismo lado— coincide con todos.
 
 ### El problema que había que resolver primero: de dónde sale la IP
 

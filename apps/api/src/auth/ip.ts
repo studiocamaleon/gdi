@@ -33,6 +33,36 @@ export function normalizarIp(ip: string): string {
   return limpia;
 }
 
+/**
+ * ¿Es una IP de red interna? (privada, loopback o link-local)
+ *
+ * La restricción se configura contra la IP PÚBLICA de la empresa —la que se ve
+ * en "cuál es mi IP"—, así que ver una interna es la señal de que el servidor
+ * no está leyendo el origen real: pasa cuando `TRUST_PROXY` no está seteado y
+ * el proxy que tiene adelante le muestra su propia IP de red.
+ *
+ * Guardar una interna en ese estado es peor que no restringir nada: no coincide
+ * nunca con un cliente real, o —si el proxy queda del mismo lado— coincide con
+ * TODOS. Por eso la UI lo avisa en vez de dejar que se guarde a ciegas.
+ */
+export function esIpPrivada(ip: string): boolean {
+  const v = normalizarIp(ip);
+  if (!v) return true; // sin origen conocido, tratarlo como no público
+  if (v === '127.0.0.1' || v.startsWith('127.')) return true;
+  if (v.startsWith('10.')) return true;
+  if (v.startsWith('192.168.')) return true;
+  // 172.16.0.0 – 172.31.255.255
+  const m172 = /^172\.(\d+)\./.exec(v);
+  if (m172 && Number(m172[1]) >= 16 && Number(m172[1]) <= 31) return true;
+  // Link-local: lo que se asigna solo cuando no hay DHCP.
+  if (v.startsWith('169.254.')) return true;
+  // IPv6: loopback y direcciones únicas locales (fc00::/7).
+  if (v === '::1') return true;
+  if (/^f[cd][0-9a-f]{2}:/i.test(v)) return true;
+  if (/^fe80:/i.test(v)) return true;
+  return false;
+}
+
 /** ¿Es una IP o un rango que podamos usar? Lo usa el DTO y la UI. */
 export function esIpOrangoValido(valor: string): boolean {
   const v = valor.trim();
