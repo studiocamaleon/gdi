@@ -338,7 +338,7 @@ function WatiDetalle({
 }) {
   const [actual, setActual] = React.useState(integracion);
   const [tab, setTab] = React.useState<
-    "credenciales" | "plantillas" | "notificaciones"
+    "credenciales" | "plantillas" | "notificaciones" | "mensajes"
   >("credenciales");
   const conectada = actual?.estado === "CONECTADA";
 
@@ -413,6 +413,19 @@ function WatiDetalle({
         >
           Notificaciones
         </button>
+        <button
+          className={tab === "mensajes" ? "on" : ""}
+          onClick={() => setTab("mensajes")}
+          disabled={!conectada}
+          title={
+            conectada
+              ? undefined
+              : "Conectá la integración para ver los mensajes"
+          }
+          style={conectada ? undefined : { opacity: 0.45, cursor: "not-allowed" }}
+        >
+          Mensajes
+        </button>
       </nav>
 
       {tab === "credenciales" ? (
@@ -427,8 +440,10 @@ function WatiDetalle({
         />
       ) : tab === "plantillas" ? (
         <PlantillasTab />
-      ) : (
+      ) : tab === "notificaciones" ? (
         <NotificacionesTab />
+      ) : (
+        <MensajesTab />
       )}
     </div>
   );
@@ -1040,15 +1055,15 @@ function CredencialesTab({
 /* ═══════════════ Notificaciones ═══════════════ */
 
 /**
- * El tablero de control de los avisos: qué se manda, cuándo, y qué pasó.
+ * El tablero de control de los avisos: qué se manda y cuándo.
  *
- * Tres bloques en un solo tab a propósito. Son preguntas que se hacen juntas
- * —"¿está prendido?", "¿a qué hora sale?", "¿por qué a éste no le llegó?"— y
- * repartirlas en pantallas separadas obliga a rebotar entre ellas.
+ * La configuración global, los eventos y el consentimiento viven juntos a
+ * propósito: son preguntas que se hacen de corrido —"¿está prendido?", "¿a qué
+ * hora sale?", "¿quién aceptó?"— y repartirlas obliga a rebotar entre pantallas.
+ * Lo que pasó con cada mensaje es otra pregunta y vive en su propio tab.
  */
 function NotificacionesTab() {
   const [datos, setDatos] = React.useState<EstadoNotificaciones | null>(null);
-  const [log, setLog] = React.useState<LineaLog[]>([]);
   const [error, setError] = React.useState<string | null>(null);
   const [cargando, setCargando] = React.useState(true);
   const [guardando, setGuardando] = React.useState(false);
@@ -1057,12 +1072,7 @@ function NotificacionesTab() {
     setCargando(true);
     setError(null);
     try {
-      const [estado, lineas] = await Promise.all([
-        getNotificaciones(),
-        getLogNotificaciones().catch(() => [] as LineaLog[]),
-      ]);
-      setDatos(estado);
-      setLog(lineas);
+      setDatos(await getNotificaciones());
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo cargar.");
     } finally {
@@ -1256,7 +1266,7 @@ function NotificacionesTab() {
           que lo haya aceptado.
         </p>
       </div>
-      <div className="int-tpl-stats" style={{ marginBottom: 26 }}>
+      <div className="int-tpl-stats">
         <Stat v={cons.total} k="Clientes" />
         <Stat v={cons.sinPreguntar} k="Sin preguntar" />
         <Stat v={cons.aceptaron} k="Aceptaron promociones" />
@@ -1266,19 +1276,165 @@ function NotificacionesTab() {
           alerta={cons.rechazaron > 0}
         />
       </div>
+    </div>
+  );
+}
 
+/* ═══════════════ Mensajes ═══════════════ */
+
+/**
+ * Los estados que devuelve el backend, en el orden en que se leen: primero lo
+ * que salió bien, después lo que todavía no salió, y al final lo que falló.
+ * `enviando` es la reserva del despachador y dura segundos; se muestra igual
+ * porque si una fila se queda ahí, eso mismo es el síntoma.
+ */
+const ESTADOS_MSJ = [
+  { valor: "enviada", label: "Enviados" },
+  { valor: "pendiente", label: "En espera" },
+  { valor: "enviando", label: "Saliendo" },
+  { valor: "fallida", label: "Fallaron" },
+  { valor: "descartada", label: "Descartados" },
+] as const;
+
+const PASOS_LIMITE = [100, 250, 500];
+
+/**
+ * El historial de avisos: qué se mandó, qué no, y por qué.
+ *
+ * Tab propio y no un bloque al pie de Notificaciones: es la pantalla a la que
+ * se entra con una pregunta puntual —"¿por qué a este cliente no le llegó?"— y
+ * tenerla debajo de tres bloques de configuración obligaba a scrollear toda la
+ * pantalla para llegar.
+ */
+function MensajesTab() {
+  const [log, setLog] = React.useState<LineaLog[]>([]);
+  const [error, setError] = React.useState<string | null>(null);
+  const [cargando, setCargando] = React.useState(true);
+  const [limite, setLimite] = React.useState(PASOS_LIMITE[0]);
+  const [filtro, setFiltro] = React.useState<string | null>(null);
+  const [busqueda, setBusqueda] = React.useState("");
+
+  const cargar = React.useCallback(async () => {
+    setCargando(true);
+    setError(null);
+    try {
+      setLog(await getLogNotificaciones(limite));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo cargar.");
+    } finally {
+      setCargando(false);
+    }
+  }, [limite]);
+
+  React.useEffect(() => {
+    void cargar();
+  }, [cargar]);
+
+  // Los conteos se calculan sobre lo traído, no sobre toda la tabla: son la
+  // lectura de "cómo viene saliendo últimamente", y por eso el rótulo dice
+  // sobre cuántos mensajes está hecha la cuenta.
+  const conteos = new Map<string, number>();
+  for (const l of log) conteos.set(l.estado, (conteos.get(l.estado) ?? 0) + 1);
+
+  const q = busqueda.trim().toLowerCase();
+  const visibles = log.filter(
+    (l) =>
+      (!filtro || l.estado === filtro) &&
+      (!q ||
+        (l.cliente ?? "").toLowerCase().includes(q) ||
+        l.telefono.toLowerCase().includes(q) ||
+        l.titulo.toLowerCase().includes(q)),
+  );
+
+  if (cargando && log.length === 0) {
+    return <p style={{ color: "var(--muted-text)", fontSize: 13 }}>Cargando…</p>;
+  }
+  if (error) {
+    return (
+      <div className="int-section">
+        <p style={{ color: "var(--danger, #b91c1c)", fontSize: 13 }}>{error}</p>
+        <button className="btn ghost" onClick={() => void cargar()}>
+          Reintentar
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="int-content">
       <div className="int-section-intro">
-        <h3>Últimos mensajes</h3>
+        <h3>Mensajes enviados</h3>
         <p>
-          Incluye los que NO se mandaron y por qué. Es donde se responde
-          &ldquo;¿por qué a este cliente no le llegó nada?&rdquo;.
+          Todo lo que el sistema generó para WhatsApp, incluido lo que NO se
+          mandó y por qué. Es donde se responde &ldquo;¿por qué a este cliente
+          no le llegó nada?&rdquo;. Las cuentas son sobre los mensajes que ves
+          acá, del más nuevo al más viejo.
         </p>
       </div>
+
+      <div className="int-tpl-stats">
+        <Stat v={log.length} k="Últimos mensajes" />
+        {ESTADOS_MSJ.filter((e) => e.valor !== "enviando").map((e) => (
+          <Stat
+            key={e.valor}
+            v={conteos.get(e.valor) ?? 0}
+            k={e.label}
+            alerta={e.valor === "fallida" && (conteos.get("fallida") ?? 0) > 0}
+          />
+        ))}
+      </div>
+
+      <div className="int-msg-barra">
+        <div className="int-msg-chips">
+          <button
+            className={`int-nt-dia${filtro === null ? " on" : ""}`}
+            onClick={() => setFiltro(null)}
+          >
+            Todos
+          </button>
+          {ESTADOS_MSJ.map((e) => (
+            <button
+              key={e.valor}
+              className={`int-nt-dia${filtro === e.valor ? " on" : ""}`}
+              onClick={() => setFiltro(filtro === e.valor ? null : e.valor)}
+              disabled={!conteos.get(e.valor)}
+              style={
+                conteos.get(e.valor)
+                  ? undefined
+                  : { opacity: 0.4, cursor: "not-allowed" }
+              }
+            >
+              {e.label}
+              {conteos.get(e.valor) ? ` · ${conteos.get(e.valor)}` : ""}
+            </button>
+          ))}
+        </div>
+        <div className="int-msg-acciones">
+          <input
+            className="int-msg-buscar"
+            placeholder="Buscar cliente, teléfono o aviso…"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+          />
+          <button
+            className="btn ghost"
+            onClick={() => void cargar()}
+            disabled={cargando}
+          >
+            {cargando ? "Actualizando…" : "Actualizar"}
+          </button>
+        </div>
+      </div>
+
       <div className="int-tpl-list">
-        {log.length === 0 ? (
-          <div className="int-nt-vacio">Todavía no se generó ningún aviso.</div>
+        {visibles.length === 0 ? (
+          <div className="int-nt-vacio">
+            {log.length === 0
+              ? "Todavía no se generó ningún aviso."
+              : "Ningún mensaje coincide con el filtro."}
+          </div>
         ) : (
-          log.map((l) => (
+          visibles.map((l) => (
             <div className="int-nt-log-fila" key={l.id}>
               <span className="int-nt-log-fecha">
                 {new Date(l.createdAt).toLocaleString("es-AR", {
@@ -1292,16 +1448,53 @@ function NotificacionesTab() {
                 <div>
                   {l.titulo}
                   {l.cliente ? (
-                    <span style={{ color: "var(--muted-text)" }}> · {l.cliente}</span>
+                    <span style={{ color: "var(--muted-text)" }}>
+                      {" "}
+                      · {l.cliente}
+                    </span>
                   ) : null}
                 </div>
-                {l.motivo && <div className="int-nt-log-motivo">{l.motivo}</div>}
+                <div className="int-nt-log-motivo">
+                  <span className="int-msg-tel">{l.telefono}</span>
+                  {l.motivo ? ` · ${l.motivo}` : ""}
+                  {l.intentos > 1 ? ` · ${l.intentos} intentos` : ""}
+                  {l.estado === "pendiente" && l.programadaPara
+                    ? ` · sale ${new Date(l.programadaPara).toLocaleString(
+                        "es-AR",
+                        {
+                          day: "2-digit",
+                          month: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        },
+                      )}`
+                    : ""}
+                </div>
               </div>
               <span className={`int-pill ${pillLog(l.estado)}`}>{l.estado}</span>
             </div>
           ))
         )}
       </div>
+
+      {/* Sólo si la tanda vino completa: si trajo menos que el límite, ya no
+          hay más para traer y el botón mentiría. */}
+      {log.length >= limite && limite < PASOS_LIMITE[PASOS_LIMITE.length - 1] && (
+        <div className="int-msg-mas">
+          <button
+            className="btn ghost"
+            onClick={() =>
+              setLimite(
+                PASOS_LIMITE.find((n) => n > limite) ??
+                  PASOS_LIMITE[PASOS_LIMITE.length - 1],
+              )
+            }
+            disabled={cargando}
+          >
+            Ver más mensajes
+          </button>
+        </div>
+      )}
     </div>
   );
 }

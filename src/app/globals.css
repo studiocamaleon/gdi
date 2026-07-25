@@ -33266,6 +33266,54 @@ body:has(.t-app) {
   color: var(--muted-text);
 }
 
+/* ── Integraciones · mensajes ──────────────────────────────────────────
+   El historial de avisos, en su propio tab. Reusa la lista y las pastillas
+   de notificaciones; lo de acá es sólo la barra de filtros. Prefijado igual
+   que todo el módulo: la hoja es global. */
+.int-msg-barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.int-msg-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.int-msg-acciones {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.int-msg-buscar {
+  width: 230px;
+  max-width: 100%;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  font-family: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.int-msg-buscar:focus {
+  outline: none;
+  border-color: var(--ink-2);
+}
+.int-msg-buscar::placeholder { color: var(--muted-text); }
+.int-msg-tel {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.int-msg-mas {
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
+}
+
 /* El estado del pedido, resaltado en el saludo del seguimiento público.
    Es el único dato que el cliente vino a buscar: en negro sobre negro se
    pierde dentro de la frase. Toma los mismos colores que la pastilla de
