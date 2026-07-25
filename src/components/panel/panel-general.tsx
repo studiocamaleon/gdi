@@ -21,6 +21,7 @@ import {
   type CeldaEstacionalidadPanel,
   type ClientesPanel,
   type CobranzaPanel,
+  type CostoLaboralPanel,
   type ComercialPanel,
   type EmbudoPanel,
   type EquipoPanel,
@@ -1427,3 +1428,121 @@ export function MetaPie({ meta }: { meta: MetaPanel | undefined }) {
     </div>
   );
 }
+
+/* ═══════════ REPORTE · Costo laboral ═══════════ */
+/**
+ * Qué cuesta cada persona y a dónde va ese costo.
+ *
+ * Deliberadamente NO hay ranking de producción ni margen por operario: el
+ * margen es del TRABAJO —depende del precio y del material— y el costo de la
+ * persona es un insumo suyo. Lo que se mide acá es la economía de la nómina,
+ * no el desempeño de nadie.
+ */
+export function TabCostoLaboral({ d }: { d: CostoLaboralPanel }) {
+  const t = d.totales;
+  const hayFuga = t.sinImputar > 0 || d.sinCentro.length > 0;
+
+  if (t.personas === 0) {
+    return (
+      <div className="d-empty" style={{ padding: 48 }}>
+        Todavía no hay sueldos cargados en los legajos, o nadie está asignado a
+        un centro de costo. Cargá la remuneración en Registros → Empleados.
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="d-kpi-row">
+        <Kpi label="Nómina del mes" value={`$${fmtK(t.costoMensual)}`} sub={`${t.personas} personas · con aguinaldo`} />
+        <Kpi label="Horas disponibles" value={fmtAR(t.horasMes)} sub="según la capacidad de sus centros" />
+        <Kpi
+          label="Costo por hora promedio"
+          value={t.horasMes > 0 ? `$${fmtAR(t.costoMensual / t.horasMes)}` : "—"}
+          sub="nómina ÷ horas"
+        />
+        <Kpi
+          label="Sin imputar"
+          value={`$${fmtK(t.sinImputar)}`}
+          sub={t.sinImputar > 0 ? "no lo cubre ninguna tarifa" : "todo absorbido"}
+          deltaTone={t.sinImputar > 0 ? "signal" : "ok"}
+        />
+      </div>
+
+      <div className="d-grid">
+        <Card span={12} title="Costo por persona" sub="sueldo del legajo, dedicación y a qué centros se imputa" flush>
+          <table className="d-tbl">
+            <thead>
+              <tr>
+                <th>Persona</th>
+                <th className="right">Sueldo</th>
+                <th className="right">Cuesta / mes</th>
+                <th className="right">Dedicación</th>
+                <th className="right">Horas</th>
+                <th className="right" title="Costo mensual dividido por las horas que aporta">Costo / hora</th>
+              </tr>
+            </thead>
+            <tbody>
+              {d.personas.map((p) => (
+                <tr key={p.empleadoId}>
+                  <td>
+                    <div className="nm">{p.nombre}</div>
+                    <div className="sub">
+                      {p.sector}
+                      {p.centros.length > 0
+                        ? ` · ${p.centros.map((c) => `${c.codigo} ${c.dedicacionPct}%`).join(" · ")}`
+                        : ""}
+                    </div>
+                  </td>
+                  <td className="right mono">${fmtK(p.sueldoNeto)}</td>
+                  <td className="right mono">
+                    ${fmtK(p.costoMensual)}
+                    {p.sinImputar > 0 ? (
+                      <div className="sub" style={{ color: "var(--signal)" }}>
+                        ${fmtK(p.sinImputar)} sin imputar
+                      </div>
+                    ) : null}
+                  </td>
+                  <td className="right mono">{pct(p.dedicacionPct, 0)}</td>
+                  <td className="right mono">{fmtAR(p.horasMes)}</td>
+                  <td className="right mono">
+                    {p.costoHora === null ? "—" : `$${fmtAR(p.costoHora)}`}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+
+        {hayFuga ? (
+          <Card
+            span={12}
+            title="Sueldo que ninguna tarifa está cubriendo"
+            sub="si no se imputa a un centro, ningún precio lo recupera"
+          >
+            <div style={{ display: "grid", gap: 10, fontSize: 12.5 }}>
+              {d.sinCentro.length > 0 ? (
+                <div>
+                  <b>Sin asignar a ningún centro:</b>{" "}
+                  {d.sinCentro
+                    .map((p) => `${p.nombre} ($${fmtK(p.costoMensual)})`)
+                    .join(", ")}
+                </div>
+              ) : null}
+              {d.personas
+                .filter((p) => p.sinImputar > 0)
+                .map((p) => (
+                  <div key={p.empleadoId}>
+                    <b>{p.nombre}</b> está asignado al {pct(p.dedicacionPct, 0)}:
+                    quedan ${fmtK(p.sinImputar)} de su costo fuera de las tarifas.
+                  </div>
+                ))}
+            </div>
+          </Card>
+        ) : null}
+      </div>
+    </>
+  );
+}
+
+

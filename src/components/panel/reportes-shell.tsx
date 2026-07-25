@@ -23,6 +23,7 @@ import {
   LayoutGridIcon,
   PackageIcon,
   UsersIcon,
+  WalletIcon,
 } from "lucide-react";
 
 import { usePuede } from "@/components/navigation/permisos-provider";
@@ -57,6 +58,12 @@ export const REPORTES: Reporte[] = [
     permiso: "finanzas.ver_margenes",
   },
   { href: "/reportes/producto", label: "Ventas & Producto", Icon: PackageIcon },
+  {
+    href: "/reportes/costo-laboral",
+    label: "Costo laboral",
+    Icon: WalletIcon,
+    permiso: "registros.ver_remuneraciones",
+  },
 ];
 
 export function ReportesShell({ children }: { children: React.ReactNode }) {
@@ -66,14 +73,17 @@ export function ReportesShell({ children }: { children: React.ReactNode }) {
 
   const verResumen = usePuede("reportes.ver_resumen");
   const verMargenes = usePuede("finanzas.ver_margenes");
+  const verRemuneraciones = usePuede("registros.ver_remuneraciones");
   const permitido = React.useCallback(
     (p: PermisoClave | undefined) =>
       p === "reportes.ver_resumen"
         ? verResumen
         : p === "finanzas.ver_margenes"
           ? verMargenes
-          : true,
-    [verResumen, verMargenes],
+          : p === "registros.ver_remuneraciones"
+            ? verRemuneraciones
+            : true,
+    [verResumen, verMargenes, verRemuneraciones],
   );
 
   const visibles = REPORTES.filter((r) => permitido(r.permiso));

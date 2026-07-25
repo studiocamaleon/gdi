@@ -11,6 +11,7 @@ import { AlertasService } from './alertas.service';
 import { ClientesService } from './clientes.service';
 import { EquipoService } from './equipo.service';
 import { EmbudoService } from './embudo.service';
+import { CostoLaboralService } from './costo-laboral.service';
 import { RangoReporteDto } from './dto/rango-reporte.dto';
 import { MixCategoriaDto } from './dto/mix-categoria.dto';
 import { ActualizarUmbralesDto } from './dto/actualizar-umbrales.dto';
@@ -42,6 +43,7 @@ export class ReportesController {
     private readonly clientesSvc: ClientesService,
     private readonly equipoSvc: EquipoService,
     private readonly embudoSvc: EmbudoService,
+    private readonly costoLaboralSvc: CostoLaboralService,
   ) {}
 
   /**
@@ -224,6 +226,32 @@ export class ReportesController {
         limites: this.equipoSvc.limites(),
       }),
       ...equipo,
+    };
+  }
+
+  /**
+   * Costo laboral: qué cuesta cada persona y a dónde va ese costo.
+   *
+   * Pide el permiso de remuneraciones —no el de Reportes— porque muestra
+   * sueldos: quien puede leer los reportes del negocio no necesariamente puede
+   * ver lo que gana cada compañero.
+   */
+  @Permiso('registros.ver_remuneraciones')
+  @Get('costo-laboral')
+  async costoLaboral(
+    @CurrentSession() auth: CurrentAuth,
+    @Query() query: RangoReporteDto,
+  ) {
+    const { rango, anterior } = this.service.resolverRango(query);
+    // El costo laboral es MENSUAL: se informa el mes en que arranca el rango,
+    // porque un sueldo prorrateado sobre un trimestre no significa nada.
+    const periodo = `${rango.desde.getFullYear()}-${String(rango.desde.getMonth() + 1).padStart(2, '0')}`;
+    const datos = await this.costoLaboralSvc.porPersona(auth.tenantId, periodo);
+    return {
+      meta: this.service.metaBase(rango, anterior, 'Legajos y centros de costo', {
+        limites: this.costoLaboralSvc.limites(),
+      }),
+      ...datos,
     };
   }
 

@@ -221,6 +221,15 @@ export const NAV: NavItem[] = [
         permiso: "finanzas.ver_margenes",
       },
       { key: "reporte-producto", label: "Ventas & Producto", href: "/reportes/producto" },
+      // Muestra sueldos, así que pide el permiso de remuneraciones y no el del
+      // módulo: leer los reportes del negocio no habilita ver lo que gana cada
+      // compañero.
+      {
+        key: "reporte-costo-laboral",
+        label: "Costo laboral",
+        href: "/reportes/costo-laboral",
+        permiso: "registros.ver_remuneraciones",
+      },
     ],
   },
   {

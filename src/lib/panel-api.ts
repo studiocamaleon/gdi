@@ -500,3 +500,51 @@ export function getPanelMixCategoria(categoria: string, rango?: RangoPanel) {
     `/reportes/panel/producto/mix-categoria?${params.toString()}`,
   );
 }
+
+/* ─── Costo laboral ──────────────────────────────────────────────────────────
+ * Qué cuesta cada persona y a dónde va ese costo. Lo habilitó mudar la nómina
+ * al legajo. NO atribuye margen ni producción por persona: el margen es del
+ * trabajo. Ver docs/legajos-nomina-diseno.md
+ */
+
+export type PersonaCostoLaboral = {
+  empleadoId: string;
+  nombre: string;
+  sector: string;
+  sueldoNeto: number;
+  cargasSociales: number;
+  sueldosPorAnio: number;
+  costoMensual: number;
+  dedicacionPct: number;
+  horasMes: number;
+  costoHora: number | null;
+  imputado: number;
+  sinImputar: number;
+  centros: Array<{
+    codigo: string;
+    nombre: string;
+    dedicacionPct: number;
+    horasMes: number;
+    imputado: number;
+  }>;
+};
+
+export type CostoLaboralPanel = {
+  periodo: string;
+  personas: PersonaCostoLaboral[];
+  totales: {
+    personas: number;
+    costoMensual: number;
+    imputado: number;
+    sinImputar: number;
+    horasMes: number;
+  };
+  /** Con sueldo cargado pero sin asignación: nadie absorbe ese costo. */
+  sinCentro: Array<{ empleadoId: string; nombre: string; costoMensual: number }>;
+};
+
+export function getPanelCostoLaboral(rango?: RangoPanel) {
+  return apiRequest<TabPanel<CostoLaboralPanel>>(
+    `/reportes/panel/costo-laboral${qs(rango)}`,
+  );
+}
