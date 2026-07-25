@@ -1,6 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { CurrentAuth } from '../auth/auth.types';
 import { formatearCuit } from '../common/cuit';
 import { PrismaService } from '../prisma/prisma.service';
 import { construirUrlQr } from './invoicing/afip-qr';
@@ -70,9 +69,9 @@ function leerIva(
 export class FacturaService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async documento(auth: CurrentAuth, id: string) {
+  async documento(tenantId: string, id: string) {
     const c = await this.prisma.comprobante.findFirst({
-      where: { id, tenantId: auth.tenantId },
+      where: { id, tenantId },
       include: {
         puntoVenta: { select: { numero: true } },
         cliente: {
@@ -99,7 +98,7 @@ export class FacturaService {
     if (!c) throw new NotFoundException(`No existe el comprobante ${id}`);
 
     const config = await this.prisma.configuracionFiscal.findUnique({
-      where: { tenantId: auth.tenantId },
+      where: { tenantId },
     });
     if (!config) {
       throw new NotFoundException(

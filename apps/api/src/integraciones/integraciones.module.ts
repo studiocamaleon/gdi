@@ -7,6 +7,7 @@ import { WatiClient } from './wati/wati.client';
 import { DespachoService } from './notificaciones/despacho.service';
 import { NotificacionesController } from './notificaciones/notificaciones.controller';
 import { NotificacionesCobrosService } from './notificaciones/notificaciones-cobros.service';
+import { NotificacionesComprobantesService } from './notificaciones/notificaciones-comprobantes.service';
 import { NotificacionesOrdenesService } from './notificaciones/notificaciones-ordenes.service';
 import { NotificacionesPresupuestosService } from './notificaciones/notificaciones-presupuestos.service';
 import { NotificacionesScheduler } from './notificaciones/notificaciones.scheduler';
@@ -42,6 +43,7 @@ import { WatiScheduler } from './wati/wati.scheduler';
     NotificacionesOrdenesService,
     NotificacionesPresupuestosService,
     NotificacionesCobrosService,
+    NotificacionesComprobantesService,
     NotificacionesScheduler,
   ],
   exports: [
@@ -49,6 +51,7 @@ import { WatiScheduler } from './wati/wati.scheduler';
     NotificacionesOrdenesService,
     NotificacionesPresupuestosService,
     NotificacionesCobrosService,
+    NotificacionesComprobantesService,
     SecretosService,
     IntegracionesService,
     WatiClient,
