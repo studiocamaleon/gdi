@@ -296,14 +296,17 @@ export function UsuariosView({
                   Link de acceso
                 </button>
               ) : null}
-              {u.activa && u.estado !== "pendiente" ? (
+              {/* Vale para los dos casos: al que nunca entró se le DA una
+                  clave (si el link no le llegó o no lo abre) y al que la
+                  olvidó se le RESTABLECE. Es la misma operación. */}
+              {u.activa ? (
                 <button
                   className="btn ghost"
                   disabled={guardando === u.id}
                   onClick={() => void restablecer(u)}
-                  title="Le pone una clave provisoria. No hace falta saber la que tiene."
+                  title="Le genera una clave para dictarle. La cambia al entrar."
                 >
-                  Restablecer clave
+                  {u.estado === "pendiente" ? "Darle una clave" : "Restablecer clave"}
                 </button>
               ) : null}
               {u.activa ? (
@@ -414,13 +417,12 @@ export function UsuariosView({
         ) : (
           historial.map((e) => (
             <div className="int-nt-log-fila" key={e.id}>
-              <span className="int-nt-log-fecha">
-                {new Date(e.createdAt).toLocaleString("es-AR", {
-                  day: "2-digit",
-                  month: "2-digit",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
+              {/* suppressHydrationWarning: la hora se muestra en la zona de
+                  quien mira, y el servidor no está en la misma que él. La
+                  diferencia es esperada, no un bug — sin esto React tira el
+                  árbol entero para regenerarlo. */}
+              <span className="int-nt-log-fecha" suppressHydrationWarning>
+                {fechaCorta(e.createdAt)}
               </span>
               <div>
                 <div>{e.descripcion}</div>
@@ -703,6 +705,24 @@ function FormularioInvitacion({
 
 function descripcionDelRol(roles: RolDelTenant[], rolId: string): string {
   return roles.find((r) => r.id === rolId)?.descripcion ?? "";
+}
+
+/**
+ * dd/mm hh:mm en la zona de quien mira.
+ *
+ * En 24 horas a propósito: con am/pm, Node escribe un espacio finito antes y
+ * Chrome uno normal, y React ve dos textos distintos donde hay la misma hora.
+ * El `suppressHydrationWarning` del span cubre lo que queda —la zona horaria,
+ * que sí puede diferir de verdad entre servidor y navegador—.
+ */
+function fechaCorta(iso: string): string {
+  return new Date(iso).toLocaleString("es-AR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 }
 
 function nombreDe(u: UsuarioDelTenant): string {
