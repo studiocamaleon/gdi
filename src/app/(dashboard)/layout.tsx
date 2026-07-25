@@ -32,7 +32,10 @@ export default async function DashboardLayout({
     currentUser = current.currentUser;
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) {
-      redirect("/login");
+      // A /salir y no a /login: el token puede seguir vigente por reloj —el
+      // middleware lo daría por bueno y rebotaría de vuelta acá— mientras la
+      // sesión detrás está revocada. /salir borra la cookie y corta el bucle.
+      redirect("/salir?motivo=sesion");
     }
 
     throw error;
