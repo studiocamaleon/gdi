@@ -33434,9 +33434,110 @@ body:has(.t-app) {
   color: var(--ink-2);
 }
 
+/* Puerta cerrada: el módulo existe pero el rol no lo incluye. */
+.sp-caja {
+  max-width: 440px;
+  margin: 80px auto;
+  text-align: center;
+  padding: 36px 28px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+}
+.sp-icono {
+  width: 46px;
+  height: 46px;
+  margin: 0 auto 18px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--muted-text);
+}
+.sp-icono svg { width: 22px; height: 22px; }
+.sp-caja h1 {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  margin: 0 0 8px;
+}
+.sp-caja p {
+  font-size: 13px;
+  color: var(--muted-text);
+  line-height: 1.55;
+  margin: 0 0 20px;
+}
+
+/* ── Editor de roles ─── */
+.usr-roles-top { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+.usr-rol-fila { grid-template-columns: minmax(0, 1fr) auto auto; }
+
+.usr-matriz {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.usr-mod {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 15px;
+  border-bottom: 1px solid var(--border);
+}
+.usr-mod:last-child { border-bottom: none; }
+/* Fuera del plan se atenúa pero se deja tocar: el permiso queda guardado y el
+   rol funciona solo el día que el tenant sube de plan. Esconderlo obligaría a
+   reconfigurar todo después de pagar. */
+.usr-mod.fuera { background: var(--surface-2); }
+.usr-mod.fuera .usr-mod-nm { color: var(--muted-text); }
+.usr-mod-txt { min-width: 0; }
+.usr-mod-nm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.usr-mod-desc {
+  font-size: 11.5px;
+  color: var(--muted-text);
+  margin-top: 3px;
+  line-height: 1.45;
+}
+
+.usr-niveles {
+  display: inline-flex;
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.usr-nivel {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--muted-text);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .12s ease, color .12s ease;
+}
+.usr-nivel + .usr-nivel { border-left: 1px solid var(--border); }
+.usr-nivel:hover { color: var(--ink); }
+.usr-nivel.on { background: var(--ink); color: #fff; }
+
 @media (max-width: 900px) {
   .usr-fila { grid-template-columns: minmax(0, 1fr) auto; }
   .usr-rol, .usr-acciones { grid-column: 1 / -1; }
+  .usr-rol-fila { flex-wrap: wrap; }
+  .usr-mod { flex-direction: column; align-items: flex-start; gap: 10px; }
 }
 
 /* El estado del pedido, resaltado en el saludo del seguimiento público.

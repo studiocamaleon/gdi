@@ -6,11 +6,16 @@ import { toast } from "sonner";
 import {
   crearUsuario,
   editarUsuario,
+  eliminarRol,
+  getRoles,
   getUsuarios,
+  reenviarInvitacion,
+  type CatalogoPermisos,
   type ListadoUsuarios,
   type RolDelTenant,
   type UsuarioDelTenant,
 } from "@/lib/usuarios-api";
+import { RolEditor } from "@/components/usuarios/rol-editor";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 
 type EmpleadoOpcion = { id: string; nombreCompleto: string };
@@ -27,14 +32,23 @@ type EmpleadoOpcion = { id: string; nombreCompleto: string };
  */
 export function UsuariosView({
   inicial,
-  roles,
+  roles: rolesIniciales,
+  catalogo,
   empleados,
 }: {
   inicial: ListadoUsuarios;
   roles: RolDelTenant[];
+  catalogo: CatalogoPermisos | null;
   empleados: EmpleadoOpcion[];
 }) {
   const [datos, setDatos] = React.useState(inicial);
+  const [roles, setRoles] = React.useState(rolesIniciales);
+  /** null = cerrado; { rol: null } = rol nuevo. */
+  const [editando, setEditando] = React.useState<{
+    rol: RolDelTenant | null;
+  } | null>(null);
+  const [aBorrar, setABorrar] = React.useState<RolDelTenant | null>(null);
+  const [destinoBorrado, setDestinoBorrado] = React.useState("");
   const [invitando, setInvitando] = React.useState(false);
   const [aDesactivar, setADesactivar] = React.useState<UsuarioDelTenant | null>(
     null,
@@ -43,11 +57,44 @@ export function UsuariosView({
 
   const recargar = React.useCallback(async () => {
     try {
-      setDatos(await getUsuarios());
+      const [u, r] = await Promise.all([getUsuarios(), getRoles()]);
+      setDatos(u);
+      setRoles(r);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo actualizar.");
     }
   }, []);
+
+  const reenviar = async (usuario: UsuarioDelTenant) => {
+    setGuardando(usuario.id);
+    try {
+      const { invitacionUrl } = await reenviarInvitacion(usuario.id);
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(invitacionUrl);
+        toast.success("Link nuevo copiado. El anterior dejó de servir.");
+      } else {
+        toast.success("Link nuevo generado.");
+      }
+      await recargar();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo generar el link.");
+    } finally {
+      setGuardando(null);
+    }
+  };
+
+  const borrarRol = async () => {
+    if (!aBorrar) return;
+    try {
+      await eliminarRol(aBorrar.id, destinoBorrado || undefined);
+      toast.success(`Rol "${aBorrar.nombre}" eliminado.`);
+      setABorrar(null);
+      setDestinoBorrado("");
+      await recargar();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo eliminar.");
+    }
+  };
 
   const cambiarRol = async (usuario: UsuarioDelTenant, rolId: string) => {
     if (rolId === usuario.rolId) return;
@@ -177,6 +224,18 @@ export function UsuariosView({
             </select>
 
             <div className="usr-acciones">
+              {/* Sólo mientras no fijó su clave: después el link no sirve para
+                  nada y ofrecerlo confunde. */}
+              {u.activa && u.estado === "pendiente" ? (
+                <button
+                  className="btn ghost"
+                  disabled={guardando === u.id}
+                  onClick={() => void reenviar(u)}
+                  title="Genera un link nuevo y copia al portapapeles. El anterior deja de servir."
+                >
+                  Link de acceso
+                </button>
+              ) : null}
               {u.activa ? (
                 <button
                   className="btn ghost"
@@ -203,10 +262,35 @@ export function UsuariosView({
         <h3>Roles</h3>
         <p>
           Cada rol junta los permisos de los módulos que puede usar. Los cinco
-          de fábrica cubren una imprenta típica; los roles a medida llegan en la
-          próxima entrega.
+          de fábrica cubren una imprenta típica; si te falta uno, duplicá el que
+          más se parezca y ajustalo.
         </p>
       </div>
+
+      {editando && catalogo ? (
+        <RolEditor
+          rol={editando.rol}
+          catalogo={catalogo}
+          onCerrar={() => setEditando(null)}
+          onGuardado={recargar}
+        />
+      ) : (
+        <div className="usr-roles-top">
+          <button
+            className="btn ghost"
+            onClick={() => setEditando({ rol: null })}
+            disabled={!catalogo}
+            title={
+              catalogo
+                ? undefined
+                : "No se pudo cargar el catálogo de permisos."
+            }
+          >
+            Crear un rol
+          </button>
+        </div>
+      )}
+
       <div className="int-tpl-list">
         {roles.map((r) => (
           <div className="usr-rol-fila" key={r.id}>
@@ -226,9 +310,75 @@ export function UsuariosView({
                   ? "1 usuario"
                   : `${r.usuarios} usuarios`}
             </div>
+            <div className="usr-acciones">
+              <button
+                className="btn ghost"
+                disabled={!catalogo}
+                onClick={() => setEditando({ rol: r })}
+              >
+                {r.esDelSistema ? "Ajustar permisos" : "Editar"}
+              </button>
+              {!r.esDelSistema && (
+                <button className="btn ghost" onClick={() => setABorrar(r)}>
+                  Eliminar
+                </button>
+              )}
+            </div>
           </div>
         ))}
       </div>
+
+      {/* Borrar un rol con gente adentro exige decir a dónde van: dejarlos sin
+          rol los tiraría al fallback del enum, que es un permiso distinto del
+          que el admin cree estar sacando. */}
+      {aBorrar && (
+        <div className="usr-form">
+          <div className="int-section-intro">
+            <h3>Eliminar &ldquo;{aBorrar.nombre}&rdquo;</h3>
+            <p>
+              {aBorrar.usuarios === 0
+                ? "No lo tiene nadie asignado, así que no cambia el acceso de ninguna persona."
+                : `Lo tienen ${aBorrar.usuarios} ${aBorrar.usuarios === 1 ? "usuario" : "usuarios"}. Elegí con qué rol siguen trabajando.`}
+            </p>
+          </div>
+          {aBorrar.usuarios > 0 && (
+            <label className="usr-campo" style={{ maxWidth: 320 }}>
+              <span>Pasan a</span>
+              <select
+                value={destinoBorrado}
+                onChange={(e) => setDestinoBorrado(e.target.value)}
+              >
+                <option value="">Elegí un rol…</option>
+                {roles
+                  .filter((r) => r.id !== aBorrar.id)
+                  .map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.nombre}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          )}
+          <div className="usr-form-acciones">
+            <button
+              className="btn ghost"
+              onClick={() => {
+                setABorrar(null);
+                setDestinoBorrado("");
+              }}
+            >
+              Cancelar
+            </button>
+            <button
+              className="btn primary"
+              disabled={aBorrar.usuarios > 0 && !destinoBorrado}
+              onClick={() => void borrarRol()}
+            >
+              Eliminar el rol
+            </button>
+          </div>
+        </div>
+      )}
 
       <ConfirmacionDestructiva
         open={aDesactivar !== null}

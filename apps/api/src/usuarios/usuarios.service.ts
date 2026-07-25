@@ -18,7 +18,12 @@ import {
   expandir,
 } from '../auth/permisos';
 import type { CurrentAuth } from '../auth/auth.types';
-import type { CrearUsuarioDto, EditarUsuarioDto } from './usuarios.dto';
+import type {
+  CrearRolDto,
+  CrearUsuarioDto,
+  EditarRolDto,
+  EditarUsuarioDto,
+} from './usuarios.dto';
 
 /** Una semana, igual que la invitación que emitía Empleados. */
 const VIGENCIA_INVITACION_MS = 1000 * 60 * 60 * 24 * 7;
@@ -153,7 +158,9 @@ export class UsuariosService {
         }));
 
       await tx.membership.upsert({
-        where: { userId_tenantId: { userId: user.id, tenantId: auth.tenantId } },
+        where: {
+          userId_tenantId: { userId: user.id, tenantId: auth.tenantId },
+        },
         update: { rol: rol.rolBase, rolId: rol.id, activa: true },
         create: {
           userId: user.id,
@@ -256,6 +263,55 @@ export class UsuariosService {
     return { ok: true as const };
   }
 
+  /**
+   * Vuelve a emitir el link de invitación.
+   *
+   * Existe porque el link no se manda solo: se copia al portapapeles y se pasa
+   * a mano, así que perderlo es normal. La anterior se revoca — el que circula
+   * es siempre el último.
+   */
+  async reenviarInvitacion(auth: CurrentAuth, userId: string) {
+    const membership = await this.prisma.membership.findUnique({
+      where: { userId_tenantId: { userId, tenantId: auth.tenantId } },
+      include: { user: { select: { email: true } } },
+    });
+    if (!membership) throw new NotFoundException('Ese usuario no existe acá.');
+    if (!membership.activa) {
+      throw new BadRequestException(
+        'Ese usuario no tiene acceso. Devolvéselo antes de invitarlo.',
+      );
+    }
+
+    const rawToken = randomBytes(32).toString('hex');
+    const tokenHash = createHash('sha256').update(rawToken).digest('hex');
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.invitation.updateMany({
+        where: {
+          tenantId: auth.tenantId,
+          userId,
+          acceptedAt: null,
+          revokedAt: null,
+        },
+        data: { revokedAt: new Date() },
+      });
+      await tx.invitation.create({
+        data: {
+          tenantId: auth.tenantId,
+          userId,
+          invitedByMembershipId: auth.membershipId || null,
+          email: membership.user.email,
+          rol: membership.rol,
+          rolId: membership.rolId,
+          tokenHash,
+          expiresAt: new Date(Date.now() + VIGENCIA_INVITACION_MS),
+        },
+      });
+    });
+
+    return { invitacionUrl: this.urlDeInvitacion(rawToken) };
+  }
+
   // ── Roles ───────────────────────────────────────────────────────────
 
   /** El catálogo para la UI: los módulos, sus permisos y qué trae el plan. */
@@ -299,6 +355,115 @@ export class UsuariosService {
     }));
   }
 
+  async crearRol(auth: CurrentAuth, dto: CrearRolDto) {
+    const permisos = this.limpiarPermisos(dto.permisos);
+    await this.verificarNombreLibre(auth.tenantId, dto.nombre);
+
+    const rol = await this.prisma.rol.create({
+      data: {
+        tenantId: auth.tenantId,
+        // Sin código: los códigos son de los predefinidos de Grafo y son la
+        // clave que usa el backfill. Uno del tenant no puede tomar uno.
+        codigo: null,
+        nombre: dto.nombre.trim(),
+        descripcion: dto.descripcion?.trim() || null,
+        esDelSistema: false,
+        permisos,
+      },
+    });
+    return { id: rol.id };
+  }
+
+  async editarRol(auth: CurrentAuth, rolId: string, dto: EditarRolDto) {
+    const rol = await this.prisma.rol.findFirst({
+      where: { id: rolId, tenantId: auth.tenantId },
+    });
+    if (!rol) throw new NotFoundException('Ese rol no existe.');
+
+    // Los de fábrica se ajustan en permisos pero no se renombran: son la
+    // referencia común —"el Vendedor de Grafo"— y un Vendedor que en realidad
+    // es un administrador vuelve inútil hablar de roles con nadie.
+    if (rol.esDelSistema && dto.nombre && dto.nombre.trim() !== rol.nombre) {
+      throw new BadRequestException(
+        'Los roles de fábrica no se renombran. Duplicalo y ponele el nombre que quieras.',
+      );
+    }
+    if (dto.nombre && dto.nombre.trim() !== rol.nombre) {
+      await this.verificarNombreLibre(auth.tenantId, dto.nombre);
+    }
+
+    const permisos =
+      dto.permisos === undefined
+        ? rol.permisos
+        : this.limpiarPermisos(dto.permisos);
+
+    if (dto.permisos !== undefined) {
+      await this.verificarQuedaAlguienConLasLlaves(auth, rolId, permisos);
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.rol.update({
+        where: { id: rolId },
+        data: {
+          ...(dto.nombre ? { nombre: dto.nombre.trim() } : {}),
+          ...(dto.descripcion === undefined
+            ? {}
+            : { descripcion: dto.descripcion?.trim() || null }),
+          ...(dto.permisos === undefined ? {} : { permisos }),
+        },
+      });
+
+      // El enum sigue vivo y tiene que seguir al rol: si un rol pasa a tener
+      // configuración, sus miembros son ADMINISTRADOR para los endpoints que
+      // todavía miran @Roles. Sin esto, cambiar permisos arreglaba la mitad.
+      if (dto.permisos !== undefined) {
+        await tx.membership.updateMany({
+          where: { tenantId: auth.tenantId, rolId },
+          data: { rol: this.rolBaseDe(rol.codigo, permisos) },
+        });
+      }
+    });
+
+    this.sessionCache.invalidarTenant(auth.tenantId);
+    return { ok: true as const };
+  }
+
+  /**
+   * Borra un rol del tenant. Si tiene gente, hay que decir a qué rol se mudan:
+   * dejarlos sin rol los tiraría al fallback del enum, que es un permiso
+   * distinto del que el admin creía estar sacando.
+   */
+  async eliminarRol(auth: CurrentAuth, rolId: string, destinoId?: string) {
+    const rol = await this.prisma.rol.findFirst({
+      where: { id: rolId, tenantId: auth.tenantId },
+      include: { _count: { select: { memberships: true } } },
+    });
+    if (!rol) throw new NotFoundException('Ese rol no existe.');
+    if (rol.esDelSistema) {
+      throw new BadRequestException(
+        'Los roles de fábrica no se borran. Si no lo usás, no se lo asignes a nadie.',
+      );
+    }
+
+    if (rol._count.memberships > 0) {
+      if (!destinoId) {
+        throw new BadRequestException(
+          `Ese rol lo están usando ${rol._count.memberships} usuarios. Elegí a qué rol pasan.`,
+        );
+      }
+      const destino = await this.rolDelTenant(auth.tenantId, destinoId);
+      await this.verificarQuedaAlguienConLasLlaves(auth, rolId, []);
+      await this.prisma.membership.updateMany({
+        where: { tenantId: auth.tenantId, rolId },
+        data: { rolId: destino.id, rol: destino.rolBase },
+      });
+    }
+
+    await this.prisma.rol.delete({ where: { id: rolId } });
+    this.sessionCache.invalidarTenant(auth.tenantId);
+    return { ok: true as const };
+  }
+
   /**
    * Siembra los predefinidos que falten. Se llama al listar: un tenant creado
    * después de la migración —o uno al que Grafo le agregó un rol al catálogo—
@@ -328,6 +493,72 @@ export class UsuariosService {
 
   // ── Internos ────────────────────────────────────────────────────────
 
+  /** Se guardan sólo claves del catálogo, sin repetir y sin el `ver` que ya
+   *  arrastra su `gestionar`: dos formas de decir lo mismo terminan en dos
+   *  matrices que se ven distintas y hacen lo mismo. */
+  private limpiarPermisos(permisos: string[]): string[] {
+    const validos = permisos.filter((p) => esPermisoValido(p));
+    const gestion = new Set(
+      validos
+        .filter((p) => p.endsWith('.gestionar'))
+        .map((p) => p.replace('.gestionar', '')),
+    );
+    return [
+      ...new Set(
+        validos.filter(
+          (p) => !(p.endsWith('.ver') && gestion.has(p.replace('.ver', ''))),
+        ),
+      ),
+    ];
+  }
+
+  private async verificarNombreLibre(tenantId: string, nombre: string) {
+    const limpio = nombre.trim();
+    if (limpio.length < 2) {
+      throw new BadRequestException('El rol necesita un nombre.');
+    }
+    const existe = await this.prisma.rol.findFirst({
+      where: { tenantId, nombre: { equals: limpio, mode: 'insensitive' } },
+    });
+    if (existe) {
+      throw new ConflictException(`Ya hay un rol que se llama "${limpio}".`);
+    }
+  }
+
+  /**
+   * Nadie puede dejar la empresa sin un solo usuario capaz de administrar la
+   * configuración.
+   *
+   * Es el cerrojo que hace segura toda la pantalla: sin esto, sacarle
+   * `configuracion.gestionar` al rol Administrador —o borrar el rol de la única
+   * persona que lo tiene— deja al tenant sin nadie que pueda revertirlo, y hay
+   * que entrar por la base a arreglarlo.
+   */
+  private async verificarQuedaAlguienConLasLlaves(
+    auth: CurrentAuth,
+    rolIdQueCambia: string,
+    permisosNuevos: string[],
+  ) {
+    const sigueTeniendo = expandir(permisosNuevos).has(
+      'configuracion.gestionar',
+    );
+    if (sigueTeniendo) return;
+
+    const conLlaves = await this.prisma.membership.count({
+      where: {
+        tenantId: auth.tenantId,
+        activa: true,
+        rolId: { not: rolIdQueCambia },
+        rolDelTenant: { permisos: { has: 'configuracion.gestionar' } },
+      },
+    });
+    if (conLlaves === 0) {
+      throw new BadRequestException(
+        'Con este cambio nadie podría administrar la empresa. Dale acceso a la configuración a otro usuario primero.',
+      );
+    }
+  }
+
   private async rolDelTenant(tenantId: string, rolId: string) {
     const rol = await this.prisma.rol.findFirst({
       where: { id: rolId, tenantId },
@@ -349,7 +580,8 @@ export class UsuariosService {
     const predefinido = ROLES_PREDEFINIDOS.find((r) => r.codigo === codigo);
     if (predefinido) return predefinido.rolBase;
     const efectivos = expandir(permisos);
-    if (efectivos.has('configuracion.gestionar')) return RolSistema.ADMINISTRADOR;
+    if (efectivos.has('configuracion.gestionar'))
+      return RolSistema.ADMINISTRADOR;
     if (efectivos.size <= 2 && efectivos.has('produccion.ver')) {
       return RolSistema.OPERADOR;
     }
@@ -409,7 +641,8 @@ export class UsuariosService {
 
   private urlDeInvitacion(token: string): string {
     const base =
-      process.env.FRONTEND_URL?.split(',')[0]?.trim() ?? 'http://localhost:3000';
+      process.env.FRONTEND_URL?.split(',')[0]?.trim() ??
+      'http://localhost:3000';
     return `${base}/aceptar-invitacion?token=${token}`;
   }
 }

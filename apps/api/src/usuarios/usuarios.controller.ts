@@ -1,8 +1,22 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+} from '@nestjs/common';
 
 import { CurrentSession } from '../auth/current-auth.decorator';
 import { Permiso } from '../auth/permiso.decorator';
-import { CrearUsuarioDto, EditarUsuarioDto } from './usuarios.dto';
+import {
+  CrearRolDto,
+  CrearUsuarioDto,
+  EditarRolDto,
+  EditarUsuarioDto,
+  EliminarRolDto,
+} from './usuarios.dto';
 import { UsuariosService } from './usuarios.service';
 import type { CurrentAuth } from '../auth/auth.types';
 
@@ -13,6 +27,9 @@ import type { CurrentAuth } from '../auth/auth.types';
  * es el permiso más peligroso del sistema —quien puede crear un administrador
  * puede hacer cualquier cosa— así que va con el resto de la configuración y no
  * con los registros del personal.
+ *
+ * Los métodos de ROL van antes que los de `:userId`: Nest resuelve por orden de
+ * declaración y `roles` es un segmento como cualquier otro.
  */
 @Permiso('configuracion.ver')
 @Controller('usuarios')
@@ -23,6 +40,8 @@ export class UsuariosController {
   listar(@CurrentSession() auth: CurrentAuth) {
     return this.usuarios.listar(auth);
   }
+
+  // ── Roles ───────────────────────────────────────────────────────────
 
   @Get('roles')
   async roles(@CurrentSession() auth: CurrentAuth) {
@@ -39,6 +58,34 @@ export class UsuariosController {
   }
 
   @Permiso('configuracion.gestionar')
+  @Post('roles')
+  crearRol(@CurrentSession() auth: CurrentAuth, @Body() dto: CrearRolDto) {
+    return this.usuarios.crearRol(auth, dto);
+  }
+
+  @Permiso('configuracion.gestionar')
+  @Patch('roles/:rolId')
+  editarRol(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('rolId') rolId: string,
+    @Body() dto: EditarRolDto,
+  ) {
+    return this.usuarios.editarRol(auth, rolId, dto);
+  }
+
+  @Permiso('configuracion.gestionar')
+  @Delete('roles/:rolId')
+  eliminarRol(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('rolId') rolId: string,
+    @Body() dto: EliminarRolDto,
+  ) {
+    return this.usuarios.eliminarRol(auth, rolId, dto.destinoId);
+  }
+
+  // ── Usuarios ────────────────────────────────────────────────────────
+
+  @Permiso('configuracion.gestionar')
   @Post()
   crear(@CurrentSession() auth: CurrentAuth, @Body() dto: CrearUsuarioDto) {
     return this.usuarios.crear(auth, dto);
@@ -52,5 +99,14 @@ export class UsuariosController {
     @Body() dto: EditarUsuarioDto,
   ) {
     return this.usuarios.editar(auth, userId, dto);
+  }
+
+  @Permiso('configuracion.gestionar')
+  @Post(':userId/invitacion')
+  reenviar(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('userId') userId: string,
+  ) {
+    return this.usuarios.reenviarInvitacion(auth, userId);
   }
 }

@@ -84,3 +84,44 @@ export async function editarUsuario(
     body: JSON.stringify(datos),
   });
 }
+
+/** Vuelve a emitir el link: el anterior deja de servir. */
+export async function reenviarInvitacion(
+  userId: string,
+): Promise<{ invitacionUrl: string }> {
+  return apiRequest(`/usuarios/${encodeURIComponent(userId)}/invitacion`, {
+    method: "POST",
+  });
+}
+
+export async function crearRol(datos: {
+  nombre: string;
+  descripcion?: string;
+  permisos: string[];
+}): Promise<{ id: string }> {
+  return apiRequest("/usuarios/roles", {
+    method: "POST",
+    body: JSON.stringify(datos),
+  });
+}
+
+export async function editarRol(
+  rolId: string,
+  datos: { nombre?: string; descripcion?: string; permisos?: string[] },
+): Promise<{ ok: true }> {
+  return apiRequest(`/usuarios/roles/${encodeURIComponent(rolId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(datos),
+  });
+}
+
+/** `destinoId` es obligatorio si el rol tiene usuarios: se mudan ahí. */
+export async function eliminarRol(
+  rolId: string,
+  destinoId?: string,
+): Promise<{ ok: true }> {
+  return apiRequest(`/usuarios/roles/${encodeURIComponent(rolId)}`, {
+    method: "DELETE",
+    body: JSON.stringify({ destinoId }),
+  });
+}
