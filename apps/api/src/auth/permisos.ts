@@ -117,6 +117,17 @@ export const PERMISOS_TRANSVERSALES = [
     descripcion:
       'El tablero que resume el negocio entero: facturación, margen, punto de equilibrio y alertas. Ver los demás reportes no alcanza.',
   },
+  /**
+   * Los sueldos son el dato más sensible del sistema y el módulo que los aloja
+   * es el más abierto: el Vendedor tiene `registros.gestionar` porque carga
+   * clientes, y sin esta excepción vería lo que gana cada compañero.
+   */
+  {
+    clave: 'registros.ver_remuneraciones',
+    label: 'Ver y editar sueldos de los legajos',
+    descripcion:
+      'La remuneración de cada empleado: sueldo, cargas y su historial. El resto del legajo se ve con el permiso del módulo.',
+  },
 ] as const;
 
 export type PermisoTransversal =

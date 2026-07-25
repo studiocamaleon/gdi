@@ -21,6 +21,7 @@ import {
   createEmpleado,
   updateEmpleado,
 } from "@/lib/empleados-api";
+import { RemuneracionSection } from "@/components/empleados/remuneracion-section";
 import {
   comisionTypeItems,
   createEmptyComision,
@@ -1088,6 +1089,12 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
           </CardContent>
         ) : null}
       </Card>
+
+      {/* Sólo en un legajo que ya existe: el sueldo cuelga del empleado, así
+          que antes de crearlo no hay a qué colgarlo. */}
+      {mode === "edit" && empleado ? (
+        <RemuneracionSection empleadoId={empleado.id} />
+      ) : null}
 
       {(datosPrincipales.usuarioSistema || comisionesHabilitadas) && (
         <div className="flex flex-wrap gap-2">
