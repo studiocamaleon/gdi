@@ -166,29 +166,17 @@ export function TabSeguridad({
       <div className="int-section-intro">
         <h3>Desde dónde puede entrar cada uno</h3>
         <p>
-          Por defecto se entra desde cualquier lado. Si la empresa tiene IP fija,
-          podés atar una cuenta a esa IP: desde otra red no la deja entrar, ni
-          con la clave correcta.{" "}
-          {miIp ? (
+          Por defecto cada uno entra desde donde esté. Si querés, podés atar una
+          cuenta a la IP pública de la empresa: desde cualquier otra conexión no
+          entra, ni con la clave correcta.
+          {miIp?.esPublica ? (
             <>
+              {" "}
               Vos estás entrando desde <strong>{miIp.ip}</strong>.
             </>
           ) : null}
         </p>
       </div>
-
-      {/* La señal de que el servidor no está viendo el origen real. Restringir
-          contra una IP interna no protege: no coincide nunca con un cliente de
-          verdad, o coincide con todos. */}
-      {miIp && !miIp.esPublica && (
-        <div className="usr-aviso">
-          <strong>Ojo: {miIp.ip} es una IP interna, no la pública.</strong> Si
-          estás probando en tu máquina es normal. Si esto pasa en el sistema
-          instalado, el servidor no está viendo de dónde viene la gente y hay
-          que configurarle <code>TRUST_PROXY</code> antes de que restringir sirva
-          de algo.
-        </div>
-      )}
 
       <div className="int-tpl-list" style={{ marginBottom: 26 }}>
         {usuarios.map((u) => (
@@ -231,10 +219,9 @@ export function TabSeguridad({
               <div className="int-section-intro">
                 <h3>Desde dónde entra {u.nombreCompleto || u.email}</h3>
                 <p>
-                  La IP <strong>pública</strong> de la empresa —la que se ve en
-                  &ldquo;cuál es mi IP&rdquo;—, una por línea o separadas por
-                  coma. Vacío = desde cualquier lado. También se puede escribir
-                  el rango entero de la oficina, como <code>190.1.2.0/24</code>.
+                  Escribí la IP pública desde la que va a poder entrar. Si son
+                  varias, una por línea. Dejalo vacío para que entre desde
+                  cualquier lado.
                 </p>
               </div>
               <textarea
@@ -242,11 +229,19 @@ export function TabSeguridad({
                 value={borrador}
                 onChange={(e) => setBorrador(e.target.value)}
                 rows={3}
-                placeholder="190.1.2.3"
+                placeholder="193.186.4.250"
                 autoFocus
               />
+              <p className="usr-ayuda">
+                ¿No sabés cuál es? Desde esa computadora, buscá{" "}
+                <strong>cuál es mi IP</strong> en Google y copiá el número que
+                aparece. Si la empresa tiene varias líneas, también se puede
+                escribir el rango entero: <code>193.186.4.0/24</code>.
+              </p>
               <div className="usr-form-acciones">
-                {miIp && (
+                {/* Sólo si es la pública de verdad: ofrecer una IP de red
+                    interna sería ofrecer un dato que no sirve para esto. */}
+                {miIp?.esPublica && (
                   <button
                     className="btn ghost"
                     onClick={() =>
@@ -254,13 +249,9 @@ export function TabSeguridad({
                         b.trim() ? `${b}, ${miIp.ip}` : miIp.ip,
                       )
                     }
-                    title={
-                      miIp.esPublica
-                        ? "Agrega la IP desde la que estás mirando ahora."
-                        : "Es una IP interna: sirve para probar, no para proteger."
-                    }
+                    title="Agrega la IP desde la que estás entrando ahora."
                   >
-                    Usar mi IP ({miIp.ip})
+                    Usar esta ({miIp.ip})
                   </button>
                 )}
                 <button
@@ -285,8 +276,8 @@ export function TabSeguridad({
       <div className="int-section-intro">
         <h3>Lo que viene</h3>
         <p>
-          Vigencia de las sesiones y segundo factor. Todavía no están: cuando
-          los trabajemos, viven acá.
+          Vigencia de las sesiones y segundo factor. Todavía no están: cuando los
+          trabajemos, viven acá.
         </p>
       </div>
     </>

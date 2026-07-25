@@ -260,12 +260,15 @@ Está, con las decisiones que lo hacen seguro y no un cartel:
   no puede entrar llama por teléfono y del otro lado no hay nada que mirar.
 - Se aceptan IPs exactas (v4 y v6) y **rangos CIDR v4** — una oficina se
   describe con `/24`, no IP por IP.
-- **Se compara contra la IP PÚBLICA**, la que se ve en "cuál es mi IP". Y la
-  pantalla avisa cuando lo que el servidor está viendo es una IP interna
-  (`10.x`, `192.168.x`, `172.16–31.x`, loopback): eso significa que le falta
-  `TRUST_PROXY` y le está viendo la cara al proxy, no al cliente. Guardar una
-  interna en ese estado es peor que no restringir: no coincide con ningún
-  cliente real, o —si el proxy queda del mismo lado— coincide con todos.
+- **Se compara contra la IP PÚBLICA**, la que se ve en "cuál es mi IP".
+
+La pantalla no habla de proxies ni de IPs de red: el administrador de una
+imprenta escribe la IP pública y listo, con una línea de ayuda que dice dónde
+mirarla si no la sabe. Lo de `TRUST_PROXY` es un asunto del servidor, así que
+vive en el log de arranque (un WARN en producción si falta) y no en la cara del
+usuario. Y el botón "usar esta IP" sólo aparece cuando lo que el servidor ve ES
+una IP pública: ofrecer una IP de red interna sería ofrecer un dato que no sirve
+para esto.
 
 ### El problema que había que resolver primero: de dónde sale la IP
 

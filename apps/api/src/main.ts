@@ -35,7 +35,19 @@ async function bootstrap() {
   const trustProxy = process.env.TRUST_PROXY;
   if (trustProxy) {
     const valor = /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy;
-    app.getHttpAdapter().getInstance().set('trust proxy', valor);
+    const express = app.getHttpAdapter().getInstance() as unknown as {
+      set: (k: string, v: unknown) => void;
+    };
+    express.set('trust proxy', valor);
+  } else if (process.env.NODE_ENV === 'production') {
+    // Aviso para quien opera el servidor, no para el usuario del sistema: en
+    // producción casi siempre hay un proxy adelante, y sin esto la IP que se ve
+    // es la suya.
+    app
+      .get(Logger)
+      .warn(
+        'TRUST_PROXY sin definir: si hay un proxy adelante, el sistema ve la IP del proxy y no la del usuario. Afecta al límite por IP y a la restricción de acceso por IP.',
+      );
   }
 
   // Cabeceras de seguridad. La API sirve solo JSON, así que los defaults de
