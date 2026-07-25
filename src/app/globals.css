@@ -33499,6 +33499,18 @@ body:has(.t-app) {
   margin: 0 0 20px;
 }
 
+/* Cómo entra la primera vez: link o clave dictada. */
+.usr-modo { margin-top: 14px; }
+.usr-modo-lbl {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-text);
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
 /* ── Editor de roles ─── */
 .usr-roles-top { display: flex; justify-content: flex-end; margin-bottom: 12px; }
 .usr-matriz {

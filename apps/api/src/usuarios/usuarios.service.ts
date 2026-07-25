@@ -63,6 +63,7 @@ export class UsuariosService {
               nombreCompleto: true,
               activo: true,
               passwordHash: true,
+              debeCambiarPassword: true,
               empleados: {
                 where: { tenantId: auth.tenantId },
                 select: { id: true, nombreCompleto: true },
@@ -104,9 +105,15 @@ export class UsuariosService {
          * contraseña: es información distinta de "lo invitamos y no sabemos
          * nada", que es lo que parecía decir la ficha del empleado.
          */
+        /**
+         * `pendiente` es "todavía no eligió SU clave": tanto el que nunca
+         * entró como el que tiene una provisoria que le dictaron. Mirar sólo
+         * `passwordHash` daría por activo a alguien cuya clave la sabe el
+         * administrador, que es medio activo nada más.
+         */
         estado: !m.activa
           ? ('desactivado' as const)
-          : m.user.passwordHash
+          : m.user.passwordHash && !m.user.debeCambiarPassword
             ? ('activo' as const)
             : ('pendiente' as const),
         invitacionVence: invitacion?.toISOString() ?? null,
@@ -132,6 +139,11 @@ export class UsuariosService {
   async crear(auth: CurrentAuth, dto: CrearUsuarioDto) {
     const email = dto.email.trim().toLowerCase();
     const rol = await this.rolDelTenant(auth.tenantId, dto.rolId);
+    // Dos formas de entregarle el acceso, porque los dos casos existen en un
+    // taller: al que tiene mail se le manda el link y elige su clave; al que
+    // está parado al lado de la máquina se le dicta una y listo.
+    const conClave = dto.modo === 'clave';
+    const provisoria = conClave ? generarProvisoria() : null;
 
     const existente = await this.prisma.user.findUnique({
       where: { email },
@@ -160,6 +172,18 @@ export class UsuariosService {
             activo: true,
           },
         }));
+
+      if (provisoria) {
+        // Vale también para el que YA tenía cuenta en otra empresa: si el admin
+        // eligió dictarle una clave, se la pisamos y la cambia al entrar.
+        await tx.user.update({
+          where: { id: user.id },
+          data: {
+            passwordHash: await bcrypt.hash(provisoria, 10),
+            debeCambiarPassword: true,
+          },
+        });
+      }
 
       await tx.membership.upsert({
         where: {
@@ -210,11 +234,13 @@ export class UsuariosService {
       tipo: 'usuario_invitado',
       usuarioAfectadoNombre: dto.nombreCompleto?.trim() || email,
       descripcion: `Le dio acceso a ${email} como ${rol.nombre}`,
-      datos: { rolId: rol.id },
+      datos: { rolId: rol.id, modo: conClave ? 'clave' : 'link' },
     });
 
     return {
-      invitacionUrl: this.urlDeInvitacion(rawToken),
+      /** Sólo si se eligió el link: con clave dictada no hay nada que mandar. */
+      invitacionUrl: conClave ? null : this.urlDeInvitacion(rawToken),
+      provisoria,
       yaTeniaCuenta: Boolean(existente?.passwordHash),
     };
   }
