@@ -77,12 +77,20 @@ export async function getCatalogoPermisos(): Promise<CatalogoPermisos> {
   return apiRequest("/usuarios/catalogo", { cache: "no-store" });
 }
 
+/** Cómo se le entrega el acceso: link para que elija su clave, o una dictada. */
+export type ModoAcceso = "link" | "clave";
+
 export async function crearUsuario(datos: {
   email: string;
   nombreCompleto?: string;
   rolId: string;
   empleadoId?: string;
-}): Promise<{ invitacionUrl: string; yaTeniaCuenta: boolean }> {
+  modo?: ModoAcceso;
+}): Promise<{
+  invitacionUrl: string | null;
+  provisoria: string | null;
+  yaTeniaCuenta: boolean;
+}> {
   return apiRequest("/usuarios", {
     method: "POST",
     body: JSON.stringify(datos),

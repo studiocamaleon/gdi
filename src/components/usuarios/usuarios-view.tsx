@@ -15,6 +15,7 @@ import {
   type CatalogoPermisos,
   type EventoAcceso,
   type ListadoUsuarios,
+  type ModoAcceso,
   type RolDelTenant,
   type UsuarioDelTenant,
 } from "@/lib/usuarios-api";
@@ -550,8 +551,12 @@ function FormularioInvitacion({
     roles.find((r) => r.codigo === "operario")?.id ?? roles[0]?.id ?? "",
   );
   const [empleadoId, setEmpleadoId] = React.useState("");
+  const [modo, setModo] = React.useState<ModoAcceso>("link");
   const [enviando, setEnviando] = React.useState(false);
-  const [link, setLink] = React.useState<string | null>(null);
+  const [entregado, setEntregado] = React.useState<{
+    link: string | null;
+    clave: string | null;
+  } | null>(null);
 
   const enviar = async () => {
     if (!email.trim() || !rolId) {
@@ -565,11 +570,17 @@ function FormularioInvitacion({
         nombreCompleto: nombre.trim() || undefined,
         rolId,
         empleadoId: empleadoId || undefined,
+        modo,
       });
-      setLink(res.invitacionUrl);
-      if (navigator.clipboard) {
-        await navigator.clipboard.writeText(res.invitacionUrl);
-        toast.success("Acceso creado. El link quedó copiado.");
+      setEntregado({ link: res.invitacionUrl, clave: res.provisoria });
+      const aCopiar = res.invitacionUrl ?? res.provisoria;
+      if (aCopiar && navigator.clipboard) {
+        await navigator.clipboard.writeText(aCopiar);
+        toast.success(
+          res.invitacionUrl
+            ? "Acceso creado. El link quedó copiado."
+            : "Acceso creado. La clave quedó copiada.",
+        );
       } else {
         toast.success("Acceso creado.");
       }
@@ -581,17 +592,19 @@ function FormularioInvitacion({
     }
   };
 
-  if (link) {
+  if (entregado) {
+    const esLink = entregado.link !== null;
     return (
       <div className="usr-form">
         <div className="int-section-intro">
-          <h3>Pasale este link</h3>
+          <h3>{esLink ? "Pasale este link" : "Dictale esta clave"}</h3>
           <p>
-            Ya tiene acceso; con el link elige su contraseña. Vence en 7 días y
-            se puede volver a generar desde el listado.
+            {esLink
+              ? "Ya tiene acceso; con el link elige su contraseña. Vence en 7 días y se puede volver a generar desde el listado."
+              : "Con esta clave entra una vez y el sistema le pide que elija una propia — vos no vas a saber cuál. No se muestra de nuevo: si se pierde, se genera otra desde el listado."}
           </p>
         </div>
-        <code className="usr-link">{link}</code>
+        <code className="usr-link">{entregado.link ?? entregado.clave}</code>
         <div className="usr-form-acciones">
           <button className="btn primary" onClick={onCancelar}>
             Listo
@@ -647,6 +660,31 @@ function FormularioInvitacion({
           </select>
         </label>
       </div>
+      <div className="usr-modo">
+        <span className="usr-modo-lbl">Cómo entra la primera vez</span>
+        <div className="usr-niveles">
+          <button
+            type="button"
+            className={`usr-nivel${modo === "link" ? " on" : ""}`}
+            onClick={() => setModo("link")}
+          >
+            Le mando un link
+          </button>
+          <button
+            type="button"
+            className={`usr-nivel${modo === "clave" ? " on" : ""}`}
+            onClick={() => setModo("clave")}
+          >
+            Le dicto una clave
+          </button>
+        </div>
+        <p className="usr-ayuda" style={{ marginTop: 8 }}>
+          {modo === "link"
+            ? "Elige su propia clave desde el link: nadie más la sabe nunca."
+            : "El sistema genera una clave para dictarle. La cambia al entrar, así que tampoco vas a saber la definitiva."}
+        </p>
+      </div>
+
       <p className="usr-ayuda">
         {descripcionDelRol(roles, rolId)} Vincular con un empleado sirve para la
         mesa de trabajo y las comisiones: quien no es del taller no lo necesita.
