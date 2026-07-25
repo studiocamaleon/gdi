@@ -268,7 +268,9 @@ export class AdministracionController {
     return this.comprobantesService.cargarCae(auth, id, body);
   }
 
-  @Permiso('administracion.gestionar')
+  // Deshacer un movimiento de plata pide su propio permiso: manejar
+  // administración no es lo mismo que poder anular lo ya registrado.
+  @Permiso('administracion.anular')
   @Delete('comprobantes/:id')
   descartarComprobante(
     @CurrentSession() auth: CurrentAuth,

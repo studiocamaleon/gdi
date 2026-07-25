@@ -89,6 +89,7 @@ import {
   personalizacionAreaM2,
   type PersonalizacionProducto,
 } from "@/lib/producto-personalizaciones";
+import { usePuede } from "@/components/navigation/permisos-provider";
 
 type CatalogSpec = {
   key: string;
@@ -3430,6 +3431,7 @@ function ApConfigStep({
   onCotizar,
   onBack,
 }: ConfigStepProps) {
+  const verMargenes = usePuede("finanzas.ver_margenes");
   const totals = getTotals(product, qty, adi);
   const cotizacionExitosa = getCotizacionExitosa(cotizacion);
   const cotizacionErrores = cotizacion && !cotizacion.exitoso ? cotizacion.errores : [];
@@ -6049,23 +6051,28 @@ function ApConfigStep({
                   </span>
                 </div>
               </div>
-              <div className="ap-sum-margen">
-                <div className="m-head">
-                  <span>Margen bruto</span>
-                  <span
-                    className={`m-val ${getCotizacionMargen(cotizacionExitosa) < 25 ? "warn" : ""}`}
-                  >
-                    {getCotizacionMargen(cotizacionExitosa).toFixed(1)}%
-                  </span>
+              {/* El vendedor cotiza sobre el precio, no sobre la ganancia:
+                  sin el permiso no ve cuánto deja el trabajo. El API tampoco
+                  se lo manda. */}
+              {verMargenes && (
+                <div className="ap-sum-margen">
+                  <div className="m-head">
+                    <span>Margen bruto</span>
+                    <span
+                      className={`m-val ${getCotizacionMargen(cotizacionExitosa) < 25 ? "warn" : ""}`}
+                    >
+                      {getCotizacionMargen(cotizacionExitosa).toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="m-track">
+                    <span
+                      style={{
+                        width: `${Math.min(100, Math.max(0, getCotizacionMargen(cotizacionExitosa)))}%`,
+                      }}
+                    />
+                  </div>
                 </div>
-                <div className="m-track">
-                  <span
-                    style={{
-                      width: `${Math.min(100, Math.max(0, getCotizacionMargen(cotizacionExitosa)))}%`,
-                    }}
-                  />
-                </div>
-              </div>
+              )}
             </>
           ) : (
             <div className="ap-empty">
@@ -6107,17 +6114,19 @@ function ApConfigStep({
               <span className="val mono">{formatCurrency(totals.total)}</span>
             </div>
           </div>
-          <div className="ap-sum-margen">
-            <div className="m-head">
-              <span>Margen bruto</span>
-              <span className={`m-val ${totals.margen < 25 ? "warn" : ""}`}>
-                {totals.margen.toFixed(1)}%
-              </span>
+          {verMargenes && (
+            <div className="ap-sum-margen">
+              <div className="m-head">
+                <span>Margen bruto</span>
+                <span className={`m-val ${totals.margen < 25 ? "warn" : ""}`}>
+                  {totals.margen.toFixed(1)}%
+                </span>
+              </div>
+              <div className="m-track">
+                <span style={{ width: `${Math.min(100, Math.max(0, totals.margen))}%` }} />
+              </div>
             </div>
-            <div className="m-track">
-              <span style={{ width: `${Math.min(100, Math.max(0, totals.margen))}%` }} />
-            </div>
-          </div>
+          )}
         </div>
       )}
     </>

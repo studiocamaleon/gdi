@@ -55,10 +55,10 @@ export class PermisosGuard implements CanActivate {
     );
     if (soloAutenticado) return true;
 
-    const requerido = this.reflector.getAllAndOverride<PermisoClave>(PERMISO_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
+    const requerido = this.reflector.getAllAndOverride<PermisoClave>(
+      PERMISO_KEY,
+      [context.getHandler(), context.getClass()],
+    );
 
     if (!requerido) {
       // Se registra fuerte: no es que el usuario no tenga permiso, es que el

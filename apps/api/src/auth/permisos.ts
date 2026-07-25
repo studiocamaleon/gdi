@@ -76,9 +76,28 @@ export const PERMISOS_TRANSVERSALES = [
     descripcion:
       'Costos unitarios, contribución, márgenes y precios de compra, en cualquier pantalla donde aparezcan.',
   },
+  /**
+   * Excepciones: acciones que pueden hacer MENOS personas que las que manejan
+   * el módulo. Son las dos que en una imprenta se piden y las autoriza otro —
+   * el vendedor cierra la venta, pero el descuento por debajo del margen
+   * mínimo lo firma alguien más.
+   */
+  {
+    clave: 'comercial.aprobar_descuento',
+    label: 'Aprobar presupuestos bajo el margen mínimo',
+    descripcion:
+      'Autorizar un presupuesto cuyo margen quedó por debajo del piso configurado. Cotizar no alcanza.',
+  },
+  {
+    clave: 'administracion.anular',
+    label: 'Anular comprobantes y cobros',
+    descripcion:
+      'Descartar un comprobante o anular un cobro registrado. Es lo que deshace un movimiento de plata.',
+  },
 ] as const;
 
-export type PermisoTransversal = (typeof PERMISOS_TRANSVERSALES)[number]['clave'];
+export type PermisoTransversal =
+  (typeof PERMISOS_TRANSVERSALES)[number]['clave'];
 
 /** Una clave del catálogo. Se llama así y no `Permiso` para no chocar con el
  *  decorador `@Permiso`, que es lo que se lee en los controllers. */
@@ -193,6 +212,8 @@ export const ROLES_PREDEFINIDOS: RolPredefinido[] = [
       'registros.ver',
       'administracion.gestionar',
       'finanzas.ver_margenes',
+      // Quien maneja los cobros es quien corrige un cobro mal cargado.
+      'administracion.anular',
     ],
   },
   {

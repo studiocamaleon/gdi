@@ -41,6 +41,12 @@ export class UsuariosController {
     return this.usuarios.listar(auth);
   }
 
+  /** Quién le cambió el acceso a quién. Sólo lectura: nadie edita auditoría. */
+  @Get('historial')
+  historial(@CurrentSession() auth: CurrentAuth) {
+    return this.usuarios.historial(auth);
+  }
+
   // ── Roles ───────────────────────────────────────────────────────────
 
   @Get('roles')

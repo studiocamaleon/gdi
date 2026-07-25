@@ -5,6 +5,7 @@ import { RolSistema } from '@prisma/client';
 import {
   MODULOS,
   PERMISOS,
+  PERMISOS_TRANSVERSALES,
   ROLES_PREDEFINIDOS,
   esPermisoValido,
   expandir,
@@ -18,7 +19,9 @@ import type { CurrentAuth } from '../auth.types';
 
 describe('catálogo de permisos', () => {
   it('tiene ver y gestionar por cada módulo, más los transversales', () => {
-    expect(PERMISOS).toHaveLength(MODULOS.length * 2 + 1);
+    expect(PERMISOS).toHaveLength(
+      MODULOS.length * 2 + PERMISOS_TRANSVERSALES.length,
+    );
     expect(esPermisoValido('costos.gestionar')).toBe(true);
     expect(esPermisoValido('costos.borrar')).toBe(false);
   });
@@ -53,7 +56,9 @@ describe('catálogo de permisos', () => {
     });
 
     it('el administrador tiene todo', () => {
-      const admin = ROLES_PREDEFINIDOS.find((r) => r.codigo === 'administrador');
+      const admin = ROLES_PREDEFINIDOS.find(
+        (r) => r.codigo === 'administrador',
+      );
       expect(admin!.permisos).toEqual(todosLosPermisos());
     });
 
@@ -73,7 +78,12 @@ describe('catálogo de permisos', () => {
         ROLES_PREDEFINIDOS.find((r) => r.codigo === 'operario')!.permisos,
       );
       expect(efectivos.has('produccion.gestionar')).toBe(true);
-      for (const modulo of ['costos', 'administracion', 'configuracion', 'panel']) {
+      for (const modulo of [
+        'costos',
+        'administracion',
+        'configuracion',
+        'panel',
+      ]) {
         expect(efectivos.has(`${modulo}.ver`)).toBe(false);
       }
     });

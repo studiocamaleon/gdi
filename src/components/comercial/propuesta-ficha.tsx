@@ -125,6 +125,7 @@ import { NestingViewer } from "@/components/nesting/nesting-viewer";
 import { listClientes } from "@/lib/clientes-api";
 import { getCurrentPeriodo } from "@/lib/costos";
 import { technologyCodeLabel } from "@/lib/maquinaria-tecnologias";
+import { usePuede } from "@/components/navigation/permisos-provider";
 
 type PropuestaFichaProps = {
   initialClientes?: ClienteDetalle[];
@@ -714,6 +715,7 @@ function OrdenTabs({
   /** null hasta que el tab de Archivos se abre y los cuenta. */
   archivosCount?: number | null;
 }) {
+  const verMargenes = usePuede("finanzas.ver_margenes");
   const tabs: Array<{
     key: OrdenTab;
     label: string;
@@ -740,7 +742,18 @@ function OrdenTabs({
       count: archivosCount ?? undefined,
       icon: <FolderIcon />,
     },
-    { key: "costos", label: "Costos", icon: <CircleDollarSignIcon /> },
+    // El tab Costos es el desglose de lo que le sale a la imprenta: material,
+    // máquina, mano de obra. Quien no puede ver márgenes tampoco lo ve — y el
+    // API ya le manda la orden sin esos campos, así que el tab estaría vacío.
+    ...(verMargenes
+      ? [
+          {
+            key: "costos" as const,
+            label: "Costos",
+            icon: <CircleDollarSignIcon />,
+          },
+        ]
+      : []),
     ...(historialCount !== undefined
       ? [
           {

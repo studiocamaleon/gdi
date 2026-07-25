@@ -59,6 +59,20 @@ export async function getRoles(): Promise<RolDelTenant[]> {
   return apiRequest("/usuarios/roles", { cache: "no-store" });
 }
 
+export type EventoAcceso = {
+  id: string;
+  tipo: string;
+  /** Quién lo hizo, congelado al momento del hecho. */
+  actorNombre: string;
+  usuarioAfectadoNombre: string | null;
+  descripcion: string;
+  createdAt: string;
+};
+
+export async function getHistorialAccesos(): Promise<EventoAcceso[]> {
+  return apiRequest("/usuarios/historial", { cache: "no-store" });
+}
+
 export async function getCatalogoPermisos(): Promise<CatalogoPermisos> {
   return apiRequest("/usuarios/catalogo", { cache: "no-store" });
 }

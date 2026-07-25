@@ -12,11 +12,13 @@ import { MotorUniversalService } from './motor.service';
 import { CotizarDto } from './cotizar.dto';
 import type { CotizarOutput } from './tipos';
 import { Permiso } from '../auth/permiso.decorator';
+import { OcultaMargenes } from '../auth/margenes.decorator';
 
 interface RequestWithAuth extends Request {
   auth?: { tenantId: string; userId: string };
 }
 
+@OcultaMargenes()
 @Permiso('comercial.ver')
 @Controller('motor-universal')
 export class MotorUniversalController {

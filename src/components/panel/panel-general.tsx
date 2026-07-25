@@ -50,6 +50,7 @@ import {
   type RentabilidadPanel,
   type ResumenProduccionKpis,
 } from "@/lib/panel-api";
+import { usePuede } from "@/components/navigation/permisos-provider";
 
 /* ─── Formato es-AR ─── */
 export const fmtAR = (n: number, d = 0) =>
@@ -1464,6 +1465,14 @@ const FETCHERS: Record<TabKey, (r: RangoPanel) => Promise<unknown>> = {
 };
 
 export function PanelGeneral({ initialResumen }: { initialResumen: ResumenData }) {
+  // Finanzas es rentabilidad pura: facturado contra costo, margen y
+  // contribución. Sin el permiso el tab no se muestra —y si llegara igual, el
+  // API ya devuelve la respuesta sin esos campos.
+  const verMargenes = usePuede("finanzas.ver_margenes");
+  const tabs = React.useMemo(
+    () => (verMargenes ? TABS : TABS.filter((t) => t.key !== "finanzas")),
+    [verMargenes],
+  );
   const [tab, setTab] = React.useState<TabKey>("resumen");
   const [periodo, setPeriodo] = React.useState<PeriodoKey>("mes");
   const [cache, setCache] = React.useState<Record<string, unknown>>({ "resumen|mes": initialResumen });
@@ -1502,7 +1511,7 @@ export function PanelGeneral({ initialResumen }: { initialResumen: ResumenData }
         </div>
 
         <div className="dash-tabs">
-          {TABS.map((t) => (
+          {tabs.map((t) => (
             <button key={t.key} className={`dash-tab ${tab === t.key ? "on" : ""}`} onClick={() => setTab(t.key)}>
               <span className="ico"><t.Icon width={15} height={15} /></span><span>{t.label}</span>
             </button>

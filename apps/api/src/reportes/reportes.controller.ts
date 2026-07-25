@@ -15,6 +15,7 @@ import { RangoReporteDto } from './dto/rango-reporte.dto';
 import { MixCategoriaDto } from './dto/mix-categoria.dto';
 import { ActualizarUmbralesDto } from './dto/actualizar-umbrales.dto';
 import { Permiso } from '../auth/permiso.decorator';
+import { OcultaMargenes } from '../auth/margenes.decorator';
 
 /**
  * Panel general (Inteligencia de negocio) — un endpoint por TAB. Los
@@ -23,6 +24,7 @@ import { Permiso } from '../auth/permiso.decorator';
  * de dominio (rentabilidad → cobranza → ventas → producto → producción).
  * Ver docs/reportes-plan-backend.md §7.
  */
+@OcultaMargenes()
 @Permiso('panel.ver')
 @Controller('reportes/panel')
 export class ReportesController {
