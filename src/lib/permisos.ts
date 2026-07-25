@@ -31,7 +31,10 @@ export type PermisoClave =
   // El Resumen ejecutivo se separa del resto de Reportes: es la lectura del
   // dueño (facturación, margen, punto de equilibrio, alertas) y de fábrica lo
   // tiene sólo el Administrador.
-  | "reportes.ver_resumen";
+  | "reportes.ver_resumen"
+  // Los sueldos de los legajos. Registros es un módulo abierto —el vendedor
+  // carga clientes ahí—, así que la remuneración pide su propio permiso.
+  | "registros.ver_remuneraciones";
 
 /**
  * Los permisos del usuario en la empresa donde está parado.

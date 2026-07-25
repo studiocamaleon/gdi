@@ -209,6 +209,10 @@ model EmpleadoRemuneracion {
   sueldoNeto     Decimal   @db.Decimal(14, 2)
   /// Cargas sociales y aportes patronales del mes.
   cargasSociales Decimal   @db.Decimal(14, 2)
+  /// Sueldos que cobra por año: 13 con aguinaldo (normal en Argentina), 12
+  /// sin. El costo mensual prorratea: (neto + cargas) × sueldosPorAnio / 12.
+  /// Ver §12.2 — modelarlo así evita una constante escondida en el código.
+  sueldosPorAnio Int       @default(13)
   /// Por qué cambió: 'paritaria' | 'ascenso' | 'correccion' | 'alta' | 'otro'.
   motivo         String?
   notas          String?
@@ -346,14 +350,102 @@ paso. Hoy figura como imposible.
 
 ---
 
-## 12. Preguntas abiertas
+## 12. Decisiones (2026-07-25)
 
-1. **Socios.** La línea "Sueldos socios" ($6.000.000) del punto de equilibrio no
-   corresponde a ningún centro productivo. ¿Los socios son legajos con
-   remuneración y sin asignación a centros, o quedan como línea suelta de gastos
-   fijos? Afecta directamente cómo se concilia la brecha de $6,3M.
-2. **Aguinaldo y cargas variables.** ¿El costo mensual es el mismo los 12 meses,
-   o hay que prever un prorrateo del aguinaldo? Cambia si la remuneración se
-   modela como mensual o como anual/12.
-3. **El conflicto de Iván Sanz** — ¿2.000.000 o 1.500.000? Hay que resolverlo
-   antes del backfill.
+### 12.1 Socios: no existe la categoría
+
+**Todos los que trabajan en la gráfica son empleados, con legajo y centro.** Los
+socios de hoy cumplen una labor concreta, así que su costo es costo laboral y va
+por el mismo camino que el de cualquier otro. El día que se reemplacen con
+alguien más, el legajo sigue existiendo con otra persona adentro.
+
+El reparto de utilidades entre socios es **otra cosa** y no se modela hoy: no es
+un sueldo, no imputa a un centro y no entra en la tarifa. Cuando exista, será un
+movimiento de resultados, no de nómina.
+
+Consecuencia para el punto de equilibrio: la línea "Sueldos socios" ($6.000.000)
+deja de tener sentido como línea suelta. La nómina de legajos pasa a cubrir
+**toda** la masa salarial, y la brecha de $6,3M se explica sola en vez de
+quedar colgada.
+
+### 12.2 Aguinaldo: se prorratea, y se modela como sueldos por año
+
+El aguinaldo (SAC) hoy no está contemplado en ningún lado. Se agrega.
+
+La decisión de fondo es **prorratearlo**, no imputarlo en junio y diciembre. Si
+no se prorratea, la tarifa hora subfactura once meses y sobrefactura dos — y un
+trabajo idéntico costaría distinto según el mes en que se produce, que es
+exactamente lo que un sistema de costeo tiene que evitar.
+
+La forma más simple y auditable de modelarlo es no tener un campo "aguinaldo"
+sino declarar **cuántos sueldos por año** cobra la persona:
+
+```
+sueldosPorAnio = 13   → con aguinaldo (el caso normal en Argentina)
+sueldosPorAnio = 12   → sin aguinaldo (contratado, monotributista)
+
+costo mensual = (sueldoNeto + cargasSociales) × sueldosPorAnio / 12
+```
+
+Con 13, el recargo es del 8,33% mensual, que es exactamente la provisión del
+SAC. Ventajas sobre un campo `aguinaldo: boolean`:
+
+- Es **por persona**: un monotributista contratado convive con empleados en
+  relación de dependencia sin necesitar un caso especial.
+- La cuenta es visible y verificable: no hay una constante escondida en el
+  código.
+- Si algún día hay un convenio con 14 sueldos, es un número, no un release.
+
+**Simplificación declarada:** el SAC legal es el 50% de la mejor remuneración de
+cada semestre, no un doceavo del sueldo corriente. Con sueldo estable son lo
+mismo; con aumentos a mitad de año, la provisión queda apenas corta. Para
+costear una hora de trabajo la diferencia es despreciable, y la alternativa
+—recalcular el mejor mes de cada semestre— mete una dependencia temporal en un
+número que tiene que ser estable. Se prorratea y se dice acá.
+
+El **pago** del aguinaldo (el evento de junio y diciembre) es otra cosa: es un
+movimiento de plata y vive en la Fase C, junto con los adelantos. Acá sólo se
+provisiona el costo.
+
+### 12.3 Backfill: aproximar y que el usuario corrija
+
+Decisión del usuario: **"cuando queden los sueldos en los legajos de cada uno,
+yo los acomodo manualmente"**.
+
+Eso simplifica el backfill y elimina el bloqueo del conflicto de Iván Sanz. La
+estrategia pasa a ser:
+
+1. Reconstruir una `EmpleadoRemuneracion` por `(empleado, período)` desde
+   `detalleJson`, tomando el valor más frecuente cuando haya varios.
+2. Marcar en `notas` los casos reconstruidos y, en particular, los que tenían
+   valores en conflicto — para que se vean al revisar.
+3. El usuario entra al legajo y ajusta.
+
+El backfill no tiene que ser exacto; tiene que ser **honesto sobre lo que
+supuso**.
+
+### 12.4 Quién puede ver los sueldos
+
+El módulo Empleados vive bajo `registros.*`, y el Vendedor tiene
+`registros.gestionar` — o sea que con el permiso actual, el vendedor vería lo
+que gana cada compañero. No corresponde.
+
+La remuneración pide un permiso propio, siguiendo el patrón de la casa para las
+acciones que puede menos gente que el módulo (`finanzas.ver_margenes`,
+`comercial.aprobar_descuento`, `reportes.ver_resumen`):
+
+```
+registros.ver_remuneraciones — "Ver y editar los sueldos de los legajos"
+```
+
+De fábrica lo tiene sólo el **Administrador**. El resto del legajo (datos
+personales, contacto, sector) sigue con `registros.ver`. Sin el permiso, la
+sección de remuneración no se muestra y el API no la devuelve.
+
+---
+
+## 13. Preguntas que quedaron cerradas
+
+- ~~Socios~~ → son empleados con legajo y centro (§12.1).
+- ~~Aguinaldo~~ → se prorratea vía `sueldosPorAnio` (§12.2).
+- ~~Conflicto de Iván Sanz~~ → lo corrige el usuario a mano (§12.3).
