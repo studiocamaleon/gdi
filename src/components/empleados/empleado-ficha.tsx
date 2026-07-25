@@ -940,13 +940,18 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
                   , junto con el resto de las cuentas de la empresa.
                 </CardDescription>
               </div>
+              {/* Con router y no con un <Link> envolviendo al Button: un <a>
+                  con un <button> adentro es HTML inválido. */}
               {mode === "edit" ? (
-                <Link href="/configuracion/usuarios" className="w-full sm:w-auto">
-                  <Button type="button" variant="sidebar" className="w-full">
-                    <ShieldCheckIcon />
-                    Administrar accesos
-                  </Button>
-                </Link>
+                <Button
+                  type="button"
+                  variant="sidebar"
+                  className="w-full sm:w-auto"
+                  onClick={() => router.push("/configuracion/usuarios")}
+                >
+                  <ShieldCheckIcon />
+                  Administrar accesos
+                </Button>
               ) : null}
             </div>
           </CardHeader>
