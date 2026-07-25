@@ -1,3 +1,5 @@
+import { SinPermiso } from "@/components/navigation/sin-permiso";
+import { tienePermiso } from "@/lib/permisos-server";
 import { IntegracionesView } from "@/components/integraciones/integraciones-view";
 import {
   getIntegraciones,
@@ -14,6 +16,10 @@ const VACIO: EstadoIntegraciones = {
 };
 
 export default async function IntegracionesPage() {
+  if (!(await tienePermiso("configuracion.ver"))) {
+    return <SinPermiso modulo="Integraciones" />;
+  }
+
   const inicial = await getIntegraciones().catch(() => VACIO);
   return <IntegracionesView inicial={inicial} />;
 }

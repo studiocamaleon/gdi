@@ -1,3 +1,5 @@
+import { SinPermiso } from "@/components/navigation/sin-permiso";
+import { tienePermiso } from "@/lib/permisos-server";
 import { UsuariosView } from "@/components/usuarios/usuarios-view";
 import { getEmpleados } from "@/lib/empleados-api";
 import {
@@ -22,6 +24,10 @@ const VACIO: ListadoUsuarios = { usuarios: [], limite: null, enUso: 0 };
  * de la pantalla funciona igual: vincular es opcional.
  */
 export default async function UsuariosPage() {
+  if (!(await tienePermiso("configuracion.ver"))) {
+    return <SinPermiso modulo="Usuarios" />;
+  }
+
   const [usuarios, roles, catalogo, empleados, historial] = await Promise.all([
     getUsuarios().catch(() => VACIO),
     getRoles().catch(() => [] as RolDelTenant[]),

@@ -122,6 +122,19 @@ export const PERMISOS_TRANSVERSALES = [
    * es el más abierto: el Vendedor tiene `registros.gestionar` porque carga
    * clientes, y sin esta excepción vería lo que gana cada compañero.
    */
+  /**
+   * Datos fiscales y métodos de pago viven en Configuración porque se definen
+   * una vez, pero son del dominio de quien cobra y factura. Sin esta llave, el
+   * Administrativo tendría que pedirle a un administrador que corrija un CUIT
+   * o cargue un medio de pago nuevo — y dársela entrando por `configuracion.ver`
+   * le abriría también Usuarios, o sea crear cuentas y repartir roles.
+   */
+  {
+    clave: 'administracion.configurar',
+    label: 'Configurar la facturación y los medios de cobro',
+    descripcion:
+      'Datos fiscales del emisor, puntos de venta y catálogo de métodos de pago. No incluye el resto de Configuración.',
+  },
   {
     clave: 'registros.ver_remuneraciones',
     label: 'Ver y editar sueldos de los legajos',
@@ -251,6 +264,9 @@ export const ROLES_PREDEFINIDOS: RolPredefinido[] = [
       'finanzas.ver_margenes',
       // Quien maneja los cobros es quien corrige un cobro mal cargado.
       'administracion.anular',
+      // ...y quien corrige el CUIT o carga un medio de pago nuevo, sin que eso
+      // le abra Usuarios.
+      'administracion.configurar',
     ],
   },
   {

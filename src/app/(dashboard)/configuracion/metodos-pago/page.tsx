@@ -1,3 +1,5 @@
+import { SinPermiso } from "@/components/navigation/sin-permiso";
+import { tienePermiso } from "@/lib/permisos-server";
 import { MetodosPagoView } from "@/components/administracion/metodos-pago-view";
 import type {
   CuentaFondosResumen,
@@ -8,6 +10,10 @@ import { getCuentasFondos, getMetodosPago } from "@/lib/administracion-api";
 export const dynamic = "force-dynamic";
 
 export default async function MetodosPagoPage() {
+  if (!(await tienePermiso("administracion.configurar"))) {
+    return <SinPermiso modulo="Métodos de pago" />;
+  }
+
   let metodos: MetodoPago[] = [];
   let cuentas: CuentaFondosResumen[] = [];
   try {

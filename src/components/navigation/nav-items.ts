@@ -259,6 +259,7 @@ export const NAV: NavItem[] = [
         key: "datos-fiscales",
         label: "Datos fiscales",
         href: "/configuracion/datos-fiscales",
+        permiso: "administracion.configurar",
       },
       // Junto a Datos fiscales por el mismo criterio: es un catálogo que se
       // define una vez —qué medios acepta la imprenta y con qué comisión— y no
@@ -267,6 +268,7 @@ export const NAV: NavItem[] = [
         key: "metodos-pago",
         label: "Métodos de pago",
         href: "/configuracion/metodos-pago",
+        permiso: "administracion.configurar",
       },
       {
         key: "almacenamiento",
@@ -298,10 +300,16 @@ export function hasChildren(
 export function navPara(permisos: Set<string> | null): NavItem[] {
   if (!permisos) return NAV;
   return NAV.flatMap<NavItem>((item) => {
-    if (!permisos.has(item.permiso)) return [];
-    if (!hasChildren(item)) return [item];
-    const children = item.children.filter(
-      (c) => !c.permiso || permisos.has(c.permiso),
+    if (!hasChildren(item)) {
+      return permisos.has(item.permiso) ? [item] : [];
+    }
+    // El permiso del hijo REEMPLAZA al del grupo, no se suma: un hijo que
+    // declara el suyo se sostiene solo (Datos fiscales con
+    // `administracion.configurar` aunque no tengas Configuración entera) y
+    // también se restringe solo (el Resumen ejecutivo NO se abre por tener
+    // Reportes). El grupo aparece si le queda al menos un hijo.
+    const children = item.children.filter((c) =>
+      permisos.has(c.permiso ?? item.permiso),
     );
     return children.length ? [{ ...item, children }] : [];
   });
@@ -331,3 +339,4 @@ export function flattenNavDestinations(
     return [{ key: item.key, label: item.label, href: item.href, grupo: "" }];
   });
 }
+
