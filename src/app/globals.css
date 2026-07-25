@@ -28421,7 +28421,11 @@ body:has(.t-app) {
   padding: 3px;
   gap: 2px;
 }
-.dash-period button {
+/* En Reportes el período viaja en la URL (?periodo=), así que los controles
+   son ANCLAS de verdad, no botones: se abren en pestaña nueva y se comparten.
+   El tablero sigue usando <button>; los dos selectores comparten estilo. */
+.dash-period button,
+.dash-period a {
   border: none;
   background: transparent;
   padding: 5px 11px;
@@ -28431,9 +28435,13 @@ body:has(.t-app) {
   cursor: pointer;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
+  text-decoration: none;
+  line-height: normal;
 }
-.dash-period button:hover { color: var(--ink); }
-.dash-period button.on {
+.dash-period button:hover,
+.dash-period a:hover { color: var(--ink); }
+.dash-period button.on,
+.dash-period a.on {
   background: var(--ink);
   color: #fff;
   box-shadow: 0 1px 2px rgba(20,20,26,.18);
@@ -28461,6 +28469,8 @@ body:has(.t-app) {
   position: relative;
   white-space: nowrap;
   transition: color .12s ease;
+  /* La tira de Reportes son <Link>: cada reporte tiene URL propia. */
+  text-decoration: none;
 }
 .dash-tab:hover { color: var(--ink-2); }
 .dash-tab.on {

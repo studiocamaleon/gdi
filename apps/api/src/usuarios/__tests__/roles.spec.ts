@@ -122,18 +122,18 @@ describe('crear rol', () => {
     const { service, rolCreate } = armar();
     await service.crearRol(AUTH, {
       nombre: 'Depósito',
-      permisos: ['inventario.ver', 'inventario.gestionar', 'panel.ver'],
+      permisos: ['inventario.ver', 'inventario.gestionar', 'reportes.ver'],
     });
     expect(rolCreate.mock.calls[0][0].data.permisos.sort()).toEqual([
       'inventario.gestionar',
-      'panel.ver',
+      'reportes.ver',
     ]);
   });
 
   it('no deja dos roles con el mismo nombre', async () => {
     const { service } = armar({ nombreEnUso: true });
     await expect(
-      service.crearRol(AUTH, { nombre: 'Vendedor', permisos: ['panel.ver'] }),
+      service.crearRol(AUTH, { nombre: 'Vendedor', permisos: ['reportes.ver'] }),
     ).rejects.toThrow(ConflictException);
   });
 
@@ -141,7 +141,7 @@ describe('crear rol', () => {
     const { service, rolCreate } = armar();
     await service.crearRol(AUTH, {
       nombre: 'Depósito',
-      permisos: ['panel.ver'],
+      permisos: ['reportes.ver'],
     });
     expect(rolCreate.mock.calls[0][0].data.codigo).toBeNull();
     expect(rolCreate.mock.calls[0][0].data.esDelSistema).toBe(false);
@@ -195,7 +195,7 @@ describe('editar rol', () => {
 
   it('el cambio se siente ya: invalida las sesiones del tenant', async () => {
     const { service, invalidarTenant } = armar({ rol: A_MEDIDA });
-    await service.editarRol(AUTH, 'r1', { permisos: ['panel.ver'] });
+    await service.editarRol(AUTH, 'r1', { permisos: ['reportes.ver'] });
     expect(invalidarTenant).toHaveBeenCalledWith('t1');
   });
 
@@ -206,7 +206,7 @@ describe('editar rol', () => {
         otrosConLlaves: 1,
       });
       await expect(
-        service.editarRol(AUTH, 'r1', { permisos: ['panel.ver'] }),
+        service.editarRol(AUTH, 'r1', { permisos: ['reportes.ver'] }),
       ).resolves.toEqual({ ok: true });
     });
 
@@ -216,7 +216,7 @@ describe('editar rol', () => {
         otrosConLlaves: 0,
       });
       await expect(
-        service.editarRol(AUTH, 'r1', { permisos: ['panel.ver'] }),
+        service.editarRol(AUTH, 'r1', { permisos: ['reportes.ver'] }),
       ).rejects.toThrow(/nadie podría administrar/i);
     });
   });

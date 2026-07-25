@@ -11,7 +11,7 @@ import type { CurrentUser } from "@/lib/auth";
  */
 
 export const MODULOS = [
-  "panel",
+  "reportes",
   "comercial",
   "registros",
   "costos",
@@ -26,7 +26,11 @@ export type ModuloClave = (typeof MODULOS)[number];
 export type PermisoClave =
   | `${ModuloClave}.ver`
   | `${ModuloClave}.gestionar`
-  | "finanzas.ver_margenes";
+  | "finanzas.ver_margenes"
+  // El Resumen ejecutivo se separa del resto de Reportes: es la lectura del
+  // dueño (facturación, margen, punto de equilibrio, alertas) y de fábrica lo
+  // tiene sólo el Administrador.
+  | "reportes.ver_resumen";
 
 /**
  * Los permisos del usuario en la empresa donde está parado.

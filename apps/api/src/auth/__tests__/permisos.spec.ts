@@ -41,8 +41,8 @@ describe('catálogo de permisos', () => {
      * guardada: se ignora y el resto de sus permisos siguen valiendo.
      */
     it('ignora claves que ya no existen', () => {
-      const efectivos = expandir(['modulo_viejo.ver', 'panel.ver']);
-      expect([...efectivos]).toEqual(['panel.ver']);
+      const efectivos = expandir(['modulo_viejo.ver', 'reportes.ver']);
+      expect([...efectivos]).toEqual(['reportes.ver']);
     });
   });
 

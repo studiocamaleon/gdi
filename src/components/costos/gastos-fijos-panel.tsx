@@ -3,7 +3,7 @@
 /**
  * Gastos fijos de estructura — vista portada VERBATIM del diseño Grafoprint
  * ("Gastos fijos.html"), conectada al backend real. Sin los elementos de
- * punto de equilibrio (ese cálculo vive en el Panel general).
+ * punto de equilibrio (ese cálculo vive en Reportes).
  * Ver docs/gastos-fijos-estructura-diseno.md
  */
 
@@ -126,8 +126,8 @@ export function GastosFijosPanel({ initialGastos }: { initialGastos: GastoFijo[]
           <div>
             <h1>Gastos fijos de estructura</h1>
             <div className="sub">
-              La estructura mensual que tu facturación debe cubrir. Es la base del <b>punto de equilibrio</b> del
-              Panel general. Independiente de los centros de costo (que sirven para las tarifas): podés tener sueldos
+              La estructura mensual que tu facturación debe cubrir. Es la base del <b>punto de equilibrio</b> de
+              Reportes. Independiente de los centros de costo (que sirven para las tarifas): podés tener sueldos
               en ambos lados sin doble conteo.
             </div>
           </div>

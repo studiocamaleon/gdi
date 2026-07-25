@@ -17,8 +17,8 @@ import { RolSistema } from '@prisma/client';
 /** Módulos del sistema, en el orden del sidebar. */
 export const MODULOS = [
   {
-    clave: 'panel',
-    label: 'Panel general',
+    clave: 'reportes',
+    label: 'Reportes',
     descripcion: 'Métricas del negocio, ventas y producción.',
   },
   {
@@ -65,8 +65,8 @@ export type ModuloClave = (typeof MODULOS)[number]['clave'];
  * El permiso que no pertenece a un módulo: ver la plata.
  *
  * Está aparte porque el margen no vive en un solo lugar — se filtra en el
- * cotizador (Comercial), en el desglose de la orden (Producción), en el panel y
- * en los reportes. Derivarlo de "acceso a Costos" no alcanza: el vendedor tiene
+ * cotizador (Comercial), en el desglose de la orden (Producción) y en Reportes.
+ * Derivarlo de "acceso a Costos" no alcanza: el vendedor tiene
  * que poder cotizar sin ver cuánto gana la imprenta en cada renglón.
  */
 export const PERMISOS_TRANSVERSALES = [
@@ -93,6 +93,19 @@ export const PERMISOS_TRANSVERSALES = [
     label: 'Anular comprobantes y cobros',
     descripcion:
       'Descartar un comprobante o anular un cobro registrado. Es lo que deshace un movimiento de plata.',
+  },
+  /**
+   * El Resumen ejecutivo es el reporte que junta TODO el negocio en una
+   * pantalla —facturación, margen, punto de equilibrio, alertas—. Es la lectura
+   * del dueño, no la del equipo: por eso se separa del resto de Reportes en vez
+   * de entrar con `reportes.ver`. De fábrica lo tiene sólo el Administrador;
+   * quien quiera dárselo a su encargado lo hace desde el editor de roles.
+   */
+  {
+    clave: 'reportes.ver_resumen',
+    label: 'Ver el Resumen ejecutivo',
+    descripcion:
+      'El tablero que resume el negocio entero: facturación, margen, punto de equilibrio y alertas. Ver los demás reportes no alcanza.',
   },
 ] as const;
 
@@ -178,7 +191,7 @@ export const ROLES_PREDEFINIDOS: RolPredefinido[] = [
       'Maneja el taller de punta a punta y ve los costos, sin tocar administración ni configuración.',
     rolBase: RolSistema.SUPERVISOR,
     permisos: [
-      'panel.ver',
+      'reportes.ver',
       'comercial.ver',
       'registros.ver',
       'costos.ver',
@@ -194,7 +207,7 @@ export const ROLES_PREDEFINIDOS: RolPredefinido[] = [
       'Cotiza y sigue sus trabajos. NO ve costos ni márgenes: cotiza sobre el precio, no sobre la ganancia.',
     rolBase: RolSistema.SUPERVISOR,
     permisos: [
-      'panel.ver',
+      'reportes.ver',
       'comercial.gestionar',
       'registros.gestionar',
       'produccion.ver',
@@ -207,7 +220,7 @@ export const ROLES_PREDEFINIDOS: RolPredefinido[] = [
       'Cobros, comprobantes y cuentas corrientes. Ve lo comercial pero no lo edita.',
     rolBase: RolSistema.SUPERVISOR,
     permisos: [
-      'panel.ver',
+      'reportes.ver',
       'comercial.ver',
       'registros.ver',
       'administracion.gestionar',
