@@ -1,7 +1,7 @@
 # Usuarios, roles y permisos — diseño
 
 **Fecha:** 2026-07-24
-**Estado:** F1 IMPLEMENTADA. F2 y F3 pendientes (ver §6).
+**Estado:** F1 y F2 IMPLEMENTADAS. F3 pendiente (ver §6).
 
 ---
 
@@ -244,10 +244,39 @@ operario recibe 403 en `/usuarios`, `/costos/*`, `/clientes`, `/administracion/*
 y `/reportes/*`, y 200 en `/ordenes-trabajo/tablero`, `/auth/me` y
 `/tenants/current`.
 
-**F2 — Personalizar (lo que pediste).**
-Editor de roles: crear, duplicar un predefinido, matriz de permisos por módulo,
-módulos fuera del plan atenuados con su upsell. `usuariosMax` aplicado al
-invitar. Invitación por email/WhatsApp automática.
+**F2 — Personalizar (lo que pediste). HECHA, menos la invitación automática.**
+Editor de roles: crear, editar, eliminar, matriz de tres niveles por módulo
+(sin acceso / ver / editar) y los transversales aparte. Los módulos fuera del
+plan se muestran atenuados **y se dejan configurar**: el permiso queda guardado
+y el rol funciona el día que el tenant sube de plan, en vez de obligar a
+reconfigurar después de pagar. `usuariosMax` ya se aplicaba desde F1.
+
+Tres cerrojos, que son lo que hace que la pantalla se pueda dar a un cliente:
+
+1. **Nadie puede dejar la empresa sin administradores.** Sacarle
+   `configuracion.gestionar` al último rol que lo tiene se rechaza con un
+   mensaje que dice qué hacer. Sin esto había que entrar por la base a
+   arreglarlo.
+2. **Los roles de fábrica no se renombran ni se borran** — se les ajustan los
+   permisos. Son la referencia común entre imprentas: un "Vendedor" que en
+   realidad es administrador vuelve inútil hablar de roles con nadie.
+3. **Borrar un rol con gente adentro exige decir a dónde se mudan.** Dejarlos
+   sin rol los tiraría al fallback del enum, que es un permiso distinto del que
+   el admin cree estar sacando.
+
+Además: al cambiarle los permisos a un rol se mueve el `RolSistema` de sus
+miembros (el enum lo siguen leyendo los endpoints con `@Roles`, así que sin esto
+el cambio arreglaba la mitad) y se invalidan las sesiones cacheadas del tenant,
+para que se sienta en el acto.
+
+**Lo que NO entró: la invitación automática.** No es una parte más de F2 —el
+proyecto no tiene NADA de email: ni librería, ni proveedor, ni variables de
+entorno— así que es elegir e integrar un proveedor desde cero, con su propio
+diseño. Por WhatsApp tampoco sale gratis: haría falta una plantilla nueva
+aprobada por Meta, y el catálogo de Wati está pensado para clientes finales, no
+para el personal. Mientras tanto el link se copia al portapapeles y se puede
+regenerar desde el listado, que es lo que faltaba de verdad: antes, perder el
+link significaba no poder hacer entrar a nadie.
 
 **F3 — Afinar.**
 `finanzas.ver_margenes` cableado en los cuatro lugares donde se filtra plata
@@ -279,10 +308,11 @@ F1 es la que no es opcional. F2 es la que pediste y se apoya entera en F1.
   arreglara. Sigue abierta la pregunta de fondo: si un rol a medida con
   `configuracion.gestionar` debería poder editar roles, porque entonces puede
   darse a sí mismo cualquier permiso en dos clicks.
-- **La invitación sigue entregándose por portapapeles.** El link se copia al
-  crear el usuario; mandarlo por mail o WhatsApp es F2. Mientras tanto la
-  pantalla lo muestra completo para poder pasarlo a mano.
-- **Las pantallas todavía no verifican permisos por su cuenta.** El sidebar
-  esconde lo que no corresponde y el API rechaza, pero entrar por URL directa a
-  un módulo prohibido muestra la pantalla vacía con errores de carga en vez de
-  un "no tenés acceso" prolijo. Es cosmético y va en F2.
+- **La invitación sigue entregándose por portapapeles.** Mandarla sola necesita
+  un proveedor de email que el proyecto todavía no tiene (ver F2). El link se
+  copia al crear el usuario y se puede regenerar desde el listado.
+- **Un rol a medida con `configuracion.gestionar` puede darse cualquier
+  permiso.** El cerrojo impide que el tenant se quede sin administradores, pero
+  no impide que quien administra se agregue módulos. Es coherente con lo que
+  significa administrar la empresa; si algún día hace falta separar "administra
+  usuarios" de "administra todo", el permiso tiene que partirse.

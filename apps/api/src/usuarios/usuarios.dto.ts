@@ -1,10 +1,13 @@
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsEmail,
   IsOptional,
   IsString,
   IsUUID,
   MaxLength,
+  MinLength,
 } from 'class-validator';
 
 export class CrearUsuarioDto {
@@ -38,4 +41,52 @@ export class EditarUsuarioDto {
   @IsOptional()
   @IsUUID('4')
   empleadoId?: string | null;
+}
+
+export class CrearRolDto {
+  @IsString()
+  @MinLength(2, { message: 'El rol necesita un nombre.' })
+  @MaxLength(60)
+  nombre!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(240)
+  descripcion?: string;
+
+  /**
+   * Claves del catálogo. Las que no existan se descartan al guardar en vez de
+   * rechazar el pedido entero: el catálogo lo mueve Grafo, y una UI de una
+   * versión anterior no tiene que romper el guardado.
+   */
+  @IsArray()
+  @ArrayMaxSize(64)
+  @IsString({ each: true })
+  permisos!: string[];
+}
+
+export class EditarRolDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  @MaxLength(60)
+  nombre?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(240)
+  descripcion?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(64)
+  @IsString({ each: true })
+  permisos?: string[];
+}
+
+export class EliminarRolDto {
+  /** A qué rol pasan los usuarios que lo tenían. */
+  @IsOptional()
+  @IsUUID('4')
+  destinoId?: string;
 }
