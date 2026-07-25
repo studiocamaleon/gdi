@@ -30,7 +30,10 @@ export function TabSeguridad({
   onCambio: () => Promise<void>;
 }) {
   const [sesiones, setSesiones] = React.useState<SesionAbierta[] | null>(null);
-  const [miIp, setMiIp] = React.useState<string | null>(null);
+  const [miIp, setMiIp] = React.useState<{
+    ip: string;
+    esPublica: boolean;
+  } | null>(null);
   const [editando, setEditando] = React.useState<string | null>(null);
   const [borrador, setBorrador] = React.useState("");
   const [guardando, setGuardando] = React.useState(false);
@@ -49,7 +52,7 @@ export function TabSeguridad({
   React.useEffect(() => {
     void cargar();
     void getMiIp()
-      .then((r) => setMiIp(r.ip))
+      .then(setMiIp)
       .catch(() => setMiIp(null));
   }, [cargar]);
 
@@ -168,11 +171,24 @@ export function TabSeguridad({
           con la clave correcta.{" "}
           {miIp ? (
             <>
-              Vos estás entrando desde <strong>{miIp}</strong>.
+              Vos estás entrando desde <strong>{miIp.ip}</strong>.
             </>
           ) : null}
         </p>
       </div>
+
+      {/* La señal de que el servidor no está viendo el origen real. Restringir
+          contra una IP interna no protege: no coincide nunca con un cliente de
+          verdad, o coincide con todos. */}
+      {miIp && !miIp.esPublica && (
+        <div className="usr-aviso">
+          <strong>Ojo: {miIp.ip} es una IP interna, no la pública.</strong> Si
+          estás probando en tu máquina es normal. Si esto pasa en el sistema
+          instalado, el servidor no está viendo de dónde viene la gente y hay
+          que configurarle <code>TRUST_PROXY</code> antes de que restringir sirva
+          de algo.
+        </div>
+      )}
 
       <div className="int-tpl-list" style={{ marginBottom: 26 }}>
         {usuarios.map((u) => (
@@ -215,9 +231,10 @@ export function TabSeguridad({
               <div className="int-section-intro">
                 <h3>Desde dónde entra {u.nombreCompleto || u.email}</h3>
                 <p>
-                  Una IP por línea, o separadas por coma. Vacío = desde
-                  cualquier lado. También se puede escribir un rango entero de
-                  la oficina, como <code>190.1.2.0/24</code>.
+                  La IP <strong>pública</strong> de la empresa —la que se ve en
+                  &ldquo;cuál es mi IP&rdquo;—, una por línea o separadas por
+                  coma. Vacío = desde cualquier lado. También se puede escribir
+                  el rango entero de la oficina, como <code>190.1.2.0/24</code>.
                 </p>
               </div>
               <textarea
@@ -233,11 +250,17 @@ export function TabSeguridad({
                   <button
                     className="btn ghost"
                     onClick={() =>
-                      setBorrador((b) => (b.trim() ? `${b}, ${miIp}` : miIp))
+                      setBorrador((b) =>
+                        b.trim() ? `${b}, ${miIp.ip}` : miIp.ip,
+                      )
                     }
-                    title="Agrega la IP desde la que estás mirando ahora."
+                    title={
+                      miIp.esPublica
+                        ? "Agrega la IP desde la que estás mirando ahora."
+                        : "Es una IP interna: sirve para probar, no para proteger."
+                    }
                   >
-                    Usar mi IP ({miIp})
+                    Usar mi IP ({miIp.ip})
                   </button>
                 )}
                 <button
