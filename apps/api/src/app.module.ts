@@ -10,6 +10,7 @@ import { AppService } from './app.service';
 import { AuthGuard } from './auth/auth.guard';
 import { ImpersonacionGuard } from './auth/impersonacion.guard';
 import { RolesGuard } from './auth/roles.guard';
+import { PermisosGuard } from './auth/permisos.guard';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { TenantContextInterceptor } from './common/interceptors/tenant-context.interceptor';
 import { AuthModule } from './auth/auth.module';
@@ -17,6 +18,7 @@ import { ClientesModule } from './clientes/clientes.module';
 import { CostosModule } from './costos/costos.module';
 import { GastosFijosModule } from './gastos-fijos/gastos-fijos.module';
 import { EmpleadosModule } from './empleados/empleados.module';
+import { UsuariosModule } from './usuarios/usuarios.module';
 import { MaquinariaModule } from './maquinaria/maquinaria.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProveedoresModule } from './proveedores/proveedores.module';
@@ -82,6 +84,7 @@ import { SuscripcionesModule } from './suscripciones/suscripciones.module';
     SuscripcionesModule,
     ClientesModule,
     EmpleadosModule,
+    UsuariosModule,
     ProveedoresModule,
     CostosModule,
     GastosFijosModule,
@@ -124,6 +127,12 @@ import { SuscripcionesModule } from './suscripciones/suscripciones.module';
     {
       provide: APP_GUARD,
       useClass: RolesGuard,
+    },
+    // Último: cuando corre, `auth.permisos` ya está resuelto. Deniega por
+    // defecto — ver permisos.guard.ts.
+    {
+      provide: APP_GUARD,
+      useClass: PermisosGuard,
     },
   ],
 })

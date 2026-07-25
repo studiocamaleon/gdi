@@ -23,7 +23,9 @@ import { ReplaceCentroComponentesCostoDto } from './dto/replace-centro-component
 import { UpsertCentroCapacidadDto } from './dto/upsert-centro-capacidad.dto';
 import { UpsertCentroRecursosMaquinariaDto } from './dto/upsert-centro-recursos-maquinaria.dto';
 import { UpsertCentroConfiguracionPeriodoDto } from './dto/upsert-centro-configuracion-periodo.dto';
+import { Permiso } from '../auth/permiso.decorator';
 
+@Permiso('costos.ver')
 @Controller('costos')
 @Roles(RolSistema.ADMINISTRADOR, RolSistema.SUPERVISOR)
 export class CostosController {
@@ -34,6 +36,7 @@ export class CostosController {
     return this.costosService.findPlantas(auth);
   }
 
+  @Permiso('costos.gestionar')
   @Post('plantas')
   createPlanta(
     @CurrentSession() auth: CurrentAuth,
@@ -42,6 +45,7 @@ export class CostosController {
     return this.costosService.createPlanta(auth, payload);
   }
 
+  @Permiso('costos.gestionar')
   @Put('plantas/:id')
   updatePlanta(
     @CurrentSession() auth: CurrentAuth,
@@ -51,6 +55,7 @@ export class CostosController {
     return this.costosService.updatePlanta(auth, id, payload);
   }
 
+  @Permiso('costos.gestionar')
   @Patch('plantas/:id/toggle')
   togglePlanta(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.costosService.togglePlanta(auth, id);
@@ -61,6 +66,7 @@ export class CostosController {
     return this.costosService.findAreas(auth);
   }
 
+  @Permiso('costos.gestionar')
   @Post('areas')
   createArea(
     @CurrentSession() auth: CurrentAuth,
@@ -69,6 +75,7 @@ export class CostosController {
     return this.costosService.createArea(auth, payload);
   }
 
+  @Permiso('costos.gestionar')
   @Put('areas/:id')
   updateArea(
     @CurrentSession() auth: CurrentAuth,
@@ -78,6 +85,7 @@ export class CostosController {
     return this.costosService.updateArea(auth, id, payload);
   }
 
+  @Permiso('costos.gestionar')
   @Patch('areas/:id/toggle')
   toggleArea(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.costosService.toggleArea(auth, id);
@@ -88,6 +96,7 @@ export class CostosController {
     return this.costosService.findCentros(auth);
   }
 
+  @Permiso('costos.gestionar')
   @Post('centros-costo')
   createCentro(
     @CurrentSession() auth: CurrentAuth,
@@ -96,6 +105,7 @@ export class CostosController {
     return this.costosService.createCentro(auth, payload);
   }
 
+  @Permiso('costos.gestionar')
   @Put('centros-costo/:id')
   updateCentro(
     @CurrentSession() auth: CurrentAuth,
@@ -105,11 +115,13 @@ export class CostosController {
     return this.costosService.updateCentro(auth, id, payload);
   }
 
+  @Permiso('costos.gestionar')
   @Patch('centros-costo/:id/toggle')
   toggleCentro(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.costosService.toggleCentro(auth, id);
   }
 
+  @Permiso('costos.gestionar')
   @Delete('centros-costo/:id')
   eliminarCentro(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.costosService.eliminarCentro(auth, id);
@@ -124,6 +136,7 @@ export class CostosController {
     return this.costosService.getCentroConfiguracion(auth, id, periodo);
   }
 
+  @Permiso('costos.gestionar')
   @Put('centros-costo/:id/configuracion-base')
   updateCentroConfiguracionBase(
     @CurrentSession() auth: CurrentAuth,
@@ -133,6 +146,7 @@ export class CostosController {
     return this.costosService.updateCentroConfiguracionBase(auth, id, payload);
   }
 
+  @Permiso('costos.gestionar')
   @Put('centros-costo/:id/configuracion-periodo')
   upsertCentroConfiguracionPeriodo(
     @CurrentSession() auth: CurrentAuth,
@@ -148,6 +162,7 @@ export class CostosController {
     );
   }
 
+  @Permiso('costos.gestionar')
   @Put('centros-costo/:id/recursos')
   replaceCentroRecursos(
     @CurrentSession() auth: CurrentAuth,
@@ -158,6 +173,7 @@ export class CostosController {
     return this.costosService.replaceCentroRecursos(auth, id, periodo, payload);
   }
 
+  @Permiso('costos.gestionar')
   @Put('centros-costo/:id/componentes-costo')
   replaceCentroComponentesCosto(
     @CurrentSession() auth: CurrentAuth,
@@ -173,6 +189,7 @@ export class CostosController {
     );
   }
 
+  @Permiso('costos.gestionar')
   @Put('centros-costo/:id/capacidad')
   upsertCentroCapacidad(
     @CurrentSession() auth: CurrentAuth,
@@ -192,6 +209,7 @@ export class CostosController {
     return this.costosService.getCentroRecursosMaquinaria(auth, id, periodo);
   }
 
+  @Permiso('costos.gestionar')
   @Put('centros-costo/:id/recursos-maquinaria')
   upsertCentroRecursosMaquinaria(
     @CurrentSession() auth: CurrentAuth,
@@ -207,6 +225,7 @@ export class CostosController {
     );
   }
 
+  @Permiso('costos.gestionar')
   @Post('centros-costo/:id/calcular-tarifa')
   calcularTarifaCentro(
     @CurrentSession() auth: CurrentAuth,
@@ -216,6 +235,7 @@ export class CostosController {
     return this.costosService.calcularTarifaCentro(auth, id, periodo);
   }
 
+  @Permiso('costos.gestionar')
   @Post('centros-costo/:id/publicar-tarifa')
   publicarTarifaCentro(
     @CurrentSession() auth: CurrentAuth,

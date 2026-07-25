@@ -14,6 +14,7 @@ import { estadoDeCiclo } from '../suscripciones/ciclo';
 import { AcceptInvitationDto } from './dto/accept-invitation.dto';
 import { LoginDto } from './dto/login.dto';
 import { CurrentAuth, JwtPayload } from './auth.types';
+import { expandir, permisosDeRolBase } from './permisos';
 import { SessionCacheService } from './session-cache.service';
 
 // Hash dummy para igualar el tiempo de respuesta del login cuando el usuario
@@ -826,9 +827,26 @@ export class AuthService {
     accessToken: string | null,
     rolPlataforma: RolPlataforma | null = null,
   ) {
-    const suscripcion = await this.resumenSuscripcion(
-      currentMembership.tenant.id,
-    );
+    const [suscripcion, rolDelTenant] = await Promise.all([
+      this.resumenSuscripcion(currentMembership.tenant.id),
+      currentMembership.rolId
+        ? this.prisma.rol.findUnique({
+            where: { id: currentMembership.rolId },
+            select: { nombre: true, permisos: true },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    // Los mismos que evalúa el guard, para que la UI esconda lo que el API va
+    // a rechazar igual. Es cortesía, no seguridad: cada pantalla los vuelve a
+    // pedir contra el API.
+    const permisos = [
+      ...expandir(
+        rolDelTenant
+          ? rolDelTenant.permisos
+          : permisosDeRolBase(currentMembership.rol),
+      ),
+    ];
 
     return {
       accessToken,
@@ -845,6 +863,9 @@ export class AuthService {
           nombre: currentMembership.tenant.nombre,
           slug: currentMembership.tenant.slug,
           rol: this.fromPrismaRol(currentMembership.rol),
+          /** El nombre que ve la gente: "Vendedor", no "supervisor". */
+          rolNombre: rolDelTenant?.nombre ?? null,
+          permisos,
           suscripcion,
         },
         tenants: memberships.map((membership) => ({

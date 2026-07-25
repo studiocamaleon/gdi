@@ -7,6 +7,18 @@ export type TenantSummary = {
   nombre: string;
   slug: string;
   rol: MembershipRole;
+  /** El nombre del rol tal como lo ve la gente: "Vendedor", no "supervisor". */
+  rolNombre?: string | null;
+  /**
+   * Permisos efectivos en ESTA empresa, ya expandidos (`gestionar` trae su
+   * `ver`). Sólo viene en `tenantActual`: los otros tenants de la lista se
+   * usan para el switcher, y sus permisos se resuelven al cambiarse.
+   *
+   * La UI los usa para no mostrar lo que el API va a rechazar igual. Es
+   * cortesía, no seguridad — la autorización real la hace el API en cada
+   * request. Ver docs/usuarios-roles-permisos-diseno.md
+   */
+  permisos?: string[];
   /** Null cuando el tenant no tiene plan asignado (legacy): la card no
    *  inventa un plan ni un contador, muestra su texto neutro. */
   suscripcion?: {

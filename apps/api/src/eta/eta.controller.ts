@@ -2,7 +2,9 @@ import { Controller, Get, Post, Query } from '@nestjs/common';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
 import { EtaService } from './eta.service';
+import { Permiso } from '../auth/permiso.decorator';
 
+@Permiso('produccion.ver')
 @Controller('eta')
 export class EtaController {
   constructor(private readonly eta: EtaService) {}

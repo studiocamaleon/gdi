@@ -6,7 +6,12 @@ import { usePathname } from "next/navigation";
 
 import { type CurrentUser, type TenantSummary } from "@/lib/auth";
 import { NavLink } from "@/components/navigation/nav-link";
-import { hasChildren, NAV, type NavItem } from "@/components/navigation/nav-items";
+import {
+  hasChildren,
+  navPara,
+  type NavItem,
+} from "@/components/navigation/nav-items";
+import { permisosDe, puede } from "@/lib/permisos";
 import { useSidebar } from "@/components/ui/sidebar";
 
 type AppSidebarProps = {
@@ -133,8 +138,8 @@ function highlightMatch(text: string, q: string): React.ReactNode {
   );
 }
 
-function getActiveKey(pathname: string) {
-  const entries = NAV.flatMap((item) => {
+function getActiveKey(nav: NavItem[], pathname: string) {
+  const entries = nav.flatMap((item) => {
     if (hasChildren(item)) {
       return item.children.map((child) => ({
         key: child.key,
@@ -150,12 +155,12 @@ function getActiveKey(pathname: string) {
     .find((entry) => matchesRoute(pathname, entry.href))?.key;
 }
 
-function getParentKey(activeKey: string | undefined) {
+function getParentKey(nav: NavItem[], activeKey: string | undefined) {
   if (!activeKey) {
     return undefined;
   }
 
-  return NAV.find((item) => hasChildren(item) && item.children.some((child) => child.key === activeKey))?.key;
+  return nav.find((item) => hasChildren(item) && item.children.some((child) => child.key === activeKey))?.key;
 }
 
 // La card muestra plan y días SÓLO con datos reales del backend. Antes esto
@@ -195,8 +200,14 @@ function getSuscripcionProgress(susc: TenantSummary["suscripcion"]) {
 
 export function AppSidebar({ currentUser }: AppSidebarProps) {
   const pathname = usePathname();
-  const activeKey = getActiveKey(pathname);
-  const parentKey = getParentKey(activeKey);
+  // Lo que este usuario puede ver. Se calcula una vez y de acá sale todo el
+  // resto: qué grupos hay, cuál está activo y qué encuentra el buscador.
+  const nav = React.useMemo(
+    () => navPara(permisosDe(currentUser)),
+    [currentUser],
+  );
+  const activeKey = getActiveKey(nav, pathname);
+  const parentKey = getParentKey(nav, activeKey);
   // Acordeón: un solo grupo abierto a la vez. Se abre el del módulo actual;
   // al abrir otro, el anterior se colapsa.
   const [openKey, setOpenKey] = React.useState<string | null>(() => parentKey ?? null);
@@ -213,10 +224,10 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
   // Navegación filtrada en vivo por el buscador del sidebar. Al filtrar, los
   // grupos con hijos que matchean se muestran expandidos.
   const filteredNav = React.useMemo<NavItem[]>(() => {
-    if (!filtering) return NAV;
+    if (!filtering) return nav;
     const match = (label: string) => label.toLowerCase().includes(q);
     const result: NavItem[] = [];
-    for (const item of NAV) {
+    for (const item of nav) {
       if (!hasChildren(item)) {
         if (match(item.label)) result.push(item);
         continue;
@@ -228,7 +239,7 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
       if (children.length > 0) result.push({ ...item, children });
     }
     return result;
-  }, [filtering, q]);
+  }, [filtering, q, nav]);
 
   React.useEffect(() => {
     if (!parentKey) {
@@ -385,6 +396,10 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
         ) : null}
       </nav>
 
+      {/* El plan y la facturación son configuración: el operario no tiene por
+          qué ver cuánto paga la imprenta ni entrar a cambiarlo. Sin esto la
+          card lo mandaba a una pantalla que el API le contesta 403. */}
+      {puede(currentUser, "configuracion.ver") ? (
       <Link href="/suscripcion" className="plan-card">
         <div className="plan-row">
           <div className="plan-title">
@@ -398,6 +413,7 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
         <div className="plan-meter"><span style={{ width: `${suscripcionProgress}%` }} /></div>
         <div className="plan-admin">Administrar suscripción</div>
       </Link>
+      ) : null}
     </aside>
   );
 }

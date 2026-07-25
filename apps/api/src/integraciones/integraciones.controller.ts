@@ -16,6 +16,7 @@ import { CurrentSession } from '../auth/current-auth.decorator';
 import { Roles } from '../auth/roles.decorator';
 import { ConectarWatiDto, ProbarEnvioWatiDto } from './dto/integraciones.dto';
 import { IntegracionesService } from './integraciones.service';
+import { Permiso } from '../auth/permiso.decorator';
 
 /**
  * Configuración → Integraciones.
@@ -25,6 +26,7 @@ import { IntegracionesService } from './integraciones.service';
  * mandarles mensajes desde su número oficial. No es una preferencia de
  * usuario.
  */
+@Permiso('configuracion.ver')
 @Controller('integraciones')
 export class IntegracionesController {
   constructor(private readonly service: IntegracionesService) {}
@@ -49,6 +51,7 @@ export class IntegracionesController {
   }
 
   /** Somete una plantilla del catálogo de Grafo a Meta. */
+  @Permiso('configuracion.gestionar')
   @Post('wati/plantillas/:codigo/someter')
   @Roles(RolSistema.ADMINISTRADOR)
   someterPlantillaWati(@Param('codigo') codigo: string) {
@@ -56,6 +59,7 @@ export class IntegracionesController {
   }
 
   /** Envío de prueba a un número propio, antes de encender la integración. */
+  @Permiso('configuracion.gestionar')
   @Post('wati/probar-envio')
   @Roles(RolSistema.ADMINISTRADOR)
   probarEnvioWati(@Body() dto: ProbarEnvioWatiDto) {
@@ -71,6 +75,7 @@ export class IntegracionesController {
   }
 
   @ProhibidoImpersonando()
+  @Permiso('configuracion.gestionar')
   @Put('wati')
   @Roles(RolSistema.ADMINISTRADOR)
   conectarWati(
@@ -81,6 +86,7 @@ export class IntegracionesController {
   }
 
   @ProhibidoImpersonando()
+  @Permiso('configuracion.gestionar')
   @Post(':proveedor/probar')
   @Roles(RolSistema.ADMINISTRADOR)
   probar(
@@ -92,6 +98,7 @@ export class IntegracionesController {
   }
 
   @ProhibidoImpersonando()
+  @Permiso('configuracion.gestionar')
   @Delete(':proveedor')
   @Roles(RolSistema.ADMINISTRADOR)
   async desconectar(

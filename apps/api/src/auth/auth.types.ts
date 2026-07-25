@@ -26,6 +26,16 @@ export type CurrentAuth = {
   role: RolSistema;
   email: string;
   /**
+   * Permisos efectivos, ya expandidos (`gestionar` trae su `ver`).
+   *
+   * Se resuelven en el AuthGuard desde el rol de la membership, NO desde el
+   * JWT: un token firmado con los permisos adentro no se puede cambiar sin
+   * re-loguear, y quitarle un permiso a alguien tiene que surtir efecto ya —
+   * es lo primero que hace un admin cuando alguien vio algo que no debía.
+   * Vacío en sesiones de plataforma, que se autorizan por otro eje.
+   */
+  permisos?: Set<string>;
+  /**
    * Impersonación: el staff del control plane operando DENTRO de un tenant.
    * `userId`/`tenantId`/`role` son los del tenant impersonado (ADMINISTRADOR),
    * para que todo lo de negocio funcione igual; el actor real viaja acá.

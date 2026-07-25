@@ -33314,6 +33314,131 @@ body:has(.t-app) {
   margin-top: 12px;
 }
 
+/* ── Configuración · usuarios ──────────────────────────────────────────
+   Quién entra al sistema y con qué rol. Monta sobre las listas de
+   integraciones (.int-tpl-list, .int-pill): es la misma clase de pantalla
+   —filas con estado y una acción— y no hay razón para dos. Prefijado usr-,
+   hijas incluidas: la hoja es global.
+   Ver docs/usuarios-roles-permisos-diseno.md */
+.usr-cupo {
+  font-size: 12.5px;
+  color: var(--muted-text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 13px;
+  margin-bottom: 14px;
+}
+.usr-cupo strong { color: var(--ink); font-weight: 600; }
+
+.usr-fila {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 190px auto;
+  gap: 14px;
+  align-items: center;
+  padding: 13px 15px;
+  border-bottom: 1px solid var(--border);
+}
+.usr-fila:last-child { border-bottom: none; }
+.usr-quien { min-width: 0; }
+.usr-nombre {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.usr-mail, .usr-legajo {
+  font-size: 12px;
+  color: var(--muted-text);
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+.usr-legajo { font-size: 11.5px; }
+.usr-estado { white-space: nowrap; }
+
+.usr-rol, .usr-campo select, .usr-campo input {
+  width: 100%;
+  padding: 7px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+.usr-rol:disabled { opacity: 0.55; cursor: not-allowed; }
+.usr-acciones { display: flex; gap: 8px; white-space: nowrap; }
+
+.usr-rol-fila {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 13px 15px;
+  border-bottom: 1px solid var(--border);
+}
+.usr-rol-fila:last-child { border-bottom: none; }
+.usr-rol-cuenta {
+  font-size: 12px;
+  color: var(--muted-text);
+  white-space: nowrap;
+}
+
+.usr-form {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  padding: 16px 18px;
+  margin-bottom: 18px;
+}
+.usr-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+}
+.usr-campo { display: block; min-width: 0; }
+.usr-campo > span {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-text);
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+.usr-ayuda {
+  font-size: 12px;
+  color: var(--muted-text);
+  line-height: 1.5;
+  margin: 12px 0 0;
+}
+.usr-form-acciones {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+/* El link de invitación: largo y con token, tiene que poder leerse entero
+   para copiarlo a mano si el portapapeles falló. */
+.usr-link {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 10px 12px;
+  overflow-wrap: anywhere;
+  color: var(--ink-2);
+}
+
+@media (max-width: 900px) {
+  .usr-fila { grid-template-columns: minmax(0, 1fr) auto; }
+  .usr-rol, .usr-acciones { grid-column: 1 / -1; }
+}
+
 /* El estado del pedido, resaltado en el saludo del seguimiento público.
    Es el único dato que el cliente vino a buscar: en negro sobre negro se
    pierde dentro de la frase. Toma los mismos colores que la pastilla de

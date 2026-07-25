@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { IS_PUBLIC_KEY } from './public.decorator';
 import { SIN_TENANT_KEY } from '../common/sin-tenant.decorator';
 import { CurrentAuth, JwtPayload } from './auth.types';
+import { expandir, permisosDeRolBase } from './permisos';
 import { SessionCacheService } from './session-cache.service';
 
 @Injectable()
@@ -122,7 +123,9 @@ export class AuthGuard implements CanActivate {
       include: {
         user: true,
         currentTenant: true,
-        currentMembership: true,
+        // El rol viene con la membership: los permisos se resuelven acá y no en
+        // un query aparte por request.
+        currentMembership: { include: { rolDelTenant: true } },
         impersonacion: true,
       },
     });
@@ -164,6 +167,9 @@ export class AuthGuard implements CanActivate {
         membershipId: '',
         role: payload.role,
         email: payload.email,
+        // Sin membership no hay rol del tenant: los permisos salen del enum,
+        // que en impersonación es ADMINISTRADOR (todo el catálogo).
+        permisos: expandir(permisosDeRolBase(payload.role)),
         impersonacion: {
           sesionId: imp.id,
           actorUserId: payload.imp.actorUserId,
@@ -181,6 +187,7 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException('Sesion expirada o revocada.');
     }
 
+    const rol = session.currentMembership.rolDelTenant;
     const auth: CurrentAuth = {
       userId: payload.sub,
       sessionId: payload.sessionId,
@@ -188,6 +195,12 @@ export class AuthGuard implements CanActivate {
       membershipId: payload.membershipId,
       role: payload.role,
       email: payload.email,
+      // Con rol asignado manda el rol; sin él —membership que el backfill no
+      // alcanzó, o rol borrado— se cae a los permisos del enum. Nadie queda
+      // sin acceso por no tener rol.
+      permisos: expandir(
+        rol ? rol.permisos : permisosDeRolBase(session.currentMembership.rol),
+      ),
     };
 
     this.sessionCache.set(auth);

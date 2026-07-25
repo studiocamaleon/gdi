@@ -22,7 +22,17 @@ import {
   IniciarSubidaDto,
   ListarArchivosDto,
 } from './dto/archivos.dto';
+import { SoloAutenticado } from '../auth/permiso.decorator';
 
+/**
+ * Transversal a propósito: los archivos cuelgan de una orden, de un cliente o
+ * del branding, y quien llega a esa pantalla ya pasó por el permiso del módulo
+ * que la sirve. Poner un permiso propio acá obligaría a que el operario que
+ * sube la foto de un trabajo terminado tenga permiso de "archivos", que no es
+ * un módulo del sidebar ni significa nada para el que configura el rol.
+ * El aislamiento por tenant lo hace el service, como siempre.
+ */
+@SoloAutenticado()
 @Controller('archivos')
 export class ArchivosController {
   constructor(private readonly service: ArchivosService) {}

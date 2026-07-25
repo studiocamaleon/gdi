@@ -1,5 +1,11 @@
 // Estructura de navegación del sidebar, compartida entre el sidebar y el
 // buscador (command palette). Un solo lugar para las rutas del ERP.
+//
+// Cada entrada declara el permiso que pide. Un módulo que el usuario no puede
+// ver NO se muestra —no se muestra deshabilitado—: la lista de lo que no podés
+// hacer es información que no hace falta dar. Ver docs/usuarios-roles-permisos-diseno.md
+
+import type { PermisoClave } from "@/lib/permisos";
 
 export type NavIconKey =
   | "Grid"
@@ -15,6 +21,8 @@ export type NavChild = {
   key: string;
   label: string;
   href: string;
+  /** Permiso que hace falta para verlo. Hereda el del grupo si no lo declara. */
+  permiso?: PermisoClave;
 };
 
 export type NavItem =
@@ -23,22 +31,27 @@ export type NavItem =
       label: string;
       icon: NavIconKey;
       href: string;
+      permiso: PermisoClave;
       children?: never;
     }
   | {
       key: string;
       label: string;
       icon: NavIconKey;
+      /** Permiso del grupo: lo heredan los hijos que no declaren el suyo. */
+      permiso: PermisoClave;
       children: NavChild[];
       href?: never;
     };
 
 export const NAV: NavItem[] = [
-  { key: "panel", label: "Panel general", icon: "Grid", href: "/" },
+  { key: "panel", label: "Panel general", icon: "Grid",
+    permiso: "panel.ver", href: "/" },
   {
     key: "comercial",
     label: "Comercial",
     icon: "Briefcase",
+    permiso: "comercial.ver",
     children: [
       {
         key: "crear-propuesta",
@@ -63,6 +76,7 @@ export const NAV: NavItem[] = [
     key: "registros",
     label: "Registros",
     icon: "Users",
+    permiso: "registros.ver",
     children: [
       { key: "clientes", label: "Clientes", href: "/clientes" },
       { key: "proveedores", label: "Proveedores", href: "/proveedores" },
@@ -73,6 +87,7 @@ export const NAV: NavItem[] = [
     key: "costos",
     label: "Costos",
     icon: "Coin",
+    permiso: "costos.ver",
     children: [
       {
         key: "centros",
@@ -116,6 +131,7 @@ export const NAV: NavItem[] = [
     key: "produccion",
     label: "Producción",
     icon: "Factory",
+    permiso: "produccion.ver",
     children: [
       {
         key: "tablero-produccion",
@@ -140,6 +156,7 @@ export const NAV: NavItem[] = [
     key: "administracion",
     label: "Administración",
     icon: "Wallet",
+    permiso: "administracion.ver",
     children: [
       {
         key: "tesoreria",
@@ -177,6 +194,7 @@ export const NAV: NavItem[] = [
     key: "inventario",
     label: "Inventario",
     icon: "Cube",
+    permiso: "inventario.ver",
     children: [
       {
         key: "materiales",
@@ -190,7 +208,13 @@ export const NAV: NavItem[] = [
     key: "configuracion",
     label: "Configuración",
     icon: "Cog",
+    permiso: "configuracion.ver",
     children: [
+      {
+        key: "usuarios",
+        label: "Usuarios",
+        href: "/configuracion/usuarios",
+      },
       {
         key: "integraciones",
         label: "Integraciones",
@@ -206,6 +230,25 @@ export function hasChildren(
   return Array.isArray(item.children);
 }
 
+/**
+ * El árbol que le corresponde a estos permisos.
+ *
+ * `permisos === null` (sesión que no los trae) devuelve todo: el API frena lo
+ * que no corresponda y un sidebar vacío por un campo que falta es peor que uno
+ * que ofrece de más. Un grupo que se queda sin hijos desaparece.
+ */
+export function navPara(permisos: Set<string> | null): NavItem[] {
+  if (!permisos) return NAV;
+  return NAV.flatMap<NavItem>((item) => {
+    if (!permisos.has(item.permiso)) return [];
+    if (!hasChildren(item)) return [item];
+    const children = item.children.filter(
+      (c) => !c.permiso || permisos.has(c.permiso),
+    );
+    return children.length ? [{ ...item, children }] : [];
+  });
+}
+
 export type NavDestination = {
   key: string;
   label: string;
@@ -215,8 +258,10 @@ export type NavDestination = {
 };
 
 /** Aplana el árbol de navegación a la lista de destinos navegables. */
-export function flattenNavDestinations(): NavDestination[] {
-  return NAV.flatMap((item) => {
+export function flattenNavDestinations(
+  permisos: Set<string> | null = null,
+): NavDestination[] {
+  return navPara(permisos).flatMap((item) => {
     if (hasChildren(item)) {
       return item.children.map((child) => ({
         key: child.key,

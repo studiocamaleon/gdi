@@ -29,7 +29,9 @@ import {
   ResolverAprobacionDto,
   ResolverPresupuestoDto,
 } from './dto/presupuestos.dto';
+import { Permiso } from '../auth/permiso.decorator';
 
+@Permiso('comercial.ver')
 @Controller('presupuestos')
 export class PresupuestosController {
   constructor(
@@ -62,6 +64,7 @@ export class PresupuestosController {
   }
 
   /** El operador no se sube su propio umbral (plan F2 §6). */
+  @Permiso('comercial.gestionar')
   @Put('config')
   @Roles(RolSistema.ADMINISTRADOR, RolSistema.SUPERVISOR)
   actualizarConfig(
@@ -80,6 +83,7 @@ export class PresupuestosController {
     return this.service.listado(auth, filtros);
   }
 
+  @Permiso('comercial.gestionar')
   @Post('emitir')
   emitir(
     @CurrentSession() auth: CurrentAuth,
@@ -96,6 +100,7 @@ export class PresupuestosController {
     return this.service.detalle(auth, id);
   }
 
+  @Permiso('comercial.gestionar')
   @Patch(':id/enviar')
   enviar(
     @CurrentSession() auth: CurrentAuth,
@@ -104,6 +109,7 @@ export class PresupuestosController {
     return this.service.enviar(auth, id);
   }
 
+  @Permiso('comercial.gestionar')
   @Patch(':id/resolver')
   resolver(
     @CurrentSession() auth: CurrentAuth,
@@ -113,6 +119,7 @@ export class PresupuestosController {
     return this.service.resolver(auth, id, dto);
   }
 
+  @Permiso('comercial.gestionar')
   @Patch(':id/aprobacion')
   @Roles(RolSistema.ADMINISTRADOR, RolSistema.SUPERVISOR)
   resolverAprobacion(
@@ -123,6 +130,7 @@ export class PresupuestosController {
     return this.service.resolverAprobacion(auth, id, dto);
   }
 
+  @Permiso('comercial.gestionar')
   @Post(':id/convertir')
   convertir(
     @CurrentSession() auth: CurrentAuth,

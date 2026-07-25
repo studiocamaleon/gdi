@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeftIcon,
@@ -18,7 +19,6 @@ import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import { NavLink } from "@/components/navigation/nav-link";
 import {
   createEmpleado,
-  inviteEmpleadoAccess,
   updateEmpleado,
 } from "@/lib/empleados-api";
 import {
@@ -29,7 +29,6 @@ import {
   EmpleadoDetalle,
   EmpleadoDireccion,
   EmpleadoPayload,
-  rolItems,
   RolSistema,
   sexoItems,
   SexoEmpleado,
@@ -209,7 +208,6 @@ function validatePayload(payload: EmpleadoPayload) {
 export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
   const router = useRouter();
   const [isSaving, startSaving] = React.useTransition();
-  const [isInviting, startInviting] = React.useTransition();
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [datosPrincipales, setDatosPrincipales] =
     React.useState<DatosPrincipalesState>({
@@ -353,41 +351,6 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
     if (!checked) {
       setComisiones([]);
     }
-  };
-
-  const handleInviteAccess = () => {
-    if (mode !== "edit" || !empleado.id) {
-      return;
-    }
-
-    if (!datosPrincipales.usuarioSistema || !usuarioSistema.emailAcceso || !usuarioSistema.rolSistema) {
-      setErrorMessage("Completa el email de acceso y el rol antes de enviar la invitacion.");
-      return;
-    }
-
-    const rolSistema = usuarioSistema.rolSistema;
-
-    startInviting(async () => {
-      try {
-        const response = await inviteEmpleadoAccess(empleado.id, {
-          email: usuarioSistema.emailAcceso.trim(),
-          rolSistema,
-        });
-
-        if (response.invitationUrl && navigator.clipboard) {
-          await navigator.clipboard.writeText(response.invitationUrl);
-          toast.success("Invitacion generada. El enlace quedo copiado al portapapeles.");
-        } else {
-          toast.success("Invitacion generada.");
-        }
-      } catch (error) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : "No se pudo generar la invitacion de acceso.",
-        );
-      }
-    });
   };
 
   const handleSave = () => {
@@ -959,74 +922,34 @@ export function EmpleadoFicha({ empleado, mode }: EmpleadoFichaProps) {
                 <CardTitle className="text-lg font-bold tracking-tight">
                   Usuario del sistema
                 </CardTitle>
+                {/*
+                  El acceso ya no se da desde acá. Un usuario no es un empleado
+                  —el contador externo entra sin legajo, casi todo el taller
+                  tiene legajo y no entra— y tener dos formularios que crean la
+                  misma cuenta terminaba en dos verdades sobre quién puede qué.
+                  Ver docs/usuarios-roles-permisos-diseno.md
+                */}
                 <CardDescription>
-                  Define el acceso al ERP y el rol que administrara sus permisos.
+                  El acceso al sistema y el rol se administran en{" "}
+                  <Link
+                    href="/configuracion/usuarios"
+                    className="font-medium underline underline-offset-4"
+                  >
+                    Configuración → Usuarios
+                  </Link>
+                  , junto con el resto de las cuentas de la empresa.
                 </CardDescription>
               </div>
               {mode === "edit" ? (
-                <Button
-                  type="button"
-                  variant="sidebar"
-                  className="w-full sm:w-auto"
-                  disabled={isInviting}
-                  onClick={handleInviteAccess}
-                >
-                  {isInviting ? (
-                    <GdiSpinner className="size-4" />
-                  ) : (
+                <Link href="/configuracion/usuarios" className="w-full sm:w-auto">
+                  <Button type="button" variant="sidebar" className="w-full">
                     <ShieldCheckIcon />
-                  )}
-                  Reenviar invitacion
-                </Button>
+                    Administrar accesos
+                  </Button>
+                </Link>
               ) : null}
             </div>
           </CardHeader>
-          <CardContent>
-            <FieldGroup className="grid lg:grid-cols-2">
-              <Field>
-                <FieldLabel htmlFor="empleado-email-acceso">Email de acceso</FieldLabel>
-                <Input
-                  id="empleado-email-acceso"
-                  type="email"
-                  value={usuarioSistema.emailAcceso}
-                  onChange={(event) =>
-                    setUsuarioSistema((current) => ({
-                      ...current,
-                      emailAcceso: event.target.value,
-                    }))
-                  }
-                  placeholder="usuario@empresa.com"
-                />
-              </Field>
-
-              <Field>
-                <FieldLabel htmlFor="empleado-rol-sistema">Rol</FieldLabel>
-                <Select
-                  items={rolItems}
-                  value={usuarioSistema.rolSistema}
-                  onValueChange={(value) =>
-                    setUsuarioSistema((current) => ({
-                      ...current,
-                      rolSistema: (value as RolSistema | "") || "",
-                    }))
-                  }
-                >
-                  <SelectTrigger id="empleado-rol-sistema" className="w-full">
-                    <SelectValue placeholder="Selecciona un rol" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      {rolItems.map((item) => (
-                        <SelectItem key={item.value} value={item.value}>
-                          {item.label}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </Field>
-            </FieldGroup>
-          </CardContent>
         </Card>
       ) : null}
 

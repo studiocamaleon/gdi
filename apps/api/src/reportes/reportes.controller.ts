@@ -14,6 +14,7 @@ import { EmbudoService } from './embudo.service';
 import { RangoReporteDto } from './dto/rango-reporte.dto';
 import { MixCategoriaDto } from './dto/mix-categoria.dto';
 import { ActualizarUmbralesDto } from './dto/actualizar-umbrales.dto';
+import { Permiso } from '../auth/permiso.decorator';
 
 /**
  * Panel general (Inteligencia de negocio) — un endpoint por TAB. Los
@@ -22,6 +23,7 @@ import { ActualizarUmbralesDto } from './dto/actualizar-umbrales.dto';
  * de dominio (rentabilidad → cobranza → ventas → producto → producción).
  * Ver docs/reportes-plan-backend.md §7.
  */
+@Permiso('panel.ver')
 @Controller('reportes/panel')
 export class ReportesController {
   constructor(

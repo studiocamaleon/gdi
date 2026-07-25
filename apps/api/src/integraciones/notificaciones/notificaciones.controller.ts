@@ -5,6 +5,7 @@ import { Roles } from '../../auth/roles.decorator';
 import { CambiarConfigDto, CambiarEventoDto } from './notificaciones.dto';
 import { NotificacionesService } from './notificaciones.service';
 import type { EventoNotificacion } from '../wati/catalogo';
+import { Permiso } from '../../auth/permiso.decorator';
 
 /**
  * Configuración → Integraciones → Wati → Notificaciones.
@@ -14,6 +15,7 @@ import type { EventoNotificacion } from '../wati/catalogo';
  * ADMINISTRADOR — encender un evento le manda WhatsApps a todos los clientes
  * desde el número oficial de la empresa.
  */
+@Permiso('configuracion.ver')
 @Controller('integraciones/notificaciones')
 export class NotificacionesController {
   constructor(private readonly service: NotificacionesService) {}
@@ -34,12 +36,14 @@ export class NotificacionesController {
     return this.service.log(Number.isFinite(n) && n > 0 ? n : 100);
   }
 
+  @Permiso('configuracion.gestionar')
   @Put('configuracion')
   @Roles(RolSistema.ADMINISTRADOR)
   cambiarConfiguracion(@Body() dto: CambiarConfigDto) {
     return this.service.cambiarConfiguracion(dto);
   }
 
+  @Permiso('configuracion.gestionar')
   @Put('eventos/:evento')
   @Roles(RolSistema.ADMINISTRADOR)
   cambiarEvento(
