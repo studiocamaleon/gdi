@@ -46,41 +46,10 @@ export type NavItem =
     };
 
 export const NAV: NavItem[] = [
-  // Reportes fue durante un tiempo el "Panel general": ocho vistas como tabs de
-  // la home, sin URL propia. Como tabs no se podían linkear ni compartir, y el
-  // buscador —que come de este árbol— no las encontraba. Ahora cada reporte es
-  // una ruta.
-  {
-    key: "reportes",
-    label: "Reportes",
-    icon: "Chart",
-    permiso: "reportes.ver",
-    children: [
-      // El único con permiso propio: junta el negocio entero en una pantalla
-      // (facturación, margen, punto de equilibrio, alertas) y de fábrica lo
-      // tiene sólo el Administrador.
-      {
-        key: "reporte-resumen",
-        label: "Resumen ejecutivo",
-        href: "/reportes/resumen",
-        permiso: "reportes.ver_resumen",
-      },
-      { key: "reporte-comercial", label: "Comercial", href: "/reportes/comercial" },
-      { key: "reporte-embudo", label: "Embudo", href: "/reportes/embudo" },
-      { key: "reporte-clientes", label: "Clientes", href: "/reportes/clientes" },
-      { key: "reporte-produccion", label: "Producción", href: "/reportes/produccion" },
-      { key: "reporte-equipo", label: "Equipo", href: "/reportes/equipo" },
-      // Rentabilidad pura: acá el margen es el contenido, no un dato de
-      // arrastre que se pueda podar. Sin el permiso, la pantalla no existe.
-      {
-        key: "reporte-finanzas",
-        label: "Finanzas",
-        href: "/reportes/finanzas",
-        permiso: "finanzas.ver_margenes",
-      },
-      { key: "reporte-producto", label: "Ventas & Producto", href: "/reportes/producto" },
-    ],
-  },
+  // El home. Vacío por ahora: qué muestra —y para quién— se diseña aparte.
+  // Lo tienen todos los roles, incluido el Operario.
+  { key: "panel", label: "Panel general", icon: "Grid",
+    permiso: "panel.ver", href: "/" },
   {
     key: "comercial",
     label: "Comercial",
@@ -222,6 +191,41 @@ export const NAV: NavItem[] = [
         label: "Datos fiscales",
         href: "/administracion/datos-fiscales",
       },
+    ],
+  },
+  // Reportes fue durante un tiempo el "Panel general": ocho vistas como tabs de
+  // la home, sin URL propia. Como tabs no se podían linkear ni compartir, y el
+  // buscador —que come de este árbol— no las encontraba. Ahora cada reporte es
+  // una ruta.
+  {
+    key: "reportes",
+    label: "Reportes",
+    icon: "Chart",
+    permiso: "reportes.ver",
+    children: [
+      // El único con permiso propio: junta el negocio entero en una pantalla
+      // (facturación, margen, punto de equilibrio, alertas) y de fábrica lo
+      // tiene sólo el Administrador.
+      {
+        key: "reporte-resumen",
+        label: "Resumen ejecutivo",
+        href: "/reportes/resumen",
+        permiso: "reportes.ver_resumen",
+      },
+      { key: "reporte-comercial", label: "Comercial", href: "/reportes/comercial" },
+      { key: "reporte-embudo", label: "Embudo", href: "/reportes/embudo" },
+      { key: "reporte-clientes", label: "Clientes", href: "/reportes/clientes" },
+      { key: "reporte-produccion", label: "Producción", href: "/reportes/produccion" },
+      { key: "reporte-equipo", label: "Equipo", href: "/reportes/equipo" },
+      // Rentabilidad pura: acá el margen es el contenido, no un dato de
+      // arrastre que se pueda podar. Sin el permiso, la pantalla no existe.
+      {
+        key: "reporte-finanzas",
+        label: "Finanzas",
+        href: "/reportes/finanzas",
+        permiso: "finanzas.ver_margenes",
+      },
+      { key: "reporte-producto", label: "Ventas & Producto", href: "/reportes/producto" },
     ],
   },
   {

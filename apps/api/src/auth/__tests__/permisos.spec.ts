@@ -82,9 +82,20 @@ describe('catálogo de permisos', () => {
         'costos',
         'administracion',
         'configuracion',
-        'panel',
+        'reportes',
       ]) {
         expect(efectivos.has(`${modulo}.ver`)).toBe(false);
+      }
+    });
+
+    /**
+     * El home es de todos. `panel.ver` significaba otra cosa cuando el Panel
+     * general ERA los reportes —por eso el operario no lo tenía y entraba a una
+     * pantalla que no podía abrir—; hoy gatea una pantalla de inicio y nada más.
+     */
+    it('todos los roles entran al Panel general', () => {
+      for (const rol of ROLES_PREDEFINIDOS) {
+        expect(expandir(rol.permisos).has('panel.ver')).toBe(true);
       }
     });
   });

@@ -16,10 +16,15 @@ import { RolSistema } from '@prisma/client';
 
 /** Módulos del sistema, en el orden del sidebar. */
 export const MODULOS = [
+  /**
+   * El home. Hoy está vacío —lo que vaya a mostrar se diseña aparte—, pero es
+   * de todos: a diferencia del viejo `panel.ver`, que en realidad gateaba los
+   * reportes y por eso el Operario no lo tenía, este lo tienen los cinco roles.
+   */
   {
-    clave: 'reportes',
-    label: 'Reportes',
-    descripcion: 'Métricas del negocio, ventas y producción.',
+    clave: 'panel',
+    label: 'Panel general',
+    descripcion: 'La pantalla de inicio del sistema.',
   },
   {
     clave: 'comercial',
@@ -46,6 +51,11 @@ export const MODULOS = [
     clave: 'administracion',
     label: 'Administración',
     descripcion: 'Cobros, comprobantes, facturación y deudores.',
+  },
+  {
+    clave: 'reportes',
+    label: 'Reportes',
+    descripcion: 'Métricas del negocio, ventas y producción.',
   },
   {
     clave: 'inventario',
@@ -191,6 +201,7 @@ export const ROLES_PREDEFINIDOS: RolPredefinido[] = [
       'Maneja el taller de punta a punta y ve los costos, sin tocar administración ni configuración.',
     rolBase: RolSistema.SUPERVISOR,
     permisos: [
+      'panel.ver',
       'reportes.ver',
       'comercial.ver',
       'registros.ver',
@@ -207,6 +218,7 @@ export const ROLES_PREDEFINIDOS: RolPredefinido[] = [
       'Cotiza y sigue sus trabajos. NO ve costos ni márgenes: cotiza sobre el precio, no sobre la ganancia.',
     rolBase: RolSistema.SUPERVISOR,
     permisos: [
+      'panel.ver',
       'reportes.ver',
       'comercial.gestionar',
       'registros.gestionar',
@@ -220,6 +232,7 @@ export const ROLES_PREDEFINIDOS: RolPredefinido[] = [
       'Cobros, comprobantes y cuentas corrientes. Ve lo comercial pero no lo edita.',
     rolBase: RolSistema.SUPERVISOR,
     permisos: [
+      'panel.ver',
       'reportes.ver',
       'comercial.ver',
       'registros.ver',
@@ -238,7 +251,7 @@ export const ROLES_PREDEFINIDOS: RolPredefinido[] = [
     // `gestionar` y no `ver`: el operario no mira producción, la ejecuta —
     // reclama pasos en la mesa, los inicia y los completa. Lo que lo acota no
     // es el permiso sino el tablero, que sólo le deja tocar el paso activo.
-    permisos: ['produccion.gestionar'],
+    permisos: ['panel.ver', 'produccion.gestionar'],
   },
 ];
 

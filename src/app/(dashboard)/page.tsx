@@ -1,39 +1,34 @@
-import { redirect } from "next/navigation";
-
-import { getCurrentUserCached } from "@/lib/auth-server";
-import { flattenNavDestinations } from "@/components/navigation/nav-items";
-import { permisosDe } from "@/lib/permisos";
+import { SinPermiso } from "@/components/navigation/sin-permiso";
+import { tienePermiso } from "@/lib/permisos-server";
 
 export const dynamic = "force-dynamic";
 
 /**
- * El home, por ahora, no es una pantalla: manda a cada uno al primer lugar que
- * su rol le deja ver.
+ * Panel general — el home. Vacío a propósito.
  *
- * Hasta acá "/" era el Panel general, que en realidad era un módulo entero de
- * ocho reportes disfrazado de home — y encima uno que el Operario no podía
- * abrir, porque no tiene el permiso. Los reportes se mudaron a /reportes; qué
- * va a vivir en el home (y para quién) se diseña aparte. Mientras tanto esto
- * redirige en vez de mostrar una pantalla vacía, que sería peor.
- *
- * El destino sale del MISMO árbol que dibuja el sidebar, así que no hay una
- * segunda lista de rutas por rol que se desincronice: el primer destino
- * visible del sidebar es el primer destino de acá.
+ * Hasta hace poco "/" era un módulo entero de ocho reportes disfrazado de home,
+ * que además el Operario no podía abrir. Los reportes se mudaron a /reportes;
+ * qué va a mostrar esta pantalla —y para quién— se diseña aparte. Mientras
+ * tanto dice lo que es, en vez de fingir contenido o dejar la vista en blanco.
  */
 export default async function DashboardPage() {
-  const { currentUser } = await getCurrentUserCached();
-  const destinos = flattenNavDestinations(permisosDe(currentUser));
-
-  // Sin un solo destino la sesión no tiene ningún módulo: es un rol vacío, y lo
-  // que corresponde es decirlo, no rebotar en un bucle contra "/".
-  if (destinos.length === 0) {
-    return (
-      <div className="d-empty" style={{ padding: 48 }}>
-        Tu rol todavía no tiene ningún módulo habilitado. Pedile a quien
-        administra el sistema en tu empresa que te asigne uno.
-      </div>
-    );
+  if (!(await tienePermiso("panel.ver"))) {
+    return <SinPermiso modulo="el Panel general" />;
   }
 
-  redirect(destinos[0].href);
+  return (
+    <div className="dash-scroll" style={{ padding: "26px 30px 44px" }}>
+      <div className="dash">
+        <div className="dash-head">
+          <div className="title-block">
+            <h1>Panel general</h1>
+            <div className="sub">La pantalla de inicio de tu taller.</div>
+          </div>
+        </div>
+        <div className="d-empty" style={{ padding: 64 }}>
+          Todavía no hay nada acá. Las métricas del negocio viven en Reportes.
+        </div>
+      </div>
+    </div>
+  );
 }

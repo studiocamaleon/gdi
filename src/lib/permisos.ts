@@ -11,12 +11,13 @@ import type { CurrentUser } from "@/lib/auth";
  */
 
 export const MODULOS = [
-  "reportes",
+  "panel",
   "comercial",
   "registros",
   "costos",
   "produccion",
   "administracion",
+  "reportes",
   "inventario",
   "configuracion",
 ] as const;
