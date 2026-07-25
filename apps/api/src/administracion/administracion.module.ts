@@ -4,6 +4,7 @@ import { EnlacesPublicosModule } from '../enlaces-publicos/enlaces-publicos.modu
 import { SuscripcionesModule } from '../suscripciones/suscripciones.module';
 import { AdministracionController } from './administracion.controller';
 import { RecibosController } from './recibos.controller';
+import { ComprobantesPublicosController } from './comprobantes-publicos.controller';
 import { MetodosPagoService } from './metodos-pago.service';
 import { CobrosService } from './cobros.service';
 import { AcreditacionesScheduler } from './acreditaciones.scheduler';
@@ -26,7 +27,11 @@ import { AfipSdkProvider } from './invoicing/afip-sdk.provider';
   imports: [ArchivosModule, EnlacesPublicosModule, SuscripcionesModule],
   // El público primero: `administracion` no tiene comodines hoy, pero el
   // orden de registro es el que resuelve Nest y no cuesta nada dejarlo claro.
-  controllers: [RecibosController, AdministracionController],
+  controllers: [
+    RecibosController,
+    ComprobantesPublicosController,
+    AdministracionController,
+  ],
   providers: [
     MetodosPagoService,
     CobrosService,

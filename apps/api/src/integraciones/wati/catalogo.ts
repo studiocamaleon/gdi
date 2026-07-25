@@ -305,6 +305,7 @@ Guardá este mensaje como constancia.`,
     categoria: 'UTILITY',
     idioma: IDIOMA,
     activoPorDefecto: true,
+    cableado: true,
     cuerpo: `Hola {{1}}, registramos tu pago de \${{2}} para la orden {{3}}. 💳
 
 Saldo restante: \${{4}}
@@ -349,10 +350,13 @@ Si ya lo abonaste, avisanos y lo regularizamos.`,
     evento: 'comprobante_emitido',
     codigo: 'grafo_comprobante_emitido_v2',
     titulo: 'Comprobante emitido',
-    cuando: 'Cuando se emite la factura con CAE',
+    cuando: 'Cuando ARCA autoriza la factura y devuelve el CAE',
     categoria: 'UTILITY',
     idioma: IDIOMA,
-    activoPorDefecto: false,
+    // La factura del cliente es suya: mandársela apenas ARCA la autoriza es lo
+    // que espera cualquiera que compró. Va prendido de fábrica como el recibo.
+    activoPorDefecto: true,
+    cableado: true,
     cuerpo: `Hola {{1}}, emitimos tu {{2}} N° {{3}} por \${{4}}. 🧾
 
 Podés descargarla acá: {{5}}

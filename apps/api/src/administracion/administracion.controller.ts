@@ -81,14 +81,14 @@ export class AdministracionController {
     @Param('id') id: string,
     @Res() res: Response,
   ): Promise<void> {
-    const archivo = await this.comprobantesService.pdfDe(auth, id);
+    const archivo = await this.comprobantesService.pdfDe(auth.tenantId, id);
     res.redirect(302, await this.archivos.urlDeDescarga(archivo.id));
   }
 
   /** El comprobante impreso: todo lo que la ley exige que figure. */
   @Get('comprobantes/:id/factura')
   factura(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
-    return this.facturaService.documento(auth, id);
+    return this.facturaService.documento(auth.tenantId, id);
   }
 
   // ── Cuenta corriente ─────────────────────────────────────────────────

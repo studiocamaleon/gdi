@@ -5,10 +5,21 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { Archivo, ArchivoScope, Prisma } from '@prisma/client';
+import {
+  Archivo,
+  ArchivoScope,
+  Prisma,
+  TipoEnlacePublico,
+} from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { CurrentAuth } from '../auth/auth.types';
+import { runWithTenant } from '../common/tenant-context';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  EnlacesPublicosService,
+  generarTokenPublico,
+} from '../enlaces-publicos/enlaces-publicos.service';
+import { NotificacionesComprobantesService } from '../integraciones/notificaciones/notificaciones-comprobantes.service';
 import {
   CargarCaeDto,
   CrearComprobanteDto,
@@ -112,6 +123,8 @@ export class ComprobantesService {
     private readonly factura: FacturaService,
     private readonly facturaPdf: FacturaPdfService,
     private readonly archivos: ArchivosService,
+    private readonly enlaces: EnlacesPublicosService,
+    private readonly avisos: NotificacionesComprobantesService,
   ) {}
 
   // ── PDF del comprobante ─────────────────────────────────────────────
@@ -126,23 +139,23 @@ export class ComprobantesService {
    * todas las facturas ya emitidas. Un comprobante autorizado por ARCA no
    * puede mutar.
    */
-  async pdfDe(auth: CurrentAuth, id: string): Promise<Archivo> {
+  async pdfDe(tenantId: string, id: string): Promise<Archivo> {
     const existente = await this.archivos.generadoDe(
       ArchivoScope.COMPROBANTE,
       id,
     );
     if (existente) return existente;
-    return this.materializarPdf(auth, id);
+    return this.materializarPdf(tenantId, id);
   }
 
-  async materializarPdf(auth: CurrentAuth, id: string): Promise<Archivo> {
+  async materializarPdf(tenantId: string, id: string): Promise<Archivo> {
     const [doc, logo] = await Promise.all([
-      this.factura.documento(auth, id),
-      this.archivos.logoDataUri(auth.tenantId),
+      this.factura.documento(tenantId, id),
+      this.archivos.logoDataUri(tenantId),
     ]);
     const contenido = await this.facturaPdf.generar(doc, logo);
     return this.archivos.materializar({
-      tenantId: auth.tenantId,
+      tenantId,
       scope: ArchivoScope.COMPROBANTE,
       entidadId: id,
       nombre: `${doc.letra}-${doc.puntoVenta}-${doc.numero}.pdf`,
@@ -156,14 +169,40 @@ export class ComprobantesService {
    * error tragado: que falle el archivo no puede tumbar una emisión fiscal
    * que ARCA ya autorizó — el endpoint lo genera después si hace falta.
    */
-  private async congelarPdf(auth: CurrentAuth, id: string): Promise<void> {
+  private async congelarPdf(tenantId: string, id: string): Promise<void> {
     try {
-      await this.materializarPdf(auth, id);
+      await this.materializarPdf(tenantId, id);
     } catch (error) {
       this.logger.warn(
         `No pude congelar el PDF del comprobante ${id}: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
+  }
+
+  /**
+   * El comprobante visto por el CLIENTE desde el link de WhatsApp.
+   *
+   * Devuelve el documento fiscal COMPLETO y no un resumen, porque es
+   * exactamente lo que dice el PDF que igual se le manda: el emisor, sus datos,
+   * los ítems, los totales y el CAE. Nada de lo que hay ahí es interno —los
+   * costos y los márgenes no viven en el comprobante— así que no hay nada que
+   * recortar. Sí se saca el estado, que sólo tiene sentido de este lado.
+   */
+  async documentoPublico(tenantId: string, id: string) {
+    // Sin sesión no hay tenant en contexto y el guard de Prisma lo exige. El
+    // tenant sale del enlace, no del pedido: el token es la credencial.
+    const [doc, logo] = await runWithTenant(tenantId, () =>
+      Promise.all([
+        this.factura.documento(tenantId, id),
+        this.archivos.urlDeLogoPublico(tenantId),
+      ]),
+    );
+    // `tieneLogo` sólo si HAY: la vista es un server component y no puede
+    // reaccionar a una imagen rota, así que necesita saberlo antes de pintar
+    // el <img>.
+    const publico = { ...doc, tieneLogo: logo !== null };
+    delete (publico as { estado?: string }).estado;
+    return publico;
   }
 
   /**
@@ -619,8 +658,36 @@ export class ComprobantesService {
     await this.facturacionOrdenes.alEmitirComprobante(auth.tenantId, id);
     // El comprobante queda congelado con los datos del emisor de ESTE
     // momento; si mañana cambia el domicilio fiscal, éste no muta.
-    await this.congelarPdf(auth, id);
+    await this.congelarPdf(auth.tenantId, id);
+    await this.publicar(auth.tenantId, id);
     return this.toResponse(actualizado);
+  }
+
+  /**
+   * Le da al comprobante emitido su link público y le avisa al cliente.
+   *
+   * Best-effort y en ese orden: el link tiene que existir antes del aviso —el
+   * mensaje lo lleva adentro— pero ninguno de los dos puede voltear una
+   * emisión que ARCA ya autorizó. Por eso el error se traga y el aviso va sin
+   * `await`: si Wati no contesta, la factura sigue emitida igual.
+   */
+  private async publicar(tenantId: string, id: string): Promise<void> {
+    try {
+      await this.enlaces.emitir(this.prisma, {
+        tenantId,
+        tipo: TipoEnlacePublico.FACTURA,
+        entidadId: id,
+        token: generarTokenPublico(),
+      });
+    } catch (error) {
+      this.logger.warn(
+        `No pude emitir el link público del comprobante ${id}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      // Sin link no hay nada que mandar: el aviso no sale y no tiene sentido
+      // intentarlo.
+      return;
+    }
+    void this.avisos.avisar(id);
   }
 
   /** Carga a mano el CAE que devolvió el portal de ARCA (provider manual). */
@@ -657,7 +724,10 @@ export class ComprobantesService {
     });
     // El PDF congelado al emitir salió sin CAE (el manual lo carga después):
     // se rehace para que el guardado tenga el número de autorización.
-    await this.congelarPdf(auth, id);
+    await this.congelarPdf(auth.tenantId, id);
+    // Recién ahora el comprobante es válido y hay algo que mandarle al
+    // cliente. Al emitir no salió nada: `avisar` corta sin CAE.
+    void this.avisos.avisar(id);
     return this.toResponse(actualizado);
   }
 
