@@ -69,6 +69,31 @@ export type EventoAcceso = {
   createdAt: string;
 };
 
+export type SesionAbierta = {
+  id: string;
+  usuarioId: string;
+  usuarioNombre: string;
+  email: string;
+  desde: string;
+  expira: string;
+  /** La del que está mirando: no se ofrece cerrarla desde acá. */
+  esLaMia: boolean;
+  esImpersonacion: boolean;
+};
+
+export async function getSesiones(): Promise<SesionAbierta[]> {
+  return apiRequest("/usuarios/sesiones", { cache: "no-store" });
+}
+
+export async function cerrarSesiones(
+  userId: string,
+): Promise<{ cerradas: number }> {
+  return apiRequest(
+    `/usuarios/${encodeURIComponent(userId)}/cerrar-sesiones`,
+    { method: "POST" },
+  );
+}
+
 export async function getHistorialAccesos(): Promise<EventoAcceso[]> {
   return apiRequest("/usuarios/historial", { cache: "no-store" });
 }

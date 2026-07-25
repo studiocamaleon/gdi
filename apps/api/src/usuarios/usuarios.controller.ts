@@ -41,6 +41,12 @@ export class UsuariosController {
     return this.usuarios.listar(auth);
   }
 
+  /** Quién está conectado ahora mismo. */
+  @Get('sesiones')
+  sesiones(@CurrentSession() auth: CurrentAuth) {
+    return this.usuarios.sesiones(auth);
+  }
+
   /** Quién le cambió el acceso a quién. Sólo lectura: nadie edita auditoría. */
   @Get('historial')
   historial(@CurrentSession() auth: CurrentAuth) {
@@ -119,6 +125,16 @@ export class UsuariosController {
     @Param('userId') userId: string,
   ) {
     return this.usuarios.restablecerPassword(auth, userId);
+  }
+
+  /** Lo echa de todos los dispositivos donde tenga la sesión abierta. */
+  @Permiso('configuracion.gestionar')
+  @Post(':userId/cerrar-sesiones')
+  cerrarSesiones(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('userId') userId: string,
+  ) {
+    return this.usuarios.cerrarSesiones(auth, userId);
   }
 
   @Permiso('configuracion.gestionar')

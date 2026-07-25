@@ -623,6 +623,67 @@ export class UsuariosService {
     });
   }
 
+  // ── Seguridad ───────────────────────────────────────────────────────
+
+  /**
+   * Quién está conectado ahora mismo a esta empresa.
+   *
+   * Las sesiones existen desde siempre y no las veía nadie: para saber si al
+   * empleado que se fue le quedó algo abierto había que entrar a la base. Se
+   * listan sólo las vivas —ni revocadas ni vencidas— porque la pregunta es del
+   * presente; el pasado está en el registro de actividad.
+   */
+  async sesiones(auth: CurrentAuth) {
+    const abiertas = await this.prisma.authSession.findMany({
+      where: {
+        currentTenantId: auth.tenantId,
+        revokedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      include: {
+        user: { select: { id: true, email: true, nombreCompleto: true } },
+      },
+    });
+    return abiertas.map((s) => ({
+      id: s.id,
+      usuarioId: s.user.id,
+      usuarioNombre: s.user.nombreCompleto || s.user.email,
+      email: s.user.email,
+      desde: s.createdAt.toISOString(),
+      expira: s.expiresAt.toISOString(),
+      /** La del que está mirando: no se ofrece cerrarla desde acá. */
+      esLaMia: s.id === auth.sessionId,
+      /** El staff de Grafo operando adentro del tenant. */
+      esImpersonacion: s.impersonacionId !== null,
+    }));
+  }
+
+  /** Cierra TODAS las sesiones de una persona en esta empresa. */
+  async cerrarSesiones(auth: CurrentAuth, userId: string) {
+    const membership = await this.prisma.membership.findUnique({
+      where: { userId_tenantId: { userId, tenantId: auth.tenantId } },
+      include: { user: { select: { email: true, nombreCompleto: true } } },
+    });
+    if (!membership) throw new NotFoundException('Ese usuario no existe acá.');
+
+    const { count } = await this.prisma.authSession.updateMany({
+      where: { userId, currentTenantId: auth.tenantId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    this.sessionCache.invalidarTenant(auth.tenantId);
+
+    const quien = membership.user.nombreCompleto || membership.user.email;
+    await this.registrar(auth, {
+      tipo: 'sesiones_cerradas',
+      usuarioAfectadoId: userId,
+      usuarioAfectadoNombre: quien,
+      descripcion: `Cerró ${count === 1 ? 'la sesión' : `las ${count} sesiones`} de ${quien}`,
+    });
+    return { cerradas: count };
+  }
+
   // ── Auditoría ───────────────────────────────────────────────────────
 
   /**
