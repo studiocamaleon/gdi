@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeftRightIcon,
@@ -165,12 +164,16 @@ export function UserTenantMenu({ currentUser }: UserTenantMenuProps) {
         <DropdownMenuSeparator />
         <div className="p-1">
           {/* La única forma de cambiar la clave propia: antes no existía
-              ninguna, ni siquiera para el que la había elegido al entrar. */}
+              ninguna, ni siquiera para el que la había elegido al entrar.
+              Navega por router y no con un <Link> adentro del Button: la
+              primitiva espera un <button> nativo, y meterle un <a> le saca la
+              semántica (lo avisa por consola). Es un item de menú, no un
+              enlace que alguien vaya a abrir en otra pestaña. */}
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            render={<Link href="/cambiar-clave" />}
+            onClick={() => router.push("/cambiar-clave")}
             className="h-9 w-full justify-start rounded-xl"
           >
             <KeyRoundIcon />
