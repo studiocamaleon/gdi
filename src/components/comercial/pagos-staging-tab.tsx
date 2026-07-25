@@ -102,7 +102,7 @@ export function PagosStagingTab({
             Para cargar cobros necesitás al menos un método de pago activo y
             una cuenta de fondos.
           </div>
-          <Link className="btn btn-primary" href="/administracion/metodos-pago">
+          <Link className="btn btn-primary" href="/configuracion/metodos-pago">
             Ir a Métodos de pago
           </Link>
         </div>

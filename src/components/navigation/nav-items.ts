@@ -181,11 +181,6 @@ export const NAV: NavItem[] = [
         label: "Deudores",
         href: "/administracion/deudores",
       },
-      {
-        key: "metodos-pago",
-        label: "Métodos de pago",
-        href: "/administracion/metodos-pago",
-      },
     ],
   },
   // Reportes fue durante un tiempo el "Panel general": ocho vistas como tabs de
@@ -264,6 +259,14 @@ export const NAV: NavItem[] = [
         key: "datos-fiscales",
         label: "Datos fiscales",
         href: "/configuracion/datos-fiscales",
+      },
+      // Junto a Datos fiscales por el mismo criterio: es un catálogo que se
+      // define una vez —qué medios acepta la imprenta y con qué comisión— y no
+      // una operación del día a día. Cobrar lo usa; configurarlo es otra cosa.
+      {
+        key: "metodos-pago",
+        label: "Métodos de pago",
+        href: "/configuracion/metodos-pago",
       },
       {
         key: "almacenamiento",
