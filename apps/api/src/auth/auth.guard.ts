@@ -7,6 +7,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
+import { vencimientoRenovado } from './sesion-vida';
 import { IS_PUBLIC_KEY } from './public.decorator';
 import { SIN_TENANT_KEY } from '../common/sin-tenant.decorator';
 import { CurrentAuth, JwtPayload } from './auth.types';
@@ -75,6 +76,7 @@ export class AuthGuard implements CanActivate {
         select: {
           revokedAt: true,
           expiresAt: true,
+          createdAt: true,
           userId: true,
           user: { select: { activo: true, rolPlataforma: true } },
         },
@@ -89,6 +91,7 @@ export class AuthGuard implements CanActivate {
       ) {
         throw new UnauthorizedException('Sesion expirada o revocada.');
       }
+      void this.renovar({ ...session, id: payload.sessionId });
       request.auth = {
         userId: payload.sub,
         sessionId: payload.sessionId,
@@ -154,6 +157,12 @@ export class AuthGuard implements CanActivate {
     ) {
       throw new UnauthorizedException('Sesion expirada o revocada.');
     }
+
+    // La sesión se corre con el uso: muere por inactividad, no a plazo fijo.
+    // `vencimientoRenovado` devuelve null casi siempre —sólo escribe cuando ya
+    // pasó media ventana—, así que esto no es un UPDATE por request. Además
+    // este camino corre sólo en miss del cache de 30 s.
+    void this.renovar(session);
 
     // ── Impersonación ──────────────────────────────────────────────────
     if (payload.imp) {
@@ -238,6 +247,31 @@ export class AuthGuard implements CanActivate {
     request.auth = auth;
 
     return true;
+  }
+
+  /**
+   * Corre el vencimiento de la sesión que se acaba de usar.
+   *
+   * No se espera (`void`) ni tumba el request si falla: renovar es higiene, no
+   * autorización. Que dos requests del mismo usuario pisen el mismo UPDATE es
+   * inofensivo —escriben casi el mismo instante—, y que la DB rechace el write
+   * no puede dejar afuera a alguien que ya está validado.
+   */
+  private async renovar(sesion: {
+    id: string;
+    expiresAt: Date;
+    createdAt: Date;
+  }): Promise<void> {
+    const nuevo = vencimientoRenovado(sesion);
+    if (!nuevo) return;
+    try {
+      await this.prisma.authSession.update({
+        where: { id: sesion.id },
+        data: { expiresAt: nuevo },
+      });
+    } catch {
+      // Si no se pudo estirar, se estira en el request siguiente.
+    }
   }
 
   private extractBearerToken(authorization?: string) {

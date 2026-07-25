@@ -10,6 +10,7 @@ import { Membership, Prisma, RolPlataforma, RolSistema } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { vencimientoInicial } from './sesion-vida';
 import { estadoDeCiclo } from '../suscripciones/ciclo';
 import { AcceptInvitationDto } from './dto/accept-invitation.dto';
 import { CambiarPasswordDto } from './dto/cambiar-password.dto';
@@ -198,7 +199,7 @@ export class AuthService {
         userId: user.id,
         currentTenantId: null,
         currentMembershipId: null,
-        expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7),
+        expiresAt: vencimientoInicial(),
       },
     });
     const accessToken = await this.issueToken({
@@ -680,7 +681,7 @@ export class AuthService {
 
     const rawToken = randomBytes(32).toString('hex');
     const tokenHash = this.hashToken(rawToken);
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7);
+    const expiresAt = vencimientoInicial();
 
     const invitation = await this.prisma.$transaction(async (tx) => {
       const user =
@@ -817,7 +818,7 @@ export class AuthService {
         userId,
         currentTenantId: membership.tenantId,
         currentMembershipId: membership.id,
-        expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7),
+        expiresAt: vencimientoInicial(),
       },
     });
 

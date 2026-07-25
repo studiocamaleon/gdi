@@ -3,6 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { SessionCacheService } from './session-cache.service';
+import { SesionesScheduler } from './sesiones.scheduler';
 
 const jwtSecret = process.env.JWT_SECRET;
 if (!jwtSecret) {
@@ -25,7 +26,7 @@ if (
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, SessionCacheService],
+  providers: [AuthService, SessionCacheService, SesionesScheduler],
   exports: [AuthService, SessionCacheService, JwtModule],
 })
 export class AuthModule {}
