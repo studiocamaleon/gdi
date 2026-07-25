@@ -36,6 +36,12 @@ export type CurrentAuth = {
    */
   permisos?: Set<string>;
   /**
+   * Desde qué IPs puede usarse esta sesión. Vacío = desde cualquier lado.
+   * Viaja en el auth para que el cache de sesión pueda revalidarla sin volver
+   * a la base. Ver auth/ip.ts
+   */
+  ipsPermitidas?: string[];
+  /**
    * Impersonación: el staff del control plane operando DENTRO de un tenant.
    * `userId`/`tenantId`/`role` son los del tenant impersonado (ADMINISTRADOR),
    * para que todo lo de negocio funcione igual; el actor real viaja acá.

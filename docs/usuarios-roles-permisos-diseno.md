@@ -236,6 +236,47 @@ membership y revoca sus sesiones en el acto.
 
 ---
 
+## 4.3 Restricción por IP (Seguridad)
+
+Pedido: que una cuenta pueda atarse a una IP fija y que desde otra red no entre.
+Está, con las decisiones que lo hacen seguro y no un cartel:
+
+- **Se guarda por membership, no por usuario.** Es una política de la EMPRESA:
+  la misma persona puede entrar sin restricción a una y sólo desde la oficina a
+  otra.
+- **Vacío significa "desde cualquier lado"**, no "desde ninguno". Al revés, la
+  migración que agregó la columna habría dejado a todo el sistema sin poder
+  entrar en el momento del deploy.
+- **Se valida en el login Y en cada request.** Sólo en el login no significa
+  nada: el que se lleva la notebook a su casa sigue trabajando con la sesión
+  abierta. Es comparar strings contra un array que ya vino en el mismo query.
+- **También contra el cache de sesión.** Sin eso, quien ya pasó una vez seguiría
+  entrando desde cualquier lado durante los 30 s del TTL.
+- **Nadie puede dejarse afuera a sí mismo.** Si te restringís a una IP que no es
+  desde la que estás mirando, se rechaza con el número en pantalla. Sin ese
+  cerrojo, un error de tipeo encierra al administrador fuera de su propio
+  sistema y no queda nadie que pueda arreglarlo salvo entrando a la base.
+- **El intento bloqueado se registra** en el log de actividad. Sin eso, el que
+  no puede entrar llama por teléfono y del otro lado no hay nada que mirar.
+- Se aceptan IPs exactas (v4 y v6) y **rangos CIDR v4** — una oficina se
+  describe con `/24`, no IP por IP.
+
+### El problema que había que resolver primero: de dónde sale la IP
+
+No había `trust proxy` configurado. Detrás de un proxy —nginx, Cloudflare, el
+router de la nube— eso hace que **toda** request parezca venir de la misma IP: la
+del proxy. Dos cosas se rompen con eso, y ninguna avisa:
+
+- El límite por IP del throttler pasa a ser un límite GLOBAL: los 100 pedidos
+  por minuto se los reparten todos los usuarios juntos (bug que ya existía).
+- Esta restricción o bloquea a todo el mundo o no protege a nadie.
+
+Y confiar de más es peor: si se acepta el `X-Forwarded-For` de cualquiera, se
+falsea con una línea de curl. Por eso `TRUST_PROXY` es **explícito y por
+variable de entorno** —`1` para un proxy adelante, `2` para proxy + CDN, o una
+lista de IPs de confianza— y sin la variable no se confía en nadie, que es lo
+correcto en local. **Hay que setearla en producción antes de que esto sirva.**
+
 ## 5. Cómo se evalúa un permiso
 
 **Backend.** Un decorador `@Permiso('costos.gestionar')` y su guard, en el mismo

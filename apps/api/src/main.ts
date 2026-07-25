@@ -14,6 +14,30 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api');
 
+  /**
+   * De quién nos creemos el `X-Forwarded-For`.
+   *
+   * Sin esto, detrás de un proxy —nginx, Cloudflare, el router de la nube—
+   * TODA request parece venir de la misma IP: la del proxy. Dos cosas se
+   * rompen con eso y ninguna avisa:
+   *
+   *  - El límite por IP del throttler pasa a ser un límite GLOBAL: los 100
+   *    pedidos por minuto se los reparten todos los usuarios juntos.
+   *  - La restricción de acceso por IP (Configuración → Usuarios → Seguridad)
+   *    o bloquea a todo el mundo o no protege a nadie.
+   *
+   * Y confiar de más es peor que no confiar: si se acepta el header de
+   * cualquiera, se falsea con una línea de curl y la restricción no vale nada.
+   * Por eso es explícito y por variable de entorno — `1` para un proxy
+   * adelante, `2` para proxy + CDN, o una lista de IPs de confianza. Sin la
+   * variable no se confía en nadie, que es lo correcto en local.
+   */
+  const trustProxy = process.env.TRUST_PROXY;
+  if (trustProxy) {
+    const valor = /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy;
+    app.getHttpAdapter().getInstance().set('trust proxy', valor);
+  }
+
   // Cabeceras de seguridad. La API sirve solo JSON, así que los defaults de
   // helmet no interfieren.
   app.use(helmet());

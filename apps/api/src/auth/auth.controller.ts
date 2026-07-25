@@ -1,9 +1,11 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Req } from '@nestjs/common';
+import type { Request } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { CurrentSession } from './current-auth.decorator';
 import { AuthService } from './auth.service';
 import { AcceptInvitationDto } from './dto/accept-invitation.dto';
 import { CambiarPasswordDto } from './dto/cambiar-password.dto';
+import { ipDeRequest } from './ip';
 import { LoginDto } from './dto/login.dto';
 import { SwitchTenantDto } from './dto/switch-tenant.dto';
 import { Public } from './public.decorator';
@@ -25,8 +27,11 @@ export class AuthController {
   @Public()
   @Throttle({ default: { ttl: 60000, limit: 10 } })
   @Post('login')
-  login(@Body() payload: LoginDto) {
-    return this.authService.login(payload);
+  login(@Body() payload: LoginDto, @Req() req: Request) {
+    // La IP sale de Express, que ya resolvió el X-Forwarded-For según el
+    // `trust proxy` de main.ts. Leer el header a mano acá sería confiar en un
+    // dato que cualquiera puede escribir.
+    return this.authService.login(payload, ipDeRequest(req));
   }
 
   /** Login del backoffice: staff de plataforma, sin exigir empresa. */

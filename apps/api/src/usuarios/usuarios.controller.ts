@@ -6,11 +6,16 @@ import {
   Param,
   Patch,
   Post,
+  Put,
+  Req,
 } from '@nestjs/common';
+import type { Request } from 'express';
 
 import { CurrentSession } from '../auth/current-auth.decorator';
 import { Permiso } from '../auth/permiso.decorator';
+import { ipDeRequest } from '../auth/ip';
 import {
+  CambiarIpsDto,
   CrearRolDto,
   CrearUsuarioDto,
   EditarRolDto,
@@ -39,6 +44,15 @@ export class UsuariosController {
   @Get()
   listar(@CurrentSession() auth: CurrentAuth) {
     return this.usuarios.listar(auth);
+  }
+
+  /**
+   * Desde qué IP está mirando quien pregunta. La UI la ofrece con un click
+   * para que nadie tenga que ir a buscarla a otro lado ni tipearla mal.
+   */
+  @Get('mi-ip')
+  miIp(@Req() req: Request) {
+    return { ip: ipDeRequest(req) };
   }
 
   /** Quién está conectado ahora mismo. */
@@ -125,6 +139,21 @@ export class UsuariosController {
     @Param('userId') userId: string,
   ) {
     return this.usuarios.restablecerPassword(auth, userId);
+  }
+
+  /**
+   * Desde qué IPs puede entrar. La IP de ESTA request viaja al service para el
+   * cerrojo de "no te dejes afuera vos mismo".
+   */
+  @Permiso('configuracion.gestionar')
+  @Put(':userId/ips')
+  cambiarIps(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('userId') userId: string,
+    @Body() dto: CambiarIpsDto,
+    @Req() req: Request,
+  ) {
+    return this.usuarios.cambiarIps(auth, userId, dto.ips, ipDeRequest(req));
   }
 
   /** Lo echa de todos los dispositivos donde tenga la sesión abierta. */

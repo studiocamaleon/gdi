@@ -15,6 +15,7 @@ import { AcceptInvitationDto } from './dto/accept-invitation.dto';
 import { CambiarPasswordDto } from './dto/cambiar-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { CurrentAuth, JwtPayload } from './auth.types';
+import { ipPermitida } from './ip';
 import { expandir, permisosDeRolBase } from './permisos';
 import { SessionCacheService } from './session-cache.service';
 
@@ -41,7 +42,7 @@ export class AuthService {
 
   private readonly logger = new Logger(AuthService.name);
 
-  async login(payload: LoginDto) {
+  async login(payload: LoginDto, ip = '') {
     const user = await this.prisma.user.findUnique({
       where: { email: payload.email.trim().toLowerCase() },
       include: {
@@ -78,9 +79,31 @@ export class AuthService {
       throw new UnauthorizedException('Credenciales invalidas.');
     }
 
-    const membership = user.memberships[0];
+    /**
+     * De las empresas del usuario, la primera a la que puede entrar DESDE ACÁ.
+     *
+     * No se toma la primera y después se valida: alguien con dos empresas —una
+     * restringida a la oficina y otra no— tiene que poder entrar a la segunda
+     * desde su casa. Filtrar antes de elegir es lo que hace eso posible.
+     */
+    const permitidas = user.memberships.filter((m) =>
+      ipPermitida(ip, m.ipsPermitidas),
+    );
+    const membership = permitidas[0];
 
     if (!membership) {
+      if (user.memberships.length > 0) {
+        // Las credenciales estaban bien: el corte es la IP. Se dice, porque
+        // "credenciales inválidas" mandaría a la persona a probar diez veces
+        // la clave correcta.
+        this.logger.warn(
+          `Login bloqueado por IP: ${user.email} desde ${ip || 'origen desconocido'}.`,
+        );
+        await this.registrarBloqueoPorIp(user.memberships[0], user.id, ip);
+        throw new UnauthorizedException(
+          'Tu cuenta sólo puede entrar desde la red autorizada de tu empresa. Hablá con quien la administra.',
+        );
+      }
       throw new UnauthorizedException('El usuario no tiene empresas activas.');
     }
 
@@ -92,6 +115,45 @@ export class AuthService {
       user.nombreCompleto ?? null,
       user.rolPlataforma ?? null,
     );
+  }
+
+  /**
+   * Deja constancia del intento bloqueado.
+   *
+   * Es lo que convierte la restricción en algo administrable: sin esto, el que
+   * no puede entrar llama por teléfono y del otro lado no hay nada que mirar.
+   * Best-effort — que falle el registro no puede convertir un bloqueo en un
+   * acceso.
+   */
+  private async registrarBloqueoPorIp(
+    membership: { tenantId: string },
+    userId: string,
+    ip: string,
+  ) {
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true, nombreCompleto: true },
+      });
+      const quien = user?.nombreCompleto || user?.email || userId;
+      await this.prisma.eventoAcceso.create({
+        data: {
+          tenantId: membership.tenantId,
+          actorUserId: null,
+          actorNombre: 'Sistema',
+          tipo: 'login_bloqueado_ip',
+          usuarioAfectadoId: userId,
+          usuarioAfectadoNombre: quien,
+          descripcion: `Intento de entrar de ${quien} desde ${ip || 'un origen desconocido'}, fuera de las IPs permitidas`,
+          datosJson: { ip },
+        },
+      });
+    } catch (error) {
+      this.logger.error(
+        'No pude registrar el bloqueo por IP.',
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
   }
 
   /**

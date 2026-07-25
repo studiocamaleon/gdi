@@ -12,6 +12,7 @@ import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { SessionCacheService } from '../auth/session-cache.service';
 import { SuscripcionesService } from '../suscripciones/suscripciones.service';
+import { esIpOrangoValido, ipPermitida } from '../auth/ip';
 import {
   MODULOS,
   PERMISOS_TRANSVERSALES,
@@ -97,6 +98,8 @@ export class UsuariosService {
         nombreCompleto: m.user.nombreCompleto,
         rolId: m.rolId,
         rolNombre: m.rolDelTenant?.nombre ?? this.nombreDelEnum(m.rol),
+        /** Vacío = entra desde cualquier lado. */
+        ipsPermitidas: m.ipsPermitidas,
         activa: m.activa,
         empleado: m.user.empleados[0] ?? null,
         /**
@@ -658,6 +661,63 @@ export class UsuariosService {
       /** El staff de Grafo operando adentro del tenant. */
       esImpersonacion: s.impersonacionId !== null,
     }));
+  }
+
+  /**
+   * Desde qué IPs puede entrar esta persona. Lista vacía = desde cualquier lado.
+   *
+   * El cerrojo importante: nadie puede restringirse a sí mismo a una IP que no
+   * sea desde la que está mirando. Sin eso, un admin se encierra afuera de su
+   * propio sistema con un error de tipeo y no queda nadie que pueda arreglarlo
+   * salvo entrando a la base.
+   */
+  async cambiarIps(
+    auth: CurrentAuth,
+    userId: string,
+    ips: string[],
+    ipActual: string,
+  ) {
+    const membership = await this.prisma.membership.findUnique({
+      where: { userId_tenantId: { userId, tenantId: auth.tenantId } },
+      include: { user: { select: { email: true, nombreCompleto: true } } },
+    });
+    if (!membership) throw new NotFoundException('Ese usuario no existe acá.');
+
+    const limpias = [...new Set(ips.map((i) => i.trim()).filter(Boolean))];
+    const invalida = limpias.find((i) => !esIpOrangoValido(i));
+    if (invalida) {
+      throw new BadRequestException(
+        `"${invalida}" no es una IP ni un rango válido. Ejemplos: 190.1.2.3 o 190.1.2.0/24.`,
+      );
+    }
+
+    if (userId === auth.userId && limpias.length > 0) {
+      if (!ipPermitida(ipActual, limpias)) {
+        throw new BadRequestException(
+          `Te estarías dejando afuera: estás entrando desde ${ipActual || 'un origen desconocido'} y esa IP no está en la lista.`,
+        );
+      }
+    }
+
+    await this.prisma.membership.update({
+      where: { id: membership.id },
+      data: { ipsPermitidas: limpias },
+    });
+    this.sessionCache.invalidarTenant(auth.tenantId);
+
+    const quien = membership.user.nombreCompleto || membership.user.email;
+    await this.registrar(auth, {
+      tipo: 'ips_cambiadas',
+      usuarioAfectadoId: userId,
+      usuarioAfectadoNombre: quien,
+      descripcion:
+        limpias.length === 0
+          ? `${quien} puede entrar desde cualquier lugar`
+          : `${quien} sólo puede entrar desde ${limpias.join(', ')}`,
+      datos: { antes: membership.ipsPermitidas, ahora: limpias },
+    });
+
+    return { ipsPermitidas: limpias };
   }
 
   /** Cierra TODAS las sesiones de una persona en esta empresa. */

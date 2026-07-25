@@ -443,7 +443,9 @@ export function UsuariosView({
       </>
       )}
 
-      {tab === "seguridad" && <TabSeguridad onCambio={recargar} />}
+      {tab === "seguridad" && (
+        <TabSeguridad usuarios={datos.usuarios} onCambio={recargar} />
+      )}
 
       {tab === "logs" && (
       <>

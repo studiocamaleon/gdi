@@ -4,9 +4,12 @@ import * as React from "react";
 import { toast } from "sonner";
 
 import {
+  cambiarIps,
   cerrarSesiones,
+  getMiIp,
   getSesiones,
   type SesionAbierta,
+  type UsuarioDelTenant,
 } from "@/lib/usuarios-api";
 
 /**
@@ -19,8 +22,18 @@ import {
  *
  * Ver docs/usuarios-roles-permisos-diseno.md
  */
-export function TabSeguridad({ onCambio }: { onCambio: () => Promise<void> }) {
+export function TabSeguridad({
+  usuarios,
+  onCambio,
+}: {
+  usuarios: UsuarioDelTenant[];
+  onCambio: () => Promise<void>;
+}) {
   const [sesiones, setSesiones] = React.useState<SesionAbierta[] | null>(null);
+  const [miIp, setMiIp] = React.useState<string | null>(null);
+  const [editando, setEditando] = React.useState<string | null>(null);
+  const [borrador, setBorrador] = React.useState("");
+  const [guardando, setGuardando] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [cerrando, setCerrando] = React.useState<string | null>(null);
 
@@ -35,7 +48,32 @@ export function TabSeguridad({ onCambio }: { onCambio: () => Promise<void> }) {
 
   React.useEffect(() => {
     void cargar();
+    void getMiIp()
+      .then((r) => setMiIp(r.ip))
+      .catch(() => setMiIp(null));
   }, [cargar]);
+
+  const guardarIps = async (u: UsuarioDelTenant) => {
+    setGuardando(true);
+    try {
+      const ips = borrador
+        .split(/[\n,]/)
+        .map((x) => x.trim())
+        .filter(Boolean);
+      await cambiarIps(u.id, ips);
+      toast.success(
+        ips.length === 0
+          ? `${u.nombreCompleto || u.email} puede entrar desde cualquier lado.`
+          : `${u.nombreCompleto || u.email} entra sólo desde ${ips.join(", ")}.`,
+      );
+      setEditando(null);
+      await onCambio();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo guardar.");
+    } finally {
+      setGuardando(false);
+    }
+  };
 
   const cerrar = async (s: SesionAbierta) => {
     setCerrando(s.usuarioId);
@@ -123,10 +161,109 @@ export function TabSeguridad({ onCambio }: { onCambio: () => Promise<void> }) {
       </div>
 
       <div className="int-section-intro">
+        <h3>Desde dónde puede entrar cada uno</h3>
+        <p>
+          Por defecto se entra desde cualquier lado. Si la empresa tiene IP fija,
+          podés atar una cuenta a esa IP: desde otra red no la deja entrar, ni
+          con la clave correcta.{" "}
+          {miIp ? (
+            <>
+              Vos estás entrando desde <strong>{miIp}</strong>.
+            </>
+          ) : null}
+        </p>
+      </div>
+
+      <div className="int-tpl-list" style={{ marginBottom: 26 }}>
+        {usuarios.map((u) => (
+          <div className="usr-fila" key={u.id}>
+            <div className="usr-quien">
+              <div className="usr-nombre">{u.nombreCompleto || u.email}</div>
+              <div className="usr-mail">
+                {u.ipsPermitidas.length === 0
+                  ? "Desde cualquier lugar"
+                  : `Sólo desde ${u.ipsPermitidas.join(", ")}`}
+              </div>
+            </div>
+            <div className="usr-estado">
+              {u.ipsPermitidas.length > 0 ? (
+                <span className="int-pill int-pill-ok">IP FIJA</span>
+              ) : null}
+            </div>
+            <div />
+            <div className="usr-acciones">
+              <button
+                className="btn ghost"
+                onClick={() => {
+                  setEditando(u.id);
+                  setBorrador(u.ipsPermitidas.join(", "));
+                }}
+              >
+                Cambiar
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {editando &&
+        (() => {
+          const u = usuarios.find((x) => x.id === editando);
+          if (!u) return null;
+          return (
+            <div className="usr-form">
+              <div className="int-section-intro">
+                <h3>Desde dónde entra {u.nombreCompleto || u.email}</h3>
+                <p>
+                  Una IP por línea, o separadas por coma. Vacío = desde
+                  cualquier lado. También se puede escribir un rango entero de
+                  la oficina, como <code>190.1.2.0/24</code>.
+                </p>
+              </div>
+              <textarea
+                className="usr-ips"
+                value={borrador}
+                onChange={(e) => setBorrador(e.target.value)}
+                rows={3}
+                placeholder="190.1.2.3"
+                autoFocus
+              />
+              <div className="usr-form-acciones">
+                {miIp && (
+                  <button
+                    className="btn ghost"
+                    onClick={() =>
+                      setBorrador((b) => (b.trim() ? `${b}, ${miIp}` : miIp))
+                    }
+                    title="Agrega la IP desde la que estás mirando ahora."
+                  >
+                    Usar mi IP ({miIp})
+                  </button>
+                )}
+                <button
+                  className="btn ghost"
+                  onClick={() => setEditando(null)}
+                  disabled={guardando}
+                >
+                  Cancelar
+                </button>
+                <button
+                  className="btn primary"
+                  onClick={() => void guardarIps(u)}
+                  disabled={guardando}
+                >
+                  {guardando ? "Guardando…" : "Guardar"}
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+
+      <div className="int-section-intro">
         <h3>Lo que viene</h3>
         <p>
-          Vigencia de las sesiones, segundo factor y desde dónde se puede
-          entrar. Todavía no está: cuando lo trabajemos, vive acá.
+          Vigencia de las sesiones y segundo factor. Todavía no están: cuando
+          los trabajemos, viven acá.
         </p>
       </div>
     </>

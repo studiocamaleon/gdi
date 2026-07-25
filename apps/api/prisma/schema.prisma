@@ -798,6 +798,17 @@ model Membership {
   /// El rol de verdad. Null sólo en membresías que el backfill no alcanzó: ahí
   /// los permisos salen de `rol` (permisosDeRolBase).
   rolId           String?       @db.Uuid
+  /// Desde qué IPs puede entrar esta persona A ESTA empresa. IP exacta o CIDR
+  /// v4 ("190.1.2.3", "190.1.2.0/24").
+  ///
+  /// **Vacío = desde cualquier lado**, que es el default y el caso de casi
+  /// todos. Que vacío signifique "cualquiera" y no "ninguna" es a propósito:
+  /// si una migración dejara el campo en blanco, nadie queda encerrado afuera.
+  ///
+  /// Va en Membership y no en User porque es una política de la EMPRESA: la
+  /// misma persona puede entrar sin restricción a una y sólo desde la oficina
+  /// a otra. Ver docs/usuarios-roles-permisos-diseno.md
+  ipsPermitidas   String[]
   activa          Boolean       @default(true)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
