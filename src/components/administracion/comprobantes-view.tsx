@@ -251,8 +251,16 @@ export function ComprobantesView({
                     }
                   >
                     <span className="acp-cmp-id">
-                      <span className={`acp-tipo-badge ${sigla.toLowerCase()}`}>
-                        {sigla}
+                      {/* La LETRA, no la sigla del tipo: es lo que define el
+                          tratamiento de IVA y lo primero que se busca al
+                          escanear la lista. El tipo lo sigue diciendo el color
+                          —y, en texto, la línea de abajo—. Mismo criterio que
+                          la ficha del comprobante. */}
+                      <span
+                        className={`acp-tipo-badge ${sigla.toLowerCase()}`}
+                        title={`${COMPROBANTE_TIPO_LABELS[c.tipo]} ${c.letra}`}
+                      >
+                        {c.letra}
                       </span>
                       <span className="num">
                         <span className="n">{c.numeroCompleto}</span>
@@ -323,3 +331,4 @@ export function ComprobantesView({
     </div>
   );
 }
+
