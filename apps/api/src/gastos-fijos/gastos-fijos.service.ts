@@ -7,6 +7,7 @@ import { CategoriaGastoFijo, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CurrentAuth } from '../auth/auth.types';
 import { UpsertGastoFijoDto } from './dto/upsert-gasto-fijo.dto';
+import { RemuneracionesService } from '../empleados/remuneraciones.service';
 
 /**
  * Gastos fijos de estructura — fuente ÚNICA del pool de costos fijos del
@@ -32,7 +33,10 @@ const CATEGORIA_DESDE_COMPONENTE: Record<string, CategoriaGastoFijo> = {
 
 @Injectable()
 export class GastosFijosService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly remuneraciones: RemuneracionesService,
+  ) {}
 
   async listar(auth: CurrentAuth) {
     const rows = await this.prisma.gastoFijoEstructura.findMany({
@@ -171,6 +175,128 @@ export class GastosFijosService {
     await this.prisma.gastoFijoEstructura.createMany({ data: nuevos });
     const total = nuevos.reduce((acc, g) => acc + Number(g.importeMensual), 0);
     return { importados: nuevos.length, total: Math.round(total * 100) / 100 };
+  }
+
+  /**
+   * Compara la línea de SUELDOS del punto de equilibrio contra la nómina real
+   * de los legajos.
+   *
+   * Los dos módulos están desacoplados a propósito —responden preguntas
+   * distintas— pero desacoplado no es lo mismo que sin conciliar: hasta acá
+   * nadie podía decir si la diferencia entre lo que dice esta pantalla y lo que
+   * cuesta la gente era una decisión o un número que quedó viejo. Esto NO
+   * fuerza la igualdad: la muestra. Ver docs/legajos-nomina-diseno.md §4.3
+   */
+  async conciliacionNomina(auth: CurrentAuth, periodo?: string) {
+    const mes = periodo ?? this.mesActual();
+    const nomina = await this.remuneraciones.nominaDelPeriodo(
+      auth.tenantId,
+      mes,
+    );
+
+    const lineas = await this.prisma.gastoFijoEstructura.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        categoria: CategoriaGastoFijo.SUELDOS,
+        activo: true,
+        vigenteDesde: { lte: mes },
+        OR: [{ vigenteHasta: null }, { vigenteHasta: { gte: mes } }],
+      },
+      orderBy: { nombre: 'asc' },
+    });
+
+    const declarado = lineas.reduce((n, l) => n + Number(l.importeMensual), 0);
+    const diferencia = Math.round((declarado - nomina.costoMensual) * 100) / 100;
+
+    return {
+      periodo: mes,
+      nomina,
+      declarado: Math.round(declarado * 100) / 100,
+      lineas: lineas.map((l) => this.toResponse(l)),
+      diferencia,
+      // Un peso de diferencia es redondeo, no una decisión. El umbral evita
+      // que la pantalla grite por centavos.
+      estado:
+        nomina.personas === 0
+          ? ('sin_nomina' as const)
+          : Math.abs(diferencia) < 1
+            ? ('alineado' as const)
+            : diferencia > 0
+              ? ('declarado_de_mas' as const)
+              : ('declarado_de_menos' as const),
+    };
+  }
+
+  /**
+   * Reemplaza las líneas de SUELDOS por una sola con la nómina real.
+   *
+   * Las viejas se CIERRAN (vigenteHasta), no se borran: el punto de equilibrio
+   * de los meses anteriores tiene que seguir dando lo que dio. Es la misma
+   * regla de vigencia que usa el resto del módulo.
+   */
+  async alinearConNomina(auth: CurrentAuth, periodo?: string) {
+    const mes = periodo ?? this.mesActual();
+    const nomina = await this.remuneraciones.nominaDelPeriodo(
+      auth.tenantId,
+      mes,
+    );
+    if (nomina.personas === 0) {
+      throw new BadRequestException(
+        'No hay sueldos cargados en los legajos para ese mes: no hay con qué alinear.',
+      );
+    }
+
+    const previo = this.mesAnterior(mes);
+
+    await this.prisma.$transaction(async (tx) => {
+      // Las que arrancaron ANTES se cierran el mes previo; las que arrancan en
+      // este mes o después se desactivan, porque cerrarlas en un mes anterior
+      // al que arrancan dejaría una vigencia imposible.
+      await tx.gastoFijoEstructura.updateMany({
+        where: {
+          tenantId: auth.tenantId,
+          categoria: CategoriaGastoFijo.SUELDOS,
+          activo: true,
+          vigenteDesde: { lt: mes },
+          OR: [{ vigenteHasta: null }, { vigenteHasta: { gte: mes } }],
+        },
+        data: { vigenteHasta: previo },
+      });
+      await tx.gastoFijoEstructura.updateMany({
+        where: {
+          tenantId: auth.tenantId,
+          categoria: CategoriaGastoFijo.SUELDOS,
+          activo: true,
+          vigenteDesde: { gte: mes },
+        },
+        data: { activo: false },
+      });
+
+      await tx.gastoFijoEstructura.create({
+        data: {
+          tenantId: auth.tenantId,
+          nombre: `Nómina · ${nomina.personas} persona${nomina.personas === 1 ? '' : 's'}`,
+          categoria: CategoriaGastoFijo.SUELDOS,
+          importeMensual: new Prisma.Decimal(nomina.costoMensual),
+          vigenteDesde: mes,
+          vigenteHasta: null,
+          activo: true,
+          notas:
+            'Sale de los legajos, con el aguinaldo prorrateado. Si cambia un ' +
+            'sueldo, esta línea NO se actualiza sola: volvé a alinear.',
+        },
+      });
+    });
+
+    return this.conciliacionNomina(auth, mes);
+  }
+
+  /** 'YYYY-MM' → el mes anterior. */
+  private mesAnterior(periodo: string): string {
+    const [anio, mes] = periodo.split('-').map(Number);
+    return mes === 1
+      ? `${anio - 1}-12`
+      : `${anio}-${String(mes - 1).padStart(2, '0')}`;
   }
 
   private async obtenerOFallar(auth: CurrentAuth, id: string): Promise<GastoFijoRow> {

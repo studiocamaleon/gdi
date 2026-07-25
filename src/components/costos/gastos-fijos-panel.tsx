@@ -9,6 +9,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
+import { ConciliacionNominaCard } from "@/components/costos/conciliacion-nomina-card";
 
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import {
@@ -137,6 +138,8 @@ export function GastosFijosPanel({ initialGastos }: { initialGastos: GastoFijo[]
             <div className="unit">por mes · {vigentes.length} conceptos</div>
           </div>
         </div>
+
+        <ConciliacionNominaCard mes={MES} onAlineado={recargar} />
 
         {/* KPIs (sin "Facturación de equilibrio") */}
         <div className="kpis">
@@ -331,3 +334,4 @@ export function GastosFijosPanel({ initialGastos }: { initialGastos: GastoFijo[]
     </div>
   );
 }
+

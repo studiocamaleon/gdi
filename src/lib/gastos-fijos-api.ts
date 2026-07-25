@@ -99,3 +99,39 @@ export function importarGastosDesdeTarifas() {
     method: "POST",
   });
 }
+
+/* ─── Conciliación con la nómina ─────────────────────────────────────────────
+ * El punto de equilibrio y los centros de costo están desacoplados a propósito.
+ * Esto NO fuerza la igualdad: hace visible una diferencia que antes no lo era.
+ * Ver docs/legajos-nomina-diseno.md §4.3
+ */
+
+export type ConciliacionNomina = {
+  periodo: string;
+  nomina: {
+    periodo: string;
+    personas: number;
+    sueldoNeto: number;
+    cargasSociales: number;
+    /** Incluye la provisión del aguinaldo. */
+    costoMensual: number;
+  };
+  /** Lo que suman hoy las líneas de SUELDOS del punto de equilibrio. */
+  declarado: number;
+  lineas: GastoFijo[];
+  /** declarado − nómina. Positivo = el punto de equilibrio declara de más. */
+  diferencia: number;
+  estado: "alineado" | "declarado_de_mas" | "declarado_de_menos" | "sin_nomina";
+};
+
+export function getConciliacionNomina(periodo?: string) {
+  const qs = periodo ? `?periodo=${periodo}` : "";
+  return apiRequest<ConciliacionNomina>(`/gastos-fijos/conciliacion-nomina${qs}`);
+}
+
+export function alinearConNomina(periodo?: string) {
+  const qs = periodo ? `?periodo=${periodo}` : "";
+  return apiRequest<ConciliacionNomina>(`/gastos-fijos/alinear-con-nomina${qs}`, {
+    method: "POST",
+  });
+}

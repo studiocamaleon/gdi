@@ -29214,6 +29214,34 @@ body:has(.t-app) {
 .gf .mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
 
 .gf .page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:32px}
+
+/* Conciliación de sueldos declarados vs. nómina real de los legajos.
+   Prefijo .gf-concil: el scope .gf ya existía y estas clases son nuevas. */
+.gf .gf-concil{
+  border:1px solid color-mix(in oklab, var(--signal, #c2410c) 30%, transparent);
+  background:color-mix(in oklab, var(--signal, #c2410c) 5%, transparent);
+  border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:14px;
+}
+.gf .gf-concil.ok{
+  border-color:var(--border);
+  background:var(--surface-2, #fafaf9);
+}
+.gf .gf-concil-head{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.gf .gf-concil-head .t{font-size:14px;font-weight:600;letter-spacing:-.01em}
+.gf .gf-concil-head .s{font-size:12px;color:var(--muted-text);margin-top:3px;line-height:1.5}
+.gf .gf-concil-head .s a{color:var(--ink);text-decoration:underline;text-underline-offset:2px}
+.gf .gf-concil-badge{
+  font-size:11px;font-weight:600;letter-spacing:.02em;text-transform:uppercase;
+  color:var(--ok, #15803d);border:1px solid color-mix(in oklab, var(--ok, #15803d) 30%, transparent);
+  border-radius:999px;padding:4px 10px;white-space:nowrap;
+}
+.gf .gf-concil-nums{display:flex;gap:34px;flex-wrap:wrap}
+.gf .gf-concil-nums > div{display:flex;flex-direction:column;gap:2px}
+.gf .gf-concil-nums .k{font-size:11px;color:var(--muted-text);text-transform:uppercase;letter-spacing:.03em}
+.gf .gf-concil-nums .v{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:17px;font-weight:600}
+.gf .gf-concil-nums .dif .v{color:var(--signal, #c2410c)}
+.gf .gf-concil-nota{font-size:12px;line-height:1.55;color:var(--muted-text);margin:0}
+
 .gf .page-head h1{font-size:23px;font-weight:600;letter-spacing:-.02em;margin:0 0 8px}
 .gf .page-head .sub{font-size:13.5px;color:var(--muted);max-width:600px}
 .gf .page-head .sub b{color:var(--ink-2);font-weight:500}
@@ -34500,4 +34528,5 @@ body:has(.t-app) {
 /* Aviso con acción al costado (cancelación pendiente) */
 .sub-alert-accion{align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap}
 .sub-alert-accion .btn-primary{flex:none;white-space:nowrap}
+
 
