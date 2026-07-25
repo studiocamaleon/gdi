@@ -30,7 +30,9 @@ import {
   ResolverPresupuestoDto,
 } from './dto/presupuestos.dto';
 import { Permiso } from '../auth/permiso.decorator';
+import { OcultaMargenes } from '../auth/margenes.decorator';
 
+@OcultaMargenes()
 @Permiso('comercial.ver')
 @Controller('presupuestos')
 export class PresupuestosController {
@@ -119,7 +121,9 @@ export class PresupuestosController {
     return this.service.resolver(auth, id, dto);
   }
 
-  @Permiso('comercial.gestionar')
+  // La excepción: cotizar lo hace el vendedor, autorizar un margen por debajo
+  // del piso lo firma otro. Por eso no alcanza con `comercial.gestionar`.
+  @Permiso('comercial.aprobar_descuento')
   @Patch(':id/aprobacion')
   @Roles(RolSistema.ADMINISTRADOR, RolSistema.SUPERVISOR)
   resolverAprobacion(

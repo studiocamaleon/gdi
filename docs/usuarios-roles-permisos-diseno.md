@@ -1,7 +1,7 @@
 # Usuarios, roles y permisos — diseño
 
 **Fecha:** 2026-07-24
-**Estado:** F1 y F2 IMPLEMENTADAS. F3 pendiente (ver §6).
+**Estado:** F1, F2 y F3 IMPLEMENTADAS. Ver §6 y §7 para lo que quedó afuera.
 
 ---
 
@@ -278,12 +278,43 @@ para el personal. Mientras tanto el link se copia al portapapeles y se puede
 regenerar desde el listado, que es lo que faltaba de verdad: antes, perder el
 link significaba no poder hacer entrar a nadie.
 
-**F3 — Afinar.**
-`finanzas.ver_margenes` cableado en los cuatro lugares donde se filtra plata
-(cotizador, desglose de OT, panel, reportes), permisos de excepción
-(aprobar descuento, anular), auditoría de cambios de acceso — quién le dio qué
-a quién y cuándo, que hoy no existe del lado del tenant (`PlataformaEvento` es
-del control plane).
+**F3 — Afinar. HECHA.**
+
+*Ver márgenes, de verdad.* La plata se poda **en el backend**, con un
+interceptor que borra los campos sensibles de la respuesta cuando el usuario no
+tiene el permiso. Se activa con `@OcultaMargenes()` en los endpoints donde el
+costo viaja de arrastre —cotizador, orden de trabajo, presupuestos, reportes— y
+NO en el módulo Costos, donde el costo es el contenido y `costos.ver` ya decide
+quién entra: podarlo dejaría el módulo mostrando pantallas vacías.
+
+La lista de campos es **explícita y no un prefijo**, y esa decisión tiene un
+motivo concreto: el motor tiene `margenesNoImprimiblesMm`, `margenNoUsableMm` y
+`margenNoImprimibleMm`, que son márgenes FÍSICOS en milímetros. Podarlos por
+parecerse en el nombre rompería el nesting y el cálculo del pliego, en silencio
+y sólo para algunos usuarios. Hay un test que los defiende.
+
+Los campos se **borran**, no se ponen en cero: un cero es un dato, se suma, se
+promedia y termina en un reporte diciendo que la imprenta trabaja sin costos.
+
+En el front, un `PermisosProvider` en el layout deja preguntar `usePuede()`
+desde cualquier componente sin cablear props por cinco niveles. Con eso se
+esconden el tab **Finanzas** del panel, el tab **Costos** de la orden y el
+bloque **Margen bruto** del cotizador.
+
+*Permisos de excepción.* Dos, los que en una imprenta se piden y los autoriza
+otro: `comercial.aprobar_descuento` (aprobar un presupuesto por debajo del
+margen mínimo — cotizar no alcanza) y `administracion.anular` (descartar un
+comprobante o anular un cobro). Van con backfill: los roles ya sembrados no
+reciben permisos nuevos del catálogo por su cuenta —`sembrarPredefinidos` sólo
+crea los que faltan, para no pisar lo que el tenant personalizó— así que sin
+migración el administrador habría perdido la aprobación el día del deploy.
+
+*Auditoría.* Tabla `EventoAcceso`, append-only, con quién invitó, cambió de rol,
+quitó o devolvió acceso, y creó, editó o borró un rol. Los nombres van
+CONGELADOS y no por FK: si mañana el actor se da de baja, la línea tiene que
+seguir diciendo quién fue. Se muestra al pie de la pantalla de Usuarios.
+Registrarla es best-effort: que falle no puede voltear el cambio que el admin
+acaba de hacer, pero se loguea fuerte.
 
 F1 es la que no es opcional. F2 es la que pediste y se apoya entera en F1.
 
@@ -291,11 +322,10 @@ F1 es la que no es opcional. F2 es la que pediste y se apoya entera en F1.
 
 ## 7. Lo que queda abierto
 
-- **`finanzas.ver_margenes` en F1 o F3.** Ponerlo en F1 es más honesto —es el
-  permiso que más se pide— pero obliga a auditar cada lugar donde se muestra un
-  costo, y son muchos. Ponerlo en F3 deja el vendedor viendo márgenes un tiempo
-  más. Mi voto: la clave y el checkbox en F1 (para que el rol Vendedor ya lo
-  tenga apagado), el cableado fino en F3.
+- **Los tres lugares del front que esconden la plata son los que encontré.** El
+  backend poda la respuesta, así que un cuarto lugar que la mostrara vería
+  campos vacíos en vez de datos ajenos — se rompe feo, no filtra. Aun así, si
+  aparece una pantalla nueva que muestra costos, va con su `usePuede`.
 - **Un usuario, varios roles?** No. Un rol por membership; si hace falta la
   suma, se duplica un rol y se le agregan permisos. Los roles múltiples suenan
   flexibles y terminan en "¿por qué este tipo ve esto?" sin respuesta.

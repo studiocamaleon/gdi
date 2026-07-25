@@ -11,6 +11,7 @@ import { AuthGuard } from './auth/auth.guard';
 import { ImpersonacionGuard } from './auth/impersonacion.guard';
 import { RolesGuard } from './auth/roles.guard';
 import { PermisosGuard } from './auth/permisos.guard';
+import { MargenesInterceptor } from './auth/margenes.interceptor';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { TenantContextInterceptor } from './common/interceptors/tenant-context.interceptor';
 import { AuthModule } from './auth/auth.module';
@@ -111,6 +112,12 @@ import { SuscripcionesModule } from './suscripciones/suscripciones.module';
     {
       provide: APP_INTERCEPTOR,
       useClass: TenantContextInterceptor,
+    },
+    // Poda la plata de las respuestas marcadas con @OcultaMargenes cuando el
+    // usuario no puede verla. Ver auth/margenes.ts.
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: MargenesInterceptor,
     },
     {
       provide: APP_GUARD,

@@ -7,10 +7,12 @@ import {
   crearUsuario,
   editarUsuario,
   eliminarRol,
+  getHistorialAccesos,
   getRoles,
   getUsuarios,
   reenviarInvitacion,
   type CatalogoPermisos,
+  type EventoAcceso,
   type ListadoUsuarios,
   type RolDelTenant,
   type UsuarioDelTenant,
@@ -35,14 +37,17 @@ export function UsuariosView({
   roles: rolesIniciales,
   catalogo,
   empleados,
+  historial: historialInicial,
 }: {
   inicial: ListadoUsuarios;
   roles: RolDelTenant[];
   catalogo: CatalogoPermisos | null;
   empleados: EmpleadoOpcion[];
+  historial: EventoAcceso[];
 }) {
   const [datos, setDatos] = React.useState(inicial);
   const [roles, setRoles] = React.useState(rolesIniciales);
+  const [historial, setHistorial] = React.useState(historialInicial);
   /** null = cerrado; { rol: null } = rol nuevo. */
   const [editando, setEditando] = React.useState<{
     rol: RolDelTenant | null;
@@ -57,13 +62,18 @@ export function UsuariosView({
 
   const recargar = React.useCallback(async () => {
     try {
-      const [u, r] = await Promise.all([getUsuarios(), getRoles()]);
+      const [u, r, h] = await Promise.all([
+        getUsuarios(),
+        getRoles(),
+        getHistorialAccesos().catch(() => historialInicial),
+      ]);
       setDatos(u);
       setRoles(r);
+      setHistorial(h);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo actualizar.");
     }
-  }, []);
+  }, [historialInicial]);
 
   const reenviar = async (usuario: UsuarioDelTenant) => {
     setGuardando(usuario.id);
@@ -326,6 +336,40 @@ export function UsuariosView({
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="int-section-intro" style={{ marginTop: 26 }}>
+        <h3>Qué pasó con los accesos</h3>
+        <p>
+          Quién le dio, le cambió o le quitó el acceso a quién. Es la respuesta
+          a &ldquo;¿quién lo habilitó?&rdquo;, que hasta ahora no la tenía
+          nadie.
+        </p>
+      </div>
+      <div className="int-tpl-list" style={{ marginBottom: 26 }}>
+        {historial.length === 0 ? (
+          <div className="int-nt-vacio">
+            Todavía no se registró ningún cambio de acceso.
+          </div>
+        ) : (
+          historial.map((e) => (
+            <div className="int-nt-log-fila" key={e.id}>
+              <span className="int-nt-log-fecha">
+                {new Date(e.createdAt).toLocaleString("es-AR", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </span>
+              <div>
+                <div>{e.descripcion}</div>
+                <div className="int-nt-log-motivo">{e.actorNombre}</div>
+              </div>
+              <span className="int-pill">{e.tipo.replace(/_/g, " ")}</span>
+            </div>
+          ))
+        )}
       </div>
 
       {/* Borrar un rol con gente adentro exige decir a dónde van: dejarlos sin

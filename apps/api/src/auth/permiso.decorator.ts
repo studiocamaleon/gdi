@@ -14,7 +14,8 @@ export const SOLO_AUTENTICADO_KEY = 'soloAutenticado';
  * `gestionar` implica `ver`, así que pedir `costos.ver` deja pasar también a
  * quien puede gestionarlos. Ver docs/usuarios-roles-permisos-diseno.md
  */
-export const Permiso = (permiso: PermisoClave) => SetMetadata(PERMISO_KEY, permiso);
+export const Permiso = (permiso: PermisoClave) =>
+  SetMetadata(PERMISO_KEY, permiso);
 
 /**
  * Declara que basta con estar autenticado: no hay permiso que aplique.

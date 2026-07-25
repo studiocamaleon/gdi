@@ -27,6 +27,7 @@ import { AvanzarCompraDto } from './dto/avanzar-compra.dto';
 import { CompletarPasosLoteDto } from './dto/completar-pasos-lote.dto';
 import { Public } from '../auth/public.decorator';
 import { Permiso } from '../auth/permiso.decorator';
+import { OcultaMargenes } from '../auth/margenes.decorator';
 
 /**
  * La orden de trabajo la miran los dos lados del mostrador, así que el
@@ -39,6 +40,7 @@ import { Permiso } from '../auth/permiso.decorator';
  *
  * Por eso la base es `produccion.ver` y cada método dice lo suyo.
  */
+@OcultaMargenes()
 @Permiso('produccion.ver')
 @Controller('ordenes-trabajo')
 export class OrdenesTrabajoController {

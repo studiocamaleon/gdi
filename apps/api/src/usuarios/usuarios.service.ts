@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { RolSistema } from '@prisma/client';
@@ -39,6 +40,8 @@ const VIGENCIA_INVITACION_MS = 1000 * 60 * 60 * 24 * 7;
  */
 @Injectable()
 export class UsuariosService {
+  private readonly logger = new Logger(UsuariosService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly sessionCache: SessionCacheService,
@@ -202,6 +205,13 @@ export class UsuariosService {
       });
     });
 
+    await this.registrar(auth, {
+      tipo: 'usuario_invitado',
+      usuarioAfectadoNombre: dto.nombreCompleto?.trim() || email,
+      descripcion: `Le dio acceso a ${email} como ${rol.nombre}`,
+      datos: { rolId: rol.id },
+    });
+
     return {
       invitacionUrl: this.urlDeInvitacion(rawToken),
       yaTeniaCuenta: Boolean(existente?.passwordHash),
@@ -211,6 +221,10 @@ export class UsuariosService {
   async editar(auth: CurrentAuth, userId: string, dto: EditarUsuarioDto) {
     const membership = await this.prisma.membership.findUnique({
       where: { userId_tenantId: { userId, tenantId: auth.tenantId } },
+      include: {
+        user: { select: { email: true, nombreCompleto: true } },
+        rolDelTenant: { select: { nombre: true } },
+      },
     });
     if (!membership) throw new NotFoundException('Ese usuario no existe acá.');
 
@@ -257,6 +271,27 @@ export class UsuariosService {
       await this.prisma.authSession.updateMany({
         where: { userId, currentTenantId: auth.tenantId, revokedAt: null },
         data: { revokedAt: new Date() },
+      });
+    }
+
+    const quien = membership.user.nombreCompleto || membership.user.email;
+    if (rol) {
+      await this.registrar(auth, {
+        tipo: 'rol_cambiado',
+        usuarioAfectadoId: userId,
+        usuarioAfectadoNombre: quien,
+        descripcion: `${quien} pasó de ${membership.rolDelTenant?.nombre ?? 'sin rol'} a ${rol.nombre}`,
+        datos: { rolAnterior: membership.rolId, rolNuevo: rol.id },
+      });
+    }
+    if (dto.activa !== undefined && dto.activa !== membership.activa) {
+      await this.registrar(auth, {
+        tipo: dto.activa ? 'acceso_devuelto' : 'acceso_quitado',
+        usuarioAfectadoId: userId,
+        usuarioAfectadoNombre: quien,
+        descripcion: dto.activa
+          ? `Le devolvió el acceso a ${quien}`
+          : `Le quitó el acceso a ${quien}`,
       });
     }
 
@@ -307,6 +342,13 @@ export class UsuariosService {
           expiresAt: new Date(Date.now() + VIGENCIA_INVITACION_MS),
         },
       });
+    });
+
+    await this.registrar(auth, {
+      tipo: 'invitacion_reenviada',
+      usuarioAfectadoId: userId,
+      usuarioAfectadoNombre: membership.user.email,
+      descripcion: `Generó un link de acceso nuevo para ${membership.user.email}`,
     });
 
     return { invitacionUrl: this.urlDeInvitacion(rawToken) };
@@ -371,6 +413,11 @@ export class UsuariosService {
         permisos,
       },
     });
+    await this.registrar(auth, {
+      tipo: 'rol_creado',
+      descripcion: `Creó el rol ${rol.nombre}`,
+      datos: { rolId: rol.id, permisos },
+    });
     return { id: rol.id };
   }
 
@@ -425,6 +472,11 @@ export class UsuariosService {
     });
 
     this.sessionCache.invalidarTenant(auth.tenantId);
+    await this.registrar(auth, {
+      tipo: 'rol_editado',
+      descripcion: `Cambió el rol ${rol.nombre}`,
+      datos: { rolId, permisosAntes: rol.permisos, permisosDespues: permisos },
+    });
     return { ok: true as const };
   }
 
@@ -461,6 +513,14 @@ export class UsuariosService {
 
     await this.prisma.rol.delete({ where: { id: rolId } });
     this.sessionCache.invalidarTenant(auth.tenantId);
+    await this.registrar(auth, {
+      tipo: 'rol_eliminado',
+      descripcion: `Eliminó el rol ${rol.nombre}`,
+      datos: {
+        permisos: rol.permisos,
+        usuariosMudados: rol._count.memberships,
+      },
+    });
     return { ok: true as const };
   }
 
@@ -489,6 +549,66 @@ export class UsuariosService {
       })),
       skipDuplicates: true,
     });
+  }
+
+  // ── Auditoría ───────────────────────────────────────────────────────
+
+  /**
+   * Deja constancia de un cambio de acceso.
+   *
+   * Best-effort: que falle el registro no puede voltear el cambio que el admin
+   * acaba de hacer —quedaría un botón que a veces funciona y a veces no— pero
+   * se loguea fuerte, porque una auditoría con agujeros es peor que ninguna si
+   * nadie sabe que los tiene.
+   */
+  private async registrar(
+    auth: CurrentAuth,
+    evento: {
+      tipo: string;
+      descripcion: string;
+      usuarioAfectadoId?: string;
+      usuarioAfectadoNombre?: string;
+      datos?: Record<string, unknown>;
+    },
+  ) {
+    try {
+      await this.prisma.eventoAcceso.create({
+        data: {
+          tenantId: auth.tenantId,
+          actorUserId: auth.userId || null,
+          // El nombre del actor se congela: si mañana cambia de mail o se da de
+          // baja, la línea tiene que seguir diciendo quién fue.
+          actorNombre: auth.impersonacion?.actorNombre ?? auth.email,
+          tipo: evento.tipo,
+          usuarioAfectadoId: evento.usuarioAfectadoId ?? null,
+          usuarioAfectadoNombre: evento.usuarioAfectadoNombre ?? null,
+          descripcion: evento.descripcion,
+          datosJson: (evento.datos ?? null) as never,
+        },
+      });
+    } catch (error) {
+      this.logger.error(
+        `No pude registrar el evento de acceso ${evento.tipo}.`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
+  }
+
+  /** El historial que muestra la pantalla. Sólo lectura, sin paginar: son pocos. */
+  async historial(auth: CurrentAuth) {
+    const eventos = await this.prisma.eventoAcceso.findMany({
+      where: { tenantId: auth.tenantId },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+    return eventos.map((e) => ({
+      id: e.id,
+      tipo: e.tipo,
+      actorNombre: e.actorNombre,
+      usuarioAfectadoNombre: e.usuarioAfectadoNombre,
+      descripcion: e.descripcion,
+      createdAt: e.createdAt.toISOString(),
+    }));
   }
 
   // ── Internos ────────────────────────────────────────────────────────
@@ -566,6 +686,7 @@ export class UsuariosService {
     if (!rol) throw new NotFoundException('Ese rol no existe.');
     return {
       id: rol.id,
+      nombre: rol.nombre,
       /**
        * El enum sigue viajando en el JWT y lo leen los endpoints con @Roles, así
        * que hay que darle uno: sale del predefinido que corresponde, y un rol

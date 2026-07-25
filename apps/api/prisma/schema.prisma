@@ -607,6 +607,7 @@ model Tenant {
   integraciones                                    IntegracionTenant[]
   memberships                                      Membership[]
   roles                                            Rol[]
+  eventosAcceso                                    EventoAcceso[]
   authSessions                                     AuthSession[]
   invitations                                      Invitation[]
   clientes                                         Cliente[]
@@ -717,6 +718,39 @@ model User {
   pasosCompletados        OrdenTrabajoItemPaso[]  @relation("PasosCompletados")
   tramosPaso              OrdenTrabajoPasoTramo[] @relation("TramosPaso")
   ahorrosConsolidacion    AhorroConsolidacion[]   @relation("AhorrosConsolidacion")
+}
+
+/// Quién le cambió el acceso a quién, dentro de una empresa.
+///
+/// Es el registro que faltaba del lado del tenant: `PlataformaEvento` audita al
+/// staff de Grafo, no al administrador de la imprenta. Sin esto, "¿quién le dio
+/// acceso a facturación al de depósito?" no tiene respuesta — y es exactamente
+/// la pregunta que se hace cuando algo salió mal.
+///
+/// Append-only: no se edita ni se borra. Ver docs/usuarios-roles-permisos-diseno.md
+model EventoAcceso {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  /// Quién lo hizo. Null si fue el sistema (seed, backfill, control plane).
+  actorUserId String? @db.Uuid
+  /// Se congela el nombre: si mañana el actor cambia de mail o se da de baja,
+  /// la línea de auditoría tiene que seguir diciendo quién fue.
+  actorNombre String
+  /// 'usuario_invitado' | 'rol_cambiado' | 'acceso_quitado' | 'acceso_devuelto'
+  /// | 'invitacion_reenviada' | 'rol_creado' | 'rol_editado' | 'rol_eliminado'
+  tipo String
+  /// A quién le pasó, cuando aplica (los eventos de rol no tienen destinatario).
+  usuarioAfectadoId String? @db.Uuid
+  /// Congelado por lo mismo que `actorNombre`.
+  usuarioAfectadoNombre String?
+  /// La frase que se lee en el listado, ya armada.
+  descripcion String
+  /// El detalle para el que quiera mirar fino: permisos antes y después, etc.
+  datosJson Json?
+  createdAt DateTime @default(now())
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
 }
 
 /// Rol del tenant: un nombre y el conjunto de permisos que junta.
