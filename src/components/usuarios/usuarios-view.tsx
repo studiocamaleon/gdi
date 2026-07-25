@@ -20,9 +20,24 @@ import {
   type UsuarioDelTenant,
 } from "@/lib/usuarios-api";
 import { RolEditor } from "@/components/usuarios/rol-editor";
+import { TabSeguridad } from "@/components/usuarios/tab-seguridad";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 
 type EmpleadoOpcion = { id: string; nombreCompleto: string };
+
+type TabUsuarios = "usuarios" | "roles" | "seguridad" | "logs";
+
+/**
+ * Cuatro preguntas distintas, cuatro pestañas. Antes era un scroll largo con
+ * los tres bloques apilados y había que bajar hasta el fondo para ver quién
+ * había tocado qué.
+ */
+const TABS: Array<{ key: TabUsuarios; label: string }> = [
+  { key: "usuarios", label: "Usuarios" },
+  { key: "roles", label: "Roles y permisos" },
+  { key: "seguridad", label: "Seguridad" },
+  { key: "logs", label: "Registro de actividad" },
+];
 
 /**
  * Configuración → Usuarios: quién entra al sistema y con qué rol.
@@ -66,6 +81,7 @@ export function UsuariosView({
     null,
   );
   const [guardando, setGuardando] = React.useState<string | null>(null);
+  const [tab, setTab] = React.useState<TabUsuarios>("usuarios");
 
   const recargar = React.useCallback(async () => {
     try {
@@ -176,20 +192,38 @@ export function UsuariosView({
             legajos.
           </div>
         </div>
-        <button
-          className="btn primary"
-          onClick={() => setInvitando(true)}
-          disabled={invitando || sinCupo}
-          title={
-            sinCupo
-              ? `Tu plan incluye ${datos.limite} usuarios y ya los estás usando.`
-              : undefined
-          }
-        >
-          Dar acceso a alguien
-        </button>
+        {/* Sólo donde significa algo: en Roles o en el registro, un botón de
+            alta de usuarios es ruido. */}
+        {tab === "usuarios" && (
+          <button
+            className="btn primary"
+            onClick={() => setInvitando(true)}
+            disabled={invitando || sinCupo}
+            title={
+              sinCupo
+                ? `Tu plan incluye ${datos.limite} usuarios y ya los estás usando.`
+                : undefined
+            }
+          >
+            Dar acceso a alguien
+          </button>
+        )}
       </div>
 
+      <nav className="int-tabs">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            className={tab === t.key ? "on" : ""}
+            onClick={() => setTab(t.key)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </nav>
+
+      {tab === "usuarios" && (
+      <>
       {datos.limite !== null && (
         <div className="usr-cupo">
           <strong>
@@ -331,6 +365,11 @@ export function UsuariosView({
         ))}
       </div>
 
+      </>
+      )}
+
+      {tab === "roles" && (
+      <>
       <div className="int-section-intro">
         <h3>Roles</h3>
         <p>
@@ -401,12 +440,19 @@ export function UsuariosView({
         ))}
       </div>
 
-      <div className="int-section-intro" style={{ marginTop: 26 }}>
+      </>
+      )}
+
+      {tab === "seguridad" && <TabSeguridad onCambio={recargar} />}
+
+      {tab === "logs" && (
+      <>
+      <div className="int-section-intro">
         <h3>Qué pasó con los accesos</h3>
         <p>
-          Quién le dio, le cambió o le quitó el acceso a quién. Es la respuesta
-          a &ldquo;¿quién lo habilitó?&rdquo;, que hasta ahora no la tenía
-          nadie.
+          Quién le dio, le cambió o le quitó el acceso a quién, y cuándo. Es la
+          respuesta a &ldquo;¿quién lo habilitó?&rdquo;, que hasta ahora no la
+          tenía nadie.
         </p>
       </div>
       <div className="int-tpl-list" style={{ marginBottom: 26 }}>
@@ -433,6 +479,9 @@ export function UsuariosView({
           ))
         )}
       </div>
+
+      </>
+      )}
 
       {/* Borrar un rol con gente adentro exige decir a dónde van: dejarlos sin
           rol los tiraría al fallback del enum, que es un permiso distinto del
