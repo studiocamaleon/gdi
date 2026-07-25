@@ -7,7 +7,7 @@ import { ArrowLeftIcon, CogIcon, PlusIcon, StarIcon, Trash2Icon } from "lucide-r
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { HumanSelect } from "@/components/ui/human-select";
 import { Input } from "@/components/ui/input";
@@ -225,11 +225,11 @@ export function ProductoRutasEditorView({ producto, rutasDisponibles, embedded =
                   Configurados: {ra.configPasos.length}/{ra.ruta.pasos.length}
                 </div>
                 <div className="flex items-center gap-2 pt-2">
-                  <Link href={`/productos-servicios/${producto.id}?tab=pasos&rutaAltId=${ra.id}`}>
-                    <Button variant="default" size="sm">
-                      <CogIcon className="mr-1 size-3" />
-                      Configurar pasos
-                    </Button>
+                  <Link href={`/productos-servicios/${producto.id}?tab=pasos&rutaAltId=${ra.id}`}
+                    className={buttonVariants({ variant: "default", size: "sm" })}
+                  >
+                    <CogIcon className="mr-1 size-3" />
+                    Configurar pasos
                   </Link>
                   {!ra.esPreferida && (
                     <Button

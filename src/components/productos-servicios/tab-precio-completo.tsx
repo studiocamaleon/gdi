@@ -35,7 +35,7 @@ import {
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardAction,
@@ -78,6 +78,7 @@ import {
 } from "@/lib/productos-servicios-api";
 import { getClientes } from "@/lib/clientes-api";
 import type { ClienteDetalle } from "@/lib/clientes";
+import { cn } from "@/lib/utils";
 
 interface Props {
   /** ID del producto; si es null el producto aún no existe (crear mode no guardado). */
@@ -285,11 +286,11 @@ function SeccionImpuestos({
           </CardDescription>
         </div>
         <CardAction className="pricing-section-action">
-          <Link href="/productos-servicios/impuestos-catalogo">
-            <Button className="btn" variant="outline" size="sm">
-              <ExternalLinkIcon className="mr-2 size-3" />
-              Administrar catálogo
-            </Button>
+          <Link href="/productos-servicios/impuestos-catalogo"
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "btn")}
+          >
+            <ExternalLinkIcon className="mr-2 size-3" />
+            Administrar catálogo
           </Link>
         </CardAction>
       </CardHeader>
@@ -436,11 +437,11 @@ function SeccionComisiones({
           </CardDescription>
         </div>
         <CardAction className="pricing-section-action">
-          <Link href="/productos-servicios/comisiones-catalogo">
-            <Button className="btn" variant="outline" size="sm">
-              <ExternalLinkIcon className="mr-2 size-3" />
-              Administrar catálogo
-            </Button>
+          <Link href="/productos-servicios/comisiones-catalogo"
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "btn")}
+          >
+            <ExternalLinkIcon className="mr-2 size-3" />
+            Administrar catálogo
           </Link>
         </CardAction>
       </CardHeader>
