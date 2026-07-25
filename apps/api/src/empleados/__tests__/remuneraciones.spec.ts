@@ -7,6 +7,7 @@ import {
 } from '../remuneraciones.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { CurrentAuth } from '../../auth/auth.types';
+import type { NominaCostosService } from '../nomina-costos.service';
 
 /**
  * Las dos reglas que no se pueden romper: cómo se prorratea el aguinaldo y
@@ -67,7 +68,17 @@ function armar(opts: { existeEmpleado?: boolean; yaHay?: unknown } = {}) {
     $transaction: jest.fn((cb: (t: unknown) => unknown) => cb(tx)),
   } as unknown as PrismaService;
 
-  return { service: new RemuneracionesService(prisma), updateMany, create };
+  // El puente con Costos se stubea: acá se prueban las reglas de la
+  // remuneración, no que los centros se recalculen (eso es su propio test).
+  const sincronizarEmpleado = jest.fn().mockResolvedValue(undefined);
+  const nominaCostos = { sincronizarEmpleado } as unknown as NominaCostosService;
+
+  return {
+    service: new RemuneracionesService(prisma, nominaCostos),
+    updateMany,
+    create,
+    sincronizarEmpleado,
+  };
 }
 
 describe('remuneraciones', () => {
@@ -137,6 +148,22 @@ describe('remuneraciones', () => {
           data: { vigenteHasta: '2026-07' },
         }),
       );
+    });
+
+    /**
+     * Sin esto, cargar un aumento dejaría las tarifas de todos sus centros
+     * calculadas con el sueldo viejo, en silencio.
+     */
+    it('cargar un sueldo recalcula los centros donde la persona trabaja', async () => {
+      const { service, sincronizarEmpleado } = armar();
+
+      await service.crear(AUTH, 'e1', {
+        vigenteDesde: '2026-08',
+        sueldoNeto: '2500000',
+        cargasSociales: '1250000',
+      });
+
+      expect(sincronizarEmpleado).toHaveBeenCalledWith('t1', 'e1');
     });
 
     it('no deja dos remuneraciones arrancando el mismo mes', async () => {

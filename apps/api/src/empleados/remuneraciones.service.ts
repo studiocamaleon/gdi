@@ -1,13 +1,16 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   NotFoundException,
+  forwardRef,
 } from '@nestjs/common';
 import { EmpleadoRemuneracion, Prisma } from '@prisma/client';
 
 import { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpsertRemuneracionDto } from './dto/remuneracion.dto';
+import { NominaCostosService } from './nomina-costos.service';
 
 /**
  * La remuneración de cada persona, con vigencia.
@@ -46,7 +49,16 @@ export function mesAnterior(periodo: string): string {
 
 @Injectable()
 export class RemuneracionesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    /**
+     * Se resuelve tarde a propósito: NominaCostosService depende de este
+     * service, así que inyectarlo derecho sería una dependencia circular
+     * dentro del módulo. `forwardRef` la corta.
+     */
+    @Inject(forwardRef(() => NominaCostosService))
+    private readonly nominaCostos: NominaCostosService,
+  ) {}
 
   /**
    * El costo mensual real de una persona.
@@ -212,6 +224,11 @@ export class RemuneracionesService {
       });
     });
 
+    // Los centros donde trabaje quedan con el sueldo viejo hasta que esto
+    // corra. No se espera dentro de la transacción: recalcular tarifas no puede
+    // hacer fallar el registro de un aumento.
+    await this.nominaCostos.sincronizarEmpleado(auth.tenantId, empleadoId);
+
     return this.calcular(creada);
   }
 
@@ -237,6 +254,7 @@ export class RemuneracionesService {
         notas: dto.notas ?? null,
       },
     });
+    await this.nominaCostos.sincronizarEmpleado(auth.tenantId, empleadoId);
     return this.calcular(actualizada);
   }
 
@@ -272,6 +290,8 @@ export class RemuneracionesService {
         });
       }
     });
+
+    await this.nominaCostos.sincronizarEmpleado(auth.tenantId, empleadoId);
   }
 
   private validarRango(dto: UpsertRemuneracionDto): void {

@@ -224,49 +224,6 @@ const additionalCostCategoryItems = categoriaComponenteCostoItems.filter(
   (item) => additionalCostCategories.has(item.value),
 );
 
-function createEmployeeDerivedComponent(params: {
-  part: "sueldos" | "cargas";
-  empleadoId: string;
-  empleadoNombre: string;
-  porcentajeAsignacion: number;
-  current?: LocalComponente;
-}) {
-  const sueldoNeto = normalizeNumber(
-    getDetailValue(params.current ?? createComponent(), "sueldoNeto"),
-  );
-  const cargasSociales = normalizeNumber(
-    getDetailValue(params.current ?? createComponent(), "cargasSociales"),
-  );
-  const baseMensual = params.part === "sueldos" ? sueldoNeto : cargasSociales;
-  const importeMensual = Number(
-    ((baseMensual * params.porcentajeAsignacion) / 100).toFixed(2),
-  );
-
-  return {
-    id: params.current?.id ?? createLocalId(),
-    categoria: params.part,
-    nombre:
-      params.part === "sueldos"
-        ? `Sueldo neto - ${params.empleadoNombre}`
-        : `Cargas sociales - ${params.empleadoNombre}`,
-    origen: "sugerido" as const,
-    importeMensual,
-    notas: params.current?.notas ?? "",
-    detalle: {
-      kind: "empleado",
-      sourceKey: params.empleadoId,
-      empleadoId: params.empleadoId,
-      empleadoNombre: params.empleadoNombre,
-      part: params.part,
-      sueldoNeto,
-      cargasSociales,
-      porcentajeAsignacion: params.porcentajeAsignacion,
-      moneda: systemCurrencyCode,
-      baseMensual,
-    },
-  } satisfies LocalComponente;
-}
-
 function calculateMachineCostPreview(
   item: CentroCostoRecursoMaquinariaPeriodo,
 ) {
@@ -375,29 +332,20 @@ function syncDerivedComponents(params: {
     }
 
     if (resource.tipoRecurso === "empleado" && resource.empleadoId) {
-      const empleadoNombre =
-        params.empleadoLabelById.get(resource.empleadoId) ??
-        "Persona sin nombre";
-      const porcentajeAsignacion = resource.porcentajeAsignacion ?? 0;
-      const sueldoKey = `empleado:${resource.empleadoId}:sueldos`;
-      const cargasKey = `empleado:${resource.empleadoId}:cargas`;
-
-      derivedComponents.push(
-        createEmployeeDerivedComponent({
-          part: "sueldos",
-          empleadoId: resource.empleadoId,
-          empleadoNombre,
-          porcentajeAsignacion,
-          current: existingDerived.get(sueldoKey),
-        }),
-        createEmployeeDerivedComponent({
-          part: "cargas",
-          empleadoId: resource.empleadoId,
-          empleadoNombre,
-          porcentajeAsignacion,
-          current: existingDerived.get(cargasKey),
-        }),
+      // Los componentes de sueldo los DERIVA EL API cruzando esta dedicación
+      // con la remuneración vigente del legajo. Acá sólo se arrastran los que
+      // ya vinieron: recalcularlos en el navegador es lo que hacía que el mismo
+      // sueldo terminara distinto en cada centro.
+      //
+      // Si la persona se acaba de agregar todavía no hay componente y no se
+      // inventa uno: aparece al guardar, con el sueldo de su legajo.
+      const yaEstaban = [
+        existingDerived.get(`empleado:${resource.empleadoId}:sueldos`),
+        existingDerived.get(`empleado:${resource.empleadoId}:cargas`),
+      ].filter((componente): componente is LocalComponente =>
+        Boolean(componente),
       );
+      derivedComponents.push(...yaEstaban);
       continue;
     }
   }
@@ -2240,9 +2188,10 @@ export function CentroCostoConfigurator({
                           Personas asignadas
                         </CardTitle>
                         <CardDescription>
-                          Pedimos sueldo neto y cargas sociales por persona. El
-                          sistema prorratea cada monto según el porcentaje del
-                          paso 2.
+                          El sueldo sale del legajo de cada persona: acá sólo se
+                          define qué parte de su tiempo trabaja en este centro.
+                          Para cambiarlo, entrá a su legajo en Registros →
+                          Empleados.
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="flex flex-col gap-3">
@@ -2280,156 +2229,57 @@ export function CentroCostoConfigurator({
                                     className="max-w-sm text-pretty"
                                     side="left"
                                   >
-                                    Cargá el sueldo neto y las cargas sociales
-                                    del mes. El sistema toma solo la parte
-                                    proporcional a este centro según la
-                                    dedicación configurada.
+                                    El sueldo y las cargas salen del legajo, con
+                                    el aguinaldo ya prorrateado. Acá se imputa
+                                    sólo la parte proporcional a la dedicación
+                                    configurada en el paso 2. Se carga en un
+                                    lugar y lo consumen todos los centros.
                                   </TooltipContent>
                                 </Tooltip>
                               </div>
 
-                              <FieldGroup className="grid gap-4 lg:grid-cols-2">
-                                <Field>
-                                  <FieldLabel>
-                                    Sueldo neto ({systemCurrencyCode})
-                                  </FieldLabel>
-                                  <Input
-                                    inputMode="decimal"
-                                    placeholder="0"
-                                    value={
+                              <div className="grid gap-3 rounded-xl bg-muted/10 px-4 py-3 text-sm sm:grid-cols-3">
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="text-xs text-muted-foreground">
+                                    Sueldo del legajo
+                                  </span>
+                                  <span className="font-medium">
+                                    {formatMoney(
                                       normalizeNumber(
                                         getDetailValue(
                                           sueldo ?? createComponent(),
                                           "sueldoNeto",
                                         ),
-                                      ) === 0
-                                        ? ""
-                                        : String(
-                                            normalizeNumber(
-                                              getDetailValue(
-                                                sueldo ?? createComponent(),
-                                                "sueldoNeto",
-                                              ),
-                                            ),
-                                          )
-                                    }
-                                    onChange={(event) =>
-                                      sueldo
-                                        ? updateComponent(
-                                            sueldo.id,
-                                            (current) =>
-                                              createEmployeeDerivedComponent({
-                                                part: "sueldos",
-                                                empleadoId:
-                                                  resource.empleadoId ?? "",
-                                                empleadoNombre,
-                                                porcentajeAsignacion:
-                                                  resource.porcentajeAsignacion ??
-                                                  0,
-                                                current: {
-                                                  ...current,
-                                                  detalle: {
-                                                    ...(current.detalle ?? {}),
-                                                    sueldoNeto:
-                                                      event.target.value === ""
-                                                        ? undefined
-                                                        : Number(
-                                                            event.target.value,
-                                                          ) || 0,
-                                                  },
-                                                },
-                                              }),
-                                          )
-                                        : undefined
-                                    }
-                                  />
-                                </Field>
-                                <Field>
-                                  <FieldLabel>
-                                    Cargas sociales ({systemCurrencyCode})
-                                  </FieldLabel>
-                                  <Input
-                                    inputMode="decimal"
-                                    placeholder="0"
-                                    value={
+                                      ),
+                                    )}
+                                  </span>
+                                </div>
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="text-xs text-muted-foreground">
+                                    Cargas sociales
+                                  </span>
+                                  <span className="font-medium">
+                                    {formatMoney(
                                       normalizeNumber(
                                         getDetailValue(
                                           cargas ?? createComponent(),
                                           "cargasSociales",
                                         ),
-                                      ) === 0
-                                        ? ""
-                                        : String(
-                                            normalizeNumber(
-                                              getDetailValue(
-                                                cargas ?? createComponent(),
-                                                "cargasSociales",
-                                              ),
-                                            ),
-                                          )
-                                    }
-                                    onChange={(event) =>
-                                      cargas
-                                        ? updateComponent(
-                                            cargas.id,
-                                            (current) =>
-                                              createEmployeeDerivedComponent({
-                                                part: "cargas",
-                                                empleadoId:
-                                                  resource.empleadoId ?? "",
-                                                empleadoNombre,
-                                                porcentajeAsignacion:
-                                                  resource.porcentajeAsignacion ??
-                                                  0,
-                                                current: {
-                                                  ...current,
-                                                  detalle: {
-                                                    ...(current.detalle ?? {}),
-                                                    cargasSociales:
-                                                      event.target.value === ""
-                                                        ? undefined
-                                                        : Number(
-                                                            event.target.value,
-                                                          ) || 0,
-                                                  },
-                                                },
-                                              }),
-                                          )
-                                        : undefined
-                                    }
-                                  />
-                                </Field>
-                              </FieldGroup>
-
-                              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-muted/10 px-4 py-3 text-sm">
-                                <span className="text-muted-foreground">
-                                  Base mensual:{" "}
-                                  <span className="font-medium text-foreground">
-                                    {formatMoney(
-                                      normalizeNumber(
-                                        getDetailValue(
-                                          sueldo ?? createComponent(),
-                                          "sueldoNeto",
-                                        ),
-                                      ) +
-                                        normalizeNumber(
-                                          getDetailValue(
-                                            cargas ?? createComponent(),
-                                            "cargasSociales",
-                                          ),
-                                        ),
+                                      ),
                                     )}
                                   </span>
-                                </span>
-                                <span className="text-muted-foreground">
-                                  Costo imputado:{" "}
-                                  <span className="font-medium text-foreground">
+                                </div>
+                                <div className="flex flex-col gap-0.5 sm:text-right">
+                                  <span className="text-xs text-muted-foreground">
+                                    Imputa a este centro
+                                  </span>
+                                  <span className="font-semibold">
                                     {formatMoney(
                                       (sueldo?.importeMensual ?? 0) +
                                         (cargas?.importeMensual ?? 0),
                                     )}
                                   </span>
-                                </span>
+                                </div>
                               </div>
                             </div>
                           ),

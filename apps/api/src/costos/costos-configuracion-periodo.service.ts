@@ -8,6 +8,7 @@ import {
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { CostosCatalogoService } from './costos-catalogo.service';
+import { NominaCostosService } from '../empleados/nomina-costos.service';
 import { CostosMapper } from './costos.mapper';
 import { CostosRepartoService } from './costos-reparto.service';
 import { CostosTarifasService } from './costos-tarifas.service';
@@ -31,6 +32,7 @@ export class CostosConfiguracionPeriodoService {
     private readonly reparto: CostosRepartoService,
     private readonly tarifas: CostosTarifasService,
     private readonly catalogo: CostosCatalogoService,
+    private readonly nominaCostos: NominaCostosService,
   ) {}
 
   async getCentroConfiguracion(auth: CurrentAuth, id: string, periodo: string) {
@@ -147,6 +149,15 @@ export class CostosConfiguracionPeriodoService {
         normalizedPeriodo,
         payload.componentesCosto,
       );
+      // Después de los componentes, no antes: `replaceCentroComponentesCosto`
+      // preserva los de sueldo pero la dotación puede haber cambiado en el
+      // mismo guardado, así que hay que rehacerlos con la nueva.
+      await this.nominaCostos.sincronizarCentroPeriodo(
+        auth.tenantId,
+        id,
+        normalizedPeriodo,
+        tx,
+      );
 
       const recursosConMaquinaria = await tx.centroCostoRecurso.findMany({
         where: {
@@ -220,13 +231,23 @@ export class CostosConfiguracionPeriodoService {
     );
 
     const recursos = await this.prisma.$transaction(async (tx) => {
-      return this.replaceCentroRecursosInTx(
+      const guardados = await this.replaceCentroRecursosInTx(
         tx,
         auth,
         id,
         normalizedPeriodo,
         payload,
       );
+      // Cambió quién trabaja acá o con qué dedicación: los componentes de
+      // sueldo se rehacen desde el legajo. Va DENTRO de la transacción para que
+      // no quede un centro con gente nueva y los sueldos de la dotación vieja.
+      await this.nominaCostos.sincronizarCentroPeriodo(
+        auth.tenantId,
+        id,
+        normalizedPeriodo,
+        tx,
+      );
+      return guardados;
     });
 
     return recursos.map((recurso) => this.mapper.toRecursoResponse(recurso));
@@ -641,17 +662,32 @@ export class CostosConfiguracionPeriodoService {
     periodo: string,
     payload: ReplaceCentroComponentesCostoDto,
   ) {
+    // Los componentes de sueldo de una PERSONA no entran acá: los deriva el
+    // legajo (NominaCostosService). Si este método los borrara y reescribiera
+    // con lo que mandó el navegador, volveríamos al problema original —el mismo
+    // sueldo tipeado distinto en cada centro—. Se preservan y se ignora
+    // cualquier intento de mandarlos desde afuera.
     await tx.centroCostoComponenteCostoPeriodo.deleteMany({
       where: {
         tenantId: auth.tenantId,
         centroCostoId: id,
         periodo,
+        empleadoId: null,
       },
     });
 
-    if (payload.componentes.length > 0) {
+    const componentesPropios = payload.componentes.filter(
+      (componente) =>
+        !(
+          componente.detalle &&
+          typeof componente.detalle === 'object' &&
+          'empleadoId' in componente.detalle
+        ),
+    );
+
+    if (componentesPropios.length > 0) {
       await tx.centroCostoComponenteCostoPeriodo.createMany({
-        data: payload.componentes.map((componente) => ({
+        data: componentesPropios.map((componente) => ({
           tenantId: auth.tenantId,
           centroCostoId: id,
           periodo,
