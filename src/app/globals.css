@@ -31686,6 +31686,25 @@ body:has(.t-app) {
 
 .arch-uso-bar.alerta i { background: var(--signal, #c2410c); }
 
+/* Lo que queda libre. Es la lectura que la gente busca —cuánto me entra
+   todavía—, así que va en el cuerpo y no como leyenda de la barra. */
+.arch-uso-restante {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted-text, #6b6b73);
+}
+.arch-uso-restante b { color: var(--ink); font-weight: 620; }
+
+.arch-uso-plan {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  color: var(--muted-text, #6b6b73);
+}
+
 .arch-uso-alerta {
   font-size: 11.5px;
   line-height: 1.5;

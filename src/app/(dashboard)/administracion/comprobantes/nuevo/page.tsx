@@ -25,7 +25,7 @@ function SinConfig({ motivo, cta }: { motivo: string; cta: string }) {
         </h1>
         <p style={{ color: "var(--muted-text)", fontSize: 13.5 }}>{motivo}</p>
         <Link
-          href="/administracion/datos-fiscales"
+          href="/configuracion/datos-fiscales"
           className="btn btn-primary"
           style={{ marginTop: 20, display: "inline-flex" }}
         >

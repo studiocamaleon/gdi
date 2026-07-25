@@ -186,11 +186,6 @@ export const NAV: NavItem[] = [
         label: "Métodos de pago",
         href: "/administracion/metodos-pago",
       },
-      {
-        key: "datos-fiscales",
-        label: "Datos fiscales",
-        href: "/administracion/datos-fiscales",
-      },
     ],
   },
   // Reportes fue durante un tiempo el "Panel general": ocho vistas como tabs de
@@ -252,6 +247,19 @@ export const NAV: NavItem[] = [
         key: "usuarios",
         label: "Usuarios",
         href: "/configuracion/usuarios",
+      },
+      // Vive acá y no en Administración: es la puesta a punto del emisor
+      // —quién factura, con qué logo, desde qué punto de venta—, no una
+      // operación del día a día. Se lo configura una vez y se lo olvida.
+      {
+        key: "datos-fiscales",
+        label: "Datos fiscales",
+        href: "/configuracion/datos-fiscales",
+      },
+      {
+        key: "almacenamiento",
+        label: "Almacenamiento",
+        href: "/configuracion/almacenamiento",
       },
       {
         key: "integraciones",

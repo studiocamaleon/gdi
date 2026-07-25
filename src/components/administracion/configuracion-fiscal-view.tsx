@@ -13,7 +13,6 @@ import {
 import { toast } from "sonner";
 
 import { LogoTenantCard } from "@/components/archivos/logo-tenant-card";
-import { UsoAlmacenamientoCard } from "@/components/archivos/uso-almacenamiento-card";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import type { LogoTenant } from "@/lib/archivos-api";
 import {
@@ -222,10 +221,6 @@ export function ConfiguracionFiscalView({
                 nombreNegocio={form.razonSocial || "Grafo"}
                 logoInicial={logoInicial}
               />
-            </div>
-            <div className="arc-card-sec">
-              <div className="arc-sec-t">Almacenamiento</div>
-              <UsoAlmacenamientoCard />
             </div>
           </div>
 
