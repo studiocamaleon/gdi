@@ -15,7 +15,9 @@ import { UpsertEstacionDto } from './dto/upsert-estacion.dto';
 import { CrearDiaNoLaborableDto } from './dto/crear-dia-no-laborable.dto';
 import { ActualizarConfiguracionProduccionDto } from './dto/actualizar-configuracion-produccion.dto';
 import { SimularNestingDto } from './dto/simular-nesting.dto';
+import { Permiso } from '../auth/permiso.decorator';
 
+@Permiso('produccion.ver')
 @Controller('produccion')
 export class ProduccionController {
   constructor(private readonly service: ProduccionService) {}
@@ -45,6 +47,7 @@ export class ProduccionController {
    * El simulador no tiene packer propio: acomoda con el mismo nesting que
    * cotizó, para que el ahorro compare dos acomodos equivalentes.
    */
+  @Permiso('produccion.gestionar')
   @Post('simulador/nesting')
   simuladorNesting(
     @CurrentSession() auth: CurrentAuth,
@@ -72,6 +75,7 @@ export class ProduccionController {
     return this.service.getConfiguracion(auth.tenantId);
   }
 
+  @Permiso('produccion.gestionar')
   @Put('configuracion')
   actualizarConfiguracion(
     @CurrentSession() auth: CurrentAuth,
@@ -87,6 +91,7 @@ export class ProduccionController {
     return this.service.findDiasNoLaborables(auth.tenantId);
   }
 
+  @Permiso('produccion.gestionar')
   @Post('dias-no-laborables')
   crearDiaNoLaborable(
     @CurrentSession() auth: CurrentAuth,
@@ -95,6 +100,7 @@ export class ProduccionController {
     return this.service.crearDiaNoLaborable(auth, payload);
   }
 
+  @Permiso('produccion.gestionar')
   @Delete('dias-no-laborables/:id')
   eliminarDiaNoLaborable(
     @CurrentSession() auth: CurrentAuth,
@@ -103,6 +109,7 @@ export class ProduccionController {
     return this.service.eliminarDiaNoLaborable(auth, id);
   }
 
+  @Permiso('produccion.gestionar')
   @Post('estaciones')
   createEstacion(
     @CurrentSession() auth: CurrentAuth,
@@ -111,6 +118,7 @@ export class ProduccionController {
     return this.service.createEstacion(auth, payload);
   }
 
+  @Permiso('produccion.gestionar')
   @Put('estaciones/:id')
   updateEstacion(
     @CurrentSession() auth: CurrentAuth,
@@ -120,11 +128,13 @@ export class ProduccionController {
     return this.service.updateEstacion(auth, id, payload);
   }
 
+  @Permiso('produccion.gestionar')
   @Patch('estaciones/:id/toggle')
   toggleEstacion(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.service.toggleEstacion(auth, id);
   }
 
+  @Permiso('produccion.gestionar')
   @Delete('estaciones/:id')
   deleteEstacion(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.service.deleteEstacion(auth, id);

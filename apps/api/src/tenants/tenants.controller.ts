@@ -3,11 +3,18 @@ import { RolSistema } from '@prisma/client';
 import { ArchivosService } from '../archivos/archivos.service';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import { Roles } from '../auth/roles.decorator';
+import { Permiso, SoloAutenticado } from '../auth/permiso.decorator';
 import { SwitchTenantDto } from '../auth/dto/switch-tenant.dto';
 import { DefinirLogoTenantDto } from './dto/logo-tenant.dto';
 import { TenantsService } from './tenants.service';
 import type { CurrentAuth } from '../auth/auth.types';
 
+/**
+ * Leer la empresa en la que estoy parado y cambiar de empresa son cosas de la
+ * sesión, no de un módulo: sin esto, un operario no podría ni cargar el
+ * dashboard. Lo que sí pide permiso es tocar la marca del negocio.
+ */
+@SoloAutenticado()
 @Controller('tenants')
 export class TenantsController {
   constructor(
@@ -24,6 +31,7 @@ export class TenantsController {
 
   /** Cambiar la marca del negocio no es cosa de un operador. */
   @Put('logo')
+  @Permiso('configuracion.gestionar')
   @Roles(RolSistema.ADMINISTRADOR, RolSistema.SUPERVISOR)
   definirLogo(
     @CurrentSession() auth: CurrentAuth,
@@ -33,6 +41,7 @@ export class TenantsController {
   }
 
   @Delete('logo')
+  @Permiso('configuracion.gestionar')
   @Roles(RolSistema.ADMINISTRADOR, RolSistema.SUPERVISOR)
   async quitarLogo(@CurrentSession() auth: CurrentAuth): Promise<{ ok: true }> {
     await this.archivos.quitarLogo(auth);

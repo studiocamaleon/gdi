@@ -13,7 +13,9 @@ import { CurrentSession } from '../auth/current-auth.decorator';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { UpsertMaquinaDto } from './dto/upsert-maquina.dto';
 import { MaquinariaService } from './maquinaria.service';
+import { Permiso } from '../auth/permiso.decorator';
 
+@Permiso('costos.ver')
 @Controller('maquinaria')
 export class MaquinariaController {
   constructor(private readonly maquinariaService: MaquinariaService) {}
@@ -31,6 +33,7 @@ export class MaquinariaController {
     return this.maquinariaService.findOne(auth, id);
   }
 
+  @Permiso('costos.gestionar')
   @Post()
   create(
     @CurrentSession() auth: CurrentAuth,
@@ -39,6 +42,7 @@ export class MaquinariaController {
     return this.maquinariaService.create(auth, payload);
   }
 
+  @Permiso('costos.gestionar')
   @Put(':id')
   update(
     @CurrentSession() auth: CurrentAuth,
@@ -48,6 +52,7 @@ export class MaquinariaController {
     return this.maquinariaService.update(auth, id, payload);
   }
 
+  @Permiso('costos.gestionar')
   @Patch(':id/toggle')
   toggle(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.maquinariaService.toggle(auth, id);

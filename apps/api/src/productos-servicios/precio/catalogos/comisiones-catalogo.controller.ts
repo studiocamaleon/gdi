@@ -17,6 +17,7 @@ import {
   ActualizarComisionCatalogoDto,
   CrearComisionCatalogoDto,
 } from '../dto/comision-catalogo.dto';
+import { Permiso } from '../../../auth/permiso.decorator';
 
 interface RequestWithAuth extends Request {
   auth?: { tenantId: string; userId: string };
@@ -28,6 +29,7 @@ function tenantId(req: RequestWithAuth): string {
   return t;
 }
 
+@Permiso('costos.ver')
 @Controller('productos-servicios/comisiones-catalogo')
 export class ComisionesCatalogoController {
   constructor(private readonly service: ComisionesCatalogoService) {}
@@ -46,6 +48,7 @@ export class ComisionesCatalogoController {
     return this.service.obtener(tenantId(req), id);
   }
 
+  @Permiso('costos.gestionar')
   @Post()
   async crear(
     @Req() req: RequestWithAuth,
@@ -54,6 +57,7 @@ export class ComisionesCatalogoController {
     return this.service.crear(tenantId(req), dto);
   }
 
+  @Permiso('costos.gestionar')
   @Patch(':id')
   async actualizar(
     @Req() req: RequestWithAuth,
@@ -63,6 +67,7 @@ export class ComisionesCatalogoController {
     return this.service.actualizar(tenantId(req), id, dto);
   }
 
+  @Permiso('costos.gestionar')
   @Delete(':id')
   @HttpCode(200)
   async eliminar(@Req() req: RequestWithAuth, @Param('id') id: string) {

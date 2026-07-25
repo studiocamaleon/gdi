@@ -26,7 +26,20 @@ import { MesaPasoDto } from './dto/mesa-paso.dto';
 import { AvanzarCompraDto } from './dto/avanzar-compra.dto';
 import { CompletarPasosLoteDto } from './dto/completar-pasos-lote.dto';
 import { Public } from '../auth/public.decorator';
+import { Permiso } from '../auth/permiso.decorator';
 
+/**
+ * La orden de trabajo la miran los dos lados del mostrador, así que el
+ * controller se parte por acción y no por módulo:
+ *
+ * - Leerla y ejecutarla es PRODUCCIÓN: el operario entra al tablero, toma su
+ *   paso en la mesa y lo completa.
+ * - Crearla, editarle los ítems y cambiarle el estado es COMERCIAL: es la
+ *   venta, no el taller.
+ *
+ * Por eso la base es `produccion.ver` y cada método dice lo suyo.
+ */
+@Permiso('produccion.ver')
 @Controller('ordenes-trabajo')
 export class OrdenesTrabajoController {
   constructor(private readonly ordenesTrabajoService: OrdenesTrabajoService) {}
@@ -99,6 +112,7 @@ export class OrdenesTrabajoController {
   }
 
   /** Completar varios pasos de una (simulador de impresión). */
+  @Permiso('produccion.gestionar')
   @Post('tablero/pasos/completar-lote')
   completarPasosLote(
     @CurrentSession() auth: CurrentAuth,
@@ -119,6 +133,7 @@ export class OrdenesTrabajoController {
   }
 
   /** Pausa automática por inactividad (D13): sin respuesta al countdown. */
+  @Permiso('produccion.gestionar')
   @Patch('tablero/pasos/:pasoId/auto-pausa')
   autoPausa(
     @CurrentSession() auth: CurrentAuth,
@@ -128,6 +143,7 @@ export class OrdenesTrabajoController {
   }
 
   /** Tomar/soltar un paso de MI mesa de trabajo (vista Por estación). */
+  @Permiso('produccion.gestionar')
   @Patch('tablero/pasos/:pasoId/mesa')
   mesaPaso(
     @CurrentSession() auth: CurrentAuth,
@@ -138,6 +154,7 @@ export class OrdenesTrabajoController {
   }
 
   /** Panel de Compras: avanzar el estado de una compra tercerizada (F2). */
+  @Permiso('produccion.gestionar')
   @Patch('tablero/pasos/:pasoId/compra')
   avanzarCompra(
     @CurrentSession() auth: CurrentAuth,
@@ -162,6 +179,7 @@ export class OrdenesTrabajoController {
     return this.ordenesTrabajoService.pasosDeOrden(auth, id);
   }
 
+  @Permiso('comercial.gestionar')
   @Post()
   create(
     @CurrentSession() auth: CurrentAuth,
@@ -170,6 +188,7 @@ export class OrdenesTrabajoController {
     return this.ordenesTrabajoService.create(auth, payload);
   }
 
+  @Permiso('comercial.gestionar')
   @Patch(':id')
   editar(
     @CurrentSession() auth: CurrentAuth,
@@ -179,6 +198,7 @@ export class OrdenesTrabajoController {
     return this.ordenesTrabajoService.editar(auth, id, payload);
   }
 
+  @Permiso('comercial.gestionar')
   @Post(':id/items')
   agregarItem(
     @CurrentSession() auth: CurrentAuth,
@@ -188,6 +208,7 @@ export class OrdenesTrabajoController {
     return this.ordenesTrabajoService.agregarItem(auth, id, payload);
   }
 
+  @Permiso('comercial.gestionar')
   @Patch(':id/items/:itemId')
   editarItem(
     @CurrentSession() auth: CurrentAuth,
@@ -198,6 +219,7 @@ export class OrdenesTrabajoController {
     return this.ordenesTrabajoService.editarItem(auth, id, itemId, payload);
   }
 
+  @Permiso('comercial.gestionar')
   @Delete(':id/items/:itemId')
   quitarItem(
     @CurrentSession() auth: CurrentAuth,
@@ -207,6 +229,7 @@ export class OrdenesTrabajoController {
     return this.ordenesTrabajoService.quitarItem(auth, id, itemId);
   }
 
+  @Permiso('produccion.gestionar')
   @Patch(':id/items/:itemId/pasos/:pasoId')
   accionPaso(
     @CurrentSession() auth: CurrentAuth,
@@ -224,6 +247,7 @@ export class OrdenesTrabajoController {
     );
   }
 
+  @Permiso('comercial.gestionar')
   @Patch(':id/estado')
   cambiarEstado(
     @CurrentSession() auth: CurrentAuth,

@@ -6,9 +6,17 @@ import { AcceptInvitationDto } from './dto/accept-invitation.dto';
 import { LoginDto } from './dto/login.dto';
 import { SwitchTenantDto } from './dto/switch-tenant.dto';
 import { Public } from './public.decorator';
+import { SoloAutenticado } from './permiso.decorator';
 import { SinTenant } from '../common/sin-tenant.decorator';
 import type { CurrentAuth } from './auth.types';
 
+/**
+ * Nada de acá pide permiso: es la puerta de entrada y lo que todo usuario tiene
+ * que poder hacer sea cual sea su rol — entrar, leer su sesión, cambiar de
+ * empresa, salir. Un permiso que se pueda perder acá deja a alguien sin poder
+ * ni desloguearse.
+ */
+@SoloAutenticado()
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}

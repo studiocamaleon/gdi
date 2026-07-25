@@ -38,6 +38,7 @@ import {
   AsociarCargoPasoDto,
   CrearCargoDirectoDto,
 } from './dto/cargo-directo.dto';
+import { Permiso } from '../auth/permiso.decorator';
 
 interface RequestWithAuth extends Request {
   auth?: { tenantId: string; userId: string };
@@ -49,6 +50,7 @@ interface RequestWithAuth extends Request {
  * MVP: read-only. POST/PUT/DELETE se agregan en sub-fases siguientes
  * cuando la UI de edición esté lista (F.3.x).
  */
+@Permiso('costos.ver')
 @Controller('productos-servicios')
 export class ProductosServiciosController {
   constructor(private readonly service: ProductosServiciosService) {}
@@ -88,6 +90,7 @@ export class ProductosServiciosController {
     return this.service.validarProducto(tenantId, id);
   }
 
+  @Permiso('costos.gestionar')
   @Post('productos')
   async crearProducto(
     @Req() req: RequestWithAuth,
@@ -98,6 +101,7 @@ export class ProductosServiciosController {
     return this.service.crearProducto(tenantId, dto);
   }
 
+  @Permiso('costos.gestionar')
   @Patch('productos/:id')
   async actualizarProducto(
     @Req() req: RequestWithAuth,
@@ -109,6 +113,7 @@ export class ProductosServiciosController {
     return this.service.actualizarProducto(tenantId, id, dto);
   }
 
+  @Permiso('costos.gestionar')
   @Post('productos/:id/duplicar')
   async duplicarProducto(
     @Req() req: RequestWithAuth,
@@ -120,6 +125,7 @@ export class ProductosServiciosController {
     return this.service.duplicarProducto(tenantId, id, dto);
   }
 
+  @Permiso('costos.gestionar')
   @Delete('productos/:id')
   @HttpCode(204)
   async eliminarProducto(@Req() req: RequestWithAuth, @Param('id') id: string) {
@@ -142,6 +148,7 @@ export class ProductosServiciosController {
     return this.service.obtenerRuta(tenantId, id);
   }
 
+  @Permiso('costos.gestionar')
   @Post('rutas')
   async crearRuta(@Req() req: RequestWithAuth, @Body() dto: CrearRutaDto) {
     const tenantId = req.auth?.tenantId;
@@ -149,6 +156,7 @@ export class ProductosServiciosController {
     return this.service.crearRuta(tenantId, dto);
   }
 
+  @Permiso('costos.gestionar')
   @Patch('rutas/:id')
   async actualizarRuta(
     @Req() req: RequestWithAuth,
@@ -160,6 +168,7 @@ export class ProductosServiciosController {
     return this.service.actualizarRuta(tenantId, id, dto);
   }
 
+  @Permiso('costos.gestionar')
   @Post('rutas/:id/duplicar')
   async duplicarRuta(
     @Req() req: RequestWithAuth,
@@ -171,6 +180,7 @@ export class ProductosServiciosController {
     return this.service.duplicarRuta(tenantId, id, dto);
   }
 
+  @Permiso('costos.gestionar')
   @Delete('rutas/:id')
   @HttpCode(204)
   async eliminarRuta(@Req() req: RequestWithAuth, @Param('id') id: string) {
@@ -181,6 +191,7 @@ export class ProductosServiciosController {
 
   // === PRODUCTO ↔ RUTAS ALTERNATIVAS ===
 
+  @Permiso('costos.gestionar')
   @Post('productos/:productoId/rutas-alternativas')
   async crearProductoRutaAlternativa(
     @Req() req: RequestWithAuth,
@@ -192,6 +203,7 @@ export class ProductosServiciosController {
     return this.service.crearProductoRutaAlternativa(tenantId, productoId, dto);
   }
 
+  @Permiso('costos.gestionar')
   @Patch('productos/rutas-alternativas/:rutaAltId')
   async actualizarProductoRutaAlternativa(
     @Req() req: RequestWithAuth,
@@ -207,6 +219,7 @@ export class ProductosServiciosController {
     );
   }
 
+  @Permiso('costos.gestionar')
   @Post('productos/rutas-alternativas/:rutaAltId/duplicar')
   async duplicarProductoRutaAlternativa(
     @Req() req: RequestWithAuth,
@@ -222,6 +235,7 @@ export class ProductosServiciosController {
     );
   }
 
+  @Permiso('costos.gestionar')
   @Delete('productos/rutas-alternativas/:rutaAltId')
   @HttpCode(204)
   async eliminarProductoRutaAlternativa(
@@ -233,6 +247,7 @@ export class ProductosServiciosController {
     await this.service.eliminarProductoRutaAlternativa(tenantId, rutaAltId);
   }
 
+  @Permiso('costos.gestionar')
   @Post('productos/rutas-alternativas/:rutaAltId/config-pasos')
   async upsertConfigPaso(
     @Req() req: RequestWithAuth,
@@ -293,6 +308,7 @@ export class ProductosServiciosController {
     return this.service.listarCargosDirectos(tenantId, soloActivos !== 'false');
   }
 
+  @Permiso('costos.gestionar')
   @Post('cargos-directos')
   async crearCargoDirecto(
     @Req() req: RequestWithAuth,
@@ -303,6 +319,7 @@ export class ProductosServiciosController {
     return this.service.crearCargoDirecto(tenantId, dto);
   }
 
+  @Permiso('costos.gestionar')
   @Patch('cargos-directos/:id')
   async actualizarCargoDirecto(
     @Req() req: RequestWithAuth,
@@ -314,6 +331,7 @@ export class ProductosServiciosController {
     return this.service.actualizarCargoDirecto(tenantId, id, dto);
   }
 
+  @Permiso('costos.gestionar')
   @Delete('cargos-directos/:id')
   @HttpCode(204)
   async eliminarCargoDirecto(
@@ -327,6 +345,7 @@ export class ProductosServiciosController {
 
   // === ASOCIACIÓN cargos ↔ producto/paso (F.3.10) ===
 
+  @Permiso('costos.gestionar')
   @Post('productos/:productoId/cargos-cotizacion')
   async asociarCargoCotizacion(
     @Req() req: RequestWithAuth,
@@ -338,6 +357,7 @@ export class ProductosServiciosController {
     return this.service.asociarCargoCotizacion(tenantId, productoId, dto);
   }
 
+  @Permiso('costos.gestionar')
   @Delete('productos/cargos-cotizacion/:asociacionId')
   @HttpCode(204)
   async desasociarCargoCotizacion(
@@ -349,6 +369,7 @@ export class ProductosServiciosController {
     await this.service.desasociarCargoCotizacion(tenantId, asociacionId);
   }
 
+  @Permiso('costos.gestionar')
   @Post('productos/config-pasos/:configPasoId/cargos')
   async asociarCargoPaso(
     @Req() req: RequestWithAuth,
@@ -360,6 +381,7 @@ export class ProductosServiciosController {
     return this.service.asociarCargoPaso(tenantId, configPasoId, dto);
   }
 
+  @Permiso('costos.gestionar')
   @Delete('productos/config-pasos/cargos/:asociacionId')
   @HttpCode(204)
   async desasociarCargoPaso(
@@ -373,6 +395,7 @@ export class ProductosServiciosController {
 
   // === PASOS EXTRAS INLINE (G-F3) ===
 
+  @Permiso('costos.gestionar')
   @Post('productos/:productoId/pasos-extras')
   async agregarPasoExtra(
     @Req() req: RequestWithAuth,
@@ -384,6 +407,7 @@ export class ProductosServiciosController {
     return this.service.agregarPasoExtra(tenantId, productoId, dto);
   }
 
+  @Permiso('costos.gestionar')
   @Patch('productos/pasos-extras/:pasoExtraId')
   async actualizarPasoExtra(
     @Req() req: RequestWithAuth,
@@ -395,6 +419,7 @@ export class ProductosServiciosController {
     return this.service.actualizarPasoExtra(tenantId, pasoExtraId, dto);
   }
 
+  @Permiso('costos.gestionar')
   @Delete('productos/pasos-extras/:pasoExtraId')
   @HttpCode(204)
   async eliminarPasoExtra(

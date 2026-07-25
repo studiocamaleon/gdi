@@ -11,11 +11,13 @@ import { Request } from 'express';
 import { MotorUniversalService } from './motor.service';
 import { CotizarDto } from './cotizar.dto';
 import type { CotizarOutput } from './tipos';
+import { Permiso } from '../auth/permiso.decorator';
 
 interface RequestWithAuth extends Request {
   auth?: { tenantId: string; userId: string };
 }
 
+@Permiso('comercial.ver')
 @Controller('motor-universal')
 export class MotorUniversalController {
   constructor(private readonly motor: MotorUniversalService) {}

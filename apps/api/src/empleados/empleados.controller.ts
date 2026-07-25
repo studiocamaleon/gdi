@@ -18,7 +18,9 @@ import { InvitarAccesoDto } from './dto/invitar-acceso.dto';
 import { EmpleadosService } from './empleados.service';
 import { UpsertEmpleadoDto } from './dto/upsert-empleado.dto';
 import type { CurrentAuth } from '../auth/auth.types';
+import { Permiso } from '../auth/permiso.decorator';
 
+@Permiso('registros.ver')
 @Controller('empleados')
 export class EmpleadosController {
   constructor(private readonly empleadosService: EmpleadosService) {}
@@ -36,6 +38,7 @@ export class EmpleadosController {
     return this.empleadosService.findOne(auth, id);
   }
 
+  @Permiso('registros.gestionar')
   @Post()
   create(
     @CurrentSession() auth: CurrentAuth,
@@ -44,6 +47,7 @@ export class EmpleadosController {
     return this.empleadosService.create(auth, payload);
   }
 
+  @Permiso('registros.gestionar')
   @Put(':id')
   update(
     @CurrentSession() auth: CurrentAuth,
@@ -54,6 +58,7 @@ export class EmpleadosController {
   }
 
   @ProhibidoImpersonando()
+  @Permiso('registros.gestionar')
   @Post(':id/invitar-acceso')
   @Roles(RolSistema.ADMINISTRADOR)
   invitarAcceso(
@@ -64,6 +69,7 @@ export class EmpleadosController {
     return this.empleadosService.invitarAcceso(auth, id, payload);
   }
 
+  @Permiso('registros.gestionar')
   @Delete(':id')
   @Roles(RolSistema.ADMINISTRADOR)
   @HttpCode(204)

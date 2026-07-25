@@ -16,6 +16,7 @@ import {
   ActualizarPrecioEspecialClienteDto,
   CrearPrecioEspecialClienteDto,
 } from '../dto/precio-especial-cliente.dto';
+import { Permiso } from '../../../auth/permiso.decorator';
 
 interface RequestWithAuth extends Request {
   auth?: { tenantId: string; userId: string };
@@ -38,6 +39,7 @@ function tenantId(req: RequestWithAuth): string {
  * Las rutas de actualizar/borrar usan path absoluto sin productoId porque el
  * id del precio especial es único globalmente.
  */
+@Permiso('costos.ver')
 @Controller()
 export class PreciosEspecialesClientesController {
   constructor(private readonly service: PreciosEspecialesClientesService) {}
@@ -50,6 +52,7 @@ export class PreciosEspecialesClientesController {
     return this.service.listarPorProducto(tenantId(req), productoId);
   }
 
+  @Permiso('costos.gestionar')
   @Post('productos-servicios/productos/:productoId/precios-especiales')
   async crear(
     @Req() req: RequestWithAuth,
@@ -59,6 +62,7 @@ export class PreciosEspecialesClientesController {
     return this.service.crear(tenantId(req), productoId, dto);
   }
 
+  @Permiso('costos.gestionar')
   @Patch('productos-servicios/precios-especiales/:id')
   async actualizar(
     @Req() req: RequestWithAuth,
@@ -68,6 +72,7 @@ export class PreciosEspecialesClientesController {
     return this.service.actualizar(tenantId(req), id, dto);
   }
 
+  @Permiso('costos.gestionar')
   @Delete('productos-servicios/precios-especiales/:id')
   @HttpCode(200)
   async eliminar(@Req() req: RequestWithAuth, @Param('id') id: string) {

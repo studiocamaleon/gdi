@@ -39,4 +39,17 @@ export class SessionCacheService {
   invalidate(sessionId: string): void {
     this.cache.delete(sessionId);
   }
+
+  /**
+   * Tira las sesiones cacheadas de un tenant. Se llama al tocar un rol o el rol
+   * de alguien: sin esto, quitarle un permiso a un usuario tardaría hasta el
+   * TTL en aplicarse, y ese medio minuto es justo cuando el admin está mirando
+   * si funcionó. El mapa tiene una entrada por sesión viva: recorrerlo es
+   * barato al lado de la confusión de no hacerlo.
+   */
+  invalidarTenant(tenantId: string): void {
+    for (const [sessionId, entry] of this.cache) {
+      if (entry.auth.tenantId === tenantId) this.cache.delete(sessionId);
+    }
+  }
 }

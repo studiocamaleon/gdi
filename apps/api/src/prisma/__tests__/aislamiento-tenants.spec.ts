@@ -88,10 +88,14 @@ const EXENTOS_CON_TENANT_ID = new Set(['Membership', 'Invitation']);
  *  - plataforma: el control plane CREA invitaciones al dar de alta un tenant
  *    (con tenantId explícito, staff-only y auditado). Nunca las lista sin
  *    filtro — si algún día lo necesita, ese código va a auth.
+ *  - usuarios: es el módulo que administra las membresías del tenant, así que
+ *    no puede no tocarlas. Toda query suya lleva `tenantId` explícito (o la
+ *    clave compuesta `userId_tenantId`), que es la condición de la excepción.
  */
 const ARCHIVOS_AUTORIZADOS = new Set([
   'auth/auth.service.ts',
   'plataforma/plataforma.service.ts',
+  'usuarios/usuarios.service.ts',
 ]);
 
 /** Copiado del guard: los que quedan fuera de la inyección automática. */

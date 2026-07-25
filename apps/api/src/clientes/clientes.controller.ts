@@ -14,7 +14,9 @@ import { UpsertClienteDto } from './dto/upsert-cliente.dto';
 import { ClientesQueryDto } from './dto/clientes-query.dto';
 import { ClientesService } from './clientes.service';
 import type { CurrentAuth } from '../auth/auth.types';
+import { Permiso } from '../auth/permiso.decorator';
 
+@Permiso('registros.ver')
 @Controller('clientes')
 export class ClientesController {
   constructor(private readonly clientesService: ClientesService) {}
@@ -32,6 +34,7 @@ export class ClientesController {
     return this.clientesService.findOne(auth, id);
   }
 
+  @Permiso('registros.gestionar')
   @Post()
   create(
     @CurrentSession() auth: CurrentAuth,
@@ -40,6 +43,7 @@ export class ClientesController {
     return this.clientesService.create(auth, payload);
   }
 
+  @Permiso('registros.gestionar')
   @Put(':id')
   update(
     @CurrentSession() auth: CurrentAuth,
@@ -49,6 +53,7 @@ export class ClientesController {
     return this.clientesService.update(auth, id, payload);
   }
 
+  @Permiso('registros.gestionar')
   @Delete(':id')
   @HttpCode(204)
   async remove(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {

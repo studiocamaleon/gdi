@@ -48,7 +48,9 @@ import {
   TransferenciaDto,
   UpsertCuentaFondosDto,
 } from './dto/tesoreria.dto';
+import { Permiso } from '../auth/permiso.decorator';
 
+@Permiso('administracion.ver')
 @Controller('administracion')
 export class AdministracionController {
   constructor(
@@ -176,6 +178,7 @@ export class AdministracionController {
 
   /** Verifica la delegación sin encender nada (chequeo en seco). */
   @ProhibidoImpersonando()
+  @Permiso('administracion.gestionar')
   @Post('afip/verificar')
   verificarAfip(@CurrentSession() auth: CurrentAuth) {
     return this.afipIntegracion.verificar(auth);
@@ -183,12 +186,14 @@ export class AdministracionController {
 
   /** Enciende la facturación: verifica y, si pasa, activa. */
   @ProhibidoImpersonando()
+  @Permiso('administracion.gestionar')
   @Post('afip/activar')
   activarAfip(@CurrentSession() auth: CurrentAuth) {
     return this.afipIntegracion.activar(auth);
   }
 
   @ProhibidoImpersonando()
+  @Permiso('administracion.gestionar')
   @Post('afip/desactivar')
   desactivarAfip(@CurrentSession() auth: CurrentAuth) {
     return this.afipIntegracion.desactivar(auth);
@@ -207,6 +212,7 @@ export class AdministracionController {
   }
 
   /** Facturar (parcial o total) una orden desde su ficha. */
+  @Permiso('administracion.gestionar')
   @Post('ordenes/:ordenId/facturar')
   facturarOrden(
     @CurrentSession() auth: CurrentAuth,
@@ -217,6 +223,7 @@ export class AdministracionController {
   }
 
   /** Facturar un lote de órdenes (N facturas o una agrupada). */
+  @Permiso('administracion.gestionar')
   @Post('facturacion/lote')
   facturarLote(
     @CurrentSession() auth: CurrentAuth,
@@ -233,6 +240,7 @@ export class AdministracionController {
     return this.comprobantesService.obtener(auth, id);
   }
 
+  @Permiso('administracion.gestionar')
   @Post('comprobantes')
   crearComprobante(
     @CurrentSession() auth: CurrentAuth,
@@ -241,6 +249,7 @@ export class AdministracionController {
     return this.comprobantesService.crear(auth, body);
   }
 
+  @Permiso('administracion.gestionar')
   @Post('comprobantes/:id/emitir')
   emitirComprobante(
     @CurrentSession() auth: CurrentAuth,
@@ -249,6 +258,7 @@ export class AdministracionController {
     return this.comprobantesService.emitir(auth, id);
   }
 
+  @Permiso('administracion.gestionar')
   @Post('comprobantes/:id/cae')
   cargarCae(
     @CurrentSession() auth: CurrentAuth,
@@ -258,6 +268,7 @@ export class AdministracionController {
     return this.comprobantesService.cargarCae(auth, id, body);
   }
 
+  @Permiso('administracion.gestionar')
   @Delete('comprobantes/:id')
   descartarComprobante(
     @CurrentSession() auth: CurrentAuth,
@@ -276,6 +287,7 @@ export class AdministracionController {
     return this.imputacionesService.pendientesDeCliente(auth, clienteId);
   }
 
+  @Permiso('administracion.gestionar')
   @Post('cobros/:id/imputaciones')
   imputarCobro(
     @CurrentSession() auth: CurrentAuth,
@@ -285,6 +297,7 @@ export class AdministracionController {
     return this.imputacionesService.imputar(auth, id, body);
   }
 
+  @Permiso('administracion.gestionar')
   @Delete('imputaciones/:id')
   quitarImputacion(
     @CurrentSession() auth: CurrentAuth,
@@ -300,6 +313,7 @@ export class AdministracionController {
     return this.configuracionFiscalService.obtener(auth);
   }
 
+  @Permiso('administracion.gestionar')
   @Put('configuracion-fiscal')
   guardarConfiguracionFiscal(
     @CurrentSession() auth: CurrentAuth,
@@ -316,6 +330,7 @@ export class AdministracionController {
     return this.configuracionFiscalService.letraPara(auth, receptor);
   }
 
+  @Permiso('administracion.gestionar')
   @Post('puntos-venta')
   crearPuntoVenta(
     @CurrentSession() auth: CurrentAuth,
@@ -324,6 +339,7 @@ export class AdministracionController {
     return this.configuracionFiscalService.crearPuntoVenta(auth, body);
   }
 
+  @Permiso('administracion.gestionar')
   @Patch('puntos-venta/:id')
   actualizarPuntoVenta(
     @CurrentSession() auth: CurrentAuth,
@@ -333,6 +349,7 @@ export class AdministracionController {
     return this.configuracionFiscalService.actualizarPuntoVenta(auth, id, body);
   }
 
+  @Permiso('administracion.gestionar')
   @Delete('puntos-venta/:id')
   eliminarPuntoVenta(
     @CurrentSession() auth: CurrentAuth,
@@ -348,6 +365,7 @@ export class AdministracionController {
     return this.tesoreriaService.resumen(auth);
   }
 
+  @Permiso('administracion.gestionar')
   @Post('cuentas')
   crearCuenta(
     @CurrentSession() auth: CurrentAuth,
@@ -364,6 +382,7 @@ export class AdministracionController {
     return this.tesoreriaService.movimientos(auth, id);
   }
 
+  @Permiso('administracion.gestionar')
   @Post('cuentas/transferencias')
   transferir(
     @CurrentSession() auth: CurrentAuth,
@@ -372,6 +391,7 @@ export class AdministracionController {
     return this.tesoreriaService.transferir(auth, payload);
   }
 
+  @Permiso('administracion.gestionar')
   @Post('cuentas/:id/arqueo')
   arqueo(
     @CurrentSession() auth: CurrentAuth,
@@ -396,6 +416,7 @@ export class AdministracionController {
     return this.cobrosService.pendientesAcreditacion(auth);
   }
 
+  @Permiso('administracion.gestionar')
   @Post('cobros')
   crearCobro(
     @CurrentSession() auth: CurrentAuth,
@@ -429,6 +450,7 @@ export class AdministracionController {
     return { url: await this.recibosService.urlPublica(id) };
   }
 
+  @Permiso('administracion.gestionar')
   @Post('cobros/:id/acreditar')
   acreditarCobro(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.cobrosService.acreditar(auth, id);
@@ -439,6 +461,7 @@ export class AdministracionController {
     return this.metodosPagoService.findAll(auth);
   }
 
+  @Permiso('administracion.gestionar')
   @Post('metodos-pago')
   createMetodo(
     @CurrentSession() auth: CurrentAuth,
@@ -447,11 +470,13 @@ export class AdministracionController {
     return this.metodosPagoService.create(auth, payload);
   }
 
+  @Permiso('administracion.gestionar')
   @Post('metodos-pago/instalar-catalogo')
   instalarCatalogo(@CurrentSession() auth: CurrentAuth) {
     return this.metodosPagoService.instalarCatalogo(auth);
   }
 
+  @Permiso('administracion.gestionar')
   @Patch('metodos-pago/:id')
   updateMetodo(
     @CurrentSession() auth: CurrentAuth,
@@ -461,6 +486,7 @@ export class AdministracionController {
     return this.metodosPagoService.update(auth, id, payload);
   }
 
+  @Permiso('administracion.gestionar')
   @Patch('metodos-pago/:id/toggle')
   toggleMetodo(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.metodosPagoService.toggle(auth, id);

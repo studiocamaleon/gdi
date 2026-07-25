@@ -606,6 +606,7 @@ model Tenant {
   archivos                                         Archivo[]                                         @relation("ArchivosDelTenant")
   integraciones                                    IntegracionTenant[]
   memberships                                      Membership[]
+  roles                                            Rol[]
   authSessions                                     AuthSession[]
   invitations                                      Invitation[]
   clientes                                         Cliente[]
@@ -718,21 +719,58 @@ model User {
   ahorrosConsolidacion    AhorroConsolidacion[]   @relation("AhorrosConsolidacion")
 }
 
+/// Rol del tenant: un nombre y el conjunto de permisos que junta.
+///
+/// Los permisos son claves del catálogo de código (auth/permisos.ts), no filas:
+/// se leen enteros cada vez que se evalúa uno, así que una tabla de N filas por
+/// rol sería una junta más por request sin nada a cambio. Una clave retirada del
+/// catálogo se ignora al expandir; con FKs habría que migrar.
+///
+/// Ver docs/usuarios-roles-permisos-diseno.md
+model Rol {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  /// Clave estable de los predefinidos ('administrador', 'operario'…). Null en
+  /// los que crea el tenant: ahí el nombre es lo único que los identifica.
+  codigo      String?
+  nombre      String
+  descripcion String?
+  /// Predefinido de Grafo: se le editan los permisos, no se borra ni se
+  /// renombra. Es también la plantilla que el tenant duplica.
+  esDelSistema Boolean @default(false)
+  permisos    String[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  memberships Membership[]
+
+  @@unique([tenantId, codigo])
+  @@index([tenantId, nombre])
+}
+
 model Membership {
   id              String        @id @default(uuid()) @db.Uuid
   userId          String        @db.Uuid
   tenantId        String        @db.Uuid
+  /// El rol del enum. Se mantiene mientras dure la transición a `rolId`: viaja
+  /// en el JWT y lo leen los endpoints que todavía usan @Roles. Cuando todo
+  /// pase por permisos, se retira.
   rol             RolSistema
+  /// El rol de verdad. Null sólo en membresías que el backfill no alcanzó: ahí
+  /// los permisos salen de `rol` (permisosDeRolBase).
+  rolId           String?       @db.Uuid
   activa          Boolean       @default(true)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  rolDelTenant    Rol?          @relation(fields: [rolId], references: [id], onDelete: SetNull)
   authSessions    AuthSession[]
   invitationsSent Invitation[]  @relation("InvitationSender")
 
   @@unique([userId, tenantId])
   @@index([tenantId])
+  @@index([rolId])
 }
 
 model AuthSession {
@@ -770,6 +808,9 @@ model Invitation {
   invitedByMembershipId String?    @db.Uuid
   email                 String
   rol                   RolSistema
+  /// El rol del tenant con el que se invitó. Null en invitaciones viejas y en
+  /// las del control plane, que sólo conocen el enum.
+  rolId                 String?    @db.Uuid
   tokenHash             String     @unique
   expiresAt             DateTime
   acceptedAt            DateTime?
