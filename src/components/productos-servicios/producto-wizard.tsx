@@ -44,7 +44,7 @@ import {
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import { HumanSelect, optionFromLabel } from "@/components/ui/human-select";
@@ -1177,11 +1177,11 @@ function StepConfigPasos({
                       </div>
                     </div>
                   </div>
-                  <Link href={`/productos-servicios/${producto.id}/rutas/${ra.id}`}>
-                    <Button variant={completo ? "outline" : "default"} size="sm">
-                      <CogIcon className="mr-2 size-3" />
-                      {completo ? "Revisar" : "Configurar"}
-                    </Button>
+                  <Link href={`/productos-servicios/${producto.id}/rutas/${ra.id}`}
+                    className={buttonVariants({ variant: completo ? "outline" : "default", size: "sm" })}
+                  >
+                    <CogIcon className="mr-2 size-3" />
+                    {completo ? "Revisar" : "Configurar"}
                   </Link>
                 </div>
               );

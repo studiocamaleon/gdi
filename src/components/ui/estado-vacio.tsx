@@ -28,7 +28,7 @@ import * as React from "react";
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Empty,
   EmptyContent,
@@ -116,10 +116,10 @@ function CTAButton({ cta, primary }: { cta: EstadoVacioCTA; primary?: boolean })
   );
   if (cta.href) {
     return (
-      <Link href={cta.href}>
-        <Button variant={primary ? "default" : "outline"} size="sm">
-          {inner}
-        </Button>
+      <Link href={cta.href}
+        className={buttonVariants({ variant: primary ? "default" : "outline", size: "sm" })}
+      >
+        {inner}
       </Link>
     );
   }

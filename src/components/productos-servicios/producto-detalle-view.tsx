@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProductoValidacionPanel } from "@/components/productos-servicios/producto-validacion-panel";
@@ -95,23 +95,23 @@ export function ProductoDetalleView({ producto }: { producto: ProductoDetalle })
             <Badge variant={producto.activo ? "default" : "secondary"}>
               {producto.activo ? "Activo" : "Inactivo"}
             </Badge>
-            <Link href={`/productos-servicios/${producto.id}/rutas`}>
-              <Button variant="outline" size="sm">
-                <GitBranchIcon className="mr-2 size-3" />
-                Configurar rutas
-              </Button>
+            <Link href={`/productos-servicios/${producto.id}/rutas`}
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              <GitBranchIcon className="mr-2 size-3" />
+              Configurar rutas
             </Link>
-            <Link href={`/productos-servicios/${producto.id}/cargos`}>
-              <Button variant="outline" size="sm">
-                <ReceiptIcon className="mr-2 size-3" />
-                Cargos directos
-              </Button>
+            <Link href={`/productos-servicios/${producto.id}/cargos`}
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              <ReceiptIcon className="mr-2 size-3" />
+              Cargos directos
             </Link>
-            <Link href={`/productos-servicios/${producto.id}/wizard`}>
-              <Button variant="outline" size="sm">
-                <PencilIcon className="mr-2 size-3" />
-                Editar
-              </Button>
+            <Link href={`/productos-servicios/${producto.id}/wizard`}
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              <PencilIcon className="mr-2 size-3" />
+              Editar
             </Link>
           </div>
         </div>
