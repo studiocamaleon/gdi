@@ -1,6 +1,7 @@
 import { MetaPie, TabFinanzas } from "@/components/panel/panel-general";
 import { SinPermiso } from "@/components/navigation/sin-permiso";
 import { getPanelFinanzas } from "@/lib/panel-api";
+import { zonaHorariaDelTenant } from "@/lib/auth-server";
 import { leerPeriodo, rangoDe } from "@/lib/panel-periodo";
 import { tienePermiso } from "@/lib/permisos-server";
 
@@ -23,7 +24,7 @@ export default async function Page({
   }
 
   const { periodo } = await searchParams;
-  const d = await getPanelFinanzas(rangoDe(leerPeriodo(periodo)));
+  const d = await getPanelFinanzas(rangoDe(leerPeriodo(periodo), await zonaHorariaDelTenant()));
   return (
     <>
       <TabFinanzas d={d as never} />

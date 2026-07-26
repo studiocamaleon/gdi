@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Put, Query } from '@nestjs/common';
+import { claveFechaEnZona } from '../common/zona';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
 import { ReportesService } from './reportes.service';
@@ -55,7 +56,7 @@ export class ReportesController {
   @Permiso('reportes.ver_resumen')
   @Get('resumen')
   async resumen(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
-    const { rango, anterior } = this.service.resolverRango(query);
+    const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
     const [{ actual, sinComparativa, deltas }, topClientes, topProductos, prodKpis, alertas, serie] =
       await Promise.all([
         this.rentabilidad.bloque(auth.tenantId, rango, anterior),
@@ -94,7 +95,7 @@ export class ReportesController {
 
   @Get('comercial')
   async comercial(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
-    const { rango, anterior } = this.service.resolverRango(query);
+    const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
     const comercial = await this.ventas.comercial(auth.tenantId, rango, anterior);
     return {
       meta: this.service.metaBase(rango, anterior, 'Órdenes emitidas', {
@@ -107,7 +108,7 @@ export class ReportesController {
 
   @Get('embudo')
   async embudo(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
-    const { rango, anterior } = this.service.resolverRango(query);
+    const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
     const { otManualesFuera, ...embudo } = await this.embudoSvc.embudo(
       auth.tenantId,
       rango,
@@ -132,7 +133,7 @@ export class ReportesController {
   @Permiso('finanzas.ver_margenes')
   @Get('finanzas')
   async finanzas(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
-    const { rango, anterior } = this.service.resolverRango(query);
+    const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
     const [{ actual, sinComparativa, deltas }, cobranza] = await Promise.all([
       this.rentabilidad.bloque(auth.tenantId, rango, anterior),
       this.cobranza.finanzas(auth.tenantId, rango),
@@ -162,7 +163,7 @@ export class ReportesController {
 
   @Get('produccion')
   async produccion(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
-    const { rango, anterior } = this.service.resolverRango(query);
+    const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
     const prod = await this.produccionSvc.produccion(auth.tenantId, rango);
     return {
       meta: this.service.metaBase(rango, anterior, 'Pasos de producción', {
@@ -174,7 +175,7 @@ export class ReportesController {
 
   @Get('alertas')
   async alertasActivas(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
-    const { rango, anterior } = this.service.resolverRango(query);
+    const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
     const activas = await this.alertas.activas(auth.tenantId, rango);
     return {
       meta: this.service.metaBase(rango, anterior, 'Reglas sobre los agregados del período'),
@@ -184,7 +185,7 @@ export class ReportesController {
 
   @Get('producto')
   async producto(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
-    const { rango, anterior } = this.service.resolverRango(query);
+    const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
     const producto = await this.productos.producto(auth.tenantId, rango);
     return {
       meta: this.service.metaBase(rango, anterior, 'Snapshot de cotización', {
@@ -196,7 +197,7 @@ export class ReportesController {
 
   @Get('producto/mix-categoria')
   async mixCategoria(@CurrentSession() auth: CurrentAuth, @Query() query: MixCategoriaDto) {
-    const { rango, anterior } = this.service.resolverRango(query);
+    const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
     const drill = await this.productos.mixCategoria(auth.tenantId, rango, query.categoria);
     return {
       meta: this.service.metaBase(rango, anterior, 'Snapshot de cotización'),
@@ -206,7 +207,7 @@ export class ReportesController {
 
   @Get('clientes')
   async clientes(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
-    const { rango, anterior } = this.service.resolverRango(query);
+    const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
     const clientes = await this.clientesSvc.clientes(auth.tenantId, rango, anterior);
     return {
       meta: this.service.metaBase(rango, anterior, 'Órdenes emitidas (historial completo)', {
@@ -219,7 +220,7 @@ export class ReportesController {
 
   @Get('equipo')
   async equipo(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
-    const { rango, anterior } = this.service.resolverRango(query);
+    const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
     const equipo = await this.equipoSvc.equipo(auth.tenantId, rango);
     return {
       meta: this.service.metaBase(rango, anterior, 'Tramos de trabajo y pasos completados', {
@@ -242,10 +243,10 @@ export class ReportesController {
     @CurrentSession() auth: CurrentAuth,
     @Query() query: RangoReporteDto,
   ) {
-    const { rango, anterior } = this.service.resolverRango(query);
+    const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
     // El costo laboral es MENSUAL: se informa el mes en que arranca el rango,
     // porque un sueldo prorrateado sobre un trimestre no significa nada.
-    const periodo = `${rango.desde.getFullYear()}-${String(rango.desde.getMonth() + 1).padStart(2, '0')}`;
+    const periodo = claveFechaEnZona(rango.desde, rango.zona).slice(0, 7);
     const datos = await this.costoLaboralSvc.porPersona(auth.tenantId, periodo);
     return {
       meta: this.service.metaBase(rango, anterior, 'Legajos y centros de costo', {

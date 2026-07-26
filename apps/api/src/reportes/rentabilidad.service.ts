@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { fraccionMesEnRango, mesesDelRango, type Rango } from './periodo';
+import { finExclusivo, fraccionMesEnRango, mesesDelRango, type Rango } from './periodo';
 
 /**
  * Rentabilidad — el corazón del Panel. Margen bruto, margen de
@@ -10,15 +10,6 @@ import { fraccionMesEnRango, mesesDelRango, type Rango } from './periodo';
  */
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
-
-/** hasta inclusivo → límite superior EXCLUSIVO (día siguiente a medianoche). */
-function finExclusivo(rango: Rango): Date {
-  return new Date(
-    rango.hasta.getFullYear(),
-    rango.hasta.getMonth(),
-    rango.hasta.getDate() + 1,
-  );
-}
 
 export type CategoriaGasto = { categoria: string; monto: number; pct: number };
 

@@ -14,12 +14,15 @@ import {
   calendarioDefault,
   DIAS_SEMANA,
   type CalendarioEstacion,
-  type DiaSemana,
   type Estacion,
 } from "@/lib/estaciones";
-
-/** Índice Date.getDay() (0 = domingo) → clave del calendario. */
-const JS_DIA: DiaSemana[] = ["dom", "lun", "mar", "mie", "jue", "vie", "sab"];
+import {
+  claveFechaEnZona,
+  diaSemanaDeClave,
+  partesEnZona,
+  sumarDiasAClave,
+  ZONA_DEFAULT,
+} from "@/lib/zona";
 
 /** Tope de días a proyectar en el eje. */
 const MAX_DIAS = 180;
@@ -55,19 +58,20 @@ function minutosDe(hora: string) {
   return hh * 60 + mm;
 }
 
-function claveFecha(fecha: Date) {
-  const y = fecha.getFullYear();
-  const m = String(fecha.getMonth() + 1).padStart(2, "0");
-  const d = String(fecha.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
+const DIA_CORTO: Record<string, string> = {
+  dom: "dom",
+  lun: "lun",
+  mar: "mar",
+  mie: "mié",
+  jue: "jue",
+  vie: "vie",
+  sab: "sáb",
+};
 
-const DIA_CORTO = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
-
-function etiquetaDe(fecha: Date) {
-  const d = String(fecha.getDate()).padStart(2, "0");
-  const m = String(fecha.getMonth() + 1).padStart(2, "0");
-  return `${DIA_CORTO[fecha.getDay()]} ${d}/${m}`;
+/** "lun 20/07", desde la clave "2026-07-20". */
+function etiquetaDe(clave: string) {
+  const [, m, d] = clave.split("-");
+  return `${DIA_CORTO[diaSemanaDeClave(clave)]} ${d}/${m}`;
 }
 
 /** La franja más ancha que trabaja alguna estación activa. */
@@ -102,12 +106,12 @@ function ventanaUnion(estaciones: Estacion[]) {
 
 /** Un día cuenta si alguna estación trabaja y no es feriado del taller. */
 function esLaborable(
-  fecha: Date,
+  clave: string,
   estaciones: Estacion[],
   noLaborables: Set<string>,
 ) {
-  if (noLaborables.has(claveFecha(fecha))) return false;
-  const dia = JS_DIA[fecha.getDay()];
+  if (noLaborables.has(clave)) return false;
+  const dia = diaSemanaDeClave(clave);
   return estaciones.some((e) => {
     if (!e.activo) return false;
     const vacio =
@@ -123,35 +127,36 @@ export function construirEje({
   ahora,
   hasta,
   noLaborables = new Set<string>(),
+  zona = ZONA_DEFAULT,
 }: {
   estaciones: Estacion[];
   ahora: Date;
   /** Último instante que el eje tiene que cubrir (el fin más lejano). */
   hasta: Date;
   noLaborables?: Set<string>;
+  /** Zona IANA del taller: los días y las horas del eje son de pared AHÍ. */
+  zona?: string;
 }): EjeLaboral {
   const ventana = ventanaUnion(estaciones);
   const jornadaMin = ventana.hasta - ventana.desde;
-
-  const cursor = new Date(ahora);
-  cursor.setHours(0, 0, 0, 0);
-  const limite = new Date(hasta);
-  limite.setHours(23, 59, 59, 999);
 
   /* El eje arranca EN `ahora`, no en la apertura del día: en el pasado
      nunca se dibuja nada (el plan es hacia adelante), así que esas horas
      serían píxeles muertos garantizados. La primera jornada queda parcial;
      si `ahora` ya pasó el cierre, ese día no entra. */
-  const minutoDeAhora = ahora.getHours() * 60 + ahora.getMinutes();
-  const claveHoy = claveFecha(ahora);
+  const ahoraPared = partesEnZona(ahora, zona);
+  const minutoDeAhora = ahoraPared.hh * 60 + ahoraPared.mm;
+  const claveHoy = claveFechaEnZona(ahora, zona);
+  const claveLimite = claveFechaEnZona(hasta, zona);
 
   const dias: DiaEje[] = [];
   const porFecha = new Map<string, DiaEje>();
   let acumulado = 0;
   for (let i = 0; i < MAX_DIAS; i += 1) {
-    if (cursor > limite && dias.length > 0) break;
-    if (esLaborable(cursor, estaciones, noLaborables)) {
-      const fecha = claveFecha(cursor);
+    const fecha = i === 0 ? claveHoy : sumarDiasAClave(claveHoy, i);
+    // Las claves ISO ordenan lexicográficamente: comparar strings es comparar días.
+    if (fecha > claveLimite && dias.length > 0) break;
+    if (esLaborable(fecha, estaciones, noLaborables)) {
       const esHoy = fecha === claveHoy;
       const desdeMin = esHoy
         ? Math.max(ventana.desde, minutoDeAhora)
@@ -162,7 +167,7 @@ export function construirEje({
           x: acumulado,
           ancho,
           desdeMin,
-          etiqueta: etiquetaDe(cursor),
+          etiqueta: etiquetaDe(fecha),
           fecha,
         };
         dias.push(dia);
@@ -170,11 +175,10 @@ export function construirEje({
         acumulado += ancho;
       }
     }
-    cursor.setDate(cursor.getDate() + 1);
   }
 
   const aX = (fecha: Date) => {
-    const clave = claveFecha(fecha);
+    const clave = claveFechaEnZona(fecha, zona);
     const dia = porFecha.get(clave);
     if (!dia) {
       // Cae en un día que el eje no dibuja (feriado, fin de semana, o antes
@@ -184,7 +188,8 @@ export function construirEje({
       const ultimo = previos.at(-1);
       return ultimo ? ultimo.x + ultimo.ancho : 0;
     }
-    const min = fecha.getHours() * 60 + fecha.getMinutes();
+    const p = partesEnZona(fecha, zona);
+    const min = p.hh * 60 + p.mm;
     return dia.x + Math.max(0, Math.min(dia.ancho, min - dia.desdeMin));
   };
 

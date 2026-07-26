@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { EmbudoService } from '../embudo.service';
 import type { PrismaService } from '../../prisma/prisma.service';
-import type { Rango } from '../periodo';
+import { parseRango } from '../periodo';
 
 /**
  * Embudo comercial — cohorte de presupuestos emitidos y "alcanzó al menos".
@@ -17,15 +17,9 @@ describe('EmbudoService — cohorte de pipeline', () => {
   let tenantId: string;
   let seq = 0;
 
-  // Junio 2026 como período; mayo como anterior.
-  const rango: Rango = {
-    desde: new Date(2026, 5, 1),
-    hasta: new Date(2026, 5, 30),
-  };
-  const anterior: Rango = {
-    desde: new Date(2026, 4, 1),
-    hasta: new Date(2026, 4, 31),
-  };
+  // Junio 2026 como período; mayo como anterior (bordes en la zona default).
+  const rango = parseRango('2026-06-01', '2026-06-30');
+  const anterior = parseRango('2026-05-01', '2026-05-31');
   const enJunio = (dia: number) => new Date(2026, 5, dia, 12, 0, 0);
 
   const crearOt = async (

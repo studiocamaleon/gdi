@@ -1,5 +1,8 @@
+import { claveFechaEnZona, ZONA_DEFAULT } from '../../common/zona';
 import {
   diasDelRango,
+  finDeDia,
+  finExclusivo,
   fraccionMesEnRango,
   granularidad,
   mesesDelRango,
@@ -8,8 +11,9 @@ import {
   periodoAnterior,
 } from '../periodo';
 
-const iso = (fecha: Date) =>
-  `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`;
+/** La fecha calendario del borde EN LA ZONA del rango (default AR). */
+const iso = (fecha: Date, zona: string = ZONA_DEFAULT) =>
+  claveFechaEnZona(fecha, zona);
 
 describe('periodo', () => {
   describe('parseRango', () => {
@@ -123,6 +127,36 @@ describe('periodo', () => {
     it('cuenta inclusivo', () => {
       expect(diasDelRango(parseRango('2026-07-01', '2026-07-31'))).toBe(31);
       expect(diasDelRango(parseRango('2026-07-10', '2026-07-10'))).toBe(1);
+    });
+  });
+
+  describe('zona horaria del tenant', () => {
+    it('los bordes son medianoche EN LA ZONA pedida, no la del proceso', () => {
+      const r = parseRango('2026-07-10', '2026-07-20', new Date(), 'America/Tegucigalpa');
+      expect(r.desde.toISOString()).toBe('2026-07-10T06:00:00.000Z');
+      expect(finExclusivo(r).toISOString()).toBe('2026-07-21T06:00:00.000Z');
+      expect(finDeDia(r).toISOString()).toBe('2026-07-21T05:59:59.999Z');
+    });
+
+    it('el default (AR) da medianoche UTC-3', () => {
+      const r = parseRango('2026-07-10', '2026-07-10');
+      expect(r.desde.toISOString()).toBe('2026-07-10T03:00:00.000Z');
+      expect(finExclusivo(r).toISOString()).toBe('2026-07-11T03:00:00.000Z');
+    });
+
+    it('"mes en curso" se decide con el reloj del tenant', () => {
+      // 02:00Z del 1/8 todavía es 31/7 a las 23:00 en AR: el mes es JULIO.
+      const r = parseRango(undefined, undefined, new Date('2026-08-01T02:00:00.000Z'));
+      expect(iso(r.desde)).toBe('2026-07-01');
+      expect(iso(r.hasta)).toBe('2026-07-31');
+    });
+
+    it('los períodos derivados conservan la zona', () => {
+      const r = parseRango('2026-07-01', '2026-07-31', new Date(), 'America/Tegucigalpa');
+      const a = periodoAnterior(r);
+      expect(a.zona).toBe('America/Tegucigalpa');
+      expect(a.desde.toISOString()).toBe('2026-06-01T06:00:00.000Z');
+      expect(mismoPeriodoAnioAnterior(r).zona).toBe('America/Tegucigalpa');
     });
   });
 });

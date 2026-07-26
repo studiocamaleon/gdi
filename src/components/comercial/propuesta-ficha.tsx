@@ -92,7 +92,7 @@ import { EstadoOtBadge } from "@/components/produccion/ordenes-trabajo-view";
 import {
   EVENTO_ICONOS,
   PagosTab,
-  formatEventoFecha,
+  useFormatEventoFecha,
 } from "@/components/produccion/orden-trabajo-detalle-view";
 import {
   calcularCostoTotal,
@@ -107,6 +107,8 @@ import {
   type TipoPropuesta,
   type UnidadPropuesta,
 } from "@/lib/propuestas";
+import { type Moneda } from "@/lib/moneda";
+import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { AgregarProductoSheet } from "@/components/comercial/agregar-producto-sheet";
 import {
   type MutacionAplicadaView,
@@ -1440,11 +1442,15 @@ function formatCantidadCosto(value: number, unidad: string) {
   })} ${unidadLabel}`;
 }
 
-function formatCostoUnitarioMaterial(value: number, unidad: string) {
+function formatCostoUnitarioMaterial(
+  value: number,
+  unidad: string,
+  moneda: Moneda,
+) {
   const unidadLabel = formatUnidadCosto(unidad, 1);
   return unidadLabel
-    ? `${formatCurrency(value)} / ${unidadLabel}`
-    : formatCurrency(value);
+    ? `${formatCurrency(value, moneda)} / ${unidadLabel}`
+    : formatCurrency(value, moneda);
 }
 
 function formatUnidadCosto(unidad: string, cantidad = 1) {
@@ -1572,9 +1578,9 @@ function formatTiempoPaso(paso: PasoCosteo) {
   return formatMinutos(paso.tiempo.totalMin);
 }
 
-function formatTarifaCentroCosto(paso: PasoCosteo) {
+function formatTarifaCentroCosto(paso: PasoCosteo, moneda: Moneda) {
   if (!paso.tiempo?.tarifaHora) return "Sin tarifa";
-  return `${formatCurrency(paso.tiempo.tarifaHora)}/h`;
+  return `${formatCurrency(paso.tiempo.tarifaHora, moneda)}/h`;
 }
 
 function getCentroCostoLabel(paso: PasoCosteo) {
@@ -1586,6 +1592,7 @@ function getCentroCostoLabel(paso: PasoCosteo) {
 }
 
 function MaterialesPasoTable({ materiales }: { materiales: MaterialCosteo[] }) {
+  const { moneda } = useConfigRegional();
   const visibles = materiales.filter((material) => material.costoTotal > 0);
   if (visibles.length === 0) {
     return (
@@ -1627,10 +1634,11 @@ function MaterialesPasoTable({ materiales }: { materiales: MaterialCosteo[] }) {
                 {formatCostoUnitarioMaterial(
                   material.precioUnitario,
                   material.unidad,
+                  moneda,
                 )}
               </td>
               <td className="num strong">
-                {formatCurrency(material.costoTotal)}
+                {formatCurrency(material.costoTotal, moneda)}
               </td>
             </tr>
           ))}
@@ -1641,6 +1649,7 @@ function MaterialesPasoTable({ materiales }: { materiales: MaterialCosteo[] }) {
 }
 
 function CargosPasoList({ cargos }: { cargos: CargoPasoCosteo[] }) {
+  const { moneda } = useConfigRegional();
   const visibles = cargos.filter((cargo) => cargo.monto > 0);
   if (visibles.length === 0) return null;
 
@@ -1653,7 +1662,7 @@ function CargosPasoList({ cargos }: { cargos: CargoPasoCosteo[] }) {
         >
           <span>{cargo.cargoNombre}</span>
           <small>{humanizeCodigo(cargo.modoCalculo)}</small>
-          <strong>{formatCurrency(cargo.monto)}</strong>
+          <strong>{formatCurrency(cargo.monto, moneda)}</strong>
         </div>
       ))}
     </div>
@@ -2353,6 +2362,8 @@ function CommercialPriceDetailPanel({
   item: PropuestaItem;
   detail: CommercialPriceDetail;
 }) {
+  const { moneda } = useConfigRegional();
+  const fmt = (v: number) => formatCurrency(v, moneda);
   return (
     <div className="op-price-detail">
       <div className="op-price-detail-head">
@@ -2368,19 +2379,19 @@ function CommercialPriceDetailPanel({
       <div className="op-price-kpis">
         <div className="op-price-kpi">
           <span>Precio neto</span>
-          <strong>{formatCurrency(detail.precioNeto)}</strong>
+          <strong>{fmt(detail.precioNeto)}</strong>
         </div>
         <div className="op-price-kpi">
           <span>Impuestos</span>
-          <strong>{formatCurrency(detail.impuestos)}</strong>
+          <strong>{fmt(detail.impuestos)}</strong>
         </div>
         <div className="op-price-kpi">
           <span>Total con impuestos</span>
-          <strong>{formatCurrency(detail.precioBruto)}</strong>
+          <strong>{fmt(detail.precioBruto)}</strong>
         </div>
         <div className="op-price-kpi">
           <span>Promedio por {detail.unidadLabel}</span>
-          <strong>{formatCurrency(detail.precioPromedioBruto)}</strong>
+          <strong>{fmt(detail.precioPromedioBruto)}</strong>
         </div>
       </div>
 
@@ -2403,9 +2414,9 @@ function CommercialPriceDetailPanel({
                   <td>{row.label}</td>
                   <td className="num">{formatDecimal(row.cantidad, 0)}</td>
                   <td className="num">{row.baseLabel}</td>
-                  <td className="num">{formatCurrency(row.netoAsignado)}</td>
-                  <td className="num">{formatCurrency(row.netoUnitario)}</td>
-                  <td className="num">{formatCurrency(row.brutoAsignado)}</td>
+                  <td className="num">{fmt(row.netoAsignado)}</td>
+                  <td className="num">{fmt(row.netoUnitario)}</td>
+                  <td className="num">{fmt(row.brutoAsignado)}</td>
                 </tr>
               ))}
             </tbody>
@@ -2428,7 +2439,7 @@ function CommercialPriceDetailPanel({
                 <small>
                   {formatDecimal(material.cantidad)} {material.unidad}
                 </small>
-                <strong>{formatCurrency(material.costo)}</strong>
+                <strong>{fmt(material.costo)}</strong>
               </div>
             ))}
           </div>
@@ -2468,7 +2479,7 @@ function CommercialPriceDetailPanel({
                     {cargo.nombre}
                     <small>{cargo.origen}</small>
                   </span>
-                  <strong>{formatCurrency(cargo.monto)}</strong>
+                  <strong>{fmt(cargo.monto)}</strong>
                 </div>
               ))}
             </div>
@@ -2557,6 +2568,8 @@ function CostosItemView({
   costo: number;
   calculoPendiente: boolean;
 }) {
+  const { moneda } = useConfigRegional();
+  const fmt = (v: number) => formatCurrency(v, moneda);
   const precioNeto = item.subtotal;
   const precioBruto = getCotizacionTotal(item.cotizacion);
   const desglosePrecio = item.cotizacion.desglosePrecio;
@@ -2763,7 +2776,7 @@ function CostosItemView({
             <span className="cw-tipo">{fila.tipo}</span>
             <span className="cw-pct">{pctDelNeto(fila.monto)}</span>
             <span className={`cw-amount ${fila.warn ? "cw-margen warn" : ""}`}>
-              {formatCurrency(fila.monto)}
+              {fmt(fila.monto)}
             </span>
           </div>
         ))}
@@ -2771,7 +2784,7 @@ function CostosItemView({
           <span className="cw-label">Precio neto (sin IVA)</span>
           <span className="cw-tipo" />
           <span className="cw-pct">100%</span>
-          <span className="cw-amount">{formatCurrency(precioNeto)}</span>
+          <span className="cw-amount">{fmt(precioNeto)}</span>
         </div>
         {ivaTotal > 0 ? (
           <div className="cw-row">
@@ -2781,14 +2794,14 @@ function CostosItemView({
             </span>
             <span className="cw-tipo">Impuesto</span>
             <span className="cw-pct">+ {pctDelNeto(ivaTotal)}</span>
-            <span className="cw-amount">+ {formatCurrency(ivaTotal)}</span>
+            <span className="cw-amount">+ {fmt(ivaTotal)}</span>
           </div>
         ) : null}
         <div className="cw-row cw-total">
           <span className="cw-label">Precio de venta</span>
           <span className="cw-tipo" />
           <span className="cw-pct" />
-          <span className="cw-amount">{formatCurrency(precioBruto)}</span>
+          <span className="cw-amount">{fmt(precioBruto)}</span>
         </div>
       </div>
 
@@ -2840,7 +2853,7 @@ function CostosItemView({
           }}
         >
           <span style={{ fontSize: 18, fontWeight: 700, color: "var(--ink)" }}>
-            {formatCurrency(margenContribucionMonto)}
+            {fmt(margenContribucionMonto)}
           </span>
           <span style={{ fontSize: 12, color: "var(--muted)" }}>
             {margenContribucionPct.toLocaleString("es-AR", {
@@ -2940,14 +2953,14 @@ function CostosItemView({
                       <td>
                         <div className="cost-step-center">
                           <strong>{getCentroCostoLabel(paso)}</strong>
-                          <span>{formatTarifaCentroCosto(paso)}</span>
+                          <span>{formatTarifaCentroCosto(paso, moneda)}</span>
                         </div>
                       </td>
                       <td className="num">
                         {paso.tiempo ? (
                           <>
                             <strong>
-                              {formatCurrency(getCostoMaquinaPaso(paso))}
+                              {fmt(getCostoMaquinaPaso(paso))}
                             </strong>
                             <span>{formatMinutos(paso.tiempo.totalMin)}</span>
                           </>
@@ -2959,7 +2972,7 @@ function CostosItemView({
                         {paso.tiempo && getCostoManoObraPaso(paso) > 0 ? (
                           <>
                             <strong>
-                              {formatCurrency(getCostoManoObraPaso(paso))}
+                              {fmt(getCostoManoObraPaso(paso))}
                             </strong>
                             <span>
                               {formatMinutos(
@@ -2974,15 +2987,15 @@ function CostosItemView({
                       </td>
                       <td className="num">
                         {materialesTotal > 0
-                          ? formatCurrency(materialesTotal)
+                          ? fmt(materialesTotal)
                           : "-"}
                       </td>
                       <td className="num">
-                        {cargosTotal > 0 ? formatCurrency(cargosTotal) : "-"}
+                        {cargosTotal > 0 ? fmt(cargosTotal) : "-"}
                       </td>
                       <td className="num strong">
                         {paso.costoTotal > 0
-                          ? formatCurrency(paso.costoTotal)
+                          ? fmt(paso.costoTotal)
                           : "-"}
                       </td>
                     </tr>
@@ -3009,7 +3022,7 @@ function CostosItemView({
               <div className="cost-charge" key={`paso-${cargo.cargoCodigo}`}>
                 <span>{cargo.cargoNombre}</span>
                 <small>{humanizeCodigo(cargo.modoCalculo)}</small>
-                <strong>{formatCurrency(cargo.monto)}</strong>
+                <strong>{fmt(cargo.monto)}</strong>
               </div>
             ))}
             {cargosCotizacion.map((cargo) => (
@@ -3019,7 +3032,7 @@ function CostosItemView({
               >
                 <span>{cargo.cargoNombre}</span>
                 <small>Cotización</small>
-                <strong>{formatCurrency(cargo.monto)}</strong>
+                <strong>{fmt(cargo.monto)}</strong>
               </div>
             ))}
           </div>
@@ -3214,7 +3227,7 @@ function claveFechaEta(fecha: Date) {
 function describirEta(
   eta: SimulacionItem | null | undefined,
   fechaElegida: string | null,
-  opts?: { margenDias?: number; noLaborables?: Set<string> },
+  opts?: { margenDias?: number; noLaborables?: Set<string>; zona?: string },
 ): {
   etiqueta: string;
   sugeridaEtiqueta: string | null;
@@ -3225,7 +3238,7 @@ function describirEta(
   if (!eta || !eta.finEstimado) return null;
   const fin = eta.finEstimado;
   const margen = opts?.margenDias ?? 0;
-  const sugerida = margen > 0 ? sumarDiasHabiles(fin, margen, opts?.noLaborables) : null;
+  const sugerida = margen > 0 ? sumarDiasHabiles(fin, margen, opts?.noLaborables, opts?.zona) : null;
   const elegida = fechaElegida ? fechaElegida.slice(0, 10) : null;
   const nivel =
     elegida && elegida < claveFechaEta(fin)
@@ -3282,6 +3295,7 @@ export function ProductRow({
   fechaEstimada: string;
   readOnly?: boolean;
 }) {
+  const { moneda, zonaHoraria } = useConfigRegional();
   const [innerTab, setInnerTab] = React.useState<InnerTab>("specs");
   const [priceDetailOpen, setPriceDetailOpen] = React.useState(false);
   const fechaInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -3356,13 +3370,19 @@ export function ProductRow({
           <span className="u">{formatUnidad(item.unidadMedida)}</span>
         </div>
         <div className="num">
-          {calculoPendiente ? "A cotizar" : formatCurrency(visibleAmounts.subtotal)}
+          {calculoPendiente
+            ? "A cotizar"
+            : formatCurrency(visibleAmounts.subtotal, moneda)}
         </div>
         <div className="num">
-          {calculoPendiente ? "-" : formatCurrency(visibleAmounts.impuestos)}
+          {calculoPendiente
+            ? "-"
+            : formatCurrency(visibleAmounts.impuestos, moneda)}
         </div>
         <div className={`num total${tienePrecioEspecial ? " especial" : ""}`}>
-          {calculoPendiente ? "Pendiente" : formatCurrency(visibleAmounts.total)}
+          {calculoPendiente
+            ? "Pendiente"
+            : formatCurrency(visibleAmounts.total, moneda)}
         </div>
         {!onRemove ? (
           <span className="x" aria-hidden="true" />
@@ -3589,7 +3609,7 @@ export function ProductRow({
                     )}
                   </div>
                   {(() => {
-                    const eta = describirEta(etaSistema, item.fechaEntrega ?? fechaEstimada, { margenDias: margenEtaDias, noLaborables });
+                    const eta = describirEta(etaSistema, item.fechaEntrega ?? fechaEstimada, { margenDias: margenEtaDias, noLaborables, zona: zonaHoraria });
                     if (!eta) return null;
                     return (
                       <div className="op-mini-row">
@@ -4001,6 +4021,8 @@ export function ResumenBar({
   guardandoBorrador?: boolean;
   readOnly?: boolean;
 }) {
+  const { moneda } = useConfigRegional();
+  const fmt = (v: number) => formatCurrency(v, moneda);
   const resumen = calcularResumenOrden(items, cargosOrden);
   const impuestosProductoResumen = getImpuestosProductoResumen(items);
   const cargosImpuestos = resumen.cargosImpuestos;
@@ -4077,13 +4099,13 @@ export function ResumenBar({
       <div className="rbar-cols">
         <div className="rbcol">
           <div className="lbl">Subtotal</div>
-          <div className="val">{formatCurrency(subtotal)}</div>
+          <div className="val">{fmt(subtotal)}</div>
           <div className="hint">{items.length} productos</div>
         </div>
         <div className="rbsep">+</div>
         <div className="rbcol">
           <div className="lbl">Impuestos</div>
-          <div className="val">{formatCurrency(impuestosVisibles)}</div>
+          <div className="val">{fmt(impuestosVisibles)}</div>
           <div className="hint">
             {impuestoLineas.length > 0
               ? impuestoLineas
@@ -4097,7 +4119,7 @@ export function ResumenBar({
         <div className="rbsep">+</div>
         <div className="rbcol">
           <div className="lbl">Cargos directos</div>
-          <div className="val">{formatCurrency(cargos)}</div>
+          <div className="val">{fmt(cargos)}</div>
           <div className="hint">
             {cargosOrdenTotal > 0
               ? `${cargosOrden.length} cargo${cargosOrden.length === 1 ? "" : "s"} de orden`
@@ -4109,7 +4131,7 @@ export function ResumenBar({
         <div className="rbsep">·</div>
         <div className="rbcol muted">
           <div className="lbl">Comisiones</div>
-          <div className="val">{formatCurrency(comisiones)}</div>
+          <div className="val">{fmt(comisiones)}</div>
           <div className="hint">
             {comisiones > 0 ? "Incluidas en subtotal" : "Sin comisiones"}
           </div>
@@ -4117,7 +4139,7 @@ export function ResumenBar({
         <div className="rbsep eq">=</div>
         <div className="rbcol total">
           <div className="lbl">Total c/ imp.</div>
-          <div className="val">{formatCurrency(totalConCargos)}</div>
+          <div className="val">{fmt(totalConCargos)}</div>
           <div className="hint">Para emitir al cliente</div>
         </div>
       </div>
@@ -4168,6 +4190,7 @@ function buildCargoOrdenSnapshot({
   zonaCodigo,
   subtotalBase,
   nota,
+  moneda,
 }: {
   cargo: CargoDirectoCatalogo;
   monto: number;
@@ -4177,6 +4200,7 @@ function buildCargoOrdenSnapshot({
   zonaCodigo: string;
   subtotalBase: number;
   nota: string;
+  moneda: Moneda;
 }): PropuestaCargoDirecto {
   const config = getCargoConfig(cargo);
   const zonas = Array.isArray(config.zonas) ? config.zonas : [];
@@ -4217,7 +4241,7 @@ function buildCargoOrdenSnapshot({
     montoNeto = precioUnidad * cantidadInput;
     nextConfig.precioPorUnidadAplicado = precioUnidad;
     nextConfig.cantidadAplicada = cantidadInput;
-    detalle = `${cantidadInput.toLocaleString("es-AR")} x ${formatCurrency(precioUnidad)}`;
+    detalle = `${cantidadInput.toLocaleString("es-AR")} x ${formatCurrency(precioUnidad, moneda)}`;
   }
 
   const montoRedondeado = Math.max(0, Math.round(montoNeto));
@@ -4261,6 +4285,7 @@ function CargoOrdenSheet({
   onClose: () => void;
   onAdd: (cargo: PropuestaCargoDirecto) => void;
 }) {
+  const { moneda } = useConfigRegional();
   const [cargoId, setCargoId] = React.useState("");
   const selectedCargo = cargos.find((cargo) => cargo.id === cargoId) ?? null;
   const selectedConfig = getCargoConfig(selectedCargo);
@@ -4305,6 +4330,7 @@ function CargoOrdenSheet({
         zonaCodigo,
         subtotalBase,
         nota,
+        moneda,
       })
     : null;
 
@@ -4383,7 +4409,7 @@ function CargoOrdenSheet({
                   </div>
                   <div>
                     <span className="lbl">Base actual</span>
-                    <strong>{formatCurrency(subtotalBase)}</strong>
+                    <strong>{formatCurrency(subtotalBase, moneda)}</strong>
                   </div>
                 </div>
               ) : null}
@@ -4400,7 +4426,7 @@ function CargoOrdenSheet({
                         {zonas.map((zona) => (
                           <option key={zona.codigo} value={zona.codigo}>
                             {zona.nombre ?? zona.codigo} ·{" "}
-                            {formatCurrency(asNumber(zona.monto))}
+                            {formatCurrency(asNumber(zona.monto), moneda)}
                           </option>
                         ))}
                       </select>
@@ -4481,7 +4507,7 @@ function CargoOrdenSheet({
                     {preview.nombreSnapshot}
                     <small>{preview.detalle}</small>
                   </span>
-                  <strong>{formatCurrency(preview.total)}</strong>
+                  <strong>{formatCurrency(preview.total, moneda)}</strong>
                 </div>
               ) : null}
             </>
@@ -4779,6 +4805,8 @@ export function PropuestaFicha({
   recienEmitida = false,
   recienConvertida = false,
 }: PropuestaFichaProps) {
+  const { moneda, zonaHoraria } = useConfigRegional();
+  const formatEventoFecha = useFormatEventoFecha();
   // La OT vive en estado local (inicializada desde el prop del server) para
   // poder refrescar el header/stepper en vivo sin recargar la página cuando
   // una acción interna cambia su estado (ej: avance de compra tercerizada).
@@ -4938,8 +4966,8 @@ export function PropuestaFicha({
           plazoProveedorDias: paso.plazoProveedorDias ?? null,
         })),
     }));
-    return estimarDemoraNuevos({ nuevos, ...colasTaller });
-  }, [conDemoraSistema, colasTaller, items]);
+    return estimarDemoraNuevos({ nuevos, ...colasTaller, zona: zonaHoraria });
+  }, [conDemoraSistema, colasTaller, items, zonaHoraria]);
 
   /** ETA de la ORDEN completa = el item que termina último. */
   const demoraOrden = React.useMemo<SimulacionItem | null>(() => {
@@ -5493,7 +5521,7 @@ export function PropuestaFicha({
             });
           } catch (error) {
             fallidos.push(
-              `${draft.metodoNombre} $${Math.round(draft.payload.montoBruto).toLocaleString("es-AR")}` +
+              `${draft.metodoNombre} ${formatCurrency(draft.payload.montoBruto, moneda)}` +
                 (error instanceof Error ? ` (${error.message})` : ""),
             );
           }
@@ -6068,7 +6096,7 @@ export function PropuestaFicha({
             </div>
           )}
           {(() => {
-            const eta = describirEta(demoraOrden, fechaEstimada, { margenDias: margenEtaDias, noLaborables: colasTaller?.noLaborables });
+            const eta = describirEta(demoraOrden, fechaEstimada, { margenDias: margenEtaDias, noLaborables: colasTaller?.noLaborables, zona: zonaHoraria });
             if (!eta) return null;
             return (
               <div
@@ -6252,15 +6280,15 @@ export function PropuestaFicha({
                   </div>
                   <div className="cargo-num">
                     <span>Neto</span>
-                    <strong>{formatCurrency(cargo.montoNeto)}</strong>
+                    <strong>{formatCurrency(cargo.montoNeto, moneda)}</strong>
                   </div>
                   <div className="cargo-num">
                     <span>IVA</span>
-                    <strong>{formatCurrency(cargo.impuestoMonto)}</strong>
+                    <strong>{formatCurrency(cargo.impuestoMonto, moneda)}</strong>
                   </div>
                   <div className="cargo-num total">
                     <span>Total</span>
-                    <strong>{formatCurrency(cargo.total)}</strong>
+                    <strong>{formatCurrency(cargo.total, moneda)}</strong>
                   </div>
                   {!modoOrden ? (
                     <button

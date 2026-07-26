@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { FAMILIAS } from '../productos-servicios/pasos/familias';
 import type { FamiliaCodigo } from '../productos-servicios/pasos/types';
 import { etiquetaMotivoFin } from '../ordenes-trabajo/ordenes-trabajo.types';
-import type { Rango } from './periodo';
+import { finExclusivo, type Rango } from './periodo';
 
 /**
  * Equipo — métricas por PERSONA con las guardas del estudio
@@ -19,20 +19,8 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 /** Guardas del estudio §4: sin esta muestra, la eficiencia no se muestra. */
 export const MUESTRA_MINIMA_EFICIENCIA = 20;
 
-function finExclusivo(rango: Rango): Date {
-  return new Date(
-    rango.hasta.getFullYear(),
-    rango.hasta.getMonth(),
-    rango.hasta.getDate() + 1,
-  );
-}
-
 function nombreFamilia(codigo: string): string {
   return FAMILIAS[codigo as FamiliaCodigo]?.nombre ?? codigo;
-}
-
-function claveFecha(fecha: Date): string {
-  return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`;
 }
 
 export type PersonaProduccion = {
@@ -93,9 +81,9 @@ export class EquipoService {
 
     const [personas, eficienciaRows, eficienciaSerieRows, disciplinaRows, polivalencia, vendedores] =
       await Promise.all([
-        this.personas(tenantId, desde, hastaExcl),
+        this.personas(tenantId, desde, hastaExcl, rango.zona),
         this.eficienciaPorPersona(tenantId, desde, hastaExcl),
-        this.eficienciaSerie(tenantId, desde, hastaExcl),
+        this.eficienciaSerie(tenantId, desde, hastaExcl, rango.zona),
         this.disciplina(tenantId, desde, hastaExcl),
         this.polivalencia(tenantId, desde, hastaExcl),
         this.vendedores(tenantId, desde, hastaExcl),
@@ -164,6 +152,7 @@ export class EquipoService {
     tenantId: string,
     desde: Date,
     hastaExcl: Date,
+    zona: string,
   ): Promise<PersonaProduccion[]> {
     const rows = await this.prisma.$queryRaw<
       Array<{
@@ -179,7 +168,8 @@ export class EquipoService {
       SELECT t."usuarioId" AS id, t."usuarioNombre" AS nombre,
              COALESCE(SUM(EXTRACT(EPOCH FROM (t."finEl" - t."inicioEl")) / 60.0), 0)::float8 AS minutos,
              COUNT(DISTINCT t."pasoId")::int AS pasos,
-             COUNT(DISTINCT date_trunc('day', t."inicioEl"))::int AS dias,
+             -- "Días trabajados" = días de la pared del TENANT (la columna guarda UTC).
+             COUNT(DISTINCT date_trunc('day', (t."inicioEl" AT TIME ZONE 'UTC') AT TIME ZONE ${zona}))::int AS dias,
              COUNT(DISTINCT p."familiaCodigo")::int AS familias,
              COUNT(*) FILTER (WHERE t."motivoFin" = 'auto_pausa')::int AS autopausas
       FROM "OrdenTrabajoPasoTramo" t
@@ -224,12 +214,12 @@ export class EquipoService {
   }
 
   /** Serie semanal del desvío por persona (tendencia contra sí mismo). */
-  private async eficienciaSerie(tenantId: string, desde: Date, hastaExcl: Date) {
+  private async eficienciaSerie(tenantId: string, desde: Date, hastaExcl: Date, zona: string) {
     return this.prisma.$queryRaw<
       Array<{ nombre: string; semana: string; muestras: number; estimado: number; real: number }>
     >`
       SELECT COALESCE(p."completadoPorNombre", 'Sin atribución') AS nombre,
-             to_char(date_trunc('week', p."completadoEl"), 'YYYY-MM-DD') AS semana,
+             to_char(date_trunc('week', (p."completadoEl" AT TIME ZONE 'UTC') AT TIME ZONE ${zona}), 'YYYY-MM-DD') AS semana,
              COUNT(*)::int AS muestras,
              COALESCE(SUM(p."duracionEstimadaMin"), 0)::float8 AS estimado,
              COALESCE(SUM(p."tiempoRealMin"), 0)::float8 AS real

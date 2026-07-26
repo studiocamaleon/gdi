@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { granularidad, type Granularidad, type Rango } from './periodo';
+import { finExclusivo, granularidad, type Granularidad, type Rango } from './periodo';
 
 /**
  * Ventas & Producto — la inteligencia comercial profunda. Ventas por
@@ -11,14 +11,6 @@ import { granularidad, type Granularidad, type Rango } from './periodo';
  */
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
-
-function finExclusivo(rango: Rango): Date {
-  return new Date(
-    rango.hasta.getFullYear(),
-    rango.hasta.getMonth(),
-    rango.hasta.getDate() + 1,
-  );
-}
 
 export type ProductoMargen = {
   nombre: string;
@@ -102,7 +94,7 @@ export class ProductoService {
         this.medidasModo(filtro),
         this.totalM2(filtro),
         this.tecnologia(filtro),
-        this.serieMix(filtro, granularidad(rango)),
+        this.serieMix(filtro, granularidad(rango), rango.zona),
         this.adicionales(filtro),
       ]);
 
@@ -126,7 +118,7 @@ export class ProductoService {
   async mixCategoria(tenantId: string, rango: Rango, categoria: string) {
     const filtro = { tenantId, desde: rango.desde, hastaExcl: finExclusivo(rango) };
     const [serie, productos] = await Promise.all([
-      this.serieMix(filtro, granularidad(rango), categoria),
+      this.serieMix(filtro, granularidad(rango), rango.zona, categoria),
       this.margenPor(filtro, `oti.nombre`, 20, categoria),
     ]);
     return { categoria, serie, productos };
@@ -139,26 +131,29 @@ export class ProductoService {
   private async serieMix(
     f: { tenantId: string; desde: Date; hastaExcl: Date },
     gran: Granularidad,
+    zona: string,
     categoria?: string,
   ): Promise<PuntoMix[]> {
     const dimension = categoria
       ? `oti.nombre`
       : `COALESCE(NULLIF(oti."categoriaComercial", ''), 'Sin categoría')`;
+    // timestamp sin zona con UTC adentro → se declara el UTC y se lleva al
+    // reloj del tenant ($4), para que el bucket sea el día de SU pared.
     const rows = await this.prisma.$queryRawUnsafe<PuntoMix[]>(
       `
-      SELECT to_char(date_trunc('${TRUNC[gran]}', ot."fechaEmision"), 'YYYY-MM-DD') AS fecha,
+      SELECT to_char(date_trunc('${TRUNC[gran]}', (ot."fechaEmision" AT TIME ZONE 'UTC') AT TIME ZONE $4), 'YYYY-MM-DD') AS fecha,
              ${dimension} AS nombre,
              COALESCE(SUM(oti.subtotal), 0)::float8 AS monto
       FROM "OrdenTrabajoItem" oti
       JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
       WHERE oti."tenantId" = $1::uuid AND ot.estado <> 'borrador'
         AND ot."fechaEmision" >= $2 AND ot."fechaEmision" < $3
-        ${categoria ? `AND COALESCE(NULLIF(oti."categoriaComercial", ''), 'Sin categoría') = $4` : ''}
+        ${categoria ? `AND COALESCE(NULLIF(oti."categoriaComercial", ''), 'Sin categoría') = $5` : ''}
       GROUP BY 1, 2 ORDER BY 1, monto DESC
       `,
       ...(categoria
-        ? [f.tenantId, f.desde, f.hastaExcl, categoria]
-        : [f.tenantId, f.desde, f.hastaExcl]),
+        ? [f.tenantId, f.desde, f.hastaExcl, zona, categoria]
+        : [f.tenantId, f.desde, f.hastaExcl, zona]),
     );
     return rows.map((r) => ({ ...r, monto: r2(r.monto) }));
   }

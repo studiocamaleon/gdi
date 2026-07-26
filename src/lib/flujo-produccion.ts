@@ -14,7 +14,6 @@ import {
   DIAS_SEMANA,
   type CalendarioDia,
   type CalendarioEstacion,
-  type DiaSemana,
   type Estacion,
 } from "@/lib/estaciones";
 import {
@@ -25,9 +24,14 @@ import {
   type TableroItemData,
   type TableroPasoData,
 } from "@/lib/tablero-produccion";
-
-/** Índice Date.getDay() (0 = domingo) → clave del calendario. */
-const JS_DIA: DiaSemana[] = ["dom", "lun", "mar", "mie", "jue", "vie", "sab"];
+import {
+  claveFechaEnZona,
+  diaSemanaDeClave,
+  instanteDe,
+  partesEnZona,
+  sumarDiasAClave,
+  ZONA_DEFAULT,
+} from "@/lib/zona";
 
 /** Horizonte de búsqueda de ventanas laborales (D8). */
 const HORIZONTE_DIAS = 120;
@@ -98,47 +102,41 @@ export type ResultadoSimulacion = {
 
 // ── Aritmética de calendario ─────────────────────────────────────────────
 
-function minutosDe(hora: string) {
-  const [hh, mm] = hora.split(":").map(Number);
-  return hh * 60 + mm;
-}
-
-function claveFecha(fecha: Date) {
-  const mes = String(fecha.getMonth() + 1).padStart(2, "0");
-  const dia = String(fecha.getDate()).padStart(2, "0");
-  return `${fecha.getFullYear()}-${mes}-${dia}`;
-}
-
-function franjasDelDia(
+/**
+ * Las franjas de una FECHA de pared ("2026-07-27"). El calendario habla en
+ * hora de pared del taller; qué día de la semana es una fecha ya no depende
+ * de ninguna zona.
+ */
+function franjasDeClave(
   calendario: CalendarioEstacion,
-  fecha: Date,
+  clave: string,
   noLaborables: Set<string>,
 ): CalendarioDia {
-  if (noLaborables.has(claveFecha(fecha))) return [];
-  return calendario.dias[JS_DIA[fecha.getDay()]] ?? [];
-}
-
-function conHora(fecha: Date, minutos: number) {
-  const resultado = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
-  resultado.setMinutes(minutos);
-  return resultado;
+  if (noLaborables.has(clave)) return [];
+  return calendario.dias[diaSemanaDeClave(clave)] ?? [];
 }
 
 /**
  * Avanza `t` al próximo instante laboral (t mismo si ya cae dentro de una
  * franja del día — puede haber varias: jornada cortada). null si no hay
  * ventana en el horizonte (D8).
+ *
+ * `zona` es la zona IANA del taller: el "08:00" del calendario es hora de
+ * pared AHÍ, no del proceso — el server corre en UTC y el navegador en la
+ * zona de quien mire (multi-moneda-zona-horaria D10).
  */
 export function avanzarAVentana(
   calendario: CalendarioEstacion,
   t: Date,
   noLaborables: Set<string> = new Set(),
+  zona: string = ZONA_DEFAULT,
 ): Date | null {
+  const claveT = claveFechaEnZona(t, zona);
   for (let i = 0; i < HORIZONTE_DIAS; i += 1) {
-    const dia = new Date(t.getFullYear(), t.getMonth(), t.getDate() + i);
-    for (const franja of franjasDelDia(calendario, dia, noLaborables)) {
-      const inicio = conHora(dia, minutosDe(franja.desde));
-      const fin = conHora(dia, minutosDe(franja.hasta));
+    const clave = i === 0 ? claveT : sumarDiasAClave(claveT, i);
+    for (const franja of franjasDeClave(calendario, clave, noLaborables)) {
+      const inicio = instanteDe(clave, franja.desde, zona);
+      const fin = instanteDe(clave, franja.hasta, zona);
       const candidato = i === 0 && t > inicio ? t : inicio;
       if (candidato < fin) return candidato;
     }
@@ -154,10 +152,12 @@ function finDeFranjaActual(
   calendario: CalendarioEstacion,
   t: Date,
   noLaborables: Set<string>,
+  zona: string,
 ): Date | null {
-  for (const franja of franjasDelDia(calendario, t, noLaborables)) {
-    const inicio = conHora(t, minutosDe(franja.desde));
-    const fin = conHora(t, minutosDe(franja.hasta));
+  const clave = claveFechaEnZona(t, zona);
+  for (const franja of franjasDeClave(calendario, clave, noLaborables)) {
+    const inicio = instanteDe(clave, franja.desde, zona);
+    const fin = instanteDe(clave, franja.hasta, zona);
     if (t >= inicio && t < fin) return fin;
   }
   return null;
@@ -173,8 +173,9 @@ export function sumarMinutosLaborales(
   desde: Date,
   minutos: number,
   noLaborables: Set<string> = new Set(),
+  zona: string = ZONA_DEFAULT,
 ): Date | null {
-  let t = avanzarAVentana(calendario, desde, noLaborables);
+  let t = avanzarAVentana(calendario, desde, noLaborables, zona);
   let restante = minutos;
   // Antes la guardia contaba días; con jornada cortada hay más de una
   // iteración por día (una por franja).
@@ -182,15 +183,15 @@ export function sumarMinutosLaborales(
   const limite = (HORIZONTE_DIAS + 7) * 6;
   while (t && guardia < limite) {
     guardia += 1;
-    const finVentana = finDeFranjaActual(calendario, t, noLaborables);
+    const finVentana = finDeFranjaActual(calendario, t, noLaborables, zona);
     if (!finVentana) {
-      t = avanzarAVentana(calendario, t, noLaborables);
+      t = avanzarAVentana(calendario, t, noLaborables, zona);
       continue;
     }
     const disponibles = (finVentana.getTime() - t.getTime()) / 60000;
     if (restante <= disponibles) return new Date(t.getTime() + restante * 60000);
     restante -= disponibles;
-    t = avanzarAVentana(calendario, finVentana, noLaborables);
+    t = avanzarAVentana(calendario, finVentana, noLaborables, zona);
   }
   return null;
 }
@@ -274,6 +275,7 @@ export function simularFlujo({
   ahora = new Date(),
   noLaborables = new Set<string>(),
   tiempoEntrePasosMin = 0,
+  zona = ZONA_DEFAULT,
 }: {
   items: TableroItemData[];
   estaciones: Estacion[];
@@ -282,6 +284,12 @@ export function simularFlujo({
   noLaborables?: Set<string>;
   /** Default del tenant para las estaciones que no declaran el suyo. */
   tiempoEntrePasosMin?: number;
+  /**
+   * Zona IANA del taller: los "08:00" del calendario y las claves de los
+   * feriados son hora de pared AHÍ. Sin pasarla se asume Argentina, que
+   * además unifica el resultado entre el server (UTC) y el navegador.
+   */
+  zona?: string;
 }): ResultadoSimulacion {
   const porItem = new Map<string, SimulacionItem>();
   const llegadasPorEstacion = new Map<string, LlegadaEstacion[]>();
@@ -360,7 +368,7 @@ export function simularFlujo({
           ? Math.max(0, (ahora.getTime() - new Date(frontera.iniciadoEl).getTime()) / 60000)
           : 0;
         const restanteMin = Math.max(duracion - transcurrido, MIN_RESTANTE_EN_CURSO);
-        const fin = sumarMinutosLaborales(est.calendario, ahora, restanteMin, noLaborables);
+        const fin = sumarMinutosLaborales(est.calendario, ahora, restanteMin, noLaborables, zona);
         if (fin === null) {
           sim.done = true;
         } else {
@@ -421,7 +429,7 @@ export function simularFlujo({
           sim.done = true;
           break;
         }
-        const fin = sumarDiasHabiles(sim.readyAt, plazo, noLaborables);
+        const fin = sumarDiasHabiles(sim.readyAt, plazo, noLaborables, zona);
         anotar({
           itemId: sim.data.id,
           pasoId: paso.id,
@@ -476,7 +484,7 @@ export function simularFlujo({
         : null;
       let startRaw = libreDesde > sim.readyAt ? libreDesde : sim.readyAt;
       if (maquinaLibre && maquinaLibre > startRaw) startRaw = maquinaLibre;
-      const start = avanzarAVentana(est.calendario, startRaw, noLaborables);
+      const start = avanzarAVentana(est.calendario, startRaw, noLaborables, zona);
       if (start === null) {
         sim.done = true;
         continue;
@@ -490,7 +498,7 @@ export function simularFlujo({
     const { sim, est, duracion, start } = mejor;
     const paso = sim.restantes[sim.idx];
     const prep = est.preparacionMin;
-    const fin = sumarMinutosLaborales(est.calendario, start, duracion, noLaborables);
+    const fin = sumarMinutosLaborales(est.calendario, start, duracion, noLaborables, zona);
     if (fin === null) {
       sim.done = true;
       continue;
@@ -503,7 +511,7 @@ export function simularFlujo({
        trabajo (start → fin); la separación queda como aire entre bloques. */
     const finSeparado =
       prep > 0
-        ? (sumarMinutosLaborales(est.calendario, fin, prep, noLaborables) ?? fin)
+        ? (sumarMinutosLaborales(est.calendario, fin, prep, noLaborables, zona) ?? fin)
         : fin;
     ocupar(est, finSeparado);
     ocuparMaquina(est, paso, finSeparado, ahora);
@@ -644,6 +652,7 @@ export function estimarDemoraNuevos({
   medianas,
   ahora = new Date(),
   noLaborables = new Set<string>(),
+  zona = ZONA_DEFAULT,
 }: {
   nuevos: ItemHipotetico[];
   /** Items vivos del tablero (las colas reales de hoy). */
@@ -652,6 +661,7 @@ export function estimarDemoraNuevos({
   medianas: Map<string, number>;
   ahora?: Date;
   noLaborables?: Set<string>;
+  zona?: string;
 }): Map<string, SimulacionItem> {
   const hipoteticos: TableroItemData[] = nuevos
     .filter((nuevo) => nuevo.pasos.length > 0)
@@ -709,6 +719,7 @@ export function estimarDemoraNuevos({
     medianas,
     ahora,
     noLaborables,
+    zona,
   });
   const resultado = new Map<string, SimulacionItem>();
   for (const nuevo of nuevos) {
@@ -727,19 +738,26 @@ export function sumarDiasHabiles(
   fecha: Date,
   dias: number,
   noLaborables: Set<string> = new Set(),
+  zona: string = ZONA_DEFAULT,
 ): Date {
-  const resultado = new Date(fecha);
   let restantes = Math.max(0, Math.floor(dias));
+  if (restantes === 0) return new Date(fecha);
+
+  // Se avanza sobre la FECHA de pared del taller y al final se reconstruye
+  // el instante conservando la hora de pared original.
+  const p = partesEnZona(fecha, zona);
+  let clave = claveFechaEnZona(fecha, zona);
   let guardia = 0;
   while (restantes > 0 && guardia < 400) {
     guardia += 1;
-    resultado.setDate(resultado.getDate() + 1);
-    const dow = resultado.getDay();
-    if (dow === 0 || dow === 6) continue;
-    if (noLaborables.has(claveFecha(resultado))) continue;
+    clave = sumarDiasAClave(clave, 1);
+    const dow = diaSemanaDeClave(clave);
+    if (dow === "dom" || dow === "sab") continue;
+    if (noLaborables.has(clave)) continue;
     restantes -= 1;
   }
-  return resultado;
+  const hora = `${String(p.hh).padStart(2, "0")}:${String(p.mm).padStart(2, "0")}`;
+  return instanteDe(clave, hora, zona);
 }
 
 // ── Etiquetas ────────────────────────────────────────────────────────────
