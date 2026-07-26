@@ -248,13 +248,19 @@ export const NAV: NavItem[] = [
     permiso: "configuracion.ver",
     children: [
       {
+        key: "empresa",
+        label: "Empresa",
+        href: "/configuracion/empresa",
+      },
+      {
         key: "usuarios",
         label: "Usuarios",
         href: "/configuracion/usuarios",
       },
       // Vive acá y no en Administración: es la puesta a punto del emisor
-      // —quién factura, con qué logo, desde qué punto de venta—, no una
-      // operación del día a día. Se lo configura una vez y se lo olvida.
+      // —quién factura, desde qué punto de venta—, no una operación del día a
+      // día. Lo comercial (nombre, logo, teléfono, web) está en Empresa: son
+      // dos públicos y dos permisos distintos.
       {
         key: "datos-fiscales",
         label: "Datos fiscales",

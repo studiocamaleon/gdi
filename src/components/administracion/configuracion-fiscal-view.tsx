@@ -12,9 +12,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { LogoTenantCard } from "@/components/archivos/logo-tenant-card";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
-import type { LogoTenant } from "@/lib/archivos-api";
 import {
   CONDICIONES_EMISOR,
   CONDICION_EMISOR_LABELS,
@@ -66,10 +64,8 @@ function estadoInicial(config: ConfiguracionFiscal | null): FormState {
 
 export function ConfiguracionFiscalView({
   initialConfig,
-  logoInicial,
 }: {
   initialConfig: ConfiguracionFiscal | null;
-  logoInicial: LogoTenant;
 }) {
   const router = useRouter();
   const [form, setForm] = React.useState<FormState>(() =>
@@ -214,16 +210,6 @@ export function ConfiguracionFiscalView({
         ) : null}
 
         <div className="arc-page" style={{ display: "block" }}>
-          <div className="arc-card" style={{ marginBottom: 20 }}>
-            <div className="arc-card-sec">
-              <div className="arc-sec-t">Identidad visual</div>
-              <LogoTenantCard
-                nombreNegocio={form.razonSocial || "Grafo"}
-                logoInicial={logoInicial}
-              />
-            </div>
-          </div>
-
           <div className="arc-card" style={{ marginBottom: 20 }}>
             <div className="arc-card-sec">
               <div className="arc-sec-t">Emisor</div>

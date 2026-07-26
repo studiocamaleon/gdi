@@ -688,6 +688,7 @@ model Tenant {
   retencionesPercepciones                          RetencionPercepcion[]
   valores                                          Valor[]
   configuracionFiscal                              ConfiguracionFiscal?
+  datosEmpresa                                     DatosEmpresa?
   puntosVenta                                      PuntoVenta[]
   comprobantes                                     Comprobante[]
   comprobanteContadores                            ComprobanteContador[]
@@ -735,26 +736,26 @@ model User {
 ///
 /// Append-only: no se edita ni se borra. Ver docs/usuarios-roles-permisos-diseno.md
 model EventoAcceso {
-  id       String @id @default(uuid()) @db.Uuid
-  tenantId String @db.Uuid
+  id                    String   @id @default(uuid()) @db.Uuid
+  tenantId              String   @db.Uuid
   /// Quién lo hizo. Null si fue el sistema (seed, backfill, control plane).
-  actorUserId String? @db.Uuid
+  actorUserId           String?  @db.Uuid
   /// Se congela el nombre: si mañana el actor cambia de mail o se da de baja,
   /// la línea de auditoría tiene que seguir diciendo quién fue.
-  actorNombre String
+  actorNombre           String
   /// 'usuario_invitado' | 'rol_cambiado' | 'acceso_quitado' | 'acceso_devuelto'
   /// | 'invitacion_reenviada' | 'rol_creado' | 'rol_editado' | 'rol_eliminado'
-  tipo String
+  tipo                  String
   /// A quién le pasó, cuando aplica (los eventos de rol no tienen destinatario).
-  usuarioAfectadoId String? @db.Uuid
+  usuarioAfectadoId     String?  @db.Uuid
   /// Congelado por lo mismo que `actorNombre`.
   usuarioAfectadoNombre String?
   /// La frase que se lee en el listado, ya armada.
-  descripcion String
+  descripcion           String
   /// El detalle para el que quiera mirar fino: permisos antes y después, etc.
-  datosJson Json?
-  createdAt DateTime @default(now())
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  datosJson             Json?
+  createdAt             DateTime @default(now())
+  tenant                Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, createdAt])
 }
@@ -768,21 +769,21 @@ model EventoAcceso {
 ///
 /// Ver docs/usuarios-roles-permisos-diseno.md
 model Rol {
-  id          String   @id @default(uuid()) @db.Uuid
-  tenantId    String   @db.Uuid
+  id           String       @id @default(uuid()) @db.Uuid
+  tenantId     String       @db.Uuid
   /// Clave estable de los predefinidos ('administrador', 'operario'…). Null en
   /// los que crea el tenant: ahí el nombre es lo único que los identifica.
-  codigo      String?
-  nombre      String
-  descripcion String?
+  codigo       String?
+  nombre       String
+  descripcion  String?
   /// Predefinido de Grafo: se le editan los permisos, no se borra ni se
   /// renombra. Es también la plantilla que el tenant duplica.
-  esDelSistema Boolean @default(false)
-  permisos    String[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  memberships Membership[]
+  esDelSistema Boolean      @default(false)
+  permisos     String[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  memberships  Membership[]
 
   @@unique([tenantId, codigo])
   @@index([tenantId, nombre])
@@ -825,24 +826,24 @@ model Membership {
 }
 
 model AuthSession {
-  id                  String     @id @default(uuid()) @db.Uuid
-  userId              String     @db.Uuid
+  id                  String               @id @default(uuid()) @db.Uuid
+  userId              String               @db.Uuid
   /// Null en sesiones de PLATAFORMA (backoffice): el staff no está parado en
   /// ningún tenant. Toda sesión de tenant (normal o impersonación) lo lleva.
-  currentTenantId     String?    @db.Uuid
+  currentTenantId     String?              @db.Uuid
   /// Null en sesiones de plataforma y de impersonación: el staff no tiene
   /// membership en el tenant. Toda sesión normal lo lleva.
-  currentMembershipId String?    @db.Uuid
+  currentMembershipId String?              @db.Uuid
   /// Presente = esta sesión ES una impersonación del control plane. El guard
   /// resuelve el rol y el actor desde SesionImpersonacion, no desde membership.
-  impersonacionId     String?    @unique @db.Uuid
+  impersonacionId     String?              @unique @db.Uuid
   expiresAt           DateTime
   revokedAt           DateTime?
-  createdAt           DateTime   @default(now())
-  updatedAt           DateTime   @updatedAt
-  user                User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  currentTenant       Tenant?    @relation(fields: [currentTenantId], references: [id], onDelete: Cascade)
-  currentMembership   Membership? @relation(fields: [currentMembershipId], references: [id], onDelete: Cascade)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currentTenant       Tenant?              @relation(fields: [currentTenantId], references: [id], onDelete: Cascade)
+  currentMembership   Membership?          @relation(fields: [currentMembershipId], references: [id], onDelete: Cascade)
   impersonacion       SesionImpersonacion? @relation(fields: [impersonacionId], references: [id], onDelete: Cascade)
 
   @@index([userId])
@@ -850,27 +851,27 @@ model AuthSession {
 }
 
 model Invitation {
-  id                    String     @id @default(uuid()) @db.Uuid
-  tenantId              String     @db.Uuid
-  userId                String?    @db.Uuid
-  empleadoId            String?    @db.Uuid
+  id                    String      @id @default(uuid()) @db.Uuid
+  tenantId              String      @db.Uuid
+  userId                String?     @db.Uuid
+  empleadoId            String?     @db.Uuid
   /// Null = invitación emitida desde el CONTROL PLANE (alta de tenant): el
   /// staff no tiene membership. Las de tenant siempre lo llevan.
-  invitedByMembershipId String?    @db.Uuid
+  invitedByMembershipId String?     @db.Uuid
   email                 String
   rol                   RolSistema
   /// El rol del tenant con el que se invitó. Null en invitaciones viejas y en
   /// las del control plane, que sólo conocen el enum.
-  rolId                 String?    @db.Uuid
-  tokenHash             String     @unique
+  rolId                 String?     @db.Uuid
+  tokenHash             String      @unique
   expiresAt             DateTime
   acceptedAt            DateTime?
   revokedAt             DateTime?
-  createdAt             DateTime   @default(now())
-  updatedAt             DateTime   @updatedAt
-  tenant                Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user                  User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
-  empleado              Empleado?  @relation(fields: [empleadoId], references: [id], onDelete: SetNull)
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+  tenant                Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user                  User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  empleado              Empleado?   @relation(fields: [empleadoId], references: [id], onDelete: SetNull)
   invitedByMembership   Membership? @relation("InvitationSender", fields: [invitedByMembershipId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, email])
@@ -952,9 +953,9 @@ model Proveedor {
 }
 
 model Empleado {
-  id                     String               @id @default(uuid()) @db.Uuid
-  tenantId               String               @db.Uuid
-  userId                 String?              @db.Uuid
+  id                     String                              @id @default(uuid()) @db.Uuid
+  tenantId               String                              @db.Uuid
+  userId                 String?                             @db.Uuid
   nombreCompleto         String
   emailPrincipal         String
   telefonoCodigo         String
@@ -962,22 +963,22 @@ model Empleado {
   sector                 String
   ocupacion              String?
   sexo                   SexoEmpleado?
-  fechaIngreso           DateTime             @db.Date
-  fechaNacimiento        DateTime?            @db.Date
-  comisionesHabilitadas  Boolean              @default(false)
-  createdAt              DateTime             @default(now())
-  updatedAt              DateTime             @updatedAt
-  tenant                 Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user                   User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+  fechaIngreso           DateTime                            @db.Date
+  fechaNacimiento        DateTime?                           @db.Date
+  comisionesHabilitadas  Boolean                             @default(false)
+  createdAt              DateTime                            @default(now())
+  updatedAt              DateTime                            @updatedAt
+  tenant                 Tenant                              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user                   User?                               @relation(fields: [userId], references: [id], onDelete: SetNull)
   direcciones            EmpleadoDireccion[]
   comisiones             EmpleadoComision[]
   remuneraciones         EmpleadoRemuneracion[]
   componentesCosto       CentroCostoComponenteCostoPeriodo[] @relation("ComponenteCostoEmpleado")
-  centrosACargo          CentroCosto[]        @relation("CentroCostoResponsable")
+  centrosACargo          CentroCosto[]                       @relation("CentroCostoResponsable")
   invitations            Invitation[]
-  recursosCentroCosto    CentroCostoRecurso[] @relation("CentroCostoRecursoEmpleado")
-  ordenesTrabajoVendidas OrdenTrabajo[]       @relation("OrdenTrabajoVendedor")
-  cotizacionesVendidas   Cotizacion[]         @relation("CotizacionVendedor")
+  recursosCentroCosto    CentroCostoRecurso[]                @relation("CentroCostoRecursoEmpleado")
+  ordenesTrabajoVendidas OrdenTrabajo[]                      @relation("OrdenTrabajoVendedor")
+  cotizacionesVendidas   Cotizacion[]                        @relation("CotizacionVendedor")
   estaciones             EstacionEmpleado[]
 
   @@index([tenantId, nombreCompleto])
@@ -995,17 +996,17 @@ model Empleado {
 /// Filas con vigencia, no un campo que se pisa: el sueldo cambia (paritarias,
 /// ascensos) y "cuánto ganaba en marzo" tiene que seguir siendo respondible.
 model EmpleadoRemuneracion {
-  id             String    @id @default(uuid()) @db.Uuid
-  tenantId       String    @db.Uuid
-  empleadoId     String    @db.Uuid
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @db.Uuid
+  empleadoId     String   @db.Uuid
   /// 'YYYY-MM' — primer mes de vigencia (inclusive).
   vigenteDesde   String
   /// 'YYYY-MM' — último mes (inclusive); null = vigente hasta nuevo aviso.
   vigenteHasta   String?
   /// Neto de bolsillo.
-  sueldoNeto     Decimal   @db.Decimal(14, 2)
+  sueldoNeto     Decimal  @db.Decimal(14, 2)
   /// Cargas sociales y aportes patronales del mes.
-  cargasSociales Decimal   @db.Decimal(14, 2)
+  cargasSociales Decimal  @db.Decimal(14, 2)
   /// Sueldos que cobra por año: 13 con aguinaldo (lo normal en Argentina), 12
   /// sin (contratado, monotributista). El costo mensual prorratea el SAC:
   /// (neto + cargas) × sueldosPorAnio / 12 — un 8,33% de recargo con 13.
@@ -1016,14 +1017,14 @@ model EmpleadoRemuneracion {
   /// aguinaldo en junio y diciembre en vez de prorratearlo haría que el mismo
   /// trabajo costara distinto según el mes, que es lo que un sistema de costeo
   /// tiene que evitar.
-  sueldosPorAnio Int       @default(13)
+  sueldosPorAnio Int      @default(13)
   /// Por qué cambió: 'alta' | 'paritaria' | 'ascenso' | 'correccion' | 'otro'.
   motivo         String?
   notas          String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  empleado       Empleado  @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  empleado       Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, empleadoId, vigenteDesde])
   @@index([tenantId, vigenteDesde])
@@ -1588,6 +1589,53 @@ model GastoFijoEstructura {
 /// Configuración de producción del tenant. Hoy: margen de seguridad que
 /// el cotizador suma a la ETA cruda al sugerir la fecha prometible.
 /// Ver docs/simulacion-flujo-diseno.md D13.
+/// Cómo se presenta la imprenta ante su cliente: teléfono, web, dónde queda,
+/// dónde dejar una reseña. Es lo COMERCIAL, y va aparte de `ConfiguracionFiscal`
+/// a propósito: la razón social y el CUIT son lo que ARCA exige en un
+/// comprobante, esto es lo que el cliente necesita para llamar, encontrar el
+/// local o volver. Además son dos permisos distintos —`configuracion.gestionar`
+/// del dueño contra `administracion.configurar` del administrativo— y en una
+/// pantalla sola uno de los dos quedaba mal.
+///
+/// El nombre comercial NO está acá: sigue siendo `Tenant.nombre`, que ya lo
+/// leen la sesión, el sidebar, el selector de empresa y el control plane. Un
+/// segundo campo sólo abriría la puerta a que discrepen.
+///
+/// Ver docs/datos-de-empresa-diseno.md
+model DatosEmpresa {
+  id                 String   @id @default(uuid()) @db.Uuid
+  tenantId           String   @unique @db.Uuid
+  /// Partido en tres columnas como el resto del sistema (ver
+  /// `src/integraciones/telefono.ts`): lo que se muestra es el número tal cual
+  /// se cargó, y para WhatsApp se normaliza a E.164 al vuelo.
+  telefonoCodigo     String?
+  telefonoNumero     String?
+  paisCodigo         String?  @db.VarChar(2)
+  /// Sólo si el WhatsApp del negocio es OTRO número que el teléfono. Null =
+  /// es el mismo, que es el caso normal en una imprenta chica.
+  whatsappCodigo     String?
+  whatsappNumero     String?
+  email              String?
+  /// Con esquema (https://…). Se guarda normalizada para que el PDF no tenga
+  /// que adivinar si "grafo.ar" es un link.
+  sitioWeb           String?
+  /// Dónde atiende, que no siempre es el domicilio fiscal: el fiscal puede ser
+  /// el estudio contable y el cliente terminaría tocando un timbre equivocado.
+  domicilioComercial String?
+  localidad          String?
+  provincia          String?
+  /// "Lunes a viernes de 9 a 18" — texto libre a propósito: cada imprenta lo
+  /// dice a su manera y una grilla de horarios sería un módulo entero.
+  horarioAtencion    String?
+  /// Link para dejar una reseña (Google, normalmente `https://g.page/r/…`).
+  /// Es el dato que le falta a la plantilla de WhatsApp `grafo_resena_v2`, que
+  /// está aprobada por Meta desde hace meses y no la manda nadie.
+  urlResenas         String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
 model ConfiguracionProduccion {
   id                  String   @id @default(uuid()) @db.Uuid
   tenantId            String   @unique @db.Uuid
@@ -3566,42 +3614,42 @@ model PlataformaEvento {
 /// MaterialPreset: los mismos planes para todos los tenants.
 /// Ver docs/control-plane-diseno.md
 model Plan {
-  id            String        @id @default(uuid()) @db.Uuid
+  id                 String        @id @default(uuid()) @db.Uuid
   /// "trial" | "taller" | "estudio" | "diamante" — estable, es la clave.
-  codigo        String        @unique
-  nombre        String
+  codigo             String        @unique
+  nombre             String
   /// La bajada comercial que ve el tenant en la tarjeta del plan ("Para
   /// imprentas que arrancan a ordenar su producción"). Editable desde la
   /// consola: es copy de producto, cambia sin deploy.
-  descripcion   String?
+  descripcion        String?
   /// ESPEJO del precio que vive en Paddle, cacheado para mostrarlo (consola,
   /// MRR, vista del tenant) sin pegarle a la API. La fuente de verdad del
   /// monto es el catálogo de Paddle: esto se sincroniza, no se edita a mano.
-  precioMensual Decimal       @db.Decimal(14, 2)
+  precioMensual      Decimal       @db.Decimal(14, 2)
   /// Moneda del precio. Paddle cobra en USD; el riel argentino (MercadoPago)
   /// llegará con ARS. Ver docs/suscripciones-cobro-diseno.md
-  moneda        String        @default("USD")
+  moneda             String        @default("USD")
   /// Qué habilita y hasta dónde: { afip, whatsapp, usuariosMax,
   /// ordenesMesMax, storageGb }. JSON a propósito: los features cambian más
   /// rápido que el schema. NADIE lo lee directo salvo SuscripcionesService.
   /// Esto NO va a Paddle: es el patrón que recomienda su propia doc — precio
   /// en Paddle, entitlements en nuestro código.
-  featuresJson  Json
+  featuresJson       Json
   /// Precio y producto en el catálogo de Paddle. Null = plan no vendible por
   /// Paddle todavía (p. ej. "trial", o los planes legacy).
-  paddlePriceId   String?     @unique
-  paddleProductId String?
+  paddlePriceId      String?       @unique
+  paddleProductId    String?
   /// Variante ANUAL del mismo plan: otro precio en Paddle, mismo producto.
   /// Null = el plan sólo se vende mensual. El ahorro contra 12 meses lo
   /// calcula el front con estos dos números.
-  paddlePriceIdAnual String?  @unique
-  precioAnual        Decimal? @db.Decimal(14, 2)
+  paddlePriceIdAnual String?       @unique
+  precioAnual        Decimal?      @db.Decimal(14, 2)
   /// Días de prueba que otorga este plan al asignarse. Null = sin prueba.
   /// Vive en el plan (no hardcodeado) para poder cambiarlo sin deploy.
   trialDias          Int?
-  activo        Boolean       @default(true)
-  orden         Int           @default(0)
-  suscripciones Suscripcion[]
+  activo             Boolean       @default(true)
+  orden              Int           @default(0)
+  suscripciones      Suscripcion[]
 }
 
 /// La suscripción del tenant: una por tenant. CON tenantId y SIN eximir del
@@ -3609,31 +3657,31 @@ model Plan {
 /// control plane —sin contexto— la escribe. Sin suscripción = tenant legacy:
 /// se lo trata como ilimitado (grandfathered) hasta que se le asigne plan.
 model Suscripcion {
-  id        String    @id @default(uuid()) @db.Uuid
-  tenantId  String    @unique @db.Uuid
-  planId    String    @db.Uuid
+  id                 String    @id @default(uuid()) @db.Uuid
+  tenantId           String    @unique @db.Uuid
+  planId             String    @db.Uuid
   /// 'activa' | 'suspendida' | 'baja' — estado NORMALIZADO nuestro, el que
   /// mira el gate por plan. No es el de Paddle: ver estadoProveedor.
-  estado    String    @default("activa")
+  estado             String    @default("activa")
   /// Quién cobra: 'paddle' | 'mercadopago' | 'manual'. "manual" son los
   /// legacy/cortesía que no pasan por ninguna pasarela.
-  proveedor String    @default("manual")
+  proveedor          String    @default("manual")
   /// Id de la suscripción en el proveedor (subscription_id de Paddle).
-  referenciaExterna String? @unique
+  referenciaExterna  String?   @unique
   /// Id del cliente en el proveedor (customer_id de Paddle), para abrir el
   /// customer portal sin volver a buscarlo.
-  clienteExternoId  String?
+  clienteExternoId   String?
   /// El estado CRUDO del proveedor (active | trialing | past_due | paused |
   /// canceled). Se guarda sin traducir para no perder información: 'past_due'
   /// mapea a estado 'activa' (hay ventana de dunning) pero enciende el banner.
-  estadoProveedor   String?
+  estadoProveedor    String?
   /// Próximo cobro informado por el proveedor (para la vista del tenant).
-  proximoCobro      DateTime?
+  proximoCobro       DateTime?
   /// Inicio del período de facturación en curso (current_billing_period de
   /// Paddle). Junto con `proximoCobro` da el largo REAL del ciclo, que es lo
   /// que permite mostrar "faltan X de N días" sin asumir 30 —un plan anual
   /// tiene 365. Nullable: las filas viejas se completan con el próximo evento.
-  periodoDesde      DateTime?
+  periodoDesde       DateTime?
   /// Cambio PROGRAMADO en la pasarela: 'cancel' | 'pause' | 'resume', con la
   /// fecha en que se hace efectivo. Existe porque al cancelar, Paddle deja la
   /// suscripción en `active` con un scheduled_change hasta el fin del período:
@@ -3644,12 +3692,12 @@ model Suscripcion {
   /// contra esta fecha, así nunca quedan desactualizados. Al vencer, el cron
   /// pasa la suscripción a 'suspendida' — cierra los gates por plan pero el
   /// tenant sigue entrando y viendo sus datos. Ver docs/suscripciones-cobro-diseno.md
-  trialHasta        DateTime?
-  desde     DateTime  @default(now())
-  hasta     DateTime?
-  notas     String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  trialHasta         DateTime?
+  desde              DateTime  @default(now())
+  hasta              DateTime?
+  notas              String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   plan   Plan   @relation(fields: [planId], references: [id])
@@ -3664,11 +3712,11 @@ model Suscripcion {
 /// tenant se resuelve después mirando la referencia externa.
 /// Ver docs/suscripciones-cobro-diseno.md
 model EventoCobro {
-  id          String   @id @default(uuid()) @db.Uuid
+  id          String    @id @default(uuid()) @db.Uuid
   /// 'paddle' | 'mercadopago'
   proveedor   String
   /// Id del evento en el proveedor. UNIQUE = la idempotencia.
-  eventoId    String   @unique
+  eventoId    String    @unique
   /// p. ej. 'subscription.updated', 'transaction.completed'
   tipo        String
   payloadJson Json
@@ -3676,7 +3724,7 @@ model EventoCobro {
   procesadoEl DateTime?
   /// Si el procesamiento falló, queda acá para poder reintentar a mano.
   errorTexto  String?
-  recibidoEl  DateTime @default(now())
+  recibidoEl  DateTime  @default(now())
 
   @@index([proveedor, tipo])
   @@index([recibidoEl])
@@ -3691,16 +3739,16 @@ model EventoCobro {
 /// del tenant/usuario (el rastro no se borra) y no caen en la excepción del
 /// spec de aislamiento.
 model SesionImpersonacion {
-  id          String    @id @default(uuid()) @db.Uuid
-  staffUserId String    @db.Uuid
-  tenantId    String    @db.Uuid
+  id           String    @id @default(uuid()) @db.Uuid
+  staffUserId  String    @db.Uuid
+  tenantId     String    @db.Uuid
   /// Obligatorio y visible al tenant: "ticket #412, no le sale el PDF".
-  motivo      String
-  creadaEl    DateTime  @default(now())
+  motivo       String
+  creadaEl     DateTime  @default(now())
   /// Corta sola. Renovar = otra sesión (otro registro), nunca extender.
-  expiraEl    DateTime
+  expiraEl     DateTime
   /// Cierre explícito (salir) o por el barrido de expiradas.
-  cerradaEl   DateTime?
+  cerradaEl    DateTime?
   /// Cómo terminó: 'salida' | 'expirada' | null (activa).
   motivoCierre String?
 

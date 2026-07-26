@@ -24341,6 +24341,14 @@ textarea.est-input { resize: vertical; min-height: 60px; font-family: inherit; }
   color: var(--muted-text-2);
 }
 
+/* Aclaración bajo un campo, para lo que no entra en la etiqueta. */
+.arc-field .arc-hint {
+  margin-top: 6px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted-text-2);
+}
+
 .arc-field input,
 .arc-field select {
   width: 100%;

@@ -102,6 +102,7 @@ describe("qué muestra el sidebar", () => {
         "configuracion.ver",
       ];
       expect(hijos(todo, "Configuración")).toEqual([
+        "Empresa",
         "Usuarios",
         "Datos fiscales",
         "Métodos de pago",

@@ -6,6 +6,8 @@ import { Roles } from '../auth/roles.decorator';
 import { Permiso, SoloAutenticado } from '../auth/permiso.decorator';
 import { SwitchTenantDto } from '../auth/dto/switch-tenant.dto';
 import { DefinirLogoTenantDto } from './dto/logo-tenant.dto';
+import { GuardarDatosEmpresaDto } from './dto/datos-empresa.dto';
+import { DatosEmpresaService } from './datos-empresa.service';
 import { TenantsService } from './tenants.service';
 import type { CurrentAuth } from '../auth/auth.types';
 
@@ -20,6 +22,7 @@ export class TenantsController {
   constructor(
     private readonly tenantsService: TenantsService,
     private readonly archivos: ArchivosService,
+    private readonly datosEmpresaService: DatosEmpresaService,
   ) {}
 
   // ── Logo (identidad visual del tenant) ───────────────────────────────
@@ -46,6 +49,29 @@ export class TenantsController {
   async quitarLogo(@CurrentSession() auth: CurrentAuth): Promise<{ ok: true }> {
     await this.archivos.quitarLogo(auth);
     return { ok: true };
+  }
+
+  // ── Datos de empresa (lo comercial: teléfono, web, dónde queda) ──────
+
+  /**
+   * Lectura abierta a cualquiera con sesión, igual que el logo: estos datos
+   * son los que el sistema imprime en un presupuesto y le muestra al cliente
+   * en el seguimiento. Esconderlos del propio equipo no protege nada.
+   */
+  @Get('empresa')
+  datosEmpresa(@CurrentSession() auth: CurrentAuth) {
+    return this.datosEmpresaService.leer(auth);
+  }
+
+  /** Cambiar cómo se presenta el negocio es del dueño, no del que factura. */
+  @Put('empresa')
+  @Permiso('configuracion.gestionar')
+  @Roles(RolSistema.ADMINISTRADOR, RolSistema.SUPERVISOR)
+  guardarDatosEmpresa(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() dto: GuardarDatosEmpresaDto,
+  ) {
+    return this.datosEmpresaService.guardar(auth, dto);
   }
 
   @Get('current')
