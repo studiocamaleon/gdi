@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { LogoTenantCard } from "@/components/archivos/logo-tenant-card";
 import type { LogoTenant } from "@/lib/archivos-api";
 import { guardarDatosEmpresa, type DatosEmpresa } from "@/lib/empresa-api";
+import { latamCountries as PAISES } from "@/lib/clientes";
 
 /**
  * Cómo se presenta el negocio ante su cliente.
@@ -19,6 +20,7 @@ import { guardarDatosEmpresa, type DatosEmpresa } from "@/lib/empresa-api";
 
 type FormState = {
   nombre: string;
+  paisCodigo: string;
   telefonoCodigo: string;
   telefonoNumero: string;
   whatsappCodigo: string;
@@ -34,10 +36,21 @@ type FormState = {
 
 const vacio = (v: string | null) => v ?? "";
 
+/**
+ * Los anchos del par código+número van inline y no en globals.css: la hoja
+ * global tiene `.arc-field select { width: 100% }` con la misma
+ * especificidad, y gana por venir después.
+ */
+const ANCHO_CODIGO: React.CSSProperties = { width: 128, flex: "0 0 auto" };
+const ANCHO_NUMERO: React.CSSProperties = { flex: 1, minWidth: 0 };
+
 function estadoInicial(d: DatosEmpresa): FormState {
   return {
     nombre: d.nombre,
-    telefonoCodigo: vacio(d.telefonoCodigo),
+    // Una imprenta argentina no debería tener que elegir Argentina: el resto
+    // del sistema asume lo mismo en el alta de clientes.
+    paisCodigo: d.paisCodigo ?? "AR",
+    telefonoCodigo: d.telefonoCodigo ?? "54",
     telefonoNumero: vacio(d.telefonoNumero),
     whatsappCodigo: vacio(d.whatsappCodigo),
     whatsappNumero: vacio(d.whatsappNumero),
@@ -76,9 +89,12 @@ export function DatosEmpresaView({
     try {
       await guardarDatosEmpresa({
         nombre: form.nombre,
+        paisCodigo: form.paisCodigo || undefined,
         telefonoCodigo: form.telefonoCodigo || undefined,
         telefonoNumero: form.telefonoNumero || undefined,
-        whatsappCodigo: form.whatsappCodigo || undefined,
+        whatsappCodigo: form.whatsappNumero
+          ? form.whatsappCodigo || form.telefonoCodigo
+          : undefined,
         whatsappNumero: form.whatsappNumero || undefined,
         email: form.email || undefined,
         sitioWeb: form.sitioWeb || undefined,
@@ -137,7 +153,13 @@ export function DatosEmpresaView({
           <div className="arc-card" style={{ marginBottom: 20 }}>
             <div className="arc-card-sec">
               <div className="arc-sec-t">Identidad</div>
-              <div className="arc-frow">
+              {/*
+                El nombre y el logo son la misma cosa —la marca— y se leen
+                juntos: apilados, la pantalla arrancaba con tres bloques
+                sueltos y el ojo no sabía que el cuadrado de la izquierda era
+                el logo de ESE nombre.
+              */}
+              <div className="emp-identidad">
                 <div className="arc-field">
                   <label>Nombre comercial</label>
                   <input
@@ -150,11 +172,13 @@ export function DatosEmpresaView({
                     —la que exige la factura— se carga en Datos fiscales.
                   </div>
                 </div>
+                <div className="emp-identidad-logo">
+                  <LogoTenantCard
+                    nombreNegocio={form.nombre || "Grafo"}
+                    logoInicial={logoInicial}
+                  />
+                </div>
               </div>
-              <LogoTenantCard
-                nombreNegocio={form.nombre || "Grafo"}
-                logoInicial={logoInicial}
-              />
             </div>
           </div>
 
@@ -163,23 +187,26 @@ export function DatosEmpresaView({
               <div className="arc-sec-t">Contacto</div>
               <div className="arc-frow">
                 <div className="arc-field">
-                  <label>
-                    Teléfono <span className="opt">(opcional)</span>
-                  </label>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <input
-                      value={form.telefonoCodigo}
-                      onChange={(e) => set("telefonoCodigo", e.target.value)}
-                      placeholder="341"
-                      style={{ width: 90 }}
-                    />
-                    <input
-                      value={form.telefonoNumero}
-                      onChange={(e) => set("telefonoNumero", e.target.value)}
-                      placeholder="5551840"
-                      style={{ flex: 1 }}
-                    />
-                  </div>
+                  <label>País</label>
+                  <select
+                    value={form.paisCodigo}
+                    onChange={(e) => {
+                      const pais = e.target.value;
+                      set("paisCodigo", pais);
+                      // El código telefónico acompaña al país salvo que ya lo
+                      // hayan tocado a mano: cambiar de país y quedarse con el
+                      // +54 sólo produce un WhatsApp que no llega.
+                      const codigo = PAISES.find((p) => p.code === pais)
+                        ?.phoneCode;
+                      if (codigo) set("telefonoCodigo", codigo);
+                    }}
+                  >
+                    {PAISES.map((p) => (
+                      <option key={p.code} value={p.code}>
+                        {p.flag} {p.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="arc-field">
                   <label>
@@ -195,23 +222,55 @@ export function DatosEmpresaView({
               <div className="arc-frow">
                 <div className="arc-field">
                   <label>
+                    Teléfono <span className="opt">(opcional)</span>
+                  </label>
+                  <div className="emp-tel">
+                    <select
+                      value={form.telefonoCodigo}
+                      onChange={(e) => set("telefonoCodigo", e.target.value)}
+                      style={ANCHO_CODIGO}
+                    >
+                      {PAISES.map((p) => (
+                        <option key={p.code} value={p.phoneCode}>
+                          {p.flag} +{p.phoneCode}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      value={form.telefonoNumero}
+                      onChange={(e) => set("telefonoNumero", e.target.value)}
+                      placeholder="3415551840"
+                      style={ANCHO_NUMERO}
+                    />
+                  </div>
+                  <div className="arc-hint">Sin el código de país.</div>
+                </div>
+                <div className="arc-field">
+                  <label>
                     WhatsApp <span className="opt">(si es otro número)</span>
                   </label>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <input
-                      value={form.whatsappCodigo}
+                  <div className="emp-tel">
+                    <select
+                      value={form.whatsappCodigo || form.telefonoCodigo}
                       onChange={(e) => set("whatsappCodigo", e.target.value)}
-                      placeholder="341"
-                      style={{ width: 90 }}
-                    />
+                      style={ANCHO_CODIGO}
+                    >
+                      {PAISES.map((p) => (
+                        <option key={p.code} value={p.phoneCode}>
+                          {p.flag} +{p.phoneCode}
+                        </option>
+                      ))}
+                    </select>
                     <input
                       value={form.whatsappNumero}
                       onChange={(e) => set("whatsappNumero", e.target.value)}
-                      placeholder="Dejalo vacío si es el mismo teléfono"
-                      style={{ flex: 1 }}
+                      placeholder="Vacío = el mismo teléfono"
+                      style={ANCHO_NUMERO}
                     />
                   </div>
                 </div>
+              </div>
+              <div className="arc-frow">
                 <div className="arc-field">
                   <label>
                     Sitio web <span className="opt">(opcional)</span>

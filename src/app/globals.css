@@ -24341,6 +24341,51 @@ textarea.est-input { resize: vertical; min-height: 60px; font-family: inherit; }
   color: var(--muted-text-2);
 }
 
+/* ── Configuración › Empresa ─────────────────────────────────────── */
+
+/*
+ * Nombre y logo, uno al lado del otro: son la misma cosa —la marca— y
+ * apilados se leían como tres bloques sin relación. La columna del nombre
+ * queda acotada para que el texto de ayuda no se estire a lo ancho de la
+ * pantalla, que es lo que hacía que el renglón se cortara en cualquier lado.
+ */
+.emp-identidad {
+  display: grid;
+  grid-template-columns: minmax(240px, 340px) 1fr;
+  gap: 30px;
+  align-items: start;
+}
+
+/* La línea separa sin encerrar: dos zonas de la misma tarjeta. */
+.emp-identidad-logo {
+  border-left: 1px solid var(--border, #e7e5e2);
+  padding-left: 30px;
+}
+
+@media (max-width: 900px) {
+  .emp-identidad {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .emp-identidad-logo {
+    border-left: 0;
+    border-top: 1px solid var(--border, #e7e5e2);
+    padding-left: 0;
+    padding-top: 20px;
+  }
+}
+
+/*
+ * Código de país + número, como en el alta de clientes. Los anchos de los dos
+ * hijos van INLINE en el componente y no acá: `.arc-field select` los estira
+ * al 100% con la misma especificidad, y gana por orden en la hoja.
+ */
+.emp-tel {
+  display: flex;
+  gap: 8px;
+}
+
 /* Aclaración bajo un campo, para lo que no entra en la etiqueta. */
 .arc-field .arc-hint {
   margin-top: 6px;
