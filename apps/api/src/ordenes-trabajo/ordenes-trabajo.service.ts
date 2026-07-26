@@ -1354,6 +1354,15 @@ export class OrdenesTrabajoService {
           data: { fechaFinalizada: new Date() },
         });
       }
+      // Primera entrega: es el ancla del pedido de reseña. Mismo criterio que
+      // arriba —sólo la primera— para que corregir el estado de una orden ya
+      // entregada no le vuelva a pedir la opinión al cliente.
+      if (hacia === 'entregada') {
+        await tx.ordenTrabajo.updateMany({
+          where: { id: orden.id, fechaEntregada: null },
+          data: { fechaEntregada: new Date() },
+        });
+      }
       // Salir de borrador es emitir: se materializan los pasos de
       // producción del Tablero desde la trazabilidad del snapshot.
       if (desde === 'borrador') {

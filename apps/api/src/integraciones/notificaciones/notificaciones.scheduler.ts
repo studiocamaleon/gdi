@@ -6,6 +6,7 @@ import { conLockDeCron } from '../../common/cron-lock';
 import { runWithTenant } from '../../common/tenant-context';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DespachoService } from './despacho.service';
+import { NotificacionesResenasService } from './notificaciones-resenas.service';
 import { ESTADOS } from './estados';
 
 /**
@@ -41,6 +42,7 @@ export class NotificacionesScheduler {
   constructor(
     private readonly prisma: PrismaService,
     private readonly despacho: DespachoService,
+    private readonly resenas: NotificacionesResenasService,
   ) {}
 
   @Cron('*/5 * * * *', { name: 'notificaciones-whatsapp' })
@@ -66,6 +68,43 @@ export class NotificacionesScheduler {
       );
     } finally {
       this.corriendo = false;
+    }
+  }
+
+  /**
+   * El pedido de reseña, una vez por día.
+   *
+   * Va aparte del drenado de cada cinco minutos porque no es lo mismo: aquello
+   * despacha lo que YA está encolado, esto decide qué encolar. Y decidirlo
+   * cada cinco minutos no aporta nada — el plazo se mide en días— mientras que
+   * pasar seguido multiplica las consultas por tenant.
+   *
+   * A las 10 de la mañana: dentro de la ventana horaria de cortesía por
+   * default (09:00–20:00), así el mensaje sale en el momento en vez de quedar
+   * reprogramado para el día siguiente.
+   */
+  @Cron('0 10 * * *', { name: 'notificaciones-resenas' })
+  async pedirResenas(): Promise<void> {
+    try {
+      await conLockDeCron(
+        this.prisma,
+        'notificaciones-resenas',
+        600,
+        async () => {
+          let total = 0;
+          for (const tenantId of await this.tenantsConWati()) {
+            total += await this.resenas.barrer(tenantId);
+          }
+          if (total > 0) {
+            this.logger.log(`${total} pedido(s) de reseña encolados.`);
+          }
+        },
+      );
+    } catch (error) {
+      this.logger.error(
+        'Falló el barrido de pedidos de reseña.',
+        error instanceof Error ? error.stack : String(error),
+      );
     }
   }
 

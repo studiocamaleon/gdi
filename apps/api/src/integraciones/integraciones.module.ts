@@ -1,5 +1,6 @@
 import { Global, Module } from '@nestjs/common';
 
+import { DatosEmpresaModule } from '../tenants/datos-empresa.module';
 import { SecretosService } from './cripto/secretos.service';
 import { IntegracionesController } from './integraciones.controller';
 import { IntegracionesService } from './integraciones.service';
@@ -10,6 +11,7 @@ import { NotificacionesCobrosService } from './notificaciones/notificaciones-cob
 import { NotificacionesComprobantesService } from './notificaciones/notificaciones-comprobantes.service';
 import { NotificacionesOrdenesService } from './notificaciones/notificaciones-ordenes.service';
 import { NotificacionesPresupuestosService } from './notificaciones/notificaciones-presupuestos.service';
+import { NotificacionesResenasService } from './notificaciones/notificaciones-resenas.service';
 import { NotificacionesScheduler } from './notificaciones/notificaciones.scheduler';
 import { NotificacionesService } from './notificaciones/notificaciones.service';
 import { WatiScheduler } from './wati/wati.scheduler';
@@ -26,6 +28,7 @@ import { WatiScheduler } from './wati/wati.scheduler';
  */
 @Global()
 @Module({
+  imports: [DatosEmpresaModule],
   // El ORDEN importa y no es cosmético: IntegracionesController tiene
   // `@Get(':proveedor')`, que matchea cualquier segmento — incluido
   // `/integraciones/notificaciones`. Registrado primero, se comía la ruta y el
@@ -44,6 +47,7 @@ import { WatiScheduler } from './wati/wati.scheduler';
     NotificacionesPresupuestosService,
     NotificacionesCobrosService,
     NotificacionesComprobantesService,
+    NotificacionesResenasService,
     NotificacionesScheduler,
   ],
   exports: [
@@ -52,6 +56,7 @@ import { WatiScheduler } from './wati/wati.scheduler';
     NotificacionesPresupuestosService,
     NotificacionesCobrosService,
     NotificacionesComprobantesService,
+    NotificacionesResenasService,
     SecretosService,
     IntegracionesService,
     WatiClient,

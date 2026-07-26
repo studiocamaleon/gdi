@@ -385,6 +385,7 @@ Nos ayuda mucho saber tu opinión. Si tenés un minuto, podés dejarnos una rese
 
 Si preferís no hacerlo, no hay problema.`,
     footer: FOOTER,
+    cableado: true,
     parametros: [
       { nombre: 'nombre_cliente', ejemplo: 'Marcela' },
       { nombre: 'numero_orden', ejemplo: 'OT-01285' },

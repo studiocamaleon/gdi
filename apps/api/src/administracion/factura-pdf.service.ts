@@ -153,7 +153,15 @@ export class FacturaPdfService {
     const LADO_LOGO = 11;
     if (logo) {
       try {
-        pdf.addImage(logo, MARGEN, y - 1, LADO_LOGO, LADO_LOGO, undefined, 'FAST');
+        pdf.addImage(
+          logo,
+          MARGEN,
+          y - 1,
+          LADO_LOGO,
+          LADO_LOGO,
+          undefined,
+          'FAST',
+        );
       } catch (error) {
         // Un logo corrupto no puede impedir emitir un comprobante fiscal.
         this.log.warn(

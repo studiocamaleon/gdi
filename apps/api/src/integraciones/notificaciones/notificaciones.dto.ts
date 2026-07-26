@@ -1,4 +1,13 @@
-import { IsBoolean, IsOptional, IsString, Matches } from 'class-validator';
+import {
+  IsBoolean,
+  IsInt,
+  IsOptional,
+  IsString,
+  Matches,
+  Max,
+  Min,
+} from 'class-validator';
+import { Type } from 'class-transformer';
 
 /** `HH:MM` en 24 h. */
 const HORA = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -34,6 +43,20 @@ export class CambiarConfigDto {
     message: 'Los días tienen que ser números del 1 al 7 separados por comas.',
   })
   diasAtencion?: string;
+
+  /**
+   * Cuántos días después de entregada se pide la reseña.
+   *
+   * El techo son 30 y no es arbitrario: el barrido mira una ventana de diez
+   * días hacia atrás, así que un plazo más largo que el historial del campo
+   * sólo produciría una función que no manda nada y nadie sabría por qué.
+   */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0, { message: 'El plazo no puede ser negativo.' })
+  @Max(30, { message: 'El plazo no puede pasar de 30 días.' })
+  resenaDiasDespues?: number;
 }
 
 export class CambiarEventoDto {

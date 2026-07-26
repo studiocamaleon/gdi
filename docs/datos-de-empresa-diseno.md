@@ -1,7 +1,7 @@
 # Datos de empresa
 
-**Estado:** Fases A (modelo + API + pantalla) y B (consumidores) implementadas
-— 2026-07-26. Fase C pendiente.
+**Estado:** COMPLETO — fases A (modelo + API + pantalla), B (consumidores) y C
+(pedido de reseña), 2026-07-26.
 
 ## El problema
 
@@ -90,9 +90,33 @@ número.
     deja el fiscal de respaldo —la RG 1415 pide el comercial, y hasta ahora lo
     único que había era el fiscal, que puede ser el estudio contable—. Se
     suman las filas Teléfono y Web.
-- **C — pendiente.** Cablear la reseña: llenar `url_resena` con el link, más el
-  disparador "N días después de entregada". Es plantilla de MARKETING, así que
-  necesita opt-in y que la imprenta la active a mano.
+- **C — hecha.** El pedido de reseña, unos días después de la entrega.
+  `grafo_resena_v2` estaba aprobada por Meta y muerta por no tener dónde sacar
+  el link; ahora sale de Configuración › Empresa.
+
+  Es el único aviso que **no lo dispara un hecho** sino el paso del tiempo:
+  nadie aprieta un botón llamado "ya pasaron tres días". Se resuelve barriendo
+  —mismo patrón que la acreditación de cobros con plazo— con un cron diario a
+  las 10, dentro de la ventana de cortesía por default para que salga en el
+  momento en vez de quedar reprogramado.
+
+  El ancla es `OrdenTrabajo.fechaEntregada`, nueva, que se sella en la PRIMERA
+  entrega y no se resetea: corregir el estado de una orden ya entregada no le
+  vuelve a pedir la opinión al cliente. Las órdenes anteriores al campo quedan
+  sin fecha **a propósito** —no hay backfill— para que encender la función no
+  dispare un WhatsApp por cada orden del historial.
+
+  Cuatro frenos, todos a propósito:
+
+  1. **Sin link de reseñas no se manda**: el mensaje entero existe para llevar
+     a esa página.
+  2. **Ventana de 10 días** hacia atrás además del plazo: volver de una pausa
+     larga no vacía el historial de golpe, y a nadie le sirve que le pregunten
+     por un trabajo de hace dos meses.
+  3. **Es MARKETING**, así que `NotificacionesService` exige que el cliente
+     haya aceptado recibir WhatsApp explícitamente.
+  4. **Viene apagado** y el plazo lo elige la imprenta (Wati › Notificaciones,
+     0–30 días, default 3).
 
 ### Dos formas del teléfono, a propósito
 

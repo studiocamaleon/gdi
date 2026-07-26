@@ -141,6 +141,8 @@ export type ConfigNotificaciones = {
    * Sólo lo respetan los avisos que invitan al cliente a venir a retirar.
    */
   diasAtencion: string;
+  /** Cuántos días después de entregada se pide la reseña. */
+  resenaDiasDespues: number;
 };
 
 export type EventoNotificacion = {

@@ -1215,6 +1215,42 @@ function NotificacionesTab() {
             ))}
           </div>
         </div>
+
+        <div className="int-nt-fila">
+          <div>
+            <div className="int-nt-label">Cuándo pedir la reseña</div>
+            <div className="int-nt-hint">
+              Días después de entregar el trabajo. Ni el mismo día —el cliente
+              todavía no lo usó— ni dos semanas después, cuando ya se olvidó. El
+              pedido sale sólo si cargaste el link de reseñas en{" "}
+              <strong>Configuración › Empresa</strong> y el aviso está
+              encendido.
+            </div>
+          </div>
+          <div className="int-nt-horas">
+            <input
+              className="int-nt-hora"
+              type="number"
+              min={0}
+              max={30}
+              style={{ width: 72 }}
+              defaultValue={cfg.resenaDiasDespues}
+              disabled={guardando}
+              // onBlur y no onChange: con onChange, tipear "10" guarda primero
+              // el 1 y después el 10, y el 1 alcanza para que el barrido de esa
+              // noche salga con el plazo equivocado.
+              onBlur={(e) => {
+                const n = Number(e.target.value);
+                if (Number.isInteger(n) && n >= 0 && n <= 30 && n !== cfg.resenaDiasDespues) {
+                  void guardar({ resenaDiasDespues: n });
+                }
+              }}
+            />
+            <span style={{ color: "var(--muted-text)", fontSize: 12 }}>
+              días
+            </span>
+          </div>
+        </div>
       </div>
 
       <div className="int-section-intro">

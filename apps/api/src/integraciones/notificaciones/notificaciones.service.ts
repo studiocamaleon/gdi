@@ -257,6 +257,7 @@ export class NotificacionesService {
     horaDesde?: string;
     horaHasta?: string;
     diasAtencion?: string;
+    resenaDiasDespues?: number;
   }) {
     const config = await this.configuracion();
     return this.prisma.configuracionNotificaciones.update({

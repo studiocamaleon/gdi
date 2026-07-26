@@ -492,6 +492,11 @@ model ConfiguracionNotificaciones {
   /// pago acreditado o una factura salen cualquier día dentro del horario.
   diasAtencion String @default("1,2,3,4,5")
 
+  /// Cuántos días después de ENTREGADA se pide la reseña. Ni el mismo día
+  /// —el cliente todavía no usó lo que encargó— ni dos semanas después,
+  /// cuando ya se olvidó.
+  resenaDiasDespues Int @default(3)
+
   updatedAt DateTime @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -2654,6 +2659,14 @@ model OrdenTrabajo {
   /// orden NO la borra: si vuelve a finalizar, el aging no se resetea.
   /// Ver docs/facturacion-ordenes-deuda-comercial-diseno.md
   fechaFinalizada    DateTime?
+  /// Cuándo se entregó, la PRIMERA vez. Es el ancla del pedido de reseña —"N
+  /// días después de la entrega"—, y por eso no se resetea: volver a marcar
+  /// entregada una orden que se había reabierto no reinicia el reloj.
+  ///
+  /// Null en todas las órdenes anteriores a este campo, a propósito: sin fecha
+  /// no hay pedido de reseña, y así encender la función no dispara un WhatsApp
+  /// por cada orden vieja del historial.
+  fechaEntregada     DateTime?
   /// Denormalizados del eje fiscal y de cobranza, mantenidos en la misma
   /// transacción que sus movimientos (patrón Comprobante.saldoPendiente):
   /// facturadoTotal = Σ ComprobanteOrden.monto de facturas emitidas no
