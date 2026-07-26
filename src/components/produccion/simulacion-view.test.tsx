@@ -54,6 +54,7 @@ const paso = (
 ): TableroPasoData => ({
   id: `p${indice}-${nombre}`,
   indice,
+  rutaPasoId: null,
   nombre,
   familiaCodigo,
   categoriaFamilia: "",

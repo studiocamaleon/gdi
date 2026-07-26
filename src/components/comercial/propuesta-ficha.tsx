@@ -109,9 +109,18 @@ import {
   type TipoPropuesta,
   type UnidadPropuesta,
 } from "@/lib/propuestas";
+import {
+  calcularCostoItem,
+  getCostoManoObraPaso,
+  getCostoMaquinaPaso,
+  getVisibleCostSteps,
+  sumCargosPaso,
+  sumMaterialesPaso,
+} from "@/lib/costos-orden";
 import { type Moneda } from "@/lib/moneda";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { AgregarProductoSheet } from "@/components/comercial/agregar-producto-sheet";
+import { CostosOrdenTab } from "@/components/comercial/costos-orden-tab";
 import {
   type MutacionAplicadaView,
   demasiaPorLado,
@@ -1517,62 +1526,8 @@ function nestingTabLabel(result: NestingViewerInput | undefined) {
   return "Acomodado";
 }
 
-function getCostBuckets(item: PropuestaItem) {
-  return [
-    {
-      key: "materiales",
-      label: "Materiales",
-      amount: item.cotizacion.costos.materialesTotal,
-    },
-    {
-      key: "centro-costo",
-      label: "Centro de costo",
-      amount: item.cotizacion.costos.tiempoTotal,
-    },
-    {
-      key: "tercerizado",
-      label: "Costo de proveedor",
-      amount: item.cotizacion.costos.tercerizadoTotal ?? 0,
-    },
-    {
-      key: "cargos",
-      label: "Cargos directos",
-      amount: item.cotizacion.costos.cargosDirectosTotal,
-    },
-  ].filter((bucket) => bucket.amount > 0);
-}
-
-function sumMaterialesPaso(paso: PasoCosteo) {
-  return (paso.materiales ?? []).reduce(
-    (acc, material) => acc + material.costoTotal,
-    0,
-  );
-}
-
-function sumCargosPaso(paso: PasoCosteo) {
-  return (paso.cargosDirectosPaso ?? []).reduce(
-    (acc, cargo) => acc + cargo.monto,
-    0,
-  );
-}
-
-function getVisibleCostSteps(pasos: PasoCosteo[]) {
-  return pasos.filter((paso) => paso.activado || paso.costoTotal > 0);
-}
-
 function formatMinutos(min: number) {
   return `${min.toLocaleString("es-AR", { maximumFractionDigits: 1 })} min`;
-}
-
-// Costo de máquina/proceso del paso (tarifa sin mano de obra × todo el tiempo).
-// Fallback a `costo` para cotizaciones viejas sin el desglose.
-function getCostoMaquinaPaso(paso: PasoCosteo) {
-  return paso.tiempo?.costoMaquina ?? paso.tiempo?.costo ?? 0;
-}
-
-// Costo de mano de obra del paso (setup + cleanup en pasos con máquina).
-function getCostoManoObraPaso(paso: PasoCosteo) {
-  return paso.tiempo?.costoManoObra ?? 0;
 }
 
 function formatTiempoPaso(paso: PasoCosteo) {
@@ -2572,31 +2527,18 @@ function CostosItemView({
 }) {
   const { moneda } = useConfigRegional();
   const fmt = (v: number) => formatCurrency(v, moneda);
-  const precioNeto = item.subtotal;
-  const precioBruto = getCotizacionTotal(item.cotizacion);
-  const desglosePrecio = item.cotizacion.desglosePrecio;
-  const cantidadPrecio = getCotizacionCantidadPrecio(
-    item.cotizacion,
-    item.cantidad,
-  );
-  const precioBaseTotal = desglosePrecio
-    ? desglosePrecio.precioBase * cantidadPrecio
-    : precioNeto;
-  const comisionesTotal = desglosePrecio
-    ? desglosePrecio.totalComisiones * cantidadPrecio
-    : 0;
-  const margenPrecioMonto = precioBaseTotal - costo;
-  // El margen se expresa sobre el NETO (sin IVA): es la base sobre la que se
-  // configura el margen del Tab Precio — así "margen 40%" configurado se lee
-  // 40% acá (y no 33% como cuando se dividía por el bruto, que incluye el IVA
-  // y no es ingreso).
-  const margenPrecioPct =
-    precioNeto > 0 ? (margenPrecioMonto / precioNeto) * 100 : 0;
-  const buckets = getCostBuckets(item);
-  const centroManoObraTotal = item.cotizacion.pasos.reduce(
-    (acc, paso) => acc + getCostoManoObraPaso(paso),
-    0,
-  );
+  // La cuenta vive en @/lib/costos-orden: la comparte con la vista consolidada
+  // del tab Costos de la orden, que suma exactamente estos mismos renglones.
+  const desglose = calcularCostoItem(item, costo);
+  const {
+    precioNeto,
+    precioBruto,
+    ivaTotal,
+    impuestosPorFueraNombres,
+    filasNeto,
+    contribucionMonto: margenContribucionMonto,
+    contribucionPct: margenContribucionPct,
+  } = desglose;
   const cargosPaso = item.cotizacion.pasos
     .flatMap((paso) => paso.cargosDirectosPaso ?? [])
     .filter((cargo) => cargo.monto > 0);
@@ -2629,142 +2571,12 @@ function CostosItemView({
     );
   }
 
-  // ── Cascada del precio: cada fila suma hacia abajo hasta el precio de venta.
-  //    costo (materiales + centro de costo + cargos) + impuestos internos +
-  //    comisiones + margen = precio neto; neto + IVA = precio de venta.
-  const costosInternosTotal = Math.max(
-    0,
-    precioNeto - precioBaseTotal - comisionesTotal,
-  );
-  const ivaTotal = Math.max(0, precioBruto - precioNeto);
-  // Margen de contribución = Precio neto − costos variables. Variables (decisión
-  // del usuario): materiales + costo de proveedor (tercerizado) + cargos +
-  // impuestos internos + comisiones. El centro de costo (máquina + mano de obra)
-  // es estructura fija que la contribución cubre → MC = centro de costo + margen.
-  const costosVariablesTotal =
-    item.cotizacion.costos.materialesTotal +
-    item.cotizacion.costos.cargosDirectosTotal +
-    (item.cotizacion.costos.tercerizadoTotal ?? 0) +
-    costosInternosTotal +
-    comisionesTotal;
-  const margenContribucionMonto = precioNeto - costosVariablesTotal;
-  const margenContribucionPct =
-    precioNeto > 0 ? (margenContribucionMonto / precioNeto) * 100 : 0;
-  // Impuestos internos desglosados uno por uno (IIBB sobre NETO, cheque sobre
-  // BRUTO_COBRADO). La suma da costosInternosTotal; el último absorbe el
-  // residuo de redondeo para que el waterfall siga sumando exacto.
-  const impuestosInternos = (desglosePrecio?.impuestos ?? [])
-    .filter((impuesto) => (impuesto.traslado ?? "POR_DENTRO") !== "POR_FUERA")
-    .slice()
-    .sort((a, b) => a.orden - b.orden);
-  let internosAcumulado = 0;
-  const impuestosInternosFilas = impuestosInternos.map((impuesto, index) => {
-    const base =
-      (impuesto.baseCalculo ?? "NETO") === "BRUTO_COBRADO"
-        ? precioBruto
-        : precioNeto;
-    const monto =
-      index === impuestosInternos.length - 1
-        ? costosInternosTotal - internosAcumulado
-        : (base * impuesto.porcentaje) / 100;
-    internosAcumulado += monto;
-    return {
-      key: `imp-${impuesto.codigo}`,
-      nombre: impuesto.nombre,
-      monto,
-    };
-  });
-  const impuestosPorFueraNombres = (desglosePrecio?.impuestos ?? [])
-    .filter((impuesto) => impuesto.traslado === "POR_FUERA")
-    .map((impuesto) => `${impuesto.nombre} ${impuesto.porcentaje}%`)
-    .join(" + ");
-
   const pctDelNeto = (monto: number) =>
     precioNeto > 0
       ? `${((monto / precioNeto) * 100).toLocaleString("es-AR", {
           maximumFractionDigits: 1,
         })}%`
       : "—";
-  const TIPO_POR_BUCKET: Record<string, string> = {
-    materiales: "Materia prima",
-    "centro-costo": "Centro de costo",
-    tercerizado: "Proveedor",
-    cargos: "Cargo directo",
-  };
-  // Filas punto por punto: todo lo que compone el precio neto (suma 100%).
-  const filasNeto: Array<{
-    key: string;
-    label: string;
-    hint?: string;
-    tipo: string;
-    monto: number;
-    warn?: boolean;
-  }> = [
-    ...buckets.flatMap((bucket) => {
-      // Desdoblar el centro de costo en máquina vs. mano de obra si hay MO.
-      // manoObra se toma de los pasos; máquina = resto, para que sumen el total.
-      if (bucket.key === "centro-costo" && centroManoObraTotal > 0) {
-        return [
-          {
-            key: "centro-maquina",
-            label: "Centro · Máquina",
-            tipo: "Centro de costo",
-            monto: bucket.amount - centroManoObraTotal,
-          },
-          {
-            key: "centro-mano-obra",
-            label: "Centro · Mano de obra",
-            tipo: "Mano de obra",
-            monto: centroManoObraTotal,
-          },
-        ];
-      }
-      return [
-        {
-          key: bucket.key,
-          label: bucket.label,
-          tipo: TIPO_POR_BUCKET[bucket.key] ?? "Costo",
-          monto: bucket.amount,
-        },
-      ];
-    }),
-    ...(impuestosInternosFilas.length > 0
-      ? impuestosInternosFilas.map((fila) => ({
-          key: fila.key,
-          label: fila.nombre,
-          hint: "ya incluido en el precio, no se muestra al cliente",
-          tipo: "Impuesto",
-          monto: fila.monto,
-        }))
-      : costosInternosTotal > 0
-        ? [
-            {
-              key: "impuestos-internos",
-              label: "Impuestos internos",
-              hint: "ya incluidos en el precio, no se muestran al cliente",
-              tipo: "Impuesto",
-              monto: costosInternosTotal,
-            },
-          ]
-        : []),
-    ...(comisionesTotal > 0
-      ? [
-          {
-            key: "comisiones",
-            label: "Comisiones",
-            tipo: "Comisión",
-            monto: comisionesTotal,
-          },
-        ]
-      : []),
-    {
-      key: "margen",
-      label: "Margen",
-      tipo: "Rentabilidad",
-      monto: margenPrecioMonto,
-      warn: margenPrecioPct < 25,
-    },
-  ];
 
   return (
     <div className="op-costs">
@@ -3306,8 +3118,6 @@ export function ProductRow({
   const tienePrecioEspecial = Boolean(
     item.cotizacion?.desglosePrecio?.precioEspecialCliente,
   );
-  const margen =
-    item.subtotal > 0 ? ((item.subtotal - costo) / item.subtotal) * 100 : 0;
   const visibleAmounts = React.useMemo(
     () => getItemOrderVisibleAmounts(item),
     [item],
@@ -6437,9 +6247,10 @@ export function PropuestaFicha({
           )
         ) : null}
         {tab === "costos" ? (
-          <EmptyTab
-            title="Vista consolidada de costos"
-            description={`Desglose de maquinas, materiales y mano de obra para los ${items.length} productos.`}
+          <CostosOrdenTab
+            items={items}
+            cargosOrden={cargosOrden}
+            ordenId={orden?.id}
           />
         ) : null}
         {tab === "historial" && orden ? (

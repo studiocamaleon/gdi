@@ -3158,6 +3158,283 @@
       padding-left: 58px;
     }
   }
+
+  /* ── Tab Costos de la OT: vista CONSOLIDADA ──────────────────────────
+     Prefijo otc- en TODA clase, incluidas las hijas: la hoja es global y
+     nombres como .kpi o .barra ya existen para otras vistas. Reusa
+     .cost-waterfall y .cost-steps-table del desglose por producto, para que
+     las dos pantallas se lean igual. */
+  .otc {
+    display: grid;
+    gap: 14px;
+  }
+
+  .otc-card {
+    padding: 14px 16px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-2);
+  }
+
+  .otc-card .cost-waterfall {
+    /* Ya está dentro de una card: sin doble marco. */
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .otc-card-head {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-bottom: 12px;
+  }
+
+  .otc-ttl {
+    color: var(--ink);
+    font-size: 13px;
+    font-weight: 650;
+  }
+
+  .otc-sub {
+    color: var(--muted);
+    font-size: 11.5px;
+    line-height: 1.4;
+  }
+
+  .otc-vacio {
+    padding: 18px 2px;
+    color: var(--muted);
+    font-size: 12.5px;
+    line-height: 1.5;
+    text-align: center;
+  }
+
+  .otc-aviso {
+    padding: 10px 14px;
+    color: var(--signal);
+    font-size: 12px;
+    line-height: 1.45;
+    background: var(--signal-bg);
+    border: 1px solid color-mix(in srgb, var(--signal) 22%, transparent);
+    border-radius: var(--r-2);
+  }
+
+  /* Tira de KPIs */
+  .otc-kpis,
+  .otc-real-kpis {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .otc-real-kpis {
+    margin-bottom: 12px;
+  }
+
+  @media (max-width: 860px) {
+    .otc-kpis,
+    .otc-real-kpis {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  .otc-kpi {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 12px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-2);
+  }
+
+  .otc-real-kpis .otc-kpi {
+    background: var(--surface-2);
+  }
+
+  .otc-kpi-lbl {
+    color: var(--muted);
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .otc-kpi-val {
+    color: var(--ink);
+    font-family: var(--font-mono);
+    font-size: 19px;
+    font-weight: 650;
+    line-height: 1.15;
+  }
+
+  .otc-kpi-hint {
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .otc-kpi.bien {
+    border-color: color-mix(in srgb, var(--ok) 34%, transparent);
+    background: var(--ok-bg);
+  }
+
+  .otc-kpi.bien .otc-kpi-val {
+    color: var(--ok);
+  }
+
+  .otc-kpi.mal {
+    border-color: color-mix(in srgb, var(--signal) 30%, transparent);
+    background: var(--signal-bg);
+  }
+
+  .otc-kpi.mal .otc-kpi-val {
+    color: var(--signal);
+  }
+
+  /* Composición del costo: barra apilada + leyenda */
+  .otc-barra {
+    display: flex;
+    height: 10px;
+    margin-bottom: 12px;
+    overflow: hidden;
+    background: var(--hairline);
+    border-radius: 999px;
+  }
+
+  .otc-barra-seg {
+    height: 100%;
+    min-width: 2px;
+  }
+
+  .otc-barra-seg.seg-materiales,
+  .otc-comp-dot.seg-materiales {
+    background: var(--chart-1);
+  }
+
+  .otc-barra-seg.seg-maquina,
+  .otc-comp-dot.seg-maquina {
+    background: var(--chart-3);
+  }
+
+  .otc-barra-seg.seg-mano-obra,
+  .otc-comp-dot.seg-mano-obra {
+    background: var(--chart-2);
+  }
+
+  .otc-barra-seg.seg-proveedor,
+  .otc-comp-dot.seg-proveedor {
+    background: var(--chart-5);
+  }
+
+  .otc-barra-seg.seg-cargos,
+  .otc-comp-dot.seg-cargos {
+    background: var(--chart-4);
+  }
+
+  .otc-barra-seg.seg-sin-desglosar,
+  .otc-comp-dot.seg-sin-desglosar {
+    background: var(--border-strong);
+  }
+
+  .otc-comp-list {
+    display: grid;
+    gap: 1px;
+  }
+
+  .otc-comp {
+    display: grid;
+    grid-template-columns: 10px minmax(0, 1fr) 64px 120px;
+    gap: 10px;
+    align-items: center;
+    padding: 7px 0;
+  }
+
+  .otc-comp + .otc-comp {
+    border-top: 1px solid var(--hairline);
+  }
+
+  .otc-comp-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+  }
+
+  .otc-comp-lbl {
+    min-width: 0;
+    color: var(--ink-2);
+    font-size: 12.5px;
+    font-weight: 500;
+  }
+
+  .otc-comp-pct,
+  .otc-comp-val {
+    justify-self: end;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    white-space: nowrap;
+  }
+
+  .otc-comp-pct {
+    color: var(--muted);
+  }
+
+  .otc-comp-val {
+    color: var(--ink-2);
+  }
+
+  /* Tablas (por producto, por centro, real vs. cotizado) */
+  .otc-tabla {
+    min-width: 720px;
+  }
+
+  .otc-tabla .num {
+    text-align: right;
+  }
+
+  .otc-tabla th.num {
+    text-align: right;
+  }
+
+  .otc-tabla td span {
+    display: block;
+    margin-top: 2px;
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  .otc-fila-warn td {
+    background: color-mix(in srgb, var(--signal-bg) 55%, transparent);
+  }
+
+  .otc-fila-orden td {
+    color: var(--ink-2);
+    background: var(--surface-2);
+  }
+
+  .otc-fila-total td {
+    border-top: 1.5px solid var(--border-strong);
+    background: var(--surface-2);
+  }
+
+  /* Signo del desvío: más caro que lo cotizado es malo, más barato es bueno. */
+  .otc-mal,
+  .otc-mal strong {
+    color: var(--signal);
+  }
+
+  .otc-bien,
+  .otc-bien strong {
+    color: var(--ok);
+  }
+
+  .otc-nota {
+    margin-bottom: 12px;
+    color: var(--muted);
+    font-size: 11.5px;
+    line-height: 1.5;
+  }
 }
 
 /* next/font define --font-geist-mono en <body>; --font-mono tiene que

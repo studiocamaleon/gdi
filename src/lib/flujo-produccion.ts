@@ -686,6 +686,7 @@ export function estimarDemoraNuevos({
       pasos: nuevo.pasos.map((paso, indice) => ({
         id: `${nuevo.id}-paso-${indice}`,
         indice,
+        rutaPasoId: null,
         nombre: paso.nombre ?? paso.familiaCodigo,
         familiaCodigo: paso.familiaCodigo,
         categoriaFamilia: "",

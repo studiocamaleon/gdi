@@ -74,6 +74,7 @@ function paso(
   return {
     id: `paso-${indice}-${familiaCodigo}`,
     indice,
+    rutaPasoId: null,
     nombre: familiaCodigo,
     familiaCodigo,
     categoriaFamilia: "",

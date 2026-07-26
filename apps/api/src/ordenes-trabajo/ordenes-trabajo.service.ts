@@ -2596,6 +2596,8 @@ export class OrdenesTrabajoService {
       pasos: Array<{
         id: string;
         indice: number;
+        /** Paso de la ruta que lo originó: empareja con el snapshot del costeo. */
+        rutaPasoId: string | null;
         nombre: string;
         familiaCodigo: string;
         categoriaFamilia: string;
@@ -2655,6 +2657,12 @@ export class OrdenesTrabajoService {
       pasos: item.pasos.map((paso) => ({
         id: paso.id,
         indice: paso.indice,
+        // Clave de emparejamiento con el paso del snapshot de costeo: la vista
+        // consolidada de Costos cruza el tiempo REAL de acá con la tarifa y el
+        // costo COTIZADOS de allá. Sale del `rutaPasoId` que la
+        // materialización ya copió de la trazabilidad, así que no depende de
+        // que las dos listas queden en el mismo orden.
+        rutaPasoId: paso.rutaPasoId,
         nombre: paso.nombre,
         familiaCodigo: paso.familiaCodigo,
         categoriaFamilia: paso.categoriaFamilia,
