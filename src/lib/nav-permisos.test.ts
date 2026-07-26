@@ -6,12 +6,11 @@ import { navPara } from "@/components/navigation/nav-items";
  * Qué ve cada uno en el sidebar.
  *
  * La regla que fijan estos tests: **el permiso de un hijo REEMPLAZA al del
- * grupo, no se suma**. Eso corta para los dos lados y los dos importan:
- *
- *  - abre: el Administrativo llega a Datos fiscales sin que le demos
- *    Configuración entera, que le abriría Usuarios —o sea crear cuentas y
- *    repartir roles—;
- *  - cierra: tener Reportes NO alcanza para el Resumen ejecutivo.
+ * grupo, no se suma**. Corta para los dos lados —abre Datos fiscales al
+ * Administrativo sin darle Configuración entera, y cierra el Resumen ejecutivo
+ * a quien sólo tiene Reportes—, pero desde que Reportes y Configuración son
+ * módulos de una sola línea, esa regla se prueba donde ahora vive cada lista:
+ * reportes-shell.test.tsx y configuracion-secciones.test.ts.
  *
  * Un error acá no se ve en pantalla: se ve como alguien mirando algo que no le
  * corresponde.
@@ -29,91 +28,50 @@ const hijos = (permisos: string[], grupo: string) => {
 
 describe("qué muestra el sidebar", () => {
   describe("el hijo con permiso propio se sostiene solo", () => {
-    it("el Administrativo ve Configuración con SÓLO sus dos pantallas", () => {
-      const permisos = [
-        "panel.ver",
-        "reportes.ver",
-        "comercial.ver",
-        "registros.ver",
-        "administracion.gestionar",
-        "administracion.ver",
-        "administracion.configurar",
-        "finanzas.ver_margenes",
-      ];
-
-      expect(etiquetas(permisos)).toContain("Configuración");
-      expect(hijos(permisos, "Configuración")).toEqual([
-        "Datos fiscales",
-        "Métodos de pago",
-      ]);
+    /** El circuito fiscal es del que factura, no del dueño del taller. */
+    it("Comprobantes y Facturación siguen a administracion.ver", () => {
+      const admin = hijos(["administracion.ver"], "Administración");
+      expect(admin).toContain("Comprobantes");
+      expect(admin).toContain("Deudores");
     });
 
-    /** Lo que hace que la llave suelta valga la pena: NO le abre Usuarios. */
-    it("y no ve Usuarios", () => {
-      expect(hijos(["administracion.configurar"], "Configuración")).not.toContain(
-        "Usuarios",
-      );
-    });
-
-    it("sin ninguna llave de Configuración, el grupo no aparece", () => {
-      expect(etiquetas(["comercial.ver"])).not.toContain("Configuración");
+    it("sin la llave del módulo, el grupo no aparece", () => {
+      expect(etiquetas(["comercial.ver"])).not.toContain("Administración");
     });
   });
 
-  describe("el hijo con permiso propio también se restringe solo", () => {
-    /** El agujero que no puede abrirse: Reportes NO da el Resumen ejecutivo. */
-    it("tener Reportes no alcanza para el Resumen ejecutivo", () => {
-      const soloReportes = hijos(["reportes.ver"], "Reportes");
-      expect(soloReportes).toContain("Comercial");
-      expect(soloReportes).not.toContain("Resumen ejecutivo");
-      expect(soloReportes).not.toContain("Finanzas");
-      expect(soloReportes).not.toContain("Costo laboral");
-    });
-
-    it("con la llave del resumen, aparece", () => {
-      expect(hijos(["reportes.ver", "reportes.ver_resumen"], "Reportes")).toContain(
-        "Resumen ejecutivo",
+  /**
+   * Reportes y Configuración ocupan UNA línea cada uno: adentro, la tira de
+   * reportes y la columna de ajustes son la navegación. Acá sólo se prueba que
+   * no reaparezcan como grupos con hijos.
+   */
+  describe("los módulos de una sola línea", () => {
+    it("Reportes es una sola entrada a /reportes", () => {
+      const reportes = navPara(new Set(["reportes.ver"])).find(
+        (m) => m.label === "Reportes",
       );
+      expect(reportes?.href).toBe("/reportes");
+      expect(hijos(["reportes.ver"], "Reportes")).toEqual([]);
     });
 
-    /** Los sueldos no se abren por poder leer los reportes del negocio. */
-    it("Costo laboral pide la llave de remuneraciones", () => {
-      expect(
-        hijos(["reportes.ver", "registros.ver_remuneraciones"], "Reportes"),
-      ).toContain("Costo laboral");
+    /** Sin la llave del módulo no hay Reportes, aunque tenga la de un reporte. */
+    it("sin reportes.ver no aparece Reportes", () => {
+      expect(etiquetas(["reportes.ver_resumen"])).not.toContain("Reportes");
+    });
+
+    /** Configuración salió de la lista: es el ancla del pie, no un grupo. */
+    it("Configuración no está en el árbol del menú", () => {
+      expect(navPara(null).map((m) => m.label)).not.toContain("Configuración");
     });
   });
 
   describe("lo de siempre no se rompió", () => {
-    it("el Administrador ve todo", () => {
-      const todo = [
-        "panel.ver",
-        "comercial.ver",
-        "registros.ver",
-        "costos.ver",
-        "produccion.ver",
-        "administracion.ver",
-        "administracion.configurar",
-        "reportes.ver",
-        "reportes.ver_resumen",
-        "registros.ver_remuneraciones",
-        "finanzas.ver_margenes",
-        "inventario.ver",
-        "configuracion.ver",
-      ];
-      expect(hijos(todo, "Configuración")).toEqual([
-        "Empresa",
-        "Usuarios",
-        "Datos fiscales",
-        "Métodos de pago",
-        "Almacenamiento",
-        "Integraciones",
-      ]);
-    });
-
     /** Sesión vieja sin lista de permisos: se ofrece todo y el API frena. */
     it("sin lista de permisos se devuelve el árbol completo", () => {
-      expect(navPara(null).map((m) => m.label)).toContain("Configuración");
+      const todo = navPara(null).map((m) => m.label);
+      expect(todo).toContain("Comercial");
+      expect(todo).toContain("Producción");
+      expect(todo).toContain("Inventario");
     });
 
     it("el Operario sólo ve Panel general y Producción", () => {
