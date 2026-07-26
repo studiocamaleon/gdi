@@ -992,6 +992,14 @@ export interface CotizarResponse {
       precioBrutoTotal: number;
     };
     pasos: Array<{
+      /**
+       * Paso de la ruta que originó este renglón de costeo. El motor lo emite
+       * siempre; se declara opcional porque los snapshots viejos guardados en
+       * `CotizacionItem.trazabilidadJson` pueden no tenerlo. Es la clave con la
+       * que Costos cruza el costo cotizado contra el tiempo real del paso
+       * materializado (`TableroPasoData.rutaPasoId`).
+       */
+      rutaPasoId?: string;
       rutaPasoOrden: number;
       familiaCodigo: string;
       nombreVisible?: string | null;

@@ -42,6 +42,13 @@ export type TableroPasoTramoAbierto = {
 export type TableroPasoData = {
   id: string;
   indice: number;
+  /**
+   * Paso de la ruta que lo originó. Es la clave con la que la vista
+   * consolidada de Costos empareja el tiempo REAL de este paso con la tarifa
+   * y el costo COTIZADOS del snapshot. Null en pasos materializados sin
+   * `rutaPasoId` en la trazabilidad (órdenes viejas): ahí se cae al índice.
+   */
+  rutaPasoId: string | null;
   nombre: string;
   familiaCodigo: string;
   /** Categoría de alto nivel de la familia (agrupa la vista Por estación). */
