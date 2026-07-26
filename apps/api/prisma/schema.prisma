@@ -1636,6 +1636,19 @@ model DatosEmpresa {
   /// Es el dato que le falta a la plantilla de WhatsApp `grafo_resena_v2`, que
   /// está aprobada por Meta desde hace meses y no la manda nadie.
   urlResenas         String?
+  /// ISO 4217 de la moneda en la que trabaja el negocio. Es ETIQUETA y
+  /// formato, nunca conversión: cambiarla no reconvierte ningún monto
+  /// histórico (multi-moneda-zona-horaria D1/D2). El catálogo con símbolo y
+  /// decimales vive en código (`common/monedas.ts`).
+  monedaCodigo       String   @default("ARS") @db.VarChar(3)
+  /// Zona IANA del taller. Todo lo que piensa en "hora de pared" —calendario
+  /// laboral, corte de jornada, ventana de WhatsApp, el "día" de un reporte—
+  /// se evalúa en esta zona, no en la del server (que en Render es UTC).
+  zonaHoraria        String   @default("America/Argentina/Buenos_Aires") @db.VarChar(64)
+  /// Cómo redondea el PRICING: 'moneda' = los decimales de la moneda (2 en
+  /// ARS, 0 en CLP); 'entero' = a la unidad, para los países donde los
+  /// centavos existen en el papel pero no en la calle (ARS, COP).
+  redondeoPrecio     String   @default("moneda") @db.VarChar(10)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -3072,6 +3085,12 @@ model MovimientoFondos {
   valorId            String?       @db.Uuid
   /// Movimiento espejo en la otra cuenta (transferencias).
   transferenciaParId String?       @db.Uuid
+  /// Sólo en transferencias entre cuentas de DISTINTA moneda: unidades de la
+  /// moneda destino por 1 de la de origen, derivado de lo que el usuario
+  /// declaró que llegó (`montoDestino`). El doc del módulo lo especificaba
+  /// desde el día uno y nunca se había implementado — la UI decía "se
+  /// registra el tipo de cambio del día" y era mentira.
+  tipoCambio         Decimal?      @db.Decimal(14, 4)
   ordenId            String?       @db.Uuid
   /// Saldo de la cuenta después de este movimiento (extracto corrido).
   saldoPosterior     Decimal       @db.Decimal(14, 2)

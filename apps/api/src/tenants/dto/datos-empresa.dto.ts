@@ -1,4 +1,13 @@
-import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import {
+  IsIn,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
+import { monedas } from '../../common/monedas';
+
+const CODIGOS_MONEDA = monedas.map((m) => m.codigo);
 
 /**
  * Todo opcional menos el nombre: una imprenta que recién arranca carga el
@@ -60,4 +69,23 @@ export class GuardarDatosEmpresaDto {
   @IsOptional()
   @IsString()
   urlResenas?: string;
+
+  /** ISO 4217, contra el catálogo. Etiqueta y formato, nunca conversión. */
+  @IsOptional()
+  @IsIn(CODIGOS_MONEDA, { message: 'Moneda desconocida' })
+  monedaCodigo?: string;
+
+  /**
+   * Zona IANA ("America/Santiago"). No se valida contra una lista acá: la
+   * valida el service contra la base de zonas de ICU, que es la que después
+   * la va a interpretar.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  zonaHoraria?: string;
+
+  @IsOptional()
+  @IsIn(['moneda', 'entero'], { message: 'Redondeo desconocido' })
+  redondeoPrecio?: string;
 }

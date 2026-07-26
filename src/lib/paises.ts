@@ -18,29 +18,68 @@ export type LatamCountry = {
   name: string;
   /** Prefijo telefónico internacional, sin el "+". Se guarda en `telefonoCodigo`. */
   phoneCode: string;
+  /**
+   * ISO 4217 de la moneda que la pantalla de Empresa SUGIERE al elegir el
+   * país. Sugerencia, no regla: en Venezuela existe el VED pero los
+   * presupuestos reales se hacen en USD. El catálogo vive en `monedas.ts`.
+   */
+  monedaSugerida: string;
+  /** Zona IANA que se sugiere al elegir el país (la de la capital). */
+  zonaHoraria: string;
 };
 
 export const latamCountries: LatamCountry[] = [
-  { code: "AR", flag: "🇦🇷", name: "Argentina", phoneCode: "54" },
-  { code: "BO", flag: "🇧🇴", name: "Bolivia", phoneCode: "591" },
-  { code: "BR", flag: "🇧🇷", name: "Brasil", phoneCode: "55" },
-  { code: "CL", flag: "🇨🇱", name: "Chile", phoneCode: "56" },
-  { code: "CO", flag: "🇨🇴", name: "Colombia", phoneCode: "57" },
-  { code: "CR", flag: "🇨🇷", name: "Costa Rica", phoneCode: "506" },
-  { code: "CU", flag: "🇨🇺", name: "Cuba", phoneCode: "53" },
-  { code: "DO", flag: "🇩🇴", name: "Republica Dominicana", phoneCode: "1809" },
-  { code: "EC", flag: "🇪🇨", name: "Ecuador", phoneCode: "593" },
-  { code: "SV", flag: "🇸🇻", name: "El Salvador", phoneCode: "503" },
-  { code: "GT", flag: "🇬🇹", name: "Guatemala", phoneCode: "502" },
-  { code: "HN", flag: "🇭🇳", name: "Honduras", phoneCode: "504" },
-  { code: "MX", flag: "🇲🇽", name: "Mexico", phoneCode: "52" },
-  { code: "NI", flag: "🇳🇮", name: "Nicaragua", phoneCode: "505" },
-  { code: "PA", flag: "🇵🇦", name: "Panama", phoneCode: "507" },
-  { code: "PY", flag: "🇵🇾", name: "Paraguay", phoneCode: "595" },
-  { code: "PE", flag: "🇵🇪", name: "Peru", phoneCode: "51" },
-  { code: "UY", flag: "🇺🇾", name: "Uruguay", phoneCode: "598" },
-  { code: "VE", flag: "🇻🇪", name: "Venezuela", phoneCode: "58" },
+  { code: "AR", flag: "🇦🇷", name: "Argentina", phoneCode: "54", monedaSugerida: "ARS", zonaHoraria: "America/Argentina/Buenos_Aires" },
+  { code: "BO", flag: "🇧🇴", name: "Bolivia", phoneCode: "591", monedaSugerida: "BOB", zonaHoraria: "America/La_Paz" },
+  { code: "BR", flag: "🇧🇷", name: "Brasil", phoneCode: "55", monedaSugerida: "BRL", zonaHoraria: "America/Sao_Paulo" },
+  { code: "CL", flag: "🇨🇱", name: "Chile", phoneCode: "56", monedaSugerida: "CLP", zonaHoraria: "America/Santiago" },
+  { code: "CO", flag: "🇨🇴", name: "Colombia", phoneCode: "57", monedaSugerida: "COP", zonaHoraria: "America/Bogota" },
+  { code: "CR", flag: "🇨🇷", name: "Costa Rica", phoneCode: "506", monedaSugerida: "CRC", zonaHoraria: "America/Costa_Rica" },
+  { code: "CU", flag: "🇨🇺", name: "Cuba", phoneCode: "53", monedaSugerida: "CUP", zonaHoraria: "America/Havana" },
+  { code: "DO", flag: "🇩🇴", name: "Republica Dominicana", phoneCode: "1809", monedaSugerida: "DOP", zonaHoraria: "America/Santo_Domingo" },
+  { code: "EC", flag: "🇪🇨", name: "Ecuador", phoneCode: "593", monedaSugerida: "USD", zonaHoraria: "America/Guayaquil" },
+  { code: "SV", flag: "🇸🇻", name: "El Salvador", phoneCode: "503", monedaSugerida: "USD", zonaHoraria: "America/El_Salvador" },
+  { code: "GT", flag: "🇬🇹", name: "Guatemala", phoneCode: "502", monedaSugerida: "GTQ", zonaHoraria: "America/Guatemala" },
+  { code: "HN", flag: "🇭🇳", name: "Honduras", phoneCode: "504", monedaSugerida: "HNL", zonaHoraria: "America/Tegucigalpa" },
+  { code: "MX", flag: "🇲🇽", name: "Mexico", phoneCode: "52", monedaSugerida: "MXN", zonaHoraria: "America/Mexico_City" },
+  { code: "NI", flag: "🇳🇮", name: "Nicaragua", phoneCode: "505", monedaSugerida: "NIO", zonaHoraria: "America/Managua" },
+  { code: "PA", flag: "🇵🇦", name: "Panama", phoneCode: "507", monedaSugerida: "PAB", zonaHoraria: "America/Panama" },
+  { code: "PY", flag: "🇵🇾", name: "Paraguay", phoneCode: "595", monedaSugerida: "PYG", zonaHoraria: "America/Asuncion" },
+  { code: "PE", flag: "🇵🇪", name: "Peru", phoneCode: "51", monedaSugerida: "PEN", zonaHoraria: "America/Lima" },
+  { code: "UY", flag: "🇺🇾", name: "Uruguay", phoneCode: "598", monedaSugerida: "UYU", zonaHoraria: "America/Montevideo" },
+  { code: "VE", flag: "🇻🇪", name: "Venezuela", phoneCode: "58", monedaSugerida: "USD", zonaHoraria: "America/Caracas" },
 ];
+
+/**
+ * Las zonas que ofrece el selector: la de cada país más las variantes que
+ * un taller real puede necesitar (Chile continental vs. Magallanes, el norte
+ * de México, la Amazonia brasileña). IANA, no offsets: el DST de Chile o de
+ * Cuba lo resuelve la base de datos de zonas, no nosotros.
+ */
+export const ZONAS_HORARIAS: string[] = [
+  ...new Set([
+    ...latamCountries.map((p) => p.zonaHoraria),
+    "America/Punta_Arenas",
+    "America/Tijuana",
+    "America/Cancun",
+    "America/Manaus",
+  ]),
+].sort();
+
+/** La zona sugerida del país, o la de Argentina si el código no está. */
+export function zonaHorariaDe(codigoPais: string | null | undefined): string {
+  return (
+    latamCountries.find((c) => c.code === codigoPais)?.zonaHoraria ??
+    "America/Argentina/Buenos_Aires"
+  );
+}
+
+/** La moneda sugerida del país, o ARS si el código no está. */
+export function monedaSugeridaDe(codigoPais: string | null | undefined): string {
+  return (
+    latamCountries.find((c) => c.code === codigoPais)?.monedaSugerida ?? "ARS"
+  );
+}
 
 /** Argentina, el default de todas las altas. */
 export const PAIS_DEFAULT = "AR";

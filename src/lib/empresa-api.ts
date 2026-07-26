@@ -21,6 +21,13 @@ export type DatosEmpresa = {
   provincia: string | null;
   horarioAtencion: string | null;
   urlResenas: string | null;
+  /** ISO 4217. Etiqueta y formato, nunca conversión: cambiarla no toca
+   *  ningún monto histórico. Catálogo en `monedas.ts`. */
+  monedaCodigo: string;
+  /** Zona IANA del taller ("America/Santiago"). */
+  zonaHoraria: string;
+  /** 'moneda' = los decimales de la moneda; 'entero' = a la unidad. */
+  redondeoPrecio: string;
 };
 
 export type GuardarDatosEmpresa = {

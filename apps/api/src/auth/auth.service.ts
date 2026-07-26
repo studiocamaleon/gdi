@@ -500,6 +500,9 @@ export class AuthService {
         // El staff dentro del tenant ve la suscripción DE ESE tenant: es parte
         // de lo que vino a mirar.
         suscripcion: await this.resumenSuscripcion(tenant.id),
+        // Y sus montos y horas en la moneda y la zona DE ESE tenant, por lo
+        // mismo.
+        regional: await this.regionalDe(tenant.id),
       };
       return {
         accessToken: null,
@@ -937,7 +940,7 @@ export class AuthService {
     accessToken: string | null,
     rolPlataforma: RolPlataforma | null = null,
   ) {
-    const [suscripcion, rolDelTenant, usuario] = await Promise.all([
+    const [suscripcion, rolDelTenant, usuario, regional] = await Promise.all([
       this.resumenSuscripcion(currentMembership.tenant.id),
       currentMembership.rolId
         ? this.prisma.rol.findUnique({
@@ -949,6 +952,7 @@ export class AuthService {
         where: { id: userId },
         select: { debeCambiarPassword: true },
       }),
+      this.regionalDe(currentMembership.tenant.id),
     ]);
 
     // Los mismos que evalúa el guard, para que la UI esconda lo que el API va
@@ -984,6 +988,7 @@ export class AuthService {
           rolNombre: rolDelTenant?.nombre ?? null,
           permisos,
           suscripcion,
+          regional,
         },
         tenants: memberships.map((membership) => ({
           id: membership.tenant.id,
@@ -992,6 +997,31 @@ export class AuthService {
           rol: this.fromPrismaRol(membership.rol),
         })),
       },
+    };
+  }
+
+  /**
+   * Moneda, zona horaria y redondeo del tenant, con defaults argentinos si
+   * la fila de DatosEmpresa no existe. Viaja en `tenantActual` para que el
+   * front lo tenga desde el primer render, sin una request más — códigos
+   * pelados: el catálogo con símbolo y decimales el front lo tiene en
+   * `src/lib/monedas.ts`.
+   */
+  private async regionalDe(tenantId: string) {
+    const d = await this.prisma.datosEmpresa.findUnique({
+      where: { tenantId },
+      select: {
+        monedaCodigo: true,
+        zonaHoraria: true,
+        redondeoPrecio: true,
+        paisCodigo: true,
+      },
+    });
+    return {
+      monedaCodigo: d?.monedaCodigo ?? 'ARS',
+      zonaHoraria: d?.zonaHoraria ?? 'America/Argentina/Buenos_Aires',
+      redondeoPrecio: d?.redondeoPrecio ?? 'moneda',
+      paisCodigo: d?.paisCodigo ?? 'AR',
     };
   }
 
