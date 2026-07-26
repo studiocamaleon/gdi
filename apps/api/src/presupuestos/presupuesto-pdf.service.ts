@@ -39,8 +39,6 @@ const CONTENIDO = ANCHO - MARGEN * 2;
 type RGB = [number, number, number];
 
 const PAPEL: RGB = [251, 251, 249];
-const SURFACE: RGB = [255, 255, 255];
-const SURFACE_2: RGB = [246, 245, 242];
 const BORDE: RGB = [231, 229, 226];
 const HAIRLINE: RGB = [238, 236, 232];
 const INK: RGB = [20, 20, 26];
@@ -51,9 +49,6 @@ const ACCENT: RGB = [217, 100, 42];
 const ACCENT_BG: RGB = [253, 241, 234];
 const ACCENT_BORD: RGB = [242, 211, 193];
 const VERDE: RGB = [22, 121, 74];
-const VERDE_BG: RGB = [233, 244, 238];
-const VERDE_BORD: RGB = [201, 230, 214];
-const VERDE_DOT: RGB = [40, 160, 106];
 
 let geistCache: { regular: string; bold: string } | null | undefined;
 
@@ -142,6 +137,7 @@ export class PresupuestoPdfService {
     y = this.detalle(pdf, d, y);
     y = this.totales(pdf, d, y);
     this.pie(pdf, d, y);
+    this.numerarPaginas(pdf, d);
 
     return Promise.resolve(Buffer.from(pdf.output('arraybuffer')));
   }
@@ -184,77 +180,27 @@ export class PresupuestoPdfService {
   }
 
   /**
-   * Pastilla redondeada con texto. Devuelve el ancho que ocupó, para poder
-   * ir acomodándolas en fila y saber cuándo cortar el renglón.
+   * En las hojas de continuación, arriba a la derecha: de qué presupuesto es y
+   * en qué página va. Sólo tienen la tabla, así que sin esto una hoja suelta no
+   * se puede identificar ni ordenar. En un presupuesto de una sola hoja no
+   * aporta nada y no se dibuja.
    */
-  private pastilla(
-    pdf: jsPDF,
-    x: number,
-    y: number,
-    partes: Array<{ texto: string; color: RGB; negrita?: boolean }>,
-    opciones: {
-      tamPx: number;
-      fondo: RGB;
-      borde: RGB;
-      padX: number;
-      alto: number;
-      gap?: number;
-      /** Tilde del diseño en los adicionales incluidos. */
-      tilde?: RGB;
-    },
-  ): number {
-    const gap = opciones.gap ?? px(7);
-    let ancho = opciones.padX * 2;
-    if (opciones.tilde) ancho += px(14) + gap;
-    partes.forEach((p, i) => {
-      this.fuente(pdf, opciones.tamPx, p.negrita);
-      ancho += pdf.getTextWidth(p.texto) + (i > 0 ? gap : 0);
-    });
+  private numerarPaginas(pdf: jsPDF, d: PresupuestoPdfDatos) {
+    const total = pdf.getNumberOfPages();
+    if (total < 2) return;
 
-    pdf.setFillColor(...opciones.fondo);
-    pdf.setDrawColor(...opciones.borde);
-    pdf.setLineWidth(0.2);
-    // Radio = mitad del alto: es el `border-radius:999px` del diseño.
-    pdf.roundedRect(
-      x,
-      y,
-      ancho,
-      opciones.alto,
-      opciones.alto / 2,
-      opciones.alto / 2,
-      'FD',
-    );
-
-    let cursor = x + opciones.padX;
-    if (opciones.tilde) {
-      this.tilde(pdf, cursor, y + opciones.alto / 2, opciones.tilde);
-      cursor += px(14) + gap;
+    for (let n = 2; n <= total; n++) {
+      pdf.setPage(n);
+      this.fuente(pdf, 10.5, false, MUTED_2);
+      pdf.text(
+        `${d.numero} · Página ${n} de ${total}`,
+        ANCHO - MARGEN,
+        px(30),
+        {
+          align: 'right',
+        },
+      );
     }
-    partes.forEach((p, i) => {
-      this.fuente(pdf, opciones.tamPx, p.negrita, p.color);
-      pdf.text(p.texto, cursor + (i > 0 ? gap : 0), y + opciones.alto / 2, {
-        baseline: 'middle',
-      });
-      cursor += pdf.getTextWidth(p.texto) + (i > 0 ? gap : 0);
-    });
-    return ancho;
-  }
-
-  /** El check de los opcionales, dibujado a mano (jsPDF no toma SVG). */
-  private tilde(pdf: jsPDF, x: number, yMedio: number, color: RGB) {
-    pdf.setDrawColor(...color);
-    pdf.setLineWidth(0.45);
-    pdf.setLineCap('round');
-    pdf.setLineJoin('round');
-    const l = px(14);
-    pdf.lines(
-      [
-        [l * 0.36, l * 0.34],
-        [l * 0.62, -l * 0.66],
-      ],
-      x + l * 0.02,
-      yMedio - l * 0.02,
-    );
   }
 
   // ── Bloques ────────────────────────────────────────────────────────
@@ -295,28 +241,10 @@ export class PresupuestoPdfService {
     this.fuente(pdf, 22, true);
     pdf.text(d.numero, der, y + px(31), { align: 'right' });
 
-    let yFin = y + lado;
-    if (d.fechaValidez) {
-      const alto = px(25);
-      const texto = `Válido hasta ${fecha(d.fechaValidez)}`;
-      this.fuente(pdf, 12, false);
-      const ancho = px(12) * 2 + px(7) * 2 + px(7) + pdf.getTextWidth(texto);
-      const xPill = der - ancho;
-      const yPill = y + px(41);
-      pdf.setFillColor(...VERDE_BG);
-      pdf.setDrawColor(...VERDE_BORD);
-      pdf.setLineWidth(0.2);
-      pdf.roundedRect(xPill, yPill, ancho, alto, alto / 2, alto / 2, 'FD');
-      pdf.setFillColor(...VERDE_DOT);
-      pdf.circle(xPill + px(12) + px(3.5), yPill + alto / 2, px(3.5), 'F');
-      this.fuente(pdf, 12, false, VERDE);
-      pdf.text(texto, xPill + px(12) + px(7) + px(7), yPill + alto / 2, {
-        baseline: 'middle',
-      });
-      yFin = Math.max(yFin, yPill + alto);
-    }
-
-    return yFin + px(26);
+    // La validez NO va acá: vive en la banda de metadatos, junto a la fecha de
+    // emisión, que es donde el lector la busca. Estaba en los dos lados y
+    // repetir un dato en un documento comercial hace dudar de cuál vale.
+    return y + lado + px(26);
   }
 
   private cuadradoIniciales(
@@ -392,252 +320,210 @@ export class PresupuestoPdfService {
     return y0 + alto + px(28);
   }
 
-  private detalle(pdf: jsPDF, d: PresupuestoPdfDatos, y0: number): number {
-    let y = y0;
-    this.fuente(pdf, 10.5, true, MUTED);
-    pdf.text(this.espaciado('DETALLE'), MARGEN, y);
-    y += px(14) + px(6);
+  // ── Detalle: una TABLA, no tarjetas ─────────────────────────────────
+  //
+  // El detalle era una tarjeta por item con el número en un círculo y cada
+  // spec en su pastilla. Se leía como una pantalla de app, no como un
+  // documento comercial: para comparar dos renglones había que barrer
+  // pastillas en vez de bajar por una columna. Ahora es una tabla —cantidad,
+  // unitario y total alineados a la derecha— y las specs son una línea de
+  // texto discreta bajo el nombre. Lo moderno queda en la tipografía y el
+  // aire, no en los adornos.
 
-    for (const item of d.items) {
+  /** Anchos de las columnas numéricas; la descripción se queda con el resto. */
+  private get colNum(): {
+    orden: number;
+    cant: number;
+    unit: number;
+    total: number;
+  } {
+    return { orden: px(22), cant: px(66), unit: px(96), total: px(104) };
+  }
+
+  private get xColumnas(): {
+    orden: number;
+    desc: number;
+    cant: number;
+    unit: number;
+    total: number;
+    anchoDesc: number;
+  } {
+    const c = this.colNum;
+    const orden = MARGEN;
+    const desc = orden + c.orden;
+    const total = ANCHO - MARGEN;
+    const unit = total - c.total;
+    const cant = unit - c.unit;
+    return {
+      orden,
+      desc,
+      cant,
+      unit,
+      total,
+      anchoDesc: cant - c.cant - desc - px(10),
+    };
+  }
+
+  /** "45 x 31 cm · Papel ilustración 250 g/m² · Simple faz" */
+  private lineaSpecs(item: PresupuestoPdfDatos['items'][number]): string {
+    return item.specs.map((s) => s.valor).join('  ·  ');
+  }
+
+  private detalle(pdf: jsPDF, d: PresupuestoPdfDatos, y0: number): number {
+    let y = this.encabezadoTabla(pdf, y0);
+
+    d.items.forEach((item, i) => {
       const alto = this.medirItem(pdf, item);
-      // `break-inside: avoid` del diseño: la tarjeta no se parte al medio.
-      if (y + alto > ALTO - px(90)) y = this.nuevaPagina(pdf);
-      this.dibujarItem(pdf, item, y, d.items.indexOf(item) + 1, alto);
-      y += alto + px(12);
-    }
+      // Un renglón no se parte entre páginas: media descripción arriba y el
+      // precio abajo es peor que dejar un hueco. El margen inferior es el
+      // mismo px(48) de arriba más el aire de la regla de cierre.
+      if (y + alto > ALTO - px(60)) {
+        y = this.nuevaPagina(pdf);
+        y = this.encabezadoTabla(pdf, y);
+      }
+      this.filaItem(pdf, item, y, i + 1);
+      y += alto;
+
+      // Hairline entre renglones, no después del último: ahí cierra el borde
+      // de la banda de totales.
+      if (i < d.items.length - 1) {
+        pdf.setDrawColor(...HAIRLINE);
+        pdf.setLineWidth(0.2);
+        pdf.line(MARGEN, y, ANCHO - MARGEN, y);
+      }
+    });
+
+    // Regla de cierre, del mismo peso que la del encabezado: la tabla queda
+    // contenida entre las dos y los totales se leen como su continuación, no
+    // como un bloque suelto.
+    pdf.setDrawColor(...BORDE);
+    pdf.setLineWidth(0.35);
+    pdf.line(MARGEN, y, ANCHO - MARGEN, y);
+
     return y;
   }
 
-  /**
-   * Nombre partido en como mucho dos renglones, con el ancho que sobra a la
-   * izquierda del precio. Lo usan `medirItem` y `dibujarItem`, que TIENEN que
-   * coincidir: si midiera distinto de lo que dibuja, la paginación cortaría
-   * tarjetas al medio.
-   */
+  /** Rótulos de columna + la regla que los separa del cuerpo. */
+  private encabezadoTabla(pdf: jsPDF, y0: number): number {
+    const x = this.xColumnas;
+    const y = y0 + px(11);
+
+    this.fuente(pdf, 10, true, MUTED_2);
+    pdf.text(this.espaciado('#'), x.orden, y);
+    pdf.text(this.espaciado('DESCRIPCIÓN'), x.desc, y);
+    pdf.text(this.espaciado('CANT.'), x.cant, y, { align: 'right' });
+    pdf.text(this.espaciado('UNITARIO'), x.unit, y, { align: 'right' });
+    pdf.text(this.espaciado('TOTAL'), x.total, y, { align: 'right' });
+
+    const yRegla = y + px(9);
+    pdf.setDrawColor(...BORDE);
+    pdf.setLineWidth(0.35);
+    pdf.line(MARGEN, yRegla, ANCHO - MARGEN, yRegla);
+    return yRegla;
+  }
+
+  /** Nombre partido con el ancho de la columna de descripción. */
   private lineasNombre(
     pdf: jsPDF,
     item: PresupuestoPdfDatos['items'][number],
   ): string[] {
-    this.fuente(pdf, 18, true);
-    const anchoPrecio = pdf.getTextWidth(money(item.total));
-    const xNombre = MARGEN + px(22) + px(30) + px(16);
-    const util = MARGEN + CONTENIDO - px(22) - anchoPrecio - px(12) - xNombre;
-    this.fuente(pdf, 17, true);
-    const lineas = pdf.splitTextToSize(
+    this.fuente(pdf, 14, true);
+    return pdf.splitTextToSize(
       item.nombre,
-      Math.max(util, px(80)),
+      this.xColumnas.anchoDesc,
     ) as string[];
-    if (lineas.length <= 2) return lineas;
-    // Más de dos renglones desbalancea la tarjeta: se corta con puntos
-    // suspensivos en vez de dejar la frase colgada a la mitad.
-    return [lineas[0], `${lineas[1].replace(/\s+\S*$/, '')}…`];
   }
 
-  /** Alto de la tarjeta, calculado igual que se dibuja (para paginar). */
+  private lineasSpecs(
+    pdf: jsPDF,
+    item: PresupuestoPdfDatos['items'][number],
+  ): string[] {
+    const texto = this.lineaSpecs(item);
+    if (!texto) return [];
+    this.fuente(pdf, 11.5);
+    return pdf.splitTextToSize(texto, this.xColumnas.anchoDesc) as string[];
+  }
+
+  private lineasAdicionales(
+    pdf: jsPDF,
+    item: PresupuestoPdfDatos['items'][number],
+  ): string[] {
+    if (item.adicionales.length === 0) return [];
+    this.fuente(pdf, 11.5);
+    return pdf.splitTextToSize(
+      `Incluye: ${item.adicionales.join(', ')}`,
+      this.xColumnas.anchoDesc,
+    ) as string[];
+  }
+
+  /**
+   * Alto del renglón. Tiene que coincidir EXACTO con lo que dibuja
+   * `filaItem`: si midiera distinto, la paginación cortaría renglones.
+   */
   private medirItem(
     pdf: jsPDF,
     item: PresupuestoPdfDatos['items'][number],
   ): number {
-    let alto = px(20) * 2 + px(30);
-    const lineas = this.lineasNombre(pdf, item);
-    if (lineas.length > 1) alto += (lineas.length - 1) * px(21);
-    if (item.specs.length > 0) {
-      alto +=
-        px(15) + this.altoPastillas(pdf, this.anchosSpecs(pdf, item), px(28));
-    }
-    if (item.adicionales.length > 0) {
-      alto +=
-        px(16) +
-        px(10.5) +
-        px(9) +
-        this.altoPastillas(pdf, this.anchosOpcionales(pdf, item), px(25));
-    }
-    return alto;
+    const nombre = this.lineasNombre(pdf, item).length;
+    const specs = this.lineasSpecs(pdf, item).length;
+    const adic = this.lineasAdicionales(pdf, item).length;
+    return (
+      px(14) +
+      nombre * px(19) +
+      (specs > 0 ? px(4) + specs * px(15) : 0) +
+      (adic > 0 ? px(3) + adic * px(15) : 0) +
+      px(14)
+    );
   }
 
-  private anchosSpecs(
+  private filaItem(
     pdf: jsPDF,
     item: PresupuestoPdfDatos['items'][number],
-  ): number[] {
-    return item.specs.map((s) => {
-      this.fuente(pdf, 12.5);
-      return (
-        px(13) * 2 +
-        px(7) +
-        pdf.getTextWidth(s.etiqueta) +
-        pdf.getTextWidth(s.valor)
-      );
-    });
-  }
-
-  private anchosOpcionales(
-    pdf: jsPDF,
-    item: PresupuestoPdfDatos['items'][number],
-  ): number[] {
-    return item.adicionales.map((a) => {
-      this.fuente(pdf, 12.5);
-      return px(9) + px(13) + px(14) + px(7) + pdf.getTextWidth(a);
-    });
-  }
-
-  /**
-   * X donde arranca el contenido interno del item: alineado con el nombre,
-   * no con el badge del índice (`padding-left:46px` del diseño, sobre el
-   * padding de 22px de la tarjeta).
-   */
-  private get xContenidoItem(): number {
-    return MARGEN + px(22) + px(46);
-  }
-
-  private get utilContenidoItem(): number {
-    return MARGEN + CONTENIDO - px(22) - this.xContenidoItem;
-  }
-
-  /** Cuánto ocupan las pastillas acomodadas en filas con wrap. */
-  private altoPastillas(
-    pdf: jsPDF,
-    anchos: number[],
-    altoFila: number,
-  ): number {
-    const util = this.utilContenidoItem;
-    let filas = 1;
-    let x = 0;
-    for (const a of anchos) {
-      if (x > 0 && x + a > util) {
-        filas += 1;
-        x = 0;
-      }
-      x += a + px(8);
-    }
-    return filas * altoFila + (filas - 1) * px(8);
-  }
-
-  private dibujarItem(
-    pdf: jsPDF,
-    item: PresupuestoPdfDatos['items'][number],
-    y: number,
-    indice: number,
-    alto: number,
-  ) {
-    pdf.setFillColor(...SURFACE);
-    pdf.setDrawColor(...BORDE);
-    pdf.setLineWidth(0.2);
-    pdf.roundedRect(MARGEN, y, CONTENIDO, alto, px(16), px(16), 'FD');
-
-    const xPad = MARGEN + px(22);
-    const yPad = y + px(20);
-
-    // Índice del item
-    const ladoIdx = px(30);
-    pdf.setFillColor(...ACCENT_BG);
-    pdf.setDrawColor(...ACCENT_BORD);
-    pdf.roundedRect(xPad, yPad, ladoIdx, ladoIdx, px(9), px(9), 'FD');
-    this.fuente(pdf, 13, true, ACCENT);
-    pdf.text(String(indice), xPad + ladoIdx / 2, yPad + ladoIdx / 2, {
-      align: 'center',
-      baseline: 'middle',
-    });
-
-    // Precio a la derecha; el nombre se corta antes de pisarlo.
-    const precio = money(item.total);
-    this.fuente(pdf, 18, true);
-    pdf.text(precio, MARGEN + CONTENIDO - px(22), yPad + px(13), {
-      align: 'right',
-    });
-
-    const xNombre = xPad + ladoIdx + px(16);
-    const lineas = this.lineasNombre(pdf, item);
-    this.fuente(pdf, 17, true);
-    lineas.forEach((l, i) => pdf.text(l, xNombre, yPad + px(13) + i * px(21)));
-    const yBajoNombre = yPad + px(13) + (lineas.length - 1) * px(21);
-
-    const unit = item.cantidad > 0 ? item.total / item.cantidad : item.total;
-    this.fuente(pdf, 12.5, false, MUTED);
-    const cant = `${item.cantidad.toLocaleString('es-AR')} ${item.cantidadUnidad} · ${money(unit)} c/u`;
-    // El ancho se mide ANTES de cambiar el cuerpo: getTextWidth usa el tamaño
-    // vigente, así que medirlo con la fuente del "IVA incl." (más chica) daba
-    // un ancho corto y las dos leyendas se pisaban.
-    const anchoCant = pdf.getTextWidth(cant);
-    pdf.text(cant, xNombre, yBajoNombre + px(15));
-    this.fuente(pdf, 11, false, MUTED_2);
-    pdf.text('IVA incl.', xNombre + anchoCant + px(6), yBajoNombre + px(15));
-
-    let yCursor = yPad + px(30) + (lineas.length - 1) * px(21);
-
-    if (item.specs.length > 0) {
-      yCursor += px(15);
-      yCursor = this.filaPastillas(
-        pdf,
-        this.xContenidoItem,
-        yCursor,
-        item.specs.map((s) => ({
-          partes: [
-            { texto: s.etiqueta, color: MUTED_2 },
-            { texto: s.valor, color: INK_2 },
-          ],
-          tamPx: 12.5,
-          fondo: SURFACE_2,
-          borde: BORDE,
-          padX: px(13),
-          alto: px(28),
-        })),
-      );
-    }
-
-    if (item.adicionales.length > 0) {
-      yCursor += px(16);
-      this.fuente(pdf, 10.5, true, VERDE);
-      pdf.text(
-        this.espaciado('OPCIONALES INCLUIDOS'),
-        this.xContenidoItem,
-        yCursor,
-      );
-      yCursor += px(9) + px(6);
-      this.filaPastillas(
-        pdf,
-        this.xContenidoItem,
-        yCursor,
-        item.adicionales.map((a) => ({
-          partes: [{ texto: a, color: VERDE }],
-          tamPx: 12.5,
-          fondo: VERDE_BG,
-          borde: VERDE_BORD,
-          padX: px(11),
-          alto: px(25),
-          tilde: VERDE,
-        })),
-      );
-    }
-  }
-
-  /** Acomoda pastillas en filas con wrap. Devuelve la Y del final. */
-  private filaPastillas(
-    pdf: jsPDF,
-    x0: number,
     y0: number,
-    pastillas: Array<{
-      partes: Array<{ texto: string; color: RGB; negrita?: boolean }>;
-      tamPx: number;
-      fondo: RGB;
-      borde: RGB;
-      padX: number;
-      alto: number;
-      tilde?: RGB;
-    }>,
-  ): number {
-    const util = MARGEN + CONTENIDO - px(22) - x0;
-    let x = x0;
-    let y = y0;
-    for (const p of pastillas) {
-      const ancho = this.pastilla(pdf, -1000, -1000, p.partes, p); // medir
-      if (x > x0 && x + ancho > x0 + util) {
-        x = x0;
-        y += p.alto + px(8);
-      }
-      this.pastilla(pdf, x, y, p.partes, p);
-      x += ancho + px(8);
+    orden: number,
+  ) {
+    const x = this.xColumnas;
+    const y = y0 + px(14) + px(13);
+
+    // El número de orden, gris y chico: ordena sin competir con el nombre.
+    this.fuente(pdf, 11.5, false, MUTED_2);
+    pdf.text(String(orden), x.orden, y);
+
+    this.fuente(pdf, 14, true, INK);
+    const nombre = this.lineasNombre(pdf, item);
+    nombre.forEach((l, i) => pdf.text(l, x.desc, y + i * px(19)));
+    let yTexto = y + (nombre.length - 1) * px(19);
+
+    const specs = this.lineasSpecs(pdf, item);
+    if (specs.length > 0) {
+      this.fuente(pdf, 11.5, false, MUTED);
+      yTexto += px(4) + px(15);
+      specs.forEach((l, i) => pdf.text(l, x.desc, yTexto + i * px(15)));
+      yTexto += (specs.length - 1) * px(15);
     }
-    return y + (pastillas[0]?.alto ?? 0);
+
+    const adic = this.lineasAdicionales(pdf, item);
+    if (adic.length > 0) {
+      this.fuente(pdf, 11.5, false, VERDE);
+      yTexto += px(3) + px(15);
+      adic.forEach((l, i) => pdf.text(l, x.desc, yTexto + i * px(15)));
+    }
+
+    // Las cifras se alinean con la PRIMERA línea del nombre: leídas en
+    // columna, tienen que estar a la misma altura aunque un item ocupe tres
+    // renglones y el otro uno.
+    const unitario =
+      item.cantidad > 0 ? item.total / item.cantidad : item.total;
+    this.fuente(pdf, 12.5, false, INK_2);
+    pdf.text(
+      `${item.cantidad.toLocaleString('es-AR')} ${item.cantidadUnidad}`.trim(),
+      x.cant,
+      y,
+      { align: 'right' },
+    );
+    pdf.text(money(unitario), x.unit, y, { align: 'right' });
+    this.fuente(pdf, 13, true, INK);
+    pdf.text(money(item.total), x.total, y, { align: 'right' });
   }
 
   private totales(pdf: jsPDF, d: PresupuestoPdfDatos, y0: number): number {
