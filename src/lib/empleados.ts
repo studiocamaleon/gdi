@@ -1,6 +1,6 @@
-import { latamCountries } from "@/lib/proveedores";
+import { PAIS_DEFAULT, phoneCodeDe } from "@/lib/paises";
 
-export { latamCountries } from "@/lib/proveedores";
+export { latamCountries } from "@/lib/paises";
 
 export type TipoDireccion = "principal" | "facturacion" | "entrega";
 export type SexoEmpleado =
@@ -128,8 +128,7 @@ export function createEmptyEmpleado(): EmpleadoDetalle {
     id: "",
     nombreCompleto: "",
     email: "",
-    telefonoCodigo:
-      latamCountries.find((country) => country.code === "AR")?.phoneCode ?? "54",
+    telefonoCodigo: phoneCodeDe(PAIS_DEFAULT),
     telefonoNumero: "",
     sector: "",
     ocupacion: "",

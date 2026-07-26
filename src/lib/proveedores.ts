@@ -1,9 +1,10 @@
-export type LatamCountry = {
-  code: string;
-  flag: string;
-  name: string;
-  phoneCode: string;
-};
+/**
+ * La lista de países vive en `paises.ts`: estaba duplicada acá y en el otro
+ * módulo, y el día que se agregara un país en uno solo las dos altas iban a
+ * ofrecer opciones distintas. Se re-exporta para no romper los imports que ya
+ * apuntan a este archivo.
+ */
+export { latamCountries, type LatamCountry } from "@/lib/paises";
 
 export type ProveedorContacto = {
   id: string;
@@ -69,28 +70,6 @@ export type ProveedorPayload = {
     principal: boolean;
   }>;
 };
-
-export const latamCountries: LatamCountry[] = [
-  { code: "AR", flag: "🇦🇷", name: "Argentina", phoneCode: "54" },
-  { code: "BO", flag: "🇧🇴", name: "Bolivia", phoneCode: "591" },
-  { code: "BR", flag: "🇧🇷", name: "Brasil", phoneCode: "55" },
-  { code: "CL", flag: "🇨🇱", name: "Chile", phoneCode: "56" },
-  { code: "CO", flag: "🇨🇴", name: "Colombia", phoneCode: "57" },
-  { code: "CR", flag: "🇨🇷", name: "Costa Rica", phoneCode: "506" },
-  { code: "CU", flag: "🇨🇺", name: "Cuba", phoneCode: "53" },
-  { code: "DO", flag: "🇩🇴", name: "Republica Dominicana", phoneCode: "1809" },
-  { code: "EC", flag: "🇪🇨", name: "Ecuador", phoneCode: "593" },
-  { code: "SV", flag: "🇸🇻", name: "El Salvador", phoneCode: "503" },
-  { code: "GT", flag: "🇬🇹", name: "Guatemala", phoneCode: "502" },
-  { code: "HN", flag: "🇭🇳", name: "Honduras", phoneCode: "504" },
-  { code: "MX", flag: "🇲🇽", name: "Mexico", phoneCode: "52" },
-  { code: "NI", flag: "🇳🇮", name: "Nicaragua", phoneCode: "505" },
-  { code: "PA", flag: "🇵🇦", name: "Panama", phoneCode: "507" },
-  { code: "PY", flag: "🇵🇾", name: "Paraguay", phoneCode: "595" },
-  { code: "PE", flag: "🇵🇪", name: "Peru", phoneCode: "51" },
-  { code: "UY", flag: "🇺🇾", name: "Uruguay", phoneCode: "598" },
-  { code: "VE", flag: "🇻🇪", name: "Venezuela", phoneCode: "58" },
-];
 
 export function createEmptyProveedor(): ProveedorDetalle {
   return {

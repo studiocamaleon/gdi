@@ -8,7 +8,11 @@ import { toast } from "sonner";
 import { LogoTenantCard } from "@/components/archivos/logo-tenant-card";
 import type { LogoTenant } from "@/lib/archivos-api";
 import { guardarDatosEmpresa, type DatosEmpresa } from "@/lib/empresa-api";
-import { latamCountries as PAISES } from "@/lib/clientes";
+import {
+  PAIS_DEFAULT,
+  latamCountries as PAISES,
+  phoneCodeDe,
+} from "@/lib/paises";
 
 /**
  * Cómo se presenta el negocio ante su cliente.
@@ -49,8 +53,8 @@ function estadoInicial(d: DatosEmpresa): FormState {
     nombre: d.nombre,
     // Una imprenta argentina no debería tener que elegir Argentina: el resto
     // del sistema asume lo mismo en el alta de clientes.
-    paisCodigo: d.paisCodigo ?? "AR",
-    telefonoCodigo: d.telefonoCodigo ?? "54",
+    paisCodigo: d.paisCodigo ?? PAIS_DEFAULT,
+    telefonoCodigo: d.telefonoCodigo ?? phoneCodeDe(PAIS_DEFAULT),
     telefonoNumero: vacio(d.telefonoNumero),
     whatsappCodigo: vacio(d.whatsappCodigo),
     whatsappNumero: vacio(d.whatsappNumero),
@@ -196,9 +200,7 @@ export function DatosEmpresaView({
                       // El código telefónico acompaña al país salvo que ya lo
                       // hayan tocado a mano: cambiar de país y quedarse con el
                       // +54 sólo produce un WhatsApp que no llega.
-                      const codigo = PAISES.find((p) => p.code === pais)
-                        ?.phoneCode;
-                      if (codigo) set("telefonoCodigo", codigo);
+                      set("telefonoCodigo", phoneCodeDe(pais));
                     }}
                   >
                     {PAISES.map((p) => (
