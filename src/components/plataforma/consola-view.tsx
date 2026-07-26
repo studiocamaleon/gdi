@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+
+import { fechaHora } from "@/lib/fecha";
 import Link from "next/link";
 
 import { useRouter } from "next/navigation";
@@ -2223,12 +2225,7 @@ function Impersonacion({
             {datos.auditoria.map((e) => (
               <div className="cpl-arow" key={e.id}>
                 <span className="ats">
-                  {new Date(e.creadoEl).toLocaleString("es-AR", {
-                    day: "2-digit",
-                    month: "short",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
+                  {fechaHora(e.creadoEl)}
                 </span>
                 <span
                   className="aic"

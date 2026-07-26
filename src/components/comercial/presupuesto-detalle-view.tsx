@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+
+import { fechaCorta, fechaHora } from "@/lib/fecha";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -65,10 +67,11 @@ const canalLabel = (v: string | null) =>
   v ? (CANALES_VENTA.find((c) => c.value === v)?.label ?? v) : "—";
 
 const fmtMoneda = (n: number) => "$" + Math.round(n).toLocaleString("es-AR");
-const fmtFecha = (iso: string | null) =>
-  iso ? new Date(iso).toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric" }) : "—";
-const fmtMomento = (iso: string) =>
-  new Date(iso).toLocaleString("es-AR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+// Formateo determinístico y en hora argentina: `toLocaleString` daba strings
+// distintos en el servidor y en el navegador —espacio angosto vs. normal antes
+// del "p. m."— y React tiraba error de hidratación. Ver src/lib/fecha.ts
+const fmtFecha = (iso: string | null) => (iso ? fechaCorta(iso) : "—");
+const fmtMomento = (iso: string) => fechaHora(iso);
 
 type Tab = "productos" | "conversion" | "historial";
 
@@ -752,3 +755,4 @@ function TabHistorial({ d }: { d: PresupuestoDetalle }) {
     </div>
   );
 }
+

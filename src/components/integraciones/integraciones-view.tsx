@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+
+import { fechaHora } from "@/lib/fecha";
 import { toast } from "sonner";
 
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
@@ -1437,12 +1439,7 @@ function MensajesTab() {
           visibles.map((l) => (
             <div className="int-nt-log-fila" key={l.id}>
               <span className="int-nt-log-fecha">
-                {new Date(l.createdAt).toLocaleString("es-AR", {
-                  day: "2-digit",
-                  month: "2-digit",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
+                {fechaHora(l.createdAt)}
               </span>
               <div>
                 <div>
@@ -1459,15 +1456,7 @@ function MensajesTab() {
                   {l.motivo ? ` · ${l.motivo}` : ""}
                   {l.intentos > 1 ? ` · ${l.intentos} intentos` : ""}
                   {l.estado === "pendiente" && l.programadaPara
-                    ? ` · sale ${new Date(l.programadaPara).toLocaleString(
-                        "es-AR",
-                        {
-                          day: "2-digit",
-                          month: "2-digit",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        },
-                      )}`
+                    ? ` · sale ${fechaHora(l.programadaPara)}`
                     : ""}
                 </div>
               </div>
