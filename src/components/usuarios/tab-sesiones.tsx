@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+
+import { fechaHoraCorta } from "@/lib/fecha";
 import { toast } from "sonner";
 
 import {
@@ -122,13 +124,5 @@ export function TabSesiones({ onCambio }: { onCambio: () => Promise<void> }) {
   );
 }
 
-/** 24 horas: con am/pm, Node y el navegador escriben espacios distintos. */
-function fechaHora(iso: string): string {
-  return new Date(iso).toLocaleString("es-AR", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-}
+/** dd/mm hh:mm en hora de Argentina, igual en el servidor y en el navegador. */
+const fechaHora = fechaHoraCorta;

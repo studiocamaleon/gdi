@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+
+import { esHoy, fechaNumerica, hora } from "@/lib/fecha";
 import Link from "next/link";
 import {
   ArrowLeftIcon,
@@ -54,27 +56,17 @@ export const EVENTO_ICONOS: Record<
 };
 
 export function formatEventoFecha(iso: string): string {
-  const fecha = new Date(iso);
-  if (Number.isNaN(fecha.getTime())) return iso;
-  const hoy = new Date();
-  const esHoy =
-    fecha.getFullYear() === hoy.getFullYear() &&
-    fecha.getMonth() === hoy.getMonth() &&
-    fecha.getDate() === hoy.getDate();
-  const hora = new Intl.DateTimeFormat("es-AR", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(fecha);
-  return esHoy ? `hoy · ${hora}` : `${formatFechaOrden(iso)} · ${hora}`;
+  const hh = hora(iso);
+  if (!hh) return iso;
+  // "hoy" se decide en hora de ARGENTINA: comparar con getDate() usa la zona
+  // del proceso, y a las 22 de acá el servidor en UTC ya está en el día
+  // siguiente — el mismo evento sería "hoy" en el navegador y con fecha en el
+  // servidor. Ver src/lib/fecha.ts
+  return esHoy(iso) ? `hoy · ${hh}` : `${formatFechaOrden(iso)} · ${hh}`;
 }
 
 function formatFechaHoy(): string {
-  return new Intl.DateTimeFormat("es-AR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(new Date());
+  return fechaNumerica(new Date().toISOString());
 }
 
 /* ─────────── Ruta macro ─────────── */

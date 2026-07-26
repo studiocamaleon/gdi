@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+
+import { fechaHoraCorta } from "@/lib/fecha";
 import { toast } from "sonner";
 
 import {
@@ -473,11 +475,11 @@ export function UsuariosView({
         ) : (
           historial.map((e) => (
             <div className="int-nt-log-fila" key={e.id}>
-              {/* suppressHydrationWarning: la hora se muestra en la zona de
-                  quien mira, y el servidor no está en la misma que él. La
-                  diferencia es esperada, no un bug — sin esto React tira el
-                  árbol entero para regenerarlo. */}
-              <span className="int-nt-log-fecha" suppressHydrationWarning>
+              {/* Sin `suppressHydrationWarning`: el helper formatea en hora de
+                  Argentina de los dos lados, así que ya no hay diferencia que
+                  tapar. Taparla escondía además cualquier OTRA discrepancia
+                  que apareciera en este span. */}
+              <span className="int-nt-log-fecha">
                 {fechaCorta(e.createdAt)}
               </span>
               <div>
@@ -767,22 +769,13 @@ function descripcionDelRol(roles: RolDelTenant[], rolId: string): string {
 }
 
 /**
- * dd/mm hh:mm en la zona de quien mira.
+ * dd/mm hh:mm en hora de Argentina.
  *
- * En 24 horas a propósito: con am/pm, Node escribe un espacio finito antes y
- * Chrome uno normal, y React ve dos textos distintos donde hay la misma hora.
- * El `suppressHydrationWarning` del span cubre lo que queda —la zona horaria,
- * que sí puede diferir de verdad entre servidor y navegador—.
+ * Antes se armaba con `toLocaleString` y hacía falta un `suppressHydrationWarning`
+ * para tapar la diferencia de zona entre el servidor y el navegador. El helper
+ * fija la zona, así que ya no hay nada que tapar. Ver src/lib/fecha.ts
  */
-function fechaCorta(iso: string): string {
-  return new Date(iso).toLocaleString("es-AR", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-}
+const fechaCorta = fechaHoraCorta;
 
 function nombreDe(u: UsuarioDelTenant): string {
   return u.nombreCompleto?.trim() || u.email;

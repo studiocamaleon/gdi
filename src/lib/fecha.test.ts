@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { fechaCorta, fechaHora, hora } from "@/lib/fecha";
+import {
+  esHoy,
+  fechaCorta,
+  fechaHora,
+  fechaHoraCorta,
+  fechaNumerica,
+  hora,
+} from "@/lib/fecha";
 
 /**
  * Lo que estos tests defienden es que el string sea SIEMPRE el mismo.
@@ -75,5 +82,52 @@ describe("hora", () => {
 
   it("medianoche es 00 y no 24", () => {
     expect(hora("2026-07-26T03:00:00.000Z")).toBe("00:00");
+  });
+});
+
+describe("fechaNumerica", () => {
+  it("dd/mm/aaaa", () => {
+    expect(fechaNumerica(TARDE)).toBe("25/07/2026");
+  });
+
+  /** A las 23 de Argentina, un servidor en UTC ya está en el día siguiente. */
+  it("usa el día argentino, no el del servidor", () => {
+    expect(fechaNumerica("2026-07-26T02:00:00.000Z")).toBe("25/07/2026");
+  });
+});
+
+describe("fechaHoraCorta", () => {
+  it("dd/mm hh:mm sin año", () => {
+    expect(fechaHoraCorta(TARDE)).toBe("25/07 18:38");
+  });
+
+  it("vacío si no hay fecha", () => {
+    expect(fechaHoraCorta(null)).toBe("");
+  });
+});
+
+describe("esHoy", () => {
+  const ahora = new Date("2026-07-25T21:38:00.000Z"); // 18:38 en Argentina
+
+  it("sí para el mismo día argentino", () => {
+    expect(esHoy("2026-07-25T12:00:00.000Z", ahora)).toBe(true);
+  });
+
+  it("no para el día anterior", () => {
+    expect(esHoy("2026-07-24T21:38:00.000Z", ahora)).toBe(false);
+  });
+
+  /**
+   * El caso que rompía: a las 23 de Argentina son las 02 UTC del día siguiente.
+   * Comparando con la zona del proceso, el servidor decía "no es hoy" y el
+   * navegador "sí" — el mismo evento con dos textos distintos.
+   */
+  it("después de las 21 hora argentina sigue siendo el mismo día", () => {
+    const casiMedianoche = new Date("2026-07-26T02:00:00.000Z"); // 23:00 del 25
+    expect(esHoy("2026-07-25T14:00:00.000Z", casiMedianoche)).toBe(true);
+  });
+
+  it("no explota sin fecha", () => {
+    expect(esHoy(null)).toBe(false);
   });
 });

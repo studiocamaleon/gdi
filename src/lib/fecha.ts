@@ -25,7 +25,10 @@ const MESES = [
 
 type Partes = {
   dia: string;
+  /** Índice 0-11, para el array de nombres. */
   mes: number;
+  /** "07", para los formatos numéricos. */
+  mesNum: string;
   anio: string;
   hora24: number;
   minuto: string;
@@ -52,6 +55,7 @@ function partes(iso: string): Partes | null {
   return {
     dia: p.day,
     mes: Number(p.month) - 1,
+    mesNum: String(p.month).padStart(2, "0"),
     anio: p.year,
     // Con hour12:false, la medianoche sale "24" en algunas versiones de ICU.
     hora24: Number(p.hour) % 24,
@@ -82,3 +86,32 @@ export function hora(iso: string | null | undefined): string {
   const p = partes(iso);
   return p ? `${String(p.hora24).padStart(2, "0")}:${p.minuto}` : "";
 }
+
+/** "25/07/2026". El formato numérico de las tablas. */
+export function fechaNumerica(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const p = partes(iso);
+  return p ? `${p.dia}/${p.mesNum}/${p.anio}` : "";
+}
+
+/** "25/07 18:38" — día y hora sin el año, para listados densos. */
+export function fechaHoraCorta(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const p = partes(iso);
+  return p ? `${p.dia}/${p.mesNum} ${String(p.hora24).padStart(2, "0")}:${p.minuto}` : "";
+}
+
+/**
+ * ¿Es hoy, en hora de Argentina?
+ *
+ * Comparar con `getDate()` usa la zona del proceso: a las 22 de Argentina el
+ * servidor en UTC ya está en el día siguiente y diría que no es hoy.
+ */
+export function esHoy(iso: string | null | undefined, ahora = new Date()): boolean {
+  if (!iso) return false;
+  const a = partes(iso);
+  const b = partes(ahora.toISOString());
+  if (!a || !b) return false;
+  return a.dia === b.dia && a.mesNum === b.mesNum && a.anio === b.anio;
+}
+
