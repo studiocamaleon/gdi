@@ -69,6 +69,8 @@ export type ArchivoDto = {
   bytes: number;
   publico: boolean;
   descripcion: string | null;
+  /** Qué automatismo lo produjo, si no lo subió una persona ("sello"). */
+  autogeneradoPor: string | null;
   esImagen: boolean;
   createdAt: string;
   subidoPor: string | null;
@@ -238,6 +240,9 @@ export class ArchivosService {
         estado: ArchivoEstado.PENDIENTE,
         publico: dto.publico ?? false,
         descripcion: dto.descripcion ?? null,
+        autogeneradoPor: dto.autogeneradoPor ?? null,
+        // Se guarda igual quién tenía la sesión: el arte lo produjo el sistema,
+        // pero fue porque esta persona guardó la orden.
         subidoPorId: auth.userId,
         multipartUploadId: multipart?.uploadId ?? null,
         ...(campo && dto.entidadId ? { [campo]: dto.entidadId } : {}),
@@ -1061,6 +1066,7 @@ export class ArchivosService {
       bytes: Number(archivo.bytes),
       publico: archivo.publico,
       descripcion: archivo.descripcion,
+      autogeneradoPor: archivo.autogeneradoPor,
       esImagen: archivo.mimeType.startsWith('image/'),
       createdAt: archivo.createdAt.toISOString(),
       subidoPor:

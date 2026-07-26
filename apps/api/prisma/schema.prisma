@@ -815,7 +815,7 @@ model Membership {
   /// Va en Membership y no en User porque es una política de la EMPRESA: la
   /// misma persona puede entrar sin restricción a una y sólo desde la oficina
   /// a otra. Ver docs/usuarios-roles-permisos-diseno.md
-  ipsPermitidas   String[]
+  ipsPermitidas   String[]      @default([])
   activa          Boolean       @default(true)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -931,6 +931,9 @@ model Cliente {
 
   @@unique([tenantId, nombre])
   @@index([tenantId, nombre])
+  /// El listado sano esconde a los inhabilitados, así que filtra por activo
+  /// en toda consulta.
+  @@index([tenantId, activo])
 }
 
 model Proveedor {
@@ -1001,7 +1004,9 @@ model Empleado {
 /// Filas con vigencia, no un campo que se pisa: el sueldo cambia (paritarias,
 /// ascensos) y "cuánto ganaba en marzo" tiene que seguir siendo respondible.
 model EmpleadoRemuneracion {
-  id             String   @id @default(uuid()) @db.Uuid
+  /// El id lo pone Postgres y no el cliente: la migración que creó la tabla
+  /// hace un backfill por SQL que inserta filas sin pasar id.
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenantId       String   @db.Uuid
   empleadoId     String   @db.Uuid
   /// 'YYYY-MM' — primer mes de vigencia (inclusive).
@@ -3477,6 +3482,12 @@ model Archivo {
   /// convertir y no se borra a mano: es una proyección de otra fila, y
   /// mezclarlo con el arte del cliente confundiría las dos cosas.
   generado          Boolean       @default(false)
+  /// Qué automatismo lo produjo ("sello" = el arte del configurador). Distinto
+  /// de `generado`: estos SÍ son adjuntos normales —se listan, se descargan y
+  /// cuentan para la cuota—, porque el taller los usa como usaría el archivo
+  /// que mandó el cliente. La marca existe para poder REEMPLAZARLOS cuando el
+  /// diseño cambia sin tocar lo que subió una persona.
+  autogeneradoPor   String?
   descripcion       String?
   subidoPorId       String?       @db.Uuid
   eliminadoEl       DateTime?
@@ -3735,6 +3746,8 @@ model Suscripcion {
   plan   Plan   @relation(fields: [planId], references: [id])
 
   @@index([planId])
+  /// El cron que vence las pruebas barre por esta fecha todas las noches.
+  @@index([trialHasta])
 }
 
 /// Eventos de cobro recibidos de una pasarela (webhooks). Existe para dos

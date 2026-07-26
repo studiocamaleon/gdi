@@ -25,6 +25,12 @@ export type Archivo = {
   bytes: number;
   publico: boolean;
   descripcion: string | null;
+  /**
+   * Qué automatismo lo produjo, si no lo subió una persona ("sello" = el arte
+   * del configurador). Es un adjunto como cualquier otro; la marca sólo sirve
+   * para reemplazarlo cuando el diseño cambia.
+   */
+  autogeneradoPor: string | null;
   esImagen: boolean;
   createdAt: string;
   subidoPor: string | null;

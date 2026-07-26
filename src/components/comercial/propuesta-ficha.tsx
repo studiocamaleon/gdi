@@ -56,6 +56,8 @@ import {
 } from "@/lib/ordenes-trabajo-api";
 import { emitirPresupuesto } from "@/lib/presupuestos-api";
 import { enlacePublicoUrl } from "@/lib/enlaces-publicos";
+import { itemsConSelloDe } from "@/lib/sello-arte/diseno";
+import { mensajeDeArtes, publicarArtesDeSello } from "@/lib/sello-arte/publicar";
 import {
   getConfiguracionProduccion,
   getDiasNoLaborables,
@@ -5095,6 +5097,28 @@ export function PropuestaFicha({
     cambiosItems.total + Object.keys(cambiosFields).length;
 
   /**
+   * Sube el arte de los sellos de la orden a los Archivos de cada ítem.
+   *
+   * Corre DESPUÉS de que la orden se guardó, con el detalle que devuelve el
+   * backend: ahí cada ítem ya tiene id —recién entonces existe algo a lo que
+   * colgarle un archivo— y trae su `jobContext`, que es donde está el diseño.
+   *
+   * No lanza nunca: la orden ya está guardada, y perderla por un fallo de red
+   * al subir un EPS sería mucho peor que avisar y reintentar en el próximo
+   * guardado.
+   */
+  const publicarArtes = React.useCallback(
+    async (productos: OrdenTrabajoProducto[]) => {
+      const conSello = itemsConSelloDe(productos);
+      if (conSello.length === 0) return;
+      const resultado = await publicarArtesDeSello(conSello);
+      const aviso = mensajeDeArtes(resultado);
+      if (aviso) toast.warning(aviso, { duration: 10000 });
+    },
+    [],
+  );
+
+  /**
    * Persiste alta/edición de un item: primero el snapshot del cotizador
    * (recotizar si ya existía, cotizar-y-guardar encadenado a la Cotizacion
    * de origen si es nuevo), después la proyección. Lanza en error — el
@@ -5141,13 +5165,22 @@ export function PropuestaFicha({
         cotizacionItemId = respuesta.cotizacionItemId;
       }
       const payload = itemToOrdenItemPayload(item, cotizacionItemId);
-      if (modo === "agregar") {
-        await agregarOrdenItem(orden.id, payload);
-      } else {
-        await editarOrdenItem(orden.id, item.id, payload);
-      }
+      const detalle =
+        modo === "agregar"
+          ? await agregarOrdenItem(orden.id, payload)
+          : await editarOrdenItem(orden.id, item.id, payload);
+
+      // Sólo el ítem que se tocó: republicar los demás borraría y volvería a
+      // subir un arte idéntico por nada. En el alta el id recién existe acá,
+      // así que se lo busca por el snapshot que se acaba de guardar.
+      const tocado = detalle.productos.filter((p) =>
+        modo === "agregar"
+          ? p.cotizacionItemId === cotizacionItemId
+          : p.id === item.id,
+      );
+      await publicarArtes(tocado);
     },
-    [orden, clienteId],
+    [orden, clienteId, publicarArtes],
   );
 
   /** Baja en staging: sólo saca la fila local; el DELETE va en Guardar. */
@@ -5534,6 +5567,10 @@ export function PropuestaFicha({
         }
       }
 
+      // El arte de los sellos, antes de mostrar el cartel de emitida: si algo
+      // falla, el aviso llega mientras la orden todavía está en pantalla.
+      await publicarArtes(orden.productos);
+
       setEmisionNumero(orden.numero);
     } catch (error) {
       setEmitiendo(false);
@@ -5551,6 +5588,7 @@ export function PropuestaFicha({
     cobrosStaged,
     persistirSnapshotsItems,
     fechaEntregaOrden,
+    publicarArtes,
   ]);
 
   const finalizarEmision = React.useCallback(() => {
@@ -5590,6 +5628,7 @@ export function PropuestaFicha({
           itemToOrdenItemPayload(item, cotizacionItemId),
         ),
       });
+      await publicarArtes(orden.productos);
       toast.success(
         `Borrador ${orden.numero} guardado. Seguí trabajándolo desde acá.`,
       );
@@ -5610,6 +5649,7 @@ export function PropuestaFicha({
     canalVenta,
     persistirSnapshotsItems,
     fechaEntregaOrden,
+    publicarArtes,
     router,
   ]);
 
