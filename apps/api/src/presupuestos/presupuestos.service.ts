@@ -14,6 +14,7 @@ import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { ArchivosService } from '../archivos/archivos.service';
 import { PresupuestoPdfService } from './presupuesto-pdf.service';
+import { DatosEmpresaService } from '../tenants/datos-empresa.service';
 import { OrdenesTrabajoService } from '../ordenes-trabajo/ordenes-trabajo.service';
 import type { CrearOrdenTrabajoItemDto } from '../ordenes-trabajo/dto/crear-orden-trabajo.dto';
 import { evaluarAprobacion } from './aprobacion';
@@ -74,6 +75,7 @@ export class PresupuestosService {
     private readonly pdf: PresupuestoPdfService,
     private readonly avisos: NotificacionesPresupuestosService,
     private readonly enlaces: EnlacesPublicosService,
+    private readonly empresa: DatosEmpresaService,
   ) {}
 
   /**
@@ -243,16 +245,18 @@ export class PresupuestosService {
 
   /** Rehace el PDF y reemplaza el anterior. */
   async materializarPdf(auth: CurrentAuth, id: string): Promise<Archivo> {
-    const [detalle, cfg, negocio, logoDataUri] = await Promise.all([
+    const [detalle, cfg, negocio, logoDataUri, empresa] = await Promise.all([
       this.detalle(auth, id),
       this.config(auth.tenantId),
       this.nombreDelNegocio(auth.tenantId),
       this.archivos.logoDataUri(auth.tenantId),
+      this.empresa.paraDocumentos(auth.tenantId),
     ]);
 
     const contenido = await this.pdf.generar({
       numero: detalle.numero!,
       negocio,
+      empresa,
       logoDataUri,
       cliente: detalle.cliente?.nombre ?? null,
       vendedor: detalle.vendedor?.nombre ?? null,

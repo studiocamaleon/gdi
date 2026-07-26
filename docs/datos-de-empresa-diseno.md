@@ -1,7 +1,7 @@
 # Datos de empresa
 
-**Estado:** Fase A (modelo + API + pantalla) implementada — 2026-07-26.
-Fases B y C pendientes.
+**Estado:** Fases A (modelo + API + pantalla) y B (consumidores) implementadas
+— 2026-07-26. Fase C pendiente.
 
 ## El problema
 
@@ -74,12 +74,35 @@ número.
 
 - **A — hecha.** Modelo + migración, `GET`/`PUT /tenants/empresa`, pantalla
   Configuración › Empresa, logo mudado desde Datos fiscales.
-- **B — pendiente.** Los consumidores: pie del PDF de presupuesto y de recibo
-  (web · teléfono · domicilio), seguimiento público (teléfono para llamar,
-  domicilio y horario para retirar), línea secundaria en el comprobante fiscal.
+- **B — hecha.** Los consumidores. Todos leen `paraDocumentos()`, que resuelve
+  una sola vez cómo se arma la dirección y cómo se escribe el teléfono:
+  - **PDF de presupuesto y de recibo**: el contacto va en la CABECERA, debajo
+    del nombre, y reemplaza a los subtítulos "Presupuesto comercial" y
+    "Comprobante de pago" — que repetían lo que la columna derecha ya dice en
+    mayúsculas. Sin datos cargados vuelve el subtítulo. La línea se MIDE contra
+    el ancho libre: jsPDF no corta ni avisa, así que un dominio largo se
+    escribía encima del número. Cuando no entra se cae primero el mail.
+  - **Seguimiento público**: tarjeta con el domicilio (con link a Google Maps)
+    y el horario. Los botones de llamar y WhatsApp sólo aparecen si el vendedor
+    no los ofreció ya, para no poner dos pares de teléfonos en la misma
+    pantalla.
+  - **Comprobante fiscal**: "Domicilio comercial" pasa a usar el comercial y
+    deja el fiscal de respaldo —la RG 1415 pide el comercial, y hasta ahora lo
+    único que había era el fiscal, que puede ser el estudio contable—. Se
+    suman las filas Teléfono y Web.
 - **C — pendiente.** Cablear la reseña: llenar `url_resena` con el link, más el
   disparador "N días después de entregada". Es plantilla de MARKETING, así que
   necesita opt-in y que la imprenta la active a mano.
+
+### Dos formas del teléfono, a propósito
+
+`telefonoLink` ("+543415551840") y `whatsapp` ("5493415551840") NO son el mismo
+string. `aE164` —la función de WhatsApp— fuerza la forma móvil argentina
+metiéndole un `9`, y lo hace con un argumento explícito: para un MENSAJE
+conviene arriesgar, porque si el número era un fijo el mensaje no iba a llegar
+igual. Para una LLAMADA el riesgo es al revés: meterle el 9 a un fijo hace que
+la llamada no entre. Así que el `tel:` respeta lo que la imprenta cargó y sólo
+lo pone en forma internacional.
 
 ## Advertencia
 

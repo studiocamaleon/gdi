@@ -3,12 +3,11 @@ import { ArchivosModule } from '../archivos/archivos.module';
 import { AuthModule } from '../auth/auth.module';
 import { TenantsController } from './tenants.controller';
 import { TenantsService } from './tenants.service';
-import { DatosEmpresaService } from './datos-empresa.service';
+import { DatosEmpresaModule } from './datos-empresa.module';
 
 @Module({
-  imports: [AuthModule, ArchivosModule],
+  imports: [AuthModule, ArchivosModule, DatosEmpresaModule],
   controllers: [TenantsController],
-  providers: [TenantsService, DatosEmpresaService],
-  exports: [DatosEmpresaService],
+  providers: [TenantsService],
 })
 export class TenantsModule {}

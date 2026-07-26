@@ -187,6 +187,10 @@ export class FacturaPdfService {
     fila('CUIT', d.emisor.cuit);
     fila('Ingresos Brutos', d.emisor.ingresosBrutos);
     fila('Inicio de actividades', fecha(d.emisor.inicioActividades));
+    // Contacto: no lo pide la norma, pero es lo primero que busca el cliente
+    // que quiere reclamar algo de una factura.
+    fila('Teléfono', d.emisor.telefono);
+    fila('Web', d.emisor.sitioWeb);
 
     // ── Recuadro de la letra: obligatorio por norma
     pdf.setDrawColor(...INK).setLineWidth(0.5);

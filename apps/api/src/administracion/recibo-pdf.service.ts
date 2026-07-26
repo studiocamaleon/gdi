@@ -62,6 +62,13 @@ export type ReciboOrden = {
 export type ReciboDoc = {
   numero: string;
   negocio: string;
+  /** Contacto del negocio (Configuración › Empresa). Ver `PresupuestoPdfDatos`. */
+  empresa?: {
+    telefono?: string | null;
+    email?: string | null;
+    sitioWebLegible?: string | null;
+    domicilio?: string | null;
+  } | null;
   iniciales: string;
   logoDataUri?: string | null;
   clienteNombre: string | null;
@@ -205,10 +212,33 @@ export class ReciboPdfService {
 
     const xTexto = MARGEN + LADO + 4;
     this.texto(pdf, d.negocio, xTexto, y0 + 5.6, { size: pt(21), bold: true });
-    this.texto(pdf, 'Comprobante de pago', xTexto, y0 + 10.6, {
-      size: pt(12.5),
-      color: MUTED,
-    });
+
+    // Igual que en el presupuesto: debajo del nombre va el contacto y no un
+    // subtítulo, porque "RECIBO DE PAGO" ya está en la columna derecha. Se
+    // mide contra el ancho libre —el número vive del otro lado— y lo que no
+    // entra se cae por el final.
+    pdf.setFontSize(pt(22)).setFont(this.familia, 'bold');
+    const anchoNumero = pdf.getTextWidth(d.numero);
+    pdf.setFontSize(pt(11)).setFont(this.familia, 'normal');
+    const contacto = lineasContacto(
+      pdf,
+      d.empresa,
+      ANCHO - MARGEN - anchoNumero - 5 - xTexto,
+    );
+
+    if (contacto.length === 0) {
+      this.texto(pdf, 'Comprobante de pago', xTexto, y0 + 10.6, {
+        size: pt(12.5),
+        color: MUTED,
+      });
+    } else {
+      contacto.forEach((l, i) =>
+        this.texto(pdf, l, xTexto, y0 + 10 + i * 3.7, {
+          size: pt(11),
+          color: MUTED,
+        }),
+      );
+    }
 
     // ── Identidad del documento (derecha)
     const xDer = ANCHO - MARGEN;
@@ -632,4 +662,39 @@ export class ReciboPdfService {
       align: 'center',
     });
   }
+}
+
+/**
+ * Los dos renglones de contacto del encabezado, recortados a lo que entra.
+ *
+ * Gemelo del de `presupuesto-pdf.service.ts`: los dos documentos tienen la
+ * misma cabecera (marca a la izquierda, número a la derecha) y el mismo
+ * problema —jsPDF no corta ni avisa, así que un dominio largo se escribe
+ * encima del número—. No se comparte el código porque cada servicio dibuja
+ * con sus propias unidades; sí se comparte el criterio: el mail es lo primero
+ * que se cae, que es lo que menos se usa desde un papel.
+ */
+function lineasContacto(
+  pdf: jsPDF,
+  empresa: ReciboDoc['empresa'],
+  disponible: number,
+): string[] {
+  if (!empresa) return [];
+
+  const partes = [empresa.telefono, empresa.sitioWebLegible, empresa.email]
+    .map((x) => x?.trim())
+    .filter(Boolean) as string[];
+
+  let contacto = '';
+  for (let corte = partes.length; corte > 0; corte--) {
+    contacto = partes.slice(0, corte).join('  ·  ');
+    if (pdf.getTextWidth(contacto) <= disponible) break;
+    contacto = '';
+  }
+
+  const domicilio = empresa.domicilio?.trim() ?? '';
+  return [
+    pdf.getTextWidth(domicilio) <= disponible ? domicilio : '',
+    contacto,
+  ].filter(Boolean);
 }

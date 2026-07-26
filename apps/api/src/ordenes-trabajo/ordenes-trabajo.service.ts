@@ -97,6 +97,7 @@ function formatFechaCorta(iso: string | null): string {
 }
 import type { OrdenesTrabajoQueryDto } from './dto/ordenes-trabajo-query.dto';
 import { filtrarSpecsPublicas } from './tracking-publico-specs';
+import { DatosEmpresaService } from '../tenants/datos-empresa.service';
 import { NotificacionesOrdenesService } from '../integraciones/notificaciones/notificaciones-ordenes.service';
 
 type OrdenConRelaciones = Prisma.OrdenTrabajoGetPayload<{
@@ -256,6 +257,7 @@ export class OrdenesTrabajoService {
     private readonly archivos: ArchivosService,
     private readonly avisos: NotificacionesOrdenesService,
     private readonly enlaces: EnlacesPublicosService,
+    private readonly empresa: DatosEmpresaService,
   ) {}
 
   /**
@@ -2847,6 +2849,7 @@ export class OrdenesTrabajoService {
             telefonoNumero: true,
           },
         },
+        tenantId: true,
         tenant: { select: { nombre: true, logoArchivoId: true } },
         // Sólo los marcados `publico`: el arte de producción y los adjuntos
         // internos NUNCA salen por acá. El filtro va en la relación, así que
@@ -2950,6 +2953,8 @@ export class OrdenesTrabajoService {
     }
     actividad.sort((a, b) => b.fecha.localeCompare(a.fecha));
 
+    const empresa = await this.empresa.paraDocumentos(orden.tenantId);
+
     const telefono =
       orden.vendedor &&
       (orden.vendedor.telefonoCodigo || orden.vendedor.telefonoNumero)
@@ -2968,6 +2973,16 @@ export class OrdenesTrabajoService {
       imprenta: {
         nombre: orden.tenant.nombre,
         iniciales: inicialesDe(orden.tenant.nombre),
+        // Cómo ubicar a la imprenta (Configuración › Empresa). El cliente que
+        // abre esto suele querer dos cosas que antes no estaban: preguntar
+        // algo y saber dónde y hasta qué hora retirar.
+        contacto: {
+          telefono: empresa.telefonoLink,
+          whatsapp: empresa.whatsapp,
+          domicilio: empresa.domicilio,
+          horario: empresa.horarioAtencion,
+          sitioWeb: empresa.sitioWeb,
+        },
         // Sólo el flag: la URL la arma el front con su propio prefijo de
         // proxy (el token ya lo tiene, es el parámetro de la página). El API
         // no tiene por qué saber cómo rutea Next.

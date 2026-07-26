@@ -55,7 +55,24 @@ export type TrackingPublico = {
   fechaEntrega: string | null;
   progresoPct: number;
   /** Sin logo cargado van las iniciales, como antes de que existiera. */
-  imprenta: { nombre: string; iniciales: string; tieneLogo: boolean };
+  imprenta: {
+    nombre: string;
+    iniciales: string;
+    tieneLogo: boolean;
+    /**
+     * Cómo ubicar a la imprenta (Configuración › Empresa). Todo puede venir
+     * en null: el negocio que no cargó nada no ve la tarjeta.
+     */
+    contacto: {
+      /** "+543415551840", listo para un `tel:`. */
+      telefono: string | null;
+      /** "5493415551840", listo para `wa.me`. Cae al teléfono si no hay propio. */
+      whatsapp: string | null;
+      domicilio: string | null;
+      horario: string | null;
+      sitioWeb: string | null;
+    };
+  };
   cliente: { nombre: string; iniciales: string };
   vendedor: { nombre: string; iniciales: string; telefono: string | null } | null;
   items: TrackingItem[];

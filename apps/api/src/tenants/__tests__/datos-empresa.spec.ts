@@ -105,4 +105,105 @@ describe('DatosEmpresaService', () => {
     const d = await service.guardar(auth, { nombre: '  Corporearte  ' });
     expect(d.nombre).toBe('Corporearte');
   });
+
+  /**
+   * Lo que consumen el PDF del presupuesto, el del recibo, la factura y el
+   * seguimiento público. Se testea acá porque los cuatro dependen del mismo
+   * formateo: si esto se corre, se corren los cuatro documentos juntos.
+   */
+  describe('paraDocumentos', () => {
+    it('sin datos cargados devuelve todo en null y no explota', async () => {
+      const otro = await prisma.tenant.create({
+        data: { nombre: 'Pelado', slug: `test-pelado-${randomUUID()}` },
+        select: { id: true },
+      });
+      const d = await service.paraDocumentos(otro.id);
+      expect(d.telefono).toBeNull();
+      expect(d.domicilio).toBeNull();
+      await prisma.tenant.delete({ where: { id: otro.id } });
+    });
+
+    it('arma el domicilio con calle, localidad y provincia', async () => {
+      await service.guardar(auth, {
+        nombre: 'Corporearte',
+        domicilioComercial: 'Mendoza 3450',
+        localidad: 'Rosario',
+        provincia: 'Santa Fe',
+      });
+      expect((await service.paraDocumentos(tenantId)).domicilio).toBe(
+        'Mendoza 3450, Rosario, Santa Fe',
+      );
+    });
+
+    /** Con media dirección cargada no puede quedar una coma colgando. */
+    it('omite las partes que faltan sin dejar comas sueltas', async () => {
+      await service.guardar(auth, {
+        nombre: 'Corporearte',
+        domicilioComercial: 'Mendoza 3450',
+      });
+      expect((await service.paraDocumentos(tenantId)).domicilio).toBe(
+        'Mendoza 3450',
+      );
+    });
+
+    it('el teléfono: legible para imprimir, internacional para llamar', async () => {
+      await service.guardar(auth, {
+        nombre: 'Corporearte',
+        paisCodigo: 'AR',
+        telefonoCodigo: '54',
+        telefonoNumero: '3415551840',
+      });
+      const d = await service.paraDocumentos(tenantId);
+      expect(d.telefono).toBe('+54 3415551840');
+      expect(d.telefonoLink).toBe('+543415551840');
+      // WhatsApp SÍ lleva el 9 del móvil argentino; el `tel:` no.
+      expect(d.whatsapp).toBe('5493415551840');
+    });
+
+    /** El caso normal: la imprenta usa el mismo número para todo. */
+    it('el WhatsApp cae al teléfono cuando no hay uno propio', async () => {
+      const d = await service.paraDocumentos(tenantId);
+      expect(d.whatsapp).toBe('5493415551840');
+    });
+
+    it('con WhatsApp propio, gana el propio', async () => {
+      await service.guardar(auth, {
+        nombre: 'Corporearte',
+        paisCodigo: 'AR',
+        telefonoCodigo: '54',
+        telefonoNumero: '3415551840',
+        whatsappCodigo: '54',
+        whatsappNumero: '3417778888',
+      });
+      const d = await service.paraDocumentos(tenantId);
+      expect(d.whatsapp).toBe('5493417778888');
+    });
+
+    /**
+     * Un `tel:` roto es peor que no ofrecer el botón: el cliente marca y le
+     * da número equivocado.
+     */
+    it('un teléfono que no se puede interpretar no genera link de WhatsApp', async () => {
+      await service.guardar(auth, {
+        nombre: 'Corporearte',
+        paisCodigo: 'AR',
+        telefonoCodigo: '54',
+        telefonoNumero: '12',
+      });
+      const d = await service.paraDocumentos(tenantId);
+      expect(d.telefono).toBe('+54 12');
+      expect(d.whatsapp).toBeNull();
+    });
+
+    /** En papel el esquema es ruido; en un href es obligatorio. */
+    it('la web sale con esquema para el link y sin él para imprimir', async () => {
+      await service.guardar(auth, {
+        nombre: 'Corporearte',
+        sitioWeb: 'www.corporearte.com.ar/',
+      });
+      const d = await service.paraDocumentos(tenantId);
+      expect(d.sitioWeb).toBe('https://www.corporearte.com.ar/');
+      expect(d.sitioWebLegible).toBe('corporearte.com.ar');
+    });
+  });
 });

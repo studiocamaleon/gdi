@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CurrentAuth } from '../auth/auth.types';
 import { GuardarDatosEmpresaDto } from './dto/datos-empresa.dto';
+import { aE164 } from '../integraciones/telefono';
 
 /**
  * Cómo se presenta la imprenta ante su cliente.
@@ -44,6 +45,52 @@ export class DatosEmpresaService {
     };
   }
 
+  /**
+   * Los mismos datos, ya masticados para los DOCUMENTOS: el PDF del
+   * presupuesto, el del recibo y el seguimiento que ve el cliente.
+   *
+   * Se resuelve acá y no en cada consumidor porque las tres decisiones son
+   * las mismas en los tres lados —cómo se arma la dirección, cómo se escribe
+   * el teléfono, qué se muestra cuando falta la mitad de los datos— y
+   * repetirlas garantizaba que se fueran separando.
+   *
+   * Toma `tenantId` y no `CurrentAuth` a propósito: el seguimiento público no
+   * tiene sesión.
+   */
+  async paraDocumentos(tenantId: string): Promise<EmpresaEnDocumentos> {
+    const d = await this.prisma.datosEmpresa.findUnique({
+      where: { tenantId },
+    });
+    if (!d) return SIN_DATOS;
+
+    const domicilio =
+      [d.domicilioComercial, d.localidad, d.provincia]
+        .map((x) => x?.trim())
+        .filter(Boolean)
+        .join(', ') || null;
+
+    // El WhatsApp cae al teléfono: la mayoría de las imprentas usan el mismo
+    // número y no lo cargan dos veces.
+    const wsp = paraWhatsapp(
+      d.whatsappNumero ? d.whatsappCodigo : d.telefonoCodigo,
+      d.whatsappNumero ?? d.telefonoNumero,
+      d.paisCodigo,
+    );
+
+    return {
+      telefono: telefonoLegible(d.telefonoCodigo, d.telefonoNumero),
+      telefonoLink: paraLlamar(d.telefonoCodigo, d.telefonoNumero),
+      whatsapp: wsp,
+      email: d.email,
+      sitioWeb: d.sitioWeb,
+      // En papel el esquema es ruido: nadie tipea "https://" al leer un PDF.
+      sitioWebLegible: sinEsquema(d.sitioWeb),
+      domicilio,
+      horarioAtencion: d.horarioAtencion,
+      urlResenas: d.urlResenas,
+    };
+  }
+
   async guardar(
     auth: CurrentAuth,
     dto: GuardarDatosEmpresaDto,
@@ -81,6 +128,44 @@ export class DatosEmpresaService {
   }
 }
 
+/** Lo que un documento necesita saber del negocio, ya formateado. */
+export type EmpresaEnDocumentos = {
+  /** "+54 3415551840", para imprimir. */
+  telefono: string | null;
+  /**
+   * "+543415551840", para un `tel:`. Es lo que se cargó en forma
+   * internacional, sin inventarle nada — ver `paraLlamar`.
+   */
+  telefonoLink: string | null;
+  /**
+   * "5493415551840", para `wa.me`. NO es lo mismo que `telefonoLink`: acá sí
+   * se fuerza la forma móvil argentina. Cae al teléfono si no hay un WhatsApp
+   * propio cargado.
+   */
+  whatsapp: string | null;
+  email: string | null;
+  /** Con esquema, para un `href`. */
+  sitioWeb: string | null;
+  /** Sin esquema ni "www.", para imprimir. */
+  sitioWebLegible: string | null;
+  /** "Mendoza 3450, Rosario, Santa Fe". */
+  domicilio: string | null;
+  horarioAtencion: string | null;
+  urlResenas: string | null;
+};
+
+const SIN_DATOS: EmpresaEnDocumentos = {
+  telefono: null,
+  telefonoLink: null,
+  whatsapp: null,
+  email: null,
+  sitioWeb: null,
+  sitioWebLegible: null,
+  domicilio: null,
+  horarioAtencion: null,
+  urlResenas: null,
+};
+
 export type DatosEmpresaResponse = {
   nombre: string;
   telefonoCodigo: string | null;
@@ -115,4 +200,60 @@ function conEsquema(v: string | undefined | null): string | null {
   const t = limpio(v);
   if (!t) return null;
   return /^https?:\/\//i.test(t) ? t : `https://${t}`;
+}
+
+/** "+54 3415551840". Sin número no hay nada que mostrar. */
+function telefonoLegible(
+  codigo: string | null,
+  numero: string | null,
+): string | null {
+  const n = (numero ?? '').trim();
+  if (!n) return null;
+  const c = (codigo ?? '').trim();
+  return c ? `+${c} ${n}` : n;
+}
+
+/**
+ * Para un `tel:`: el número cargado en forma internacional y nada más.
+ *
+ * NO se usa `aE164` acá, que es la función de WhatsApp: esa fuerza la forma
+ * móvil argentina (le mete un `9`) porque para un mensaje conviene arriesgar.
+ * Para una LLAMADA el riesgo es al revés — meterle el 9 a un fijo hace que la
+ * llamada no entre—, así que se respeta lo que la imprenta cargó.
+ */
+function paraLlamar(codigo: string | null, numero: string | null): string | null {
+  const n = (numero ?? '').replace(/\D/g, '');
+  if (!n) return null;
+  const c = (codigo ?? '').replace(/\D/g, '');
+  return c ? `+${c}${n}` : `+${n}`;
+}
+
+/**
+ * Para `wa.me`: dígitos, sin `+`, con la forma móvil que WhatsApp exige.
+ * Null si el número no se puede interpretar — un link roto es peor que no
+ * ofrecer el botón.
+ */
+function paraWhatsapp(
+  codigo: string | null,
+  numero: string | null,
+  pais: string | null,
+): string | null {
+  if (!numero?.trim()) return null;
+  const r = aE164({
+    telefonoCodigo: codigo,
+    telefonoNumero: numero,
+    paisCodigo: pais,
+  });
+  return r.ok ? r.e164 : null;
+}
+
+/** "https://www.grafo.ar/" → "grafo.ar". */
+function sinEsquema(url: string | null): string | null {
+  if (!url) return null;
+  return (
+    url
+      .replace(/^https?:\/\//i, '')
+      .replace(/^www\./i, '')
+      .replace(/\/$/, '') || null
+  );
 }

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ArchivosModule } from '../archivos/archivos.module';
+import { DatosEmpresaModule } from '../tenants/datos-empresa.module';
 import { EnlacesPublicosModule } from '../enlaces-publicos/enlaces-publicos.module';
 import { SuscripcionesModule } from '../suscripciones/suscripciones.module';
 import { AdministracionController } from './administracion.controller';
@@ -24,7 +25,12 @@ import { ManualProvider } from './invoicing/manual.provider';
 import { AfipSdkProvider } from './invoicing/afip-sdk.provider';
 
 @Module({
-  imports: [ArchivosModule, EnlacesPublicosModule, SuscripcionesModule],
+  imports: [
+    ArchivosModule,
+    EnlacesPublicosModule,
+    SuscripcionesModule,
+    DatosEmpresaModule,
+  ],
   // El público primero: `administracion` no tiene comodines hoy, pero el
   // orden de registro es el que resuelve Nest y no cuesta nada dejarlo claro.
   controllers: [

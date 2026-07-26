@@ -2,11 +2,17 @@ import { Module } from '@nestjs/common';
 import { ArchivosModule } from '../archivos/archivos.module';
 import { EtaModule } from '../eta/eta.module';
 import { EnlacesPublicosModule } from '../enlaces-publicos/enlaces-publicos.module';
+import { DatosEmpresaModule } from '../tenants/datos-empresa.module';
 import { OrdenesTrabajoController } from './ordenes-trabajo.controller';
 import { OrdenesTrabajoService } from './ordenes-trabajo.service';
 
 @Module({
-  imports: [EtaModule, ArchivosModule, EnlacesPublicosModule],
+  imports: [
+    EtaModule,
+    ArchivosModule,
+    EnlacesPublicosModule,
+    DatosEmpresaModule,
+  ],
   controllers: [OrdenesTrabajoController],
   providers: [OrdenesTrabajoService],
   // Presupuestos convierte en OT reusando el create canónico.

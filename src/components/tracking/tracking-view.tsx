@@ -38,6 +38,18 @@ const IcoWa = () => (
     <path d="M17.5 14.4c-.3-.2-1.7-.8-2-.9-.3-.1-.5-.2-.7.2-.2.3-.7.9-.9 1.1-.2.2-.3.2-.6 0-.3-.2-1.3-.5-2.4-1.5-.9-.8-1.5-1.8-1.7-2.1-.2-.3 0-.5.1-.6.1-.1.3-.4.4-.5.1-.2.2-.3.3-.5.1-.2 0-.4 0-.5-.1-.2-.7-1.6-.9-2.2-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.4 0 1.4 1 2.7 1.2 2.9.2.2 2 3.1 4.8 4.2.7.3 1.2.5 1.6.6.7.2 1.3.2 1.8.1.5-.1 1.7-.7 2-1.4.2-.7.2-1.2.2-1.3 0-.1-.3-.2-.6-.4Z M12 2C6.5 2 2 6.5 2 12c0 1.7.4 3.4 1.3 4.8L2 22l5.3-1.3c1.4.8 3 1.2 4.7 1.2 5.5 0 10-4.5 10-10S17.5 2 12 2Zm6 16-.2.2c-1.5 1.5-3.6 2.4-5.8 2.4-1.5 0-2.9-.4-4.2-1.1l-.3-.2-3.2.8.8-3.1-.2-.3c-.8-1.3-1.2-2.8-1.2-4.4 0-4.6 3.7-8.3 8.3-8.3 2.2 0 4.3.9 5.9 2.4 1.6 1.6 2.4 3.7 2.4 5.9 0 2.2-.9 4.3-2.3 5.7Z" />
   </svg>
 );
+const IcoPin = () => (
+  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+    <circle cx="12" cy="10" r="3" />
+  </svg>
+);
+const IcoClock = () => (
+  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v5l3 2" />
+  </svg>
+);
 const IcoDoc = () => (
   <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -350,6 +362,14 @@ export function TrackingView({
   const celebra = data.estado === "finalizada" || data.estado === "entregada";
   const ultimaAct = data.actividad[0]?.fecha;
   const telDigits = data.vendedor?.telefono?.replace(/\D/g, "") ?? "";
+  // Puede venir sin `contacto` si el navegador tiene cacheada la respuesta
+  // vieja: la página se re-consulta sola y no vale la pena romperla por eso.
+  const contacto = data.imprenta.contacto ?? {
+    telefono: null, whatsapp: null, domicilio: null, horario: null, sitioWeb: null,
+  };
+  const hayContacto = Boolean(
+    contacto.domicilio || contacto.horario || contacto.telefono || contacto.whatsapp,
+  );
 
   return (
     <div className="t-app t-mobile">
@@ -462,6 +482,51 @@ export function TrackingView({
                 <a className="ic-btn wa" title="WhatsApp" href={`https://wa.me/${telDigits}`} target="_blank" rel="noreferrer"><IcoWa /></a>
               </div>
             ) : null}
+          </div>
+        ) : null}
+
+        {/* Dónde queda la imprenta y hasta qué hora atiende. El cliente que
+            abre este link ya sabe CUÁNDO va a estar listo; lo que no tenía era
+            adónde ir a buscarlo ni a quién preguntarle si el vendedor no
+            cargó teléfono. Si el negocio no cargó nada, la tarjeta no existe. */}
+        {hayContacto ? (
+          <div className="t-card">
+            <div className="t-card-head">
+              <span className="ttl">{data.imprenta.nombre}</span>
+              <span className="sub">dónde estamos</span>
+            </div>
+            <div className="t-shop">
+              {contacto.domicilio ? (
+                <a
+                  className="row"
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(contacto.domicilio)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <span className="ico"><IcoPin /></span>
+                  <span className="txt">{contacto.domicilio}</span>
+                  <span className="cta">Ver mapa</span>
+                </a>
+              ) : null}
+              {contacto.horario ? (
+                <div className="row">
+                  <span className="ico"><IcoClock /></span>
+                  <span className="txt">{contacto.horario}</span>
+                </div>
+              ) : null}
+              {/* Los botones sólo cuando el vendedor no los ofreció ya: dos
+                  pares de teléfonos en la misma pantalla sólo hacen dudar. */}
+              {!data.vendedor?.telefono && (contacto.telefono || contacto.whatsapp) ? (
+                <div className="t-contact-actions" style={{ marginTop: 4 }}>
+                  {contacto.telefono ? (
+                    <a className="ic-btn" title="Llamar" href={`tel:${contacto.telefono}`}><IcoPhone /></a>
+                  ) : null}
+                  {contacto.whatsapp ? (
+                    <a className="ic-btn wa" title="WhatsApp" href={`https://wa.me/${contacto.whatsapp}`} target="_blank" rel="noreferrer"><IcoWa /></a>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
           </div>
         ) : null}
 

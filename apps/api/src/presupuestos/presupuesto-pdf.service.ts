@@ -96,6 +96,16 @@ export type PresupuestoPdfDatos = {
   numero: string;
   negocio: string;
   /**
+   * Contacto del negocio (Configuración › Empresa). Lo que no esté cargado se
+   * omite, y si no hay nada la cabecera cae al subtítulo de siempre.
+   */
+  empresa?: {
+    telefono?: string | null;
+    email?: string | null;
+    sitioWebLegible?: string | null;
+    domicilio?: string | null;
+  } | null;
+  /**
    * Logo del tenant como data URI. Sólo se dibuja si es PNG o JPEG: jsPDF no
    * rasteriza SVG ni WEBP, y los dibujaría como un cuadro negro. Cuando no se
    * puede, salen las iniciales — el fallback original del diseño.
@@ -229,8 +239,27 @@ export class PresupuestoPdfService {
     const xTexto = MARGEN + lado + px(15);
     this.fuente(pdf, 21, true);
     pdf.text(d.negocio, xTexto, y + px(21));
-    this.fuente(pdf, 12.5, false, MUTED);
-    pdf.text('Presupuesto comercial', xTexto, y + px(21) + px(17));
+
+    // Debajo del nombre va el CONTACTO, no un subtítulo: "Presupuesto
+    // comercial" repetía lo que la columna derecha ya dice en mayúsculas, y
+    // el cliente que quiere llamar no tenía dónde mirar. Sin datos cargados
+    // vuelve el subtítulo, para que la cabecera no quede coja.
+    this.fuente(pdf, 22, true);
+    const anchoNumero = pdf.getTextWidth(d.numero);
+    this.fuente(pdf, 11.5, false, MUTED);
+    const contacto = this.lineasContacto(
+      pdf,
+      d,
+      ANCHO - MARGEN - anchoNumero - px(18) - xTexto,
+    );
+    if (contacto.length === 0) {
+      this.fuente(pdf, 12.5, false, MUTED);
+      pdf.text('Presupuesto comercial', xTexto, y + px(21) + px(17));
+    } else {
+      contacto.forEach((l, i) =>
+        pdf.text(l, xTexto, y + px(21) + px(16) + i * px(14)),
+      );
+    }
 
     // ── Columna derecha: rótulo, número y pastilla de validez
     const der = ANCHO - MARGEN;
@@ -245,6 +274,43 @@ export class PresupuestoPdfService {
     // emisión, que es donde el lector la busca. Estaba en los dos lados y
     // repetir un dato en un documento comercial hace dudar de cuál vale.
     return y + lado + px(26);
+  }
+
+  /**
+   * Hasta dos renglones de contacto: dónde queda y cómo se lo ubica.
+   *
+   * Dos y no uno porque una dirección completa más el teléfono más la web no
+   * entran en el ancho que deja la columna del número.
+   *
+   * Y se MIDE, en vez de confiar: jsPDF no corta ni avisa, así que un negocio
+   * con dominio y mail largos se escribiría por encima del número del
+   * presupuesto. Cuando no entra se van cayendo los datos por el final —el
+   * mail primero, que es el que menos se usa desde un papel— hasta que entre.
+   */
+  private lineasContacto(
+    pdf: jsPDF,
+    d: PresupuestoPdfDatos,
+    disponible: number,
+  ): string[] {
+    const e = d.empresa;
+    if (!e) return [];
+
+    const partes = [e.telefono, e.sitioWebLegible, e.email]
+      .map((x) => x?.trim())
+      .filter(Boolean) as string[];
+
+    let contacto = '';
+    for (let corte = partes.length; corte > 0; corte--) {
+      contacto = partes.slice(0, corte).join('  ·  ');
+      if (pdf.getTextWidth(contacto) <= disponible) break;
+      contacto = '';
+    }
+
+    const domicilio = e.domicilio?.trim() ?? '';
+    return [
+      pdf.getTextWidth(domicilio) <= disponible ? domicilio : '',
+      contacto,
+    ].filter(Boolean);
   }
 
   private cuadradoIniciales(

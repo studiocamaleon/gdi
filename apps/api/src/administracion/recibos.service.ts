@@ -14,6 +14,7 @@ import {
 import { urlEnlacePublico } from '../enlaces-publicos/enlaces-publicos.urls';
 import { importeEnLetras } from './numero-en-letras';
 import { ReciboPdfService, type ReciboDoc } from './recibo-pdf.service';
+import { DatosEmpresaService } from '../tenants/datos-empresa.service';
 
 /**
  * Recibos de pago — el documento del cobro.
@@ -31,6 +32,7 @@ export class RecibosService {
     private readonly archivos: ArchivosService,
     private readonly enlaces: EnlacesPublicosService,
     private readonly pdf: ReciboPdfService,
+    private readonly empresa: DatosEmpresaService,
   ) {}
 
   /**
@@ -151,6 +153,7 @@ export class RecibosService {
     return {
       numero: cobro.numeroRecibo,
       negocio,
+      empresa: await this.empresa.paraDocumentos(cobro.tenantId),
       iniciales: this.iniciales(negocio),
       logoDataUri: await this.archivos.logoDataUri(cobro.tenantId),
       clienteNombre:

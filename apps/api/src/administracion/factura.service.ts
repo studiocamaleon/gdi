@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { formatearCuit } from '../common/cuit';
 import { PrismaService } from '../prisma/prisma.service';
+import { DatosEmpresaService } from '../tenants/datos-empresa.service';
 import { construirUrlQr } from './invoicing/afip-qr';
 import {
   CBTE_TIPO,
@@ -67,7 +68,10 @@ function leerIva(
  */
 @Injectable()
 export class FacturaService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly empresaDatos: DatosEmpresaService,
+  ) {}
 
   async documento(tenantId: string, id: string) {
     const c = await this.prisma.comprobante.findFirst({
@@ -105,6 +109,8 @@ export class FacturaService {
         'Faltan los datos fiscales del emisor: no se puede armar el comprobante.',
       );
     }
+
+    const empresa = await this.empresaDatos.paraDocumentos(tenantId);
 
     const snapshot = (c.receptorSnapshot ?? {}) as Record<string, unknown>;
     const receptorCondicion = texto(
@@ -159,7 +165,13 @@ export class FacturaService {
       // ── Emisor (RG 1415) ──
       emisor: {
         razonSocial: config.razonSocial,
-        domicilioFiscal: config.domicilioFiscal,
+        // La RG 1415 pide el domicilio COMERCIAL. Hasta que existió
+        // Configuración › Empresa lo único que había era el fiscal —que puede
+        // ser el estudio contable—, así que se imprimía ese. Ahora se usa el
+        // comercial cuando está cargado y el fiscal queda de respaldo.
+        domicilioFiscal: empresa.domicilio ?? config.domicilioFiscal,
+        telefono: empresa.telefono,
+        sitioWeb: empresa.sitioWebLegible,
         condicionFiscal:
           CONDICION_EMISOR_LABEL[config.condicionFiscal] ??
           config.condicionFiscal,
