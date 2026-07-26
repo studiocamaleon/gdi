@@ -40,9 +40,21 @@ export class TransferenciaDto {
   @IsUUID()
   haciaCuentaId: string;
 
+  /** En la moneda de la cuenta de ORIGEN. */
   @IsNumber()
   @Min(0.01)
   monto: number;
+
+  /**
+   * Obligatorio cuando las cuentas son de DISTINTA moneda: lo que llegó a la
+   * cuenta destino, en SU moneda. Se pide el monto y no el tipo de cambio a
+   * propósito — el TC tiene dos convenciones posibles y el extracto del banco
+   * dice un monto, no una tasa; la tasa se deriva y se guarda.
+   */
+  @IsOptional()
+  @IsNumber()
+  @Min(0.01)
+  montoDestino?: number;
 }
 
 export class ArqueoDto {

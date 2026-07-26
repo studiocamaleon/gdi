@@ -21,6 +21,8 @@ import {
   type PresupuestoEstado,
   type PresupuestosListado,
 } from "@/lib/presupuestos-api";
+import { formatearMoneda, type Moneda } from "@/lib/moneda";
+import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 
 const ESTADO_META: Record<PresupuestoEstado, { label: string; color: string; bg: string }> = {
   borrador: { label: "Borrador", color: "#6e6e76", bg: "rgba(20,20,26,.06)" },
@@ -32,8 +34,8 @@ const ESTADO_META: Record<PresupuestoEstado, { label: string; color: string; bg:
   convertido: { label: "Convertido", color: "#14141a", bg: "rgba(20,20,26,.08)" },
 };
 
-const fmtMoneda = (n: number) =>
-  "$" + Math.round(n).toLocaleString("es-AR");
+const fmtMoneda = (n: number, moneda: Moneda) =>
+  formatearMoneda(n, moneda, { decimales: 0 });
 const fmtFecha = (iso: string | null) => {
   if (!iso) return "—";
   const [y, m, d] = iso.slice(0, 10).split("-");
@@ -63,6 +65,7 @@ function EstadoBadge({ estado, visto }: { estado: PresupuestoEstado; visto?: boo
 }
 
 export function PresupuestosView({ initial, rol }: { initial: PresupuestosListado; rol: MembershipRole }) {
+  const { moneda } = useConfigRegional();
   const router = useRouter();
   const [data, setData] = React.useState(initial);
   const [filtro, setFiltro] = React.useState<PresupuestoEstado | "todos">("todos");
@@ -148,12 +151,12 @@ export function PresupuestosView({ initial, rol }: { initial: PresupuestosListad
         <div className="otl-kpis">
           <div className="otl-kpi">
             <div className="k-lbl">Pipeline abierto</div>
-            <div className="k-val mono">{fmtMoneda(pipeline.total)}</div>
+            <div className="k-val mono">{fmtMoneda(pipeline.total, moneda)}</div>
             <div className="k-hint">{pipeline.cantidad} enviados esperando decisión</div>
           </div>
           <div className="otl-kpi">
             <div className="k-lbl">Aprobados sin convertir</div>
-            <div className="k-val mono">{fmtMoneda(aprobados.total)}</div>
+            <div className="k-val mono">{fmtMoneda(aprobados.total, moneda)}</div>
             <div className="k-hint">{aprobados.cantidad} listos para pasar a OT</div>
           </div>
           <div className="otl-kpi">
@@ -166,7 +169,7 @@ export function PresupuestosView({ initial, rol }: { initial: PresupuestosListad
           <div className="otl-kpi accent">
             <div className="k-lbl">Perdidos</div>
             <div className="k-val mono">{statDe("rechazado").cantidad + statDe("vencido").cantidad}</div>
-            <div className="k-hint">{fmtMoneda(statDe("rechazado").total + statDe("vencido").total)} con motivo registrado</div>
+            <div className="k-hint">{fmtMoneda(statDe("rechazado").total + statDe("vencido").total, moneda)} con motivo registrado</div>
           </div>
         </div>
 
@@ -220,7 +223,7 @@ export function PresupuestosView({ initial, rol }: { initial: PresupuestosListad
                     </td>
                     <td className="mono" style={{ padding: "11px 14px" }}>{fmtFecha(p.fechaEmision)}</td>
                     <td className="mono" style={{ padding: "11px 14px" }}>{fmtFecha(p.fechaValidez)}</td>
-                    <td className="mono" style={{ padding: "11px 14px", textAlign: "right", fontWeight: 600 }}>{fmtMoneda(p.total)}</td>
+                    <td className="mono" style={{ padding: "11px 14px", textAlign: "right", fontWeight: 600 }}>{fmtMoneda(p.total, moneda)}</td>
                     <td style={{ padding: "11px 14px", color: "#6e6e76" }}>{p.vendedor ?? "—"}</td>
                   </tr>
                 ))}

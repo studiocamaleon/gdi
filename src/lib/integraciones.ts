@@ -76,13 +76,6 @@ export function itemDe(proveedor: ProveedorIntegracion): CatalogoItem {
   return CATALOGO.find((c) => c.proveedor === proveedor)!;
 }
 
-export function fechaCorta(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
-}
-
 /**
  * Estado de las plantillas: el catálogo canónico de Grafo cruzado con lo que
  * hay de verdad en la cuenta de Wati del tenant.

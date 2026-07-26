@@ -27,9 +27,7 @@ import {
   formatCuit,
   type CondicionFiscal,
 } from "@/lib/clientes";
-
-const fmt = (n: number) =>
-  (n < 0 ? "−" : "") + "$" + Math.abs(Math.round(n)).toLocaleString("es-AR");
+import { formatearMoneda, monedaDe } from "@/lib/moneda";
 
 export type ClienteOpcion = {
   id: string;
@@ -88,6 +86,9 @@ export function ComprobanteEmisionView({
   const [items, setItems] = React.useState<ItemForm[]>([itemVacio()]);
   const [moneda, setMoneda] = React.useState<"ARS" | "USD">("ARS");
   const [cotizacion, setCotizacion] = React.useState("");
+  // Los montos de esta pantalla son DEL comprobante: siguen a su selector
+  // ARS/USD, no a la moneda del tenant.
+  const fmt = (n: number) => formatearMoneda(n, monedaDe(moneda), { decimales: 0 });
   const [condicionVenta, setCondicionVenta] = React.useState("contado");
   const [guardando, setGuardando] = React.useState(false);
   const [desdeOrden, setDesdeOrden] = React.useState(false);

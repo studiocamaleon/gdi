@@ -84,6 +84,7 @@ import {
 } from "@/lib/estaciones";
 import type { DiaNoLaborable, DuracionFamilia } from "@/lib/estaciones-api";
 import { etiquetaEta, simularFlujo, type ResultadoSimulacion, type SimulacionItem } from "@/lib/flujo-produccion";
+import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { SimulacionView } from "@/components/produccion/simulacion-view";
 import { formatBytes, urlDeArchivo, type Archivo } from "@/lib/archivos";
 import { listarArchivos } from "@/lib/archivos-api";
@@ -2009,6 +2010,7 @@ export function TableroProduccion({
   /** Default del tenant para el traslado entre pasos. */
   tiempoEntrePasosMin?: number;
 }) {
+  const { zonaHoraria } = useConfigRegional();
   const [items, setItems] = React.useState<TableroItemData[]>(initialItems);
   const [mode, setMode] = React.useState<Mode>(DEFAULT_BOARD_MODE);
   const [defaultMode, setDefaultMode] = React.useState<Mode>(DEFAULT_BOARD_MODE);
@@ -2121,8 +2123,8 @@ export function TableroProduccion({
   /** Simulación de flujo (fase 2b): ETA por item + llegadas por estación. */
   const sim = React.useMemo<ResultadoSimulacion>(
     () =>
-      simularFlujo({ items, estaciones, medianas, noLaborables, tiempoEntrePasosMin }),
-    [items, estaciones, medianas, noLaborables, tiempoEntrePasosMin],
+      simularFlujo({ items, estaciones, medianas, noLaborables, tiempoEntrePasosMin, zona: zonaHoraria }),
+    [items, estaciones, medianas, noLaborables, tiempoEntrePasosMin, zonaHoraria],
   );
 
   /** Minutos de carga en camino que LLEGAN HOY, por estación. */

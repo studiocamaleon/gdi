@@ -99,6 +99,14 @@ import type { OrdenesTrabajoQueryDto } from './dto/ordenes-trabajo-query.dto';
 import { filtrarSpecsPublicas } from './tracking-publico-specs';
 import { DatosEmpresaService } from '../tenants/datos-empresa.service';
 import { NotificacionesOrdenesService } from '../integraciones/notificaciones/notificaciones-ordenes.service';
+import { formatearMoneda, type Moneda } from '../common/moneda';
+import { regionalDelTenant } from '../common/regional';
+import {
+  claveFechaEnZona,
+  instanteDe,
+  sumarDiasAClave,
+  ZONA_DEFAULT,
+} from '../common/zona';
 
 type OrdenConRelaciones = Prisma.OrdenTrabajoGetPayload<{
   include: {
@@ -191,18 +199,22 @@ export function sumaTramosMin(
  * ("HH:mm") del día en que se abrió; si se abrió DESPUÉS del corte (turno
  * nocturno), la del día siguiente. Determinístico: no depende de cuándo
  * corre la reconciliación.
+ *
+ * El "20:00" de la config es hora de pared del TALLER (`zona` IANA del
+ * tenant): con el `setHours` local de antes, el server en UTC cerraba los
+ * tramos a las 17:00 de Argentina.
  */
-export function corteJornadaDe(inicioEl: Date, corte: string): Date {
+export function corteJornadaDe(
+  inicioEl: Date,
+  corte: string,
+  zona: string = ZONA_DEFAULT,
+): Date {
   const [hh, mm] = corte.split(':').map((parte) => Number(parte));
-  const corteDia = new Date(inicioEl);
-  corteDia.setHours(
-    Number.isFinite(hh) ? hh : 20,
-    Number.isFinite(mm) ? mm : 0,
-    0,
-    0,
-  );
+  const hora = `${String(Number.isFinite(hh) ? hh : 20).padStart(2, '0')}:${String(Number.isFinite(mm) ? mm : 0).padStart(2, '0')}`;
+  const dia = claveFechaEnZona(inicioEl, zona);
+  const corteDia = instanteDe(dia, hora, zona);
   if (inicioEl >= corteDia) {
-    corteDia.setDate(corteDia.getDate() + 1);
+    return instanteDe(sumarDiasAClave(dia, 1), hora, zona);
   }
   return corteDia;
 }
@@ -275,6 +287,11 @@ export class OrdenesTrabajoService {
    */
   private avisarAlCliente(ordenId: string): void {
     void this.avisos.sincronizar(ordenId);
+  }
+
+  /** La moneda del tenant, para mensajes de timeline y errores con montos. */
+  private async monedaDe(tenantId: string): Promise<Moneda> {
+    return (await regionalDelTenant(this.prisma, tenantId)).moneda;
   }
 
   /**
@@ -993,11 +1010,14 @@ export class OrdenesTrabajoService {
     // que anular la factura o emitir una nota de crédito.
     const actual = await tx.ordenTrabajo.findUniqueOrThrow({
       where: { id: ordenId },
-      select: { facturadoTotal: true },
+      select: { facturadoTotal: true, tenantId: true },
     });
     if (total < Number(actual.facturadoTotal) - 0.01) {
+      const { moneda } = await regionalDelTenant(this.prisma, actual.tenantId);
+      const dinero = (n: number) =>
+        formatearMoneda(n, moneda, { decimales: 0 });
       throw new ConflictException(
-        `La orden ya tiene $${Number(actual.facturadoTotal).toLocaleString('es-AR')} facturados y esta edición la dejaría en $${Math.round(total).toLocaleString('es-AR')}: anulá la factura o emitile una nota de crédito primero.`,
+        `La orden ya tiene ${dinero(Number(actual.facturadoTotal))} facturados y esta edición la dejaría en ${dinero(total)}: anulá la factura o emitile una nota de crédito primero.`,
       );
     }
     await tx.ordenTrabajo.update({
@@ -1110,7 +1130,7 @@ export class OrdenesTrabajoService {
           tenantId: auth.tenantId,
           ordenId: orden.id,
           tipo: 'item_agregado',
-          descripcion: `Producto agregado: "${payload.nombre}" · ${payload.cantidad} ${payload.cantidadUnidad} · $${Math.round(payload.total).toLocaleString('es-AR')}`,
+          descripcion: `Producto agregado: "${payload.nombre}" · ${payload.cantidad} ${payload.cantidadUnidad} · ${formatearMoneda(payload.total, await this.monedaDe(auth.tenantId), { decimales: 0 })}`,
           usuarioNombre,
           usuarioId: auth.userId,
           origen: 'usuario',
@@ -1159,6 +1179,7 @@ export class OrdenesTrabajoService {
       specs: existente.specsJson,
       adicionales: existente.adicionalesJson,
     };
+    const moneda = await this.monedaDe(auth.tenantId);
     const partes: string[] = [];
     if (antes.cantidad !== payload.cantidad) {
       partes.push(
@@ -1166,9 +1187,9 @@ export class OrdenesTrabajoService {
       );
     }
     if (antes.total !== payload.total) {
-      partes.push(
-        `total $${Math.round(antes.total).toLocaleString('es-AR')} → $${Math.round(payload.total).toLocaleString('es-AR')}`,
-      );
+      const dinero = (n: number) =>
+        formatearMoneda(n, moneda, { decimales: 0 });
+      partes.push(`total ${dinero(antes.total)} → ${dinero(payload.total)}`);
     }
     if (partes.length === 0) partes.push('especificaciones actualizadas');
 
@@ -1259,7 +1280,7 @@ export class OrdenesTrabajoService {
           tenantId: auth.tenantId,
           ordenId: orden.id,
           tipo: 'item_quitado',
-          descripcion: `Producto quitado: "${existente.nombre}" · $${Math.round(Number(existente.total)).toLocaleString('es-AR')}`,
+          descripcion: `Producto quitado: "${existente.nombre}" · ${formatearMoneda(Number(existente.total), await this.monedaDe(auth.tenantId), { decimales: 0 })}`,
           usuarioNombre,
           usuarioId: auth.userId,
           origen: 'usuario',
@@ -1453,7 +1474,10 @@ export class OrdenesTrabajoService {
 
   /**
    * Coherencia de montos por item: total = subtotal + impuestos, con
-   * tolerancia de $1 por redondeos de la capa comercial.
+   * tolerancia de 1 UNIDAD de la moneda por redondeos de la capa comercial.
+   * Una unidad y no un porcentaje a propósito: cubre tanto el peor caso del
+   * redondeo a 2 decimales como el del redondeo a entero (CLP, o
+   * `redondeoPrecio: 'entero'`), donde el error máximo es exactamente 1.
    */
   validarMontosItems(
     items: Array<{
@@ -1660,11 +1684,12 @@ export class OrdenesTrabajoService {
       select: { corteJornada: true },
     });
     const corte = config?.corteJornada ?? '20:00';
+    const { zonaHoraria } = await regionalDelTenant(this.prisma, tenantId);
     const ahora = new Date();
     const vencidos = abiertos
       .map((tramo) => ({
         ...tramo,
-        corteEl: corteJornadaDe(tramo.inicioEl, corte),
+        corteEl: corteJornadaDe(tramo.inicioEl, corte, zonaHoraria),
       }))
       .filter((tramo) => tramo.corteEl <= ahora);
     if (vencidos.length === 0) return;

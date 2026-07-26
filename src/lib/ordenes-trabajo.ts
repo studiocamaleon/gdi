@@ -13,6 +13,8 @@
  * snapshot de items viaja del presupuesto a la OT al aprobar.
  */
 
+import { formatearMoneda, type Moneda } from "@/lib/moneda";
+
 export type OrdenTrabajoEstado =
   | "borrador"
   | "pendiente"
@@ -243,9 +245,9 @@ export function progresoDerivado(
   }
 }
 
-/** "$220.298" — redondeado, sin decimales (formato del listado). */
-export function formatMonedaOrden(value: number): string {
-  return "$" + Math.round(value).toLocaleString("es-AR");
+/** "$ 220.298" — redondeado, sin decimales (formato del listado). */
+export function formatMonedaOrden(value: number, moneda: Moneda): string {
+  return formatearMoneda(value, moneda, { decimales: 0 });
 }
 
 /**

@@ -12,14 +12,7 @@ import {
 import QRCode from "qrcode";
 
 import type { FacturaDocumento } from "@/lib/administracion";
-
-/** Los importes del comprobante van con 2 decimales, siempre. */
-const fmt = (n: number) =>
-  "$" +
-  n.toLocaleString("es-AR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+import { formatearMoneda, monedaDe } from "@/lib/moneda";
 
 const fecha = (iso: string | null) => {
   if (!iso) return "—";
@@ -51,6 +44,9 @@ function Qr({ url }: { url: string }) {
 
 export function FacturaView({ doc, id }: { doc: FacturaDocumento; id: string }) {
   const d = doc;
+  // Los importes van en la moneda DEL comprobante (una E puede ser USD) y
+  // con 2 decimales siempre: lo fija la normativa, no la preferencia visual.
+  const fmt = (n: number) => formatearMoneda(n, monedaDe(d.moneda), { decimales: 2 });
   const ivaOrdenado = [...d.ivaPorAlicuota].sort((a, b) => b.alicuota - a.alicuota);
 
   return (

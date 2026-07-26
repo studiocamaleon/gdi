@@ -22,7 +22,9 @@ import {
   ZOOM_PASOS,
   zoomDeSlider,
 } from "@/lib/eje-laboral";
+import { fechaNumerica, hora } from "@/lib/fecha";
 import { fuentesSimulacion } from "@/lib/fuentes-simulacion";
+import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import {
   PROVEEDOR_KEY,
   type PasoProgramado,
@@ -87,11 +89,17 @@ function opacidadEtiqueta(anchoPx: number, minimo: number, comodo: number) {
   return (anchoPx - minimo) / (comodo - minimo);
 }
 
+/* La hora y el día de un bloque se leen en la zona del TALLER: los getters
+   locales (`getHours`/`getDay`) usan la del navegador, que puede ser otra. */
 const DIA_CORTO = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
-const hhmm = (d: Date) =>
-  `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-const diaCorto = (d: Date) =>
-  `${DIA_CORTO[d.getDay()]} ${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+const hhmm = (d: Date, zona?: string) => hora(d.toISOString(), zona);
+const diaCorto = (d: Date, zona?: string) => {
+  const [dd, mm, yyyy] = fechaNumerica(d.toISOString(), zona).split("/").map(Number);
+  // La fecha civil ya salió en la zona pedida; el getUTCDay sobre ese trío
+  // es puro calendario, sin volver a pasar por la zona del navegador.
+  const idx = new Date(Date.UTC(yyyy, mm - 1, dd)).getUTCDay();
+  return `${DIA_CORTO[idx]} ${String(dd).padStart(2, "0")}/${String(mm).padStart(2, "0")}`;
+};
 
 type Bloque = {
   orden: number;
@@ -153,6 +161,7 @@ export function SimulacionView({
   /** px por minuto laboral. Ver Z_MIN/Z_MAX en eje-laboral. */
   zoomInicial?: number;
 }) {
+  const { zonaHoraria } = useConfigRegional();
   const [vista, setVista] = React.useState<"mesa" | "proj">(vistaInicial);
   const [z, setZ] = React.useState(zoomInicial);
   /* Al hacer zoom hay que dejar quieto el punto que el usuario está mirando:
@@ -220,8 +229,8 @@ export function SimulacionView({
   const [tocando, setTocando] = React.useState(false);
 
   const { carriles, eje, total, bloques, xAhora } = React.useMemo(
-    () => construir(items, estaciones, sim, noLaborables),
-    [items, estaciones, sim, noLaborables],
+    () => construir(items, estaciones, sim, noLaborables, zonaHoraria),
+    [items, estaciones, sim, noLaborables, zonaHoraria],
   );
 
   /* El plan cambia con el polling: el replay no puede quedar apuntando a
@@ -632,6 +641,7 @@ function Readout({
   carriles: number;
   tarde: number;
 }) {
+  const { zonaHoraria } = useConfigRegional();
   if (cursor === 0)
     return <span className="muted">Taller vacío. El scheduler todavía no colocó nada.</span>;
   if (cursor >= bloques.length)
@@ -662,7 +672,7 @@ function Readout({
       </span>{" "}
       en <b>{b.estNombre}</b>, arranca{" "}
       <b>
-        {diaCorto(b.inicio)} {hhmm(b.inicio)}
+        {diaCorto(b.inicio, zonaHoraria)} {hhmm(b.inicio, zonaHoraria)}
       </b>
       {b.esperaMin > 0 ? (
         <>
@@ -709,6 +719,7 @@ function LineaDeTiempo({
   scrollRef: React.RefObject<HTMLDivElement | null>;
   xAhora: number;
 }) {
+  const { zonaHoraria } = useConfigRegional();
   const ancho = eje.totalMin * z + 60;
   const hiloOT = focoOTs && focoOTs.size === 1 ? [...focoOTs][0] : null;
 
@@ -930,7 +941,7 @@ function LineaDeTiempo({
             {tip.ot} · {tip.pasoNombre}
           </span>
           <span className="t2">
-            {diaCorto(tip.inicio)} {hhmm(tip.inicio)} → {hhmm(tip.fin)}
+            {diaCorto(tip.inicio, zonaHoraria)} {hhmm(tip.inicio, zonaHoraria)} → {hhmm(tip.fin, zonaHoraria)}
             <b className={tip.tarde ? "hot" : ""}>
               {tip.duracionMin != null
                 ? `${tip.duracionMin} min`
@@ -1037,6 +1048,7 @@ function Proyeccion({
   soloTarde: boolean;
   onSel: (b: Bloque) => void;
 }) {
+  const { zonaHoraria } = useConfigRegional();
   const maxMin = Math.max(
     1,
     ...carriles.map((c) => c.bloques.reduce((s, b) => s + (b.duracionMin ?? 0), 0)),
@@ -1100,11 +1112,13 @@ function Proyeccion({
             </div>
             <div className="simu-sbody">
               {bs.map((b) => {
-                const dia = diaCorto(b.inicio);
+                const dia = diaCorto(b.inicio, zonaHoraria);
                 const sep = dia !== ultimoDia;
                 ultimoDia = dia;
                 const finTxt =
-                  diaCorto(b.fin) === dia ? hhmm(b.fin) : `${diaCorto(b.fin)} ${hhmm(b.fin)}`;
+                  diaCorto(b.fin, zonaHoraria) === dia
+                    ? hhmm(b.fin, zonaHoraria)
+                    : `${diaCorto(b.fin, zonaHoraria)} ${hhmm(b.fin, zonaHoraria)}`;
                 return (
                   <React.Fragment key={b.pasoId}>
                     {sep ? (
@@ -1126,7 +1140,7 @@ function Proyeccion({
                     >
                       <div className="simu-ptime">
                         {c.filas > 1 ? <span className="pst">P{b.fila + 1}</span> : null}
-                        <span className="h0">{hhmm(b.inicio)}</span>
+                        <span className="h0">{hhmm(b.inicio, zonaHoraria)}</span>
                         <span className="arr">→</span>
                         <span className="h1">{finTxt}</span>
                         <span className="dur">
@@ -1188,6 +1202,7 @@ function Inspector({
   onClose: () => void;
   onOpen: () => void;
 }) {
+  const { zonaHoraria } = useConfigRegional();
   const notas: React.ReactNode[] = [];
   if (b.esperaMin > 0)
     notas.push(
@@ -1271,8 +1286,8 @@ function Inspector({
         <div>
           <Fila k="Estación" v={b.estNombre} />
           <Fila k="Familia" v={b.familia} />
-          <Fila k="Arranca" v={`${diaCorto(b.inicio)} ${hhmm(b.inicio)}`} />
-          <Fila k="Termina" v={`${diaCorto(b.fin)} ${hhmm(b.fin)}`} />
+          <Fila k="Arranca" v={`${diaCorto(b.inicio, zonaHoraria)} ${hhmm(b.inicio, zonaHoraria)}`} />
+          <Fila k="Termina" v={`${diaCorto(b.fin, zonaHoraria)} ${hhmm(b.fin, zonaHoraria)}`} />
           {b.duracionMin != null ? (
             <Fila k="Duración" v={`${b.duracionMin} min`} />
           ) : (
@@ -1315,6 +1330,7 @@ function construir(
   estaciones: Estacion[],
   sim: ResultadoSimulacion,
   noLaborables: Set<string>,
+  zona?: string,
 ) {
   const porItem = new Map(items.map((i) => [i.id, i]));
   const pasos = new Map<string, TableroPasoData>();
@@ -1326,7 +1342,7 @@ function construir(
     (max, p) => (p.fin > max ? p.fin : max),
     ahora,
   );
-  const eje = construirEje({ estaciones, ahora, hasta: finMax, noLaborables });
+  const eje = construirEje({ estaciones, ahora, hasta: finMax, noLaborables, zona });
   /* El eje arranca en la APERTURA del día, no en este instante: la línea de
      "ahora" hay que ubicarla, no dejarla en el origen. */
   const xAhora = eje.aX(ahora);
@@ -1369,7 +1385,7 @@ function construir(
         candidatos: p.candidatos,
         preparacionMin: p.preparacionMin,
         tarde: !!(entrega && eta?.finEstimado && eta.finEstimado > entrega),
-        entrega: entrega ? diaCorto(entrega) : null,
+        entrega: entrega ? diaCorto(entrega, zona) : null,
         fila: 0,
       };
       return bloque;

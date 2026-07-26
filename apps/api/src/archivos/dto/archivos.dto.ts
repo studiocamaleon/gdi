@@ -50,6 +50,16 @@ export class IniciarSubidaDto {
   @IsOptional()
   @IsBoolean()
   publico?: boolean;
+
+  /**
+   * Qué automatismo lo produjo ("sello"). Lo manda el front cuando el archivo
+   * lo generó el sistema y no una persona: es lo que después permite
+   * reemplazarlo sin tocar los adjuntos de nadie.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  autogeneradoPor?: string;
 }
 
 export class ParteSubidaDto {

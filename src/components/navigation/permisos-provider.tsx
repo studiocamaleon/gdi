@@ -39,3 +39,16 @@ export function usePuede(permiso: PermisoClave): boolean {
   const permisos = React.useContext(Ctx);
   return permisos === null || permisos.has(permiso);
 }
+
+/**
+ * Lo mismo pero como función, para filtrar una lista cuyos permisos no se
+ * conocen de antemano — donde `usePuede` no sirve porque no se puede llamar un
+ * hook por cada clave.
+ */
+export function usePuedeFn(): (permiso: PermisoClave) => boolean {
+  const permisos = React.useContext(Ctx);
+  return React.useCallback(
+    (permiso: PermisoClave) => permisos === null || permisos.has(permiso),
+    [permisos],
+  );
+}

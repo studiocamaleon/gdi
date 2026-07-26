@@ -2,37 +2,31 @@
  * Construcción PURA de las fotos diarias del ETA (F2) desde el resultado del
  * motor. Sin DB — el EtaService corre el motor, delega el armado acá y hace el
  * upsert. Ver docs/eta-metricas-historicas-diseno.md §4.2/§4.3
+ *
+ * Toda la aritmética de "día" es en la ZONA del taller (multi-moneda-zona-
+ * horaria D10): antes usaba la del proceso, que en el server es UTC.
  */
 
 import {
   DIAS_SEMANA,
   type CalendarioEstacion,
-  type DiaSemana,
 } from '../produccion/calendario';
 import { calendarioDefault } from './motor/estaciones-tipos';
 import { PROVEEDOR_KEY } from './motor/flujo-produccion';
 import { percentil } from './metricas';
 import { SIN_ESTACION_KEY } from './motor/tablero-tipos';
+import {
+  claveFechaEnZona,
+  diaSemanaDeClave,
+  instanteDe,
+  sumarDiasAClave,
+  ZONA_DEFAULT,
+} from '../common/zona';
 
-const JS_DIA: DiaSemana[] = [
-  'dom',
-  'lun',
-  'mar',
-  'mie',
-  'jue',
-  'vie',
-  'sab',
-];
 const DIA_MS = 86_400_000;
 
-function claveFecha(fecha: Date) {
-  const m = String(fecha.getMonth() + 1).padStart(2, '0');
-  const d = String(fecha.getDate()).padStart(2, '0');
-  return `${fecha.getFullYear()}-${m}-${d}`;
-}
-
-function minutosDeDia(cal: CalendarioEstacion, fecha: Date): number {
-  const franjas = cal.dias[JS_DIA[fecha.getDay()]] ?? [];
+function minutosDeClave(cal: CalendarioEstacion, clave: string): number {
+  const franjas = cal.dias[diaSemanaDeClave(clave)] ?? [];
   return franjas.reduce((acc, f) => {
     const [dh, dm] = f.desde.split(':').map(Number);
     const [hh, hm] = f.hasta.split(':').map(Number);
@@ -49,12 +43,14 @@ function capacidad5dMin(
   puestos: number,
   ahora: Date,
   noLaborables: Set<string>,
+  zona: string,
 ): number {
+  const hoy = claveFechaEnZona(ahora, zona);
   let total = 0;
   for (let i = 0; i < 5; i += 1) {
-    const dia = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate() + i);
-    if (noLaborables.has(claveFecha(dia))) continue;
-    total += minutosDeDia(cal, dia) * Math.max(1, puestos);
+    const clave = sumarDiasAClave(hoy, i);
+    if (noLaborables.has(clave)) continue;
+    total += minutosDeClave(cal, clave) * Math.max(1, puestos);
   }
   return total;
 }
@@ -69,15 +65,17 @@ function proyectarHorizonteDias(
   puestos: number,
   ahora: Date,
   noLaborables: Set<string>,
+  zona: string,
 ): number | null {
   if (colaMin <= 0) return 0;
   const p = Math.max(1, puestos);
+  const hoy = claveFechaEnZona(ahora, zona);
   let restante = colaMin;
   let dias = 0;
   for (let i = 0; i < 365; i += 1) {
-    const fecha = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate() + i);
-    if (noLaborables.has(claveFecha(fecha))) continue;
-    const capacidadDia = minutosDeDia(cal, fecha) * p;
+    const clave = sumarDiasAClave(hoy, i);
+    if (noLaborables.has(clave)) continue;
+    const capacidadDia = minutosDeClave(cal, clave) * p;
     if (capacidadDia <= 0) continue;
     const consumo = Math.min(restante, capacidadDia);
     dias += consumo / capacidadDia;
@@ -127,6 +125,7 @@ export function construirSnapshotsEstacion(
   estaciones: EstacionInfo[],
   ahora: Date,
   noLaborables: Set<string>,
+  zona: string = ZONA_DEFAULT,
 ): SnapshotEstacion[] {
   const info = new Map(estaciones.map((e) => [e.id, e]));
   const finVentana5d = ahora.getTime() + 5 * DIA_MS;
@@ -164,7 +163,9 @@ export function construirSnapshotsEstacion(
           ? calendarioDefault()
           : null;
     const puestos = est?.capacidadConcurrente ?? 1;
-    const cap5d = cal ? capacidad5dMin(cal, puestos, ahora, noLaborables) : 0;
+    const cap5d = cal
+      ? capacidad5dMin(cal, puestos, ahora, noLaborables, zona)
+      : 0;
 
     salida.push({
       estacionKey,
@@ -172,7 +173,7 @@ export function construirSnapshotsEstacion(
         est?.nombre ?? NOMBRE_SINTETICO[estacionKey] ?? estacionKey,
       colaMin,
       horizonteDias: cal
-        ? proyectarHorizonteDias(cal, colaMin, puestos, ahora, noLaborables)
+        ? proyectarHorizonteDias(cal, colaMin, puestos, ahora, noLaborables, zona)
         : null,
       esperaP50Min: esperas.length ? Math.round(percentil(esperas, 0.5)) : 0,
       esperaP90Min: esperas.length ? Math.round(percentil(esperas, 0.9)) : 0,
@@ -206,15 +207,19 @@ type EtaItem = {
 export function construirSnapshotsItem(
   porItem: Map<string, EtaItem>,
   fechaEntregaPorItem: Map<string, string | null>,
+  zona: string = ZONA_DEFAULT,
 ): SnapshotItem[] {
   const salida: SnapshotItem[] = [];
   for (const [itemId, eta] of porItem) {
     const entregaIso = fechaEntregaPorItem.get(itemId) ?? null;
     let margenMin: number | null = null;
     if (eta.finEstimado && entregaIso) {
-      const [y, m, d] = entregaIso.slice(0, 10).split('-').map(Number);
-      if (y && m && d) {
-        const deadline = new Date(y, m - 1, d, 23, 59, 59, 999);
+      const clave = entregaIso.slice(0, 10);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(clave)) {
+        // Fin del día de entrega EN EL TALLER, no en el proceso.
+        const deadline = new Date(
+          instanteDe(clave, '23:59', zona).getTime() + 59_999,
+        );
         margenMin = Math.round(
           (eta.finEstimado.getTime() - deadline.getTime()) / 60000,
         );

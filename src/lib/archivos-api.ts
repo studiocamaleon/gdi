@@ -108,6 +108,8 @@ export async function subirArchivo(
     entidadId?: string;
     descripcion?: string;
     publico?: boolean;
+    /** Marca de automatismo: lo produjo el sistema, no una persona. */
+    autogeneradoPor?: string;
   },
   onProgress?: (pct: number) => void,
   signal?: AbortSignal,
@@ -122,6 +124,7 @@ export async function subirArchivo(
       bytes: file.size,
       descripcion: destino.descripcion,
       publico: destino.publico,
+      autogeneradoPor: destino.autogeneradoPor,
     }),
   });
 

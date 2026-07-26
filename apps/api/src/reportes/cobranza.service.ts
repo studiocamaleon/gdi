@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { diasDelRango, type Rango } from './periodo';
+import { diasDelRango, finExclusivo, type Rango } from './periodo';
 
 /**
  * Cobranza — el eje financiero del Panel. Aging de deuda (foto al día de
@@ -46,11 +46,7 @@ export class CobranzaService {
 
   async finanzas(tenantId: string, rango: Rango, hoy: Date = new Date()) {
     const desde = rango.desde;
-    const hastaExcl = new Date(
-      rango.hasta.getFullYear(),
-      rango.hasta.getMonth(),
-      rango.hasta.getDate() + 1,
-    );
+    const hastaExcl = finExclusivo(rango);
 
     const [ordenesAbiertas, costoRows, factCob, chequeRows, cuentas] =
       await Promise.all([

@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import { formatearMoneda, type Moneda } from "@/lib/moneda";
+import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import Link from "next/link";
 import { toast } from "sonner";
 
@@ -21,8 +23,8 @@ import {
  * muestra, y ofrece alinearla si corresponde.
  */
 
-const fmt = (n: number) =>
-  `$${Math.round(n).toLocaleString("es-AR")}`;
+const fmt = (n: number, moneda: Moneda) =>
+  formatearMoneda(n, moneda, { decimales: 0 });
 
 export function ConciliacionNominaCard({
   mes,
@@ -31,6 +33,7 @@ export function ConciliacionNominaCard({
   mes: string;
   onAlineado: () => void | Promise<void>;
 }) {
+  const { moneda } = useConfigRegional();
   const [datos, setDatos] = React.useState<ConciliacionNomina | null>(null);
   const [error, setError] = React.useState(false);
   const [confirmando, setConfirmando] = React.useState(false);
@@ -93,18 +96,18 @@ export function ConciliacionNominaCard({
       <div className="gf-concil-nums">
         <div>
           <span className="k">Acá declarás</span>
-          <span className="v">{fmt(datos.declarado)}</span>
+          <span className="v">{fmt(datos.declarado, moneda)}</span>
         </div>
         <div>
           <span className="k">La nómina cuesta</span>
-          <span className="v">{fmt(datos.nomina.costoMensual)}</span>
+          <span className="v">{fmt(datos.nomina.costoMensual, moneda)}</span>
         </div>
         <div className={alineado ? "" : "dif"}>
           <span className="k">Diferencia</span>
           <span className="v">
             {alineado
               ? "—"
-              : `${datos.diferencia > 0 ? "+" : "−"}${fmt(Math.abs(datos.diferencia))}`}
+              : `${datos.diferencia > 0 ? "+" : "−"}${fmt(Math.abs(datos.diferencia), moneda)}`}
           </span>
         </div>
       </div>
@@ -121,7 +124,7 @@ export function ConciliacionNominaCard({
         open={confirmando}
         onOpenChange={setConfirmando}
         titulo="Reemplazar los sueldos por la nómina real"
-        descripcion={`Las líneas de sueldos de este mes se cierran y queda una sola con ${fmt(datos.nomina.costoMensual)}.`}
+        descripcion={`Las líneas de sueldos de este mes se cierran y queda una sola con ${fmt(datos.nomina.costoMensual, moneda)}.`}
         impacto={[
           "Los meses anteriores no se tocan: las líneas viejas se cierran, no se borran.",
           "Cambia el punto de equilibrio de Reportes.",

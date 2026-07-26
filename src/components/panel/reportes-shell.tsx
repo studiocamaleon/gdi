@@ -26,7 +26,7 @@ import {
   WalletIcon,
 } from "lucide-react";
 
-import { usePuede } from "@/components/navigation/permisos-provider";
+import { usePuedeFn } from "@/components/navigation/permisos-provider";
 import type { PermisoClave } from "@/lib/permisos";
 import { PERIODOS, leerPeriodo } from "@/lib/panel-periodo";
 
@@ -38,7 +38,11 @@ type Reporte = {
   permiso?: PermisoClave;
 };
 
-/** El orden de la tira. Espejo de los hijos de "Reportes" en nav-items.ts. */
+/**
+ * El orden de la tira, y la única lista de reportes que existe: el sidebar
+ * muestra "Reportes" como una sola entrada, así que acá no hay hijos filtrados
+ * por permiso que hagan de red. Lo que se saque de esta lista deja de ofrecerse.
+ */
 export const REPORTES: Reporte[] = [
   {
     href: "/reportes/resumen",
@@ -66,27 +70,24 @@ export const REPORTES: Reporte[] = [
   },
 ];
 
+/**
+ * Los reportes que esta persona puede abrir. El permiso del reporte NO se suma
+ * al del módulo: lo reemplaza. Tener Reportes no abre el Resumen ejecutivo, y
+ * Costo laboral pide la llave de remuneraciones porque muestra sueldos.
+ */
+export function reportesVisibles(
+  puede: (permiso: PermisoClave) => boolean,
+): Reporte[] {
+  return REPORTES.filter((r) => !r.permiso || puede(r.permiso));
+}
+
 export function ReportesShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const periodo = leerPeriodo(searchParams.get("periodo") ?? undefined);
 
-  const verResumen = usePuede("reportes.ver_resumen");
-  const verMargenes = usePuede("finanzas.ver_margenes");
-  const verRemuneraciones = usePuede("registros.ver_remuneraciones");
-  const permitido = React.useCallback(
-    (p: PermisoClave | undefined) =>
-      p === "reportes.ver_resumen"
-        ? verResumen
-        : p === "finanzas.ver_margenes"
-          ? verMargenes
-          : p === "registros.ver_remuneraciones"
-            ? verRemuneraciones
-            : true,
-    [verResumen, verMargenes, verRemuneraciones],
-  );
-
-  const visibles = REPORTES.filter((r) => permitido(r.permiso));
+  const puede = usePuedeFn();
+  const visibles = React.useMemo(() => reportesVisibles(puede), [puede]);
   const activo = visibles.find((r) => pathname === r.href) ?? visibles[0];
 
   // "Este mes" es el default: se va de la URL en vez de escribirse, para que el

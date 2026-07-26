@@ -27,24 +27,22 @@ import {
   cargarTipografiasSello,
   TIPOGRAFIAS_SELLO,
 } from "@/lib/sello-arte/fonts";
+import { nombreArteSello } from "@/lib/sello-arte/diseno";
+import type {
+  DisenoSello,
+  SelloLineaDiseno,
+  SelloModeloDiseno,
+} from "@/lib/sello-arte/diseno";
 import styles from "./sello-editor.module.css";
 
-/** Modelo del cuerpo del sello elegido (viene de la variante de materia prima). */
-export type SelloEditorModel = {
-  nombre: string;
-  widthMm: number;
-  heightMm: number;
-  lineasMax: number;
-};
+/**
+ * Modelo del cuerpo del sello elegido (viene de la variante de materia prima).
+ * Es el mismo que se guarda dentro del diseño: al guardar la orden el arte se
+ * vuelve a dibujar sin el editor abierto, y ahí las medidas tienen que estar.
+ */
+export type SelloEditorModel = SelloModeloDiseno;
 
-export type SelloLineaDiseno = { text: string; bold: boolean; italic: boolean };
-
-/** Diseño del sello — lo que se guarda en el jobContext del ítem. */
-export type DisenoSello = {
-  lineas: SelloLineaDiseno[];
-  align: Alineacion;
-  fontKey: string;
-};
+export type { DisenoSello, SelloLineaDiseno };
 
 type Props = {
   open: boolean;
@@ -176,9 +174,13 @@ export function SelloEditorSheet({
     const blob = new Blob([eps], { type: "application/postscript" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    const nm = (lineas[0]?.text || "sello").trim().replace(/[^\w-]+/g, "-").slice(0, 24) || "sello";
+    // Mismo nombre que el arte que se sube a la orden: el archivo que alguien
+    // baja a mano y el que queda en Archivos son el mismo, y se ve.
     a.href = url;
-    a.download = `${nm}-${model.widthMm}x${model.heightMm}mm${negative ? "-negativo" : ""}.eps`;
+    a.download = nombreArteSello(
+      { lineas, align, fontKey, modelo: model },
+      negative,
+    );
     a.click();
     URL.revokeObjectURL(url);
     toast.success(`Archivo generado · ${a.download}`);
@@ -189,7 +191,10 @@ export function SelloEditorSheet({
       toast.error("Cargá al menos una línea de texto.");
       return;
     }
-    onSave({ lineas, align, fontKey });
+    if (!model) return;
+    // El modelo viaja DENTRO del diseño: al guardar la orden el arte se
+    // regenera desde este dato solo, sin volver a mirar la variante del cuerpo.
+    onSave({ lineas, align, fontKey, modelo: model });
     onOpenChange(false);
   };
 

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { PlusIcon, XIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -135,6 +136,7 @@ function labelPrecioPorUnidad(unidadComercial?: string) {
 }
 
 export function TabPrecioEditor({ value, onChange, unidadComercial }: Props) {
+  const { moneda } = useConfigRegional();
   const metodo = value.metodoCalculo;
   const detalle = value.detalle ?? {};
   const unidadLabel = labelUnidad(unidadComercial);
@@ -385,7 +387,7 @@ export function TabPrecioEditor({ value, onChange, unidadComercial }: Props) {
 
                   {(metodo === "variable_por_cantidad" || metodo === "fijado_por_cantidad") && (
                     <>
-                      <span className="text-xs">$</span>
+                      <span className="text-xs">{moneda.simbolo}</span>
                       <Input
                         type="number"
                         value={tier.price ?? 0}

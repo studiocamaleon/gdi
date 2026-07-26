@@ -11,6 +11,7 @@ import {
 import type { CuentaFondosResumen, MetodoPago } from "@/lib/administracion";
 import { getCuentasFondos, getMetodosPago } from "@/lib/administracion-api";
 import { formatMonedaOrden } from "@/lib/ordenes-trabajo";
+import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 
 /**
  * Pestaña Pagos de la ficha ANTES de emitir: los cobros quedan en staging
@@ -28,6 +29,7 @@ export function PagosStagingTab({
   onAgregar: (draft: CobroDraft) => void;
   onQuitar: (index: number) => void;
 }) {
+  const { moneda } = useConfigRegional();
   const [metodos, setMetodos] = React.useState<MetodoPago[] | null>(null);
   const [cuentas, setCuentas] = React.useState<CuentaFondosResumen[]>([]);
   const [showForm, setShowForm] = React.useState(false);
@@ -69,12 +71,12 @@ export function PagosStagingTab({
       <div className="pagos-kpis">
         <div className="pk">
           <span className="pk-l">Total propuesta</span>
-          <span className="pk-v">{formatMonedaOrden(total)}</span>
+          <span className="pk-v">{formatMonedaOrden(total, moneda)}</span>
           <span className="pk-s">c/ impuestos</span>
         </div>
         <div className={`pk ${cobros.length > 0 ? "pk-ok" : ""}`}>
           <span className="pk-l">A registrar al emitir</span>
-          <span className="pk-v">{formatMonedaOrden(cobrado)}</span>
+          <span className="pk-v">{formatMonedaOrden(cobrado, moneda)}</span>
           <span className="pk-s">
             {cobros.length === 0
               ? "Sin cobros cargados"
@@ -83,7 +85,7 @@ export function PagosStagingTab({
         </div>
         <div className={`pk ${saldo <= 0 && total > 0 ? "pk-ok" : "pk-warn"}`}>
           <span className="pk-l">Saldo restante</span>
-          <span className="pk-v">{formatMonedaOrden(saldo)}</span>
+          <span className="pk-v">{formatMonedaOrden(saldo, moneda)}</span>
           <span className="pk-s">
             {saldo <= 0 && total > 0 ? "Orden saldada" : "A cobrar"}
           </span>
@@ -180,13 +182,13 @@ export function PagosStagingTab({
                       </button>
                     </span>
                     <span className="mov-monto">
-                      {formatMonedaOrden(c.payload.montoBruto)}
+                      {formatMonedaOrden(c.payload.montoBruto, moneda)}
                     </span>
                   </div>
                 ))}
                 <div className="mov-foot">
                   <span>Total a registrar al emitir</span>
-                  <span>{formatMonedaOrden(cobrado)}</span>
+                  <span>{formatMonedaOrden(cobrado, moneda)}</span>
                 </div>
               </div>
             )}
@@ -199,12 +201,14 @@ export function PagosStagingTab({
               <b style={{ color: "var(--ink-2)", margin: "0 4px" }}>
                 {formatMonedaOrden(
                   cobros.reduce((s, c) => s + c.netoAcreditado, 0),
+                  moneda,
                 )}
               </b>{" "}
               · disponible real{" "}
               <b style={{ color: "var(--ink-2)", margin: "0 4px" }}>
                 {formatMonedaOrden(
                   cobros.reduce((s, c) => s + c.disponibleReal, 0),
+                  moneda,
                 )}
               </b>{" "}
               según métodos elegidos

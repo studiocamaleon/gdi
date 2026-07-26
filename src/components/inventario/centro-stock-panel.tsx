@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import { formatearMoneda } from "@/lib/moneda";
+import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { useRouter } from "next/navigation";
 import { ArrowDownIcon, ArrowUpIcon, BoxIcon, CirclePlusIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -63,6 +65,7 @@ export function CentroStockPanel({
   initialStock,
   materiasPrimas,
 }: CentroStockPanelProps) {
+  const { moneda } = useConfigRegional();
   const router = useRouter();
 
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
@@ -567,7 +570,7 @@ export function CentroStockPanel({
                         {number2Formatter.format(resumen?.cantidadTotal ?? 0)}
                       </TableCell>
                       <TableCell className="text-right">
-                        $ {number2Formatter.format(resumen?.valorTotal ?? 0)}
+                        {formatearMoneda(resumen?.valorTotal ?? 0, moneda, { decimales: 2 })}
                       </TableCell>
                     </TableRow>
                   );
@@ -618,7 +621,7 @@ export function CentroStockPanel({
                     <TableCell>{row.varianteSku}</TableCell>
                     <TableCell className="text-right">{number2Formatter.format(row.cantidadDisponible)}</TableCell>
                     <TableCell className="text-right">{number2Formatter.format(row.costoPromedio)}</TableCell>
-                    <TableCell className="text-right">$ {number2Formatter.format(row.valorStock)}</TableCell>
+                    <TableCell className="text-right">{formatearMoneda(row.valorStock, moneda, { decimales: 2 })}</TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end gap-2">
                         <Button variant="outline" size="sm" onClick={() => openMovimiento(row)}>

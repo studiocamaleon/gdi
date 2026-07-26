@@ -1,7 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { jsPDF } from 'jspdf';
 import { registrarGeist } from './invoicing/geist';
-import { formatearImporte } from './numero-en-letras';
+import {
+  formatearMonedaDoc,
+  monedaDe,
+  type Moneda,
+} from '../common/moneda';
 
 /**
  * PDF del recibo de pago (diseño "PDF Recibo de pago" de claude.ai/design).
@@ -68,6 +72,8 @@ export type ReciboDoc = {
     email?: string | null;
     sitioWebLegible?: string | null;
     domicilio?: string | null;
+    /** La moneda del tenant. Un PDF cruza fronteras: nunca `$` a secas. */
+    moneda?: Moneda;
   } | null;
   iniciales: string;
   logoDataUri?: string | null;
@@ -85,8 +91,6 @@ export type ReciboDoc = {
   orden: ReciboOrden | null;
 };
 
-const money = (n: number) => '$' + formatearImporte(n);
-
 const fechaCorta = (iso: string) => {
   const [y, m, d] = iso.slice(0, 10).split('-');
   return `${d}/${m}/${y}`;
@@ -96,8 +100,15 @@ const fechaCorta = (iso: string) => {
 export class ReciboPdfService {
   private readonly log = new Logger(ReciboPdfService.name);
   private familia = 'helvetica';
+  private moneda: Moneda = monedaDe(null);
+
+  /** "AR$ 1.234,56" / "CLP $ 1.235": en papel el símbolo va desambiguado. */
+  private money(n: number): string {
+    return formatearMonedaDoc(n, this.moneda);
+  }
 
   generar(doc: ReciboDoc): Buffer {
+    this.moneda = doc.empresa?.moneda ?? monedaDe(null);
     const pdf = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
     this.familia = registrarGeist(pdf, this.log, 'el recibo de pago');
     pdf.setFont(this.familia, 'normal');
@@ -332,7 +343,7 @@ export class ReciboPdfService {
       color: [163, 163, 168],
       tracking: 0.4,
     });
-    this.texto(pdf, money(d.monto), xIzq, y0 + 18.5, {
+    this.texto(pdf, this.money(d.monto), xIzq, y0 + 18.5, {
       size: pt(40),
       bold: true,
       color: BLANCO,
@@ -442,7 +453,7 @@ export class ReciboPdfService {
       color: MUTED_2,
       align: 'right',
     });
-    this.texto(pdf, money(orden.total), xDer, y + 12, {
+    this.texto(pdf, this.money(orden.total), xDer, y + 12, {
       size: pt(12.5),
       color: MUTED_2,
       align: 'right',
@@ -509,7 +520,7 @@ export class ReciboPdfService {
         bold: f.fuerte,
         color: f.color ?? MUTED,
       });
-      this.texto(pdf, money(f.valor), ANCHO - MARGEN - 6, y + 6, {
+      this.texto(pdf, this.money(f.valor), ANCHO - MARGEN - 6, y + 6, {
         size: f.grande ? pt(16) : pt(14),
         bold: f.fuerte,
         color: f.color ?? INK_2,

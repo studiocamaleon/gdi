@@ -65,6 +65,12 @@ function cargarGeist(log: Logger): { regular: string; bold: string } | null {
   return geistCache;
 }
 
+/**
+ * A propósito NO usa el helper multi-moneda: el comprobante ARCA es un
+ * documento fiscal argentino (el módulo entero se gatea por país), su moneda
+ * es ARS o USD con cotización, y el campo "Moneda" impreso ya la declara.
+ * Acá manda la convención fiscal local, no la del catálogo.
+ */
 const money = (n: number) =>
   '$' +
   n.toLocaleString('es-AR', {

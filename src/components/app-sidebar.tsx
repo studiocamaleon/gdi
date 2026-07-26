@@ -12,6 +12,10 @@ import {
   type NavItem,
 } from "@/components/navigation/nav-items";
 import { permisosDe, puede } from "@/lib/permisos";
+import {
+  PALABRAS_CONFIG,
+  seccionesConfigVisibles,
+} from "@/components/configuracion/configuracion-secciones";
 import { useSidebar } from "@/components/ui/sidebar";
 
 type AppSidebarProps = {
@@ -211,9 +215,24 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
   // Lo que este usuario puede ver. Se calcula una vez y de acá sale todo el
   // resto: qué grupos hay, cuál está activo y qué encuentra el buscador.
   const nav = React.useMemo(
-    () => navPara(permisosDe(currentUser)),
+    () =>
+      navPara(
+        permisosDe(currentUser),
+        currentUser.tenantActual?.regional?.paisCodigo ?? "AR",
+      ),
     [currentUser],
   );
+  // El ancla del pie. Se muestra si le queda alguna sección: el Administrativo
+  // entra por Datos fiscales y Métodos de pago sin tener `configuracion.ver`.
+  const hayConfig = React.useMemo(() => {
+    const permisos = permisosDe(currentUser);
+    return (
+      seccionesConfigVisibles(
+        (p) => permisos === null || permisos.has(p),
+        currentUser.tenantActual?.regional?.paisCodigo ?? "AR",
+      ).length > 0
+    );
+  }, [currentUser]);
   const activeKey = getActiveKey(nav, pathname);
   const parentKey = getParentKey(nav, activeKey);
   // Acordeón: un solo grupo abierto a la vez. Se abre el del módulo actual;
@@ -228,6 +247,14 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
   const [query, setQuery] = React.useState("");
   const q = query.trim().toLowerCase();
   const filtering = q.length > 0;
+  const configActiva = matchesRoute(pathname, "/configuracion");
+  // Sus secciones ya no son hijos del menú, así que el buscador las tiene que
+  // encontrar por acá: escribir "usuarios" o "integraciones" llega igual.
+  const configMatch =
+    filtering &&
+    ("configuración".includes(q) ||
+      "configuracion".includes(q) ||
+      PALABRAS_CONFIG.some((p) => p.toLowerCase().includes(q)));
 
   // Navegación filtrada en vivo por el buscador del sidebar. Al filtrar, los
   // grupos con hijos que matchean se muestran expandidos.
@@ -237,7 +264,9 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
     const result: NavItem[] = [];
     for (const item of nav) {
       if (!hasChildren(item)) {
-        if (match(item.label)) result.push(item);
+        // `buscar`: las pantallas que el módulo tiene adentro pero no muestra
+        // como hijos (los reportes). Buscar "embudo" tiene que llegar igual.
+        if (match(item.label) || item.buscar?.some(match)) result.push(item);
         continue;
       }
       const grupoMatch = match(item.label);
@@ -373,7 +402,7 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
           );
         })}
 
-        {filtering && filteredNav.length === 0 ? (
+        {filtering && filteredNav.length === 0 && !configMatch ? (
           <div
             style={{
               padding: "10px 12px",
@@ -421,6 +450,26 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
         <div className="plan-meter"><span style={{ width: `${suscripcionProgress}%` }} /></div>
         <div className="plan-admin">Administrar suscripción</div>
       </Link>
+      ) : null}
+
+      {/* Configuración cierra el sidebar en vez de ocupar seis líneas del menú:
+          es el vecino del plan —plan y ajustes son la misma visita— y sus
+          secciones son la columna de su propia vista. Se esconde al filtrar
+          como cualquier otra entrada; si no, buscar "usuarios" dejaba la lista
+          vacía con Configuración igual de visible abajo. */}
+      {hayConfig && (!filtering || configMatch) ? (
+        <div className="side-foot">
+          <NavLink
+            href="/configuracion"
+            title="Configuración"
+            className={`nav-item ${configActiva ? "active" : ""}`}
+          >
+            <span className="ico"><Ico.Cog /></span>
+            <span className="label">
+              {filtering ? highlightMatch("Configuración", q) : "Configuración"}
+            </span>
+          </NavLink>
+        </div>
       ) : null}
     </aside>
   );

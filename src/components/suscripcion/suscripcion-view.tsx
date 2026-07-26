@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
+import { useFecha } from "@/components/navigation/config-regional-provider";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import type { Paddle } from "@paddle/paddle-js";
 
@@ -152,15 +153,6 @@ function precio(monto: number, moneda: string): string {
   return `${simbolo}${monto.toLocaleString("es-AR")}`;
 }
 
-function fechaLarga(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("es-AR", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
-
 function detallesDe(features: Record<string, unknown>): string[] {
   const out: string[] = [];
   for (const [clave, etiqueta] of Object.entries(ETIQUETA_FEATURE)) {
@@ -223,6 +215,8 @@ const LogoPaddle = ({ s = 26 }: { s?: number }) => (
 );
 
 export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
+  const { fechaCorta } = useFecha();
+  const fechaLarga = (iso: string | null) => (iso ? fechaCorta(iso) : "—");
   const [datos, setDatos] = React.useState(inicial);
   const [paddle, setPaddle] = React.useState<Paddle | null>(null);
   const [confirmando, setConfirmando] = React.useState(false);

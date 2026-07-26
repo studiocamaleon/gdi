@@ -13,6 +13,8 @@
  */
 
 import * as React from "react";
+import { formatearMoneda, type Moneda } from "@/lib/moneda";
+import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { ArrowRightIcon, CheckIcon, ChevronRightIcon } from "lucide-react";
 
 import {
@@ -247,8 +249,8 @@ const simFmt = (n: number, d = 1) =>
 
 const fmtRollM = (rollCm: number) => (rollCm / 100).toFixed(2).replace(".", ",");
 
-const fmtPesos = (n: number) =>
-  `$${Math.round(n).toLocaleString("es-AR")}`;
+const fmtPesos = (n: number, moneda: Moneda) =>
+  formatearMoneda(n, moneda, { decimales: 0 });
 
 /* ─────────── Layout SVG (rollo horizontal) ─────────── */
 
@@ -375,6 +377,7 @@ function SimMaterialCard({
   ) => void;
   completando: boolean;
 }) {
+  const { moneda } = useConfigRegional();
   const [open, setOpen] = React.useState(false);
   const [rollOverride, setRollOverride] = React.useState<number | null>(null);
   // Duración REAL de la tanda (opcional, registro-tiempos D11): se prorratea
@@ -587,7 +590,7 @@ function SimMaterialCard({
                         </div>
                         <div className="rr2 mono">
                           <span className="u">{Math.round(r.utilization * 100)}%</span>
-                          <span className="wa">{r.costo !== null ? fmtPesos(r.costo) : `−${simFmt(r.wasteArea / 10000, 1)}m²`}</span>
+                          <span className="wa">{r.costo !== null ? fmtPesos(r.costo, moneda) : `−${simFmt(r.wasteArea / 10000, 1)}m²`}</span>
                         </div>
                         {blocked ? (
                           <div className="rblock mono">{r.incompatible.length} no entra</div>
@@ -603,14 +606,14 @@ function SimMaterialCard({
                   <span className="k">Consumo</span>
                   <span className="v mono">
                     {consolidadoMl !== null ? simFmt(consolidadoMl, 2) : "—"} ml
-                    {shownPack?.costo != null ? ` · ${fmtPesos(shownPack.costo)}` : ""}
+                    {shownPack?.costo != null ? ` · ${fmtPesos(shownPack.costo, moneda)}` : ""}
                   </span>
                 </div>
                 <div className={`sv ${(ahorroMl ?? 0) >= 0 ? "ok" : ""}`}>
                   <span className="k">Ahorro vs. cotizado{baselineParcial ? " (parcial)" : ""}</span>
                   <span className="v mono">
                     {ahorroMl !== null ? `${simFmt(ahorroMl, 1)} ml` : "—"}
-                    {ahorroPesos !== null ? ` · ${fmtPesos(ahorroPesos)}` : ""}
+                    {ahorroPesos !== null ? ` · ${fmtPesos(ahorroPesos, moneda)}` : ""}
                   </span>
                 </div>
                 <div
@@ -654,6 +657,7 @@ function SimMaterialCard({
 /* ─────────── Vista principal ─────────── */
 
 export function SimuladorImpresion({ initialData }: { initialData: SimuladorData }) {
+  const { moneda } = useConfigRegional();
   const [data, setData] = React.useState(initialData);
   const [excluded, setExcluded] = React.useState<Set<string>>(() => new Set());
   const [completando, setCompletando] = React.useState(false);
@@ -887,7 +891,7 @@ export function SimuladorImpresion({ initialData }: { initialData: SimuladorData
               <div className="k">Ahorro vs. cotizado</div>
               <div className="v mono">
                 {simFmt(techAhorroMl, 1)} ml
-                {techAhorroPesos !== 0 ? ` · ${fmtPesos(techAhorroPesos)}` : ""}
+                {techAhorroPesos !== 0 ? ` · ${fmtPesos(techAhorroPesos, moneda)}` : ""}
               </div>
             </div>
           </div>

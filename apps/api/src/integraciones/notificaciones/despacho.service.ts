@@ -5,6 +5,8 @@ import { IntegracionesService } from '../integraciones.service';
 import { POR_EVENTO } from '../wati/catalogo';
 import { WatiClient } from '../wati/wati.client';
 import { ESTADOS } from './estados';
+import { regionalDelTenant } from '../../common/regional';
+import { ZONA_DEFAULT } from '../../common/zona';
 
 /**
  * Manda una notificación de la cola.
@@ -26,12 +28,11 @@ import { ESTADOS } from './estados';
 /** Cada cuántos intentos se rinde con una notificación. */
 export const MAX_INTENTOS = 4;
 
-/**
- * El sistema es argentino y no modelamos zona horaria por tenant, así que las
- * ventanas se evalúan en hora de Buenos Aires — no en la del servidor, que en
- * Render es UTC y las correría tres horas.
- */
-const ZONA = 'America/Argentina/Buenos_Aires';
+// La ventana se evalúa en la zona horaria DEL TENANT (Configuración ›
+// Empresa › Regional) — no en la del servidor, que en Render es UTC y la
+// correría tres horas. Antes acá vivía la constante de Buenos Aires y la
+// nota "no modelamos zona horaria por tenant"; desde
+// multi-moneda-zona-horaria (D11), sí la modelamos.
 
 export type ResultadoDespacho =
   | { estado: 'enviada' }
@@ -116,11 +117,13 @@ export class DespachoService {
 
     // Fuera de ventana no se descarta: se corre. El aviso sigue sirviendo
     // mañana a las 9, y despertar a alguien a las 23:40 no.
+    const { zonaHoraria } = await regionalDelTenant(this.prisma, n.tenantId);
     const proxima = proximaVentana(ahora, {
       horaDesde: config?.horaDesde ?? '09:00',
       horaHasta: config?.horaHasta ?? '20:00',
       diasAtencion: config?.diasAtencion ?? '1,2,3,4,5',
       requiereLocalAbierto: plantilla.requiereLocalAbierto ?? false,
+      zona: zonaHoraria,
     });
     if (proxima) {
       // Vuelve a `pendiente`: correrla no es mandarla, y si quedara reservada
@@ -256,6 +259,8 @@ export function proximaVentana(
     /** ISO: 1 = lunes … 7 = domingo. */
     diasAtencion: string;
     requiereLocalAbierto: boolean;
+    /** Zona IANA del tenant; sin ella, Argentina (lo histórico). */
+    zona?: string;
   },
 ): Date | null {
   const minutos = (hhmm: string): number => {
@@ -276,7 +281,7 @@ export function proximaVentana(
     !reglas.requiereLocalAbierto || dias.has(iso);
 
   const partes = new Intl.DateTimeFormat('en-GB', {
-    timeZone: ZONA,
+    timeZone: reglas.zona ?? ZONA_DEFAULT,
     hour: '2-digit',
     minute: '2-digit',
     weekday: 'short',

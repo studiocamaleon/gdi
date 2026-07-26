@@ -57,6 +57,7 @@ import {
   type PropuestaItem,
   type UnidadPropuesta,
 } from "@/lib/propuestas";
+import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import {
   cotizar,
   getCatalogoFamilias,
@@ -3212,6 +3213,7 @@ function ApSelectStep({
   products,
   loadingProductId,
 }: SelectStepProps) {
+  const { moneda } = useConfigRegional();
   const [activeIndex, setActiveIndex] = React.useState(0);
   const activeResultRef = React.useRef<HTMLButtonElement | null>(null);
   const visibleRecientes = products.slice(0, 3);
@@ -3371,7 +3373,7 @@ function ApSelectStep({
                     <>Precio por motor</>
                   ) : (
                     <>
-                      Referencia <strong>{formatCurrency(product.precioBase)}</strong> /{" "}
+                      Referencia <strong>{formatCurrency(product.precioBase, moneda)}</strong> /{" "}
                       {product.unidad}
                     </>
                   )}
@@ -3431,6 +3433,8 @@ function ApConfigStep({
   onCotizar,
   onBack,
 }: ConfigStepProps) {
+  const { moneda } = useConfigRegional();
+  const fmt = (v: number) => formatCurrency(v, moneda);
   const verMargenes = usePuede("finanzas.ver_margenes");
   const totals = getTotals(product, qty, adi);
   const cotizacionExitosa = getCotizacionExitosa(cotizacion);
@@ -5855,7 +5859,7 @@ function ApConfigStep({
                     <span className="lb">{adicional.name}</span>
                     {!product.real ? (
                       <span className="mt mono">
-                        + {formatCurrency(adicional.monto ?? 0)}
+                        + {fmt(adicional.monto ?? 0)}
                       </span>
                     ) : null}
                   </button>
@@ -6022,7 +6026,7 @@ function ApConfigStep({
                 <div className="row">
                   <span className="lbl">{labelPrecioUnitario(product.unidad)}</span>
                   <span className="val mono">
-                    {formatUnitPrice(getCotizacionUnitario(cotizacionExitosa))}
+                    {formatUnitPrice(getCotizacionUnitario(cotizacionExitosa), moneda)}
                   </span>
                 </div>
                 <div className="row">
@@ -6035,19 +6039,19 @@ function ApConfigStep({
                 <div className="row">
                   <span className="lbl">Subtotal neto</span>
                   <span className="val mono">
-                    {formatCurrency(getCotizacionNeto(cotizacionExitosa))}
+                    {fmt(getCotizacionNeto(cotizacionExitosa))}
                   </span>
                 </div>
                 <div className="row sub">
                   <span className="lbl">+ Impuestos</span>
                   <span className="val mono">
-                    {formatCurrency(getCotizacionImpuestos(cotizacionExitosa))}
+                    {fmt(getCotizacionImpuestos(cotizacionExitosa))}
                   </span>
                 </div>
                 <div className="row total">
                   <span className="lbl">Total con impuestos</span>
                   <span className="val mono">
-                    {formatCurrency(getCotizacionTotal(cotizacionExitosa))}
+                    {fmt(getCotizacionTotal(cotizacionExitosa))}
                   </span>
                 </div>
               </div>
@@ -6091,27 +6095,27 @@ function ApConfigStep({
             <div className="row">
               <span className="lbl">
                 Subtotal ({qty.toLocaleString("es-AR")} {product.unidad} x{" "}
-                {formatCurrency(product.precioBase)})
+                {fmt(product.precioBase)})
               </span>
-              <span className="val mono">{formatCurrency(totals.subtotal)}</span>
+              <span className="val mono">{fmt(totals.subtotal)}</span>
             </div>
             {adi.length > 0 ? (
               <div className="row">
                 <span className="lbl">+ Opcionales ({adi.length})</span>
-                <span className="val mono">{formatCurrency(totals.adicionalesMonto)}</span>
+                <span className="val mono">{fmt(totals.adicionalesMonto)}</span>
               </div>
             ) : null}
             <div className="row sub">
               <span className="lbl">+ Impuestos ({product.impuestoPct}%)</span>
-              <span className="val mono">{formatCurrency(totals.impuestos)}</span>
+              <span className="val mono">{fmt(totals.impuestos)}</span>
             </div>
             <div className="row sub muted">
               <span className="lbl">Costo estimado</span>
-              <span className="val mono">{formatCurrency(totals.costoEstimado)}</span>
+              <span className="val mono">{fmt(totals.costoEstimado)}</span>
             </div>
             <div className="row total">
               <span className="lbl">Total con impuestos</span>
-              <span className="val mono">{formatCurrency(totals.total)}</span>
+              <span className="val mono">{fmt(totals.total)}</span>
             </div>
           </div>
           {verMargenes && (
@@ -6143,6 +6147,7 @@ export function AgregarProductoSheet({
   onSaveItem,
   clienteId = null,
 }: AgregarProductoSheetProps) {
+  const { moneda } = useConfigRegional();
   const [step, setStep] = React.useState<"select" | "config">("select");
   const [product, setProduct] = React.useState<CatalogProduct | null>(null);
   const [productoDetalle, setProductoDetalle] = React.useState<ProductoDetalle | null>(null);
@@ -6626,9 +6631,9 @@ export function AgregarProductoSheet({
                     ? cotizando
                       ? "Cotizando..."
                       : cotizacionExitosa
-                        ? formatCurrency(getCotizacionTotal(cotizacionExitosa))
+                        ? formatCurrency(getCotizacionTotal(cotizacionExitosa), moneda)
                         : "Pendiente"
-                    : formatCurrency(totals.total)}
+                    : formatCurrency(totals.total, moneda)}
                 </span>
               </div>
               {!isEditing ? (

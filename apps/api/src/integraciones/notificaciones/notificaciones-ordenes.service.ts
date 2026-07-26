@@ -6,6 +6,8 @@ import { NotificacionesService } from './notificaciones.service';
 import { enContextoDe } from './contexto';
 import type { EventoNotificacion } from '../wati/catalogo';
 import { urlEnlacePublico } from '../../enlaces-publicos/enlaces-publicos.urls';
+import { numeroMoneda } from '../../common/moneda';
+import { regionalDelTenant } from '../../common/regional';
 
 /**
  * Traduce el estado de una orden al aviso que le corresponde.
@@ -94,6 +96,15 @@ export class NotificacionesOrdenesService {
     const nombre = nombreDelCliente(orden.cliente?.razonSocial);
     const comun = { clienteId: orden.clienteId, ordenId: orden.id };
 
+    // Sin `$`: el símbolo ya está en el texto fijo de la plantilla de Meta,
+    // y mandarlo acá saldría "$$92.700,00". La fecha, en la zona del taller.
+    const { moneda, zonaHoraria } = await regionalDelTenant(
+      this.prisma,
+      orden.tenantId,
+    );
+    const money = (n: number) => numeroMoneda(n, moneda);
+    const fecha = (d: Date | null) => fechaLegible(d, zonaHoraria);
+
     const parametros = (() => {
       switch (evento) {
         case 'orden_recibida':
@@ -140,23 +151,13 @@ export function nombreDelCliente(razonSocial?: string | null): string {
 }
 
 /** `dd/mm/aaaa`, o un guion si la orden no tiene fecha comprometida. */
-function fecha(d: Date | null): string {
+function fechaLegible(d: Date | null, zona: string): string {
   if (!d) return 'a confirmar';
   return new Date(d).toLocaleDateString('es-AR', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
-    timeZone: 'America/Argentina/Buenos_Aires',
+    timeZone: zona,
   });
 }
 
-/**
- * Sin el `$`: el símbolo ya está en el texto fijo de la plantilla, y
- * mandarlo acá saldría "$$92.700,00".
- */
-function money(n: number): string {
-  return n.toLocaleString('es-AR', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}

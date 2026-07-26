@@ -2,7 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AlertasService } from './alertas.service';
-import { granularidad, type Granularidad, type Rango } from './periodo';
+import { claveFechaEnZona, instanteDe } from '../common/zona';
+import { finExclusivo, granularidad, type Granularidad, type Rango } from './periodo';
 
 /**
  * Clientes — el eje que el Panel no tenía: concentración de cartera,
@@ -15,14 +16,6 @@ import { granularidad, type Granularidad, type Rango } from './periodo';
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const MS_DIA = 86_400_000;
 const TRUNC: Record<Granularidad, string> = { dia: 'day', semana: 'week', mes: 'month' };
-
-function finExclusivo(rango: Rango): Date {
-  return new Date(
-    rango.hasta.getFullYear(),
-    rango.hasta.getMonth(),
-    rango.hasta.getDate() + 1,
-  );
-}
 
 export type SegmentoRfm =
   | 'campeones'
@@ -120,6 +113,9 @@ export class ClientesService {
       this.prisma.$queryRaw<Array<{ fecha: string; nuevos: number; recurrentes: number }>>`
         WITH ord AS (
           SELECT ot.id, ot."clienteId" AS cid, ot."fechaEmision" AS f,
+                 -- La misma fecha en el reloj del TENANT: los buckets y la
+                 -- "primera compra" se comparan en su pared, no en UTC.
+                 (ot."fechaEmision" AT TIME ZONE 'UTC') AT TIME ZONE ${rango.zona} AS fl,
                  SUM(oti.subtotal) AS total
           FROM "OrdenTrabajoItem" oti
           JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
@@ -127,16 +123,16 @@ export class ClientesService {
             AND ot."clienteId" IS NOT NULL AND ot."fechaEmision" IS NOT NULL
           GROUP BY ot.id, ot."clienteId", ot."fechaEmision"
         ), marcada AS (
-          SELECT *, MIN(f) OVER (PARTITION BY cid) AS primera FROM ord
+          SELECT *, MIN(fl) OVER (PARTITION BY cid) AS primera FROM ord
         )
-        SELECT to_char(date_trunc(${Prisma.raw(`'${TRUNC[gran]}'`)}, f), 'YYYY-MM-DD') AS fecha,
+        SELECT to_char(date_trunc(${Prisma.raw(`'${TRUNC[gran]}'`)}, fl), 'YYYY-MM-DD') AS fecha,
                COALESCE(SUM(total) FILTER (
                  WHERE date_trunc(${Prisma.raw(`'${TRUNC[gran]}'`)}, primera)
-                     = date_trunc(${Prisma.raw(`'${TRUNC[gran]}'`)}, f)
+                     = date_trunc(${Prisma.raw(`'${TRUNC[gran]}'`)}, fl)
                ), 0)::float8 AS nuevos,
                COALESCE(SUM(total) FILTER (
                  WHERE date_trunc(${Prisma.raw(`'${TRUNC[gran]}'`)}, primera)
-                     < date_trunc(${Prisma.raw(`'${TRUNC[gran]}'`)}, f)
+                     < date_trunc(${Prisma.raw(`'${TRUNC[gran]}'`)}, fl)
                ), 0)::float8 AS recurrentes
         FROM marcada
         WHERE f >= ${rango.desde} AND f < ${hastaExcl}
@@ -174,7 +170,8 @@ export class ClientesService {
     ]);
 
     const diasActivo = umbrales.diasClienteDormido;
-    const hoyMid = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+    // La medianoche de HOY en la zona del tenant, no la del proceso.
+    const hoyMid = instanteDe(claveFechaEnZona(hoy, rango.zona), '00:00', rango.zona);
 
     // Actividad del rango vs. el período anterior (retención simple).
     const activos = historia.filter((h) => h.ordenesRango > 0);
@@ -230,7 +227,7 @@ export class ClientesService {
           cliente: h.nombre,
           ordenes: h.ordenes,
           facturadoHistorico: r2(h.facturado),
-          ultimaCompra: h.ultima.toISOString().slice(0, 10),
+          ultimaCompra: claveFechaEnZona(h.ultima, rango.zona),
           diasSinComprar: dias,
         });
       }

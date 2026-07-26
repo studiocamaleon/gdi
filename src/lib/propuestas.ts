@@ -1,4 +1,5 @@
 import type { CotizarResponse } from "@/lib/productos-servicios-api";
+import { formatearMoneda, type Moneda } from "@/lib/moneda";
 
 export type TipoPropuesta = "orden_trabajo" | "presupuesto";
 
@@ -90,12 +91,8 @@ export function offsetDate(days: number) {
   return date.toISOString().slice(0, 10);
 }
 
-export function formatCurrency(value: number) {
-  return new Intl.NumberFormat("es-AR", {
-    style: "currency",
-    currency: "ARS",
-    maximumFractionDigits: 0,
-  }).format(value);
+export function formatCurrency(value: number, moneda: Moneda) {
+  return formatearMoneda(value, moneda, { decimales: 0 });
 }
 
 /**
@@ -103,14 +100,9 @@ export function formatCurrency(value: number) {
  * tanda: $0,10/u), pero entero para valores grandes. Los totales siguen usando
  * `formatCurrency` (enteros).
  */
-export function formatUnitPrice(value: number) {
+export function formatUnitPrice(value: number, moneda: Moneda) {
   const digits = value !== 0 && Math.abs(value) < 100 ? 2 : 0;
-  return new Intl.NumberFormat("es-AR", {
-    style: "currency",
-    currency: "ARS",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: digits,
-  }).format(value);
+  return formatearMoneda(value, moneda, { decimales: digits });
 }
 
 export function formatUnidad(unidad: UnidadPropuesta) {

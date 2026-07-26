@@ -5,6 +5,12 @@
  * Reglas con campo null = desactivadas (default: nada cambia).
  */
 
+import {
+  formatearMoneda,
+  monedaDe,
+  type Moneda,
+} from '../common/moneda';
+
 export type ConfigAprobacion = {
   /** Total máximo que un operador puede enviar sin aprobación. */
   aprobacionMontoMax: number | null;
@@ -23,14 +29,15 @@ export type MotivoAprobacion = {
   detalle: string;
 };
 
-const pesos = (n: number) => '$' + Math.round(n).toLocaleString('es-AR');
 const r1 = (n: number) => Math.round(n * 10) / 10;
 
 export function evaluarAprobacion(
   config: ConfigAprobacion,
   presupuesto: { total: number; items: ItemAprobacion[] },
+  moneda: Moneda = monedaDe(null),
 ): MotivoAprobacion[] {
   const motivos: MotivoAprobacion[] = [];
+  const dinero = (n: number) => formatearMoneda(n, moneda, { decimales: 0 });
 
   if (
     config.aprobacionMontoMax != null &&
@@ -38,7 +45,7 @@ export function evaluarAprobacion(
   ) {
     motivos.push({
       regla: 'monto',
-      detalle: `El total ${pesos(presupuesto.total)} supera el umbral de ${pesos(config.aprobacionMontoMax)}.`,
+      detalle: `El total ${dinero(presupuesto.total)} supera el umbral de ${dinero(config.aprobacionMontoMax)}.`,
     });
   }
 

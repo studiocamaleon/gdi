@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { PlusIcon, XIcon } from "lucide-react";
 import { getProveedores } from "@/lib/proveedores-api";
 import type {
@@ -255,6 +256,7 @@ function TarifaEditor({
   cfg: Record<string, unknown>;
   patchCfg: (extra: Record<string, unknown>) => void;
 }) {
+  const { moneda } = useConfigRegional();
   const numOrNull = (v: string) => (v === "" ? null : Number(v));
   return (
     <div className="sec">
@@ -278,9 +280,9 @@ function TarifaEditor({
           </select>
         </div>
         <div className="field">
-          <label>Tarifa ($)</label>
+          <label>Tarifa ({moneda.simbolo})</label>
           <div className="money">
-            <span className="mp">$</span>
+            <span className="mp">{moneda.simbolo}</span>
             <input
               className="ctl mono"
               type="number"
@@ -303,9 +305,9 @@ function TarifaEditor({
           />
         </div>
         <div className="field">
-          <label>Mínimo de costo ($)</label>
+          <label>Mínimo de costo ({moneda.simbolo})</label>
           <div className="money">
-            <span className="mp">$</span>
+            <span className="mp">{moneda.simbolo}</span>
             <input
               className="ctl mono"
               type="number"
@@ -329,6 +331,7 @@ function FijoEditor({
   cfg: Record<string, unknown>;
   patchCfg: (extra: Record<string, unknown>) => void;
 }) {
+  const { moneda } = useConfigRegional();
   return (
     <div className="sec">
       <div className="sec-head">
@@ -337,9 +340,9 @@ function FijoEditor({
       </div>
       <div className="fields">
         <div className="field">
-          <label>Costo ($)</label>
+          <label>Costo ({moneda.simbolo})</label>
           <div className="money">
-            <span className="mp">$</span>
+            <span className="mp">{moneda.simbolo}</span>
             <input
               className="ctl mono"
               type="number"
@@ -376,6 +379,7 @@ function MatrizEditor({
   value: UpsertConfigPasoPayload;
   onChange: (patch: Patch) => void;
 }) {
+  const { moneda } = useConfigRegional();
   const cfg = cfgDe(value);
   const ejes: TercerizadoEje[] = Array.isArray(cfg.ejes)
     ? (cfg.ejes as TercerizadoEje[])
@@ -636,7 +640,7 @@ function MatrizEditor({
                                 )
                               }
                             />
-                            <span className="pfx">$</span>
+                            <span className="pfx">{moneda.simbolo}</span>
                           </div>
                         </td>
                       );

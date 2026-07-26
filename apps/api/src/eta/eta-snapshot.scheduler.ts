@@ -6,9 +6,13 @@ import { EtaService } from './eta.service';
 
 /**
  * Foto diaria del ETA (F2). Corre después del barrido de acreditaciones
- * (01:00): a las 03:00 itera los tenants con órdenes vivas y snapshotea la
- * cola proyectada. Idempotente (upsert por día), con guard local para no
- * superponer corridas largas.
+ * (01:00 UTC): a las 09:00 UTC itera los tenants con órdenes vivas y
+ * snapshotea la cola proyectada. El horario es UTC —el cron no declara
+ * timeZone— y 09:00 UTC es madrugada en todo el continente (06:00 en
+ * Buenos Aires, 03:00 en Tegucigalpa), así la foto cae "de noche" para
+ * cualquier tenant; la FECHA del snapshot ya se calcula con la zona de
+ * cada uno en eta.service. Idempotente (upsert por día), con guard local
+ * para no superponer corridas largas.
  */
 @Injectable()
 export class EtaSnapshotScheduler {
@@ -20,7 +24,7 @@ export class EtaSnapshotScheduler {
     private readonly prisma: PrismaService,
   ) {}
 
-  @Cron('0 3 * * *', { name: 'eta-snapshot-diario' })
+  @Cron('0 9 * * *', { name: 'eta-snapshot-diario' })
   async snapshotDiario() {
     if (this.corriendo) return;
     this.corriendo = true;

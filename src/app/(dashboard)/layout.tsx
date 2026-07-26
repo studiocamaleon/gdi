@@ -4,6 +4,7 @@ import { ApiError } from "@/lib/api";
 import { getCurrentUserCached } from "@/lib/auth-server";
 import { getSessionToken } from "@/lib/session";
 import { AppSidebar } from "@/components/app-sidebar";
+import { ConfigRegionalProvider } from "@/components/navigation/config-regional-provider";
 import { NavigationFeedbackProvider } from "@/components/navigation/navigation-feedback";
 import { PermisosProvider } from "@/components/navigation/permisos-provider";
 import { PasosEnCursoWidget } from "@/components/produccion/pasos-en-curso-widget";
@@ -52,6 +53,7 @@ export default async function DashboardLayout({
 
   return (
     <PermisosProvider permisos={currentUser.tenantActual?.permisos}>
+      <ConfigRegionalProvider regional={currentUser.tenantActual?.regional}>
       <NavigationFeedbackProvider>
         <ImpersonacionBanner currentUser={currentUser} />
         <SidebarProvider
@@ -77,6 +79,7 @@ export default async function DashboardLayout({
           <PasosEnCursoWidget />
         </SidebarProvider>
       </NavigationFeedbackProvider>
+      </ConfigRegionalProvider>
     </PermisosProvider>
   );
 }

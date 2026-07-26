@@ -13,21 +13,17 @@ import {
   type FilaDeudor,
   type TramoAging,
 } from "@/lib/administracion";
-
-/** "—" cuando es cero: el diseño deja las celdas vacías en blanco. */
-const fmt = (n: number) =>
-  n === 0 ? "—" : "$" + Math.round(n).toLocaleString("es-AR");
-
-/** Compacto para las tarjetas de arriba: $1.2M / $340k / $850. */
-const fmtK = (n: number) =>
-  n >= 1_000_000
-    ? "$" + (n / 1_000_000).toFixed(1) + "M"
-    : n >= 1000
-      ? "$" + Math.round(n / 1000) + "k"
-      : "$" + Math.round(n);
+import { useConfigRegional } from "@/components/navigation/config-regional-provider";
+import { abreviarMoneda, formatearMoneda } from "@/lib/moneda";
 
 export function DeudoresView({ initialFilas }: { initialFilas: FilaDeudor[] }) {
   const router = useRouter();
+  const { moneda } = useConfigRegional();
+  // "—" cuando es cero: el diseño deja las celdas vacías en blanco.
+  const fmt = (n: number) =>
+    n === 0 ? "—" : formatearMoneda(n, moneda, { decimales: 0 });
+  // Compacto para las tarjetas de arriba.
+  const fmtK = (n: number) => abreviarMoneda(n, moneda);
   const [q, setQ] = React.useState("");
   const [sort, setSort] = React.useState<"total" | "overdue">("total");
 

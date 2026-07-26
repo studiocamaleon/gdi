@@ -285,6 +285,13 @@ const FUGA_LABEL: Record<string, string> = {
 };
 const fugaLabel = (m: string) => FUGA_LABEL[m] ?? m;
 
+/** Meses para etiquetas de ejes: las claves de bucket se parten como string,
+ *  sin pasar por `Date`/ICU (evita el corrimiento de día por zona). */
+const MES_CORTO = [
+  "ene", "feb", "mar", "abr", "may", "jun",
+  "jul", "ago", "sep", "oct", "nov", "dic",
+];
+
 function Negocio() {
   const [periodo, setPeriodo] = React.useState<PeriodoNegocio>("90d");
   const [data, setData] = React.useState<NegocioPlataforma | null>(null);
@@ -332,13 +339,13 @@ function Negocio() {
   // Serie: etiquetas x ralas (máx ~8 visibles) y compactas según el período.
   const serie = data?.serie ?? [];
   const paso = Math.max(1, Math.ceil(serie.length / 8));
-  const fmtX = (iso: string) =>
-    periodo === "12m"
-      ? new Date(iso).toLocaleDateString("es-AR", { month: "short" })
-      : new Date(iso).toLocaleDateString("es-AR", {
-          day: "2-digit",
-          month: "2-digit",
-        });
+  // El bucket es una CLAVE de calendario ("2026-07-20"): parsearla con
+  // `new Date` la vuelve medianoche UTC y el navegador al oeste la corre un
+  // día. Se parte el string y listo — no hay zona que interpretar.
+  const fmtX = (iso: string) => {
+    const [, m, d] = iso.slice(0, 10).split("-");
+    return periodo === "12m" ? MES_CORTO[Number(m) - 1] : `${d}/${m}`;
+  };
   const serieChart = serie.map((s, i) => ({
     x: i % paso === 0 || i === serie.length - 1 ? fmtX(s.periodo) : "",
     ventas: s.ventas,
@@ -362,6 +369,10 @@ function Negocio() {
     x: b.rango,
     v: b.tenants,
   }));
+  // Más de una moneda en el ecosistema: los totales de arriba suman crudo
+  // (no hay tipo de cambio en el sistema); el desglose es la lectura honesta.
+  const porMoneda = data?.porMoneda ?? [];
+  const mezclaMonedas = porMoneda.length > 1;
 
   return (
     <div className="cpl-page cpl-neg">
@@ -373,6 +384,23 @@ function Negocio() {
         </p>
         {selector}
       </div>
+
+      {mezclaMonedas ? (
+        <div
+          className="cpl-empty"
+          style={{ color: "var(--warn, #a16207)", marginBottom: 10 }}
+        >
+          Ojo: hay imprentas operando en más de una moneda y los totales suman
+          sin convertir. GMV por moneda:{" "}
+          {porMoneda
+            .map(
+              (m) =>
+                `${m.moneda} ${mk(m.ventas)} (${m.tenants} imprenta${m.tenants === 1 ? "" : "s"})`,
+            )
+            .join(" · ")}
+          .
+        </div>
+      ) : null}
 
       {error ? <div className="cpl-empty">{error}</div> : null}
       {!error && !data && cargando ? (
@@ -783,10 +811,7 @@ function Observabilidad({
     const d = new Date(`${iso}T00:00:00`);
     return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
   };
-  const labelMes = (ym: string) =>
-    new Date(`${ym}-01T00:00:00`)
-      .toLocaleDateString("es-AR", { month: "short" })
-      .replace(".", "");
+  const labelMes = (ym: string) => MES_CORTO[Number(ym.slice(5, 7)) - 1];
 
   const serieChart = actividadSemanal.map((sem) => ({
     x: labelSemana(sem.semana),

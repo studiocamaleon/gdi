@@ -310,7 +310,10 @@ export async function getMovimientosCuenta(
 export async function transferirEntreCuentas(payload: {
   desdeCuentaId: string;
   haciaCuentaId: string;
+  /** En la moneda de la cuenta de ORIGEN. */
   monto: number;
+  /** Obligatorio entre monedas distintas: lo que llegó, en la del DESTINO. */
+  montoDestino?: number;
 }): Promise<{ ok: boolean }> {
   return apiRequest("/administracion/cuentas/transferencias", {
     method: "POST",

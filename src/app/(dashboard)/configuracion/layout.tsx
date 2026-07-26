@@ -1,3 +1,4 @@
+import { ConfiguracionNav } from "@/components/configuracion/configuracion-nav";
 import { SinPermiso } from "@/components/navigation/sin-permiso";
 import { tienePermiso } from "@/lib/permisos-server";
 
@@ -26,5 +27,14 @@ export default async function Layout({
   if (!config && !facturacion) {
     return <SinPermiso modulo="Configuración" />;
   }
-  return <>{children}</>;
+  // La columna de secciones vive acá y no en cada página: es el menú del
+  // módulo, sobrevive a la navegación entre secciones y el `<main>` del
+  // dashboard ya es un flex row, así que entra como hermana del contenido —que
+  // sigue trayendo su propio scroll.
+  return (
+    <>
+      <ConfiguracionNav />
+      {children}
+    </>
+  );
 }

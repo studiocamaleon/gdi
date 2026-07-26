@@ -114,6 +114,13 @@ export type NegocioPlataforma = {
   distribucionTamano: Array<{ rango: string; tenants: number }>;
   /** Referencia del ecosistema: ticket mediano (para comparar imprentas). */
   medianaTicket: number;
+  /**
+   * GMV del período por MONEDA del tenant. Los KPIs de arriba suman crudo
+   * (peras con manzanas si hay más de una moneda) porque no hay tipo de
+   * cambio en el sistema (D2): este desglose es la verdad — con una sola
+   * entrada, los totales son homogéneos; con más de una, la consola avisa.
+   */
+  porMoneda: Array<{ moneda: string; ventas: number; tenants: number }>;
 };
 
 export type Insight = {
@@ -187,6 +194,7 @@ export class NegocioService {
       medidas,
       adicionales,
       embudo,
+      porMoneda,
     ] = await Promise.all([
       this.kpisVentas(v),
       this.kpisFacturado(v),
@@ -201,6 +209,7 @@ export class NegocioService {
       this.medidas(v),
       this.adicionales(v),
       this.embudo(v),
+      this.porMoneda(v),
     ]);
 
     const serie = this.zipSerie(serieVentas, serieFacturado);
@@ -265,7 +274,34 @@ export class NegocioService {
       medianaTicket: this.mediana(
         tenConPct.map((t) => t.ticket).filter((n) => n > 0),
       ),
+      porMoneda,
     };
+  }
+
+  /** GMV del período agrupado por la moneda de cada tenant. */
+  private async porMoneda(
+    v: Ventana,
+  ): Promise<Array<{ moneda: string; ventas: number; tenants: number }>> {
+    const rows = await this.prisma.$queryRaw<
+      Array<{ moneda: string; ventas: number; tenants: bigint }>
+    >`
+      SELECT
+        COALESCE(de."monedaCodigo", 'ARS') AS moneda,
+        COALESCE(SUM(oti.subtotal), 0)::float8 AS ventas,
+        COUNT(DISTINCT ot."tenantId") AS tenants
+      FROM "OrdenTrabajoItem" oti
+      JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
+      LEFT JOIN "DatosEmpresa" de ON de."tenantId" = ot."tenantId"
+      WHERE ot.estado <> 'borrador'
+        AND ot."fechaEmision" >= ${v.desde} AND ot."fechaEmision" < ${v.hasta}
+      GROUP BY 1
+      ORDER BY ventas DESC
+    `;
+    return rows.map((r) => ({
+      moneda: r.moneda,
+      ventas: r2(r.ventas),
+      tenants: Number(r.tenants),
+    }));
   }
 
   /** Buckets de GMV por imprenta (histograma de tamaño del ecosistema). */
@@ -547,6 +583,9 @@ export class NegocioService {
     });
   }
 
+  // Los buckets de estas series quedan a propósito en UTC: la vista es de la
+  // PLATAFORMA (agrega todos los tenants a la vez) y no existe "la zona del
+  // tenant" para elegir — convertir a una sería mentirle a las demás.
   private async serieVentas(v: Ventana) {
     const trunc = Prisma.raw(`'${v.trunc}'`);
     return this.prisma.$queryRaw<Array<{ periodo: string; monto: number }>>`

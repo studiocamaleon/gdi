@@ -11,6 +11,8 @@ import type { CrearCobroDto } from './dto/cobro.dto';
 import { FacturacionOrdenesService } from './facturacion-ordenes.service';
 import { RecibosService } from './recibos.service';
 import { NotificacionesCobrosService } from '../integraciones/notificaciones/notificaciones-cobros.service';
+import { formatearMoneda } from '../common/moneda';
+import { regionalDelTenant } from '../common/regional';
 
 /**
  * Cobros — el registro de cómo entra la plata, con las tres cifras:
@@ -142,6 +144,7 @@ export class CobrosService {
     ]);
     void emisorEmpleado;
     const usuarioNombre = firmaActor(auth, actor?.nombreCompleto ?? auth.email);
+    const { moneda } = await regionalDelTenant(this.prisma, auth.tenantId);
 
     const cobroId = await this.prisma.$transaction(async (tx) => {
       // El número de recibo se asigna acá y no después: un cobro registrado
@@ -158,6 +161,9 @@ export class CobrosService {
           registradoPorNombre: usuarioNombre,
           metodoPagoId: metodo.id,
           cuentaDestinoId: cuenta.id,
+          // La del negocio: el campo existía con default 'ARS' y nadie lo
+          // escribía, así que un tenant CLP registraba cobros "en pesos".
+          moneda: moneda.codigo,
           montoBruto: payload.montoBruto,
           comisionPctAplicada: payload.comisionPctAplicada,
           comisionMonto: cifras.comisionMonto,
@@ -193,6 +199,7 @@ export class CobrosService {
             modalidad: payload.valor.fechaPago ? 'diferido' : 'comun',
             numero: payload.valor.numero,
             banco: payload.valor.banco,
+            moneda: moneda.codigo,
             importe: payload.montoBruto,
             fechaEmision: payload.valor.fechaEmision
               ? new Date(payload.valor.fechaEmision)
@@ -240,7 +247,7 @@ export class CobrosService {
             tenantId: auth.tenantId,
             ordenId: orden.id,
             tipo: 'nota',
-            descripcion: `Cobro registrado: $${Math.round(payload.montoBruto).toLocaleString('es-AR')} · ${metodo.nombre}${esCheque ? ' (valor en cartera)' : ''}`,
+            descripcion: `Cobro registrado: ${formatearMoneda(payload.montoBruto, moneda, { decimales: 0 })} · ${metodo.nombre}${esCheque ? ' (valor en cartera)' : ''}`,
             usuarioNombre,
             usuarioId: auth.userId,
             origen: 'usuario',

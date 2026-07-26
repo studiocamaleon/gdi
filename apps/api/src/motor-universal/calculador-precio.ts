@@ -111,7 +111,9 @@ export function calcularPrecio(
       margenNegativo: false,
       mensaje:
         precioBase < precioMin
-          ? `Precio ajustado a margen mínimo ${marginMinPct}% ($${precioMin.toFixed(2)})`
+          ? // Sin símbolo de moneda: el calculador es puro y no sabe en qué
+            // moneda trabaja el tenant; el número solo se entiende igual.
+            `Precio ajustado a margen mínimo ${marginMinPct}% (${precioMin.toFixed(2)})`
           : undefined,
     };
   }

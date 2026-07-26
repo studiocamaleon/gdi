@@ -30,6 +30,8 @@ import {
   updateCentroCosto,
   updatePlanta,
 } from "@/lib/costos-api";
+import { formatearMoneda, type Moneda } from "@/lib/moneda";
+import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import {
   categoriaGraficaItems,
   CentroCosto,
@@ -120,16 +122,12 @@ function createEmptyCentro(plantaId = "", areaCostoId = ""): CentroCostoPayload 
 
 const EMPTY_SELECT_VALUE = "__none__";
 
-function formatMoneyOrDash(value: number | null | undefined) {
+function formatMoneyOrDash(value: number | null | undefined, moneda: Moneda) {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return null;
   }
 
-  return new Intl.NumberFormat("es-AR", {
-    style: "currency",
-    currency: "ARS",
-    maximumFractionDigits: 0,
-  }).format(value);
+  return formatearMoneda(value, moneda, { decimales: 0 });
 }
 
 function getNextCentroCodigo(areaCodigo: string, centros: CentroCosto[]) {
@@ -157,6 +155,7 @@ export function CostosPanel({
   initialCentros,
   empleados,
 }: CostosPanelProps) {
+  const { moneda } = useConfigRegional();
   const [plantas, setPlantas] = React.useState(initialPlantas);
   const [areas, setAreas] = React.useState(initialAreas);
   const [centros, setCentros] = React.useState(initialCentros);
@@ -1148,12 +1147,15 @@ export function CostosPanel({
                     {centros.map((centro) => {
                       const tarifaPublicada = formatMoneyOrDash(
                         centro.ultimaTarifaBase ?? centro.ultimaTarifaPublicada,
+                        moneda,
                       );
                       const tarifaAbsorbida = formatMoneyOrDash(
                         centro.ultimaTarifaAbsorbida,
+                        moneda,
                       );
                       const tarifaTotal = formatMoneyOrDash(
                         centro.ultimaTarifaTotal ?? centro.ultimaTarifaPublicada,
+                        moneda,
                       );
                       const estadoCosteo =
                         centro.estadoConfiguracion === "sin_configurar"
@@ -1298,13 +1300,13 @@ export function CostosPanel({
                         }).format(totalesCentros.horas)}
                       </td>
                       <td className="right numeric">
-                        {formatMoneyOrDash(totalesCentros.tarifaPublicada) ?? "—"}
+                        {formatMoneyOrDash(totalesCentros.tarifaPublicada, moneda) ?? "—"}
                       </td>
                       <td className="right numeric muted-value">
-                        {formatMoneyOrDash(totalesCentros.absorbido) ?? "—"}
+                        {formatMoneyOrDash(totalesCentros.absorbido, moneda) ?? "—"}
                       </td>
                       <td className="right numeric strong-value">
-                        {formatMoneyOrDash(totalesCentros.tarifaTotal) ?? "—"}
+                        {formatMoneyOrDash(totalesCentros.tarifaTotal, moneda) ?? "—"}
                       </td>
                       <td className="right sticky-right" />
                     </tr>

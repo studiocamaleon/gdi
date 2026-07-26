@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RentabilidadService } from './rentabilidad.service';
-import { diasDelRango, type Rango } from './periodo';
+import { diasDelRango, finExclusivo, type Rango } from './periodo';
 import type { ActualizarUmbralesDto } from './dto/actualizar-umbrales.dto';
+import { formatearMoneda } from '../common/moneda';
+import { regionalDelTenant } from '../common/regional';
 
 /**
  * Alertas — la capa de INTELIGENCIA del Panel: lee los agregados de los
@@ -49,7 +51,6 @@ const DEFAULTS: Umbrales = {
   margenPctMin: 25,
 };
 
-const pesos = (n: number) => `$${Math.round(n).toLocaleString('es-AR')}`;
 
 @Injectable()
 export class AlertasService {
@@ -81,6 +82,12 @@ export class AlertasService {
       update: merged,
     });
     return merged;
+  }
+
+  /** "$ 12.345" en la moneda del tenant, para los detalles de las alertas. */
+  private async dinero(tenantId: string): Promise<(n: number) => string> {
+    const { moneda } = await regionalDelTenant(this.prisma, tenantId);
+    return (n) => formatearMoneda(n, moneda, { decimales: 0 });
   }
 
   /** Evalúa todas las reglas y devuelve las alertas activas, más severas primero. */
@@ -116,6 +123,7 @@ export class AlertasService {
     if (vencido <= 0) return [];
     const pct = facturado > 0 ? (vencido / facturado) * 100 : Infinity;
     if (pct <= u.deudaVencidaPctMax) return [];
+    const dinero = await this.dinero(tenantId);
     return [
       {
         id: 'deuda-vencida',
@@ -123,8 +131,8 @@ export class AlertasService {
         titulo: 'Deuda vencida alta',
         detalle:
           facturado > 0
-            ? `${pesos(vencido)} vencidos (+30 días): ${Math.round(pct)}% de la facturación del período.`
-            : `${pesos(vencido)} vencidos (+30 días) sin facturación en el período.`,
+            ? `${dinero(vencido)} vencidos (+30 días): ${Math.round(pct)}% de la facturación del período.`
+            : `${dinero(vencido)} vencidos (+30 días) sin facturación en el período.`,
         reporte: 'finanzas',
       },
     ];
@@ -197,12 +205,13 @@ export class AlertasService {
         : Math.max(0, Math.round((hoyMid.getTime() - rango.desde.getTime()) / MS_DIA) + 1);
     const esperadoPct = total > 0 ? Math.min(100, (transcurridos / total) * 100) : 100;
     if (p.avancePct >= esperadoPct) return [];
+    const dinero = await this.dinero(tenantId);
     return [
       {
         id: 'punto-equilibrio',
         severidad: p.avancePct < esperadoPct / 2 ? 'critico' : 'atencion',
         titulo: 'Por debajo del punto de equilibrio',
-        detalle: `Vas al ${Math.round(p.avancePct)}% del punto de equilibrio (${pesos(p.puntoEquilibrio)}); para lo transcurrido del período deberías ir cerca del ${Math.round(esperadoPct)}%.`,
+        detalle: `Vas al ${Math.round(p.avancePct)}% del punto de equilibrio (${dinero(p.puntoEquilibrio)}); para lo transcurrido del período deberías ir cerca del ${Math.round(esperadoPct)}%.`,
         reporte: 'finanzas',
       },
     ];
@@ -236,14 +245,6 @@ export class AlertasService {
       },
     ];
   }
-}
-
-function finExclusivo(rango: Rango): Date {
-  return new Date(
-    rango.hasta.getFullYear(),
-    rango.hasta.getMonth(),
-    rango.hasta.getDate() + 1,
-  );
 }
 
 function limpiar(dto: ActualizarUmbralesDto): Partial<Umbrales> {

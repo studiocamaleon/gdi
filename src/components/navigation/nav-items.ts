@@ -24,6 +24,12 @@ export type NavChild = {
   href: string;
   /** Permiso que hace falta para verlo. Hereda el del grupo si no lo declara. */
   permiso?: PermisoClave;
+  /**
+   * Sólo se muestra si el país del tenant coincide (`"AR"` para el circuito
+   * fiscal ARCA: comprobantes, facturación, datos fiscales). Sin declarar =
+   * para todos. Ver multi-moneda-zona-horaria D14.
+   */
+  soloPais?: string;
 };
 
 export type NavItem =
@@ -34,6 +40,12 @@ export type NavItem =
       href: string;
       permiso: PermisoClave;
       children?: never;
+      /**
+       * Palabras extra por las que el buscador del sidebar encuentra la
+       * entrada. Para un módulo que adentro tiene varias pantallas pero en el
+       * menú ocupa una sola línea: escribir "embudo" sigue llevando a Reportes.
+       */
+      buscar?: string[];
     }
   | {
       key: string;
@@ -170,11 +182,13 @@ export const NAV: NavItem[] = [
         key: "comprobantes",
         label: "Comprobantes",
         href: "/administracion/comprobantes",
+        soloPais: "AR",
       },
       {
         key: "facturacion",
         label: "Facturación",
         href: "/administracion/facturacion",
+        soloPais: "AR",
       },
       {
         key: "deudores",
@@ -183,48 +197,33 @@ export const NAV: NavItem[] = [
       },
     ],
   },
-  // Reportes fue durante un tiempo el "Panel general": ocho vistas como tabs de
+  // Reportes fue durante un tiempo el "Panel general": nueve vistas como tabs de
   // la home, sin URL propia. Como tabs no se podían linkear ni compartir, y el
-  // buscador —que come de este árbol— no las encontraba. Ahora cada reporte es
-  // una ruta.
+  // buscador —que come de este árbol— no las encontraba. Cada reporte quedó como
+  // ruta propia, pero en el sidebar Reportes es UNA línea: adentro la tira de
+  // reportes ya es la navegación (ver reportes-shell.tsx) y repetirla como nueve
+  // hijos sólo cargaba el menú. `/reportes` manda al primero que la persona
+  // puede ver, y `buscar` sostiene lo que los hijos daban gratis: escribir
+  // "embudo" o "costo laboral" sigue encontrando el módulo.
+  //
+  // Ojo: el permiso de acá es sólo el del módulo. Qué reporte ve cada uno lo
+  // deciden la tira (reportes-shell.tsx) y el gate de cada página.
   {
     key: "reportes",
     label: "Reportes",
     icon: "Chart",
     permiso: "reportes.ver",
-    children: [
-      // El único con permiso propio: junta el negocio entero en una pantalla
-      // (facturación, margen, punto de equilibrio, alertas) y de fábrica lo
-      // tiene sólo el Administrador.
-      {
-        key: "reporte-resumen",
-        label: "Resumen ejecutivo",
-        href: "/reportes/resumen",
-        permiso: "reportes.ver_resumen",
-      },
-      { key: "reporte-comercial", label: "Comercial", href: "/reportes/comercial" },
-      { key: "reporte-embudo", label: "Embudo", href: "/reportes/embudo" },
-      { key: "reporte-clientes", label: "Clientes", href: "/reportes/clientes" },
-      { key: "reporte-produccion", label: "Producción", href: "/reportes/produccion" },
-      { key: "reporte-equipo", label: "Equipo", href: "/reportes/equipo" },
-      // Rentabilidad pura: acá el margen es el contenido, no un dato de
-      // arrastre que se pueda podar. Sin el permiso, la pantalla no existe.
-      {
-        key: "reporte-finanzas",
-        label: "Finanzas",
-        href: "/reportes/finanzas",
-        permiso: "finanzas.ver_margenes",
-      },
-      { key: "reporte-producto", label: "Ventas & Producto", href: "/reportes/producto" },
-      // Muestra sueldos, así que pide el permiso de remuneraciones y no el del
-      // módulo: leer los reportes del negocio no habilita ver lo que gana cada
-      // compañero.
-      {
-        key: "reporte-costo-laboral",
-        label: "Costo laboral",
-        href: "/reportes/costo-laboral",
-        permiso: "registros.ver_remuneraciones",
-      },
+    href: "/reportes",
+    buscar: [
+      "Resumen ejecutivo",
+      "Comercial",
+      "Embudo",
+      "Clientes",
+      "Producción",
+      "Equipo",
+      "Finanzas",
+      "Ventas & Producto",
+      "Costo laboral",
     ],
   },
   {
@@ -241,53 +240,11 @@ export const NAV: NavItem[] = [
       { key: "movimientos", label: "Movimientos", href: "/inventario/movimientos" },
     ],
   },
-  {
-    key: "configuracion",
-    label: "Configuración",
-    icon: "Cog",
-    permiso: "configuracion.ver",
-    children: [
-      {
-        key: "empresa",
-        label: "Empresa",
-        href: "/configuracion/empresa",
-      },
-      {
-        key: "usuarios",
-        label: "Usuarios",
-        href: "/configuracion/usuarios",
-      },
-      // Vive acá y no en Administración: es la puesta a punto del emisor
-      // —quién factura, desde qué punto de venta—, no una operación del día a
-      // día. Lo comercial (nombre, logo, teléfono, web) está en Empresa: son
-      // dos públicos y dos permisos distintos.
-      {
-        key: "datos-fiscales",
-        label: "Datos fiscales",
-        href: "/configuracion/datos-fiscales",
-        permiso: "administracion.configurar",
-      },
-      // Junto a Datos fiscales por el mismo criterio: es un catálogo que se
-      // define una vez —qué medios acepta la imprenta y con qué comisión— y no
-      // una operación del día a día. Cobrar lo usa; configurarlo es otra cosa.
-      {
-        key: "metodos-pago",
-        label: "Métodos de pago",
-        href: "/configuracion/metodos-pago",
-        permiso: "administracion.configurar",
-      },
-      {
-        key: "almacenamiento",
-        label: "Almacenamiento",
-        href: "/configuracion/almacenamiento",
-      },
-      {
-        key: "integraciones",
-        label: "Integraciones",
-        href: "/configuracion/integraciones",
-      },
-    ],
-  },
+  // Configuración NO está en esta lista: es el ancla del pie del sidebar,
+  // debajo de la card del plan, y sus secciones son la columna de su propia
+  // vista. Viven en components/configuracion/configuracion-nav.tsx —incluido
+  // qué permiso pide cada una—, que es de donde salen tanto el pie como el
+  // redirect de /configuracion.
 ];
 
 export function hasChildren(
@@ -303,8 +260,20 @@ export function hasChildren(
  * que no corresponda y un sidebar vacío por un campo que falta es peor que uno
  * que ofrece de más. Un grupo que se queda sin hijos desaparece.
  */
-export function navPara(permisos: Set<string> | null): NavItem[] {
-  if (!permisos) return NAV;
+export function navPara(
+  permisos: Set<string> | null,
+  pais: string = "AR",
+): NavItem[] {
+  // El filtro por país corre SIEMPRE, incluso sin permisos: un tenant chileno
+  // sin lista de permisos no tiene por qué ver el circuito fiscal argentino.
+  const porPais = (c: NavChild) => !c.soloPais || c.soloPais === pais;
+  if (!permisos) {
+    return NAV.flatMap<NavItem>((item) => {
+      if (!hasChildren(item)) return [item];
+      const children = item.children.filter(porPais);
+      return children.length ? [{ ...item, children }] : [];
+    });
+  }
   return NAV.flatMap<NavItem>((item) => {
     if (!hasChildren(item)) {
       return permisos.has(item.permiso) ? [item] : [];
@@ -314,8 +283,8 @@ export function navPara(permisos: Set<string> | null): NavItem[] {
     // `administracion.configurar` aunque no tengas Configuración entera) y
     // también se restringe solo (el Resumen ejecutivo NO se abre por tener
     // Reportes). El grupo aparece si le queda al menos un hijo.
-    const children = item.children.filter((c) =>
-      permisos.has(c.permiso ?? item.permiso),
+    const children = item.children.filter(
+      (c) => permisos.has(c.permiso ?? item.permiso) && porPais(c),
     );
     return children.length ? [{ ...item, children }] : [];
   });

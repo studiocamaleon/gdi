@@ -815,7 +815,7 @@ model Membership {
   /// Va en Membership y no en User porque es una política de la EMPRESA: la
   /// misma persona puede entrar sin restricción a una y sólo desde la oficina
   /// a otra. Ver docs/usuarios-roles-permisos-diseno.md
-  ipsPermitidas   String[]
+  ipsPermitidas   String[]      @default([])
   activa          Boolean       @default(true)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -931,6 +931,9 @@ model Cliente {
 
   @@unique([tenantId, nombre])
   @@index([tenantId, nombre])
+  /// El listado sano esconde a los inhabilitados, así que filtra por activo
+  /// en toda consulta.
+  @@index([tenantId, activo])
 }
 
 model Proveedor {
@@ -1001,7 +1004,9 @@ model Empleado {
 /// Filas con vigencia, no un campo que se pisa: el sueldo cambia (paritarias,
 /// ascensos) y "cuánto ganaba en marzo" tiene que seguir siendo respondible.
 model EmpleadoRemuneracion {
-  id             String   @id @default(uuid()) @db.Uuid
+  /// El id lo pone Postgres y no el cliente: la migración que creó la tabla
+  /// hace un backfill por SQL que inserta filas sin pasar id.
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenantId       String   @db.Uuid
   empleadoId     String   @db.Uuid
   /// 'YYYY-MM' — primer mes de vigencia (inclusive).
@@ -1636,6 +1641,19 @@ model DatosEmpresa {
   /// Es el dato que le falta a la plantilla de WhatsApp `grafo_resena_v2`, que
   /// está aprobada por Meta desde hace meses y no la manda nadie.
   urlResenas         String?
+  /// ISO 4217 de la moneda en la que trabaja el negocio. Es ETIQUETA y
+  /// formato, nunca conversión: cambiarla no reconvierte ningún monto
+  /// histórico (multi-moneda-zona-horaria D1/D2). El catálogo con símbolo y
+  /// decimales vive en código (`common/monedas.ts`).
+  monedaCodigo       String   @default("ARS") @db.VarChar(3)
+  /// Zona IANA del taller. Todo lo que piensa en "hora de pared" —calendario
+  /// laboral, corte de jornada, ventana de WhatsApp, el "día" de un reporte—
+  /// se evalúa en esta zona, no en la del server (que en Render es UTC).
+  zonaHoraria        String   @default("America/Argentina/Buenos_Aires") @db.VarChar(64)
+  /// Cómo redondea el PRICING: 'moneda' = los decimales de la moneda (2 en
+  /// ARS, 0 en CLP); 'entero' = a la unidad, para los países donde los
+  /// centavos existen en el papel pero no en la calle (ARS, COP).
+  redondeoPrecio     String   @default("moneda") @db.VarChar(10)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -3072,6 +3090,12 @@ model MovimientoFondos {
   valorId            String?       @db.Uuid
   /// Movimiento espejo en la otra cuenta (transferencias).
   transferenciaParId String?       @db.Uuid
+  /// Sólo en transferencias entre cuentas de DISTINTA moneda: unidades de la
+  /// moneda destino por 1 de la de origen, derivado de lo que el usuario
+  /// declaró que llegó (`montoDestino`). El doc del módulo lo especificaba
+  /// desde el día uno y nunca se había implementado — la UI decía "se
+  /// registra el tipo de cambio del día" y era mentira.
+  tipoCambio         Decimal?      @db.Decimal(14, 4)
   ordenId            String?       @db.Uuid
   /// Saldo de la cuenta después de este movimiento (extracto corrido).
   saldoPosterior     Decimal       @db.Decimal(14, 2)
@@ -3458,6 +3482,12 @@ model Archivo {
   /// convertir y no se borra a mano: es una proyección de otra fila, y
   /// mezclarlo con el arte del cliente confundiría las dos cosas.
   generado          Boolean       @default(false)
+  /// Qué automatismo lo produjo ("sello" = el arte del configurador). Distinto
+  /// de `generado`: estos SÍ son adjuntos normales —se listan, se descargan y
+  /// cuentan para la cuota—, porque el taller los usa como usaría el archivo
+  /// que mandó el cliente. La marca existe para poder REEMPLAZARLOS cuando el
+  /// diseño cambia sin tocar lo que subió una persona.
+  autogeneradoPor   String?
   descripcion       String?
   subidoPorId       String?       @db.Uuid
   eliminadoEl       DateTime?
@@ -3716,6 +3746,8 @@ model Suscripcion {
   plan   Plan   @relation(fields: [planId], references: [id])
 
   @@index([planId])
+  /// El cron que vence las pruebas barre por esta fecha todas las noches.
+  @@index([trialHasta])
 }
 
 /// Eventos de cobro recibidos de una pasarela (webhooks). Existe para dos

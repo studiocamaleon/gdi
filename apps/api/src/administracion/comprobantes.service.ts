@@ -43,6 +43,8 @@ import { ManualProvider } from './invoicing/manual.provider';
 import { AfipSdkProvider } from './invoicing/afip-sdk.provider';
 import { AfipIntegracionService } from './afip-integracion.service';
 import { texto } from './invoicing/codigos-arca';
+import { regionalDelTenant } from '../common/regional';
+import { claveFechaEnZona } from '../common/zona';
 import type {
   ComprobanteItemProvider,
   InvoicingProvider,
@@ -409,13 +411,31 @@ export class ComprobantesService {
       }
     }
 
-    const fecha = payload.fecha ? new Date(payload.fecha) : new Date();
+    // `fecha` es una columna DATE: un `new Date()` crudo mete la hora y
+    // Postgres trunca en UTC — una factura emitida a las 22:00 del taller
+    // quedaba fechada al día siguiente. Se normaliza al día LOCAL del taller.
+    const { zonaHoraria, paisCodigo } = await regionalDelTenant(
+      this.prisma,
+      auth.tenantId,
+    );
+    // El circuito de comprobantes es ARCA: letras, CUIT, CAE. Para un tenant
+    // de otro país no es que "todavía no anda": es normativa de otro fisco.
+    // Su circuito es la deuda comercial + recibos (D14).
+    if (paisCodigo !== 'AR') {
+      throw new ConflictException(
+        'Los comprobantes fiscales (ARCA) son del circuito argentino. Para tu país usá recibos de pago y el estado de cuenta.',
+      );
+    }
+    const claveHoy = claveFechaEnZona(new Date(), zonaHoraria);
+    const fecha = payload.fecha
+      ? new Date(`${payload.fecha.slice(0, 10)}T00:00:00.000Z`)
+      : new Date(`${claveHoy}T00:00:00.000Z`);
     const dias =
       payload.diasVencimiento ??
       DIAS_POR_CONDICION[payload.condicionVenta ?? 'contado'] ??
       0;
     const vencimiento = new Date(fecha);
-    vencimiento.setDate(vencimiento.getDate() + dias);
+    vencimiento.setUTCDate(vencimiento.getUTCDate() + dias);
 
     const comprobante = await this.prisma.comprobante.create({
       data: {

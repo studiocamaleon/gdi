@@ -14,6 +14,7 @@ import {
   type OrdenTrabajoListItem,
   type OrdenesTrabajoStats,
 } from "@/lib/ordenes-trabajo";
+import { useConfigRegional, useFecha } from "@/components/navigation/config-regional-provider";
 
 type FiltroEstado = OrdenTrabajoEstado | "todas";
 type ModoVista = "tabla" | "tarjetas";
@@ -76,6 +77,8 @@ export function OrdenesTrabajoView({
   q: string;
   estado: FiltroEstado;
 }) {
+  const { moneda } = useConfigRegional();
+  const { fechaNumerica } = useFecha();
   const router = useRouter();
   const [busqueda, setBusqueda] = React.useState(qInicial);
   const [modo, setModo] = React.useState<ModoVista>("tabla");
@@ -185,7 +188,7 @@ export function OrdenesTrabajoView({
           </div>
           <div className="otl-kpi">
             <div className="k-lbl">Valor en curso</div>
-            <div className="k-val mono">{formatMonedaOrden(kpis.valorEnCurso)}</div>
+            <div className="k-val mono">{formatMonedaOrden(kpis.valorEnCurso, moneda)}</div>
             <div className="k-hint">Sin entregadas ni borradores</div>
           </div>
           <div className="otl-kpi">
@@ -196,13 +199,7 @@ export function OrdenesTrabajoView({
           <div className="otl-kpi accent">
             <div className="k-lbl">Emitidas hoy</div>
             <div className="k-val mono">{kpis.emitidasHoy}</div>
-            <div className="k-hint">
-              {new Intl.DateTimeFormat("es-AR", {
-                day: "2-digit",
-                month: "2-digit",
-                year: "numeric",
-              }).format(hoy)}
-            </div>
+            <div className="k-hint">{fechaNumerica(hoy.toISOString())}</div>
           </div>
         </div>
 
@@ -317,7 +314,7 @@ export function OrdenesTrabajoView({
                 <span className="mono entrega">
                   {formatFechaOrden(o.fechaEntrega)}
                 </span>
-                <span className="r mono total">{formatMonedaOrden(o.total)}</span>
+                <span className="r mono total">{formatMonedaOrden(o.total, moneda)}</span>
                 <span className="r vend">{o.vendedorNombre}</span>
               </div>
             ))}
@@ -363,7 +360,7 @@ export function OrdenesTrabajoView({
                   <span className="cf r">
                     <span className="l">Total</span>
                     <span className="v mono total">
-                      {formatMonedaOrden(o.total)}
+                      {formatMonedaOrden(o.total, moneda)}
                     </span>
                   </span>
                 </div>

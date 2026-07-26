@@ -140,6 +140,12 @@ export interface AplicarPrecioInput {
    * acá `precioConfig` ya correcto.
    */
   precioEspecialCliente?: PrecioEspecialClienteSnapshot;
+  /**
+   * A cuántos decimales redondea el dinero de la salida. Lo decide el
+   * tenant: los de la moneda (2 en ARS, 0 en CLP) o 0 si eligió redondear
+   * a la unidad (`redondeoPrecio = 'entero'`). Default 2 = lo de siempre.
+   */
+  decimalesPrecio?: number;
 }
 
 export interface DesglosePrecio {

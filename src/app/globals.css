@@ -3908,6 +3908,115 @@ body {
     color: var(--side-ink);
   }
 
+  /* El pie del sidebar: Configuración, debajo de la card del plan. Reusa
+     .nav-item para verse igual que el resto del menú —y para heredar lo que
+     .side.collapsed ya le hace a los ítems. */
+  .side-foot {
+    padding: 0 9px 11px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Columna de secciones de Configuración. Hermana del contenido dentro del
+     flex de .gp-main: ancho fijo, scroll propio. */
+  .cfgnav {
+    flex: 0 0 250px;
+    width: 250px;
+    align-self: stretch;
+    overflow-y: auto;
+    padding: 22px 12px 28px;
+    border-right: 1px solid var(--border);
+    background: var(--surface-2);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .cfgnav-t {
+    padding: 0 10px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted-text);
+  }
+
+  .cfgnav-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 9px 10px;
+    border-radius: var(--r-2);
+    color: var(--ink-2);
+    text-decoration: none;
+    transition:
+      background 0.12s ease,
+      color 0.12s ease;
+  }
+
+  .cfgnav-item:hover {
+    background: var(--surface);
+    color: var(--ink);
+  }
+
+  .cfgnav-item.on {
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: inset 0 0 0 1px var(--border);
+  }
+
+  .cfgnav-ico {
+    display: inline-flex;
+    margin-top: 1px;
+    color: var(--muted-text);
+    flex: 0 0 auto;
+  }
+
+  .cfgnav-item.on .cfgnav-ico {
+    color: var(--ink);
+  }
+
+  .cfgnav-txt {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .cfgnav-label {
+    font-size: 13.5px;
+    font-weight: 500;
+    line-height: 1.25;
+  }
+
+  .cfgnav-det {
+    font-size: 11.5px;
+    line-height: 1.35;
+    color: var(--muted-text);
+  }
+
+  /* La columna le come ancho al contenido, que es lo que la persona vino a
+     editar: en notebooks se angosta primero y recién abajo suelta el detalle. */
+  @media (max-width: 1440px) {
+    .cfgnav {
+      flex-basis: 208px;
+      width: 208px;
+      padding-left: 9px;
+      padding-right: 9px;
+    }
+  }
+
+  @media (max-width: 1180px) {
+    .cfgnav {
+      flex-basis: 176px;
+      width: 176px;
+    }
+
+    .cfgnav-det {
+      display: none;
+    }
+  }
+
   .main {
     display: flex;
     flex-direction: column;

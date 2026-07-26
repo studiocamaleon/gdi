@@ -12,8 +12,11 @@ import {
   decidirPresupuestoPublico,
   type PresupuestoPublico,
 } from "@/lib/presupuestos-api";
+import { formatearMonedaDoc, monedaDe, type Moneda } from "@/lib/moneda";
 
-const fmtMoneda = (n: number) => "$" + Math.round(n).toLocaleString("es-AR");
+// Documento que cruza fronteras: símbolo desambiguado y sin decimales (como antes).
+const fmtMoneda = (n: number, moneda: Moneda) =>
+  formatearMonedaDoc(n, moneda, { decimales: 0 });
 const fmtFecha = (iso: string | null) => {
   if (!iso) return "—";
   const [y, m, d] = iso.slice(0, 10).split("-");
@@ -92,6 +95,7 @@ export function PresupuestoPublicoView({
 
   const vigente = d.estado === "enviado";
   const dias = diasHastaVencer(d.fechaValidez);
+  const moneda = monedaDe(d.monedaCodigo);
 
   return (
     <div className="pp-online-bg">
@@ -142,7 +146,7 @@ export function PresupuestoPublicoView({
                   <div className="it-nm">{i.nombre}</div>
                   <div className="it-qty">{i.cantidad.toLocaleString("es-AR")} {i.cantidadUnidad}</div>
                 </div>
-                <div className="it-price">{fmtMoneda(i.total)}</div>
+                <div className="it-price">{fmtMoneda(i.total, moneda)}</div>
               </div>
               {i.specs.length ? (
                 <div className="pp-chips" style={{ marginTop: 13 }}>
@@ -168,10 +172,10 @@ export function PresupuestoPublicoView({
           ))}
 
           <div className="pp-ol-tot">
-            <div className="tr"><span>Subtotal</span><span className="v">{fmtMoneda(d.subtotal)}</span></div>
-            {d.cargosDirectos > 0 ? <div className="tr"><span>Cargos</span><span className="v">{fmtMoneda(d.cargosDirectos)}</span></div> : null}
-            <div className="tr"><span>Impuestos</span><span className="v">{fmtMoneda(d.impuestos)}</span></div>
-            <div className="tr grand"><span className="l">Total</span><span className="v">{fmtMoneda(d.total)}</span></div>
+            <div className="tr"><span>Subtotal</span><span className="v">{fmtMoneda(d.subtotal, moneda)}</span></div>
+            {d.cargosDirectos > 0 ? <div className="tr"><span>Cargos</span><span className="v">{fmtMoneda(d.cargosDirectos, moneda)}</span></div> : null}
+            <div className="tr"><span>Impuestos</span><span className="v">{fmtMoneda(d.impuestos, moneda)}</span></div>
+            <div className="tr grand"><span className="l">Total</span><span className="v">{fmtMoneda(d.total, moneda)}</span></div>
           </div>
 
           {d.senaSugeridaPct != null && d.senaSugeridaPct > 0 ? (

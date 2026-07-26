@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { claveFechaEnZona, instanteDe } from '../common/zona';
 import {
+  finExclusivo,
   granularidad,
   mismoPeriodoAnioAnterior,
   type Granularidad,
@@ -20,14 +22,6 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 const MS_DIA = 86_400_000;
 /** Días sin comprar para considerar a un cliente recurrente "dormido". */
 const DIAS_DORMIDO = 60;
-
-function finExclusivo(rango: Rango): Date {
-  return new Date(
-    rango.hasta.getFullYear(),
-    rango.hasta.getMonth(),
-    rango.hasta.getDate() + 1,
-  );
-}
 
 const TRUNC: Record<Granularidad, string> = { dia: 'day', semana: 'week', mes: 'month' };
 
@@ -61,8 +55,11 @@ export class VentasService {
     rango: Rango,
   ): Promise<Array<{ fecha: string; monto: number; costo: number }>> {
     const truncUnit = Prisma.raw(`'${TRUNC[granularidad(rango)]}'`);
+    // La columna es timestamp SIN zona con UTC adentro: primero se le declara
+    // el UTC y recién ahí se lleva al reloj del tenant, para que el bucket
+    // "día" sea el día de SU pared.
     const rows = await this.prisma.$queryRaw<Array<{ fecha: string; monto: number; costo: number }>>`
-      SELECT to_char(date_trunc(${truncUnit}, ot."fechaEmision"), 'YYYY-MM-DD') AS fecha,
+      SELECT to_char(date_trunc(${truncUnit}, (ot."fechaEmision" AT TIME ZONE 'UTC') AT TIME ZONE ${rango.zona}), 'YYYY-MM-DD') AS fecha,
              COALESCE(SUM(oti.subtotal), 0)::float8 AS monto,
              COALESCE(SUM(ci."costoTotal"), 0)::float8 AS costo
       FROM "OrdenTrabajoItem" oti
@@ -106,7 +103,7 @@ export class VentasService {
       Array<{ fecha: string; ordenes: number; promedio: number; mediana: number }>
     >`
       WITH ordenes AS (
-        SELECT ot.id, date_trunc(${truncUnit}, ot."fechaEmision") AS bucket,
+        SELECT ot.id, date_trunc(${truncUnit}, (ot."fechaEmision" AT TIME ZONE 'UTC') AT TIME ZONE ${rango.zona}) AS bucket,
                SUM(oti.subtotal) AS total
         FROM "OrdenTrabajoItem" oti
         JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
@@ -134,10 +131,15 @@ export class VentasService {
    * "qué categoría vendió en qué mes" desde que hay datos.
    */
   async estacionalidad(tenantId: string, rango: Rango): Promise<CeldaEstacionalidad[]> {
-    const desde12 = new Date(rango.hasta.getFullYear(), rango.hasta.getMonth() - 11, 1);
+    // Primer día del mes que arrancó 11 meses antes del fin del rango, en la
+    // zona del tenant (aritmética por clave, sin el reloj del proceso).
+    const [y, m] = claveFechaEnZona(rango.hasta, rango.zona).split('-').map(Number);
+    const f = new Date(Date.UTC(y, m - 1 - 11, 1));
+    const clave12 = `${f.getUTCFullYear()}-${String(f.getUTCMonth() + 1).padStart(2, '0')}-01`;
+    const desde12 = instanteDe(clave12, '00:00', rango.zona);
     const rows = await this.prisma.$queryRaw<CeldaEstacionalidad[]>`
       SELECT COALESCE(NULLIF(oti."categoriaComercial", ''), 'Sin categoría') AS categoria,
-             to_char(date_trunc('month', ot."fechaEmision"), 'YYYY-MM') AS mes,
+             to_char(date_trunc('month', (ot."fechaEmision" AT TIME ZONE 'UTC') AT TIME ZONE ${rango.zona}), 'YYYY-MM') AS mes,
              COALESCE(SUM(oti.subtotal), 0)::float8 AS monto
       FROM "OrdenTrabajoItem" oti
       JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
@@ -213,7 +215,8 @@ export class VentasService {
     const mixTecnologia = this.conPct(tecnologia);
 
     // Nuevos (primera compra en el rango) y dormidos (recurrentes parados).
-    const hoyMid = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+    // La medianoche de HOY en la zona del tenant, no la del proceso.
+    const hoyMid = instanteDe(claveFechaEnZona(hoy, rango.zona), '00:00', rango.zona);
     let nuevosClientes = 0;
     const dormidos: ClienteDormido[] = [];
     for (const h of historia) {
@@ -223,7 +226,7 @@ export class VentasService {
         dormidos.push({
           clienteId: h.id,
           cliente: h.nombre,
-          ultimaCompra: h.ultima.toISOString().slice(0, 10),
+          ultimaCompra: claveFechaEnZona(h.ultima, rango.zona),
           diasSinComprar: dias,
           historico: h.ordenes,
         });

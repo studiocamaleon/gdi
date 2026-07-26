@@ -6,13 +6,17 @@
  * (server) para pedir los datos y el shell (cliente) para armar los links del
  * selector. Sin "use client" a propósito.
  *
- * El rango se calcula con `new Date()` del proceso que lo llama —hoy siempre el
- * server de Next—, igual que `apps/api/src/reportes/periodo.ts` hace con el
- * suyo: los dos corren en la misma máquina y con la misma hora local, así que
- * "este mes" significa lo mismo de los dos lados.
+ * El rango son CLAVES calendario ("YYYY-MM-DD") y "hoy" se resuelve en la
+ * ZONA del tenant (`zona`), no en la del proceso: el API interpreta esas
+ * claves en esa misma zona (`apps/api/src/reportes/periodo.ts`), así que
+ * "mes pasado" significa lo mismo de los dos lados aunque el server corra
+ * en UTC. Las páginas server la sacan de `tenantActual.regional`; los
+ * componentes de cliente, de `useConfigRegional()`. Sin zona → Argentina,
+ * que es lo que el sistema asumía siempre.
  */
 
 import type { RangoPanel } from "@/lib/panel-api";
+import { claveFechaEnZona, ZONA_DEFAULT } from "@/lib/zona";
 
 export type PeriodoKey = "mes" | "mesPasado" | "trimestre" | "anio";
 
@@ -33,26 +37,31 @@ export function leerPeriodo(valor: string | string[] | undefined): PeriodoKey {
     : PERIODO_POR_DEFECTO;
 }
 
-function iso(f: Date) {
-  return `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, "0")}-${String(f.getDate()).padStart(2, "0")}`;
+/** Clave "YYYY-MM-DD" por aritmética UTC pura (mes 0-11; día 0 = fin del anterior). */
+function clave(y: number, m0: number, d: number): string {
+  const f = new Date(Date.UTC(y, m0, d));
+  return `${f.getUTCFullYear()}-${String(f.getUTCMonth() + 1).padStart(2, "0")}-${String(f.getUTCDate()).padStart(2, "0")}`;
 }
 
 /**
- * El rango que le corresponde al período. "Este mes" va VACÍO: el API ya
- * define el mes en curso como su default, y mandárselo calculado sería repetir
- * la misma cuenta en dos lugares para que un día dejen de coincidir.
+ * El rango que le corresponde al período, contado desde el HOY de la zona
+ * del tenant. "Este mes" va VACÍO: el API ya define el mes en curso (en esa
+ * misma zona) como su default, y mandárselo calculado sería repetir la misma
+ * cuenta en dos lugares para que un día dejen de coincidir.
  */
-export function rangoDe(p: PeriodoKey): RangoPanel {
-  const hoy = new Date(),
-    y = hoy.getFullYear(),
-    m = hoy.getMonth();
+export function rangoDe(
+  p: PeriodoKey,
+  zona: string = ZONA_DEFAULT,
+): RangoPanel {
   if (p === "mes") return {};
+  const [y, m] = claveFechaEnZona(new Date(), zona).split("-").map(Number);
+  const m0 = m - 1; // a mes 0-11, como Date
   if (p === "mesPasado") {
-    return { desde: iso(new Date(y, m - 1, 1)), hasta: iso(new Date(y, m, 0)) };
+    return { desde: clave(y, m0 - 1, 1), hasta: clave(y, m0, 0) };
   }
   if (p === "trimestre") {
-    const q = Math.floor(m / 3) * 3;
-    return { desde: iso(new Date(y, q, 1)), hasta: iso(new Date(y, q + 3, 0)) };
+    const q = Math.floor(m0 / 3) * 3;
+    return { desde: clave(y, q, 1), hasta: clave(y, q + 3, 0) };
   }
-  return { desde: iso(new Date(y, 0, 1)), hasta: iso(new Date(y, 11, 31)) };
+  return { desde: clave(y, 0, 1), hasta: clave(y, 11, 31) };
 }

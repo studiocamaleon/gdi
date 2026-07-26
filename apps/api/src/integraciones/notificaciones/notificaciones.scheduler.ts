@@ -79,9 +79,14 @@ export class NotificacionesScheduler {
    * cada cinco minutos no aporta nada — el plazo se mide en días— mientras que
    * pasar seguido multiplica las consultas por tenant.
    *
-   * A las 10 de la mañana: dentro de la ventana horaria de cortesía por
-   * default (09:00–20:00), así el mensaje sale en el momento en vez de quedar
-   * reprogramado para el día siguiente.
+   * El horario (10:00 UTC — el cron no declara timeZone) es sólo el momento
+   * del BARRIDO, no el de la salida: con zona horaria por tenant, un único
+   * disparo no puede caer "dentro de la ventana" de todos a la vez. El que
+   * decide es el despacho, que evalúa la ventana de cortesía (09:00–20:00)
+   * en la zona de CADA tenant y reprograma a su próxima ventana local lo
+   * que caiga fuera. Barrer temprano en el continente (07:00 en Buenos
+   * Aires, 04:00 en Tegucigalpa) hace que lo encolado salga ese mismo día,
+   * apenas abra la ventana local de cada uno.
    */
   @Cron('0 10 * * *', { name: 'notificaciones-resenas' })
   async pedirResenas(): Promise<void> {

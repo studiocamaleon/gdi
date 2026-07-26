@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
+import { claveFechaEnZona } from '../common/zona';
+import { regionalDelTenant } from '../common/regional';
 import {
   granularidad,
   parseRango,
@@ -25,8 +27,8 @@ export type MetaReporte = {
   granularidad: Granularidad;
 };
 
-const iso = (fecha: Date) =>
-  `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`;
+/** La fecha calendario del borde, en la zona del rango (no la del proceso). */
+const iso = (fecha: Date, zona: string) => claveFechaEnZona(fecha, zona);
 
 /**
  * Cimiento del módulo Panel: resuelve el rango una vez y arma la `meta`
@@ -38,9 +40,18 @@ const iso = (fecha: Date) =>
 export class ReportesService {
   constructor(readonly prisma: PrismaService) {}
 
-  resolverRango(query: RangoReporteDto): { rango: Rango; anterior: Rango } {
+  /**
+   * El rango se interpreta en la ZONA del tenant: "2026-07-01" es la
+   * medianoche de SU taller, y el default "este mes" es el mes que corre
+   * en su reloj de pared (no en el del server).
+   */
+  async resolverRango(
+    tenantId: string,
+    query: RangoReporteDto,
+  ): Promise<{ rango: Rango; anterior: Rango }> {
+    const { zonaHoraria } = await regionalDelTenant(this.prisma, tenantId);
     try {
-      const rango = parseRango(query.desde, query.hasta);
+      const rango = parseRango(query.desde, query.hasta, new Date(), zonaHoraria);
       return { rango, anterior: periodoAnterior(rango) };
     } catch (error) {
       throw new BadRequestException(
@@ -59,8 +70,11 @@ export class ReportesService {
       fuente,
       limites: extra?.limites ?? [],
       sinComparativa: extra?.sinComparativa ?? false,
-      rango: { desde: iso(rango.desde), hasta: iso(rango.hasta) },
-      rangoAnterior: { desde: iso(anterior.desde), hasta: iso(anterior.hasta) },
+      rango: { desde: iso(rango.desde, rango.zona), hasta: iso(rango.hasta, rango.zona) },
+      rangoAnterior: {
+        desde: iso(anterior.desde, anterior.zona),
+        hasta: iso(anterior.hasta, anterior.zona),
+      },
       granularidad: granularidad(rango),
     };
   }

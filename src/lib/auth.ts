@@ -31,6 +31,20 @@ export type TenantSummary = {
     venceEl?: string | null;
     enPrueba?: boolean;
   } | null;
+  /**
+   * Moneda, zona horaria y redondeo del tenant. Códigos pelados: el catálogo
+   * con símbolo y decimales vive en `monedas.ts`. Sólo viene en
+   * `tenantActual` (como los permisos); puede faltar en una sesión de una
+   * versión anterior del API — ahí se asume Argentina, que es lo que el
+   * sistema asumía siempre.
+   */
+  regional?: {
+    monedaCodigo: string;
+    zonaHoraria: string;
+    redondeoPrecio: string;
+    /** ISO alfa-2; AR si no está cargado. Gatea lo fiscal argentino. */
+    paisCodigo?: string;
+  };
 };
 
 export type CurrentUser = {

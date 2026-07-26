@@ -3,6 +3,8 @@ import type { Prisma } from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProduccionService } from '../produccion/produccion.service';
+import { regionalDelTenant } from '../common/regional';
+import { claveFechaEnZona } from '../common/zona';
 import {
   descomponerCiclo,
   evaluarSesgoFamilias,
@@ -48,13 +50,15 @@ export class EtaService {
 
   /** Arma las 5 entradas desde la DB y corre la simulación de todo el taller. */
   async correr(tenantId: string): Promise<ResultadoSimulacion> {
-    const [items, estaciones, duraciones, dias, config] = await Promise.all([
-      this.assembleItems(tenantId),
-      this.produccion.findEstaciones(tenantId),
-      this.produccion.findDuracionesFamilias(tenantId),
-      this.produccion.findDiasNoLaborables(tenantId),
-      this.produccion.getConfiguracion(tenantId),
-    ]);
+    const [items, estaciones, duraciones, dias, config, regional] =
+      await Promise.all([
+        this.assembleItems(tenantId),
+        this.produccion.findEstaciones(tenantId),
+        this.produccion.findDuracionesFamilias(tenantId),
+        this.produccion.findDiasNoLaborables(tenantId),
+        this.produccion.getConfiguracion(tenantId),
+        regionalDelTenant(this.prisma, tenantId),
+      ]);
     const medianas = new Map(
       duraciones.map((d) => [d.familiaCodigo, d.medianaMin]),
     );
@@ -66,6 +70,9 @@ export class EtaService {
       ahora: new Date(),
       noLaborables,
       tiempoEntrePasosMin: config.tiempoEntrePasosMin,
+      // El calendario de las estaciones es hora de pared del TALLER, y este
+      // proceso corre en UTC: sin la zona, las franjas se corren 3 horas.
+      zona: regional.zonaHoraria,
     });
   }
 
@@ -247,21 +254,27 @@ export class EtaService {
    * día pisa, no duplica.
    */
   async snapshotDiario(tenantId: string, ahora = new Date()): Promise<void> {
-    const [{ porItem, traza }, estaciones, dias, entregas] = await Promise.all([
-      this.correr(tenantId),
-      this.produccion.findEstaciones(tenantId),
-      this.produccion.findDiasNoLaborables(tenantId),
-      this.prisma.ordenTrabajoItem.findMany({
-        where: {
-          tenantId,
-          orden: { estado: { in: ESTADOS_TABLERO } },
-        },
-        select: { id: true, orden: { select: { fechaEntrega: true } } },
-      }),
-    ]);
+    const [{ porItem, traza }, estaciones, dias, entregas, regional] =
+      await Promise.all([
+        this.correr(tenantId),
+        this.produccion.findEstaciones(tenantId),
+        this.produccion.findDiasNoLaborables(tenantId),
+        this.prisma.ordenTrabajoItem.findMany({
+          where: {
+            tenantId,
+            orden: { estado: { in: ESTADOS_TABLERO } },
+          },
+          select: { id: true, orden: { select: { fechaEntrega: true } } },
+        }),
+        regionalDelTenant(this.prisma, tenantId),
+      ]);
     const noLaborables = new Set(dias.map((d) => d.fecha));
+    // "El día" del snapshot es el día LOCAL del taller (misma convención que
+    // DiaNoLaborable — cierra la D8 de eta-metricas-historicas): antes se
+    // usaba el día local del proceso, que en UTC coincidía de casualidad por
+    // el horario del cron.
     const fecha = new Date(
-      Date.UTC(ahora.getFullYear(), ahora.getMonth(), ahora.getDate()),
+      `${claveFechaEnZona(ahora, regional.zonaHoraria)}T00:00:00.000Z`,
     );
 
     const estacionesInfo: EstacionInfo[] = estaciones.map((e) => ({
@@ -282,6 +295,7 @@ export class EtaService {
       estacionesInfo,
       ahora,
       noLaborables,
+      regional.zonaHoraria,
     );
     const entregaPorItem = new Map(
       entregas.map((e) => [
@@ -291,7 +305,11 @@ export class EtaService {
           : null,
       ]),
     );
-    const fotosItem = construirSnapshotsItem(porItem, entregaPorItem);
+    const fotosItem = construirSnapshotsItem(
+      porItem,
+      entregaPorItem,
+      regional.zonaHoraria,
+    );
 
     for (const foto of fotosEstacion) {
       const { estacionKey, ...campos } = foto;

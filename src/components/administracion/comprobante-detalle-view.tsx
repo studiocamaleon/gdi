@@ -21,9 +21,8 @@ import {
   type CondicionVenta,
 } from "@/lib/administracion";
 import { cargarCae, emitirComprobante } from "@/lib/administracion-api";
-
-const fmt = (n: number) =>
-  (n < 0 ? "−" : "") + "$" + Math.abs(Math.round(n)).toLocaleString("es-AR");
+import { useConfigRegional } from "@/components/navigation/config-regional-provider";
+import { formatearMoneda } from "@/lib/moneda";
 
 export function ComprobanteDetalleView({
   comprobante,
@@ -31,6 +30,8 @@ export function ComprobanteDetalleView({
   comprobante: ComprobanteDetalle;
 }) {
   const router = useRouter();
+  const { moneda } = useConfigRegional();
+  const fmt = (n: number) => formatearMoneda(n, moneda, { decimales: 0 });
   const c = comprobante;
   const [trabajando, setTrabajando] = React.useState(false);
   const [caeForm, setCaeForm] = React.useState<{

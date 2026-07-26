@@ -20,6 +20,9 @@ const VACIO: DatosEmpresa = {
   provincia: null,
   horarioAtencion: null,
   urlResenas: null,
+  monedaCodigo: "ARS",
+  zonaHoraria: "America/Argentina/Buenos_Aires",
+  redondeoPrecio: "moneda",
 };
 
 export default async function EmpresaPage() {

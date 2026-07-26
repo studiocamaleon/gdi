@@ -55,12 +55,11 @@ function cargarGeist(log: Logger): { regular: string; bold: string } | null {
   return geistCache;
 }
 
-const money = (n: number) =>
-  '$' +
-  n.toLocaleString('es-AR', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+import {
+  formatearMonedaDoc,
+  monedaDe,
+  type Moneda,
+} from '../common/moneda';
 
 const fechaCorta = (iso: string | null) => {
   if (!iso) return '—';
@@ -86,13 +85,21 @@ const CONDICION_LABEL: Record<string, string> = {
 export class EstadoCuentaPdfService {
   private readonly log = new Logger(EstadoCuentaPdfService.name);
   private familia = 'helvetica';
+  private moneda: Moneda = monedaDe(null);
+
+  /** "AR$ 1.234,56" / "CLP $ 1.235": en papel el símbolo va desambiguado. */
+  private money(n: number): string {
+    return formatearMonedaDoc(n, this.moneda);
+  }
 
   generar(
     cc: CuentaCorriente,
     emisor: EmisorEstadoCuenta = null,
     generadoEl: Date = new Date(),
     logoDataUri: string | null = null,
+    moneda: Moneda = monedaDe(null),
   ): Buffer {
+    this.moneda = moneda;
     const pdf = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
     this.registrarFuente(pdf);
     pdf.setFont(this.familia, 'normal');
@@ -226,7 +233,7 @@ export class EstadoCuentaPdfService {
     pdf.setFont(this.familia, 'bold');
     pdf.setFontSize(20);
     pdf.setTextColor(...(cc.saldo > 0 ? INK : OK));
-    pdf.text(money(cc.saldo), MARGEN, y + 8);
+    pdf.text(this.money(cc.saldo), MARGEN, y + 8);
 
     pdf.setFont(this.familia, 'normal');
     pdf.setFontSize(9);
@@ -246,13 +253,13 @@ export class EstadoCuentaPdfService {
     } else {
       pdf.setFont(this.familia, 'bold');
       pdf.setTextColor(...(cc.excedido ? DANGER : INK));
-      pdf.text(money(cc.cliente.limiteCredito), xr, y + 7);
+      pdf.text(this.money(cc.cliente.limiteCredito), xr, y + 7);
       pdf.setFont(this.familia, 'normal');
       pdf.setFontSize(9);
       pdf.setTextColor(...MUTED);
       const uso =
         cc.usoLimitePct != null ? `Usa ${cc.usoLimitePct}% del límite` : '';
-      const alerta = cc.excedido ? `  ·  excede en ${money(cc.excedente)}` : '';
+      const alerta = cc.excedido ? `  ·  excede en ${this.money(cc.excedente)}` : '';
       pdf.text(`${uso}${alerta}`, xr, y + 13);
     }
 
@@ -276,13 +283,13 @@ export class EstadoCuentaPdfService {
       styles: { font: this.familia, fontSize: 9, cellPadding: 1.5 },
       body: TRAMOS_AGING.map((t) => [
         TRAMO_AGING_LABELS[t],
-        money(cc.aging[t]),
+        this.money(cc.aging[t]),
       ]),
       columnStyles: {
         0: { textColor: MUTED },
         1: { halign: 'right', textColor: INK },
       },
-      foot: [['Total deudor', money(cc.agingTotal)]],
+      foot: [['Total deudor', this.money(cc.agingTotal)]],
       footStyles: {
         font: this.familia,
         fontStyle: 'bold',
@@ -323,9 +330,9 @@ export class EstadoCuentaPdfService {
       body: filas.map((m) => [
         fechaCorta(m.fecha),
         `${m.sigla}  ${m.descripcion}`,
-        m.debe > 0 ? money(m.debe) : '—',
-        m.haber > 0 ? money(m.haber) : '—',
-        money(m.saldo),
+        m.debe > 0 ? this.money(m.debe) : '—',
+        m.haber > 0 ? this.money(m.haber) : '—',
+        this.money(m.saldo),
       ]),
       columnStyles: {
         0: { cellWidth: 22 },

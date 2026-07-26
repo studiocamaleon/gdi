@@ -7,6 +7,8 @@ import { nombreDelCliente } from './notificaciones-ordenes.service';
 import { enContextoDe } from './contexto';
 import type { EventoNotificacion } from '../wati/catalogo';
 import { urlEnlacePublico } from '../../enlaces-publicos/enlaces-publicos.urls';
+import { numeroMoneda } from '../../common/moneda';
+import { regionalDelTenant } from '../../common/regional';
 
 /**
  * Traduce el estado de un presupuesto al aviso que le corresponde.
@@ -73,7 +75,14 @@ export class NotificacionesPresupuestosService {
     const url = urlEnlacePublico(TipoEnlacePublico.PRESUPUESTO, p.publicToken);
 
     const nombre = nombreDelCliente(p.cliente?.razonSocial);
-    const total = money(Number(p.total ?? 0));
+    // Sin `$`: el símbolo ya está en el texto fijo de la plantilla de Meta.
+    // La fecha de vencimiento, en la zona del taller.
+    const { moneda, zonaHoraria } = await regionalDelTenant(
+      this.prisma,
+      p.tenantId,
+    );
+    const total = numeroMoneda(Number(p.total ?? 0), moneda);
+    const fecha = (d: Date | null) => fechaLegible(d, zonaHoraria);
 
     const parametros =
       evento === 'presupuesto_enviado'
@@ -94,20 +103,13 @@ export class NotificacionesPresupuestosService {
   }
 }
 
-function fecha(d: Date | null): string {
+function fechaLegible(d: Date | null, zona: string): string {
   if (!d) return 'sin vencimiento';
   return new Date(d).toLocaleDateString('es-AR', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
-    timeZone: 'America/Argentina/Buenos_Aires',
+    timeZone: zona,
   });
 }
 
-/** Sin `$`: el símbolo ya está en el texto fijo de la plantilla. */
-function money(n: number): string {
-  return n.toLocaleString('es-AR', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}

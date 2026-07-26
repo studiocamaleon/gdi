@@ -81,7 +81,7 @@ export class EmbudoService {
   constructor(private readonly prisma: PrismaService) {}
 
   async embudo(tenantId: string, rango: Rango, anterior: Rango) {
-    const hasta = finDeDia(rango.hasta);
+    const hasta = finDeDia(rango);
 
     // 1) Cohorte: presupuestos FORMALES (con número) enviados en el rango.
     const cotizaciones = (await this.prisma.cotizacion.findMany({
@@ -135,7 +135,7 @@ export class EmbudoService {
         where: {
           tenantId,
           numero: { not: null },
-          fechaEnvio: { gte: anterior.desde, lte: finDeDia(anterior.hasta) },
+          fechaEnvio: { gte: anterior.desde, lte: finDeDia(anterior) },
         },
       }),
       this.prisma.cotizacion.count({
@@ -143,7 +143,7 @@ export class EmbudoService {
           tenantId,
           numero: { not: null },
           estado: { in: ESTADOS_APROBADO },
-          fechaEnvio: { gte: anterior.desde, lte: finDeDia(anterior.hasta) },
+          fechaEnvio: { gte: anterior.desde, lte: finDeDia(anterior) },
         },
       }),
       this.prisma.ordenTrabajo.count({

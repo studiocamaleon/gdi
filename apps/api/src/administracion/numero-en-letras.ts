@@ -14,6 +14,8 @@
  * Ver docs/recibos-pago-diseno.md
  */
 
+import { monedaDe, numeroMoneda, type Moneda } from '../common/moneda';
+
 const UNIDADES = [
   '',
   'uno',
@@ -140,9 +142,38 @@ export function formatearImporte(monto: number): string {
 }
 
 /**
+ * El sustantivo de cada moneda del catálogo, para las letras del recibo.
+ * Una moneda sin entrada acá sale con su código ISO ("124.059 XXX con…"),
+ * que es feo pero nunca miente.
+ */
+const NOMBRES_EN_LETRAS: Record<string, { singular: string; plural: string }> =
+  {
+    ARS: { singular: 'peso', plural: 'pesos' },
+    BOB: { singular: 'boliviano', plural: 'bolivianos' },
+    BRL: { singular: 'real', plural: 'reales' },
+    CLP: { singular: 'peso', plural: 'pesos' },
+    COP: { singular: 'peso', plural: 'pesos' },
+    PYG: { singular: 'guaraní', plural: 'guaraníes' },
+    PEN: { singular: 'sol', plural: 'soles' },
+    UYU: { singular: 'peso', plural: 'pesos' },
+    VED: { singular: 'bolívar', plural: 'bolívares' },
+    MXN: { singular: 'peso', plural: 'pesos' },
+    GTQ: { singular: 'quetzal', plural: 'quetzales' },
+    HNL: { singular: 'lempira', plural: 'lempiras' },
+    NIO: { singular: 'córdoba', plural: 'córdobas' },
+    CRC: { singular: 'colón', plural: 'colones' },
+    PAB: { singular: 'balboa', plural: 'balboas' },
+    DOP: { singular: 'peso', plural: 'pesos' },
+    CUP: { singular: 'peso', plural: 'pesos' },
+    USD: { singular: 'dólar', plural: 'dólares' },
+  };
+
+/**
  * El importe como va en el recibo: "Ciento veinticuatro mil cincuenta y nueve
  * pesos con 00/100." Los centavos van en cifras a propósito — es la convención
- * de los recibos argentinos y evita discutir si "cincuenta" son centavos o pesos.
+ * de los recibos de la región y evita discutir si "cincuenta" son centavos o
+ * pesos. En una moneda sin centavos (CLP, PYG) el "con 00/100" directamente
+ * no existe.
  *
  * Las letras se derivan del MISMO string que se imprime arriba, no del float.
  * No es paranoia: `Intl` redondea sobre la representación decimal e `Math.round`
@@ -150,15 +181,39 @@ export function formatearImporte(monto: number): string {
  * primero y 1,00 con el segundo). Un centavo de diferencia entre el número y
  * las letras invalida el recibo, así que se calcula una sola vez y se parte.
  */
-export function importeEnLetras(monto: number, moneda = 'ARS'): string {
-  const [enteroStr, centavosStr] = formatearImporte(monto).split(',');
-  const entero = Number(enteroStr.replace(/\./g, ''));
+export function importeEnLetras(monto: number, moneda?: Moneda): string {
+  const m = moneda ?? monedaDe(null);
+
+  // El mismo string que imprime el PDF, partido por el separador decimal DE
+  // ESA moneda: en Honduras el decimal es "." y el "." argentino agrupa.
+  const numero = numeroMoneda(Math.abs(monto), m);
+  const decimal = separadorDecimalDe(m.locale);
+  const [enteroStr, centavosStr] = numero.split(decimal);
+  const entero = Number(enteroStr.replace(/[^\d]/g, ''));
 
   const letras = enteroEnLetras(entero);
   // Apócope delante del sustantivo: "un peso", no "uno peso".
   const letrasApocopadas = letras.replace(/uno$/, 'un');
-  const unidad = moneda === 'ARS' ? (entero === 1 ? 'peso' : 'pesos') : moneda;
+  const nombre = NOMBRES_EN_LETRAS[m.codigo];
+  const unidad = nombre
+    ? entero === 1
+      ? nombre.singular
+      : nombre.plural
+    : m.codigo;
 
-  const frase = `${letrasApocopadas} ${unidad} con ${centavosStr}/100.`;
+  const centavos =
+    m.decimales > 0 && centavosStr !== undefined
+      ? ` con ${centavosStr}/100`
+      : '';
+  const frase = `${letrasApocopadas} ${unidad}${centavos}.`;
   return frase.charAt(0).toUpperCase() + frase.slice(1);
+}
+
+/** "," en es-AR/es-CL, "." en es-HN/es-MX — lo dice ICU, no nosotros. */
+function separadorDecimalDe(locale: string): string {
+  return (
+    new Intl.NumberFormat(locale)
+      .formatToParts(1.5)
+      .find((p) => p.type === 'decimal')?.value ?? ','
+  );
 }

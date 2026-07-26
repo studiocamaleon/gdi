@@ -1,8 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CurrentAuth } from '../auth/auth.types';
 import { GuardarDatosEmpresaDto } from './dto/datos-empresa.dto';
 import { aE164 } from '../integraciones/telefono';
+import { MONEDA_DEFAULT, monedaDe, type Moneda } from '../common/monedas';
+
+export const ZONA_DEFAULT = 'America/Argentina/Buenos_Aires';
 
 /**
  * Cómo se presenta la imprenta ante su cliente.
@@ -42,6 +45,27 @@ export class DatosEmpresaService {
       provincia: datos?.provincia ?? null,
       horarioAtencion: datos?.horarioAtencion ?? null,
       urlResenas: datos?.urlResenas ?? null,
+      monedaCodigo: datos?.monedaCodigo ?? MONEDA_DEFAULT,
+      zonaHoraria: datos?.zonaHoraria ?? ZONA_DEFAULT,
+      redondeoPrecio: datos?.redondeoPrecio ?? 'moneda',
+    };
+  }
+
+  /**
+   * La config regional pelada, para el resto del API: en qué moneda trabaja
+   * el tenant, en qué zona vive su "hora de pared" y cómo redondea el
+   * pricing. Con defaults argentinos cuando la fila no existe, así ningún
+   * consumidor tiene que contemplar el null.
+   */
+  async regional(tenantId: string): Promise<ConfigRegional> {
+    const d = await this.prisma.datosEmpresa.findUnique({
+      where: { tenantId },
+      select: { monedaCodigo: true, zonaHoraria: true, redondeoPrecio: true },
+    });
+    return {
+      moneda: monedaDe(d?.monedaCodigo),
+      zonaHoraria: d?.zonaHoraria ?? ZONA_DEFAULT,
+      redondeoPrecio: d?.redondeoPrecio === 'entero' ? 'entero' : 'moneda',
     };
   }
 
@@ -88,6 +112,8 @@ export class DatosEmpresaService {
       domicilio,
       horarioAtencion: d.horarioAtencion,
       urlResenas: d.urlResenas,
+      moneda: monedaDe(d.monedaCodigo),
+      zonaHoraria: d.zonaHoraria ?? ZONA_DEFAULT,
     };
   }
 
@@ -95,6 +121,15 @@ export class DatosEmpresaService {
     auth: CurrentAuth,
     dto: GuardarDatosEmpresaDto,
   ): Promise<DatosEmpresaResponse> {
+    // La zona se valida contra ICU, que es quien la va a interpretar después:
+    // una zona escrita mal no rompería al guardar sino semanas más tarde, en
+    // el medio de un cálculo de ETA.
+    if (dto.zonaHoraria !== undefined && !zonaValida(dto.zonaHoraria)) {
+      throw new BadRequestException(
+        `Zona horaria desconocida: "${dto.zonaHoraria}"`,
+      );
+    }
+
     const datos = {
       telefonoCodigo: limpio(dto.telefonoCodigo),
       telefonoNumero: limpio(dto.telefonoNumero),
@@ -108,6 +143,14 @@ export class DatosEmpresaService {
       provincia: limpio(dto.provincia),
       horarioAtencion: limpio(dto.horarioAtencion),
       urlResenas: conEsquema(dto.urlResenas),
+      // Los tres regionales tienen default en la base: sólo pisan si vienen.
+      ...(dto.monedaCodigo !== undefined && {
+        monedaCodigo: dto.monedaCodigo.toUpperCase(),
+      }),
+      ...(dto.zonaHoraria !== undefined && { zonaHoraria: dto.zonaHoraria }),
+      ...(dto.redondeoPrecio !== undefined && {
+        redondeoPrecio: dto.redondeoPrecio,
+      }),
     };
 
     // El nombre comercial y el resto se guardan juntos o no se guarda nada:
@@ -127,6 +170,13 @@ export class DatosEmpresaService {
     return this.leer(auth);
   }
 }
+
+/** La config regional del tenant, siempre resuelta (nunca null). */
+export type ConfigRegional = {
+  moneda: Moneda;
+  zonaHoraria: string;
+  redondeoPrecio: 'moneda' | 'entero';
+};
 
 /** Lo que un documento necesita saber del negocio, ya formateado. */
 export type EmpresaEnDocumentos = {
@@ -152,6 +202,9 @@ export type EmpresaEnDocumentos = {
   domicilio: string | null;
   horarioAtencion: string | null;
   urlResenas: string | null;
+  /** Nunca null: sin fila de datos, la moneda es la default (ARS). */
+  moneda: Moneda;
+  zonaHoraria: string;
 };
 
 const SIN_DATOS: EmpresaEnDocumentos = {
@@ -164,6 +217,8 @@ const SIN_DATOS: EmpresaEnDocumentos = {
   domicilio: null,
   horarioAtencion: null,
   urlResenas: null,
+  moneda: monedaDe(null),
+  zonaHoraria: ZONA_DEFAULT,
 };
 
 export type DatosEmpresaResponse = {
@@ -180,7 +235,23 @@ export type DatosEmpresaResponse = {
   provincia: string | null;
   horarioAtencion: string | null;
   urlResenas: string | null;
+  monedaCodigo: string;
+  zonaHoraria: string;
+  redondeoPrecio: string;
 };
+
+/**
+ * ¿ICU conoce esta zona? `Intl` tira `RangeError` con una zona inválida, y
+ * es exactamente el runtime que después la va a usar — mejor juez imposible.
+ */
+function zonaValida(zona: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: zona });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /** Vacío y "  " son lo mismo que no cargado: uno solo llega a la base. */
 function limpio(v: string | undefined | null): string | null {

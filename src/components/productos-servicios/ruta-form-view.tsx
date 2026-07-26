@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useFecha } from "@/components/navigation/config-regional-provider";
 import {
   ArrowLeftIcon,
   BookOpenIcon,
@@ -203,6 +204,7 @@ interface PasoEditable {
 
 export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
   const router = useRouter();
+  const { fechaNumerica } = useFecha();
   const [guardando, setGuardando] = React.useState(false);
   const [eliminando, setEliminando] = React.useState(false);
   const [familiasOpen, setFamiliasOpen] = React.useState(false);
@@ -676,7 +678,7 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
                     : v.cambios ?? "Versión inicial"}
                 </span>
                 <span className="vdate">
-                  {new Date(v.createdAt).toLocaleDateString("es-AR")}
+                  {fechaNumerica(v.createdAt)}
                 </span>
               </div>
             ))}

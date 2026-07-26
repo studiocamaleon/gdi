@@ -2,6 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { jsPDF } from 'jspdf';
+import {
+  formatearMonedaDoc,
+  monedaDe,
+  type Moneda,
+} from '../common/moneda';
 
 /**
  * PDF del presupuesto, dibujado con jsPDF.
@@ -70,13 +75,6 @@ function cargarGeist(log: Logger): { regular: string; bold: string } | null {
   return geistCache;
 }
 
-const money = (n: number) =>
-  '$' +
-  n.toLocaleString('es-AR', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-
 const fecha = (iso: string | null) => {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -104,6 +102,8 @@ export type PresupuestoPdfDatos = {
     email?: string | null;
     sitioWebLegible?: string | null;
     domicilio?: string | null;
+    /** La moneda del tenant. Un PDF cruza fronteras: nunca `$` a secas. */
+    moneda?: Moneda;
   } | null;
   /**
    * Logo del tenant como data URI. Sólo se dibuja si es PNG o JPEG: jsPDF no
@@ -136,8 +136,15 @@ export type PresupuestoPdfDatos = {
 export class PresupuestoPdfService {
   private readonly log = new Logger(PresupuestoPdfService.name);
   private familia = 'helvetica';
+  private moneda: Moneda = monedaDe(null);
+
+  /** "AR$ 1.234,56" / "CLP $ 1.235": en papel el símbolo va desambiguado. */
+  private money(n: number): string {
+    return formatearMonedaDoc(n, this.moneda);
+  }
 
   generar(d: PresupuestoPdfDatos): Promise<Buffer> {
+    this.moneda = d.empresa?.moneda ?? monedaDe(null);
     const pdf = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
     this.registrarFuente(pdf);
     this.fondo(pdf);
@@ -587,9 +594,9 @@ export class PresupuestoPdfService {
       y,
       { align: 'right' },
     );
-    pdf.text(money(unitario), x.unit, y, { align: 'right' });
+    pdf.text(this.money(unitario), x.unit, y, { align: 'right' });
     this.fuente(pdf, 13, true, INK);
-    pdf.text(money(item.total), x.total, y, { align: 'right' });
+    pdf.text(this.money(item.total), x.total, y, { align: 'right' });
   }
 
   private totales(pdf: jsPDF, d: PresupuestoPdfDatos, y0: number): number {
@@ -615,7 +622,7 @@ export class PresupuestoPdfService {
       this.fuente(pdf, 14, false, MUTED);
       pdf.text(k, x + px(4), y + px(9) + px(6));
       this.fuente(pdf, 14, false, INK_2);
-      pdf.text(money(v), x + anchoCaja - px(4), y + px(9) + px(6), {
+      pdf.text(this.money(v), x + anchoCaja - px(4), y + px(9) + px(6), {
         align: 'right',
       });
       y += px(31);
@@ -631,7 +638,7 @@ export class PresupuestoPdfService {
       baseline: 'middle',
     });
     this.fuente(pdf, 25, true, [255, 255, 255]);
-    pdf.text(money(d.total), x + anchoCaja - px(20), y + altoCaja / 2, {
+    pdf.text(this.money(d.total), x + anchoCaja - px(20), y + altoCaja / 2, {
       align: 'right',
       baseline: 'middle',
     });

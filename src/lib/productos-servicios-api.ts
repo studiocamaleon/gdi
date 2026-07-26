@@ -673,6 +673,8 @@ export interface LookupsConfigPaso {
       sku: string;
       nombreVariante: string | null;
       precioReferencia: string | null;
+      /** ISO 4217 del precio del material; ausente = la del tenant (hoy ARS). */
+      moneda?: string;
       atributosVarianteJson?: Record<string, unknown> | null;
     }>;
   }>;
@@ -706,6 +708,8 @@ export interface MateriaPrimaBusquedaItem {
     sku: string;
     nombreVariante: string | null;
     precioReferencia: string | null;
+    /** ISO 4217 del precio del material; ausente = la del tenant (hoy ARS). */
+    moneda?: string;
     atributosVarianteJson?: Record<string, unknown> | null;
   }>;
 }

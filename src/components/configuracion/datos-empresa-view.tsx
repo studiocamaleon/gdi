@@ -8,10 +8,14 @@ import { toast } from "sonner";
 import { LogoTenantCard } from "@/components/archivos/logo-tenant-card";
 import type { LogoTenant } from "@/lib/archivos-api";
 import { guardarDatosEmpresa, type DatosEmpresa } from "@/lib/empresa-api";
+import { MONEDA_DEFAULT, monedaDe, monedas as MONEDAS } from "@/lib/monedas";
 import {
   PAIS_DEFAULT,
   latamCountries as PAISES,
+  ZONAS_HORARIAS,
+  monedaSugeridaDe,
   phoneCodeDe,
+  zonaHorariaDe,
 } from "@/lib/paises";
 
 /**
@@ -36,9 +40,23 @@ type FormState = {
   provincia: string;
   horarioAtencion: string;
   urlResenas: string;
+  monedaCodigo: string;
+  zonaHoraria: string;
+  redondeoPrecio: string;
 };
 
 const vacio = (v: string | null) => v ?? "";
+
+/** "$ 1.234,56" en la moneda elegida, para que el select se explique solo. */
+function ejemploMoneda(codigo: string, entero = false): string {
+  const m = monedaDe(codigo);
+  const decimales = entero ? 0 : m.decimales;
+  const n = new Intl.NumberFormat(m.locale, {
+    minimumFractionDigits: decimales,
+    maximumFractionDigits: decimales,
+  }).format(1234.56);
+  return `${m.simbolo} ${n}`;
+}
 
 /**
  * Los anchos del par código+número van inline y no en globals.css: la hoja
@@ -65,6 +83,9 @@ function estadoInicial(d: DatosEmpresa): FormState {
     provincia: vacio(d.provincia),
     horarioAtencion: vacio(d.horarioAtencion),
     urlResenas: vacio(d.urlResenas),
+    monedaCodigo: d.monedaCodigo || MONEDA_DEFAULT,
+    zonaHoraria: d.zonaHoraria || zonaHorariaDe(PAIS_DEFAULT),
+    redondeoPrecio: d.redondeoPrecio || "moneda",
   };
 }
 
@@ -107,6 +128,9 @@ export function DatosEmpresaView({
         provincia: form.provincia || undefined,
         horarioAtencion: form.horarioAtencion || undefined,
         urlResenas: form.urlResenas || undefined,
+        monedaCodigo: form.monedaCodigo || undefined,
+        zonaHoraria: form.zonaHoraria || undefined,
+        redondeoPrecio: form.redondeoPrecio || undefined,
       });
       toast.success("Datos de la empresa guardados.");
       router.refresh();
@@ -201,6 +225,12 @@ export function DatosEmpresaView({
                       // hayan tocado a mano: cambiar de país y quedarse con el
                       // +54 sólo produce un WhatsApp que no llega.
                       set("telefonoCodigo", phoneCodeDe(pais));
+                      // Moneda y zona acompañan también: son SUGERENCIA (se
+                      // pueden pisar abajo, en Regional), pero el caso normal
+                      // es que la imprenta chilena quiera CLP y Santiago sin
+                      // tener que saber qué es una zona IANA.
+                      set("monedaCodigo", monedaSugeridaDe(pais));
+                      set("zonaHoraria", zonaHorariaDe(pais));
                     }}
                   >
                     {PAISES.map((p) => (
@@ -337,6 +367,86 @@ export function DatosEmpresaView({
                   />
                 </div>
               </div>
+            </div>
+          </div>
+
+          <div className="arc-card" style={{ marginBottom: 20 }}>
+            <div className="arc-card-sec">
+              <div className="arc-sec-t">Regional</div>
+              <div className="arc-frow">
+                <div className="arc-field">
+                  <label>Moneda</label>
+                  <select
+                    value={form.monedaCodigo}
+                    onChange={(e) => set("monedaCodigo", e.target.value)}
+                  >
+                    {MONEDAS.map((m) => (
+                      <option key={m.codigo} value={m.codigo}>
+                        {m.codigo} — {m.nombre} ({m.simbolo})
+                      </option>
+                    ))}
+                  </select>
+                  <div className="arc-hint">
+                    Ej.: {ejemploMoneda(form.monedaCodigo)}
+                  </div>
+                </div>
+                <div className="arc-field">
+                  <label>Zona horaria</label>
+                  <select
+                    value={form.zonaHoraria}
+                    onChange={(e) => set("zonaHoraria", e.target.value)}
+                  >
+                    {/* Si la guardada no está en la lista corta (la cargó
+                        el soporte a mano), se ofrece igual: un select que
+                        esconde el valor actual lo pisa al primer guardado. */}
+                    {!ZONAS_HORARIAS.includes(form.zonaHoraria) && (
+                      <option value={form.zonaHoraria}>
+                        {form.zonaHoraria}
+                      </option>
+                    )}
+                    {ZONAS_HORARIAS.map((z) => (
+                      <option key={z} value={z}>
+                        {z.replace(/^America\//, "").replaceAll("_", " ")}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="arc-hint">
+                    La hora del taller: calendario de producción, corte de
+                    jornada y horarios de WhatsApp se calculan con esta zona.
+                  </div>
+                </div>
+              </div>
+              <div className="arc-frow">
+                <div className="arc-field">
+                  <label>Redondeo de precios</label>
+                  <select
+                    value={form.redondeoPrecio}
+                    onChange={(e) => set("redondeoPrecio", e.target.value)}
+                  >
+                    <option value="moneda">
+                      Con centavos ({ejemploMoneda(form.monedaCodigo)})
+                    </option>
+                    <option value="entero">
+                      A la unidad ({ejemploMoneda(form.monedaCodigo, true)})
+                    </option>
+                  </select>
+                  <div className="arc-hint">
+                    Cómo redondea el cotizador. En Argentina o Colombia los
+                    centavos existen en el papel pero no en la calle.
+                  </div>
+                </div>
+              </div>
+              {form.monedaCodigo !== (initial.monedaCodigo || MONEDA_DEFAULT) && (
+                <div className="arc-variant-note" style={{ marginTop: 4 }}>
+                  <InfoIcon />
+                  <span>
+                    Cambiar la moneda no convierte ningún importe: los
+                    presupuestos, órdenes y cobros ya cargados conservan su
+                    número y se muestran con la moneda nueva. Es para corregir
+                    la configuración inicial, no para mudar el negocio de país.
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
