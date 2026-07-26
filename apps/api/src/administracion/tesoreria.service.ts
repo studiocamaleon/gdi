@@ -137,6 +137,21 @@ export class TesoreriaService {
       throw new NotFoundException('No se encontró alguna de las cuentas.');
     }
 
+    // Entre monedas distintas el mismo número no puede entrar y salir: hay
+    // que declarar cuánto LLEGÓ (en la moneda destino). El TC implícito se
+    // guarda en los dos movimientos — antes la UI decía "se registra el tipo
+    // de cambio del día" y no se registraba nada.
+    const cruzada = desde.moneda !== hacia.moneda;
+    if (cruzada && !payload.montoDestino) {
+      throw new BadRequestException(
+        `Las cuentas están en monedas distintas (${desde.moneda} → ${hacia.moneda}): indicá cuánto llegó a la cuenta destino, en ${hacia.moneda}.`,
+      );
+    }
+    const montoDestino = cruzada ? payload.montoDestino! : payload.monto;
+    const tipoCambio = cruzada
+      ? Math.round((montoDestino / payload.monto) * 10_000) / 10_000
+      : null;
+
     await this.prisma.$transaction(async (tx) => {
       const ahora = new Date();
       const desdeAct = await tx.cuentaFondos.update({
@@ -150,14 +165,17 @@ export class TesoreriaService {
           fecha: ahora,
           tipo: 'salida',
           monto: payload.monto,
-          concepto: `Transferencia a ${hacia.nombre}`,
+          concepto: cruzada
+            ? `Transferencia a ${hacia.nombre} (${montoDestino} ${hacia.moneda} · TC ${tipoCambio})`
+            : `Transferencia a ${hacia.nombre}`,
           origenTipo: 'transferencia',
+          tipoCambio,
           saldoPosterior: Number(desdeAct.saldo),
         },
       });
       const haciaAct = await tx.cuentaFondos.update({
         where: { id: hacia.id },
-        data: { saldo: { increment: payload.monto } },
+        data: { saldo: { increment: montoDestino } },
       });
       await tx.movimientoFondos.create({
         data: {
@@ -165,10 +183,13 @@ export class TesoreriaService {
           cuentaId: hacia.id,
           fecha: ahora,
           tipo: 'entrada',
-          monto: payload.monto,
-          concepto: `Transferencia desde ${desde.nombre}`,
+          monto: montoDestino,
+          concepto: cruzada
+            ? `Transferencia desde ${desde.nombre} (${payload.monto} ${desde.moneda} · TC ${tipoCambio})`
+            : `Transferencia desde ${desde.nombre}`,
           origenTipo: 'transferencia',
           transferenciaParId: salida.id,
+          tipoCambio,
           saldoPosterior: Number(haciaAct.saldo),
         },
       });

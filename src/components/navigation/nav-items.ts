@@ -24,6 +24,12 @@ export type NavChild = {
   href: string;
   /** Permiso que hace falta para verlo. Hereda el del grupo si no lo declara. */
   permiso?: PermisoClave;
+  /**
+   * Sólo se muestra si el país del tenant coincide (`"AR"` para el circuito
+   * fiscal ARCA: comprobantes, facturación, datos fiscales). Sin declarar =
+   * para todos. Ver multi-moneda-zona-horaria D14.
+   */
+  soloPais?: string;
 };
 
 export type NavItem =
@@ -170,11 +176,13 @@ export const NAV: NavItem[] = [
         key: "comprobantes",
         label: "Comprobantes",
         href: "/administracion/comprobantes",
+        soloPais: "AR",
       },
       {
         key: "facturacion",
         label: "Facturación",
         href: "/administracion/facturacion",
+        soloPais: "AR",
       },
       {
         key: "deudores",
@@ -266,6 +274,7 @@ export const NAV: NavItem[] = [
         label: "Datos fiscales",
         href: "/configuracion/datos-fiscales",
         permiso: "administracion.configurar",
+        soloPais: "AR",
       },
       // Junto a Datos fiscales por el mismo criterio: es un catálogo que se
       // define una vez —qué medios acepta la imprenta y con qué comisión— y no
@@ -303,8 +312,20 @@ export function hasChildren(
  * que no corresponda y un sidebar vacío por un campo que falta es peor que uno
  * que ofrece de más. Un grupo que se queda sin hijos desaparece.
  */
-export function navPara(permisos: Set<string> | null): NavItem[] {
-  if (!permisos) return NAV;
+export function navPara(
+  permisos: Set<string> | null,
+  pais: string = "AR",
+): NavItem[] {
+  // El filtro por país corre SIEMPRE, incluso sin permisos: un tenant chileno
+  // sin lista de permisos no tiene por qué ver el circuito fiscal argentino.
+  const porPais = (c: NavChild) => !c.soloPais || c.soloPais === pais;
+  if (!permisos) {
+    return NAV.flatMap<NavItem>((item) => {
+      if (!hasChildren(item)) return [item];
+      const children = item.children.filter(porPais);
+      return children.length ? [{ ...item, children }] : [];
+    });
+  }
   return NAV.flatMap<NavItem>((item) => {
     if (!hasChildren(item)) {
       return permisos.has(item.permiso) ? [item] : [];
@@ -314,8 +335,8 @@ export function navPara(permisos: Set<string> | null): NavItem[] {
     // `administracion.configurar` aunque no tengas Configuración entera) y
     // también se restringe solo (el Resumen ejecutivo NO se abre por tener
     // Reportes). El grupo aparece si le queda al menos un hijo.
-    const children = item.children.filter((c) =>
-      permisos.has(c.permiso ?? item.permiso),
+    const children = item.children.filter(
+      (c) => permisos.has(c.permiso ?? item.permiso) && porPais(c),
     );
     return children.length ? [{ ...item, children }] : [];
   });

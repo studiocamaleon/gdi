@@ -27,9 +27,15 @@ import {
   getMovimientosCuenta,
   transferirEntreCuentas,
 } from "@/lib/administracion-api";
+import { useConfigRegional } from "@/components/navigation/config-regional-provider";
+import { formatearMoneda, monedaDe } from "@/lib/moneda";
 
-const fmt = (n: number, cur = "$") =>
-  (n < 0 ? "−" : "") + cur + Math.abs(Math.round(n)).toLocaleString("es-AR");
+/**
+ * Cada cuenta muestra su plata en SU moneda (`CuentaFondos.moneda`, hay
+ * cuentas en USD); los totales de arriba van en la del tenant.
+ */
+const fmtCta = (n: number, monedaCodigo: string | undefined) =>
+  formatearMoneda(n, monedaDe(monedaCodigo), { decimales: 0 });
 
 const ORIGEN_LABELS: Record<string, string> = {
   cobro: "Cobro",
@@ -102,16 +108,32 @@ function TransferModal({
   desdeInicial?: string;
   ocupado: boolean;
   onClose: () => void;
-  onDone: (desde: string, hacia: string, monto: number) => void;
+  onDone: (
+    desde: string,
+    hacia: string,
+    monto: number,
+    montoDestino?: number,
+  ) => void;
 }) {
   const [desde, setDesde] = React.useState(desdeInicial ?? cuentas[0]?.id ?? "");
   const [hacia, setHacia] = React.useState(
     cuentas.find((c) => c.id !== (desdeInicial ?? cuentas[0]?.id))?.id ?? "",
   );
   const [monto, setMonto] = React.useState("");
+  const [montoDestino, setMontoDestino] = React.useState("");
   const cuentaDesde = cuentas.find((c) => c.id === desde);
   const cuentaHacia = cuentas.find((c) => c.id === hacia);
-  const valido = Number(monto) > 0 && desde !== hacia && !!cuentaHacia;
+  const cruzada =
+    !!cuentaDesde && !!cuentaHacia && cuentaDesde.moneda !== cuentaHacia.moneda;
+  const valido =
+    Number(monto) > 0 &&
+    desde !== hacia &&
+    !!cuentaHacia &&
+    (!cruzada || Number(montoDestino) > 0);
+  const tcImplicito =
+    cruzada && Number(monto) > 0 && Number(montoDestino) > 0
+      ? Math.round((Number(montoDestino) / Number(monto)) * 10_000) / 10_000
+      : null;
   return (
     <ModalBase onClose={onClose}>
       <div className="ats-modal-head">
@@ -126,7 +148,7 @@ function TransferModal({
           <select value={desde} onChange={(e) => setDesde(e.target.value)}>
             {cuentas.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.nombre} · {fmt(c.saldo)}
+                {c.nombre} · {fmtCta(c.saldo, c.moneda)}
               </option>
             ))}
           </select>
@@ -141,7 +163,7 @@ function TransferModal({
               .filter((c) => c.id !== desde)
               .map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.nombre} · {fmt(c.saldo)}
+                  {c.nombre} · {fmtCta(c.saldo, c.moneda)}
                 </option>
               ))}
           </select>
@@ -149,7 +171,7 @@ function TransferModal({
         <div className="ats-field">
           <label>Monto ({cuentaDesde?.moneda ?? "ARS"})</label>
           <div className="ats-money">
-            <span className="c">$</span>
+            <span className="c">{monedaDe(cuentaDesde?.moneda).simbolo}</span>
             <input
               type="number"
               value={monto}
@@ -158,12 +180,28 @@ function TransferModal({
             />
           </div>
         </div>
-        {cuentaDesde &&
-        cuentaHacia &&
-        cuentaDesde.moneda !== cuentaHacia.moneda ? (
-          <div style={{ color: "var(--warn, #a16207)", fontSize: 12 }}>
-            Cuentas en distinta moneda — se registra el tipo de cambio del día.
-          </div>
+        {cruzada ? (
+          <>
+            {/* El extracto del banco dice un monto, no una tasa: se pide lo
+                que LLEGÓ y el TC se deriva y se registra en el movimiento. */}
+            <div className="ats-field">
+              <label>Llegó a destino ({cuentaHacia.moneda})</label>
+              <div className="ats-money">
+                <span className="c">{monedaDe(cuentaHacia.moneda).simbolo}</span>
+                <input
+                  type="number"
+                  value={montoDestino}
+                  onChange={(e) => setMontoDestino(e.target.value)}
+                  placeholder="0"
+                />
+              </div>
+            </div>
+            <div style={{ color: "var(--warn, #a16207)", fontSize: 12 }}>
+              {tcImplicito
+                ? `Cuentas en distinta moneda — se registra TC ${tcImplicito} (${cuentaHacia.moneda} por 1 ${cuentaDesde.moneda}).`
+                : "Cuentas en distinta moneda: indicá cuánto llegó a la cuenta destino."}
+            </div>
+          </>
         ) : null}
       </div>
       <div className="ats-modal-foot">
@@ -174,7 +212,14 @@ function TransferModal({
           type="button"
           className="btn btn-primary"
           disabled={!valido || ocupado}
-          onClick={() => onDone(desde, hacia, Number(monto))}
+          onClick={() =>
+            onDone(
+              desde,
+              hacia,
+              Number(monto),
+              cruzada ? Number(montoDestino) : undefined,
+            )
+          }
         >
           <ArrowLeftRightIcon />
           {ocupado ? "Transfiriendo…" : "Transferir"}
@@ -196,6 +241,7 @@ function ArqueoModal({
   onDone: (contado: number) => void;
 }) {
   const [contado, setContado] = React.useState("");
+  const fmt = (n: number) => fmtCta(n, cuenta.moneda);
   const diff = contado === "" ? null : Number(contado) - cuenta.saldo;
   return (
     <ModalBase onClose={onClose}>
@@ -209,7 +255,7 @@ function ArqueoModal({
         <div className="ats-field">
           <label>Efectivo contado</label>
           <div className="ats-money">
-            <span className="c">$</span>
+            <span className="c">{monedaDe(cuenta.moneda).simbolo}</span>
             <input
               type="number"
               autoFocus
@@ -354,6 +400,8 @@ export function TesoreriaView({
   initialKpis: TesoreriaKpis;
 }) {
   const router = useRouter();
+  const { moneda } = useConfigRegional();
+  const fmt = (n: number) => formatearMoneda(n, moneda, { decimales: 0 });
   const cuentas = initialCuentas;
   const kpis = initialKpis;
   const [selId, setSelId] = React.useState<string | null>(
@@ -463,7 +511,7 @@ export function TesoreriaView({
             </div>
             <div className="usd">
               <span className="cur">USD</span>
-              <span className="n">{fmt(kpis.posicionUsd)}</span>
+              <span className="n">{fmtCta(kpis.posicionUsd, "USD")}</span>
             </div>
           </div>
           <div className="ats-kpi">
@@ -553,7 +601,7 @@ export function TesoreriaView({
                       <span className="cur-tag">{cuenta.moneda}</span>
                     </div>
                     <div className="saldo">
-                      <span className="sv">{fmt(cuenta.saldo)}</span>
+                      <span className="sv">{fmtCta(cuenta.saldo, cuenta.moneda)}</span>
                       <span className="lm">
                         {fechaCorta(cuenta.ultimoMovimiento)}
                       </span>
@@ -576,7 +624,7 @@ export function TesoreriaView({
                   <div className="bal">
                     <div className="l">Saldo actual</div>
                     <div className="v">
-                      {fmt(sel.saldo)}{" "}
+                      {fmtCta(sel.saldo, sel.moneda)}{" "}
                       <span style={{ fontSize: 12, color: "var(--muted-text-2)" }}>
                         {sel.moneda}
                       </span>
@@ -655,12 +703,12 @@ export function TesoreriaView({
                             className={`ats-mv-amt ${m.tipo === "entrada" ? "in" : "out"}`}
                           >
                             {m.tipo === "entrada"
-                              ? "+" + fmt(m.monto)
-                              : fmt(-m.monto)}
+                              ? "+" + fmtCta(m.monto, sel.moneda)
+                              : fmtCta(-m.monto, sel.moneda)}
                           </span>
                         </span>
                         <span className="ats-mv-saldo">
-                          {fmt(m.saldoPosterior)}
+                          {fmtCta(m.saldoPosterior, sel.moneda)}
                         </span>
                       </div>
                     ))}
@@ -677,14 +725,15 @@ export function TesoreriaView({
             desdeInicial={modal.from}
             ocupado={ocupado}
             onClose={() => setModal(null)}
-            onDone={(desde, hacia, monto) =>
+            onDone={(desde, hacia, monto, montoDestino) =>
               void ejecutar(async () => {
                 await transferirEntreCuentas({
                   desdeCuentaId: desde,
                   haciaCuentaId: hacia,
                   monto,
+                  montoDestino,
                 });
-                return `Transferencia de ${fmt(monto)} registrada.`;
+                return `Transferencia de ${fmtCta(monto, cuentas.find((c) => c.id === desde)?.moneda ?? moneda.codigo)} registrada.`;
               })
             }
           />
@@ -699,7 +748,7 @@ export function TesoreriaView({
                 const r = await cerrarArqueo(sel.id, contado);
                 return r.diferencia === 0
                   ? "Arqueo cerrado sin diferencias."
-                  : `Arqueo cerrado · ajuste ${fmt(Math.abs(r.diferencia))}.`;
+                  : `Arqueo cerrado · ajuste ${fmtCta(Math.abs(r.diferencia), sel.moneda)}.`;
               })
             }
           />

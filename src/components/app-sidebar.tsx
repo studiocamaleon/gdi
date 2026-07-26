@@ -211,7 +211,11 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
   // Lo que este usuario puede ver. Se calcula una vez y de acá sale todo el
   // resto: qué grupos hay, cuál está activo y qué encuentra el buscador.
   const nav = React.useMemo(
-    () => navPara(permisosDe(currentUser)),
+    () =>
+      navPara(
+        permisosDe(currentUser),
+        currentUser.tenantActual?.regional?.paisCodigo ?? "AR",
+      ),
     [currentUser],
   );
   const activeKey = getActiveKey(nav, pathname);

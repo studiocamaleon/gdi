@@ -185,6 +185,9 @@ export type NegocioPlataforma = {
   }>;
   distribucionTamano: Array<{ rango: string; tenants: number }>;
   medianaTicket: number;
+  /** GMV por moneda del tenant. Más de una entrada = los totales de arriba
+   *  mezclan monedas sin convertir; la consola lo avisa. */
+  porMoneda?: Array<{ moneda: string; ventas: number; tenants: number }>;
 };
 
 export async function getNegocioPlataforma(
