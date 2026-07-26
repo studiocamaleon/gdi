@@ -20,8 +20,10 @@ import {
   type MetodoPago,
 } from "@/lib/administracion";
 import type { CrearCobroPayload } from "@/lib/administracion-api";
+import { useConfigRegional } from "@/components/navigation/config-regional-provider";
+import { formatearMoneda, numeroMoneda, parsearMonto } from "@/lib/moneda";
+import { MoneyInput } from "@/components/ui/money-input";
 
-const fmt = (n: number) => "$" + Math.round(n).toLocaleString("es-AR");
 const JURISDICCIONES = [
   "CABA",
   "Buenos Aires",
@@ -109,12 +111,21 @@ export function CobroFormulario({
   onCancel?: () => void;
   cancelHref?: string;
 }) {
+  const { moneda } = useConfigRegional();
+  const fmt = (n: number) => formatearMoneda(n, moneda, { decimales: 0 });
   const metodosActivos = metodos.filter((m) => m.activo);
   const [metodoId, setMetodoId] = React.useState(metodosActivos[0]?.id ?? "");
   const metodo = metodosActivos.find((m) => m.id === metodoId) ?? null;
   const esCheque = metodo?.tipo === "cheque_echeq";
 
-  const [monto, setMonto] = React.useState(saldo > 0 ? String(saldo) : "");
+  // El texto viaja con los separadores de la moneda (lo maneja MoneyInput);
+  // el número parseado se guarda aparte para no re-parsear en cada cálculo.
+  const [monto, setMonto] = React.useState(() =>
+    saldo > 0 ? numeroMoneda(saldo, moneda) : "",
+  );
+  const [montoNum, setMontoNum] = React.useState<number | null>(
+    saldo > 0 ? saldo : null,
+  );
   // "N° de operación": va impreso en el recibo, que es donde el cliente lo
   // reconoce (el ID de la transferencia, el cupón de la tarjeta, el ticket).
   const [referencia, setReferencia] = React.useState("");
@@ -131,12 +142,15 @@ export function CobroFormulario({
     origen: "tercero" as "tercero" | "propio",
   });
 
-  const bruto = Number(monto) || 0;
+  const bruto = montoNum ?? 0;
   const comPct = comEdit ?? metodo?.comisionPct ?? 0;
   const comision = (bruto * comPct) / 100;
   const ivaCom = (comision * (metodo?.ivaComisionPct ?? 0)) / 100;
   const neto = bruto - comision - ivaCom;
-  const totalRet = rets.reduce((s, r) => s + (Number(r.monto) || 0), 0);
+  const totalRet = rets.reduce(
+    (s, r) => s + (parsearMonto(r.monto, moneda) ?? 0),
+    0,
+  );
   const disponible = neto - totalRet;
   const cuentaUsadaId =
     cuentaId ?? metodo?.cuentaDestinoId ?? cuentas[0]?.id ?? null;
@@ -171,9 +185,12 @@ export function CobroFormulario({
         if (j !== i) return r;
         const nr = { ...r, [campo]: valor };
         if (campo === "alicuota" || campo === "base") {
-          const b = Number(nr.base) || 0;
+          const b = parsearMonto(nr.base, moneda) ?? 0;
           const a = Number(nr.alicuota) || 0;
-          if (b && a) nr.monto = String(Math.round((b * a) / 100));
+          // El monto calculado se escribe ya formateado: es el texto de un
+          // MoneyInput y tiene que re-parsear con los separadores de la moneda.
+          if (b && a)
+            nr.monto = numeroMoneda(Math.round((b * a) / 100), moneda);
         }
         return nr;
       }),
@@ -201,13 +218,13 @@ export function CobroFormulario({
         comisionPctAplicada: comPct,
         referencia: referencia.trim() || undefined,
         retenciones: rets
-          .filter((r) => Number(r.monto) > 0)
+          .filter((r) => (parsearMonto(r.monto, moneda) ?? 0) > 0)
           .map((r) => ({
             regimen: r.regimen,
             jurisdiccion: r.jurisdiccion,
-            base: Number(r.base) || 0,
+            base: parsearMonto(r.base, moneda) ?? 0,
             alicuota: Number(r.alicuota) || 0,
-            monto: Number(r.monto),
+            monto: parsearMonto(r.monto, moneda) ?? 0,
             nroComprobante: r.comprobante || undefined,
           })),
         valor: esCheque
@@ -241,20 +258,26 @@ export function CobroFormulario({
           <div className="arc-frow">
             <div className="arc-field">
               <label>Monto a cobrar</label>
-              <div className="arc-money big">
-                <span className="c">$</span>
-                <input
-                  type="number"
-                  value={monto}
-                  onChange={(e) => setMonto(e.target.value)}
-                  placeholder="0"
-                />
-              </div>
+              <MoneyInput
+                className="big"
+                inputClassName="h-auto"
+                value={monto}
+                onValueChange={(texto, numero) => {
+                  setMonto(texto);
+                  setMontoNum(numero);
+                }}
+                moneda={moneda}
+                placeholder="0"
+                ariaLabel="Monto a cobrar"
+              />
               {saldo > 0 ? (
                 <button
                   type="button"
                   className="arc-max"
-                  onClick={() => setMonto(String(saldo))}
+                  onClick={() => {
+                    setMonto(numeroMoneda(saldo, moneda));
+                    setMontoNum(saldo);
+                  }}
                 >
                   Saldo completo · {fmt(saldo)}
                 </button>
@@ -316,11 +339,11 @@ export function CobroFormulario({
             <div className="arc-field">
               <label>Neto acreditado</label>
               <div className="arc-money">
-                <span className="c">$</span>
+                <span className="c">{moneda.simbolo}</span>
                 <input
                   type="text"
                   disabled
-                  value={Math.round(neto).toLocaleString("es-AR")}
+                  value={numeroMoneda(neto, moneda, 0)}
                 />
               </div>
             </div>
@@ -485,16 +508,13 @@ export function CobroFormulario({
                   <div className="arc-frow3" style={{ marginBottom: 10 }}>
                     <div className="arc-field sm" style={{ marginBottom: 0 }}>
                       <label>Base imponible</label>
-                      <div className="arc-money">
-                        <span className="c" style={{ fontSize: 11 }}>
-                          $
-                        </span>
-                        <input
-                          type="number"
-                          value={r.base}
-                          onChange={(e) => setRet(i, "base", e.target.value)}
-                        />
-                      </div>
+                      <MoneyInput
+                        inputClassName="h-auto"
+                        value={r.base}
+                        onValueChange={(texto) => setRet(i, "base", texto)}
+                        moneda={moneda}
+                        ariaLabel="Base imponible"
+                      />
                     </div>
                     <div className="arc-field sm" style={{ marginBottom: 0 }}>
                       <label>Alícuota</label>
@@ -511,17 +531,14 @@ export function CobroFormulario({
                     </div>
                     <div className="arc-field sm" style={{ marginBottom: 0 }}>
                       <label>Monto</label>
-                      <div className="arc-money">
-                        <span className="c" style={{ fontSize: 11 }}>
-                          $
-                        </span>
-                        <input
-                          type="number"
-                          value={r.monto}
-                          onChange={(e) => setRet(i, "monto", e.target.value)}
-                          placeholder="0"
-                        />
-                      </div>
+                      <MoneyInput
+                        inputClassName="h-auto"
+                        value={r.monto}
+                        onValueChange={(texto) => setRet(i, "monto", texto)}
+                        moneda={moneda}
+                        placeholder="0"
+                        ariaLabel="Monto de la retención"
+                      />
                     </div>
                   </div>
                   <div className="arc-field sm" style={{ marginBottom: 0 }}>

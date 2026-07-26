@@ -10,7 +10,7 @@ import {
   verificarAfip,
   type AfipIntegracion,
 } from "@/lib/integraciones-api";
-import { fechaCorta } from "@/lib/integraciones";
+import { useFecha } from "@/components/navigation/config-regional-provider";
 
 /**
  * La integración AFIP: NO es "conectar con credenciales", es delegación. El
@@ -25,6 +25,7 @@ export function AfipDetalle({
   inicial: AfipIntegracion;
   onVolver: () => void;
 }) {
+  const { fechaNumerica, hora } = useFecha();
   const [datos, setDatos] = React.useState(inicial);
   const [verificando, setVerificando] = React.useState(false);
   const [cambiando, setCambiando] = React.useState(false);
@@ -220,7 +221,7 @@ export function AfipDetalle({
                   <div className="t">{estadoPill.txt}</div>
                   <div className="m">
                     {datos.ultimoChequeoEl
-                      ? `última verificación ${fechaCorta(datos.ultimoChequeoEl)}`
+                      ? `última verificación ${fechaNumerica(datos.ultimoChequeoEl)} ${hora(datos.ultimoChequeoEl)}`
                       : "todavía sin verificar"}
                   </div>
                 </div>

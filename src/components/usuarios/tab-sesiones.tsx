@@ -2,8 +2,9 @@
 
 import * as React from "react";
 
-import { fechaHoraCorta } from "@/lib/fecha";
 import { toast } from "sonner";
+
+import { useFecha } from "@/components/navigation/config-regional-provider";
 
 import {
   cerrarSesiones,
@@ -19,6 +20,7 @@ import {
  * Ver docs/usuarios-roles-permisos-diseno.md
  */
 export function TabSesiones({ onCambio }: { onCambio: () => Promise<void> }) {
+  const { fechaHoraCorta } = useFecha();
   const [sesiones, setSesiones] = React.useState<SesionAbierta[] | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [cerrando, setCerrando] = React.useState<string | null>(null);
@@ -100,7 +102,7 @@ export function TabSesiones({ onCambio }: { onCambio: () => Promise<void> }) {
                 <div className="usr-mail">{s.email}</div>
               </div>
               <div className="usr-estado usr-mail" suppressHydrationWarning>
-                Desde {fechaHora(s.desde)}
+                Desde {fechaHoraCorta(s.desde)}
               </div>
               <div />
               <div className="usr-acciones">
@@ -123,6 +125,3 @@ export function TabSesiones({ onCambio }: { onCambio: () => Promise<void> }) {
     </>
   );
 }
-
-/** dd/mm hh:mm en hora de Argentina, igual en el servidor y en el navegador. */
-const fechaHora = fechaHoraCorta;

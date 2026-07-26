@@ -2,14 +2,13 @@
 
 import * as React from "react";
 
-import { fechaHora } from "@/lib/fecha";
 import { toast } from "sonner";
 
+import { useFecha } from "@/components/navigation/config-regional-provider";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import {
   CATALOGO,
   ETIQUETA_ESTADO,
-  fechaCorta,
   itemDe,
   type CatalogoItem,
   type EstadoIntegracion,
@@ -272,6 +271,7 @@ function Card({
   integracion?: Integracion;
   onAbrir: (p: ProveedorIntegracion) => void;
 }) {
+  const { fechaNumerica } = useFecha();
   const estado = integracion?.estado ?? "DESCONECTADA";
   const clase = item.disponible
     ? estado === "CONECTADA"
@@ -311,7 +311,7 @@ function Card({
       <div className="int-card-foot">
         <span className="installs">
           {estado === "CONECTADA" && integracion?.conectadaEl
-            ? `Desde el ${fechaCorta(integracion.conectadaEl).slice(0, 10)}`
+            ? `Desde el ${fechaNumerica(integracion.conectadaEl)}`
             : ETIQUETA_ESTADO[estado]}
         </span>
         {item.disponible && (
@@ -805,6 +805,7 @@ function CredencialesTab({
   conectada: boolean;
   onActualizada: (i: Integracion | null) => Promise<void>;
 }) {
+  const { fechaNumerica, hora } = useFecha();
   const meta = (integracion?.metadata ?? {}) as {
     endpoint?: string;
     tenantId?: string;
@@ -981,7 +982,11 @@ function CredencialesTab({
             </div>
             <div className="cm">
               <div className="cm-k">Último chequeo</div>
-              <div className="cm-v mono">{fechaCorta(integracion?.ultimoChequeoEl ?? null)}</div>
+              <div className="cm-v mono">
+                {integracion?.ultimoChequeoEl
+                  ? `${fechaNumerica(integracion.ultimoChequeoEl)} ${hora(integracion.ultimoChequeoEl)}`
+                  : "—"}
+              </div>
             </div>
             <div className="cm">
               <div className="cm-k">Token</div>
@@ -1345,6 +1350,7 @@ const PASOS_LIMITE = [100, 250, 500];
  * pantalla para llegar.
  */
 function MensajesTab() {
+  const { fechaHora } = useFecha();
   const [log, setLog] = React.useState<LineaLog[]>([]);
   const [error, setError] = React.useState<string | null>(null);
   const [cargando, setCargando] = React.useState(true);

@@ -3,6 +3,7 @@
 import * as React from "react";
 import { toast } from "sonner";
 
+import { useFecha } from "@/components/navigation/config-regional-provider";
 import { getKardex } from "@/lib/inventario-stock-api";
 import type { KardexResponse } from "@/lib/inventario-stock";
 import type { MateriaPrima } from "@/lib/materias-primas";
@@ -60,6 +61,7 @@ function normalizeVarianteFilter(value: string) {
 }
 
 export function MovimientosKardexPanel({ materiasPrimas }: HistorialPanelProps) {
+  const { fechaNumerica, hora } = useFecha();
   const variantes = React.useMemo(
     () =>
       materiasPrimas.flatMap((materiaPrima) =>
@@ -292,7 +294,7 @@ export function MovimientosKardexPanel({ materiasPrimas }: HistorialPanelProps) 
             ) : (
               kardex.items.map((item) => (
                 <TableRow key={item.movimientoId}>
-                  <TableCell>{new Date(item.createdAt).toLocaleString()}</TableCell>
+                  <TableCell>{`${fechaNumerica(item.createdAt)} ${hora(item.createdAt)}`}</TableCell>
                   <TableCell>
                     {varianteLabelById.get(item.varianteId) ??
                       (item.materiaPrimaNombre

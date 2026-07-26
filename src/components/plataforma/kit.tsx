@@ -2,6 +2,7 @@
 
 import * as React from "react";
 
+import { fechaCorta as fechaCortaAR } from "@/lib/fecha";
 import type { TenantConsola } from "@/lib/plataforma-api";
 
 /**
@@ -164,12 +165,11 @@ export function haceCuanto(iso: string | null): string {
   return `hace ${Math.round(h / 24)} d`;
 }
 
+// El control plane lo mira el staff de la plataforma sobre TODOS los tenants:
+// acá no hay "zona del tenant" que aplicar, y el default de @/lib/fecha ya es
+// la zona de la empresa (Argentina). No usa `useFecha()` a propósito.
 export function fechaCorta(iso: string): string {
-  return new Date(iso).toLocaleDateString("es-AR", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  return fechaCortaAR(iso);
 }
 
 /**

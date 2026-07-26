@@ -69,6 +69,9 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { formatearMoneda, numeroMoneda, type Moneda } from "@/lib/moneda";
+import { MoneyInput } from "@/components/ui/money-input";
+import { useConfigRegional, useFecha } from "@/components/navigation/config-regional-provider";
 
 const number2Formatter = new Intl.NumberFormat("es-AR", {
   minimumFractionDigits: 2,
@@ -137,8 +140,8 @@ function getLabel<T extends string>(
   return items.find((item) => item.value === value)?.label ?? fallback;
 }
 
-function formatCurrencyUnit(value: number, unitLabel: string) {
-  return `$${number2Formatter.format(value)} por ${unitLabel}`;
+function formatCurrencyUnit(value: number, unitLabel: string, moneda: Moneda) {
+  return `${formatearMoneda(value, moneda, { decimales: 2 })} por ${unitLabel}`;
 }
 
 function resolveVarianteUnits(
@@ -161,6 +164,12 @@ type LocalVariante = {
   unidadStock?: UnidadMateriaPrima;
   unidadCompra?: UnidadMateriaPrima;
   precioReferencia?: number;
+  /**
+   * Lo que se ve en el MoneyInput. Va aparte del número porque mientras se
+   * tipea el texto puede no parsear ("1234," a mitad de camino) y el input
+   * no puede quedarse en blanco; al payload va sólo `precioReferencia`.
+   */
+  precioReferenciaTexto?: string;
   proveedorReferenciaId?: string;
 };
 
@@ -365,11 +374,15 @@ function createEmptyVariante(): LocalVariante {
     unidadStock: undefined,
     unidadCompra: undefined,
     precioReferencia: undefined,
+    precioReferenciaTexto: "",
     proveedorReferenciaId: undefined,
   };
 }
 
-function mapMateriaPrimaToForm(materiaPrima: MateriaPrima): FormState {
+function mapMateriaPrimaToForm(
+  materiaPrima: MateriaPrima,
+  moneda: Moneda,
+): FormState {
   return {
     codigo: materiaPrima.codigo,
     nombre: materiaPrima.nombre,
@@ -402,6 +415,10 @@ function mapMateriaPrimaToForm(materiaPrima: MateriaPrima): FormState {
             unidadStock: undefined,
             unidadCompra: undefined,
             precioReferencia: variante.precioReferencia ?? undefined,
+            precioReferenciaTexto:
+              variante.precioReferencia != null
+                ? numeroMoneda(variante.precioReferencia, moneda)
+                : "",
             proveedorReferenciaId: variante.proveedorReferenciaId ?? undefined,
           }))
         : [createEmptyVariante()],
@@ -567,10 +584,6 @@ const COMPONENTES_UNIDAD_IMAGEN_LASER = new Set<string>([
   "drum_cleaning_blade",
 ]);
 
-function formatFechaCorta(value: string) {
-  return new Date(value).toLocaleString();
-}
-
 function getMovimientoTipoLabel(tipo: string) {
   switch (tipo) {
     case "ingreso":
@@ -591,10 +604,13 @@ function getMovimientoTipoLabel(tipo: string) {
 }
 
 export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: MateriaPrimaFichaProps) {
+  const { moneda } = useConfigRegional();
+  const { fechaNumerica, hora } = useFecha();
+  const formatFechaCorta = (value: string) => `${fechaNumerica(value)} ${hora(value)}`;
   const router = useRouter();
-  const [form, setForm] = React.useState<FormState>(() => mapMateriaPrimaToForm(materiaPrima));
+  const [form, setForm] = React.useState<FormState>(() => mapMateriaPrimaToForm(materiaPrima, moneda));
   const [savedSnapshot, setSavedSnapshot] = React.useState(() =>
-    createFormSnapshot(mapMateriaPrimaToForm(materiaPrima)),
+    createFormSnapshot(mapMateriaPrimaToForm(materiaPrima, moneda)),
   );
   const [activeTab, setActiveTab] = React.useState("datos-base");
   const [isSaving, setIsSaving] = React.useState(false);
@@ -645,11 +661,11 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
   const hasChanges = currentSnapshot !== savedSnapshot;
 
   React.useEffect(() => {
-    const nextForm = mapMateriaPrimaToForm(materiaPrima);
+    const nextForm = mapMateriaPrimaToForm(materiaPrima, moneda);
     setForm(nextForm);
     setSavedSnapshot(createFormSnapshot(nextForm));
     setCustomFormatoModeByVariante({});
-  }, [materiaPrima]);
+  }, [materiaPrima, moneda]);
 
   React.useEffect(() => {
     setForm((prev) => {
@@ -930,7 +946,7 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
         template?.camposTecnicos ?? [],
       );
       const updated = await updateMateriaPrima(materiaPrima.id, payload);
-      const updatedForm = mapMateriaPrimaToForm(updated);
+      const updatedForm = mapMateriaPrimaToForm(updated, moneda);
       setForm(updatedForm);
       setSavedSnapshot(createFormSnapshot(updatedForm));
       toast.success("Ficha de materia prima actualizada.");
@@ -1605,23 +1621,23 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                                 return (
                                   <div className="space-y-1">
                                     <div className="relative max-w-[260px]">
-                                      <Input
-                                        type="number"
-                                        min={0}
-                                        step="0.000001"
-                                        className="pl-6 pr-20"
-                                        value={variante.precioReferencia ?? ""}
-                                        onChange={(event) =>
+                                      <MoneyInput
+                                        inputClassName="pr-20"
+                                        value={
+                                          variante.precioReferenciaTexto ??
+                                          (variante.precioReferencia != null
+                                            ? numeroMoneda(variante.precioReferencia, moneda)
+                                            : "")
+                                        }
+                                        moneda={moneda}
+                                        ariaLabel="Precio de costo por unidad de compra"
+                                        onValueChange={(texto, numero) =>
                                           setVariante(variante.id, {
-                                            precioReferencia: event.target.value
-                                              ? Number(event.target.value)
-                                              : undefined,
+                                            precioReferenciaTexto: texto,
+                                            precioReferencia: numero ?? undefined,
                                           })
                                         }
                                       />
-                                      <span className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-xs text-muted-foreground">
-                                        $
-                                      </span>
                                       <span className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-xs text-muted-foreground">
                                         {unidadCompraLabelVariante}
                                       </span>
@@ -1629,13 +1645,13 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                                     <p className="text-xs text-muted-foreground">
                                       Precio cargado:{" "}
                                       {typeof precioReferencia === "number" && Number.isFinite(precioReferencia)
-                                        ? formatCurrencyUnit(precioReferencia, unidadCompraLabelVariante)
+                                        ? formatCurrencyUnit(precioReferencia, unidadCompraLabelVariante, moneda)
                                         : `Sin definir por ${unidadCompraLabelVariante}`}
                                     </p>
                                     {precioPorStock !== null && unidadCompra !== unidadStock ? (
                                       <p className="text-xs text-muted-foreground">
                                         Valor interno normalizado:{" "}
-                                        {formatCurrencyUnit(precioPorStock, unidadStockLabelVariante)}
+                                        {formatCurrencyUnit(precioPorStock, unidadStockLabelVariante, moneda)}
                                       </p>
                                     ) : null}
                                   </div>
@@ -1697,8 +1713,10 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                       <CardTitle className="text-sm">Valor stock</CardTitle>
                     </CardHeader>
                     <CardContent className="text-2xl font-semibold">
-                      $ {number2Formatter.format(
+                      {formatearMoneda(
                         inventarioResumen.reduce((acc, item) => acc + item.valorStock, 0),
+                        moneda,
+                        { decimales: 2 },
                       )}
                     </CardContent>
                   </Card>
@@ -1746,10 +1764,10 @@ export function MateriaPrimaFicha({ materiaPrima, proveedores, maquinas }: Mater
                               {number2Formatter.format(item.stockTotal)}
                             </TableCell>
                             <TableCell className="text-right">
-                              $ {number2Formatter.format(item.costoPromedio)}
+                              {formatearMoneda(item.costoPromedio, moneda, { decimales: 2 })}
                             </TableCell>
                             <TableCell className="text-right">
-                              $ {number2Formatter.format(item.valorStock)}
+                              {formatearMoneda(item.valorStock, moneda, { decimales: 2 })}
                             </TableCell>
                             <TableCell className="text-right">{item.almacenesConStock}</TableCell>
                             <TableCell>

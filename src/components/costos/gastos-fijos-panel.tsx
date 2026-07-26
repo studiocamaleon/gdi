@@ -8,6 +8,9 @@
  */
 
 import * as React from "react";
+import { formatearMoneda, parsearMonto, type Moneda } from "@/lib/moneda";
+import { useConfigRegional } from "@/components/navigation/config-regional-provider";
+import { MoneyInput } from "@/components/ui/money-input";
 import { toast } from "sonner";
 import { ConciliacionNominaCard } from "@/components/costos/conciliacion-nomina-card";
 
@@ -24,7 +27,8 @@ import {
 } from "@/lib/gastos-fijos-api";
 
 /* ─── helpers ─── */
-const fmt = (n: number) => "$" + Math.round(n).toLocaleString("es-AR");
+const fmt = (n: number, moneda: Moneda) =>
+  formatearMoneda(n, moneda, { decimales: 0 });
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 function monthLbl(s: string | null): string | null {
   if (!s) return null;
@@ -57,6 +61,7 @@ const MES = mesActual();
 const FORM_VACIO = { nombre: "", categoria: "SUELDOS" as CategoriaGastoFijo, importe: "", vigenteDesde: MES, vigenteHasta: "" };
 
 export function GastosFijosPanel({ initialGastos }: { initialGastos: GastoFijo[] }) {
+  const { moneda } = useConfigRegional();
   const [gastos, setGastos] = React.useState<GastoFijo[]>(initialGastos);
   const [form, setForm] = React.useState(FORM_VACIO);
   const [guardando, setGuardando] = React.useState(false);
@@ -85,9 +90,12 @@ export function GastosFijosPanel({ initialGastos }: { initialGastos: GastoFijo[]
 
   async function agregar(event: React.FormEvent) {
     event.preventDefault();
-    const importe = Number((form.importe || "").replace(/\D/g, ""));
+    // parsearMonto entiende los separadores de la moneda del tenant; la
+    // máscara vieja (replace(/\D/g,"")) hacía imposible tipear centavos.
+    const importe = parsearMonto(form.importe, moneda);
     if (!form.nombre.trim()) return toast.error("Poné un nombre al gasto.");
-    if (!importe) return toast.error("El importe mensual no es válido.");
+    if (importe === null || importe <= 0)
+      return toast.error("El importe mensual no es válido.");
     if (form.vigenteHasta && form.vigenteHasta < form.vigenteDesde)
       return toast.error('La vigencia "hasta" no puede ser anterior a "desde".');
     setGuardando(true);
@@ -134,7 +142,7 @@ export function GastosFijosPanel({ initialGastos }: { initialGastos: GastoFijo[]
           </div>
           <div className="total-badge">
             <div className="lbl">Total fijo vigente · {MES}</div>
-            <div className="val">{fmt(total)}</div>
+            <div className="val">{fmt(total, moneda)}</div>
             <div className="unit">por mes · {vigentes.length} conceptos</div>
           </div>
         </div>
@@ -145,7 +153,7 @@ export function GastosFijosPanel({ initialGastos }: { initialGastos: GastoFijo[]
         <div className="kpis">
           <div className="kpi">
             <div className="l"><IcCard />Total mensual</div>
-            <div className="v">{fmt(total)}</div>
+            <div className="v">{fmt(total, moneda)}</div>
             <div className="h">
               {deltaPct === null ? (
                 "sin mes anterior para comparar"
@@ -197,11 +205,11 @@ export function GastosFijosPanel({ initialGastos }: { initialGastos: GastoFijo[]
                     </div>
                     <div className="field">
                       <label>Importe mensual</label>
-                      <div className="money">
-                        <span className="pfx">$</span>
-                        <input className="ctl" inputMode="numeric" placeholder="0" value={form.importe}
-                          onChange={(e) => { const n = e.target.value.replace(/\D/g, ""); setForm((f) => ({ ...f, importe: n ? Number(n).toLocaleString("es-AR") : "" })); }} />
-                      </div>
+                      {/* "money" en el wrapper para que .gf .money .ctl siga
+                          dando el padding del símbolo; el input conserva .ctl */}
+                      <MoneyInput className="money" inputClassName="ctl" placeholder="0"
+                        value={form.importe} moneda={moneda} ariaLabel="Importe mensual"
+                        onValueChange={(texto) => setForm((f) => ({ ...f, importe: texto }))} />
                     </div>
                     <div className="field">
                       <label>Vigente desde</label>
@@ -252,7 +260,7 @@ export function GastosFijosPanel({ initialGastos }: { initialGastos: GastoFijo[]
                         <tr key={g.id} className={g.activo ? "" : "off"}>
                           <td className="nm-cell"><div className="nm">{g.nombre}</div></td>
                           <td><span className="cat"><span className="dot" style={{ background: info(g.categoria).color }} />{info(g.categoria).label}</span></td>
-                          <td className="amt-cell">{fmt(g.importeMensual)}</td>
+                          <td className="amt-cell">{fmt(g.importeMensual, moneda)}</td>
                           <td>
                             <span className="vig">
                               {monthLbl(g.vigenteDesde)}<span className="arw">→</span>
@@ -274,7 +282,7 @@ export function GastosFijosPanel({ initialGastos }: { initialGastos: GastoFijo[]
               </div>
               <div className="foot">
                 <span className="lbl">Total fijo vigente por mes</span>
-                <span className="sum">{fmt(total)}</span>
+                <span className="sum">{fmt(total, moneda)}</span>
               </div>
             </div>
           </div>
@@ -299,7 +307,7 @@ export function GastosFijosPanel({ initialGastos }: { initialGastos: GastoFijo[]
                       <div key={k} className="comp-row">
                         <span className="dot" style={{ background: info(k).color }} />
                         <span className="nm">{info(k).label}</span>
-                        <span className="amt">{fmt(v)}</span>
+                        <span className="amt">{fmt(v, moneda)}</span>
                         <span className="pct">{Math.round((v / total) * 100)}%</span>
                       </div>
                     ))}

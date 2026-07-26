@@ -2,8 +2,9 @@
 
 import * as React from "react";
 
-import { fechaHoraCorta } from "@/lib/fecha";
 import { toast } from "sonner";
+
+import { useFecha } from "@/components/navigation/config-regional-provider";
 
 import {
   crearUsuario,
@@ -70,6 +71,7 @@ export function UsuariosView({
   empleados: EmpleadoOpcion[];
   historial: EventoAcceso[];
 }) {
+  const { fechaHoraCorta } = useFecha();
   const [datos, setDatos] = React.useState(inicial);
   const [roles, setRoles] = React.useState(rolesIniciales);
   const [historial, setHistorial] = React.useState(historialInicial);
@@ -475,12 +477,12 @@ export function UsuariosView({
         ) : (
           historial.map((e) => (
             <div className="int-nt-log-fila" key={e.id}>
-              {/* Sin `suppressHydrationWarning`: el helper formatea en hora de
-                  Argentina de los dos lados, así que ya no hay diferencia que
+              {/* Sin `suppressHydrationWarning`: el helper formatea en la zona
+                  del tenant de los dos lados, así que ya no hay diferencia que
                   tapar. Taparla escondía además cualquier OTRA discrepancia
                   que apareciera en este span. */}
               <span className="int-nt-log-fecha">
-                {fechaCorta(e.createdAt)}
+                {fechaHoraCorta(e.createdAt)}
               </span>
               <div>
                 <div>{e.descripcion}</div>
@@ -767,15 +769,6 @@ function FormularioInvitacion({
 function descripcionDelRol(roles: RolDelTenant[], rolId: string): string {
   return roles.find((r) => r.id === rolId)?.descripcion ?? "";
 }
-
-/**
- * dd/mm hh:mm en hora de Argentina.
- *
- * Antes se armaba con `toLocaleString` y hacía falta un `suppressHydrationWarning`
- * para tapar la diferencia de zona entre el servidor y el navegador. El helper
- * fija la zona, así que ya no hay nada que tapar. Ver src/lib/fecha.ts
- */
-const fechaCorta = fechaHoraCorta;
 
 function nombreDe(u: UsuarioDelTenant): string {
   return u.nombreCompleto?.trim() || u.email;

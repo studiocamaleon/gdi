@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import { formatearMoneda, parsearMonto, type Moneda } from "@/lib/moneda";
+import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { PlusIcon, Trash2Icon, WalletIcon } from "lucide-react";
 import { toast } from "sonner";
 
@@ -13,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import { usePuede } from "@/components/navigation/permisos-provider";
@@ -35,8 +38,8 @@ import {
  * leen de acá. Ver docs/legajos-nomina-diseno.md
  */
 
-const fmt = (n: number) =>
-  n.toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+const fmt = (n: number, moneda: Moneda) =>
+  formatearMoneda(n, moneda, { decimales: 0 });
 
 /** 'YYYY-MM' → 'julio 2026'. */
 function mesLargo(periodo: string): string {
@@ -69,6 +72,7 @@ const BORRADOR_VACIO: Borrador = {
 };
 
 export function RemuneracionSection({ empleadoId }: { empleadoId: string }) {
+  const { moneda } = useConfigRegional();
   const puedeVer = usePuede("registros.ver_remuneraciones");
   const [filas, setFilas] = React.useState<Remuneracion[] | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -95,16 +99,27 @@ export function RemuneracionSection({ empleadoId }: { empleadoId: string }) {
   const vigente = filas?.find((f) => f.vigenteHasta === null) ?? null;
 
   async function guardar() {
-    if (!borrador.sueldoNeto) {
-      toast.error("Falta el sueldo neto.");
+    // El usuario tipea con los separadores de su moneda ("1.234,56"); el DTO
+    // del API exige @IsNumberString() canónico ("1234.56"). Se parsea acá y
+    // se manda String(numero): el texto crudo nunca viaja.
+    const sueldo = parsearMonto(borrador.sueldoNeto, moneda);
+    if (sueldo === null || sueldo <= 0) {
+      toast.error("Falta el sueldo neto (o no es un monto válido).");
+      return;
+    }
+    const cargas = borrador.cargasSociales.trim()
+      ? parsearMonto(borrador.cargasSociales, moneda)
+      : 0;
+    if (cargas === null) {
+      toast.error("Las cargas sociales no son un monto válido.");
       return;
     }
     setGuardando(true);
     try {
       await crearRemuneracion(empleadoId, {
         vigenteDesde: borrador.vigenteDesde,
-        sueldoNeto: borrador.sueldoNeto,
-        cargasSociales: borrador.cargasSociales || "0",
+        sueldoNeto: String(sueldo),
+        cargasSociales: String(cargas),
         sueldosPorAnio: borrador.sueldosPorAnio,
         motivo: borrador.motivo,
       });
@@ -157,10 +172,10 @@ export function RemuneracionSection({ empleadoId }: { empleadoId: string }) {
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                   <WalletIcon className="size-4 text-muted-foreground" />
                   <span className="text-2xl font-semibold tracking-tight">
-                    ${fmt(vigente.sueldoNeto)}
+                    {fmt(vigente.sueldoNeto, moneda)}
                   </span>
                   <span className="text-sm text-muted-foreground">
-                    de bolsillo + ${fmt(vigente.cargasSociales)} de cargas
+                    de bolsillo + {fmt(vigente.cargasSociales, moneda)} de cargas
                   </span>
                   <Badge variant="secondary" className="ml-auto">
                     desde {mesLargo(vigente.vigenteDesde)}
@@ -190,13 +205,13 @@ export function RemuneracionSection({ empleadoId }: { empleadoId: string }) {
                         : " (sin aguinaldo)"}
                     </span>
                     <span className="font-semibold">
-                      ${fmt(vigente.costoMensual)}
+                      {fmt(vigente.costoMensual, moneda)}
                     </span>
                   </div>
                   {vigente.provisionSacMensual > 0 ? (
                     <p className="mt-1 text-xs text-muted-foreground">
-                      ${fmt(vigente.costoMensualSinSac)} del mes + $
-                      {fmt(vigente.provisionSacMensual)} de provisión del
+                      {fmt(vigente.costoMensualSinSac, moneda)} del mes +{" "}
+                      {fmt(vigente.provisionSacMensual, moneda)} de provisión del
                       aguinaldo. Se prorratea para que el mismo trabajo no
                       cueste distinto en junio que en marzo.
                     </p>
@@ -231,9 +246,9 @@ export function RemuneracionSection({ empleadoId }: { empleadoId: string }) {
                       <span className="text-muted-foreground">
                         {mesLargo(f.vigenteDesde)} → {mesLargo(f.vigenteHasta!)}
                       </span>
-                      <span className="font-medium">${fmt(f.sueldoNeto)}</span>
+                      <span className="font-medium">{fmt(f.sueldoNeto, moneda)}</span>
                       <span className="text-xs text-muted-foreground">
-                        + ${fmt(f.cargasSociales)} cargas
+                        + {fmt(f.cargasSociales, moneda)} cargas
                       </span>
                       {f.motivo ? (
                         <Badge variant="outline" className="text-xs">
@@ -275,12 +290,12 @@ export function RemuneracionSection({ empleadoId }: { empleadoId: string }) {
                   </label>
                   <label className="flex flex-col gap-1 text-sm">
                     <span className="text-muted-foreground">Sueldo neto</span>
-                    <Input
-                      inputMode="decimal"
+                    <MoneyInput
                       placeholder="0"
                       value={borrador.sueldoNeto}
-                      onChange={(e) =>
-                        setBorrador((b) => ({ ...b, sueldoNeto: e.target.value }))
+                      moneda={moneda}
+                      onValueChange={(texto) =>
+                        setBorrador((b) => ({ ...b, sueldoNeto: texto }))
                       }
                     />
                   </label>
@@ -288,14 +303,14 @@ export function RemuneracionSection({ empleadoId }: { empleadoId: string }) {
                     <span className="text-muted-foreground">
                       Cargas sociales
                     </span>
-                    <Input
-                      inputMode="decimal"
+                    <MoneyInput
                       placeholder="0"
                       value={borrador.cargasSociales}
-                      onChange={(e) =>
+                      moneda={moneda}
+                      onValueChange={(texto) =>
                         setBorrador((b) => ({
                           ...b,
-                          cargasSociales: e.target.value,
+                          cargasSociales: texto,
                         }))
                       }
                     />
