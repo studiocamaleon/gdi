@@ -65,7 +65,7 @@ export class VentasService {
       FROM "OrdenTrabajoItem" oti
       JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
       LEFT JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
-      WHERE oti."tenantId" = ${tenantId}::uuid AND ot.estado <> 'borrador'
+      WHERE oti."tenantId" = ${tenantId}::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
         AND ot."fechaEmision" >= ${rango.desde} AND ot."fechaEmision" < ${finExclusivo(rango)}
       GROUP BY 1 ORDER BY 1
     `;
@@ -83,7 +83,7 @@ export class VentasService {
       FROM "OrdenTrabajoItem" oti
       JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
       LEFT JOIN "Cliente" c ON c.id = ot."clienteId"
-      WHERE oti."tenantId" = ${tenantId}::uuid AND ot.estado <> 'borrador'
+      WHERE oti."tenantId" = ${tenantId}::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
         AND ot."fechaEmision" >= ${rango.desde} AND ot."fechaEmision" < ${finExclusivo(rango)}
       GROUP BY ot."clienteId", c.nombre
       ORDER BY facturado DESC
@@ -107,7 +107,7 @@ export class VentasService {
                SUM(oti.subtotal) AS total
         FROM "OrdenTrabajoItem" oti
         JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
-        WHERE oti."tenantId" = ${tenantId}::uuid AND ot.estado <> 'borrador'
+        WHERE oti."tenantId" = ${tenantId}::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
           AND ot."fechaEmision" >= ${rango.desde} AND ot."fechaEmision" < ${finExclusivo(rango)}
         GROUP BY ot.id, 2
       )
@@ -143,7 +143,7 @@ export class VentasService {
              COALESCE(SUM(oti.subtotal), 0)::float8 AS monto
       FROM "OrdenTrabajoItem" oti
       JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
-      WHERE oti."tenantId" = ${tenantId}::uuid AND ot.estado <> 'borrador'
+      WHERE oti."tenantId" = ${tenantId}::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
         AND ot."fechaEmision" >= ${desde12} AND ot."fechaEmision" < ${finExclusivo(rango)}
       GROUP BY 1, 2 ORDER BY 2, 1
     `;
@@ -170,7 +170,7 @@ export class VentasService {
           FROM "OrdenTrabajoItem" oti
           JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
           LEFT JOIN "Empleado" e ON e.id = ot."vendedorEmpleadoId"
-          WHERE oti."tenantId" = ${tenantId}::uuid AND ot.estado <> 'borrador'
+          WHERE oti."tenantId" = ${tenantId}::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
             AND ot."fechaEmision" >= ${desde} AND ot."fechaEmision" < ${hastaExcl}
           GROUP BY ot."vendedorEmpleadoId", e."nombreCompleto"
           ORDER BY facturado DESC
@@ -180,7 +180,7 @@ export class VentasService {
                  COALESCE(SUM(oti.subtotal), 0)::float8 AS monto
           FROM "OrdenTrabajoItem" oti
           JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
-          WHERE oti."tenantId" = ${tenantId}::uuid AND ot.estado <> 'borrador'
+          WHERE oti."tenantId" = ${tenantId}::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
             AND ot."fechaEmision" >= ${desde} AND ot."fechaEmision" < ${hastaExcl}
           GROUP BY 1 ORDER BY monto DESC
         `,
@@ -190,7 +190,7 @@ export class VentasService {
           FROM "OrdenTrabajoItem" oti
           JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
           LEFT JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
-          WHERE oti."tenantId" = ${tenantId}::uuid AND ot.estado <> 'borrador'
+          WHERE oti."tenantId" = ${tenantId}::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
             AND ot."fechaEmision" >= ${desde} AND ot."fechaEmision" < ${hastaExcl}
           GROUP BY 1 ORDER BY monto DESC
         `,
@@ -203,7 +203,7 @@ export class VentasService {
                  MIN(ot."fechaEmision") AS primera, MAX(ot."fechaEmision") AS ultima
           FROM "OrdenTrabajo" ot
           LEFT JOIN "Cliente" c ON c.id = ot."clienteId"
-          WHERE ot."tenantId" = ${tenantId}::uuid AND ot.estado <> 'borrador'
+          WHERE ot."tenantId" = ${tenantId}::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
             AND ot."clienteId" IS NOT NULL AND ot."fechaEmision" IS NOT NULL
           GROUP BY ot."clienteId", c.nombre
         `,
@@ -275,7 +275,7 @@ export class VentasService {
              COUNT(*)::int AS items
       FROM "OrdenTrabajoItem" oti
       JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
-      WHERE oti."tenantId" = ${tenantId}::uuid AND ot.estado <> 'borrador'
+      WHERE oti."tenantId" = ${tenantId}::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
         AND ot."fechaEmision" >= ${rango.desde} AND ot."fechaEmision" < ${finExclusivo(rango)}
     `;
     return rows[0] ?? { ventas: 0, ordenes: 0, items: 0 };

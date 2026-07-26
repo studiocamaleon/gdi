@@ -167,6 +167,42 @@ describe('PermisosGuard', () => {
     expect(guard.canActivate(contexto(AUTH))).toBe(true);
   });
 
+  /**
+   * Varios permisos = alcanza con cualquiera. Es lo que deja que el cobro lo
+   * registren dos roles distintos —el Administrativo por la caja, el Vendedor
+   * por la seña— sin darle a ninguno el permiso del otro.
+   */
+  describe('permisos alternativos (OR)', () => {
+    it('alcanza con tener uno de los declarados', () => {
+      const guard = guardCon({
+        [PERMISO_KEY]: ['administracion.gestionar', 'produccion.ver'],
+      });
+      expect(guard.canActivate(contexto(AUTH))).toBe(true);
+    });
+
+    it('rechaza si no tiene ninguno', () => {
+      const guard = guardCon({
+        [PERMISO_KEY]: ['administracion.gestionar', 'costos.ver'],
+      });
+      expect(() => guard.canActivate(contexto(AUTH))).toThrow(
+        ForbiddenException,
+      );
+    });
+
+    /** La forma vieja (una sola clave, sin array) tiene que seguir andando. */
+    it('sigue aceptando un permiso suelto', () => {
+      const guard = guardCon({ [PERMISO_KEY]: 'produccion.gestionar' });
+      expect(guard.canActivate(contexto(AUTH))).toBe(true);
+    });
+
+    it('una lista vacía deniega, como no declarar nada', () => {
+      const guard = guardCon({ [PERMISO_KEY]: [] });
+      expect(() => guard.canActivate(contexto(AUTH))).toThrow(
+        ForbiddenException,
+      );
+    });
+  });
+
   it('no se mete con el control plane (@SinTenant)', () => {
     const guard = guardCon({ [SIN_TENANT_KEY]: true });
     expect(guard.canActivate(contexto(undefined))).toBe(true);

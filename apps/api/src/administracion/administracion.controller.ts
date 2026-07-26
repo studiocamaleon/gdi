@@ -36,6 +36,7 @@ import {
   CrearComprobanteDto,
   FacturarLoteDto,
   FacturarOrdenDto,
+  NotaCreditoOrdenDto,
   ImputarCobroDto,
 } from './dto/comprobante.dto';
 import { FacturacionOrdenesService } from './facturacion-ordenes.service';
@@ -219,6 +220,21 @@ export class AdministracionController {
   @Get('facturacion/pendientes')
   pendientesFacturacion(@CurrentSession() auth: CurrentAuth) {
     return this.facturacionOrdenesService.pendientesFacturacion(auth.tenantId);
+  }
+
+  /**
+   * Nota de crédito contra una factura de la orden. Pide `administracion.anular`
+   * —no `gestionar`— porque es la operación que DESHACE: emitir factura y
+   * anularla son dos permisos distintos, igual que descartar un comprobante.
+   */
+  @Permiso('administracion.anular')
+  @Post('ordenes/:ordenId/nota-credito')
+  notaCreditoOrden(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('ordenId') ordenId: string,
+    @Body() body: NotaCreditoOrdenDto,
+  ) {
+    return this.comprobantesService.notaCreditoDeOrden(auth, ordenId, body);
   }
 
   /** Facturar (parcial o total) una orden desde su ficha. */
@@ -428,7 +444,8 @@ export class AdministracionController {
     return this.cobrosService.pendientesAcreditacion(auth);
   }
 
-  @Permiso('administracion.gestionar')
+  // También el Vendedor: la seña se toma al cerrar la venta, no en la caja.
+  @Permiso('administracion.gestionar', 'administracion.cobrar')
   @Post('cobros')
   crearCobro(
     @CurrentSession() auth: CurrentAuth,
@@ -468,6 +485,9 @@ export class AdministracionController {
     return this.cobrosService.acreditar(auth, id);
   }
 
+  // El formulario de cobro los necesita para pintarse, así que quien puede
+  // cobrar tiene que poder leerlos aunque no vea el resto de administración.
+  @Permiso('administracion.ver', 'administracion.cobrar')
   @Get('metodos-pago')
   findAllMetodos(@CurrentSession() auth: CurrentAuth) {
     return this.metodosPagoService.findAll(auth);
@@ -504,6 +524,8 @@ export class AdministracionController {
     return this.metodosPagoService.toggle(auth, id);
   }
 
+  /** Idem métodos de pago: es la cuenta a la que entra lo que se cobra. */
+  @Permiso('administracion.ver', 'administracion.cobrar')
   @Get('cuentas')
   listarCuentas(@CurrentSession() auth: CurrentAuth) {
     return this.metodosPagoService.listarCuentas(auth);

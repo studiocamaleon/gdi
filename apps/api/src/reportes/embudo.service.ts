@@ -150,7 +150,9 @@ export class EmbudoService {
         where: {
           tenantId,
           cotizacionId: null,
-          estado: { not: 'borrador' },
+          // Una orden cancelada no entró al embudo por la puerta de venta
+          // directa: no llegó a ningún lado.
+          estado: { notIn: ['borrador', 'cancelada'] },
           fechaEmision: { gte: rango.desde, lte: hasta },
         },
       }),

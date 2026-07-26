@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ArchivosModule } from '../archivos/archivos.module';
+import { AdministracionModule } from '../administracion/administracion.module';
 import { EtaModule } from '../eta/eta.module';
 import { EnlacesPublicosModule } from '../enlaces-publicos/enlaces-publicos.module';
 import { DatosEmpresaModule } from '../tenants/datos-empresa.module';
@@ -8,6 +9,9 @@ import { OrdenesTrabajoService } from './ordenes-trabajo.service';
 
 @Module({
   imports: [
+    // "Acreditar y cancelar" en un paso necesita emitir la NC. Dependencia de
+    // ida: Administración no importa este módulo.
+    AdministracionModule,
     EtaModule,
     ArchivosModule,
     EnlacesPublicosModule,

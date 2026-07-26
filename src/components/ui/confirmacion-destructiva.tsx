@@ -53,10 +53,16 @@ interface ConfirmacionDestructivaProps {
   textoConfirmacion?: string;
   /** Si false, omite el input de tipeo (acciones menos críticas). */
   requiereTipear?: boolean;
+  /**
+   * Pide un motivo escrito y lo pasa a `onConfirmar`. Para lo que queda
+   * registrado y alguien va a leer meses después —cancelar una orden—, donde
+   * el "por qué" importa más que la confirmación en sí.
+   */
+  motivo?: { label: string; placeholder?: string; minimo?: number };
   /** Label del botón de confirmación. */
   accionLabel: string;
   /** Callback al confirmar. Devuelve promise para mostrar estado de carga. */
-  onConfirmar: () => void | Promise<void>;
+  onConfirmar: (motivo: string) => void | Promise<void>;
 }
 
 export function ConfirmacionDestructiva({
@@ -68,29 +74,36 @@ export function ConfirmacionDestructiva({
   nombreItem,
   textoConfirmacion,
   requiereTipear = true,
+  motivo,
   accionLabel,
   onConfirmar,
 }: ConfirmacionDestructivaProps) {
   const palabraEsperada = textoConfirmacion ?? nombreItem ?? "";
   const [tipeado, setTipeado] = React.useState("");
+  const [texto, setTexto] = React.useState("");
   const [ejecutando, setEjecutando] = React.useState(false);
 
   // Reset al cerrar
   React.useEffect(() => {
     if (!open) {
       setTipeado("");
+      setTexto("");
       setEjecutando(false);
     }
   }, [open]);
 
+  const motivoOk =
+    !motivo || texto.trim().length >= (motivo.minimo ?? 3);
   const habilitado =
-    !ejecutando && (!requiereTipear || tipeado.trim() === palabraEsperada.trim());
+    !ejecutando &&
+    motivoOk &&
+    (!requiereTipear || tipeado.trim() === palabraEsperada.trim());
 
   const handleConfirmar = async () => {
     if (!habilitado) return;
     setEjecutando(true);
     try {
-      await onConfirmar();
+      await onConfirmar(texto.trim());
     } finally {
       // El parent normalmente cierra el dialog; igual aseguramos el reset si queda abierto
       setEjecutando(false);
@@ -122,6 +135,24 @@ export function ConfirmacionDestructiva({
                 <li key={idx}>{i}</li>
               ))}
             </ul>
+          </div>
+        )}
+
+        {motivo && (
+          <div className="mt-4 space-y-2">
+            <Label htmlFor="confirmacion-motivo" className="text-xs">
+              {motivo.label}
+            </Label>
+            <textarea
+              id="confirmacion-motivo"
+              value={texto}
+              onChange={(e) => setTexto(e.target.value)}
+              placeholder={motivo.placeholder}
+              autoFocus
+              rows={3}
+              maxLength={500}
+              className="border-input placeholder:text-muted-foreground focus-visible:ring-ring w-full resize-none rounded-md border bg-transparent px-3 py-2 text-sm focus-visible:ring-1 focus-visible:outline-none"
+            />
           </div>
         )}
 

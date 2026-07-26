@@ -13,8 +13,10 @@ import {
   pasoReabrible,
   sumaTramosMin,
   TRANSICIONES_PASO,
+  validarCancelacion,
 } from '../ordenes-trabajo.service';
 import {
+  esCancelable,
   progresoEfectivo,
   tiempoMedidoValido,
   type OrdenTrabajoEstado,
@@ -65,8 +67,106 @@ describe('OrdenesTrabajoService — validarTransicion', () => {
 
   it('estado desconocido se rechaza', () => {
     expect(() =>
-      svc().validarTransicion('cancelada' as OrdenTrabajoEstado, 'entregada'),
+      svc().validarTransicion('archivada' as OrdenTrabajoEstado, 'entregada'),
     ).toThrow(BadRequestException);
+  });
+
+  /**
+   * `cancelada` no es una etapa más adelante: es una salida lateral. Si entrara
+   * en la comparación por índice quedaría alcanzable desde cualquier lado
+   * —incluida una orden entregada— por el orden del array y no por decisión.
+   */
+  describe('cancelada queda fuera del flujo', () => {
+    it('no se sale de cancelada', () => {
+      expect(() => svc().validarTransicion('cancelada', 'produccion')).toThrow(
+        BadRequestException,
+      );
+      expect(() => svc().validarTransicion('cancelada', 'entregada')).toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('no se entra a cancelada por el cambio de estado común', () => {
+      expect(() => svc().validarTransicion('produccion', 'cancelada')).toThrow(
+        /acción de cancelar/i,
+      );
+    });
+  });
+});
+
+describe('desde dónde se puede cancelar', () => {
+  it.each(['borrador', 'pendiente', 'produccion'] as const)(
+    'una orden %s se puede cancelar',
+    (estado) => {
+      expect(esCancelable(estado)).toBe(true);
+    },
+  );
+
+  /**
+   * Decisión 2026-07-26: sólo se cancela lo que todavía no se hizo. Una
+   * finalizada ya consumió material y horas, así que sacarla del eje comercial
+   * se llevaría puestos la venta Y el costo juntos —salen de la misma fila— y
+   * el taller dejaría de ver que produjo algo que no cobró. Eso es una pérdida,
+   * y una pérdida no se esconde: se mira.
+   */
+  it('una finalizada NO se cancela: el trabajo ya está hecho', () => {
+    expect(esCancelable('finalizada')).toBe(false);
+  });
+
+  /** El trabajo ya salió por la puerta: eso se devuelve, no se cancela. */
+  it('una entregada NO se cancela', () => {
+    expect(esCancelable('entregada')).toBe(false);
+  });
+
+  it('una cancelada tampoco (se cancela una sola vez)', () => {
+    expect(esCancelable('cancelada')).toBe(false);
+  });
+});
+
+describe('validarCancelacion', () => {
+  it('deja cancelar lo que todavía no se facturó', () => {
+    expect(() => validarCancelacion('produccion', 0)).not.toThrow();
+    expect(() => validarCancelacion('borrador', 0)).not.toThrow();
+  });
+
+  /**
+   * El caso caro: si ARCA ya tiene una factura de esta orden, cancelarla
+   * dejaría el eje comercial diciendo una cosa y el fiscal otra. (Se puede
+   * facturar desde producción, así que el caso sigue vivo aunque las
+   * finalizadas ya no se cancelen.)
+   */
+  it('frena si la orden tiene facturación emitida', () => {
+    expect(() => validarCancelacion('produccion', 78_330)).toThrow(
+      /nota de crédito/i,
+    );
+  });
+
+  /** Y el mensaje dice cómo salir: reabrir la deja en producción. */
+  it('una finalizada manda a reabrir el paso', () => {
+    expect(() => validarCancelacion('finalizada', 0)).toThrow(/reabrí/i);
+  });
+
+  it('una entregada no se cancela ni sin facturar', () => {
+    expect(() => validarCancelacion('entregada', 0)).toThrow(
+      BadRequestException,
+    );
+  });
+
+  it('no se cancela dos veces', () => {
+    expect(() => validarCancelacion('cancelada', 0)).toThrow(/ya estaba/i);
+  });
+});
+
+describe('progreso de una orden cancelada', () => {
+  /** Decir "40%" invitaría a leerlo como algo que todavía puede terminar. */
+  it('no informa avance aunque el tablero haya dejado uno', () => {
+    expect(progresoEfectivo('cancelada', 40)).toBeNull();
+  });
+});
+
+describe('qué se puede editar de una cancelada', () => {
+  it('nada: es el registro de algo que no va a pasar', () => {
+    expect(svc().camposEditables('cancelada').size).toBe(0);
   });
 });
 

@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -17,11 +18,14 @@ import type { CurrentAuth } from '../auth/auth.types';
 import { firmaActor } from '../common/firma-actor';
 import { paginatedResponse } from '../common/dto/pagination.dto';
 import {
+  esCancelable,
   etiquetaMotivoFin,
+  ESTADO_CANCELADA,
   MOTIVOS_PAUSA,
   MOTIVO_PAUSA_LABELS,
   ORDEN_TRABAJO_ESTADOS,
   ORDEN_TRABAJO_ESTADO_LABELS,
+  ORDEN_TRABAJO_FLUJO,
   progresoEfectivo,
   tiempoMedidoValido,
   type MotivoPausa,
@@ -32,6 +36,7 @@ import {
 } from './ordenes-trabajo.types';
 import type {
   CambiarEstadoOrdenTrabajoDto,
+  CancelarOrdenTrabajoDto,
   CrearOrdenTrabajoDto,
   CrearOrdenTrabajoItemDto,
   EditarOrdenTrabajoDto,
@@ -98,6 +103,7 @@ function formatFechaCorta(iso: string | null): string {
 import type { OrdenesTrabajoQueryDto } from './dto/ordenes-trabajo-query.dto';
 import { filtrarSpecsPublicas } from './tracking-publico-specs';
 import { DatosEmpresaService } from '../tenants/datos-empresa.service';
+import { ComprobantesService } from '../administracion/comprobantes.service';
 import { NotificacionesOrdenesService } from '../integraciones/notificaciones/notificaciones-ordenes.service';
 import { formatearMoneda, type Moneda } from '../common/moneda';
 import { regionalDelTenant } from '../common/regional';
@@ -185,6 +191,38 @@ export const TRANSICIONES_PASO: Record<
  * Suma en minutos de los tramos CERRADOS de un paso (el tiempo medido, D2).
  * Un tramo abierto no suma: se cierra antes de completar/pausar.
  */
+/**
+ * Si esta orden se puede cancelar. Lanza con el motivo si no.
+ *
+ * Vive suelta y no adentro de `cancelar()` para poder probarla sin base: es la
+ * regla que decide si una venta desaparece de los números, y el caso caro —una
+ * orden ya facturada— no puede depender de que alguien acierte el escenario.
+ */
+export function validarCancelacion(
+  estado: OrdenTrabajoEstado,
+  facturadoTotal: number,
+): void {
+  if (estado === ESTADO_CANCELADA) {
+    throw new BadRequestException('La orden ya estaba cancelada.');
+  }
+  if (!esCancelable(estado)) {
+    // Dos mensajes distintos porque son dos situaciones distintas, y en una de
+    // ellas SÍ hay salida: la finalizada por error se reabre.
+    throw new BadRequestException(
+      estado === 'finalizada'
+        ? 'El trabajo ya está hecho: una orden finalizada no se cancela. Si la finalizaste por error, reabrí un paso desde el tablero —vuelve a producción— y cancelala desde ahí.'
+        : 'El trabajo ya se entregó: eso no se cancela. Si hay que devolver, emitile una nota de crédito al cliente.',
+    );
+  }
+  // El eje fiscal manda: si ARCA ya tiene una factura de esta orden, cancelarla
+  // dejaría al sistema diciendo dos cosas distintas. La NC es el camino.
+  if (facturadoTotal > 0) {
+    throw new ConflictException(
+      'La orden tiene facturación emitida. Emitile la nota de crédito primero y después cancelala.',
+    );
+  }
+}
+
 export function sumaTramosMin(
   tramos: Array<{ inicioEl: Date; finEl: Date | null }>,
 ): number {
@@ -270,6 +308,9 @@ export class OrdenesTrabajoService {
     private readonly avisos: NotificacionesOrdenesService,
     private readonly enlaces: EnlacesPublicosService,
     private readonly empresa: DatosEmpresaService,
+    // Para "acreditar y cancelar" en un paso. Es una dependencia de ida:
+    // Administración no sabe nada de este módulo, así que no hay ciclo.
+    private readonly comprobantes: ComprobantesService,
   ) {}
 
   /**
@@ -439,11 +480,12 @@ export class OrdenesTrabajoService {
             fechaEntrega: { gte: hoy0, lt: en8dias },
           },
         }),
-        // "Emitidas hoy": todo lo que no es borrador creado en el día.
+        // "Emitidas hoy": lo que salió al taller en el día. Una cancelada no
+        // cuenta aunque se haya emitido hoy: el número mide trabajo entrando.
         this.prisma.ordenTrabajo.count({
           where: {
             tenantId: auth.tenantId,
-            estado: { not: 'borrador' },
+            estado: { notIn: ['borrador', ESTADO_CANCELADA] },
             createdAt: { gte: hoy0, lt: manana0 },
           },
         }),
@@ -455,8 +497,10 @@ export class OrdenesTrabajoService {
       produccion: 0,
       finalizada: 0,
       entregada: 0,
+      cancelada: 0,
     };
-    // "Valor en curso": suma de todo lo que no está entregado ni en borrador.
+    // "Valor en curso": lo que el taller tiene entre manos. Ni entregado, ni
+    // borrador, ni cancelado — esa plata no va a entrar.
     let valorEnCurso = 0;
     for (const grupo of porEstado as Array<{
       estado: string;
@@ -465,7 +509,11 @@ export class OrdenesTrabajoService {
     }>) {
       const estado = grupo.estado as OrdenTrabajoEstado;
       counts[estado] = grupo._count._all;
-      if (estado !== 'entregada' && estado !== 'borrador') {
+      if (
+        estado !== 'entregada' &&
+        estado !== 'borrador' &&
+        estado !== ESTADO_CANCELADA
+      ) {
         valorEnCurso += Number(grupo._sum.total ?? 0);
       }
     }
@@ -784,6 +832,9 @@ export class OrdenesTrabajoService {
         return new Set(['fechaEntrega', 'observaciones']);
       case 'finalizada':
       case 'entregada':
+      // Cancelada es de sólo lectura como las cerradas: es el registro de algo
+      // que no va a pasar, y editarlo después sería reescribir la historia.
+      case 'cancelada':
         return new Set();
     }
   }
@@ -1430,6 +1481,239 @@ export class OrdenesTrabajoService {
     return this.findOne(auth, orden.id);
   }
 
+  // ── Cancelación ──────────────────────────────────────────────────────
+
+  /**
+   * Cancela una orden: la saca del taller y de las ventas, dejando por escrito
+   * quién, cuándo, por qué y con cuánto trabajo encima.
+   *
+   * Lo que NO hace, a propósito:
+   *
+   * - **No toca la plata.** Los cobros quedan como están: esa plata entró de
+   *   verdad. Al desaparecer la orden de la deuda, lo cobrado queda como saldo
+   *   a favor del cliente —que es lo que la cuenta corriente ya calcula sola—.
+   *   Devolverlo es otra operación, y anular el cobro sería mentir sobre la caja.
+   * - **No borra el trabajo hecho.** Los pasos, sus tramos y a quién
+   *   pertenecen siguen ahí: esas horas se trabajaron y se pagaron. La orden
+   *   sale del eje comercial (ventas, margen, deuda), no del eje de trabajo
+   *   (horas, utilización, eficiencia).
+   * - **No le avisa al cliente.** Cancelar es una conversación humana; el
+   *   sistema no manda un WhatsApp por su cuenta.
+   *
+   * Y no se puede cancelar una orden facturada: primero hay que emitir la nota
+   * de crédito, o el eje fiscal queda diciendo algo que el comercial ya negó.
+   */
+  async cancelar(
+    auth: CurrentAuth,
+    id: string,
+    payload: CancelarOrdenTrabajoDto,
+  ) {
+    const [orden, actor] = await Promise.all([
+      this.prisma.ordenTrabajo.findFirst({
+        where: { id, tenantId: auth.tenantId },
+      }),
+      this.prisma.empleado.findFirst({
+        where: { tenantId: auth.tenantId, userId: auth.userId },
+        select: { nombreCompleto: true },
+      }),
+    ]);
+    if (!orden) {
+      throw new NotFoundException('No se encontró la orden de trabajo.');
+    }
+
+    const desde = orden.estado as OrdenTrabajoEstado;
+    const motivo = payload.motivo.trim();
+
+    /**
+     * "Acreditar y cancelar" en un solo acto: la NC sale ANTES y fuera de la
+     * transacción de la cancelación —habla con ARCA por red, y una llamada
+     * externa no puede vivir dentro de una transacción de base—. Si ARCA
+     * rechaza, no se cancela nada: la orden queda como estaba y el error se ve.
+     */
+    if (payload.emitirNotaCredito && Number(orden.facturadoTotal) > 0) {
+      if (!auth.permisos?.has('administracion.anular')) {
+        throw new ForbiddenException(
+          'No podés emitir notas de crédito. Pedile a administración que acredite la factura y después cancelá la orden.',
+        );
+      }
+      await this.acreditarFacturasDeOrden(auth, orden.id, motivo);
+      const refrescada = await this.prisma.ordenTrabajo.findFirst({
+        where: { id: orden.id, tenantId: auth.tenantId },
+        select: { facturadoTotal: true },
+      });
+      validarCancelacion(desde, Number(refrescada?.facturadoTotal ?? 0));
+    } else {
+      validarCancelacion(desde, Number(orden.facturadoTotal));
+    }
+    if (!motivo) {
+      throw new BadRequestException('Contá por qué se cancela la orden.');
+    }
+
+    // Foto del avance ANTES de tocar nada: es lo que después permite decidir
+    // si se le cobra algo al cliente.
+    const pasos = await this.prisma.ordenTrabajoItemPaso.findMany({
+      where: { tenantId: auth.tenantId, item: { ordenId: orden.id } },
+      select: {
+        id: true,
+        estado: true,
+        tiempoRealMin: true,
+        tramos: { select: { inicioEl: true, finEl: true } },
+      },
+    });
+    const ahora = new Date();
+    const pasosHechos = pasos.filter((p) => p.estado === 'hecho').length;
+    const minutosReales = Math.round(
+      pasos.reduce((acc, p) => {
+        const asentado = p.tiempoRealMin != null ? Number(p.tiempoRealMin) : null;
+        return acc + (asentado ?? sumaTramosMin(p.tramos));
+      }, 0),
+    );
+
+    await this.prisma.$transaction(async (tx) => {
+      // 1. Los cronómetros que quedaron corriendo. Si no se cierran acá nadie
+      //    los cierra: la orden sale del tablero y el barrido de fin de jornada
+      //    sólo mira lo que el tablero lee.
+      await tx.ordenTrabajoPasoTramo.updateMany({
+        where: { tenantId: auth.tenantId, finEl: null, paso: { item: { ordenId: orden.id } } },
+        data: { finEl: ahora, motivoFin: 'cancelacion' },
+      });
+
+      // 2. El tiempo trabajado se asienta en los pasos que quedaron a mitad de
+      //    camino. El paso no se marca 'hecho' —no se completó—, pero sus
+      //    minutos tienen que existir: son horas que el taller pagó.
+      for (const paso of pasos) {
+        if (paso.tiempoRealMin != null) continue;
+        const abiertos = paso.tramos.filter((t) => !t.finEl);
+        const minutos =
+          sumaTramosMin(paso.tramos) +
+          abiertos.reduce(
+            (acc, t) => acc + (ahora.getTime() - t.inicioEl.getTime()) / 60_000,
+            0,
+          );
+        if (minutos <= 0) continue;
+        await tx.ordenTrabajoItemPaso.update({
+          where: { id: paso.id },
+          data: {
+            tiempoRealMin: Math.round(minutos * 100) / 100,
+            tiempoFuente: 'medido',
+          },
+        });
+      }
+
+      // 3. Nadie sigue teniendo esto en su mesa.
+      await tx.ordenTrabajoItemPaso.updateMany({
+        where: {
+          tenantId: auth.tenantId,
+          item: { ordenId: orden.id },
+          mesaUsuarioId: { not: null },
+        },
+        data: { mesaUsuarioId: null },
+      });
+
+      // 4. El seguimiento no puede seguir mostrándole al cliente un trabajo
+      //    que ya no se va a hacer.
+      await this.enlaces.revocar(
+        tx,
+        TipoEnlacePublico.SEGUIMIENTO_OT,
+        orden.id,
+      );
+
+      await tx.ordenTrabajo.update({
+        where: { id: orden.id },
+        data: {
+          estado: ESTADO_CANCELADA,
+          canceladaEl: ahora,
+          estadoAlCancelar: desde,
+          motivoCancelacion: motivo,
+          canceladaPorId: auth.userId,
+          canceladaPorNombre: firmaActor(
+            auth,
+            actor?.nombreCompleto ?? auth.email,
+          ),
+          pasosHechosAlCancelar: pasosHechos,
+          pasosTotalAlCancelar: pasos.length,
+          minutosRealesAlCancelar: minutosReales,
+        },
+      });
+
+      await tx.ordenTrabajoEvento.create({
+        data: {
+          tenantId: auth.tenantId,
+          ordenId: orden.id,
+          tipo: 'cancelacion',
+          descripcion: `Orden cancelada (estaba ${ORDEN_TRABAJO_ESTADO_LABELS[desde].toLowerCase()}): ${motivo}`,
+          usuarioNombre: firmaActor(auth, actor?.nombreCompleto ?? auth.email),
+          usuarioId: auth.userId,
+          origen: 'usuario',
+          datosJson: {
+            campo: 'estado',
+            antes: desde,
+            despues: ESTADO_CANCELADA,
+            motivo,
+            pasosHechos,
+            pasosTotal: pasos.length,
+            minutosReales,
+            cobradoTotal: Number(orden.cobradoTotal),
+          },
+        },
+      });
+    });
+
+    // La promesa de entrega de algo que no se va a entregar no es un dato de
+    // precisión del pronóstico: es ruido. Post-commit y sin romper si falla,
+    // igual que el resto de la telemetría del ETA.
+    await this.descartarPromesasEta(auth.tenantId, orden.id);
+
+    return this.findOne(auth, orden.id);
+  }
+
+  /**
+   * Emite una nota de crédito por cada factura viva de la orden, para poder
+   * cancelarla en el mismo paso.
+   *
+   * Una a una y en orden: si la orden se facturó en dos veces, cada factura
+   * necesita su propia NC (ARCA corrige comprobante por comprobante). Si
+   * alguna falla se corta acá — las anteriores ya emitidas quedan, que es lo
+   * correcto: son comprobantes fiscales reales, no un borrador que se descarta.
+   */
+  private async acreditarFacturasDeOrden(
+    auth: CurrentAuth,
+    ordenId: string,
+    motivo: string,
+  ): Promise<void> {
+    const vinculos = await this.prisma.comprobanteOrden.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        ordenId,
+        comprobante: {
+          tipo: 'factura',
+          estado: 'emitido',
+          anuladoEl: null,
+        },
+      },
+      select: { comprobanteId: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    for (const v of vinculos) {
+      await this.comprobantes.notaCreditoDeOrden(auth, ordenId, {
+        comprobanteOrigenId: v.comprobanteId,
+        motivo: `Cancelación de la orden — ${motivo}`.slice(0, 200),
+      });
+    }
+  }
+
+  private async descartarPromesasEta(tenantId: string, ordenId: string) {
+    try {
+      await this.eta.descartarPromesasAbiertas(tenantId, ordenId);
+    } catch (error) {
+      this.logger.error(
+        `Falló el descarte de promesas de ETA (orden ${ordenId}).`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
+  }
+
   /**
    * Emitir al taller (o cualquier salida de borrador) exige cliente asignado;
    * el borrador puede no tenerlo todavía (se completa antes de emitir).
@@ -1497,10 +1781,32 @@ export class OrdenesTrabajoService {
     }
   }
 
-  /** Sólo transiciones hacia adelante en el flujo (sin saltos hacia atrás). */
+  /**
+   * Sólo transiciones hacia adelante en el flujo (sin saltos hacia atrás).
+   *
+   * `cancelada` queda FUERA de esta validación a propósito: no es una etapa más
+   * adelante sino una salida lateral, y comparar índices la volvería alcanzable
+   * desde cualquier lado —incluida una orden ya entregada— por accidente del
+   * orden del array y no por decisión. Se cancela por su propio endpoint, que
+   * es el que sabe qué hay que frenar y qué hay que cerrar. Ver `cancelar()`.
+   */
   validarTransicion(desde: OrdenTrabajoEstado, hacia: OrdenTrabajoEstado) {
-    const desdeIdx = ORDEN_TRABAJO_ESTADOS.indexOf(desde);
-    const haciaIdx = ORDEN_TRABAJO_ESTADOS.indexOf(hacia);
+    if (desde === ESTADO_CANCELADA) {
+      throw new BadRequestException(
+        'La orden está cancelada: no se le puede cambiar el estado.',
+      );
+    }
+    if (hacia === ESTADO_CANCELADA) {
+      throw new BadRequestException(
+        'Para cancelar una orden usá la acción de cancelar, que pide el motivo.',
+      );
+    }
+    const desdeIdx = ORDEN_TRABAJO_FLUJO.indexOf(
+      desde as (typeof ORDEN_TRABAJO_FLUJO)[number],
+    );
+    const haciaIdx = ORDEN_TRABAJO_FLUJO.indexOf(
+      hacia as (typeof ORDEN_TRABAJO_FLUJO)[number],
+    );
     if (desdeIdx < 0 || haciaIdx < 0) {
       throw new BadRequestException('Estado de orden inválido.');
     }
@@ -2770,6 +3076,29 @@ export class OrdenesTrabajoService {
       cobradoTotal: Number(
         (orden as { cobradoTotal?: unknown }).cobradoTotal ?? 0,
       ),
+      // Cancelación: el motivo se muestra en la ficha, no escondido en el
+      // historial. Quien abre una orden cancelada pregunta exactamente eso.
+      cancelacion: (() => {
+        const o = orden as {
+          canceladaEl?: Date | null;
+          estadoAlCancelar?: string | null;
+          motivoCancelacion?: string | null;
+          canceladaPorNombre?: string | null;
+          pasosHechosAlCancelar?: number | null;
+          pasosTotalAlCancelar?: number | null;
+          minutosRealesAlCancelar?: number | null;
+        };
+        if (!o.canceladaEl) return null;
+        return {
+          fecha: o.canceladaEl.toISOString(),
+          estadoAlCancelar: o.estadoAlCancelar ?? null,
+          motivo: o.motivoCancelacion ?? '',
+          por: o.canceladaPorNombre ?? null,
+          pasosHechos: o.pasosHechosAlCancelar ?? 0,
+          pasosTotal: o.pasosTotalAlCancelar ?? 0,
+          minutosReales: o.minutosRealesAlCancelar ?? 0,
+        };
+      })(),
       productos: orden.items.map((item) => {
         const cotItem = (
           item as typeof item & {

@@ -2654,7 +2654,9 @@ model OrdenTrabajo {
   vendedorEmpleadoId String?                @db.Uuid
   /// Presupuesto de origen (si vino del cotizador).
   cotizacionId       String?                @db.Uuid
-  /// 'borrador' | 'pendiente' | 'produccion' | 'finalizada' | 'entregada'.
+  /// 'borrador' | 'pendiente' | 'produccion' | 'finalizada' | 'entregada' |
+  /// 'cancelada'. Las cinco primeras son una SECUENCIA que sólo avanza;
+  /// 'cancelada' es una salida lateral y terminal.
   estado             String                 @default("borrador")
   fechaEmision       DateTime?
   fechaEntrega       DateTime?              @db.Date
@@ -2693,6 +2695,29 @@ model OrdenTrabajo {
   /// facturada y sin cobrar/parcial/cobrada) se calculan de acá.
   facturadoTotal     Decimal                @default(0) @db.Decimal(14, 2)
   cobradoTotal       Decimal                @default(0) @db.Decimal(14, 2)
+  /// === Cancelación ===
+  /// Cuándo se canceló. Es el "está cancelada" real: `estado` lo dice también,
+  /// pero esta fecha es la que ordena y la que permite contar cancelaciones
+  /// por período sin adivinar mirando el timeline.
+  canceladaEl        DateTime?
+  /// En qué etapa estaba cuando se canceló. Sin esto se pierde la diferencia
+  /// entre una que murió en borrador y una que se cortó con el taller a mitad
+  /// de camino, que es justo lo que hay que poder mirar después.
+  estadoAlCancelar   String?
+  /// Por qué. Obligatorio al cancelar: una orden que desaparece de las ventas
+  /// sin explicación es una discusión asegurada tres meses después.
+  motivoCancelacion  String?
+  canceladaPorId     String?                @db.Uuid
+  /// Nombre CONGELADO de quien canceló: el legajo puede cambiar o borrarse y
+  /// el historial no puede quedar sin responsable.
+  canceladaPorNombre String?
+  /// Foto del avance al momento de cancelar: cuántos pasos estaban hechos
+  /// sobre el total y cuántos minutos reales se habían trabajado. Es lo que
+  /// permite decidir si se le cobra algo al cliente, y queda acá porque los
+  /// pasos siguen vivos pero el avance se sigue moviendo si alguien reabre.
+  pasosHechosAlCancelar Int?
+  pasosTotalAlCancelar  Int?
+  minutosRealesAlCancelar Int?
   createdAt          DateTime               @default(now())
   updatedAt          DateTime               @updatedAt
   tenant             Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)

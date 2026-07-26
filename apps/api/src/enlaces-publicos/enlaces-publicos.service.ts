@@ -71,6 +71,26 @@ export class EnlacesPublicosService {
   }
 
   /**
+   * Apaga el link de una entidad sin borrarlo: el token deja de resolver y
+   * quien lo tenga guardado ve la pantalla de link inválido.
+   *
+   * La fila queda —el token no se recicla y el historial de visitas tampoco se
+   * pierde—, y `emitir` lo revive si la entidad vuelve a compartirse. Existe
+   * para la orden cancelada: el seguimiento no puede seguir mostrándole al
+   * cliente un trabajo que ya no se va a hacer.
+   */
+  async revocar(
+    db: PrismaLike,
+    tipo: TipoEnlacePublico,
+    entidadId: string,
+  ): Promise<void> {
+    await db.enlacePublico.updateMany({
+      where: { tipo, entidadId, revocadoEl: null },
+      data: { revocadoEl: new Date() },
+    });
+  }
+
+  /**
    * Traduce el token de la URL a la entidad que abre, o null si no sirve.
    *
    * El `tipo` esperado se compara contra el guardado: un token de presupuesto

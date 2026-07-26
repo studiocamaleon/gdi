@@ -12,6 +12,7 @@ import {
   CircleDollarSignIcon,
   CreditCardIcon,
   Edit3Icon,
+  XCircleIcon,
   ExternalLinkIcon,
   ExpandIcon,
   FactoryIcon,
@@ -47,6 +48,7 @@ import {
 import {
   agregarOrdenItem,
   cambiarEstadoOrdenTrabajo,
+  cancelarOrdenTrabajo,
   crearOrdenTrabajo,
   editarOrdenItem,
   editarOrdenTrabajo,
@@ -75,6 +77,7 @@ import {
 } from "@/lib/flujo-produccion";
 import {
   ORDEN_TRABAJO_ESTADOS,
+  esCancelable,
   ORDEN_TRABAJO_FLOW,
   formatFechaOrden,
   type OrdenTrabajoDetalle,
@@ -139,6 +142,7 @@ import { listClientes } from "@/lib/clientes-api";
 import { getCurrentPeriodo } from "@/lib/costos";
 import { technologyCodeLabel } from "@/lib/maquinaria-tecnologias";
 import { usePuede } from "@/components/navigation/permisos-provider";
+import { useFecha } from "@/components/navigation/config-regional-provider";
 
 type PropuestaFichaProps = {
   initialClientes?: ClienteDetalle[];
@@ -4671,6 +4675,12 @@ export function PropuestaFicha({
   const [cobrosStaged, setCobrosStaged] = React.useState<CobroDraft[]>([]);
   const [confirmBorradorConCobros, setConfirmBorradorConCobros] =
     React.useState(false);
+  const { fechaHora } = useFecha();
+  // Acreditar una factura ante ARCA no es cosa de cualquiera: es el mismo
+  // permiso que rige anular comprobantes.
+  const puedeAnular = usePuede("administracion.anular");
+  const [confirmCancelar, setConfirmCancelar] = React.useState(false);
+  const [cancelando, setCancelando] = React.useState(false);
   const [openIds, setOpenIds] = React.useState<Set<string>>(() => new Set());
   const [items, setItems] = React.useState<PropuestaItem[]>(() =>
     orden ? orden.productos.map(rehidratarOrdenItem) : [],
@@ -4905,6 +4915,72 @@ export function PropuestaFicha({
 
   const cambiosSinGuardar =
     cambiosItems.total + Object.keys(cambiosFields).length;
+
+  /**
+   * Qué le va a pasar a la orden al cancelarla. Se arma con los datos de ESTA
+   * orden y no con un texto fijo: lo que importa es la plata cobrada y el
+   * trabajo hecho, que es distinto en cada caso.
+   */
+  /**
+   * Una orden facturada no se cancela sin acreditar primero: si ARCA tiene una
+   * factura viva, el eje fiscal diría una cosa y el comercial otra. Con permiso
+   * de anular se resuelve en el mismo paso; sin él, hay que pedírselo a
+   * administración.
+   */
+  const facturaViva = (orden?.facturadoTotal ?? 0) > 0.01;
+  const acreditaYCancela = facturaViva && puedeAnular;
+
+  const impactoCancelacion = React.useMemo(() => {
+    if (!orden) return [];
+    const puntos = [
+      "Sale del tablero del taller y de la capacidad comprometida.",
+      "Deja de contar como venta en el panel y los reportes.",
+      "El link de seguimiento del cliente deja de funcionar.",
+    ];
+    if (acreditaYCancela) {
+      puntos.unshift(
+        `Se emite la nota de crédito de ${formatCurrency(orden.facturadoTotal, moneda)} facturados: la factura queda acreditada ante ARCA.`,
+      );
+    }
+    const cobrado = orden.cobradoTotal ?? 0;
+    if (cobrado > 0) {
+      puntos.push(
+        `Los ${formatCurrency(cobrado, moneda)} cobrados quedan como saldo a favor de ${orden.clienteNombre || "el cliente"} (no se devuelven solos).`,
+      );
+    }
+    if ((orden.progresoPct ?? 0) > 0) {
+      puntos.push(
+        `El taller ya hizo el ${orden.progresoPct}% del trabajo: esas horas quedan registradas y siguen contando para el equipo.`,
+      );
+    }
+    return puntos;
+  }, [orden, moneda, acreditaYCancela]);
+
+  const cancelarOrden = React.useCallback(
+    async (motivo: string) => {
+      if (!orden || cancelando) return;
+      setCancelando(true);
+      try {
+        await cancelarOrdenTrabajo(orden.id, motivo, acreditaYCancela);
+        setConfirmCancelar(false);
+        toast.success(
+          acreditaYCancela
+            ? `Orden ${orden.numero} cancelada y facturación acreditada.`
+            : `Orden ${orden.numero} cancelada.`,
+        );
+        router.refresh();
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "No se pudo cancelar la orden.",
+        );
+      } finally {
+        setCancelando(false);
+      }
+    },
+    [orden, cancelando, acreditaYCancela, router],
+  );
 
   /**
    * Sube el arte de los sellos de la orden a los Archivos de cada ítem.
@@ -5764,7 +5840,10 @@ export function PropuestaFicha({
           ) : orden &&
             (camposEditablesOrden(orden.estado).size > 0 ||
               (orden.estado !== "borrador" &&
-                orden.total - orden.facturadoTotal > 0.01)) ? (
+                orden.total - orden.facturadoTotal > 0.01) ||
+              // Una finalizada y facturada por completo no tiene nada editable
+              // ni nada que facturar, pero se sigue pudiendo cancelar.
+              esCancelable(orden.estado)) ? (
             <div style={{ display: "flex", gap: 8 }}>
               {editandoOrden ? (
                 <>
@@ -5802,7 +5881,8 @@ export function PropuestaFicha({
                       <CheckIcon />
                       {emitiendoBorrador ? "Emitiendo…" : "Emitir OT"}
                     </button>
-                  ) : orden.total - orden.facturadoTotal > 0.01 ? (
+                  ) : orden.estado !== "cancelada" &&
+                    orden.total - orden.facturadoTotal > 0.01 ? (
                     <button
                       type="button"
                       className="btn"
@@ -5834,6 +5914,24 @@ export function PropuestaFicha({
                       Editar orden
                     </button>
                   ) : null}
+                  {esCancelable(orden.estado) ? (
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => setConfirmCancelar(true)}
+                      disabled={cancelando || (facturaViva && !puedeAnular)}
+                      title={
+                        facturaViva && !puedeAnular
+                          ? "La orden está facturada: administración tiene que emitir la nota de crédito antes de cancelarla"
+                          : acreditaYCancela
+                            ? "Cancelar la orden: primero se acredita la factura con una nota de crédito"
+                            : "Cancelar la orden: sale del taller y deja de contar como venta"
+                      }
+                    >
+                      <XCircleIcon />
+                      Cancelar orden
+                    </button>
+                  ) : null}
                 </>
               )}
             </div>
@@ -5841,7 +5939,38 @@ export function PropuestaFicha({
         </div>
       </div>
 
-      {orden ? (
+      {/* Cancelada: en vez del stepper —que mostraría un recorrido que no va a
+          seguir— se cuenta qué pasó. El motivo es lo primero que pregunta
+          cualquiera que abre una orden cancelada. */}
+      {orden?.cancelacion ? (
+        <div className="prf-cancelada">
+          <div className="prf-cancelada-t">
+            <XCircleIcon width={15} height={15} />
+            Cancelada
+            {orden.cancelacion.estadoAlCancelar
+              ? ` cuando estaba ${(
+                  ORDEN_TRABAJO_ESTADOS[
+                    orden.cancelacion
+                      .estadoAlCancelar as keyof typeof ORDEN_TRABAJO_ESTADOS
+                  ]?.label ?? orden.cancelacion.estadoAlCancelar
+                ).toLowerCase()}`
+              : ""}
+          </div>
+          <div className="prf-cancelada-m">“{orden.cancelacion.motivo}”</div>
+          <div className="prf-cancelada-f">
+            {orden.cancelacion.por ? `${orden.cancelacion.por} · ` : ""}
+            {fechaHora(orden.cancelacion.fecha)}
+            {orden.cancelacion.pasosTotal > 0
+              ? ` · ${orden.cancelacion.pasosHechos} de ${orden.cancelacion.pasosTotal} pasos hechos`
+              : ""}
+            {orden.cancelacion.minutosReales > 0
+              ? ` · ${Math.round(orden.cancelacion.minutosReales)} min trabajados`
+              : ""}
+          </div>
+        </div>
+      ) : null}
+
+      {orden && !orden.cancelacion ? (
         <div className="otd-flow" style={{ marginBottom: 18 }}>
           {ORDEN_TRABAJO_FLOW.map((k, i) => {
             const e = ORDEN_TRABAJO_ESTADOS[k];
@@ -6349,6 +6478,26 @@ export function PropuestaFicha({
         requiereTipear={false}
         accionLabel="Guardar borrador igualmente"
         onConfirmar={() => guardarBorrador()}
+      />
+
+      <ConfirmacionDestructiva
+        open={confirmCancelar}
+        onOpenChange={setConfirmCancelar}
+        titulo={`Cancelar la orden ${orden?.numero ?? ""}`}
+        descripcion={
+          acreditaYCancela
+            ? "Esta orden está facturada, así que el sistema emite primero la nota de crédito que la acredita ante ARCA y recién entonces la cancela. Si ARCA rechaza la nota, no se cancela nada."
+            : "La orden sale del taller y deja de contar como venta. El trabajo que ya se hizo queda registrado: las horas del equipo no se borran."
+        }
+        impacto={impactoCancelacion}
+        requiereTipear={false}
+        motivo={{
+          label: "¿Por qué se cancela? Queda en el historial de la orden.",
+          placeholder:
+            "Ej.: el cliente se arrepintió · error de carga · no aprobó el arte",
+        }}
+        accionLabel="Cancelar la orden"
+        onConfirmar={(motivo) => cancelarOrden(motivo)}
       />
 
       <AgregarProductoSheet

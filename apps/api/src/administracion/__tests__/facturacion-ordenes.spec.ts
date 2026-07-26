@@ -355,4 +355,97 @@ describe('FacturacionOrdenesService — motor', () => {
       expect(Number(imp[0].monto)).toBe(60_000);
     });
   });
+
+  /**
+   * Emitir la NC es lo que DESHACE lo fiscal (ARCA no anula: se corrige con
+   * otro comprobante). Hasta que esto se cableó, emitir una nota de crédito
+   * sólo restaba del facturado y dejaba la factura corregida con su saldo y
+   * sus cobros imputados como si nada — plata pegada a un comprobante muerto.
+   */
+  describe('nota de crédito', () => {
+    /** La NC por el total: la factura queda saldada y el cobro, libre. */
+    it('anula la factura entera y libera el cobro', async () => {
+      const orden = await crearOrden(100_000);
+      const factura = await crearFactura([
+        { ordenId: orden.id, monto: 100_000 },
+      ]);
+      const cobro = await crearCobro(orden.id, 100_000);
+      await motor.recalcularFacturado(prisma, tenantId, orden.id);
+      await motor.recalcularCobrado(prisma, tenantId, orden.id);
+      await motor.matchearCobro(prisma, tenantId, cobro.id);
+      expect(await saldoDe(factura.id)).toBe(0);
+      expect(await facturadoDe(orden.id)).toBe(100_000);
+
+      const nc = await crearFactura([{ ordenId: orden.id, monto: 100_000 }], {
+        tipo: 'nota_credito',
+      });
+      await prisma.comprobante.update({
+        where: { id: nc.id },
+        data: { comprobanteOrigenId: factura.id },
+      });
+      await motor.alEmitirComprobante(tenantId, nc.id);
+
+      // La factura no tiene nada más que cobrar: si le devolviéramos el saldo,
+      // el matching volvería a pegarle el cobro y desharía la NC.
+      expect(await saldoDe(factura.id)).toBe(0);
+      expect(await facturadoDe(orden.id)).toBe(0);
+      const imp = await prisma.cobroImputacion.findMany({
+        where: { comprobanteId: factura.id },
+      });
+      expect(imp).toHaveLength(0);
+    });
+
+    /** La NC parcial deja vivo el resto, y el cobro se re-imputa hasta ahí. */
+    it('la parcial deja el resto de la factura en pie', async () => {
+      const orden = await crearOrden(100_000);
+      const factura = await crearFactura([
+        { ordenId: orden.id, monto: 100_000 },
+      ]);
+      const cobro = await crearCobro(orden.id, 100_000);
+      await motor.recalcularCobrado(prisma, tenantId, orden.id);
+      await motor.matchearCobro(prisma, tenantId, cobro.id);
+
+      const nc = await crearFactura([{ ordenId: orden.id, monto: 30_000 }], {
+        tipo: 'nota_credito',
+      });
+      await prisma.comprobante.update({
+        where: { id: nc.id },
+        data: { comprobanteOrigenId: factura.id },
+      });
+      await motor.alEmitirComprobante(tenantId, nc.id);
+
+      expect(await facturadoDe(orden.id)).toBe(70_000);
+      // El cobro de 100k se re-imputa hasta lo que la factura sigue debiendo.
+      const imp = await prisma.cobroImputacion.findMany({
+        where: { comprobanteId: factura.id },
+      });
+      expect(imp).toHaveLength(1);
+      expect(Number(imp[0].monto)).toBe(70_000);
+      expect(await saldoDe(factura.id)).toBe(0);
+    });
+
+    /** Una NC no cobra nada: no tiene que salir a buscar cobros para imputar. */
+    it('no se matchea a sí misma contra los cobros de la orden', async () => {
+      const orden = await crearOrden(50_000);
+      const factura = await crearFactura([
+        { ordenId: orden.id, monto: 50_000 },
+      ]);
+      const cobro = await crearCobro(orden.id, 50_000);
+      await motor.matchearCobro(prisma, tenantId, cobro.id);
+
+      const nc = await crearFactura([{ ordenId: orden.id, monto: 50_000 }], {
+        tipo: 'nota_credito',
+      });
+      await prisma.comprobante.update({
+        where: { id: nc.id },
+        data: { comprobanteOrigenId: factura.id },
+      });
+      await motor.alEmitirComprobante(tenantId, nc.id);
+
+      const impNc = await prisma.cobroImputacion.findMany({
+        where: { comprobanteId: nc.id },
+      });
+      expect(impNc).toHaveLength(0);
+    });
+  });
 });

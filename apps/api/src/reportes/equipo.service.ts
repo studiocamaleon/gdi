@@ -346,7 +346,7 @@ export class EquipoService {
         JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
         LEFT JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
         LEFT JOIN "Empleado" e ON e.id = ot."vendedorEmpleadoId"
-        WHERE oti."tenantId" = ${tenantId}::uuid AND ot.estado <> 'borrador'
+        WHERE oti."tenantId" = ${tenantId}::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
           AND ot."fechaEmision" >= ${desde} AND ot."fechaEmision" < ${hastaExcl}
         GROUP BY 1, 2
         ORDER BY facturado DESC

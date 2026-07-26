@@ -49,7 +49,7 @@ export class RentabilidadService {
         JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
         LEFT JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
         WHERE oti."tenantId" = ${tenantId}::uuid
-          AND ot.estado <> 'borrador'
+          AND ot.estado NOT IN ('borrador', 'cancelada')
           AND ot."fechaEmision" >= ${desde}
           AND ot."fechaEmision" < ${hastaExcl}
       `,
@@ -63,7 +63,7 @@ export class RentabilidadService {
         CROSS JOIN LATERAL jsonb_array_elements(ci."trazabilidadJson"->'pasos') paso
         CROSS JOIN LATERAL jsonb_array_elements(COALESCE(paso->'materiales', '[]'::jsonb)) mat
         WHERE oti."tenantId" = ${tenantId}::uuid
-          AND ot.estado <> 'borrador'
+          AND ot.estado NOT IN ('borrador', 'cancelada')
           AND ot."fechaEmision" >= ${desde}
           AND ot."fechaEmision" < ${hastaExcl}
           AND mat->>'tipoLineaCosto' IN ('MATERIAL', 'CONSUMIBLE_MAQUINA')

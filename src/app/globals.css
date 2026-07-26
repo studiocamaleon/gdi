@@ -4185,6 +4185,40 @@ body {
     color: var(--side-ink);
   }
 
+  /* Banda de la orden cancelada: ocupa el lugar del stepper, que no tiene nada
+     que mostrar cuando el recorrido se cortó. Gris y no roja: no es un error
+     del sistema, es un trabajo que no va a pasar. */
+  .prf-cancelada {
+    margin-bottom: 18px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-left: 3px solid #a8a8b0;
+    border-radius: var(--r-2);
+    background: var(--surface-2);
+  }
+
+  .prf-cancelada-t {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .prf-cancelada-m {
+    margin-top: 6px;
+    font-size: 13.5px;
+    line-height: 1.45;
+    color: var(--ink-2);
+  }
+
+  .prf-cancelada-f {
+    margin-top: 6px;
+    font-size: 11.5px;
+    color: var(--muted-text);
+  }
+
   /* El pie del sidebar: Configuración, debajo de la card del plan. Reusa
      .nav-item para verse igual que el resto del menú —y para heredar lo que
      .side.collapsed ya le hace a los ítems. */
@@ -22583,6 +22617,97 @@ textarea.est-input { resize: vertical; min-height: 60px; font-family: inherit; }
   font-size: 13px;
   color: var(--muted-text);
   padding: 8px 2px;
+}
+
+/* Tabla de comprobantes de la orden. Grilla propia: la de `.mov-row` le daba
+   130px al comprobante y el número entraba partido en tres renglones,
+   aplastando el badge (que además no tenía flex-shrink). */
+.fo-comps .mov-th,
+.fo-comps .mov-row {
+  grid-template-columns: 88px minmax(170px, 1fr) 92px minmax(0, 148px) 112px 124px;
+  gap: 10px;
+}
+
+.fo-comps .mov-badge {
+  flex: 0 0 auto;
+}
+
+.fo-comp {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fo-comp-txt {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.fo-comp-nro {
+  color: inherit;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.fo-comp-sub {
+  font-size: 11px;
+  color: var(--muted-text-2);
+  white-space: nowrap;
+}
+
+/* El CAE es un número largo que no se puede cortar al medio sin mentir:
+   se trunca con puntos suspensivos y queda completo en el title. */
+.fo-comp-cae {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--muted-text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fo-comp-acc {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 1180px) {
+  .fo-comps .mov-th,
+  .fo-comps .mov-row {
+    grid-template-columns: 80px minmax(150px, 1fr) 88px 104px 112px;
+  }
+
+  /* Lo primero que se va es el CAE: está en el detalle del comprobante. */
+  .fo-comps .mov-th > :nth-child(4),
+  .fo-comps .mov-row > :nth-child(4) {
+    display: none;
+  }
+}
+
+/* "Nota de crédito" en la fila de una factura emitida. Discreto: es la
+   salida de excepción, no la acción que uno busca. */
+.fo-nc-btn {
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted-text);
+  font-size: 10.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.fo-nc-btn:hover {
+  color: var(--ink);
+  border-color: var(--ink-2);
 }
 
 .mov-table {

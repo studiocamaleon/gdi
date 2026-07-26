@@ -17,6 +17,7 @@ import { OrdenesTrabajoService } from './ordenes-trabajo.service';
 import { OrdenesTrabajoQueryDto } from './dto/ordenes-trabajo-query.dto';
 import {
   CambiarEstadoOrdenTrabajoDto,
+  CancelarOrdenTrabajoDto,
   CrearOrdenTrabajoDto,
   CrearOrdenTrabajoItemDto,
   EditarOrdenTrabajoDto,
@@ -247,6 +248,21 @@ export class OrdenesTrabajoController {
       pasoId,
       payload,
     );
+  }
+
+  /**
+   * Cancelar la orden. Lo hace Comercial —quien cierra la venta es quien se
+   * entera de que se cayó—, y queda todo en el historial de la orden: quién,
+   * cuándo, por qué y con cuánto trabajo encima.
+   */
+  @Permiso('comercial.gestionar')
+  @Post(':id/cancelar')
+  cancelar(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() payload: CancelarOrdenTrabajoDto,
+  ) {
+    return this.ordenesTrabajoService.cancelar(auth, id, payload);
   }
 
   @Permiso('comercial.gestionar')

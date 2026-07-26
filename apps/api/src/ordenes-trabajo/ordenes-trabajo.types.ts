@@ -4,7 +4,13 @@
  * Ver docs/ordenes-trabajo-persistencia-diseno.md
  */
 
-export const ORDEN_TRABAJO_ESTADOS = [
+/**
+ * El ciclo normal, EN ORDEN. Es una secuencia, no un conjunto: varias cuentas
+ * dependen de la posición (el progreso, la matriz de transiciones).
+ * `cancelada` NO está acá a propósito — no es una etapa más adelante, es una
+ * salida lateral que puede pasar desde casi cualquier punto.
+ */
+export const ORDEN_TRABAJO_FLUJO = [
   'borrador',
   'pendiente',
   'produccion',
@@ -12,7 +18,43 @@ export const ORDEN_TRABAJO_ESTADOS = [
   'entregada',
 ] as const;
 
+export const ORDEN_TRABAJO_ESTADOS = [
+  ...ORDEN_TRABAJO_FLUJO,
+  'cancelada',
+] as const;
+
 export type OrdenTrabajoEstado = (typeof ORDEN_TRABAJO_ESTADOS)[number];
+
+/** Terminal: de acá no se sale. Se cancela una vez y queda. */
+export const ESTADO_CANCELADA = 'cancelada' as const;
+
+/**
+ * Desde dónde se puede cancelar: mientras el trabajo todavía no está hecho.
+ *
+ * `finalizada` y `entregada` quedan afuera a propósito, y no es una restricción
+ * caprichosa: el trabajo YA existe. El material se consumió y las horas se
+ * pagaron, así que "cancelar" no describe nada real. Peor: al salir del eje
+ * comercial se llevaría puesta la venta Y el costo juntos —salen de la misma
+ * fila del reporte—, con lo cual el taller dejaría de ver que produjo algo que
+ * no cobró. Un trabajo hecho y no cobrado es una PÉRDIDA, y hacerla desaparecer
+ * de los números es exactamente lo que un sistema de costeo no puede hacer.
+ *
+ * Si una orden se finalizó por error, el camino es reabrir un paso desde el
+ * tablero —eso la devuelve a producción— y cancelarla ahí. Es un acto
+ * consciente y queda registrado.
+ *
+ * `borrador` sí: nunca salió al taller, no cuenta como venta y no hay otra
+ * forma de descartarlo.
+ */
+export const ESTADOS_CANCELABLES = [
+  'borrador',
+  'pendiente',
+  'produccion',
+] as const satisfies readonly OrdenTrabajoEstado[];
+
+export function esCancelable(estado: string): boolean {
+  return (ESTADOS_CANCELABLES as readonly string[]).includes(estado);
+}
 
 export const ORDEN_TRABAJO_EVENTO_TIPOS = [
   'emision',
@@ -26,6 +68,7 @@ export const ORDEN_TRABAJO_EVENTO_TIPOS = [
   'item_quitado',
   'paso',
   'nota',
+  'cancelacion',
 ] as const;
 
 export type OrdenTrabajoEventoTipo =
@@ -37,6 +80,7 @@ export const ORDEN_TRABAJO_ESTADO_LABELS: Record<OrdenTrabajoEstado, string> = {
   produccion: 'En producción',
   finalizada: 'Finalizada',
   entregada: 'Entregada',
+  cancelada: 'Cancelada',
 };
 
 /**
@@ -153,5 +197,9 @@ export function progresoEfectivo(
     case 'finalizada':
     case 'entregada':
       return 100;
+    // Una cancelada no tiene avance que mostrar: quedó donde quedó, y decir
+    // "40%" invitaría a leerlo como algo que todavía puede terminar.
+    case 'cancelada':
+      return null;
   }
 }

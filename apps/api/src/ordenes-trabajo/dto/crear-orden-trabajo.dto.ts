@@ -3,6 +3,7 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsISO8601,
@@ -172,6 +173,29 @@ export class EditarOrdenTrabajoDto {
   @IsString()
   @MaxLength(2000)
   observaciones?: string;
+}
+
+export class CancelarOrdenTrabajoDto {
+  /**
+   * Por qué se cancela. Obligatorio: una orden que desaparece de las ventas
+   * sin explicación es una discusión asegurada tres meses después.
+   */
+  @IsString()
+  @MinLength(3)
+  @MaxLength(500)
+  motivo: string;
+
+  /**
+   * Emitir la nota de crédito de las facturas vivas de la orden y recién
+   * entonces cancelar, en un solo acto.
+   *
+   * Sin esto la cancelación de una orden facturada se frena y hay que ir a
+   * Comprobantes a emitir la NC a mano. Pide `administracion.anular` además
+   * del permiso de cancelar: acreditar ante ARCA no es cosa de cualquiera.
+   */
+  @IsOptional()
+  @IsBoolean()
+  emitirNotaCredito?: boolean;
 }
 
 export class CambiarEstadoOrdenTrabajoDto {

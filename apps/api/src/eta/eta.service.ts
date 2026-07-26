@@ -237,6 +237,24 @@ export class EtaService {
     }
   }
 
+  /**
+   * Borra las promesas todavía abiertas de una orden que se canceló.
+   *
+   * Una promesa sin `finReal` es "esto todavía se está haciendo". Si la orden
+   * se cancela, esa fila no se va a cerrar nunca y quedaría contando como
+   * atraso infinito en la precisión del pronóstico. Las ya cerradas se
+   * conservan: ahí sí hubo entrega real que medir.
+   */
+  async descartarPromesasAbiertas(
+    tenantId: string,
+    ordenId: string,
+  ): Promise<number> {
+    const { count } = await this.prisma.etaPromesa.deleteMany({
+      where: { tenantId, finReal: null, item: { ordenId } },
+    });
+    return count;
+  }
+
   // ── Foto diaria (F2): cron por tenant ──────────────────────────────────
 
   /** Tenants con algo que snapshotear (órdenes vivas en el tablero). */

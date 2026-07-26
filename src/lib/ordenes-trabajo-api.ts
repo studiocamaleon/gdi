@@ -290,6 +290,23 @@ export async function mesaPasoProduccion(
   );
 }
 
+/**
+ * Cancelar la orden. Endpoint aparte del cambio de estado porque no es una
+ * etapa más: pide motivo, frena si hay factura emitida y cierra lo que quedó
+ * abierto en el taller.
+ */
+export async function cancelarOrdenTrabajo(
+  id: string,
+  motivo: string,
+  /** Acreditar las facturas vivas y cancelar en un solo acto. */
+  emitirNotaCredito = false,
+): Promise<OrdenTrabajoDetalle> {
+  return apiRequest<OrdenTrabajoDetalle>(`/ordenes-trabajo/${id}/cancelar`, {
+    method: "POST",
+    body: JSON.stringify({ motivo, emitirNotaCredito }),
+  });
+}
+
 export async function cambiarEstadoOrdenTrabajo(
   id: string,
   payload: {

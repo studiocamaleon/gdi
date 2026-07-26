@@ -143,7 +143,7 @@ export class AlertasService {
     const rows = await this.prisma.$queryRaw<Array<{ ordenes: number; ultima: Date }>>`
       SELECT COUNT(DISTINCT ot.id)::int AS ordenes, MAX(ot."fechaEmision") AS ultima
       FROM "OrdenTrabajo" ot
-      WHERE ot."tenantId" = ${tenantId}::uuid AND ot.estado <> 'borrador'
+      WHERE ot."tenantId" = ${tenantId}::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
         AND ot."clienteId" IS NOT NULL AND ot."fechaEmision" IS NOT NULL
       GROUP BY ot."clienteId"
     `;
@@ -171,7 +171,7 @@ export class AlertasService {
       SELECT COALESCE(SUM(oti.subtotal), 0)::float8 AS facturado
       FROM "OrdenTrabajoItem" oti
       JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
-      WHERE oti."tenantId" = ${tenantId}::uuid AND ot.estado <> 'borrador'
+      WHERE oti."tenantId" = ${tenantId}::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
         AND ot."fechaEmision" >= ${rango.desde} AND ot."fechaEmision" < ${finExclusivo(rango)}
       GROUP BY ot."clienteId"
       ORDER BY facturado DESC

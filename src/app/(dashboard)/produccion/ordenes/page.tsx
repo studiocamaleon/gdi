@@ -16,6 +16,7 @@ const STATS_VACIAS: OrdenesTrabajoStats = {
     produccion: 0,
     finalizada: 0,
     entregada: 0,
+    cancelada: 0,
   },
   totalOrdenes: 0,
   activas: 0,
@@ -30,6 +31,7 @@ const ESTADOS_VALIDOS = new Set([
   "produccion",
   "finalizada",
   "entregada",
+  "cancelada",
 ]);
 
 /**

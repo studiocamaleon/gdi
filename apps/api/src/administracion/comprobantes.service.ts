@@ -25,6 +25,7 @@ import {
   CrearComprobanteDto,
   FacturarLoteDto,
   FacturarOrdenDto,
+  NotaCreditoOrdenDto,
   type ComprobanteOrdenVinculoDto,
   type ComprobanteTipo,
 } from './dto/comprobante.dto';
@@ -804,6 +805,13 @@ export class ComprobantesService {
         'No se puede facturar una orden en borrador: emitila primero.',
       );
     }
+    // No se factura lo que se dio de baja. Al revés tampoco: una orden con
+    // facturación emitida no se puede cancelar hasta que se le emita la NC.
+    if (orden.estado === 'cancelada') {
+      throw new BadRequestException(
+        'La orden está cancelada: no se puede facturar.',
+      );
+    }
     // La red del gate de UI: aunque el botón se filtre, sin la integración AFIP
     // activa no se emite. Ver docs/integracion-afip-delegacion-diseno.md
     if (!(await this.afipIntegracion.facturacionHabilitada())) {
@@ -842,6 +850,116 @@ export class ComprobantesService {
       tipo: 'factura',
       puntoVentaId,
       clienteId: orden.clienteId ?? undefined,
+      ordenes: [{ ordenId: orden.id, monto: total }],
+      items: [item],
+      condicionVenta: 'contado',
+    } as CrearComprobanteDto);
+    if (payload.emitir === false) return borrador;
+    return this.emitir(auth, borrador.id);
+  }
+
+  /**
+   * Nota de crédito contra una factura de la orden.
+   *
+   * Es la única forma de deshacer lo fiscal: ARCA no tiene "anular", se corrige
+   * emitiendo un comprobante que referencia al original (por eso el provider no
+   * expone `anular`, sino otro `emitir` con asociados). Sale por el mismo
+   * camino que la factura —AFIP SDK si el tenant tiene la integración activa,
+   * manual si no—, así que hereda el gate del plan sin pedir nada nuevo.
+   *
+   * Al emitirse, `alEmitirComprobante` revierte la factura corregida: le saca
+   * los cobros imputados y rehace su saldo. Es lo que permite después cancelar
+   * la orden, que se frena mientras haya facturación viva.
+   */
+  async notaCreditoDeOrden(
+    auth: CurrentAuth,
+    ordenId: string,
+    payload: NotaCreditoOrdenDto,
+  ) {
+    const orden = await this.prisma.ordenTrabajo.findFirst({
+      where: { id: ordenId, tenantId: auth.tenantId },
+      select: { id: true, numero: true, clienteId: true },
+    });
+    if (!orden) throw new NotFoundException('La orden no existe.');
+
+    const factura = await this.prisma.comprobante.findFirst({
+      where: {
+        id: payload.comprobanteOrigenId,
+        tenantId: auth.tenantId,
+        tipo: 'factura',
+      },
+      select: {
+        id: true,
+        estado: true,
+        anuladoEl: true,
+        total: true,
+        letra: true,
+        numero: true,
+        puntoVentaId: true,
+        clienteId: true,
+        puntoVenta: { select: { numero: true } },
+        ordenes: { select: { ordenId: true } },
+      },
+    });
+    if (!factura) {
+      throw new NotFoundException('No se encontró la factura a corregir.');
+    }
+    if (factura.estado !== 'emitido' || factura.anuladoEl) {
+      throw new BadRequestException(
+        'Sólo se le emite nota de crédito a una factura emitida. Un borrador se descarta.',
+      );
+    }
+    const pv = String(factura.puntoVenta.numero).padStart(4, '0');
+    const nro =
+      factura.numero === null ? '—' : String(factura.numero).padStart(8, '0');
+    const numeroFactura = `${factura.letra} ${pv}-${nro}`;
+
+    if (!factura.ordenes.some((v) => v.ordenId === orden.id)) {
+      throw new BadRequestException(
+        `La factura ${numeroFactura} no está vinculada a la orden ${orden.numero}.`,
+      );
+    }
+
+    // Lo que queda vivo de esa factura: su total menos lo que otras NC ya le
+    // sacaron. Sin esto se podría acreditar dos veces la misma factura.
+    const previas = await this.prisma.comprobante.aggregate({
+      where: {
+        tenantId: auth.tenantId,
+        comprobanteOrigenId: factura.id,
+        tipo: 'nota_credito',
+        estado: 'emitido',
+        anuladoEl: null,
+      },
+      _sum: { total: true },
+    });
+    const vivo = redondear2(
+      Number(factura.total) - Number(previas._sum.total ?? 0),
+    );
+    if (vivo <= 0.01) {
+      throw new BadRequestException(
+        'Esa factura ya está acreditada por completo.',
+      );
+    }
+    const monto = payload.monto ?? vivo;
+    if (monto > vivo + 0.01) {
+      throw new BadRequestException(
+        `La factura tiene $${vivo.toLocaleString('es-AR')} sin acreditar: la nota de crédito no puede ser mayor.`,
+      );
+    }
+
+    const letra = await this.letraParaCliente(auth, factura.clienteId);
+    const item = this.renglonPorMonto(
+      letra,
+      monto,
+      `Anulación ${numeroFactura} — ${payload.motivo.trim()}`,
+    );
+    const total = calcularTotales(letra, [item]).total;
+
+    const borrador = await this.crear(auth, {
+      tipo: 'nota_credito',
+      puntoVentaId: factura.puntoVentaId,
+      clienteId: factura.clienteId ?? orden.clienteId ?? undefined,
+      comprobanteOrigenId: factura.id,
       ordenes: [{ ordenId: orden.id, monto: total }],
       items: [item],
       condicionVenta: 'contado',
@@ -1150,6 +1268,13 @@ export class ComprobantesService {
     if (orden.estado === 'borrador') {
       throw new BadRequestException(
         'No se puede facturar una orden en borrador: emitila primero.',
+      );
+    }
+    // No se factura lo que se dio de baja. Al revés tampoco: una orden con
+    // facturación emitida no se puede cancelar hasta que se le emita la NC.
+    if (orden.estado === 'cancelada') {
+      throw new BadRequestException(
+        'La orden está cancelada: no se puede facturar.',
       );
     }
     return orden;

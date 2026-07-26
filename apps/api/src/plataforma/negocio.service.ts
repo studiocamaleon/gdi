@@ -14,7 +14,7 @@ import { PrismaService } from '../prisma/prisma.service';
  * groupBy ven TODOS los tenants. Service propio, no reusa los de `reportes/`.
  *
  * Medida canónica de venta, idéntica a la del Panel del tenant:
- *   VENDIDO = SUM(OrdenTrabajoItem.subtotal) de OT con estado <> 'borrador',
+ *   VENDIDO = SUM(OrdenTrabajoItem.subtotal) de OT ni borrador ni cancelada,
  *   fechada por OrdenTrabajo.fechaEmision. Neto, sin IVA. No es la Cotización
  *   ni el Comprobante fiscal (esas son capas aparte: facturado y cobrado).
  * Ver docs/control-plane-negocio-diseno.md
@@ -292,7 +292,7 @@ export class NegocioService {
       FROM "OrdenTrabajoItem" oti
       JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
       LEFT JOIN "DatosEmpresa" de ON de."tenantId" = ot."tenantId"
-      WHERE ot.estado <> 'borrador'
+      WHERE ot.estado NOT IN ('borrador', 'cancelada')
         AND ot."fechaEmision" >= ${v.desde} AND ot."fechaEmision" < ${v.hasta}
       GROUP BY 1
       ORDER BY ventas DESC
@@ -524,7 +524,7 @@ export class NegocioService {
         COUNT(DISTINCT ot.id) FILTER (WHERE ot."fechaEmision" >= ${v.desdePrev} AND ot."fechaEmision" < ${v.desde}) AS ordenesprev
       FROM "OrdenTrabajoItem" oti
       JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
-      WHERE ot.estado <> 'borrador'
+      WHERE ot.estado NOT IN ('borrador', 'cancelada')
         AND ot."fechaEmision" >= ${v.desdePrev} AND ot."fechaEmision" < ${v.hasta}
     `;
     return {
@@ -593,7 +593,7 @@ export class NegocioService {
              COALESCE(SUM(oti.subtotal), 0)::float8 AS monto
       FROM "OrdenTrabajoItem" oti
       JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
-      WHERE ot.estado <> 'borrador'
+      WHERE ot.estado NOT IN ('borrador', 'cancelada')
         AND ot."fechaEmision" >= ${v.desde} AND ot."fechaEmision" < ${v.hasta}
       GROUP BY 1 ORDER BY 1
     `;
@@ -638,7 +638,7 @@ export class NegocioService {
              COUNT(DISTINCT ot.id) AS ordenes
       FROM "OrdenTrabajoItem" oti
       JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
-      WHERE ot.estado <> 'borrador'
+      WHERE ot.estado NOT IN ('borrador', 'cancelada')
         AND ot."fechaEmision" >= ${v.desde} AND ot."fechaEmision" < ${v.hasta}
       GROUP BY 1 ORDER BY 2 DESC
     `;
@@ -667,7 +667,7 @@ export class NegocioService {
       FROM "OrdenTrabajoItem" oti
       JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
       JOIN "Tenant" t ON t.id = ot."tenantId"
-      WHERE ot.estado <> 'borrador'
+      WHERE ot.estado NOT IN ('borrador', 'cancelada')
         AND ot."fechaEmision" >= ${v.desde} AND ot."fechaEmision" < ${v.hasta}
       GROUP BY t.id, t.nombre, t.slug
       ORDER BY ventas DESC
@@ -691,7 +691,7 @@ export class NegocioService {
         this.prisma.ordenTrabajo
           .findMany({
             where: {
-              estado: { not: 'borrador' },
+              estado: { notIn: ['borrador', 'cancelada'] },
               fechaEmision: { gte: v.desde, lt: v.hasta },
             },
             distinct: ['tenantId'],
@@ -736,7 +736,7 @@ export class NegocioService {
       FROM "OrdenTrabajoItem" oti
       JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
       LEFT JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
-      WHERE ot.estado <> 'borrador'
+      WHERE ot.estado NOT IN ('borrador', 'cancelada')
         AND ot."fechaEmision" >= ${v.desde} AND ot."fechaEmision" < ${v.hasta}
       GROUP BY 1 ORDER BY ventas DESC
     `;
@@ -767,7 +767,7 @@ export class NegocioService {
       FROM "OrdenTrabajoItem" oti
       JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
       JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
-      WHERE ot.estado <> 'borrador'
+      WHERE ot.estado NOT IN ('borrador', 'cancelada')
         AND ot."fechaEmision" >= ${v.desde} AND ot."fechaEmision" < ${v.hasta}
       GROUP BY 1
     `;
@@ -800,7 +800,7 @@ export class NegocioService {
                ) AS con
         FROM "OrdenTrabajoItem" oti
         JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
-        WHERE ot.estado <> 'borrador'
+        WHERE ot.estado NOT IN ('borrador', 'cancelada')
           AND ot."fechaEmision" >= ${v.desde} AND ot."fechaEmision" < ${v.hasta}
       `,
       this.prisma.$queryRaw<Array<{ etiqueta: string; items: bigint }>>`
@@ -808,7 +808,7 @@ export class NegocioService {
         FROM "OrdenTrabajoItem" oti
         JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
         CROSS JOIN LATERAL jsonb_array_elements_text(oti."adicionalesJson") et(etiqueta)
-        WHERE ot.estado <> 'borrador'
+        WHERE ot.estado NOT IN ('borrador', 'cancelada')
           AND jsonb_typeof(oti."adicionalesJson") = 'array'
           AND ot."fechaEmision" >= ${v.desde} AND ot."fechaEmision" < ${v.hasta}
         GROUP BY 1 ORDER BY items DESC LIMIT 8

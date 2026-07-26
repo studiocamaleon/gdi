@@ -8,6 +8,7 @@ import { DownloadIcon, PlusIcon, SearchIcon } from "lucide-react";
 import {
   ORDEN_TRABAJO_ESTADOS,
   ORDEN_TRABAJO_FLOW,
+  ESTADO_CANCELADA,
   formatFechaOrden,
   formatMonedaOrden,
   type OrdenTrabajoEstado,
@@ -145,6 +146,16 @@ export function OrdenesTrabajoView({
       k,
       label: ORDEN_TRABAJO_ESTADOS[k].label,
     })),
+    // Va al final y sólo si hay alguna: en un taller sano son pocas, y un chip
+    // permanente en cero le daría un lugar que no se ganó.
+    ...(kpis.porEstado.cancelada > 0
+      ? [
+          {
+            k: ESTADO_CANCELADA as FiltroEstado,
+            label: ORDEN_TRABAJO_ESTADOS.cancelada.label,
+          },
+        ]
+      : []),
   ];
 
   return (

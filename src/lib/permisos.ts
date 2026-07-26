@@ -38,7 +38,12 @@ export type PermisoClave =
   // Datos fiscales y métodos de pago: viven en Configuración pero son del
   // dominio de quien cobra y factura. Sin esta llave suelta, dárselos
   // implicaría abrirle también Usuarios.
-  | "administracion.configurar";
+  | "administracion.configurar"
+  // Tomar la seña es parte de cerrar la venta: el Vendedor cobra sin que eso
+  // le abra facturación ni tesorería.
+  | "administracion.cobrar"
+  // Anular un comprobante o un cobro: lo que deshace un movimiento de plata.
+  | "administracion.anular";
 
 /**
  * Los permisos del usuario en la empresa donde está parado.

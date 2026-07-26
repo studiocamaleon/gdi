@@ -6,6 +6,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  MaxLength,
   Min,
   MinLength,
   ValidateNested,
@@ -151,6 +152,33 @@ export class FacturarOrdenDto {
   @IsOptional()
   @IsString()
   puntoVentaId?: string;
+
+  /** false = dejar el borrador sin pedir CAE. Default: emitir. */
+  @IsOptional()
+  emitir?: boolean;
+}
+
+/**
+ * Nota de crédito contra una factura de la orden: es la forma de deshacer lo
+ * fiscal —ARCA no tiene "anular", se corrige emitiendo la NC que referencia al
+ * comprobante—. Ver docs/facturacion-ordenes-deuda-comercial-diseno.md §7.
+ */
+export class NotaCreditoOrdenDto {
+  /** Qué factura se corrige. Sin esto la NC no existe para ARCA. */
+  @IsString()
+  comprobanteOrigenId: string;
+
+  /** Default: todo lo que esa factura tenga vivo (total − NC previas). */
+  @IsOptional()
+  @IsNumber()
+  @Min(0.01)
+  monto?: number;
+
+  /** Por qué se anula. Va en el renglón y queda en el comprobante. */
+  @IsString()
+  @MinLength(3)
+  @MaxLength(200)
+  motivo: string;
 
   /** false = dejar el borrador sin pedir CAE. Default: emitir. */
   @IsOptional()

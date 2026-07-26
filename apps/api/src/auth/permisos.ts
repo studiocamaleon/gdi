@@ -105,6 +105,22 @@ export const PERMISOS_TRANSVERSALES = [
       'Descartar un comprobante o anular un cobro registrado. Es lo que deshace un movimiento de plata.',
   },
   /**
+   * Tomar la seña es parte de cerrar la venta, no de manejar la caja: el
+   * Vendedor cobra en el mostrador y el Administrativo concilia después. Sin
+   * esta llave había que elegir entre darle al Vendedor la administración
+   * entera —comprobantes, tesorería, cuentas— o que sus cobros fallaran con un
+   * 403 al emitir la orden, que es lo que venía pasando.
+   *
+   * Deja cobrar y ver lo que el formulario necesita (métodos de pago y
+   * cuentas). NO abre facturación, ni tesorería, ni anular.
+   */
+  {
+    clave: 'administracion.cobrar',
+    label: 'Registrar cobros de clientes',
+    descripcion:
+      'Tomar un pago o una seña contra una orden y emitir su recibo. No incluye facturar, mover fondos entre cuentas ni anular.',
+  },
+  /**
    * El Resumen ejecutivo es el reporte que junta TODO el negocio en una
    * pantalla —facturación, margen, punto de equilibrio, alertas—. Es la lectura
    * del dueño, no la del equipo: por eso se separa del resto de Reportes en vez
@@ -247,6 +263,9 @@ export const ROLES_PREDEFINIDOS: RolPredefinido[] = [
       'comercial.gestionar',
       'registros.gestionar',
       'produccion.ver',
+      // Cierra la venta con la seña en la mano: sin esto, los cobros que carga
+      // en la ficha fallaban al emitir la orden.
+      'administracion.cobrar',
     ],
   },
   {

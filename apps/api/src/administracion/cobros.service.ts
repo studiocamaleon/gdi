@@ -101,6 +101,14 @@ export class CobrosService {
         'No se pueden registrar cobros sobre un borrador: emití la orden primero.',
       );
     }
+    // Cobrar contra algo que ya se dio de baja deja plata imputada a una venta
+    // que no existe. Si el cliente igual pagó, va como cobro sin orden y queda
+    // a cuenta.
+    if (orden && orden.estado === 'cancelada') {
+      throw new BadRequestException(
+        'La orden está cancelada: no se le pueden registrar cobros.',
+      );
+    }
 
     const esCheque = metodo.tipo === 'cheque_echeq';
     if (esCheque && !payload.valor) {

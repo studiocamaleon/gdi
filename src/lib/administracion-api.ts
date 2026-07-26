@@ -122,6 +122,21 @@ export async function facturarOrden(
   });
 }
 
+/**
+ * Nota de crédito contra una factura de la orden. Es la forma de deshacer lo
+ * fiscal —ARCA no anula, se corrige con otro comprobante— y lo que después
+ * permite cancelar la orden.
+ */
+export async function notaCreditoOrden(
+  ordenId: string,
+  payload: { comprobanteOrigenId: string; motivo: string; monto?: number },
+): Promise<Comprobante> {
+  return apiRequest(`/administracion/ordenes/${ordenId}/nota-credito`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function facturarLote(payload: {
   ordenIds: string[];
   modo: "por_orden" | "agrupada";

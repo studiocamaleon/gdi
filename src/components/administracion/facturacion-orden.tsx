@@ -22,10 +22,13 @@ import {
   getCobros,
   getComprobantes,
   getFacturacionHabilitada,
+  notaCreditoOrden,
   reciboPdfUrl,
 } from "@/lib/administracion-api";
 import { formatFechaOrden, formatMonedaOrden } from "@/lib/ordenes-trabajo";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
+import { usePuede } from "@/components/navigation/permisos-provider";
+import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 
 /** Fecha · método · recibo · acreditación · monto. */
 const COLS_COBRO = "84px 1fr 118px 96px 108px";
@@ -283,6 +286,10 @@ export function ComprobantesOrdenTab({
   const [cobros, setCobros] = React.useState<Cobro[] | null>(null);
   const [facturarOpen, setFacturarOpen] = React.useState(false);
   const [refrescos, setRefrescos] = React.useState(0);
+  /** La factura que se está por acreditar, o null. */
+  const [ncPara, setNcPara] = React.useState<Comprobante | null>(null);
+  // Anular es otro permiso que facturar: emitir y deshacer no son lo mismo.
+  const puedeAnular = usePuede("administracion.anular");
   // El botón Facturar sólo aparece con la integración AFIP activa. null =
   // todavía no sabemos, así que no se muestra ni el botón ni el aviso.
   const [facturacionActiva, setFacturacionActiva] = React.useState<
@@ -364,18 +371,19 @@ export function ComprobantesOrdenTab({
               : " Emití la orden para poder facturarla."}
           </div>
         ) : (
-          <div className="mov-table">
+          <div className="mov-table fo-comps">
             <div className="mov-th">
               <span>Fecha</span>
               <span>Comprobante</span>
               <span>Estado</span>
               <span>CAE</span>
               <span className="r">Aplica a esta orden</span>
+              <span />
             </div>
             {listaComp.map((c) => (
               <div key={c.id} className="mov-row">
                 <span className="mov-fecha">{formatFechaOrden(c.fecha)}</span>
-                <span className="mov-metodo">
+                <span className="fo-comp">
                   <span className="mov-badge">
                     {c.tipo === "factura"
                       ? "FA"
@@ -383,22 +391,26 @@ export function ComprobantesOrdenTab({
                         ? "NC"
                         : "ND"}
                   </span>
-                  <Link
-                    href={`/administracion/comprobantes/${c.id}`}
-                    style={{ color: "inherit" }}
-                  >
-                    {c.numeroCompleto}
-                  </Link>
-                  {c.ordenes.length > 1 ? (
-                    <span className="mov-who">
-                      · lote de {c.ordenes.length} órdenes
-                    </span>
-                  ) : null}
+                  {/* Número y "lote de N" apilados: en una sola línea el número
+                      se partía en tres renglones y aplastaba al badge. */}
+                  <span className="fo-comp-txt">
+                    <Link
+                      href={`/administracion/comprobantes/${c.id}`}
+                      className="fo-comp-nro"
+                    >
+                      {c.numeroCompleto}
+                    </Link>
+                    {c.ordenes.length > 1 ? (
+                      <span className="fo-comp-sub">
+                        lote de {c.ordenes.length} órdenes
+                      </span>
+                    ) : null}
+                  </span>
                 </span>
                 <span className="mov-ref">
                   {COMPROBANTE_ESTADO_LABEL[c.estado] ?? c.estado}
                 </span>
-                <span className="mov-comp">
+                <span className="fo-comp-cae" title={c.cae ?? undefined}>
                   {c.cae ? (
                     c.cae
                   ) : c.estado === "emitido" ? (
@@ -410,6 +422,23 @@ export function ComprobantesOrdenTab({
                 <span className="mov-monto">
                   {c.tipo === "nota_credito" ? "−" : ""}
                   {formatMonedaOrden(montoDeEstaOrden(c), moneda)}
+                </span>
+                {/* La NC es lo único que deshace una factura emitida: ARCA no
+                    anula, se corrige con otro comprobante. Columna propia para
+                    que no empuje al monto. */}
+                <span className="fo-comp-acc">
+                  {c.tipo === "factura" &&
+                  c.estado === "emitido" &&
+                  puedeAnular ? (
+                    <button
+                      type="button"
+                      className="fo-nc-btn"
+                      onClick={() => setNcPara(c)}
+                      title="Emitir una nota de crédito que anule esta factura"
+                    >
+                      Nota de crédito
+                    </button>
+                  ) : null}
                 </span>
               </div>
             ))}
@@ -505,6 +534,48 @@ export function ComprobantesOrdenTab({
           onFacturada={() => setRefrescos((n) => n + 1)}
         />
       ) : null}
+
+      <ConfirmacionDestructiva
+        open={ncPara !== null}
+        onOpenChange={(open) => {
+          if (!open) setNcPara(null);
+        }}
+        titulo={`Nota de crédito de ${ncPara?.numeroCompleto ?? ""}`}
+        descripcion={`Se emite una NC por ${formatMonedaOrden(ncPara ? montoDeEstaOrden(ncPara) : 0, moneda)} que anula esa factura ante ARCA. La factura original no se borra —no se puede—: queda compensada por la nota.`}
+        impacto={[
+          "El facturado de la orden baja: vuelve a quedar sin facturar.",
+          "Los cobros imputados a esa factura se liberan y buscan otra.",
+          "Recién con la factura acreditada se puede cancelar la orden.",
+        ]}
+        requiereTipear={false}
+        motivo={{
+          label: "¿Por qué se anula? Va en el detalle del comprobante.",
+          placeholder: "Ej.: error en el importe · el cliente canceló el trabajo",
+        }}
+        accionLabel="Emitir nota de crédito"
+        onConfirmar={async (motivo) => {
+          if (!ncPara) return;
+          try {
+            const nc = await notaCreditoOrden(ordenId, {
+              comprobanteOrigenId: ncPara.id,
+              motivo,
+            });
+            setNcPara(null);
+            setRefrescos((n) => n + 1);
+            toast.success(
+              nc.estado === "emitido"
+                ? `Nota de crédito ${nc.numeroCompleto} emitida.`
+                : `La nota de crédito quedó ${COMPROBANTE_ESTADO_LABEL[nc.estado]?.toLowerCase() ?? nc.estado}: revisala en Comprobantes.`,
+            );
+          } catch (error) {
+            toast.error(
+              error instanceof Error
+                ? error.message
+                : "No se pudo emitir la nota de crédito.",
+            );
+          }
+        }}
+      />
     </div>
   );
 }

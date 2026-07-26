@@ -55,12 +55,18 @@ export class PermisosGuard implements CanActivate {
     );
     if (soloAutenticado) return true;
 
-    const requerido = this.reflector.getAllAndOverride<PermisoClave>(
-      PERMISO_KEY,
-      [context.getHandler(), context.getClass()],
-    );
+    // Puede venir uno solo (la forma vieja) o varios, y entonces alcanza con
+    // tener cualquiera.
+    const declarado = this.reflector.getAllAndOverride<
+      PermisoClave | PermisoClave[]
+    >(PERMISO_KEY, [context.getHandler(), context.getClass()]);
+    const requerido = declarado
+      ? Array.isArray(declarado)
+        ? declarado
+        : [declarado]
+      : null;
 
-    if (!requerido) {
+    if (!requerido || requerido.length === 0) {
       // Se registra fuerte: no es que el usuario no tenga permiso, es que el
       // endpoint no declaró cuál pide. Es un bug nuestro y se arregla anotando.
       this.logger.error(
@@ -69,7 +75,7 @@ export class PermisosGuard implements CanActivate {
       throw new ForbiddenException('Esta acción no está disponible.');
     }
 
-    if (!auth.permisos?.has(requerido)) {
+    if (!requerido.some((p) => auth.permisos?.has(p))) {
       throw new ForbiddenException('No tenés permisos para hacer esto.');
     }
 

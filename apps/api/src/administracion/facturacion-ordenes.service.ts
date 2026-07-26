@@ -257,6 +257,36 @@ export class FacturacionOrdenesService {
     });
     await tx.cobroImputacion.deleteMany({ where: { comprobanteId, tenantId } });
 
+    // El saldo de la factura se REHACE, no se devuelve sumando lo que tenía
+    // imputado: lo que queda por cobrar es su total menos lo que las notas de
+    // crédito ya le sacaron. Con una NC total el saldo queda en 0 y los cobros
+    // liberados no vuelven a pegarse a ella —si no, el matching desharía la
+    // NC—; con una NC parcial queda el resto, y el cobro se re-imputa hasta ahí.
+    const factura = await tx.comprobante.findFirst({
+      where: { id: comprobanteId, tenantId },
+      select: { total: true },
+    });
+    if (factura) {
+      const notas = await tx.comprobante.aggregate({
+        where: {
+          tenantId,
+          comprobanteOrigenId: comprobanteId,
+          tipo: 'nota_credito',
+          estado: 'emitido',
+          anuladoEl: null,
+        },
+        _sum: { total: true },
+      });
+      const saldo = Math.max(
+        0,
+        r2(Number(factura.total) - Number(notas._sum.total ?? 0)),
+      );
+      await tx.comprobante.update({
+        where: { id: comprobanteId },
+        data: { saldoPendiente: saldo },
+      });
+    }
+
     const vinculos = await tx.comprobanteOrden.findMany({
       where: { comprobanteId, tenantId },
       select: { ordenId: true },
@@ -273,6 +303,11 @@ export class FacturacionOrdenesService {
   /** Post-emisión (fuera del circuito ARCA): denormalizados + matching. */
   async alEmitirComprobante(tenantId: string, comprobanteId: string) {
     await this.prisma.$transaction(async (tx) => {
+      const emitido = await tx.comprobante.findFirst({
+        where: { id: comprobanteId, tenantId },
+        select: { tipo: true, comprobanteOrigenId: true },
+      });
+
       const vinculos = await tx.comprobanteOrden.findMany({
         where: { comprobanteId, tenantId },
         select: { ordenId: true },
@@ -280,6 +315,23 @@ export class FacturacionOrdenesService {
       for (const v of vinculos) {
         await this.recalcularFacturado(tx, tenantId, v.ordenId);
       }
+
+      // Una NC no cobra nada: DESHACE. Hasta acá emitirla sólo restaba del
+      // facturado y dejaba la factura corregida con su saldo y sus cobros
+      // imputados como si nada hubiera pasado — o sea, plata pegada a un
+      // comprobante que ya no debería estar vivo.
+      if (
+        emitido?.tipo === 'nota_credito' &&
+        emitido.comprobanteOrigenId
+      ) {
+        await this.revertirFactura(
+          tx,
+          tenantId,
+          emitido.comprobanteOrigenId,
+        );
+        return;
+      }
+
       await this.matchearFactura(tx, tenantId, comprobanteId);
     });
   }

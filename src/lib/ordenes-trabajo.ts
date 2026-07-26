@@ -20,9 +20,14 @@ export type OrdenTrabajoEstado =
   | "pendiente"
   | "produccion"
   | "finalizada"
-  | "entregada";
+  | "entregada"
+  | "cancelada";
 
-/** Ciclo de vida en orden. */
+/**
+ * Ciclo de vida en orden. `cancelada` NO está: no es una etapa más adelante
+ * sino una salida lateral, y el stepper del detalle recorre este array — una
+ * cancelada no tiene que dibujarse como si le faltara llegar a algún lado.
+ */
 export const ORDEN_TRABAJO_FLOW: OrdenTrabajoEstado[] = [
   "borrador",
   "pendiente",
@@ -30,6 +35,25 @@ export const ORDEN_TRABAJO_FLOW: OrdenTrabajoEstado[] = [
   "finalizada",
   "entregada",
 ];
+
+/** Terminal y fuera del flujo: se llega por la acción de cancelar. */
+export const ESTADO_CANCELADA = "cancelada" as const;
+
+/**
+ * Desde dónde ofrece cancelar la UI: mientras el trabajo todavía no está
+ * hecho. Espejo de ESTADOS_CANCELABLES del API.
+ *
+ * Una finalizada no se cancela —el trabajo existe, el material se consumió y
+ * las horas se pagaron—; si se finalizó por error, se reabre un paso desde el
+ * tablero y se cancela desde producción.
+ */
+export function esCancelable(estado: OrdenTrabajoEstado): boolean {
+  return (
+    estado === "borrador" ||
+    estado === "pendiente" ||
+    estado === "produccion"
+  );
+}
 
 export const ORDEN_TRABAJO_ESTADOS: Record<
   OrdenTrabajoEstado,
@@ -50,6 +74,9 @@ export const ORDEN_TRABAJO_ESTADOS: Record<
     dot: "#1f9d6b",
   },
   entregada: { label: "Entregada", fg: "#2c2c33", bg: "#e8e6e1", dot: "#4a4a52" },
+  // Apagada a propósito: no es un error (rojo) ni un logro (verde), es un
+  // trabajo que no va a pasar. Tiene que leerse como cerrado, no como alarma.
+  cancelada: { label: "Cancelada", fg: "#7a7a82", bg: "#f4f3f1", dot: "#a8a8b0" },
 };
 
 /**
@@ -209,9 +236,23 @@ export type OrdenTrabajoDetalle = OrdenTrabajoListItem & {
   facturadoTotal: number;
   /** Eje de cobranza: bruto cobrado de la orden. */
   cobradoTotal: number;
+  /** Sólo si está cancelada: por qué, quién y con cuánto trabajo encima. */
+  cancelacion: OrdenTrabajoCancelacion | null;
   productos: OrdenTrabajoProducto[];
   eventos: OrdenTrabajoEvento[];
   pago: OrdenTrabajoPago | null;
+};
+
+export type OrdenTrabajoCancelacion = {
+  /** ISO. */
+  fecha: string;
+  /** En qué etapa estaba: no es lo mismo morir en borrador que en producción. */
+  estadoAlCancelar: string | null;
+  motivo: string;
+  por: string | null;
+  pasosHechos: number;
+  pasosTotal: number;
+  minutosReales: number;
 };
 
 /**
@@ -242,6 +283,10 @@ export function progresoDerivado(
     case "finalizada":
     case "entregada":
       return 100;
+    // Quedó donde quedó: mostrar un avance invitaría a leerlo como algo que
+    // todavía puede terminar.
+    case "cancelada":
+      return null;
   }
 }
 
@@ -293,6 +338,7 @@ export function getMockOrdenDetalle(id: string): OrdenTrabajoDetalle | null {
       publicToken: null,
       facturadoTotal: 0,
       cobradoTotal: 0,
+      cancelacion: null,
       productos: [],
       eventos: [],
       pago: null,
@@ -307,6 +353,7 @@ export function getMockOrdenDetalle(id: string): OrdenTrabajoDetalle | null {
     publicToken: null,
     facturadoTotal: 0,
     cobradoTotal: 0,
+    cancelacion: null,
     productos: [
       {
         codigo: "TAR-001",
