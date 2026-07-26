@@ -7,6 +7,7 @@
  */
 
 import { apiRequest } from "@/lib/api";
+import { formatearMonedaDoc, type Moneda } from "@/lib/moneda";
 
 export type ReciboOrden = {
   numero: string;
@@ -32,6 +33,8 @@ export type ReciboPublico = {
   montoEnLetras: string;
   metodoNombre: string;
   cuentaTexto: string | null;
+  /** ISO 4217 de la moneda del tenant; ausente en payloads viejos = ARS. */
+  monedaCodigo?: string;
   /** null = pago a cuenta, sin orden contra la cual medir saldo. */
   orden: ReciboOrden | null;
 };
@@ -53,12 +56,9 @@ export function reciboLogoUrl(token: string): string {
   return `/api/backend/recibos/publico/${encodeURIComponent(token)}/logo`;
 }
 
-export const money = (n: number) =>
-  "$" +
-  n.toLocaleString("es-AR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+// Vistas públicas: símbolo desambiguado ("AR$"), el link cruza fronteras.
+export const money = (n: number, moneda: Moneda) =>
+  formatearMonedaDoc(n, moneda);
 
 export function fechaCorta(iso: string): string {
   const [y, m, d] = iso.slice(0, 10).split("-");

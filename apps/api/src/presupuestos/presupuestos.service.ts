@@ -562,12 +562,13 @@ export class PresupuestosService {
     cotizacionId: string,
     total: number,
   ) {
-    const [cfg, items] = await Promise.all([
+    const [cfg, items, regional] = await Promise.all([
       this.config(tenantId),
       this.prisma.cotizacionItem.findMany({
         where: { cotizacionId },
         select: { precioTotal: true, costoTotal: true },
       }),
+      this.empresa.regional(tenantId),
     ]);
     return evaluarAprobacion(
       {
@@ -581,6 +582,7 @@ export class PresupuestosService {
           costoTotal: i.costoTotal != null ? Number(i.costoTotal) : null,
         })),
       },
+      regional.moneda,
     );
   }
 
@@ -773,10 +775,14 @@ export class PresupuestosService {
     }
 
     const emision = (c.emisionJson ?? { items: [] }) as unknown as EmisionJson;
+    const regional = await this.empresa.regional(c.tenantId);
     return {
       numero: c.numero,
       estado,
       negocio: c.tenant.nombre,
+      // El link es público y cruza fronteras: el front formatea los montos
+      // con esta moneda (símbolo desambiguado), no con un "$" asumido.
+      monedaCodigo: regional.moneda.codigo,
       cliente: c.cliente?.nombre ?? null,
       vendedor: c.vendedor?.nombreCompleto ?? null,
       fechaEmision: c.fechaEmision?.toISOString().slice(0, 10) ?? null,

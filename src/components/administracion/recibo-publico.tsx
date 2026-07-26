@@ -5,6 +5,7 @@ import {
   reciboPdfUrl,
   type ReciboPublico,
 } from "@/lib/recibos";
+import { monedaDe } from "@/lib/moneda";
 
 /**
  * El recibo de pago que ve el cliente por el link de WhatsApp (`/c/<token>`).
@@ -26,6 +27,7 @@ export function ReciboPublicoView({
   tieneLogo: boolean;
 }) {
   const { orden } = datos;
+  const moneda = monedaDe(datos.monedaCodigo);
 
   return (
     <div className="rc-page">
@@ -84,7 +86,7 @@ export function ReciboPublicoView({
           <div className="rc-hero">
             <div>
               <div className="rc-hl">Recibimos la suma de</div>
-              <div className="rc-amt">{money(datos.monto)}</div>
+              <div className="rc-amt">{money(datos.monto, moneda)}</div>
               <div className="rc-words">{datos.montoEnLetras}</div>
             </div>
             <div className="rc-method">
@@ -124,26 +126,26 @@ export function ReciboPublicoView({
                 <div className="rc-ar">
                   Total del trabajo
                   <br />
-                  {money(orden.total)}
+                  {money(orden.total, moneda)}
                 </div>
               </div>
 
               <div className="rc-bal">
                 <div className="rc-br">
                   <span className="rc-l">Total del trabajo</span>
-                  <span className="rc-v">{money(orden.total)}</span>
+                  <span className="rc-v">{money(orden.total, moneda)}</span>
                 </div>
                 <div className="rc-br">
                   <span className="rc-l">Pagos anteriores</span>
-                  <span className="rc-v">{money(orden.pagosAnteriores)}</span>
+                  <span className="rc-v">{money(orden.pagosAnteriores, moneda)}</span>
                 </div>
                 <div className="rc-br rc-pay">
                   <span className="rc-l">Este pago</span>
-                  <span className="rc-v">{money(datos.monto)}</span>
+                  <span className="rc-v">{money(datos.monto, moneda)}</span>
                 </div>
                 <div className="rc-br rc-due">
                   <span className="rc-l">Saldo pendiente</span>
-                  <span className="rc-v">{money(orden.saldoPendiente)}</span>
+                  <span className="rc-v">{money(orden.saldoPendiente, moneda)}</span>
                 </div>
                 <div className="rc-prog">
                   <div className="rc-track">

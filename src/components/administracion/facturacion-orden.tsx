@@ -25,6 +25,7 @@ import {
   reciboPdfUrl,
 } from "@/lib/administracion-api";
 import { formatFechaOrden, formatMonedaOrden } from "@/lib/ordenes-trabajo";
+import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 
 /** Fecha · método · recibo · acreditación · monto. */
 const COLS_COBRO = "84px 1fr 118px 96px 108px";
@@ -69,6 +70,7 @@ export function FacturarOrdenModal({
   onClose: () => void;
   onFacturada: (comprobante: Comprobante) => void;
 }) {
+  const { moneda } = useConfigRegional();
   const [monto, setMonto] = React.useState(String(Math.round(saldoSinFacturar)));
   const [concepto, setConcepto] = React.useState(
     `Trabajos de impresión — ${numero}`,
@@ -121,7 +123,7 @@ export function FacturarOrdenModal({
           </button>
           <h2>Facturar {numero}</h2>
           <div className="s">
-            Saldo sin facturar: {formatMonedaOrden(saldoSinFacturar)} · la
+            Saldo sin facturar: {formatMonedaOrden(saldoSinFacturar, moneda)} · la
             factura queda vinculada a la orden
           </div>
         </div>
@@ -131,7 +133,7 @@ export function FacturarOrdenModal({
               <label className="cf-field cf-monto">
                 <span className="cf-lbl">Monto a facturar (IVA incluido)</span>
                 <div className="cf-money">
-                  <span className="cf-cur">$</span>
+                  <span className="cf-cur">{moneda.simbolo}</span>
                   <input
                     type="number"
                     value={monto}
@@ -216,6 +218,7 @@ function EjesOrden({
   facturado: number;
   cobrado: number;
 }) {
+  const { moneda } = useConfigRegional();
   const fiscal = estadoFiscalOrden(total, facturado);
   const cobranza = estadoCobranzaOrden(total, cobrado);
   const pctF = total > 0 ? Math.min(100, Math.round((facturado / total) * 100)) : 0;
@@ -224,19 +227,19 @@ function EjesOrden({
     <div className="pagos-kpis" style={{ marginBottom: 14 }}>
       <div className="pk">
         <span className="pk-l">Total de la orden</span>
-        <span className="pk-v">{formatMonedaOrden(total)}</span>
+        <span className="pk-v">{formatMonedaOrden(total, moneda)}</span>
         <span className="pk-s">c/ impuestos</span>
       </div>
       <div className={`pk ${fiscal === "facturada" ? "pk-ok" : ""}`}>
         <span className="pk-l">Facturado</span>
-        <span className="pk-v">{formatMonedaOrden(facturado)}</span>
+        <span className="pk-v">{formatMonedaOrden(facturado, moneda)}</span>
         <span className="pk-s">
           {ESTADO_FISCAL_LABEL[fiscal]} · {pctF}%
         </span>
       </div>
       <div className={`pk ${cobranza === "cobrada" ? "pk-ok" : "pk-warn"}`}>
         <span className="pk-l">Cobrado</span>
-        <span className="pk-v">{formatMonedaOrden(cobrado)}</span>
+        <span className="pk-v">{formatMonedaOrden(cobrado, moneda)}</span>
         <span className="pk-s">
           {ESTADO_COBRANZA_LABEL[cobranza]} · {pctC}%
         </span>
@@ -273,6 +276,7 @@ export function ComprobantesOrdenTab({
    */
   recargarToken?: number;
 }) {
+  const { moneda } = useConfigRegional();
   const [comprobantes, setComprobantes] = React.useState<Comprobante[] | null>(
     null,
   );
@@ -405,13 +409,13 @@ export function ComprobantesOrdenTab({
                 </span>
                 <span className="mov-monto">
                   {c.tipo === "nota_credito" ? "−" : ""}
-                  {formatMonedaOrden(montoDeEstaOrden(c))}
+                  {formatMonedaOrden(montoDeEstaOrden(c), moneda)}
                 </span>
               </div>
             ))}
             <div className="mov-foot">
               <span>Facturado neto de NC</span>
-              <span>{formatMonedaOrden(Math.max(0, facturado))}</span>
+              <span>{formatMonedaOrden(Math.max(0, facturado), moneda)}</span>
             </div>
           </div>
         )}
@@ -467,7 +471,7 @@ export function ComprobantesOrdenTab({
                     : "Pendiente"}
                 </span>
                 <span className="mov-monto">
-                  {formatMonedaOrden(c.montoBruto)}
+                  {formatMonedaOrden(c.montoBruto, moneda)}
                 </span>
               </div>
             ))}

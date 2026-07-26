@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { formatearMoneda, monedaDe } from "@/lib/moneda";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -819,7 +820,7 @@ function materialVariantOption(
     label: variantLabel,
     code: variante.sku,
     description: variante.precioReferencia
-      ? `${mp.nombre} · Referencia: $${Number(variante.precioReferencia).toLocaleString("es-AR")}`
+      ? `${mp.nombre} · Referencia: ${formatearMoneda(Number(variante.precioReferencia), monedaDe(variante.moneda))}`
       : `${mp.nombre} · ${mp.codigo}`,
     details: variantDetails,
     group: mp.nombre,
@@ -2112,7 +2113,10 @@ function ColorThicknessVariantSelector({
             const checked = enabledVariantIds.has(variante.id);
             const medida = getVariantMeasureLabel(summary);
             const precio = variante.precioReferencia
-              ? Number(variante.precioReferencia).toLocaleString("es-AR")
+              ? formatearMoneda(
+                  Number(variante.precioReferencia),
+                  monedaDe(variante.moneda),
+                )
               : null;
             return (
               <label
@@ -2151,7 +2155,7 @@ function ColorThicknessVariantSelector({
                     ) : null}
                     {precio ? (
                       <span className="text-muted-foreground block truncate">
-                        Ref. ${precio}
+                        Ref. {precio}
                       </span>
                     ) : null}
                     {candidate.defaultVarianteId === variante.id ? (
@@ -8170,7 +8174,7 @@ export function ConfigPasosEditorView({
                                                                   {candidatoMpLookup
                                                                     ?.variante
                                                                     .precioReferencia
-                                                                    ? ` · $${Number(candidatoMpLookup.variante.precioReferencia)}`
+                                                                    ? ` · ${formatearMoneda(Number(candidatoMpLookup.variante.precioReferencia), monedaDe(candidatoMpLookup.variante.moneda))}`
                                                                     : ""}
                                                                 </span>
                                                               ) : (
@@ -8373,7 +8377,7 @@ export function ConfigPasosEditorView({
                                                                               variante.sku,
                                                                             description:
                                                                               variante.precioReferencia
-                                                                                ? `$${Number(variante.precioReferencia)} · ${variante.sku}`
+                                                                                ? `${formatearMoneda(Number(variante.precioReferencia), monedaDe(variante.moneda))} · ${variante.sku}`
                                                                                 : variante.sku,
                                                                           }),
                                                                         )}

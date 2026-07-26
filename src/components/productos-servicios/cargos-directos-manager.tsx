@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import { formatearMoneda, type Moneda } from "@/lib/moneda";
+import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { useRouter } from "next/navigation";
 import { PencilIcon, PlusIcon, Trash2Icon, WrenchIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -163,18 +165,14 @@ function selectClassName() {
   return "border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none";
 }
 
-function formatConfigResumen(cargo: CargoDirectoCatalogo) {
+function formatConfigResumen(cargo: CargoDirectoCatalogo, moneda: Moneda) {
   const config = asRecord(cargo.configJson);
   if (cargo.modoCalculo === "MONTO_FIJO_PLANO") {
     const zonas = Array.isArray(config.zonas) ? config.zonas : [];
     if (zonas.length > 0) return `${zonas.length} importe${zonas.length === 1 ? "" : "s"}`;
     const monto = Number(config.monto ?? 0);
     return monto > 0
-      ? new Intl.NumberFormat("es-AR", {
-          style: "currency",
-          currency: "ARS",
-          maximumFractionDigits: 0,
-        }).format(monto)
+      ? formatearMoneda(monto, moneda, { decimales: 0 })
       : "Sin monto";
   }
   if (cargo.modoCalculo === "PORCENTAJE_SOBRE_BASE") {
@@ -184,17 +182,14 @@ function formatConfigResumen(cargo: CargoDirectoCatalogo) {
   if (cargo.modoCalculo === "POR_UNIDAD_INPUT") {
     const precio = Number(config.precioPorUnidad ?? 0);
     const unidad = typeof config.unidad === "string" ? config.unidad : "";
-    const formatted = new Intl.NumberFormat("es-AR", {
-      style: "currency",
-      currency: "ARS",
-      maximumFractionDigits: 0,
-    }).format(precio);
+    const formatted = formatearMoneda(precio, moneda, { decimales: 0 });
     return `${formatted}${unidad ? ` / ${unidad}` : ""}`;
   }
   return "Sin configuración";
 }
 
 export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoDirectoCatalogo[] }) {
+  const { moneda } = useConfigRegional();
   const router = useRouter();
   const [editando, setEditando] = React.useState<CargoDirectoCatalogo | null>(null);
   const [openSheet, setOpenSheet] = React.useState(false);
@@ -637,7 +632,7 @@ export function CargosDirectosManager({ initialCargos }: { initialCargos: CargoD
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <span className="text-sm">{formatConfigResumen(c)}</span>
+                      <span className="text-sm">{formatConfigResumen(c, moneda)}</span>
                     </TableCell>
                     <TableCell>
                       <Badge variant={c.activo ? "default" : "secondary"}>

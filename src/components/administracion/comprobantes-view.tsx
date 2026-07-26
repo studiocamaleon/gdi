@@ -12,9 +12,8 @@ import {
   formatCuitODash,
   type Comprobante,
 } from "@/lib/administracion";
-
-const fmt = (n: number) =>
-  (n < 0 ? "−" : "") + "$" + Math.abs(Math.round(n)).toLocaleString("es-AR");
+import { useConfigRegional } from "@/components/navigation/config-regional-provider";
+import { formatearMoneda } from "@/lib/moneda";
 
 const CHIPS_ESTADO: Array<[string, string]> = [
   ["todos", "Todos"],
@@ -52,6 +51,8 @@ export function ComprobantesView({
   initialComprobantes: Comprobante[];
 }) {
   const router = useRouter();
+  const { moneda } = useConfigRegional();
+  const fmt = (n: number) => formatearMoneda(n, moneda, { decimales: 0 });
   const [q, setQ] = React.useState("");
   const [est, setEst] = React.useState("todos");
   const [tip, setTip] = React.useState("todos");

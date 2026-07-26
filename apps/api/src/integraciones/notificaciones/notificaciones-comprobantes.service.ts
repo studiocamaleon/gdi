@@ -114,7 +114,13 @@ function numeroFormateado(puntoVenta: number, numero: number): string {
   return `${String(puntoVenta).padStart(4, '0')}-${String(numero).padStart(8, '0')}`;
 }
 
-/** Sin `$`: el símbolo ya está en el texto fijo de la plantilla. */
+/**
+ * Sin `$`: el símbolo ya está en el texto fijo de la plantilla.
+ *
+ * A propósito NO usa el helper multi-moneda: el comprobante ARCA es del
+ * circuito fiscal argentino (gateado por país), siempre en ARS o USD con
+ * cotización — misma decisión que en `factura-pdf.service.ts`.
+ */
 function money(n: number): string {
   return n.toLocaleString('es-AR', {
     minimumFractionDigits: 2,

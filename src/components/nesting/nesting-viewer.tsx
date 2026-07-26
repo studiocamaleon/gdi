@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import { formatearMoneda, type Moneda } from "@/lib/moneda";
+import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import type { NestingViewerInput } from "@/lib/productos-servicios-api";
 import type {
   DemasiaPorLado,
@@ -114,12 +116,8 @@ function formatNumber(value: number, digits = 2): string {
   }).format(value);
 }
 
-function formatARS(value: number) {
-  return new Intl.NumberFormat("es-AR", {
-    style: "currency",
-    currency: "ARS",
-    maximumFractionDigits: 0,
-  }).format(value);
+function formatMoney(value: number, moneda: Moneda) {
+  return formatearMoneda(value, moneda, { decimales: 0 });
 }
 
 function labelUnidad(u: NestingViewerInput["unidad"]): string {
@@ -425,6 +423,7 @@ function NestingCostingSummary({
 }: {
   costingDetails: NonNullable<NestingViewerProps["costingDetails"]>;
 }) {
+  const { moneda } = useConfigRegional();
   const items = costingDetails.filter((item) => item.detalleCosteoNesting);
   if (items.length === 0) return null;
 
@@ -437,7 +436,7 @@ function NestingCostingSummary({
             <span className="font-semibold">Costeo del sustrato</span>
             <span>{item.materialNombre}</span>
             <span>{costingLabel(detalle.strategy)}</span>
-            <span>Total {formatARS(detalle.totalCost)}</span>
+            <span>Total {formatMoney(detalle.totalCost, moneda)}</span>
             {detalle.lastUnit ? (
               <span>Última placa {formatNumber(detalle.lastUnit.occupationPct, 1)}%</span>
             ) : null}

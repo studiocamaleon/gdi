@@ -4,6 +4,7 @@ import {
   type ComprobantePublico,
 } from "@/lib/comprobantes-publicos";
 import { fechaCorta, money } from "@/lib/recibos";
+import { monedaDe } from "@/lib/moneda";
 
 /**
  * El comprobante fiscal que ve el cliente por el link de WhatsApp (`/f/<token>`).
@@ -29,6 +30,8 @@ export function ComprobantePublicoView({
   tieneLogo: boolean;
 }) {
   const { emisor, receptor } = datos;
+  // La moneda es la DEL COMPROBANTE ('ARS'|'USD' fiscal), no la del tenant.
+  const moneda = monedaDe(datos.moneda);
   const iniciales = inicialesDe(emisor.razonSocial);
 
   return (
@@ -94,7 +97,7 @@ export function ComprobantePublicoView({
           <div className="rc-hero">
             <div>
               <div className="rc-hl">Importe total</div>
-              <div className="rc-amt">{money(datos.total)}</div>
+              <div className="rc-amt">{money(datos.total, moneda)}</div>
               <div className="rc-words">
                 {datos.moneda}
                 {datos.ordenNumero ? ` · Orden ${datos.ordenNumero}` : ""}
@@ -116,11 +119,11 @@ export function ComprobantePublicoView({
                   <div className="cp-item-d">
                     <div className="cp-item-n">{item.descripcion}</div>
                     <div className="cp-item-q">
-                      {item.cantidad} × {money(item.precioUnitario)}
+                      {item.cantidad} × {money(item.precioUnitario, moneda)}
                       {item.alicuota !== null ? ` · IVA ${item.alicuota}%` : ""}
                     </div>
                   </div>
-                  <div className="cp-item-v">{money(item.subtotal)}</div>
+                  <div className="cp-item-v">{money(item.subtotal, moneda)}</div>
                 </div>
               ))}
             </div>
@@ -130,12 +133,12 @@ export function ComprobantePublicoView({
                 <>
                   <div className="cp-tr">
                     <span className="cp-l">Subtotal</span>
-                    <span className="cp-v">{money(datos.subtotal)}</span>
+                    <span className="cp-v">{money(datos.subtotal, moneda)}</span>
                   </div>
                   {datos.ivaPorAlicuota.map((iva) => (
                     <div className="cp-tr" key={iva.alicuota}>
                       <span className="cp-l">IVA {iva.alicuota}%</span>
-                      <span className="cp-v">{money(iva.monto)}</span>
+                      <span className="cp-v">{money(iva.monto, moneda)}</span>
                     </div>
                   ))}
                 </>
@@ -143,12 +146,12 @@ export function ComprobantePublicoView({
               {datos.otrosTributos.map((t) => (
                 <div className="cp-tr" key={t.descripcion}>
                   <span className="cp-l">{t.descripcion}</span>
-                  <span className="cp-v">{money(t.monto)}</span>
+                  <span className="cp-v">{money(t.monto, moneda)}</span>
                 </div>
               ))}
               <div className="cp-tr cp-total">
                 <span className="cp-l">Total</span>
-                <span className="cp-v">{money(datos.total)}</span>
+                <span className="cp-v">{money(datos.total, moneda)}</span>
               </div>
               {/* RG 5614: sin discriminar, el IVA contenido igual se informa. */}
               {datos.ivaContenido !== null ? (
@@ -156,7 +159,7 @@ export function ComprobantePublicoView({
                   <span className="cp-l">
                     IVA contenido en el precio (Ley 27.743)
                   </span>
-                  <span className="cp-v">{money(datos.ivaContenido)}</span>
+                  <span className="cp-v">{money(datos.ivaContenido, moneda)}</span>
                 </div>
               ) : null}
             </div>

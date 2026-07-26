@@ -150,10 +150,11 @@ export class RecibosService {
       .filter(Boolean)
       .join(' · ');
 
+    const empresa = await this.empresa.paraDocumentos(cobro.tenantId);
     return {
       numero: cobro.numeroRecibo,
       negocio,
-      empresa: await this.empresa.paraDocumentos(cobro.tenantId),
+      empresa,
       iniciales: this.iniciales(negocio),
       logoDataUri: await this.archivos.logoDataUri(cobro.tenantId),
       clienteNombre:
@@ -162,7 +163,9 @@ export class RecibosService {
       registradoPor: cobro.registradoPorNombre,
       referencia: cobro.referencia,
       monto,
-      montoEnLetras: importeEnLetras(monto, cobro.moneda),
+      // En la moneda del NEGOCIO: `cobro.moneda` existe pero hoy nadie la
+      // escribe distinta, y las letras deben coincidir con el número impreso.
+      montoEnLetras: importeEnLetras(monto, empresa.moneda),
       metodoNombre: cobro.metodoPago.nombre,
       cuentaTexto: cuentaTexto || null,
       orden,

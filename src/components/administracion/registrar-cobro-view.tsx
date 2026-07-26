@@ -15,8 +15,8 @@ import type {
   MetodoPago,
 } from "@/lib/administracion";
 import { crearCobro, imputarCobro } from "@/lib/administracion-api";
-
-const fmt = (n: number) => "$" + Math.round(n).toLocaleString("es-AR");
+import { useConfigRegional } from "@/components/navigation/config-regional-provider";
+import { formatearMoneda } from "@/lib/moneda";
 
 export type OrdenContexto = {
   id: string;
@@ -38,6 +38,8 @@ export function RegistrarCobroView({
   cuentas: CuentaFondosResumen[];
 }) {
   const router = useRouter();
+  const { moneda } = useConfigRegional();
+  const fmt = (n: number) => formatearMoneda(n, moneda, { decimales: 0 });
   const saldo = Math.max(0, orden.total - orden.cobradoBruto);
   const [guardando, setGuardando] = React.useState(false);
 

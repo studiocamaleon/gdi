@@ -72,8 +72,17 @@ interface CargasNormalizadas {
 export class AplicarPrecioService {
   private readonly logger = new Logger(AplicarPrecioService.name);
 
+  /**
+   * Decimales del dinero de ESTA corrida (los % siguen redondeando a 2).
+   * Campo de instancia y no parámetro enhebrado: `aplicar()` es síncrono de
+   * punta a punta, así que no hay carrera posible entre requests.
+   */
+  private dec = 2;
+  private r = (n: number) => redondear(n, this.dec);
+
   aplicar(input: AplicarPrecioInput): AplicarPrecioOutput {
     this.validarInput(input);
+    this.dec = input.decimalesPrecio ?? 2;
 
     const cargas = this.normalizarCargas(input.impuestos, input.comisiones);
 
@@ -84,23 +93,23 @@ export class AplicarPrecioService {
       cargas,
     );
 
-    const impuestosPorFuera = redondear((neto * cargas.porFueraPct) / 100);
-    const brutoUnitario = redondear(neto + impuestosPorFuera);
-    const netoUnitario = redondear(neto);
+    const impuestosPorFuera = this.r((neto * cargas.porFueraPct) / 100);
+    const brutoUnitario = this.r(neto + impuestosPorFuera);
+    const netoUnitario = this.r(neto);
 
-    const costosInternos = redondear(
+    const costosInternos = this.r(
       (neto * cargas.internosNetoPct) / 100 +
         (brutoUnitario * cargas.internosBrutoPct) / 100,
     );
-    const totalComisiones = redondear(
+    const totalComisiones = this.r(
       (neto * cargas.comisionesNetoPct) / 100 +
         (brutoUnitario * cargas.comisionesBrutoPct) / 100,
     );
-    const totalImpuestos = redondear(impuestosPorFuera + costosInternos);
-    const precioBase = redondear(neto - costosInternos - totalComisiones);
+    const totalImpuestos = this.r(impuestosPorFuera + costosInternos);
+    const precioBase = this.r(neto - costosInternos - totalComisiones);
 
-    const precioNetoTotal = redondear(netoUnitario * input.cantidad);
-    const precioBrutoTotal = redondear(brutoUnitario * input.cantidad);
+    const precioNetoTotal = this.r(netoUnitario * input.cantidad);
+    const precioBrutoTotal = this.r(brutoUnitario * input.cantidad);
 
     const margenEfectivoPct =
       netoUnitario > 0
@@ -269,7 +278,7 @@ export class AplicarPrecioService {
     cargas: CargasNormalizadas,
   ): number {
     const incluyeIva = (config.detalle?.precioIncluyeIva ?? true) !== false;
-    return redondear(
+    return this.r(
       incluyeIva ? precioConfigurado / cargas.factorPorFuera : precioConfigurado,
     );
   }
@@ -291,7 +300,7 @@ export class AplicarPrecioService {
     if (typeof detalle.price !== 'number') {
       throw new BadRequestException('precio_fijo requiere `price`');
     }
-    return redondear(detalle.price);
+    return this.r(detalle.price);
   }
 
   /** neto = max(neto del price, neto necesario para preservar margen mínimo). */
@@ -319,7 +328,7 @@ export class AplicarPrecioService {
       detalle.minimumMarginPct,
       cargas,
     );
-    return redondear(Math.max(netoPrice, piso));
+    return this.r(Math.max(netoPrice, piso));
   }
 
   /** Tramos por rango: el primer `quantityUntil >= cantidad` define el margen. */
@@ -358,7 +367,7 @@ export class AplicarPrecioService {
     );
     const tramo =
       tiers.find((t) => cantidad <= t.quantityUntil) ?? tiers[tiers.length - 1];
-    return redondear(tramo.price);
+    return this.r(tramo.price);
   }
 
   /** Cantidades exactas: la cantidad pedida debe coincidir con uno de los tramos. */
@@ -378,7 +387,7 @@ export class AplicarPrecioService {
         `fijado_por_cantidad: cantidad ${cantidad} no permitida. Válidas: ${cantidadesValidas}`,
       );
     }
-    return redondear(tramo.price);
+    return this.r(tramo.price);
   }
 
   /** Cantidades exactas con margen objetivo sobre el neto. */
@@ -422,7 +431,7 @@ export class AplicarPrecioService {
         'La suma de margen objetivo, costos impositivos internos y comisiones debe ser menor al 100% del precio neto.',
       );
     }
-    return redondear(costo / (1 - tasaTotal));
+    return this.r(costo / (1 - tasaTotal));
   }
 
   // ── Validaciones ────────────────────────────────────────────────────

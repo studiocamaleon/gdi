@@ -71,6 +71,7 @@ import {
 import { familiaMutaMedidasEnPrePasada } from '../productos-servicios/pasos/familias';
 import { resolverArrastreOpcionales } from './arrastre-opcionales';
 import { paramsEfectivos } from './params-runtime';
+import { regionalDelTenant } from '../common/regional';
 import {
   aplicarMutacionPre,
   calcularMetrosLinealesUnion,
@@ -1278,6 +1279,9 @@ export class MotorUniversalService {
       }));
 
     // 4. Aplicar
+    // El redondeo del dinero lo decide el tenant: los decimales de su moneda
+    // (0 en CLP) o directo a la unidad si eligió `redondeoPrecio: 'entero'`.
+    const regional = await regionalDelTenant(this.prisma, args.tenantId);
     const out = this.aplicarPrecio.aplicar({
       costoUnitario: args.costoUnitario,
       cantidad: args.cantidad,
@@ -1285,6 +1289,8 @@ export class MotorUniversalService {
       impuestos: impuestosSnapshot,
       comisiones: comisionesSnapshot,
       precioEspecialCliente: precioEspecialSnapshot ?? undefined,
+      decimalesPrecio:
+        regional.redondeoPrecio === 'entero' ? 0 : regional.moneda.decimales,
     });
 
     return {

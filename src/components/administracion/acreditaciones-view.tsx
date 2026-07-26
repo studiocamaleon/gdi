@@ -12,19 +12,10 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { useConfigRegional, useFecha } from "@/components/navigation/config-regional-provider";
 import type { CobroPendienteAcreditacion } from "@/lib/administracion";
 import { acreditarCobro } from "@/lib/administracion-api";
-
-const fmt = (n: number) =>
-  (n < 0 ? "−" : "") + "$" + Math.abs(Math.round(n)).toLocaleString("es-AR");
-
-const fechaLarga = (iso: string | null) => {
-  if (!iso) return "—";
-  return new Intl.DateTimeFormat("es-AR", {
-    day: "2-digit",
-    month: "short",
-  }).format(new Date(iso));
-};
+import { formatearMoneda } from "@/lib/moneda";
 
 /** Días calendario hasta la acreditación, en texto corto. */
 function cuandoAcredita(iso: string | null) {
@@ -57,6 +48,12 @@ export function AcreditacionesView({
   initialFilas: CobroPendienteAcreditacion[];
 }) {
   const router = useRouter();
+  const { moneda } = useConfigRegional();
+  const { fechaCorta } = useFecha();
+  // "25-jul" sin año: la vista mira la semana que viene, el año sobra.
+  const fechaLarga = (iso: string | null) =>
+    iso ? fechaCorta(iso).replace(/-\d{4}$/, "") : "—";
+  const fmt = (n: number) => formatearMoneda(n, moneda, { decimales: 0 });
   const [filas, setFilas] = React.useState(initialFilas);
   const [chip, setChip] = React.useState<Chip>("todos");
   const [q, setQ] = React.useState("");

@@ -2,7 +2,6 @@
 
 import * as React from "react";
 
-import { fechaCorta, fechaHora } from "@/lib/fecha";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -31,6 +30,8 @@ import {
   type PresupuestoDetalle,
   type PresupuestoEstado,
 } from "@/lib/presupuestos-api";
+import { formatearMoneda, type Moneda } from "@/lib/moneda";
+import { useConfigRegional, useFecha } from "@/components/navigation/config-regional-provider";
 import type { MembershipRole } from "@/lib/auth";
 import { CANALES_VENTA } from "@/lib/propuestas";
 
@@ -66,12 +67,8 @@ const MOTIVOS_PERDIDA = [
 const canalLabel = (v: string | null) =>
   v ? (CANALES_VENTA.find((c) => c.value === v)?.label ?? v) : "—";
 
-const fmtMoneda = (n: number) => "$" + Math.round(n).toLocaleString("es-AR");
-// Formateo determinístico y en hora argentina: `toLocaleString` daba strings
-// distintos en el servidor y en el navegador —espacio angosto vs. normal antes
-// del "p. m."— y React tiraba error de hidratación. Ver src/lib/fecha.ts
-const fmtFecha = (iso: string | null) => (iso ? fechaCorta(iso) : "—");
-const fmtMomento = (iso: string) => fechaHora(iso);
+const fmtMoneda = (n: number, moneda: Moneda) =>
+  formatearMoneda(n, moneda, { decimales: 0 });
 
 type Tab = "productos" | "conversion" | "historial";
 
@@ -83,6 +80,9 @@ export function PresupuestoDetalleView({
   rol: MembershipRole;
 }) {
   const router = useRouter();
+  const { fechaCorta, fechaHora } = useFecha();
+  const fmtFecha = (iso: string | null) => (iso ? fechaCorta(iso) : "—");
+  const fmtMomento = fechaHora;
   const [d, setD] = React.useState<PresupuestoDetalle>(inicial);
   const [tab, setTab] = React.useState<Tab>("productos");
   const [trabajando, setTrabajando] = React.useState(false);
@@ -559,6 +559,7 @@ function AccionesEstado({
 }
 
 function TabProductos({ d }: { d: PresupuestoDetalle }) {
+  const { moneda } = useConfigRegional();
   return (
     <>
       <div className="otd-card">
@@ -601,9 +602,9 @@ function TabProductos({ d }: { d: PresupuestoDetalle }) {
                 <td className="mono">
                   {i.cantidad.toLocaleString("es-AR")} {i.cantidadUnidad}
                 </td>
-                <td className="right mono">{fmtMoneda(i.subtotal)}</td>
+                <td className="right mono">{fmtMoneda(i.subtotal, moneda)}</td>
                 <td className="right mono">
-                  <b>{fmtMoneda(i.total)}</b>
+                  <b>{fmtMoneda(i.total, moneda)}</b>
                 </td>
               </tr>
             ))}
@@ -619,15 +620,15 @@ function TabProductos({ d }: { d: PresupuestoDetalle }) {
           </span>
         </div>
         <div className="pp-resumen">
-          <Cifra l="Subtotal" v={fmtMoneda(d.subtotal)} s="sin impuestos" />
+          <Cifra l="Subtotal" v={fmtMoneda(d.subtotal, moneda)} s="sin impuestos" />
           <span className="op">+</span>
-          <Cifra l="Impuestos" v={fmtMoneda(d.impuestos)} s={d.impuestos > 0 ? "IVA incluido" : "sin impuestos"} />
+          <Cifra l="Impuestos" v={fmtMoneda(d.impuestos, moneda)} s={d.impuestos > 0 ? "IVA incluido" : "sin impuestos"} />
           <span className="op">+</span>
-          <Cifra l="Cargos directos" v={fmtMoneda(d.cargosDirectos)} s={d.cargosDirectos > 0 ? "" : "sin cargos"} />
+          <Cifra l="Cargos directos" v={fmtMoneda(d.cargosDirectos, moneda)} s={d.cargosDirectos > 0 ? "" : "sin cargos"} />
           <span className="op">=</span>
           <div className="pp-total">
             <div className="l">Total c/ imp.</div>
-            <div className="v">{fmtMoneda(d.total)}</div>
+            <div className="v">{fmtMoneda(d.total, moneda)}</div>
             {d.senaSugeridaPct ? <div className="s">Seña sugerida {d.senaSugeridaPct}%</div> : null}
           </div>
         </div>
@@ -664,6 +665,7 @@ function TabConversion({
   seleccion: Set<string>;
   setSeleccion: (s: Set<string>) => void;
 }) {
+  const { moneda } = useConfigRegional();
   const convertibles = d.items.filter((i) => i.cotizacionItemId != null);
   const disponible = d.estado === "aprobado";
 
@@ -709,7 +711,7 @@ function TabConversion({
                 <span className="qt mono">
                   {i.cantidad.toLocaleString("es-AR")} {i.cantidadUnidad}
                 </span>
-                <span className="tt mono">{fmtMoneda(i.total)}</span>
+                <span className="tt mono">{fmtMoneda(i.total, moneda)}</span>
               </label>
             );
           })
@@ -720,7 +722,7 @@ function TabConversion({
           <span>
             {seleccion.size} de {convertibles.length} productos
           </span>
-          <b className="mono">{fmtMoneda(totalSel)}</b>
+          <b className="mono">{fmtMoneda(totalSel, moneda)}</b>
         </div>
       ) : null}
     </div>
@@ -728,6 +730,7 @@ function TabConversion({
 }
 
 function TabHistorial({ d }: { d: PresupuestoDetalle }) {
+  const { fechaHora: fmtMomento } = useFecha();
   return (
     <div className="otd-card">
       <div className="otd-card-head">

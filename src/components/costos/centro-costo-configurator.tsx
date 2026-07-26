@@ -22,6 +22,8 @@ import {
   publicarTarifaCentroCosto,
   upsertCentroCostoConfiguracionPeriodo,
 } from "@/lib/costos-api";
+import { formatearMoneda, type Moneda } from "@/lib/moneda";
+import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import {
   AreaCosto,
   categoriaComponenteCostoItems,
@@ -124,7 +126,6 @@ type LocalRecurso = CentroCostoRecursoPayload & { id: string };
 type LocalComponente = CentroCostoComponenteCostoPayload & { id: string };
 const wizardSheetClassName =
   "costo-sheet w-screen max-w-none gap-0 overflow-hidden p-0 data-[side=right]:w-[96vw] data-[side=right]:sm:max-w-[96vw] md:data-[side=right]:w-[92vw] md:data-[side=right]:sm:max-w-[92vw] lg:data-[side=right]:w-[1100px] lg:data-[side=right]:sm:max-w-[1100px] xl:data-[side=right]:w-[1280px] xl:data-[side=right]:sm:max-w-[1280px]";
-const systemCurrencyCode = "ARS";
 
 function createLocalId() {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
@@ -353,12 +354,8 @@ function syncDerivedComponents(params: {
   return [...derivedComponents, ...manualComponents];
 }
 
-function formatMoney(value: number) {
-  return new Intl.NumberFormat("es-AR", {
-    style: "currency",
-    currency: systemCurrencyCode,
-    maximumFractionDigits: 0,
-  }).format(value || 0);
+function formatMoney(value: number, moneda: Moneda) {
+  return formatearMoneda(value || 0, moneda, { decimales: 0 });
 }
 
 function formatNumber(value: number) {
@@ -457,6 +454,8 @@ export function CentroCostoConfigurator({
   refreshKey,
   onConfigured,
 }: CentroCostoConfiguratorProps) {
+  const { moneda } = useConfigRegional();
+  const fmt = (v: number) => formatMoney(v, moneda);
   const [periodo, setPeriodo] = React.useState(getCurrentPeriodo());
   const [activeStep, setActiveStep] = React.useState<WizardStep>("identidad");
   const [isLoading, startLoading] = React.useTransition();
@@ -1785,7 +1784,7 @@ export function CentroCostoConfigurator({
                               </Field>
                               <Field>
                                 <FieldLabel>
-                                  Valor mensual ({systemCurrencyCode})
+                                  Valor mensual ({moneda.codigo})
                                 </FieldLabel>
                                 <Input
                                   inputMode="decimal"
@@ -1866,7 +1865,7 @@ export function CentroCostoConfigurator({
                                   </div>
                                   <div className="flex flex-col gap-1.5">
                                     <span className="text-xs text-muted-foreground">
-                                      Valor actual ({systemCurrencyCode})
+                                      Valor actual ({moneda.codigo})
                                     </span>
                                     <Input
                                       inputMode="decimal"
@@ -1893,7 +1892,7 @@ export function CentroCostoConfigurator({
                                   </div>
                                   <div className="flex flex-col gap-1.5">
                                     <span className="text-xs text-muted-foreground">
-                                      Valor final de vida ({systemCurrencyCode})
+                                      Valor final de vida ({moneda.codigo})
                                     </span>
                                     <Input
                                       inputMode="decimal"
@@ -1920,11 +1919,11 @@ export function CentroCostoConfigurator({
                                   </div>
                                   <div className="flex flex-col gap-1.5">
                                     <span className="text-xs text-muted-foreground">
-                                      Depreciación mensual ({systemCurrencyCode}
+                                      Depreciación mensual ({moneda.codigo}
                                       )
                                     </span>
                                     <div className="flex h-10 items-center rounded-md border border-border bg-background px-3 text-sm font-medium">
-                                      {formatMoney(
+                                      {fmt(
                                         Math.max(
                                           0,
                                           (resource.valorActual ?? 0) -
@@ -2158,7 +2157,7 @@ export function CentroCostoConfigurator({
               </CardTitle>
               <CardDescription>
                 El sistema armó esta pantalla según los recursos del paso 2. Los
-                importes se cargan en {systemCurrencyCode} y se recalculan solos
+                importes se cargan en {moneda.codigo} y se recalculan solos
                 cuando cambia la dedicación de las personas o los datos de una
                 máquina.
               </CardDescription>
@@ -2166,7 +2165,7 @@ export function CentroCostoConfigurator({
             <CardContent className="flex flex-col gap-5">
               <div className="rounded-2xl border border-border/70 bg-muted/10 px-4 py-3 text-sm text-muted-foreground">
                 Todos los valores monetarios se cargan en{" "}
-                <span className="font-medium">{systemCurrencyCode}</span>.
+                <span className="font-medium">{moneda.codigo}</span>.
               </div>
 
               {!hasCostSources ? (
@@ -2244,7 +2243,7 @@ export function CentroCostoConfigurator({
                                     Sueldo del legajo
                                   </span>
                                   <span className="font-medium">
-                                    {formatMoney(
+                                    {fmt(
                                       normalizeNumber(
                                         getDetailValue(
                                           sueldo ?? createComponent(),
@@ -2259,7 +2258,7 @@ export function CentroCostoConfigurator({
                                     Cargas sociales
                                   </span>
                                   <span className="font-medium">
-                                    {formatMoney(
+                                    {fmt(
                                       normalizeNumber(
                                         getDetailValue(
                                           cargas ?? createComponent(),
@@ -2274,7 +2273,7 @@ export function CentroCostoConfigurator({
                                     Imputa a este centro
                                   </span>
                                   <span className="font-semibold">
-                                    {formatMoney(
+                                    {fmt(
                                       (sueldo?.importeMensual ?? 0) +
                                         (cargas?.importeMensual ?? 0),
                                     )}
@@ -2327,7 +2326,7 @@ export function CentroCostoConfigurator({
                                     <FieldGroup className="grid gap-3 md:grid-cols-3">
                                       <Field>
                                         <FieldLabelWithTooltip
-                                          label={`Valor de compra (${systemCurrencyCode})`}
+                                          label={`Valor de compra (${moneda.codigo})`}
                                           help="Costo total de adquisición de la máquina, sin restar valor residual."
                                         />
                                         <Input
@@ -2362,7 +2361,7 @@ export function CentroCostoConfigurator({
                                       </Field>
                                       <Field>
                                         <FieldLabelWithTooltip
-                                          label={`Valor residual (${systemCurrencyCode})`}
+                                          label={`Valor residual (${moneda.codigo})`}
                                           help="Valor estimado de recupero al final de la vida útil."
                                         />
                                         <Input
@@ -2446,7 +2445,7 @@ export function CentroCostoConfigurator({
                                     <FieldGroup className="grid gap-3 md:grid-cols-3">
                                       <Field>
                                         <FieldLabelWithTooltip
-                                          label={`Mantenimiento (${systemCurrencyCode})`}
+                                          label={`Mantenimiento (${moneda.codigo})`}
                                           help="Costo mensual estimado de mantenimiento preventivo/correctivo."
                                         />
                                         <Input
@@ -2482,7 +2481,7 @@ export function CentroCostoConfigurator({
                                       </Field>
                                       <Field>
                                         <FieldLabelWithTooltip
-                                          label={`Seguros (${systemCurrencyCode})`}
+                                          label={`Seguros (${moneda.codigo})`}
                                           help="Prima mensual de seguros asociados al activo."
                                         />
                                         <Input
@@ -2516,7 +2515,7 @@ export function CentroCostoConfigurator({
                                       </Field>
                                       <Field>
                                         <FieldLabelWithTooltip
-                                          label={`Otros (${systemCurrencyCode})`}
+                                          label={`Otros (${moneda.codigo})`}
                                           help="Otros costos fijos mensuales imputables a esta máquina."
                                         />
                                         <Input
@@ -2559,7 +2558,7 @@ export function CentroCostoConfigurator({
                                     Amortización
                                   </span>
                                   <span className="font-medium text-foreground">
-                                    {formatMoney(item.amortizacionMensual)}
+                                    {fmt(item.amortizacionMensual)}
                                   </span>
                                 </div>
                                 <div className="flex flex-col">
@@ -2567,7 +2566,7 @@ export function CentroCostoConfigurator({
                                     Total mensual
                                   </span>
                                   <span className="font-medium text-foreground">
-                                    {formatMoney(item.costoMensualTotal)}
+                                    {fmt(item.costoMensualTotal)}
                                   </span>
                                 </div>
                                 <div className="flex flex-col">
@@ -2575,7 +2574,7 @@ export function CentroCostoConfigurator({
                                     Tarifa hora
                                   </span>
                                   <span className="font-medium text-foreground">
-                                    {formatMoney(item.tarifaHora)} / h
+                                    {fmt(item.tarifaHora)} / h
                                   </span>
                                 </div>
                               </div>
@@ -2726,7 +2725,7 @@ export function CentroCostoConfigurator({
                               <FieldGroup className="grid gap-4 lg:grid-cols-3">
                                 <Field>
                                   <FieldLabel>
-                                    Importe mensual ({systemCurrencyCode})
+                                    Importe mensual ({moneda.codigo})
                                   </FieldLabel>
                                   <Input
                                     inputMode="decimal"
@@ -2790,7 +2789,7 @@ export function CentroCostoConfigurator({
                           Empleados
                         </span>
                         <span className="font-medium">
-                          {formatMoney(empleadosCosteadosTotal)}
+                          {fmt(empleadosCosteadosTotal)}
                         </span>
                       </div>
                       <div className="flex items-center justify-between rounded-xl border border-border/70 px-4 py-3">
@@ -2798,7 +2797,7 @@ export function CentroCostoConfigurator({
                           Maquinaria
                         </span>
                         <span className="font-medium">
-                          {formatMoney(maquinariaCosteadaTotal)}
+                          {fmt(maquinariaCosteadaTotal)}
                         </span>
                       </div>
                       <div className="flex items-center justify-between rounded-xl border border-border/70 px-4 py-3">
@@ -2806,7 +2805,7 @@ export function CentroCostoConfigurator({
                           Gastos generales
                         </span>
                         <span className="font-medium">
-                          {formatMoney(gastosGeneralesTotales)}
+                          {fmt(gastosGeneralesTotales)}
                         </span>
                       </div>
                       <div className="flex items-center justify-between rounded-xl border border-border/70 px-4 py-3">
@@ -2814,7 +2813,7 @@ export function CentroCostoConfigurator({
                           Activos fijos (depreciación)
                         </span>
                         <span className="font-medium">
-                          {formatMoney(activosFijosTotales)}
+                          {fmt(activosFijosTotales)}
                         </span>
                       </div>
                       <div className="flex items-center justify-between rounded-xl border border-border/70 px-4 py-3">
@@ -2822,7 +2821,7 @@ export function CentroCostoConfigurator({
                           Otros costos del centro
                         </span>
                         <span className="font-medium">
-                          {formatMoney(adicionalesCosteadosTotal)}
+                          {fmt(adicionalesCosteadosTotal)}
                         </span>
                       </div>
                       <div className="flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 lg:col-span-2">
@@ -2830,7 +2829,7 @@ export function CentroCostoConfigurator({
                           Total mensual estimado
                         </span>
                         <span className="text-lg font-semibold">
-                          {formatMoney(costoMensualTotal)}
+                          {fmt(costoMensualTotal)}
                         </span>
                       </div>
                     </CardContent>
@@ -2988,7 +2987,7 @@ export function CentroCostoConfigurator({
                     Costo mensual directo
                   </p>
                   <p className="text-3xl font-semibold">
-                    {formatMoney(costoMensualDirecto)}
+                    {fmt(costoMensualDirecto)}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-border/70 p-4">
@@ -2996,7 +2995,7 @@ export function CentroCostoConfigurator({
                     Absorbido por reparto
                   </p>
                   <p className="text-3xl font-semibold">
-                    {formatMoney(repartoAbsorbidoTotal)}
+                    {fmt(repartoAbsorbidoTotal)}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-border/70 p-4">
@@ -3004,7 +3003,7 @@ export function CentroCostoConfigurator({
                     Costo mensual total
                   </p>
                   <p className="text-3xl font-semibold">
-                    {formatMoney(costoMensualTotal)}
+                    {fmt(costoMensualTotal)}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-border/70 p-4">
@@ -3020,7 +3019,7 @@ export function CentroCostoConfigurator({
                     Tarifa calculada
                   </p>
                   <p className="text-3xl font-semibold">
-                    {formatMoney(tarifaProyectada)}
+                    {fmt(tarifaProyectada)}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     por {getUnidadBaseLabel(baseForm.unidadBaseFutura)}
@@ -3057,7 +3056,7 @@ export function CentroCostoConfigurator({
                         </span>
                       </div>
                       <span className="font-medium">
-                        {formatMoney(item.monto)}
+                        {fmt(item.monto)}
                       </span>
                     </div>
                   ))
@@ -3122,7 +3121,7 @@ export function CentroCostoConfigurator({
                   <p className="text-2xl font-semibold">
                     {draftTariff === null
                       ? "Sin calcular"
-                      : formatMoney(draftTariff)}
+                      : fmt(draftTariff)}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-border/70 p-4">
@@ -3132,7 +3131,7 @@ export function CentroCostoConfigurator({
                   <p className="text-2xl font-semibold">
                     {publishedTariff === null
                       ? "Sin publicar"
-                      : formatMoney(publishedTariff)}
+                      : fmt(publishedTariff)}
                   </p>
                 </div>
               </CardContent>

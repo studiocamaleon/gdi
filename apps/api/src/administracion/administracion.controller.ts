@@ -28,6 +28,7 @@ import { FacturaService } from './factura.service';
 import { EstadoCuentaPdfService } from './estado-cuenta-pdf.service';
 import { RecibosService } from './recibos.service';
 import { ArchivosService } from '../archivos/archivos.service';
+import { DatosEmpresaService } from '../tenants/datos-empresa.service';
 import { UpsertMetodoPagoDto } from './dto/metodo-pago.dto';
 import { CrearCobroDto } from './dto/cobro.dto';
 import {
@@ -69,6 +70,7 @@ export class AdministracionController {
     private readonly estadoCuentaPdfService: EstadoCuentaPdfService,
     private readonly facturacionOrdenesService: FacturacionOrdenesService,
     private readonly archivos: ArchivosService,
+    private readonly datosEmpresa: DatosEmpresaService,
   ) {}
 
   /**
@@ -118,10 +120,11 @@ export class AdministracionController {
     @Param('clienteId') clienteId: string,
     @Res({ passthrough: true }) res: Response,
   ): Promise<StreamableFile> {
-    const [cc, config, logo] = await Promise.all([
+    const [cc, config, logo, regional] = await Promise.all([
       this.cuentaCorrienteService.obtener(auth, clienteId),
       this.configuracionFiscalService.obtener(auth),
       this.archivos.logoDataUri(auth.tenantId),
+      this.datosEmpresa.regional(auth.tenantId),
     ]);
     const emisor = config
       ? {
@@ -132,7 +135,13 @@ export class AdministracionController {
           ingresosBrutos: config.ingresosBrutos,
         }
       : null;
-    const pdf = this.estadoCuentaPdfService.generar(cc, emisor, new Date(), logo);
+    const pdf = this.estadoCuentaPdfService.generar(
+      cc,
+      emisor,
+      new Date(),
+      logo,
+      regional.moneda,
+    );
     const slug =
       (cc.cliente.nombre || 'cliente')
         .normalize('NFD')

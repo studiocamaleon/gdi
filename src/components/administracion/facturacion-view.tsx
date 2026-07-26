@@ -16,14 +16,8 @@ import type {
   ResultadoLoteFacturacion,
 } from "@/lib/administracion";
 import { facturarLote } from "@/lib/administracion-api";
-
-const fmt = (n: number) => "$" + Math.round(n).toLocaleString("es-AR");
-const fmtK = (n: number) =>
-  n >= 1_000_000
-    ? "$" + (n / 1_000_000).toFixed(1) + "M"
-    : n >= 1000
-      ? "$" + Math.round(n / 1000) + "k"
-      : "$" + Math.round(n);
+import { useConfigRegional } from "@/components/navigation/config-regional-provider";
+import { abreviarMoneda, formatearMoneda } from "@/lib/moneda";
 
 /**
  * Administración → Facturación: órdenes finalizadas/entregadas con saldo
@@ -38,6 +32,9 @@ export function FacturacionView({
   initialOrdenes: OrdenFacturable[];
 }) {
   const router = useRouter();
+  const { moneda } = useConfigRegional();
+  const fmt = (n: number) => formatearMoneda(n, moneda, { decimales: 0 });
+  const fmtK = (n: number) => abreviarMoneda(n, moneda);
   const [q, setQ] = React.useState("");
   const [sel, setSel] = React.useState<Set<string>>(() => new Set());
   const [modo, setModo] = React.useState<"por_orden" | "agrupada">(

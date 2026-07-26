@@ -29,9 +29,16 @@ import {
   updateMetodoPago,
   type UpsertMetodoPagoPayload,
 } from "@/lib/administracion-api";
+import { useConfigRegional } from "@/components/navigation/config-regional-provider";
+import { formatearMoneda } from "@/lib/moneda";
 
-const fmt = (n: number) => "$" + Math.round(n).toLocaleString("es-AR");
 const BASE_SIMULACION = 100_000;
+
+/** El formateador de la vista, en la moneda del tenant (fila y sheet lo usan). */
+function useFmt() {
+  const { moneda } = useConfigRegional();
+  return (n: number) => formatearMoneda(n, moneda, { decimales: 0 });
+}
 
 type SheetDraft = UpsertMetodoPagoPayload & { id?: string };
 
@@ -73,6 +80,7 @@ function FilaMetodo({
   onToggleAbierto: () => void;
   onEditar: () => void;
 }) {
+  const fmt = useFmt();
   const sim = simularMetodo(metodo, BASE_SIMULACION);
   return (
     <>
@@ -213,6 +221,7 @@ function SheetMetodo({
   onClose: () => void;
   onSave: (draft: SheetDraft) => void;
 }) {
+  const fmt = useFmt();
   const [form, setForm] = React.useState<SheetDraft>(draft);
   const sim = simularMetodo(form, BASE_SIMULACION);
   const set = <K extends keyof SheetDraft>(campo: K, valor: SheetDraft[K]) =>

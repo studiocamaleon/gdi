@@ -6,6 +6,8 @@ import { NotificacionesService } from './notificaciones.service';
 import { nombreDelCliente } from './notificaciones-ordenes.service';
 import { enContextoDe } from './contexto';
 import { urlEnlacePublico } from '../../enlaces-publicos/enlaces-publicos.urls';
+import { numeroMoneda } from '../../common/moneda';
+import { regionalDelTenant } from '../../common/regional';
 
 /**
  * "Registramos tu pago" — el aviso del recibo.
@@ -77,6 +79,10 @@ export class NotificacionesCobrosService {
     const cobrado = Number(cobro.orden.cobradoTotal ?? 0);
     const saldo = Math.max(0, total - cobrado);
 
+    // Sin `$`: el símbolo ya está en el texto fijo de la plantilla de Meta.
+    const { moneda } = await regionalDelTenant(this.prisma, cobro.tenantId);
+    const money = (n: number) => numeroMoneda(n, moneda);
+
     const parametros = [
       nombreDelCliente(cobro.cliente?.razonSocial),
       money(Number(cobro.montoBruto)),
@@ -99,10 +105,3 @@ export class NotificacionesCobrosService {
   }
 }
 
-/** Sin `$`: el símbolo ya está en el texto fijo de la plantilla. */
-function money(n: number): string {
-  return n.toLocaleString('es-AR', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}

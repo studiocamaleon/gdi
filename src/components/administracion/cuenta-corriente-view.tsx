@@ -23,11 +23,17 @@ import {
   type MovimientoCuentaCorriente,
 } from "@/lib/administracion";
 import { CONDICION_FISCAL_LABELS, type CondicionFiscal } from "@/lib/clientes";
+import { useConfigRegional } from "@/components/navigation/config-regional-provider";
+import { formatearMoneda } from "@/lib/moneda";
 
-const fmt = (n: number) =>
-  (n < 0 ? "−" : "") + "$" + Math.abs(Math.round(n)).toLocaleString("es-AR");
+/** El formateador de la vista, en la moneda del tenant (varios componentes lo usan). */
+function useFmt() {
+  const { moneda } = useConfigRegional();
+  return (n: number) => formatearMoneda(n, moneda, { decimales: 0 });
+}
 
 function LedgerRow({ m }: { m: MovimientoCuentaCorriente }) {
+  const fmt = useFmt();
   const [open, setOpen] = React.useState(false);
   const tiene = !!m.imputaciones?.length;
   return (
@@ -98,6 +104,7 @@ function AgingModal({
   cc: CuentaCorriente;
   onClose: () => void;
 }) {
+  const fmt = useFmt();
   const total = cc.agingTotal;
   return (
     <div className="acc-backdrop show" onClick={onClose}>
@@ -187,6 +194,7 @@ function AgingModal({
 }
 
 export function CuentaCorrienteView({ cc }: { cc: CuentaCorriente }) {
+  const fmt = useFmt();
   const [aging, setAging] = React.useState(false);
 
   const saldo = cc.saldo;
