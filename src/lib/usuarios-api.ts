@@ -20,7 +20,6 @@ export type UsuarioDelTenant = {
   activa: boolean;
   empleado: { id: string; nombreCompleto: string } | null;
   estado: EstadoUsuario;
-  invitacionVence: string | null;
   /** El que está mirando: no puede tocarse a sí mismo. */
   esYo: boolean;
 };
@@ -120,17 +119,17 @@ export async function getCatalogoPermisos(): Promise<CatalogoPermisos> {
   return apiRequest("/usuarios/catalogo", { cache: "no-store" });
 }
 
-/** Cómo se le entrega el acceso: link para que elija su clave, o una dictada. */
-export type ModoAcceso = "link" | "clave";
-
+/**
+ * Da el acceso y devuelve la clave provisoria para dictarle. Única forma de
+ * entrega: el modo "le mando un link" se retiró porque nunca hubo nada que
+ * mandara el link (ver usuarios-view.tsx).
+ */
 export async function crearUsuario(datos: {
   email: string;
   nombreCompleto?: string;
   rolId: string;
   empleadoId?: string;
-  modo?: ModoAcceso;
 }): Promise<{
-  invitacionUrl: string | null;
   provisoria: string | null;
   yaTeniaCuenta: boolean;
 }> {
@@ -147,15 +146,6 @@ export async function editarUsuario(
   return apiRequest(`/usuarios/${encodeURIComponent(userId)}`, {
     method: "PATCH",
     body: JSON.stringify(datos),
-  });
-}
-
-/** Vuelve a emitir el link: el anterior deja de servir. */
-export async function reenviarInvitacion(
-  userId: string,
-): Promise<{ invitacionUrl: string }> {
-  return apiRequest(`/usuarios/${encodeURIComponent(userId)}/invitacion`, {
-    method: "POST",
   });
 }
 
