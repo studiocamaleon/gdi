@@ -49,29 +49,13 @@ enum TipoComision {
   FIJO
 }
 
+/// Un centro produce lo que se vende, o es estructura que se reparte entre los
+/// que producen. No hay un tercer caso: los seis tipos anteriores decían lo
+/// mismo con más palabras, y la imputación era un segundo campo que repetía la
+/// misma decisión. Ver docs/centros-de-costo-carga-manual-diseno.md
 enum TipoCentroCosto {
   PRODUCTIVO
-  APOYO
-  ADMINISTRATIVO
-  COMERCIAL
-  LOGISTICO
-  TERCERIZADO
-}
-
-enum ImputacionPreferidaCentroCosto {
-  DIRECTA
-  INDIRECTA
-  REPARTO
-}
-
-enum UnidadBaseCentroCosto {
-  NINGUNA
-  HORA_MAQUINA
-  HORA_HOMBRE
-  PLIEGO
-  UNIDAD
-  M2
-  KG
+  NO_PRODUCTIVO
 }
 
 /// Las tres secciones de la planilla del centro de costo. Ver
@@ -1170,8 +1154,6 @@ model CentroCosto {
   nombre              String
   descripcion         String?
   tipoCentro          TipoCentroCosto
-  imputacionPreferida ImputacionPreferidaCentroCosto
-  unidadBaseFutura    UnidadBaseCentroCosto          @default(NINGUNA)
   activo              Boolean                        @default(true)
   createdAt           DateTime                       @default(now())
   updatedAt           DateTime                       @updatedAt
@@ -1246,7 +1228,6 @@ model CentroCostoCapacidadPeriodo {
   tenantId         String                @db.Uuid
   centroCostoId    String                @db.Uuid
   periodo          String
-  unidadBase       UnidadBaseCentroCosto
   /// El "PNH" del listado: las horas que el centro puede producir en el mes,
   /// cargadas a mano. Antes se derivaban de días × horas − % no productivo.
   horasProductivas Decimal               @db.Decimal(12, 2)

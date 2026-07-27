@@ -5,11 +5,9 @@ import {
 } from '@nestjs/common';
 import {
   EstadoTarifaCentroCostoPeriodo,
-  ImputacionPreferidaCentroCosto,
   Prisma,
   SeccionCentroCostoLinea,
   TipoCentroCosto,
-  UnidadBaseCentroCosto,
 } from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
@@ -149,10 +147,7 @@ export class CostosTarifasService {
       },
     });
 
-    if (
-      snapshot.centro.imputacionPreferida ===
-      ImputacionPreferidaCentroCosto.REPARTO
-    ) {
+    if (snapshot.centro.tipoCentro === TipoCentroCosto.NO_PRODUCTIVO) {
       await this.republishTarifasCentrosProductivos(auth, normalizedPeriodo);
     }
 
@@ -260,7 +255,6 @@ export class CostosTarifasService {
         periodo,
         centroCodigo: centro.codigo,
         centroNombre: centro.nombre,
-        unidadBase: this.mapper.fromPrismaUnidadBase(centro.unidadBaseFutura),
         costoMensualGastosGenerales: this.mapper.decimalToNumber(
           costoMensualGastosGenerales,
         ),
@@ -334,21 +328,6 @@ export class CostosTarifasService {
       .computeCostoMensualDirectoCentro(centro)
       .plus(costoMensualAbsorbidoReparto);
     const capacidad = centro.capacidadesPeriodo[0] ?? null;
-
-    if (centro.unidadBaseFutura === UnidadBaseCentroCosto.NINGUNA) {
-      advertencias.push(
-        'Conviene definir como queres medir este centro para que la tarifa sea util despues.',
-      );
-    }
-
-    if (
-      centro.tipoCentro === TipoCentroCosto.PRODUCTIVO &&
-      centro.imputacionPreferida === ImputacionPreferidaCentroCosto.REPARTO
-    ) {
-      advertencias.push(
-        'Este centro productivo esta configurado como fuente de reparto; no se repartira a si mismo.',
-      );
-    }
 
     if (centro.lineas.length === 0) {
       advertencias.push(

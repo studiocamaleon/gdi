@@ -95,7 +95,7 @@ function calcularModeloNuevo({ centros, lineasPorCentroPeriodo, horasPorCentroPe
 
     const objetivos = centros.filter((c) => c.tipoCentro === 'PRODUCTIVO');
     const fuentes = centros.filter(
-      (c) => c.imputacionPreferida === 'REPARTO' && directo.get(c.id) > 0,
+      (c) => c.tipoCentro === 'NO_PRODUCTIVO' && directo.get(c.id) > 0,
     );
     const absorbido = new Map();
 
@@ -152,8 +152,6 @@ async function capturar(prisma) {
       codigo: true,
       nombre: true,
       tipoCentro: true,
-      imputacionPreferida: true,
-      unidadBaseFutura: true,
       activo: true,
     },
     orderBy: [{ tenantId: 'asc' }, { codigo: 'asc' }],
@@ -261,8 +259,6 @@ async function capturar(prisma) {
       centroCodigo: centro.codigo,
       centroNombre: centro.nombre,
       tipoCentro: centro.tipoCentro,
-      imputacionPreferida: centro.imputacionPreferida,
-      unidadBase: centro.unidadBaseFutura,
       periodo,
       estado: tarifa.estado,
       esFilaDeTest: esFilaDeTest(tarifa),

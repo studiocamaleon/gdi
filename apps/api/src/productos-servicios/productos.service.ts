@@ -784,7 +784,6 @@ export class ProductosService {
                     id: true,
                     codigo: true,
                     nombre: true,
-                    unidadBaseFutura: true,
                   },
                 },
                 slotsMateriales: {
@@ -922,7 +921,6 @@ export class ProductosService {
                 id: true,
                 codigo: true,
                 nombre: true,
-                unidadBaseFutura: true,
               },
             },
           },

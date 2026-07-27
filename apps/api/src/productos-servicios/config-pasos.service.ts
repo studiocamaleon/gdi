@@ -3,18 +3,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, UnidadBaseCentroCosto } from '@prisma/client';
+import { Prisma, TipoCentroCosto } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { UpsertProductoConfigPasoDto } from './dto/producto-ruta.dto';
 import { FamiliasPasosService } from './familias-pasos.service';
 import { construirClaveMatch } from '../motor-universal/tercerizado-costo';
 import { FAMILIAS } from './pasos/familias';
 import type { FamiliaCodigo } from './pasos/types';
-
-const UNIDADES_CENTRO_COSTO_HORARIAS = [
-  UnidadBaseCentroCosto.HORA_HOMBRE,
-  UnidadBaseCentroCosto.HORA_MAQUINA,
-];
 
 function tipoPerfilCompatibleConFamilia(
   familiaCodigo: string,
@@ -161,12 +156,12 @@ export class ConfigPasosService {
           id: centroCostoId,
           tenantId,
           activo: true,
-          unidadBaseFutura: { in: UNIDADES_CENTRO_COSTO_HORARIAS },
+          tipoCentro: TipoCentroCosto.PRODUCTIVO,
         },
       });
       if (!centro) {
         throw new BadRequestException(
-          'El centro de costo del paso debe estar activo y usar una unidad horaria.',
+          'El centro de costo del paso debe estar activo y ser productivo.',
         );
       }
     }

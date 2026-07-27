@@ -1,8 +1,8 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   EstadoTarifaCentroCostoPeriodo,
-  ImputacionPreferidaCentroCosto,
   Prisma,
+  TipoCentroCosto,
 } from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
@@ -110,8 +110,7 @@ export class CostosConfiguracionPeriodoService {
       // Un centro que reparte su costo entero no tiene valor hora: lo que cuesta
       // ya se cobra dentro de los productivos que lo absorbieron. Mostrarle una
       // tarifa invitaría a cobrarlo dos veces.
-      const esFuenteDeReparto =
-        centro.imputacionPreferida === ImputacionPreferidaCentroCosto.REPARTO;
+      const esFuenteDeReparto = centro.tipoCentro === TipoCentroCosto.NO_PRODUCTIVO;
       const horas = centro.capacidadesPeriodo[0]?.horasProductivas ?? null;
       const tieneHoras = !esFuenteDeReparto && horas != null && horas.gt(0);
 
@@ -120,7 +119,6 @@ export class CostosConfiguracionPeriodoService {
         codigo: centro.codigo,
         nombre: centro.nombre,
         tipoCentro: this.mapper.fromPrismaTipoCentro(centro.tipoCentro),
-        unidadBase: this.mapper.fromPrismaUnidadBase(centro.unidadBaseFutura),
         horasProductivas: tieneHoras
           ? this.mapper.decimalToNumber(horas)
           : null,
@@ -225,11 +223,9 @@ export class CostosConfiguracionPeriodoService {
         tenantId: auth.tenantId,
         centroCostoId: id,
         periodo: normalizedPeriodo,
-        unidadBase: centro.unidadBaseFutura,
         horasProductivas,
       },
       update: {
-        unidadBase: centro.unidadBaseFutura,
         horasProductivas,
       },
     });

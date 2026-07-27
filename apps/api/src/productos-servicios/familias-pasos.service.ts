@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { UnidadBaseCentroCosto } from '@prisma/client';
+import { TipoCentroCosto } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CATEGORIAS } from './pasos/categorias';
 import {
@@ -15,11 +15,6 @@ import type {
   ModoTiempo,
 } from './pasos/types';
 import type { UpsertProductoConfigPasoDto } from './dto/producto-ruta.dto';
-
-const UNIDADES_CENTRO_COSTO_HORARIAS = [
-  UnidadBaseCentroCosto.HORA_HOMBRE,
-  UnidadBaseCentroCosto.HORA_MAQUINA,
-];
 
 @Injectable()
 export class FamiliasPasosService {
@@ -91,13 +86,12 @@ export class FamiliasPasosService {
         where: {
           tenantId,
           activo: true,
-          unidadBaseFutura: { in: UNIDADES_CENTRO_COSTO_HORARIAS },
+          tipoCentro: TipoCentroCosto.PRODUCTIVO,
         },
         select: {
           id: true,
           codigo: true,
           nombre: true,
-          unidadBaseFutura: true,
         },
         orderBy: { nombre: 'asc' },
       }),
