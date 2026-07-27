@@ -1,6 +1,6 @@
 # Egresos y Cuentas por pagar — diseño
 
-Estado: **F1 y F2 implementadas** (falta la orden de pago imprimible y los adjuntos).
+Estado: **F1 y F2 completas**. Pendientes: F3 (recurrentes) y F4 (Libro IVA Compras).
 Diseñado 2026-07-26.
 
 Módulo para registrar **todo lo que sale de la caja**: pago de servicios, alquiler,
@@ -532,9 +532,12 @@ como N egresos hermanados, y el **saldo por proveedor con aging** — donde, a
 diferencia de CxC, el tramo "a vencer" sí se llena, porque del lado de compras hay
 vencimientos reales.
 
-Queda para F2.1: la **orden de pago imprimible** (PDF con jsPDF, como los otros tres
-documentos) y los **adjuntos** del egreso — el scope `ArchivoScope.EGRESO` y el FK ya
-están en la base, falta la UI.
+**F2.1 — Orden de pago y adjuntos (hecho).** El PDF de la orden de pago con jsPDF
+—el espejo del recibo, mismo lenguaje visual— con el detalle de los comprobantes
+cancelados y, sobre todo, de las RETENCIONES: es la razón por la que el proveedor lo
+pide, porque necesita el certificado para computarse el pago a cuenta. Se genera al
+vuelo y NO se persiste: a diferencia del recibo no se comparte por link, se descarga.
+Y la factura del proveedor escaneada se adjunta desde la ficha del egreso.
 
 **F3 — Recurrentes.** `GastoRecurrente` + cron de generación + el puente con
 `GastoFijoEstructura` y el reporte presupuestado vs. real.

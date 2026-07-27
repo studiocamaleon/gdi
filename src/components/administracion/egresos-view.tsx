@@ -20,6 +20,7 @@ import * as React from "react";
 
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { usePuede } from "@/components/navigation/permisos-provider";
+import { ArchivoUploader } from "@/components/archivos/archivo-uploader";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import { MoneyInput } from "@/components/ui/money-input";
 import { formatearMoneda } from "@/lib/moneda";
@@ -57,6 +58,8 @@ import {
 import type { CuentaFondosResumen, MetodoPago } from "@/lib/administracion";
 import type { ProveedorDetalle } from "@/lib/proveedores";
 import type { PagoDeEgreso } from "@/lib/egresos";
+import type { Archivo } from "@/lib/archivos";
+import { listarArchivos } from "@/lib/archivos-api";
 
 type Tab = "por-pagar" | "todos" | "proveedores" | "analisis";
 
@@ -1385,6 +1388,7 @@ function DetalleEgreso({
   const { moneda } = useConfigRegional();
   const fmt = (v: number) => formatearMoneda(v, moneda, { decimales: 0 });
   const [pagos, setPagos] = React.useState<PagoDeEgreso[] | null>(null);
+  const [archivos, setArchivos] = React.useState<Archivo[]>([]);
   const [anulandoPago, setAnulandoPago] = React.useState<PagoDeEgreso | null>(
     null,
   );
@@ -1393,6 +1397,9 @@ function DetalleEgreso({
     getPagosDeEgreso(egreso.id)
       .then((r) => setPagos(r.pagos))
       .catch(() => setPagos([]));
+    listarArchivos("EGRESO", egreso.id)
+      .then(setArchivos)
+      .catch(() => setArchivos([]));
   }, [egreso.id]);
 
   React.useEffect(() => cargar(), [cargar]);
@@ -1466,6 +1473,19 @@ function DetalleEgreso({
           </dl>
 
           <div className="egr-pagos">
+            <div className="egr-pagos-t">Factura escaneada</div>
+            <ArchivoUploader
+              scope="EGRESO"
+              entidadId={egreso.id}
+              archivos={archivos}
+              onCambio={setArchivos}
+              soloLectura={!puedeAnular && egreso.estado === "anulado"}
+              titulo="Arrastrá la factura del proveedor"
+              vacio="Sin la factura adjunta."
+            />
+          </div>
+
+          <div className="egr-pagos">
             <div className="egr-pagos-t">Pagos</div>
             {pagos === null ? (
               <div className="egr-sub">Cargando…</div>
@@ -1487,6 +1507,16 @@ function DetalleEgreso({
                     </span>
                   </div>
                   <span className="mono">{fmt(p.monto)}</span>
+                  {!p.anuladoEl ? (
+                    <a
+                      className="egr-link"
+                      href={`/api/backend/egresos/pagos/${p.id}/orden-pago.pdf`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Orden de pago
+                    </a>
+                  ) : null}
                   {!p.anuladoEl && puedeAnular ? (
                     <button
                       type="button"

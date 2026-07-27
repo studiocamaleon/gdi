@@ -17,7 +17,15 @@ import type { CurrentAuth } from '../../auth/auth.types';
  */
 describe('EgresosService', () => {
   const prisma = new PrismaClient();
-  const service = new EgresosService(prisma as unknown as PrismaService);
+  // Las dependencias del PDF no se ejercitan acá (la orden de pago se prueba
+  // en su propio spec): se pasan explícitas para que el día que este spec las
+  // necesite falle en la construcción y no con un `undefined` a mitad de test.
+  const service = new EgresosService(
+    prisma as unknown as PrismaService,
+    null as never,
+    null as never,
+    null as never,
+  );
   let tenantId: string;
   let auth: CurrentAuth;
   let cuentaId: string;

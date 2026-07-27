@@ -7,7 +7,9 @@ import {
   Patch,
   Post,
   Query,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 
 import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
@@ -109,6 +111,25 @@ export class EgresosController {
     @Body() body: RegistrarPagoDto,
   ) {
     return this.egresos.registrarPago(auth, body);
+  }
+
+  /**
+   * La orden de pago en PDF, para mandarle al proveedor. Se genera al vuelo:
+   * no se guarda en el storage porque no se comparte por link, se descarga.
+   */
+  @Get('pagos/:id/orden-pago.pdf')
+  async ordenDePagoPdf(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const pdf = await this.egresos.ordenDePagoPdf(auth, id);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="orden-de-pago-${id.slice(0, 8)}.pdf"`,
+    );
+    res.end(pdf);
   }
 
   @Permiso('administracion.anular')

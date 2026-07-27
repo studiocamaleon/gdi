@@ -7,6 +7,13 @@ import {
 import { NaturalezaEgreso, Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { DatosEmpresaService } from '../tenants/datos-empresa.service';
+import { ArchivosService } from '../archivos/archivos.service';
+import {
+  OrdenPagoPdfService,
+  type OrdenPagoDoc,
+} from './orden-pago-pdf.service';
+import { REGIMEN_RETENCION_LABELS } from './egresos.types';
 import type { CurrentAuth } from '../auth/auth.types';
 import { firmaActor } from '../common/firma-actor';
 import { regionalDelTenant } from '../common/regional';
@@ -64,7 +71,119 @@ function hoyEnZona(zonaHoraria: string): string {
 
 @Injectable()
 export class EgresosService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly empresa: DatosEmpresaService,
+    private readonly archivos: ArchivosService,
+    private readonly ordenPagoPdf: OrdenPagoPdfService,
+  ) {}
+
+  /** "Grafica Corporearte" → "GC". El fallback del logo, igual que el recibo. */
+  private iniciales(nombre: string): string {
+    const palabras = nombre.trim().split(/\s+/).filter(Boolean);
+    if (palabras.length === 0) return '?';
+    if (palabras.length === 1) return palabras[0].slice(0, 2).toUpperCase();
+    return (palabras[0][0] + palabras[1][0]).toUpperCase();
+  }
+
+  /**
+   * La orden de pago en PDF, generada al vuelo.
+   *
+   * A diferencia del recibo NO se persiste en el storage: el recibo se
+   * comparte por link público y tiene que ser estable, mientras que ésta se
+   * descarga y se manda a mano. Regenerarla es barato y evita pagar storage
+   * por un documento que nadie va a volver a pedir por URL.
+   */
+  async ordenDePagoPdf(auth: CurrentAuth, pagoId: string): Promise<Buffer> {
+    const pago = await this.prisma.pago.findFirst({
+      where: { id: pagoId, tenantId: auth.tenantId },
+      include: {
+        metodoPago: { select: { nombre: true } },
+        cuentaOrigen: { select: { nombre: true, banco: true, cbuAlias: true } },
+        proveedor: { select: { nombre: true, cuit: true } },
+        retenciones: true,
+        valor: { select: { numero: true, banco: true, fechaPago: true } },
+        imputaciones: {
+          include: {
+            egreso: {
+              select: {
+                numero: true,
+                descripcion: true,
+                tipoComprobante: true,
+                puntoVenta: true,
+                numeroComprobante: true,
+                fechaVencimiento: true,
+                beneficiarioNombre: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!pago) throw new NotFoundException('No encontramos ese pago.');
+
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: auth.tenantId },
+      select: { nombre: true },
+    });
+    const negocio = tenant?.nombre ?? 'Mi imprenta';
+    const empresa = await this.empresa.paraDocumentos(auth.tenantId);
+    const cuentaTexto =
+      [pago.cuentaOrigen.banco ?? pago.cuentaOrigen.nombre]
+        .filter(Boolean)
+        .join(' · ') || null;
+
+    const doc: OrdenPagoDoc = {
+      numero: pago.numero,
+      negocio,
+      empresa,
+      iniciales: this.iniciales(negocio),
+      logoDataUri: await this.archivos.logoDataUri(auth.tenantId),
+      proveedorNombre:
+        pago.proveedor?.nombre ??
+        pago.imputaciones[0]?.egreso.beneficiarioNombre ??
+        'Sin proveedor',
+      proveedorCuit: pago.proveedor?.cuit ?? null,
+      fecha: pago.fecha.toISOString().slice(0, 10),
+      registradoPor: pago.registradoPorNombre,
+      metodoNombre: pago.metodoPago.nombre,
+      cuentaTexto,
+      referencia: pago.referencia,
+      cheque: pago.valor
+        ? {
+            numero: pago.valor.numero,
+            banco: pago.valor.banco,
+            fechaPago: pago.valor.fechaPago
+              ? pago.valor.fechaPago.toISOString().slice(0, 10)
+              : null,
+          }
+        : null,
+      egresos: pago.imputaciones.map((i) => ({
+        numero: i.egreso.numero,
+        descripcion: i.egreso.descripcion,
+        comprobante:
+          i.egreso.tipoComprobante && i.egreso.numeroComprobante
+            ? `${i.egreso.tipoComprobante} ${i.egreso.puntoVenta ?? ''}-${i.egreso.numeroComprobante}`.replace(
+                ' -',
+                ' ',
+              )
+            : null,
+        vencimiento: i.egreso.fechaVencimiento
+          ? i.egreso.fechaVencimiento.toISOString().slice(0, 10)
+          : null,
+        monto: dec(i.monto),
+      })),
+      retenciones: pago.retenciones.map((r) => ({
+        regimen: REGIMEN_RETENCION_LABELS[r.regimen] ?? r.regimen,
+        monto: dec(r.monto),
+      })),
+      montoBruto: dec(pago.montoBruto),
+      retencionesTotal: dec(pago.retencionesTotal),
+      montoNeto: dec(pago.montoNeto),
+    };
+
+    return this.ordenPagoPdf.generar(doc);
+  }
 
   /**
    * Nombre que se congela como autor. Pasa por `firmaActor` para que una
