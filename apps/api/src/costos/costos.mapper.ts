@@ -1,35 +1,27 @@
 import { Injectable } from '@nestjs/common';
 import {
   CategoriaComponenteCostoCentro,
-  CategoriaGraficaCentroCosto,
+  type CentroCostoLinea,
   EstadoTarifaCentroCostoPeriodo,
   ImputacionPreferidaCentroCosto,
-  MetodoDepreciacionMaquina,
-  OrigenComponenteCostoCentro,
   Prisma,
+  SeccionCentroCostoLinea,
   TipoCentroCosto,
-  TipoGastoGeneralCentroCosto,
-  TipoRecursoCentroCosto,
   UnidadBaseCentroCosto,
 } from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
 import {
-  CategoriaGraficaCentroCostoDto,
   ImputacionPreferidaCentroCostoDto,
   TipoCentroCostoDto,
   UnidadBaseCentroCostoDto,
   UpsertCentroCostoDto,
 } from './dto/upsert-centro-costo.dto';
 import {
-  TipoGastoGeneralCentroCostoDto,
-  TipoRecursoCentroCostoDto,
-} from './dto/replace-centro-recursos.dto';
-import {
   CategoriaComponenteCostoCentroDto,
-  OrigenComponenteCostoCentroDto,
-} from './dto/replace-centro-componentes-costo.dto';
-import { UpsertCentroRecursosMaquinariaDto } from './dto/upsert-centro-recursos-maquinaria.dto';
-import type { AreaCompleta, CentroCompleto } from './costos.types';
+  CentroCostoLineaItemDto,
+  SeccionCentroCostoLineaDto,
+} from './dto/replace-centro-lineas.dto';
+import type { CentroCompleto } from './costos.types';
 
 @Injectable()
 export class CostosMapper {
@@ -49,17 +41,6 @@ export class CostosMapper {
     };
   }
 
-  toAreaResponse(area: AreaCompleta) {
-    return {
-      id: area.id,
-      plantaId: area.plantaId,
-      plantaNombre: area.planta.nombre,
-      codigo: area.codigo,
-      nombre: area.nombre,
-      descripcion: area.descripcion ?? '',
-      activa: area.activa,
-    };
-  }
 
   toCentroResponse(centro: CentroCompleto) {
     const tarifas = centro.tarifasPeriodo ?? [];
@@ -123,27 +104,21 @@ export class CostosMapper {
         ? resumen.capacidadPractica
         : null;
     const capacidadPracticaPersistida = centro.capacidadesPeriodo[0]
-      ? this.decimalToNumber(centro.capacidadesPeriodo[0].capacidadPractica)
+      ? this.decimalToNumber(centro.capacidadesPeriodo[0].horasProductivas)
       : null;
 
     return {
       id: centro.id,
       plantaId: centro.plantaId,
       plantaNombre: centro.planta.nombre,
-      areaCostoId: centro.areaCostoId,
-      areaCostoNombre: centro.areaCosto.nombre,
       codigo: centro.codigo,
       nombre: centro.nombre,
       descripcion: centro.descripcion ?? '',
       tipoCentro: this.fromPrismaTipoCentro(centro.tipoCentro),
-      categoriaGrafica: this.fromPrismaCategoria(centro.categoriaGrafica),
       imputacionPreferida: this.fromPrismaImputacion(
         centro.imputacionPreferida,
       ),
       unidadBaseFutura: this.fromPrismaUnidadBase(centro.unidadBaseFutura),
-      responsableEmpleadoId: centro.responsableEmpleadoId ?? '',
-      responsableEmpleadoNombre:
-        centro.responsableEmpleado?.nombreCompleto ?? '',
       activo: centro.activo,
       estadoConfiguracion,
       ultimoPeriodoConfigurado,
@@ -161,59 +136,7 @@ export class CostosMapper {
     };
   }
 
-  toRecursoResponse(
-    recurso: Prisma.CentroCostoRecursoGetPayload<{
-      include: { empleado: true; maquina: true };
-    }>,
-  ) {
-    return {
-      id: recurso.id,
-      periodo: recurso.periodo,
-      tipoRecurso: this.fromPrismaTipoRecurso(recurso.tipoRecurso),
-      empleadoId: recurso.empleadoId ?? '',
-      empleadoNombre: recurso.empleado?.nombreCompleto ?? '',
-      maquinaId: recurso.maquinaId ?? '',
-      maquinaNombre: recurso.maquina?.nombre ?? recurso.nombreRecurso ?? '',
-      nombreRecurso: recurso.nombreRecurso ?? '',
-      tipoGastoGeneral: recurso.tipoGastoGeneral
-        ? this.fromPrismaTipoGastoGeneral(recurso.tipoGastoGeneral)
-        : '',
-      valorMensual: recurso.valorMensual
-        ? this.decimalToNumber(recurso.valorMensual)
-        : null,
-      vidaUtilRestanteMeses: recurso.vidaUtilRestanteMeses ?? null,
-      valorActual: recurso.valorActual
-        ? this.decimalToNumber(recurso.valorActual)
-        : null,
-      valorFinalVida: recurso.valorFinalVida
-        ? this.decimalToNumber(recurso.valorFinalVida)
-        : null,
-      depreciacionMensualCalc: recurso.depreciacionMensualCalc
-        ? this.decimalToNumber(recurso.depreciacionMensualCalc)
-        : null,
-      descripcion: recurso.descripcion ?? '',
-      porcentajeAsignacion: recurso.porcentajeAsignacion
-        ? this.decimalToNumber(recurso.porcentajeAsignacion)
-        : null,
-      activo: recurso.activo,
-    };
-  }
 
-  toComponenteCostoResponse(
-    componente: Prisma.CentroCostoComponenteCostoPeriodoGetPayload<object>,
-  ) {
-    return {
-      id: componente.id,
-      periodo: componente.periodo,
-      categoria: this.fromPrismaCategoriaComponente(componente.categoria),
-      nombre: componente.nombre,
-      origen: this.fromPrismaOrigenComponente(componente.origen),
-      importeMensual: this.decimalToNumber(componente.importeMensual),
-      notas: componente.notas ?? '',
-      detalle:
-        (componente.detalleJson as Record<string, unknown> | null) ?? null,
-    };
-  }
 
   toCapacidadResponse(
     capacidad: Prisma.CentroCostoCapacidadPeriodoGetPayload<object>,
@@ -222,16 +145,7 @@ export class CostosMapper {
       id: capacidad.id,
       periodo: capacidad.periodo,
       unidadBase: this.fromPrismaUnidadBase(capacidad.unidadBase),
-      diasPorMes: this.decimalToNumber(capacidad.diasPorMes),
-      horasPorDia: this.decimalToNumber(capacidad.horasPorDia),
-      porcentajeNoProductivo: this.decimalToNumber(
-        capacidad.porcentajeNoProductivo,
-      ),
-      capacidadTeorica: this.decimalToNumber(capacidad.capacidadTeorica),
-      capacidadPractica: this.decimalToNumber(capacidad.capacidadPractica),
-      overrideManualCapacidad: capacidad.overrideManualCapacidad
-        ? this.decimalToNumber(capacidad.overrideManualCapacidad)
-        : null,
+      horasProductivas: this.decimalToNumber(capacidad.horasProductivas),
     };
   }
 
@@ -251,89 +165,6 @@ export class CostosMapper {
     };
   }
 
-  toRecursoMaquinariaResponse(
-    item: Prisma.CentroCostoRecursoMaquinaPeriodoGetPayload<object> | undefined,
-    recurso: {
-      id: string;
-      periodo: string;
-      maquinaId: string | null;
-      nombreRecurso?: string | null;
-      maquina?: { nombre: string } | null;
-    },
-  ) {
-    const metodoDepreciacion = item
-      ? this.fromPrismaMetodoDepreciacionMaquina(item.metodoDepreciacion)
-      : 'lineal';
-    const valorCompra = item ? this.decimalToNumber(item.valorCompra) : 0;
-    const valorResidual = item ? this.decimalToNumber(item.valorResidual) : 0;
-    const vidaUtilMeses = item?.vidaUtilMeses ?? 60;
-    const potenciaNominalKw = item
-      ? Number(item.potenciaNominalKw.toFixed(2))
-      : 0;
-    const factorCargaPct = item
-      ? this.decimalToNumber(item.factorCargaPct)
-      : 100;
-    const tarifaEnergiaKwh = item
-      ? Number(item.tarifaEnergiaKwh.toFixed(2))
-      : 0;
-    const horasProgramadasMes = item
-      ? this.decimalToNumber(item.horasProgramadasMes)
-      : 160;
-    const disponibilidadPct = item
-      ? this.decimalToNumber(item.disponibilidadPct)
-      : 85;
-    const eficienciaPct = item ? this.decimalToNumber(item.eficienciaPct) : 85;
-    const mantenimientoMensual = item
-      ? this.decimalToNumber(item.mantenimientoMensual)
-      : 0;
-    const segurosMensual = item ? this.decimalToNumber(item.segurosMensual) : 0;
-    const otrosFijosMensual = item
-      ? this.decimalToNumber(item.otrosFijosMensual)
-      : 0;
-    const horasProductivas = Number(
-      (
-        horasProgramadasMes *
-        (disponibilidadPct / 100) *
-        (eficienciaPct / 100)
-      ).toFixed(2),
-    );
-
-    return {
-      id: item?.id ?? '',
-      centroCostoRecursoId: recurso.id,
-      periodo: recurso.periodo,
-      maquinaId: recurso.maquinaId ?? '',
-      maquinaNombre: recurso.maquina?.nombre ?? recurso.nombreRecurso ?? '',
-      metodoDepreciacion,
-      valorCompra,
-      valorResidual,
-      vidaUtilMeses,
-      potenciaNominalKw,
-      factorCargaPct,
-      tarifaEnergiaKwh,
-      horasProgramadasMes,
-      disponibilidadPct,
-      eficienciaPct,
-      horasProductivas,
-      mantenimientoMensual,
-      segurosMensual,
-      otrosFijosMensual,
-      amortizacionMensual: item
-        ? this.decimalToNumber(item.amortizacionMensualCalc)
-        : Number(
-            (
-              Math.max(0, valorCompra - valorResidual) /
-              Math.max(1, vidaUtilMeses)
-            ).toFixed(2),
-          ),
-      energiaMensual: item ? this.decimalToNumber(item.energiaMensualCalc) : 0,
-      costoMensualTotal: item
-        ? this.decimalToNumber(item.costoMensualTotalCalc)
-        : 0,
-      tarifaHora: item ? Number(item.tarifaHoraCalc.toFixed(2)) : 0,
-      updatedAt: item?.updatedAt.toISOString() ?? '',
-    };
-  }
 
   buildCreateCentroData(
     auth: CurrentAuth,
@@ -342,15 +173,12 @@ export class CostosMapper {
     return {
       tenantId: auth.tenantId,
       plantaId: payload.plantaId,
-      areaCostoId: payload.areaCostoId,
       codigo: payload.codigo.trim().toUpperCase(),
       nombre: payload.nombre.trim(),
       descripcion: payload.descripcion?.trim() || null,
       tipoCentro: this.toPrismaTipoCentro(payload.tipoCentro),
-      categoriaGrafica: this.toPrismaCategoria(payload.categoriaGrafica),
       imputacionPreferida: this.toPrismaImputacion(payload.imputacionPreferida),
       unidadBaseFutura: this.toPrismaUnidadBase(payload.unidadBaseFutura),
-      responsableEmpleadoId: payload.responsableEmpleadoId ?? null,
       activo: payload.activo,
     };
   }
@@ -360,17 +188,125 @@ export class CostosMapper {
   ): Prisma.CentroCostoUncheckedUpdateInput {
     return {
       plantaId: payload.plantaId,
-      areaCostoId: payload.areaCostoId,
       codigo: payload.codigo.trim().toUpperCase(),
       nombre: payload.nombre.trim(),
       descripcion: payload.descripcion?.trim() || null,
       tipoCentro: this.toPrismaTipoCentro(payload.tipoCentro),
-      categoriaGrafica: this.toPrismaCategoria(payload.categoriaGrafica),
       imputacionPreferida: this.toPrismaImputacion(payload.imputacionPreferida),
       unidadBaseFutura: this.toPrismaUnidadBase(payload.unidadBaseFutura),
-      responsableEmpleadoId: payload.responsableEmpleadoId ?? null,
       activo: payload.activo,
     };
+  }
+
+  /**
+   * El importe mensual de una línea, según su sección. Se calcula en el
+   * servidor y se persiste: así la suma del centro no depende de recorrer
+   * ramas, y el número guardado es el mismo que costea.
+   */
+  computeImporteLinea(linea: CentroCostoLineaItemDto): Prisma.Decimal {
+    if (linea.seccion === SeccionCentroCostoLineaDto.empleado) {
+      const salario = new Prisma.Decimal(linea.salarioMensual ?? 0);
+      const cargas = new Prisma.Decimal(linea.cargasPct ?? 0).div(100);
+      return salario.mul(cargas.plus(1)).toDecimalPlaces(2);
+    }
+    if (linea.seccion === SeccionCentroCostoLineaDto.activo_fijo) {
+      const vida = linea.vidaUtilRestanteMeses ?? 0;
+      if (vida <= 0) return new Prisma.Decimal(0);
+      return new Prisma.Decimal(linea.valorActual ?? 0)
+        .minus(linea.valorFinalVida ?? 0)
+        .div(vida)
+        .toDecimalPlaces(2);
+    }
+    return new Prisma.Decimal(linea.valorMensual ?? 0).toDecimalPlaces(2);
+  }
+
+  buildLineaData(
+    auth: CurrentAuth,
+    centroCostoId: string,
+    periodo: string,
+    linea: CentroCostoLineaItemDto,
+    orden: number,
+  ): Prisma.CentroCostoLineaUncheckedCreateInput {
+    const esEmpleado = linea.seccion === SeccionCentroCostoLineaDto.empleado;
+    const esActivoFijo =
+      linea.seccion === SeccionCentroCostoLineaDto.activo_fijo;
+
+    return {
+      tenantId: auth.tenantId,
+      centroCostoId,
+      periodo,
+      orden,
+      seccion: this.toPrismaSeccionLinea(linea.seccion),
+      nombre: linea.nombre.trim(),
+      categoria: linea.categoria
+        ? this.toPrismaCategoriaComponente(linea.categoria)
+        : null,
+      ocupacion: esEmpleado ? (linea.ocupacion?.trim() || null) : null,
+      dedicacionPct: esEmpleado ? (linea.dedicacionPct ?? null) : null,
+      salarioMensual: esEmpleado ? (linea.salarioMensual ?? 0) : null,
+      cargasPct: esEmpleado ? (linea.cargasPct ?? 0) : null,
+      vidaUtilRestanteMeses: esActivoFijo
+        ? (linea.vidaUtilRestanteMeses ?? null)
+        : null,
+      valorActual: esActivoFijo ? (linea.valorActual ?? 0) : null,
+      valorFinalVida: esActivoFijo ? (linea.valorFinalVida ?? 0) : null,
+      importeMensual: this.computeImporteLinea(linea),
+      notas: linea.notas?.trim() || null,
+    };
+  }
+
+  toLineaResponse(linea: CentroCostoLinea) {
+    return {
+      id: linea.id,
+      periodo: linea.periodo,
+      seccion: this.fromPrismaSeccionLinea(linea.seccion),
+      nombre: linea.nombre,
+      categoria: linea.categoria
+        ? this.fromPrismaCategoriaComponente(linea.categoria)
+        : null,
+      ocupacion: linea.ocupacion,
+      dedicacionPct: linea.dedicacionPct
+        ? Number(linea.dedicacionPct)
+        : null,
+      salarioMensual: linea.salarioMensual
+        ? this.decimalToNumber(linea.salarioMensual)
+        : null,
+      cargasPct: linea.cargasPct ? Number(linea.cargasPct) : null,
+      vidaUtilRestanteMeses: linea.vidaUtilRestanteMeses,
+      valorActual: linea.valorActual
+        ? this.decimalToNumber(linea.valorActual)
+        : null,
+      valorFinalVida: linea.valorFinalVida
+        ? this.decimalToNumber(linea.valorFinalVida)
+        : null,
+      importeMensual: this.decimalToNumber(linea.importeMensual),
+      orden: linea.orden,
+      notas: linea.notas,
+    };
+  }
+
+  toPrismaSeccionLinea(
+    seccion: SeccionCentroCostoLineaDto,
+  ): SeccionCentroCostoLinea {
+    return {
+      [SeccionCentroCostoLineaDto.gasto_general]:
+        SeccionCentroCostoLinea.GASTO_GENERAL,
+      [SeccionCentroCostoLineaDto.empleado]: SeccionCentroCostoLinea.EMPLEADO,
+      [SeccionCentroCostoLineaDto.activo_fijo]:
+        SeccionCentroCostoLinea.ACTIVO_FIJO,
+    }[seccion];
+  }
+
+  fromPrismaSeccionLinea(
+    seccion: SeccionCentroCostoLinea,
+  ): SeccionCentroCostoLineaDto {
+    return {
+      [SeccionCentroCostoLinea.GASTO_GENERAL]:
+        SeccionCentroCostoLineaDto.gasto_general,
+      [SeccionCentroCostoLinea.EMPLEADO]: SeccionCentroCostoLineaDto.empleado,
+      [SeccionCentroCostoLinea.ACTIVO_FIJO]:
+        SeccionCentroCostoLineaDto.activo_fijo,
+    }[seccion];
   }
 
   decimalToNumber(value: Prisma.Decimal) {
@@ -401,63 +337,7 @@ export class CostosMapper {
     return mapping[tipo];
   }
 
-  toPrismaCategoria(categoria: CategoriaGraficaCentroCostoDto) {
-    const mapping: Record<
-      CategoriaGraficaCentroCostoDto,
-      CategoriaGraficaCentroCosto
-    > = {
-      [CategoriaGraficaCentroCostoDto.preprensa]:
-        CategoriaGraficaCentroCosto.PREPRENSA,
-      [CategoriaGraficaCentroCostoDto.impresion]:
-        CategoriaGraficaCentroCosto.IMPRESION,
-      [CategoriaGraficaCentroCostoDto.terminacion]:
-        CategoriaGraficaCentroCosto.TERMINACION,
-      [CategoriaGraficaCentroCostoDto.empaque]:
-        CategoriaGraficaCentroCosto.EMPAQUE,
-      [CategoriaGraficaCentroCostoDto.logistica]:
-        CategoriaGraficaCentroCosto.LOGISTICA,
-      [CategoriaGraficaCentroCostoDto.calidad]:
-        CategoriaGraficaCentroCosto.CALIDAD,
-      [CategoriaGraficaCentroCostoDto.mantenimiento]:
-        CategoriaGraficaCentroCosto.MANTENIMIENTO,
-      [CategoriaGraficaCentroCostoDto.administracion]:
-        CategoriaGraficaCentroCosto.ADMINISTRACION,
-      [CategoriaGraficaCentroCostoDto.comercial]:
-        CategoriaGraficaCentroCosto.COMERCIAL,
-      [CategoriaGraficaCentroCostoDto.tercerizado]:
-        CategoriaGraficaCentroCosto.TERCERIZADO,
-    };
-    return mapping[categoria];
-  }
 
-  fromPrismaCategoria(categoria: CategoriaGraficaCentroCosto) {
-    const mapping: Record<
-      CategoriaGraficaCentroCosto,
-      CategoriaGraficaCentroCostoDto
-    > = {
-      [CategoriaGraficaCentroCosto.PREPRENSA]:
-        CategoriaGraficaCentroCostoDto.preprensa,
-      [CategoriaGraficaCentroCosto.IMPRESION]:
-        CategoriaGraficaCentroCostoDto.impresion,
-      [CategoriaGraficaCentroCosto.TERMINACION]:
-        CategoriaGraficaCentroCostoDto.terminacion,
-      [CategoriaGraficaCentroCosto.EMPAQUE]:
-        CategoriaGraficaCentroCostoDto.empaque,
-      [CategoriaGraficaCentroCosto.LOGISTICA]:
-        CategoriaGraficaCentroCostoDto.logistica,
-      [CategoriaGraficaCentroCosto.CALIDAD]:
-        CategoriaGraficaCentroCostoDto.calidad,
-      [CategoriaGraficaCentroCosto.MANTENIMIENTO]:
-        CategoriaGraficaCentroCostoDto.mantenimiento,
-      [CategoriaGraficaCentroCosto.ADMINISTRACION]:
-        CategoriaGraficaCentroCostoDto.administracion,
-      [CategoriaGraficaCentroCosto.COMERCIAL]:
-        CategoriaGraficaCentroCostoDto.comercial,
-      [CategoriaGraficaCentroCosto.TERCERIZADO]:
-        CategoriaGraficaCentroCostoDto.tercerizado,
-    };
-    return mapping[categoria];
-  }
 
   toPrismaImputacion(imputacion: ImputacionPreferidaCentroCostoDto) {
     const mapping: Record<
@@ -517,69 +397,9 @@ export class CostosMapper {
     return mapping[unidad];
   }
 
-  toPrismaTipoRecurso(tipo: TipoRecursoCentroCostoDto) {
-    const mapping: Record<TipoRecursoCentroCostoDto, TipoRecursoCentroCosto> = {
-      [TipoRecursoCentroCostoDto.empleado]: TipoRecursoCentroCosto.EMPLEADO,
-      [TipoRecursoCentroCostoDto.maquinaria]: TipoRecursoCentroCosto.MAQUINARIA,
-      [TipoRecursoCentroCostoDto.gasto_general]:
-        TipoRecursoCentroCosto.GASTO_GENERAL,
-      [TipoRecursoCentroCostoDto.activo_fijo]:
-        TipoRecursoCentroCosto.ACTIVO_FIJO,
-    };
-    return mapping[tipo];
-  }
 
-  fromPrismaTipoRecurso(tipo: TipoRecursoCentroCosto) {
-    const mapping: Record<TipoRecursoCentroCosto, TipoRecursoCentroCostoDto> = {
-      [TipoRecursoCentroCosto.EMPLEADO]: TipoRecursoCentroCostoDto.empleado,
-      [TipoRecursoCentroCosto.MAQUINARIA]: TipoRecursoCentroCostoDto.maquinaria,
-      [TipoRecursoCentroCosto.GASTO_GENERAL]:
-        TipoRecursoCentroCostoDto.gasto_general,
-      [TipoRecursoCentroCosto.ACTIVO_FIJO]:
-        TipoRecursoCentroCostoDto.activo_fijo,
-    };
-    return mapping[tipo];
-  }
 
-  toPrismaTipoGastoGeneral(
-    tipo: TipoGastoGeneralCentroCostoDto,
-  ): TipoGastoGeneralCentroCosto {
-    const mapping: Record<
-      TipoGastoGeneralCentroCostoDto,
-      TipoGastoGeneralCentroCosto
-    > = {
-      [TipoGastoGeneralCentroCostoDto.limpieza]:
-        TipoGastoGeneralCentroCosto.LIMPIEZA,
-      [TipoGastoGeneralCentroCostoDto.mantenimiento]:
-        TipoGastoGeneralCentroCosto.MANTENIMIENTO,
-      [TipoGastoGeneralCentroCostoDto.servicios]:
-        TipoGastoGeneralCentroCosto.SERVICIOS,
-      [TipoGastoGeneralCentroCostoDto.alquiler]:
-        TipoGastoGeneralCentroCosto.ALQUILER,
-      [TipoGastoGeneralCentroCostoDto.otro]: TipoGastoGeneralCentroCosto.OTRO,
-    };
-    return mapping[tipo];
-  }
 
-  fromPrismaTipoGastoGeneral(
-    tipo: TipoGastoGeneralCentroCosto,
-  ): TipoGastoGeneralCentroCostoDto {
-    const mapping: Record<
-      TipoGastoGeneralCentroCosto,
-      TipoGastoGeneralCentroCostoDto
-    > = {
-      [TipoGastoGeneralCentroCosto.LIMPIEZA]:
-        TipoGastoGeneralCentroCostoDto.limpieza,
-      [TipoGastoGeneralCentroCosto.MANTENIMIENTO]:
-        TipoGastoGeneralCentroCostoDto.mantenimiento,
-      [TipoGastoGeneralCentroCosto.SERVICIOS]:
-        TipoGastoGeneralCentroCostoDto.servicios,
-      [TipoGastoGeneralCentroCosto.ALQUILER]:
-        TipoGastoGeneralCentroCostoDto.alquiler,
-      [TipoGastoGeneralCentroCosto.OTRO]: TipoGastoGeneralCentroCostoDto.otro,
-    };
-    return mapping[tipo];
-  }
 
   toPrismaCategoriaComponente(categoria: CategoriaComponenteCostoCentroDto) {
     const mapping: Record<
@@ -635,47 +455,8 @@ export class CostosMapper {
     return mapping[categoria];
   }
 
-  toPrismaOrigenComponente(origen: OrigenComponenteCostoCentroDto) {
-    const mapping: Record<
-      OrigenComponenteCostoCentroDto,
-      OrigenComponenteCostoCentro
-    > = {
-      [OrigenComponenteCostoCentroDto.manual]:
-        OrigenComponenteCostoCentro.MANUAL,
-      [OrigenComponenteCostoCentroDto.sugerido]:
-        OrigenComponenteCostoCentro.SUGERIDO,
-    };
-    return mapping[origen];
-  }
 
-  fromPrismaOrigenComponente(origen: OrigenComponenteCostoCentro) {
-    const mapping: Record<
-      OrigenComponenteCostoCentro,
-      OrigenComponenteCostoCentroDto
-    > = {
-      [OrigenComponenteCostoCentro.MANUAL]:
-        OrigenComponenteCostoCentroDto.manual,
-      [OrigenComponenteCostoCentro.SUGERIDO]:
-        OrigenComponenteCostoCentroDto.sugerido,
-    };
-    return mapping[origen];
-  }
 
-  toPrismaMetodoDepreciacionMaquina(
-    metodo: UpsertCentroRecursosMaquinariaDto['recursos'][number]['metodoDepreciacion'],
-  ) {
-    const mapping: Record<string, MetodoDepreciacionMaquina> = {
-      lineal: MetodoDepreciacionMaquina.LINEAL,
-    };
-    return mapping[metodo];
-  }
-
-  fromPrismaMetodoDepreciacionMaquina(metodo: MetodoDepreciacionMaquina) {
-    const mapping: Record<MetodoDepreciacionMaquina, string> = {
-      [MetodoDepreciacionMaquina.LINEAL]: 'lineal',
-    };
-    return mapping[metodo];
-  }
 
   fromPrismaEstadoTarifa(estado: EstadoTarifaCentroCostoPeriodo) {
     const mapping: Record<

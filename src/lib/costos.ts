@@ -6,18 +6,6 @@ export type TipoCentroCosto =
   | "logistico"
   | "tercerizado";
 
-export type CategoriaGraficaCentroCosto =
-  | "preprensa"
-  | "impresion"
-  | "terminacion"
-  | "empaque"
-  | "logistica"
-  | "calidad"
-  | "mantenimiento"
-  | "administracion"
-  | "comercial"
-  | "tercerizado";
-
 export type ImputacionPreferidaCentroCosto =
   | "directa"
   | "indirecta"
@@ -75,31 +63,16 @@ export type Planta = {
   activa: boolean;
 };
 
-export type AreaCosto = {
-  id: string;
-  plantaId: string;
-  plantaNombre: string;
-  codigo: string;
-  nombre: string;
-  descripcion: string;
-  activa: boolean;
-};
-
 export type CentroCosto = {
   id: string;
   plantaId: string;
   plantaNombre: string;
-  areaCostoId: string;
-  areaCostoNombre: string;
   codigo: string;
   nombre: string;
   descripcion: string;
   tipoCentro: TipoCentroCosto;
-  categoriaGrafica: CategoriaGraficaCentroCosto;
   imputacionPreferida: ImputacionPreferidaCentroCosto;
   unidadBaseFutura: UnidadBaseCentroCosto;
-  responsableEmpleadoId: string;
-  responsableEmpleadoNombre: string;
   activo: boolean;
   estadoConfiguracion: EstadoConfiguracionCentroCosto;
   ultimoPeriodoConfigurado: string;
@@ -109,6 +82,87 @@ export type CentroCosto = {
   ultimaTarifaAbsorbida: number | null;
   ultimaTarifaTotal: number | null;
   ultimaCapacidadPractica: number | null;
+};
+
+export type SeccionCentroCostoLinea =
+  | "gasto_general"
+  | "empleado"
+  | "activo_fijo";
+
+/** Una fila de la planilla, tal como vuelve del servidor. */
+export type CentroCostoLinea = {
+  id: string;
+  periodo: string;
+  seccion: SeccionCentroCostoLinea;
+  nombre: string;
+  categoria: CategoriaComponenteCostoCentro | null;
+  ocupacion: string | null;
+  dedicacionPct: number | null;
+  salarioMensual: number | null;
+  cargasPct: number | null;
+  vidaUtilRestanteMeses: number | null;
+  valorActual: number | null;
+  valorFinalVida: number | null;
+  importeMensual: number;
+  orden: number;
+  notas: string | null;
+};
+
+/**
+ * Lo que se manda al guardar. Sin `importeMensual`: si el total viajara, la
+ * planilla podría mostrar una cosa y costear otra.
+ */
+export type CentroCostoLineaPayload = {
+  seccion: SeccionCentroCostoLinea;
+  nombre: string;
+  categoria?: CategoriaComponenteCostoCentro;
+  valorMensual?: number;
+  ocupacion?: string;
+  dedicacionPct?: number;
+  salarioMensual?: number;
+  cargasPct?: number;
+  vidaUtilRestanteMeses?: number;
+  valorActual?: number;
+  valorFinalVida?: number;
+  notas?: string;
+};
+
+/**
+ * Una fila del listado de centros, con los números vivos del período.
+ *
+ * `prorrateado` es lo que un centro de estructura manda a los productivos, y
+ * `absorbido` lo que cada productivo recibe: el total de las dos columnas tiene
+ * que coincidir, y el listado lo muestra para que se vea de un vistazo que el
+ * reparto no perdió plata.
+ *
+ * `horasProductivas` y `valorHora` vienen en null en los centros que reparten
+ * su costo entero: lo que cuestan ya se cobra dentro de los productivos que los
+ * absorbieron, y mostrarles una tarifa invitaría a cobrarlo dos veces.
+ */
+export type ResumenCentroCostoFila = {
+  id: string;
+  codigo: string;
+  nombre: string;
+  tipoCentro: TipoCentroCosto;
+  unidadBase: UnidadBaseCentroCosto;
+  horasProductivas: number | null;
+  gastos: number;
+  absorbido: number;
+  prorrateado: number;
+  gastoTotal: number;
+  valorHora: number | null;
+  lineas: number;
+};
+
+export type ResumenCentrosCosto = {
+  periodo: string;
+  centros: ResumenCentroCostoFila[];
+  totales: {
+    gastos: number;
+    absorbido: number;
+    prorrateado: number;
+    gastoTotal: number;
+  };
 };
 
 export type CentroCostoRecurso = {
@@ -178,6 +232,8 @@ export type CentroCostoCapacidad = {
   porcentajeNoProductivo: number;
   capacidadTeorica: number;
   capacidadPractica: number;
+  /** Las horas del período. Es lo que divide el costo para dar el valor hora. */
+  horasProductivas: number;
   overrideManualCapacidad: number | null;
 };
 
@@ -206,6 +262,8 @@ export type RepartoAbsorbidoCentroCosto = {
 export type CentroCostoConfiguracionDetalle = {
   periodo: string;
   centro: CentroCosto;
+  /** La planilla del período: lo que edita la ficha y lo que costea el motor. */
+  lineas: CentroCostoLinea[];
   recursos: CentroCostoRecurso[];
   recursosMaquinaria: CentroCostoRecursoMaquinariaPeriodo[];
   componentesCosto: CentroCostoComponenteCosto[];
@@ -239,24 +297,14 @@ export type PlantaPayload = {
   descripcion?: string;
 };
 
-export type AreaCostoPayload = {
-  plantaId: string;
-  codigo: string;
-  nombre: string;
-  descripcion?: string;
-};
-
 export type CentroCostoPayload = {
   plantaId: string;
-  areaCostoId: string;
   codigo: string;
   nombre: string;
   descripcion?: string;
   tipoCentro: TipoCentroCosto;
-  categoriaGrafica: CategoriaGraficaCentroCosto;
   imputacionPreferida: ImputacionPreferidaCentroCosto;
   unidadBaseFutura: UnidadBaseCentroCosto;
-  responsableEmpleadoId?: string;
   activo: boolean;
 };
 
@@ -303,6 +351,11 @@ export type CentroCostoComponenteCostoPayload = {
   detalle?: Record<string, unknown>;
 };
 
+export type CentroCostoCapacidadManualPayload = {
+  /** Las horas del período, cargadas a mano. Manda sobre la fórmula vieja. */
+  horasProductivas: number;
+};
+
 export type CentroCostoCapacidadPayload = {
   diasPorMes: number;
   horasPorDia: number;
@@ -319,22 +372,6 @@ export const tipoCentroItems: Array<{ label: string; value: TipoCentroCosto }> =
     { label: "Logistico", value: "logistico" },
     { label: "Tercerizado", value: "tercerizado" },
   ];
-
-export const categoriaGraficaItems: Array<{
-  label: string;
-  value: CategoriaGraficaCentroCosto;
-}> = [
-  { label: "Preprensa", value: "preprensa" },
-  { label: "Impresion", value: "impresion" },
-  { label: "Terminacion", value: "terminacion" },
-  { label: "Empaque", value: "empaque" },
-  { label: "Logistica", value: "logistica" },
-  { label: "Calidad", value: "calidad" },
-  { label: "Mantenimiento", value: "mantenimiento" },
-  { label: "Administracion", value: "administracion" },
-  { label: "Comercial", value: "comercial" },
-  { label: "Tercerizado", value: "tercerizado" },
-];
 
 export const imputacionPreferidaItems: Array<{
   label: string;
@@ -416,10 +453,6 @@ const tipoCentroLabels = new Map(
   tipoCentroItems.map((item) => [item.value, item.label] as const),
 );
 
-const categoriaGraficaLabels = new Map(
-  categoriaGraficaItems.map((item) => [item.value, item.label] as const),
-);
-
 const imputacionPreferidaLabels = new Map(
   imputacionPreferidaItems.map((item) => [item.value, item.label] as const),
 );
@@ -448,10 +481,6 @@ const estadoConfiguracionLabels = new Map(
 
 export function getTipoCentroLabel(value: TipoCentroCosto) {
   return tipoCentroLabels.get(value) ?? value;
-}
-
-export function getCategoriaGraficaLabel(value: CategoriaGraficaCentroCosto) {
-  return categoriaGraficaLabels.get(value) ?? value;
 }
 
 export function getImputacionPreferidaLabel(
@@ -498,33 +527,6 @@ export function getCurrentPeriodo() {
   const now = new Date();
   const month = String(now.getMonth() + 1).padStart(2, "0");
   return `${now.getFullYear()}-${month}`;
-}
-
-export function getSuggestedUnidadBase(
-  tipoCentro: TipoCentroCosto,
-  categoriaGrafica: CategoriaGraficaCentroCosto,
-): UnidadBaseCentroCosto {
-  if (tipoCentro === "tercerizado") {
-    if (categoriaGrafica === "tercerizado" || categoriaGrafica === "empaque") {
-      return "unidad";
-    }
-
-    return "m2";
-  }
-
-  if (tipoCentro === "administrativo") {
-    return "hora_hombre";
-  }
-
-  if (categoriaGrafica === "impresion") {
-    return "hora_maquina";
-  }
-
-  if (categoriaGrafica === "preprensa") {
-    return "hora_hombre";
-  }
-
-  return "unidad";
 }
 
 export function getSuggestedImputacion(

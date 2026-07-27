@@ -23,7 +23,6 @@ import {
   LayoutGridIcon,
   PackageIcon,
   UsersIcon,
-  WalletIcon,
 } from "lucide-react";
 
 import { usePuedeFn } from "@/components/navigation/permisos-provider";
@@ -62,12 +61,6 @@ export const REPORTES: Reporte[] = [
     permiso: "finanzas.ver_margenes",
   },
   { href: "/reportes/producto", label: "Ventas & Producto", Icon: PackageIcon },
-  {
-    href: "/reportes/costo-laboral",
-    label: "Costo laboral",
-    Icon: WalletIcon,
-    permiso: "registros.ver_remuneraciones",
-  },
 ];
 
 /**

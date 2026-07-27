@@ -3,7 +3,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { CategoriaGastoFijo, Prisma } from '@prisma/client';
+import {
+  CategoriaComponenteCostoCentro,
+  CategoriaGastoFijo,
+  Prisma,
+  SeccionCentroCostoLinea,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CurrentAuth } from '../auth/auth.types';
 import { UpsertGastoFijoDto } from './dto/upsert-gasto-fijo.dto';
@@ -110,62 +115,42 @@ export class GastosFijosService {
       return { importados: 0, total: 0, motivo: 'ya_existen_gastos' as const };
     }
 
-    // Último período con componentes cargados (para vigenteDesde).
-    const ultimoComp = await this.prisma.centroCostoComponenteCostoPeriodo.findFirst({
+    // Último período con planilla cargada (para vigenteDesde).
+    const ultimaLinea = await this.prisma.centroCostoLinea.findFirst({
       where: { tenantId: auth.tenantId },
       orderBy: { periodo: 'desc' },
       select: { periodo: true },
     });
-    const periodo = ultimoComp?.periodo ?? this.mesActual();
+    const periodo = ultimaLinea?.periodo ?? this.mesActual();
 
     const nuevos: Prisma.GastoFijoEstructuraCreateManyInput[] = [];
 
-    // 1) Componentes de centro (sueldos, cargas, alquiler, etc.) del período.
-    const componentes = await this.prisma.centroCostoComponenteCostoPeriodo.findMany({
+    // 1) La planilla de cada centro: gastos generales, empleados y activos.
+    // Antes esto leía los componentes derivados; ahora lee lo que el usuario
+    // cargó a mano, que es la misma información sin la capa intermedia.
+    const lineas = await this.prisma.centroCostoLinea.findMany({
       where: { tenantId: auth.tenantId, periodo },
       include: { centroCosto: { select: { nombre: true } } },
     });
-    for (const c of componentes) {
+    for (const linea of lineas) {
+      const categoria =
+        linea.seccion === SeccionCentroCostoLinea.EMPLEADO
+          ? 'SUELDOS'
+          : linea.seccion === SeccionCentroCostoLinea.ACTIVO_FIJO
+            ? 'AMORTIZACION'
+            : (CATEGORIA_DESDE_COMPONENTE[
+                linea.categoria ?? CategoriaComponenteCostoCentro.OTROS
+              ] ?? 'OTROS');
       nuevos.push({
         tenantId: auth.tenantId,
-        nombre: `${c.nombre} · ${c.centroCosto?.nombre ?? 'Centro'}`,
-        categoria: CATEGORIA_DESDE_COMPONENTE[c.categoria] ?? 'OTROS',
-        importeMensual: c.importeMensual,
+        nombre: `${linea.nombre} · ${linea.centroCosto?.nombre ?? 'Centro'}`,
+        categoria,
+        importeMensual: linea.importeMensual,
         vigenteDesde: periodo,
         vigenteHasta: null,
         activo: true,
-        notas: 'Importado desde componentes de centro de costo.',
+        notas: 'Importado desde la planilla del centro de costo.',
       });
-    }
-
-    // 2) Maquinaria/activos/gastos generales, que solo viven en la tarifa.
-    const tarifas = await this.prisma.centroCostoTarifaPeriodo.findMany({
-      where: { tenantId: auth.tenantId, periodo, estado: 'PUBLICADA' },
-      include: { centroCosto: { select: { nombre: true } } },
-    });
-    for (const t of tarifas) {
-      const resumen = (t.resumenJson ?? {}) as Record<string, unknown>;
-      const centro = t.centroCosto?.nombre ?? 'Centro';
-      const partes: Array<[string, CategoriaGastoFijo, string]> = [
-        ['costoMensualMaquinaria', 'AMORTIZACION', 'Maquinaria'],
-        ['costoMensualActivosFijos', 'AMORTIZACION', 'Activos fijos'],
-        ['costoMensualGastosGenerales', 'OTROS', 'Gastos generales'],
-      ];
-      for (const [clave, categoria, etiqueta] of partes) {
-        const monto = Number(resumen[clave] ?? 0);
-        if (monto > 0) {
-          nuevos.push({
-            tenantId: auth.tenantId,
-            nombre: `${etiqueta} · ${centro}`,
-            categoria,
-            importeMensual: new Prisma.Decimal(monto),
-            vigenteDesde: periodo,
-            vigenteHasta: null,
-            activo: true,
-            notas: 'Importado desde la tarifa del centro.',
-          });
-        }
-      }
     }
 
     if (nuevos.length === 0) {

@@ -58,19 +58,6 @@ enum TipoCentroCosto {
   TERCERIZADO
 }
 
-enum CategoriaGraficaCentroCosto {
-  PREPRENSA
-  IMPRESION
-  TERMINACION
-  EMPAQUE
-  LOGISTICA
-  CALIDAD
-  MANTENIMIENTO
-  ADMINISTRACION
-  COMERCIAL
-  TERCERIZADO
-}
-
 enum ImputacionPreferidaCentroCosto {
   DIRECTA
   INDIRECTA
@@ -87,19 +74,12 @@ enum UnidadBaseCentroCosto {
   KG
 }
 
-enum TipoRecursoCentroCosto {
-  EMPLEADO
-  MAQUINARIA
+/// Las tres secciones de la planilla del centro de costo. Ver
+/// docs/centros-de-costo-carga-manual-diseno.md
+enum SeccionCentroCostoLinea {
   GASTO_GENERAL
+  EMPLEADO
   ACTIVO_FIJO
-}
-
-enum TipoGastoGeneralCentroCosto {
-  LIMPIEZA
-  MANTENIMIENTO
-  SERVICIOS
-  ALQUILER
-  OTRO
 }
 
 enum CategoriaComponenteCostoCentro {
@@ -128,11 +108,6 @@ enum CategoriaGastoFijo {
   SOFTWARE // software y licencias
   LEGAL // contable / legal
   OTROS
-}
-
-enum OrigenComponenteCostoCentro {
-  MANUAL
-  SUGERIDO
 }
 
 enum MetodoDepreciacionMaquina {
@@ -621,11 +596,8 @@ model Tenant {
   proveedores                                      Proveedor[]
   empleados                                        Empleado[]
   plantas                                          Planta[]
-  areasCosto                                       AreaCosto[]
   centrosCosto                                     CentroCosto[]
-  centroCostoRecursos                              CentroCostoRecurso[]
-  centroCostoRecursosMaquinaria                    CentroCostoRecursoMaquinaPeriodo[]
-  centroCostoComponentesCostoPeriodo               CentroCostoComponenteCostoPeriodo[]
+  centroCostoLineas                                CentroCostoLinea[]
   gastosFijosEstructura                            GastoFijoEstructura[]
   centroCostoCapacidadesPeriodo                    CentroCostoCapacidadPeriodo[]
   centroCostoTarifasPeriodo                        CentroCostoTarifaPeriodo[]
@@ -984,9 +956,9 @@ model Proveedor {
 }
 
 model Empleado {
-  id                     String                              @id @default(uuid()) @db.Uuid
-  tenantId               String                              @db.Uuid
-  userId                 String?                             @db.Uuid
+  id                     String                 @id @default(uuid()) @db.Uuid
+  tenantId               String                 @db.Uuid
+  userId                 String?                @db.Uuid
   nombreCompleto         String
   emailPrincipal         String
   telefonoCodigo         String
@@ -994,22 +966,19 @@ model Empleado {
   sector                 String
   ocupacion              String?
   sexo                   SexoEmpleado?
-  fechaIngreso           DateTime                            @db.Date
-  fechaNacimiento        DateTime?                           @db.Date
-  comisionesHabilitadas  Boolean                             @default(false)
-  createdAt              DateTime                            @default(now())
-  updatedAt              DateTime                            @updatedAt
-  tenant                 Tenant                              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user                   User?                               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  fechaIngreso           DateTime               @db.Date
+  fechaNacimiento        DateTime?              @db.Date
+  comisionesHabilitadas  Boolean                @default(false)
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+  tenant                 Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user                   User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
   direcciones            EmpleadoDireccion[]
   comisiones             EmpleadoComision[]
   remuneraciones         EmpleadoRemuneracion[]
-  componentesCosto       CentroCostoComponenteCostoPeriodo[] @relation("ComponenteCostoEmpleado")
-  centrosACargo          CentroCosto[]                       @relation("CentroCostoResponsable")
   invitations            Invitation[]
-  recursosCentroCosto    CentroCostoRecurso[]                @relation("CentroCostoRecursoEmpleado")
-  ordenesTrabajoVendidas OrdenTrabajo[]                      @relation("OrdenTrabajoVendedor")
-  cotizacionesVendidas   Cotizacion[]                        @relation("CotizacionVendedor")
+  ordenesTrabajoVendidas OrdenTrabajo[]         @relation("OrdenTrabajoVendedor")
+  cotizacionesVendidas   Cotizacion[]           @relation("CotizacionVendedor")
   estaciones             EstacionEmpleado[]
   egresos                Egreso[]
 
@@ -1185,176 +1154,106 @@ model Planta {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  areasCosto   AreaCosto[]
-  centrosCosto CentroCosto[]
   maquinas     Maquina[]
+  centroCostos CentroCosto[]
 
   @@unique([tenantId, codigo])
   @@index([tenantId, nombre])
 }
 
-model AreaCosto {
-  id           String        @id @default(uuid()) @db.Uuid
-  tenantId     String        @db.Uuid
-  plantaId     String        @db.Uuid
-  codigo       String
-  nombre       String
-  descripcion  String?
-  activa       Boolean       @default(true)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  planta       Planta        @relation(fields: [plantaId], references: [id], onDelete: Cascade)
-  centrosCosto CentroCosto[]
-
-  @@unique([tenantId, plantaId, codigo])
-  @@index([tenantId, plantaId, nombre])
-}
 
 model CentroCosto {
-  id                      String                              @id @default(uuid()) @db.Uuid
-  tenantId                String                              @db.Uuid
-  plantaId                String                              @db.Uuid
-  areaCostoId             String                              @db.Uuid
-  codigo                  String
-  nombre                  String
-  descripcion             String?
-  tipoCentro              TipoCentroCosto
-  categoriaGrafica        CategoriaGraficaCentroCosto
-  imputacionPreferida     ImputacionPreferidaCentroCosto
-  unidadBaseFutura        UnidadBaseCentroCosto               @default(NINGUNA)
-  responsableEmpleadoId   String?                             @db.Uuid
-  activo                  Boolean                             @default(true)
-  createdAt               DateTime                            @default(now())
-  updatedAt               DateTime                            @updatedAt
-  tenant                  Tenant                              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  planta                  Planta                              @relation(fields: [plantaId], references: [id], onDelete: Cascade)
-  areaCosto               AreaCosto                           @relation(fields: [areaCostoId], references: [id], onDelete: Cascade)
-  responsableEmpleado     Empleado?                           @relation("CentroCostoResponsable", fields: [responsableEmpleadoId], references: [id], onDelete: SetNull)
-  recursos                CentroCostoRecurso[]
-  componentesCostoPeriodo CentroCostoComponenteCostoPeriodo[]
-  capacidadesPeriodo      CentroCostoCapacidadPeriodo[]
-  tarifasPeriodo          CentroCostoTarifaPeriodo[]
-  maquinasPrincipales     Maquina[]                           @relation("MaquinaCentroCostoPrincipal")
-  productoConfigPasos     ProductoConfigPaso[]                @relation("ProductoConfigPasoCentroCostoManual")
-  productoPasosExtras     ProductoPasoExtra[]                 @relation("ProductoPasoExtraCentroCostoManual")
-  egresos                 Egreso[]
+  id                  String                         @id @default(uuid()) @db.Uuid
+  tenantId            String                         @db.Uuid
+  plantaId            String                         @db.Uuid
+  codigo              String
+  nombre              String
+  descripcion         String?
+  tipoCentro          TipoCentroCosto
+  imputacionPreferida ImputacionPreferidaCentroCosto
+  unidadBaseFutura    UnidadBaseCentroCosto          @default(NINGUNA)
+  activo              Boolean                        @default(true)
+  createdAt           DateTime                       @default(now())
+  updatedAt           DateTime                       @updatedAt
+  tenant              Tenant                         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  planta              Planta                         @relation(fields: [plantaId], references: [id], onDelete: Cascade)
+  lineas              CentroCostoLinea[]
+  capacidadesPeriodo  CentroCostoCapacidadPeriodo[]
+  tarifasPeriodo      CentroCostoTarifaPeriodo[]
+  maquinasPrincipales Maquina[]                      @relation("MaquinaCentroCostoPrincipal")
+  productoConfigPasos ProductoConfigPaso[]           @relation("ProductoConfigPasoCentroCostoManual")
+  productoPasosExtras ProductoPasoExtra[]            @relation("ProductoPasoExtraCentroCostoManual")
+  egresos             Egreso[]
 
   @@unique([tenantId, codigo])
-  @@index([tenantId, plantaId, areaCostoId])
+  @@index([tenantId, plantaId])
   @@index([tenantId, nombre])
 }
 
-model CentroCostoRecurso {
-  id                      String                             @id @default(uuid()) @db.Uuid
-  tenantId                String                             @db.Uuid
-  centroCostoId           String                             @db.Uuid
-  periodo                 String
-  tipoRecurso             TipoRecursoCentroCosto
-  empleadoId              String?                            @db.Uuid
-  maquinaId               String?                            @db.Uuid
-  nombreRecurso           String?
-  tipoGastoGeneral        TipoGastoGeneralCentroCosto?
-  valorMensual            Decimal?                           @db.Decimal(14, 2)
-  vidaUtilRestanteMeses   Int?
-  valorActual             Decimal?                           @db.Decimal(14, 2)
-  valorFinalVida          Decimal?                           @db.Decimal(14, 2)
-  depreciacionMensualCalc Decimal?                           @db.Decimal(14, 2)
-  descripcion             String?
-  porcentajeAsignacion    Decimal?                           @db.Decimal(5, 2)
-  activo                  Boolean                            @default(true)
-  createdAt               DateTime                           @default(now())
-  updatedAt               DateTime                           @updatedAt
-  tenant                  Tenant                             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  centroCosto             CentroCosto                        @relation(fields: [centroCostoId], references: [id], onDelete: Cascade)
-  empleado                Empleado?                          @relation("CentroCostoRecursoEmpleado", fields: [empleadoId], references: [id], onDelete: SetNull)
-  maquina                 Maquina?                           @relation("CentroCostoRecursoMaquina", fields: [maquinaId], references: [id], onDelete: SetNull)
-  maquinariaPeriodo       CentroCostoRecursoMaquinaPeriodo[]
+/// La planilla del centro de costo: una línea por gasto, por persona o por
+/// activo, toda cargada a mano y sin una sola clave foránea a Empleado o a
+/// Maquina. Reemplaza a CentroCostoRecurso, CentroCostoRecursoMaquinaPeriodo y
+/// CentroCostoComponenteCostoPeriodo, que se retiran en F7.
+///
+/// Ver docs/centros-de-costo-carga-manual-diseno.md
+model CentroCostoLinea {
+  id            String                          @id @default(uuid()) @db.Uuid
+  tenantId      String                          @db.Uuid
+  centroCostoId String                          @db.Uuid
+  periodo       String
+  seccion       SeccionCentroCostoLinea
+  /// Texto libre en las tres secciones: el nombre de la persona, del gasto o
+  /// del activo. Es a propósito que no apunte a ninguna entidad del sistema.
+  nombre        String
+  /// "Tipo de gasto" en los generales, "Tipo de activo fijo" en los activos.
+  categoria     CategoriaComponenteCostoCentro?
 
-  @@index([tenantId, centroCostoId, periodo])
-  @@index([tenantId, tipoRecurso, periodo])
-  @@index([tenantId, empleadoId, periodo])
-  @@index([tenantId, maquinaId, periodo])
-}
+  // Sólo EMPLEADO
+  ocupacion      String?
+  /// Qué parte de las horas productivas del centro le dedica esta persona.
+  /// Se guarda el porcentaje y no las horas porque es como lo piensa el usuario
+  /// ("20% acá, 80% allá") y porque así las horas siguen solas si el centro
+  /// cambia su declaración. Es informativo: no escala el costo de la línea.
+  dedicacionPct  Decimal? @db.Decimal(5, 2)
+  salarioMensual Decimal? @db.Decimal(14, 2)
+  /// Con 6 decimales aunque la UI muestre 2: con 2, cargas de $786,55 sobre un
+  /// sueldo de $1.900 dan 41,3974% que se guardaría como 41,40 y reconstruiría
+  /// $2.686,60 en vez de $2.686,55. Cinco centavos por línea que en la
+  /// migración se leen como un centro que cambió de tarifa.
+  cargasPct      Decimal? @db.Decimal(9, 6)
 
-model CentroCostoRecursoMaquinaPeriodo {
-  id                      String                    @id @default(uuid()) @db.Uuid
-  tenantId                String                    @db.Uuid
-  centroCostoRecursoId    String                    @db.Uuid
-  maquinaId               String?                   @db.Uuid
-  periodo                 String
-  metodoDepreciacion      MetodoDepreciacionMaquina @default(LINEAL)
-  valorCompra             Decimal                   @db.Decimal(14, 2)
-  valorResidual           Decimal                   @db.Decimal(14, 2)
-  vidaUtilMeses           Int
-  potenciaNominalKw       Decimal                   @db.Decimal(10, 4)
-  factorCargaPct          Decimal                   @db.Decimal(5, 2)
-  tarifaEnergiaKwh        Decimal                   @db.Decimal(12, 4)
-  horasProgramadasMes     Decimal                   @db.Decimal(10, 2)
-  disponibilidadPct       Decimal                   @db.Decimal(5, 2)
-  eficienciaPct           Decimal                   @db.Decimal(5, 2)
-  mantenimientoMensual    Decimal                   @db.Decimal(14, 2)
-  segurosMensual          Decimal                   @db.Decimal(14, 2)
-  otrosFijosMensual       Decimal                   @db.Decimal(14, 2)
-  amortizacionMensualCalc Decimal                   @db.Decimal(14, 2)
-  energiaMensualCalc      Decimal                   @db.Decimal(14, 2)
-  costoMensualTotalCalc   Decimal                   @db.Decimal(14, 2)
-  tarifaHoraCalc          Decimal                   @db.Decimal(14, 4)
-  createdAt               DateTime                  @default(now())
-  updatedAt               DateTime                  @updatedAt
-  tenant                  Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  centroCostoRecurso      CentroCostoRecurso        @relation(fields: [centroCostoRecursoId], references: [id], onDelete: Cascade)
-  maquina                 Maquina?                  @relation(fields: [maquinaId], references: [id], onDelete: SetNull)
+  // Sólo ACTIVO_FIJO
+  vidaUtilRestanteMeses Int?
+  valorActual           Decimal? @db.Decimal(14, 2)
+  valorFinalVida        Decimal? @db.Decimal(14, 2)
 
-  @@unique([tenantId, centroCostoRecursoId, periodo])
-  @@index([tenantId, maquinaId, periodo])
-}
-
-model CentroCostoComponenteCostoPeriodo {
-  id             String                         @id @default(uuid()) @db.Uuid
-  tenantId       String                         @db.Uuid
-  centroCostoId  String                         @db.Uuid
-  periodo        String
-  categoria      CategoriaComponenteCostoCentro
-  nombre         String
-  origen         OrigenComponenteCostoCentro    @default(MANUAL)
-  importeMensual Decimal                        @db.Decimal(12, 2)
-  /// A quién corresponde, en las líneas de SUELDOS y CARGAS.
-  ///
-  /// El vínculo ya existía dentro de `detalleJson`, que es como decir que no
-  /// existía: no se puede consultar, indexar ni proteger con FK. Por eso "qué
-  /// me cuesta esta persona" figuraba como imposible mientras el dato estaba
-  /// ahí. Null en los componentes que no son de una persona (energía,
-  /// alquiler). Ver docs/legajos-nomina-diseno.md
-  empleadoId     String?                        @db.Uuid
+  /// Calculado al guardar y persistido, redondeado a 2 decimales, para que la
+  /// suma del centro no dependa de recorrer ramas por sección.
+  importeMensual Decimal     @db.Decimal(14, 2)
+  orden          Int         @default(0)
   notas          String?
-  detalleJson    Json?
-  createdAt      DateTime                       @default(now())
-  updatedAt      DateTime                       @updatedAt
-  tenant         Tenant                         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  centroCosto    CentroCosto                    @relation(fields: [centroCostoId], references: [id], onDelete: Cascade)
-  empleado       Empleado?                      @relation("ComponenteCostoEmpleado", fields: [empleadoId], references: [id], onDelete: SetNull)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  tenant         Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  centroCosto    CentroCosto @relation(fields: [centroCostoId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, centroCostoId, periodo])
-  @@index([tenantId, empleadoId, periodo])
+  @@index([tenantId, periodo, seccion])
 }
 
 model CentroCostoCapacidadPeriodo {
-  id                      String                @id @default(uuid()) @db.Uuid
-  tenantId                String                @db.Uuid
-  centroCostoId           String                @db.Uuid
-  periodo                 String
-  unidadBase              UnidadBaseCentroCosto
-  diasPorMes              Decimal               @db.Decimal(10, 2)
-  horasPorDia             Decimal               @db.Decimal(10, 2)
-  porcentajeNoProductivo  Decimal               @db.Decimal(5, 2)
-  capacidadTeorica        Decimal               @db.Decimal(12, 2)
-  capacidadPractica       Decimal               @db.Decimal(12, 2)
-  overrideManualCapacidad Decimal?              @db.Decimal(12, 2)
-  createdAt               DateTime              @default(now())
-  updatedAt               DateTime              @updatedAt
-  tenant                  Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  centroCosto             CentroCosto           @relation(fields: [centroCostoId], references: [id], onDelete: Cascade)
+  id               String                @id @default(uuid()) @db.Uuid
+  tenantId         String                @db.Uuid
+  centroCostoId    String                @db.Uuid
+  periodo          String
+  unidadBase       UnidadBaseCentroCosto
+  /// El "PNH" del listado: las horas que el centro puede producir en el mes,
+  /// cargadas a mano. Antes se derivaban de días × horas − % no productivo.
+  horasProductivas Decimal               @db.Decimal(12, 2)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  tenant           Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  centroCosto      CentroCosto           @relation(fields: [centroCostoId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, centroCostoId, periodo])
 }
@@ -1425,8 +1324,6 @@ model Maquina {
   perfilesOperativos           MaquinaPerfilOperativo[]
   consumibles                  MaquinaConsumible[]
   componentesDesgaste          MaquinaComponenteDesgaste[]
-  recursosCentroCosto          CentroCostoRecurso[]                 @relation("CentroCostoRecursoMaquina")
-  costosCentroCostoPeriodo     CentroCostoRecursoMaquinaPeriodo[]
   // === Modelo Universal V2 ===
   productoConfigPasosM1        ProductoConfigPaso[]                 @relation("ProductoConfigPasoMaquinaM1")
   productoPasosExtrasM1        ProductoPasoExtra[]                  @relation("ProductoPasoExtraMaquinaM1")

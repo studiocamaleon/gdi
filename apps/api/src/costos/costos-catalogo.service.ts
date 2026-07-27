@@ -3,10 +3,9 @@ import { Planta } from '@prisma/client';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
-import type { AreaCompleta, CentroCompleto } from './costos.types';
+import type { CentroCompleto } from './costos.types';
 import { CostosMapper } from './costos.mapper';
 import { CostosValidacionesService } from './costos-validaciones.service';
-import { UpsertAreaCostoDto } from './dto/upsert-area-costo.dto';
 import { UpsertCentroCostoDto } from './dto/upsert-centro-costo.dto';
 import { UpsertPlantaDto } from './dto/upsert-planta.dto';
 
@@ -76,79 +75,15 @@ export class CostosCatalogoService {
     });
   }
 
-  async findAreas(auth: CurrentAuth) {
-    const areas = await this.prisma.areaCosto.findMany({
-      where: { tenantId: auth.tenantId },
-      include: { planta: true },
-      orderBy: [{ planta: { nombre: 'asc' } }, { nombre: 'asc' }],
-    });
 
-    return areas.map((area) => this.mapper.toAreaResponse(area));
-  }
 
-  async createArea(auth: CurrentAuth, payload: UpsertAreaCostoDto) {
-    await this.validaciones.findPlantaOrThrow(auth, payload.plantaId);
 
-    let area: AreaCompleta;
-
-    try {
-      area = await this.prisma.areaCosto.create({
-        data: {
-          tenantId: auth.tenantId,
-          plantaId: payload.plantaId,
-          codigo: payload.codigo.trim().toUpperCase(),
-          nombre: payload.nombre.trim(),
-          descripcion: payload.descripcion?.trim() || null,
-        },
-        include: { planta: true },
-      });
-    } catch (error) {
-      this.handleWriteError(error, 'area');
-    }
-
-    return this.mapper.toAreaResponse(area);
-  }
-
-  async updateArea(auth: CurrentAuth, id: string, payload: UpsertAreaCostoDto) {
-    await this.validaciones.findPlantaOrThrow(auth, payload.plantaId);
-    await this.validaciones.findAreaOrThrow(auth, id);
-
-    let area: AreaCompleta;
-
-    try {
-      area = await this.prisma.areaCosto.update({
-        where: { id },
-        data: {
-          plantaId: payload.plantaId,
-          codigo: payload.codigo.trim().toUpperCase(),
-          nombre: payload.nombre.trim(),
-          descripcion: payload.descripcion?.trim() || null,
-        },
-        include: { planta: true },
-      });
-    } catch (error) {
-      this.handleWriteError(error, 'area');
-    }
-
-    return this.mapper.toAreaResponse(area);
-  }
-
-  async toggleArea(auth: CurrentAuth, id: string) {
-    const area = await this.validaciones.findAreaOrThrow(auth, id);
-
-    return this.prisma.areaCosto.update({
-      where: { id },
-      data: { activa: !area.activa },
-    });
-  }
 
   async findCentros(auth: CurrentAuth) {
     const centros = await this.prisma.centroCosto.findMany({
       where: { tenantId: auth.tenantId },
       include: {
         planta: true,
-        areaCosto: true,
-        responsableEmpleado: true,
         capacidadesPeriodo: {
           orderBy: [{ periodo: 'desc' }, { createdAt: 'desc' }],
           take: 1,
@@ -174,8 +109,6 @@ export class CostosCatalogoService {
         data: this.mapper.buildCreateCentroData(auth, payload),
         include: {
           planta: true,
-          areaCosto: true,
-          responsableEmpleado: true,
           capacidadesPeriodo: true,
           tarifasPeriodo: true,
         },
@@ -203,8 +136,6 @@ export class CostosCatalogoService {
         data: this.mapper.buildUpdateCentroData(payload),
         include: {
           planta: true,
-          areaCosto: true,
-          responsableEmpleado: true,
           capacidadesPeriodo: true,
           tarifasPeriodo: true,
         },

@@ -1,27 +1,19 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   EstadoTarifaCentroCostoPeriodo,
+  ImputacionPreferidaCentroCosto,
   Prisma,
-  TipoRecursoCentroCosto,
-  UnidadBaseCentroCosto,
 } from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { CostosCatalogoService } from './costos-catalogo.service';
-import { NominaCostosService } from '../empleados/nomina-costos.service';
 import { CostosMapper } from './costos.mapper';
 import { CostosRepartoService } from './costos-reparto.service';
 import { CostosTarifasService } from './costos-tarifas.service';
 import { CostosValidacionesService } from './costos-validaciones.service';
-import { ReplaceCentroComponentesCostoDto } from './dto/replace-centro-componentes-costo.dto';
-import {
-  ReplaceCentroRecursosDto,
-  TipoRecursoCentroCostoDto,
-} from './dto/replace-centro-recursos.dto';
+import { ReplaceCentroLineasDto } from './dto/replace-centro-lineas.dto';
 import { UpsertCentroCapacidadDto } from './dto/upsert-centro-capacidad.dto';
 import { UpsertCentroConfiguracionBaseDto } from './dto/upsert-centro-configuracion-base.dto';
-import { UpsertCentroConfiguracionPeriodoDto } from './dto/upsert-centro-configuracion-periodo.dto';
-import { UpsertCentroRecursosMaquinariaDto } from './dto/upsert-centro-recursos-maquinaria.dto';
 
 @Injectable()
 export class CostosConfiguracionPeriodoService {
@@ -32,18 +24,14 @@ export class CostosConfiguracionPeriodoService {
     private readonly reparto: CostosRepartoService,
     private readonly tarifas: CostosTarifasService,
     private readonly catalogo: CostosCatalogoService,
-    private readonly nominaCostos: NominaCostosService,
   ) {}
 
   async getCentroConfiguracion(auth: CurrentAuth, id: string, periodo: string) {
     const normalizedPeriodo = this.validaciones.normalizePeriodo(periodo);
-    const [centro, empleadosDisponibilidad, repartoPeriodo] = await Promise.all(
-      [
-        this.tarifas.getCentroConfiguracionEntity(auth, id, normalizedPeriodo),
-        this.buildEmpleadosDisponibilidad(auth, normalizedPeriodo, id),
-        this.reparto.computeRepartoPeriodo(auth, normalizedPeriodo),
-      ],
-    );
+    const [centro, repartoPeriodo] = await Promise.all([
+      this.tarifas.getCentroConfiguracionEntity(auth, id, normalizedPeriodo),
+      this.reparto.computeRepartoPeriodo(auth, normalizedPeriodo),
+    ]);
     const tarifaBorrador =
       centro.tarifasPeriodo.find(
         (tarifa) => tarifa.estado === EstadoTarifaCentroCostoPeriodo.BORRADOR,
@@ -58,24 +46,8 @@ export class CostosConfiguracionPeriodoService {
     return {
       periodo: normalizedPeriodo,
       centro: this.mapper.toCentroResponse(centro),
-      recursos: centro.recursos.map((recurso) =>
-        this.mapper.toRecursoResponse(recurso),
-      ),
-      recursosMaquinaria: centro.recursos
-        .filter(
-          (recurso) =>
-            recurso.tipoRecurso === TipoRecursoCentroCosto.MAQUINARIA,
-        )
-        .map((recurso) =>
-          this.mapper.toRecursoMaquinariaResponse(
-            recurso.maquinariaPeriodo[0],
-            recurso,
-          ),
-        )
-        .filter((item) => Boolean(item)),
-      componentesCosto: centro.componentesCostoPeriodo.map((componente) =>
-        this.mapper.toComponenteCostoResponse(componente),
-      ),
+      /** La planilla del período: lo que edita la ficha y lo que costea el motor. */
+      lineas: centro.lineas.map((linea) => this.mapper.toLineaResponse(linea)),
       capacidad: centro.capacidadesPeriodo[0]
         ? this.mapper.toCapacidadResponse(centro.capacidadesPeriodo[0])
         : null,
@@ -94,7 +66,6 @@ export class CostosConfiguracionPeriodoService {
         normalizedPeriodo,
         costoMensualAbsorbidoReparto,
       ),
-      empleadosDisponibilidad,
     };
   }
 
@@ -106,278 +77,132 @@ export class CostosConfiguracionPeriodoService {
     return this.catalogo.updateCentro(auth, id, payload);
   }
 
-  async upsertCentroConfiguracionPeriodo(
-    auth: CurrentAuth,
-    id: string,
-    periodo: string,
-    payload: UpsertCentroConfiguracionPeriodoDto,
-  ) {
+  async getResumenCentros(auth: CurrentAuth, periodo: string) {
     const normalizedPeriodo = this.validaciones.normalizePeriodo(periodo);
-    await this.validaciones.findCentroOrThrow(auth, id);
-    await this.validaciones.validateCentroReferences(auth, payload.centro);
-    await this.validaciones.validateRecursos(
-      auth,
-      id,
-      normalizedPeriodo,
-      payload.recursos.recursos,
-    );
-
-    await this.prisma.$transaction(async (tx) => {
-      const centro = await tx.centroCosto.update({
-        where: { id },
-        data: this.mapper.buildUpdateCentroData(payload.centro),
-      });
-
-      const recursos = await this.replaceCentroRecursosInTx(
-        tx,
-        auth,
-        id,
-        normalizedPeriodo,
-        payload.recursos,
-      );
-      await this.upsertCentroRecursosMaquinariaInTx(
-        tx,
-        auth,
-        normalizedPeriodo,
-        recursos,
-        payload.recursosMaquinaria,
-      );
-      await this.replaceCentroComponentesCostoInTx(
-        tx,
-        auth,
-        id,
-        normalizedPeriodo,
-        payload.componentesCosto,
-      );
-      // Después de los componentes, no antes: `replaceCentroComponentesCosto`
-      // preserva los de sueldo pero la dotación puede haber cambiado en el
-      // mismo guardado, así que hay que rehacerlos con la nueva.
-      await this.nominaCostos.sincronizarCentroPeriodo(
-        auth.tenantId,
-        id,
-        normalizedPeriodo,
-        tx,
-      );
-
-      const recursosConMaquinaria = await tx.centroCostoRecurso.findMany({
-        where: {
-          tenantId: auth.tenantId,
-          centroCostoId: id,
-          periodo: normalizedPeriodo,
-          activo: true,
-        },
+    const [centros, reparto] = await Promise.all([
+      this.prisma.centroCosto.findMany({
+        where: { tenantId: auth.tenantId, activo: true },
         include: {
-          maquinariaPeriodo: {
+          lineas: { where: { periodo: normalizedPeriodo } },
+          capacidadesPeriodo: {
             where: { periodo: normalizedPeriodo },
-            orderBy: [{ createdAt: 'desc' }],
             take: 1,
           },
         },
-      });
-      const capacidad = this.computeCapacidad(
-        payload.capacidad,
-        centro.unidadBaseFutura,
-        recursosConMaquinaria,
-      );
+        orderBy: [{ nombre: 'asc' }],
+      }),
+      this.reparto.computeRepartoPeriodo(auth, normalizedPeriodo),
+    ]);
 
-      await tx.centroCostoCapacidadPeriodo.upsert({
-        where: {
-          tenantId_centroCostoId_periodo: {
-            tenantId: auth.tenantId,
-            centroCostoId: id,
-            periodo: normalizedPeriodo,
-          },
-        },
-        create: {
-          tenantId: auth.tenantId,
-          centroCostoId: id,
-          periodo: normalizedPeriodo,
-          unidadBase: centro.unidadBaseFutura,
-          diasPorMes: capacidad.diasPorMes,
-          horasPorDia: capacidad.horasPorDia,
-          porcentajeNoProductivo: capacidad.porcentajeNoProductivo,
-          capacidadTeorica: capacidad.capacidadTeorica,
-          capacidadPractica: capacidad.capacidadPractica,
-          overrideManualCapacidad: capacidad.overrideManualCapacidad,
-        },
-        update: {
-          unidadBase: centro.unidadBaseFutura,
-          diasPorMes: capacidad.diasPorMes,
-          horasPorDia: capacidad.horasPorDia,
-          porcentajeNoProductivo: capacidad.porcentajeNoProductivo,
-          capacidadTeorica: capacidad.capacidadTeorica,
-          capacidadPractica: capacidad.capacidadPractica,
-          overrideManualCapacidad: capacidad.overrideManualCapacidad,
-        },
-      });
+    const filas = centros.map((centro) => {
+      const gastos = centro.lineas.reduce(
+        (acc, linea) => acc.plus(linea.importeMensual),
+        new Prisma.Decimal(0),
+      );
+      const absorbido =
+        reparto.absorbidoByCentroId.get(centro.id) ?? new Prisma.Decimal(0);
+      const prorrateado =
+        reparto.distribuidoByCentroId.get(centro.id) ?? new Prisma.Decimal(0);
+      // El gasto total NO le resta lo prorrateado: "Prorrateado" es informativo
+      // —cuánto mandó a los productivos— y el total sigue siendo lo que el
+      // centro cuesta. Para un centro de estructura las dos columnas coinciden.
+      const gastoTotal = gastos.plus(absorbido);
+      // Un centro que reparte su costo entero no tiene valor hora: lo que cuesta
+      // ya se cobra dentro de los productivos que lo absorbieron. Mostrarle una
+      // tarifa invitaría a cobrarlo dos veces.
+      const esFuenteDeReparto =
+        centro.imputacionPreferida === ImputacionPreferidaCentroCosto.REPARTO;
+      const horas = centro.capacidadesPeriodo[0]?.horasProductivas ?? null;
+      const tieneHoras = !esFuenteDeReparto && horas != null && horas.gt(0);
+
+      return {
+        id: centro.id,
+        codigo: centro.codigo,
+        nombre: centro.nombre,
+        tipoCentro: this.mapper.fromPrismaTipoCentro(centro.tipoCentro),
+        unidadBase: this.mapper.fromPrismaUnidadBase(centro.unidadBaseFutura),
+        horasProductivas: tieneHoras
+          ? this.mapper.decimalToNumber(horas)
+          : null,
+        gastos: this.mapper.decimalToNumber(gastos),
+        absorbido: this.mapper.decimalToNumber(absorbido),
+        prorrateado: this.mapper.decimalToNumber(prorrateado),
+        gastoTotal: this.mapper.decimalToNumber(gastoTotal),
+        valorHora: tieneHoras
+          ? this.mapper.decimalToNumber(gastoTotal.div(horas))
+          : null,
+        lineas: centro.lineas.length,
+      };
     });
 
-    return this.getCentroConfiguracion(auth, id, normalizedPeriodo);
+    return {
+      periodo: normalizedPeriodo,
+      centros: filas,
+      totales: {
+        gastos: filas.reduce((acc, fila) => acc + fila.gastos, 0),
+        absorbido: filas.reduce((acc, fila) => acc + fila.absorbido, 0),
+        prorrateado: filas.reduce((acc, fila) => acc + fila.prorrateado, 0),
+        gastoTotal: filas.reduce((acc, fila) => acc + fila.gastoTotal, 0),
+      },
+    };
   }
 
-  async replaceCentroRecursos(
+  /**
+   * Reemplaza la planilla entera del período. Es una sola operación y no un
+   * CRUD fila por fila porque eso es lo que hace el usuario: abre el centro,
+   * toca lo que sea de las tres secciones y aprieta Guardar una vez.
+   *
+   * El importe de cada línea se calcula acá, nunca se toma del cliente: si el
+   * total viajara, la planilla podría mostrar una cosa y costear otra.
+   */
+  async replaceCentroLineas(
     auth: CurrentAuth,
     id: string,
     periodo: string,
-    payload: ReplaceCentroRecursosDto,
+    payload: ReplaceCentroLineasDto,
   ) {
     const normalizedPeriodo = this.validaciones.normalizePeriodo(periodo);
     await this.validaciones.findCentroOrThrow(auth, id);
-    await this.validaciones.validateRecursos(
-      auth,
-      id,
-      normalizedPeriodo,
-      payload.recursos,
-    );
+    this.validaciones.validateLineas(payload.lineas);
 
-    const recursos = await this.prisma.$transaction(async (tx) => {
-      const guardados = await this.replaceCentroRecursosInTx(
-        tx,
+    const data = payload.lineas.map((linea, index) =>
+      this.mapper.buildLineaData(
         auth,
         id,
         normalizedPeriodo,
-        payload,
-      );
-      // Cambió quién trabaja acá o con qué dedicación: los componentes de
-      // sueldo se rehacen desde el legajo. Va DENTRO de la transacción para que
-      // no quede un centro con gente nueva y los sueldos de la dotación vieja.
-      await this.nominaCostos.sincronizarCentroPeriodo(
-        auth.tenantId,
-        id,
-        normalizedPeriodo,
-        tx,
-      );
-      return guardados;
-    });
-
-    return recursos.map((recurso) => this.mapper.toRecursoResponse(recurso));
-  }
-
-  async getCentroRecursosMaquinaria(
-    auth: CurrentAuth,
-    id: string,
-    periodo: string,
-  ) {
-    const normalizedPeriodo = this.validaciones.normalizePeriodo(periodo);
-    await this.validaciones.findCentroOrThrow(auth, id);
-
-    const recursos = await this.prisma.centroCostoRecurso.findMany({
-      where: {
-        tenantId: auth.tenantId,
-        centroCostoId: id,
-        periodo: normalizedPeriodo,
-        tipoRecurso: TipoRecursoCentroCosto.MAQUINARIA,
-      },
-      include: {
-        maquina: true,
-        maquinariaPeriodo: {
-          where: { periodo: normalizedPeriodo },
-          orderBy: [{ createdAt: 'desc' }],
-          take: 1,
-        },
-      },
-      orderBy: [{ createdAt: 'asc' }],
-    });
-
-    return recursos
-      .map((recurso) =>
-        this.mapper.toRecursoMaquinariaResponse(
-          recurso.maquinariaPeriodo[0],
-          recurso,
-        ),
-      )
-      .filter((item) => Boolean(item));
-  }
-
-  async upsertCentroRecursosMaquinaria(
-    auth: CurrentAuth,
-    id: string,
-    periodo: string,
-    payload: UpsertCentroRecursosMaquinariaDto,
-  ) {
-    const normalizedPeriodo = this.validaciones.normalizePeriodo(periodo);
-    await this.validaciones.findCentroOrThrow(auth, id);
-
-    const recursos = await this.prisma.centroCostoRecurso.findMany({
-      where: {
-        tenantId: auth.tenantId,
-        centroCostoId: id,
-        periodo: normalizedPeriodo,
-        tipoRecurso: TipoRecursoCentroCosto.MAQUINARIA,
-      },
-      include: {
-        maquina: true,
-      },
-    });
-    const recursoById = new Map(recursos.map((item) => [item.id, item]));
-    const normalizeMachineResourceName = (value?: string | null) =>
-      value?.trim().toLocaleLowerCase() ?? '';
-    const recursoByMaquinaId = new Map(
-      recursos
-        .filter((item) => item.maquinaId)
-        .map((item) => [item.maquinaId as string, item]),
-    );
-    const recursoByNombre = new Map(
-      recursos
-        .filter((item) => !item.maquinaId && item.nombreRecurso?.trim())
-        .map((item) => [normalizeMachineResourceName(item.nombreRecurso), item]),
-    );
-
-    for (const item of payload.recursos) {
-      const recurso =
-        recursoById.get(item.centroCostoRecursoId) ??
-        (item.maquinaId ? recursoByMaquinaId.get(item.maquinaId) : undefined) ??
-        recursoByNombre.get(normalizeMachineResourceName(item.nombreRecurso));
-      if (!recurso) {
-        throw new BadRequestException(
-          'Uno de los recursos de maquinaria no pertenece al centro/período seleccionado.',
-        );
-      }
-
-      if (!recurso.maquinaId && !recurso.nombreRecurso?.trim()) {
-        throw new BadRequestException(
-          'El recurso de maquinaria debe tener un nombre antes de cargar costeo.',
-        );
-      }
-    }
-
-    await this.prisma.$transaction((tx) =>
-      this.upsertCentroRecursosMaquinariaInTx(
-        tx,
-        auth,
-        normalizedPeriodo,
-        recursos,
-        payload,
+        linea,
+        index,
       ),
     );
 
-    return this.getCentroRecursosMaquinaria(auth, id, normalizedPeriodo);
-  }
-
-  async replaceCentroComponentesCosto(
-    auth: CurrentAuth,
-    id: string,
-    periodo: string,
-    payload: ReplaceCentroComponentesCostoDto,
-  ) {
-    const normalizedPeriodo = this.validaciones.normalizePeriodo(periodo);
-    await this.validaciones.findCentroOrThrow(auth, id);
-
-    const componentes = await this.prisma.$transaction(async (tx) => {
-      return this.replaceCentroComponentesCostoInTx(
-        tx,
-        auth,
-        id,
-        normalizedPeriodo,
-        payload,
-      );
+    const lineas = await this.prisma.$transaction(async (tx) => {
+      await tx.centroCostoLinea.deleteMany({
+        where: {
+          tenantId: auth.tenantId,
+          centroCostoId: id,
+          periodo: normalizedPeriodo,
+        },
+      });
+      if (data.length > 0) {
+        await tx.centroCostoLinea.createMany({ data });
+      }
+      return tx.centroCostoLinea.findMany({
+        where: {
+          tenantId: auth.tenantId,
+          centroCostoId: id,
+          periodo: normalizedPeriodo,
+        },
+        orderBy: [{ orden: 'asc' }],
+      });
     });
 
-    return componentes.map((componente) =>
-      this.mapper.toComponenteCostoResponse(componente),
-    );
+    return lineas.map((linea) => this.mapper.toLineaResponse(linea));
   }
 
+  /**
+   * Las horas productivas del período. Se cargan a mano: la fórmula de
+   * días × horas − % no productivo se retiró con el modelo derivado.
+   */
   async upsertCentroCapacidad(
     auth: CurrentAuth,
     id: string,
@@ -386,26 +211,7 @@ export class CostosConfiguracionPeriodoService {
   ) {
     const normalizedPeriodo = this.validaciones.normalizePeriodo(periodo);
     const centro = await this.validaciones.findCentroOrThrow(auth, id);
-    const recursos = await this.prisma.centroCostoRecurso.findMany({
-      where: {
-        tenantId: auth.tenantId,
-        centroCostoId: id,
-        periodo: normalizedPeriodo,
-        activo: true,
-      },
-      include: {
-        maquinariaPeriodo: {
-          where: { periodo: normalizedPeriodo },
-          orderBy: [{ createdAt: 'desc' }],
-          take: 1,
-        },
-      },
-    });
-    const capacidad = this.computeCapacidad(
-      payload,
-      centro.unidadBaseFutura,
-      recursos,
-    );
+    const horasProductivas = new Prisma.Decimal(payload.horasProductivas ?? 0);
 
     const result = await this.prisma.centroCostoCapacidadPeriodo.upsert({
       where: {
@@ -420,519 +226,15 @@ export class CostosConfiguracionPeriodoService {
         centroCostoId: id,
         periodo: normalizedPeriodo,
         unidadBase: centro.unidadBaseFutura,
-        diasPorMes: capacidad.diasPorMes,
-        horasPorDia: capacidad.horasPorDia,
-        porcentajeNoProductivo: capacidad.porcentajeNoProductivo,
-        capacidadTeorica: capacidad.capacidadTeorica,
-        capacidadPractica: capacidad.capacidadPractica,
-        overrideManualCapacidad: capacidad.overrideManualCapacidad,
+        horasProductivas,
       },
       update: {
         unidadBase: centro.unidadBaseFutura,
-        diasPorMes: capacidad.diasPorMes,
-        horasPorDia: capacidad.horasPorDia,
-        porcentajeNoProductivo: capacidad.porcentajeNoProductivo,
-        capacidadTeorica: capacidad.capacidadTeorica,
-        capacidadPractica: capacidad.capacidadPractica,
-        overrideManualCapacidad: capacidad.overrideManualCapacidad,
+        horasProductivas,
       },
     });
 
     return this.mapper.toCapacidadResponse(result);
   }
 
-  private async replaceCentroRecursosInTx(
-    tx: Prisma.TransactionClient,
-    auth: CurrentAuth,
-    id: string,
-    periodo: string,
-    payload: ReplaceCentroRecursosDto,
-  ) {
-    await tx.centroCostoRecurso.deleteMany({
-      where: {
-        tenantId: auth.tenantId,
-        centroCostoId: id,
-        periodo,
-      },
-    });
-
-    if (payload.recursos.length > 0) {
-      await tx.centroCostoRecurso.createMany({
-        data: payload.recursos.map((recurso) => ({
-          tenantId: auth.tenantId,
-          centroCostoId: id,
-          periodo,
-          tipoRecurso: this.mapper.toPrismaTipoRecurso(recurso.tipoRecurso),
-          empleadoId:
-            recurso.tipoRecurso === TipoRecursoCentroCostoDto.empleado
-              ? (recurso.empleadoId ?? null)
-              : null,
-          maquinaId:
-            recurso.tipoRecurso === TipoRecursoCentroCostoDto.maquinaria
-              ? (recurso.maquinaId ?? null)
-              : null,
-          nombreRecurso:
-            recurso.tipoRecurso === TipoRecursoCentroCostoDto.maquinaria ||
-            recurso.tipoRecurso === TipoRecursoCentroCostoDto.gasto_general ||
-            recurso.tipoRecurso === TipoRecursoCentroCostoDto.activo_fijo
-              ? recurso.nombreRecurso?.trim() || null
-              : null,
-          tipoGastoGeneral:
-            recurso.tipoRecurso === TipoRecursoCentroCostoDto.gasto_general
-              ? this.mapper.toPrismaTipoGastoGeneral(recurso.tipoGastoGeneral!)
-              : null,
-          valorMensual:
-            recurso.tipoRecurso === TipoRecursoCentroCostoDto.gasto_general
-              ? new Prisma.Decimal(recurso.valorMensual!)
-              : null,
-          vidaUtilRestanteMeses:
-            recurso.tipoRecurso === TipoRecursoCentroCostoDto.activo_fijo
-              ? recurso.vidaUtilRestanteMeses!
-              : null,
-          valorActual:
-            recurso.tipoRecurso === TipoRecursoCentroCostoDto.activo_fijo
-              ? new Prisma.Decimal(recurso.valorActual!)
-              : null,
-          valorFinalVida:
-            recurso.tipoRecurso === TipoRecursoCentroCostoDto.activo_fijo
-              ? new Prisma.Decimal(recurso.valorFinalVida!)
-              : null,
-          depreciacionMensualCalc:
-            recurso.tipoRecurso === TipoRecursoCentroCostoDto.activo_fijo
-              ? this.computeDepreciacionMensual(
-                  recurso.valorActual!,
-                  recurso.valorFinalVida!,
-                  recurso.vidaUtilRestanteMeses!,
-                )
-              : null,
-          descripcion: recurso.descripcion?.trim() || null,
-          porcentajeAsignacion:
-            recurso.tipoRecurso === TipoRecursoCentroCostoDto.empleado &&
-            recurso.porcentajeAsignacion !== undefined
-              ? new Prisma.Decimal(recurso.porcentajeAsignacion)
-              : null,
-          activo: recurso.activo,
-        })),
-      });
-    }
-
-    return tx.centroCostoRecurso.findMany({
-      where: {
-        tenantId: auth.tenantId,
-        centroCostoId: id,
-        periodo,
-      },
-      include: {
-        empleado: true,
-        maquina: true,
-        maquinariaPeriodo: true,
-      },
-      orderBy: [{ createdAt: 'asc' }],
-    });
-  }
-
-  private async upsertCentroRecursosMaquinariaInTx(
-    tx: Prisma.TransactionClient,
-    auth: CurrentAuth,
-    periodo: string,
-    recursos: Array<
-      Prisma.CentroCostoRecursoGetPayload<{
-        include: { maquina: true };
-      }>
-    >,
-    payload: UpsertCentroRecursosMaquinariaDto,
-  ) {
-    const recursosMaquinaria = recursos.filter(
-      (recurso) => recurso.tipoRecurso === TipoRecursoCentroCosto.MAQUINARIA,
-    );
-    const recursoById = new Map(
-      recursosMaquinaria.map((item) => [item.id, item]),
-    );
-    const recursoByMaquinaId = new Map(
-      recursosMaquinaria
-        .filter((item) => item.maquinaId)
-        .map((item) => [item.maquinaId as string, item]),
-    );
-    const normalizeMachineResourceName = (value?: string | null) =>
-      value?.trim().toLocaleLowerCase() ?? '';
-    const recursoByNombre = new Map(
-      recursosMaquinaria
-        .filter((item) => !item.maquinaId && item.nombreRecurso?.trim())
-        .map((item) => [normalizeMachineResourceName(item.nombreRecurso), item]),
-    );
-    const findRecursoMaquinaria = (
-      item: UpsertCentroRecursosMaquinariaDto['recursos'][number],
-    ) =>
-      recursoById.get(item.centroCostoRecursoId) ??
-      (item.maquinaId ? recursoByMaquinaId.get(item.maquinaId) : undefined) ??
-      recursoByNombre.get(normalizeMachineResourceName(item.nombreRecurso));
-    const payloadResourceIds: string[] = [];
-
-    for (const item of payload.recursos) {
-      const recurso = findRecursoMaquinaria(item);
-      if (!recurso) {
-        throw new BadRequestException(
-          'Uno de los recursos de maquinaria no pertenece al centro/período seleccionado.',
-        );
-      }
-      payloadResourceIds.push(recurso.id);
-    }
-
-    await tx.centroCostoRecursoMaquinaPeriodo.deleteMany({
-      where: {
-        tenantId: auth.tenantId,
-        periodo,
-        centroCostoRecursoId: {
-          in: Array.from(recursoById.keys()),
-          ...(payloadResourceIds.length > 0
-            ? { notIn: payloadResourceIds }
-            : {}),
-        },
-      },
-    });
-
-    for (const item of payload.recursos) {
-      const recurso = findRecursoMaquinaria(item);
-      if (!recurso) continue;
-      const calculado = this.computeMaquinariaCosteo(item);
-
-      await tx.centroCostoRecursoMaquinaPeriodo.upsert({
-        where: {
-          tenantId_centroCostoRecursoId_periodo: {
-            tenantId: auth.tenantId,
-            centroCostoRecursoId: recurso.id,
-            periodo,
-          },
-        },
-        create: {
-          tenantId: auth.tenantId,
-          centroCostoRecursoId: recurso.id,
-          maquinaId: recurso.maquinaId ?? null,
-          periodo,
-          metodoDepreciacion: this.mapper.toPrismaMetodoDepreciacionMaquina(
-            item.metodoDepreciacion,
-          ),
-          valorCompra: calculado.valorCompra,
-          valorResidual: calculado.valorResidual,
-          vidaUtilMeses: calculado.vidaUtilMeses,
-          potenciaNominalKw: calculado.potenciaNominalKw,
-          factorCargaPct: calculado.factorCargaPct,
-          tarifaEnergiaKwh: calculado.tarifaEnergiaKwh,
-          horasProgramadasMes: calculado.horasProgramadasMes,
-          disponibilidadPct: calculado.disponibilidadPct,
-          eficienciaPct: calculado.eficienciaPct,
-          mantenimientoMensual: calculado.mantenimientoMensual,
-          segurosMensual: calculado.segurosMensual,
-          otrosFijosMensual: calculado.otrosFijosMensual,
-          amortizacionMensualCalc: calculado.amortizacionMensual,
-          energiaMensualCalc: calculado.energiaMensual,
-          costoMensualTotalCalc: calculado.costoMensualTotal,
-          tarifaHoraCalc: calculado.tarifaHora,
-        },
-        update: {
-          maquinaId: recurso.maquinaId ?? null,
-          metodoDepreciacion: this.mapper.toPrismaMetodoDepreciacionMaquina(
-            item.metodoDepreciacion,
-          ),
-          valorCompra: calculado.valorCompra,
-          valorResidual: calculado.valorResidual,
-          vidaUtilMeses: calculado.vidaUtilMeses,
-          potenciaNominalKw: calculado.potenciaNominalKw,
-          factorCargaPct: calculado.factorCargaPct,
-          tarifaEnergiaKwh: calculado.tarifaEnergiaKwh,
-          horasProgramadasMes: calculado.horasProgramadasMes,
-          disponibilidadPct: calculado.disponibilidadPct,
-          eficienciaPct: calculado.eficienciaPct,
-          mantenimientoMensual: calculado.mantenimientoMensual,
-          segurosMensual: calculado.segurosMensual,
-          otrosFijosMensual: calculado.otrosFijosMensual,
-          amortizacionMensualCalc: calculado.amortizacionMensual,
-          energiaMensualCalc: calculado.energiaMensual,
-          costoMensualTotalCalc: calculado.costoMensualTotal,
-          tarifaHoraCalc: calculado.tarifaHora,
-        },
-      });
-    }
-  }
-
-  private async replaceCentroComponentesCostoInTx(
-    tx: Prisma.TransactionClient,
-    auth: CurrentAuth,
-    id: string,
-    periodo: string,
-    payload: ReplaceCentroComponentesCostoDto,
-  ) {
-    // Los componentes de sueldo de una PERSONA no entran acá: los deriva el
-    // legajo (NominaCostosService). Si este método los borrara y reescribiera
-    // con lo que mandó el navegador, volveríamos al problema original —el mismo
-    // sueldo tipeado distinto en cada centro—. Se preservan y se ignora
-    // cualquier intento de mandarlos desde afuera.
-    await tx.centroCostoComponenteCostoPeriodo.deleteMany({
-      where: {
-        tenantId: auth.tenantId,
-        centroCostoId: id,
-        periodo,
-        empleadoId: null,
-      },
-    });
-
-    const componentesPropios = payload.componentes.filter(
-      (componente) =>
-        !(
-          componente.detalle &&
-          typeof componente.detalle === 'object' &&
-          'empleadoId' in componente.detalle
-        ),
-    );
-
-    if (componentesPropios.length > 0) {
-      await tx.centroCostoComponenteCostoPeriodo.createMany({
-        data: componentesPropios.map((componente) => ({
-          tenantId: auth.tenantId,
-          centroCostoId: id,
-          periodo,
-          categoria: this.mapper.toPrismaCategoriaComponente(
-            componente.categoria,
-          ),
-          nombre: componente.nombre.trim(),
-          origen: this.mapper.toPrismaOrigenComponente(componente.origen),
-          importeMensual: new Prisma.Decimal(componente.importeMensual),
-          notas: componente.notas?.trim() || null,
-          detalleJson: componente.detalle
-            ? (componente.detalle as Prisma.InputJsonValue)
-            : Prisma.JsonNull,
-        })),
-      });
-    }
-
-    return tx.centroCostoComponenteCostoPeriodo.findMany({
-      where: {
-        tenantId: auth.tenantId,
-        centroCostoId: id,
-        periodo,
-      },
-      orderBy: [{ createdAt: 'asc' }],
-    });
-  }
-
-  private async buildEmpleadosDisponibilidad(
-    auth: CurrentAuth,
-    periodo: string,
-    centroCostoId: string,
-  ) {
-    const [empleados, asignaciones] = await Promise.all([
-      this.prisma.empleado.findMany({
-        where: { tenantId: auth.tenantId },
-        orderBy: { nombreCompleto: 'asc' },
-        select: {
-          id: true,
-          nombreCompleto: true,
-        },
-      }),
-      this.prisma.centroCostoRecurso.findMany({
-        where: {
-          tenantId: auth.tenantId,
-          periodo,
-          tipoRecurso: TipoRecursoCentroCosto.EMPLEADO,
-          activo: true,
-          empleadoId: { not: null },
-        },
-        include: {
-          centroCosto: {
-            select: {
-              id: true,
-              codigo: true,
-              nombre: true,
-            },
-          },
-        },
-      }),
-    ]);
-
-    const groupedAssignments = new Map<
-      string,
-      Array<{
-        centroCostoId: string;
-        centroCodigo: string;
-        centroNombre: string;
-        porcentajeAsignacion: number;
-      }>
-    >();
-
-    for (const asignacion of asignaciones) {
-      if (!asignacion.empleadoId) {
-        continue;
-      }
-
-      const currentAssignments =
-        groupedAssignments.get(asignacion.empleadoId) ?? [];
-      currentAssignments.push({
-        centroCostoId: asignacion.centroCostoId,
-        centroCodigo: asignacion.centroCosto.codigo,
-        centroNombre: asignacion.centroCosto.nombre,
-        porcentajeAsignacion: Number(
-          asignacion.porcentajeAsignacion?.toFixed(2) ?? 0,
-        ),
-      });
-      groupedAssignments.set(asignacion.empleadoId, currentAssignments);
-    }
-
-    return empleados.map((empleado) => {
-      const asignacionesEmpleado = groupedAssignments.get(empleado.id) ?? [];
-      const asignadoEnEsteCentro = asignacionesEmpleado
-        .filter((item) => item.centroCostoId === centroCostoId)
-        .reduce((total, item) => total + item.porcentajeAsignacion, 0);
-      const asignacionesOtrosCentros = asignacionesEmpleado.filter(
-        (item) => item.centroCostoId !== centroCostoId,
-      );
-      const porcentajeAsignadoEnOtrosCentros = asignacionesOtrosCentros.reduce(
-        (total, item) => total + item.porcentajeAsignacion,
-        0,
-      );
-
-      return {
-        empleadoId: empleado.id,
-        empleadoNombre: empleado.nombreCompleto,
-        porcentajeAsignadoEnEsteCentro: Number(asignadoEnEsteCentro.toFixed(2)),
-        porcentajeAsignadoEnOtrosCentros: Number(
-          porcentajeAsignadoEnOtrosCentros.toFixed(2),
-        ),
-        porcentajeDisponible: Number(
-          Math.max(0, 100 - porcentajeAsignadoEnOtrosCentros).toFixed(2),
-        ),
-        asignacionesOtrosCentros,
-      };
-    });
-  }
-
-  private computeCapacidad(
-    payload: UpsertCentroCapacidadDto,
-    unidadBase: UnidadBaseCentroCosto,
-    recursos: Array<
-      Prisma.CentroCostoRecursoGetPayload<{
-        include: { maquinariaPeriodo: true };
-      }>
-    >,
-  ) {
-    const diasPorMes = new Prisma.Decimal(payload.diasPorMes);
-    const horasPorDia = new Prisma.Decimal(payload.horasPorDia);
-    const horasBaseMes = diasPorMes.mul(horasPorDia);
-    const capacidadHoraHombre = recursos
-      .filter(
-        (recurso) => recurso.tipoRecurso === TipoRecursoCentroCosto.EMPLEADO,
-      )
-      .reduce((acc, recurso) => {
-        const porcentaje =
-          recurso.porcentajeAsignacion ?? new Prisma.Decimal(0);
-        return acc.plus(
-          horasBaseMes.mul(porcentaje).div(new Prisma.Decimal(100)),
-        );
-      }, new Prisma.Decimal(0));
-    // Capacidad teórica = techo del centro. Para HORA_HOMBRE escala con la
-    // dotación (suma de horas-hombre asignadas); para máquina/otros es el turno
-    // base (días × horas).
-    const capacidadTeorica =
-      unidadBase === UnidadBaseCentroCosto.HORA_HOMBRE
-        ? capacidadHoraHombre
-        : horasBaseMes;
-    // % de tiempo no productivo → factor productivo aplicado a la teórica.
-    let porcentajeNoProductivo = new Prisma.Decimal(
-      payload.porcentajeNoProductivo ?? 0,
-    );
-    if (porcentajeNoProductivo.lt(0)) {
-      porcentajeNoProductivo = new Prisma.Decimal(0);
-    } else if (porcentajeNoProductivo.gt(100)) {
-      porcentajeNoProductivo = new Prisma.Decimal(100);
-    }
-    const factorProductivo = new Prisma.Decimal(100)
-      .minus(porcentajeNoProductivo)
-      .div(new Prisma.Decimal(100));
-    const capacidadAutomatica = capacidadTeorica.mul(factorProductivo);
-    const overrideManualCapacidad =
-      payload.overrideManualCapacidad === undefined
-        ? null
-        : new Prisma.Decimal(payload.overrideManualCapacidad);
-    const capacidadPractica = overrideManualCapacidad ?? capacidadAutomatica;
-
-    return {
-      diasPorMes,
-      horasPorDia,
-      porcentajeNoProductivo,
-      capacidadTeorica,
-      capacidadPractica,
-      overrideManualCapacidad,
-    };
-  }
-
-  private computeDepreciacionMensual(
-    valorActual: number,
-    valorFinalVida: number,
-    vidaUtilRestanteMeses: number,
-  ) {
-    const depreciable = Math.max(0, valorActual - valorFinalVida);
-    return new Prisma.Decimal(
-      (depreciable / Math.max(1, vidaUtilRestanteMeses)).toFixed(2),
-    );
-  }
-
-  private computeMaquinariaCosteo(
-    item: UpsertCentroRecursosMaquinariaDto['recursos'][number],
-  ) {
-    const valorCompra = new Prisma.Decimal(item.valorCompra);
-    const valorResidual = new Prisma.Decimal(item.valorResidual);
-    const vidaUtilMeses = Math.max(1, Math.round(item.vidaUtilMeses));
-    const potenciaNominalKw = new Prisma.Decimal(item.potenciaNominalKw ?? 0);
-    const factorCargaPct = new Prisma.Decimal(item.factorCargaPct ?? 100);
-    const tarifaEnergiaKwh = new Prisma.Decimal(item.tarifaEnergiaKwh ?? 0);
-    const horasProgramadasMes = new Prisma.Decimal(
-      item.horasProgramadasMes ?? 160,
-    );
-    const disponibilidadPct = new Prisma.Decimal(item.disponibilidadPct ?? 85);
-    const eficienciaPct = new Prisma.Decimal(item.eficienciaPct ?? 85);
-    const mantenimientoMensual = new Prisma.Decimal(item.mantenimientoMensual);
-    const segurosMensual = new Prisma.Decimal(item.segurosMensual);
-    const otrosFijosMensual = new Prisma.Decimal(item.otrosFijosMensual);
-
-    const rawBaseDepreciable = valorCompra.minus(valorResidual);
-    const baseDepreciable = rawBaseDepreciable.gt(0)
-      ? rawBaseDepreciable
-      : new Prisma.Decimal(0);
-    const amortizacionMensual = baseDepreciable.div(
-      new Prisma.Decimal(vidaUtilMeses),
-    );
-    const horasProductivas = horasProgramadasMes
-      .mul(disponibilidadPct.div(new Prisma.Decimal(100)))
-      .mul(eficienciaPct.div(new Prisma.Decimal(100)));
-    const energiaMensual = potenciaNominalKw
-      .mul(factorCargaPct.div(new Prisma.Decimal(100)))
-      .mul(horasProductivas)
-      .mul(tarifaEnergiaKwh);
-    const costoMensualTotal = amortizacionMensual
-      .plus(energiaMensual)
-      .plus(mantenimientoMensual)
-      .plus(segurosMensual)
-      .plus(otrosFijosMensual);
-    const tarifaHora = horasProductivas.gt(0)
-      ? costoMensualTotal.div(horasProductivas)
-      : new Prisma.Decimal(0);
-
-    return {
-      valorCompra,
-      valorResidual,
-      vidaUtilMeses,
-      potenciaNominalKw,
-      factorCargaPct,
-      tarifaEnergiaKwh,
-      horasProgramadasMes,
-      disponibilidadPct,
-      eficienciaPct,
-      mantenimientoMensual,
-      segurosMensual,
-      otrosFijosMensual,
-      amortizacionMensual,
-      energiaMensual,
-      costoMensualTotal,
-      tarifaHora,
-    };
-  }
 }

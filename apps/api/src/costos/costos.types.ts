@@ -1,13 +1,9 @@
-import { AreaCosto, Planta, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-
-export type AreaCompleta = AreaCosto & { planta: Planta };
 
 export type CentroCompleto = Prisma.CentroCostoGetPayload<{
   include: {
     planta: true;
-    areaCosto: true;
-    responsableEmpleado: true;
     capacidadesPeriodo: true;
     tarifasPeriodo: true;
   };
@@ -16,16 +12,7 @@ export type CentroCompleto = Prisma.CentroCostoGetPayload<{
 export type CentroConfiguracionCompleta = Prisma.CentroCostoGetPayload<{
   include: {
     planta: true;
-    areaCosto: true;
-    responsableEmpleado: true;
-    recursos: {
-      include: {
-        empleado: true;
-        maquina: true;
-        maquinariaPeriodo: true;
-      };
-    };
-    componentesCostoPeriodo: true;
+    lineas: true;
     capacidadesPeriodo: true;
     tarifasPeriodo: true;
   };
@@ -55,6 +42,12 @@ export type RepartoAbsorbidoItem = {
 export type RepartoPeriodo = {
   absorbidoByCentroId: Map<string, Prisma.Decimal>;
   desgloseByCentroId: Map<string, RepartoAbsorbidoItem[]>;
+  /**
+   * Lo que cada centro de estructura mandó a los productivos. Es la columna
+   * "Prorrateado" del listado, y su total tiene que dar igual que el de
+   * "Absorbido": es la verificación a ojo de que el reparto no perdió plata.
+   */
+  distribuidoByCentroId: Map<string, Prisma.Decimal>;
 };
 
 export type DbClient = PrismaService | Prisma.TransactionClient;
