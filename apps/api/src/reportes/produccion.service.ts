@@ -33,6 +33,13 @@ type OtdRow = {
   fin: Date | null;
 };
 
+/**
+ * Días hábiles de un mes típico. Reemplaza al `diasPorMes` que cada centro
+ * declaraba dentro de la fórmula de capacidad, retirada con el modelo derivado.
+ * Ver docs/centros-de-costo-carga-manual-diseno.md
+ */
+const DIAS_HABILES_MES = 22;
+
 @Injectable()
 export class ReporteProduccionService {
   constructor(private readonly prisma: PrismaService) {}
@@ -97,16 +104,21 @@ export class ReporteProduccionService {
       `,
       this.prisma.centroCostoCapacidadPeriodo.findMany({
         where: { tenantId, periodo: mesActual() },
-        select: { capacidadPractica: true, diasPorMes: true },
+        select: { horasProductivas: true },
       }),
     ]);
     const trabajosEnCola = colaRows[0]?.trabajos ?? 0;
     const horasCola = (colaRows[0]?.minutos ?? 0) / 60;
-    // Capacidad diaria (horas) = Σ capacidadPractica del mes / días por mes.
-    const horasPorDia = capRows.reduce((acc, c) => {
-      const dias = Number(c.diasPorMes) || 0;
-      return dias > 0 ? acc + Number(c.capacidadPractica) / dias : acc;
-    }, 0);
+    // Capacidad diaria (horas) = Σ horas productivas del mes / días hábiles.
+    //
+    // Antes cada centro declaraba sus propios `diasPorMes` como parte de la
+    // fórmula de capacidad. Esa fórmula se retiró: ahora el centro carga las
+    // horas del mes y nada más. Repartirlas sobre una constante es una
+    // aproximación, y se nota sobre todo en meses cortos o con feriados; el
+    // dato fino vive en el calendario del módulo de Capacidad de estaciones.
+    const horasPorDia =
+      capRows.reduce((acc, c) => acc + Number(c.horasProductivas), 0) /
+      DIAS_HABILES_MES;
     return {
       trabajosEnCola,
       diasDeCarga: horasPorDia > 0 ? r2(horasCola / horasPorDia) : null,
@@ -252,14 +264,14 @@ export class ReporteProduccionService {
       `,
       this.prisma.centroCostoCapacidadPeriodo.findMany({
         where: { tenantId, periodo: { in: mesesDelRango(rango) } },
-        select: { centroCostoId: true, periodo: true, capacidadPractica: true, overrideManualCapacidad: true },
+        select: { centroCostoId: true, periodo: true, horasProductivas: true },
       }),
     ]);
 
     // Capacidad práctica (horas) prorrateada al rango, por centro.
     const capPorCentro = new Map<string, number>();
     for (const c of capacidades) {
-      const horas = Number(c.overrideManualCapacidad ?? c.capacidadPractica);
+      const horas = Number(c.horasProductivas);
       const proporcion = horas * fraccionMesEnRango(c.periodo, rango);
       capPorCentro.set(c.centroCostoId, (capPorCentro.get(c.centroCostoId) ?? 0) + proporcion);
     }

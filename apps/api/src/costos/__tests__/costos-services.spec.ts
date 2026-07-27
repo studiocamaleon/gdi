@@ -3,17 +3,22 @@ import {
   EstadoTarifaCentroCostoPeriodo,
   ImputacionPreferidaCentroCosto,
   Prisma,
+  SeccionCentroCostoLinea,
   TipoCentroCosto,
-  TipoRecursoCentroCosto,
   UnidadBaseCentroCosto,
 } from '@prisma/client';
 import { CostosMapper } from '../costos.mapper';
 import { CostosRepartoService } from '../costos-reparto.service';
 import { CostosTarifasService } from '../costos-tarifas.service';
 import { CostosValidacionesService } from '../costos-validaciones.service';
-import { TipoRecursoCentroCostoDto } from '../dto/replace-centro-recursos.dto';
+import { SeccionCentroCostoLineaDto } from '../dto/replace-centro-lineas.dto';
 
 const auth = { tenantId: 'tenant-1', userId: 'user-1' };
+
+const linea = (
+  importeMensual: number,
+  seccion: SeccionCentroCostoLinea = SeccionCentroCostoLinea.GASTO_GENERAL,
+) => ({ seccion, importeMensual: new Prisma.Decimal(importeMensual) });
 
 function createTarifasService(prisma: any, mapper = new CostosMapper()) {
   const reparto = new CostosRepartoService(prisma, mapper);
@@ -38,12 +43,9 @@ describe('Costos services', () => {
             nombre: 'Fuente productiva',
             tipoCentro: TipoCentroCosto.PRODUCTIVO,
             imputacionPreferida: ImputacionPreferidaCentroCosto.REPARTO,
-            recursos: [],
-            componentesCostoPeriodo: [
-              { importeMensual: new Prisma.Decimal(1000) },
-            ],
+            lineas: [linea(1000)],
             capacidadesPeriodo: [
-              { capacidadPractica: new Prisma.Decimal(100) },
+              { horasProductivas: new Prisma.Decimal(100) },
             ],
           },
           {
@@ -52,9 +54,10 @@ describe('Costos services', () => {
             nombre: 'Destino productivo',
             tipoCentro: TipoCentroCosto.PRODUCTIVO,
             imputacionPreferida: ImputacionPreferidaCentroCosto.DIRECTA,
-            recursos: [],
-            componentesCostoPeriodo: [],
-            capacidadesPeriodo: [{ capacidadPractica: new Prisma.Decimal(50) }],
+            lineas: [linea(400)],
+            capacidadesPeriodo: [
+              { horasProductivas: new Prisma.Decimal(50) },
+            ],
           },
         ]),
       },
@@ -83,15 +86,8 @@ describe('Costos services', () => {
         tipoCentro: TipoCentroCosto.PRODUCTIVO,
         imputacionPreferida: ImputacionPreferidaCentroCosto.DIRECTA,
         unidadBaseFutura: UnidadBaseCentroCosto.HORA_HOMBRE,
-        recursos: [
-          {
-            activo: true,
-            tipoRecurso: TipoRecursoCentroCosto.EMPLEADO,
-            maquinariaPeriodo: [],
-          },
-        ],
-        componentesCostoPeriodo: [],
-        capacidadesPeriodo: [{ capacidadPractica: new Prisma.Decimal(10) }],
+        lineas: [],
+        capacidadesPeriodo: [{ horasProductivas: new Prisma.Decimal(10) }],
       } as any,
       '2026-04',
       new Prisma.Decimal(100),
@@ -108,19 +104,14 @@ describe('Costos services', () => {
       id: 'centro-1',
       plantaId: 'planta-1',
       planta: { nombre: 'Planta Norte' },
-      areaCostoId: 'area-1',
-      areaCosto: { nombre: 'Impresión' },
       codigo: 'IMP',
       nombre: 'Impresión',
       descripcion: null,
       tipoCentro: TipoCentroCosto.PRODUCTIVO,
-      categoriaGrafica: 'IMPRESION',
       imputacionPreferida: ImputacionPreferidaCentroCosto.DIRECTA,
       unidadBaseFutura: UnidadBaseCentroCosto.HORA_MAQUINA,
-      responsableEmpleadoId: null,
-      responsableEmpleado: null,
       activo: true,
-      capacidadesPeriodo: [{ capacidadPractica: new Prisma.Decimal(160) }],
+      capacidadesPeriodo: [{ horasProductivas: new Prisma.Decimal(160) }],
       tarifasPeriodo: [
         {
           periodo: '2026-03',
@@ -147,7 +138,6 @@ describe('Costos services', () => {
     expect(response).toMatchObject({
       id: 'centro-1',
       plantaNombre: 'Planta Norte',
-      areaCostoNombre: 'Impresión',
       estadoConfiguracion: 'borrador_pendiente',
       ultimoPeriodoConfigurado: '2026-04',
       ultimaTarifaBase: 9,
@@ -155,27 +145,6 @@ describe('Costos services', () => {
       ultimaTarifaTotal: 12,
       ultimaCapacidadPractica: 160,
     });
-  });
-
-  it('validaciones rechazan recursos inválidos antes de persistir', async () => {
-    const prisma = {
-      centroCosto: {
-        findFirst: jest.fn().mockResolvedValue({
-          id: 'centro-1',
-          plantaId: 'planta-1',
-        }),
-      },
-    };
-    const service = new CostosValidacionesService(prisma as any);
-
-    await expect(
-      service.validateRecursos(auth, 'centro-1', '2026-04', [
-        {
-          tipoRecurso: TipoRecursoCentroCostoDto.maquinaria,
-          activo: true,
-        } as any,
-      ]),
-    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('tarifa publicada conserva total con reparto absorbido', async () => {
@@ -186,9 +155,11 @@ describe('Costos services', () => {
       tipoCentro: TipoCentroCosto.PRODUCTIVO,
       imputacionPreferida: ImputacionPreferidaCentroCosto.DIRECTA,
       unidadBaseFutura: UnidadBaseCentroCosto.HORA_MAQUINA,
-      recursos: [],
-      componentesCostoPeriodo: [{ importeMensual: new Prisma.Decimal(100) }],
-      capacidadesPeriodo: [{ capacidadPractica: new Prisma.Decimal(10) }],
+      lineas: [
+        linea(60, SeccionCentroCostoLinea.EMPLEADO),
+        linea(40, SeccionCentroCostoLinea.ACTIVO_FIJO),
+      ],
+      capacidadesPeriodo: [{ horasProductivas: new Prisma.Decimal(10) }],
       tarifasPeriodo: [],
       planta: {},
       areaCosto: {},
@@ -203,16 +174,10 @@ describe('Costos services', () => {
             nombre: 'Fuente de reparto',
             tipoCentro: TipoCentroCosto.APOYO,
             imputacionPreferida: ImputacionPreferidaCentroCosto.REPARTO,
-            recursos: [],
-            componentesCostoPeriodo: [
-              { importeMensual: new Prisma.Decimal(50) },
-            ],
+            lineas: [linea(50)],
             capacidadesPeriodo: [],
           },
-          {
-            ...targetConfig,
-            capacidadesPeriodo: [{ capacidadPractica: new Prisma.Decimal(10) }],
-          },
+          targetConfig,
         ]),
         findFirst: jest.fn().mockResolvedValue(targetConfig),
       },
@@ -233,5 +198,114 @@ describe('Costos services', () => {
       costoMensualTotal: 150,
       tarifaCalculada: 15,
     });
+    // La mano de obra sale de las líneas de empleado y NO absorbe el reparto:
+    // lo que baja de la estructura no es mano de obra del centro, y sumarlo
+    // haría que el setup pague dos veces la administración.
+    expect(snapshot.costoMensualManoObra.toNumber()).toBe(60);
+    expect(snapshot.tarifaManoObra.toNumber()).toBe(6);
+  });
+
+  it('el importe de cada sección replica la aritmética de la planilla', () => {
+    const mapper = new CostosMapper();
+    const importe = (linea: any) =>
+      mapper.computeImporteLinea(linea).toNumber();
+
+    // Los mismos números del modelo de referencia, que cierran al centavo.
+    expect(
+      importe({
+        seccion: SeccionCentroCostoLineaDto.empleado,
+        salarioMensual: 1900,
+        cargasPct: 40,
+      }),
+    ).toBe(2660);
+    expect(
+      importe({
+        seccion: SeccionCentroCostoLineaDto.activo_fijo,
+        valorActual: 5000,
+        valorFinalVida: 500,
+        vidaUtilRestanteMeses: 60,
+      }),
+    ).toBe(75);
+    expect(
+      importe({
+        seccion: SeccionCentroCostoLineaDto.gasto_general,
+        valorMensual: 250,
+      }),
+    ).toBe(250);
+  });
+
+  it('las validaciones de la planilla atajan lo que el DTO no puede ver solo', () => {
+    const validaciones = new CostosValidacionesService({} as any);
+    const fija = (extra: any) => ({
+      seccion: SeccionCentroCostoLineaDto.activo_fijo,
+      nombre: 'Guillotina',
+      vidaUtilRestanteMeses: 12,
+      valorActual: 1000,
+      ...extra,
+    });
+
+    // Amortizar hacia arriba daría una depreciación negativa que abarataría el
+    // centro en vez de encarecerlo.
+    expect(() =>
+      validaciones.validateLineas([fija({ valorFinalVida: 2000 })] as any),
+    ).toThrow(BadRequestException);
+    expect(() =>
+      validaciones.validateLineas([fija({ valorFinalVida: 200 })] as any),
+    ).not.toThrow();
+
+    // Dos veces el mismo nombre en una sección es casi siempre un doble click,
+    // y duplica el costo del centro en silencio.
+    expect(() =>
+      validaciones.validateLineas([
+        fija({ valorFinalVida: 0 }),
+        fija({ valorFinalVida: 0 }),
+      ] as any),
+    ).toThrow(BadRequestException);
+  });
+
+  it('el reparto se distribuye en proporción al gasto propio, no a las horas', async () => {
+    const mapper = new CostosMapper();
+    const prisma = {
+      centroCosto: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'estructura',
+            codigo: 'ADM',
+            nombre: 'Administración',
+            tipoCentro: TipoCentroCosto.ADMINISTRATIVO,
+            imputacionPreferida: ImputacionPreferidaCentroCosto.REPARTO,
+            lineas: [linea(900)],
+            capacidadesPeriodo: [],
+          },
+          {
+            // Gasta el triple que el otro, pero tiene la mitad de horas.
+            id: 'caro',
+            codigo: 'CAR',
+            nombre: 'Centro caro',
+            tipoCentro: TipoCentroCosto.PRODUCTIVO,
+            imputacionPreferida: ImputacionPreferidaCentroCosto.DIRECTA,
+            lineas: [linea(300)],
+            capacidadesPeriodo: [{ horasProductivas: new Prisma.Decimal(80) }],
+          },
+          {
+            id: 'barato',
+            codigo: 'BAR',
+            nombre: 'Centro barato',
+            tipoCentro: TipoCentroCosto.PRODUCTIVO,
+            imputacionPreferida: ImputacionPreferidaCentroCosto.DIRECTA,
+            lineas: [linea(100)],
+            capacidadesPeriodo: [{ horasProductivas: new Prisma.Decimal(160) }],
+          },
+        ]),
+      },
+    };
+    const service = new CostosRepartoService(prisma as any, mapper);
+
+    const reparto = await service.computeRepartoPeriodo(auth, '2026-04');
+
+    // 300 y 100 de gasto propio sobre 400 → 3 a 1. Si se repartiera por horas
+    // (80 contra 160) la relación sería la inversa.
+    expect(reparto.absorbidoByCentroId.get('caro')?.toNumber()).toBe(675);
+    expect(reparto.absorbidoByCentroId.get('barato')?.toNumber()).toBe(225);
   });
 });

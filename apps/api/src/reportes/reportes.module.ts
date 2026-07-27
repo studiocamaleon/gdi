@@ -10,7 +10,6 @@ import { AlertasService } from './alertas.service';
 import { ClientesService } from './clientes.service';
 import { EquipoService } from './equipo.service';
 import { EmbudoService } from './embudo.service';
-import { CostoLaboralService } from './costo-laboral.service';
 import { EmpleadosModule } from '../empleados/empleados.module';
 
 @Module({
@@ -28,7 +27,6 @@ import { EmpleadosModule } from '../empleados/empleados.module';
     ClientesService,
     EquipoService,
     EmbudoService,
-    CostoLaboralService,
   ],
 })
 export class ReportesModule {}

@@ -3,12 +3,12 @@
 import * as React from "react";
 import {
   Building2Icon,
-  CheckCircle2Icon,
   FolderTreeIcon,
   PencilIcon,
   PlusIcon,
   PowerIcon,
   RefreshCcwIcon,
+  SearchIcon,
   SlidersHorizontalIcon,
   Trash2Icon,
 } from "lucide-react";
@@ -16,43 +16,29 @@ import { toast } from "sonner";
 
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import {
-  createAreaCosto,
-  createCentroCosto,
   createPlanta,
   eliminarCentroCosto,
-  getAreasCosto,
   getCentrosCosto,
   getPlantas,
-  toggleAreaCosto,
+  getResumenCentrosCosto,
   toggleCentroCosto,
   togglePlanta,
-  updateAreaCosto,
-  updateCentroCosto,
   updatePlanta,
 } from "@/lib/costos-api";
 import { formatearMoneda, type Moneda } from "@/lib/moneda";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import {
-  categoriaGraficaItems,
   CentroCosto,
-  getCategoriaGraficaLabel,
-  getImputacionPreferidaLabel,
-  getTipoCentroLabel,
-  getUnidadBaseLabel,
-  imputacionPreferidaItems,
+  getCurrentPeriodo,
   Planta,
-  tipoCentroItems,
-  unidadBaseItems,
-  type AreaCosto,
-  type CentroCostoPayload,
-  type AreaCostoPayload,
+  type ResumenCentroCostoFila,
+  type ResumenCentrosCosto,
   type PlantaPayload,
 } from "@/lib/costos";
-import { EmpleadoDetalle } from "@/lib/empleados";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
-import { CentroCostoConfigurator } from "@/components/costos/centro-costo-configurator";
+import { CentroCostoFicha } from "@/components/costos/centro-costo-ficha";
 import {
   Card,
   CardContent,
@@ -62,14 +48,6 @@ import {
 } from "@/components/ui/card";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -82,9 +60,7 @@ import { Tabs, TabsContent } from "@/components/ui/tabs";
 
 type CostosPanelProps = {
   initialPlantas: Planta[];
-  initialAreas: AreaCosto[];
   initialCentros: CentroCosto[];
-  empleados: EmpleadoDetalle[];
 };
 
 function createEmptyPlanta(): PlantaPayload {
@@ -95,32 +71,12 @@ function createEmptyPlanta(): PlantaPayload {
   };
 }
 
-function createEmptyArea(plantaId = ""): AreaCostoPayload {
-  return {
-    plantaId,
-    codigo: "",
-    nombre: "",
-    descripcion: "",
-  };
-}
 
-function createEmptyCentro(plantaId = "", areaCostoId = ""): CentroCostoPayload {
-  return {
-    plantaId,
-    areaCostoId,
-    codigo: "",
-    nombre: "",
-    descripcion: "",
-    tipoCentro: "productivo",
-    categoriaGrafica: "preprensa",
-    imputacionPreferida: "directa",
-    unidadBaseFutura: "ninguna",
-    responsableEmpleadoId: undefined,
-    activo: true,
-  };
-}
 
-const EMPTY_SELECT_VALUE = "__none__";
+function formatPeriodoCorto(periodo: string) {
+  const [anio, mes] = periodo.split("-");
+  return anio && mes ? `${mes}/${anio}` : periodo;
+}
 
 function formatMoneyOrDash(value: number | null | undefined, moneda: Moneda) {
   if (typeof value !== "number" || !Number.isFinite(value)) {
@@ -130,34 +86,13 @@ function formatMoneyOrDash(value: number | null | undefined, moneda: Moneda) {
   return formatearMoneda(value, moneda, { decimales: 0 });
 }
 
-function getNextCentroCodigo(areaCodigo: string, centros: CentroCosto[]) {
-  const prefix = `${areaCodigo.toUpperCase()}-`;
-  let maxSequence = 0;
-
-  for (const centro of centros) {
-    if (!centro.codigo.startsWith(prefix)) {
-      continue;
-    }
-
-    const sequence = Number.parseInt(centro.codigo.slice(prefix.length), 10);
-
-    if (Number.isFinite(sequence)) {
-      maxSequence = Math.max(maxSequence, sequence);
-    }
-  }
-
-  return `${prefix}${String(maxSequence + 1).padStart(3, "0")}`;
-}
-
 export function CostosPanel({
   initialPlantas,
-  initialAreas,
   initialCentros,
-  empleados,
 }: CostosPanelProps) {
   const { moneda } = useConfigRegional();
   const [plantas, setPlantas] = React.useState(initialPlantas);
-  const [areas, setAreas] = React.useState(initialAreas);
+
   const [centros, setCentros] = React.useState(initialCentros);
   const [activeTab, setActiveTab] = React.useState("plantas");
   const [selectedCentro, setSelectedCentro] = React.useState<CentroCosto | null>(null);
@@ -165,123 +100,89 @@ export function CostosPanel({
   const [isConfiguratorOpen, setIsConfiguratorOpen] = React.useState(false);
   const [configuracionRefreshKey, setConfiguracionRefreshKey] = React.useState(0);
   const [editingPlantaId, setEditingPlantaId] = React.useState<string | null>(null);
-  const [editingAreaId, setEditingAreaId] = React.useState<string | null>(null);
-  const [editingCentroId, setEditingCentroId] = React.useState<string | null>(null);
+
   const [plantaForm, setPlantaForm] = React.useState<PlantaPayload>(createEmptyPlanta);
-  const [areaForm, setAreaForm] = React.useState<AreaCostoPayload>(() =>
-    createEmptyArea(initialPlantas[0]?.id ?? ""),
-  );
-  const [centroForm, setCentroForm] = React.useState<CentroCostoPayload>(() =>
-    createEmptyCentro(initialPlantas[0]?.id ?? "", initialAreas[0]?.id ?? ""),
-  );
+
   const [isReloading, startReloading] = React.useTransition();
   const [isSaving, startSaving] = React.useTransition();
+  const [periodoResumen, setPeriodoResumen] = React.useState(getCurrentPeriodo);
+  const [busquedaCentros, setBusquedaCentros] = React.useState("");
+  const [resumen, setResumen] = React.useState<ResumenCentrosCosto | null>(null);
+  const [isLoadingResumen, setIsLoadingResumen] = React.useState(false);
 
-  const plantaLabelById = React.useMemo(
-    () => new Map(plantas.map((planta) => [planta.id, planta.nombre])),
-    [plantas],
+
+  // La fila del resumen trae sólo lo que la tabla muestra; las acciones
+  // necesitan el centro completo.
+  const centroById = React.useMemo(
+    () => new Map(centros.map((centro) => [centro.id, centro])),
+    [centros],
   );
 
-  // Totales de la tabla de centros: suma sólo valores numéricos publicados,
-  // con los mismos fallbacks que usa cada fila (base ?? publicada, etc.).
-  const totalesCentros = React.useMemo(() => {
-    const sumar = (getValor: (centro: CentroCosto) => number | null) =>
-      centros.reduce((acc, centro) => {
-        const valor = getValor(centro);
-        return typeof valor === "number" && Number.isFinite(valor)
-          ? acc + valor
-          : acc;
-      }, 0);
+  // Las filas que muestra la tabla: los números vivos del período, filtrados
+  // por la búsqueda. El orden lo define el backend (por nombre).
+  const filasResumen = React.useMemo(() => {
+    const filas = resumen?.centros ?? [];
+    const termino = busquedaCentros.trim().toLowerCase();
+    if (!termino) return filas;
+    return filas.filter(
+      (fila) =>
+        fila.nombre.toLowerCase().includes(termino) ||
+        fila.codigo.toLowerCase().includes(termino),
+    );
+  }, [resumen, busquedaCentros]);
+
+  // Se recalculan sobre las filas visibles y no se toman del backend: si hay
+  // una búsqueda activa, los totales tienen que hablar de lo que se está
+  // viendo. Sin filtro, absorbido y prorrateado dan igual — es la verificación
+  // a ojo de que el reparto no perdió plata.
+  const totalesResumen = React.useMemo(() => {
+    const sumar = (getValor: (fila: ResumenCentroCostoFila) => number) =>
+      filasResumen.reduce((acc, fila) => acc + getValor(fila), 0);
     return {
-      horas: sumar((c) => c.ultimaCapacidadPractica),
-      tarifaPublicada: sumar((c) => c.ultimaTarifaBase ?? c.ultimaTarifaPublicada),
-      absorbido: sumar((c) => c.ultimaTarifaAbsorbida),
-      tarifaTotal: sumar((c) => c.ultimaTarifaTotal ?? c.ultimaTarifaPublicada),
+      gastos: sumar((f) => f.gastos),
+      absorbido: sumar((f) => f.absorbido),
+      prorrateado: sumar((f) => f.prorrateado),
+      gastoTotal: sumar((f) => f.gastoTotal),
     };
-  }, [centros]);
+  }, [filasResumen]);
 
-  const areaLabelById = React.useMemo(
-    () => new Map(areas.map((area) => [area.id, area.nombre])),
-    [areas],
-  );
+  const repartoCuadra =
+    Math.abs(totalesResumen.absorbido - totalesResumen.prorrateado) < 0.01;
 
-  const empleadoLabelById = React.useMemo(
-    () => new Map(empleados.map((empleado) => [empleado.id, empleado.nombreCompleto])),
-    [empleados],
-  );
-
-  const areaOptions = React.useMemo(
-    () => areas.filter((area) => area.plantaId === centroForm.plantaId),
-    [areas, centroForm.plantaId],
-  );
+  const cargarResumen = React.useCallback(async (periodo: string) => {
+    setIsLoadingResumen(true);
+    try {
+      setResumen(await getResumenCentrosCosto(periodo));
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudo cargar el resumen de centros.",
+      );
+      setResumen(null);
+    } finally {
+      setIsLoadingResumen(false);
+    }
+  }, []);
 
   React.useEffect(() => {
-    if (editingAreaId || !plantas.length || areaForm.plantaId) {
-      return;
-    }
+    if (activeTab !== "centros") return;
+    void cargarResumen(periodoResumen);
+  }, [activeTab, periodoResumen, cargarResumen, configuracionRefreshKey]);
 
-    setAreaForm((current) => ({
-      ...current,
-      plantaId: plantas[0].id,
-    }));
-  }, [areaForm.plantaId, editingAreaId, plantas]);
 
-  React.useEffect(() => {
-    if (editingCentroId || !plantas.length) {
-      return;
-    }
 
-    const plantaId = centroForm.plantaId || plantas[0].id;
-    const nextArea =
-      areas.find((area) => area.id === centroForm.areaCostoId && area.plantaId === plantaId) ??
-      areas.find((area) => area.plantaId === plantaId);
 
-    setCentroForm((current) => {
-      const nextCodigo =
-        current.codigo ||
-        (nextArea
-          ? getNextCentroCodigo(
-              nextArea.codigo,
-              centros.filter((centro) => centro.areaCostoId === nextArea.id),
-            )
-          : "");
-
-      if (
-        current.plantaId === plantaId &&
-        current.areaCostoId === (nextArea?.id ?? "") &&
-        current.codigo === nextCodigo
-      ) {
-        return current;
-      }
-
-      return {
-        ...current,
-        plantaId,
-        areaCostoId: nextArea?.id ?? "",
-        codigo: nextCodigo,
-      };
-    });
-  }, [
-    areas,
-    centroForm.areaCostoId,
-    centroForm.codigo,
-    centroForm.plantaId,
-    centros,
-    editingCentroId,
-    plantas,
-  ]);
 
   const reloadAll = React.useCallback(() => {
     startReloading(async () => {
       try {
-        const [nextPlantas, nextAreas, nextCentros] = await Promise.all([
+        const [nextPlantas, nextCentros] = await Promise.all([
           getPlantas(),
-          getAreasCosto(),
           getCentrosCosto(),
         ]);
 
         setPlantas(nextPlantas);
-        setAreas(nextAreas);
         setCentros(nextCentros);
         setSelectedCentro((current) =>
           current
@@ -316,54 +217,7 @@ export function CostosPanel({
     });
   };
 
-  const handleAreaSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
 
-    startSaving(async () => {
-      try {
-        if (editingAreaId) {
-          await updateAreaCosto(editingAreaId, areaForm);
-          toast.success("Area actualizada.");
-        } else {
-          await createAreaCosto(areaForm);
-          toast.success("Area creada.");
-        }
-
-        setEditingAreaId(null);
-        setAreaForm(createEmptyArea(areaForm.plantaId));
-        reloadAll();
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "No se pudo guardar el area.");
-      }
-    });
-  };
-
-  const handleCentroSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    startSaving(async () => {
-      try {
-        if (editingCentroId) {
-          await updateCentroCosto(editingCentroId, centroForm);
-          toast.success("Centro de costo actualizado.");
-        } else {
-          await createCentroCosto(centroForm);
-          toast.success("Centro de costo creado.");
-        }
-
-        setEditingCentroId(null);
-        setCentroForm(createEmptyCentro(centroForm.plantaId, ""));
-        reloadAll();
-        setConfiguracionRefreshKey((current) => current + 1);
-      } catch (error) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : "No se pudo guardar el centro de costo.",
-        );
-      }
-    });
-  };
 
   const handleTogglePlanta = (id: string) => {
     startSaving(async () => {
@@ -378,16 +232,6 @@ export function CostosPanel({
     });
   };
 
-  const handleToggleArea = (id: string) => {
-    startSaving(async () => {
-      try {
-        await toggleAreaCosto(id);
-        reloadAll();
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "No se pudo cambiar el area.");
-      }
-    });
-  };
 
   const handleToggleCentro = (id: string) => {
     startSaving(async () => {
@@ -413,7 +257,7 @@ export function CostosPanel({
         <div className="title-block">
           <h1>Centros de costo</h1>
           <div className="sub">
-            Administra la estructura multi-tenant de plantas, áreas y centros de costo para el costeo operativo de la gráfica.
+            Las plantas y los centros de costo con los que se costea la gráfica. Cada centro es una planilla que se carga a mano.
           </div>
         </div>
         <button type="button" className="btn cc-refresh" onClick={reloadAll}>
@@ -430,13 +274,6 @@ export function CostosPanel({
             onClick={() => setActiveTab("plantas")}
           >
             Plantas
-          </button>
-          <button
-            type="button"
-            className={`cc-tab ${activeTab === "areas" ? "active" : ""}`}
-            onClick={() => setActiveTab("areas")}
-          >
-            Áreas
           </button>
           <button
             type="button"
@@ -579,657 +416,140 @@ export function CostosPanel({
               </Card>
             </TabsContent>
 
-            <TabsContent value="areas" className="flex flex-col gap-6">
-              <Card className="rounded-2xl border-border/70 shadow-none">
-                <CardHeader>
-                  <CardTitle className="text-lg">Areas</CardTitle>
-                  <CardDescription>
-                    Cada area ordena departamentos funcionales dentro de una planta.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form className="flex flex-col gap-4" onSubmit={handleAreaSubmit}>
-                    <FieldGroup className="grid gap-4 lg:grid-cols-4">
-                      <Field>
-                        <FieldLabel htmlFor="area-planta">Planta</FieldLabel>
-                        <Select
-                          value={areaForm.plantaId}
-                          onValueChange={(value) => {
-                            if (!value) {
-                              return;
-                            }
-
-                            setAreaForm((current) => ({ ...current, plantaId: value }));
-                          }}
-                        >
-                          <SelectTrigger id="area-planta" className="w-full">
-                            <SelectValue placeholder="Selecciona una planta">
-                              {(value) =>
-                                typeof value === "string"
-                                  ? plantaLabelById.get(value) ?? value
-                                  : "Selecciona una planta"
-                              }
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectGroup>
-                              {plantas.map((planta) => (
-                                <SelectItem key={planta.id} value={planta.id}>
-                                  {planta.nombre}
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          </SelectContent>
-                        </Select>
-                      </Field>
-                      <Field>
-                        <FieldLabel htmlFor="area-codigo">Codigo</FieldLabel>
-                        <Input
-                          id="area-codigo"
-                          value={areaForm.codigo}
-                          onChange={(event) =>
-                            setAreaForm((current) => ({
-                              ...current,
-                              codigo: event.target.value,
-                            }))
-                          }
-                          placeholder="PRE"
-                        />
-                      </Field>
-                      <Field>
-                        <FieldLabel htmlFor="area-nombre">Nombre</FieldLabel>
-                        <Input
-                          id="area-nombre"
-                          value={areaForm.nombre}
-                          onChange={(event) =>
-                            setAreaForm((current) => ({
-                              ...current,
-                              nombre: event.target.value,
-                            }))
-                          }
-                          placeholder="Preprensa"
-                        />
-                      </Field>
-                      <Field>
-                        <FieldLabel htmlFor="area-descripcion">Descripcion</FieldLabel>
-                        <Input
-                          id="area-descripcion"
-                          value={areaForm.descripcion ?? ""}
-                          onChange={(event) =>
-                            setAreaForm((current) => ({
-                              ...current,
-                              descripcion: event.target.value,
-                            }))
-                          }
-                          placeholder="Observaciones"
-                        />
-                      </Field>
-                    </FieldGroup>
-
-                    <div className="flex gap-2">
-                      <Button type="submit" variant="brand">
-                        {isSaving ? <GdiSpinner className="size-4" /> : <PlusIcon />}
-                        {editingAreaId ? "Guardar cambios" : "Nueva area"}
-                      </Button>
-                      {editingAreaId ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => {
-                            setEditingAreaId(null);
-                            setAreaForm(createEmptyArea(areaForm.plantaId));
-                          }}
-                        >
-                          Cancelar
-                        </Button>
-                      ) : null}
-                    </div>
-                  </form>
-                </CardContent>
-              </Card>
-
-              <Card className="rounded-2xl border-border/70 shadow-none">
-                <CardContent className="px-0">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="px-4">Planta</TableHead>
-                        <TableHead>Nombre</TableHead>
-                        <TableHead>Estado</TableHead>
-                        <TableHead className="w-40">Acciones</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {areas.map((area) => (
-                        <TableRow key={area.id}>
-                          <TableCell className="px-4">{area.plantaNombre}</TableCell>
-                          <TableCell className="font-medium">{area.nombre}</TableCell>
-                          <TableCell>
-                            <Badge variant={area.activa ? "secondary" : "outline"}>
-                              {area.activa ? "Activa" : "Inactiva"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setEditingAreaId(area.id);
-                                  setAreaForm({
-                                    plantaId: area.plantaId,
-                                    codigo: area.codigo,
-                                    nombre: area.nombre,
-                                    descripcion: area.descripcion,
-                                  });
-                                  setActiveTab("areas");
-                                }}
-                              >
-                                <PencilIcon />
-                                Editar
-                              </Button>
-                              <Button
-                                variant="sidebar"
-                                size="sm"
-                                onClick={() => handleToggleArea(area.id)}
-                              >
-                                {area.activa ? "Inactivar" : "Activar"}
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
             <TabsContent value="centros" className="cost-centers-tab">
               <div className="wiz-section centros-form-section">
                 <div className="wiz-section-head">
                   <div className="body">
                     <h2>Centros de costo</h2>
                     <div className="helptext">
-                      Define el punto real de imputación con clasificación gráfica,
-                      responsables y reglas operativas del centro.
+                      Cada centro es una planilla que se carga a mano: gastos
+                      generales, empleados y activos fijos. No se toma nada de
+                      otros módulos.
                     </div>
                   </div>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => {
+                      setSelectedCentro(null);
+                      setIsConfiguratorOpen(true);
+                    }}
+                  >
+                    <PlusIcon />
+                    Añadir centro de costo
+                  </button>
                 </div>
+              </div>
 
-                <form className="centros-form" onSubmit={handleCentroSubmit}>
-                  <div className="cc-form-grid cols-cc">
-                      <Field>
-                        <FieldLabel htmlFor="centro-planta">Planta</FieldLabel>
-                        <Select
-                          value={centroForm.plantaId}
-                          onValueChange={(value) => {
-                            if (!value) {
-                              return;
-                            }
 
-                            const nextArea = areas.find((area) => area.plantaId === value);
-
-                            setCentroForm((current) => ({
-                              ...current,
-                              plantaId: value,
-                              areaCostoId: nextArea?.id ?? "",
-                              codigo:
-                                editingCentroId || !nextArea
-                                  ? current.codigo
-                                  : getNextCentroCodigo(
-                                      nextArea.codigo,
-                                      centros.filter((centro) => centro.areaCostoId === nextArea.id),
-                                    ),
-                            }));
-                          }}
-                        >
-                          <SelectTrigger id="centro-planta" className="w-full">
-                            <SelectValue placeholder="Selecciona una planta">
-                              {(value) =>
-                                typeof value === "string"
-                                  ? plantaLabelById.get(value) ?? value
-                                  : "Selecciona una planta"
-                              }
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectGroup>
-                              {plantas.map((planta) => (
-                                <SelectItem key={planta.id} value={planta.id}>
-                                  {planta.nombre}
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          </SelectContent>
-                        </Select>
-                      </Field>
-                      <Field>
-                        <FieldLabel htmlFor="centro-area">Área</FieldLabel>
-                        <Select
-                          value={centroForm.areaCostoId}
-                          onValueChange={(value) => {
-                            if (!value) {
-                              return;
-                            }
-
-                            const area = areas.find((item) => item.id === value);
-
-                            setCentroForm((current) => ({
-                              ...current,
-                              areaCostoId: value,
-                              codigo:
-                                editingCentroId && current.areaCostoId === value
-                                  ? current.codigo
-                                  : getNextCentroCodigo(
-                                      area?.codigo ?? "AREA",
-                                      centros.filter((centro) => centro.areaCostoId === value),
-                                    ),
-                            }));
-                          }}
-                        >
-                          <SelectTrigger id="centro-area" className="w-full">
-                            <SelectValue placeholder="Selecciona un area">
-                              {(value) =>
-                                typeof value === "string"
-                                  ? areaLabelById.get(value) ?? value
-                                  : "Selecciona un area"
-                              }
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectGroup>
-                              {areaOptions.map((area) => (
-                                <SelectItem key={area.id} value={area.id}>
-                                  {area.nombre}
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          </SelectContent>
-                        </Select>
-                      </Field>
-                      <Field>
-                        <FieldLabel htmlFor="centro-codigo">Codigo</FieldLabel>
-                        <Input
-                          id="centro-codigo"
-                          value={centroForm.codigo}
-                          onChange={(event) =>
-                            setCentroForm((current) => ({
-                              ...current,
-                              codigo: event.target.value,
-                            }))
-                          }
-                          placeholder="AREA-001"
-                        />
-                      </Field>
-                      <Field>
-                        <FieldLabel htmlFor="centro-nombre">Nombre</FieldLabel>
-                        <Input
-                          id="centro-nombre"
-                          value={centroForm.nombre}
-                          onChange={(event) =>
-                            setCentroForm((current) => ({
-                              ...current,
-                              nombre: event.target.value,
-                            }))
-                          }
-                          placeholder="CTP principal"
-                        />
-                      </Field>
-                      <Field>
-                        <FieldLabel htmlFor="centro-tipo">Tipo</FieldLabel>
-                        <Select
-                          value={centroForm.tipoCentro}
-                          onValueChange={(value) => {
-                            if (!value) {
-                              return;
-                            }
-
-                            setCentroForm((current) => ({
-                              ...current,
-                              tipoCentro: value as CentroCostoPayload["tipoCentro"],
-                            }));
-                          }}
-                        >
-                          <SelectTrigger id="centro-tipo" className="w-full">
-                            <SelectValue placeholder="Selecciona un tipo">
-                              {(value) =>
-                                typeof value === "string"
-                                  ? getTipoCentroLabel(
-                                      value as CentroCostoPayload["tipoCentro"],
-                                    )
-                                  : "Selecciona un tipo"
-                              }
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectGroup>
-                              {tipoCentroItems.map((item) => (
-                                <SelectItem key={item.value} value={item.value}>
-                                  {item.label}
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          </SelectContent>
-                        </Select>
-                      </Field>
-                      <Field>
-                        <FieldLabel htmlFor="centro-categoria">Categoría gráfica</FieldLabel>
-                        <Select
-                          value={centroForm.categoriaGrafica}
-                          onValueChange={(value) => {
-                            if (!value) {
-                              return;
-                            }
-
-                            setCentroForm((current) => ({
-                              ...current,
-                              categoriaGrafica:
-                                value as CentroCostoPayload["categoriaGrafica"],
-                            }));
-                          }}
-                        >
-                          <SelectTrigger id="centro-categoria" className="w-full">
-                            <SelectValue placeholder="Selecciona una categoria">
-                              {(value) =>
-                                typeof value === "string"
-                                  ? getCategoriaGraficaLabel(
-                                      value as CentroCostoPayload["categoriaGrafica"],
-                                    )
-                                  : "Selecciona una categoria"
-                              }
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectGroup>
-                              {categoriaGraficaItems.map((item) => (
-                                <SelectItem key={item.value} value={item.value}>
-                                  {item.label}
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          </SelectContent>
-                        </Select>
-                      </Field>
-                      <Field>
-                        <FieldLabel htmlFor="centro-imputacion">Imputación</FieldLabel>
-                        <Select
-                          value={centroForm.imputacionPreferida}
-                          onValueChange={(value) => {
-                            if (!value) {
-                              return;
-                            }
-
-                            setCentroForm((current) => ({
-                              ...current,
-                              imputacionPreferida:
-                                value as CentroCostoPayload["imputacionPreferida"],
-                            }));
-                          }}
-                        >
-                          <SelectTrigger id="centro-imputacion" className="w-full">
-                            <SelectValue placeholder="Selecciona una imputacion">
-                              {(value) =>
-                                typeof value === "string"
-                                  ? getImputacionPreferidaLabel(
-                                      value as CentroCostoPayload["imputacionPreferida"],
-                                    )
-                                  : "Selecciona una imputacion"
-                              }
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectGroup>
-                              {imputacionPreferidaItems.map((item) => (
-                                <SelectItem key={item.value} value={item.value}>
-                                  {item.label}
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          </SelectContent>
-                        </Select>
-                      </Field>
-                      <Field>
-                        <FieldLabel htmlFor="centro-unidad">Unidad base futura</FieldLabel>
-                        <Select
-                          value={centroForm.unidadBaseFutura}
-                          onValueChange={(value) => {
-                            if (!value) {
-                              return;
-                            }
-
-                            setCentroForm((current) => ({
-                              ...current,
-                              unidadBaseFutura:
-                                value as CentroCostoPayload["unidadBaseFutura"],
-                            }));
-                          }}
-                        >
-                          <SelectTrigger id="centro-unidad" className="w-full">
-                            <SelectValue placeholder="Selecciona una unidad">
-                              {(value) =>
-                                typeof value === "string"
-                                  ? getUnidadBaseLabel(
-                                      value as CentroCostoPayload["unidadBaseFutura"],
-                                    )
-                                  : "Selecciona una unidad"
-                              }
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectGroup>
-                              {unidadBaseItems.map((item) => (
-                                <SelectItem key={item.value} value={item.value}>
-                                  {item.label}
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          </SelectContent>
-                        </Select>
-                      </Field>
-                      <Field>
-                        <FieldLabel htmlFor="centro-responsable">Responsable</FieldLabel>
-                        <Select
-                          value={centroForm.responsableEmpleadoId ?? EMPTY_SELECT_VALUE}
-                          onValueChange={(value) => {
-                            if (!value) {
-                              return;
-                            }
-
-                            setCentroForm((current) => ({
-                              ...current,
-                              responsableEmpleadoId:
-                                value === EMPTY_SELECT_VALUE ? undefined : value,
-                            }));
-                          }}
-                        >
-                          <SelectTrigger id="centro-responsable" className="w-full">
-                            <SelectValue placeholder="Selecciona un responsable">
-                              {(value) => {
-                                if (value === EMPTY_SELECT_VALUE) {
-                                  return "Sin responsable";
-                                }
-
-                                return typeof value === "string"
-                                  ? empleadoLabelById.get(value) ?? value
-                                  : "Selecciona un responsable";
-                              }}
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectGroup>
-                              <SelectItem value={EMPTY_SELECT_VALUE}>
-                                Sin responsable
-                              </SelectItem>
-                              {empleados.map((empleado) => (
-                                <SelectItem key={empleado.id} value={empleado.id}>
-                                  {empleado.nombreCompleto}
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          </SelectContent>
-                        </Select>
-                      </Field>
-                      <Field className="cc-desc-field">
-                        <FieldLabel htmlFor="centro-descripcion">Descripción</FieldLabel>
-                        <Input
-                          id="centro-descripcion"
-                          value={centroForm.descripcion ?? ""}
-                          onChange={(event) =>
-                            setCentroForm((current) => ({
-                              ...current,
-                              descripcion: event.target.value,
-                            }))
-                          }
-                          placeholder="Comentarios operativos"
-                        />
-                      </Field>
-                  </div>
-
-                  <div className="centro-active-row">
-                    <div>
-                      <strong>Activo</strong>
-                      <span>Determina si se puede seguir imputando</span>
-                    </div>
-                    <button
-                      type="button"
-                      className={`switch-lg ${centroForm.activo ? "on" : ""}`}
-                      role="switch"
-                      aria-checked={centroForm.activo}
-                      aria-label="Activo"
-                      onClick={() =>
-                        setCentroForm((current) => ({
-                          ...current,
-                          activo: !current.activo,
-                        }))
-                      }
-                    />
-                  </div>
-
-                  <div className="centros-form-actions">
-                    <button type="submit" className="btn btn-primary">
-                      {isSaving ? <GdiSpinner className="size-4" /> : <PlusIcon />}
-                      {editingCentroId ? "Guardar cambios" : "Nuevo centro"}
-                    </button>
-                    {editingCentroId ? (
-                      <button
-                        type="button"
-                        className="btn"
-                        onClick={() => {
-                          setEditingCentroId(null);
-                          setCentroForm(createEmptyCentro(centroForm.plantaId, ""));
-                        }}
-                      >
-                        Cancelar
-                      </button>
-                    ) : null}
-                  </div>
-                </form>
+              <div className="ccosto-toolbar">
+                <div className="ccosto-buscador">
+                  <SearchIcon />
+                  <input
+                    type="search"
+                    placeholder="Búsqueda"
+                    value={busquedaCentros}
+                    onChange={(event) => setBusquedaCentros(event.target.value)}
+                    aria-label="Buscar centro de costo"
+                  />
+                </div>
+                <label className="ccosto-periodo">
+                  <span>Período</span>
+                  <input
+                    type="month"
+                    value={periodoResumen}
+                    onChange={(event) =>
+                      setPeriodoResumen(event.target.value || getCurrentPeriodo())
+                    }
+                  />
+                </label>
               </div>
 
               <div className="card tbl-scroll centros-costo-table-card">
-                <table className="tbl centros-costo-table">
+                <table className="tbl centros-costo-table ccosto-tabla">
                   <thead>
                     <tr>
-                      <th>Centro</th>
-                      <th>Área</th>
-                      <th>Tipo</th>
-                      <th>Estado costeo</th>
-                      <th>Período</th>
+                      <th>Nombre</th>
                       <th className="right">Horas productivas</th>
-                      <th className="right">Tarifa publicada</th>
+                      <th className="right">Gastos</th>
                       <th className="right">Absorbido</th>
-                      <th className="right">Tarifa total</th>
+                      <th className="right">Prorrateado</th>
+                      <th className="right">Gasto total</th>
+                      <th className="right">Valor de la hora</th>
                       <th className="right sticky-right">Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {centros.map((centro) => {
-                      const tarifaPublicada = formatMoneyOrDash(
-                        centro.ultimaTarifaBase ?? centro.ultimaTarifaPublicada,
-                        moneda,
-                      );
-                      const tarifaAbsorbida = formatMoneyOrDash(
-                        centro.ultimaTarifaAbsorbida,
-                        moneda,
-                      );
-                      const tarifaTotal = formatMoneyOrDash(
-                        centro.ultimaTarifaTotal ?? centro.ultimaTarifaPublicada,
-                        moneda,
-                      );
-                      const estadoCosteo =
-                        centro.estadoConfiguracion === "sin_configurar"
-                          ? "Sin configurar"
-                          : centro.estadoConfiguracion === "borrador"
-                            ? "Borrador"
-                            : "Publicado";
-                      const isTercerizado =
-                        centro.tipoCentro.toLowerCase() === "tercerizado";
+                    {isLoadingResumen && filasResumen.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="ccosto-vacio">
+                          <GdiSpinner className="size-4" />
+                        </td>
+                      </tr>
+                    ) : null}
+                    {!isLoadingResumen && filasResumen.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="ccosto-vacio">
+                          {busquedaCentros.trim()
+                            ? "Ningún centro coincide con la búsqueda."
+                            : `Todavía no hay centros con datos cargados en ${formatPeriodoCorto(periodoResumen)}.`}
+                        </td>
+                      </tr>
+                    ) : null}
+                    {filasResumen.map((fila) => {
+                      const centro = centroById.get(fila.id);
+                      // Los centros que reparten su costo entero no tienen valor
+                      // hora: lo que cuestan ya se cobra dentro de los productivos
+                      // que los absorbieron.
+                      const repartePorEntero = fila.prorrateado > 0;
 
                       return (
-                        <tr key={centro.id}>
+                        <tr key={fila.id}>
                           <td>
-                            <div className="name">{centro.nombre}</div>
+                            <div className="name">{fila.nombre}</div>
                             <div className="desc mono-desc">
-                              {centro.plantaNombre} / {centro.areaCostoNombre}
+                              {fila.codigo}
+                              {fila.lineas > 0
+                                ? ` · ${fila.lineas} ${fila.lineas === 1 ? "línea" : "líneas"}`
+                                : " · sin cargar"}
                             </div>
                           </td>
-                          <td>{centro.areaCostoNombre}</td>
-                          <td>
-                            <span className={`tag ${isTercerizado ? "warm" : ""}`}>
-                              {getTipoCentroLabel(centro.tipoCentro)}
-                            </span>
-                          </td>
-                          <td>
-                            <span
-                              className={`tag ${
-                                centro.estadoConfiguracion === "publicado"
-                                  ? "ok"
-                                  : "muted"
-                              }`}
-                            >
-                              {centro.estadoConfiguracion === "publicado" ? (
-                                <span className="d" />
-                              ) : null}
-                              {estadoCosteo}
-                            </span>
-                          </td>
-                          <td className="mono-cell">
-                            {centro.ultimoPeriodoConfigurado || "Sin período"}
-                          </td>
                           <td className="right numeric">
-                            {typeof centro.ultimaCapacidadPractica === "number" &&
-                            Number.isFinite(centro.ultimaCapacidadPractica)
-                              ? new Intl.NumberFormat("es-AR", {
+                            {fila.horasProductivas == null
+                              ? "—"
+                              : new Intl.NumberFormat("es-AR", {
                                   minimumFractionDigits: 0,
                                   maximumFractionDigits: 2,
-                                }).format(centro.ultimaCapacidadPractica)
+                                }).format(fila.horasProductivas)}
+                          </td>
+                          <td className="right numeric">
+                            {formatMoneyOrDash(fila.gastos, moneda) ?? "—"}
+                          </td>
+                          <td className="right numeric muted-value">
+                            {fila.absorbido > 0
+                              ? formatMoneyOrDash(fila.absorbido, moneda)
+                              : "—"}
+                          </td>
+                          <td className="right numeric muted-value">
+                            {repartePorEntero
+                              ? formatMoneyOrDash(fila.prorrateado, moneda)
                               : "—"}
                           </td>
                           <td className="right numeric">
-                            {tarifaPublicada ?? "Sin publicar"}
-                          </td>
-                          <td className="right numeric muted-value">
-                            {tarifaAbsorbida ?? "—"}
+                            {formatMoneyOrDash(fila.gastoTotal, moneda) ?? "—"}
                           </td>
                           <td className="right numeric strong-value">
-                            {tarifaTotal ?? "—"}
+                            {fila.valorHora == null
+                              ? "—"
+                              : formatMoneyOrDash(fila.valorHora, moneda)}
                           </td>
                           <td className="right sticky-right">
                             <span className="centros-actions">
-                              <span
-                                className={`centro-status-icon ${
-                                  centro.activo ? "active" : "inactive"
-                                }`}
-                                title={centro.activo ? "Activo" : "Inactivo"}
-                                aria-label={centro.activo ? "Activo" : "Inactivo"}
-                              >
-                                <CheckCircle2Icon />
-                              </span>
                               <button
                                 type="button"
                                 className="btn btn-primary configure-cost-btn"
                                 onClick={() => {
+                                  if (!centro) return;
                                   setSelectedCentro(centro);
                                   setIsConfiguratorOpen(true);
                                 }}
@@ -1240,35 +560,9 @@ export function CostosPanel({
                               <button
                                 type="button"
                                 className="icon-btn"
-                                title="Editar"
-                                aria-label={`Editar ${centro.nombre}`}
-                                onClick={() => {
-                                  setEditingCentroId(centro.id);
-                                  setCentroForm({
-                                    plantaId: centro.plantaId,
-                                    areaCostoId: centro.areaCostoId,
-                                    codigo: centro.codigo,
-                                    nombre: centro.nombre,
-                                    descripcion: centro.descripcion,
-                                    tipoCentro: centro.tipoCentro,
-                                    categoriaGrafica: centro.categoriaGrafica,
-                                    imputacionPreferida: centro.imputacionPreferida,
-                                    unidadBaseFutura: centro.unidadBaseFutura,
-                                    responsableEmpleadoId:
-                                      centro.responsableEmpleadoId || undefined,
-                                    activo: centro.activo,
-                                  });
-                                  setActiveTab("centros");
-                                }}
-                              >
-                                <PencilIcon />
-                              </button>
-                              <button
-                                type="button"
-                                className="icon-btn"
-                                title={centro.activo ? "Inactivar" : "Activar"}
-                                aria-label={`${centro.activo ? "Inactivar" : "Activar"} ${centro.nombre}`}
-                                onClick={() => handleToggleCentro(centro.id)}
+                                title="Inactivar"
+                                aria-label={`Inactivar ${fila.nombre}`}
+                                onClick={() => handleToggleCentro(fila.id)}
                               >
                                 <PowerIcon />
                               </button>
@@ -1276,8 +570,10 @@ export function CostosPanel({
                                 type="button"
                                 className="icon-btn"
                                 title="Eliminar"
-                                aria-label={`Eliminar ${centro.nombre}`}
-                                onClick={() => handleEliminarCentro(centro)}
+                                aria-label={`Eliminar ${fila.nombre}`}
+                                onClick={() => {
+                                  if (centro) handleEliminarCentro(centro);
+                                }}
                               >
                                 <Trash2Icon />
                               </button>
@@ -1289,27 +585,37 @@ export function CostosPanel({
                   </tbody>
                   <tfoot>
                     <tr className="centros-totales-row">
-                      <td colSpan={5}>
-                        Total · {centros.length}{" "}
-                        {centros.length === 1 ? "centro" : "centros"}
+                      <td colSpan={2}>
+                        Total · {filasResumen.length}{" "}
+                        {filasResumen.length === 1 ? "centro" : "centros"}
                       </td>
                       <td className="right numeric">
-                        {new Intl.NumberFormat("es-AR", {
-                          minimumFractionDigits: 0,
-                          maximumFractionDigits: 2,
-                        }).format(totalesCentros.horas)}
-                      </td>
-                      <td className="right numeric">
-                        {formatMoneyOrDash(totalesCentros.tarifaPublicada, moneda) ?? "—"}
+                        {formatMoneyOrDash(totalesResumen.gastos, moneda) ?? "—"}
                       </td>
                       <td className="right numeric muted-value">
-                        {formatMoneyOrDash(totalesCentros.absorbido, moneda) ?? "—"}
+                        {formatMoneyOrDash(totalesResumen.absorbido, moneda) ?? "—"}
+                      </td>
+                      <td className="right numeric muted-value">
+                        {formatMoneyOrDash(totalesResumen.prorrateado, moneda) ?? "—"}
                       </td>
                       <td className="right numeric strong-value">
-                        {formatMoneyOrDash(totalesCentros.tarifaTotal, moneda) ?? "—"}
+                        {formatMoneyOrDash(totalesResumen.gastoTotal, moneda) ?? "—"}
                       </td>
+                      <td className="right numeric" />
                       <td className="right sticky-right" />
                     </tr>
+                    {/* Lo que sale de los centros de estructura tiene que entrar
+                        entero a los productivos. Si las dos columnas no dan
+                        igual, el reparto perdió plata en el camino. */}
+                    {totalesResumen.prorrateado > 0 ? (
+                      <tr className="ccosto-cuadre">
+                        <td colSpan={8}>
+                          {repartoCuadra
+                            ? `El prorrateo cuadra: los ${formatMoneyOrDash(totalesResumen.prorrateado, moneda)} que reparte la estructura entran completos a los centros productivos.`
+                            : `El prorrateo no cuadra: se reparten ${formatMoneyOrDash(totalesResumen.prorrateado, moneda)} pero se absorben ${formatMoneyOrDash(totalesResumen.absorbido, moneda)}.`}
+                        </td>
+                      </tr>
+                    ) : null}
                   </tfoot>
                 </table>
               </div>
@@ -1325,13 +631,6 @@ export function CostosPanel({
                 <div className="kpi-card">
                   <div className="lbl">
                     <FolderTreeIcon />
-                    Áreas
-                  </div>
-                  <div className="val">{areas.length}</div>
-                </div>
-                <div className="kpi-card">
-                  <div className="lbl">
-                    <FolderTreeIcon />
                     Centros activos
                   </div>
                   <div className="val">
@@ -1341,16 +640,18 @@ export function CostosPanel({
               </div>
         </TabsContent>
       </Tabs>
-      <CentroCostoConfigurator
+      <CentroCostoFicha
         open={isConfiguratorOpen}
-        onOpenChange={setIsConfiguratorOpen}
+        onOpenChange={(next) => {
+          setIsConfiguratorOpen(next);
+          if (!next) setSelectedCentro(null);
+        }}
         centro={selectedCentro}
         plantas={plantas}
-        areas={areas}
-        empleados={empleados}
-        refreshKey={configuracionRefreshKey}
-        onConfigured={async () => {
+        periodo={periodoResumen}
+        onSaved={async () => {
           reloadAll();
+          await cargarResumen(periodoResumen);
         }}
       />
       <ConfirmacionDestructiva

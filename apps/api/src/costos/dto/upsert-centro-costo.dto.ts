@@ -16,19 +16,6 @@ export enum TipoCentroCostoDto {
   tercerizado = 'tercerizado',
 }
 
-export enum CategoriaGraficaCentroCostoDto {
-  preprensa = 'preprensa',
-  impresion = 'impresion',
-  terminacion = 'terminacion',
-  empaque = 'empaque',
-  logistica = 'logistica',
-  calidad = 'calidad',
-  mantenimiento = 'mantenimiento',
-  administracion = 'administracion',
-  comercial = 'comercial',
-  tercerizado = 'tercerizado',
-}
-
 export enum ImputacionPreferidaCentroCostoDto {
   directa = 'directa',
   indirecta = 'indirecta',
@@ -49,9 +36,6 @@ export class UpsertCentroCostoDto {
   @IsUUID()
   plantaId: string;
 
-  @IsUUID()
-  areaCostoId: string;
-
   @IsString()
   @MinLength(1)
   codigo: string;
@@ -67,18 +51,11 @@ export class UpsertCentroCostoDto {
   @IsEnum(TipoCentroCostoDto)
   tipoCentro: TipoCentroCostoDto;
 
-  @IsEnum(CategoriaGraficaCentroCostoDto)
-  categoriaGrafica: CategoriaGraficaCentroCostoDto;
-
   @IsEnum(ImputacionPreferidaCentroCostoDto)
   imputacionPreferida: ImputacionPreferidaCentroCostoDto;
 
   @IsEnum(UnidadBaseCentroCostoDto)
   unidadBaseFutura: UnidadBaseCentroCostoDto;
-
-  @IsOptional()
-  @IsUUID()
-  responsableEmpleadoId?: string;
 
   @IsBoolean()
   activo: boolean;

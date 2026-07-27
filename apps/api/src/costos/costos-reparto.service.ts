@@ -3,7 +3,6 @@ import {
   ImputacionPreferidaCentroCosto,
   Prisma,
   TipoCentroCosto,
-  TipoRecursoCentroCosto,
 } from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
@@ -27,17 +26,7 @@ export class CostosRepartoService {
         activo: true,
       },
       include: {
-        recursos: {
-          where: { periodo, activo: true },
-          include: {
-            maquinariaPeriodo: {
-              where: { periodo },
-              orderBy: [{ createdAt: 'desc' }],
-              take: 1,
-            },
-          },
-        },
-        componentesCostoPeriodo: {
+        lineas: {
           where: { periodo },
         },
         capacidadesPeriodo: {
@@ -54,6 +43,7 @@ export class CostosRepartoService {
       return {
         absorbidoByCentroId: new Map(),
         desgloseByCentroId: new Map(),
+        distribuidoByCentroId: new Map(),
       };
     }
 
@@ -72,20 +62,26 @@ export class CostosRepartoService {
       return {
         absorbidoByCentroId: new Map(),
         desgloseByCentroId: new Map(),
+        distribuidoByCentroId: new Map(),
       };
     }
 
+    // El peso del reparto es el gasto propio de cada centro productivo, no sus
+    // horas. Un centro que gasta el doble absorbe el doble de la estructura,
+    // sin depender de que las horas estén bien cargadas para no distorsionar.
+    // Ver docs/centros-de-costo-carga-manual-diseno.md, decisión 4.
     const baseByTarget = new Map<string, Prisma.Decimal>();
     for (const target of centrosObjetivo) {
-      const capacidad = target.capacidadesPeriodo[0]?.capacidadPractica;
+      const gastoPropio = this.computeCostoMensualDirectoCentro(target);
       baseByTarget.set(
         target.id,
-        capacidad && capacidad.gt(0) ? capacidad : new Prisma.Decimal(0),
+        gastoPropio.gt(0) ? gastoPropio : new Prisma.Decimal(0),
       );
     }
 
     const absorbidoByCentroId = new Map<string, Prisma.Decimal>();
     const desgloseByCentroId = new Map<string, RepartoAbsorbidoItem[]>();
+    const distribuidoByCentroId = new Map<string, Prisma.Decimal>();
 
     for (const fuente of fuentes) {
       const targets = centrosObjetivo.filter(
@@ -140,58 +136,31 @@ export class CostosRepartoService {
         });
         desgloseByCentroId.set(target.id, desgloseActual);
       }
+
+      // Lo efectivamente asignado, no el costo de la fuente: si algún monto se
+      // hubiera recortado a cero, el total del listado seguiría cuadrando.
+      distribuidoByCentroId.set(fuente.id, asignadoAcumulado);
     }
 
     return {
       absorbidoByCentroId,
       desgloseByCentroId,
+      distribuidoByCentroId,
     };
   }
 
+  /**
+   * El gasto propio del centro: la suma de su planilla, sin lo que absorbe de
+   * los centros de estructura. Antes había que sumar cuatro orígenes distintos
+   * (componentes, maquinaria, gastos generales y activos fijos); ahora es una
+   * sola lista de líneas cargadas a mano.
+   */
   computeCostoMensualDirectoCentro(
-    centro: Prisma.CentroCostoGetPayload<{
-      include: {
-        recursos: {
-          include: { maquinariaPeriodo: true };
-        };
-        componentesCostoPeriodo: true;
-      };
-    }>,
+    centro: Prisma.CentroCostoGetPayload<{ include: { lineas: true } }>,
   ) {
-    const costoMensualBase = centro.componentesCostoPeriodo.reduce(
-      (acc, item) => acc.plus(item.importeMensual),
+    return centro.lineas.reduce(
+      (acc, linea) => acc.plus(linea.importeMensual),
       new Prisma.Decimal(0),
     );
-    const costoMensualMaquinaria = centro.recursos
-      .filter(
-        (recurso) => recurso.tipoRecurso === TipoRecursoCentroCosto.MAQUINARIA,
-      )
-      .reduce(
-        (acc, recurso) =>
-          acc.plus(recurso.maquinariaPeriodo[0]?.costoMensualTotalCalc ?? 0),
-        new Prisma.Decimal(0),
-      );
-    const costoMensualGastosGenerales = centro.recursos
-      .filter(
-        (recurso) =>
-          recurso.tipoRecurso === TipoRecursoCentroCosto.GASTO_GENERAL,
-      )
-      .reduce(
-        (acc, recurso) => acc.plus(recurso.valorMensual ?? 0),
-        new Prisma.Decimal(0),
-      );
-    const costoMensualActivosFijos = centro.recursos
-      .filter(
-        (recurso) => recurso.tipoRecurso === TipoRecursoCentroCosto.ACTIVO_FIJO,
-      )
-      .reduce(
-        (acc, recurso) => acc.plus(recurso.depreciacionMensualCalc ?? 0),
-        new Prisma.Decimal(0),
-      );
-
-    return costoMensualBase
-      .plus(costoMensualMaquinaria)
-      .plus(costoMensualGastosGenerales)
-      .plus(costoMensualActivosFijos);
   }
 }

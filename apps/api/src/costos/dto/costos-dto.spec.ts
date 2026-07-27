@@ -2,58 +2,78 @@ import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import {
-  MetodoDepreciacionMaquinaDto,
-  UpsertCentroRecursosMaquinariaDto,
-} from './upsert-centro-recursos-maquinaria.dto';
+  ReplaceCentroLineasDto,
+  SeccionCentroCostoLineaDto,
+} from './replace-centro-lineas.dto';
 
-describe('Costos DTO validation', () => {
-  it('acepta maquinaria sin campos de energia y productividad', async () => {
-    const dto = plainToInstance(UpsertCentroRecursosMaquinariaDto, {
-      recursos: [
-        {
-          centroCostoRecursoId: '550e8400-e29b-41d4-a716-446655440000',
-          metodoDepreciacion: MetodoDepreciacionMaquinaDto.lineal,
-          valorCompra: 1000,
-          valorResidual: 0,
-          vidaUtilMeses: 12,
-          mantenimientoMensual: 0,
-          segurosMensual: 0,
-          otrosFijosMensual: 0,
-        },
-      ],
+describe('Lineas del centro de costo', () => {
+  const linea = (extra: Record<string, unknown>) =>
+    plainToInstance(ReplaceCentroLineasDto, {
+      lineas: [{ nombre: 'X', ...extra }],
     });
 
-    const errors = await validate(dto);
+  it('un gasto general no necesita los campos de empleado ni de activo fijo', async () => {
+    const errors = await validate(
+      linea({
+        seccion: SeccionCentroCostoLineaDto.gasto_general,
+        valorMensual: 100,
+      }),
+    );
 
     expect(errors).toHaveLength(0);
   });
 
-  it('rechaza porcentajes de maquinaria mayores a 100', async () => {
-    const dto = plainToInstance(UpsertCentroRecursosMaquinariaDto, {
-      recursos: [
+  it('una linea de empleado exige sueldo y porcentaje de cargas', async () => {
+    const errors = await validate(
+      linea({ seccion: SeccionCentroCostoLineaDto.empleado }),
+    );
+
+    expect(errors).toHaveLength(1);
+    const campos = Object.keys(
+      errors[0].children?.[0]?.children?.reduce(
+        (acc, e) => ({ ...acc, [e.property]: true }),
+        {},
+      ) ?? {},
+    );
+    expect(campos).toEqual(
+      expect.arrayContaining(['salarioMensual', 'cargasPct']),
+    );
+  });
+
+  it('un activo fijo con vida util cero se rechaza: no se divide por cero', async () => {
+    const errors = await validate(
+      linea({
+        seccion: SeccionCentroCostoLineaDto.activo_fijo,
+        vidaUtilRestanteMeses: 0,
+        valorActual: 5000,
+        valorFinalVida: 500,
+      }),
+    );
+
+    expect(errors).toHaveLength(1);
+  });
+
+  it('mandar el importe mensual se rechaza: el total lo calcula el servidor', async () => {
+    const dto = plainToInstance(ReplaceCentroLineasDto, {
+      lineas: [
         {
-          centroCostoRecursoId: '550e8400-e29b-41d4-a716-446655440000',
-          metodoDepreciacion: MetodoDepreciacionMaquinaDto.lineal,
-          valorCompra: 1000,
-          valorResidual: 0,
-          vidaUtilMeses: 12,
-          potenciaNominalKw: 1,
-          factorCargaPct: 120,
-          tarifaEnergiaKwh: 10,
-          horasProgramadasMes: 10,
-          disponibilidadPct: 101,
-          eficienciaPct: 850,
-          mantenimientoMensual: 0,
-          segurosMensual: 0,
-          otrosFijosMensual: 0,
+          seccion: SeccionCentroCostoLineaDto.gasto_general,
+          nombre: 'Energia',
+          valorMensual: 100,
+          importeMensual: 999999,
         },
       ],
     });
 
-    const errors = await validate(dto);
+    // Las mismas opciones que el ValidationPipe global de main.ts: sin ellas
+    // la propiedad desconocida sobrevive al plainToInstance y el test no
+    // estaría midiendo lo que pasa de verdad en la ruta.
+    const errors = await validate(dto, {
+      whitelist: true,
+      forbidNonWhitelisted: true,
+    });
 
-    expect(JSON.stringify(errors)).toContain('factorCargaPct');
-    expect(JSON.stringify(errors)).toContain('disponibilidadPct');
-    expect(JSON.stringify(errors)).toContain('eficienciaPct');
+    expect(errors).toHaveLength(1);
+    expect(JSON.stringify(errors)).toContain('importeMensual');
   });
 });

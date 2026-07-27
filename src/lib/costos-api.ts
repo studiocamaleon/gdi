@@ -1,21 +1,16 @@
 import { apiRequest } from "@/lib/api";
 import {
-  AreaCosto,
-  AreaCostoPayload,
   CentroCosto,
   CentroCostoCapacidad,
-  CentroCostoCapacidadPayload,
-  CentroCostoComponenteCosto,
-  CentroCostoComponenteCostoPayload,
+  CentroCostoCapacidadManualPayload,
   CentroCostoConfiguracionDetalle,
+  CentroCostoLinea,
+  CentroCostoLineaPayload,
   CentroCostoPayload,
-  CentroCostoRecurso,
-  CentroCostoRecursoMaquinariaPayload,
-  CentroCostoRecursoMaquinariaPeriodo,
-  CentroCostoRecursoPayload,
   CentroCostoTarifaPeriodo,
   Planta,
   PlantaPayload,
+  ResumenCentrosCosto,
 } from "@/lib/costos";
 
 export async function getPlantas() {
@@ -42,32 +37,19 @@ export async function togglePlanta(id: string) {
   });
 }
 
-export async function getAreasCosto() {
-  return apiRequest<AreaCosto[]>("/costos/areas");
-}
-
-export async function createAreaCosto(payload: AreaCostoPayload) {
-  return apiRequest<AreaCosto>("/costos/areas", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function updateAreaCosto(id: string, payload: AreaCostoPayload) {
-  return apiRequest<AreaCosto>(`/costos/areas/${id}`, {
-    method: "PUT",
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function toggleAreaCosto(id: string) {
-  return apiRequest<void>(`/costos/areas/${id}/toggle`, {
-    method: "PATCH",
-  });
-}
-
 export async function getCentrosCosto() {
   return apiRequest<CentroCosto[]>("/costos/centros-costo");
+}
+
+/**
+ * El listado con los números vivos del período. No sale del último snapshot de
+ * tarifa: ese puede haber quedado viejo respecto de su propia planilla, y el
+ * listado tiene que decir lo que el centro cuesta hoy.
+ */
+export async function getResumenCentrosCosto(periodo: string) {
+  return apiRequest<ResumenCentrosCosto>(
+    `/costos/centros-costo/resumen?periodo=${encodeURIComponent(periodo)}`,
+  );
 }
 
 export async function createCentroCosto(payload: CentroCostoPayload) {
@@ -119,56 +101,20 @@ export async function updateCentroCostoConfiguracionBase(
   );
 }
 
-export async function upsertCentroCostoConfiguracionPeriodo(
+/**
+ * Reemplaza la planilla entera del período: las tres secciones de una. El
+ * importe de cada línea NO se manda — lo calcula el servidor.
+ */
+export async function replaceCentroCostoLineas(
   id: string,
   periodo: string,
-  payload: {
-    centro: CentroCostoPayload;
-    recursos: CentroCostoRecursoPayload[];
-    recursosMaquinaria: CentroCostoRecursoMaquinariaPayload[];
-    componentesCosto: CentroCostoComponenteCostoPayload[];
-    capacidad: CentroCostoCapacidadPayload;
-  },
+  lineas: CentroCostoLineaPayload[],
 ) {
-  return apiRequest<CentroCostoConfiguracionDetalle>(
-    `/costos/centros-costo/${id}/configuracion-periodo?periodo=${encodeURIComponent(periodo)}`,
+  return apiRequest<CentroCostoLinea[]>(
+    `/costos/centros-costo/${id}/lineas?periodo=${encodeURIComponent(periodo)}`,
     {
       method: "PUT",
-      body: JSON.stringify({
-        centro: payload.centro,
-        recursos: { recursos: payload.recursos },
-        recursosMaquinaria: { recursos: payload.recursosMaquinaria },
-        componentesCosto: { componentes: payload.componentesCosto },
-        capacidad: payload.capacidad,
-      }),
-    },
-  );
-}
-
-export async function replaceCentroCostoRecursos(
-  id: string,
-  periodo: string,
-  recursos: CentroCostoRecursoPayload[],
-) {
-  return apiRequest<CentroCostoRecurso[]>(
-    `/costos/centros-costo/${id}/recursos?periodo=${encodeURIComponent(periodo)}`,
-    {
-      method: "PUT",
-      body: JSON.stringify({ recursos }),
-    },
-  );
-}
-
-export async function replaceCentroCostoComponentes(
-  id: string,
-  periodo: string,
-  componentes: CentroCostoComponenteCostoPayload[],
-) {
-  return apiRequest<CentroCostoComponenteCosto[]>(
-    `/costos/centros-costo/${id}/componentes-costo?periodo=${encodeURIComponent(periodo)}`,
-    {
-      method: "PUT",
-      body: JSON.stringify({ componentes }),
+      body: JSON.stringify({ lineas }),
     },
   );
 }
@@ -176,36 +122,13 @@ export async function replaceCentroCostoComponentes(
 export async function upsertCentroCostoCapacidad(
   id: string,
   periodo: string,
-  payload: CentroCostoCapacidadPayload,
+  payload: CentroCostoCapacidadManualPayload,
 ) {
   return apiRequest<CentroCostoCapacidad>(
     `/costos/centros-costo/${id}/capacidad?periodo=${encodeURIComponent(periodo)}`,
     {
       method: "PUT",
       body: JSON.stringify(payload),
-    },
-  );
-}
-
-export async function getCentroCostoRecursosMaquinaria(
-  id: string,
-  periodo: string,
-) {
-  return apiRequest<CentroCostoRecursoMaquinariaPeriodo[]>(
-    `/costos/centros-costo/${id}/recursos-maquinaria?periodo=${encodeURIComponent(periodo)}`,
-  );
-}
-
-export async function upsertCentroCostoRecursosMaquinaria(
-  id: string,
-  periodo: string,
-  recursos: CentroCostoRecursoMaquinariaPayload[],
-) {
-  return apiRequest<CentroCostoRecursoMaquinariaPeriodo[]>(
-    `/costos/centros-costo/${id}/recursos-maquinaria?periodo=${encodeURIComponent(periodo)}`,
-    {
-      method: "PUT",
-      body: JSON.stringify({ recursos }),
     },
   );
 }

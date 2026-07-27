@@ -7,7 +7,6 @@ import {
 } from '../remuneraciones.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { CurrentAuth } from '../../auth/auth.types';
-import type { NominaCostosService } from '../nomina-costos.service';
 
 /**
  * Las dos reglas que no se pueden romper: cómo se prorratea el aguinaldo y
@@ -68,16 +67,11 @@ function armar(opts: { existeEmpleado?: boolean; yaHay?: unknown } = {}) {
     $transaction: jest.fn((cb: (t: unknown) => unknown) => cb(tx)),
   } as unknown as PrismaService;
 
-  // El puente con Costos se stubea: acá se prueban las reglas de la
-  // remuneración, no que los centros se recalculen (eso es su propio test).
-  const sincronizarEmpleado = jest.fn().mockResolvedValue(undefined);
-  const nominaCostos = { sincronizarEmpleado } as unknown as NominaCostosService;
-
   return {
-    service: new RemuneracionesService(prisma, nominaCostos),
+    service: new RemuneracionesService(prisma),
     updateMany,
     create,
-    sincronizarEmpleado,
+    prisma,
   };
 }
 
@@ -151,11 +145,13 @@ describe('remuneraciones', () => {
     });
 
     /**
-     * Sin esto, cargar un aumento dejaría las tarifas de todos sus centros
-     * calculadas con el sueldo viejo, en silencio.
+     * El legajo dejó de escribir en los centros de costo: la planilla del
+     * centro se carga a mano y el empleado que figura ahí es texto libre.
+     * Cargar un aumento no puede tocar ninguna tabla de Costos.
+     * Ver docs/centros-de-costo-carga-manual-diseno.md, decisión 1.
      */
-    it('cargar un sueldo recalcula los centros donde la persona trabaja', async () => {
-      const { service, sincronizarEmpleado } = armar();
+    it('cargar un sueldo no toca los centros de costo', async () => {
+      const { service, prisma } = armar();
 
       await service.crear(AUTH, 'e1', {
         vigenteDesde: '2026-08',
@@ -163,7 +159,10 @@ describe('remuneraciones', () => {
         cargasSociales: '1250000',
       });
 
-      expect(sincronizarEmpleado).toHaveBeenCalledWith('t1', 'e1');
+      const tocados = Object.keys(prisma).filter((clave) =>
+        clave.toLowerCase().startsWith('centrocosto'),
+      );
+      expect(tocados).toEqual([]);
     });
 
     it('no deja dos remuneraciones arrancando el mismo mes', async () => {

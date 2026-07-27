@@ -4,12 +4,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
-  CategoriaComponenteCostoCentro,
   EstadoTarifaCentroCostoPeriodo,
   ImputacionPreferidaCentroCosto,
   Prisma,
+  SeccionCentroCostoLinea,
   TipoCentroCosto,
-  TipoRecursoCentroCosto,
   UnidadBaseCentroCosto,
 } from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
@@ -188,54 +187,28 @@ export class CostosTarifasService {
       centroCostoId,
       periodo,
     );
-    const costoMensualBase = centro.componentesCostoPeriodo.reduce(
-      (acc, item) => acc.plus(item.importeMensual),
-      new Prisma.Decimal(0),
+    // Una sola planilla, tres secciones. Antes esto sumaba cuatro orígenes
+    // distintos —componentes, maquinaria, gastos generales y activos fijos—,
+    // cada uno con su propia forma de derivar el importe.
+    const sumar = (seccion: SeccionCentroCostoLinea) =>
+      centro.lineas
+        .filter((linea) => linea.seccion === seccion)
+        .reduce((acc, linea) => acc.plus(linea.importeMensual), new Prisma.Decimal(0));
+
+    const costoMensualGastosGenerales = sumar(
+      SeccionCentroCostoLinea.GASTO_GENERAL,
     );
-    // Mano de obra = SUELDOS + CARGAS. Se persiste aparte para poder cobrar la
-    // hora hombre sólo sobre setup/cleanup en el motor (no sobre el runtime de
-    // máquina). Ver docs/hora-hombre-setup-cleanup-diseno.md
-    const MANO_OBRA_CATEGORIAS = new Set<CategoriaComponenteCostoCentro>([
-      CategoriaComponenteCostoCentro.SUELDOS,
-      CategoriaComponenteCostoCentro.CARGAS,
-    ]);
-    const costoMensualManoObra = centro.componentesCostoPeriodo
-      .filter((item) => MANO_OBRA_CATEGORIAS.has(item.categoria))
-      .reduce((acc, item) => acc.plus(item.importeMensual), new Prisma.Decimal(0));
-    const costoMensualMaquinaria = centro.recursos
-      .filter(
-        (recurso) =>
-          recurso.activo &&
-          recurso.tipoRecurso === TipoRecursoCentroCosto.MAQUINARIA,
-      )
-      .reduce(
-        (acc, recurso) =>
-          acc.plus(recurso.maquinariaPeriodo[0]?.costoMensualTotalCalc ?? 0),
-        new Prisma.Decimal(0),
-      );
-    const costoMensualGastosGenerales = centro.recursos
-      .filter(
-        (recurso) =>
-          recurso.activo &&
-          recurso.tipoRecurso === TipoRecursoCentroCosto.GASTO_GENERAL,
-      )
-      .reduce(
-        (acc, recurso) => acc.plus(recurso.valorMensual ?? 0),
-        new Prisma.Decimal(0),
-      );
-    const costoMensualActivosFijos = centro.recursos
-      .filter(
-        (recurso) =>
-          recurso.activo &&
-          recurso.tipoRecurso === TipoRecursoCentroCosto.ACTIVO_FIJO,
-      )
-      .reduce(
-        (acc, recurso) => acc.plus(recurso.depreciacionMensualCalc ?? 0),
-        new Prisma.Decimal(0),
-      );
-    const costoMensualTotal = costoMensualBase
-      .plus(costoMensualMaquinaria)
-      .plus(costoMensualGastosGenerales)
+    // Mano de obra = las líneas de empleado. Se persiste aparte para poder
+    // cobrar la hora hombre sólo sobre setup/cleanup y no sobre el runtime de
+    // máquina. Detectarla por sección es más firme que por categoría, que
+    // dependía de que la nómina hubiera etiquetado bien.
+    // Ver docs/hora-hombre-setup-cleanup-diseno.md
+    const costoMensualManoObra = sumar(SeccionCentroCostoLinea.EMPLEADO);
+    const costoMensualActivosFijos = sumar(
+      SeccionCentroCostoLinea.ACTIVO_FIJO,
+    );
+    const costoMensualTotal = costoMensualGastosGenerales
+      .plus(costoMensualManoObra)
       .plus(costoMensualActivosFijos);
     const costoMensualAbsorbidoReparto =
       repartoPeriodo.absorbidoByCentroId.get(centroCostoId) ??
@@ -250,8 +223,10 @@ export class CostosTarifasService {
     const costoMensualTotalConReparto = costoMensualTotal.plus(
       costoMensualAbsorbidoReparto,
     );
-    const capacidadPractica =
-      centro.capacidadesPeriodo[0]?.capacidadPractica ?? new Prisma.Decimal(0);
+    // Las horas del período, cargadas a mano. `capacidadPractica` se conserva
+    // como nombre en el snapshot porque es el contrato con el motor y el ETA.
+    const capacidad = centro.capacidadesPeriodo[0];
+    const capacidadPractica = capacidad?.horasProductivas ?? new Prisma.Decimal(0);
     const tarifaCalculada =
       costoMensualTotalConReparto.gt(0) && capacidadPractica.gt(0)
         ? costoMensualTotalConReparto.div(capacidadPractica)
@@ -286,10 +261,6 @@ export class CostosTarifasService {
         centroCodigo: centro.codigo,
         centroNombre: centro.nombre,
         unidadBase: this.mapper.fromPrismaUnidadBase(centro.unidadBaseFutura),
-        costoMensualBase: this.mapper.decimalToNumber(costoMensualBase),
-        costoMensualMaquinaria: this.mapper.decimalToNumber(
-          costoMensualMaquinaria,
-        ),
         costoMensualGastosGenerales: this.mapper.decimalToNumber(
           costoMensualGastosGenerales,
         ),
@@ -332,24 +303,9 @@ export class CostosTarifasService {
       },
       include: {
         planta: true,
-        areaCosto: true,
-        responsableEmpleado: true,
-        recursos: {
+        lineas: {
           where: { periodo },
-          include: {
-            empleado: true,
-            maquina: true,
-            maquinariaPeriodo: {
-              where: { periodo },
-              orderBy: [{ createdAt: 'desc' }],
-              take: 1,
-            },
-          },
-          orderBy: [{ createdAt: 'asc' }],
-        },
-        componentesCostoPeriodo: {
-          where: { periodo },
-          orderBy: [{ createdAt: 'asc' }],
+          orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
         },
         capacidadesPeriodo: {
           where: { periodo },
@@ -374,16 +330,10 @@ export class CostosTarifasService {
     costoMensualAbsorbidoReparto: Prisma.Decimal = new Prisma.Decimal(0),
   ) {
     const advertencias: string[] = [];
-    const recursosActivos = centro.recursos.filter((recurso) => recurso.activo);
     const costoMensualTotal = this.reparto
       .computeCostoMensualDirectoCentro(centro)
       .plus(costoMensualAbsorbidoReparto);
     const capacidad = centro.capacidadesPeriodo[0] ?? null;
-    const recursosMaquinariaActivos = centro.recursos.filter(
-      (recurso) =>
-        recurso.activo &&
-        recurso.tipoRecurso === TipoRecursoCentroCosto.MAQUINARIA,
-    );
 
     if (centro.unidadBaseFutura === UnidadBaseCentroCosto.NINGUNA) {
       advertencias.push(
@@ -400,23 +350,9 @@ export class CostosTarifasService {
       );
     }
 
-    if (recursosActivos.length === 0) {
+    if (centro.lineas.length === 0) {
       advertencias.push(
-        'Todavia no cargaste que personas, maquinas, gastos generales o activos fijos usa este sector para trabajar.',
-      );
-    }
-
-    if (centro.componentesCostoPeriodo.length === 0) {
-      advertencias.push(
-        `Todavia no cargaste costos mensuales para ${periodo}.`,
-      );
-    }
-
-    if (
-      recursosMaquinariaActivos.some((recurso) => !recurso.maquinariaPeriodo[0])
-    ) {
-      advertencias.push(
-        'Hay maquinaria activa en recursos sin parámetros de amortización/energía para este período.',
+        `Todavia no cargaste gastos, empleados ni activos fijos para ${periodo}.`,
       );
     }
 
@@ -430,9 +366,9 @@ export class CostosTarifasService {
       advertencias.push(
         'Todavia no definiste cuantas horas o unidades reales puede producir este centro por mes.',
       );
-    } else if (!capacidad.capacidadPractica.gt(0)) {
+    } else if (!capacidad.horasProductivas.gt(0)) {
       advertencias.push(
-        'La capacidad practica debe ser mayor a 0 para poder publicar una tarifa.',
+        'Las horas productivas deben ser mayores a 0 para poder publicar una tarifa.',
       );
     }
 

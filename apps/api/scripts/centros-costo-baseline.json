@@ -1,0 +1,2905 @@
+{
+  "capturadoEn": "2026-07-27T19:15:55.814Z",
+  "centros": 10,
+  "conservacionReparto": {
+    "2026-07": {
+      "sale": 2437500,
+      "entra": 2437500
+    },
+    "2026-03": {
+      "sale": 0,
+      "entra": 0
+    },
+    "2026-05": {
+      "sale": 0,
+      "entra": 0
+    },
+    "2026-06": {
+      "sale": 3791666.66,
+      "entra": 3791666.6600000006
+    }
+  },
+  "entradas": {
+    "TER-001__2026-07__BORRADOR": {
+      "centroCodigo": "TER-001",
+      "centroNombre": "Grabado/Corte Laser",
+      "tipoCentro": "PRODUCTIVO",
+      "imputacionPreferida": "DIRECTA",
+      "unidadBase": "HORA_MAQUINA",
+      "periodo": "2026-07",
+      "estado": "BORRADOR",
+      "esFilaDeTest": false,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 647361.11,
+        "capacidadPractica": 100,
+        "tarifaCalculada": 6473.61,
+        "costoMensualManoObra": 243750,
+        "tarifaManoObra": 2437.5
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 473750,
+        "costoMensualManoObra": 243750,
+        "costoMensualAbsorbidoReparto": 65398.03,
+        "horasProductivas": 100,
+        "tarifaCalculada": 5391.48,
+        "tarifaManoObra": 2437.5
+      },
+      "derivado": {
+        "costoMensualSinReparto": 473750,
+        "costoMensualManoObra": 243750,
+        "horasProductivas": 100
+      },
+      "snapshotDesactualizado": false,
+      "resumen": {
+        "periodo": "2026-07",
+        "unidadBase": "hora_maquina",
+        "advertencias": [],
+        "centroCodigo": "TER-001",
+        "centroNombre": "Grabado/Corte Laser",
+        "tarifaManoObra": 2437.5,
+        "tarifaCalculada": 6473.61,
+        "costoMensualBase": 243750,
+        "capacidadPractica": 100,
+        "costoMensualTotal": 647361.11,
+        "costoMensualManoObra": 243750,
+        "costoMensualMaquinaria": 230000,
+        "costoMensualSinReparto": 473750,
+        "tarifaAbsorbidaReparto": 1736.11,
+        "tarifaDirectaSinReparto": 4737.5,
+        "costoMensualActivosFijos": 0,
+        "desgloseRepartoAbsorbido": [
+          {
+            "monto": 173611.11,
+            "desdeCentroCodigo": "IMP-004",
+            "desdeCentroNombre": "Administracion & Gerencia",
+            "desdeCentroCostoId": "970eba6b-0001-4e5e-a157-9d2c11847b20"
+          }
+        ],
+        "costoMensualGastosGenerales": 0,
+        "costoMensualAbsorbidoReparto": 173611.11
+      },
+      "insumos": {
+        "capacidad": {
+          "horasProductivas": 100,
+          "capacidadPractica": 100,
+          "capacidadTeorica": 100,
+          "overrideManual": null
+        },
+        "componentes": {
+          "filas": 2,
+          "porCategoria": {
+            "SUELDOS": 162500,
+            "CARGAS": 81250
+          },
+          "total": 243750
+        },
+        "recursos": {
+          "MAQUINARIA": {
+            "filas": 1,
+            "importe": 230000
+          },
+          "EMPLEADO": {
+            "filas": 1,
+            "importe": 0
+          }
+        }
+      }
+    },
+    "IMP-001__2026-03__BORRADOR": {
+      "centroCodigo": "IMP-001",
+      "centroNombre": "Impresion Digital Laser",
+      "tipoCentro": "PRODUCTIVO",
+      "imputacionPreferida": "DIRECTA",
+      "unidadBase": "HORA_MAQUINA",
+      "periodo": "2026-03",
+      "estado": "BORRADOR",
+      "esFilaDeTest": false,
+      "resumenParcial": true,
+      "contrato": {
+        "costoMensualTotal": 3400000,
+        "capacidadPractica": 149.6,
+        "tarifaCalculada": 22727.27,
+        "costoMensualManoObra": 2000000,
+        "tarifaManoObra": 13368.98
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 3400000,
+        "costoMensualManoObra": 2000000,
+        "costoMensualAbsorbidoReparto": 0,
+        "horasProductivas": 149.6,
+        "tarifaCalculada": 22727.27,
+        "tarifaManoObra": 13368.98
+      },
+      "derivado": {
+        "costoMensualSinReparto": 3400000,
+        "costoMensualManoObra": 2000000,
+        "horasProductivas": 149.6
+      },
+      "snapshotDesactualizado": false,
+      "resumen": {
+        "periodo": "2026-03",
+        "unidadBase": "hora_maquina",
+        "advertencias": [],
+        "centroCodigo": "IMP-001",
+        "centroNombre": "Offset 4 colores",
+        "tarifaCalculada": 22727.27,
+        "capacidadPractica": 149.6,
+        "costoMensualTotal": 3400000
+      },
+      "insumos": {
+        "capacidad": {
+          "horasProductivas": 149.6,
+          "capacidadPractica": 149.6,
+          "capacidadTeorica": 176,
+          "overrideManual": null
+        },
+        "componentes": {
+          "filas": 5,
+          "porCategoria": {
+            "SUELDOS": 1200000,
+            "CARGAS": 800000,
+            "AMORTIZACION": 900000,
+            "ENERGIA": 300000,
+            "MANTENIMIENTO": 200000
+          },
+          "total": 3400000
+        },
+        "recursos": {
+          "EMPLEADO": {
+            "filas": 2,
+            "importe": 0
+          },
+          "MAQUINARIA": {
+            "filas": 1,
+            "importe": 0
+          }
+        }
+      }
+    },
+    "PRE-001__2026-03__PUBLICADA": {
+      "centroCodigo": "PRE-001",
+      "centroNombre": "Diseño Grafico & Pre-prensa",
+      "tipoCentro": "PRODUCTIVO",
+      "imputacionPreferida": "DIRECTA",
+      "unidadBase": "HORA_HOMBRE",
+      "periodo": "2026-03",
+      "estado": "PUBLICADA",
+      "esFilaDeTest": true,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 6000,
+        "capacidadPractica": 1,
+        "tarifaCalculada": 6000,
+        "costoMensualManoObra": 0,
+        "tarifaManoObra": 0
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 0,
+        "costoMensualManoObra": 0,
+        "costoMensualAbsorbidoReparto": 0,
+        "horasProductivas": 0,
+        "tarifaCalculada": 0,
+        "tarifaManoObra": 0
+      },
+      "derivado": {
+        "costoMensualSinReparto": 0,
+        "costoMensualManoObra": 0,
+        "horasProductivas": 0
+      },
+      "snapshotDesactualizado": false,
+      "resumen": {
+        "test": true
+      },
+      "insumos": {
+        "capacidad": null,
+        "componentes": {
+          "filas": 0,
+          "porCategoria": {},
+          "total": 0
+        },
+        "recursos": {}
+      }
+    },
+    "PRE-001__2026-05__PUBLICADA": {
+      "centroCodigo": "PRE-001",
+      "centroNombre": "Diseño Grafico & Pre-prensa",
+      "tipoCentro": "PRODUCTIVO",
+      "imputacionPreferida": "DIRECTA",
+      "unidadBase": "HORA_HOMBRE",
+      "periodo": "2026-05",
+      "estado": "PUBLICADA",
+      "esFilaDeTest": true,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 6000,
+        "capacidadPractica": 1,
+        "tarifaCalculada": 6000,
+        "costoMensualManoObra": 0,
+        "tarifaManoObra": 0
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 0,
+        "costoMensualManoObra": 0,
+        "costoMensualAbsorbidoReparto": 0,
+        "horasProductivas": 0,
+        "tarifaCalculada": 0,
+        "tarifaManoObra": 0
+      },
+      "derivado": {
+        "costoMensualSinReparto": 0,
+        "costoMensualManoObra": 0,
+        "horasProductivas": 0
+      },
+      "snapshotDesactualizado": false,
+      "resumen": {
+        "test": true
+      },
+      "insumos": {
+        "capacidad": null,
+        "componentes": {
+          "filas": 0,
+          "porCategoria": {},
+          "total": 0
+        },
+        "recursos": {}
+      }
+    },
+    "VP-002__2026-05__PUBLICADA": {
+      "centroCodigo": "VP-002",
+      "centroNombre": "Ventas & Centro de Copiado",
+      "tipoCentro": "ADMINISTRATIVO",
+      "imputacionPreferida": "DIRECTA",
+      "unidadBase": "HORA_HOMBRE",
+      "periodo": "2026-05",
+      "estado": "PUBLICADA",
+      "esFilaDeTest": true,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 22727.27,
+        "capacidadPractica": 1,
+        "tarifaCalculada": 22727.27,
+        "costoMensualManoObra": 0,
+        "tarifaManoObra": 0
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 0,
+        "costoMensualManoObra": 0,
+        "costoMensualAbsorbidoReparto": 0,
+        "horasProductivas": 0,
+        "tarifaCalculada": 0,
+        "tarifaManoObra": 0
+      },
+      "derivado": {
+        "costoMensualSinReparto": 0,
+        "costoMensualManoObra": 0,
+        "horasProductivas": 0
+      },
+      "snapshotDesactualizado": false,
+      "resumen": {
+        "test": true
+      },
+      "insumos": {
+        "capacidad": null,
+        "componentes": {
+          "filas": 0,
+          "porCategoria": {},
+          "total": 0
+        },
+        "recursos": {}
+      }
+    },
+    "IMP-001__2026-05__PUBLICADA": {
+      "centroCodigo": "IMP-001",
+      "centroNombre": "Impresion Digital Laser",
+      "tipoCentro": "PRODUCTIVO",
+      "imputacionPreferida": "DIRECTA",
+      "unidadBase": "HORA_MAQUINA",
+      "periodo": "2026-05",
+      "estado": "PUBLICADA",
+      "esFilaDeTest": true,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 22727.27,
+        "capacidadPractica": 1,
+        "tarifaCalculada": 22727.27,
+        "costoMensualManoObra": 0,
+        "tarifaManoObra": 0
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 0,
+        "costoMensualManoObra": 0,
+        "costoMensualAbsorbidoReparto": 0,
+        "horasProductivas": 0,
+        "tarifaCalculada": 0,
+        "tarifaManoObra": 0
+      },
+      "derivado": {
+        "costoMensualSinReparto": 0,
+        "costoMensualManoObra": 0,
+        "horasProductivas": 0
+      },
+      "snapshotDesactualizado": false,
+      "resumen": {
+        "test": true
+      },
+      "insumos": {
+        "capacidad": null,
+        "componentes": {
+          "filas": 0,
+          "porCategoria": {},
+          "total": 0
+        },
+        "recursos": {}
+      }
+    },
+    "IMP-001__2026-03__PUBLICADA": {
+      "centroCodigo": "IMP-001",
+      "centroNombre": "Impresion Digital Laser",
+      "tipoCentro": "PRODUCTIVO",
+      "imputacionPreferida": "DIRECTA",
+      "unidadBase": "HORA_MAQUINA",
+      "periodo": "2026-03",
+      "estado": "PUBLICADA",
+      "esFilaDeTest": false,
+      "resumenParcial": true,
+      "contrato": {
+        "costoMensualTotal": 3400000,
+        "capacidadPractica": 149.6,
+        "tarifaCalculada": 22727.27,
+        "costoMensualManoObra": 2000000,
+        "tarifaManoObra": 13368.98
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 3400000,
+        "costoMensualManoObra": 2000000,
+        "costoMensualAbsorbidoReparto": 0,
+        "horasProductivas": 149.6,
+        "tarifaCalculada": 22727.27,
+        "tarifaManoObra": 13368.98
+      },
+      "derivado": {
+        "costoMensualSinReparto": 3400000,
+        "costoMensualManoObra": 2000000,
+        "horasProductivas": 149.6
+      },
+      "snapshotDesactualizado": false,
+      "resumen": {
+        "periodo": "2026-03",
+        "unidadBase": "hora_maquina",
+        "advertencias": [],
+        "centroCodigo": "IMP-001",
+        "centroNombre": "Offset 4 colores",
+        "tarifaCalculada": 22727.27,
+        "capacidadPractica": 149.6,
+        "costoMensualTotal": 3400000
+      },
+      "insumos": {
+        "capacidad": {
+          "horasProductivas": 149.6,
+          "capacidadPractica": 149.6,
+          "capacidadTeorica": 176,
+          "overrideManual": null
+        },
+        "componentes": {
+          "filas": 5,
+          "porCategoria": {
+            "SUELDOS": 1200000,
+            "CARGAS": 800000,
+            "AMORTIZACION": 900000,
+            "ENERGIA": 300000,
+            "MANTENIMIENTO": 200000
+          },
+          "total": 3400000
+        },
+        "recursos": {
+          "EMPLEADO": {
+            "filas": 2,
+            "importe": 0
+          },
+          "MAQUINARIA": {
+            "filas": 1,
+            "importe": 0
+          }
+        }
+      }
+    },
+    "VP-002__2026-06__PUBLICADA": {
+      "centroCodigo": "VP-002",
+      "centroNombre": "Ventas & Centro de Copiado",
+      "tipoCentro": "ADMINISTRATIVO",
+      "imputacionPreferida": "DIRECTA",
+      "unidadBase": "HORA_HOMBRE",
+      "periodo": "2026-06",
+      "estado": "PUBLICADA",
+      "esFilaDeTest": true,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 6000,
+        "capacidadPractica": 1,
+        "tarifaCalculada": 6000,
+        "costoMensualManoObra": 2500000,
+        "tarifaManoObra": 2500000
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 3582222.14,
+        "costoMensualManoObra": 2708333.34,
+        "costoMensualAbsorbidoReparto": 0,
+        "horasProductivas": 160,
+        "tarifaCalculada": 22388.89,
+        "tarifaManoObra": 16927.08
+      },
+      "derivado": {
+        "costoMensualSinReparto": 3582222.14,
+        "costoMensualManoObra": 2708333.34,
+        "horasProductivas": 160
+      },
+      "snapshotDesactualizado": false,
+      "resumen": {
+        "test": true
+      },
+      "insumos": {
+        "capacidad": {
+          "horasProductivas": 160,
+          "capacidadPractica": 160,
+          "capacidadTeorica": 160,
+          "overrideManual": null
+        },
+        "componentes": {
+          "filas": 2,
+          "porCategoria": {
+            "SUELDOS": 1841666.67,
+            "CARGAS": 866666.67
+          },
+          "total": 2708333.34
+        },
+        "recursos": {
+          "EMPLEADO": {
+            "filas": 1,
+            "importe": 0
+          },
+          "ACTIVO_FIJO": {
+            "filas": 1,
+            "importe": 208333.33
+          },
+          "MAQUINARIA": {
+            "filas": 5,
+            "importe": 665555.47
+          }
+        }
+      }
+    },
+    "IMP-005__2026-07__BORRADOR": {
+      "centroCodigo": "IMP-005",
+      "centroNombre": "Impresion DTF UV",
+      "tipoCentro": "PRODUCTIVO",
+      "imputacionPreferida": "DIRECTA",
+      "unidadBase": "HORA_MAQUINA",
+      "periodo": "2026-07",
+      "estado": "BORRADOR",
+      "esFilaDeTest": false,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 1907152.76,
+        "capacidadPractica": 160,
+        "tarifaCalculada": 11919.7,
+        "costoMensualManoObra": 853125,
+        "tarifaManoObra": 5332.03
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 1629374.98,
+        "costoMensualManoObra": 853125,
+        "costoMensualAbsorbidoReparto": 224924.34,
+        "horasProductivas": 160,
+        "tarifaCalculada": 11589.37,
+        "tarifaManoObra": 5332.03
+      },
+      "derivado": {
+        "costoMensualSinReparto": 1629374.98,
+        "costoMensualManoObra": 853125,
+        "horasProductivas": 160
+      },
+      "snapshotDesactualizado": false,
+      "resumen": {
+        "periodo": "2026-07",
+        "unidadBase": "hora_maquina",
+        "advertencias": [],
+        "centroCodigo": "IMP-005",
+        "centroNombre": "Impresion DTF UV",
+        "tarifaManoObra": 5332.03,
+        "tarifaCalculada": 11919.7,
+        "costoMensualBase": 853125,
+        "capacidadPractica": 160,
+        "costoMensualTotal": 1907152.76,
+        "costoMensualManoObra": 853125,
+        "costoMensualMaquinaria": 703333.33,
+        "costoMensualSinReparto": 1629374.98,
+        "tarifaAbsorbidaReparto": 1736.11,
+        "tarifaDirectaSinReparto": 10183.59,
+        "costoMensualActivosFijos": 72916.65,
+        "desgloseRepartoAbsorbido": [
+          {
+            "monto": 277777.78,
+            "desdeCentroCodigo": "IMP-004",
+            "desdeCentroNombre": "Administracion & Gerencia",
+            "desdeCentroCostoId": "970eba6b-0001-4e5e-a157-9d2c11847b20"
+          }
+        ],
+        "costoMensualGastosGenerales": 0,
+        "costoMensualAbsorbidoReparto": 277777.78
+      },
+      "insumos": {
+        "capacidad": {
+          "horasProductivas": 160,
+          "capacidadPractica": 160,
+          "capacidadTeorica": 160,
+          "overrideManual": null
+        },
+        "componentes": {
+          "filas": 2,
+          "porCategoria": {
+            "SUELDOS": 568750,
+            "CARGAS": 284375
+          },
+          "total": 853125
+        },
+        "recursos": {
+          "MAQUINARIA": {
+            "filas": 1,
+            "importe": 703333.33
+          },
+          "EMPLEADO": {
+            "filas": 1,
+            "importe": 0
+          },
+          "ACTIVO_FIJO": {
+            "filas": 1,
+            "importe": 72916.65
+          }
+        }
+      }
+    },
+    "IMP-004__2026-06__PUBLICADA": {
+      "centroCodigo": "IMP-004",
+      "centroNombre": "Administracion & Gerencia",
+      "tipoCentro": "ADMINISTRATIVO",
+      "imputacionPreferida": "REPARTO",
+      "unidadBase": "NINGUNA",
+      "periodo": "2026-06",
+      "estado": "PUBLICADA",
+      "esFilaDeTest": true,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 22727.27,
+        "capacidadPractica": 1,
+        "tarifaCalculada": 22727.27,
+        "costoMensualManoObra": 3500000,
+        "tarifaManoObra": 3500000
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 3791666.66,
+        "costoMensualManoObra": 3791666.66,
+        "costoMensualAbsorbidoReparto": 0,
+        "horasProductivas": 176,
+        "tarifaCalculada": 21543.56,
+        "tarifaManoObra": 21543.56
+      },
+      "derivado": {
+        "costoMensualSinReparto": 3791666.66,
+        "costoMensualManoObra": 3791666.66,
+        "horasProductivas": 176
+      },
+      "snapshotDesactualizado": false,
+      "resumen": {
+        "test": true
+      },
+      "insumos": {
+        "capacidad": {
+          "horasProductivas": 176,
+          "capacidadPractica": 176,
+          "capacidadTeorica": 176,
+          "overrideManual": null
+        },
+        "componentes": {
+          "filas": 2,
+          "porCategoria": {
+            "SUELDOS": 2708333.33,
+            "CARGAS": 1083333.33
+          },
+          "total": 3791666.66
+        },
+        "recursos": {
+          "EMPLEADO": {
+            "filas": 1,
+            "importe": 0
+          }
+        }
+      }
+    },
+    "VP-002__2026-03__PUBLICADA": {
+      "centroCodigo": "VP-002",
+      "centroNombre": "Ventas & Centro de Copiado",
+      "tipoCentro": "ADMINISTRATIVO",
+      "imputacionPreferida": "DIRECTA",
+      "unidadBase": "HORA_HOMBRE",
+      "periodo": "2026-03",
+      "estado": "PUBLICADA",
+      "esFilaDeTest": true,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 6000,
+        "capacidadPractica": 1,
+        "tarifaCalculada": 6000,
+        "costoMensualManoObra": 0,
+        "tarifaManoObra": 0
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 0,
+        "costoMensualManoObra": 0,
+        "costoMensualAbsorbidoReparto": 0,
+        "horasProductivas": 0,
+        "tarifaCalculada": 0,
+        "tarifaManoObra": 0
+      },
+      "derivado": {
+        "costoMensualSinReparto": 0,
+        "costoMensualManoObra": 0,
+        "horasProductivas": 0
+      },
+      "snapshotDesactualizado": false,
+      "resumen": {
+        "test": true
+      },
+      "insumos": {
+        "capacidad": null,
+        "componentes": {
+          "filas": 0,
+          "porCategoria": {},
+          "total": 0
+        },
+        "recursos": {}
+      }
+    },
+    "IMP-001__2026-06__BORRADOR": {
+      "centroCodigo": "IMP-001",
+      "centroNombre": "Impresion Digital Laser",
+      "tipoCentro": "PRODUCTIVO",
+      "imputacionPreferida": "DIRECTA",
+      "unidadBase": "HORA_MAQUINA",
+      "periodo": "2026-06",
+      "estado": "BORRADOR",
+      "esFilaDeTest": false,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 2410322.11,
+        "capacidadPractica": 115.6,
+        "tarifaCalculada": 20850.54,
+        "costoMensualManoObra": 1500000,
+        "tarifaManoObra": 12975.78
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 2041666.67,
+        "costoMensualManoObra": 1625000,
+        "costoMensualAbsorbidoReparto": 553148.94,
+        "horasProductivas": 115.6,
+        "tarifaCalculada": 22446.5,
+        "tarifaManoObra": 14057.09
+      },
+      "derivado": {
+        "costoMensualSinReparto": 2041666.67,
+        "costoMensualManoObra": 1625000,
+        "horasProductivas": 115.6
+      },
+      "snapshotDesactualizado": true,
+      "resumen": {
+        "periodo": "2026-06",
+        "unidadBase": "hora_maquina",
+        "advertencias": [],
+        "centroCodigo": "IMP-001",
+        "centroNombre": "Impresion Digital Laser",
+        "tarifaCalculada": 20850.54,
+        "costoMensualBase": 1500000,
+        "capacidadPractica": 115.6,
+        "costoMensualTotal": 2410322.11,
+        "costoMensualMaquinaria": 416666.67,
+        "costoMensualSinReparto": 1916666.67,
+        "tarifaAbsorbidaReparto": 4270.38,
+        "tarifaDirectaSinReparto": 16580.16,
+        "costoMensualActivosFijos": 0,
+        "desgloseRepartoAbsorbido": [
+          {
+            "monto": 493655.44,
+            "desdeCentroCodigo": "IMP-004",
+            "desdeCentroNombre": "Administracion & Gerencia",
+            "desdeCentroCostoId": "970eba6b-0001-4e5e-a157-9d2c11847b20"
+          }
+        ],
+        "costoMensualGastosGenerales": 0,
+        "costoMensualAbsorbidoReparto": 493655.44
+      },
+      "insumos": {
+        "capacidad": {
+          "horasProductivas": 115.6,
+          "capacidadPractica": 115.6,
+          "capacidadTeorica": 176,
+          "overrideManual": null
+        },
+        "componentes": {
+          "filas": 4,
+          "porCategoria": {
+            "SUELDOS": 1105000,
+            "CARGAS": 520000
+          },
+          "total": 1625000
+        },
+        "recursos": {
+          "EMPLEADO": {
+            "filas": 2,
+            "importe": 0
+          },
+          "MAQUINARIA": {
+            "filas": 1,
+            "importe": 416666.67
+          }
+        }
+      }
+    },
+    "IMP-001__2026-06__PUBLICADA": {
+      "centroCodigo": "IMP-001",
+      "centroNombre": "Impresion Digital Laser",
+      "tipoCentro": "PRODUCTIVO",
+      "imputacionPreferida": "DIRECTA",
+      "unidadBase": "HORA_MAQUINA",
+      "periodo": "2026-06",
+      "estado": "PUBLICADA",
+      "esFilaDeTest": true,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 22727.27,
+        "capacidadPractica": 1,
+        "tarifaCalculada": 22727.27,
+        "costoMensualManoObra": 1500000,
+        "tarifaManoObra": 1500000
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 2041666.67,
+        "costoMensualManoObra": 1625000,
+        "costoMensualAbsorbidoReparto": 553148.94,
+        "horasProductivas": 115.6,
+        "tarifaCalculada": 22446.5,
+        "tarifaManoObra": 14057.09
+      },
+      "derivado": {
+        "costoMensualSinReparto": 2041666.67,
+        "costoMensualManoObra": 1625000,
+        "horasProductivas": 115.6
+      },
+      "snapshotDesactualizado": false,
+      "resumen": {
+        "test": true
+      },
+      "insumos": {
+        "capacidad": {
+          "horasProductivas": 115.6,
+          "capacidadPractica": 115.6,
+          "capacidadTeorica": 176,
+          "overrideManual": null
+        },
+        "componentes": {
+          "filas": 4,
+          "porCategoria": {
+            "SUELDOS": 1105000,
+            "CARGAS": 520000
+          },
+          "total": 1625000
+        },
+        "recursos": {
+          "EMPLEADO": {
+            "filas": 2,
+            "importe": 0
+          },
+          "MAQUINARIA": {
+            "filas": 1,
+            "importe": 416666.67
+          }
+        }
+      }
+    },
+    "IMP-004__2026-07__PUBLICADA": {
+      "centroCodigo": "IMP-004",
+      "centroNombre": "Administracion & Gerencia",
+      "tipoCentro": "ADMINISTRATIVO",
+      "imputacionPreferida": "REPARTO",
+      "unidadBase": "NINGUNA",
+      "periodo": "2026-07",
+      "estado": "PUBLICADA",
+      "esFilaDeTest": false,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 2437500,
+        "capacidadPractica": 176,
+        "tarifaCalculada": 13849.43,
+        "costoMensualManoObra": 2437500,
+        "tarifaManoObra": 13849.43
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 2437500,
+        "costoMensualManoObra": 2437500,
+        "costoMensualAbsorbidoReparto": 0,
+        "horasProductivas": 176,
+        "tarifaCalculada": 13849.43,
+        "tarifaManoObra": 13849.43
+      },
+      "derivado": {
+        "costoMensualSinReparto": 2437500,
+        "costoMensualManoObra": 2437500,
+        "horasProductivas": 176
+      },
+      "snapshotDesactualizado": false,
+      "resumen": {
+        "periodo": "2026-07",
+        "unidadBase": "ninguna",
+        "advertencias": [
+          "Conviene definir como queres medir este centro para que la tarifa sea util despues."
+        ],
+        "centroCodigo": "IMP-004",
+        "centroNombre": "Administracion & Gerencia",
+        "tarifaManoObra": 13849.43,
+        "tarifaCalculada": 13849.43,
+        "costoMensualBase": 2437500,
+        "capacidadPractica": 176,
+        "costoMensualTotal": 2437500,
+        "costoMensualManoObra": 2437500,
+        "costoMensualMaquinaria": 0,
+        "costoMensualSinReparto": 2437500,
+        "tarifaAbsorbidaReparto": 0,
+        "tarifaDirectaSinReparto": 13849.43,
+        "costoMensualActivosFijos": 0,
+        "desgloseRepartoAbsorbido": [],
+        "costoMensualGastosGenerales": 0,
+        "costoMensualAbsorbidoReparto": 0
+      },
+      "insumos": {
+        "capacidad": {
+          "horasProductivas": 176,
+          "capacidadPractica": 176,
+          "capacidadTeorica": 176,
+          "overrideManual": null
+        },
+        "componentes": {
+          "filas": 2,
+          "porCategoria": {
+            "SUELDOS": 1625000,
+            "CARGAS": 812500
+          },
+          "total": 2437500
+        },
+        "recursos": {
+          "EMPLEADO": {
+            "filas": 1,
+            "importe": 0
+          }
+        }
+      }
+    },
+    "IMP-003__2026-06__PUBLICADA": {
+      "centroCodigo": "IMP-003",
+      "centroNombre": "Produccion & Taller",
+      "tipoCentro": "PRODUCTIVO",
+      "imputacionPreferida": "DIRECTA",
+      "unidadBase": "HORA_HOMBRE",
+      "periodo": "2026-06",
+      "estado": "PUBLICADA",
+      "esFilaDeTest": false,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 8694853.51,
+        "capacidadPractica": 320,
+        "tarifaCalculada": 27171.42,
+        "costoMensualManoObra": 6000000,
+        "tarifaManoObra": 18750
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 7828333.26,
+        "costoMensualManoObra": 6500000,
+        "costoMensualAbsorbidoReparto": 2120931.07,
+        "horasProductivas": 320,
+        "tarifaCalculada": 31091.45,
+        "tarifaManoObra": 20312.5
+      },
+      "derivado": {
+        "costoMensualSinReparto": 7828333.26,
+        "costoMensualManoObra": 6500000,
+        "horasProductivas": 320
+      },
+      "snapshotDesactualizado": true,
+      "resumen": {
+        "periodo": "2026-06",
+        "unidadBase": "hora_hombre",
+        "advertencias": [],
+        "centroCodigo": "IMP-003",
+        "centroNombre": "Produccion & Taller",
+        "tarifaCalculada": 27171.42,
+        "costoMensualBase": 6000000,
+        "capacidadPractica": 320,
+        "costoMensualTotal": 8694853.51,
+        "costoMensualMaquinaria": 508333.34,
+        "costoMensualSinReparto": 7328333.26,
+        "tarifaAbsorbidaReparto": 4270.38,
+        "tarifaDirectaSinReparto": 22901.04,
+        "costoMensualActivosFijos": 499999.92,
+        "desgloseRepartoAbsorbido": [
+          {
+            "monto": 1366520.25,
+            "desdeCentroCodigo": "IMP-004",
+            "desdeCentroNombre": "Administracion & Gerencia",
+            "desdeCentroCostoId": "970eba6b-0001-4e5e-a157-9d2c11847b20"
+          }
+        ],
+        "costoMensualGastosGenerales": 320000,
+        "costoMensualAbsorbidoReparto": 1366520.25
+      },
+      "insumos": {
+        "capacidad": {
+          "horasProductivas": 320,
+          "capacidadPractica": 320,
+          "capacidadTeorica": 160,
+          "overrideManual": null
+        },
+        "componentes": {
+          "filas": 4,
+          "porCategoria": {
+            "SUELDOS": 4333333.34,
+            "CARGAS": 2166666.66
+          },
+          "total": 6500000
+        },
+        "recursos": {
+          "EMPLEADO": {
+            "filas": 2,
+            "importe": 0
+          },
+          "ACTIVO_FIJO": {
+            "filas": 1,
+            "importe": 499999.92
+          },
+          "MAQUINARIA": {
+            "filas": 2,
+            "importe": 508333.33999999997
+          },
+          "GASTO_GENERAL": {
+            "filas": 1,
+            "importe": 320000
+          }
+        }
+      }
+    },
+    "PRE-001__2026-06__PUBLICADA": {
+      "centroCodigo": "PRE-001",
+      "centroNombre": "Diseño Grafico & Pre-prensa",
+      "tipoCentro": "PRODUCTIVO",
+      "imputacionPreferida": "DIRECTA",
+      "unidadBase": "HORA_HOMBRE",
+      "periodo": "2026-06",
+      "estado": "PUBLICADA",
+      "esFilaDeTest": false,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 4789897.51,
+        "capacidadPractica": 224,
+        "tarifaCalculada": 21383.47,
+        "costoMensualManoObra": 3500000,
+        "tarifaManoObra": 15625
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 4125000.01,
+        "costoMensualManoObra": 3791666.68,
+        "costoMensualAbsorbidoReparto": 1117586.64,
+        "horasProductivas": 224,
+        "tarifaCalculada": 23404.4,
+        "tarifaManoObra": 16927.08
+      },
+      "derivado": {
+        "costoMensualSinReparto": 4125000.01,
+        "costoMensualManoObra": 3791666.68,
+        "horasProductivas": 224
+      },
+      "snapshotDesactualizado": true,
+      "resumen": {
+        "periodo": "2026-06",
+        "unidadBase": "hora_hombre",
+        "advertencias": [],
+        "centroCodigo": "PRE-001",
+        "centroNombre": "Diseño Grafico & Pre-prensa",
+        "tarifaCalculada": 21383.47,
+        "costoMensualBase": 3500000,
+        "capacidadPractica": 224,
+        "costoMensualTotal": 4789897.51,
+        "costoMensualMaquinaria": 0,
+        "costoMensualSinReparto": 3833333.33,
+        "tarifaAbsorbidaReparto": 4270.38,
+        "tarifaDirectaSinReparto": 17113.1,
+        "costoMensualActivosFijos": 333333.33,
+        "desgloseRepartoAbsorbido": [
+          {
+            "monto": 956564.18,
+            "desdeCentroCodigo": "IMP-004",
+            "desdeCentroNombre": "Administracion & Gerencia",
+            "desdeCentroCostoId": "970eba6b-0001-4e5e-a157-9d2c11847b20"
+          }
+        ],
+        "costoMensualGastosGenerales": 0,
+        "costoMensualAbsorbidoReparto": 956564.18
+      },
+      "insumos": {
+        "capacidad": {
+          "horasProductivas": 224,
+          "capacidadPractica": 224,
+          "capacidadTeorica": 160,
+          "overrideManual": null
+        },
+        "componentes": {
+          "filas": 4,
+          "porCategoria": {
+            "SUELDOS": 2578333.34,
+            "CARGAS": 1213333.34
+          },
+          "total": 3791666.6799999997
+        },
+        "recursos": {
+          "EMPLEADO": {
+            "filas": 2,
+            "importe": 0
+          },
+          "ACTIVO_FIJO": {
+            "filas": 1,
+            "importe": 333333.33
+          }
+        }
+      }
+    },
+    "IMP-004__2026-06__BORRADOR": {
+      "centroCodigo": "IMP-004",
+      "centroNombre": "Administracion & Gerencia",
+      "tipoCentro": "ADMINISTRATIVO",
+      "imputacionPreferida": "REPARTO",
+      "unidadBase": "NINGUNA",
+      "periodo": "2026-06",
+      "estado": "BORRADOR",
+      "esFilaDeTest": false,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 3500000,
+        "capacidadPractica": 176,
+        "tarifaCalculada": 19886.36,
+        "costoMensualManoObra": 3500000,
+        "tarifaManoObra": 19886.36
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 3791666.66,
+        "costoMensualManoObra": 3791666.66,
+        "costoMensualAbsorbidoReparto": 0,
+        "horasProductivas": 176,
+        "tarifaCalculada": 21543.56,
+        "tarifaManoObra": 21543.56
+      },
+      "derivado": {
+        "costoMensualSinReparto": 3791666.66,
+        "costoMensualManoObra": 3791666.66,
+        "horasProductivas": 176
+      },
+      "snapshotDesactualizado": true,
+      "resumen": {
+        "periodo": "2026-06",
+        "unidadBase": "ninguna",
+        "advertencias": [
+          "Conviene definir como queres medir este centro para que la tarifa sea util despues."
+        ],
+        "centroCodigo": "IMP-004",
+        "centroNombre": "Administracion & Gerencia",
+        "tarifaCalculada": 19886.36,
+        "costoMensualBase": 3500000,
+        "capacidadPractica": 176,
+        "costoMensualTotal": 3500000,
+        "costoMensualMaquinaria": 0,
+        "costoMensualSinReparto": 3500000,
+        "tarifaAbsorbidaReparto": 0,
+        "tarifaDirectaSinReparto": 19886.36,
+        "costoMensualActivosFijos": 0,
+        "desgloseRepartoAbsorbido": [],
+        "costoMensualGastosGenerales": 0,
+        "costoMensualAbsorbidoReparto": 0
+      },
+      "insumos": {
+        "capacidad": {
+          "horasProductivas": 176,
+          "capacidadPractica": 176,
+          "capacidadTeorica": 176,
+          "overrideManual": null
+        },
+        "componentes": {
+          "filas": 2,
+          "porCategoria": {
+            "SUELDOS": 2708333.33,
+            "CARGAS": 1083333.33
+          },
+          "total": 3791666.66
+        },
+        "recursos": {
+          "EMPLEADO": {
+            "filas": 1,
+            "importe": 0
+          }
+        }
+      }
+    },
+    "VP-002__2026-06__BORRADOR": {
+      "centroCodigo": "VP-002",
+      "centroNombre": "Ventas & Centro de Copiado",
+      "tipoCentro": "ADMINISTRATIVO",
+      "imputacionPreferida": "DIRECTA",
+      "unidadBase": "HORA_HOMBRE",
+      "periodo": "2026-06",
+      "estado": "BORRADOR",
+      "esFilaDeTest": false,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 3373888.8,
+        "capacidadPractica": 160,
+        "tarifaCalculada": 21086.81,
+        "costoMensualManoObra": 2500000,
+        "tarifaManoObra": 15625
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 3582222.14,
+        "costoMensualManoObra": 2708333.34,
+        "costoMensualAbsorbidoReparto": 0,
+        "horasProductivas": 160,
+        "tarifaCalculada": 22388.89,
+        "tarifaManoObra": 16927.08
+      },
+      "derivado": {
+        "costoMensualSinReparto": 3582222.14,
+        "costoMensualManoObra": 2708333.34,
+        "horasProductivas": 160
+      },
+      "snapshotDesactualizado": true,
+      "resumen": {
+        "periodo": "2026-06",
+        "unidadBase": "hora_hombre",
+        "advertencias": [],
+        "centroCodigo": "VP-002",
+        "centroNombre": "Ventas & Centro de Copiado",
+        "tarifaCalculada": 21086.81,
+        "costoMensualBase": 2500000,
+        "capacidadPractica": 160,
+        "costoMensualTotal": 3373888.8,
+        "costoMensualMaquinaria": 665555.47,
+        "costoMensualSinReparto": 3373888.8,
+        "tarifaAbsorbidaReparto": 0,
+        "tarifaDirectaSinReparto": 21086.81,
+        "costoMensualActivosFijos": 208333.33,
+        "desgloseRepartoAbsorbido": [],
+        "costoMensualGastosGenerales": 0,
+        "costoMensualAbsorbidoReparto": 0
+      },
+      "insumos": {
+        "capacidad": {
+          "horasProductivas": 160,
+          "capacidadPractica": 160,
+          "capacidadTeorica": 160,
+          "overrideManual": null
+        },
+        "componentes": {
+          "filas": 2,
+          "porCategoria": {
+            "SUELDOS": 1841666.67,
+            "CARGAS": 866666.67
+          },
+          "total": 2708333.34
+        },
+        "recursos": {
+          "EMPLEADO": {
+            "filas": 1,
+            "importe": 0
+          },
+          "ACTIVO_FIJO": {
+            "filas": 1,
+            "importe": 208333.33
+          },
+          "MAQUINARIA": {
+            "filas": 5,
+            "importe": 665555.47
+          }
+        }
+      }
+    },
+    "PRE-001__2026-06__BORRADOR": {
+      "centroCodigo": "PRE-001",
+      "centroNombre": "Diseño Grafico & Pre-prensa",
+      "tipoCentro": "PRODUCTIVO",
+      "imputacionPreferida": "DIRECTA",
+      "unidadBase": "HORA_HOMBRE",
+      "periodo": "2026-06",
+      "estado": "BORRADOR",
+      "esFilaDeTest": false,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 4789897.51,
+        "capacidadPractica": 224,
+        "tarifaCalculada": 21383.47,
+        "costoMensualManoObra": 3500000,
+        "tarifaManoObra": 15625
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 4125000.01,
+        "costoMensualManoObra": 3791666.68,
+        "costoMensualAbsorbidoReparto": 1117586.64,
+        "horasProductivas": 224,
+        "tarifaCalculada": 23404.4,
+        "tarifaManoObra": 16927.08
+      },
+      "derivado": {
+        "costoMensualSinReparto": 4125000.01,
+        "costoMensualManoObra": 3791666.68,
+        "horasProductivas": 224
+      },
+      "snapshotDesactualizado": true,
+      "resumen": {
+        "periodo": "2026-06",
+        "unidadBase": "hora_hombre",
+        "advertencias": [],
+        "centroCodigo": "PRE-001",
+        "centroNombre": "Diseño Grafico & Pre-prensa",
+        "tarifaCalculada": 21383.47,
+        "costoMensualBase": 3500000,
+        "capacidadPractica": 224,
+        "costoMensualTotal": 4789897.51,
+        "costoMensualMaquinaria": 0,
+        "costoMensualSinReparto": 3833333.33,
+        "tarifaAbsorbidaReparto": 4270.38,
+        "tarifaDirectaSinReparto": 17113.1,
+        "costoMensualActivosFijos": 333333.33,
+        "desgloseRepartoAbsorbido": [
+          {
+            "monto": 956564.18,
+            "desdeCentroCodigo": "IMP-004",
+            "desdeCentroNombre": "Administracion & Gerencia",
+            "desdeCentroCostoId": "970eba6b-0001-4e5e-a157-9d2c11847b20"
+          }
+        ],
+        "costoMensualGastosGenerales": 0,
+        "costoMensualAbsorbidoReparto": 956564.18
+      },
+      "insumos": {
+        "capacidad": {
+          "horasProductivas": 224,
+          "capacidadPractica": 224,
+          "capacidadTeorica": 160,
+          "overrideManual": null
+        },
+        "componentes": {
+          "filas": 4,
+          "porCategoria": {
+            "SUELDOS": 2578333.34,
+            "CARGAS": 1213333.34
+          },
+          "total": 3791666.6799999997
+        },
+        "recursos": {
+          "EMPLEADO": {
+            "filas": 2,
+            "importe": 0
+          },
+          "ACTIVO_FIJO": {
+            "filas": 1,
+            "importe": 333333.33
+          }
+        }
+      }
+    },
+    "IMP-003__2026-06__BORRADOR": {
+      "centroCodigo": "IMP-003",
+      "centroNombre": "Produccion & Taller",
+      "tipoCentro": "PRODUCTIVO",
+      "imputacionPreferida": "DIRECTA",
+      "unidadBase": "HORA_HOMBRE",
+      "periodo": "2026-06",
+      "estado": "BORRADOR",
+      "esFilaDeTest": false,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 8694853.51,
+        "capacidadPractica": 320,
+        "tarifaCalculada": 27171.42,
+        "costoMensualManoObra": 6000000,
+        "tarifaManoObra": 18750
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 7828333.26,
+        "costoMensualManoObra": 6500000,
+        "costoMensualAbsorbidoReparto": 2120931.07,
+        "horasProductivas": 320,
+        "tarifaCalculada": 31091.45,
+        "tarifaManoObra": 20312.5
+      },
+      "derivado": {
+        "costoMensualSinReparto": 7828333.26,
+        "costoMensualManoObra": 6500000,
+        "horasProductivas": 320
+      },
+      "snapshotDesactualizado": true,
+      "resumen": {
+        "periodo": "2026-06",
+        "unidadBase": "hora_hombre",
+        "advertencias": [],
+        "centroCodigo": "IMP-003",
+        "centroNombre": "Produccion & Taller",
+        "tarifaCalculada": 27171.42,
+        "costoMensualBase": 6000000,
+        "capacidadPractica": 320,
+        "costoMensualTotal": 8694853.51,
+        "costoMensualMaquinaria": 508333.34,
+        "costoMensualSinReparto": 7328333.26,
+        "tarifaAbsorbidaReparto": 4270.38,
+        "tarifaDirectaSinReparto": 22901.04,
+        "costoMensualActivosFijos": 499999.92,
+        "desgloseRepartoAbsorbido": [
+          {
+            "monto": 1366520.25,
+            "desdeCentroCodigo": "IMP-004",
+            "desdeCentroNombre": "Administracion & Gerencia",
+            "desdeCentroCostoId": "970eba6b-0001-4e5e-a157-9d2c11847b20"
+          }
+        ],
+        "costoMensualGastosGenerales": 320000,
+        "costoMensualAbsorbidoReparto": 1366520.25
+      },
+      "insumos": {
+        "capacidad": {
+          "horasProductivas": 320,
+          "capacidadPractica": 320,
+          "capacidadTeorica": 160,
+          "overrideManual": null
+        },
+        "componentes": {
+          "filas": 4,
+          "porCategoria": {
+            "SUELDOS": 4333333.34,
+            "CARGAS": 2166666.66
+          },
+          "total": 6500000
+        },
+        "recursos": {
+          "EMPLEADO": {
+            "filas": 2,
+            "importe": 0
+          },
+          "ACTIVO_FIJO": {
+            "filas": 1,
+            "importe": 499999.92
+          },
+          "MAQUINARIA": {
+            "filas": 2,
+            "importe": 508333.33999999997
+          },
+          "GASTO_GENERAL": {
+            "filas": 1,
+            "importe": 320000
+          }
+        }
+      }
+    },
+    "VP-002__2026-07__BORRADOR": {
+      "centroCodigo": "VP-002",
+      "centroNombre": "Ventas & Centro de Copiado",
+      "tipoCentro": "ADMINISTRATIVO",
+      "imputacionPreferida": "DIRECTA",
+      "unidadBase": "HORA_HOMBRE",
+      "periodo": "2026-07",
+      "estado": "BORRADOR",
+      "esFilaDeTest": false,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 3582222.14,
+        "capacidadPractica": 160,
+        "tarifaCalculada": 22388.89,
+        "costoMensualManoObra": 2708333.34,
+        "tarifaManoObra": 16927.08
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 3582222.14,
+        "costoMensualManoObra": 2708333.34,
+        "costoMensualAbsorbidoReparto": 0,
+        "horasProductivas": 160,
+        "tarifaCalculada": 22388.89,
+        "tarifaManoObra": 16927.08
+      },
+      "derivado": {
+        "costoMensualSinReparto": 3582222.14,
+        "costoMensualManoObra": 2708333.34,
+        "horasProductivas": 160
+      },
+      "snapshotDesactualizado": false,
+      "resumen": {
+        "periodo": "2026-07",
+        "unidadBase": "hora_hombre",
+        "advertencias": [],
+        "centroCodigo": "VP-002",
+        "centroNombre": "Ventas & Centro de Copiado",
+        "tarifaManoObra": 16927.08,
+        "tarifaCalculada": 22388.89,
+        "costoMensualBase": 2708333.34,
+        "capacidadPractica": 160,
+        "costoMensualTotal": 3582222.14,
+        "costoMensualManoObra": 2708333.34,
+        "costoMensualMaquinaria": 665555.47,
+        "costoMensualSinReparto": 3582222.14,
+        "tarifaAbsorbidaReparto": 0,
+        "tarifaDirectaSinReparto": 22388.89,
+        "costoMensualActivosFijos": 208333.33,
+        "desgloseRepartoAbsorbido": [],
+        "costoMensualGastosGenerales": 0,
+        "costoMensualAbsorbidoReparto": 0
+      },
+      "insumos": {
+        "capacidad": {
+          "horasProductivas": 160,
+          "capacidadPractica": 160,
+          "capacidadTeorica": 160,
+          "overrideManual": null
+        },
+        "componentes": {
+          "filas": 2,
+          "porCategoria": {
+            "SUELDOS": 1841666.67,
+            "CARGAS": 866666.67
+          },
+          "total": 2708333.34
+        },
+        "recursos": {
+          "EMPLEADO": {
+            "filas": 1,
+            "importe": 0
+          },
+          "ACTIVO_FIJO": {
+            "filas": 1,
+            "importe": 208333.33
+          },
+          "MAQUINARIA": {
+            "filas": 5,
+            "importe": 665555.47
+          }
+        }
+      }
+    },
+    "IMP-007__2026-07__BORRADOR": {
+      "centroCodigo": "IMP-007",
+      "centroNombre": "Impresion Hibrida UV",
+      "tipoCentro": "PRODUCTIVO",
+      "imputacionPreferida": "DIRECTA",
+      "unidadBase": "HORA_MAQUINA",
+      "periodo": "2026-07",
+      "estado": "BORRADOR",
+      "esFilaDeTest": false,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 3334374.98,
+        "capacidadPractica": 120,
+        "tarifaCalculada": 27786.46,
+        "costoMensualManoObra": 853125,
+        "tarifaManoObra": 7109.38
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 3126041.65,
+        "costoMensualManoObra": 853125,
+        "costoMensualAbsorbidoReparto": 431529.18,
+        "horasProductivas": 120,
+        "tarifaCalculada": 29646.42,
+        "tarifaManoObra": 7109.38
+      },
+      "derivado": {
+        "costoMensualSinReparto": 3126041.65,
+        "costoMensualManoObra": 853125,
+        "horasProductivas": 120
+      },
+      "snapshotDesactualizado": false,
+      "resumen": {
+        "periodo": "2026-07",
+        "unidadBase": "hora_maquina",
+        "advertencias": [],
+        "centroCodigo": "IMP-007",
+        "centroNombre": "Impresion Hibrida UV",
+        "tarifaManoObra": 7109.38,
+        "tarifaCalculada": 27786.46,
+        "costoMensualBase": 853125,
+        "capacidadPractica": 120,
+        "costoMensualTotal": 3334374.98,
+        "costoMensualManoObra": 853125,
+        "costoMensualMaquinaria": 2200000,
+        "costoMensualSinReparto": 3126041.65,
+        "tarifaAbsorbidaReparto": 1736.11,
+        "tarifaDirectaSinReparto": 26050.35,
+        "costoMensualActivosFijos": 72916.65,
+        "desgloseRepartoAbsorbido": [
+          {
+            "monto": 208333.33,
+            "desdeCentroCodigo": "IMP-004",
+            "desdeCentroNombre": "Administracion & Gerencia",
+            "desdeCentroCostoId": "970eba6b-0001-4e5e-a157-9d2c11847b20"
+          }
+        ],
+        "costoMensualGastosGenerales": 0,
+        "costoMensualAbsorbidoReparto": 208333.33
+      },
+      "insumos": {
+        "capacidad": {
+          "horasProductivas": 120,
+          "capacidadPractica": 120,
+          "capacidadTeorica": 120,
+          "overrideManual": null
+        },
+        "componentes": {
+          "filas": 2,
+          "porCategoria": {
+            "SUELDOS": 568750,
+            "CARGAS": 284375
+          },
+          "total": 853125
+        },
+        "recursos": {
+          "MAQUINARIA": {
+            "filas": 1,
+            "importe": 2200000
+          },
+          "EMPLEADO": {
+            "filas": 1,
+            "importe": 0
+          },
+          "ACTIVO_FIJO": {
+            "filas": 1,
+            "importe": 72916.65
+          }
+        }
+      }
+    },
+    "IMP-003__2026-07__PUBLICADA": {
+      "centroCodigo": "IMP-003",
+      "centroNombre": "Produccion & Taller",
+      "tipoCentro": "PRODUCTIVO",
+      "imputacionPreferida": "DIRECTA",
+      "unidadBase": "HORA_HOMBRE",
+      "periodo": "2026-07",
+      "estado": "PUBLICADA",
+      "esFilaDeTest": false,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 6487361.04,
+        "capacidadPractica": 304,
+        "tarifaCalculada": 21340,
+        "costoMensualManoObra": 4631250,
+        "tarifaManoObra": 15234.38
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 5959583.26,
+        "costoMensualManoObra": 4631250,
+        "costoMensualAbsorbidoReparto": 822680.69,
+        "horasProductivas": 304,
+        "tarifaCalculada": 22310.08,
+        "tarifaManoObra": 15234.38
+      },
+      "derivado": {
+        "costoMensualSinReparto": 5959583.26,
+        "costoMensualManoObra": 4631250,
+        "horasProductivas": 304
+      },
+      "snapshotDesactualizado": false,
+      "resumen": {
+        "periodo": "2026-07",
+        "unidadBase": "hora_hombre",
+        "advertencias": [],
+        "centroCodigo": "IMP-003",
+        "centroNombre": "Produccion & Taller",
+        "tarifaManoObra": 15234.38,
+        "tarifaCalculada": 21340,
+        "costoMensualBase": 4631250,
+        "capacidadPractica": 304,
+        "costoMensualTotal": 6487361.04,
+        "costoMensualManoObra": 4631250,
+        "costoMensualMaquinaria": 508333.34,
+        "costoMensualSinReparto": 5959583.26,
+        "tarifaAbsorbidaReparto": 1736.11,
+        "tarifaDirectaSinReparto": 19603.89,
+        "costoMensualActivosFijos": 499999.92,
+        "desgloseRepartoAbsorbido": [
+          {
+            "monto": 527777.78,
+            "desdeCentroCodigo": "IMP-004",
+            "desdeCentroNombre": "Administracion & Gerencia",
+            "desdeCentroCostoId": "970eba6b-0001-4e5e-a157-9d2c11847b20"
+          }
+        ],
+        "costoMensualGastosGenerales": 320000,
+        "costoMensualAbsorbidoReparto": 527777.78
+      },
+      "insumos": {
+        "capacidad": {
+          "horasProductivas": 304,
+          "capacidadPractica": 304,
+          "capacidadTeorica": 304,
+          "overrideManual": null
+        },
+        "componentes": {
+          "filas": 4,
+          "porCategoria": {
+            "SUELDOS": 3087500,
+            "CARGAS": 1543750
+          },
+          "total": 4631250
+        },
+        "recursos": {
+          "EMPLEADO": {
+            "filas": 2,
+            "importe": 0
+          },
+          "ACTIVO_FIJO": {
+            "filas": 1,
+            "importe": 499999.92
+          },
+          "MAQUINARIA": {
+            "filas": 2,
+            "importe": 508333.33999999997
+          },
+          "GASTO_GENERAL": {
+            "filas": 1,
+            "importe": 320000
+          }
+        }
+      }
+    },
+    "IMP-001__2026-07__BORRADOR": {
+      "centroCodigo": "IMP-001",
+      "centroNombre": "Impresion Digital Laser",
+      "tipoCentro": "PRODUCTIVO",
+      "imputacionPreferida": "DIRECTA",
+      "unidadBase": "HORA_MAQUINA",
+      "periodo": "2026-07",
+      "estado": "BORRADOR",
+      "esFilaDeTest": false,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 1924722.23,
+        "capacidadPractica": 176,
+        "tarifaCalculada": 10935.92,
+        "costoMensualManoObra": 1202500,
+        "tarifaManoObra": 6832.39
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 1619166.67,
+        "costoMensualManoObra": 1202500,
+        "costoMensualAbsorbidoReparto": 223515.15,
+        "horasProductivas": 176,
+        "tarifaCalculada": 10469.78,
+        "tarifaManoObra": 6832.39
+      },
+      "derivado": {
+        "costoMensualSinReparto": 1619166.67,
+        "costoMensualManoObra": 1202500,
+        "horasProductivas": 176
+      },
+      "snapshotDesactualizado": false,
+      "resumen": {
+        "periodo": "2026-07",
+        "unidadBase": "hora_maquina",
+        "advertencias": [],
+        "centroCodigo": "IMP-001",
+        "centroNombre": "Impresion Digital Laser",
+        "tarifaManoObra": 6832.39,
+        "tarifaCalculada": 10935.92,
+        "costoMensualBase": 1202500,
+        "capacidadPractica": 176,
+        "costoMensualTotal": 1924722.23,
+        "costoMensualManoObra": 1202500,
+        "costoMensualMaquinaria": 416666.67,
+        "costoMensualSinReparto": 1619166.67,
+        "tarifaAbsorbidaReparto": 1736.11,
+        "tarifaDirectaSinReparto": 9199.81,
+        "costoMensualActivosFijos": 0,
+        "desgloseRepartoAbsorbido": [
+          {
+            "monto": 305555.56,
+            "desdeCentroCodigo": "IMP-004",
+            "desdeCentroNombre": "Administracion & Gerencia",
+            "desdeCentroCostoId": "970eba6b-0001-4e5e-a157-9d2c11847b20"
+          }
+        ],
+        "costoMensualGastosGenerales": 0,
+        "costoMensualAbsorbidoReparto": 305555.56
+      },
+      "insumos": {
+        "capacidad": {
+          "horasProductivas": 176,
+          "capacidadPractica": 176,
+          "capacidadTeorica": 176,
+          "overrideManual": null
+        },
+        "componentes": {
+          "filas": 4,
+          "porCategoria": {
+            "SUELDOS": 780000,
+            "CARGAS": 422500
+          },
+          "total": 1202500
+        },
+        "recursos": {
+          "EMPLEADO": {
+            "filas": 2,
+            "importe": 0
+          },
+          "MAQUINARIA": {
+            "filas": 1,
+            "importe": 416666.67
+          }
+        }
+      }
+    },
+    "VP-002__2026-07__PUBLICADA": {
+      "centroCodigo": "VP-002",
+      "centroNombre": "Ventas & Centro de Copiado",
+      "tipoCentro": "ADMINISTRATIVO",
+      "imputacionPreferida": "DIRECTA",
+      "unidadBase": "HORA_HOMBRE",
+      "periodo": "2026-07",
+      "estado": "PUBLICADA",
+      "esFilaDeTest": false,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 3582222.14,
+        "capacidadPractica": 160,
+        "tarifaCalculada": 22388.89,
+        "costoMensualManoObra": 2708333.34,
+        "tarifaManoObra": 16927.08
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 3582222.14,
+        "costoMensualManoObra": 2708333.34,
+        "costoMensualAbsorbidoReparto": 0,
+        "horasProductivas": 160,
+        "tarifaCalculada": 22388.89,
+        "tarifaManoObra": 16927.08
+      },
+      "derivado": {
+        "costoMensualSinReparto": 3582222.14,
+        "costoMensualManoObra": 2708333.34,
+        "horasProductivas": 160
+      },
+      "snapshotDesactualizado": false,
+      "resumen": {
+        "periodo": "2026-07",
+        "unidadBase": "hora_hombre",
+        "advertencias": [],
+        "centroCodigo": "VP-002",
+        "centroNombre": "Ventas & Centro de Copiado",
+        "tarifaManoObra": 16927.08,
+        "tarifaCalculada": 22388.89,
+        "costoMensualBase": 2708333.34,
+        "capacidadPractica": 160,
+        "costoMensualTotal": 3582222.14,
+        "costoMensualManoObra": 2708333.34,
+        "costoMensualMaquinaria": 665555.47,
+        "costoMensualSinReparto": 3582222.14,
+        "tarifaAbsorbidaReparto": 0,
+        "tarifaDirectaSinReparto": 22388.89,
+        "costoMensualActivosFijos": 208333.33,
+        "desgloseRepartoAbsorbido": [],
+        "costoMensualGastosGenerales": 0,
+        "costoMensualAbsorbidoReparto": 0
+      },
+      "insumos": {
+        "capacidad": {
+          "horasProductivas": 160,
+          "capacidadPractica": 160,
+          "capacidadTeorica": 160,
+          "overrideManual": null
+        },
+        "componentes": {
+          "filas": 2,
+          "porCategoria": {
+            "SUELDOS": 1841666.67,
+            "CARGAS": 866666.67
+          },
+          "total": 2708333.34
+        },
+        "recursos": {
+          "EMPLEADO": {
+            "filas": 1,
+            "importe": 0
+          },
+          "ACTIVO_FIJO": {
+            "filas": 1,
+            "importe": 208333.33
+          },
+          "MAQUINARIA": {
+            "filas": 5,
+            "importe": 665555.47
+          }
+        }
+      }
+    },
+    "IMP-006__2026-07__PUBLICADA": {
+      "centroCodigo": "IMP-006",
+      "centroNombre": "Impresion Eco-solvente",
+      "tipoCentro": "PRODUCTIVO",
+      "imputacionPreferida": "DIRECTA",
+      "unidadBase": "HORA_MAQUINA",
+      "periodo": "2026-07",
+      "estado": "PUBLICADA",
+      "esFilaDeTest": false,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 1066319.43,
+        "capacidadPractica": 160,
+        "tarifaCalculada": 6664.5,
+        "costoMensualManoObra": 365625,
+        "tarifaManoObra": 2285.16
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 788541.65,
+        "costoMensualManoObra": 365625,
+        "costoMensualAbsorbidoReparto": 108852.91,
+        "horasProductivas": 160,
+        "tarifaCalculada": 5608.72,
+        "tarifaManoObra": 2285.16
+      },
+      "derivado": {
+        "costoMensualSinReparto": 788541.65,
+        "costoMensualManoObra": 365625,
+        "horasProductivas": 160
+      },
+      "snapshotDesactualizado": false,
+      "resumen": {
+        "periodo": "2026-07",
+        "unidadBase": "hora_maquina",
+        "advertencias": [],
+        "centroCodigo": "IMP-006",
+        "centroNombre": "Impresion Eco-solvente",
+        "tarifaManoObra": 2285.16,
+        "tarifaCalculada": 6664.5,
+        "costoMensualBase": 365625,
+        "capacidadPractica": 160,
+        "costoMensualTotal": 1066319.43,
+        "costoMensualManoObra": 365625,
+        "costoMensualMaquinaria": 350000,
+        "costoMensualSinReparto": 788541.65,
+        "tarifaAbsorbidaReparto": 1736.11,
+        "tarifaDirectaSinReparto": 4928.39,
+        "costoMensualActivosFijos": 72916.65,
+        "desgloseRepartoAbsorbido": [
+          {
+            "monto": 277777.78,
+            "desdeCentroCodigo": "IMP-004",
+            "desdeCentroNombre": "Administracion & Gerencia",
+            "desdeCentroCostoId": "970eba6b-0001-4e5e-a157-9d2c11847b20"
+          }
+        ],
+        "costoMensualGastosGenerales": 0,
+        "costoMensualAbsorbidoReparto": 277777.78
+      },
+      "insumos": {
+        "capacidad": {
+          "horasProductivas": 160,
+          "capacidadPractica": 160,
+          "capacidadTeorica": 160,
+          "overrideManual": null
+        },
+        "componentes": {
+          "filas": 2,
+          "porCategoria": {
+            "SUELDOS": 243750,
+            "CARGAS": 121875
+          },
+          "total": 365625
+        },
+        "recursos": {
+          "MAQUINARIA": {
+            "filas": 1,
+            "importe": 350000
+          },
+          "EMPLEADO": {
+            "filas": 1,
+            "importe": 0
+          },
+          "ACTIVO_FIJO": {
+            "filas": 1,
+            "importe": 72916.65
+          }
+        }
+      }
+    },
+    "IMP-008__2026-07__PUBLICADA": {
+      "centroCodigo": "IMP-008",
+      "centroNombre": "Impresion DTF Textil",
+      "tipoCentro": "PRODUCTIVO",
+      "imputacionPreferida": "DIRECTA",
+      "unidadBase": "HORA_MAQUINA",
+      "periodo": "2026-07",
+      "estado": "PUBLICADA",
+      "esFilaDeTest": false,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 1199652.76,
+        "capacidadPractica": 160,
+        "tarifaCalculada": 7497.83,
+        "costoMensualManoObra": 365625,
+        "tarifaManoObra": 2285.16
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 921874.98,
+        "costoMensualManoObra": 365625,
+        "costoMensualAbsorbidoReparto": 127258.69,
+        "horasProductivas": 160,
+        "tarifaCalculada": 6557.09,
+        "tarifaManoObra": 2285.16
+      },
+      "derivado": {
+        "costoMensualSinReparto": 921874.98,
+        "costoMensualManoObra": 365625,
+        "horasProductivas": 160
+      },
+      "snapshotDesactualizado": false,
+      "resumen": {
+        "periodo": "2026-07",
+        "unidadBase": "hora_maquina",
+        "advertencias": [],
+        "centroCodigo": "IMP-008",
+        "centroNombre": "Impresion DTF Textil",
+        "tarifaManoObra": 2285.16,
+        "tarifaCalculada": 7497.83,
+        "costoMensualBase": 365625,
+        "capacidadPractica": 160,
+        "costoMensualTotal": 1199652.76,
+        "costoMensualManoObra": 365625,
+        "costoMensualMaquinaria": 483333.33,
+        "costoMensualSinReparto": 921874.98,
+        "tarifaAbsorbidaReparto": 1736.11,
+        "tarifaDirectaSinReparto": 5761.72,
+        "costoMensualActivosFijos": 72916.65,
+        "desgloseRepartoAbsorbido": [
+          {
+            "monto": 277777.78,
+            "desdeCentroCodigo": "IMP-004",
+            "desdeCentroNombre": "Administracion & Gerencia",
+            "desdeCentroCostoId": "970eba6b-0001-4e5e-a157-9d2c11847b20"
+          }
+        ],
+        "costoMensualGastosGenerales": 0,
+        "costoMensualAbsorbidoReparto": 277777.78
+      },
+      "insumos": {
+        "capacidad": {
+          "horasProductivas": 160,
+          "capacidadPractica": 160,
+          "capacidadTeorica": 160,
+          "overrideManual": null
+        },
+        "componentes": {
+          "filas": 2,
+          "porCategoria": {
+            "SUELDOS": 243750,
+            "CARGAS": 121875
+          },
+          "total": 365625
+        },
+        "recursos": {
+          "MAQUINARIA": {
+            "filas": 1,
+            "importe": 483333.33
+          },
+          "EMPLEADO": {
+            "filas": 1,
+            "importe": 0
+          },
+          "ACTIVO_FIJO": {
+            "filas": 1,
+            "importe": 72916.65
+          }
+        }
+      }
+    },
+    "PRE-001__2026-07__BORRADOR": {
+      "centroCodigo": "PRE-001",
+      "centroNombre": "Diseño Grafico & Pre-prensa",
+      "tipoCentro": "PRODUCTIVO",
+      "imputacionPreferida": "DIRECTA",
+      "unidadBase": "HORA_HOMBRE",
+      "periodo": "2026-07",
+      "estado": "BORRADOR",
+      "esFilaDeTest": false,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 3528055.56,
+        "capacidadPractica": 224,
+        "tarifaCalculada": 15750.25,
+        "costoMensualManoObra": 2805833.34,
+        "tarifaManoObra": 12526.04
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 3139166.67,
+        "costoMensualManoObra": 2805833.34,
+        "costoMensualAbsorbidoReparto": 433341.01,
+        "horasProductivas": 224,
+        "tarifaCalculada": 15948.69,
+        "tarifaManoObra": 12526.04
+      },
+      "derivado": {
+        "costoMensualSinReparto": 3139166.67,
+        "costoMensualManoObra": 2805833.34,
+        "horasProductivas": 224
+      },
+      "snapshotDesactualizado": false,
+      "resumen": {
+        "periodo": "2026-07",
+        "unidadBase": "hora_hombre",
+        "advertencias": [],
+        "centroCodigo": "PRE-001",
+        "centroNombre": "Diseño Grafico & Pre-prensa",
+        "tarifaManoObra": 12526.04,
+        "tarifaCalculada": 15750.25,
+        "costoMensualBase": 2805833.34,
+        "capacidadPractica": 224,
+        "costoMensualTotal": 3528055.56,
+        "costoMensualManoObra": 2805833.34,
+        "costoMensualMaquinaria": 0,
+        "costoMensualSinReparto": 3139166.67,
+        "tarifaAbsorbidaReparto": 1736.11,
+        "tarifaDirectaSinReparto": 14014.14,
+        "costoMensualActivosFijos": 333333.33,
+        "desgloseRepartoAbsorbido": [
+          {
+            "monto": 388888.89,
+            "desdeCentroCodigo": "IMP-004",
+            "desdeCentroNombre": "Administracion & Gerencia",
+            "desdeCentroCostoId": "970eba6b-0001-4e5e-a157-9d2c11847b20"
+          }
+        ],
+        "costoMensualGastosGenerales": 0,
+        "costoMensualAbsorbidoReparto": 388888.89
+      },
+      "insumos": {
+        "capacidad": {
+          "horasProductivas": 224,
+          "capacidadPractica": 224,
+          "capacidadTeorica": 224,
+          "overrideManual": null
+        },
+        "componentes": {
+          "filas": 4,
+          "porCategoria": {
+            "SUELDOS": 1820000,
+            "CARGAS": 985833.34
+          },
+          "total": 2805833.34
+        },
+        "recursos": {
+          "EMPLEADO": {
+            "filas": 2,
+            "importe": 0
+          },
+          "ACTIVO_FIJO": {
+            "filas": 1,
+            "importe": 333333.33
+          }
+        }
+      }
+    },
+    "IMP-005__2026-07__PUBLICADA": {
+      "centroCodigo": "IMP-005",
+      "centroNombre": "Impresion DTF UV",
+      "tipoCentro": "PRODUCTIVO",
+      "imputacionPreferida": "DIRECTA",
+      "unidadBase": "HORA_MAQUINA",
+      "periodo": "2026-07",
+      "estado": "PUBLICADA",
+      "esFilaDeTest": false,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 1907152.76,
+        "capacidadPractica": 160,
+        "tarifaCalculada": 11919.7,
+        "costoMensualManoObra": 853125,
+        "tarifaManoObra": 5332.03
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 1629374.98,
+        "costoMensualManoObra": 853125,
+        "costoMensualAbsorbidoReparto": 224924.34,
+        "horasProductivas": 160,
+        "tarifaCalculada": 11589.37,
+        "tarifaManoObra": 5332.03
+      },
+      "derivado": {
+        "costoMensualSinReparto": 1629374.98,
+        "costoMensualManoObra": 853125,
+        "horasProductivas": 160
+      },
+      "snapshotDesactualizado": false,
+      "resumen": {
+        "periodo": "2026-07",
+        "unidadBase": "hora_maquina",
+        "advertencias": [],
+        "centroCodigo": "IMP-005",
+        "centroNombre": "Impresion DTF UV",
+        "tarifaManoObra": 5332.03,
+        "tarifaCalculada": 11919.7,
+        "costoMensualBase": 853125,
+        "capacidadPractica": 160,
+        "costoMensualTotal": 1907152.76,
+        "costoMensualManoObra": 853125,
+        "costoMensualMaquinaria": 703333.33,
+        "costoMensualSinReparto": 1629374.98,
+        "tarifaAbsorbidaReparto": 1736.11,
+        "tarifaDirectaSinReparto": 10183.59,
+        "costoMensualActivosFijos": 72916.65,
+        "desgloseRepartoAbsorbido": [
+          {
+            "monto": 277777.78,
+            "desdeCentroCodigo": "IMP-004",
+            "desdeCentroNombre": "Administracion & Gerencia",
+            "desdeCentroCostoId": "970eba6b-0001-4e5e-a157-9d2c11847b20"
+          }
+        ],
+        "costoMensualGastosGenerales": 0,
+        "costoMensualAbsorbidoReparto": 277777.78
+      },
+      "insumos": {
+        "capacidad": {
+          "horasProductivas": 160,
+          "capacidadPractica": 160,
+          "capacidadTeorica": 160,
+          "overrideManual": null
+        },
+        "componentes": {
+          "filas": 2,
+          "porCategoria": {
+            "SUELDOS": 568750,
+            "CARGAS": 284375
+          },
+          "total": 853125
+        },
+        "recursos": {
+          "MAQUINARIA": {
+            "filas": 1,
+            "importe": 703333.33
+          },
+          "EMPLEADO": {
+            "filas": 1,
+            "importe": 0
+          },
+          "ACTIVO_FIJO": {
+            "filas": 1,
+            "importe": 72916.65
+          }
+        }
+      }
+    },
+    "IMP-006__2026-07__BORRADOR": {
+      "centroCodigo": "IMP-006",
+      "centroNombre": "Impresion Eco-solvente",
+      "tipoCentro": "PRODUCTIVO",
+      "imputacionPreferida": "DIRECTA",
+      "unidadBase": "HORA_MAQUINA",
+      "periodo": "2026-07",
+      "estado": "BORRADOR",
+      "esFilaDeTest": false,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 1066319.43,
+        "capacidadPractica": 160,
+        "tarifaCalculada": 6664.5,
+        "costoMensualManoObra": 365625,
+        "tarifaManoObra": 2285.16
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 788541.65,
+        "costoMensualManoObra": 365625,
+        "costoMensualAbsorbidoReparto": 108852.91,
+        "horasProductivas": 160,
+        "tarifaCalculada": 5608.72,
+        "tarifaManoObra": 2285.16
+      },
+      "derivado": {
+        "costoMensualSinReparto": 788541.65,
+        "costoMensualManoObra": 365625,
+        "horasProductivas": 160
+      },
+      "snapshotDesactualizado": false,
+      "resumen": {
+        "periodo": "2026-07",
+        "unidadBase": "hora_maquina",
+        "advertencias": [],
+        "centroCodigo": "IMP-006",
+        "centroNombre": "Impresion Eco-solvente",
+        "tarifaManoObra": 2285.16,
+        "tarifaCalculada": 6664.5,
+        "costoMensualBase": 365625,
+        "capacidadPractica": 160,
+        "costoMensualTotal": 1066319.43,
+        "costoMensualManoObra": 365625,
+        "costoMensualMaquinaria": 350000,
+        "costoMensualSinReparto": 788541.65,
+        "tarifaAbsorbidaReparto": 1736.11,
+        "tarifaDirectaSinReparto": 4928.39,
+        "costoMensualActivosFijos": 72916.65,
+        "desgloseRepartoAbsorbido": [
+          {
+            "monto": 277777.78,
+            "desdeCentroCodigo": "IMP-004",
+            "desdeCentroNombre": "Administracion & Gerencia",
+            "desdeCentroCostoId": "970eba6b-0001-4e5e-a157-9d2c11847b20"
+          }
+        ],
+        "costoMensualGastosGenerales": 0,
+        "costoMensualAbsorbidoReparto": 277777.78
+      },
+      "insumos": {
+        "capacidad": {
+          "horasProductivas": 160,
+          "capacidadPractica": 160,
+          "capacidadTeorica": 160,
+          "overrideManual": null
+        },
+        "componentes": {
+          "filas": 2,
+          "porCategoria": {
+            "SUELDOS": 243750,
+            "CARGAS": 121875
+          },
+          "total": 365625
+        },
+        "recursos": {
+          "MAQUINARIA": {
+            "filas": 1,
+            "importe": 350000
+          },
+          "EMPLEADO": {
+            "filas": 1,
+            "importe": 0
+          },
+          "ACTIVO_FIJO": {
+            "filas": 1,
+            "importe": 72916.65
+          }
+        }
+      }
+    },
+    "IMP-003__2026-07__BORRADOR": {
+      "centroCodigo": "IMP-003",
+      "centroNombre": "Produccion & Taller",
+      "tipoCentro": "PRODUCTIVO",
+      "imputacionPreferida": "DIRECTA",
+      "unidadBase": "HORA_HOMBRE",
+      "periodo": "2026-07",
+      "estado": "BORRADOR",
+      "esFilaDeTest": false,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 6487361.04,
+        "capacidadPractica": 304,
+        "tarifaCalculada": 21340,
+        "costoMensualManoObra": 4631250,
+        "tarifaManoObra": 15234.38
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 5959583.26,
+        "costoMensualManoObra": 4631250,
+        "costoMensualAbsorbidoReparto": 822680.69,
+        "horasProductivas": 304,
+        "tarifaCalculada": 22310.08,
+        "tarifaManoObra": 15234.38
+      },
+      "derivado": {
+        "costoMensualSinReparto": 5959583.26,
+        "costoMensualManoObra": 4631250,
+        "horasProductivas": 304
+      },
+      "snapshotDesactualizado": false,
+      "resumen": {
+        "periodo": "2026-07",
+        "unidadBase": "hora_hombre",
+        "advertencias": [],
+        "centroCodigo": "IMP-003",
+        "centroNombre": "Produccion & Taller",
+        "tarifaManoObra": 15234.38,
+        "tarifaCalculada": 21340,
+        "costoMensualBase": 4631250,
+        "capacidadPractica": 304,
+        "costoMensualTotal": 6487361.04,
+        "costoMensualManoObra": 4631250,
+        "costoMensualMaquinaria": 508333.34,
+        "costoMensualSinReparto": 5959583.26,
+        "tarifaAbsorbidaReparto": 1736.11,
+        "tarifaDirectaSinReparto": 19603.89,
+        "costoMensualActivosFijos": 499999.92,
+        "desgloseRepartoAbsorbido": [
+          {
+            "monto": 527777.78,
+            "desdeCentroCodigo": "IMP-004",
+            "desdeCentroNombre": "Administracion & Gerencia",
+            "desdeCentroCostoId": "970eba6b-0001-4e5e-a157-9d2c11847b20"
+          }
+        ],
+        "costoMensualGastosGenerales": 320000,
+        "costoMensualAbsorbidoReparto": 527777.78
+      },
+      "insumos": {
+        "capacidad": {
+          "horasProductivas": 304,
+          "capacidadPractica": 304,
+          "capacidadTeorica": 304,
+          "overrideManual": null
+        },
+        "componentes": {
+          "filas": 4,
+          "porCategoria": {
+            "SUELDOS": 3087500,
+            "CARGAS": 1543750
+          },
+          "total": 4631250
+        },
+        "recursos": {
+          "EMPLEADO": {
+            "filas": 2,
+            "importe": 0
+          },
+          "ACTIVO_FIJO": {
+            "filas": 1,
+            "importe": 499999.92
+          },
+          "MAQUINARIA": {
+            "filas": 2,
+            "importe": 508333.33999999997
+          },
+          "GASTO_GENERAL": {
+            "filas": 1,
+            "importe": 320000
+          }
+        }
+      }
+    },
+    "IMP-008__2026-07__BORRADOR": {
+      "centroCodigo": "IMP-008",
+      "centroNombre": "Impresion DTF Textil",
+      "tipoCentro": "PRODUCTIVO",
+      "imputacionPreferida": "DIRECTA",
+      "unidadBase": "HORA_MAQUINA",
+      "periodo": "2026-07",
+      "estado": "BORRADOR",
+      "esFilaDeTest": false,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 1199652.76,
+        "capacidadPractica": 160,
+        "tarifaCalculada": 7497.83,
+        "costoMensualManoObra": 365625,
+        "tarifaManoObra": 2285.16
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 921874.98,
+        "costoMensualManoObra": 365625,
+        "costoMensualAbsorbidoReparto": 127258.69,
+        "horasProductivas": 160,
+        "tarifaCalculada": 6557.09,
+        "tarifaManoObra": 2285.16
+      },
+      "derivado": {
+        "costoMensualSinReparto": 921874.98,
+        "costoMensualManoObra": 365625,
+        "horasProductivas": 160
+      },
+      "snapshotDesactualizado": false,
+      "resumen": {
+        "periodo": "2026-07",
+        "unidadBase": "hora_maquina",
+        "advertencias": [],
+        "centroCodigo": "IMP-008",
+        "centroNombre": "Impresion DTF Textil",
+        "tarifaManoObra": 2285.16,
+        "tarifaCalculada": 7497.83,
+        "costoMensualBase": 365625,
+        "capacidadPractica": 160,
+        "costoMensualTotal": 1199652.76,
+        "costoMensualManoObra": 365625,
+        "costoMensualMaquinaria": 483333.33,
+        "costoMensualSinReparto": 921874.98,
+        "tarifaAbsorbidaReparto": 1736.11,
+        "tarifaDirectaSinReparto": 5761.72,
+        "costoMensualActivosFijos": 72916.65,
+        "desgloseRepartoAbsorbido": [
+          {
+            "monto": 277777.78,
+            "desdeCentroCodigo": "IMP-004",
+            "desdeCentroNombre": "Administracion & Gerencia",
+            "desdeCentroCostoId": "970eba6b-0001-4e5e-a157-9d2c11847b20"
+          }
+        ],
+        "costoMensualGastosGenerales": 0,
+        "costoMensualAbsorbidoReparto": 277777.78
+      },
+      "insumos": {
+        "capacidad": {
+          "horasProductivas": 160,
+          "capacidadPractica": 160,
+          "capacidadTeorica": 160,
+          "overrideManual": null
+        },
+        "componentes": {
+          "filas": 2,
+          "porCategoria": {
+            "SUELDOS": 243750,
+            "CARGAS": 121875
+          },
+          "total": 365625
+        },
+        "recursos": {
+          "MAQUINARIA": {
+            "filas": 1,
+            "importe": 483333.33
+          },
+          "EMPLEADO": {
+            "filas": 1,
+            "importe": 0
+          },
+          "ACTIVO_FIJO": {
+            "filas": 1,
+            "importe": 72916.65
+          }
+        }
+      }
+    },
+    "IMP-004__2026-07__BORRADOR": {
+      "centroCodigo": "IMP-004",
+      "centroNombre": "Administracion & Gerencia",
+      "tipoCentro": "ADMINISTRATIVO",
+      "imputacionPreferida": "REPARTO",
+      "unidadBase": "NINGUNA",
+      "periodo": "2026-07",
+      "estado": "BORRADOR",
+      "esFilaDeTest": false,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 2437500,
+        "capacidadPractica": 176,
+        "tarifaCalculada": 13849.43,
+        "costoMensualManoObra": 2437500,
+        "tarifaManoObra": 13849.43
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 2437500,
+        "costoMensualManoObra": 2437500,
+        "costoMensualAbsorbidoReparto": 0,
+        "horasProductivas": 176,
+        "tarifaCalculada": 13849.43,
+        "tarifaManoObra": 13849.43
+      },
+      "derivado": {
+        "costoMensualSinReparto": 2437500,
+        "costoMensualManoObra": 2437500,
+        "horasProductivas": 176
+      },
+      "snapshotDesactualizado": false,
+      "resumen": {
+        "periodo": "2026-07",
+        "unidadBase": "ninguna",
+        "advertencias": [
+          "Conviene definir como queres medir este centro para que la tarifa sea util despues."
+        ],
+        "centroCodigo": "IMP-004",
+        "centroNombre": "Administracion & Gerencia",
+        "tarifaManoObra": 13849.43,
+        "tarifaCalculada": 13849.43,
+        "costoMensualBase": 2437500,
+        "capacidadPractica": 176,
+        "costoMensualTotal": 2437500,
+        "costoMensualManoObra": 2437500,
+        "costoMensualMaquinaria": 0,
+        "costoMensualSinReparto": 2437500,
+        "tarifaAbsorbidaReparto": 0,
+        "tarifaDirectaSinReparto": 13849.43,
+        "costoMensualActivosFijos": 0,
+        "desgloseRepartoAbsorbido": [],
+        "costoMensualGastosGenerales": 0,
+        "costoMensualAbsorbidoReparto": 0
+      },
+      "insumos": {
+        "capacidad": {
+          "horasProductivas": 176,
+          "capacidadPractica": 176,
+          "capacidadTeorica": 176,
+          "overrideManual": null
+        },
+        "componentes": {
+          "filas": 2,
+          "porCategoria": {
+            "SUELDOS": 1625000,
+            "CARGAS": 812500
+          },
+          "total": 2437500
+        },
+        "recursos": {
+          "EMPLEADO": {
+            "filas": 1,
+            "importe": 0
+          }
+        }
+      }
+    },
+    "IMP-007__2026-07__PUBLICADA": {
+      "centroCodigo": "IMP-007",
+      "centroNombre": "Impresion Hibrida UV",
+      "tipoCentro": "PRODUCTIVO",
+      "imputacionPreferida": "DIRECTA",
+      "unidadBase": "HORA_MAQUINA",
+      "periodo": "2026-07",
+      "estado": "PUBLICADA",
+      "esFilaDeTest": false,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 3334374.98,
+        "capacidadPractica": 120,
+        "tarifaCalculada": 27786.46,
+        "costoMensualManoObra": 853125,
+        "tarifaManoObra": 7109.38
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 3126041.65,
+        "costoMensualManoObra": 853125,
+        "costoMensualAbsorbidoReparto": 431529.18,
+        "horasProductivas": 120,
+        "tarifaCalculada": 29646.42,
+        "tarifaManoObra": 7109.38
+      },
+      "derivado": {
+        "costoMensualSinReparto": 3126041.65,
+        "costoMensualManoObra": 853125,
+        "horasProductivas": 120
+      },
+      "snapshotDesactualizado": false,
+      "resumen": {
+        "periodo": "2026-07",
+        "unidadBase": "hora_maquina",
+        "advertencias": [],
+        "centroCodigo": "IMP-007",
+        "centroNombre": "Impresion Hibrida UV",
+        "tarifaManoObra": 7109.38,
+        "tarifaCalculada": 27786.46,
+        "costoMensualBase": 853125,
+        "capacidadPractica": 120,
+        "costoMensualTotal": 3334374.98,
+        "costoMensualManoObra": 853125,
+        "costoMensualMaquinaria": 2200000,
+        "costoMensualSinReparto": 3126041.65,
+        "tarifaAbsorbidaReparto": 1736.11,
+        "tarifaDirectaSinReparto": 26050.35,
+        "costoMensualActivosFijos": 72916.65,
+        "desgloseRepartoAbsorbido": [
+          {
+            "monto": 208333.33,
+            "desdeCentroCodigo": "IMP-004",
+            "desdeCentroNombre": "Administracion & Gerencia",
+            "desdeCentroCostoId": "970eba6b-0001-4e5e-a157-9d2c11847b20"
+          }
+        ],
+        "costoMensualGastosGenerales": 0,
+        "costoMensualAbsorbidoReparto": 208333.33
+      },
+      "insumos": {
+        "capacidad": {
+          "horasProductivas": 120,
+          "capacidadPractica": 120,
+          "capacidadTeorica": 120,
+          "overrideManual": null
+        },
+        "componentes": {
+          "filas": 2,
+          "porCategoria": {
+            "SUELDOS": 568750,
+            "CARGAS": 284375
+          },
+          "total": 853125
+        },
+        "recursos": {
+          "MAQUINARIA": {
+            "filas": 1,
+            "importe": 2200000
+          },
+          "EMPLEADO": {
+            "filas": 1,
+            "importe": 0
+          },
+          "ACTIVO_FIJO": {
+            "filas": 1,
+            "importe": 72916.65
+          }
+        }
+      }
+    },
+    "PRE-001__2026-07__PUBLICADA": {
+      "centroCodigo": "PRE-001",
+      "centroNombre": "Diseño Grafico & Pre-prensa",
+      "tipoCentro": "PRODUCTIVO",
+      "imputacionPreferida": "DIRECTA",
+      "unidadBase": "HORA_HOMBRE",
+      "periodo": "2026-07",
+      "estado": "PUBLICADA",
+      "esFilaDeTest": false,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 3528055.56,
+        "capacidadPractica": 224,
+        "tarifaCalculada": 15750.25,
+        "costoMensualManoObra": 2805833.34,
+        "tarifaManoObra": 12526.04
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 3139166.67,
+        "costoMensualManoObra": 2805833.34,
+        "costoMensualAbsorbidoReparto": 433341.01,
+        "horasProductivas": 224,
+        "tarifaCalculada": 15948.69,
+        "tarifaManoObra": 12526.04
+      },
+      "derivado": {
+        "costoMensualSinReparto": 3139166.67,
+        "costoMensualManoObra": 2805833.34,
+        "horasProductivas": 224
+      },
+      "snapshotDesactualizado": false,
+      "resumen": {
+        "periodo": "2026-07",
+        "unidadBase": "hora_hombre",
+        "advertencias": [],
+        "centroCodigo": "PRE-001",
+        "centroNombre": "Diseño Grafico & Pre-prensa",
+        "tarifaManoObra": 12526.04,
+        "tarifaCalculada": 15750.25,
+        "costoMensualBase": 2805833.34,
+        "capacidadPractica": 224,
+        "costoMensualTotal": 3528055.56,
+        "costoMensualManoObra": 2805833.34,
+        "costoMensualMaquinaria": 0,
+        "costoMensualSinReparto": 3139166.67,
+        "tarifaAbsorbidaReparto": 1736.11,
+        "tarifaDirectaSinReparto": 14014.14,
+        "costoMensualActivosFijos": 333333.33,
+        "desgloseRepartoAbsorbido": [
+          {
+            "monto": 388888.89,
+            "desdeCentroCodigo": "IMP-004",
+            "desdeCentroNombre": "Administracion & Gerencia",
+            "desdeCentroCostoId": "970eba6b-0001-4e5e-a157-9d2c11847b20"
+          }
+        ],
+        "costoMensualGastosGenerales": 0,
+        "costoMensualAbsorbidoReparto": 388888.89
+      },
+      "insumos": {
+        "capacidad": {
+          "horasProductivas": 224,
+          "capacidadPractica": 224,
+          "capacidadTeorica": 224,
+          "overrideManual": null
+        },
+        "componentes": {
+          "filas": 4,
+          "porCategoria": {
+            "SUELDOS": 1820000,
+            "CARGAS": 985833.34
+          },
+          "total": 2805833.34
+        },
+        "recursos": {
+          "EMPLEADO": {
+            "filas": 2,
+            "importe": 0
+          },
+          "ACTIVO_FIJO": {
+            "filas": 1,
+            "importe": 333333.33
+          }
+        }
+      }
+    },
+    "TER-001__2026-07__PUBLICADA": {
+      "centroCodigo": "TER-001",
+      "centroNombre": "Grabado/Corte Laser",
+      "tipoCentro": "PRODUCTIVO",
+      "imputacionPreferida": "DIRECTA",
+      "unidadBase": "HORA_MAQUINA",
+      "periodo": "2026-07",
+      "estado": "PUBLICADA",
+      "esFilaDeTest": false,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 647361.11,
+        "capacidadPractica": 100,
+        "tarifaCalculada": 6473.61,
+        "costoMensualManoObra": 243750,
+        "tarifaManoObra": 2437.5
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 473750,
+        "costoMensualManoObra": 243750,
+        "costoMensualAbsorbidoReparto": 65398.03,
+        "horasProductivas": 100,
+        "tarifaCalculada": 5391.48,
+        "tarifaManoObra": 2437.5
+      },
+      "derivado": {
+        "costoMensualSinReparto": 473750,
+        "costoMensualManoObra": 243750,
+        "horasProductivas": 100
+      },
+      "snapshotDesactualizado": false,
+      "resumen": {
+        "periodo": "2026-07",
+        "unidadBase": "hora_maquina",
+        "advertencias": [],
+        "centroCodigo": "TER-001",
+        "centroNombre": "Grabado/Corte Laser",
+        "tarifaManoObra": 2437.5,
+        "tarifaCalculada": 6473.61,
+        "costoMensualBase": 243750,
+        "capacidadPractica": 100,
+        "costoMensualTotal": 647361.11,
+        "costoMensualManoObra": 243750,
+        "costoMensualMaquinaria": 230000,
+        "costoMensualSinReparto": 473750,
+        "tarifaAbsorbidaReparto": 1736.11,
+        "tarifaDirectaSinReparto": 4737.5,
+        "costoMensualActivosFijos": 0,
+        "desgloseRepartoAbsorbido": [
+          {
+            "monto": 173611.11,
+            "desdeCentroCodigo": "IMP-004",
+            "desdeCentroNombre": "Administracion & Gerencia",
+            "desdeCentroCostoId": "970eba6b-0001-4e5e-a157-9d2c11847b20"
+          }
+        ],
+        "costoMensualGastosGenerales": 0,
+        "costoMensualAbsorbidoReparto": 173611.11
+      },
+      "insumos": {
+        "capacidad": {
+          "horasProductivas": 100,
+          "capacidadPractica": 100,
+          "capacidadTeorica": 100,
+          "overrideManual": null
+        },
+        "componentes": {
+          "filas": 2,
+          "porCategoria": {
+            "SUELDOS": 162500,
+            "CARGAS": 81250
+          },
+          "total": 243750
+        },
+        "recursos": {
+          "MAQUINARIA": {
+            "filas": 1,
+            "importe": 230000
+          },
+          "EMPLEADO": {
+            "filas": 1,
+            "importe": 0
+          }
+        }
+      }
+    },
+    "IMP-001__2026-07__PUBLICADA": {
+      "centroCodigo": "IMP-001",
+      "centroNombre": "Impresion Digital Laser",
+      "tipoCentro": "PRODUCTIVO",
+      "imputacionPreferida": "DIRECTA",
+      "unidadBase": "HORA_MAQUINA",
+      "periodo": "2026-07",
+      "estado": "PUBLICADA",
+      "esFilaDeTest": false,
+      "resumenParcial": false,
+      "contrato": {
+        "costoMensualTotal": 1924722.23,
+        "capacidadPractica": 176,
+        "tarifaCalculada": 10935.92,
+        "costoMensualManoObra": 1202500,
+        "tarifaManoObra": 6832.39
+      },
+      "nuevo": {
+        "costoMensualSinReparto": 1619166.67,
+        "costoMensualManoObra": 1202500,
+        "costoMensualAbsorbidoReparto": 223515.15,
+        "horasProductivas": 176,
+        "tarifaCalculada": 10469.78,
+        "tarifaManoObra": 6832.39
+      },
+      "derivado": {
+        "costoMensualSinReparto": 1619166.67,
+        "costoMensualManoObra": 1202500,
+        "horasProductivas": 176
+      },
+      "snapshotDesactualizado": false,
+      "resumen": {
+        "periodo": "2026-07",
+        "unidadBase": "hora_maquina",
+        "advertencias": [],
+        "centroCodigo": "IMP-001",
+        "centroNombre": "Impresion Digital Laser",
+        "tarifaManoObra": 6832.39,
+        "tarifaCalculada": 10935.92,
+        "costoMensualBase": 1202500,
+        "capacidadPractica": 176,
+        "costoMensualTotal": 1924722.23,
+        "costoMensualManoObra": 1202500,
+        "costoMensualMaquinaria": 416666.67,
+        "costoMensualSinReparto": 1619166.67,
+        "tarifaAbsorbidaReparto": 1736.11,
+        "tarifaDirectaSinReparto": 9199.81,
+        "costoMensualActivosFijos": 0,
+        "desgloseRepartoAbsorbido": [
+          {
+            "monto": 305555.56,
+            "desdeCentroCodigo": "IMP-004",
+            "desdeCentroNombre": "Administracion & Gerencia",
+            "desdeCentroCostoId": "970eba6b-0001-4e5e-a157-9d2c11847b20"
+          }
+        ],
+        "costoMensualGastosGenerales": 0,
+        "costoMensualAbsorbidoReparto": 305555.56
+      },
+      "insumos": {
+        "capacidad": {
+          "horasProductivas": 176,
+          "capacidadPractica": 176,
+          "capacidadTeorica": 176,
+          "overrideManual": null
+        },
+        "componentes": {
+          "filas": 4,
+          "porCategoria": {
+            "SUELDOS": 780000,
+            "CARGAS": 422500
+          },
+          "total": 1202500
+        },
+        "recursos": {
+          "EMPLEADO": {
+            "filas": 2,
+            "importe": 0
+          },
+          "MAQUINARIA": {
+            "filas": 1,
+            "importe": 416666.67
+          }
+        }
+      }
+    }
+  }
+}
