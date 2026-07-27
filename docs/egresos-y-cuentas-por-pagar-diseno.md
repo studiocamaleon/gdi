@@ -517,8 +517,16 @@ lente sobre órdenes terminadas.
 fondos. Vista de Egresos con el gesto único para contado, pago simple y anulación.
 **Con esto ya sirve.**
 
+**F1.1 — Los huecos que molestaban ya (hecho).** Datos de pago del proveedor
+(CUIT, condición IVA, plazo, CBU) escribibles desde su ficha, con la precarga del
+vencimiento funcionando de verdad; reclasificar un egreso pagado (el pago bloquea
+los importes, no la categoría); y el tab **Análisis**: "¿en qué se me va la plata?"
+por categoría y naturaleza, agrupado por competencia, separando el gasto del
+período de lo que sólo movió caja.
+
 **F2 — Cuentas por pagar completo.** Aging por vencimiento, pago masivo sobre
-selección, orden de pago imprimible, retenciones practicadas, cheque propio, adjuntos.
+selección, orden de pago imprimible, retenciones practicadas, cheque propio, adjuntos,
+y el saldo por proveedor (journey E2).
 
 **F3 — Recurrentes.** `GastoRecurrente` + cron de generación + el puente con
 `GastoFijoEstructura` y el reporte presupuestado vs. real.
