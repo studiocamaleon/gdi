@@ -16,6 +16,11 @@ import type { CurrentAuth } from '../auth/auth.types';
 import { Permiso } from '../auth/permiso.decorator';
 import { OcultaMargenes } from '../auth/margenes.decorator';
 import { EgresosService } from './egresos.service';
+import { RecurrentesService } from './recurrentes.service';
+import {
+  CrearRecurrenteDto,
+  EditarRecurrenteDto,
+} from './dto/recurrente.dto';
 import {
   AnularDto,
   CrearCategoriaEgresoDto,
@@ -41,7 +46,61 @@ import {
 @Permiso('administracion.ver')
 @Controller('egresos')
 export class EgresosController {
-  constructor(private readonly egresos: EgresosService) {}
+  constructor(
+    private readonly egresos: EgresosService,
+    private readonly recurrentes: RecurrentesService,
+  ) {}
+
+  // ── Gastos recurrentes (F3) ────────────────────────────────────────────
+
+  @Get('recurrentes')
+  listarRecurrentes(@CurrentSession() auth: CurrentAuth) {
+    return this.recurrentes.listar(auth);
+  }
+
+  @Permiso('administracion.gestionar')
+  @Post('recurrentes')
+  crearRecurrente(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() body: CrearRecurrenteDto,
+  ) {
+    return this.recurrentes.crear(auth, body);
+  }
+
+  /** Emitir a mano lo pendiente, sin esperar al cron de la madrugada. */
+  @Permiso('administracion.gestionar')
+  @Post('recurrentes/generar')
+  generarRecurrentes(@CurrentSession() auth: CurrentAuth) {
+    return this.recurrentes.generarAhora(auth);
+  }
+
+  /** Presupuestado vs. real de la estructura (journey E4). */
+  @Get('presupuestado')
+  presupuestadoVsReal(
+    @CurrentSession() auth: CurrentAuth,
+    @Query('periodo') periodo?: string,
+  ) {
+    return this.recurrentes.presupuestadoVsReal(auth, periodo);
+  }
+
+  @Permiso('administracion.gestionar')
+  @Patch('recurrentes/:id')
+  editarRecurrente(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+    @Body() body: EditarRecurrenteDto,
+  ) {
+    return this.recurrentes.editar(auth, id, body);
+  }
+
+  @Permiso('administracion.gestionar')
+  @Delete('recurrentes/:id')
+  borrarRecurrente(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id') id: string,
+  ) {
+    return this.recurrentes.borrar(auth, id);
+  }
 
   // ── Categorías ─────────────────────────────────────────────────────────
 

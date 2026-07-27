@@ -696,6 +696,7 @@ model Tenant {
   valores                                          Valor[]
   categoriasEgreso                                 CategoriaEgreso[]
   egresos                                          Egreso[]
+  gastosRecurrentes                                GastoRecurrente[]
   egresoContadores                                 EgresoContador[]
   pagos                                            Pago[]
   pagoContadores                                   PagoContador[]
@@ -972,10 +973,11 @@ model Proveedor {
   materiaPrimaVariantesReferencia MateriaPrimaVariante[] @relation("MateriaPrimaVarianteProveedorReferencia")
   configPasosTercerizados         ProductoConfigPaso[]   @relation("ProductoConfigPasoProveedor")
 
-  valores  Valor[]
-  archivos Archivo[]
-  egresos  Egreso[]
-  pagos    Pago[]
+  valores     Valor[]
+  archivos    Archivo[]
+  egresos     Egreso[]
+  pagos       Pago[]
+  recurrentes GastoRecurrente[]
 
   @@unique([tenantId, nombre])
   @@index([tenantId, nombre])
@@ -1616,6 +1618,7 @@ model GastoFijoEstructura {
   updatedAt      DateTime           @updatedAt
   tenant         Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   egresos        Egreso[]
+  recurrentes    GastoRecurrente[]
 
   @@index([tenantId])
 }
@@ -3100,27 +3103,28 @@ model CuentaFondos {
 }
 
 model MetodoPago {
-  id                    String        @id @default(uuid()) @db.Uuid
-  tenantId              String        @db.Uuid
+  id                    String            @id @default(uuid()) @db.Uuid
+  tenantId              String            @db.Uuid
   codigo                String
   nombre                String
   /// 'efectivo' | 'transferencia' | 'billetera_qr' | 'tarjeta_debito' |
   /// 'tarjeta_credito' | 'cheque_echeq' | 'debito_automatico'.
   tipo                  String
-  comisionPct           Decimal       @default(0) @db.Decimal(6, 3)
-  ivaComisionPct        Decimal       @default(0) @db.Decimal(6, 3)
-  plazoAcreditacionDias Int           @default(0)
+  comisionPct           Decimal           @default(0) @db.Decimal(6, 3)
+  ivaComisionPct        Decimal           @default(0) @db.Decimal(6, 3)
+  plazoAcreditacionDias Int               @default(0)
   /// Sugiere cargar líneas de retención al registrar cobros con este método.
-  sufreRetencion        Boolean       @default(false)
-  cuentaDestinoId       String?       @db.Uuid
-  activo                Boolean       @default(true)
-  orden                 Int           @default(0)
-  createdAt             DateTime      @default(now())
-  updatedAt             DateTime      @updatedAt
-  tenant                Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  cuentaDestino         CuentaFondos? @relation(fields: [cuentaDestinoId], references: [id], onDelete: SetNull)
+  sufreRetencion        Boolean           @default(false)
+  cuentaDestinoId       String?           @db.Uuid
+  activo                Boolean           @default(true)
+  orden                 Int               @default(0)
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  tenant                Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cuentaDestino         CuentaFondos?     @relation(fields: [cuentaDestinoId], references: [id], onDelete: SetNull)
   cobros                Cobro[]
   pagos                 Pago[]
+  recurrentes           GastoRecurrente[]
 
   @@unique([tenantId, codigo])
   @@index([tenantId, activo])
@@ -3534,22 +3538,23 @@ enum NaturalezaEgreso {
 /// hojas, y nadie lo mantiene. La AMORTIZACIÓN no está en este árbol a propósito:
 /// no es un egreso (no sale plata) y vive sólo en GastoFijoEstructura.
 model CategoriaEgreso {
-  id         String            @id @default(uuid()) @db.Uuid
-  tenantId   String            @db.Uuid
+  id          String            @id @default(uuid()) @db.Uuid
+  tenantId    String            @db.Uuid
   /// Slug estable: el nombre se puede editar, el código es la identidad.
-  codigo     String
-  nombre     String
-  naturaleza NaturalezaEgreso
-  padreId    String?           @db.Uuid
-  esSistema  Boolean           @default(false)
-  activo     Boolean           @default(true)
-  orden      Int               @default(0)
-  createdAt  DateTime          @default(now())
-  updatedAt  DateTime          @updatedAt
-  tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  padre      CategoriaEgreso?  @relation("CategoriaEgresoPadre", fields: [padreId], references: [id], onDelete: Restrict)
-  hijos      CategoriaEgreso[] @relation("CategoriaEgresoPadre")
-  egresos    Egreso[]
+  codigo      String
+  nombre      String
+  naturaleza  NaturalezaEgreso
+  padreId     String?           @db.Uuid
+  esSistema   Boolean           @default(false)
+  activo      Boolean           @default(true)
+  orden       Int               @default(0)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  padre       CategoriaEgreso?  @relation("CategoriaEgresoPadre", fields: [padreId], references: [id], onDelete: Restrict)
+  hijos       CategoriaEgreso[] @relation("CategoriaEgresoPadre")
+  egresos     Egreso[]
+  recurrentes GastoRecurrente[]
 
   @@unique([tenantId, codigo])
   @@index([tenantId, activo])
@@ -3602,6 +3607,11 @@ model Egreso {
   centroCostoId         String?   @db.Uuid
   /// Puente con el presupuestado para el reporte "presupuestado vs real" (F3).
   gastoFijoEstructuraId String?   @db.Uuid
+  /// Plantilla que lo emitió (F3). Con el período de competencia forma el
+  /// único que hace idempotente la generación mensual.
+  gastoRecurrenteId     String?   @db.Uuid
+  /// 'YYYY-MM' del período generado. Sólo en egresos de origen 'recurrente'.
+  periodoRecurrente     String?
   /// Adelantos de sueldo y gastos atribuibles a una persona.
   empleadoId            String?   @db.Uuid
   anuladoEl             DateTime?
@@ -3617,6 +3627,7 @@ model Egreso {
   proveedor    Proveedor?           @relation(fields: [proveedorId], references: [id])
   centroCosto  CentroCosto?         @relation(fields: [centroCostoId], references: [id])
   gastoFijo    GastoFijoEstructura? @relation(fields: [gastoFijoEstructuraId], references: [id])
+  recurrente   GastoRecurrente?     @relation(fields: [gastoRecurrenteId], references: [id])
   empleado     Empleado?            @relation(fields: [empleadoId], references: [id])
   imputaciones PagoImputacion[]
   archivos     Archivo[]
@@ -3627,11 +3638,59 @@ model Egreso {
   /// parcial de hecho: en Postgres los NULL no colisionan, así que los gastos
   /// sin documento (multas, caja chica) no se estorban entre sí.
   @@unique([tenantId, proveedorId, tipoComprobante, puntoVenta, numeroComprobante])
+  /// IDEMPOTENCIA de la generación mensual: una plantilla emite UN egreso por
+  /// período. Sin esto, dos instancias del cron corriendo a la vez —o un
+  /// reintento— duplicarían el alquiler del mes.
+  @@unique([gastoRecurrenteId, periodoRecurrente])
   @@index([tenantId, estado])
   @@index([tenantId, fechaVencimiento])
   @@index([tenantId, fechaCompetencia])
   @@index([tenantId, proveedorId])
   @@index([tenantId, categoriaEgresoId])
+}
+
+/// Plantilla que emite egresos sola, mes a mes: el alquiler, la luz, el
+/// contador. Ver docs/egresos-y-cuentas-por-pagar-diseno.md §4.5
+///
+/// El `monto` es una SUGERENCIA y no una verdad: la luz no viene igual dos
+/// meses seguidos. El egreso se genera pendiente con ese importe y quien lo
+/// paga lo corrige. Sin esa aclaración la herramienta mentiría con precisión.
+model GastoRecurrente {
+  id                    String   @id @default(uuid()) @db.Uuid
+  tenantId              String   @db.Uuid
+  descripcion           String
+  categoriaEgresoId     String   @db.Uuid
+  proveedorId           String?  @db.Uuid
+  monto                 Decimal  @db.Decimal(14, 2)
+  moneda                String   @default("ARS") @db.VarChar(3)
+  metodoPagoId          String?  @db.Uuid
+  /// 'mensual' | 'bimestral' | 'trimestral' | 'semestral' | 'anual'.
+  frecuencia            String   @default("mensual")
+  /// Día del mes en que vence (1-31), con clamp a fin de mes corto: un
+  /// vencimiento el 31 en febrero cae el 28, no se saltea.
+  diaVencimiento        Int      @default(10)
+  /// 'YYYY-MM' — primer período que emite (inclusive).
+  vigenteDesde          String
+  /// 'YYYY-MM' — último período (inclusive); null = indefinido.
+  vigenteHasta          String?
+  /// El puente con el PRESUPUESTADO: si apunta a un gasto fijo, el reporte
+  /// puede comparar lo que se planificó contra lo que realmente se pagó.
+  gastoFijoEstructuraId String?  @db.Uuid
+  activo                Boolean  @default(true)
+  /// 'YYYY-MM' del último período emitido. Primera barrera de idempotencia;
+  /// la dura es el único de Egreso.
+  ultimoPeriodoGenerado String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  tenant     Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  categoria  CategoriaEgreso      @relation(fields: [categoriaEgresoId], references: [id], onDelete: Restrict)
+  proveedor  Proveedor?           @relation(fields: [proveedorId], references: [id])
+  metodoPago MetodoPago?          @relation(fields: [metodoPagoId], references: [id])
+  gastoFijo  GastoFijoEstructura? @relation(fields: [gastoFijoEstructuraId], references: [id])
+  egresos    Egreso[]
+
+  @@index([tenantId, activo])
 }
 
 /// El ACTO de pagar — espejo de Cobro.

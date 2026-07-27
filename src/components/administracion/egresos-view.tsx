@@ -30,6 +30,8 @@ import {
   NATURALEZA_LABELS,
   TIPO_COMPROBANTE_LABELS,
   TIPOS_COMPROBANTE_COMPRA,
+  FRECUENCIA_LABELS,
+  FRECUENCIAS_RECURRENTE,
   REGIMEN_RETENCION_LABELS,
   REGIMENES_RETENCION,
   TRAMO_AGING_LABELS,
@@ -41,6 +43,8 @@ import {
   type Egreso,
   type ReporteEgresos,
   type ResumenEgresos,
+  type GastoRecurrente,
+  type PresupuestadoVsReal,
   type SaldoProveedor,
 } from "@/lib/egresos";
 import {
@@ -51,7 +55,12 @@ import {
   getPagosDeEgreso,
   getReporteEgresos,
   getResumenEgresos,
+  getPresupuestadoVsReal,
+  getRecurrentes,
   getSaldosProveedores,
+  crearRecurrente,
+  editarRecurrente,
+  generarRecurrentes,
   registrarPagoEgresos,
   type CrearEgresoBody,
 } from "@/lib/egresos-api";
@@ -61,7 +70,16 @@ import type { PagoDeEgreso } from "@/lib/egresos";
 import type { Archivo } from "@/lib/archivos";
 import { listarArchivos } from "@/lib/archivos-api";
 
-type Tab = "por-pagar" | "todos" | "proveedores" | "analisis";
+type Tab =
+  | "por-pagar"
+  | "todos"
+  | "proveedores"
+  | "recurrentes"
+  | "analisis";
+
+/** Un decimal, en formato local. */
+const pct1 = (v: number) =>
+  v.toLocaleString("es-AR", { maximumFractionDigits: 1 });
 
 /** Hoy en ISO local, para comparar vencimientos sin arrastrar zona horaria. */
 function hoyIso(): string {
@@ -140,6 +158,10 @@ export function EgresosView({
   const [anulando, setAnulando] = React.useState<Egreso | null>(null);
   const [reporte, setReporte] = React.useState<ReporteEgresos | null>(null);
   const [saldos, setSaldos] = React.useState<SaldoProveedor[] | null>(null);
+  const [recurrentes, setRecurrentes] = React.useState<
+    GastoRecurrente[] | null
+  >(null);
+  const [presu, setPresu] = React.useState<PresupuestadoVsReal | null>(null);
 
   const recargar = React.useCallback(
     async (t: Tab = tab) => {
@@ -175,13 +197,24 @@ export function EgresosView({
         .catch(() => setSaldos([]));
       return;
     }
+    if (t === "recurrentes") {
+      setRecurrentes(null);
+      getRecurrentes()
+        .then((r) => setRecurrentes(r.recurrentes))
+        .catch(() => setRecurrentes([]));
+      return;
+    }
     if (t === "analisis") {
       // El reporte se pide recién acá: es una agregación sobre todo el
       // período y no hace falta pagarla si nadie abre el tab.
       setReporte(null);
+      setPresu(null);
       getReporteEgresos()
         .then(setReporte)
         .catch(() => setReporte(null));
+      getPresupuestadoVsReal()
+        .then(setPresu)
+        .catch(() => setPresu(null));
       return;
     }
     void recargar(t);
@@ -289,6 +322,13 @@ export function EgresosView({
           </button>
           <button
             type="button"
+            className={tab === "recurrentes" ? "on" : ""}
+            onClick={() => cambiarTab("recurrentes")}
+          >
+            Recurrentes
+          </button>
+          <button
+            type="button"
             className={tab === "analisis" ? "on" : ""}
             onClick={() => cambiarTab("analisis")}
           >
@@ -321,7 +361,17 @@ export function EgresosView({
       {error ? <div className="egr-error">{error}</div> : null}
 
       {tab === "analisis" ? (
-        <Analisis reporte={reporte} fmt={fmt} />
+        <Analisis reporte={reporte} presu={presu} fmt={fmt} />
+      ) : tab === "recurrentes" ? (
+        <Recurrentes
+          recurrentes={recurrentes}
+          categorias={categorias}
+          proveedores={proveedores}
+          hoy={hoy}
+          puedeGestionar={puedeGestionar}
+          fmt={fmt}
+          onCambio={() => cambiarTab("recurrentes")}
+        />
       ) : tab === "proveedores" ? (
         <SaldosProveedores saldos={saldos} fmt={fmt} />
       ) : visibles.length === 0 ? (
@@ -502,6 +552,305 @@ export function EgresosView({
 }
 
 /**
+ * Plantillas que emiten egresos solas (journeys B5 y B6).
+ *
+ * El monto es una SUGERENCIA y la pantalla lo dice: la luz no viene igual dos
+ * meses seguidos, así que el egreso nace pendiente con ese importe y quien lo
+ * paga lo corrige. Si el sistema tratara el monto como verdad, mentiría con
+ * precisión.
+ */
+function Recurrentes({
+  recurrentes,
+  categorias,
+  proveedores,
+  hoy,
+  puedeGestionar,
+  fmt,
+  onCambio,
+}: {
+  recurrentes: GastoRecurrente[] | null;
+  categorias: CategoriaEgreso[];
+  proveedores: ProveedorDetalle[];
+  hoy: string;
+  puedeGestionar: boolean;
+  fmt: (v: number) => string;
+  onCambio: () => void;
+}) {
+  const [alta, setAlta] = React.useState(false);
+  const [emitiendo, setEmitiendo] = React.useState(false);
+  const [aviso, setAviso] = React.useState<string | null>(null);
+  const activas = categorias.filter((c) => c.activo);
+
+  const [descripcion, setDescripcion] = React.useState("");
+  const [categoriaId, setCategoriaId] = React.useState(activas[0]?.id ?? "");
+  const [proveedorId, setProveedorId] = React.useState("");
+  const [monto, setMonto] = React.useState(0);
+  const [frecuencia, setFrecuencia] = React.useState("mensual");
+  const [dia, setDia] = React.useState(10);
+  const [desde, setDesde] = React.useState(hoy.slice(0, 7));
+
+  const emitir = async () => {
+    setEmitiendo(true);
+    setAviso(null);
+    try {
+      const r = await generarRecurrentes();
+      setAviso(
+        r.emitidos === 0
+          ? "No había nada pendiente de emitir."
+          : `${r.emitidos} egreso${r.emitidos === 1 ? "" : "s"} emitido${r.emitidos === 1 ? "" : "s"}.`,
+      );
+      onCambio();
+    } catch (e) {
+      setAviso(e instanceof Error ? e.message : "No se pudo emitir.");
+    } finally {
+      setEmitiendo(false);
+    }
+  };
+
+  const guardar = async () => {
+    await crearRecurrente({
+      descripcion: descripcion.trim(),
+      categoriaEgresoId: categoriaId,
+      proveedorId: proveedorId || undefined,
+      monto,
+      frecuencia,
+      diaVencimiento: dia,
+      vigenteDesde: desde,
+    });
+    setAlta(false);
+    setDescripcion("");
+    setMonto(0);
+    onCambio();
+  };
+
+  if (!recurrentes) {
+    return <div className="egr-cargando">Cargando plantillas…</div>;
+  }
+
+  return (
+    <div className="egr-analisis">
+      <div className="egr-toolbar">
+        {puedeGestionar ? (
+          <>
+            <button type="button" className="btn" onClick={() => setAlta(true)}>
+              Nueva plantilla
+            </button>
+            <button
+              type="button"
+              className="btn"
+              disabled={emitiendo}
+              onClick={() => void emitir()}
+            >
+              {emitiendo ? "Emitiendo…" : "Emitir pendientes"}
+            </button>
+          </>
+        ) : null}
+        {aviso ? <span className="egr-sub">{aviso}</span> : null}
+      </div>
+
+      {recurrentes.length === 0 ? (
+        <div className="egr-empty">
+          <div className="ttl">Sin gastos recurrentes</div>
+          <div className="sub">
+            El alquiler, la luz, el contador: cargalos una vez y aparecen solos
+            cada mes en Cuentas por pagar.
+          </div>
+        </div>
+      ) : (
+        <div className="egr-tabla-wrap">
+          <table className="egr-tabla">
+            <thead>
+              <tr>
+                <th>Plantilla</th>
+                <th>Categoría</th>
+                <th>Frecuencia</th>
+                <th className="num">Importe</th>
+                <th>Último emitido</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recurrentes.map((r) => (
+                <tr key={r.id} className={r.activo ? "" : "muted-row"}>
+                  <td>
+                    {r.descripcion}
+                    <span className="egr-sub">
+                      {r.proveedorNombre ?? "sin proveedor"} · vence el día{" "}
+                      {r.diaVencimiento}
+                      {r.gastoFijoNombre
+                        ? ` · presupuestado: ${r.gastoFijoNombre}`
+                        : ""}
+                    </span>
+                  </td>
+                  <td>{r.categoriaNombre}</td>
+                  <td>{FRECUENCIA_LABELS[r.frecuencia] ?? r.frecuencia}</td>
+                  <td className="num mono">
+                    {fmt(r.monto)}
+                    <span className="egr-sub">sugerido</span>
+                  </td>
+                  <td className="mono">
+                    {r.ultimoPeriodoGenerado ?? "—"}
+                    <span className="egr-sub">
+                      {r.egresosEmitidos} emitido
+                      {r.egresosEmitidos === 1 ? "" : "s"}
+                    </span>
+                  </td>
+                  <td>
+                    {puedeGestionar ? (
+                      <button
+                        type="button"
+                        className="egr-link"
+                        onClick={async () => {
+                          await editarRecurrente(r.id, { activo: !r.activo });
+                          onCambio();
+                        }}
+                      >
+                        {r.activo ? "Desactivar" : "Activar"}
+                      </button>
+                    ) : (
+                      <span className={`egr-badge ${r.activo ? "" : "anulado"}`}>
+                        {r.activo ? "Activa" : "Inactiva"}
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {alta ? (
+        <div className="egr-modal-bg" role="dialog" aria-modal="true">
+          <div className="egr-modal egr-modal-sm">
+            <div className="egr-modal-head">
+              <h2>Nueva plantilla</h2>
+              <button
+                type="button"
+                className="egr-x"
+                onClick={() => setAlta(false)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="egr-modal-body">
+              <div className="egr-grid">
+                <label className="egr-f egr-f-wide">
+                  <span>Descripción</span>
+                  <input
+                    value={descripcion}
+                    onChange={(e) => setDescripcion(e.target.value)}
+                    placeholder="Alquiler del galpón, Internet, Contador…"
+                  />
+                </label>
+                <label className="egr-f">
+                  <span>Categoría</span>
+                  <select
+                    className="egr-select"
+                    value={categoriaId}
+                    onChange={(e) => setCategoriaId(e.target.value)}
+                  >
+                    {activas.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="egr-f">
+                  <span>Proveedor</span>
+                  <select
+                    className="egr-select"
+                    value={proveedorId}
+                    onChange={(e) => setProveedorId(e.target.value)}
+                  >
+                    <option value="">Sin proveedor</option>
+                    {proveedores.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="egr-f">
+                  <span>Importe sugerido</span>
+                  <CampoMonto
+                    valor={monto}
+                    onCambio={setMonto}
+                    ariaLabel="Importe sugerido"
+                  />
+                  <small className="egr-hint">
+                    Se puede corregir mes a mes: la luz nunca es igual.
+                  </small>
+                </label>
+                <label className="egr-f">
+                  <span>Frecuencia</span>
+                  <select
+                    className="egr-select"
+                    value={frecuencia}
+                    onChange={(e) => setFrecuencia(e.target.value)}
+                  >
+                    {FRECUENCIAS_RECURRENTE.map((f) => (
+                      <option key={f} value={f}>
+                        {FRECUENCIA_LABELS[f]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="egr-f">
+                  <span>Vence el día</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={31}
+                    value={dia}
+                    onChange={(e) =>
+                      setDia(
+                        Math.max(1, Math.min(31, Number(e.target.value) || 1)),
+                      )
+                    }
+                  />
+                  <small className="egr-hint">
+                    El 31 en un mes corto cae el último día.
+                  </small>
+                </label>
+                <label className="egr-f">
+                  <span>Desde</span>
+                  <input
+                    type="month"
+                    value={desde}
+                    onChange={(e) => setDesde(e.target.value)}
+                  />
+                </label>
+              </div>
+            </div>
+            <div className="egr-modal-foot">
+              <button
+                type="button"
+                className="btn"
+                onClick={() => setAlta(false)}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={
+                  descripcion.trim().length < 2 || !categoriaId || monto <= 0
+                }
+                onClick={() => void guardar()}
+              >
+                Crear
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
  * Saldo por proveedor con antigüedad (journey E2) — el espejo de la matriz de
  * deudores, del otro lado del mostrador.
  */
@@ -592,9 +941,11 @@ function SaldosProveedores({
  */
 function Analisis({
   reporte,
+  presu,
   fmt,
 }: {
   reporte: ReporteEgresos | null;
+  presu: PresupuestadoVsReal | null;
   fmt: (v: number) => string;
 }) {
   if (!reporte) {
@@ -636,6 +987,84 @@ function Analisis({
           <span className="h">al {reporte.hasta} · por competencia</span>
         </div>
       </div>
+
+      {presu && presu.lineas.length > 0 ? (
+        <section className="egr-panel">
+          <div className="egr-panel-t">
+            Presupuestado vs. real de la estructura · {presu.periodo}
+          </div>
+          <div className="egr-tabla-wrap">
+            <table className="egr-tabla">
+              <thead>
+                <tr>
+                  <th>Gasto fijo</th>
+                  <th className="num">Presupuestado</th>
+                  <th className="num">Real</th>
+                  <th className="num">Desvío</th>
+                </tr>
+              </thead>
+              <tbody>
+                {presu.lineas.map((l) => (
+                  <tr key={l.gastoFijoId} className={l.sinRegistrar ? "muted-row" : ""}>
+                    <td>
+                      {l.nombre}
+                      {l.sinRegistrar ? (
+                        <span className="egr-sub">sin egresos este mes</span>
+                      ) : null}
+                    </td>
+                    <td className="num mono">{fmt(l.presupuestado)}</td>
+                    <td className="num mono">
+                      {l.sinRegistrar ? "—" : fmt(l.real)}
+                    </td>
+                    <td
+                      className={`num mono ${
+                        l.sinRegistrar ? "" : l.desvio > 0 ? "egr-mal" : ""
+                      }`}
+                    >
+                      {l.sinRegistrar ? (
+                        "—"
+                      ) : (
+                        <>
+                          {l.desvio >= 0 ? "+" : "−"}
+                          {fmt(Math.abs(l.desvio))}
+                          {l.desvioPct != null ? (
+                            <span className="egr-sub">
+                              {l.desvioPct >= 0 ? "+" : "−"}
+                              {pct1(Math.abs(l.desvioPct))}%
+                            </span>
+                          ) : null}
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                <tr className="egr-fila-total">
+                  <td className="strong">Total con registro</td>
+                  <td className="num mono strong">{fmt(presu.presupuestado)}</td>
+                  <td className="num mono strong">{fmt(presu.real)}</td>
+                  <td
+                    className={`num mono strong ${presu.desvio > 0 ? "egr-mal" : ""}`}
+                  >
+                    {presu.desvio >= 0 ? "+" : "−"}
+                    {fmt(Math.abs(presu.desvio))}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          {/* Comparar contra cero un gasto que nadie registró mostraría un
+              ahorro que no existe: se listan pero no suman. */}
+          {presu.sinRegistrar > 0 ? (
+            <div className="egr-nota-inline">
+              {presu.sinRegistrar} gasto
+              {presu.sinRegistrar === 1 ? "" : "s"} fijo
+              {presu.sinRegistrar === 1 ? "" : "s"} todavía sin egresos este mes:
+              se listan pero no entran en el total, porque compararlos contra
+              cero mostraría un ahorro que no existe.
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       <div className="egr-analisis-cols">
         <section className="egr-panel">

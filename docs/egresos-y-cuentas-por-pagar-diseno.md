@@ -1,6 +1,6 @@
 # Egresos y Cuentas por pagar — diseño
 
-Estado: **F1 y F2 completas**. Pendientes: F3 (recurrentes) y F4 (Libro IVA Compras).
+Estado: **F1, F2 y F3 completas**. Pendiente: F4 (Libro IVA Compras).
 Diseñado 2026-07-26.
 
 Módulo para registrar **todo lo que sale de la caja**: pago de servicios, alquiler,
@@ -539,8 +539,18 @@ pide, porque necesita el certificado para computarse el pago a cuenta. Se genera
 vuelo y NO se persiste: a diferencia del recibo no se comparte por link, se descarga.
 Y la factura del proveedor escaneada se adjunta desde la ficha del egreso.
 
-**F3 — Recurrentes.** `GastoRecurrente` + cron de generación + el puente con
-`GastoFijoEstructura` y el reporte presupuestado vs. real.
+**F3 — Recurrentes (hecho).** `GastoRecurrente` + cron diario + el puente con
+`GastoFijoEstructura` y el reporte presupuestado vs. real en el tab Análisis.
+
+La generación es idempotente por partida doble: `ultimoPeriodoGenerado` evita el
+trabajo y el único `(gastoRecurrenteId, periodoRecurrente)` evita el duplicado de
+verdad si dos procesos corren a la vez. Emite TODOS los períodos pendientes y no
+sólo el actual: un alquiler que no aparece porque el servidor estuvo caído no es un
+alquiler que no haya que pagar. El día de vencimiento hace clamp a fin de mes corto.
+
+Vincular una plantilla a un gasto fijo alcanza a los egresos YA emitidos (sólo los
+que no tienen imputación propia): si no, quien descubre el reporte después de meses
+de uso lo vería vacío para toda su historia.
 
 **F4 — Fiscal.** Libro IVA Compras por período.
 

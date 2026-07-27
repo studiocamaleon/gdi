@@ -213,6 +213,70 @@ export type ReporteEgresos = {
   }>;
 };
 
+export const FRECUENCIAS_RECURRENTE = [
+  "mensual",
+  "bimestral",
+  "trimestral",
+  "semestral",
+  "anual",
+] as const;
+
+export type FrecuenciaRecurrente = (typeof FRECUENCIAS_RECURRENTE)[number];
+
+/** Índice por string: la frecuencia viaja como texto desde el API. */
+export const FRECUENCIA_LABELS: Record<string, string> = {
+  mensual: "Mensual",
+  bimestral: "Cada 2 meses",
+  trimestral: "Cada 3 meses",
+  semestral: "Cada 6 meses",
+  anual: "Anual",
+};
+
+export type GastoRecurrente = {
+  id: string;
+  descripcion: string;
+  categoriaEgresoId: string;
+  categoriaNombre: string;
+  naturaleza: NaturalezaEgreso;
+  proveedorId: string | null;
+  proveedorNombre: string | null;
+  /** Una SUGERENCIA: la luz no viene igual dos meses seguidos. */
+  monto: number;
+  moneda: string;
+  frecuencia: string;
+  diaVencimiento: number;
+  /** 'YYYY-MM'. */
+  vigenteDesde: string;
+  vigenteHasta: string | null;
+  gastoFijoEstructuraId: string | null;
+  gastoFijoNombre: string | null;
+  activo: boolean;
+  ultimoPeriodoGenerado: string | null;
+  egresosEmitidos: number;
+};
+
+export type LineaPresupuestado = {
+  gastoFijoId: string;
+  nombre: string;
+  categoria: string;
+  presupuestado: number;
+  real: number;
+  desvio: number;
+  desvioPct: number | null;
+  /** Sin egresos todavía: el desvío no significa nada. */
+  sinRegistrar: boolean;
+};
+
+export type PresupuestadoVsReal = {
+  periodo: string;
+  lineas: LineaPresupuestado[];
+  presupuestado: number;
+  real: number;
+  desvio: number;
+  desvioPct: number | null;
+  sinRegistrar: number;
+};
+
 /**
  * Cuántos días faltan (negativo = vencido). Se calcula sobre fechas ISO en
  * texto para no arrastrar la zona horaria: comparar Date en SSR desalinea la

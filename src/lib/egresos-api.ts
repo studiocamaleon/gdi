@@ -2,6 +2,8 @@ import { apiRequest } from "@/lib/api";
 import type {
   CategoriaEgreso,
   Egreso,
+  GastoRecurrente,
+  PresupuestadoVsReal,
   NaturalezaEgreso,
   PagoDeEgreso,
   ReporteEgresos,
@@ -96,6 +98,75 @@ export async function getSaldosProveedores(): Promise<{
   return apiRequest<{ proveedores: SaldoProveedor[]; total: number }>(
     "/egresos/proveedores",
   );
+}
+
+// ── Gastos recurrentes (F3) ────────────────────────────────────────────
+
+export async function getRecurrentes(): Promise<{
+  recurrentes: GastoRecurrente[];
+}> {
+  return apiRequest<{ recurrentes: GastoRecurrente[] }>("/egresos/recurrentes");
+}
+
+export async function crearRecurrente(body: {
+  descripcion: string;
+  categoriaEgresoId: string;
+  proveedorId?: string;
+  monto: number;
+  metodoPagoId?: string;
+  frecuencia?: string;
+  diaVencimiento?: number;
+  vigenteDesde: string;
+  vigenteHasta?: string;
+  gastoFijoEstructuraId?: string;
+}): Promise<GastoRecurrente> {
+  return apiRequest<GastoRecurrente>("/egresos/recurrentes", {
+    method: "POST",
+    body: JSON.stringify(body),
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+export async function editarRecurrente(
+  id: string,
+  body: {
+    descripcion?: string;
+    monto?: number;
+    diaVencimiento?: number;
+    vigenteHasta?: string;
+    activo?: boolean;
+    gastoFijoEstructuraId?: string;
+  },
+): Promise<GastoRecurrente> {
+  return apiRequest<GastoRecurrente>(`/egresos/recurrentes/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+export async function borrarRecurrente(
+  id: string,
+): Promise<{ ok: boolean; desactivada: boolean }> {
+  return apiRequest<{ ok: boolean; desactivada: boolean }>(
+    `/egresos/recurrentes/${id}`,
+    { method: "DELETE" },
+  );
+}
+
+/** Emitir a mano lo pendiente, sin esperar al cron de la madrugada. */
+export async function generarRecurrentes(): Promise<{ emitidos: number }> {
+  return apiRequest<{ emitidos: number }>("/egresos/recurrentes/generar", {
+    method: "POST",
+  });
+}
+
+/** Presupuestado vs. real de la estructura (journey E4). */
+export async function getPresupuestadoVsReal(
+  periodo?: string,
+): Promise<PresupuestadoVsReal> {
+  const q = periodo ? `?periodo=${periodo}` : "";
+  return apiRequest<PresupuestadoVsReal>(`/egresos/presupuestado${q}`);
 }
 
 export type CrearEgresoBody = {
