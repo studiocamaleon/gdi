@@ -3,7 +3,6 @@ import {
   IsArray,
   IsBoolean,
   IsEmail,
-  IsIn,
   IsOptional,
   IsString,
   IsUUID,
@@ -28,14 +27,9 @@ export class CrearUsuarioDto {
   @IsUUID('4')
   empleadoId?: string;
 
-  /**
-   * Cómo se le entrega el acceso. `link` (default): se le manda un link y él
-   * elige su clave — nadie más la sabe nunca. `clave`: el sistema genera una
-   * provisoria para dictarle, y él la cambia al entrar.
-   */
-  @IsOptional()
-  @IsIn(['link', 'clave'])
-  modo?: 'link' | 'clave';
+  // No hay campo `modo`: el acceso se entrega SIEMPRE con una clave provisoria
+  // para dictar. El modo "link" se retiró (2026-07-27) porque nunca existió
+  // nada que mandara el link.
 }
 
 export class EditarUsuarioDto {

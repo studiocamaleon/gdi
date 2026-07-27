@@ -192,12 +192,21 @@ invitación no servía: `acceptInvitation` sólo fija la clave si el usuario
 
 Cómo quedó, y por qué así:
 
-- **Al dar de alta se elige cómo entra la primera vez.** *Le mando un link* —el
-  de siempre: la persona elige su clave y nadie más la sabe nunca— o *le dicto
-  una clave*, que genera la provisoria en el momento. Los dos casos existen en
-  un taller: al que tiene mail se le manda el link, al que está parado al lado
-  de la máquina se le dicta y listo. El link seguía siendo el único camino, y
-  era el frágil: si se perdía, no entraba nadie.
+- **Al dar de alta el sistema genera una clave provisoria para dictar.** Es la
+  única forma de entrega. Durante un tiempo hubo dos —*le mando un link* y *le
+  dicto una clave*—, pero el link se **retiró el 2026-07-27**: nunca existió
+  nada que lo mandara, así que el admin igual tenía que copiarlo y pasarlo a
+  mano por WhatsApp. Dos caminos para lo mismo, y el que venía por default
+  tenía un nombre que mentía. Con él se fueron el botón *Link de acceso* del
+  listado y el endpoint `POST /usuarios/:id/invitacion`.
+  - La tabla `Invitation` y `/aceptar-invitacion` **siguen vivas**: las usa el
+    control plane cuando crea un tenant (`plataforma.crearTenant`) y el
+    registro de `auth.service`. Lo que se fue es que Usuarios emita tokens.
+    Dar de alta a alguien ahora *revoca* la invitación que le hubiera quedado
+    viva de antes.
+  - Si algún día se quiere el link de verdad, el trabajo que falta es el que
+    nunca se hizo: mandarlo por email (o por WhatsApp, que ya está cableado).
+    Recién ahí vuelve a tener sentido ofrecer la opción.
 - **El admin restablece, no elige.** Aprieta "Restablecer clave" y el sistema
   genera una provisoria —tres bloques de cuatro, sin caracteres que se confundan
   al dictarlos por teléfono— que se muestra **una sola vez**. No necesita saber
@@ -210,8 +219,8 @@ Cómo quedó, y por qué así:
   válida.
 - **Restablecer corta las sesiones abiertas** de esa persona. Si le cambiás la
   clave a alguien, lo que quedó abierto en otra máquina deja de valer.
-- **"Pendiente" significa "todavía no eligió SU clave"**, tanto el que nunca
-  entró como el que anda con una provisoria. Mirar sólo si tiene contraseña
+- **"Pendiente" significa "todavía no eligió SU clave"**: anda con la
+  provisoria que le dictaron. Mirar sólo si tiene contraseña
   daría por activo a alguien cuya clave la sabe el administrador, que es medio
   activo nada más.
 - **Cambiar la propia clave pide la actual**, aunque la sesión esté abierta: una

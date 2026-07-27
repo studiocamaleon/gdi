@@ -174,13 +174,4 @@ export class UsuariosController {
   ) {
     return this.usuarios.cerrarSesiones(auth, userId);
   }
-
-  @Permiso('configuracion.gestionar')
-  @Post(':userId/invitacion')
-  reenviar(
-    @CurrentSession() auth: CurrentAuth,
-    @Param('userId') userId: string,
-  ) {
-    return this.usuarios.reenviarInvitacion(auth, userId);
-  }
 }

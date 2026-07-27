@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { RolSistema } from '@prisma/client';
-import { randomBytes, createHash, randomInt } from 'node:crypto';
+import { randomInt } from 'node:crypto';
 import * as bcrypt from 'bcryptjs';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -27,9 +27,6 @@ import type {
   EditarRolDto,
   EditarUsuarioDto,
 } from './usuarios.dto';
-
-/** Una semana, igual que la invitación que emitía Empleados. */
-const VIGENCIA_INVITACION_MS = 1000 * 60 * 60 * 24 * 7;
 
 /**
  * Usuarios del tenant: quién entra al sistema y con qué rol.
@@ -79,18 +76,7 @@ export class UsuariosService {
       this.suscripciones.limites(auth.tenantId),
     ]);
 
-    // Una sola consulta para todas las invitaciones vivas, en vez de una por
-    // usuario: el listado es de 6 filas pero el N+1 se paga igual.
-    const pendientes = await this.prisma.invitation.findMany({
-      where: { tenantId: auth.tenantId, acceptedAt: null, revokedAt: null },
-      select: { userId: true, expiresAt: true },
-    });
-    const invitacionDe = new Map(
-      pendientes.map((i) => [i.userId, i.expiresAt]),
-    );
-
     const usuarios = memberships.map((m) => {
-      const invitacion = invitacionDe.get(m.userId);
       return {
         id: m.user.id,
         membershipId: m.id,
@@ -103,23 +89,15 @@ export class UsuariosService {
         activa: m.activa,
         empleado: m.user.empleados[0] ?? null,
         /**
-         * El estado que se lee de un vistazo. `pendiente` significa que la
-         * cuenta existe y el acceso está dado, pero todavía no fijó su
-         * contraseña: es información distinta de "lo invitamos y no sabemos
-         * nada", que es lo que parecía decir la ficha del empleado.
-         */
-        /**
-         * `pendiente` es "todavía no eligió SU clave": tanto el que nunca
-         * entró como el que tiene una provisoria que le dictaron. Mirar sólo
-         * `passwordHash` daría por activo a alguien cuya clave la sabe el
-         * administrador, que es medio activo nada más.
+         * `pendiente` es "todavía no eligió SU clave": sigue con la provisoria
+         * que le dictaron. Mirar sólo `passwordHash` daría por activo a alguien
+         * cuya clave la sabe el administrador, que es medio activo nada más.
          */
         estado: !m.activa
           ? ('desactivado' as const)
           : m.user.passwordHash && !m.user.debeCambiarPassword
             ? ('activo' as const)
             : ('pendiente' as const),
-        invitacionVence: invitacion?.toISOString() ?? null,
         esYo: m.userId === auth.userId,
       };
     });
@@ -133,20 +111,20 @@ export class UsuariosService {
   }
 
   /**
-   * Da de alta el acceso y devuelve el link de invitación.
+   * Da de alta el acceso y devuelve la clave provisoria para dictarle.
    *
-   * La membership queda ACTIVA de entrada, como venía haciendo Empleados: la
-   * invitación sirve para que la persona fije su contraseña, no para habilitar
-   * el acceso. El listado lo dice con todas las letras (`pendiente`).
+   * La membership queda ACTIVA de entrada: la clave provisoria es para que la
+   * persona fije la suya, no para habilitar el acceso. Mientras no la cambie,
+   * el listado lo dice con todas las letras (`pendiente`).
    */
   async crear(auth: CurrentAuth, dto: CrearUsuarioDto) {
     const email = dto.email.trim().toLowerCase();
     const rol = await this.rolDelTenant(auth.tenantId, dto.rolId);
-    // Dos formas de entregarle el acceso, porque los dos casos existen en un
-    // taller: al que tiene mail se le manda el link y elige su clave; al que
-    // está parado al lado de la máquina se le dicta una y listo.
-    const conClave = dto.modo === 'clave';
-    const provisoria = conClave ? generarProvisoria() : null;
+    // Una sola forma de entregarle el acceso: el sistema genera una clave
+    // provisoria, el admin la dicta, y la persona la cambia al entrar. Hubo un
+    // modo "le mando un link" que se retiró (2026-07-27): el link se generaba
+    // pero no lo mandaba nadie, así que el admin igual lo copiaba a mano.
+    const provisoria = generarProvisoria();
 
     const existente = await this.prisma.user.findUnique({
       where: { email },
@@ -162,9 +140,6 @@ export class UsuariosService {
 
     await this.verificarCupo(auth.tenantId);
 
-    const rawToken = randomBytes(32).toString('hex');
-    const tokenHash = createHash('sha256').update(rawToken).digest('hex');
-
     await this.prisma.$transaction(async (tx) => {
       const user =
         existente ??
@@ -176,17 +151,15 @@ export class UsuariosService {
           },
         }));
 
-      if (provisoria) {
-        // Vale también para el que YA tenía cuenta en otra empresa: si el admin
-        // eligió dictarle una clave, se la pisamos y la cambia al entrar.
-        await tx.user.update({
-          where: { id: user.id },
-          data: {
-            passwordHash: await bcrypt.hash(provisoria, 10),
-            debeCambiarPassword: true,
-          },
-        });
-      }
+      // Vale también para el que YA tenía cuenta en otra empresa: la clave se
+      // le pisa con la provisoria y la cambia al entrar.
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          passwordHash: await bcrypt.hash(provisoria, 10),
+          debeCambiarPassword: true,
+        },
+      });
 
       await tx.membership.upsert({
         where: {
@@ -206,8 +179,9 @@ export class UsuariosService {
         await this.vincularEmpleado(tx, auth.tenantId, dto.empleadoId, user.id);
       }
 
-      // Una invitación viva por vez: la anterior deja de servir apenas se
-      // emite otra, así el link que circula es siempre el último.
+      // Si le quedaba una invitación viva de antes —de cuando existía el modo
+      // link— deja de servir: el acceso ahora es la clave que se acaba de
+      // generar y un token suelto por ahí sólo sería otra puerta.
       await tx.invitation.updateMany({
         where: {
           tenantId: auth.tenantId,
@@ -217,32 +191,16 @@ export class UsuariosService {
         },
         data: { revokedAt: new Date() },
       });
-
-      await tx.invitation.create({
-        data: {
-          tenantId: auth.tenantId,
-          userId: user.id,
-          empleadoId: dto.empleadoId ?? null,
-          invitedByMembershipId: auth.membershipId || null,
-          email,
-          rol: rol.rolBase,
-          rolId: rol.id,
-          tokenHash,
-          expiresAt: new Date(Date.now() + VIGENCIA_INVITACION_MS),
-        },
-      });
     });
 
     await this.registrar(auth, {
       tipo: 'usuario_invitado',
       usuarioAfectadoNombre: dto.nombreCompleto?.trim() || email,
       descripcion: `Le dio acceso a ${email} como ${rol.nombre}`,
-      datos: { rolId: rol.id, modo: conClave ? 'clave' : 'link' },
+      datos: { rolId: rol.id },
     });
 
     return {
-      /** Sólo si se eligió el link: con clave dictada no hay nada que mandar. */
-      invitacionUrl: conClave ? null : this.urlDeInvitacion(rawToken),
       provisoria,
       yaTeniaCuenta: Boolean(existente?.passwordHash),
     };
@@ -326,62 +284,6 @@ export class UsuariosService {
     }
 
     return { ok: true as const };
-  }
-
-  /**
-   * Vuelve a emitir el link de invitación.
-   *
-   * Existe porque el link no se manda solo: se copia al portapapeles y se pasa
-   * a mano, así que perderlo es normal. La anterior se revoca — el que circula
-   * es siempre el último.
-   */
-  async reenviarInvitacion(auth: CurrentAuth, userId: string) {
-    const membership = await this.prisma.membership.findUnique({
-      where: { userId_tenantId: { userId, tenantId: auth.tenantId } },
-      include: { user: { select: { email: true } } },
-    });
-    if (!membership) throw new NotFoundException('Ese usuario no existe acá.');
-    if (!membership.activa) {
-      throw new BadRequestException(
-        'Ese usuario no tiene acceso. Devolvéselo antes de invitarlo.',
-      );
-    }
-
-    const rawToken = randomBytes(32).toString('hex');
-    const tokenHash = createHash('sha256').update(rawToken).digest('hex');
-
-    await this.prisma.$transaction(async (tx) => {
-      await tx.invitation.updateMany({
-        where: {
-          tenantId: auth.tenantId,
-          userId,
-          acceptedAt: null,
-          revokedAt: null,
-        },
-        data: { revokedAt: new Date() },
-      });
-      await tx.invitation.create({
-        data: {
-          tenantId: auth.tenantId,
-          userId,
-          invitedByMembershipId: auth.membershipId || null,
-          email: membership.user.email,
-          rol: membership.rol,
-          rolId: membership.rolId,
-          tokenHash,
-          expiresAt: new Date(Date.now() + VIGENCIA_INVITACION_MS),
-        },
-      });
-    });
-
-    await this.registrar(auth, {
-      tipo: 'invitacion_reenviada',
-      usuarioAfectadoId: userId,
-      usuarioAfectadoNombre: membership.user.email,
-      descripcion: `Generó un link de acceso nuevo para ${membership.user.email}`,
-    });
-
-    return { invitacionUrl: this.urlDeInvitacion(rawToken) };
   }
 
   /**
@@ -951,13 +853,6 @@ export class UsuariosService {
       where: { id: empleadoId, tenantId },
       data: { userId },
     });
-  }
-
-  private urlDeInvitacion(token: string): string {
-    const base =
-      process.env.FRONTEND_URL?.split(',')[0]?.trim() ??
-      'http://localhost:3000';
-    return `${base}/aceptar-invitacion?token=${token}`;
   }
 }
 

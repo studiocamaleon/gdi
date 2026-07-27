@@ -13,12 +13,10 @@ import {
   getHistorialAccesos,
   getRoles,
   getUsuarios,
-  reenviarInvitacion,
   restablecerPassword,
   type CatalogoPermisos,
   type EventoAcceso,
   type ListadoUsuarios,
-  type ModoAcceso,
   type RolDelTenant,
   type UsuarioDelTenant,
 } from "@/lib/usuarios-api";
@@ -107,24 +105,6 @@ export function UsuariosView({
       toast.error(e instanceof Error ? e.message : "No se pudo actualizar.");
     }
   }, [historialInicial]);
-
-  const reenviar = async (usuario: UsuarioDelTenant) => {
-    setGuardando(usuario.id);
-    try {
-      const { invitacionUrl } = await reenviarInvitacion(usuario.id);
-      if (navigator.clipboard) {
-        await navigator.clipboard.writeText(invitacionUrl);
-        toast.success("Link nuevo copiado. El anterior dejó de servir.");
-      } else {
-        toast.success("Link nuevo generado.");
-      }
-      await recargar();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "No se pudo generar el link.");
-    } finally {
-      setGuardando(null);
-    }
-  };
 
   const restablecer = async (usuario: UsuarioDelTenant) => {
     setGuardando(usuario.id);
@@ -279,10 +259,14 @@ export function UsuariosView({
           roles={roles}
           empleados={empleados}
           onCancelar={() => setInvitando(false)}
-          onCreado={async () => {
-            setInvitando(false);
-            await recargar();
-          }}
+          /**
+           * Refresca el listado pero NO cierra la ficha: la cierra el "Listo"
+           * de la pantalla de la clave (que es `onCancelar`). Cerrarla acá
+           * dejaba esa pantalla como código muerto y la clave provisoria vivía
+           * sólo en el portapapeles — si el navegador no lo permitía, no la
+           * veía nadie y había que generar otra.
+           */
+          onCreado={recargar}
         />
       )}
 
@@ -328,18 +312,6 @@ export function UsuariosView({
             </select>
 
             <div className="usr-acciones">
-              {/* Sólo mientras no fijó su clave: después el link no sirve para
-                  nada y ofrecerlo confunde. */}
-              {u.activa && u.estado === "pendiente" ? (
-                <button
-                  className="btn ghost"
-                  disabled={guardando === u.id}
-                  onClick={() => void reenviar(u)}
-                  title="Genera un link nuevo y copia al portapapeles. El anterior deja de servir."
-                >
-                  Link de acceso
-                </button>
-              ) : null}
               {/* Vale para los dos casos: al que nunca entró se le DA una
                   clave (si el link no le llegó o no lo abre) y al que la
                   olvidó se le RESTABLECE. Es la misma operación. */}
@@ -586,7 +558,7 @@ function PillEstado({ usuario }: { usuario: UsuarioDelTenant }) {
     return (
       <span
         className="int-pill int-pill-warn"
-        title="Ya tiene acceso: le falta abrir el link y elegir su contraseña."
+        title="Ya tiene acceso con la clave provisoria: le falta entrar y elegir la suya."
       >
         FALTA SU CLAVE
       </span>
@@ -596,8 +568,13 @@ function PillEstado({ usuario }: { usuario: UsuarioDelTenant }) {
 }
 
 /**
- * El alta. Devuelve el link porque todavía no se manda solo: mientras eso no
- * exista, esconder el link dejaría al admin sin forma de hacer entrar a nadie.
+ * El alta. Una sola forma de entrar: el sistema genera una clave provisoria
+ * para dictarle y la persona la cambia al entrar.
+ *
+ * Hubo un segundo modo —"le mando un link"— que nunca se terminó: el link se
+ * generaba pero no lo mandaba nadie, así que el admin igual tenía que copiarlo
+ * y pasarlo a mano. Dos caminos para lo mismo, y uno con un nombre que mentía.
+ * Se retiró (2026-07-27) y no se va a implementar.
  */
 function FormularioInvitacion({
   roles,
@@ -616,12 +593,8 @@ function FormularioInvitacion({
     roles.find((r) => r.codigo === "operario")?.id ?? roles[0]?.id ?? "",
   );
   const [empleadoId, setEmpleadoId] = React.useState("");
-  const [modo, setModo] = React.useState<ModoAcceso>("link");
   const [enviando, setEnviando] = React.useState(false);
-  const [entregado, setEntregado] = React.useState<{
-    link: string | null;
-    clave: string | null;
-  } | null>(null);
+  const [clave, setClave] = React.useState<string | null>(null);
 
   const enviar = async () => {
     if (!email.trim() || !rolId) {
@@ -635,17 +608,11 @@ function FormularioInvitacion({
         nombreCompleto: nombre.trim() || undefined,
         rolId,
         empleadoId: empleadoId || undefined,
-        modo,
       });
-      setEntregado({ link: res.invitacionUrl, clave: res.provisoria });
-      const aCopiar = res.invitacionUrl ?? res.provisoria;
-      if (aCopiar && navigator.clipboard) {
-        await navigator.clipboard.writeText(aCopiar);
-        toast.success(
-          res.invitacionUrl
-            ? "Acceso creado. El link quedó copiado."
-            : "Acceso creado. La clave quedó copiada.",
-        );
+      setClave(res.provisoria);
+      if (res.provisoria && navigator.clipboard) {
+        await navigator.clipboard.writeText(res.provisoria);
+        toast.success("Acceso creado. La clave quedó copiada.");
       } else {
         toast.success("Acceso creado.");
       }
@@ -657,19 +624,18 @@ function FormularioInvitacion({
     }
   };
 
-  if (entregado) {
-    const esLink = entregado.link !== null;
+  if (clave) {
     return (
       <div className="usr-form">
         <div className="int-section-intro">
-          <h3>{esLink ? "Pasale este link" : "Dictale esta clave"}</h3>
+          <h3>Dictale esta clave</h3>
           <p>
-            {esLink
-              ? "Ya tiene acceso; con el link elige su contraseña. Vence en 7 días y se puede volver a generar desde el listado."
-              : "Con esta clave entra una vez y el sistema le pide que elija una propia — vos no vas a saber cuál. No se muestra de nuevo: si se pierde, se genera otra desde el listado."}
+            Con esta clave entra una vez y el sistema le pide que elija una
+            propia — vos no vas a saber cuál. No se muestra de nuevo: si se
+            pierde, se genera otra desde el listado.
           </p>
         </div>
-        <code className="usr-link">{entregado.link ?? entregado.clave}</code>
+        <code className="usr-link">{clave}</code>
         <div className="usr-form-acciones">
           <button className="btn primary" onClick={onCancelar}>
             Listo
@@ -725,30 +691,11 @@ function FormularioInvitacion({
           </select>
         </label>
       </div>
-      <div className="usr-modo">
-        <span className="usr-modo-lbl">Cómo entra la primera vez</span>
-        <div className="usr-niveles">
-          <button
-            type="button"
-            className={`usr-nivel${modo === "link" ? " on" : ""}`}
-            onClick={() => setModo("link")}
-          >
-            Le mando un link
-          </button>
-          <button
-            type="button"
-            className={`usr-nivel${modo === "clave" ? " on" : ""}`}
-            onClick={() => setModo("clave")}
-          >
-            Le dicto una clave
-          </button>
-        </div>
-        <p className="usr-ayuda" style={{ marginTop: 8 }}>
-          {modo === "link"
-            ? "Elige su propia clave desde el link: nadie más la sabe nunca."
-            : "El sistema genera una clave para dictarle. La cambia al entrar, así que tampoco vas a saber la definitiva."}
-        </p>
-      </div>
+      <p className="usr-ayuda">
+        Al crear el acceso el sistema genera una clave provisoria para
+        dictarle. La cambia al entrar, así que la definitiva no la sabe nadie
+        más que la persona.
+      </p>
 
       <p className="usr-ayuda">
         {descripcionDelRol(roles, rolId)} Vincular con un empleado sirve para la
