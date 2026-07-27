@@ -32,6 +32,7 @@ import { MotorUniversalModule } from './motor-universal/motor.module';
 import { OrdenesTrabajoModule } from './ordenes-trabajo/ordenes-trabajo.module';
 import { PresupuestosModule } from './presupuestos/presupuestos.module';
 import { AdministracionModule } from './administracion/administracion.module';
+import { EgresosModule } from './egresos/egresos.module';
 import { ReportesModule } from './reportes/reportes.module';
 import { EtaModule } from './eta/eta.module';
 import { ArchivosModule } from './archivos/archivos.module';
@@ -97,6 +98,7 @@ import { SuscripcionesModule } from './suscripciones/suscripciones.module';
     OrdenesTrabajoModule,
     PresupuestosModule,
     AdministracionModule,
+    EgresosModule,
     ReportesModule,
     EtaModule,
     ArchivosModule,

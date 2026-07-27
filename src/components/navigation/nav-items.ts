@@ -191,9 +191,21 @@ export const NAV: NavItem[] = [
         soloPais: "AR",
       },
       {
+        // La ruta sigue siendo /deudores: renombrar la URL rompería links
+        // guardados sin que nadie gane nada. "Deudores" nombraba al sujeto;
+        // lo que la vista muestra es la CUENTA (el derecho de cobro por
+        // órdenes ya entregadas), que es como se llama en contabilidad.
         key: "deudores",
-        label: "Deudores",
+        label: "Cuentas por cobrar",
         href: "/administracion/deudores",
+      },
+      {
+        // Un solo ítem para los dos usos: "Cuentas por pagar" no es una
+        // pantalla aparte sino el filtro de los egresos con vencimiento e
+        // impagos. Ver docs/egresos-y-cuentas-por-pagar-diseno.md
+        key: "egresos",
+        label: "Egresos",
+        href: "/administracion/egresos",
       },
     ],
   },

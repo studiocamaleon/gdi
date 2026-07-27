@@ -692,6 +692,12 @@ model Tenant {
   cobros                                           Cobro[]
   retencionesPercepciones                          RetencionPercepcion[]
   valores                                          Valor[]
+  categoriasEgreso                                 CategoriaEgreso[]
+  egresos                                          Egreso[]
+  egresoContadores                                 EgresoContador[]
+  pagos                                            Pago[]
+  pagoContadores                                   PagoContador[]
+  pagoImputaciones                                 PagoImputacion[]
   configuracionFiscal                              ConfiguracionFiscal?
   datosEmpresa                                     DatosEmpresa?
   puntosVenta                                      PuntoVenta[]
@@ -945,6 +951,17 @@ model Proveedor {
   telefonoCodigo                  String
   telefonoNumero                  String
   paisCodigo                      String                 @db.VarChar(2)
+  /// === Datos para PAGARLE (docs/egresos-y-cuentas-por-pagar-diseno.md §4.6) ===
+  /// Hasta acá el proveedor no tenía ni CUIT: servía para referenciar materiales y
+  /// tercerizar pasos, no para registrar una factura de compra ni emitir un pago.
+  /// CUIT/CUIL sin guiones (11 dígitos); null = todavía no lo tenemos.
+  cuit                            String?                @db.VarChar(11)
+  /// 'RI' | 'MONOTRIBUTO' | 'EXENTO' | 'CF' | null.
+  condicionIva                    String?
+  /// Días de plazo que da este proveedor. Precarga el vencimiento al cargar una
+  /// factura suya; 0 = contado. Null = no sabemos, se pide a mano.
+  condicionPagoDias               Int?
+  cbuAlias                        String?
   createdAt                       DateTime               @default(now())
   updatedAt                       DateTime               @updatedAt
   tenant                          Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -955,6 +972,8 @@ model Proveedor {
 
   valores  Valor[]
   archivos Archivo[]
+  egresos  Egreso[]
+  pagos    Pago[]
 
   @@unique([tenantId, nombre])
   @@index([tenantId, nombre])
@@ -988,6 +1007,7 @@ model Empleado {
   ordenesTrabajoVendidas OrdenTrabajo[]                      @relation("OrdenTrabajoVendedor")
   cotizacionesVendidas   Cotizacion[]                        @relation("CotizacionVendedor")
   estaciones             EstacionEmpleado[]
+  egresos                Egreso[]
 
   @@index([tenantId, nombreCompleto])
   @@index([tenantId, sector])
@@ -1214,6 +1234,7 @@ model CentroCosto {
   maquinasPrincipales     Maquina[]                           @relation("MaquinaCentroCostoPrincipal")
   productoConfigPasos     ProductoConfigPaso[]                @relation("ProductoConfigPasoCentroCostoManual")
   productoPasosExtras     ProductoPasoExtra[]                 @relation("ProductoPasoExtraCentroCostoManual")
+  egresos                 Egreso[]
 
   @@unique([tenantId, codigo])
   @@index([tenantId, plantaId, areaCostoId])
@@ -1592,6 +1613,7 @@ model GastoFijoEstructura {
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
   tenant         Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  egresos        Egreso[]
 
   @@index([tenantId])
 }
@@ -2646,39 +2668,39 @@ model CotizacionItem {
 // Ver docs/ordenes-trabajo-persistencia-diseno.md
 
 model OrdenTrabajo {
-  id                 String                 @id @default(uuid()) @db.Uuid
-  tenantId           String                 @db.Uuid
+  id                      String                 @id @default(uuid()) @db.Uuid
+  tenantId                String                 @db.Uuid
   /// "OT-2026-0184" — asignado al crear vía OrdenTrabajoContador.
-  numero             String
-  clienteId          String?                @db.Uuid
-  vendedorEmpleadoId String?                @db.Uuid
+  numero                  String
+  clienteId               String?                @db.Uuid
+  vendedorEmpleadoId      String?                @db.Uuid
   /// Presupuesto de origen (si vino del cotizador).
-  cotizacionId       String?                @db.Uuid
+  cotizacionId            String?                @db.Uuid
   /// 'borrador' | 'pendiente' | 'produccion' | 'finalizada' | 'entregada' |
   /// 'cancelada'. Las cinco primeras son una SECUENCIA que sólo avanza;
   /// 'cancelada' es una salida lateral y terminal.
-  estado             String                 @default("borrador")
-  fechaEmision       DateTime?
-  fechaEntrega       DateTime?              @db.Date
-  observaciones      String?
+  estado                  String                 @default("borrador")
+  fechaEmision            DateTime?
+  fechaEntrega            DateTime?              @db.Date
+  observaciones           String?
   /// 'mostrador' | 'web' | 'vendedor_externo' | 'telefono'.
-  canalVenta         String?
+  canalVenta              String?
   /// Denormalizados para el listado; la fuente de verdad es items/snapshot.
-  subtotal           Decimal?               @db.Decimal(14, 2)
-  impuestos          Decimal?               @db.Decimal(14, 2)
-  cargosDirectos     Decimal?               @db.Decimal(14, 2)
-  total              Decimal?               @db.Decimal(14, 2)
+  subtotal                Decimal?               @db.Decimal(14, 2)
+  impuestos               Decimal?               @db.Decimal(14, 2)
+  cargosDirectos          Decimal?               @db.Decimal(14, 2)
+  total                   Decimal?               @db.Decimal(14, 2)
   /// Avance 0-100 informado por producción; null = sin dato.
-  progresoPct        Int?
+  progresoPct             Int?
   /// Token aleatorio url-safe del link PÚBLICO de seguimiento del cliente
   /// (grafoprint.com.ar/track/<token>). Se genera al emitir la OT (salir de
   /// borrador); null = todavía no compartible. Ver docs/tracking-publico-diseno.md
-  publicToken        String?                @unique
+  publicToken             String?                @unique
   /// Primera vez que la orden llegó a 'finalizada'. Ancla del aging de la
   /// deuda COMERCIAL (la deuda nace acá, no en la factura). Reabrir la
   /// orden NO la borra: si vuelve a finalizar, el aging no se resetea.
   /// Ver docs/facturacion-ordenes-deuda-comercial-diseno.md
-  fechaFinalizada    DateTime?
+  fechaFinalizada         DateTime?
   /// Cuándo se entregó, la PRIMERA vez. Es el ancla del pedido de reseña —"N
   /// días después de la entrega"—, y por eso no se resetea: volver a marcar
   /// entregada una orden que se había reabierto no reinicia el reloj.
@@ -2686,52 +2708,52 @@ model OrdenTrabajo {
   /// Null en todas las órdenes anteriores a este campo, a propósito: sin fecha
   /// no hay pedido de reseña, y así encender la función no dispara un WhatsApp
   /// por cada orden vieja del historial.
-  fechaEntregada     DateTime?
+  fechaEntregada          DateTime?
   /// Denormalizados del eje fiscal y de cobranza, mantenidos en la misma
   /// transacción que sus movimientos (patrón Comprobante.saldoPendiente):
   /// facturadoTotal = Σ ComprobanteOrden.monto de facturas emitidas no
   /// anuladas (las NC restan); cobradoTotal = Σ Cobro.montoBruto no
   /// anulados de la orden. Los estados derivados (sin facturar/parcial/
   /// facturada y sin cobrar/parcial/cobrada) se calculan de acá.
-  facturadoTotal     Decimal                @default(0) @db.Decimal(14, 2)
-  cobradoTotal       Decimal                @default(0) @db.Decimal(14, 2)
+  facturadoTotal          Decimal                @default(0) @db.Decimal(14, 2)
+  cobradoTotal            Decimal                @default(0) @db.Decimal(14, 2)
   /// === Cancelación ===
   /// Cuándo se canceló. Es el "está cancelada" real: `estado` lo dice también,
   /// pero esta fecha es la que ordena y la que permite contar cancelaciones
   /// por período sin adivinar mirando el timeline.
-  canceladaEl        DateTime?
+  canceladaEl             DateTime?
   /// En qué etapa estaba cuando se canceló. Sin esto se pierde la diferencia
   /// entre una que murió en borrador y una que se cortó con el taller a mitad
   /// de camino, que es justo lo que hay que poder mirar después.
-  estadoAlCancelar   String?
+  estadoAlCancelar        String?
   /// Por qué. Obligatorio al cancelar: una orden que desaparece de las ventas
   /// sin explicación es una discusión asegurada tres meses después.
-  motivoCancelacion  String?
-  canceladaPorId     String?                @db.Uuid
+  motivoCancelacion       String?
+  canceladaPorId          String?                @db.Uuid
   /// Nombre CONGELADO de quien canceló: el legajo puede cambiar o borrarse y
   /// el historial no puede quedar sin responsable.
-  canceladaPorNombre String?
+  canceladaPorNombre      String?
   /// Foto del avance al momento de cancelar: cuántos pasos estaban hechos
   /// sobre el total y cuántos minutos reales se habían trabajado. Es lo que
   /// permite decidir si se le cobra algo al cliente, y queda acá porque los
   /// pasos siguen vivos pero el avance se sigue moviendo si alguien reabre.
-  pasosHechosAlCancelar Int?
-  pasosTotalAlCancelar  Int?
+  pasosHechosAlCancelar   Int?
+  pasosTotalAlCancelar    Int?
   minutosRealesAlCancelar Int?
-  createdAt          DateTime               @default(now())
-  updatedAt          DateTime               @updatedAt
-  tenant             Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  cliente            Cliente?               @relation("OrdenTrabajoCliente", fields: [clienteId], references: [id])
-  vendedor           Empleado?              @relation("OrdenTrabajoVendedor", fields: [vendedorEmpleadoId], references: [id])
-  cotizacion         Cotizacion?            @relation(fields: [cotizacionId], references: [id])
-  items              OrdenTrabajoItem[]
-  pasos              OrdenTrabajoItemPaso[]
-  eventos            OrdenTrabajoEvento[]
-  cobros             Cobro[]
-  movimientosFondos  MovimientoFondos[]
-  comprobantes       Comprobante[]
-  comprobanteOrdenes ComprobanteOrden[]
-  archivos           Archivo[]
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+  tenant                  Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cliente                 Cliente?               @relation("OrdenTrabajoCliente", fields: [clienteId], references: [id])
+  vendedor                Empleado?              @relation("OrdenTrabajoVendedor", fields: [vendedorEmpleadoId], references: [id])
+  cotizacion              Cotizacion?            @relation(fields: [cotizacionId], references: [id])
+  items                   OrdenTrabajoItem[]
+  pasos                   OrdenTrabajoItemPaso[]
+  eventos                 OrdenTrabajoEvento[]
+  cobros                  Cobro[]
+  movimientosFondos       MovimientoFondos[]
+  comprobantes            Comprobante[]
+  comprobanteOrdenes      ComprobanteOrden[]
+  archivos                Archivo[]
 
   @@unique([tenantId, numero])
   @@index([tenantId, estado])
@@ -3068,6 +3090,7 @@ model CuentaFondos {
   metodosPagoDefault MetodoPago[]
   movimientos        MovimientoFondos[]
   cobrosDestino      Cobro[]
+  pagosOrigen        Pago[]
   valoresDeposito    Valor[]
 
   @@unique([tenantId, nombre])
@@ -3095,6 +3118,7 @@ model MetodoPago {
   tenant                Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   cuentaDestino         CuentaFondos? @relation(fields: [cuentaDestinoId], references: [id], onDelete: SetNull)
   cobros                Cobro[]
+  pagos                 Pago[]
 
   @@unique([tenantId, codigo])
   @@index([tenantId, activo])
@@ -3112,6 +3136,8 @@ model MovimientoFondos {
   /// 'cobro' | 'pago' | 'transferencia' | 'valor' | 'ajuste_arqueo'.
   origenTipo         String
   cobroId            String?       @db.Uuid
+  /// Pago a proveedor que generó esta salida (docs/egresos-y-cuentas-por-pagar).
+  pagoId             String?       @db.Uuid
   valorId            String?       @db.Uuid
   /// Movimiento espejo en la otra cuenta (transferencias).
   transferenciaParId String?       @db.Uuid
@@ -3130,6 +3156,7 @@ model MovimientoFondos {
   tenant             Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   cuenta             CuentaFondos  @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
   cobro              Cobro?        @relation(fields: [cobroId], references: [id])
+  pago               Pago?         @relation(fields: [pagoId], references: [id])
   valor              Valor?        @relation(fields: [valorId], references: [id])
   orden              OrdenTrabajo? @relation(fields: [ordenId], references: [id])
 
@@ -3250,6 +3277,7 @@ model Valor {
   cobro            Cobro?             @relation(fields: [cobroId], references: [id])
   cuentaDeposito   CuentaFondos?      @relation(fields: [cuentaDepositoId], references: [id])
   movimientos      MovimientoFondos[]
+  pagos            Pago[]
 
   @@index([tenantId, estado])
 }
@@ -3468,6 +3496,217 @@ model ComprobanteOrden {
 
   @@unique([comprobanteId, ordenId])
   @@index([tenantId, ordenId])
+}
+
+/// === EGRESOS Y CUENTAS POR PAGAR ===
+/// Ver docs/egresos-y-cuentas-por-pagar-diseno.md
+
+/// Qué ES el egreso, para los reportes. No confundir con "a qué se imputa": la
+/// naturaleza dice dónde suma (o si no suma), la imputación dice qué análisis
+/// habilita. Es el eje que evita que una multa entre en la tarifa de una máquina
+/// y que un adelanto de sueldo se cuente como gasto.
+enum NaturalezaEgreso {
+  /// Material, tercerizado, consumibles, repuestos de máquina.
+  COSTO_PRODUCCION
+  /// No varía con el trabajo: alquiler, sueldos, servicios, multas.
+  GASTO_ESTRUCTURA
+  /// Capex: una máquina, una obra. Sale plata pero no es gasto del período.
+  INVERSION
+  /// Distribución de utilidades. No es gasto.
+  RETIRO_SOCIOS
+  /// Adelantos, préstamos, ajustes de caja: mueve caja, NO afecta resultado.
+  NO_RESULTADO
+}
+
+/// Árbol de clasificación de egresos: CURADO y editable.
+///
+/// Se siembra al crear el tenant y se puede renombrar, reordenar, desactivar y
+/// extender. Las de sistema (`esSistema`) no se borran —hay historia colgada— y
+/// ninguna con egresos se puede borrar.
+///
+/// Dos niveles a propósito: el plan de cuentas de la competencia tiene tres y 80+
+/// hojas, y nadie lo mantiene. La AMORTIZACIÓN no está en este árbol a propósito:
+/// no es un egreso (no sale plata) y vive sólo en GastoFijoEstructura.
+model CategoriaEgreso {
+  id         String            @id @default(uuid()) @db.Uuid
+  tenantId   String            @db.Uuid
+  /// Slug estable: el nombre se puede editar, el código es la identidad.
+  codigo     String
+  nombre     String
+  naturaleza NaturalezaEgreso
+  padreId    String?           @db.Uuid
+  esSistema  Boolean           @default(false)
+  activo     Boolean           @default(true)
+  orden      Int               @default(0)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  padre      CategoriaEgreso?  @relation("CategoriaEgresoPadre", fields: [padreId], references: [id], onDelete: Restrict)
+  hijos      CategoriaEgreso[] @relation("CategoriaEgresoPadre")
+  egresos    Egreso[]
+
+  @@unique([tenantId, codigo])
+  @@index([tenantId, activo])
+}
+
+/// La OBLIGACIÓN (o el gasto de contado). Lo que sale, o va a salir, de la caja.
+///
+/// Tiene TRES fechas y no una, que es el nudo del módulo:
+///   competencia  — a qué mes PERTENECE el gasto (la luz de julio pagada en agosto)
+///   vencimiento  — cuándo hay que pagarlo; NULL = contado, no entra en CxP
+///   la del pago  — la ponen los Pago, que son entidades aparte
+///
+/// "Cuentas por pagar" NO es una tabla: es el filtro de los egresos con
+/// vencimiento y estado pendiente/parcial.
+model Egreso {
+  id                    String    @id @default(uuid()) @db.Uuid
+  tenantId              String    @db.Uuid
+  /// EGR-AAAA-NNNN, atómico vía EgresoContador.
+  numero                String
+  descripcion           String
+  categoriaEgresoId     String    @db.Uuid
+  /// Null = egreso sin proveedor: la multa, el adelanto, el flete sin factura.
+  /// Opcional a propósito: si fuera obligatorio, la caja chica quedaría afuera
+  /// del sistema y el módulo no serviría para la mitad de los casos reales.
+  proveedorId           String?   @db.Uuid
+  /// A quién se le paga, CONGELADO. Texto libre cuando no hay proveedor.
+  beneficiarioNombre    String
+  fechaCompetencia      DateTime  @db.Date
+  /// Null = contado (nace pagado y nunca pisa Cuentas por pagar).
+  fechaVencimiento      DateTime? @db.Date
+  moneda                String    @default("ARS") @db.VarChar(3)
+  /// Neto e IVA SEPARADOS desde el día uno: es lo que habilita el Libro IVA
+  /// Compras sin migrar nada, y el crédito fiscal es plata real.
+  neto                  Decimal   @db.Decimal(14, 2)
+  iva                   Decimal   @default(0) @db.Decimal(14, 2)
+  otrosImpuestos        Decimal   @default(0) @db.Decimal(14, 2)
+  total                 Decimal   @db.Decimal(14, 2)
+  /// Σ PagoImputacion.monto, mantenido en la MISMA transacción que el pago
+  /// (patrón cobradoTotal/facturadoTotal de OrdenTrabajo).
+  pagadoTotal           Decimal   @default(0) @db.Decimal(14, 2)
+  /// 'FA'|'FB'|'FC'|'ND'|'NC'|'TICKET'|'RECIBO'|'SIN_DOCUMENTO'.
+  tipoComprobante       String?
+  puntoVenta            String?
+  numeroComprobante     String?
+  /// 'pendiente' | 'parcial' | 'pagado' | 'anulado'.
+  estado                String    @default("pendiente")
+  /// 'manual' | 'recurrente'.
+  origen                String    @default("manual")
+  /// Imputaciones, todas opcionales e independientes entre sí.
+  centroCostoId         String?   @db.Uuid
+  /// Puente con el presupuestado para el reporte "presupuestado vs real" (F3).
+  gastoFijoEstructuraId String?   @db.Uuid
+  /// Adelantos de sueldo y gastos atribuibles a una persona.
+  empleadoId            String?   @db.Uuid
+  anuladoEl             DateTime?
+  motivoAnulacion       String?
+  /// Quién lo cargó, congelado: el legajo puede cambiar y el historial no.
+  registradoPorNombre   String?
+  notas                 String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  tenant       Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  categoria    CategoriaEgreso      @relation(fields: [categoriaEgresoId], references: [id], onDelete: Restrict)
+  proveedor    Proveedor?           @relation(fields: [proveedorId], references: [id])
+  centroCosto  CentroCosto?         @relation(fields: [centroCostoId], references: [id])
+  gastoFijo    GastoFijoEstructura? @relation(fields: [gastoFijoEstructuraId], references: [id])
+  empleado     Empleado?            @relation(fields: [empleadoId], references: [id])
+  imputaciones PagoImputacion[]
+
+  @@unique([tenantId, numero])
+  /// ANTIDUPLICADO: la misma factura del mismo proveedor no se carga dos veces.
+  /// Es el error de carga manual más común y el más caro. Funciona como índice
+  /// parcial de hecho: en Postgres los NULL no colisionan, así que los gastos
+  /// sin documento (multas, caja chica) no se estorban entre sí.
+  @@unique([tenantId, proveedorId, tipoComprobante, puntoVenta, numeroComprobante])
+  @@index([tenantId, estado])
+  @@index([tenantId, fechaVencimiento])
+  @@index([tenantId, fechaCompetencia])
+  @@index([tenantId, proveedorId])
+  @@index([tenantId, categoriaEgresoId])
+}
+
+/// El ACTO de pagar — espejo de Cobro.
+///
+/// Existe separado del Egreso porque un pago cubre VARIAS facturas, puede ser
+/// parcial, y las retenciones se practican al pagar (no cuando nace el gasto).
+/// La UI colapsa los dos en un solo gesto cuando coinciden, que es el 80%.
+model Pago {
+  id                  String    @id @default(uuid()) @db.Uuid
+  tenantId            String    @db.Uuid
+  /// OP-AAAA-NNNN: la orden de pago que se le manda al proveedor.
+  numero              String
+  fecha               DateTime
+  metodoPagoId        String    @db.Uuid
+  cuentaOrigenId      String    @db.Uuid
+  /// Lo que se imputa a los egresos.
+  montoBruto          Decimal   @db.Decimal(14, 2)
+  /// Retenciones PRACTICADAS (F2): reducen lo que sale sin reducir lo saldado.
+  retencionesTotal    Decimal   @default(0) @db.Decimal(14, 2)
+  /// montoBruto − retenciones: lo que efectivamente sale de la cuenta.
+  montoNeto           Decimal   @db.Decimal(14, 2)
+  moneda              String    @default("ARS") @db.VarChar(3)
+  /// Sólo si la cuenta está en otra moneda que el egreso (patrón transferencia).
+  tipoCambio          Decimal?  @db.Decimal(14, 4)
+  proveedorId         String?   @db.Uuid
+  /// N° de operación del medio de pago: transferencia, cupón, ticket.
+  referencia          String?   @db.VarChar(60)
+  /// Cheque propio emitido (F2). Valor ya soporta origen 'propio'.
+  valorId             String?   @db.Uuid
+  anuladoEl           DateTime?
+  motivoAnulacion     String?
+  registradoPorNombre String?
+  notas               String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  metodoPago   MetodoPago         @relation(fields: [metodoPagoId], references: [id])
+  cuentaOrigen CuentaFondos       @relation(fields: [cuentaOrigenId], references: [id])
+  proveedor    Proveedor?         @relation(fields: [proveedorId], references: [id])
+  valor        Valor?             @relation(fields: [valorId], references: [id])
+  imputaciones PagoImputacion[]
+  movimientos  MovimientoFondos[]
+
+  @@unique([tenantId, numero])
+  @@index([tenantId, fecha])
+  @@index([tenantId, proveedorId])
+}
+
+/// Qué egresos salda un pago y por cuánto — espejo de CobroImputacion.
+model PagoImputacion {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  pagoId    String   @db.Uuid
+  egresoId  String   @db.Uuid
+  monto     Decimal  @db.Decimal(14, 2)
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  pago   Pago   @relation(fields: [pagoId], references: [id], onDelete: Cascade)
+  egreso Egreso @relation(fields: [egresoId], references: [id], onDelete: Cascade)
+
+  @@unique([pagoId, egresoId])
+  @@index([tenantId, egresoId])
+}
+
+model EgresoContador {
+  tenantId String @db.Uuid
+  anio     Int
+  ultimo   Int    @default(0)
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, anio])
+}
+
+model PagoContador {
+  tenantId String @db.Uuid
+  anio     Int
+  ultimo   Int    @default(0)
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, anio])
 }
 
 /// Archivo almacenado en object storage (Cloudflare R2 en producción, disco
