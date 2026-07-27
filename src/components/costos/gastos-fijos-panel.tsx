@@ -11,6 +11,10 @@ import * as React from "react";
 import { formatearMoneda, parsearMonto, type Moneda } from "@/lib/moneda";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { MoneyInput } from "@/components/ui/money-input";
+import {
+  SelectBuscable,
+  type OpcionSelect,
+} from "@/components/ui/select-buscable";
 import { toast } from "sonner";
 import { ConciliacionNominaCard } from "@/components/costos/conciliacion-nomina-card";
 
@@ -53,11 +57,16 @@ const info = (c: string) => CATEGORIA_GASTO_INFO[c as CategoriaGastoFijo] ?? { l
 const IcCard = () => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="3" y="6" width="18" height="12" rx="2" /><path d="M3 10h18" /></svg>);
 const IcList = () => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M4 6h16M4 12h16M4 18h10" /></svg>);
 const IcChart = () => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M3 3v18h18" /><path d="M7 15l4-6 3 4 4-7" /></svg>);
-const IcPlus = () => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" /></svg>);
 const IcPower = () => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M18.36 6.64A9 9 0 1 1 5.64 6.64" /><path d="M12 2v10" /></svg>);
 const IcTrash = () => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" /></svg>);
 
 const MES = mesActual();
+/** El catálogo es fijo: se arma una sola vez. */
+const OPCIONES_CATEGORIA: OpcionSelect[] = CATEGORIAS_GASTO_FIJO.map((c) => ({
+  value: c.value,
+  label: c.label,
+}));
+
 const FORM_VACIO = { nombre: "", categoria: "SUELDOS" as CategoriaGastoFijo, importe: "", vigenteDesde: MES, vigenteHasta: "" };
 
 export function GastosFijosPanel({ initialGastos }: { initialGastos: GastoFijo[] }) {
@@ -66,6 +75,7 @@ export function GastosFijosPanel({ initialGastos }: { initialGastos: GastoFijo[]
   const [form, setForm] = React.useState(FORM_VACIO);
   const [guardando, setGuardando] = React.useState(false);
   const [aEliminar, setAEliminar] = React.useState<GastoFijo | null>(null);
+  const [altaAbierta, setAltaAbierta] = React.useState(false);
   const nombreRef = React.useRef<HTMLInputElement>(null);
 
   const recargar = React.useCallback(async () => {
@@ -109,8 +119,8 @@ export function GastosFijosPanel({ initialGastos }: { initialGastos: GastoFijo[]
       });
       toast.success("Gasto fijo agregado.");
       setForm(FORM_VACIO);
+      setAltaAbierta(false);
       await recargar();
-      nombreRef.current?.focus();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo guardar.");
     } finally {
@@ -140,10 +150,19 @@ export function GastosFijosPanel({ initialGastos }: { initialGastos: GastoFijo[]
               en ambos lados sin doble conteo.
             </div>
           </div>
-          <div className="total-badge">
-            <div className="lbl">Total fijo vigente · {MES}</div>
-            <div className="val">{fmt(total, moneda)}</div>
-            <div className="unit">por mes · {vigentes.length} conceptos</div>
+          <div className="gf-head-der">
+            <div className="total-badge">
+              <div className="lbl">Total fijo vigente · {MES}</div>
+              <div className="val">{fmt(total, moneda)}</div>
+              <div className="unit">por mes · {vigentes.length} conceptos</div>
+            </div>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setAltaAbierta(true)}
+            >
+              Agregar gasto fijo
+            </button>
           </div>
         </div>
 
@@ -180,56 +199,10 @@ export function GastosFijosPanel({ initialGastos }: { initialGastos: GastoFijo[]
         </div>
 
         <div className="grid">
-          {/* LEFT: form + tabla */}
+          {/* LEFT: la tabla. El alta se fue a un modal —como en Cuentas por
+              pagar— para que la lista, que es lo que se consulta todos los
+              días, se lleve el ancho. */}
           <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-            <div className="card">
-              <div className="card-head">
-                <h2>Agregar gasto fijo</h2>
-                <span className="grow" />
-                <span className="cap">se suma a la estructura del mes seleccionado</span>
-              </div>
-              <div className="card-body">
-                <form onSubmit={agregar}>
-                  <div className="form-grid">
-                    <div className="field wide">
-                      <label>Nombre</label>
-                      <input ref={nombreRef} className="ctl" placeholder="Ej: Alquiler del local" value={form.nombre}
-                        onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))} />
-                    </div>
-                    <div className="field">
-                      <label>Categoría</label>
-                      <select className="ctl" value={form.categoria}
-                        onChange={(e) => setForm((f) => ({ ...f, categoria: e.target.value as CategoriaGastoFijo }))}>
-                        {CATEGORIAS_GASTO_FIJO.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-                      </select>
-                    </div>
-                    <div className="field">
-                      <label>Importe mensual</label>
-                      {/* "money" en el wrapper para que .gf .money .ctl siga
-                          dando el padding del símbolo; el input conserva .ctl */}
-                      <MoneyInput className="money" inputClassName="ctl" placeholder="0"
-                        value={form.importe} moneda={moneda} ariaLabel="Importe mensual"
-                        onValueChange={(texto) => setForm((f) => ({ ...f, importe: texto }))} />
-                    </div>
-                    <div className="field">
-                      <label>Vigente desde</label>
-                      <input className="ctl" type="month" value={form.vigenteDesde}
-                        onChange={(e) => setForm((f) => ({ ...f, vigenteDesde: e.target.value }))} />
-                    </div>
-                    <div className="field">
-                      <label>Vigente hasta <span className="opt">· opcional</span></label>
-                      <input className="ctl" type="month" value={form.vigenteHasta}
-                        onChange={(e) => setForm((f) => ({ ...f, vigenteHasta: e.target.value }))} />
-                    </div>
-                    <div className="field wide" style={{ flexDirection: "row", gap: 10, marginTop: 2 }}>
-                      <button className="btn" type="submit" disabled={guardando}><IcPlus />Agregar gasto</button>
-                      <button className="btn ghost" type="button" onClick={() => setForm(FORM_VACIO)}>Limpiar</button>
-                    </div>
-                  </div>
-                </form>
-              </div>
-            </div>
-
             <div className="card">
               <div className="card-head">
                 <h2>Gastos fijos cargados</h2>
@@ -318,6 +291,112 @@ export function GastosFijosPanel({ initialGastos }: { initialGastos: GastoFijo[]
           </div>
         </div>
       </div>
+
+      {altaAbierta ? (
+        <div className="mod-bg" role="dialog" aria-modal="true">
+          <div className="mod mod-sm">
+            <div className="mod-head">
+              <h2>Agregar gasto fijo</h2>
+              <button
+                type="button"
+                className="mod-x"
+                onClick={() => setAltaAbierta(false)}
+              >
+                ×
+              </button>
+            </div>
+            <form onSubmit={agregar}>
+              <div className="mod-body">
+                <div className="form-grid">
+                  <div className="field wide">
+                    <label>Nombre</label>
+                    <input
+                      ref={nombreRef}
+                      className="ctl"
+                      placeholder="Ej: Alquiler del local"
+                      autoFocus
+                      value={form.nombre}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, nombre: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="field">
+                    <label>Categoría</label>
+                    <SelectBuscable
+                      value={form.categoria}
+                      onChange={(v) =>
+                        setForm((f) => ({
+                          ...f,
+                          categoria: v as CategoriaGastoFijo,
+                        }))
+                      }
+                      opciones={OPCIONES_CATEGORIA}
+                      ariaLabel="Categoría"
+                    />
+                  </div>
+                  <div className="field">
+                    <label>Importe mensual</label>
+                    {/* "money" en el wrapper para que .gf .money .ctl siga
+                        dando el padding del símbolo; el input conserva .ctl */}
+                    <MoneyInput
+                      className="money"
+                      inputClassName="ctl"
+                      placeholder="0"
+                      value={form.importe}
+                      moneda={moneda}
+                      ariaLabel="Importe mensual"
+                      onValueChange={(texto) =>
+                        setForm((f) => ({ ...f, importe: texto }))
+                      }
+                    />
+                  </div>
+                  <div className="field">
+                    <label>Vigente desde</label>
+                    <input
+                      className="ctl"
+                      type="month"
+                      value={form.vigenteDesde}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, vigenteDesde: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="field">
+                    <label>
+                      Vigente hasta <span className="opt">· opcional</span>
+                    </label>
+                    <input
+                      className="ctl"
+                      type="month"
+                      value={form.vigenteHasta}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, vigenteHasta: e.target.value }))
+                      }
+                    />
+                    <span className="gf-ayuda">
+                      Vacío = sigue vigente hasta que lo des de baja.
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="mod-foot">
+                <button
+                  type="button"
+                  className="btn ghost"
+                  onClick={() => setAltaAbierta(false)}
+                  disabled={guardando}
+                >
+                  Cancelar
+                </button>
+                <button className="btn btn-primary" type="submit" disabled={guardando}>
+                  {guardando ? "Guardando…" : "Agregar gasto"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
 
       <ConfirmacionDestructiva
         open={aEliminar !== null}

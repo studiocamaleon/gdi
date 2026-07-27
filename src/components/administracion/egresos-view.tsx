@@ -17,16 +17,25 @@
  */
 
 import * as React from "react";
+import { FileIcon, UploadCloudIcon, XIcon } from "lucide-react";
+import { toast } from "sonner";
 
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { usePuede } from "@/components/navigation/permisos-provider";
 import { ArchivoUploader } from "@/components/archivos/archivo-uploader";
+import { formatBytes, validarArchivo } from "@/lib/archivos";
+import { subirArchivo } from "@/lib/archivos-api";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import { MoneyInput } from "@/components/ui/money-input";
-import { formatearMoneda } from "@/lib/moneda";
+import {
+  SelectBuscable,
+  type OpcionSelect,
+} from "@/components/ui/select-buscable";
+import { formatearMoneda, numeroMoneda, parsearMonto } from "@/lib/moneda";
+import { fechaConDia } from "@/lib/fecha";
 import {
   EGRESO_ESTADO_LABELS,
-  NATURALEZA_AYUDA,
+  NATURALEZAS_EGRESO,
   NATURALEZA_LABELS,
   TIPO_COMPROBANTE_LABELS,
   TIPOS_COMPROBANTE_COMPRA,
@@ -36,6 +45,12 @@ import {
   REGIMENES_RETENCION,
   TRAMO_AGING_LABELS,
   TRAMOS_AGING,
+  ALICUOTAS_IVA,
+  LARGO_NUMERO_COMPROBANTE,
+  LARGO_PUNTO_VENTA,
+  completarCeros,
+  discriminaIva,
+  ivaDeNeto,
   diasHastaVencimiento,
   etiquetaVencimiento,
   tonoVencimiento,
@@ -58,11 +73,13 @@ import {
   getPresupuestadoVsReal,
   getRecurrentes,
   getSaldosProveedores,
+  getValoresEnCartera,
   crearRecurrente,
   editarRecurrente,
   generarRecurrentes,
   registrarPagoEgresos,
   type CrearEgresoBody,
+  type ValorEnCartera,
 } from "@/lib/egresos-api";
 import type { CuentaFondosResumen, MetodoPago } from "@/lib/administracion";
 import type { ProveedorDetalle } from "@/lib/proveedores";
@@ -71,6 +88,45 @@ import type { Archivo } from "@/lib/archivos";
 import { listarArchivos } from "@/lib/archivos-api";
 
 type Tab = "por-pagar" | "todos" | "proveedores" | "recurrentes" | "analisis";
+
+/**
+ * Las dos caras del módulo, que son dos preguntas distintas:
+ *
+ *   · `cuentas-por-pagar` — ¿a quién le debo y cuándo? Sólo lo que tiene
+ *     vencimiento y sigue impago, por factura y por proveedor. Es el espejo
+ *     exacto de Cuentas por cobrar.
+ *   · `egresos` — ¿en qué se me va la plata? TODO lo que sale, deuda o
+ *     contado, más el análisis y las plantillas que lo generan.
+ *
+ * Un gasto de contado no es una cuenta por pagar —nunca fue deuda ni un
+ * segundo— y por eso no aparece del lado izquierdo. Es el mismo registro
+ * mirado con dos filtros, no dos módulos.
+ */
+export type ModoEgresos = "cuentas-por-pagar" | "egresos";
+
+export const TABS_POR_MODO: Record<ModoEgresos, Tab[]> = {
+  "cuentas-por-pagar": ["por-pagar", "proveedores"],
+  egresos: ["todos", "analisis", "recurrentes"],
+};
+
+const TAB_LABELS: Record<Tab, string> = {
+  "por-pagar": "Por pagar",
+  todos: "Todos",
+  proveedores: "Proveedores",
+  recurrentes: "Recurrentes",
+  analisis: "Análisis",
+};
+
+const ENCABEZADO: Record<ModoEgresos, { titulo: string; sub: string }> = {
+  "cuentas-por-pagar": {
+    titulo: "Cuentas por pagar",
+    sub: "Lo que debés y todavía no pagaste, por vencimiento y por proveedor.",
+  },
+  egresos: {
+    titulo: "Egresos",
+    sub: "Todo lo que sale de la caja: pagado en el momento o a plazo.",
+  },
+};
 
 /** Un decimal, en formato local. */
 const pct1 = (v: number) =>
@@ -98,6 +154,20 @@ function CampoMonto({
 }) {
   const { moneda } = useConfigRegional();
   const [texto, setTexto] = React.useState(valor ? String(valor) : "");
+
+  /*
+    El texto es del campo (hay que poder tipear "1.2" sin que se reformatee en
+    cada tecla), pero si el valor cambia DESDE AFUERA —el IVA que sale de la
+    alícuota— hay que mostrarlo. Se distingue uno del otro comparando: mientras
+    se tipea, `valor` ya es lo que dice el texto y esto no hace nada.
+  */
+  React.useEffect(() => {
+    if ((parsearMonto(texto, moneda) ?? 0) === valor) return;
+    setTexto(valor ? numeroMoneda(valor, moneda) : "");
+    // `texto` a propósito fuera: mirarlo re-dispararía en cada tecla.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [valor, moneda]);
+
   return (
     <MoneyInput
       inputClassName="h-auto"
@@ -112,6 +182,233 @@ function CampoMonto({
   );
 }
 
+/**
+ * Las categorías listas para el selector: agrupadas por naturaleza y en el
+ * orden en que la naturaleza importa (primero lo que es costo de producción,
+ * al final lo que ni siquiera incide en el resultado).
+ *
+ * El agrupado no es decoración: "Combustible" y "Retiro de socios" se cargan
+ * en el mismo campo pero significan cosas opuestas en el balance, y el título
+ * del grupo es lo único que se lo dice a quien carga.
+ */
+export function opcionesDeCategorias(
+  categorias: CategoriaEgreso[],
+): OpcionSelect[] {
+  const activas = categorias.filter((c) => c.activo);
+  return NATURALEZAS_EGRESO.flatMap((naturaleza) =>
+    activas
+      .filter((c) => c.naturaleza === naturaleza)
+      .map((c) => ({
+        value: c.id,
+        label: c.nombre,
+        grupo: NATURALEZA_LABELS[naturaleza],
+      })),
+  );
+}
+
+/**
+ * El comprobante que se elige ANTES de que el egreso exista.
+ *
+ * El uploader de la casa sube apenas soltás el archivo, y para eso necesita
+ * un `entidadId` — que acá todavía no hay, porque el egreso se crea al
+ * guardar. Así que esto sólo RETIENE los archivos y los sube después, con el
+ * id recién creado. Es el precio de poder adjuntar la factura sin haber
+ * guardado primero, que es como se carga en la realidad: tenés el papel en la
+ * mano mientras tipeás.
+ */
+function ComprobantePendiente({
+  archivos,
+  onCambio,
+}: {
+  archivos: File[];
+  onCambio: (f: File[]) => void;
+}) {
+  const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const [dentro, setDentro] = React.useState(false);
+
+  const agregar = (lista: FileList | null) => {
+    if (!lista) return;
+    const aceptados: File[] = [];
+    for (const f of Array.from(lista)) {
+      const error = validarArchivo(f);
+      if (error) toast.error(`${f.name}: ${error}`);
+      else aceptados.push(f);
+    }
+    if (aceptados.length) onCambio([...archivos, ...aceptados]);
+  };
+
+  return (
+    <div className="egr-adj">
+      <button
+        type="button"
+        className={`arch-drop${dentro ? " dentro" : ""}`}
+        onClick={() => inputRef.current?.click()}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDentro(true);
+        }}
+        onDragLeave={() => setDentro(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDentro(false);
+          agregar(e.dataTransfer.files);
+        }}
+      >
+        <UploadCloudIcon />
+        <span className="arch-drop-txt">
+          <span className="arch-drop-t">
+            Arrastrá la factura o hacé click para elegirla
+          </span>
+          <span className="arch-drop-s">
+            Se adjunta al egreso cuando lo registrás.
+          </span>
+        </span>
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        hidden
+        onChange={(e) => {
+          agregar(e.target.files);
+          // Para poder volver a elegir el MISMO archivo si lo sacaron.
+          e.target.value = "";
+        }}
+      />
+
+      {archivos.length > 0 ? (
+        <div className="egr-adj-lista">
+          {archivos.map((f, i) => (
+            <div className="egr-adj-fila" key={`${f.name}-${i}`}>
+              <FileIcon size={14} />
+              <span className="egr-adj-nom">{f.name}</span>
+              <span className="egr-adj-peso">{formatBytes(f.size)}</span>
+              <button
+                type="button"
+                className="egr-adj-x"
+                onClick={() => onCambio(archivos.filter((_, j) => j !== i))}
+                aria-label={`Sacar ${f.name}`}
+              >
+                <XIcon size={13} />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Reparte un importe disponible entre varios egresos, de arriba hacia abajo.
+ *
+ * Lo usa el endoso: un cheque de 200.000 contra facturas por 300.000 paga las
+ * primeras hasta agotarse y deja el resto pendiente. El orden que llega es el
+ * del listado —por vencimiento—, así que se cancela primero lo que vence
+ * antes, que es lo que haría cualquiera con la chequera en la mano.
+ *
+ * Nunca le asigna a un egreso más que su saldo: pagar de más no existe.
+ */
+export function repartirEntreEgresos(
+  egresos: Array<{ id: string; saldo: number }>,
+  disponible: number,
+): Record<string, number> {
+  let restante = Math.max(0, disponible);
+  const reparto: Record<string, number> = {};
+  for (const e of egresos) {
+    const toma = Math.min(e.saldo, restante);
+    // Redondeo por paso: sin esto, restar flotantes deja "0.009 restante" y
+    // el último egreso se lleva un centavo fantasma.
+    reparto[e.id] = Math.round(toma * 100) / 100;
+    restante = Math.round((restante - toma) * 100) / 100;
+  }
+  return reparto;
+}
+
+/**
+ * Escape cierra el modal.
+ *
+ * Cierra igual que la "×" —sin avisar—, que es lo que ya hacía. Si alguna vez
+ * el formulario tiene que defender lo cargado, la pieza de la casa es
+ * ConfirmacionSalida y va acá adentro, no en un confirm() del navegador.
+ *
+ * El SelectBuscable se come su propio Escape cuando está abierto: cerrar una
+ * lista no tiene que cerrar el formulario entero.
+ */
+function useCerrarConEscape(onCerrar: () => void, activo = true) {
+  React.useEffect(() => {
+    if (!activo) return;
+    const alTeclear = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCerrar();
+    };
+    window.addEventListener("keydown", alTeclear);
+    return () => window.removeEventListener("keydown", alTeclear);
+  }, [onCerrar, activo]);
+}
+
+/** Catálogos fijos: no cambian por tenant, así que se arman una sola vez. */
+const OPCIONES_COMPROBANTE: OpcionSelect[] = TIPOS_COMPROBANTE_COMPRA.map(
+  (t) => ({ value: t, label: TIPO_COMPROBANTE_LABELS[t] }),
+);
+
+const OPCIONES_FRECUENCIA: OpcionSelect[] = FRECUENCIAS_RECURRENTE.map((f) => ({
+  value: f,
+  label: FRECUENCIA_LABELS[f],
+}));
+
+const OPCIONES_RETENCION: OpcionSelect[] = REGIMENES_RETENCION.map((g) => ({
+  value: g,
+  label: REGIMEN_RETENCION_LABELS[g],
+}));
+
+/** "A mano" al final y no primero: es la excepción, no el default. */
+const OPCIONES_ALICUOTA: OpcionSelect[] = [
+  ...ALICUOTAS_IVA.map((a) => ({ value: String(a), label: `${a}%` })),
+  { value: "manual", label: "A mano" },
+];
+
+const OPCIONES_CHEQUE: OpcionSelect[] = [
+  { value: "echeq", label: "e-cheq" },
+  { value: "fisico", label: "Físico" },
+];
+
+function opcionesDeMetodos(metodos: MetodoPago[]): OpcionSelect[] {
+  return metodos.map((m) => ({ value: m.id, label: m.nombre }));
+}
+
+/**
+ * Las cuentas para "salió de".
+ *
+ * NO se filtran por método de pago, se ORDENA y se marca la que el método
+ * tiene configurada: `MetodoPago.cuentaDestinoId` es una cuenta por defecto,
+ * no una lista de cuentas habilitadas. Filtrar por ella dejaría un solo
+ * elemento y taparía casos reales —el efectivo sale de la caja del mostrador
+ * o de la caja fuerte, la transferencia de cualquiera de los dos bancos—.
+ * Es el mismo criterio que usa Cobros (`cobro-formulario.tsx`).
+ *
+ * La moneda va como detalle y no pegada al nombre: en un tenant con cuentas
+ * en dos monedas es lo que decide cuál elegir.
+ */
+export function opcionesDeCuentas(
+  cuentas: CuentaFondosResumen[],
+  cuentaDelMetodoId?: string | null,
+): OpcionSelect[] {
+  const opciones = cuentas.map((c) => ({
+    value: c.id,
+    label: c.nombre,
+    detalle:
+      c.id === cuentaDelMetodoId
+        ? `${c.moneda} · la del método elegido`
+        : c.moneda,
+  }));
+  if (!cuentaDelMetodoId) return opciones;
+  // La sugerida primero: es la que se va a usar el 90% de las veces.
+  return [
+    ...opciones.filter((o) => o.value === cuentaDelMetodoId),
+    ...opciones.filter((o) => o.value !== cuentaDelMetodoId),
+  ];
+}
+
 function sumarDias(iso: string, dias: number): string {
   const t = Date.parse(`${iso}T00:00:00Z`) + dias * 86_400_000;
   return new Date(t).toISOString().slice(0, 10);
@@ -124,6 +421,7 @@ export function EgresosView({
   proveedores,
   metodosPago,
   cuentas,
+  modo = "egresos",
 }: {
   initialEgresos: Egreso[];
   initialResumen: ResumenEgresos | null;
@@ -131,7 +429,10 @@ export function EgresosView({
   proveedores: ProveedorDetalle[];
   metodosPago: MetodoPago[];
   cuentas: CuentaFondosResumen[];
+  /** Qué mitad del módulo se está mirando. Ver `ModoEgresos`. */
+  modo?: ModoEgresos;
 }) {
+  const tabsVisibles = TABS_POR_MODO[modo];
   // Los permisos se resuelven en el cliente (patrón de la casa): el guard del
   // API es el que manda, esto sólo evita ofrecer botones que van a dar 403.
   const puedeGestionar = usePuede("administracion.gestionar");
@@ -140,7 +441,7 @@ export function EgresosView({
   const fmt = (v: number) => formatearMoneda(v, moneda, { decimales: 0 });
   const hoy = React.useMemo(() => hoyIso(), []);
 
-  const [tab, setTab] = React.useState<Tab>("por-pagar");
+  const [tab, setTab] = React.useState<Tab>(tabsVisibles[0]);
   const [egresos, setEgresos] = React.useState(initialEgresos);
   const [resumen, setResumen] = React.useState(initialResumen);
   const [cargando, setCargando] = React.useState(false);
@@ -174,6 +475,7 @@ export function EgresosView({
         setEgresos(lista.egresos);
         setResumen(res);
         setSeleccion(new Set());
+        return lista.egresos;
       } catch (e) {
         setError(e instanceof Error ? e.message : "No se pudo cargar.");
       } finally {
@@ -240,11 +542,8 @@ export function EgresosView({
       <div className="egr-wrap">
         <div className="egr-head">
           <div>
-            <h1>Egresos</h1>
-            <div className="sub">
-              Todo lo que sale de la caja. Lo que tiene vencimiento y todavía se
-              debe es tu cuenta por pagar.
-            </div>
+            <h1>{ENCABEZADO[modo].titulo}</h1>
+            <div className="sub">{ENCABEZADO[modo].sub}</div>
           </div>
           {puedeGestionar ? (
             <button
@@ -294,42 +593,19 @@ export function EgresosView({
         ) : null}
 
         <div className="egr-toolbar">
+          {/* La tira sale de la lista del modo: así una entrada del sidebar
+              no puede mostrar un tab que no le corresponde. */}
           <div className="egr-tabs" role="tablist">
-            <button
-              type="button"
-              className={tab === "por-pagar" ? "on" : ""}
-              onClick={() => cambiarTab("por-pagar")}
-            >
-              Por pagar
-            </button>
-            <button
-              type="button"
-              className={tab === "todos" ? "on" : ""}
-              onClick={() => cambiarTab("todos")}
-            >
-              Todos
-            </button>
-            <button
-              type="button"
-              className={tab === "proveedores" ? "on" : ""}
-              onClick={() => cambiarTab("proveedores")}
-            >
-              Proveedores
-            </button>
-            <button
-              type="button"
-              className={tab === "recurrentes" ? "on" : ""}
-              onClick={() => cambiarTab("recurrentes")}
-            >
-              Recurrentes
-            </button>
-            <button
-              type="button"
-              className={tab === "analisis" ? "on" : ""}
-              onClick={() => cambiarTab("analisis")}
-            >
-              Análisis
-            </button>
+            {tabsVisibles.map((t) => (
+              <button
+                key={t}
+                type="button"
+                className={tab === t ? "on" : ""}
+                onClick={() => cambiarTab(t)}
+              >
+                {TAB_LABELS[t]}
+              </button>
+            ))}
           </div>
           <input
             className="egr-search"
@@ -354,7 +630,7 @@ export function EgresosView({
           ) : null}
         </div>
 
-        {error ? <div className="egr-error">{error}</div> : null}
+        {error ? <div className="egr-error mod-suelto">{error}</div> : null}
 
         {tab === "analisis" ? (
           <Analisis reporte={reporte} presu={presu} fmt={fmt} />
@@ -390,6 +666,9 @@ export function EgresosView({
                 <tr>
                   {tab === "por-pagar" && puedeGestionar ? <th /> : null}
                   <th>{tab === "por-pagar" ? "Vence" : "Competencia"}</th>
+                  {/* En "Por pagar" el vencimiento YA es la primera columna;
+                      acá se agrega porque es el orden del listado. */}
+                  {tab !== "por-pagar" ? <th>Vencimiento</th> : null}
                   <th>Descripción</th>
                   <th>Beneficiario</th>
                   <th>Categoría</th>
@@ -423,10 +702,12 @@ export function EgresosView({
                           />
                         </td>
                       ) : null}
-                      <td className="mono">
+                      {/* Sin `mono`: con "Vie 28 ago 2026" la monoespaciada
+                          separa las letras y se lee peor que alineado. */}
+                      <td>
                         {tab === "por-pagar" && e.fechaVencimiento ? (
                           <>
-                            {e.fechaVencimiento}
+                            {fechaConDia(e.fechaVencimiento)}
                             {dias != null ? (
                               <span className="egr-sub">
                                 {etiquetaVencimiento(dias)}
@@ -434,14 +715,22 @@ export function EgresosView({
                             ) : null}
                           </>
                         ) : (
-                          <>
-                            {e.fechaCompetencia}
-                            {!e.fechaVencimiento ? (
-                              <span className="egr-sub">contado</span>
-                            ) : null}
-                          </>
+                          /* "contado" ya lo dice la columna Vencimiento, que
+                             está al lado: repetirlo acá era decirlo dos veces
+                             en la misma fila. */
+                          fechaConDia(e.fechaCompetencia)
                         )}
                       </td>
+                      {tab !== "por-pagar" ? (
+                        <td>
+                          {e.fechaVencimiento ? (
+                            fechaConDia(e.fechaVencimiento)
+                          ) : (
+                            /* Sin vencimiento = se pagó en el momento. */
+                            <span className="egr-sub">contado</span>
+                          )}
+                        </td>
+                      ) : null}
                       <td>
                         <button
                           type="button"
@@ -490,9 +779,19 @@ export function EgresosView({
             cuentas={cuentas}
             hoy={hoy}
             onCerrar={() => setAltaAbierta(false)}
-            onListo={() => {
+            /*
+              Se abre el detalle del recién creado en vez de volver al listado:
+              es la confirmación de que quedó guardado y, sobre todo, es donde
+              se adjunta la factura escaneada. El adjunto NO puede vivir en el
+              alta porque el archivo se cuelga de un egreso que todavía no
+              existe.
+            */
+            onListo={(creadoId) => {
               setAltaAbierta(false);
-              void recargar();
+              void recargar().then((lista) => {
+                const nuevo = lista?.find((e) => e.id === creadoId);
+                if (nuevo) setDetalle(nuevo);
+              });
             }}
           />
         ) : null}
@@ -579,6 +878,19 @@ function Recurrentes({
   const [emitiendo, setEmitiendo] = React.useState(false);
   const [aviso, setAviso] = React.useState<string | null>(null);
   const activas = categorias.filter((c) => c.activo);
+  const opcionesCategoria = React.useMemo(
+    () => opcionesDeCategorias(categorias),
+    [categorias],
+  );
+  const opcionesProveedor = React.useMemo<OpcionSelect[]>(
+    () => [
+      { value: "", label: "Sin proveedor" },
+      ...proveedores.map((p) => ({ value: p.id, label: p.nombre })),
+    ],
+    [proveedores],
+  );
+  const cerrarAlta = React.useCallback(() => setAlta(false), []);
+  useCerrarConEscape(cerrarAlta, alta);
 
   const [descripcion, setDescripcion] = React.useState("");
   const [categoriaId, setCategoriaId] = React.useState(activas[0]?.id ?? "");
@@ -722,19 +1034,19 @@ function Recurrentes({
       )}
 
       {alta ? (
-        <div className="egr-modal-bg" role="dialog" aria-modal="true">
-          <div className="egr-modal egr-modal-sm">
-            <div className="egr-modal-head">
+        <div className="mod-bg" role="dialog" aria-modal="true">
+          <div className="mod mod-sm">
+            <div className="mod-head">
               <h2>Nueva plantilla</h2>
               <button
                 type="button"
-                className="egr-x"
+                className="mod-x"
                 onClick={() => setAlta(false)}
               >
                 ×
               </button>
             </div>
-            <div className="egr-modal-body">
+            <div className="mod-body">
               <div className="egr-grid">
                 <label className="egr-f egr-f-wide">
                   <span>Descripción</span>
@@ -746,32 +1058,25 @@ function Recurrentes({
                 </label>
                 <label className="egr-f">
                   <span>Categoría</span>
-                  <select
-                    className="egr-select"
+                  <SelectBuscable
                     value={categoriaId}
-                    onChange={(e) => setCategoriaId(e.target.value)}
-                  >
-                    {activas.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.nombre}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setCategoriaId}
+                    opciones={opcionesCategoria}
+                    placeholder="Elegir categoría"
+                    placeholderBusqueda="Buscar categoría…"
+                    vacio="Ninguna categoría coincide."
+                  />
                 </label>
                 <label className="egr-f">
                   <span>Proveedor</span>
-                  <select
-                    className="egr-select"
+                  <SelectBuscable
                     value={proveedorId}
-                    onChange={(e) => setProveedorId(e.target.value)}
-                  >
-                    <option value="">Sin proveedor</option>
-                    {proveedores.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.nombre}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setProveedorId}
+                    opciones={opcionesProveedor}
+                    placeholder="Sin proveedor"
+                    placeholderBusqueda="Buscar proveedor…"
+                    vacio="Ningún proveedor coincide."
+                  />
                 </label>
                 <label className="egr-f">
                   <span>Importe sugerido</span>
@@ -786,17 +1091,11 @@ function Recurrentes({
                 </label>
                 <label className="egr-f">
                   <span>Frecuencia</span>
-                  <select
-                    className="egr-select"
+                  <SelectBuscable
                     value={frecuencia}
-                    onChange={(e) => setFrecuencia(e.target.value)}
-                  >
-                    {FRECUENCIAS_RECURRENTE.map((f) => (
-                      <option key={f} value={f}>
-                        {FRECUENCIA_LABELS[f]}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setFrecuencia}
+                    opciones={OPCIONES_FRECUENCIA}
+                  />
                 </label>
                 <label className="egr-f">
                   <span>Vence el día</span>
@@ -825,7 +1124,7 @@ function Recurrentes({
                 </label>
               </div>
             </div>
-            <div className="egr-modal-foot">
+            <div className="mod-foot">
               <button
                 type="button"
                 className="btn"
@@ -1138,11 +1437,30 @@ function AltaEgreso({
   cuentas: CuentaFondosResumen[];
   hoy: string;
   onCerrar: () => void;
-  onListo: () => void;
+  /** Devuelve el id para que el listado pueda abrir el detalle recién creado. */
+  onListo: (creadoId: string) => void;
 }) {
+  useCerrarConEscape(onCerrar);
   const { moneda } = useConfigRegional();
   const fmt = (v: number) => formatearMoneda(v, moneda, { decimales: 0 });
   const activas = categorias.filter((c) => c.activo);
+  const opcionesCategoria = React.useMemo(
+    () => opcionesDeCategorias(categorias),
+    [categorias],
+  );
+  // "Sin proveedor" es una opción real y va primera: la mayoría de los egresos
+  // de un taller no tienen proveedor cargado (la nafta, un flete suelto).
+  const opcionesProveedor = React.useMemo<OpcionSelect[]>(
+    () => [
+      { value: "", label: "Sin proveedor" },
+      ...proveedores.map((p) => ({ value: p.id, label: p.nombre })),
+    ],
+    [proveedores],
+  );
+  const opcionesMetodo = React.useMemo(
+    () => opcionesDeMetodos(metodosPago),
+    [metodosPago],
+  );
 
   const [yaPagado, setYaPagado] = React.useState(true);
   const [descripcion, setDescripcion] = React.useState("");
@@ -1153,21 +1471,64 @@ function AltaEgreso({
   const [vencimiento, setVencimiento] = React.useState(sumarDias(hoy, 30));
   const [neto, setNeto] = React.useState(0);
   const [iva, setIva] = React.useState(0);
+  /** Porcentaje elegido, o `null` = lo escribe la persona. */
+  const [alicuota, setAlicuota] = React.useState<number | null>(21);
   const [tipoComprobante, setTipoComprobante] = React.useState("SIN_DOCUMENTO");
   const [puntoVenta, setPuntoVenta] = React.useState("");
   const [numeroComprobante, setNumeroComprobante] = React.useState("");
   const [metodoPagoId, setMetodoPagoId] = React.useState(
     metodosPago[0]?.id ?? "",
   );
-  const [cuentaId, setCuentaId] = React.useState(cuentas[0]?.id ?? "");
+  /**
+   * `null` = todavía no la eligieron a mano, así que la manda el método.
+   * Una vez que la persona elige una, se respeta aunque después cambie el
+   * método: lo explícito le gana a lo sugerido.
+   */
+  const [cuentaId, setCuentaId] = React.useState<string | null>(null);
   const [referencia, setReferencia] = React.useState("");
   const [notas, setNotas] = React.useState("");
+  /** Retenidos hasta que el egreso exista. Ver `ComprobantePendiente`. */
+  const [adjuntos, setAdjuntos] = React.useState<File[]>([]);
   const [cuotas, setCuotas] = React.useState(1);
   const [guardando, setGuardando] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  const categoria = activas.find((c) => c.id === categoriaId);
+  const conIva = discriminaIva(tipoComprobante);
   const total = neto + iva;
+
+  // La cuenta que se va a usar: la elegida, si no la del método, si no la
+  // primera. Mismo orden que Cobros.
+  const metodo = metodosPago.find((m) => m.id === metodoPagoId);
+  const cuentaUsadaId =
+    cuentaId ?? metodo?.cuentaDestinoId ?? cuentas[0]?.id ?? "";
+  const opcionesCuenta = React.useMemo(
+    () => opcionesDeCuentas(cuentas, metodo?.cuentaDestinoId),
+    [cuentas, metodo?.cuentaDestinoId],
+  );
+
+  /*
+    El IVA lo calcula la alícuota, salvo que lo escriban a mano. Escribirlo a
+    mano no es un caso raro: una factura con dos alícuotas mezcladas, o el
+    proveedor que redondeó distinto y el número tiene que coincidir con el
+    papel. Por eso "A mano" es una opción y no un accidente.
+  */
+  React.useEffect(() => {
+    if (!conIva || alicuota === null) return;
+    setIva(ivaDeNeto(neto, alicuota));
+  }, [neto, alicuota, conIva]);
+
+  /* Un ticket, un recibo o un gasto sin papel no tienen IVA que descontar: el
+     campo se va de pantalla Y el valor se limpia, para que no quede colgado
+     un crédito fiscal de un comprobante anterior. */
+  React.useEffect(() => {
+    if (!conIva) setIva(0);
+  }, [conIva]);
+
+  /** Tocar el importe del IVA pasa la alícuota a "a mano". */
+  const cambiarIva = (n: number) => {
+    setAlicuota(null);
+    setIva(n);
+  };
 
   const proveedorElegido = proveedores.find((p) => p.id === proveedorId);
 
@@ -1201,7 +1562,7 @@ function AltaEgreso({
       if (yaPagado) {
         body.pago = {
           metodoPagoId,
-          cuentaOrigenId: cuentaId,
+          cuentaOrigenId: cuentaUsadaId,
           fecha: competencia,
           referencia: referencia.trim() || undefined,
         };
@@ -1209,8 +1570,29 @@ function AltaEgreso({
         body.fechaVencimiento = vencimiento;
         if (cuotas > 1) body.cuotas = cuotas;
       }
-      await crearEgreso(body);
-      onListo();
+      const { id } = await crearEgreso(body);
+
+      /*
+        Recién ahora hay a qué colgar los archivos. Si alguno falla NO se
+        deshace el egreso: ya está registrado y con su pago hecho, y anularlo
+        por una subida cortada sería peor. Se avisa cuál falló y el detalle
+        —que se abre a continuación— deja volver a intentarlo.
+      */
+      const fallaron: string[] = [];
+      for (const file of adjuntos) {
+        try {
+          await subirArchivo(file, { scope: "EGRESO", entidadId: id });
+        } catch {
+          fallaron.push(file.name);
+        }
+      }
+      if (fallaron.length) {
+        toast.error(
+          `El egreso quedó registrado, pero no se pudo adjuntar ${fallaron.join(", ")}. Probá de nuevo desde el detalle.`,
+        );
+      }
+
+      onListo(id);
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo guardar.");
     } finally {
@@ -1223,19 +1605,22 @@ function AltaEgreso({
     categoriaId &&
     total > 0 &&
     (proveedorId || beneficiario.trim().length >= 2) &&
-    (!yaPagado || (metodoPagoId && cuentaId));
+    // `cuentaUsadaId` y no `cuentaId`: lo que importa es que HAYA una cuenta,
+    // no que la hayan elegido a mano. Mirar el estado crudo dejaría el botón
+    // apagado hasta tocar un campo que ya venía resuelto.
+    (!yaPagado || (metodoPagoId && cuentaUsadaId));
 
   return (
-    <div className="egr-modal-bg" role="dialog" aria-modal="true">
-      <div className="egr-modal">
-        <div className="egr-modal-head">
+    <div className="mod-bg" role="dialog" aria-modal="true">
+      <div className="mod">
+        <div className="mod-head">
           <h2>Registrar egreso</h2>
-          <button type="button" className="egr-x" onClick={onCerrar}>
+          <button type="button" className="mod-x" onClick={onCerrar}>
             ×
           </button>
         </div>
 
-        <div className="egr-modal-body">
+        <div className="mod-body">
           {/* El switch primero: define qué pide el resto del formulario. */}
           <label className="egr-switch">
             <input
@@ -1265,37 +1650,29 @@ function AltaEgreso({
 
             <label className="egr-f">
               <span>Categoría</span>
-              <select
+              <SelectBuscable
                 value={categoriaId}
-                onChange={(e) => setCategoriaId(e.target.value)}
-              >
-                {activas.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nombre}
-                  </option>
-                ))}
-              </select>
-              {categoria ? (
-                <small className="egr-hint">
-                  {NATURALEZA_LABELS[categoria.naturaleza]} ·{" "}
-                  {NATURALEZA_AYUDA[categoria.naturaleza]}
-                </small>
-              ) : null}
+                onChange={setCategoriaId}
+                opciones={opcionesCategoria}
+                placeholder="Elegir categoría"
+                placeholderBusqueda="Buscar categoría…"
+                vacio="Ninguna categoría coincide."
+              />
+              {/* Sin la ayuda de la naturaleza: desde que la lista agrupa por
+                  naturaleza y muestra su título, repetirla debajo del campo
+                  era decir dos veces lo mismo y movía el alto de la fila. */}
             </label>
 
             <label className="egr-f">
               <span>Proveedor</span>
-              <select
+              <SelectBuscable
                 value={proveedorId}
-                onChange={(e) => setProveedorId(e.target.value)}
-              >
-                <option value="">Sin proveedor</option>
-                {proveedores.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.nombre}
-                  </option>
-                ))}
-              </select>
+                onChange={setProveedorId}
+                opciones={opcionesProveedor}
+                placeholder="Sin proveedor"
+                placeholderBusqueda="Buscar proveedor…"
+                vacio="Ningún proveedor coincide."
+              />
             </label>
 
             {!proveedorId ? (
@@ -1364,45 +1741,86 @@ function AltaEgreso({
                 no sueltos en la grilla de 2 columnas: arriba hay campos
                 condicionales (beneficiario, vencimiento) y según cuáles se
                 muestren, estos tres caerían corridos de fila. */}
-            <div className="egr-sub egr-sub-3">
+            <div
+              className={
+                conIva ? "egr-sub egr-sub-importe" : "egr-sub egr-sub-2"
+              }
+            >
               <label className="egr-f">
-                <span>Neto</span>
-                <CampoMonto valor={neto} onCambio={setNeto} ariaLabel="Neto" />
+                {/* Sin IVA discriminado el importe ES el total, y llamarlo
+                    "Neto" haría pensar que falta sumarle algo. */}
+                <span>{conIva ? "Neto" : "Importe"}</span>
+                <CampoMonto
+                  valor={neto}
+                  onCambio={setNeto}
+                  ariaLabel={conIva ? "Neto" : "Importe"}
+                />
               </label>
-              <label className="egr-f">
-                <span>IVA</span>
-                <CampoMonto valor={iva} onCambio={setIva} ariaLabel="IVA" />
-              </label>
+              {conIva ? (
+                <>
+                  {/* La alícuota va ANTES del IVA y no adentro de su etiqueta:
+                      se lee en el orden en que se piensa —importe, a cuánto,
+                      cuánto da— y es el campo que más se toca de los tres. */}
+                  <label className="egr-f">
+                    <span>Alícuota</span>
+                    <SelectBuscable
+                      value={alicuota === null ? "manual" : String(alicuota)}
+                      onChange={(v) =>
+                        setAlicuota(v === "manual" ? null : Number(v))
+                      }
+                      opciones={OPCIONES_ALICUOTA}
+                      ariaLabel="Alícuota de IVA"
+                    />
+                  </label>
+                  <label className="egr-f">
+                    <span>IVA</span>
+                    <CampoMonto
+                      valor={iva}
+                      onCambio={cambiarIva}
+                      ariaLabel="IVA"
+                    />
+                  </label>
+                </>
+              ) : null}
               <label className="egr-f">
                 <span>Comprobante</span>
-                <select
+                <SelectBuscable
                   value={tipoComprobante}
-                  onChange={(e) => setTipoComprobante(e.target.value)}
-                >
-                  {TIPOS_COMPROBANTE_COMPRA.map((t) => (
-                    <option key={t} value={t}>
-                      {TIPO_COMPROBANTE_LABELS[t]}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setTipoComprobante}
+                  opciones={OPCIONES_COMPROBANTE}
+                />
               </label>
             </div>
 
             {tipoComprobante !== "SIN_DOCUMENTO" ? (
               <div className="egr-sub egr-sub-2">
+                {/* Los ceros los pone el sistema al salir del campo, no la
+                    persona: se tipea "1" y "12345", que es lo que uno lee en
+                    la factura. Al salir y no al tipear, porque rellenar por
+                    tecla no dejaría escribir el segundo dígito. */}
                 <label className="egr-f">
                   <span>Punto de venta</span>
                   <input
+                    inputMode="numeric"
                     value={puntoVenta}
                     onChange={(e) => setPuntoVenta(e.target.value)}
+                    onBlur={() =>
+                      setPuntoVenta((v) => completarCeros(v, LARGO_PUNTO_VENTA))
+                    }
                     placeholder="0001"
                   />
                 </label>
                 <label className="egr-f">
                   <span>Número</span>
                   <input
+                    inputMode="numeric"
                     value={numeroComprobante}
                     onChange={(e) => setNumeroComprobante(e.target.value)}
+                    onBlur={() =>
+                      setNumeroComprobante((v) =>
+                        completarCeros(v, LARGO_NUMERO_COMPROBANTE),
+                      )
+                    }
                     placeholder="00012345"
                   />
                 </label>
@@ -1413,29 +1831,21 @@ function AltaEgreso({
               <>
                 <label className="egr-f">
                   <span>Método de pago</span>
-                  <select
+                  <SelectBuscable
                     value={metodoPagoId}
-                    onChange={(e) => setMetodoPagoId(e.target.value)}
-                  >
-                    {metodosPago.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.nombre}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setMetodoPagoId}
+                    opciones={opcionesMetodo}
+                    placeholderBusqueda="Buscar método…"
+                  />
                 </label>
                 <label className="egr-f">
                   <span>Salió de</span>
-                  <select
-                    value={cuentaId}
-                    onChange={(e) => setCuentaId(e.target.value)}
-                  >
-                    {cuentas.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.nombre} ({c.moneda})
-                      </option>
-                    ))}
-                  </select>
+                  <SelectBuscable
+                    value={cuentaUsadaId}
+                    onChange={setCuentaId}
+                    opciones={opcionesCuenta}
+                    placeholderBusqueda="Buscar cuenta…"
+                  />
                 </label>
                 <label className="egr-f">
                   <span>Referencia</span>
@@ -1456,17 +1866,25 @@ function AltaEgreso({
                 rows={2}
               />
             </label>
+
+            <label className="egr-f egr-f-wide">
+              <span>Comprobante</span>
+              <ComprobantePendiente
+                archivos={adjuntos}
+                onCambio={setAdjuntos}
+              />
+            </label>
           </div>
 
-          <div className="egr-total">
+          <div className="egr-total mod-destacado">
             <span>Total</span>
             <strong className="mono">{fmt(total)}</strong>
           </div>
 
-          {error ? <div className="egr-error">{error}</div> : null}
+          {error ? <div className="egr-error mod-suelto">{error}</div> : null}
         </div>
 
-        <div className="egr-modal-foot">
+        <div className="mod-foot">
           <button type="button" className="btn" onClick={onCerrar}>
             Cancelar
           </button>
@@ -1500,12 +1918,18 @@ function RegistrarPago({
   onCerrar: () => void;
   onListo: () => void;
 }) {
+  useCerrarConEscape(onCerrar);
   const { moneda } = useConfigRegional();
   const fmt = (v: number) => formatearMoneda(v, moneda, { decimales: 0 });
+  const opcionesMetodo = React.useMemo(
+    () => opcionesDeMetodos(metodosPago),
+    [metodosPago],
+  );
   const [metodoPagoId, setMetodoPagoId] = React.useState(
     metodosPago[0]?.id ?? "",
   );
-  const [cuentaId, setCuentaId] = React.useState(cuentas[0]?.id ?? "");
+  /** `null` = la manda el método elegido. Ver `opcionesDeCuentas`. */
+  const [cuentaId, setCuentaId] = React.useState<string | null>(null);
   const [fecha, setFecha] = React.useState(hoy);
   const [referencia, setReferencia] = React.useState("");
   // Editable por egreso: así el pago parcial es el mismo formulario.
@@ -1519,11 +1943,68 @@ function RegistrarPago({
   const [chequeBanco, setChequeBanco] = React.useState("");
   const [chequeFormato, setChequeFormato] = React.useState("echeq");
   const [chequeFechaPago, setChequeFechaPago] = React.useState("");
+  /** Emitir uno propio o endosar uno que ya está en cartera. */
+  const [chequeModo, setChequeModo] = React.useState<"propio" | "endoso">(
+    "propio",
+  );
+  const [valorId, setValorId] = React.useState("");
+  /** `null` = todavía no se pidió la cartera. */
+  const [valores, setValores] = React.useState<ValorEnCartera[] | null>(null);
   const [guardando, setGuardando] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
   const metodo = metodosPago.find((m) => m.id === metodoPagoId);
   const esCheque = metodo?.tipo === "cheque_echeq";
+
+  // La cartera se pide sólo cuando hace falta: la mayoría de los pagos no son
+  // por endoso y el modal no tiene por qué pagar esa consulta siempre.
+  React.useEffect(() => {
+    if (!esCheque || chequeModo !== "endoso" || valores !== null) return;
+    getValoresEnCartera()
+      .then((r) => setValores(r.valores))
+      .catch(() => setValores([]));
+  }, [esCheque, chequeModo, valores]);
+
+  const valorElegido = valores?.find((v) => v.id === valorId) ?? null;
+
+  /**
+   * Deja el pago en exactamente lo que cubre el cheque.
+   *
+   * Un cheque de 200.000 contra una factura de 300.000 es un pago PARCIAL de
+   * 200.000, no un cheque partido: el resto se paga después por otro medio y
+   * la factura queda en "parcial" mientras tanto. Esto es lo que evita tener
+   * que hacer la cuenta a mano en cada renglón.
+   *
+   * Reparte de arriba hacia abajo —el orden de la lista es por vencimiento—
+   * hasta agotar el cheque, sin pasarse del saldo de cada egreso.
+   */
+  const ajustarAlCheque = () => {
+    if (!valorElegido) return;
+    // El cheque respalda lo que SALE; lo retenido no viaja en el cheque.
+    setMontos(repartirEntreEgresos(egresos, valorElegido.importe + retencionesTotal));
+  };
+
+  /** Lo que el cheque puede pagar como máximo de esta selección. */
+  const totalSaldos = egresos.reduce((acc, e) => acc + e.saldo, 0);
+  const opcionesValores = React.useMemo<OpcionSelect[]>(
+    () =>
+      (valores ?? []).map((v) => ({
+        value: v.id,
+        label: `${v.banco} ${v.numero}`,
+        // Importe y de quién vino: es lo que decide cuál usar.
+        detalle: [
+          formatearMoneda(v.importe, moneda, { decimales: 0 }),
+          v.clienteNombre,
+          v.fechaPago ? `al ${v.fechaPago}` : "al día",
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      })),
+    [valores, moneda],
+  );
+  const cuentaUsadaId =
+    cuentaId ?? metodo?.cuentaDestinoId ?? cuentas[0]?.id ?? "";
+  const opcionesCuenta = opcionesDeCuentas(cuentas, metodo?.cuentaDestinoId);
   const total = egresos.reduce((acc, e) => acc + (montos[e.id] ?? 0), 0);
   const retencionesTotal = retenciones.reduce((acc, r) => acc + r.monto, 0);
   // Lo que realmente sale de la cuenta: lo retenido se deposita al fisco.
@@ -1536,7 +2017,7 @@ function RegistrarPago({
     try {
       await registrarPagoEgresos({
         metodoPagoId,
-        cuentaOrigenId: cuentaId,
+        cuentaOrigenId: cuentaUsadaId,
         fecha,
         referencia: referencia.trim() || undefined,
         imputaciones: egresos
@@ -1553,14 +2034,18 @@ function RegistrarPago({
               total > 0 ? Math.round((r.monto / total) * 100000) / 1000 : 0,
             monto: r.monto,
           })),
-        cheque: esCheque
-          ? {
-              numero: chequeNumero.trim(),
-              banco: chequeBanco.trim(),
-              formato: chequeFormato,
-              fechaPago: chequeFechaPago || undefined,
-            }
-          : undefined,
+        // Uno u otro, nunca los dos: el backend lo rechaza si van juntos.
+        cheque:
+          esCheque && chequeModo === "propio"
+            ? {
+                numero: chequeNumero.trim(),
+                banco: chequeBanco.trim(),
+                formato: chequeFormato,
+                fechaPago: chequeFechaPago || undefined,
+              }
+            : undefined,
+        valorId:
+          esCheque && chequeModo === "endoso" ? valorId || undefined : undefined,
       });
       onListo();
     } catch (e) {
@@ -1573,15 +2058,15 @@ function RegistrarPago({
   };
 
   return (
-    <div className="egr-modal-bg" role="dialog" aria-modal="true">
-      <div className="egr-modal">
-        <div className="egr-modal-head">
+    <div className="mod-bg" role="dialog" aria-modal="true">
+      <div className="mod">
+        <div className="mod-head">
           <h2>Registrar pago</h2>
-          <button type="button" className="egr-x" onClick={onCerrar}>
+          <button type="button" className="mod-x" onClick={onCerrar}>
             ×
           </button>
         </div>
-        <div className="egr-modal-body">
+        <div className="mod-body">
           <div className="egr-pago-lista">
             {egresos.map((e) => (
               <div className="egr-pago-fila" key={e.id}>
@@ -1605,29 +2090,21 @@ function RegistrarPago({
           <div className="egr-grid">
             <label className="egr-f">
               <span>Método de pago</span>
-              <select
+              <SelectBuscable
                 value={metodoPagoId}
-                onChange={(e) => setMetodoPagoId(e.target.value)}
-              >
-                {metodosPago.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.nombre}
-                  </option>
-                ))}
-              </select>
+                onChange={setMetodoPagoId}
+                opciones={opcionesMetodo}
+                placeholderBusqueda="Buscar método…"
+              />
             </label>
             <label className="egr-f">
               <span>Sale de</span>
-              <select
-                value={cuentaId}
-                onChange={(e) => setCuentaId(e.target.value)}
-              >
-                {cuentas.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nombre} ({c.moneda})
-                  </option>
-                ))}
-              </select>
+              <SelectBuscable
+                value={cuentaUsadaId}
+                onChange={setCuentaId}
+                opciones={opcionesCuenta}
+                placeholderBusqueda="Buscar cuenta…"
+              />
             </label>
             <label className="egr-f">
               <span>Fecha</span>
@@ -1649,7 +2126,92 @@ function RegistrarPago({
 
           {esCheque ? (
             <div className="egr-sub-bloque">
-              <div className="egr-panel-t">Cheque propio</div>
+              <div className="egr-panel-t">Cheque</div>
+              {/* Emitir uno propio o endosar uno que entró por un cobro: en un
+                  taller las dos cosas pasan, y con el cheque del cliente la
+                  plata nunca pasa por el banco. */}
+              <div className="usr-niveles" style={{ marginBottom: 12 }}>
+                <button
+                  type="button"
+                  className={`usr-nivel${chequeModo === "propio" ? " on" : ""}`}
+                  onClick={() => setChequeModo("propio")}
+                >
+                  Emito uno propio
+                </button>
+                <button
+                  type="button"
+                  className={`usr-nivel${chequeModo === "endoso" ? " on" : ""}`}
+                  onClick={() => setChequeModo("endoso")}
+                >
+                  Endoso uno de la cartera
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {esCheque && chequeModo === "endoso" ? (
+            <div className="egr-sub-bloque">
+              <div className="egr-panel-t">Cheque a endosar</div>
+              {valores === null ? (
+                <div className="egr-nota-inline">Buscando la cartera…</div>
+              ) : valores.length === 0 ? (
+                <div className="egr-nota-inline">
+                  No hay cheques de terceros en cartera. Entran cuando un
+                  cliente paga con cheque.
+                </div>
+              ) : (
+                <>
+                  <label className="egr-f">
+                    <span>Cheque</span>
+                    <SelectBuscable
+                      value={valorId}
+                      onChange={setValorId}
+                      opciones={opcionesValores}
+                      placeholder="Elegir cheque"
+                      placeholderBusqueda="Buscar por número, banco o cliente…"
+                      vacio="Ningún cheque coincide."
+                    />
+                  </label>
+                  <div className="egr-nota-inline">
+                    {!valorElegido ? (
+                      "Sale de la cartera y pasa al proveedor. No toca ninguna cuenta: esta plata nunca entró al banco."
+                    ) : valorElegido.importe > totalSaldos ? (
+                      /* No se puede pagar de más: no hay vuelto. */
+                      <>
+                        El cheque es de {fmt(valorElegido.importe)} y lo
+                        seleccionado suma {fmt(totalSaldos)}. Elegí más facturas
+                        o usá un cheque más chico.
+                      </>
+                    ) : valorElegido.importe !== neto ? (
+                      /*
+                        El caso más común: el cheque cubre PARTE. No es un
+                        cheque partido, es un pago parcial — el resto se paga
+                        después por otro medio.
+                      */
+                      <>
+                        El cheque cubre {fmt(valorElegido.importe)} de los{" "}
+                        {fmt(neto)} seleccionados.{" "}
+                        <button
+                          type="button"
+                          className="egr-link"
+                          onClick={ajustarAlCheque}
+                        >
+                          Pagar sólo lo del cheque
+                        </button>{" "}
+                        y el resto queda pendiente para otro pago.
+                      </>
+                    ) : (
+                      "Sale de la cartera y pasa al proveedor. No toca ninguna cuenta: esta plata nunca entró al banco."
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          ) : null}
+
+          {esCheque && chequeModo === "propio" ? (
+            <div className="egr-sub-bloque">
+              <div className="egr-panel-t">Datos del cheque propio</div>
               <div className="egr-grid">
                 <label className="egr-f">
                   <span>Número</span>
@@ -1669,14 +2231,11 @@ function RegistrarPago({
                 </label>
                 <label className="egr-f">
                   <span>Formato</span>
-                  <select
-                    className="egr-select"
+                  <SelectBuscable
                     value={chequeFormato}
-                    onChange={(e) => setChequeFormato(e.target.value)}
-                  >
-                    <option value="echeq">e-cheq</option>
-                    <option value="fisico">Físico</option>
-                  </select>
+                    onChange={setChequeFormato}
+                    opciones={OPCIONES_CHEQUE}
+                  />
                 </label>
                 <label className="egr-f">
                   <span>Fecha de pago</span>
@@ -1720,23 +2279,16 @@ function RegistrarPago({
             ) : (
               retenciones.map((r, i) => (
                 <div className="egr-ret-fila" key={i}>
-                  <select
-                    className="egr-select"
+                  <SelectBuscable
                     value={r.regimen}
-                    onChange={(e) =>
+                    onChange={(v) =>
                       setRetenciones((prev) =>
-                        prev.map((x, j) =>
-                          j === i ? { ...x, regimen: e.target.value } : x,
-                        ),
+                        prev.map((x, j) => (j === i ? { ...x, regimen: v } : x)),
                       )
                     }
-                  >
-                    {REGIMENES_RETENCION.map((g) => (
-                      <option key={g} value={g}>
-                        {REGIMEN_RETENCION_LABELS[g]}
-                      </option>
-                    ))}
-                  </select>
+                    opciones={OPCIONES_RETENCION}
+                    ariaLabel="Régimen de retención"
+                  />
                   <CampoMonto
                     valor={r.monto}
                     onCambio={(v) =>
@@ -1760,7 +2312,7 @@ function RegistrarPago({
             )}
           </div>
 
-          <div className="egr-total">
+          <div className="egr-total mod-destacado">
             <span>
               {retencionesTotal > 0 ? "Sale de la cuenta" : "Total del pago"}
             </span>
@@ -1774,13 +2326,13 @@ function RegistrarPago({
           ) : null}
 
           {excede ? (
-            <div className="egr-error">
+            <div className="egr-error mod-suelto">
               Estás imputando más de lo que se debe en alguno de los egresos.
             </div>
           ) : null}
-          {error ? <div className="egr-error">{error}</div> : null}
+          {error ? <div className="egr-error mod-suelto">{error}</div> : null}
         </div>
-        <div className="egr-modal-foot">
+        <div className="mod-foot">
           <button type="button" className="btn" onClick={onCerrar}>
             Cancelar
           </button>
@@ -1792,15 +2344,24 @@ function RegistrarPago({
               total <= 0 ||
               excede ||
               retencionesTotal > total ||
-              (esCheque && (!chequeNumero.trim() || !chequeBanco.trim()))
+              (esCheque &&
+                chequeModo === "propio" &&
+                (!chequeNumero.trim() || !chequeBanco.trim())) ||
+              // Endosar exige un cheque elegido Y que su importe sea el del
+              // pago: un cheque no se parte, y el backend lo rechaza igual.
+              (esCheque &&
+                chequeModo === "endoso" &&
+                (!valorId || valorElegido?.importe !== neto))
             }
             onClick={() => void guardar()}
           >
             {guardando
               ? "Registrando…"
-              : esCheque
-                ? `Emitir cheque por ${fmt(neto)}`
-                : `Pagar ${fmt(neto)}`}
+              : esCheque && chequeModo === "endoso"
+                ? `Endosar cheque por ${fmt(neto)}`
+                : esCheque
+                  ? `Emitir cheque por ${fmt(neto)}`
+                  : `Pagar ${fmt(neto)}`}
           </button>
         </div>
       </div>
@@ -1822,6 +2383,7 @@ function DetalleEgreso({
   onAnular: () => void;
   onCambio: () => void;
 }) {
+  useCerrarConEscape(onCerrar);
   const { moneda } = useConfigRegional();
   const fmt = (v: number) => formatearMoneda(v, moneda, { decimales: 0 });
   const [pagos, setPagos] = React.useState<PagoDeEgreso[] | null>(null);
@@ -1842,18 +2404,18 @@ function DetalleEgreso({
   React.useEffect(() => cargar(), [cargar]);
 
   return (
-    <div className="egr-modal-bg" role="dialog" aria-modal="true">
-      <div className="egr-modal egr-modal-sm">
-        <div className="egr-modal-head">
+    <div className="mod-bg" role="dialog" aria-modal="true">
+      <div className="mod mod-sm">
+        <div className="mod-head">
           <h2>
             {egreso.descripcion}
             <span className="egr-sub mono">{egreso.numero}</span>
           </h2>
-          <button type="button" className="egr-x" onClick={onCerrar}>
+          <button type="button" className="mod-x" onClick={onCerrar}>
             ×
           </button>
         </div>
-        <div className="egr-modal-body">
+        <div className="mod-body">
           <dl className="egr-dl">
             <dt>Beneficiario</dt>
             <dd>{egreso.beneficiarioNombre}</dd>
@@ -1865,10 +2427,12 @@ function DetalleEgreso({
               ) : null}
             </dd>
             <dt>Competencia</dt>
-            <dd className="mono">{egreso.fechaCompetencia}</dd>
+            <dd>{fechaConDia(egreso.fechaCompetencia)}</dd>
             <dt>Vencimiento</dt>
-            <dd className="mono">
-              {egreso.fechaVencimiento ?? "fue de contado"}
+            <dd>
+              {egreso.fechaVencimiento
+                ? fechaConDia(egreso.fechaVencimiento)
+                : "fue de contado"}
             </dd>
             {egreso.numeroComprobante ? (
               <>
@@ -1968,7 +2532,7 @@ function DetalleEgreso({
             )}
           </div>
         </div>
-        <div className="egr-modal-foot">
+        <div className="mod-foot">
           {puedeAnular && egreso.estado !== "anulado" ? (
             <button type="button" className="btn btn-danger" onClick={onAnular}>
               Anular egreso

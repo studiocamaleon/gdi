@@ -29800,9 +29800,19 @@ body:has(.t-app) {
   --shadow-md:0 1px 2px rgba(20,20,26,.06),0 6px 18px -8px rgba(20,20,26,.14);
   font-family:var(--font-sans);color:var(--ink);font-size:13.5px;line-height:1.45;
   letter-spacing:-.005em;-webkit-font-smoothing:antialiased;font-feature-settings:"ss01","cv11";
-  padding:40px 28px 100px;
+  /* Mismo patrón que `.egr-page` y `.ade-page`: el padre (`main.gp-main`) es
+     un flex en ROW, así que sin `flex: 1` la vista se dimensiona al CONTENIDO
+     y queda angosta —el mismo salto que tenía Egresos—. `min-width: 0` deja
+     que la tabla scrollee adentro en vez de estirar la columna. */
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 32px 28px 90px;
 }
-.gf .wrap{max-width:1120px;margin:0 auto;display:flex;flex-direction:column;gap:26px}
+/* 1600 como el resto de los módulos de Administración, no 1120: con la tabla
+   y la composición al lado, 1120 obligaba a apretar las dos. */
+.gf .wrap{max-width:1600px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
 .gf .mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
 
 .gf .page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:32px}
@@ -35433,48 +35443,73 @@ body:has(.t-app) {
 }
 
 /* Modal */
-.egr-modal-bg {
+/* ═══ Modal (compartido) ═══
+  Lo usan Egresos/Cuentas por pagar y Gastos fijos. Prefijo neutro a
+  propósito: nació dentro de `.egr-` y quedarse ahí habría obligado al
+  segundo módulo a copiarlo, que es como dos modales terminan siendo
+  distintos sin que nadie lo decida.
+
+  El marcado que espera:
+    .mod-bg > .mod > (.mod-head + .mod-body + .mod-foot)
+  Cada hijo directo de `.mod-body` se dibuja como tarjeta blanca sobre el
+  gris; `.mod-suelto` lo exceptúa (un cartel de error trae su propio color) y
+  `.mod-destacado` le da el borde fuerte al bloque que se mira primero.
+*/
+/*
+  El modal es una columna de alto acotado: el encabezado y los botones quedan
+  siempre a la vista y lo que scrollea es el cuerpo.
+
+  Antes scrolleaba el fondo entero, así que en un formulario largo —el de
+  egreso con proveedor, comprobante y pago— había que bajar hasta el final
+  para encontrar "Guardar", y el título se perdía de pantalla.
+*/
+.mod-bg {
   position: fixed;
   inset: 0;
   z-index: 60;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  padding: 40px 16px;
-  overflow-y: auto;
+  padding: 24px 16px;
   background: rgb(10 10 12 / 55%);
 }
 
-.egr-modal {
+.mod {
+  display: flex;
+  flex-direction: column;
   width: 100%;
   max-width: 720px;
+  max-height: 100%;
+  overflow: hidden;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-3);
   box-shadow: 0 18px 50px rgb(10 10 12 / 22%);
 }
 
-.egr-modal.egr-modal-sm {
+.mod.mod-sm {
   max-width: 560px;
 }
 
-.egr-modal-head {
+.mod-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding: 18px 20px 12px;
+  flex: none;
+  padding: 18px 20px 14px;
   border-bottom: 1px solid var(--hairline);
 }
 
-.egr-modal-head h2 {
+.mod-head h2 {
   margin: 0;
   color: var(--ink);
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 660;
+  letter-spacing: -0.01em;
 }
 
-.egr-modal-head .egr-sub {
+.mod-head .mod-sub {
   display: block;
   margin-top: 3px;
   color: var(--muted-text);
@@ -35482,24 +35517,81 @@ body:has(.t-app) {
   font-weight: 400;
 }
 
-.egr-x {
+/* Área de click de 28px: el "×" suelto era un carácter de 22px y había que
+   apuntarle. */
+.mod-x {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin: -2px -4px 0 0;
   color: var(--muted-text);
-  font-size: 22px;
+  font-size: 20px;
   line-height: 1;
   background: none;
   border: 0;
+  border-radius: var(--r-1);
   cursor: pointer;
 }
 
-.egr-modal-body {
-  padding: 16px 20px;
+.mod-x:hover {
+  color: var(--ink);
+  background: var(--surface-2);
 }
 
-.egr-modal-foot {
+/* El cuerpo es el fondo gris sobre el que se apoyan las secciones. Lo que
+   scrollea es esto, no el modal ni la página. */
+.mod-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 20px;
+  background: var(--surface-2);
+}
+
+/* Cada bloque de primer nivel del cuerpo va en su tarjeta blanca sobre el
+   gris: separa "qué gasto es" de "cómo se pagó" sin necesidad de títulos.
+
+   La regla es sobre CUALQUIER hijo directo y no sobre una lista de clases,
+   porque los cuatro modales del módulo tienen cuerpos distintos (el de pago
+   arranca con la lista de egresos, el de detalle con la ficha) y una lista
+   dejaría bloques sueltos sobre el gris. `.mod-suelto` queda afuera: ya trae
+   su propio color de alerta y una tarjeta encima lo apagaría. */
+.mod-body > *:not(.mod-suelto) {
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+}
+
+/* El espaciado lo decide el cuerpo, no el margen que cada bloque traía de
+   cuando iban todos pegados sobre fondo blanco. Los `:first-child`/`:not()`
+   no son decorativos: llevan la regla a (0,2,0) y así le ganan a los
+   `.egr-pagos { margin-top: 18px }` de más abajo, que si no dejarían un
+   espaciado distinto por bloque. */
+.mod-body > *:first-child {
+  margin: 0;
+}
+
+.mod-body > *:not(:first-child) {
+  margin: 12px 0 0;
+}
+
+/* El total sigue siendo el que se mira: ahora que todas las tarjetas son
+   blancas, lo que lo separa es el borde. */
+.mod-body > .mod-destacado {
+  border-color: var(--border-strong);
+}
+
+.mod-foot {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  padding: 12px 20px 18px;
+  flex: none;
+  padding: 14px 20px;
+  background: var(--surface);
   border-top: 1px solid var(--hairline);
 }
 
@@ -35573,6 +35665,23 @@ body:has(.t-app) {
 
 .egr-sub-2 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* Neto · Alícuota · IVA · Comprobante en una fila.
+   No son cuatro columnas iguales: la alícuota es un "21%" y no necesita más
+   que eso, y al comprobante le alcanza con entrar "Sin documento", que es la
+   etiqueta más larga. Lo que sobra se lo quedan los dos importes, que son los
+   que se leen. */
+.egr-sub-importe {
+  grid-template-columns:
+    minmax(0, 1.15fr) minmax(0, 0.7fr)
+    minmax(0, 1.15fr) minmax(0, 1fr);
+}
+
+@media (max-width: 720px) {
+  .egr-sub-importe {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 640px) {
@@ -35912,6 +36021,334 @@ body:has(.t-app) {
 
 @media (max-width: 640px) {
   .egr-ret-fila {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ── El símbolo de moneda nunca queda debajo del número ─── */
+/*
+  `.arc-money input` reserva el lugar del "$" con `padding-left`, pero es
+  (0,1,1) y cualquier módulo que estile sus inputs con el shorthand `padding`
+  se lo borra: `.egr-f input` le ganaba por venir después y `.arc-field.sm
+  input` por especificidad. El número terminaba abajo del símbolo (Egresos y
+  las retenciones de Cobros).
+
+  `arc-money-in` la pone el propio MoneyInput y no estila nada más: está para
+  llegar a (0,2,1) y, desde el final del archivo, ganarle a los dos casos sin
+  ir módulo por módulo ni usar !important.
+*/
+.arc-money input.arc-money-in {
+  padding-left: 24px;
+}
+
+.arc-money.big input.arc-money-in {
+  padding-left: 28px;
+}
+
+/* ═══ Select con búsqueda y títulos de grupo (SelectBuscable) ═══
+   Reemplaza al `<select>` nativo, que se ve distinto en cada sistema
+   operativo y no deja ni buscar ni agrupar. El popover se dibuja en un
+   portal sobre el <body> —el cuerpo del modal lo recortaría—, así que
+   `.selb-pop` es `fixed` y su posición la calcula el componente. */
+.selb {
+  position: relative;
+  min-width: 0;
+}
+
+.selb-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-1);
+  cursor: pointer;
+}
+
+.selb-trigger:hover:not(:disabled) {
+  border-color: var(--ink-2);
+}
+
+.selb-trigger:focus-visible {
+  outline: 2px solid var(--ink-2);
+  outline-offset: -1px;
+}
+
+.selb-trigger:disabled {
+  color: var(--muted-text);
+  background: var(--surface-2);
+  cursor: not-allowed;
+}
+
+.selb-val {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.selb-val.es-placeholder {
+  color: var(--muted-text);
+}
+
+.selb-chev {
+  flex: none;
+  color: var(--muted-text);
+}
+
+.selb-pop {
+  position: fixed;
+  /* El disparador puede ser angosto (la variante mini mide ~60px) pero la
+     lista tiene que poder leerse. */
+  min-width: 150px;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+  box-shadow: 0 12px 32px rgb(10 10 12 / 18%);
+}
+
+.selb-busq {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.selb-busq > svg {
+  flex: none;
+  color: var(--muted-text);
+}
+
+.selb-busq input {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  background: none;
+  border: 0;
+}
+
+.selb-busq input:focus {
+  outline: none;
+}
+
+.selb-limpiar {
+  display: flex;
+  flex: none;
+  padding: 2px;
+  color: var(--muted-text);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.selb-limpiar:hover {
+  color: var(--ink);
+}
+
+.selb-lista {
+  overflow-y: auto;
+  padding: 4px;
+}
+
+/* El título de la naturaleza: se lee como encabezado, no como opción. */
+.selb-grupo {
+  padding: 8px 8px 4px;
+  color: var(--muted-text);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.selb-opt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: var(--r-1);
+  cursor: pointer;
+}
+
+/* Un solo resaltado para el mouse y para las flechas: el componente mueve
+   `es-activa` con el hover también, así no hay dos cursores compitiendo. */
+.selb-opt.es-activa {
+  background: var(--surface-2);
+}
+
+.selb-opt.es-elegida {
+  font-weight: 600;
+}
+
+.selb-opt:disabled {
+  color: var(--muted-text);
+  cursor: not-allowed;
+}
+
+.selb-opt > svg {
+  flex: none;
+  color: var(--ink-2);
+}
+
+.selb-opt-txt {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.selb-opt-lbl {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.selb-opt-det {
+  color: var(--muted-text);
+  font-size: 11px;
+}
+
+.selb-vacio {
+  padding: 14px 10px;
+  color: var(--muted-text);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* La alícuota va en la MISMA línea que la etiqueta "IVA" y no como un campo
+   aparte: es un ajuste del importe de al lado, no otro dato que cargar. Y así
+   los tres campos siguen entrando en una fila. */
+
+/* Comprobante retenido antes de guardar (ComprobantePendiente). Reusa
+   `.arch-drop` del uploader de la casa para que la zona de soltar se vea
+   igual acá que en el detalle; lo propio es la lista de lo que espera. */
+.egr-adj {
+  display: grid;
+  gap: 8px;
+}
+
+.egr-adj-lista {
+  display: grid;
+  gap: 6px;
+}
+
+.egr-adj-fila {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  font-size: 12.5px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-1);
+}
+
+.egr-adj-fila > svg {
+  flex: none;
+  color: var(--muted-text);
+}
+
+.egr-adj-nom {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.egr-adj-peso {
+  flex: none;
+  color: var(--muted-text);
+  font-size: 11px;
+}
+
+.egr-adj-x {
+  display: flex;
+  flex: none;
+  padding: 2px;
+  color: var(--muted-text);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.egr-adj-x:hover {
+  color: var(--signal);
+}
+
+/* El encabezado de Gastos fijos: el total y el botón de alta, como el
+   "Registrar egreso" de Cuentas por pagar. */
+.gf .gf-head-der {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: none;
+}
+
+.gf .gf-ayuda {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+/* El formulario vive ahora dentro del modal compartido, que trae su propio
+   fondo y tarjetas: la grilla sólo tiene que acomodar los campos. */
+.mod-body .form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.mod-body .form-grid .wide {
+  grid-column: 1 / -1;
+}
+
+.mod-body .field {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.mod-body .field > label {
+  margin-bottom: 5px;
+  color: var(--muted-text);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.mod-body .field .opt {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+@media (max-width: 560px) {
+  .mod-body .form-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }

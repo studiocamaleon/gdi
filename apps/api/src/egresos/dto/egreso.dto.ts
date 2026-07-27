@@ -292,11 +292,23 @@ export class RegistrarPagoDto {
   @Type(() => RetencionPracticadaDto)
   retenciones?: RetencionPracticadaDto[];
 
-  /** Obligatorio si el método es cheque_echeq. */
+  /**
+   * Cheque PROPIO que se emite. Con método cheque_echeq va esto o `valorId`.
+   */
   @IsOptional()
   @ValidateNested()
   @Type(() => ChequePropioDto)
   cheque?: ChequePropioDto;
+
+  /**
+   * Cheque DE TERCERO que se endosa: el que entró por un cobro y está en
+   * cartera. Es la otra mitad del pago con cheque y en una imprenta pesa
+   * tanto como emitir uno propio — el cheque que dio un cliente se usa para
+   * pagarle al papelero, y así la plata nunca pasa por el banco.
+   */
+  @IsOptional()
+  @IsUUID()
+  valorId?: string;
 }
 
 export class CrearCategoriaEgresoDto {

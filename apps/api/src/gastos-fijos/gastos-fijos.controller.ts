@@ -17,7 +17,21 @@ import { GastosFijosService } from './gastos-fijos.service';
 import { UpsertGastoFijoDto } from './dto/upsert-gasto-fijo.dto';
 import { Permiso } from '../auth/permiso.decorator';
 
-@Permiso('costos.ver')
+/*
+  Permiso `administracion.configurar` y no `costos.*`.
+
+  Acá vive lo que la empresa gasta por mes: la nómina, el alquiler, el
+  estudio contable, las refinanciaciones. Es información administrativa, no de
+  producción — y ningún precio la usa: el cotizador no lee esta tabla, las
+  tarifas de máquina salen de los centros de costo. Lo único que la consume es
+  el punto de equilibrio (un reporte) y el puente con los egresos recurrentes.
+
+  El cambio de permiso es deliberado y tiene consecuencias en las dos
+  direcciones: el Jefe de producción DEJA de ver la masa salarial —no la
+  necesita— y el Administrativo, que es quien carga estos números, PASA a
+  poder hacerlo. Antes no podía: no tenía `costos.ver`.
+*/
+@Permiso('administracion.configurar')
 @Controller('gastos-fijos')
 @Roles(RolSistema.ADMINISTRADOR, RolSistema.SUPERVISOR)
 export class GastosFijosController {
@@ -28,7 +42,7 @@ export class GastosFijosController {
     return this.gastosFijos.listar(auth);
   }
 
-  @Permiso('costos.gestionar')
+  @Permiso('administracion.configurar')
   @Post()
   crear(
     @CurrentSession() auth: CurrentAuth,
@@ -50,7 +64,7 @@ export class GastosFijosController {
   }
 
   /** Reemplaza las líneas de sueldos por una con la nómina de los legajos. */
-  @Permiso('costos.gestionar')
+  @Permiso('administracion.configurar')
   @Post('alinear-con-nomina')
   alinearConNomina(
     @CurrentSession() auth: CurrentAuth,
@@ -59,13 +73,13 @@ export class GastosFijosController {
     return this.gastosFijos.alinearConNomina(auth, periodo);
   }
 
-  @Permiso('costos.gestionar')
+  @Permiso('administracion.configurar')
   @Post('importar-desde-tarifas')
   importar(@CurrentSession() auth: CurrentAuth) {
     return this.gastosFijos.importarDesdeTarifas(auth);
   }
 
-  @Permiso('costos.gestionar')
+  @Permiso('administracion.configurar')
   @Put(':id')
   actualizar(
     @CurrentSession() auth: CurrentAuth,
@@ -75,13 +89,13 @@ export class GastosFijosController {
     return this.gastosFijos.actualizar(auth, id, payload);
   }
 
-  @Permiso('costos.gestionar')
+  @Permiso('administracion.configurar')
   @Patch(':id/toggle')
   alternar(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.gastosFijos.alternarActivo(auth, id);
   }
 
-  @Permiso('costos.gestionar')
+  @Permiso('administracion.configurar')
   @Delete(':id')
   eliminar(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.gastosFijos.eliminar(auth, id);

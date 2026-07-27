@@ -35,10 +35,59 @@ describe("qué muestra el sidebar", () => {
       expect(admin).toContain("Cuentas por cobrar");
     });
 
+    /**
+     * Las dos caras del mismo mostrador van juntas y en ese orden: primero lo
+     * que te deben, después lo que debés. Que "Egresos" venga al final no es
+     * cosmético — es lo que evita que se lea como sinónimo de cuentas por
+     * pagar, que fue el malentendido que motivó el corte.
+     */
+    it("Cuentas por cobrar y por pagar quedan una al lado de la otra", () => {
+      const admin = hijos(["administracion.ver"], "Administración");
+      const cobrar = admin.indexOf("Cuentas por cobrar");
+      const pagar = admin.indexOf("Cuentas por pagar");
+      expect(cobrar).toBeGreaterThanOrEqual(0);
+      expect(pagar).toBe(cobrar + 1);
+      expect(admin.indexOf("Egresos")).toBe(pagar + 1);
+    });
+
     it("sin la llave del módulo, el grupo no aparece", () => {
       expect(etiquetas(["comercial.ver"])).not.toContain("Administración");
     });
   });
+
+    /**
+     * Gastos fijos se mudó de Costos a Administración con permiso PROPIO.
+     *
+     * Adentro está la masa salarial del taller, así que quién lo ve no puede
+     * quedar librado al permiso del grupo. El cambio corta para los dos lados
+     * y así tiene que ser: el Jefe de producción —que antes lo veía por
+     * `costos.ver`— lo pierde, y el Administrativo —que carga esos números y
+     * NO tenía `costos.ver`— lo gana.
+     */
+    describe("Gastos fijos y la masa salarial", () => {
+      it("no aparece en Costos", () => {
+        expect(hijos(["costos.ver"], "Costos")).not.toContain("Gastos fijos");
+      });
+
+      it("el Jefe de producción ya no lo ve", () => {
+        const jefe = ["panel.ver", "costos.ver", "produccion.gestionar"];
+        expect(hijos(jefe, "Administración")).not.toContain("Gastos fijos");
+        expect(hijos(jefe, "Costos")).not.toContain("Gastos fijos");
+      });
+
+      /** Entrar a Administración no alcanza: pide su propio permiso. */
+      it("no se abre sólo por tener Administración", () => {
+        const admin = hijos(["administracion.ver"], "Administración");
+        expect(admin).toContain("Cuentas por pagar");
+        expect(admin).not.toContain("Gastos fijos");
+      });
+
+      it("el Administrativo sí lo ve", () => {
+        expect(
+          hijos(["administracion.configurar"], "Administración"),
+        ).toContain("Gastos fijos");
+      });
+    });
 
   /**
    * Reportes y Configuración ocupan UNA línea cada uno: adentro, la tira de

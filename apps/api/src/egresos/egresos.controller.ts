@@ -151,6 +151,12 @@ export class EgresosController {
     return this.egresos.saldosPorProveedor(auth);
   }
 
+  /** Los cheques de terceros que están en cartera, para poder endosarlos. */
+  @Get('valores-en-cartera')
+  valoresEnCartera(@CurrentSession() auth: CurrentAuth) {
+    return this.egresos.valoresEnCartera(auth);
+  }
+
   /** "¿En qué se me va la plata?" — por categoría y naturaleza, por competencia. */
   @Get('reporte')
   reporte(

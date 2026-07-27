@@ -111,11 +111,6 @@ export const NAV: NavItem[] = [
       },
       { key: "maquinaria", label: "Maquinaria", href: "/costos/maquinaria" },
       {
-        key: "gastos-fijos",
-        label: "Gastos fijos",
-        href: "/costos/gastos-fijos",
-      },
-      {
         key: "rutas",
         label: "Rutas de producción",
         href: "/productos-servicios/rutas",
@@ -200,12 +195,37 @@ export const NAV: NavItem[] = [
         href: "/administracion/deudores",
       },
       {
-        // Un solo ítem para los dos usos: "Cuentas por pagar" no es una
-        // pantalla aparte sino el filtro de los egresos con vencimiento e
-        // impagos. Ver docs/egresos-y-cuentas-por-pagar-diseno.md
+        // El espejo de Cuentas por cobrar, y va pegado a él a propósito: las
+        // dos preguntas son la misma de cada lado del mostrador. Es el MISMO
+        // módulo que Egresos con otro filtro (ver `ModoEgresos`), no una
+        // pantalla aparte: un gasto de contado nunca fue una cuenta por pagar
+        // y por eso no aparece acá.
+        key: "cuentas-por-pagar",
+        label: "Cuentas por pagar",
+        href: "/administracion/cuentas-por-pagar",
+      },
+      {
+        // Todo lo que sale de la caja, deuda o no: el registro completo, el
+        // análisis de en qué se va la plata y las plantillas recurrentes.
         key: "egresos",
         label: "Egresos",
         href: "/administracion/egresos",
+      },
+      {
+        // Vivía en Costos, y el motivo era falso: NINGÚN precio los usa —el
+        // cotizador no lee esa tabla y las tarifas de máquina salen de los
+        // centros de costo—. Lo que hay acá es lo que gasta la empresa por
+        // mes: nómina, alquiler, contador. Es administrativo.
+        //
+        // Permiso PROPIO y no el del grupo: adentro está la masa salarial, así
+        // que lo ven sólo el Administrador y el Administrativo. Con
+        // `administracion.ver` lo habría visto cualquiera que entre a
+        // Administración; con el de Costos lo veía el Jefe de producción y NO
+        // lo veía el Administrativo, que es quien carga estos números.
+        key: "gastos-fijos",
+        label: "Gastos fijos",
+        href: "/administracion/gastos-fijos",
+        permiso: "administracion.configurar",
       },
     ],
   },

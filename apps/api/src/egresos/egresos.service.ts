@@ -413,10 +413,23 @@ export class EgresosService {
 
     const filas = await this.prisma.egreso.findMany({
       where,
+      /*
+        Los dos tabs ordenan por VENCIMIENTO, que es la fecha que manda en un
+        egreso: cuándo hay que tener la plata.
+
+        · "Por pagar" ascendente — lo que vence primero, primero.
+        · "Todos" descendente — es un histórico y se lee de lo último a lo
+          primero. Lo de contado (sin vencimiento) va al final: no tiene una
+          fecha que compita, y mezclarlo arriba correría lo que sí importa.
+      */
       orderBy:
         q.soloPendientes === 'true'
           ? [{ fechaVencimiento: 'asc' }]
-          : [{ fechaCompetencia: 'desc' }, { createdAt: 'desc' }],
+          : [
+              { fechaVencimiento: { sort: 'desc', nulls: 'last' } },
+              { fechaCompetencia: 'desc' },
+              { createdAt: 'desc' },
+            ],
       take: 300,
       include: {
         categoria: { select: { nombre: true, naturaleza: true } },
@@ -823,12 +836,17 @@ export class EgresosService {
     // valor va a cartera y recién impacta la cuenta cuando se debita. Es el
     // mismo criterio que usa Cobros con los cheques de terceros.
     const esCheque = metodo.tipo === 'cheque_echeq';
-    if (esCheque && !dto.cheque) {
+    if (esCheque && !dto.cheque && !dto.valorId) {
       throw new BadRequestException(
-        'Pagando con cheque hay que indicar número, banco y formato.',
+        'Pagando con cheque hay que emitir uno propio o endosar uno de la cartera.',
       );
     }
-    if (!esCheque && dto.cheque) {
+    if (dto.cheque && dto.valorId) {
+      throw new BadRequestException(
+        'Es un cheque propio o uno endosado, no las dos cosas.',
+      );
+    }
+    if (!esCheque && (dto.cheque || dto.valorId)) {
       throw new BadRequestException(
         'Los datos del cheque sólo aplican a un método de tipo cheque.',
       );
@@ -996,6 +1014,58 @@ export class EgresosService {
         where: { id: pago.id },
         data: { valorId: valor.id },
       });
+    } else if (esCheque && dto.valorId) {
+      /*
+        ENDOSO: el cheque que entró por un cobro se le pasa al proveedor.
+
+        Tampoco toca la cuenta, y por una razón distinta a la del cheque
+        propio: esta plata NUNCA estuvo en una cuenta. El cobro con cheque no
+        genera movimiento —acredita recién cuando el valor se deposita—, así
+        que el cheque va de la cartera a manos del proveedor sin pasar por el
+        banco. Un movimiento acá inventaría una salida de algo que nunca entró.
+      */
+      const valor = await tx.valor.findFirst({
+        where: { id: dto.valorId, tenantId: auth.tenantId },
+      });
+      if (!valor) throw new NotFoundException('Ese cheque no existe.');
+      if (valor.origen !== 'tercero') {
+        throw new BadRequestException(
+          'Sólo se endosan cheques de terceros. Los propios se emiten.',
+        );
+      }
+      if (valor.estado !== 'cartera') {
+        throw new ConflictException(
+          `Ese cheque ya no está en cartera (${valor.estado}).`,
+        );
+      }
+      /*
+        Un cheque no se parte: se endosa entero. Si no coincide con lo que se
+        paga habría que manejar vuelto o saldo a favor, que hoy no existe —y
+        dejarlo pasar escondería una diferencia en la cuenta del proveedor.
+      */
+      if (r2(dec(valor.importe)) !== montoNeto) {
+        throw new BadRequestException(
+          `El cheque es de ${dec(valor.importe)} y estás pagando ${montoNeto}. Un cheque se endosa por su importe exacto.`,
+        );
+      }
+      if (valor.moneda !== cuenta.moneda) {
+        throw new BadRequestException(
+          `El cheque está en ${valor.moneda} y el pago en ${cuenta.moneda}.`,
+        );
+      }
+
+      await tx.valor.update({
+        where: { id: valor.id },
+        data: {
+          estado: 'endosado',
+          // A quién se lo endosamos: sin esto la cartera no sabe dónde fue.
+          proveedorId: [...proveedorIds][0] ?? null,
+        },
+      });
+      await tx.pago.update({
+        where: { id: pago.id },
+        data: { valorId: valor.id },
+      });
     } else {
       // La plata sale YA, y sale el NETO: lo retenido no se le paga al
       // proveedor, se deposita al fisco.
@@ -1027,6 +1097,13 @@ export class EgresosService {
       montoBruto,
       retencionesTotal,
       montoNeto,
+      /**
+       * El pago no movió ninguna cuenta. Vale para los dos caminos del cheque
+       * y por razones distintas: el propio ENTRA a cartera y se debita
+       * después; el endosado SALE de cartera y esa plata nunca estuvo en el
+       * banco. Lo que comparten —y es lo único que el front necesita saber—
+       * es que el saldo no cambió.
+       */
       enCartera: esCheque,
     };
   }
@@ -1093,16 +1170,32 @@ export class EgresosService {
       if (pago.valorId) {
         const valor = await tx.valor.findUnique({
           where: { id: pago.valorId },
-          select: { estado: true },
+          select: { estado: true, origen: true },
         });
-        if (valor && valor.estado !== 'cartera') {
+        /*
+          Deshacer el pago con cheque NO es lo mismo según de quién sea:
+
+          · PROPIO — lo emitimos nosotros para este pago. Si el pago se cae, el
+            cheque no tiene por qué existir: queda rechazado.
+          · ENDOSADO — es de un tercero y entró por un cobro. El pago se cae
+            pero el cheque sigue siendo nuestro: VUELVE A CARTERA para poder
+            usarlo en otra cosa. Marcarlo rechazado lo haría desaparecer de la
+            cartera y perderíamos plata cobrada.
+        */
+        const enJuego = valor?.origen === 'tercero' ? 'endosado' : 'cartera';
+        if (valor && valor.estado !== enJuego) {
           throw new ConflictException(
-            'Ese cheque ya fue debitado: no se puede anular el pago sin revertir el valor primero.',
+            valor.origen === 'tercero'
+              ? `Ese cheque ya no está endosado (${valor.estado}): revisá el valor antes de anular.`
+              : 'Ese cheque ya fue debitado: no se puede anular el pago sin revertir el valor primero.',
           );
         }
         await tx.valor.update({
           where: { id: pago.valorId },
-          data: { estado: 'rechazado', motivoRechazo: dto.motivo.trim() },
+          data:
+            valor?.origen === 'tercero'
+              ? { estado: 'cartera', proveedorId: null }
+              : { estado: 'rechazado', motivoRechazo: dto.motivo.trim() },
         });
       }
 
@@ -1261,6 +1354,37 @@ export class EgresosService {
    * (el flete sin factura, la multa) y esconderlos haría que la suma no cierre
    * contra el total a pagar.
    */
+  /**
+   * Los cheques de terceros disponibles para endosar.
+   *
+   * Salen de los cobros con cheque: el cliente paga con uno, queda en cartera,
+   * y desde acá se le puede endosar a un proveedor. Los propios NO entran
+   * —ésos se emiten, no se endosan— ni los que ya salieron de la cartera.
+   */
+  async valoresEnCartera(auth: CurrentAuth) {
+    const valores = await this.prisma.valor.findMany({
+      where: { tenantId: auth.tenantId, origen: 'tercero', estado: 'cartera' },
+      include: { cliente: { select: { nombre: true } } },
+      // Por fecha de pago: el diferido que vence antes conviene usarlo antes.
+      orderBy: [{ fechaPago: 'asc' }, { createdAt: 'asc' }],
+      take: 200,
+    });
+    return {
+      valores: valores.map((v) => ({
+        id: v.id,
+        numero: v.numero,
+        banco: v.banco,
+        importe: dec(v.importe),
+        moneda: v.moneda,
+        formato: v.formato,
+        modalidad: v.modalidad,
+        fechaPago: v.fechaPago ? v.fechaPago.toISOString().slice(0, 10) : null,
+        /** De quién lo recibimos: es lo que lo identifica al elegirlo. */
+        clienteNombre: v.cliente?.nombre ?? null,
+      })),
+    };
+  }
+
   async saldosPorProveedor(auth: CurrentAuth) {
     const { zonaHoraria } = await regionalDelTenant(this.prisma, auth.tenantId);
     const hoy = soloFecha(hoyEnZona(zonaHoraria));
