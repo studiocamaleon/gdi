@@ -35552,6 +35552,30 @@ body:has(.t-app) {
   grid-column: 1 / -1;
 }
 
+/* Sub-grillas que ocupan la fila entera: agrupan campos que tienen que ir
+   juntos (neto + IVA + comprobante, punto de venta + número) sin depender de
+   cuántos campos condicionales se hayan mostrado más arriba. */
+.egr-sub {
+  display: grid;
+  gap: 12px;
+  grid-column: 1 / -1;
+}
+
+.egr-sub-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.egr-sub-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 640px) {
+  .egr-sub-3,
+  .egr-sub-2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .egr-f > span {
   color: var(--muted-text);
   font-size: 11px;

@@ -663,33 +663,37 @@ function AltaEgreso({
               </label>
             ) : null}
 
-            <label className="egr-f">
-              <span>Neto</span>
-              <CampoMonto valor={neto} onCambio={setNeto} ariaLabel="Neto" />
-            </label>
-
-            <label className="egr-f">
-              <span>IVA</span>
-              <CampoMonto valor={iva} onCambio={setIva} ariaLabel="IVA" />
-            </label>
-
-            <label className="egr-f">
-              <span>Comprobante</span>
-              <select
-                value={tipoComprobante}
-                onChange={(e) => setTipoComprobante(e.target.value)}
-              >
-                {TIPOS_COMPROBANTE_COMPRA.map((t) => (
-                  <option key={t} value={t}>
-                    {TIPO_COMPROBANTE_LABELS[t]}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {/* El importe y el documento van juntos en su propia sub-grilla y
+                no sueltos en la grilla de 2 columnas: arriba hay campos
+                condicionales (beneficiario, vencimiento) y según cuáles se
+                muestren, estos tres caerían corridos de fila. */}
+            <div className="egr-sub egr-sub-3">
+              <label className="egr-f">
+                <span>Neto</span>
+                <CampoMonto valor={neto} onCambio={setNeto} ariaLabel="Neto" />
+              </label>
+              <label className="egr-f">
+                <span>IVA</span>
+                <CampoMonto valor={iva} onCambio={setIva} ariaLabel="IVA" />
+              </label>
+              <label className="egr-f">
+                <span>Comprobante</span>
+                <select
+                  value={tipoComprobante}
+                  onChange={(e) => setTipoComprobante(e.target.value)}
+                >
+                  {TIPOS_COMPROBANTE_COMPRA.map((t) => (
+                    <option key={t} value={t}>
+                      {TIPO_COMPROBANTE_LABELS[t]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
 
             {tipoComprobante !== "SIN_DOCUMENTO" ? (
-              <>
-                <label className="egr-f egr-f-sm">
+              <div className="egr-sub egr-sub-2">
+                <label className="egr-f">
                   <span>Punto de venta</span>
                   <input
                     value={puntoVenta}
@@ -697,7 +701,7 @@ function AltaEgreso({
                     placeholder="0001"
                   />
                 </label>
-                <label className="egr-f egr-f-sm">
+                <label className="egr-f">
                   <span>Número</span>
                   <input
                     value={numeroComprobante}
@@ -705,7 +709,7 @@ function AltaEgreso({
                     placeholder="00012345"
                   />
                 </label>
-              </>
+              </div>
             ) : null}
 
             {yaPagado ? (
