@@ -57,6 +57,7 @@ const CAMPO_POR_SCOPE: Record<ArchivoScope, keyof Archivo | null> = {
   COTIZACION: 'cotizacionId',
   COMPROBANTE: 'comprobanteId',
   COBRO: 'cobroId',
+  EGRESO: 'egresoId',
   PRODUCTO: 'productoId',
   PROVEEDOR: 'proveedorId',
 };

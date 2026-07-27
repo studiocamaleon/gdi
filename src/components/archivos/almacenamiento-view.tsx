@@ -18,6 +18,7 @@ const ETIQUETA_SCOPE: Record<ArchivoScope, string> = {
   COTIZACION: "Presupuestos",
   COMPROBANTE: "Comprobantes",
   COBRO: "Cobros",
+  EGRESO: "Facturas de compra",
   PRODUCTO: "Productos",
   PROVEEDOR: "Proveedores",
 };

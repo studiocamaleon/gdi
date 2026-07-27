@@ -67,6 +67,10 @@ export class ProveedoresService {
         telefonoCodigo: normalized.telefonoCodigo,
         telefonoNumero: normalized.telefonoNumero,
         paisCodigo: normalized.pais,
+        cuit: normalized.cuit,
+        condicionIva: normalized.condicionIva,
+        condicionPagoDias: normalized.condicionPagoDias,
+        cbuAlias: normalized.cbuAlias,
         contactos: {
           create: normalized.contactos.map((contacto) => ({
             tenantId: auth.tenantId,
@@ -116,6 +120,10 @@ export class ProveedoresService {
           telefonoCodigo: normalized.telefonoCodigo,
           telefonoNumero: normalized.telefonoNumero,
           paisCodigo: normalized.pais,
+          cuit: normalized.cuit,
+          condicionIva: normalized.condicionIva,
+          condicionPagoDias: normalized.condicionPagoDias,
+          cbuAlias: normalized.cbuAlias,
         },
       });
 
@@ -207,6 +215,12 @@ export class ProveedoresService {
       pais: payload.pais.trim().toUpperCase(),
       telefonoCodigo: payload.telefonoCodigo.trim(),
       telefonoNumero: payload.telefonoNumero.trim(),
+      // Datos de pago: vacío se guarda como null, no como cadena vacía — un
+      // CUIT "" pasaría el chequeo de "¿tiene CUIT?" y no lo tiene.
+      cuit: payload.cuit?.trim() || null,
+      condicionIva: payload.condicionIva ?? null,
+      condicionPagoDias: payload.condicionPagoDias ?? null,
+      cbuAlias: payload.cbuAlias?.trim() || null,
       contactos: this.normalizeContactos(payload.contactos),
       direcciones: this.normalizeDirecciones(payload.direcciones),
     };
@@ -273,6 +287,10 @@ export class ProveedoresService {
       telefonoCodigo: proveedor.telefonoCodigo,
       telefonoNumero: proveedor.telefonoNumero,
       pais: proveedor.paisCodigo,
+      cuit: proveedor.cuit ?? '',
+      condicionIva: proveedor.condicionIva ?? '',
+      condicionPagoDias: proveedor.condicionPagoDias,
+      cbuAlias: proveedor.cbuAlias ?? '',
       contacto: contactoPrincipal?.nombre ?? '',
       ciudad: direccionPrincipal?.ciudad ?? '',
       contactos: proveedor.contactos.map((contacto) => ({

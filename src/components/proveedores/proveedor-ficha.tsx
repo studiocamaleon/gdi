@@ -67,7 +67,21 @@ type DatosGeneralesState = {
   telefonoNumero: string;
   email: string;
   pais: string;
+  /** Datos para PAGARLE — ver docs/egresos-y-cuentas-por-pagar-diseno.md */
+  cuit: string;
+  condicionIva: string;
+  /** Texto y no número: el input vacío tiene que poder quedar vacío. */
+  condicionPagoDias: string;
+  cbuAlias: string;
 };
+
+const CONDICIONES_IVA = [
+  { value: "", label: "Sin especificar" },
+  { value: "RI", label: "Responsable inscripto" },
+  { value: "MONOTRIBUTO", label: "Monotributo" },
+  { value: "EXENTO", label: "Exento" },
+  { value: "CF", label: "Consumidor final" },
+];
 
 const countryItems = latamCountries.map((country) => ({
   label: `${country.flag} ${country.name}`,
@@ -108,6 +122,13 @@ function buildPayload(
   return {
     nombre: datosGenerales.nombre.trim(),
     razonSocial: datosGenerales.razonSocial.trim() || undefined,
+    cuit: datosGenerales.cuit.replace(/\D/g, "") || undefined,
+    condicionIva: datosGenerales.condicionIva || undefined,
+    condicionPagoDias:
+      datosGenerales.condicionPagoDias.trim() === ""
+        ? undefined
+        : Number(datosGenerales.condicionPagoDias),
+    cbuAlias: datosGenerales.cbuAlias.trim() || undefined,
     email: datosGenerales.email.trim(),
     pais: datosGenerales.pais.trim(),
     telefonoCodigo: datosGenerales.telefonoCodigo.trim(),
@@ -198,6 +219,13 @@ export function ProveedorFicha({ proveedor, mode }: ProveedorFichaProps) {
     telefonoNumero: proveedor.telefonoNumero,
     email: proveedor.email,
     pais: proveedor.pais,
+    cuit: proveedor.cuit,
+    condicionIva: proveedor.condicionIva,
+    condicionPagoDias:
+      proveedor.condicionPagoDias == null
+        ? ""
+        : String(proveedor.condicionPagoDias),
+    cbuAlias: proveedor.cbuAlias,
   });
   const [contactos, setContactos] = React.useState(proveedor.contactos);
   const [direcciones, setDirecciones] = React.useState(proveedor.direcciones);
@@ -445,6 +473,92 @@ export function ProveedorFicha({ proveedor, mode }: ProveedorFichaProps) {
                   }))
                 }
                 placeholder="Ej. Cafe del Centro SRL"
+              />
+            </Field>
+
+            {/* Datos para PAGARLE. Sin esto, el proveedor sirve para
+                referenciar materiales pero no para cargar su factura ni
+                emitirle un pago. Ver docs/egresos-y-cuentas-por-pagar-diseno.md */}
+            <Field>
+              <FieldLabel htmlFor="proveedor-cuit">CUIT</FieldLabel>
+              <Input
+                id="proveedor-cuit"
+                value={datosGenerales.cuit}
+                onChange={(event) =>
+                  setDatosGenerales((current) => ({
+                    ...current,
+                    cuit: event.target.value.replace(/\D/g, "").slice(0, 11),
+                  }))
+                }
+                placeholder="30712345671"
+                inputMode="numeric"
+              />
+            </Field>
+
+            <Field>
+              <FieldLabel htmlFor="proveedor-condicion-iva">
+                Condicion frente al IVA
+              </FieldLabel>
+              <Select
+                items={CONDICIONES_IVA}
+                value={datosGenerales.condicionIva}
+                onValueChange={(value) =>
+                  setDatosGenerales((current) => ({
+                    ...current,
+                    condicionIva: value ?? "",
+                  }))
+                }
+              >
+                <SelectTrigger id="proveedor-condicion-iva" className="w-full">
+                  <SelectValue placeholder="Sin especificar" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {CONDICIONES_IVA.map((c) => (
+                      <SelectItem key={c.value} value={c.value}>
+                        {c.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </Field>
+
+            <Field>
+              <FieldLabel htmlFor="proveedor-plazo">
+                Condicion de pago (dias)
+              </FieldLabel>
+              <Input
+                id="proveedor-plazo"
+                value={datosGenerales.condicionPagoDias}
+                onChange={(event) =>
+                  setDatosGenerales((current) => ({
+                    ...current,
+                    condicionPagoDias: event.target.value
+                      .replace(/\D/g, "")
+                      .slice(0, 3),
+                  }))
+                }
+                placeholder="30"
+                inputMode="numeric"
+              />
+              <FieldDescription>
+                Precarga el vencimiento al cargar una factura suya. 0 = contado.
+              </FieldDescription>
+            </Field>
+
+            <Field>
+              <FieldLabel htmlFor="proveedor-cbu">CBU o alias</FieldLabel>
+              <Input
+                id="proveedor-cbu"
+                value={datosGenerales.cbuAlias}
+                onChange={(event) =>
+                  setDatosGenerales((current) => ({
+                    ...current,
+                    cbuAlias: event.target.value,
+                  }))
+                }
+                placeholder="mi.alias.banco"
               />
             </Field>
 

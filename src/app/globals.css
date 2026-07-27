@@ -35124,3 +35124,806 @@ body:has(.t-app) {
 
 
 
+
+/* ── Egresos y Cuentas por pagar ──────────────────────────────────────────
+   Prefijo egr- en TODA clase, y las hijas SIEMPRE escritas como descendientes
+   (.egr-kpi .l): la hoja es global y nombres como .l o .v pertenecen a otras
+   vistas. Ver docs/egresos-y-cuentas-por-pagar-diseno.md */
+.egr-page {
+  /* `flex: 1` y NO `width: 100%`: el padre (`main.gp-main`) es un flex en ROW,
+     así que un item con `flex: 0 1 auto` se dimensiona al CONTENIDO. Eso hacía
+     que cada pestaña midiera distinto —1059, 1004, 958, 1084— y que la vista
+     saltara al cambiar de tab. Mismo patrón que `.ade-page` de Cuentas por
+     cobrar, que lo resuelve con flex:1 + minHeight:0 en el contenedor.
+     `min-width: 0` es lo que deja que las tablas anchas scrolleen adentro en
+     vez de estirar la columna. */
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 32px 28px 90px;
+}
+
+/* El tope de legibilidad va en un wrap interno, no en el contenedor: así el
+   contenedor siempre ocupa la columna y sólo el contenido se centra. Más
+   generoso que los 1240 del resto porque acá hay tablas de siete columnas
+   (el aging por proveedor) que quedaban apretadas. */
+.egr-wrap {
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.egr-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.egr-head h1 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 680;
+  letter-spacing: -0.01em;
+}
+
+.egr-head .sub {
+  margin-top: 4px;
+  max-width: 68ch;
+  color: var(--muted-text);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+/* Tira de KPIs: la pregunta del lunes a la mañana */
+.egr-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+@media (max-width: 900px) {
+  .egr-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.egr-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 13px 15px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+}
+
+.egr-kpi .l {
+  color: var(--muted-text);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.egr-kpi .v {
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 650;
+  line-height: 1.15;
+}
+
+.egr-kpi .h {
+  color: var(--muted-text);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.egr-kpi.mal {
+  border-color: color-mix(in srgb, var(--signal) 32%, transparent);
+  background: var(--signal-bg);
+}
+
+.egr-kpi.mal .v {
+  color: var(--signal);
+}
+
+.egr-kpi.alerta {
+  border-color: color-mix(in srgb, var(--signal) 22%, transparent);
+}
+
+.egr-kpi.bien .v {
+  color: var(--ok);
+}
+
+/* Toolbar: tabs + búsqueda + acción de pago */
+.egr-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.egr-tabs {
+  display: inline-flex;
+  padding: 3px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.egr-tabs button {
+  padding: 6px 14px;
+  color: var(--muted-text);
+  font-size: 12.5px;
+  font-weight: 600;
+  background: none;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.egr-tabs button.on {
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.egr-search {
+  flex: 1 1 260px;
+  min-width: 200px;
+  padding: 8px 12px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+}
+
+/* Tabla */
+.egr-tabla-wrap {
+  overflow-x: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+}
+
+.egr-tabla {
+  width: 100%;
+  min-width: 900px;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.egr-tabla th {
+  padding: 10px 14px;
+  color: var(--muted-text);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+
+.egr-tabla td {
+  padding: 11px 14px;
+  vertical-align: top;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.egr-tabla tr:last-child td {
+  border-bottom: 0;
+}
+
+.egr-tabla .num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.egr-tabla th.num {
+  text-align: right;
+}
+
+.egr-tabla .egr-check {
+  width: 34px;
+  padding-right: 0;
+}
+
+.egr-tabla .egr-sub {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted-text);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+/* El vencimiento manda el color de la fila */
+.egr-tabla tr.egr-vencido td:first-child,
+.egr-tabla tr.egr-vencido .mono {
+  color: var(--signal);
+}
+
+.egr-tabla tr.egr-vencido {
+  background: color-mix(in srgb, var(--signal-bg) 45%, transparent);
+}
+
+.egr-tabla tr.egr-urgente td:first-child {
+  color: var(--warn, #a16207);
+}
+
+.egr-link {
+  padding: 0;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.egr-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.egr-badge {
+  display: inline-block;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.egr-badge.pagado {
+  color: var(--ok);
+  background: var(--ok-bg);
+  border-color: color-mix(in srgb, var(--ok) 28%, transparent);
+}
+
+.egr-badge.parcial {
+  color: var(--warn, #a16207);
+  background: var(--warn-bg);
+  border-color: color-mix(in srgb, var(--warn, #a16207) 26%, transparent);
+}
+
+.egr-badge.anulado {
+  color: var(--muted-text);
+  text-decoration: line-through;
+}
+
+/* Estados y avisos */
+.egr-empty {
+  padding: 54px 24px;
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+}
+
+.egr-empty .ttl {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.egr-empty .sub {
+  margin: 6px auto 0;
+  max-width: 52ch;
+  color: var(--muted-text);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.egr-error {
+  margin-top: 12px;
+  padding: 10px 14px;
+  color: var(--signal);
+  font-size: 12px;
+  line-height: 1.45;
+  background: var(--signal-bg);
+  border: 1px solid color-mix(in srgb, var(--signal) 22%, transparent);
+  border-radius: var(--r-2);
+}
+
+.egr-cargando {
+  margin-top: 10px;
+  color: var(--muted-text);
+  font-size: 11.5px;
+  text-align: center;
+}
+
+/* Modal */
+.egr-modal-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 16px;
+  overflow-y: auto;
+  background: rgb(10 10 12 / 55%);
+}
+
+.egr-modal {
+  width: 100%;
+  max-width: 720px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-3);
+  box-shadow: 0 18px 50px rgb(10 10 12 / 22%);
+}
+
+.egr-modal.egr-modal-sm {
+  max-width: 560px;
+}
+
+.egr-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px 12px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.egr-modal-head h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 660;
+}
+
+.egr-modal-head .egr-sub {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted-text);
+  font-size: 11.5px;
+  font-weight: 400;
+}
+
+.egr-x {
+  color: var(--muted-text);
+  font-size: 22px;
+  line-height: 1;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.egr-modal-body {
+  padding: 16px 20px;
+}
+
+.egr-modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px 18px;
+  border-top: 1px solid var(--hairline);
+}
+
+/* El switch que define el resto del formulario */
+.egr-switch {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+  cursor: pointer;
+}
+
+.egr-switch input {
+  margin-top: 2px;
+}
+
+.egr-switch b {
+  display: block;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.egr-switch small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted-text);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+/* Formulario */
+.egr-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .egr-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.egr-f {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.egr-f.egr-f-wide {
+  grid-column: 1 / -1;
+}
+
+/* Sub-grillas que ocupan la fila entera: agrupan campos que tienen que ir
+   juntos (neto + IVA + comprobante, punto de venta + número) sin depender de
+   cuántos campos condicionales se hayan mostrado más arriba. */
+.egr-sub {
+  display: grid;
+  gap: 12px;
+  grid-column: 1 / -1;
+}
+
+.egr-sub-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.egr-sub-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 640px) {
+  .egr-sub-3,
+  .egr-sub-2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.egr-f > span {
+  color: var(--muted-text);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.egr-f input,
+.egr-f select,
+.egr-f textarea {
+  padding: 8px 10px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-1);
+}
+
+.egr-f textarea {
+  resize: vertical;
+}
+
+.egr-f .egr-hint {
+  color: var(--muted-text);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.egr-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 14px;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-2);
+}
+
+.egr-total span {
+  color: var(--muted-text);
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.egr-total strong {
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+/* Pago de varios egresos */
+.egr-pago-lista {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.egr-pago-fila {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-1);
+}
+
+.egr-pago-fila b {
+  display: block;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.egr-pago-fila .egr-sub {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted-text);
+  font-size: 11px;
+}
+
+/* Ficha del egreso */
+.egr-dl {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 6px 14px;
+  margin: 0;
+  font-size: 12.5px;
+}
+
+.egr-dl dt {
+  color: var(--muted-text);
+  font-weight: 600;
+}
+
+.egr-dl dd {
+  margin: 0;
+  color: var(--ink-2);
+}
+
+.egr-dl dd small {
+  color: var(--muted-text);
+}
+
+.egr-pagos {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--hairline);
+}
+
+.egr-pagos-t {
+  margin-bottom: 8px;
+  color: var(--muted-text);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.egr-pagos .egr-sub {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted-text);
+  font-size: 11px;
+}
+
+.egr-pago-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.egr-pago-item:last-child {
+  border-bottom: 0;
+}
+
+.egr-pago-item.anulado {
+  color: var(--muted-text);
+  text-decoration: line-through;
+}
+
+/* Tab Análisis: "¿en qué se me va la plata?" */
+.egr-analisis {
+  display: grid;
+  gap: 14px;
+}
+
+.egr-kpi .v.egr-periodo {
+  font-size: 15px;
+}
+
+.egr-analisis-cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .egr-analisis-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.egr-panel {
+  padding: 14px 16px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+}
+
+.egr-panel-t {
+  margin-bottom: 10px;
+  color: var(--muted-text);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.egr-linea {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 90px 48px 110px;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.egr-linea + .egr-linea {
+  border-top: 1px solid var(--hairline);
+}
+
+.egr-linea-n {
+  min-width: 0;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.egr-linea-n small {
+  display: block;
+  margin-top: 1px;
+  color: var(--muted-text);
+  font-size: 10.5px;
+  font-weight: 400;
+}
+
+.egr-linea-b {
+  height: 6px;
+  overflow: hidden;
+  background: var(--hairline);
+  border-radius: 999px;
+}
+
+.egr-linea-f {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  background: var(--chart-3);
+  border-radius: 999px;
+}
+
+/* Lo que NO es gasto del período se dibuja apagado: sale de la caja pero no
+   compite con el gasto en la lectura. */
+.egr-linea-f.off {
+  background: var(--border-strong);
+}
+
+.egr-linea-p {
+  justify-self: end;
+  color: var(--muted-text);
+  font-size: 11.5px;
+}
+
+.egr-linea-m {
+  justify-self: end;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .egr-linea {
+    grid-template-columns: minmax(0, 1fr) 44px 100px;
+  }
+
+  .egr-linea-b {
+    display: none;
+  }
+}
+
+/* Fila de totales de la matriz por proveedor */
+.egr-tabla tr.egr-fila-total td {
+  border-top: 1.5px solid var(--border-strong);
+  background: var(--surface-2);
+  font-weight: 650;
+}
+
+.egr-tabla .strong {
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.egr-tabla .egr-mal {
+  color: var(--signal);
+}
+
+/* Bloques del modal de pago: cheque y retenciones */
+.egr-sub-bloque {
+  margin-top: 14px;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+}
+
+.egr-sub-bloque .egr-panel-t {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.egr-link.egr-mini {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--signal);
+}
+
+.egr-ret-fila {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 160px 60px;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 0;
+}
+
+.egr-ret-fila + .egr-ret-fila {
+  border-top: 1px solid var(--hairline);
+}
+
+.egr-select {
+  padding: 8px 10px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-1);
+}
+
+.egr-nota-inline {
+  margin-top: 8px;
+  color: var(--muted-text);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+@media (max-width: 640px) {
+  .egr-ret-fila {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

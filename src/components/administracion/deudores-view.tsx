@@ -74,7 +74,7 @@ export function DeudoresView({ initialFilas }: { initialFilas: FilaDeudor[] }) {
       <div className="ade-wrap">
         <div className="ade-head">
           <div>
-            <h1>Aging de deudores</h1>
+            <h1>Cuentas por cobrar</h1>
             <div className="sub">
               Antigüedad de la deuda por cliente. Cuanto más intenso el color,
               mayor el saldo vencido.

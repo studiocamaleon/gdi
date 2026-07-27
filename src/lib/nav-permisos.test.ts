@@ -32,7 +32,7 @@ describe("qué muestra el sidebar", () => {
     it("Comprobantes y Facturación siguen a administracion.ver", () => {
       const admin = hijos(["administracion.ver"], "Administración");
       expect(admin).toContain("Comprobantes");
-      expect(admin).toContain("Deudores");
+      expect(admin).toContain("Cuentas por cobrar");
     });
 
     it("sin la llave del módulo, el grupo no aparece", () => {
