@@ -1,8 +1,7 @@
 # Centros de costo: carga manual, desacoplada del sistema
 
 Fecha: 2026-07-27
-Rama: `feat/centros-costo-refactor`
-Estado: diseño cerrado, implementación no arrancada
+Estado: IMPLEMENTADO y mergeado a main (F0 a F7 + tipo binario)
 
 ## 1. El problema
 
