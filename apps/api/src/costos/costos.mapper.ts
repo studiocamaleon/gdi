@@ -207,7 +207,15 @@ export class CostosMapper {
     if (linea.seccion === SeccionCentroCostoLineaDto.empleado) {
       const salario = new Prisma.Decimal(linea.salarioMensual ?? 0);
       const cargas = new Prisma.Decimal(linea.cargasPct ?? 0).div(100);
-      return salario.mul(cargas.plus(1)).toDecimalPlaces(2);
+      // El centro absorbe la parte del costo de la persona que le corresponde,
+      // no el sueldo entero: alguien repartido entre cuatro centros se contaría
+      // cuatro veces y todas las tarifas saldrían infladas.
+      //
+      // Ausente significa 100%, no 0%: así una fila a la que todavía no se le
+      // cargó la dedicación cuesta lo que costaba, en vez de desaparecer del
+      // costo del centro sin que nadie lo note.
+      const dedicacion = new Prisma.Decimal(linea.dedicacionPct ?? 100).div(100);
+      return salario.mul(cargas.plus(1)).mul(dedicacion).toDecimalPlaces(2);
     }
     if (linea.seccion === SeccionCentroCostoLineaDto.activo_fijo) {
       const vida = linea.vidaUtilRestanteMeses ?? 0;

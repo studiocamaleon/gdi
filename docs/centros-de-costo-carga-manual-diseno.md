@@ -156,8 +156,18 @@ dependa de recorrer ramas por sección:
 | Sección | `importeMensual` |
 |---|---|
 | `GASTO_GENERAL` | el valor cargado |
-| `EMPLEADO` | `salarioMensual × (1 + cargasPct / 100)` |
+| `EMPLEADO` | `salarioMensual × (1 + cargasPct / 100) × (dedicacionPct / 100)` |
 | `ACTIVO_FIJO` | `(valorActual − valorFinalVida) / vidaUtilRestanteMeses` |
+
+**El centro absorbe la parte del costo de la persona que le corresponde, no el
+sueldo entero.** Es la única forma de que la suma de los centros dé lo que la
+empresa gasta de verdad: con los datos reales, Ivan Sanz está en cuatro centros y
+Hector Alence en dos, así que sin repartir la nómina pasaría de $16,5M a más de
+$30M y todas las tarifas —y todos los presupuestos— saldrían casi al doble.
+
+`dedicacionPct` ausente significa **100%**, no 0%: una fila a la que todavía no
+se le cargó la dedicación cuesta lo que costaba, en vez de desaparecer del costo
+del centro sin que nadie lo note.
 
 En las tres, `importeMensual` se redondea a 2 decimales. El porcentaje de cargas
 se **carga y se guarda como porcentaje** — nunca como monto — y la UI lo muestra

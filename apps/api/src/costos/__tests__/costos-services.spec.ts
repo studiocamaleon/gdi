@@ -211,6 +211,7 @@ describe('Costos services', () => {
       mapper.computeImporteLinea(linea).toNumber();
 
     // Los mismos números del modelo de referencia, que cierran al centavo.
+    // Sin dedicación cargada se asume 100%: la fila cuesta lo que costaba.
     expect(
       importe({
         seccion: SeccionCentroCostoLineaDto.empleado,
@@ -218,6 +219,28 @@ describe('Costos services', () => {
         cargasPct: 40,
       }),
     ).toBe(2660);
+
+    // El centro absorbe la parte que le corresponde de la persona, no el
+    // sueldo entero: alguien repartido entre cuatro centros se contaría cuatro
+    // veces y todas las tarifas saldrían infladas.
+    expect(
+      importe({
+        seccion: SeccionCentroCostoLineaDto.empleado,
+        salarioMensual: 1900,
+        cargasPct: 40,
+        dedicacionPct: 25,
+      }),
+    ).toBe(665);
+
+    // Y las partes de una misma persona suman su costo, ni más ni menos.
+    const persona = (pct: number) =>
+      importe({
+        seccion: SeccionCentroCostoLineaDto.empleado,
+        salarioMensual: 1625000,
+        cargasPct: 50,
+        dedicacionPct: pct,
+      });
+    expect(persona(90) + persona(10)).toBe(persona(100));
     expect(
       importe({
         seccion: SeccionCentroCostoLineaDto.activo_fijo,

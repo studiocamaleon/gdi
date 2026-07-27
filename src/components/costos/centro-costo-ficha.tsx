@@ -103,7 +103,7 @@ const SECCIONES: {
     seccion: "empleado",
     titulo: "Gastos de empleados",
     ayuda:
-      "Las personas que trabajan en el sector. El costo total sale del sueldo más el porcentaje de cargas.",
+      "Las personas que trabajan en el sector. Se carga el sueldo completo de cada una y qué parte de su tiempo le dedica al centro: el centro absorbe esa proporción, no el sueldo entero.",
   },
   {
     seccion: "activo_fijo",
@@ -125,7 +125,9 @@ function nuevaLinea(seccion: SeccionCentroCostoLinea): LineaLocal {
     ocupacion: "",
     salarioMensual: "",
     cargasPct: "",
-    dedicacionPct: "",
+    // Las filas nuevas arrancan en 100%: el default queda a la vista en vez de
+    // estar escondido en el cálculo.
+    dedicacionPct: seccion === "empleado" ? "100" : "",
     vidaUtilRestanteMeses: "",
     valorActual: "",
     valorFinalVida: "",
@@ -165,9 +167,15 @@ const numero = (valor: string) => {
  */
 function importeDeLinea(linea: LineaLocal): number {
   if (linea.seccion === "empleado") {
+    // Ausente = 100%: una fila sin dedicación cargada cuesta lo que costaba.
+    const dedicacion =
+      linea.dedicacionPct.trim() === "" ? 100 : numero(linea.dedicacionPct);
     return (
       Math.round(
-        numero(linea.salarioMensual) * (1 + numero(linea.cargasPct) / 100) * 100,
+        numero(linea.salarioMensual) *
+          (1 + numero(linea.cargasPct) / 100) *
+          (dedicacion / 100) *
+          100,
       ) / 100
     );
   }
