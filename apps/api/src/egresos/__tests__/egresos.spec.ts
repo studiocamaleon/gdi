@@ -588,6 +588,264 @@ describe('EgresosService', () => {
 
   // ── F2: cuotas (B11) ─────────────────────────────────────────────────
 
+  // ── Endosar un cheque de tercero ─────────────────────────────────────
+
+  /**
+   * El cheque que entró por un cobro y se le pasa al proveedor.
+   *
+   * En una imprenta pesa tanto como emitir uno propio: el cheque del cliente
+   * paga al papelero y la plata nunca pasa por el banco. Lo que hay que
+   * cuidar es que el valor no se duplique ni se pierda — es plata cobrada que
+   * vive en una sola fila.
+   */
+  describe('endoso de cheque de tercero', () => {
+    /** Un cheque en cartera, como el que deja un cobro. */
+    const enCartera = async (importe: number, numero: string) =>
+      prisma.valor.create({
+        data: {
+          tenantId,
+          origen: 'tercero',
+          formato: 'fisico',
+          modalidad: 'diferido',
+          numero,
+          banco: 'Nación',
+          importe,
+          moneda: 'ARS',
+          fechaPago: new Date('2026-12-15'),
+          estado: 'cartera',
+        },
+      });
+
+    const facturaDe = async (total: number) =>
+      service.crear(auth, {
+        descripcion: 'Factura a endosar',
+        categoriaEgresoId: catMateriales,
+        proveedorId,
+        fechaVencimiento: '2026-10-30',
+        neto: total,
+        tipoComprobante: 'FA',
+        puntoVenta: '0007',
+        numeroComprobante: nroDoc(),
+      });
+
+    it('salda la factura, saca el cheque de cartera y NO toca la cuenta', async () => {
+      const valor = await enCartera(150_000, 'END-0001');
+      const { id } = await facturaDe(150_000);
+      const saldoAntes = await saldoCuenta();
+
+      const pago = await service.registrarPago(auth, {
+        metodoPagoId: metodoChequeId,
+        cuentaOrigenId: cuentaId,
+        imputaciones: [{ egresoId: id, monto: 150_000 }],
+        valorId: valor.id,
+      });
+
+      const egreso = await prisma.egreso.findUniqueOrThrow({ where: { id } });
+      expect(egreso.estado).toBe('pagado');
+
+      const despues = await prisma.valor.findUniqueOrThrow({
+        where: { id: valor.id },
+      });
+      expect(despues.estado).toBe('endosado');
+      // A quién se lo dimos: sin esto la cartera no sabe dónde fue.
+      expect(despues.proveedorId).toBe(proveedorId);
+
+      // Esta plata nunca estuvo en el banco: no puede salir de ahí.
+      expect(await saldoCuenta()).toBe(saldoAntes);
+      expect(
+        await prisma.movimientoFondos.count({
+          where: { tenantId, pagoId: pago.id },
+        }),
+      ).toBe(0);
+    });
+
+    /** Un cheque no se parte: o cubre el pago exacto o no sirve. */
+    it('rechaza endosar un cheque de importe distinto al pago', async () => {
+      const valor = await enCartera(200_000, 'END-0002');
+      const { id } = await facturaDe(150_000);
+
+      await expect(
+        service.registrarPago(auth, {
+          metodoPagoId: metodoChequeId,
+          cuentaOrigenId: cuentaId,
+          imputaciones: [{ egresoId: id, monto: 150_000 }],
+          valorId: valor.id,
+        }),
+      ).rejects.toThrow(/importe exacto/i);
+
+      const igual = await prisma.valor.findUniqueOrThrow({
+        where: { id: valor.id },
+      });
+      expect(igual.estado).toBe('cartera');
+    });
+
+    /** El mismo cheque no puede pagar dos facturas. */
+    it('no deja endosar dos veces el mismo cheque', async () => {
+      const valor = await enCartera(90_000, 'END-0003');
+      const primera = await facturaDe(90_000);
+      const segunda = await facturaDe(90_000);
+
+      await service.registrarPago(auth, {
+        metodoPagoId: metodoChequeId,
+        cuentaOrigenId: cuentaId,
+        imputaciones: [{ egresoId: primera.id, monto: 90_000 }],
+        valorId: valor.id,
+      });
+
+      await expect(
+        service.registrarPago(auth, {
+          metodoPagoId: metodoChequeId,
+          cuentaOrigenId: cuentaId,
+          imputaciones: [{ egresoId: segunda.id, monto: 90_000 }],
+          valorId: valor.id,
+        }),
+      ).rejects.toThrow(/ya no está en cartera/i);
+    });
+
+    /**
+     * El caso real: factura de 300.000, cheque de 200.000 y el resto por
+     * transferencia. NO es un cheque partido —el cheque respalda entero el
+     * pago que respalda—: son DOS pagos sobre la misma factura, que es lo que
+     * de verdad pasó y lo que permite que cada instrumento se concilie por su
+     * lado (el cheque se debita en diciembre, la transferencia salió hoy).
+     */
+    it('un cheque puede cubrir PARTE de una factura y el resto ir por otro medio', async () => {
+      const valor = await enCartera(200_000, 'END-0010');
+      const { id } = await facturaDe(300_000);
+      const saldoAntes = await saldoCuenta();
+
+      // 1) Los 200.000 del cheque, endosado.
+      await service.registrarPago(auth, {
+        metodoPagoId: metodoChequeId,
+        cuentaOrigenId: cuentaId,
+        imputaciones: [{ egresoId: id, monto: 200_000 }],
+        valorId: valor.id,
+      });
+
+      const aMedias = await prisma.egreso.findUniqueOrThrow({ where: { id } });
+      expect(aMedias.estado).toBe('parcial');
+      expect(Number(aMedias.pagadoTotal)).toBe(200_000);
+      expect(await saldoCuenta()).toBe(saldoAntes); // el cheque no toca la caja
+
+      // 2) Los 100.000 que faltan, por transferencia.
+      await service.registrarPago(auth, {
+        metodoPagoId,
+        cuentaOrigenId: cuentaId,
+        imputaciones: [{ egresoId: id, monto: 100_000 }],
+      });
+
+      const cerrada = await prisma.egreso.findUniqueOrThrow({ where: { id } });
+      expect(cerrada.estado).toBe('pagado');
+      // Ahora sí salió plata, y sólo la de la transferencia.
+      expect(await saldoCuenta()).toBe(saldoAntes - 100_000);
+
+      const endosado = await prisma.valor.findUniqueOrThrow({
+        where: { id: valor.id },
+      });
+      expect(endosado.estado).toBe('endosado');
+    });
+
+    it('no deja endosar un cheque propio', async () => {
+      const propio = await prisma.valor.create({
+        data: {
+          tenantId,
+          origen: 'propio',
+          formato: 'echeq',
+          modalidad: 'comun',
+          numero: 'END-0004',
+          banco: 'Galicia',
+          importe: 50_000,
+          moneda: 'ARS',
+          estado: 'cartera',
+        },
+      });
+      const { id } = await facturaDe(50_000);
+
+      await expect(
+        service.registrarPago(auth, {
+          metodoPagoId: metodoChequeId,
+          cuentaOrigenId: cuentaId,
+          imputaciones: [{ egresoId: id, monto: 50_000 }],
+          valorId: propio.id,
+        }),
+      ).rejects.toThrow(/cheques de terceros/i);
+    });
+
+    it('no deja mandar cheque propio y endoso a la vez', async () => {
+      const valor = await enCartera(40_000, 'END-0005');
+      const { id } = await facturaDe(40_000);
+
+      await expect(
+        service.registrarPago(auth, {
+          metodoPagoId: metodoChequeId,
+          cuentaOrigenId: cuentaId,
+          imputaciones: [{ egresoId: id, monto: 40_000 }],
+          valorId: valor.id,
+          cheque: { numero: 'X', banco: 'Y', formato: 'echeq' },
+        }),
+      ).rejects.toThrow(/no las dos cosas/i);
+    });
+
+    /**
+     * Lo más importante: anular el pago devuelve el cheque a la CARTERA, no lo
+     * rechaza. Es plata cobrada que sigue siendo nuestra — marcarlo rechazado
+     * la haría desaparecer.
+     */
+    it('al anular el pago el cheque VUELVE a cartera', async () => {
+      const valor = await enCartera(70_000, 'END-0006');
+      const { id } = await facturaDe(70_000);
+
+      const pago = await service.registrarPago(auth, {
+        metodoPagoId: metodoChequeId,
+        cuentaOrigenId: cuentaId,
+        imputaciones: [{ egresoId: id, monto: 70_000 }],
+        valorId: valor.id,
+      });
+      await service.anularPago(auth, pago.id, { motivo: 'Me equivoqué' });
+
+      const devuelto = await prisma.valor.findUniqueOrThrow({
+        where: { id: valor.id },
+      });
+      expect(devuelto.estado).toBe('cartera');
+      expect(devuelto.proveedorId).toBeNull();
+
+      const egreso = await prisma.egreso.findUniqueOrThrow({ where: { id } });
+      expect(egreso.estado).toBe('pendiente');
+    });
+
+    /** El propio, en cambio, sí queda rechazado: lo emitimos para ese pago. */
+    it('al anular, el cheque PROPIO queda rechazado y no vuelve a cartera', async () => {
+      const { id } = await facturaDe(30_000);
+      const pago = await service.registrarPago(auth, {
+        metodoPagoId: metodoChequeId,
+        cuentaOrigenId: cuentaId,
+        imputaciones: [{ egresoId: id, monto: 30_000 }],
+        cheque: { numero: 'END-0007', banco: 'Galicia', formato: 'echeq' },
+      });
+      await service.anularPago(auth, pago.id, { motivo: 'Error de carga' });
+
+      const valor = await prisma.valor.findFirstOrThrow({
+        where: { tenantId, numero: 'END-0007' },
+      });
+      expect(valor.estado).toBe('rechazado');
+    });
+
+    it('la cartera sólo ofrece cheques de tercero disponibles', async () => {
+      const libre = await enCartera(11_111, 'END-0008');
+      const usado = await enCartera(22_222, 'END-0009');
+      await prisma.valor.update({
+        where: { id: usado.id },
+        data: { estado: 'endosado' },
+      });
+
+      const { valores } = await service.valoresEnCartera(auth);
+      const ids = valores.map((v) => v.id);
+      expect(ids).toContain(libre.id);
+      expect(ids).not.toContain(usado.id);
+      expect(valores.every((v) => v.importe > 0)).toBe(true);
+    });
+  });
+
   describe('cuotas', () => {
     it('crea N egresos hermanados y el total cierra exacto', async () => {
       const doc = nroDoc();
@@ -647,6 +905,67 @@ describe('EgresosService', () => {
         papelera!.aging.d61_90 +
         papelera!.aging.d90_mas;
       expect(Math.round(suma * 100) / 100).toBe(papelera!.total);
+    });
+
+    /**
+     * Que cada tramo reciba lo suyo.
+     *
+     * El test de arriba sólo comprueba que los tramos SUMEN el total, y eso
+     * pasaría igual si todo cayera siempre en "a vencer" — que es justo lo que
+     * parece estar roto cuando ninguna factura está atrasada. Acá se planta
+     * una deuda en cada tramo y se exige que aterrice donde corresponde.
+     */
+    it('cada tramo recibe la deuda de su antigüedad', async () => {
+      // Un proveedor propio para que no se mezcle con el resto del spec.
+      const prov = await prisma.proveedor.create({
+        data: {
+          tenantId,
+          nombre: 'Proveedor del aging',
+          emailPrincipal: `aging-${randomUUID().slice(0, 8)}@test.local`,
+          telefonoCodigo: '11',
+          telefonoNumero: '5555-5555',
+          paisCodigo: 'AR',
+        },
+      });
+
+      /** Una fecha a N días de hoy, en ISO. Negativo = vencida hace N días. */
+      const aDias = (n: number) => {
+        const d = new Date();
+        d.setUTCDate(d.getUTCDate() + n);
+        return d.toISOString().slice(0, 10);
+      };
+
+      const casos: Array<[string, number, number]> = [
+        ['a_vencer', 30, 1_000],
+        ['d0_30', -10, 2_000],
+        ['d31_60', -45, 3_000],
+        ['d61_90', -75, 4_000],
+        ['d90_mas', -200, 5_000],
+      ];
+      for (const [, dias, monto] of casos) {
+        await service.crear(auth, {
+          descripcion: `Aging ${dias}`,
+          categoriaEgresoId: catMateriales,
+          proveedorId: prov.id,
+          fechaVencimiento: aDias(dias),
+          neto: monto,
+          tipoComprobante: 'FA',
+          puntoVenta: '0011',
+          numeroComprobante: nroDoc(),
+        });
+      }
+
+      const r = await service.saldosPorProveedor(auth);
+      const fila = r.proveedores.find((p) => p.proveedorId === prov.id);
+      expect(fila).toBeDefined();
+      for (const [tramo, , monto] of casos) {
+        expect({ [tramo]: fila!.aging[tramo as keyof typeof fila.aging] }).toEqual(
+          { [tramo]: monto },
+        );
+      }
+      expect(fila!.total).toBe(15_000);
+      // El KPI de riesgo son los dos tramos más viejos.
+      expect(fila!.vencidoGrave).toBe(9_000);
     });
 
     it('los egresos sin proveedor tienen su propia fila', async () => {
@@ -833,6 +1152,63 @@ describe('EgresosService', () => {
       const listado = await service.listar(auth, {});
       const fila = listado.egresos.find((e) => e.id === id);
       expect(fila?.fechaCompetencia).toBe(esperado);
+    });
+  });
+
+  // ── El orden del listado ─────────────────────────────────────────────
+
+  /**
+   * En un egreso la fecha que manda es el VENCIMIENTO: cuándo hay que tener la
+   * plata. Los dos tabs ordenan por ahí, en sentidos opuestos porque responden
+   * preguntas opuestas — "qué se viene" contra "qué pasó".
+   */
+  describe('orden del listado', () => {
+    const conVencimiento = (venc: string | null, descripcion: string) =>
+      service.crear(auth, {
+        descripcion,
+        categoriaEgresoId: catMateriales,
+        proveedorId,
+        ...(venc
+          ? { fechaVencimiento: venc }
+          : { pago: { metodoPagoId, cuentaOrigenId: cuentaId } }),
+        neto: 1_000,
+        tipoComprobante: 'FA',
+        puntoVenta: '0009',
+        numeroComprobante: nroDoc(),
+      });
+
+    it('"Todos" va del vencimiento más nuevo al más viejo', async () => {
+      const viejo = await conVencimiento('2031-01-10', 'Orden viejo');
+      const nuevo = await conVencimiento('2031-06-10', 'Orden nuevo');
+      const medio = await conVencimiento('2031-03-10', 'Orden medio');
+
+      const { egresos } = await service.listar(auth, {});
+      const mios = egresos
+        .filter((e) => [viejo.id, nuevo.id, medio.id].includes(e.id))
+        .map((e) => e.id);
+      expect(mios).toEqual([nuevo.id, medio.id, viejo.id]);
+    });
+
+    /** Sin vencimiento no hay fecha que comparar: no puede encabezar la lista. */
+    it('lo de contado queda DESPUÉS de todo lo que tiene vencimiento', async () => {
+      const contado = await conVencimiento(null, 'Nafta de contado');
+      const conFecha = await conVencimiento('2030-05-05', 'Factura a 30 días');
+
+      const { egresos } = await service.listar(auth, {});
+      const pos = (id: string) => egresos.findIndex((e) => e.id === id);
+      expect(pos(conFecha.id)).toBeGreaterThanOrEqual(0);
+      expect(pos(contado.id)).toBeGreaterThan(pos(conFecha.id));
+    });
+
+    /** El tab de cuentas por pagar sigue al revés: primero lo que vence antes. */
+    it('"Por pagar" va del vencimiento más próximo al más lejano', async () => {
+      const { egresos } = await service.listar(auth, {
+        soloPendientes: 'true',
+      });
+      const fechas = egresos
+        .map((e) => e.fechaVencimiento)
+        .filter((f): f is string => f !== null);
+      expect(fechas).toEqual([...fechas].sort());
     });
   });
 

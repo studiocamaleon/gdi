@@ -125,7 +125,9 @@ export function LoginForm() {
               {isPasswordVisible ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
             </button>
           </div>
-          <span className="help">Si aún no activaste tu acceso, primero aceptá la invitación recibida por correo.</span>
+          {/* Nadie recibe una invitación por correo: el acceso se entrega con
+              una clave que dicta quien administra. Ver usuarios.service.crear */}
+          <span className="help">Si todavía no tenés clave, pedísela a quien administra el sistema.</span>
         </div>
 
         {errorMessage ? <p className="login-error">{errorMessage}</p> : null}

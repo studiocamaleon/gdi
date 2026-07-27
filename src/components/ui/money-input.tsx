@@ -43,6 +43,9 @@ export function MoneyInput({
   /** Va al `<input>` (p. ej. "ctl" donde el CSS scopeado estila por esa clase). */
   inputClassName?: string;
 }) {
+  // `arc-money-in` no estila: existe para que el padding que reserva el lugar
+  // del símbolo le gane al `padding` shorthand del módulo que lo contenga.
+  // Ver el bloque del final de globals.css.
   const numero = parsearMonto(value, moneda);
   const invalido = value.trim() !== "" && numero === null;
   return (
@@ -55,7 +58,7 @@ export function MoneyInput({
         disabled={disabled}
         aria-label={ariaLabel}
         aria-invalid={invalido || undefined}
-        className={inputClassName}
+        className={cn("arc-money-in", inputClassName)}
         onChange={(e) =>
           onValueChange(e.target.value, parsearMonto(e.target.value, moneda))
         }

@@ -75,6 +75,74 @@ export const TIPO_COMPROBANTE_LABELS: Record<TipoComprobanteCompra, string> = {
   SIN_DOCUMENTO: "Sin documento",
 };
 
+/**
+ * Qué comprobantes traen el IVA DISCRIMINADO.
+ *
+ * Es lo único que habilita el crédito fiscal, y por lo tanto lo único donde
+ * tiene sentido cargar el IVA aparte:
+ *   · Factura A y las notas que la ajustan — el IVA viene en su propio renglón.
+ *   · Factura B — el IVA está adentro del precio y NO se discrimina: para el
+ *     que compra, el importe es el importe.
+ *   · Factura C (monotributista) — no hay IVA en absoluto.
+ *   · Ticket, recibo y sin documento — tampoco.
+ *
+ * Pedir el IVA igual en esos casos no es sólo ruido en la pantalla: cualquier
+ * número que se cargue ahí se lleva un crédito fiscal que no existe, y el
+ * Libro IVA Compras sale mal.
+ */
+const COMPROBANTES_CON_IVA: readonly TipoComprobanteCompra[] = [
+  "FA",
+  "ND",
+  "NC",
+];
+
+export function discriminaIva(tipo: string | null | undefined): boolean {
+  return COMPROBANTES_CON_IVA.includes(tipo as TipoComprobanteCompra);
+}
+
+/**
+ * Las alícuotas de IVA vigentes en Argentina. `null` = "a mano", para la
+ * factura con dos alícuotas mezcladas o cuando el proveedor redondeó distinto
+ * y el número tiene que coincidir con el papel.
+ */
+export const ALICUOTAS_IVA = [21, 10.5, 27, 5, 2.5, 0] as const;
+
+/**
+ * El IVA de un neto a una alícuota, redondeado a centavos.
+ *
+ * Redondea sobre centésimos y no sobre el float crudo: 10,5% de 1.234,55 da
+ * 129,62775 y sin esto quedaría un total con seis decimales.
+ */
+export function ivaDeNeto(neto: number, alicuotaPct: number): number {
+  return Math.round(neto * alicuotaPct) / 100;
+}
+
+/**
+ * Largos del comprobante argentino: 4 dígitos el punto de venta, 8 el número.
+ * Es la misma convención con la que el sistema los IMPRIME
+ * (`notificaciones-comprobantes.service.ts`, `cuenta-corriente.service.ts`),
+ * así que lo que se carga y lo que se muestra coinciden.
+ */
+export const LARGO_PUNTO_VENTA = 4;
+export const LARGO_NUMERO_COMPROBANTE = 8;
+
+/**
+ * Rellena con ceros a la izquierda lo que se tipeó.
+ *
+ * Nadie escribe "0001" teniendo el 1 en la mano, pero el número guardado tiene
+ * que coincidir con el del papel para que después se pueda buscar por él —y
+ * para que el único de "misma factura del mismo proveedor" haga su trabajo:
+ * "1" y "0001" son la misma factura y sin esto entrarían dos veces.
+ *
+ * Lo que no es sólo dígitos se deja intacto: si alguien pegó "0001-00012345"
+ * o una letra, el dato es suyo y prefiero que lo vea a que se lo deformemos.
+ */
+export function completarCeros(valor: string, largo: number): string {
+  const limpio = valor.trim();
+  if (!limpio || !/^\d+$/.test(limpio)) return limpio;
+  return limpio.padStart(largo, "0");
+}
+
 export type CategoriaEgreso = {
   id: string;
   codigo: string;

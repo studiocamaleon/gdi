@@ -1,23 +1,29 @@
 import { EgresosView } from "@/components/administracion/egresos-view";
 import { getCuentasFondos, getMetodosPago } from "@/lib/administracion-api";
-import { getCategoriasEgreso, getEgresos, getResumenEgresos } from "@/lib/egresos-api";
+import {
+  getCategoriasEgreso,
+  getEgresos,
+  getResumenEgresos,
+} from "@/lib/egresos-api";
 import { getProveedores } from "@/lib/proveedores-api";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Egresos: todo lo que sale de la caja, pagado en el momento o a plazo.
+ * Cuentas por pagar: lo que se debe y todavía no se pagó.
  *
- * Lo que se debe y todavía no se pagó vive en su propia ruta
- * (`/administracion/cuentas-por-pagar`), que es el MISMO módulo con otro
- * filtro. Ver `ModoEgresos`.
+ * Es el MISMO módulo que Egresos con otro filtro —ver `ModoEgresos`— y no una
+ * vista aparte: el registro es uno solo y duplicarlo abriría la puerta a que
+ * los dos lados digan cosas distintas. Lo que cambia es qué tabs se ofrecen y
+ * con qué pregunta se entra.
+ *
+ * Ruta propia y no un `?tab=`: se linkea, se comparte y el sidebar la marca
+ * como activa, igual que Cuentas por cobrar.
  */
-export default async function EgresosPage() {
-  // Todo en paralelo y tolerante: una lista vacía muestra el estado vacío, que
-  // es mejor que una pantalla de error por un catálogo sin cargar.
+export default async function CuentasPorPagarPage() {
   const [egresos, resumen, categorias, proveedores, metodosPago, cuentas] =
     await Promise.all([
-      getEgresos({}).then(
+      getEgresos({ soloPendientes: true }).then(
         (r) => r.egresos,
         () => [],
       ),
@@ -45,6 +51,7 @@ export default async function EgresosPage() {
 
   return (
     <EgresosView
+      modo="cuentas-por-pagar"
       initialEgresos={egresos}
       initialResumen={resumen}
       categorias={categorias}

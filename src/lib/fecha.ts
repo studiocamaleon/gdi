@@ -102,6 +102,38 @@ export function hora(iso: string | null | undefined, zona = ZONA): string {
   return p ? `${String(p.hora24).padStart(2, "0")}:${p.minuto}` : "";
 }
 
+const DIAS_CORTOS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+
+/**
+ * "Mié 28 ago 2026" — una fecha CALENDARIA, con el día de la semana.
+ *
+ * Para vencimientos y entregas: leer "28-08-2026" no dice nada, y "Vie 28 ago"
+ * te dice de una si cae en fin de semana o si llegás. Es el formato que ya usa
+ * el tablero de producción.
+ *
+ * Ojo con lo que recibe: esto espera "YYYY-MM-DD", una fecha del CALENDARIO,
+ * no un instante. Por eso —a diferencia del resto del módulo— no toma zona
+ * horaria ni la aplica. Un vencimiento no ocurre a una hora: convertirlo a
+ * Buenos Aires lo correría un día entero, porque el ISO date-only se parsea
+ * como medianoche UTC y en UTC-3 eso es el día anterior. Las partes se leen
+ * con los getters UTC del mismo Date que se construyó en UTC: sin conversión,
+ * el resultado es idéntico en el servidor y en el navegador.
+ *
+ * @param conAnio false para listados densos donde el año se sobreentiende.
+ */
+export function fechaConDia(
+  iso: string | null | undefined,
+  conAnio = true,
+): string {
+  if (!iso) return "";
+  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+  if (!y || !m || !d) return "";
+  const f = new Date(Date.UTC(y, m - 1, d));
+  if (Number.isNaN(f.getTime())) return "";
+  const base = `${DIAS_CORTOS[f.getUTCDay()]} ${f.getUTCDate()} ${MESES[f.getUTCMonth()]}`;
+  return conAnio ? `${base} ${f.getUTCFullYear()}` : base;
+}
+
 /** "25/07/2026". El formato numérico de las tablas. */
 export function fechaNumerica(iso: string | null | undefined, zona = ZONA): string {
   if (!iso) return "";

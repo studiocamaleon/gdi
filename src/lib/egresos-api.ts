@@ -242,7 +242,7 @@ export async function registrarPagoEgresos(body: {
     monto: number;
     nroComprobante?: string;
   }>;
-  /** Obligatorio si el método es de tipo cheque. */
+  /** Cheque PROPIO que se emite. Con método cheque va esto o `valorId`. */
   cheque?: {
     numero: string;
     banco: string;
@@ -250,6 +250,8 @@ export async function registrarPagoEgresos(body: {
     fechaEmision?: string;
     fechaPago?: string;
   };
+  /** Cheque DE TERCERO que se endosa, elegido de la cartera. */
+  valorId?: string;
 }): Promise<{
   id: string;
   numero: string;
@@ -285,4 +287,23 @@ export async function anularPagoEgreso(
     body: JSON.stringify({ motivo }),
     headers: { "Content-Type": "application/json" },
   });
+}
+
+/** Un cheque de tercero en cartera, disponible para endosar. */
+export type ValorEnCartera = {
+  id: string;
+  numero: string;
+  banco: string;
+  importe: number;
+  moneda: string;
+  formato: string;
+  modalidad: string;
+  fechaPago: string | null;
+  clienteNombre: string | null;
+};
+
+export async function getValoresEnCartera(): Promise<{
+  valores: ValorEnCartera[];
+}> {
+  return apiRequest("/egresos/valores-en-cartera", { cache: "no-store" });
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   esHoy,
+  fechaConDia,
   fechaCorta,
   fechaHora,
   fechaHoraCorta,
@@ -129,5 +130,51 @@ describe("esHoy", () => {
 
   it("no explota sin fecha", () => {
     expect(esHoy(null)).toBe(false);
+  });
+});
+
+
+/**
+ * "Mié 28 ago 2026" — el formato de vencimientos y entregas.
+ *
+ * Lo que este bloque protege es una trampa concreta: un vencimiento es una
+ * fecha del CALENDARIO, no un instante. Si se lo convierte a la zona del
+ * taller, el ISO date-only —que se parsea como medianoche UTC— retrocede un
+ * día en UTC-3 y la factura pasa a vencer el 27 en vez del 28.
+ */
+describe("fechaConDia", () => {
+  it("día de la semana, número, mes y año", () => {
+    expect(fechaConDia("2026-08-28")).toBe("Vie 28 ago 2026");
+  });
+
+  /** El caso que motivó no usar zona horaria: en UTC-3 daría el 27. */
+  it("NO retrocede un día por la zona horaria", () => {
+    expect(fechaConDia("2026-08-28")).toContain("28 ago");
+    expect(fechaConDia("2026-01-01")).toBe("Jue 1 ene 2026");
+  });
+
+  it("acepta un ISO con hora y se queda con la fecha", () => {
+    expect(fechaConDia("2026-08-28T00:00:00.000Z")).toBe("Vie 28 ago 2026");
+  });
+
+  it("sin año para listados densos", () => {
+    expect(fechaConDia("2026-08-28", false)).toBe("Vie 28 ago");
+  });
+
+  /** Los tres vencimientos reales del módulo de egresos. */
+  it("las tres cuotas caen en el día que corresponde", () => {
+    expect(fechaConDia("2026-08-28")).toBe("Vie 28 ago 2026");
+    expect(fechaConDia("2026-09-28")).toBe("Lun 28 sep 2026");
+    expect(fechaConDia("2026-10-28")).toBe("Mié 28 oct 2026");
+  });
+
+  it("el día 1 no lleva cero adelante", () => {
+    expect(fechaConDia("2026-03-01")).toBe("Dom 1 mar 2026");
+  });
+
+  it("vacío si no hay fecha o no sirve", () => {
+    expect(fechaConDia(null)).toBe("");
+    expect(fechaConDia("")).toBe("");
+    expect(fechaConDia("cualquier cosa")).toBe("");
   });
 });

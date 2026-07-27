@@ -1014,9 +1014,23 @@ export class ArchivosService {
           return this.prisma.producto.findFirst(where);
         case ArchivoScope.PROVEEDOR:
           return this.prisma.proveedor.findFirst(where);
-        default:
-          return null;
+        case ArchivoScope.EGRESO:
+          return this.prisma.egreso.findFirst(where);
+        // TENANT_BRANDING no está: el early return de arriba ya lo sacó del
+        // tipo, y agregarlo acá no compila.
       }
+      /*
+        SIN `default`. El `never` hace que agregar un scope nuevo y no
+        enseñarle acá a buscar su entidad NO COMPILE.
+
+        Esto lo aprendimos caro: `EGRESO` se agregó con su campo en
+        `CAMPO_POR_SCOPE` —que es un Record exhaustivo y el compilador sí
+        exigió— pero acá había un `default: return null` que se lo tragó en
+        silencio. Resultado: adjuntar la factura de un egreso devolvía 404
+        "No encontré la entidad", desde el primer día y sin que nada avisara.
+      */
+      const exhaustivo: never = scope;
+      return exhaustivo;
     })();
 
     if (!existe) {
