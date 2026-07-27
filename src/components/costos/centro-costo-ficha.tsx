@@ -347,9 +347,14 @@ export function CentroCostoFicha({
   };
 
   const editar = (key: string, campo: keyof LineaLocal, valor: string) => {
+    // Nadie dedica el 140% de su tiempo. Se acota acá y no sólo en el DTO
+    // porque un 400 del servidor al guardar llega tarde y sin decir en qué
+    // fila; que el número se frene solo al tipear se entiende sin leer nada.
+    const acotado =
+      campo === "dedicacionPct" && numero(valor) > 100 ? "100" : valor;
     setLineas((actuales) =>
       actuales.map((linea) =>
-        linea.key === key ? { ...linea, [campo]: valor } : linea,
+        linea.key === key ? { ...linea, [campo]: acotado } : linea,
       ),
     );
     marcar();
@@ -569,15 +574,24 @@ export function CentroCostoFicha({
                       de aplicarlo a las del centro: pensar "20% acá, 80% allá"
                       es más natural que calcular 35,2 horas a mano. */}
                   <div className="ccosto-dedicacion">
-                    <input
-                      className="ccosto-num"
-                      inputMode="decimal"
-                      value={fila.dedicacionPct}
-                      placeholder="%"
-                      onChange={(event) =>
-                        editar(fila.key, "dedicacionPct", event.target.value)
-                      }
-                    />
+                    {/* El % va como unidad fija dentro del campo y no como
+                        placeholder: un placeholder desaparece al tipear, justo
+                        cuando el usuario necesita saber en qué está midiendo. */}
+                    <div className="ccosto-dedicacion-campo">
+                      <input
+                        className="ccosto-num"
+                        inputMode="decimal"
+                        value={fila.dedicacionPct}
+                        placeholder="0"
+                        min={0}
+                        max={100}
+                        aria-label="Porcentaje de dedicación (0 a 100)"
+                        onChange={(event) =>
+                          editar(fila.key, "dedicacionPct", event.target.value)
+                        }
+                      />
+                      <span className="ccosto-dedicacion-unidad">%</span>
+                    </div>
                     <span className="ccosto-dedicacion-horas">
                       {horasDedicadas(fila.dedicacionPct)}
                     </span>
