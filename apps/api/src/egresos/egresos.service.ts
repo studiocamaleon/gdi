@@ -11,6 +11,12 @@ import type { CurrentAuth } from '../auth/auth.types';
 import { firmaActor } from '../common/firma-actor';
 import { regionalDelTenant } from '../common/regional';
 import {
+  calcularAging,
+  totalAging,
+  vencidoGrave,
+  type ComprobanteAging,
+} from '../administracion/aging';
+import {
   CATEGORIAS_SEMILLA,
   estadoPorPagado,
   incideEnResultado,
@@ -382,6 +388,17 @@ export class EgresosService {
       throw new BadRequestException('Esa categoría está desactivada.');
     }
 
+    const cuotas = dto.cuotas ?? 1;
+    if (cuotas > 1 && !dto.fechaVencimiento) {
+      throw new BadRequestException(
+        'Una compra en cuotas necesita la fecha de la primera cuota.',
+      );
+    }
+    if (cuotas > 1 && dto.pago) {
+      throw new BadRequestException(
+        'Si son cuotas, el egreso no puede nacer pagado: se paga cuota por cuota.',
+      );
+    }
     const esContado = !dto.fechaVencimiento;
     if (esContado && !dto.pago) {
       throw new BadRequestException(
@@ -425,6 +442,66 @@ export class EgresosService {
 
     try {
       return await this.prisma.$transaction(async (tx) => {
+        if (cuotas > 1) {
+          // El resto de la división va en la PRIMERA cuota, no en la última:
+          // así el total siempre cierra y la diferencia se paga antes, no
+          // después. Cada cuota es un egreso propio y hermanado por el
+          // documento (comparten proveedor y número de factura, así que el
+          // antiduplicado se desactiva agregándole el índice de cuota).
+          const netoBase = Math.floor((neto / cuotas) * 100) / 100;
+          const ivaBase = Math.floor((iva / cuotas) * 100) / 100;
+          const otrosBase = Math.floor((otros / cuotas) * 100) / 100;
+          const creados: Array<{ id: string; numero: string }> = [];
+          for (let i = 0; i < cuotas; i += 1) {
+            const esPrimera = i === 0;
+            const netoCuota = esPrimera
+              ? r2(neto - netoBase * (cuotas - 1))
+              : netoBase;
+            const ivaCuota = esPrimera ? r2(iva - ivaBase * (cuotas - 1)) : ivaBase;
+            const otrosCuota = esPrimera
+              ? r2(otros - otrosBase * (cuotas - 1))
+              : otrosBase;
+            const vence = new Date(fechaVencimiento!);
+            vence.setUTCMonth(vence.getUTCMonth() + i);
+            const numeroCuota = await this.numerarEgreso(
+              tx,
+              auth.tenantId,
+              fechaCompetencia,
+            );
+            const cuota = await tx.egreso.create({
+              data: {
+                tenantId: auth.tenantId,
+                numero: numeroCuota,
+                descripcion: `${dto.descripcion.trim()} (cuota ${i + 1}/${cuotas})`,
+                categoriaEgresoId: dto.categoriaEgresoId,
+                proveedorId: dto.proveedorId ?? null,
+                beneficiarioNombre: beneficiario,
+                fechaCompetencia,
+                fechaVencimiento: vence,
+                moneda: dto.moneda ?? 'ARS',
+                neto: netoCuota,
+                iva: ivaCuota,
+                otrosImpuestos: otrosCuota,
+                total: r2(netoCuota + ivaCuota + otrosCuota),
+                tipoComprobante: dto.tipoComprobante ?? null,
+                puntoVenta: dto.puntoVenta?.trim() || null,
+                numeroComprobante: dto.numeroComprobante?.trim()
+                  ? `${dto.numeroComprobante.trim()}/${i + 1}`
+                  : null,
+                estado: 'pendiente',
+                origen: 'manual',
+                centroCostoId: dto.centroCostoId ?? null,
+                gastoFijoEstructuraId: dto.gastoFijoEstructuraId ?? null,
+                empleadoId: dto.empleadoId ?? null,
+                registradoPorNombre: registradoPor,
+                notas: dto.notas?.trim() || null,
+              },
+            });
+            creados.push({ id: cuota.id, numero: cuota.numero });
+          }
+          return { id: creados[0].id, numero: creados[0].numero, cuotas };
+        }
+
         const numero = await this.numerarEgreso(
           tx,
           auth.tenantId,
@@ -620,9 +697,23 @@ export class EgresosService {
   ) {
     const metodo = await tx.metodoPago.findFirst({
       where: { id: dto.metodoPagoId, tenantId: auth.tenantId },
-      select: { id: true, nombre: true },
+      select: { id: true, nombre: true, tipo: true },
     });
     if (!metodo) throw new NotFoundException('Ese método de pago no existe.');
+    // Con cheque la factura queda saldada pero la plata NO sale todavía: el
+    // valor va a cartera y recién impacta la cuenta cuando se debita. Es el
+    // mismo criterio que usa Cobros con los cheques de terceros.
+    const esCheque = metodo.tipo === 'cheque_echeq';
+    if (esCheque && !dto.cheque) {
+      throw new BadRequestException(
+        'Pagando con cheque hay que indicar número, banco y formato.',
+      );
+    }
+    if (!esCheque && dto.cheque) {
+      throw new BadRequestException(
+        'Los datos del cheque sólo aplican a un método de tipo cheque.',
+      );
+    }
     const cuenta = await tx.cuentaFondos.findFirst({
       where: { id: dto.cuentaOrigenId, tenantId: auth.tenantId },
       select: { id: true, nombre: true, moneda: true },
@@ -683,6 +774,20 @@ export class EgresosService {
     const montoBruto = r2(
       dto.imputaciones.reduce((acc, i) => acc + i.monto, 0),
     );
+    // La retención SALDA la factura pero no sale de la cuenta: se la quedamos
+    // nosotros para depositarla al fisco. Por eso reduce el neto y no el
+    // imputado — confundir las dos cosas deja al proveedor debiendo plata que
+    // en realidad ya se le retuvo.
+    const retenciones = dto.retenciones ?? [];
+    const retencionesTotal = r2(
+      retenciones.reduce((acc, r) => acc + r.monto, 0),
+    );
+    if (retencionesTotal > montoBruto) {
+      throw new BadRequestException(
+        'Las retenciones no pueden superar el monto del pago.',
+      );
+    }
+    const montoNeto = r2(montoBruto - retencionesTotal);
     const numero = await this.numerarPago(tx, auth.tenantId, fecha);
 
     const pago = await tx.pago.create({
@@ -693,13 +798,26 @@ export class EgresosService {
         metodoPagoId: metodo.id,
         cuentaOrigenId: cuenta.id,
         montoBruto,
-        retencionesTotal: 0,
-        montoNeto: montoBruto,
+        retencionesTotal,
+        montoNeto,
         moneda: cuenta.moneda,
         proveedorId: [...proveedorIds][0] ?? null,
         referencia: dto.referencia?.trim() || null,
         registradoPorNombre: registradoPor,
         notas: dto.notas?.trim() || null,
+        retenciones: {
+          create: retenciones.map((r) => ({
+            tenantId: auth.tenantId,
+            direccion: 'practicada',
+            regimen: r.regimen,
+            jurisdiccion: r.jurisdiccion ?? null,
+            base: r.base,
+            alicuota: r.alicuota,
+            monto: r.monto,
+            nroComprobante: r.nroComprobante ?? null,
+            periodoFiscal: fecha.toISOString().slice(0, 7),
+          })),
+        },
       },
     });
 
@@ -724,30 +842,74 @@ export class EgresosService {
       });
     }
 
-    // La plata sale: un solo movimiento por el neto del pago.
-    const cuentaAct = await tx.cuentaFondos.update({
-      where: { id: cuenta.id },
-      data: { saldo: { decrement: montoBruto } },
-    });
     const concepto =
       egresos.length === 1
         ? `Pago ${numero} · ${egresos[0].beneficiarioNombre} (${egresos[0].numero})`
         : `Pago ${numero} · ${egresos[0].beneficiarioNombre} (${egresos.length} egresos)`;
-    await tx.movimientoFondos.create({
-      data: {
-        tenantId: auth.tenantId,
-        cuentaId: cuenta.id,
-        fecha,
-        tipo: 'salida',
-        monto: montoBruto,
-        concepto,
-        origenTipo: 'pago',
-        pagoId: pago.id,
-        saldoPosterior: Number(cuentaAct.saldo),
-      },
-    });
 
-    return { id: pago.id, numero: pago.numero, montoNeto: montoBruto };
+    if (esCheque && dto.cheque) {
+      // El cheque va a CARTERA: la factura queda saldada pero la cuenta no se
+      // toca hasta que el banco lo debite. Registrar la salida acá haría ver
+      // un saldo que todavía existe como menor de lo que es.
+      const valor = await tx.valor.create({
+        data: {
+          tenantId: auth.tenantId,
+          origen: 'propio',
+          formato: dto.cheque.formato,
+          modalidad: dto.cheque.fechaPago ? 'diferido' : 'comun',
+          numero: dto.cheque.numero.trim(),
+          banco: dto.cheque.banco.trim(),
+          importe: montoNeto,
+          moneda: cuenta.moneda,
+          fechaEmision: dto.cheque.fechaEmision
+            ? new Date(dto.cheque.fechaEmision)
+            : fecha,
+          fechaPago: dto.cheque.fechaPago
+            ? new Date(dto.cheque.fechaPago)
+            : null,
+          estado: 'cartera',
+          proveedorId: [...proveedorIds][0] ?? null,
+        },
+      });
+      // El vínculo va en los dos sentidos: sin esto, anular el pago no sabría
+      // qué cheque tiene que dar de baja.
+      await tx.pago.update({
+        where: { id: pago.id },
+        data: { valorId: valor.id },
+      });
+    } else {
+      // La plata sale YA, y sale el NETO: lo retenido no se le paga al
+      // proveedor, se deposita al fisco.
+      const cuentaAct = await tx.cuentaFondos.update({
+        where: { id: cuenta.id },
+        data: { saldo: { decrement: montoNeto } },
+      });
+      await tx.movimientoFondos.create({
+        data: {
+          tenantId: auth.tenantId,
+          cuentaId: cuenta.id,
+          fecha,
+          tipo: 'salida',
+          monto: montoNeto,
+          concepto:
+            retencionesTotal > 0
+              ? `${concepto} · neto de retenciones`
+              : concepto,
+          origenTipo: 'pago',
+          pagoId: pago.id,
+          saldoPosterior: Number(cuentaAct.saldo),
+        },
+      });
+    }
+
+    return {
+      id: pago.id,
+      numero: pago.numero,
+      montoBruto,
+      retencionesTotal,
+      montoNeto,
+      enCartera: esCheque,
+    };
   }
 
   /**
@@ -781,24 +943,49 @@ export class EgresosService {
         });
       }
 
-      const monto = dec(pago.montoBruto);
-      const cuentaAct = await tx.cuentaFondos.update({
-        where: { id: pago.cuentaOrigenId },
-        data: { saldo: { increment: monto } },
+      // Se devuelve el NETO, que es lo que efectivamente salió: con
+      // retenciones, el bruto nunca tocó la cuenta.
+      const monto = dec(pago.montoNeto);
+      const salioDeLaCuenta = await tx.movimientoFondos.count({
+        where: { tenantId: auth.tenantId, pagoId: pago.id, tipo: 'salida' },
       });
-      await tx.movimientoFondos.create({
-        data: {
-          tenantId: auth.tenantId,
-          cuentaId: pago.cuentaOrigenId,
-          fecha: new Date(),
-          tipo: 'entrada',
-          monto,
-          concepto: `Anulación del pago ${pago.numero}: ${dto.motivo.trim()}`,
-          origenTipo: 'pago',
-          pagoId: pago.id,
-          saldoPosterior: Number(cuentaAct.saldo),
-        },
-      });
+      if (salioDeLaCuenta > 0) {
+        const cuentaAct = await tx.cuentaFondos.update({
+          where: { id: pago.cuentaOrigenId },
+          data: { saldo: { increment: monto } },
+        });
+        await tx.movimientoFondos.create({
+          data: {
+            tenantId: auth.tenantId,
+            cuentaId: pago.cuentaOrigenId,
+            fecha: new Date(),
+            tipo: 'entrada',
+            monto,
+            concepto: `Anulación del pago ${pago.numero}: ${dto.motivo.trim()}`,
+            origenTipo: 'pago',
+            pagoId: pago.id,
+            saldoPosterior: Number(cuentaAct.saldo),
+          },
+        });
+      }
+      // Si se pagó con cheque, la plata nunca salió: lo que hay que deshacer
+      // es el valor en cartera, no un movimiento que no existe. Un cheque ya
+      // debitado NO se puede anular así — la plata ya se fue del banco.
+      if (pago.valorId) {
+        const valor = await tx.valor.findUnique({
+          where: { id: pago.valorId },
+          select: { estado: true },
+        });
+        if (valor && valor.estado !== 'cartera') {
+          throw new ConflictException(
+            'Ese cheque ya fue debitado: no se puede anular el pago sin revertir el valor primero.',
+          );
+        }
+        await tx.valor.update({
+          where: { id: pago.valorId },
+          data: { estado: 'rechazado', motivoRechazo: dto.motivo.trim() },
+        });
+      }
 
       await tx.pago.update({
         where: { id },
@@ -940,6 +1127,87 @@ export class EgresosService {
           pct: totalSalida > 0 ? r2((c.monto / totalSalida) * 100) : 0,
         }))
         .sort((a, b) => b.monto - a.monto),
+    };
+  }
+
+  /**
+   * Saldo por proveedor con antigüedad (journey E2) — el espejo de la matriz
+   * de deudores, del otro lado del mostrador.
+   *
+   * Reusa el `aging` de Cuentas por cobrar, pero acá el tramo "a vencer" SÍ se
+   * llena: del lado de compras hay vencimientos reales, mientras que en CxC la
+   * deuda nace de la orden terminada y todo lo finalizado es exigible.
+   *
+   * Los egresos sin proveedor se agrupan en una fila propia: son deuda igual
+   * (el flete sin factura, la multa) y esconderlos haría que la suma no cierre
+   * contra el total a pagar.
+   */
+  async saldosPorProveedor(auth: CurrentAuth) {
+    const { zonaHoraria } = await regionalDelTenant(this.prisma, auth.tenantId);
+    const hoy = soloFecha(hoyEnZona(zonaHoraria));
+
+    const filas = await this.prisma.egreso.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        estado: { in: ['pendiente', 'parcial'] },
+        fechaVencimiento: { not: null },
+      },
+      select: {
+        proveedorId: true,
+        beneficiarioNombre: true,
+        fechaVencimiento: true,
+        total: true,
+        pagadoTotal: true,
+        proveedor: { select: { nombre: true, cuit: true } },
+      },
+    });
+
+    const porProveedor = new Map<
+      string,
+      {
+        proveedorId: string | null;
+        nombre: string;
+        cuit: string | null;
+        comps: ComprobanteAging[];
+        egresos: number;
+      }
+    >();
+    for (const f of filas) {
+      const saldo = r2(dec(f.total) - dec(f.pagadoTotal));
+      if (saldo <= 0) continue;
+      const clave = f.proveedorId ?? 'sin-proveedor';
+      const actual = porProveedor.get(clave) ?? {
+        proveedorId: f.proveedorId,
+        nombre: f.proveedorId
+          ? (f.proveedor?.nombre ?? f.beneficiarioNombre)
+          : 'Sin proveedor',
+        cuit: f.proveedorId ? (f.proveedor?.cuit ?? null) : null,
+        comps: [],
+        egresos: 0,
+      };
+      actual.comps.push({ vencimiento: f.fechaVencimiento, saldo });
+      actual.egresos += 1;
+      porProveedor.set(clave, actual);
+    }
+
+    const proveedores = [...porProveedor.values()]
+      .map((p) => {
+        const aging = calcularAging(p.comps, hoy);
+        return {
+          proveedorId: p.proveedorId,
+          nombre: p.nombre,
+          cuit: p.cuit,
+          egresos: p.egresos,
+          aging,
+          total: totalAging(aging),
+          vencidoGrave: vencidoGrave(aging),
+        };
+      })
+      .sort((a, b) => b.total - a.total);
+
+    return {
+      proveedores,
+      total: r2(proveedores.reduce((acc, p) => acc + p.total, 0)),
     };
   }
 

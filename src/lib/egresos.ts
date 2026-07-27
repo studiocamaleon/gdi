@@ -141,6 +141,54 @@ export type ResumenEgresos = {
   egresosPendientes: number;
 };
 
+export const REGIMENES_RETENCION = [
+  "SICORE_GANANCIAS",
+  "IVA_RG2854",
+  "IIBB_CONVENIO",
+  "SUSS",
+  "otro",
+] as const;
+
+export type RegimenRetencion = (typeof REGIMENES_RETENCION)[number];
+
+export const REGIMEN_RETENCION_LABELS: Record<RegimenRetencion, string> = {
+  SICORE_GANANCIAS: "Ganancias (SICORE)",
+  IVA_RG2854: "IVA",
+  IIBB_CONVENIO: "Ingresos brutos",
+  SUSS: "SUSS",
+  otro: "Otro",
+};
+
+/** Tramos de antigüedad — los mismos que Cuentas por cobrar. */
+export const TRAMOS_AGING = [
+  "a_vencer",
+  "d0_30",
+  "d31_60",
+  "d61_90",
+  "d90_mas",
+] as const;
+
+export type TramoAging = (typeof TRAMOS_AGING)[number];
+
+export const TRAMO_AGING_LABELS: Record<TramoAging, string> = {
+  a_vencer: "A vencer",
+  d0_30: "0-30 días",
+  d31_60: "31-60",
+  d61_90: "61-90",
+  d90_mas: "+90",
+};
+
+export type SaldoProveedor = {
+  proveedorId: string | null;
+  nombre: string;
+  cuit: string | null;
+  egresos: number;
+  aging: Record<TramoAging, number>;
+  total: number;
+  /** Vencido hace más de 60 días: el KPI de riesgo. */
+  vencidoGrave: number;
+};
+
 export type ReporteEgresos = {
   desde: string;
   hasta: string;

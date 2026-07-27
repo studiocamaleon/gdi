@@ -29,6 +29,10 @@ import {
   NATURALEZA_LABELS,
   TIPO_COMPROBANTE_LABELS,
   TIPOS_COMPROBANTE_COMPRA,
+  REGIMEN_RETENCION_LABELS,
+  REGIMENES_RETENCION,
+  TRAMO_AGING_LABELS,
+  TRAMOS_AGING,
   diasHastaVencimiento,
   etiquetaVencimiento,
   tonoVencimiento,
@@ -36,6 +40,7 @@ import {
   type Egreso,
   type ReporteEgresos,
   type ResumenEgresos,
+  type SaldoProveedor,
 } from "@/lib/egresos";
 import {
   anularEgreso,
@@ -45,6 +50,7 @@ import {
   getPagosDeEgreso,
   getReporteEgresos,
   getResumenEgresos,
+  getSaldosProveedores,
   registrarPagoEgresos,
   type CrearEgresoBody,
 } from "@/lib/egresos-api";
@@ -52,7 +58,7 @@ import type { CuentaFondosResumen, MetodoPago } from "@/lib/administracion";
 import type { ProveedorDetalle } from "@/lib/proveedores";
 import type { PagoDeEgreso } from "@/lib/egresos";
 
-type Tab = "por-pagar" | "todos" | "analisis";
+type Tab = "por-pagar" | "todos" | "proveedores" | "analisis";
 
 /** Hoy en ISO local, para comparar vencimientos sin arrastrar zona horaria. */
 function hoyIso(): string {
@@ -130,6 +136,7 @@ export function EgresosView({
   const [detalle, setDetalle] = React.useState<Egreso | null>(null);
   const [anulando, setAnulando] = React.useState<Egreso | null>(null);
   const [reporte, setReporte] = React.useState<ReporteEgresos | null>(null);
+  const [saldos, setSaldos] = React.useState<SaldoProveedor[] | null>(null);
 
   const recargar = React.useCallback(
     async (t: Tab = tab) => {
@@ -158,6 +165,13 @@ export function EgresosView({
 
   const cambiarTab = (t: Tab) => {
     setTab(t);
+    if (t === "proveedores") {
+      setSaldos(null);
+      getSaldosProveedores()
+        .then((r) => setSaldos(r.proveedores))
+        .catch(() => setSaldos([]));
+      return;
+    }
     if (t === "analisis") {
       // El reporte se pide recién acá: es una agregación sobre todo el
       // período y no hace falta pagarla si nadie abre el tab.
@@ -265,6 +279,13 @@ export function EgresosView({
           </button>
           <button
             type="button"
+            className={tab === "proveedores" ? "on" : ""}
+            onClick={() => cambiarTab("proveedores")}
+          >
+            Proveedores
+          </button>
+          <button
+            type="button"
             className={tab === "analisis" ? "on" : ""}
             onClick={() => cambiarTab("analisis")}
           >
@@ -298,6 +319,8 @@ export function EgresosView({
 
       {tab === "analisis" ? (
         <Analisis reporte={reporte} fmt={fmt} />
+      ) : tab === "proveedores" ? (
+        <SaldosProveedores saldos={saldos} fmt={fmt} />
       ) : visibles.length === 0 ? (
         <div className="egr-empty">
           <div className="ttl">
@@ -476,6 +499,87 @@ export function EgresosView({
 }
 
 /**
+ * Saldo por proveedor con antigüedad (journey E2) — el espejo de la matriz de
+ * deudores, del otro lado del mostrador.
+ */
+function SaldosProveedores({
+  saldos,
+  fmt,
+}: {
+  saldos: SaldoProveedor[] | null;
+  fmt: (v: number) => string;
+}) {
+  if (!saldos) return <div className="egr-cargando">Calculando saldos…</div>;
+  if (saldos.length === 0) {
+    return (
+      <div className="egr-empty">
+        <div className="ttl">No le debés nada a nadie</div>
+        <div className="sub">
+          Acá vas a ver la deuda de cada proveedor repartida por antigüedad.
+        </div>
+      </div>
+    );
+  }
+  const totales = TRAMOS_AGING.map((t) =>
+    saldos.reduce((acc, p) => acc + p.aging[t], 0),
+  );
+  const total = saldos.reduce((acc, p) => acc + p.total, 0);
+  return (
+    <div className="egr-tabla-wrap">
+      <table className="egr-tabla">
+        <thead>
+          <tr>
+            <th>Proveedor</th>
+            {TRAMOS_AGING.map((t) => (
+              <th key={t} className="num">
+                {TRAMO_AGING_LABELS[t]}
+              </th>
+            ))}
+            <th className="num">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {saldos.map((p) => (
+            <tr key={p.proveedorId ?? "sin"}>
+              <td>
+                {p.nombre}
+                <span className="egr-sub">
+                  {p.cuit ? `CUIT ${p.cuit} · ` : ""}
+                  {p.egresos} egreso{p.egresos === 1 ? "" : "s"}
+                </span>
+              </td>
+              {TRAMOS_AGING.map((t) => (
+                <td
+                  key={t}
+                  className={`num mono ${
+                    /* Lo vencido hace más de 60 días es el KPI de riesgo. */
+                    (t === "d61_90" || t === "d90_mas") && p.aging[t] > 0
+                      ? "egr-mal"
+                      : ""
+                  }`}
+                >
+                  {p.aging[t] > 0 ? fmt(p.aging[t]) : "—"}
+                </td>
+              ))}
+              <td className="num mono strong">{fmt(p.total)}</td>
+            </tr>
+          ))}
+          <tr className="egr-fila-total">
+            <td className="strong">Total</td>
+            {totales.map((v, i) => (
+              <td key={TRAMOS_AGING[i]} className="num mono">
+                {v > 0 ? fmt(v) : "—"}
+              </td>
+            ))}
+            <td className="num mono strong">{fmt(total)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/**
  * "¿En qué se me va la plata?" (journey E3).
  *
  * Separa lo que es GASTO del período de lo que sólo movió caja. Sin esa
@@ -623,6 +727,7 @@ function AltaEgreso({
   const [cuentaId, setCuentaId] = React.useState(cuentas[0]?.id ?? "");
   const [referencia, setReferencia] = React.useState("");
   const [notas, setNotas] = React.useState("");
+  const [cuotas, setCuotas] = React.useState(1);
   const [guardando, setGuardando] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -667,6 +772,7 @@ function AltaEgreso({
         };
       } else {
         body.fechaVencimiento = vencimiento;
+        if (cuotas > 1) body.cuotas = cuotas;
       }
       await crearEgreso(body);
       onListo();
@@ -791,6 +897,27 @@ function AltaEgreso({
                     {proveedorElegido.condicionPagoDias === 0
                       ? `${proveedorElegido.nombre} es de contado.`
                       : `${proveedorElegido.nombre} da ${proveedorElegido.condicionPagoDias} días.`}
+                  </small>
+                ) : null}
+              </label>
+            ) : null}
+
+            {!yaPagado ? (
+              <label className="egr-f">
+                <span>Cuotas</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={36}
+                  value={cuotas}
+                  onChange={(e) =>
+                    setCuotas(Math.max(1, Math.min(36, Number(e.target.value) || 1)))
+                  }
+                />
+                {cuotas > 1 ? (
+                  <small className="egr-hint">
+                    {cuotas} egresos, uno por mes desde el vencimiento. Cada uno
+                    se paga por separado.
                   </small>
                 ) : null}
               </label>
@@ -948,10 +1075,22 @@ function RegistrarPago({
   const [montos, setMontos] = React.useState<Record<string, number>>(() =>
     Object.fromEntries(egresos.map((e) => [e.id, e.saldo])),
   );
+  const [retenciones, setRetenciones] = React.useState<
+    Array<{ regimen: string; monto: number }>
+  >([]);
+  const [chequeNumero, setChequeNumero] = React.useState("");
+  const [chequeBanco, setChequeBanco] = React.useState("");
+  const [chequeFormato, setChequeFormato] = React.useState("echeq");
+  const [chequeFechaPago, setChequeFechaPago] = React.useState("");
   const [guardando, setGuardando] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
+  const metodo = metodosPago.find((m) => m.id === metodoPagoId);
+  const esCheque = metodo?.tipo === "cheque_echeq";
   const total = egresos.reduce((acc, e) => acc + (montos[e.id] ?? 0), 0);
+  const retencionesTotal = retenciones.reduce((acc, r) => acc + r.monto, 0);
+  // Lo que realmente sale de la cuenta: lo retenido se deposita al fisco.
+  const neto = total - retencionesTotal;
   const excede = egresos.some((e) => (montos[e.id] ?? 0) > e.saldo + 0.005);
 
   const guardar = async () => {
@@ -966,6 +1105,24 @@ function RegistrarPago({
         imputaciones: egresos
           .filter((e) => (montos[e.id] ?? 0) > 0)
           .map((e) => ({ egresoId: e.id, monto: montos[e.id] })),
+        retenciones: retenciones
+          .filter((r) => r.monto > 0)
+          .map((r) => ({
+            regimen: r.regimen,
+            // La base es el total del pago y la alícuota se deriva: al
+            // administrativo le llega el MONTO en el certificado, no el %.
+            base: total,
+            alicuota: total > 0 ? Math.round((r.monto / total) * 100000) / 1000 : 0,
+            monto: r.monto,
+          })),
+        cheque: esCheque
+          ? {
+              numero: chequeNumero.trim(),
+              banco: chequeBanco.trim(),
+              formato: chequeFormato,
+              fechaPago: chequeFechaPago || undefined,
+            }
+          : undefined,
       });
       onListo();
     } catch (e) {
@@ -1050,10 +1207,131 @@ function RegistrarPago({
             </label>
           </div>
 
-          <div className="egr-total">
-            <span>Total del pago</span>
-            <strong className="mono">{fmt(total)}</strong>
+          {esCheque ? (
+            <div className="egr-sub-bloque">
+              <div className="egr-panel-t">Cheque propio</div>
+              <div className="egr-grid">
+                <label className="egr-f">
+                  <span>Número</span>
+                  <input
+                    value={chequeNumero}
+                    onChange={(e) => setChequeNumero(e.target.value)}
+                    placeholder="00012345"
+                  />
+                </label>
+                <label className="egr-f">
+                  <span>Banco</span>
+                  <input
+                    value={chequeBanco}
+                    onChange={(e) => setChequeBanco(e.target.value)}
+                    placeholder="Galicia"
+                  />
+                </label>
+                <label className="egr-f">
+                  <span>Formato</span>
+                  <select
+                    className="egr-select"
+                    value={chequeFormato}
+                    onChange={(e) => setChequeFormato(e.target.value)}
+                  >
+                    <option value="echeq">e-cheq</option>
+                    <option value="fisico">Físico</option>
+                  </select>
+                </label>
+                <label className="egr-f">
+                  <span>Fecha de pago</span>
+                  <input
+                    type="date"
+                    value={chequeFechaPago}
+                    onChange={(e) => setChequeFechaPago(e.target.value)}
+                  />
+                  <small className="egr-hint">
+                    Con fecha futura es diferido.
+                  </small>
+                </label>
+              </div>
+              <div className="egr-nota-inline">
+                La factura queda saldada, pero la plata no sale de la cuenta
+                hasta que el banco lo debite.
+              </div>
+            </div>
+          ) : null}
+
+          <div className="egr-sub-bloque">
+            <div className="egr-panel-t">
+              Retenciones practicadas
+              <button
+                type="button"
+                className="egr-link egr-mini"
+                onClick={() =>
+                  setRetenciones((prev) => [
+                    ...prev,
+                    { regimen: "SICORE_GANANCIAS", monto: 0 },
+                  ])
+                }
+              >
+                + Agregar
+              </button>
+            </div>
+            {retenciones.length === 0 ? (
+              <div className="egr-sub">
+                Sin retenciones: sale el total del pago.
+              </div>
+            ) : (
+              retenciones.map((r, i) => (
+                <div className="egr-ret-fila" key={i}>
+                  <select
+                    className="egr-select"
+                    value={r.regimen}
+                    onChange={(e) =>
+                      setRetenciones((prev) =>
+                        prev.map((x, j) =>
+                          j === i ? { ...x, regimen: e.target.value } : x,
+                        ),
+                      )
+                    }
+                  >
+                    {REGIMENES_RETENCION.map((g) => (
+                      <option key={g} value={g}>
+                        {REGIMEN_RETENCION_LABELS[g]}
+                      </option>
+                    ))}
+                  </select>
+                  <CampoMonto
+                    valor={r.monto}
+                    onCambio={(v) =>
+                      setRetenciones((prev) =>
+                        prev.map((x, j) => (j === i ? { ...x, monto: v } : x)),
+                      )
+                    }
+                    ariaLabel="Monto retenido"
+                  />
+                  <button
+                    type="button"
+                    className="egr-link"
+                    onClick={() =>
+                      setRetenciones((prev) => prev.filter((_, j) => j !== i))
+                    }
+                  >
+                    Quitar
+                  </button>
+                </div>
+              ))
+            )}
           </div>
+
+          <div className="egr-total">
+            <span>
+              {retencionesTotal > 0 ? "Sale de la cuenta" : "Total del pago"}
+            </span>
+            <strong className="mono">{fmt(neto)}</strong>
+          </div>
+          {retencionesTotal > 0 ? (
+            <div className="egr-nota-inline">
+              Se saldan {fmt(total)} de deuda; {fmt(retencionesTotal)} quedan
+              retenidos para depositar al fisco.
+            </div>
+          ) : null}
 
           {excede ? (
             <div className="egr-error">
@@ -1069,10 +1347,20 @@ function RegistrarPago({
           <button
             type="button"
             className="btn btn-primary"
-            disabled={guardando || total <= 0 || excede}
+            disabled={
+              guardando ||
+              total <= 0 ||
+              excede ||
+              retencionesTotal > total ||
+              (esCheque && (!chequeNumero.trim() || !chequeBanco.trim()))
+            }
             onClick={() => void guardar()}
           >
-            {guardando ? "Registrando…" : `Pagar ${fmt(total)}`}
+            {guardando
+              ? "Registrando…"
+              : esCheque
+                ? `Emitir cheque por ${fmt(neto)}`
+                : `Pagar ${fmt(neto)}`}
           </button>
         </div>
       </div>

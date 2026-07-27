@@ -55,6 +55,27 @@ export const TIPO_COMPROBANTE_LABELS: Record<TipoComprobanteCompra, string> = {
   SIN_DOCUMENTO: 'Sin documento',
 };
 
+/**
+ * Regímenes de retención PRACTICADA. Mismo catálogo que las sufridas del lado
+ * de cobros (`administracion/dto/cobro.dto.ts`): son los mismos impuestos,
+ * cambia de qué lado del mostrador estamos.
+ */
+export const REGIMENES_RETENCION = [
+  'SICORE_GANANCIAS',
+  'IVA_RG2854',
+  'IIBB_CONVENIO',
+  'SUSS',
+  'otro',
+] as const;
+
+export const REGIMEN_RETENCION_LABELS: Record<string, string> = {
+  SICORE_GANANCIAS: 'Ganancias (SICORE)',
+  IVA_RG2854: 'IVA',
+  IIBB_CONVENIO: 'Ingresos brutos',
+  SUSS: 'SUSS',
+  otro: 'Otro',
+};
+
 export const NATURALEZA_LABELS: Record<NaturalezaEgreso, string> = {
   COSTO_PRODUCCION: 'Costo de producción',
   GASTO_ESTRUCTURA: 'Gasto de estructura',

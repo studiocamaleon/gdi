@@ -409,6 +409,8 @@ enum ArchivoScope {
   COBRO
   PRODUCTO
   PROVEEDOR
+  /// La factura del proveedor escaneada, colgada del egreso.
+  EGRESO
 }
 
 /// PENDIENTE: fila creada, presigned firmado, bytes todavía no verificados.
@@ -3226,6 +3228,9 @@ model RetencionPercepcion {
   id             String   @id @default(uuid()) @db.Uuid
   tenantId       String   @db.Uuid
   cobroId        String?  @db.Uuid
+  /// Pago a proveedor cuando la retención es PRACTICADA (se la retenemos al
+  /// pagarle). Excluyente con cobroId: una es sufrida y la otra practicada.
+  pagoId         String?  @db.Uuid
   /// 'sufrida' (nos retienen al cobrar) | 'practicada' (retenemos al pagar, F2).
   direccion      String   @default("sufrida")
   /// 'SIRCREB' | 'SIRTAC' | 'IIBB_CONVENIO' | 'SICORE_GANANCIAS' |
@@ -3241,6 +3246,7 @@ model RetencionPercepcion {
   createdAt      DateTime @default(now())
   tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   cobro          Cobro?   @relation(fields: [cobroId], references: [id], onDelete: Cascade)
+  pago           Pago?    @relation(fields: [pagoId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, periodoFiscal])
   @@index([tenantId, regimen])
@@ -3613,6 +3619,7 @@ model Egreso {
   gastoFijo    GastoFijoEstructura? @relation(fields: [gastoFijoEstructuraId], references: [id])
   empleado     Empleado?            @relation(fields: [empleadoId], references: [id])
   imputaciones PagoImputacion[]
+  archivos     Archivo[]
 
   @@unique([tenantId, numero])
   /// ANTIDUPLICADO: la misma factura del mismo proveedor no se carga dos veces.
@@ -3661,13 +3668,14 @@ model Pago {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
-  tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  metodoPago   MetodoPago         @relation(fields: [metodoPagoId], references: [id])
-  cuentaOrigen CuentaFondos       @relation(fields: [cuentaOrigenId], references: [id])
-  proveedor    Proveedor?         @relation(fields: [proveedorId], references: [id])
-  valor        Valor?             @relation(fields: [valorId], references: [id])
+  tenant       Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  metodoPago   MetodoPago            @relation(fields: [metodoPagoId], references: [id])
+  cuentaOrigen CuentaFondos          @relation(fields: [cuentaOrigenId], references: [id])
+  proveedor    Proveedor?            @relation(fields: [proveedorId], references: [id])
+  valor        Valor?                @relation(fields: [valorId], references: [id])
   imputaciones PagoImputacion[]
   movimientos  MovimientoFondos[]
+  retenciones  RetencionPercepcion[]
 
   @@unique([tenantId, numero])
   @@index([tenantId, fecha])
@@ -3764,6 +3772,7 @@ model Archivo {
   cotizacionId  String? @db.Uuid
   comprobanteId String? @db.Uuid
   cobroId       String? @db.Uuid
+  egresoId      String? @db.Uuid
   productoId    String? @db.Uuid
   proveedorId   String? @db.Uuid
 
@@ -3775,6 +3784,7 @@ model Archivo {
   cotizacion  Cotizacion?       @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
   comprobante Comprobante?      @relation(fields: [comprobanteId], references: [id], onDelete: Cascade)
   cobro       Cobro?            @relation(fields: [cobroId], references: [id], onDelete: Cascade)
+  egreso      Egreso?           @relation(fields: [egresoId], references: [id], onDelete: Cascade)
   producto    Producto?         @relation(fields: [productoId], references: [id], onDelete: Cascade)
   proveedor   Proveedor?        @relation(fields: [proveedorId], references: [id], onDelete: Cascade)
 
@@ -3786,6 +3796,7 @@ model Archivo {
   @@index([tenantId, ordenId])
   @@index([tenantId, clienteId])
   @@index([tenantId, cotizacionId])
+  @@index([tenantId, egresoId])
   @@index([estado, createdAt])
 }
 

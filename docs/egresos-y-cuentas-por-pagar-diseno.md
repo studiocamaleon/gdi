@@ -1,6 +1,7 @@
 # Egresos y Cuentas por pagar — diseño
 
-Estado: **F1 en implementación**. Diseñado 2026-07-26.
+Estado: **F1 y F2 implementadas** (falta la orden de pago imprimible y los adjuntos).
+Diseñado 2026-07-26.
 
 Módulo para registrar **todo lo que sale de la caja**: pago de servicios, alquiler,
 sueldos, proveedores, combustible, multas, adelantos. Y como consecuencia —no como
@@ -524,9 +525,16 @@ los importes, no la categoría); y el tab **Análisis**: "¿en qué se me va la 
 por categoría y naturaleza, agrupado por competencia, separando el gasto del
 período de lo que sólo movió caja.
 
-**F2 — Cuentas por pagar completo.** Aging por vencimiento, pago masivo sobre
-selección, orden de pago imprimible, retenciones practicadas, cheque propio, adjuntos,
-y el saldo por proveedor (journey E2).
+**F2 — Cuentas por pagar completo (hecho, salvo la orden de pago imprimible).**
+Retenciones practicadas (reducen lo que SALE sin reducir lo que se salda), cheque
+propio (la factura se salda y la plata no sale hasta que el banco lo debite), cuotas
+como N egresos hermanados, y el **saldo por proveedor con aging** — donde, a
+diferencia de CxC, el tramo "a vencer" sí se llena, porque del lado de compras hay
+vencimientos reales.
+
+Queda para F2.1: la **orden de pago imprimible** (PDF con jsPDF, como los otros tres
+documentos) y los **adjuntos** del egreso — el scope `ArchivoScope.EGRESO` y el FK ya
+están en la base, falta la UI.
 
 **F3 — Recurrentes.** `GastoRecurrente` + cron de generación + el puente con
 `GastoFijoEstructura` y el reporte presupuestado vs. real.

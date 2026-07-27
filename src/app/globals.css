@@ -35834,3 +35834,78 @@ body:has(.t-app) {
     display: none;
   }
 }
+
+/* Fila de totales de la matriz por proveedor */
+.egr-tabla tr.egr-fila-total td {
+  border-top: 1.5px solid var(--border-strong);
+  background: var(--surface-2);
+  font-weight: 650;
+}
+
+.egr-tabla .strong {
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.egr-tabla .egr-mal {
+  color: var(--signal);
+}
+
+/* Bloques del modal de pago: cheque y retenciones */
+.egr-sub-bloque {
+  margin-top: 14px;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+}
+
+.egr-sub-bloque .egr-panel-t {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.egr-link.egr-mini {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--signal);
+}
+
+.egr-ret-fila {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 160px 60px;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 0;
+}
+
+.egr-ret-fila + .egr-ret-fila {
+  border-top: 1px solid var(--hairline);
+}
+
+.egr-select {
+  padding: 8px 10px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-1);
+}
+
+.egr-nota-inline {
+  margin-top: 8px;
+  color: var(--muted-text);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+@media (max-width: 640px) {
+  .egr-ret-fila {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

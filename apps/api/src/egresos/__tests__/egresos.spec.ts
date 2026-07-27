@@ -22,6 +22,7 @@ describe('EgresosService', () => {
   let auth: CurrentAuth;
   let cuentaId: string;
   let metodoPagoId: string;
+  let metodoChequeId: string;
   let proveedorId: string;
   let otroProveedorId: string;
   let catMateriales: string;
@@ -58,6 +59,15 @@ describe('EgresosService', () => {
       },
     });
     metodoPagoId = metodo.id;
+    const chequeMetodo = await prisma.metodoPago.create({
+      data: {
+        tenantId,
+        codigo: 'cheque-test',
+        nombre: 'Cheque propio',
+        tipo: 'cheque_echeq',
+      },
+    });
+    metodoChequeId = chequeMetodo.id;
     const prov = await prisma.proveedor.create({
       data: {
         tenantId,
@@ -394,6 +404,255 @@ describe('EgresosService', () => {
       // Una máquina nueva no es gasto de julio; un retiro de socios tampoco.
       expect(incideEnResultado('INVERSION')).toBe(false);
       expect(incideEnResultado('RETIRO_SOCIOS')).toBe(false);
+    });
+  });
+
+  // ── F2: retenciones practicadas (C4) ─────────────────────────────────
+
+  describe('retenciones practicadas', () => {
+    it('reducen lo que SALE sin reducir lo que se salda', async () => {
+      const { id } = await service.crear(auth, {
+        descripcion: 'Servicio con retención',
+        categoriaEgresoId: catMateriales,
+        proveedorId,
+        fechaVencimiento: '2026-09-30',
+        neto: 320_000,
+        tipoComprobante: 'FA',
+        puntoVenta: '0004',
+        numeroComprobante: nroDoc(),
+      });
+      const saldoAntes = await saldoCuenta();
+
+      const pago = await service.registrarPago(auth, {
+        metodoPagoId,
+        cuentaOrigenId: cuentaId,
+        imputaciones: [{ egresoId: id, monto: 320_000 }],
+        retenciones: [
+          {
+            regimen: 'SICORE_GANANCIAS',
+            base: 320_000,
+            alicuota: 3,
+            monto: 9_600,
+          },
+        ],
+      });
+
+      // La factura queda saldada por el BRUTO...
+      const egreso = await prisma.egreso.findUniqueOrThrow({ where: { id } });
+      expect(egreso.estado).toBe('pagado');
+      expect(Number(egreso.pagadoTotal)).toBe(320_000);
+      // ...pero de la cuenta salió el NETO: lo retenido se deposita al fisco.
+      expect(pago.montoNeto).toBe(310_400);
+      expect(await saldoCuenta()).toBe(saldoAntes - 310_400);
+
+      const ret = await prisma.retencionPercepcion.findMany({
+        where: { tenantId, pagoId: pago.id },
+      });
+      expect(ret).toHaveLength(1);
+      expect(ret[0].direccion).toBe('practicada');
+    });
+
+    it('no deja retener más que el pago', async () => {
+      const { id } = await service.crear(auth, {
+        descripcion: 'Chico',
+        categoriaEgresoId: catMateriales,
+        proveedorId,
+        fechaVencimiento: '2026-09-30',
+        neto: 1_000,
+        tipoComprobante: 'FA',
+        puntoVenta: '0004',
+        numeroComprobante: nroDoc(),
+      });
+      await expect(
+        service.registrarPago(auth, {
+          metodoPagoId,
+          cuentaOrigenId: cuentaId,
+          imputaciones: [{ egresoId: id, monto: 1_000 }],
+          retenciones: [
+            { regimen: 'otro', base: 1_000, alicuota: 200, monto: 2_000 },
+          ],
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  // ── F2: cheque propio (C5) ───────────────────────────────────────────
+
+  describe('cheque propio', () => {
+    it('salda la factura pero NO toca la cuenta hasta que se debite', async () => {
+      const { id } = await service.crear(auth, {
+        descripcion: 'Pago con cheque',
+        categoriaEgresoId: catMateriales,
+        proveedorId,
+        fechaVencimiento: '2026-09-30',
+        neto: 200_000,
+        tipoComprobante: 'FA',
+        puntoVenta: '0005',
+        numeroComprobante: nroDoc(),
+      });
+      const saldoAntes = await saldoCuenta();
+
+      const pago = await service.registrarPago(auth, {
+        metodoPagoId: metodoChequeId,
+        cuentaOrigenId: cuentaId,
+        imputaciones: [{ egresoId: id, monto: 200_000 }],
+        cheque: {
+          numero: '00012345',
+          banco: 'Galicia',
+          formato: 'echeq',
+          fechaPago: '2026-11-30',
+        },
+      });
+
+      expect(pago.enCartera).toBe(true);
+      const egreso = await prisma.egreso.findUniqueOrThrow({ where: { id } });
+      expect(egreso.estado).toBe('pagado');
+      // La plata NO salió: el cheque está en cartera.
+      expect(await saldoCuenta()).toBe(saldoAntes);
+      const movs = await prisma.movimientoFondos.count({
+        where: { tenantId, pagoId: pago.id },
+      });
+      expect(movs).toBe(0);
+
+      const valor = await prisma.valor.findFirstOrThrow({
+        where: { tenantId, numero: '00012345' },
+      });
+      expect(valor.origen).toBe('propio');
+      expect(valor.estado).toBe('cartera');
+      expect(valor.proveedorId).toBe(proveedorId);
+    });
+
+    it('exige los datos del cheque si el método es cheque', async () => {
+      const { id } = await service.crear(auth, {
+        descripcion: 'Sin datos de cheque',
+        categoriaEgresoId: catMateriales,
+        proveedorId,
+        fechaVencimiento: '2026-09-30',
+        neto: 5_000,
+        tipoComprobante: 'FA',
+        puntoVenta: '0005',
+        numeroComprobante: nroDoc(),
+      });
+      await expect(
+        service.registrarPago(auth, {
+          metodoPagoId: metodoChequeId,
+          cuentaOrigenId: cuentaId,
+          imputaciones: [{ egresoId: id, monto: 5_000 }],
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('anular el pago con cheque en cartera lo da de baja, sin contramovimiento', async () => {
+      const { id } = await service.crear(auth, {
+        descripcion: 'Cheque a anular',
+        categoriaEgresoId: catMateriales,
+        proveedorId,
+        fechaVencimiento: '2026-09-30',
+        neto: 70_000,
+        tipoComprobante: 'FA',
+        puntoVenta: '0006',
+        numeroComprobante: nroDoc(),
+      });
+      const saldoAntes = await saldoCuenta();
+      const pago = await service.registrarPago(auth, {
+        metodoPagoId: metodoChequeId,
+        cuentaOrigenId: cuentaId,
+        imputaciones: [{ egresoId: id, monto: 70_000 }],
+        cheque: { numero: '00099999', banco: 'Nación', formato: 'fisico' },
+      });
+
+      await service.anularPago(auth, pago.id, { motivo: 'sin fondos' });
+
+      const egreso = await prisma.egreso.findUniqueOrThrow({ where: { id } });
+      expect(egreso.estado).toBe('pendiente');
+      // Nunca salió plata, así que tampoco vuelve nada.
+      expect(await saldoCuenta()).toBe(saldoAntes);
+      const movs = await prisma.movimientoFondos.count({
+        where: { tenantId, pagoId: pago.id },
+      });
+      expect(movs).toBe(0);
+      const valor = await prisma.valor.findFirstOrThrow({
+        where: { tenantId, numero: '00099999' },
+      });
+      expect(valor.estado).toBe('rechazado');
+    });
+  });
+
+  // ── F2: cuotas (B11) ─────────────────────────────────────────────────
+
+  describe('cuotas', () => {
+    it('crea N egresos hermanados y el total cierra exacto', async () => {
+      const doc = nroDoc();
+      await service.crear(auth, {
+        descripcion: 'Guillotina en cuotas',
+        categoriaEgresoId: catMaquinaria,
+        proveedorId,
+        fechaVencimiento: '2026-09-10',
+        neto: 100_000,
+        cuotas: 3,
+        tipoComprobante: 'FA',
+        puntoVenta: '0007',
+        numeroComprobante: doc,
+      });
+      const cuotas = await prisma.egreso.findMany({
+        where: { tenantId, numeroComprobante: { startsWith: `${doc}/` } },
+        orderBy: { fechaVencimiento: 'asc' },
+      });
+      expect(cuotas).toHaveLength(3);
+      // El total cierra exacto: el resto va en la primera, no se pierde.
+      const suma = cuotas.reduce((acc, c) => acc + Number(c.total), 0);
+      expect(Math.round(suma * 100) / 100).toBe(100_000);
+      // Un vencimiento por mes.
+      expect(cuotas.map((c) => c.fechaVencimiento?.toISOString().slice(0, 10)))
+        .toEqual(['2026-09-10', '2026-10-10', '2026-11-10']);
+      expect(cuotas[0].descripcion).toContain('cuota 1/3');
+    });
+
+    it('en cuotas no puede nacer pagado', async () => {
+      await expect(
+        service.crear(auth, {
+          descripcion: 'Cuotas pagadas',
+          categoriaEgresoId: catMaquinaria,
+          beneficiarioNombre: 'X',
+          fechaVencimiento: '2026-09-10',
+          neto: 30_000,
+          cuotas: 3,
+          pago: { metodoPagoId, cuentaOrigenId: cuentaId },
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  // ── F2: saldo por proveedor con aging (E2) ───────────────────────────
+
+  describe('saldos por proveedor', () => {
+    it('agrupa la deuda por proveedor y la reparte por antigüedad', async () => {
+      const r = await service.saldosPorProveedor(auth);
+      const papelera = r.proveedores.find((p) => p.proveedorId === proveedorId);
+      expect(papelera).toBeDefined();
+      expect(papelera!.total).toBeGreaterThan(0);
+      // La suma de los tramos es el total del proveedor.
+      const suma =
+        papelera!.aging.a_vencer +
+        papelera!.aging.d0_30 +
+        papelera!.aging.d31_60 +
+        papelera!.aging.d61_90 +
+        papelera!.aging.d90_mas;
+      expect(Math.round(suma * 100) / 100).toBe(papelera!.total);
+    });
+
+    it('los egresos sin proveedor tienen su propia fila', async () => {
+      await service.crear(auth, {
+        descripcion: 'Flete sin factura a plazo',
+        categoriaEgresoId: catMateriales,
+        beneficiarioNombre: 'Ramón',
+        fechaVencimiento: '2026-12-01',
+        neto: 12_345,
+      });
+      const r = await service.saldosPorProveedor(auth);
+      const sin = r.proveedores.find((p) => p.proveedorId === null);
+      expect(sin?.nombre).toBe('Sin proveedor');
+      expect(sin?.total).toBeGreaterThanOrEqual(12_345);
     });
   });
 

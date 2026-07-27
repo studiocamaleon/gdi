@@ -6,6 +6,7 @@ import type {
   PagoDeEgreso,
   ReporteEgresos,
   ResumenEgresos,
+  SaldoProveedor,
 } from "@/lib/egresos";
 
 // ── Categorías ─────────────────────────────────────────────────────────
@@ -87,6 +88,16 @@ export async function getReporteEgresos(rango?: {
   );
 }
 
+/** Saldo por proveedor con antigüedad (journey E2). */
+export async function getSaldosProveedores(): Promise<{
+  proveedores: SaldoProveedor[];
+  total: number;
+}> {
+  return apiRequest<{ proveedores: SaldoProveedor[]; total: number }>(
+    "/egresos/proveedores",
+  );
+}
+
 export type CrearEgresoBody = {
   descripcion: string;
   categoriaEgresoId: string;
@@ -104,6 +115,8 @@ export type CrearEgresoBody = {
   centroCostoId?: string;
   empleadoId?: string;
   notas?: string;
+  /** N cuotas = N egresos hermanados, uno por vencimiento mensual. */
+  cuotas?: number;
   /** Presente = el egreso nace pagado (switch "ya está pagado"). */
   pago?: {
     metodoPagoId: string;
@@ -149,8 +162,40 @@ export async function registrarPagoEgresos(body: {
   referencia?: string;
   notas?: string;
   imputaciones: Array<{ egresoId: string; monto: number }>;
-}): Promise<{ id: string; numero: string; montoNeto: number }> {
-  return apiRequest<{ id: string; numero: string; montoNeto: number }>(
+  /** Reducen lo que sale sin reducir lo que se salda. */
+  retenciones?: Array<{
+    regimen: string;
+    jurisdiccion?: string;
+    base: number;
+    alicuota: number;
+    monto: number;
+    nroComprobante?: string;
+  }>;
+  /** Obligatorio si el método es de tipo cheque. */
+  cheque?: {
+    numero: string;
+    banco: string;
+    formato: string;
+    fechaEmision?: string;
+    fechaPago?: string;
+  };
+}): Promise<{
+  id: string;
+  numero: string;
+  montoBruto: number;
+  retencionesTotal: number;
+  montoNeto: number;
+  /** El cheque quedó en cartera: la plata todavía no salió. */
+  enCartera: boolean;
+}> {
+  return apiRequest<{
+    id: string;
+    numero: string;
+    montoBruto: number;
+    retencionesTotal: number;
+    montoNeto: number;
+    enCartera: boolean;
+  }>(
     "/egresos/pagos",
     {
       method: "POST",

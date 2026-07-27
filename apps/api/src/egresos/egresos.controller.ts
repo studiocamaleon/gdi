@@ -84,6 +84,12 @@ export class EgresosController {
     return this.egresos.resumen(auth);
   }
 
+  /** Saldo por proveedor con antigüedad: el espejo de la matriz de deudores. */
+  @Get('proveedores')
+  saldosPorProveedor(@CurrentSession() auth: CurrentAuth) {
+    return this.egresos.saldosPorProveedor(auth);
+  }
+
   /** "¿En qué se me va la plata?" — por categoría y naturaleza, por competencia. */
   @Get('reporte')
   reporte(

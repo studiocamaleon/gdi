@@ -2,11 +2,13 @@ import {
   IsArray,
   IsBoolean,
   IsIn,
+  IsInt,
   IsISO8601,
   IsNumber,
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
   Min,
   MinLength,
@@ -15,7 +17,10 @@ import {
 import { Type } from 'class-transformer';
 import { NaturalezaEgreso } from '@prisma/client';
 
-import { TIPOS_COMPROBANTE_COMPRA } from '../egresos.types';
+import {
+  REGIMENES_RETENCION,
+  TIPOS_COMPROBANTE_COMPRA,
+} from '../egresos.types';
 
 /**
  * Pago que viaja JUNTO con el egreso: es el "ya está pagado" del formulario.
@@ -131,6 +136,18 @@ export class CrearEgresoDto {
   @ValidateNested()
   @Type(() => PagoInlineDto)
   pago?: PagoInlineDto;
+
+  /**
+   * Cuotas: en vez de un egreso con N vencimientos se crean N egresos
+   * hermanados, uno por cuota. Es lo que se ve en el listado igual, se paga
+   * por separado sin lógica nueva, y cada cuota envejece por su cuenta en el
+   * aging. Sólo con vencimiento (una compra en cuotas no es de contado).
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(2)
+  @Max(36)
+  cuotas?: number;
 }
 
 export class EditarEgresoDto {
@@ -190,6 +207,57 @@ export class ImputacionPagoDto {
   monto: number;
 }
 
+/** Retención PRACTICADA: se la retenemos al proveedor al pagarle. */
+export class RetencionPracticadaDto {
+  @IsIn(REGIMENES_RETENCION)
+  regimen: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  jurisdiccion?: string;
+
+  @IsNumber()
+  @Min(0)
+  base: number;
+
+  @IsNumber()
+  @Min(0)
+  alicuota: number;
+
+  @IsNumber()
+  @Min(0.01)
+  monto: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  nroComprobante?: string;
+}
+
+/** Cheque PROPIO emitido: la factura queda paga pero la plata no salió. */
+export class ChequePropioDto {
+  @IsString()
+  @MaxLength(30)
+  numero: string;
+
+  @IsString()
+  @MaxLength(80)
+  banco: string;
+
+  @IsIn(['fisico', 'echeq'])
+  formato: string;
+
+  @IsOptional()
+  @IsISO8601()
+  fechaEmision?: string;
+
+  /** Con fecha futura es diferido; es lo que define cuándo sale la plata. */
+  @IsOptional()
+  @IsISO8601()
+  fechaPago?: string;
+}
+
 export class RegistrarPagoDto {
   @IsUUID()
   metodoPagoId: string;
@@ -216,6 +284,19 @@ export class RegistrarPagoDto {
   @ValidateNested({ each: true })
   @Type(() => ImputacionPagoDto)
   imputaciones: ImputacionPagoDto[];
+
+  /** Reducen lo que SALE sin reducir lo que se salda. */
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => RetencionPracticadaDto)
+  retenciones?: RetencionPracticadaDto[];
+
+  /** Obligatorio si el método es cheque_echeq. */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ChequePropioDto)
+  cheque?: ChequePropioDto;
 }
 
 export class CrearCategoriaEgresoDto {
