@@ -1,9 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import {
-  ImputacionPreferidaCentroCosto,
-  Prisma,
-  TipoCentroCosto,
-} from '@prisma/client';
+import { Prisma, TipoCentroCosto } from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import type { RepartoAbsorbidoItem, RepartoPeriodo } from './costos.types';
@@ -47,11 +43,10 @@ export class CostosRepartoService {
       };
     }
 
+    // Todo lo que no produce es estructura, y la estructura se reparte entre
+    // los que producen. Antes hacía falta un segundo campo para decir esto.
     const fuentes = centros
-      .filter(
-        (item) =>
-          item.imputacionPreferida === ImputacionPreferidaCentroCosto.REPARTO,
-      )
+      .filter((item) => item.tipoCentro === TipoCentroCosto.NO_PRODUCTIVO)
       .map((item) => ({
         ...item,
         costoMensualDirecto: this.computeCostoMensualDirectoCentro(item),

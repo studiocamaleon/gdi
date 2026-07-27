@@ -10,7 +10,7 @@ import {
   EstadoTarifaCentroCostoPeriodo,
   Prisma,
   PrismaClient,
-  UnidadBaseCentroCosto,
+  TipoCentroCosto,
 } from '@prisma/client';
 import { MotorUniversalService } from '../motor.service';
 import { runNestingForPaso } from '../nesting-dispatcher';
@@ -59,7 +59,7 @@ async function ensureCentroHorarioConTarifa(tenantId: string) {
     where: {
       tenantId,
       activo: true,
-      unidadBaseFutura: UnidadBaseCentroCosto.HORA_HOMBRE,
+      tipoCentro: TipoCentroCosto.PRODUCTIVO,
     },
   });
 
@@ -146,7 +146,8 @@ async function ensureCentrosManualesDemo(tenantId: string) {
     where: {
       tenantId,
       activo: true,
-      unidadBaseFutura: { not: UnidadBaseCentroCosto.HORA_HOMBRE },
+      tipoCentro: TipoCentroCosto.PRODUCTIVO,
+      id: { not: centro.id },
     },
     select: { id: true },
   });

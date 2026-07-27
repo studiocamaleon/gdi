@@ -3,17 +3,13 @@ import {
   CategoriaComponenteCostoCentro,
   type CentroCostoLinea,
   EstadoTarifaCentroCostoPeriodo,
-  ImputacionPreferidaCentroCosto,
   Prisma,
   SeccionCentroCostoLinea,
   TipoCentroCosto,
-  UnidadBaseCentroCosto,
 } from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
 import {
-  ImputacionPreferidaCentroCostoDto,
   TipoCentroCostoDto,
-  UnidadBaseCentroCostoDto,
   UpsertCentroCostoDto,
 } from './dto/upsert-centro-costo.dto';
 import {
@@ -115,19 +111,12 @@ export class CostosMapper {
       nombre: centro.nombre,
       descripcion: centro.descripcion ?? '',
       tipoCentro: this.fromPrismaTipoCentro(centro.tipoCentro),
-      imputacionPreferida: this.fromPrismaImputacion(
-        centro.imputacionPreferida,
-      ),
-      unidadBaseFutura: this.fromPrismaUnidadBase(centro.unidadBaseFutura),
       activo: centro.activo,
       estadoConfiguracion,
       ultimoPeriodoConfigurado,
       ultimaTarifaPublicada: ultimaTarifaPublicada
         ? this.decimalToNumber(ultimaTarifaPublicada.tarifaCalculada)
         : null,
-      unidadTarifaPublicada: ultimaTarifaPublicada
-        ? this.fromPrismaUnidadBase(centro.unidadBaseFutura)
-        : '',
       ultimaTarifaBase: tarifaDirectaSinReparto,
       ultimaTarifaAbsorbida: tarifaAbsorbidaReparto,
       ultimaTarifaTotal: tarifaTotalCalculada,
@@ -144,7 +133,6 @@ export class CostosMapper {
     return {
       id: capacidad.id,
       periodo: capacidad.periodo,
-      unidadBase: this.fromPrismaUnidadBase(capacidad.unidadBase),
       horasProductivas: this.decimalToNumber(capacidad.horasProductivas),
     };
   }
@@ -177,8 +165,6 @@ export class CostosMapper {
       nombre: payload.nombre.trim(),
       descripcion: payload.descripcion?.trim() || null,
       tipoCentro: this.toPrismaTipoCentro(payload.tipoCentro),
-      imputacionPreferida: this.toPrismaImputacion(payload.imputacionPreferida),
-      unidadBaseFutura: this.toPrismaUnidadBase(payload.unidadBaseFutura),
       activo: payload.activo,
     };
   }
@@ -192,8 +178,6 @@ export class CostosMapper {
       nombre: payload.nombre.trim(),
       descripcion: payload.descripcion?.trim() || null,
       tipoCentro: this.toPrismaTipoCentro(payload.tipoCentro),
-      imputacionPreferida: this.toPrismaImputacion(payload.imputacionPreferida),
-      unidadBaseFutura: this.toPrismaUnidadBase(payload.unidadBaseFutura),
       activo: payload.activo,
     };
   }
@@ -324,11 +308,7 @@ export class CostosMapper {
   toPrismaTipoCentro(tipo: TipoCentroCostoDto) {
     const mapping: Record<TipoCentroCostoDto, TipoCentroCosto> = {
       [TipoCentroCostoDto.productivo]: TipoCentroCosto.PRODUCTIVO,
-      [TipoCentroCostoDto.apoyo]: TipoCentroCosto.APOYO,
-      [TipoCentroCostoDto.administrativo]: TipoCentroCosto.ADMINISTRATIVO,
-      [TipoCentroCostoDto.comercial]: TipoCentroCosto.COMERCIAL,
-      [TipoCentroCostoDto.logistico]: TipoCentroCosto.LOGISTICO,
-      [TipoCentroCostoDto.tercerizado]: TipoCentroCosto.TERCERIZADO,
+      [TipoCentroCostoDto.no_productivo]: TipoCentroCosto.NO_PRODUCTIVO,
     };
     return mapping[tipo];
   }
@@ -336,74 +316,16 @@ export class CostosMapper {
   fromPrismaTipoCentro(tipo: TipoCentroCosto) {
     const mapping: Record<TipoCentroCosto, TipoCentroCostoDto> = {
       [TipoCentroCosto.PRODUCTIVO]: TipoCentroCostoDto.productivo,
-      [TipoCentroCosto.APOYO]: TipoCentroCostoDto.apoyo,
-      [TipoCentroCosto.ADMINISTRATIVO]: TipoCentroCostoDto.administrativo,
-      [TipoCentroCosto.COMERCIAL]: TipoCentroCostoDto.comercial,
-      [TipoCentroCosto.LOGISTICO]: TipoCentroCostoDto.logistico,
-      [TipoCentroCosto.TERCERIZADO]: TipoCentroCostoDto.tercerizado,
+      [TipoCentroCosto.NO_PRODUCTIVO]: TipoCentroCostoDto.no_productivo,
     };
     return mapping[tipo];
   }
 
 
 
-  toPrismaImputacion(imputacion: ImputacionPreferidaCentroCostoDto) {
-    const mapping: Record<
-      ImputacionPreferidaCentroCostoDto,
-      ImputacionPreferidaCentroCosto
-    > = {
-      [ImputacionPreferidaCentroCostoDto.directa]:
-        ImputacionPreferidaCentroCosto.DIRECTA,
-      [ImputacionPreferidaCentroCostoDto.indirecta]:
-        ImputacionPreferidaCentroCosto.INDIRECTA,
-      [ImputacionPreferidaCentroCostoDto.reparto]:
-        ImputacionPreferidaCentroCosto.REPARTO,
-    };
-    return mapping[imputacion];
-  }
 
-  fromPrismaImputacion(imputacion: ImputacionPreferidaCentroCosto) {
-    const mapping: Record<
-      ImputacionPreferidaCentroCosto,
-      ImputacionPreferidaCentroCostoDto
-    > = {
-      [ImputacionPreferidaCentroCosto.DIRECTA]:
-        ImputacionPreferidaCentroCostoDto.directa,
-      [ImputacionPreferidaCentroCosto.INDIRECTA]:
-        ImputacionPreferidaCentroCostoDto.indirecta,
-      [ImputacionPreferidaCentroCosto.REPARTO]:
-        ImputacionPreferidaCentroCostoDto.reparto,
-    };
-    return mapping[imputacion];
-  }
 
-  toPrismaUnidadBase(unidad: UnidadBaseCentroCostoDto) {
-    const mapping: Record<UnidadBaseCentroCostoDto, UnidadBaseCentroCosto> = {
-      [UnidadBaseCentroCostoDto.ninguna]: UnidadBaseCentroCosto.NINGUNA,
-      [UnidadBaseCentroCostoDto.hora_maquina]:
-        UnidadBaseCentroCosto.HORA_MAQUINA,
-      [UnidadBaseCentroCostoDto.hora_hombre]: UnidadBaseCentroCosto.HORA_HOMBRE,
-      [UnidadBaseCentroCostoDto.pliego]: UnidadBaseCentroCosto.PLIEGO,
-      [UnidadBaseCentroCostoDto.unidad]: UnidadBaseCentroCosto.UNIDAD,
-      [UnidadBaseCentroCostoDto.m2]: UnidadBaseCentroCosto.M2,
-      [UnidadBaseCentroCostoDto.kg]: UnidadBaseCentroCosto.KG,
-    };
-    return mapping[unidad];
-  }
 
-  fromPrismaUnidadBase(unidad: UnidadBaseCentroCosto) {
-    const mapping: Record<UnidadBaseCentroCosto, UnidadBaseCentroCostoDto> = {
-      [UnidadBaseCentroCosto.NINGUNA]: UnidadBaseCentroCostoDto.ninguna,
-      [UnidadBaseCentroCosto.HORA_MAQUINA]:
-        UnidadBaseCentroCostoDto.hora_maquina,
-      [UnidadBaseCentroCosto.HORA_HOMBRE]: UnidadBaseCentroCostoDto.hora_hombre,
-      [UnidadBaseCentroCosto.PLIEGO]: UnidadBaseCentroCostoDto.pliego,
-      [UnidadBaseCentroCosto.UNIDAD]: UnidadBaseCentroCostoDto.unidad,
-      [UnidadBaseCentroCosto.M2]: UnidadBaseCentroCostoDto.m2,
-      [UnidadBaseCentroCosto.KG]: UnidadBaseCentroCostoDto.kg,
-    };
-    return mapping[unidad];
-  }
 
 
 

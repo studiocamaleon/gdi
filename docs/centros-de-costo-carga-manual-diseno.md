@@ -101,11 +101,7 @@ queda, se retira en una limpieza aparte, no en esta.
   motor, el ETA y los reportes. Incluye `capacidadPractica`, que se conserva con
   ese nombre aunque adentro del módulo pase a llamarse horas productivas —
   renombrarlo obligaría a tocar `motor-universal` sin ganar nada.
-- **`CentroCosto.unidadBaseFutura`**: es el equivalente al selector "Hora:
-  Hombre / Máquina" de Holdprint, y sí sale del módulo (lo leen el motor y
-  productos-servicios para decidir si el paso se cobra por hora máquina, hora
-  hombre o m²).
-- **`CentroCosto.tipoCentro` e `imputacionPreferida`**: los usa el reparto.
+- **`CentroCosto.tipoCentro`**, que pasó a ser binario (ver más abajo).
 - **`Egreso.centroCostoId`**, `ProductoConfigPaso` y `ProductoPasoExtra`
   apuntando a centros: sin cambios.
 
@@ -609,7 +605,34 @@ anotado en su encabezado.
 archivos eliminados. Suite en verde (1.181 tests), gate en verde, y el listado
 verificado en el navegador con los mismos números que antes del drop.
 
-## 10. Puntos abiertos
+## 10. Tipo binario: un campo en vez de tres
+
+Después de cerrar F7 quedó a la vista que la cabecera todavía decía tres veces
+la misma cosa. Los datos lo confirmaban: de seis tipos posibles se usaban dos, y
+la imputación repetía la decisión que ya tomaba el tipo.
+
+- `TipoCentroCosto` pasa a **PRODUCTIVO | NO_PRODUCTIVO**, y en la ficha se
+  muestra como dos botones en vez de un desplegable: son dos y se excluyen.
+- `imputacionPreferida` **desaparece**: lo que no produce es estructura, y la
+  estructura se reparte. No hacía falta un segundo campo para decirlo.
+- `unidadBaseFutura` **desaparece**. Se verificó que el motor no la lee: su único
+  uso real era filtrar qué centros se ofrecen al asignar un paso, y ahí
+  `HORA_HOMBRE` y `HORA_MAQUINA` caían en la misma lista — la distinción no
+  cambiaba nada. Ese filtro pasa a mirar el tipo, que es lo que en realidad
+  quería decir: Administración nunca debió ofrecerse para costear un paso.
+
+La migración no puede usar el cast automático de Prisma, porque `ADMINISTRATIVO`
+no existe en el enum nuevo y reventaría. La conversión se hace por la imputación
+—el campo que hoy dice de verdad quién reparte— y **antes** de borrar esa
+columna.
+
+**Impacto real, medido:** Ventas & Centro de Copiado estaba en un limbo —tipo
+administrativo pero imputación directa—, así que no absorbía nada y aun así
+mostraba valor hora. Al declararlo productivo pasa a absorber **$411.101** donde
+antes tenía $0, y el resto baja proporcionalmente porque la estructura ahora se
+reparte entre nueve centros y no ocho. El total sigue conservándose.
+
+## 11. Puntos abiertos
 
 1. **`AreaCosto`** — verificado: queda huérfana. Sus únicas referencias en el
    schema son los contenedores (`Tenant.areasCosto`, `Planta.areasCosto`) y el

@@ -507,12 +507,6 @@ export function CostosPanel({
                         <tr key={fila.id}>
                           <td>
                             <div className="name">{fila.nombre}</div>
-                            <div className="desc mono-desc">
-                              {fila.codigo}
-                              {fila.lineas > 0
-                                ? ` · ${fila.lineas} ${fila.lineas === 1 ? "línea" : "líneas"}`
-                                : " · sin cargar"}
-                            </div>
                           </td>
                           <td className="right numeric">
                             {fila.horasProductivas == null

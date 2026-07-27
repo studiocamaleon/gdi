@@ -1,11 +1,9 @@
 import { BadRequestException } from '@nestjs/common';
 import {
   EstadoTarifaCentroCostoPeriodo,
-  ImputacionPreferidaCentroCosto,
   Prisma,
   SeccionCentroCostoLinea,
   TipoCentroCosto,
-  UnidadBaseCentroCosto,
 } from '@prisma/client';
 import { CostosMapper } from '../costos.mapper';
 import { CostosRepartoService } from '../costos-reparto.service';
@@ -41,8 +39,7 @@ describe('Costos services', () => {
             id: 'source',
             codigo: 'SRC',
             nombre: 'Fuente productiva',
-            tipoCentro: TipoCentroCosto.PRODUCTIVO,
-            imputacionPreferida: ImputacionPreferidaCentroCosto.REPARTO,
+            tipoCentro: TipoCentroCosto.NO_PRODUCTIVO,
             lineas: [linea(1000)],
             capacidadesPeriodo: [
               { horasProductivas: new Prisma.Decimal(100) },
@@ -53,7 +50,6 @@ describe('Costos services', () => {
             codigo: 'TGT',
             nombre: 'Destino productivo',
             tipoCentro: TipoCentroCosto.PRODUCTIVO,
-            imputacionPreferida: ImputacionPreferidaCentroCosto.DIRECTA,
             lineas: [linea(400)],
             capacidadesPeriodo: [
               { horasProductivas: new Prisma.Decimal(50) },
@@ -84,8 +80,6 @@ describe('Costos services', () => {
     const advertencias = tarifas.buildAdvertencias(
       {
         tipoCentro: TipoCentroCosto.PRODUCTIVO,
-        imputacionPreferida: ImputacionPreferidaCentroCosto.DIRECTA,
-        unidadBaseFutura: UnidadBaseCentroCosto.HORA_HOMBRE,
         lineas: [],
         capacidadesPeriodo: [{ horasProductivas: new Prisma.Decimal(10) }],
       } as any,
@@ -108,8 +102,6 @@ describe('Costos services', () => {
       nombre: 'Impresión',
       descripcion: null,
       tipoCentro: TipoCentroCosto.PRODUCTIVO,
-      imputacionPreferida: ImputacionPreferidaCentroCosto.DIRECTA,
-      unidadBaseFutura: UnidadBaseCentroCosto.HORA_MAQUINA,
       activo: true,
       capacidadesPeriodo: [{ horasProductivas: new Prisma.Decimal(160) }],
       tarifasPeriodo: [
@@ -153,8 +145,6 @@ describe('Costos services', () => {
       codigo: 'TGT',
       nombre: 'Destino productivo',
       tipoCentro: TipoCentroCosto.PRODUCTIVO,
-      imputacionPreferida: ImputacionPreferidaCentroCosto.DIRECTA,
-      unidadBaseFutura: UnidadBaseCentroCosto.HORA_MAQUINA,
       lineas: [
         linea(60, SeccionCentroCostoLinea.EMPLEADO),
         linea(40, SeccionCentroCostoLinea.ACTIVO_FIJO),
@@ -172,8 +162,7 @@ describe('Costos services', () => {
             id: 'source',
             codigo: 'SRC',
             nombre: 'Fuente de reparto',
-            tipoCentro: TipoCentroCosto.APOYO,
-            imputacionPreferida: ImputacionPreferidaCentroCosto.REPARTO,
+            tipoCentro: TipoCentroCosto.NO_PRODUCTIVO,
             lineas: [linea(50)],
             capacidadesPeriodo: [],
           },
@@ -295,8 +284,7 @@ describe('Costos services', () => {
             id: 'estructura',
             codigo: 'ADM',
             nombre: 'Administración',
-            tipoCentro: TipoCentroCosto.ADMINISTRATIVO,
-            imputacionPreferida: ImputacionPreferidaCentroCosto.REPARTO,
+            tipoCentro: TipoCentroCosto.NO_PRODUCTIVO,
             lineas: [linea(900)],
             capacidadesPeriodo: [],
           },
@@ -306,7 +294,6 @@ describe('Costos services', () => {
             codigo: 'CAR',
             nombre: 'Centro caro',
             tipoCentro: TipoCentroCosto.PRODUCTIVO,
-            imputacionPreferida: ImputacionPreferidaCentroCosto.DIRECTA,
             lineas: [linea(300)],
             capacidadesPeriodo: [{ horasProductivas: new Prisma.Decimal(80) }],
           },
@@ -315,7 +302,6 @@ describe('Costos services', () => {
             codigo: 'BAR',
             nombre: 'Centro barato',
             tipoCentro: TipoCentroCosto.PRODUCTIVO,
-            imputacionPreferida: ImputacionPreferidaCentroCosto.DIRECTA,
             lineas: [linea(100)],
             capacidadesPeriodo: [{ horasProductivas: new Prisma.Decimal(160) }],
           },

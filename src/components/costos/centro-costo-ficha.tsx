@@ -26,12 +26,9 @@ import {
   getCategoriaComponenteCostoLabel,
   getCurrentPeriodo,
   getTipoCentroLabel,
-  getUnidadBaseLabel,
   Planta,
   SeccionCentroCostoLinea,
   tipoCentroItems,
-  unidadBaseItems,
-  type UnidadBaseCentroCosto,
   type TipoCentroCosto,
 } from "@/lib/costos";
 import { formatearMoneda } from "@/lib/moneda";
@@ -251,8 +248,6 @@ export function CentroCostoFicha({
   const [nombre, setNombre] = React.useState("");
   const [tipoCentro, setTipoCentro] =
     React.useState<TipoCentroCosto>("productivo");
-  const [unidadBase, setUnidadBase] =
-    React.useState<UnidadBaseCentroCosto>("hora_hombre");
   const [horasProductivas, setHorasProductivas] = React.useState("");
   const [lineas, setLineas] = React.useState<LineaLocal[]>([]);
   const [absorbido, setAbsorbido] = React.useState(0);
@@ -268,7 +263,6 @@ export function CentroCostoFicha({
     if (!centro) {
       setNombre("");
       setTipoCentro("productivo");
-      setUnidadBase("hora_hombre");
       setHorasProductivas("");
       setLineas([]);
       setAbsorbido(0);
@@ -284,7 +278,6 @@ export function CentroCostoFicha({
       ]);
       setNombre(detalle.centro.nombre);
       setTipoCentro(detalle.centro.tipoCentro);
-      setUnidadBase(detalle.centro.unidadBaseFutura);
       setHorasProductivas(
         detalle.capacidad ? String(detalle.capacidad.horasProductivas) : "",
       );
@@ -384,9 +377,6 @@ export function CentroCostoFicha({
           nombre: nombre.trim(),
           descripcion: "",
           tipoCentro,
-          imputacionPreferida:
-            tipoCentro === "productivo" ? "directa" : "reparto",
-          unidadBaseFutura: unidadBase,
           activo: true,
         } as CentroCostoPayload;
         const creado = await createCentroCosto(payload);
@@ -398,8 +388,6 @@ export function CentroCostoFicha({
           nombre: nombre.trim(),
           descripcion: centro.descripcion,
           tipoCentro,
-          imputacionPreferida: centro.imputacionPreferida,
-          unidadBaseFutura: unidadBase,
           activo: centro.activo,
         } as CentroCostoPayload);
       }
@@ -746,51 +734,29 @@ export function CentroCostoFicha({
         </label>
         <label>
           <span>Tipo *</span>
-          <Select
-            value={tipoCentro}
-            onValueChange={(valor) => {
-              setTipoCentro(valor as TipoCentroCosto);
-              marcar();
-            }}
-          >
-            <SelectTrigger className="ccosto-select">
-              <SelectValue>
-                {(valor: string) => getTipoCentroLabel(valor as TipoCentroCosto)}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {tipoCentroItems.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  {getTipoCentroLabel(item.value)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </label>
-        <label>
-          <span>Hora</span>
-          <Select
-            value={unidadBase}
-            onValueChange={(valor) => {
-              setUnidadBase(valor as UnidadBaseCentroCosto);
-              marcar();
-            }}
-          >
-            <SelectTrigger className="ccosto-select">
-              <SelectValue>
-                {(valor: string) =>
-                  getUnidadBaseLabel(valor as UnidadBaseCentroCosto)
-                }
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {unidadBaseItems.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  {getUnidadBaseLabel(item.value)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* Son dos y se excluyen: mostrarlos como botones deja la decisión a
+              la vista en vez de esconderla detrás de un desplegable. */}
+          <div className="ccosto-segmentado" role="group">
+            {tipoCentroItems.map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                className={tipoCentro === item.value ? "activo" : ""}
+                aria-pressed={tipoCentro === item.value}
+                onClick={() => {
+                  setTipoCentro(item.value);
+                  marcar();
+                }}
+              >
+                {getTipoCentroLabel(item.value)}
+              </button>
+            ))}
+          </div>
+          <span className="ccosto-ayuda">
+            {tipoCentro === "productivo"
+              ? "Produce lo que se vende: tiene valor hora y absorbe parte de la estructura."
+              : "Es estructura: su costo se reparte entre los centros productivos y no tiene valor hora."}
+          </span>
         </label>
       </div>
     </section>

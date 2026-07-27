@@ -6217,8 +6217,9 @@ body {
   }
 
   .ccosto-tabs .ccosto-tab.activa {
-    border-bottom-color: var(--accent);
-    color: var(--text);
+    border-bottom-color: #111114;
+    color: #111114;
+    font-weight: 600;
   }
 
   .ccosto-cuerpo {
@@ -6461,6 +6462,39 @@ body {
     background: var(--surface-1);
     color: var(--text);
     font-size: 13px;
+  }
+
+  /* Dos opciones que se excluyen, a la vista. */
+  .ccosto-seccion .ccosto-segmentado {
+    display: inline-flex;
+    align-self: flex-start;
+    padding: 3px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface-2);
+  }
+
+  .ccosto-seccion .ccosto-segmentado button {
+    padding: 7px 14px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .ccosto-seccion .ccosto-segmentado button.activo {
+    background: #111114;
+    color: #fff;
+  }
+
+  .ccosto-seccion .ccosto-ayuda {
+    font-size: 11.5px;
+    line-height: 1.4;
+    color: var(--text-muted);
   }
 
   .ccosto-resumen {
@@ -36779,6 +36813,8 @@ body:has(.t-app) {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+
 
 
 

@@ -1,24 +1,8 @@
-export type TipoCentroCosto =
-  | "productivo"
-  | "apoyo"
-  | "administrativo"
-  | "comercial"
-  | "logistico"
-  | "tercerizado";
-
-export type ImputacionPreferidaCentroCosto =
-  | "directa"
-  | "indirecta"
-  | "reparto";
-
-export type UnidadBaseCentroCosto =
-  | "ninguna"
-  | "hora_maquina"
-  | "hora_hombre"
-  | "pliego"
-  | "unidad"
-  | "m2"
-  | "kg";
+/**
+ * Un centro produce lo que se vende, o es estructura que se reparte entre los
+ * que producen. No hay un tercer caso.
+ */
+export type TipoCentroCosto = "productivo" | "no_productivo";
 
 export type EstadoConfiguracionCentroCosto =
   | "sin_configurar"
@@ -71,13 +55,10 @@ export type CentroCosto = {
   nombre: string;
   descripcion: string;
   tipoCentro: TipoCentroCosto;
-  imputacionPreferida: ImputacionPreferidaCentroCosto;
-  unidadBaseFutura: UnidadBaseCentroCosto;
   activo: boolean;
   estadoConfiguracion: EstadoConfiguracionCentroCosto;
   ultimoPeriodoConfigurado: string;
   ultimaTarifaPublicada: number | null;
-  unidadTarifaPublicada: UnidadBaseCentroCosto | "";
   ultimaTarifaBase: number | null;
   ultimaTarifaAbsorbida: number | null;
   ultimaTarifaTotal: number | null;
@@ -144,7 +125,6 @@ export type ResumenCentroCostoFila = {
   codigo: string;
   nombre: string;
   tipoCentro: TipoCentroCosto;
-  unidadBase: UnidadBaseCentroCosto;
   horasProductivas: number | null;
   gastos: number;
   absorbido: number;
@@ -226,7 +206,6 @@ export type CentroCostoComponenteCosto = {
 export type CentroCostoCapacidad = {
   id: string;
   periodo: string;
-  unidadBase: UnidadBaseCentroCosto;
   diasPorMes: number;
   horasPorDia: number;
   porcentajeNoProductivo: number;
@@ -303,8 +282,6 @@ export type CentroCostoPayload = {
   nombre: string;
   descripcion?: string;
   tipoCentro: TipoCentroCosto;
-  imputacionPreferida: ImputacionPreferidaCentroCosto;
-  unidadBaseFutura: UnidadBaseCentroCosto;
   activo: boolean;
 };
 
@@ -366,34 +343,8 @@ export type CentroCostoCapacidadPayload = {
 export const tipoCentroItems: Array<{ label: string; value: TipoCentroCosto }> =
   [
     { label: "Productivo", value: "productivo" },
-    { label: "Apoyo", value: "apoyo" },
-    { label: "Administrativo", value: "administrativo" },
-    { label: "Comercial", value: "comercial" },
-    { label: "Logistico", value: "logistico" },
-    { label: "Tercerizado", value: "tercerizado" },
+    { label: "No productivo", value: "no_productivo" },
   ];
-
-export const imputacionPreferidaItems: Array<{
-  label: string;
-  value: ImputacionPreferidaCentroCosto;
-}> = [
-  { label: "Directa", value: "directa" },
-  { label: "Indirecta", value: "indirecta" },
-  { label: "Reparto", value: "reparto" },
-];
-
-export const unidadBaseItems: Array<{
-  label: string;
-  value: UnidadBaseCentroCosto;
-}> = [
-  { label: "Ninguna", value: "ninguna" },
-  { label: "Hora maquina", value: "hora_maquina" },
-  { label: "Hora hombre", value: "hora_hombre" },
-  { label: "Pliego", value: "pliego" },
-  { label: "Unidad", value: "unidad" },
-  { label: "m2", value: "m2" },
-  { label: "Kg", value: "kg" },
-];
 
 export const tipoRecursoItems: Array<{
   label: string;
@@ -453,14 +404,6 @@ const tipoCentroLabels = new Map(
   tipoCentroItems.map((item) => [item.value, item.label] as const),
 );
 
-const imputacionPreferidaLabels = new Map(
-  imputacionPreferidaItems.map((item) => [item.value, item.label] as const),
-);
-
-const unidadBaseLabels = new Map(
-  unidadBaseItems.map((item) => [item.value, item.label] as const),
-);
-
 const tipoRecursoLabels = new Map(
   tipoRecursoItems.map((item) => [item.value, item.label] as const),
 );
@@ -481,20 +424,6 @@ const estadoConfiguracionLabels = new Map(
 
 export function getTipoCentroLabel(value: TipoCentroCosto) {
   return tipoCentroLabels.get(value) ?? value;
-}
-
-export function getImputacionPreferidaLabel(
-  value: ImputacionPreferidaCentroCosto,
-) {
-  return imputacionPreferidaLabels.get(value) ?? value;
-}
-
-export function getUnidadBaseLabel(value: UnidadBaseCentroCosto | "") {
-  if (!value) {
-    return "";
-  }
-
-  return unidadBaseLabels.get(value) ?? value;
 }
 
 export function getTipoRecursoLabel(value: TipoRecursoCentroCosto) {
@@ -529,16 +458,3 @@ export function getCurrentPeriodo() {
   return `${now.getFullYear()}-${month}`;
 }
 
-export function getSuggestedImputacion(
-  tipoCentro: TipoCentroCosto,
-): ImputacionPreferidaCentroCosto {
-  if (tipoCentro === "administrativo") {
-    return "indirecta";
-  }
-
-  if (tipoCentro === "tercerizado") {
-    return "reparto";
-  }
-
-  return "directa";
-}
