@@ -40,6 +40,13 @@ export type ProveedorDetalle = {
   pais: string;
   telefonoCodigo: string;
   telefonoNumero: string;
+  /** === Datos para PAGARLE (docs/egresos-y-cuentas-por-pagar-diseno.md) === */
+  cuit: string;
+  /** 'RI' | 'MONOTRIBUTO' | 'EXENTO' | 'CF' | ''. */
+  condicionIva: string;
+  /** Días de plazo. Precarga el vencimiento al cargar su factura; null = no sabemos. */
+  condicionPagoDias: number | null;
+  cbuAlias: string;
   contactos: ProveedorContacto[];
   direcciones: ProveedorDireccion[];
 };
@@ -51,6 +58,10 @@ export type ProveedorPayload = {
   pais: string;
   telefonoCodigo: string;
   telefonoNumero: string;
+  cuit?: string;
+  condicionIva?: string;
+  condicionPagoDias?: number;
+  cbuAlias?: string;
   contactos: Array<{
     nombre: string;
     cargo?: string;
@@ -82,6 +93,10 @@ export function createEmptyProveedor(): ProveedorDetalle {
     pais: "AR",
     telefonoCodigo: "54",
     telefonoNumero: "",
+    cuit: "",
+    condicionIva: "",
+    condicionPagoDias: null,
+    cbuAlias: "",
     contactos: [
       {
         id: crypto.randomUUID(),

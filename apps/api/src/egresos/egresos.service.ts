@@ -502,6 +502,19 @@ export class EgresosService {
     }
   }
 
+  /**
+   * Corrige un egreso.
+   *
+   * Lo que bloquea el pago son los IMPORTES, no la clasificación. Reclasificar
+   * (poner la nafta en Vehículo en vez de Materiales) o corregir el mes de
+   * competencia no mueve un peso, y es justamente lo que uno descubre DESPUÉS
+   * de pagar, cuando mira el reporte. Bloquearlo obligaba a anular el pago
+   * —con su contramovimiento— sólo para arreglar una etiqueta.
+   *
+   * Los importes sí: bajar el total por debajo de lo ya pagado rompería la
+   * invariante `pagadoTotal <= total` y dejaría el saldo del proveedor en
+   * negativo sin nada que lo explique.
+   */
   async editar(auth: CurrentAuth, id: string, dto: EditarEgresoDto) {
     const egreso = await this.prisma.egreso.findFirst({
       where: { id, tenantId: auth.tenantId },
@@ -511,9 +524,14 @@ export class EgresosService {
     if (egreso.estado === 'anulado') {
       throw new ConflictException('Un egreso anulado no se edita.');
     }
-    if (dec(egreso.pagadoTotal) > 0) {
+    const tienePagos = dec(egreso.pagadoTotal) > 0;
+    const tocaImportes =
+      dto.neto !== undefined ||
+      dto.iva !== undefined ||
+      dto.otrosImpuestos !== undefined;
+    if (tienePagos && tocaImportes) {
       throw new ConflictException(
-        'Ese egreso ya tiene pagos: anulá el pago antes de corregirlo.',
+        'Ese egreso ya tiene pagos: para cambiarle el importe hay que anular el pago primero. La categoría y las fechas sí se pueden corregir.',
       );
     }
     const data: Prisma.EgresoUpdateInput = {};
@@ -531,11 +549,7 @@ export class EgresosService {
       data.centroCosto = { connect: { id: dto.centroCostoId } };
     }
     if (dto.notas !== undefined) data.notas = dto.notas.trim() || null;
-    if (
-      dto.neto !== undefined ||
-      dto.iva !== undefined ||
-      dto.otrosImpuestos !== undefined
-    ) {
+    if (tocaImportes) {
       const actual = await this.prisma.egreso.findUniqueOrThrow({
         where: { id },
         select: { neto: true, iva: true, otrosImpuestos: true },
@@ -827,6 +841,105 @@ export class EgresosService {
         motivoAnulacion: i.pago.motivoAnulacion,
         registradoPorNombre: i.pago.registradoPorNombre,
       })),
+    };
+  }
+
+  // ── Reporte ────────────────────────────────────────────────────────────
+
+  /**
+   * "¿En qué se me va la plata?" — por categoría y por naturaleza.
+   *
+   * Se agrupa por COMPETENCIA y no por fecha de pago: la luz de julio pagada
+   * en agosto es gasto de julio. Es la misma razón por la que el contador pide
+   * el período devengado y no el extracto bancario.
+   *
+   * Y separa lo que INCIDE EN RESULTADO de lo que sólo mueve caja: una
+   * guillotina de $3.500.000 haría ver un julio catastrófico si se sumara al
+   * gasto, un retiro de socios no es un gasto, y un adelanto de sueldo es
+   * plata que el empleado debe. Los tres salen de la caja igual, así que se
+   * informan aparte en vez de esconderse.
+   */
+  async reporte(auth: CurrentAuth, q: { desde?: string; hasta?: string }) {
+    const { zonaHoraria } = await regionalDelTenant(this.prisma, auth.tenantId);
+    const hoy = hoyEnZona(zonaHoraria);
+    // Default: el mes en curso, que es lo que uno mira sin pensar.
+    const desde = q.desde ?? `${hoy.slice(0, 7)}-01`;
+    const hasta = q.hasta ?? hoy;
+
+    const filas = await this.prisma.egreso.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        // Un anulado no es un gasto: no puede aparecer en ningún total.
+        estado: { not: 'anulado' },
+        fechaCompetencia: { gte: soloFecha(desde), lte: soloFecha(hasta) },
+      },
+      select: {
+        total: true,
+        categoriaEgresoId: true,
+        categoria: { select: { nombre: true, naturaleza: true } },
+      },
+    });
+
+    const porCategoria = new Map<
+      string,
+      {
+        categoriaId: string;
+        nombre: string;
+        naturaleza: NaturalezaEgreso;
+        monto: number;
+        egresos: number;
+      }
+    >();
+    const porNaturaleza = new Map<NaturalezaEgreso, number>();
+    let totalSalida = 0;
+    let totalResultado = 0;
+
+    for (const f of filas) {
+      const monto = dec(f.total);
+      const naturaleza = f.categoria.naturaleza;
+      totalSalida += monto;
+      if (incideEnResultado(naturaleza)) totalResultado += monto;
+      porNaturaleza.set(
+        naturaleza,
+        (porNaturaleza.get(naturaleza) ?? 0) + monto,
+      );
+      const actual = porCategoria.get(f.categoriaEgresoId) ?? {
+        categoriaId: f.categoriaEgresoId,
+        nombre: f.categoria.nombre,
+        naturaleza,
+        monto: 0,
+        egresos: 0,
+      };
+      actual.monto += monto;
+      actual.egresos += 1;
+      porCategoria.set(f.categoriaEgresoId, actual);
+    }
+
+    return {
+      desde,
+      hasta,
+      /** Todo lo que salió de la caja en el período. */
+      totalSalida: r2(totalSalida),
+      /** Sólo lo que es gasto: costo de producción + estructura. */
+      totalResultado: r2(totalResultado),
+      egresos: filas.length,
+      naturalezas: [...porNaturaleza.entries()]
+        .map(([naturaleza, monto]) => ({
+          naturaleza,
+          monto: r2(monto),
+          // El % se calcula sobre la SALIDA total y no sobre el resultado: si
+          // no, las naturalezas que no son gasto sumarían más de 100%.
+          pct: totalSalida > 0 ? r2((monto / totalSalida) * 100) : 0,
+          incideEnResultado: incideEnResultado(naturaleza),
+        }))
+        .sort((a, b) => b.monto - a.monto),
+      categorias: [...porCategoria.values()]
+        .map((c) => ({
+          ...c,
+          monto: r2(c.monto),
+          pct: totalSalida > 0 ? r2((c.monto / totalSalida) * 100) : 0,
+        }))
+        .sort((a, b) => b.monto - a.monto),
     };
   }
 

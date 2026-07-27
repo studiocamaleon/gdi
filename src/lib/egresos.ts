@@ -141,6 +141,30 @@ export type ResumenEgresos = {
   egresosPendientes: number;
 };
 
+export type ReporteEgresos = {
+  desde: string;
+  hasta: string;
+  /** Todo lo que salió de la caja en el período. */
+  totalSalida: number;
+  /** Sólo lo que es gasto: costo de producción + estructura. */
+  totalResultado: number;
+  egresos: number;
+  naturalezas: Array<{
+    naturaleza: NaturalezaEgreso;
+    monto: number;
+    pct: number;
+    incideEnResultado: boolean;
+  }>;
+  categorias: Array<{
+    categoriaId: string;
+    nombre: string;
+    naturaleza: NaturalezaEgreso;
+    monto: number;
+    pct: number;
+    egresos: number;
+  }>;
+};
+
 /**
  * Cuántos días faltan (negativo = vencido). Se calcula sobre fechas ISO en
  * texto para no arrastrar la zona horaria: comparar Date en SSR desalinea la

@@ -35725,3 +35725,112 @@ body:has(.t-app) {
   color: var(--muted-text);
   text-decoration: line-through;
 }
+
+/* Tab Análisis: "¿en qué se me va la plata?" */
+.egr-analisis {
+  display: grid;
+  gap: 14px;
+}
+
+.egr-kpi .v.egr-periodo {
+  font-size: 15px;
+}
+
+.egr-analisis-cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .egr-analisis-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.egr-panel {
+  padding: 14px 16px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+}
+
+.egr-panel-t {
+  margin-bottom: 10px;
+  color: var(--muted-text);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.egr-linea {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 90px 48px 110px;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.egr-linea + .egr-linea {
+  border-top: 1px solid var(--hairline);
+}
+
+.egr-linea-n {
+  min-width: 0;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.egr-linea-n small {
+  display: block;
+  margin-top: 1px;
+  color: var(--muted-text);
+  font-size: 10.5px;
+  font-weight: 400;
+}
+
+.egr-linea-b {
+  height: 6px;
+  overflow: hidden;
+  background: var(--hairline);
+  border-radius: 999px;
+}
+
+.egr-linea-f {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  background: var(--chart-3);
+  border-radius: 999px;
+}
+
+/* Lo que NO es gasto del período se dibuja apagado: sale de la caja pero no
+   compite con el gasto en la lectura. */
+.egr-linea-f.off {
+  background: var(--border-strong);
+}
+
+.egr-linea-p {
+  justify-self: end;
+  color: var(--muted-text);
+  font-size: 11.5px;
+}
+
+.egr-linea-m {
+  justify-self: end;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .egr-linea {
+    grid-template-columns: minmax(0, 1fr) 44px 100px;
+  }
+
+  .egr-linea-b {
+    display: none;
+  }
+}

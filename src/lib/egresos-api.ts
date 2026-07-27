@@ -4,6 +4,7 @@ import type {
   Egreso,
   NaturalezaEgreso,
   PagoDeEgreso,
+  ReporteEgresos,
   ResumenEgresos,
 } from "@/lib/egresos";
 
@@ -70,6 +71,20 @@ export async function getEgresos(
 
 export async function getResumenEgresos(): Promise<ResumenEgresos> {
   return apiRequest<ResumenEgresos>("/egresos/resumen");
+}
+
+/** "¿En qué se me va la plata?" — agrupado por COMPETENCIA. */
+export async function getReporteEgresos(rango?: {
+  desde?: string;
+  hasta?: string;
+}): Promise<ReporteEgresos> {
+  const q = new URLSearchParams();
+  if (rango?.desde) q.set("desde", rango.desde);
+  if (rango?.hasta) q.set("hasta", rango.hasta);
+  const query = q.toString();
+  return apiRequest<ReporteEgresos>(
+    `/egresos/reporte${query ? `?${query}` : ""}`,
+  );
 }
 
 export type CrearEgresoBody = {

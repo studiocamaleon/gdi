@@ -26,6 +26,8 @@ describe('EgresosService', () => {
   let otroProveedorId: string;
   let catMateriales: string;
   let catAdelanto: string;
+  let catVehiculo: string;
+  let catMaquinaria: string;
   let seq = 0;
 
   beforeAll(async () => {
@@ -85,6 +87,8 @@ describe('EgresosService', () => {
     const cats = await prisma.categoriaEgreso.findMany({ where: { tenantId } });
     catMateriales = cats.find((c) => c.codigo === 'materiales')!.id;
     catAdelanto = cats.find((c) => c.codigo === 'adelanto_sueldo')!.id;
+    catVehiculo = cats.find((c) => c.codigo === 'vehiculo')!.id;
+    catMaquinaria = cats.find((c) => c.codigo === 'maquinaria')!.id;
   });
 
   afterAll(async () => {
@@ -390,6 +394,137 @@ describe('EgresosService', () => {
       // Una máquina nueva no es gasto de julio; un retiro de socios tampoco.
       expect(incideEnResultado('INVERSION')).toBe(false);
       expect(incideEnResultado('RETIRO_SOCIOS')).toBe(false);
+    });
+  });
+
+  // ── Reclasificar (D6) ────────────────────────────────────────────────
+
+  describe('corregir un egreso ya pagado', () => {
+    const crearPagado = async (total: number) => {
+      const { id } = await service.crear(auth, {
+        descripcion: 'Para reclasificar',
+        categoriaEgresoId: catMateriales,
+        beneficiarioNombre: 'YPF',
+        neto: total,
+        pago: { metodoPagoId, cuentaOrigenId: cuentaId },
+      });
+      return id;
+    };
+
+    it('deja RECLASIFICAR: cambiar la categoría no mueve un peso', async () => {
+      const id = await crearPagado(30_000);
+      // Es justo lo que uno descubre DESPUÉS de pagar, mirando el reporte.
+      await service.editar(auth, id, { categoriaEgresoId: catVehiculo });
+      const e = await prisma.egreso.findUniqueOrThrow({ where: { id } });
+      expect(e.categoriaEgresoId).toBe(catVehiculo);
+      expect(e.estado).toBe('pagado');
+    });
+
+    it('deja corregir el mes de competencia', async () => {
+      const id = await crearPagado(20_000);
+      await service.editar(auth, id, { fechaCompetencia: '2026-01-31' });
+      const listado = await service.listar(auth, {});
+      expect(
+        listado.egresos.find((x) => x.id === id)?.fechaCompetencia,
+      ).toBe('2026-01-31');
+    });
+
+    it('NO deja tocar el importe: rompería pagadoTotal <= total', async () => {
+      const id = await crearPagado(40_000);
+      await expect(
+        service.editar(auth, id, { neto: 10_000 }),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+  });
+
+  // ── Reporte (E3) ─────────────────────────────────────────────────────
+
+  describe('reporte por categoría y naturaleza', () => {
+    it('separa lo que es gasto de lo que sólo mueve caja', async () => {
+      const mk = (categoriaEgresoId: string, neto: number, desc: string) =>
+        service.crear(auth, {
+          descripcion: desc,
+          categoriaEgresoId,
+          beneficiarioNombre: 'Varios',
+          fechaCompetencia: '2026-05-15',
+          neto,
+          pago: { metodoPagoId, cuentaOrigenId: cuentaId },
+        });
+      await mk(catMateriales, 100_000, 'Papel'); // costo de producción
+      await mk(catVehiculo, 50_000, 'Nafta'); // estructura
+      await mk(catMaquinaria, 900_000, 'Guillotina'); // inversión
+      await mk(catAdelanto, 30_000, 'Adelanto'); // no incide en resultado
+
+      const r = await service.reporte(auth, {
+        desde: '2026-05-01',
+        hasta: '2026-05-31',
+      });
+
+      // Salió de la caja todo; gasto del período es sólo lo primero.
+      expect(r.totalSalida).toBe(1_080_000);
+      expect(r.totalResultado).toBe(150_000);
+
+      const inversion = r.naturalezas.find((n) => n.naturaleza === 'INVERSION');
+      expect(inversion?.monto).toBe(900_000);
+      expect(inversion?.incideEnResultado).toBe(false);
+
+      const noResultado = r.naturalezas.find(
+        (n) => n.naturaleza === 'NO_RESULTADO',
+      );
+      expect(noResultado?.incideEnResultado).toBe(false);
+
+      // Ordenado de mayor a menor: lo que más pesa, primero.
+      expect(r.categorias[0].monto).toBe(900_000);
+    });
+
+    it('un egreso anulado no aparece en ningún total', async () => {
+      const { id } = await service.crear(auth, {
+        descripcion: 'Se anula',
+        categoriaEgresoId: catMateriales,
+        beneficiarioNombre: 'Error',
+        fechaCompetencia: '2026-04-10',
+        neto: 777_000,
+        fechaVencimiento: '2026-05-10',
+        tipoComprobante: 'FA',
+        puntoVenta: '0003',
+        numeroComprobante: nroDoc(),
+      });
+      const antes = await service.reporte(auth, {
+        desde: '2026-04-01',
+        hasta: '2026-04-30',
+      });
+      expect(antes.totalSalida).toBe(777_000);
+
+      await service.anular(auth, id, { motivo: 'cargado por error' });
+
+      const despues = await service.reporte(auth, {
+        desde: '2026-04-01',
+        hasta: '2026-04-30',
+      });
+      expect(despues.totalSalida).toBe(0);
+    });
+
+    it('agrupa por COMPETENCIA, no por cuándo se pagó', async () => {
+      // La luz de marzo pagada en abril es gasto de MARZO. Se usa un mes que
+      // ningún otro test toca: el reporte suma todo el tenant y un vecino que
+      // escriba en el mismo período haría fallar esto por interferencia.
+      await service.crear(auth, {
+        descripcion: 'Luz de marzo',
+        categoriaEgresoId: catVehiculo,
+        beneficiarioNombre: 'Edenor',
+        fechaCompetencia: '2026-03-20',
+        neto: 15_000,
+        pago: {
+          metodoPagoId,
+          cuentaOrigenId: cuentaId,
+          fecha: '2026-04-05T12:00:00.000Z',
+        },
+      });
+      const marzo = await service.reporte(auth, {
+        desde: '2026-03-01',
+        hasta: '2026-03-31',
+      });
+      expect(marzo.totalSalida).toBe(15_000);
     });
   });
 

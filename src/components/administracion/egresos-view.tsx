@@ -34,6 +34,7 @@ import {
   tonoVencimiento,
   type CategoriaEgreso,
   type Egreso,
+  type ReporteEgresos,
   type ResumenEgresos,
 } from "@/lib/egresos";
 import {
@@ -42,6 +43,7 @@ import {
   crearEgreso,
   getEgresos,
   getPagosDeEgreso,
+  getReporteEgresos,
   getResumenEgresos,
   registrarPagoEgresos,
   type CrearEgresoBody,
@@ -50,7 +52,7 @@ import type { CuentaFondosResumen, MetodoPago } from "@/lib/administracion";
 import type { ProveedorDetalle } from "@/lib/proveedores";
 import type { PagoDeEgreso } from "@/lib/egresos";
 
-type Tab = "por-pagar" | "todos";
+type Tab = "por-pagar" | "todos" | "analisis";
 
 /** Hoy en ISO local, para comparar vencimientos sin arrastrar zona horaria. */
 function hoyIso(): string {
@@ -127,6 +129,7 @@ export function EgresosView({
   const [seleccion, setSeleccion] = React.useState<Set<string>>(new Set());
   const [detalle, setDetalle] = React.useState<Egreso | null>(null);
   const [anulando, setAnulando] = React.useState<Egreso | null>(null);
+  const [reporte, setReporte] = React.useState<ReporteEgresos | null>(null);
 
   const recargar = React.useCallback(
     async (t: Tab = tab) => {
@@ -155,6 +158,15 @@ export function EgresosView({
 
   const cambiarTab = (t: Tab) => {
     setTab(t);
+    if (t === "analisis") {
+      // El reporte se pide recién acá: es una agregación sobre todo el
+      // período y no hace falta pagarla si nadie abre el tab.
+      setReporte(null);
+      getReporteEgresos()
+        .then(setReporte)
+        .catch(() => setReporte(null));
+      return;
+    }
     void recargar(t);
   };
 
@@ -251,6 +263,13 @@ export function EgresosView({
           >
             Todos
           </button>
+          <button
+            type="button"
+            className={tab === "analisis" ? "on" : ""}
+            onClick={() => cambiarTab("analisis")}
+          >
+            Análisis
+          </button>
         </div>
         <input
           className="egr-search"
@@ -277,7 +296,9 @@ export function EgresosView({
 
       {error ? <div className="egr-error">{error}</div> : null}
 
-      {visibles.length === 0 ? (
+      {tab === "analisis" ? (
+        <Analisis reporte={reporte} fmt={fmt} />
+      ) : visibles.length === 0 ? (
         <div className="egr-empty">
           <div className="ttl">
             {tab === "por-pagar"
@@ -455,6 +476,110 @@ export function EgresosView({
 }
 
 /**
+ * "¿En qué se me va la plata?" (journey E3).
+ *
+ * Separa lo que es GASTO del período de lo que sólo movió caja. Sin esa
+ * separación, el mes en que se compra una guillotina parece catastrófico, un
+ * retiro de socios se lee como gasto, y el adelanto de sueldo se cuenta dos
+ * veces (el adelanto y después el sueldo).
+ */
+function Analisis({
+  reporte,
+  fmt,
+}: {
+  reporte: ReporteEgresos | null;
+  fmt: (v: number) => string;
+}) {
+  if (!reporte) {
+    return <div className="egr-cargando">Calculando el período…</div>;
+  }
+  if (reporte.egresos === 0) {
+    return (
+      <div className="egr-empty">
+        <div className="ttl">Sin egresos en el período</div>
+        <div className="sub">
+          El análisis agrupa por fecha de competencia — el mes al que pertenece
+          el gasto, no el día en que se pagó.
+        </div>
+      </div>
+    );
+  }
+  const noEsGasto = reporte.totalSalida - reporte.totalResultado;
+  return (
+    <div className="egr-analisis">
+      <div className="egr-kpis">
+        <div className="egr-kpi">
+          <span className="l">Gasto del período</span>
+          <span className="v">{fmt(reporte.totalResultado)}</span>
+          <span className="h">costo de producción + estructura</span>
+        </div>
+        <div className="egr-kpi">
+          <span className="l">Salió de la caja</span>
+          <span className="v">{fmt(reporte.totalSalida)}</span>
+          <span className="h">{reporte.egresos} egresos</span>
+        </div>
+        <div className="egr-kpi">
+          <span className="l">No es gasto</span>
+          <span className="v">{fmt(noEsGasto)}</span>
+          <span className="h">inversión, retiros, adelantos</span>
+        </div>
+        <div className="egr-kpi">
+          <span className="l">Período</span>
+          <span className="v egr-periodo">{reporte.desde}</span>
+          <span className="h">al {reporte.hasta} · por competencia</span>
+        </div>
+      </div>
+
+      <div className="egr-analisis-cols">
+        <section className="egr-panel">
+          <div className="egr-panel-t">Por naturaleza</div>
+          {reporte.naturalezas.map((n) => (
+            <div className="egr-linea" key={n.naturaleza}>
+              <span className="egr-linea-n">
+                {NATURALEZA_LABELS[n.naturaleza]}
+                {!n.incideEnResultado ? (
+                  <small>no es gasto del período</small>
+                ) : null}
+              </span>
+              <span className="egr-linea-b">
+                <span
+                  className={`egr-linea-f ${n.incideEnResultado ? "" : "off"}`}
+                  style={{ width: `${n.pct}%` }}
+                />
+              </span>
+              <span className="egr-linea-p mono">{n.pct}%</span>
+              <span className="egr-linea-m mono">{fmt(n.monto)}</span>
+            </div>
+          ))}
+        </section>
+
+        <section className="egr-panel">
+          <div className="egr-panel-t">Por categoría</div>
+          {reporte.categorias.map((c) => (
+            <div className="egr-linea" key={c.categoriaId}>
+              <span className="egr-linea-n">
+                {c.nombre}
+                <small>
+                  {c.egresos} egreso{c.egresos === 1 ? "" : "s"}
+                </small>
+              </span>
+              <span className="egr-linea-b">
+                <span
+                  className="egr-linea-f"
+                  style={{ width: `${c.pct}%` }}
+                />
+              </span>
+              <span className="egr-linea-p mono">{c.pct}%</span>
+              <span className="egr-linea-m mono">{fmt(c.monto)}</span>
+            </div>
+          ))}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+/**
  * Alta de un egreso. El switch "Ya está pagado" es el corazón de la pantalla:
  * encendido pide la cuenta y el egreso nace saldado; apagado pide el
  * vencimiento y va a Cuentas por pagar.
@@ -504,14 +629,15 @@ function AltaEgreso({
   const categoria = activas.find((c) => c.id === categoriaId);
   const total = neto + iva;
 
+  const proveedorElegido = proveedores.find((p) => p.id === proveedorId);
+
   // El plazo del proveedor precarga el vencimiento: es el dato por el que se
-  // cargó en el maestro.
+  // carga en el maestro. `0` es contado y también es una respuesta, así que se
+  // aplica igual (vence hoy) en vez de ignorarse como si no estuviera.
   React.useEffect(() => {
-    const prov = proveedores.find((p) => p.id === proveedorId);
-    const dias = (prov as { condicionPagoDias?: number | null } | undefined)
-      ?.condicionPagoDias;
-    if (dias != null && dias > 0) setVencimiento(sumarDias(hoy, dias));
-  }, [proveedorId, proveedores, hoy]);
+    const dias = proveedorElegido?.condicionPagoDias;
+    if (dias != null) setVencimiento(sumarDias(hoy, dias));
+  }, [proveedorElegido, hoy]);
 
   const guardar = async () => {
     setGuardando(true);
@@ -660,6 +786,13 @@ function AltaEgreso({
                   value={vencimiento}
                   onChange={(e) => setVencimiento(e.target.value)}
                 />
+                {proveedorElegido?.condicionPagoDias != null ? (
+                  <small className="egr-hint">
+                    {proveedorElegido.condicionPagoDias === 0
+                      ? `${proveedorElegido.nombre} es de contado.`
+                      : `${proveedorElegido.nombre} da ${proveedorElegido.condicionPagoDias} días.`}
+                  </small>
+                ) : null}
               </label>
             ) : null}
 

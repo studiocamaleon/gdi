@@ -84,6 +84,16 @@ export class EgresosController {
     return this.egresos.resumen(auth);
   }
 
+  /** "¿En qué se me va la plata?" — por categoría y naturaleza, por competencia. */
+  @Get('reporte')
+  reporte(
+    @CurrentSession() auth: CurrentAuth,
+    @Query('desde') desde?: string,
+    @Query('hasta') hasta?: string,
+  ) {
+    return this.egresos.reporte(auth, { desde, hasta });
+  }
+
   // ── Pagos ──────────────────────────────────────────────────────────────
 
   @Permiso('administracion.gestionar')
