@@ -54,41 +54,27 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
+/**
+ * El centro que costea los pasos manuales. En el seed es PRE-001, el mismo
+ * que las rutas usan como `centroCostoId` de los pasos sin máquina, así que
+ * se lo busca por código y no por "el primer productivo que aparezca".
+ */
 async function ensureCentroHorarioConTarifa(tenantId: string) {
   const centro = await prisma.centroCosto.findFirstOrThrow({
     where: {
       tenantId,
       activo: true,
       tipoCentro: TipoCentroCosto.PRODUCTIVO,
+      codigo: 'PRE-001',
     },
   });
 
-  await prisma.centroCostoTarifaPeriodo.upsert({
-    where: {
-      tenantId_centroCostoId_periodo_estado: {
-        tenantId,
-        centroCostoId: centro.id,
-        periodo: '2026-06',
-        estado: EstadoTarifaCentroCostoPeriodo.PUBLICADA,
-      },
-    },
-    update: {
-      tarifaCalculada: tarifaHoraManual,
-      costoMensualTotal: tarifaHoraManual,
-      capacidadPractica: 1,
-      resumenJson: { test: true },
-    },
-    create: {
-      tenantId,
-      centroCostoId: centro.id,
-      periodo: '2026-03',
-      costoMensualTotal: tarifaHoraManual,
-      capacidadPractica: 1,
-      tarifaCalculada: tarifaHoraManual,
-      estado: EstadoTarifaCentroCostoPeriodo.PUBLICADA,
-      resumenJson: { test: true },
-    },
-  });
+  // Los períodos que piden los tests, con la tarifa que esperan. El `where` y
+  // el `create` tienen que hablar del mismo período: con distinto, el upsert
+  // no encontraba nada y creaba uno que chocaba con el del seed.
+  for (const periodo of ['2026-03', '2026-06']) {
+    await ensureTarifaPublicada(tenantId, centro.id, periodo, tarifaHoraManual);
+  }
 
   return centro;
 }
