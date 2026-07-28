@@ -14,7 +14,6 @@
  */
 
 import * as React from "react";
-import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
 
 import {
   Card,
@@ -274,8 +273,6 @@ export function MaquinaEditorSecciones({ editor }: { editor: MaquinaEditorState 
     perfiles,
     setPerfiles,
     template,
-    openSection,
-    setOpenSection,
     materiasPrimas,
     loadingMaterias,
     handleMaquinaFieldChange,
@@ -298,31 +295,15 @@ export function MaquinaEditorSecciones({ editor }: { editor: MaquinaEditorState 
     <>
       {secciones.map((sec) => (
         <Card key={sec.id}>
-          <button
-            type="button"
-            onClick={() => setOpenSection(openSection === sec.id ? null : sec.id)}
-            className="w-full text-left"
-          >
-            <CardHeader className="cursor-pointer">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    {openSection === sec.id ? (
-                      <ChevronDownIcon className="size-4" />
-                    ) : (
-                      <ChevronRightIcon className="size-4" />
-                    )}
-                    {sec.title}
-                  </CardTitle>
-                  <CardDescription className="ml-6 text-xs">
-                    {sec.description}
-                  </CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-          </button>
-          {openSection === sec.id && (
-            <CardContent className="space-y-3">
+          <CardHeader>
+            <CardTitle className="text-base">{sec.title}</CardTitle>
+            {sec.description ? (
+              <CardDescription className="text-xs">
+                {sec.description}
+              </CardDescription>
+            ) : null}
+          </CardHeader>
+          <CardContent className="space-y-3">
               {sec.id === "perfiles_operativos" ? (
                 <PerfilesOperativosEditor
                   perfiles={perfiles}
@@ -401,8 +382,7 @@ export function MaquinaEditorSecciones({ editor }: { editor: MaquinaEditorState 
                   })}
                 </div>
               )}
-            </CardContent>
-          )}
+          </CardContent>
         </Card>
       ))}
     </>

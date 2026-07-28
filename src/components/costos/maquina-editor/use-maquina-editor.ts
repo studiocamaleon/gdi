@@ -26,7 +26,6 @@ import type { MateriaPrima } from "@/lib/materias-primas";
 import {
   cleanGranFormatoGeometryFields,
   cloneRecord,
-  getDefaultOpenSection,
   getDefaultProductivityUnit,
   getDefaultProfileType,
   maquinaToPayload,
@@ -52,9 +51,6 @@ export function useMaquinaEditor({
       normalizePerfilTypeForTemplate({ ...p, uiKey: `p-${i}-init` }, payload),
     );
   });
-  const [openSection, setOpenSection] = React.useState<string | null>(() =>
-    getDefaultOpenSection(maquina.plantilla),
-  );
   const [materiasPrimas, setMateriasPrimas] = React.useState<MateriaPrima[]>([]);
   const [loadingMaterias, setLoadingMaterias] = React.useState(false);
 
@@ -215,8 +211,6 @@ export function useMaquinaEditor({
     perfiles,
     setPerfiles,
     template,
-    openSection,
-    setOpenSection,
     materiasPrimas,
     loadingMaterias,
     handleMaquinaFieldChange,

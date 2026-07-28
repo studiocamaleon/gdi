@@ -585,12 +585,6 @@ export function normalizeRequiredPrinterConsumibles(
   });
 }
 
-export function getDefaultOpenSection(plantilla: PlantillaMaquinaria) {
-  return plantilla === "impresora_gran_formato_por_area"
-    ? "parametros_tecnicos"
-    : "capacidades_fisicas";
-}
-
 export function getAllowedProfileTypes(form: MaquinaPayload): TipoPerfilOperativoMaquina[] {
   const template = getMaquinariaTemplate(form.plantilla);
   const baseTypes = template?.allowedProfileTypes ?? ["impresion"];
