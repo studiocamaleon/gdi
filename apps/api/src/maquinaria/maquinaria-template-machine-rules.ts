@@ -47,7 +47,9 @@ const RULES: Record<PlantillaMaquinariaDto, MachineTemplateRule> = {
   // ─── §7 GUILLOTINA ──────────────────────────────────────────────
   // anchoUtil = largo cuchilla. paramsTecnicos: tiempoPorCorteSeg.
   [PlantillaMaquinariaDto.guillotina]: {
-    requiredMachineKeys: ['anchoUtil', 'altoUtil', 'tiempoPorCorteSeg'],
+    // tiempoPorCorteSeg se mudó al perfil (2026-07-28): puede variar con la
+    // dureza del papel, igual que los pliegos por tanda.
+    requiredMachineKeys: ['anchoUtil', 'altoUtil'],
   },
 
   // ─── §8 PLOTTER_DE_CORTE ────────────────────────────────────────

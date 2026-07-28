@@ -347,14 +347,6 @@ function buildGuillotinaSections(): MaquinariaTemplateSection[] {
       ],
     }),
     section({
-      id: "parametros_tecnicos",
-      title: "Parámetros técnicos",
-      description: "Tiempo por corte (constante en la máquina, casi no varía con material).",
-      fields: [
-        field({ key: "tiempoPorCorteSeg", label: "Tiempo por corte", scope: "maquina", kind: "number", unit: "seg", required: true, description: "Segundos por cada corte individual (ej. 8)." }),
-      ],
-    }),
-    section({
       id: "perfiles_operativos",
       title: "Perfiles operativos",
       description: "Cuanto más grueso el papel, menos pliegos entran en la pila.",
@@ -363,6 +355,7 @@ function buildGuillotinaSections(): MaquinariaTemplateSection[] {
         field({ key: "setupMin", label: "Setup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de preparación inicial." }),
         field({ key: "cleanupMin", label: "Cleanup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de limpieza." }),
         field({ key: "feedReloadMin", label: "Tiempo entre tandas", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo para preparar la siguiente tanda." }),
+        field({ key: "tiempoPorCorteSeg", label: "Tiempo por corte", scope: "perfil_operativo", kind: "number", unit: "seg", required: true, description: "Segundos por cada corte individual (ej. 8). Un papel más duro puede tardar más." }),
         // Escalón, no rango: el perfil que gana es el del "hasta" más chico
         // que todavía cubre el papel. Así no quedan huecos ni solapamientos.
         field({ key: "gramajeMaxGr", label: "Gramaje (hasta)", scope: "perfil_operativo", kind: "number", unit: "g_m2", required: true, description: "Se usa este perfil para papeles de hasta este gramaje." }),
@@ -752,7 +745,7 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
     help: {
       summary: "Productividad NULL en perfiles — la guillotina usa fórmula tandas × cortes/tanda.",
       tips: [
-        "tiempoPorCorteSeg es constante en la máquina.",
+        "El tiempo por corte se declara en cada perfil: un papel más duro puede tardar más.",
         "Creá un perfil por rango de gramaje. Cada uno declara pliegosMaxPorTanda.",
       ],
       examples: ["Polar 92 ED para corte de pliegos impresos"],

@@ -210,16 +210,35 @@ const PERFIL_DETALLE_RETIRADO: Partial<Record<PlantillaMaquinaria, string[]>> = 
   guillotina: ["gramajeMinGr"],
 };
 
-function limpiarDetalleRetirado(
+/**
+ * Claves que se mudaron de la máquina al perfil: si el perfil todavía no
+ * las trae, se siembran con el valor de la máquina para que el primer
+ * guardado las deje escritas donde corresponde.
+ */
+const PERFIL_DETALLE_HEREDADO: Partial<Record<PlantillaMaquinaria, string[]>> = {
+  guillotina: ["tiempoPorCorteSeg"],
+};
+
+function prepararDetallePerfil(
   plantilla: PlantillaMaquinaria,
   detalle: Record<string, unknown> | null | undefined,
+  parametrosTecnicos: Record<string, unknown> | null | undefined,
 ) {
-  if (!detalle) return undefined;
-  const retiradas = PERFIL_DETALLE_RETIRADO[plantilla];
-  if (!retiradas?.length) return detalle;
-  const limpio = { ...detalle };
-  for (const clave of retiradas) delete limpio[clave];
-  return limpio;
+  const retiradas = PERFIL_DETALLE_RETIRADO[plantilla] ?? [];
+  const heredadas = PERFIL_DETALLE_HEREDADO[plantilla] ?? [];
+  if (!detalle && heredadas.length === 0) return undefined;
+
+  const preparado = { ...(detalle ?? {}) };
+  for (const clave of retiradas) delete preparado[clave];
+  for (const clave of heredadas) {
+    if (
+      preparado[clave] === undefined &&
+      parametrosTecnicos?.[clave] !== undefined
+    ) {
+      preparado[clave] = parametrosTecnicos[clave];
+    }
+  }
+  return preparado;
 }
 
 export function maquinaToPayload(maquina: Maquina): MaquinaPayload {
@@ -255,7 +274,11 @@ export function maquinaToPayload(maquina: Maquina): MaquinaPayload {
       setupMin: p.setupMin ?? undefined,
       cleanupMin: p.cleanupMin ?? undefined,
       feedReloadMin: p.feedReloadMin ?? undefined,
-      detalle: limpiarDetalleRetirado(maquina.plantilla, p.detalle),
+      detalle: prepararDetallePerfil(
+        maquina.plantilla,
+        p.detalle,
+        maquina.parametrosTecnicos,
+      ),
       reglaSeleccionJson: p.reglaSeleccionJson ?? undefined,
     })),
     consumibles: maquina.consumibles.map((c) => ({

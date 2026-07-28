@@ -114,8 +114,13 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
   // gramajeMaxGr es el ESCALÓN del perfil ("hasta N g/m²"), sin mínimo:
   // el motor elige el escalón más chico que cubre el papel.
   [PlantillaMaquinariaDto.guillotina]: buildRule({
-    detalleKeys: ['gramajeMaxGr', 'pliegosMaxPorTanda'],
-    requiredFieldKeys: ['nombre', 'pliegosMaxPorTanda', 'gramajeMaxGr'],
+    detalleKeys: ['gramajeMaxGr', 'pliegosMaxPorTanda', 'tiempoPorCorteSeg'],
+    requiredFieldKeys: [
+      'nombre',
+      'pliegosMaxPorTanda',
+      'gramajeMaxGr',
+      'tiempoPorCorteSeg',
+    ],
     allowedProfileTypes: [TipoPerfilOperativoMaquinaDto.corte],
   }),
 

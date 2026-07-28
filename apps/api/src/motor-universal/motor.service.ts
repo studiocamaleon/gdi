@@ -5080,8 +5080,13 @@ export class MotorUniversalService {
   ): number {
     const detalle = this.asRecord(paso.perfil?.detalleJson);
     const pliegosMaxPorTanda = Number(detalle.pliegosMaxPorTanda ?? 0);
+    // El tiempo por corte vive en el perfil (2026-07-28). El valor de la
+    // máquina queda como respaldo de las guillotinas cargadas antes del
+    // cambio: sin él, ese paso costearía 0 minutos en silencio.
     const tiempoPorCorteSeg = Number(
-      paso.maquina?.parametrosTecnicosJson?.tiempoPorCorteSeg ?? 0,
+      detalle.tiempoPorCorteSeg ??
+        paso.maquina?.parametrosTecnicosJson?.tiempoPorCorteSeg ??
+        0,
     );
     const cortesPorTanda = this.getCortesGuillotinaPorTanda(jobContext);
     const pliegos = this.resolverCantidad(paso, jobContext, null);
