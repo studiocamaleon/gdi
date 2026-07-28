@@ -1,424 +1,696 @@
 "use client";
 
 /**
- * Gastos fijos de estructura — vista portada VERBATIM del diseño Grafoprint
- * ("Gastos fijos.html"), conectada al backend real. Sin los elementos de
- * punto de equilibrio (ese cálculo vive en Reportes).
+ * Gastos fijos de estructura, con la forma de Holdprint: una lista y nada más.
+ *
+ * El módulo es INDEPENDIENTE — no lee de centros de costo ni de legajos — y por
+ * eso tampoco clasifica por centro: el centro ya declara sus propios gastos en
+ * su planilla, y cargarlos de los dos lados los contaría dos veces.
  * Ver docs/gastos-fijos-estructura-diseno.md
  */
 
 import * as React from "react";
-import { formatearMoneda, parsearMonto, type Moneda } from "@/lib/moneda";
-import { useConfigRegional } from "@/components/navigation/config-regional-provider";
-import { MoneyInput } from "@/components/ui/money-input";
-import {
-  SelectBuscable,
-  type OpcionSelect,
-} from "@/components/ui/select-buscable";
+import { FilterIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
 import { toast } from "sonner";
-import { ConciliacionNominaCard } from "@/components/costos/conciliacion-nomina-card";
 
-import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import {
   CATEGORIAS_GASTO_FIJO,
   CATEGORIA_GASTO_INFO,
   createGastoFijo,
   eliminarGastoFijo,
+  FRECUENCIAS_GASTO_FIJO,
+  FRECUENCIA_LABEL,
   getGastosFijos,
-  toggleGastoFijo,
+  updateGastoFijo,
   type CategoriaGastoFijo,
+  type FrecuenciaGastoFijo,
   type GastoFijo,
+  type GastoFijoPayload,
 } from "@/lib/gastos-fijos-api";
+import { getProveedores } from "@/lib/proveedores-api";
+import { getMetodosPago } from "@/lib/administracion-api";
+import { formatearMoneda } from "@/lib/moneda";
+import { useConfigRegional } from "@/components/navigation/config-regional-provider";
+import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
+import { ConfirmacionSalida } from "@/components/ui/confirmacion-salida";
+import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
-/* ─── helpers ─── */
-const fmt = (n: number, moneda: Moneda) =>
-  formatearMoneda(n, moneda, { decimales: 0 });
-const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
-function monthLbl(s: string | null): string | null {
-  if (!s) return null;
-  const [y, m] = s.split("-");
-  return `${MESES[Number(m) - 1]} ${y.slice(2)}`;
-}
-function mesActual(): string {
-  const h = new Date();
-  return `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, "0")}`;
-}
-function mesAnterior(mes: string): string {
-  const [y, m] = mes.split("-").map(Number);
-  const d = new Date(y, m - 2, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-function vigenteEn(g: GastoFijo, mes: string): boolean {
-  return g.activo && g.vigenteDesde <= mes && (g.vigenteHasta === null || mes <= g.vigenteHasta);
-}
-const info = (c: string) => CATEGORIA_GASTO_INFO[c as CategoriaGastoFijo] ?? { label: c, color: "#8a8a93" };
+type Estado = "todos" | "activos" | "inactivos";
 
-/* ─── icons (verbatim del diseño) ─── */
-const IcCard = () => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="3" y="6" width="18" height="12" rx="2" /><path d="M3 10h18" /></svg>);
-const IcList = () => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M4 6h16M4 12h16M4 18h10" /></svg>);
-const IcChart = () => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M3 3v18h18" /><path d="M7 15l4-6 3 4 4-7" /></svg>);
-const IcPower = () => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M18.36 6.64A9 9 0 1 1 5.64 6.64" /><path d="M12 2v10" /></svg>);
-const IcTrash = () => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" /></svg>);
+type Formulario = {
+  nombre: string;
+  valor: string;
+  frecuencia: FrecuenciaGastoFijo;
+  metodoPagoId: string;
+  proveedorId: string;
+  notas: string;
+  categoria: CategoriaGastoFijo;
+  documento: string;
+  vigenteDesde: string;
+  /** Cómo termina la vigencia, como en el modelo de referencia. */
+  fin: "nunca" | "en" | "despues";
+  vigenteHasta: string;
+  repeticiones: string;
+};
 
-const MES = mesActual();
-/** El catálogo es fijo: se arma una sola vez. */
-const OPCIONES_CATEGORIA: OpcionSelect[] = CATEGORIAS_GASTO_FIJO.map((c) => ({
-  value: c.value,
-  label: c.label,
-}));
+const SIN_VALOR = "__ninguno__";
 
-const FORM_VACIO = { nombre: "", categoria: "SUELDOS" as CategoriaGastoFijo, importe: "", vigenteDesde: MES, vigenteHasta: "" };
+/** Cuántas veces al año se paga cada frecuencia. */
+const CUOTAS_POR_ANIO: Record<FrecuenciaGastoFijo, number> = {
+  MENSUAL: 12,
+  BIMESTRAL: 6,
+  TRIMESTRAL: 4,
+  SEMESTRAL: 2,
+  ANUAL: 1,
+};
+
+function periodoActual() {
+  const hoy = new Date();
+  return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function formularioVacio(): Formulario {
+  return {
+    nombre: "",
+    valor: "",
+    frecuencia: "MENSUAL",
+    metodoPagoId: "",
+    proveedorId: "",
+    notas: "",
+    categoria: "OTROS",
+    documento: "",
+    vigenteDesde: periodoActual(),
+    fin: "nunca",
+    vigenteHasta: "",
+    repeticiones: "",
+  };
+}
+
+function desdeGasto(g: GastoFijo): Formulario {
+  return {
+    nombre: g.nombre,
+    valor: String(g.valor),
+    frecuencia: g.frecuencia,
+    metodoPagoId: g.metodoPagoId ?? "",
+    proveedorId: g.proveedorId ?? "",
+    notas: g.notas ?? "",
+    categoria: g.categoria,
+    documento: g.documento ?? "",
+    vigenteDesde: g.vigenteDesde,
+    fin: g.vigenteHasta ? "en" : "nunca",
+    vigenteHasta: g.vigenteHasta ?? "",
+    repeticiones: "",
+  };
+}
+
+const numero = (v: string) => {
+  const n = Number(v.replace(",", "."));
+  return Number.isFinite(n) ? n : 0;
+};
+
+/**
+ * "Termina después de N repeticiones" se resuelve acá y viaja como un
+ * `vigenteHasta` concreto: la base guarda vigencias, no reglas, así que la
+ * cuenta se hace una vez y el resultado queda a la vista al reabrir la ficha.
+ */
+function calcularVigenteHasta(f: Formulario): string | null {
+  if (f.fin === "nunca") return null;
+  if (f.fin === "en") return f.vigenteHasta || null;
+
+  const repeticiones = Math.max(1, Math.round(numero(f.repeticiones)));
+  const mesesPorCuota = 12 / CUOTAS_POR_ANIO[f.frecuencia];
+  const [anio, mes] = f.vigenteDesde.split("-").map(Number);
+  if (!anio || !mes) return null;
+
+  const indice = anio * 12 + (mes - 1) + repeticiones * mesesPorCuota - 1;
+  return `${Math.floor(indice / 12)}-${String((indice % 12) + 1).padStart(2, "0")}`;
+}
 
 export function GastosFijosPanel({ initialGastos }: { initialGastos: GastoFijo[] }) {
   const { moneda } = useConfigRegional();
-  const [gastos, setGastos] = React.useState<GastoFijo[]>(initialGastos);
-  const [form, setForm] = React.useState(FORM_VACIO);
-  const [guardando, setGuardando] = React.useState(false);
+  const fmt = (v: number) => formatearMoneda(v, moneda, { decimales: 2 });
+
+  const [gastos, setGastos] = React.useState(initialGastos);
+  const [busqueda, setBusqueda] = React.useState("");
+  const [estado, setEstado] = React.useState<Estado>("todos");
+  const [filtroAbierto, setFiltroAbierto] = React.useState(false);
+  const [fichaAbierta, setFichaAbierta] = React.useState(false);
+  const [editando, setEditando] = React.useState<GastoFijo | null>(null);
   const [aEliminar, setAEliminar] = React.useState<GastoFijo | null>(null);
-  const [altaAbierta, setAltaAbierta] = React.useState(false);
-  const nombreRef = React.useRef<HTMLInputElement>(null);
+  const [form, setForm] = React.useState<Formulario>(formularioVacio);
+  const [tab, setTab] = React.useState<"datos" | "clasificacion">("datos");
+  const [guardando, setGuardando] = React.useState(false);
+  const [sucio, setSucio] = React.useState(false);
+  const [confirmandoSalida, setConfirmandoSalida] = React.useState(false);
+  const [proveedores, setProveedores] = React.useState<
+    Array<{ id: string; nombre: string }>
+  >([]);
+  const [metodos, setMetodos] = React.useState<
+    Array<{ id: string; nombre: string }>
+  >([]);
+
+  // Proveedores y métodos de pago se piden al abrir la ficha por primera vez:
+  // son catálogos que casi no cambian y no hacen falta para ver la lista.
+  const cargarCatalogos = React.useCallback(async () => {
+    if (proveedores.length > 0 || metodos.length > 0) return;
+    try {
+      const [ps, ms] = await Promise.all([getProveedores(), getMetodosPago()]);
+      setProveedores(ps.map((p) => ({ id: p.id, nombre: p.nombre })));
+      setMetodos(ms.map((m) => ({ id: m.id, nombre: m.nombre })));
+    } catch {
+      // Que no se pueda elegir favorecido no debería impedir cargar el gasto.
+    }
+  }, [proveedores.length, metodos.length]);
 
   const recargar = React.useCallback(async () => {
     try {
       setGastos(await getGastosFijos());
-    } catch {
-      toast.error("No se pudo actualizar la lista.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "No se pudieron cargar los gastos.",
+      );
     }
   }, []);
 
-  /* ─── agregados (sobre lo vigente este mes) ─── */
-  const vigentes = gastos.filter((g) => vigenteEn(g, MES));
-  const total = vigentes.reduce((s, g) => s + g.importeMensual, 0);
-  const inactivos = gastos.filter((g) => !g.activo).length;
-  const prevTotal = gastos.filter((g) => vigenteEn(g, mesAnterior(MES))).reduce((s, g) => s + g.importeMensual, 0);
-  const deltaPct = prevTotal > 0 ? ((total - prevTotal) / prevTotal) * 100 : null;
+  const filtrados = React.useMemo(() => {
+    const termino = busqueda.trim().toLowerCase();
+    return gastos.filter((g) => {
+      if (estado === "activos" && !g.activo) return false;
+      if (estado === "inactivos" && g.activo) return false;
+      if (!termino) return true;
+      return (
+        g.nombre.toLowerCase().includes(termino) ||
+        (g.proveedorNombre ?? "").toLowerCase().includes(termino)
+      );
+    });
+  }, [gastos, busqueda, estado]);
 
-  const byCat = new Map<string, number>();
-  for (const g of vigentes) byCat.set(g.categoria, (byCat.get(g.categoria) ?? 0) + g.importeMensual);
-  const comp = [...byCat.entries()].sort((a, b) => b[1] - a[1]);
-  const top = comp[0];
+  // El total suma el MENSUAL, que es lo que pesa en el punto de equilibrio.
+  // Sumar las cuotas mezclaría un seguro anual con un alquiler mensual y daría
+  // un número que no significa nada.
+  const total = filtrados.reduce((acc, g) => acc + g.importeMensual, 0);
 
-  async function agregar(event: React.FormEvent) {
-    event.preventDefault();
-    // parsearMonto entiende los separadores de la moneda del tenant; la
-    // máscara vieja (replace(/\D/g,"")) hacía imposible tipear centavos.
-    const importe = parsearMonto(form.importe, moneda);
-    if (!form.nombre.trim()) return toast.error("Poné un nombre al gasto.");
-    if (importe === null || importe <= 0)
-      return toast.error("El importe mensual no es válido.");
-    if (form.vigenteHasta && form.vigenteHasta < form.vigenteDesde)
-      return toast.error('La vigencia "hasta" no puede ser anterior a "desde".');
+  const abrir = (gasto: GastoFijo | null) => {
+    setEditando(gasto);
+    setForm(gasto ? desdeGasto(gasto) : formularioVacio());
+    setTab("datos");
+    setSucio(false);
+    setFichaAbierta(true);
+    void cargarCatalogos();
+  };
+
+  const editar = <K extends keyof Formulario>(campo: K, valor: Formulario[K]) => {
+    setForm((actual) => ({ ...actual, [campo]: valor }));
+    setSucio(true);
+  };
+
+  const guardar = async () => {
+    if (!form.nombre.trim()) {
+      toast.error("El gasto necesita una descripción.");
+      return;
+    }
     setGuardando(true);
     try {
-      await createGastoFijo({
+      const payload: GastoFijoPayload = {
         nombre: form.nombre.trim(),
         categoria: form.categoria,
-        importeMensual: importe,
-        vigenteDesde: form.vigenteDesde || MES,
-        vigenteHasta: form.vigenteHasta || null,
-      });
-      toast.success("Gasto fijo agregado.");
-      setForm(FORM_VACIO);
-      setAltaAbierta(false);
+        valor: numero(form.valor),
+        frecuencia: form.frecuencia,
+        proveedorId: form.proveedorId || null,
+        metodoPagoId: form.metodoPagoId || null,
+        documento: form.documento.trim() || null,
+        vigenteDesde: form.vigenteDesde,
+        vigenteHasta: calcularVigenteHasta(form),
+        notas: form.notas.trim() || null,
+      };
+      if (editando) await updateGastoFijo(editando.id, payload);
+      else await createGastoFijo(payload);
+
+      setSucio(false);
+      toast.success(editando ? "Gasto guardado." : "Gasto creado.");
+      setFichaAbierta(false);
       await recargar();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "No se pudo guardar.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "No se pudo guardar el gasto.",
+      );
     } finally {
       setGuardando(false);
     }
-  }
+  };
 
-  async function alternar(g: GastoFijo) {
-    try {
-      await toggleGastoFijo(g.id);
-      await recargar();
-    } catch {
-      toast.error("No se pudo cambiar el estado.");
-    }
-  }
+  const pedirCierre = (siguiente: boolean) => {
+    if (siguiente) return setFichaAbierta(true);
+    if (sucio) return setConfirmandoSalida(true);
+    setFichaAbierta(false);
+  };
+
+  const mensualDelForm =
+    (numero(form.valor) * CUOTAS_POR_ANIO[form.frecuencia]) / 12;
 
   return (
-    <div className="gf">
-      <div className="wrap">
-        {/* head */}
-        <div className="page-head">
-          <div>
-            <h1>Gastos fijos de estructura</h1>
-            <div className="sub">
-              La estructura mensual que tu facturación debe cubrir. Es la base del <b>punto de equilibrio</b> de
-              Reportes. Independiente de los centros de costo (que sirven para las tarifas): podés tener sueldos
-              en ambos lados sin doble conteo.
-            </div>
-          </div>
-          <div className="gf-head-der">
-            <div className="total-badge">
-              <div className="lbl">Total fijo vigente · {MES}</div>
-              <div className="val">{fmt(total, moneda)}</div>
-              <div className="unit">por mes · {vigentes.length} conceptos</div>
-            </div>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => setAltaAbierta(true)}
-            >
-              Agregar gasto fijo
-            </button>
-          </div>
-        </div>
-
-        <ConciliacionNominaCard mes={MES} onAlineado={recargar} />
-
-        {/* KPIs (sin "Facturación de equilibrio") */}
-        <div className="kpis">
-          <div className="kpi">
-            <div className="l"><IcCard />Total mensual</div>
-            <div className="v">{fmt(total, moneda)}</div>
-            <div className="h">
-              {deltaPct === null ? (
-                "sin mes anterior para comparar"
-              ) : (
-                <>
-                  <span className={deltaPct <= 0 ? "up" : "dn"}>
-                    {deltaPct <= 0 ? "↓" : "↑"} {Math.abs(deltaPct).toLocaleString("es-AR", { maximumFractionDigits: 1 })}%
-                  </span>{" "}
-                  vs mes anterior
-                </>
-              )}
-            </div>
-          </div>
-          <div className="kpi">
-            <div className="l"><IcList />Conceptos vigentes</div>
-            <div className="v">{vigentes.length}</div>
-            <div className="h">{inactivos} inactivos</div>
-          </div>
-          <div className="kpi">
-            <div className="l"><IcChart />Categoría mayor</div>
-            <div className="v" style={{ fontSize: 16 }}>{top ? info(top[0]).label : "—"}</div>
-            <div className="h">{top && total > 0 ? `${Math.round((top[1] / total) * 100)}% de la estructura` : "—"}</div>
-          </div>
-        </div>
-
-        <div className="grid">
-          {/* LEFT: la tabla. El alta se fue a un modal —como en Cuentas por
-              pagar— para que la lista, que es lo que se consulta todos los
-              días, se lleve el ancho. */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-            <div className="card">
-              <div className="card-head">
-                <h2>Gastos fijos cargados</h2>
-                <span className="grow" />
-                <span className="cap">{gastos.length} conceptos</span>
-              </div>
-              <div style={{ overflowX: "auto" }}>
-                <table className="tbl">
-                  <thead>
-                    <tr>
-                      <th>Nombre</th><th>Categoría</th><th className="right">Importe mensual</th>
-                      <th>Vigencia</th><th>Estado</th><th className="right">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {gastos.length === 0 ? (
-                      <tr><td colSpan={6}><div className="empty"><IcCard /><div>Todavía no cargaste gastos fijos.</div></div></td></tr>
-                    ) : gastos.map((g) => {
-                      const vig = vigenteEn(g, MES);
-                      const tag = !g.activo
-                        ? <span className="tag mut"><span className="d" />Inactivo</span>
-                        : !vig
-                        ? <span className="tag mut"><span className="d" />Fuera de vigencia</span>
-                        : g.vigenteHasta
-                        ? <span className="tag warn"><span className="d" />Vence {monthLbl(g.vigenteHasta)}</span>
-                        : <span className="tag ok"><span className="d" />Vigente</span>;
-                      return (
-                        <tr key={g.id} className={g.activo ? "" : "off"}>
-                          <td className="nm-cell"><div className="nm">{g.nombre}</div></td>
-                          <td><span className="cat"><span className="dot" style={{ background: info(g.categoria).color }} />{info(g.categoria).label}</span></td>
-                          <td className="amt-cell">{fmt(g.importeMensual, moneda)}</td>
-                          <td>
-                            <span className="vig">
-                              {monthLbl(g.vigenteDesde)}<span className="arw">→</span>
-                              {g.vigenteHasta ? monthLbl(g.vigenteHasta) : <span className="open">en curso</span>}
-                            </span>
-                          </td>
-                          <td>{tag}</td>
-                          <td>
-                            <span className="acts">
-                              <button className="icon-btn" title={g.activo ? "Inactivar" : "Activar"} onClick={() => alternar(g)}><IcPower /></button>
-                              <button className="icon-btn danger" title="Eliminar" onClick={() => setAEliminar(g)}><IcTrash /></button>
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              <div className="foot">
-                <span className="lbl">Total fijo vigente por mes</span>
-                <span className="sum">{fmt(total, moneda)}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* RIGHT: composición (sin bloque de equilibrio) */}
-          <div className="card">
-            <div className="card-head">
-              <h2>Composición de la estructura</h2>
-              <span className="grow" />
-              <span className="cap">dónde se va el fijo</span>
-            </div>
-            <div className="card-body">
-              {comp.length === 0 ? (
-                <div className="empty"><IcChart /><div>Sin gastos vigentes este mes.</div></div>
-              ) : (
-                <>
-                  <div className="comp-bar">
-                    {comp.map(([k, v]) => <span key={k} style={{ width: `${(v / total) * 100}%`, background: info(k).color }} />)}
-                  </div>
-                  <div className="comp-list">
-                    {comp.map(([k, v]) => (
-                      <div key={k} className="comp-row">
-                        <span className="dot" style={{ background: info(k).color }} />
-                        <span className="nm">{info(k).label}</span>
-                        <span className="amt">{fmt(v, moneda)}</span>
-                        <span className="pct">{Math.round((v / total) * 100)}%</span>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
+    <div className="content">
+      <div className="page-head">
+        <div className="title-block">
+          <h1>Gastos fijos</h1>
+          <div className="sub">
+            Lo que la estructura cuesta todos los meses, con trabajo o sin él.
+            Es la base del punto de equilibrio.
           </div>
         </div>
       </div>
 
-      {altaAbierta ? (
-        <div className="mod-bg" role="dialog" aria-modal="true">
-          <div className="mod mod-sm">
-            <div className="mod-head">
-              <h2>Agregar gasto fijo</h2>
-              <button
-                type="button"
-                className="mod-x"
-                onClick={() => setAltaAbierta(false)}
-              >
-                ×
-              </button>
-            </div>
-            <form onSubmit={agregar}>
-              <div className="mod-body">
-                <div className="form-grid">
-                  <div className="field wide">
-                    <label>Nombre</label>
-                    <input
-                      ref={nombreRef}
-                      className="ctl"
-                      placeholder="Ej: Alquiler del local"
-                      autoFocus
-                      value={form.nombre}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, nombre: e.target.value }))
-                      }
-                    />
-                  </div>
-                  <div className="field">
-                    <label>Categoría</label>
-                    <SelectBuscable
-                      value={form.categoria}
-                      onChange={(v) =>
-                        setForm((f) => ({
-                          ...f,
-                          categoria: v as CategoriaGastoFijo,
-                        }))
-                      }
-                      opciones={OPCIONES_CATEGORIA}
-                      ariaLabel="Categoría"
-                    />
-                  </div>
-                  <div className="field">
-                    <label>Importe mensual</label>
-                    {/* "money" en el wrapper para que .gf .money .ctl siga
-                        dando el padding del símbolo; el input conserva .ctl */}
-                    <MoneyInput
-                      className="money"
-                      inputClassName="ctl"
-                      placeholder="0"
-                      value={form.importe}
-                      moneda={moneda}
-                      ariaLabel="Importe mensual"
-                      onValueChange={(texto) =>
-                        setForm((f) => ({ ...f, importe: texto }))
-                      }
-                    />
-                  </div>
-                  <div className="field">
-                    <label>Vigente desde</label>
-                    <input
-                      className="ctl"
-                      type="month"
-                      value={form.vigenteDesde}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, vigenteDesde: e.target.value }))
-                      }
-                    />
-                  </div>
-                  <div className="field">
-                    <label>
-                      Vigente hasta <span className="opt">· opcional</span>
-                    </label>
-                    <input
-                      className="ctl"
-                      type="month"
-                      value={form.vigenteHasta}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, vigenteHasta: e.target.value }))
-                      }
-                    />
-                    <span className="gf-ayuda">
-                      Vacío = sigue vigente hasta que lo des de baja.
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <div className="mod-foot">
-                <button
-                  type="button"
-                  className="btn ghost"
-                  onClick={() => setAltaAbierta(false)}
-                  disabled={guardando}
-                >
-                  Cancelar
-                </button>
-                <button className="btn btn-primary" type="submit" disabled={guardando}>
-                  {guardando ? "Guardando…" : "Agregar gasto"}
-                </button>
-              </div>
-            </form>
-          </div>
+      <div className="gfijo-toolbar">
+        <div className="gfijo-buscador">
+          <SearchIcon />
+          <input
+            type="search"
+            placeholder="Búsqueda"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            aria-label="Buscar gasto fijo"
+          />
+        </div>
+        <div className="gfijo-acciones">
+          <button
+            type="button"
+            className={`gfijo-btn ${filtroAbierto ? "activo" : ""}`}
+            onClick={() => setFiltroAbierto((v) => !v)}
+          >
+            <FilterIcon />
+            Filtrar
+          </button>
+          <button
+            type="button"
+            className="gfijo-btn gfijo-btn-primario"
+            onClick={() => abrir(null)}
+          >
+            <PlusIcon />
+            Insertar gasto
+          </button>
+        </div>
+      </div>
+
+      {filtroAbierto ? (
+        <div className="gfijo-filtros">
+          <label className="gfijo-chip">
+            <span>Estado</span>
+            <select
+              value={estado}
+              onChange={(e) => setEstado(e.target.value as Estado)}
+            >
+              <option value="todos">Todos</option>
+              <option value="activos">Activos</option>
+              <option value="inactivos">Inactivos</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            className="gfijo-cerrar-filtros"
+            aria-label="Quitar filtros"
+            onClick={() => {
+              setEstado("todos");
+              setFiltroAbierto(false);
+            }}
+          >
+            <XIcon />
+          </button>
         </div>
       ) : null}
 
+      <div className="card tbl-scroll">
+        <table className="tbl gfijo-tabla">
+          <thead>
+            <tr>
+              <th>Descripción</th>
+              <th>Favorecido</th>
+              <th>Frecuencia</th>
+              <th className="right">Valor</th>
+              <th className="right sticky-right">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtrados.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="gfijo-vacio">
+                  <div>No hay elementos registrados</div>
+                  <button type="button" onClick={() => abrir(null)}>
+                    Haga clic aquí
+                  </button>{" "}
+                  para añadir
+                </td>
+              </tr>
+            ) : null}
+            {filtrados.map((g) => (
+              <tr key={g.id} className={g.activo ? "" : "gfijo-inactivo"}>
+                <td>
+                  <div className="name">{g.nombre}</div>
+                  <div className="desc">
+                    <span
+                      className="gfijo-punto"
+                      style={{
+                        background: CATEGORIA_GASTO_INFO[g.categoria].color,
+                      }}
+                    />
+                    {CATEGORIA_GASTO_INFO[g.categoria].label}
+                  </div>
+                </td>
+                <td>{g.proveedorNombre ?? "—"}</td>
+                <td>{FRECUENCIA_LABEL[g.frecuencia]}</td>
+                <td className="right numeric">
+                  <div className="strong-value">{fmt(g.valor)}</div>
+                  {g.frecuencia !== "MENSUAL" ? (
+                    <div className="desc">{fmt(g.importeMensual)} / mes</div>
+                  ) : null}
+                </td>
+                <td className="right sticky-right">
+                  <span className="centros-actions">
+                    <button type="button" className="btn" onClick={() => abrir(g)}>
+                      Editar
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      title="Eliminar"
+                      aria-label={`Eliminar ${g.nombre}`}
+                      onClick={() => setAEliminar(g)}
+                    >
+                      <XIcon />
+                    </button>
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="gfijo-total">
+        <span>Total mensual:</span>
+        <strong>{fmt(total)}</strong>
+      </div>
+
+      <Sheet open={fichaAbierta} onOpenChange={pedirCierre}>
+        <SheetContent
+          side="right"
+          className="gfijo-ficha !w-[min(720px,96vw)] !max-w-none"
+        >
+          <SheetHeader>
+            <SheetTitle>
+              {editando ? "Gasto fijo" : "Añadir gastos fijos"}
+            </SheetTitle>
+            <SheetDescription>
+              Se carga el valor de una cuota y cada cuánto se paga; el mensual lo
+              calcula el sistema.
+            </SheetDescription>
+          </SheetHeader>
+
+          <nav className="gfijo-tabs">
+            {(
+              [
+                ["datos", "Datos generales"],
+                ["clasificacion", "Clasificación"],
+              ] as const
+            ).map(([valor, etiqueta]) => (
+              <button
+                key={valor}
+                type="button"
+                className={`gfijo-tab ${tab === valor ? "activa" : ""}`}
+                onClick={() => setTab(valor)}
+              >
+                {etiqueta}
+              </button>
+            ))}
+          </nav>
+
+          <div className="gfijo-cuerpo">
+            {tab === "datos" ? (
+              <>
+                <section className="gfijo-seccion">
+                  <header className="gfijo-seccion-head">
+                    <h3>Datos del gasto</h3>
+                  </header>
+                  <div className="gfijo-form">
+                    <label className="gfijo-ancho">
+                      <span>Descripción *</span>
+                      <input
+                        value={form.nombre}
+                        placeholder="Alquiler del local"
+                        onChange={(e) => editar("nombre", e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      <span>Valor *</span>
+                      <input
+                        inputMode="decimal"
+                        value={form.valor}
+                        placeholder="0,00"
+                        onChange={(e) => editar("valor", e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      <span>Período *</span>
+                      <select
+                        value={form.frecuencia}
+                        onChange={(e) =>
+                          editar("frecuencia", e.target.value as FrecuenciaGastoFijo)
+                        }
+                      >
+                        {FRECUENCIAS_GASTO_FIJO.map((f) => (
+                          <option key={f.value} value={f.value}>
+                            {f.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>Forma de pago</span>
+                      <select
+                        value={form.metodoPagoId || SIN_VALOR}
+                        onChange={(e) =>
+                          editar(
+                            "metodoPagoId",
+                            e.target.value === SIN_VALOR ? "" : e.target.value,
+                          )
+                        }
+                      >
+                        <option value={SIN_VALOR}>Sin especificar</option>
+                        {metodos.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.nombre}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="gfijo-ancho">
+                      <span>Favorecido</span>
+                      <select
+                        value={form.proveedorId || SIN_VALOR}
+                        onChange={(e) =>
+                          editar(
+                            "proveedorId",
+                            e.target.value === SIN_VALOR ? "" : e.target.value,
+                          )
+                        }
+                      >
+                        <option value={SIN_VALOR}>Sin especificar</option>
+                        {proveedores.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.nombre}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="gfijo-ancho">
+                      <span>Observación</span>
+                      <textarea
+                        rows={3}
+                        value={form.notas}
+                        onChange={(e) => editar("notas", e.target.value)}
+                      />
+                    </label>
+                  </div>
+                  {numero(form.valor) > 0 && form.frecuencia !== "MENSUAL" ? (
+                    <footer className="gfijo-seccion-foot">
+                      <span>Se prorratea para el punto de equilibrio</span>
+                      <strong>= {fmt(mensualDelForm)} / mes</strong>
+                    </footer>
+                  ) : null}
+                </section>
+
+                <section className="gfijo-seccion">
+                  <header className="gfijo-seccion-head">
+                    <h3>Vigencia</h3>
+                    <p>
+                      Desde qué mes cuenta para la estructura y hasta cuándo. El
+                      histórico queda: subir el alquiler en julio no cambia lo
+                      que costó en junio.
+                    </p>
+                  </header>
+                  <div className="gfijo-form">
+                    <label>
+                      <span>Empezando en *</span>
+                      <input
+                        type="month"
+                        value={form.vigenteDesde}
+                        onChange={(e) =>
+                          editar("vigenteDesde", e.target.value || periodoActual())
+                        }
+                      />
+                    </label>
+                    <fieldset className="gfijo-fin gfijo-ancho">
+                      <legend>Termina en</legend>
+                      {(
+                        [
+                          ["nunca", "Nunca"],
+                          ["en", "En"],
+                          ["despues", "Después"],
+                        ] as const
+                      ).map(([valor, etiqueta]) => (
+                        <label key={valor} className="gfijo-radio">
+                          <input
+                            type="radio"
+                            name="gfijo-fin"
+                            checked={form.fin === valor}
+                            onChange={() => editar("fin", valor)}
+                          />
+                          <span>{etiqueta}</span>
+                        </label>
+                      ))}
+                      {form.fin === "en" ? (
+                        <input
+                          type="month"
+                          value={form.vigenteHasta}
+                          onChange={(e) => editar("vigenteHasta", e.target.value)}
+                        />
+                      ) : null}
+                      {form.fin === "despues" ? (
+                        <span className="gfijo-repeticiones">
+                          <input
+                            inputMode="numeric"
+                            value={form.repeticiones}
+                            placeholder="12"
+                            onChange={(e) => editar("repeticiones", e.target.value)}
+                          />
+                          <span>
+                            repeticiones
+                            {calcularVigenteHasta(form)
+                              ? ` · hasta ${calcularVigenteHasta(form)}`
+                              : ""}
+                          </span>
+                        </span>
+                      ) : null}
+                    </fieldset>
+                  </div>
+                </section>
+              </>
+            ) : null}
+
+            {tab === "clasificacion" ? (
+              <section className="gfijo-seccion">
+                <header className="gfijo-seccion-head">
+                  <h3>Clasificación</h3>
+                  <p>
+                    El gasto fijo no se imputa a centros de costo: el centro ya
+                    declara sus propios gastos en su planilla, y cargarlos de los
+                    dos lados los contaría dos veces.
+                  </p>
+                </header>
+                <div className="gfijo-form">
+                  <label>
+                    <span>Clasificar gasto</span>
+                    <select
+                      value={form.categoria}
+                      onChange={(e) =>
+                        editar("categoria", e.target.value as CategoriaGastoFijo)
+                      }
+                    >
+                      {CATEGORIAS_GASTO_FIJO.map((c) => (
+                        <option key={c.value} value={c.value}>
+                          {c.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Documento</span>
+                    <input
+                      value={form.documento}
+                      placeholder="Factura, contrato…"
+                      onChange={(e) => editar("documento", e.target.value)}
+                    />
+                  </label>
+                </div>
+              </section>
+            ) : null}
+          </div>
+
+          <SheetFooter className="gfijo-acciones-pie">
+            <Button variant="outline" onClick={() => pedirCierre(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={guardar} disabled={guardando}>
+              {guardando ? <GdiSpinner className="size-4" /> : null}
+              Guardar
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+
+      <ConfirmacionSalida
+        open={confirmandoSalida}
+        cambios={1}
+        guardando={guardando}
+        onGuardarYSalir={async () => {
+          setConfirmandoSalida(false);
+          await guardar();
+        }}
+        onDescartarYSalir={() => {
+          setConfirmandoSalida(false);
+          setSucio(false);
+          setFichaAbierta(false);
+        }}
+        onSeguirEditando={() => setConfirmandoSalida(false)}
+      />
+
       <ConfirmacionDestructiva
         open={aEliminar !== null}
-        onOpenChange={(o) => { if (!o) setAEliminar(null); }}
+        onOpenChange={(abierto) => {
+          if (!abierto) setAEliminar(null);
+        }}
         titulo="Eliminar gasto fijo"
-        descripcion={<>Se quita <strong>{aEliminar?.nombre}</strong> de la estructura de costos fijos.</>}
+        descripcion={`¿Eliminar "${aEliminar?.nombre ?? ""}" de la estructura?`}
+        impacto={[
+          "El punto de equilibrio baja en ese importe.",
+          "Esta acción no se puede deshacer.",
+        ]}
         nombreItem={aEliminar?.nombre}
         requiereTipear={false}
         accionLabel="Eliminar"
         onConfirmar={async () => {
           if (!aEliminar) return;
+          const gasto = aEliminar;
+          setAEliminar(null);
           try {
-            await eliminarGastoFijo(aEliminar.id);
-            toast.success("Gasto fijo eliminado.");
-            setAEliminar(null);
+            await eliminarGastoFijo(gasto.id);
+            toast.success(`"${gasto.nombre}" eliminado.`);
             await recargar();
-          } catch (e) {
-            toast.error(e instanceof Error ? e.message : "No se pudo eliminar.");
+          } catch (error) {
+            toast.error(
+              error instanceof Error ? error.message : "No se pudo eliminar.",
+            );
           }
         }}
       />
     </div>
   );
 }
-

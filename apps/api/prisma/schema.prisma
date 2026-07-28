@@ -80,6 +80,17 @@ enum CategoriaComponenteCostoCentro {
 
 /// Categorías de gasto fijo de estructura (planificación / punto de equilibrio).
 /// Independiente de las categorías de componente de centro (costeo/tarifa).
+/// Cada cuánto se paga el gasto. El importe mensual se deriva de acá: uno
+/// anual prorratea a doceavos para que el punto de equilibrio no salte en el
+/// mes que toca pagarlo.
+enum FrecuenciaGastoFijo {
+  MENSUAL
+  BIMESTRAL
+  TRIMESTRAL
+  SEMESTRAL
+  ANUAL
+}
+
 enum CategoriaGastoFijo {
   ALQUILER
   SUELDOS
@@ -902,6 +913,7 @@ model Cliente {
 }
 
 model Proveedor {
+  gastosFijosEstructura           GastoFijoEstructura[]
   id                              String                 @id @default(uuid()) @db.Uuid
   tenantId                        String                 @db.Uuid
   nombre                          String
@@ -1481,11 +1493,22 @@ model ConfiguracionInsights {
 /// los meses entre `vigenteDesde` y `vigenteHasta` (null = indefinido).
 /// Ver docs/gastos-fijos-estructura-diseno.md
 model GastoFijoEstructura {
-  id             String             @id @default(uuid()) @db.Uuid
-  tenantId       String             @db.Uuid
+  id             String              @id @default(uuid()) @db.Uuid
+  tenantId       String              @db.Uuid
   nombre         String
   categoria      CategoriaGastoFijo
-  importeMensual Decimal            @db.Decimal(14, 2)
+  /// Lo que el usuario carga: el valor de UNA cuota, con su frecuencia.
+  valor          Decimal             @default(0) @db.Decimal(14, 2)
+  frecuencia     FrecuenciaGastoFijo @default(MENSUAL)
+  /// Derivado de valor y frecuencia, y persistido: es lo que suma el punto de
+  /// equilibrio, y no tiene que depender de recalcular en cada lectura.
+  importeMensual Decimal             @db.Decimal(14, 2)
+  /// A quién se le paga — el "Favorecido" del listado. Opcional: no todo gasto
+  /// de estructura tiene un proveedor cargado en el sistema.
+  proveedorId    String?             @db.Uuid
+  metodoPagoId   String?             @db.Uuid
+  /// Número de factura, contrato o lo que identifique al gasto.
+  documento      String?
   /// 'YYYY-MM' — primer mes de vigencia (inclusive).
   vigenteDesde   String
   /// 'YYYY-MM' — último mes de vigencia (inclusive); null = indefinido.
@@ -1494,11 +1517,14 @@ model GastoFijoEstructura {
   notas          String?
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
-  tenant         Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant         Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  proveedor      Proveedor?          @relation(fields: [proveedorId], references: [id], onDelete: SetNull)
+  metodoPago     MetodoPago?         @relation(fields: [metodoPagoId], references: [id], onDelete: SetNull)
   egresos        Egreso[]
   recurrentes    GastoRecurrente[]
 
   @@index([tenantId])
+  @@index([tenantId, proveedorId])
 }
 
 /// Configuración de producción del tenant. Hoy: margen de seguridad que
@@ -2981,6 +3007,7 @@ model CuentaFondos {
 }
 
 model MetodoPago {
+  gastosFijosEstructura GastoFijoEstructura[]
   id                    String            @id @default(uuid()) @db.Uuid
   tenantId              String            @db.Uuid
   codigo                String

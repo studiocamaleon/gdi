@@ -51,33 +51,8 @@ export class GastosFijosController {
     return this.gastosFijos.crear(auth, payload);
   }
 
-  /**
-   * La comparación contra la nómina real de los legajos. Es una LECTURA: no
-   * cambia nada, sólo hace visible una diferencia que hasta ahora no lo era.
-   */
-  @Get('conciliacion-nomina')
-  conciliacionNomina(
-    @CurrentSession() auth: CurrentAuth,
-    @Query('periodo') periodo?: string,
-  ) {
-    return this.gastosFijos.conciliacionNomina(auth, periodo);
-  }
 
-  /** Reemplaza las líneas de sueldos por una con la nómina de los legajos. */
-  @Permiso('administracion.configurar')
-  @Post('alinear-con-nomina')
-  alinearConNomina(
-    @CurrentSession() auth: CurrentAuth,
-    @Query('periodo') periodo?: string,
-  ) {
-    return this.gastosFijos.alinearConNomina(auth, periodo);
-  }
 
-  @Permiso('administracion.configurar')
-  @Post('importar-desde-tarifas')
-  importar(@CurrentSession() auth: CurrentAuth) {
-    return this.gastosFijos.importarDesdeTarifas(auth);
-  }
 
   @Permiso('administracion.configurar')
   @Put(':id')

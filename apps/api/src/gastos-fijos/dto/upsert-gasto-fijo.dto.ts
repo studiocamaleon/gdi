@@ -1,10 +1,11 @@
-import { CategoriaGastoFijo } from '@prisma/client';
+import { CategoriaGastoFijo, FrecuenciaGastoFijo } from '@prisma/client';
 import {
   IsBoolean,
   IsEnum,
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   Matches,
   Min,
   MinLength,
@@ -23,10 +24,31 @@ export class UpsertGastoFijoDto {
   @IsEnum(CategoriaGastoFijo)
   categoria: CategoriaGastoFijo;
 
+  /**
+   * El valor de UNA cuota. El importe mensual lo deriva el servidor cruzándolo
+   * con la frecuencia: si viajara ya prorrateado, el formulario mostraría un
+   * número distinto del que el usuario cargó.
+   */
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
-  importeMensual: number;
+  valor: number;
+
+  @IsEnum(FrecuenciaGastoFijo)
+  frecuencia: FrecuenciaGastoFijo;
+
+  /** El "Favorecido": a quién se le paga. */
+  @IsOptional()
+  @IsUUID()
+  proveedorId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  metodoPagoId?: string;
+
+  @IsOptional()
+  @IsString()
+  documento?: string;
 
   @IsString()
   @Matches(PERIODO_RE, { message: 'vigenteDesde debe tener formato YYYY-MM' })

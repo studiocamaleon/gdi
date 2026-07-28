@@ -39,21 +39,62 @@ export const CATEGORIA_GASTO_INFO: Record<CategoriaGastoFijo, { label: string; c
     { label: string; color: string }
   >;
 
+export type FrecuenciaGastoFijo =
+  | "MENSUAL"
+  | "BIMESTRAL"
+  | "TRIMESTRAL"
+  | "SEMESTRAL"
+  | "ANUAL";
+
+export const FRECUENCIAS_GASTO_FIJO: Array<{
+  value: FrecuenciaGastoFijo;
+  label: string;
+}> = [
+  { value: "MENSUAL", label: "Mes" },
+  { value: "BIMESTRAL", label: "Bimestre" },
+  { value: "TRIMESTRAL", label: "Trimestre" },
+  { value: "SEMESTRAL", label: "Semestre" },
+  { value: "ANUAL", label: "Año" },
+];
+
+export const FRECUENCIA_LABEL: Record<FrecuenciaGastoFijo, string> =
+  Object.fromEntries(
+    FRECUENCIAS_GASTO_FIJO.map((f) => [f.value, f.label]),
+  ) as Record<FrecuenciaGastoFijo, string>;
+
 export type GastoFijo = {
   id: string;
   nombre: string;
   categoria: CategoriaGastoFijo;
+  /** El valor de UNA cuota, tal como se carga. */
+  valor: number;
+  frecuencia: FrecuenciaGastoFijo;
+  /** Derivado de valor y frecuencia: lo que suma al punto de equilibrio. */
   importeMensual: number;
+  proveedorId: string | null;
+  /** El "Favorecido" del listado. */
+  proveedorNombre: string | null;
+  metodoPagoId: string | null;
+  metodoPagoNombre: string | null;
+  documento: string | null;
   vigenteDesde: string;
   vigenteHasta: string | null;
   activo: boolean;
   notas: string | null;
 };
 
+/**
+ * Lo que se manda al guardar. Va el valor de la cuota, no el mensual: ese lo
+ * deriva el servidor cruzándolo con la frecuencia.
+ */
 export type GastoFijoPayload = {
   nombre: string;
   categoria: CategoriaGastoFijo;
-  importeMensual: number;
+  valor: number;
+  frecuencia: FrecuenciaGastoFijo;
+  proveedorId?: string | null;
+  metodoPagoId?: string | null;
+  documento?: string | null;
   vigenteDesde: string;
   vigenteHasta?: string | null;
   activo?: boolean;
@@ -91,47 +132,5 @@ export function toggleGastoFijo(id: string) {
 export function eliminarGastoFijo(id: string) {
   return apiRequest<{ id: string; eliminado: boolean }>(`/gastos-fijos/${id}`, {
     method: "DELETE",
-  });
-}
-
-export function importarGastosDesdeTarifas() {
-  return apiRequest<ImportarResultado>("/gastos-fijos/importar-desde-tarifas", {
-    method: "POST",
-  });
-}
-
-/* ─── Conciliación con la nómina ─────────────────────────────────────────────
- * El punto de equilibrio y los centros de costo están desacoplados a propósito.
- * Esto NO fuerza la igualdad: hace visible una diferencia que antes no lo era.
- * Ver docs/legajos-nomina-diseno.md §4.3
- */
-
-export type ConciliacionNomina = {
-  periodo: string;
-  nomina: {
-    periodo: string;
-    personas: number;
-    sueldoNeto: number;
-    cargasSociales: number;
-    /** Incluye la provisión del aguinaldo. */
-    costoMensual: number;
-  };
-  /** Lo que suman hoy las líneas de SUELDOS del punto de equilibrio. */
-  declarado: number;
-  lineas: GastoFijo[];
-  /** declarado − nómina. Positivo = el punto de equilibrio declara de más. */
-  diferencia: number;
-  estado: "alineado" | "declarado_de_mas" | "declarado_de_menos" | "sin_nomina";
-};
-
-export function getConciliacionNomina(periodo?: string) {
-  const qs = periodo ? `?periodo=${periodo}` : "";
-  return apiRequest<ConciliacionNomina>(`/gastos-fijos/conciliacion-nomina${qs}`);
-}
-
-export function alinearConNomina(periodo?: string) {
-  const qs = periodo ? `?periodo=${periodo}` : "";
-  return apiRequest<ConciliacionNomina>(`/gastos-fijos/alinear-con-nomina${qs}`, {
-    method: "POST",
   });
 }
