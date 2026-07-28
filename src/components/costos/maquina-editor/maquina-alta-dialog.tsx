@@ -65,6 +65,10 @@ export function MaquinaAltaDialog({ open, onClose, plantas }: MaquinaAltaDialogP
         geometriaTrabajo: template?.geometry ?? base.geometriaTrabajo,
         unidadProduccionPrincipal:
           template?.defaultProductionUnit ?? base.unidadProduccionPrincipal,
+        // Nace como BORRADOR explícito: el API sólo saltea la validación de
+        // campos requeridos de la plantilla con esta marca. La ficha lo
+        // "gradúa" cuando esos campos se completan (ver maquina-ficha).
+        estadoConfiguracion: "borrador",
       };
       const created = await createMaquina(payload);
       toast.success(`"${created.nombre}" creada — completá su ficha`);

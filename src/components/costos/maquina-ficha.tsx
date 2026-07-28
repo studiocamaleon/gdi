@@ -62,9 +62,33 @@ export function MaquinaFicha({ maquina, plantas, centrosCosto }: MaquinaFichaPro
     setSaving(true);
     try {
       const payload = editor.buildPayload();
-      const updated = await updateMaquina(maquina.id, payload);
+      const esBorrador = payload.estadoConfiguracion === "borrador";
+      let updated;
+      if (!esBorrador) {
+        updated = await updateMaquina(maquina.id, payload);
+      } else {
+        // Un borrador intenta graduarse: sin la marca, el API deriva el
+        // estado (incompleta/lista) validando los campos de la plantilla.
+        // Si todavía faltan, se guarda igual COMO borrador — la gracia del
+        // flujo es poder completar la ficha de a poco.
+        try {
+          updated = await updateMaquina(maquina.id, {
+            ...payload,
+            estadoConfiguracion: undefined,
+          });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "";
+          if (!msg.includes("debe completar los campos")) throw err;
+          updated = await updateMaquina(maquina.id, payload);
+          toast.info(
+            `Guardada como borrador. ${msg.replace("La maquina debe", "Para dejarla operativa debe")}`,
+          );
+        }
+      }
       setNombreGuardado(updated.nombre);
-      toast.success(`"${updated.nombre}" actualizada`);
+      if (updated.estadoConfiguracion !== "borrador") {
+        toast.success(`"${updated.nombre}" actualizada`);
+      }
       router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error guardando");

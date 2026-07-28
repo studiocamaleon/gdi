@@ -6945,7 +6945,7 @@ body {
     padding: 0 12px;
     border: 1px solid var(--border);
     border-radius: 8px;
-    background: var(--surface-1);
+    background: var(--surface);
   }
 
   .maq-buscador svg {
@@ -6979,7 +6979,7 @@ body {
     padding: 9px 14px;
     border: 1px solid var(--border);
     border-radius: 8px;
-    background: var(--surface-1);
+    background: var(--surface);
     color: var(--text);
     font-size: 13px;
     font-weight: 500;
@@ -7033,7 +7033,7 @@ body {
     padding: 8px 10px;
     border: 1px solid var(--border);
     border-radius: 7px;
-    background: var(--surface-1);
+    background: var(--surface);
     color: var(--text);
     font-size: 13px;
   }
@@ -7232,7 +7232,7 @@ body {
     flex-direction: column;
     width: min(480px, 94vw);
     max-height: min(640px, 90vh);
-    background: var(--surface-1);
+    background: var(--surface);
     border-radius: 12px;
     box-shadow: var(--shadow-pop, 0 18px 50px rgba(20, 20, 26, 0.25));
   }
@@ -7295,7 +7295,7 @@ body {
     padding: 9px 12px;
     border: 1px solid var(--border);
     border-radius: 8px;
-    background: var(--surface-1);
+    background: var(--surface);
     color: var(--text);
     font-size: 13px;
   }
@@ -7308,7 +7308,7 @@ body {
     padding: 0 12px;
     border: 1px solid var(--border);
     border-radius: 8px;
-    background: var(--surface-1);
+    background: var(--surface);
   }
 
   .maq-alta-buscador svg {
@@ -37637,6 +37637,8 @@ body:has(.t-app) {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+
 
 
 
