@@ -74,7 +74,7 @@ export class RentabilidadService {
       this.prisma.gastoFijoEstructura.findMany({
         where: { tenantId, activo: true },
         select: {
-          categoria: true,
+          categoria: { select: { nombre: true } },
           importeMensual: true,
           vigenteDesde: true,
           vigenteHasta: true,
@@ -101,7 +101,8 @@ export class RentabilidadService {
         if (!vigente) continue;
         const proporcion = importe * fraccionMesEnRango(mes, rango);
         costosFijos += proporcion;
-        porCategoria.set(gasto.categoria, (porCategoria.get(gasto.categoria) ?? 0) + proporcion);
+        const cat = gasto.categoria.nombre;
+        porCategoria.set(cat, (porCategoria.get(cat) ?? 0) + proporcion);
       }
     }
 

@@ -151,12 +151,6 @@ export const PERMISOS_TRANSVERSALES = [
     descripcion:
       'Datos fiscales del emisor, puntos de venta y catálogo de métodos de pago. No incluye el resto de Configuración.',
   },
-  {
-    clave: 'registros.ver_remuneraciones',
-    label: 'Ver y editar sueldos de los legajos',
-    descripcion:
-      'La remuneración de cada empleado: sueldo, cargas y su historial. El resto del legajo se ve con el permiso del módulo.',
-  },
 ] as const;
 
 export type PermisoTransversal =

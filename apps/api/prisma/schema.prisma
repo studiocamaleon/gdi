@@ -80,18 +80,15 @@ enum CategoriaComponenteCostoCentro {
 
 /// Categorías de gasto fijo de estructura (planificación / punto de equilibrio).
 /// Independiente de las categorías de componente de centro (costeo/tarifa).
-enum CategoriaGastoFijo {
-  ALQUILER
-  SUELDOS
-  SERVICIOS // luz, agua, internet, teléfono
-  AMORTIZACION // depreciación de máquinas/equipos
-  FINANCIEROS // intereses, cuotas, leasing
-  IMPUESTOS // fijos (no IVA/IIBB, que se costean por venta)
-  MARKETING
-  SEGUROS
-  SOFTWARE // software y licencias
-  LEGAL // contable / legal
-  OTROS
+/// Cada cuánto se paga el gasto. El importe mensual se deriva de acá: uno
+/// anual prorratea a doceavos para que el punto de equilibrio no salte en el
+/// mes que toca pagarlo.
+enum FrecuenciaGastoFijo {
+  MENSUAL
+  BIMESTRAL
+  TRIMESTRAL
+  SEMESTRAL
+  ANUAL
 }
 
 enum MetodoDepreciacionMaquina {
@@ -601,7 +598,6 @@ model Tenant {
   proveedorDireccions                              ProveedorDireccion[]
   empleadoDireccions                               EmpleadoDireccion[]
   empleadoComisions                                EmpleadoComision[]
-  empleadoRemuneraciones                           EmpleadoRemuneracion[]
   productosImpuestosCatalogo                       ProductoImpuestoCatalogo[]
   productosComisionesCatalogo                      ProductoComisionCatalogo[]
   estaciones                                       Estacion[]
@@ -902,6 +898,7 @@ model Cliente {
 }
 
 model Proveedor {
+  gastosFijosEstructura           GastoFijoEstructura[]
   id                              String                 @id @default(uuid()) @db.Uuid
   tenantId                        String                 @db.Uuid
   nombre                          String
@@ -959,7 +956,6 @@ model Empleado {
   user                   User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
   direcciones            EmpleadoDireccion[]
   comisiones             EmpleadoComision[]
-  remuneraciones         EmpleadoRemuneracion[]
   invitations            Invitation[]
   ordenesTrabajoVendidas OrdenTrabajo[]         @relation("OrdenTrabajoVendedor")
   cotizacionesVendidas   Cotizacion[]           @relation("CotizacionVendedor")
@@ -968,53 +964,6 @@ model Empleado {
 
   @@index([tenantId, nombreCompleto])
   @@index([tenantId, sector])
-}
-
-/// Lo que cuesta una persona por mes, con vigencia.
-///
-/// Fuente ÚNICA del costo laboral: los centros de costo CONSUMEN de acá en vez
-/// de pedir el sueldo otra vez. Antes de esto, el sueldo de cada persona se
-/// re-tipeaba en cada centro donde trabajaba, y ya había divergido — la misma
-/// persona con dos sueldos base distintos en centros distintos, sin nada que lo
-/// detectara. Ver docs/legajos-nomina-diseno.md
-///
-/// Filas con vigencia, no un campo que se pisa: el sueldo cambia (paritarias,
-/// ascensos) y "cuánto ganaba en marzo" tiene que seguir siendo respondible.
-model EmpleadoRemuneracion {
-  /// El id lo pone Postgres y no el cliente: la migración que creó la tabla
-  /// hace un backfill por SQL que inserta filas sin pasar id.
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId       String   @db.Uuid
-  empleadoId     String   @db.Uuid
-  /// 'YYYY-MM' — primer mes de vigencia (inclusive).
-  vigenteDesde   String
-  /// 'YYYY-MM' — último mes (inclusive); null = vigente hasta nuevo aviso.
-  vigenteHasta   String?
-  /// Neto de bolsillo.
-  sueldoNeto     Decimal  @db.Decimal(14, 2)
-  /// Cargas sociales y aportes patronales del mes.
-  cargasSociales Decimal  @db.Decimal(14, 2)
-  /// Sueldos que cobra por año: 13 con aguinaldo (lo normal en Argentina), 12
-  /// sin (contratado, monotributista). El costo mensual prorratea el SAC:
-  /// (neto + cargas) × sueldosPorAnio / 12 — un 8,33% de recargo con 13.
-  ///
-  /// Se modela como "cuántos sueldos" y no como un booleano `aguinaldo` para
-  /// que la cuenta esté a la vista y no escondida en una constante del código,
-  /// y para que un convenio con 14 sea un número y no un release. Imputar el
-  /// aguinaldo en junio y diciembre en vez de prorratearlo haría que el mismo
-  /// trabajo costara distinto según el mes, que es lo que un sistema de costeo
-  /// tiene que evitar.
-  sueldosPorAnio Int      @default(13)
-  /// Por qué cambió: 'alta' | 'paritaria' | 'ascenso' | 'correccion' | 'otro'.
-  motivo         String?
-  notas          String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  empleado       Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
-
-  @@index([tenantId, empleadoId, vigenteDesde])
-  @@index([tenantId, vigenteDesde])
 }
 
 model ClienteContacto {
@@ -1481,11 +1430,25 @@ model ConfiguracionInsights {
 /// los meses entre `vigenteDesde` y `vigenteHasta` (null = indefinido).
 /// Ver docs/gastos-fijos-estructura-diseno.md
 model GastoFijoEstructura {
-  id             String             @id @default(uuid()) @db.Uuid
-  tenantId       String             @db.Uuid
+  id             String              @id @default(uuid()) @db.Uuid
+  tenantId       String              @db.Uuid
   nombre         String
-  categoria      CategoriaGastoFijo
-  importeMensual Decimal            @db.Decimal(14, 2)
+  /// Mismo catálogo que Cuentas por pagar, para que el gasto presupuestado y
+  /// el pago real se clasifiquen igual. Sólo se ofrecen las de naturaleza
+  /// GASTO_ESTRUCTURA: un gasto fijo de "materiales" no existe.
+  categoriaEgresoId String           @db.Uuid
+  /// Lo que el usuario carga: el valor de UNA cuota, con su frecuencia.
+  valor          Decimal             @default(0) @db.Decimal(14, 2)
+  frecuencia     FrecuenciaGastoFijo @default(MENSUAL)
+  /// Derivado de valor y frecuencia, y persistido: es lo que suma el punto de
+  /// equilibrio, y no tiene que depender de recalcular en cada lectura.
+  importeMensual Decimal             @db.Decimal(14, 2)
+  /// A quién se le paga — el "Favorecido" del listado. Opcional: no todo gasto
+  /// de estructura tiene un proveedor cargado en el sistema.
+  proveedorId    String?             @db.Uuid
+  metodoPagoId   String?             @db.Uuid
+  /// Número de factura, contrato o lo que identifique al gasto.
+  documento      String?
   /// 'YYYY-MM' — primer mes de vigencia (inclusive).
   vigenteDesde   String
   /// 'YYYY-MM' — último mes de vigencia (inclusive); null = indefinido.
@@ -1494,11 +1457,16 @@ model GastoFijoEstructura {
   notas          String?
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
-  tenant         Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant         Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  categoria      CategoriaEgreso     @relation(fields: [categoriaEgresoId], references: [id], onDelete: Restrict)
+  proveedor      Proveedor?          @relation(fields: [proveedorId], references: [id], onDelete: SetNull)
+  metodoPago     MetodoPago?         @relation(fields: [metodoPagoId], references: [id], onDelete: SetNull)
   egresos        Egreso[]
   recurrentes    GastoRecurrente[]
 
   @@index([tenantId])
+  @@index([tenantId, proveedorId])
+  @@index([tenantId, categoriaEgresoId])
 }
 
 /// Configuración de producción del tenant. Hoy: margen de seguridad que
@@ -2981,6 +2949,7 @@ model CuentaFondos {
 }
 
 model MetodoPago {
+  gastosFijosEstructura GastoFijoEstructura[]
   id                    String            @id @default(uuid()) @db.Uuid
   tenantId              String            @db.Uuid
   codigo                String
@@ -3433,6 +3402,7 @@ model CategoriaEgreso {
   hijos       CategoriaEgreso[] @relation("CategoriaEgresoPadre")
   egresos     Egreso[]
   recurrentes GastoRecurrente[]
+  gastosFijos GastoFijoEstructura[]
 
   @@unique([tenantId, codigo])
   @@index([tenantId, activo])

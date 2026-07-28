@@ -5,55 +5,65 @@ import { apiRequest } from "@/lib/api";
  * equilibrio. Ver docs/gastos-fijos-estructura-diseno.md
  */
 
-export type CategoriaGastoFijo =
-  | "SUELDOS"
-  | "ALQUILER"
-  | "SERVICIOS"
-  | "IMPUESTOS"
-  | "SEGUROS"
-  | "SOFTWARE"
-  | "LEGAL"
-  | "FINANCIEROS"
-  | "AMORTIZACION"
-  | "MARKETING"
-  | "OTROS";
+export type FrecuenciaGastoFijo =
+  | "MENSUAL"
+  | "BIMESTRAL"
+  | "TRIMESTRAL"
+  | "SEMESTRAL"
+  | "ANUAL";
 
-/** Etiqueta + color por categoría (colores del diseño Grafoprint). */
-export const CATEGORIAS_GASTO_FIJO: Array<{ value: CategoriaGastoFijo; label: string; color: string }> = [
-  { value: "SUELDOS", label: "Sueldos", color: "#2f6fdb" },
-  { value: "ALQUILER", label: "Alquiler", color: "#d9642a" },
-  { value: "SERVICIOS", label: "Servicios", color: "#7a52d0" },
-  { value: "IMPUESTOS", label: "Impuestos y tasas", color: "#1f9d6b" },
-  { value: "SEGUROS", label: "Seguros", color: "#b8791b" },
-  { value: "SOFTWARE", label: "Software y licencias", color: "#0e9aa7" },
-  { value: "LEGAL", label: "Contable / legal", color: "#c0392b" },
-  { value: "FINANCIEROS", label: "Financieros", color: "#3f8f8a" },
-  { value: "AMORTIZACION", label: "Amortización", color: "#9a6b3f" },
-  { value: "MARKETING", label: "Marketing", color: "#c77dab" },
-  { value: "OTROS", label: "Otros", color: "#8a8a93" },
+export const FRECUENCIAS_GASTO_FIJO: Array<{
+  value: FrecuenciaGastoFijo;
+  label: string;
+}> = [
+  { value: "MENSUAL", label: "Mes" },
+  { value: "BIMESTRAL", label: "Bimestre" },
+  { value: "TRIMESTRAL", label: "Trimestre" },
+  { value: "SEMESTRAL", label: "Semestre" },
+  { value: "ANUAL", label: "Año" },
 ];
 
-export const CATEGORIA_GASTO_INFO: Record<CategoriaGastoFijo, { label: string; color: string }> =
-  Object.fromEntries(CATEGORIAS_GASTO_FIJO.map((c) => [c.value, { label: c.label, color: c.color }])) as Record<
-    CategoriaGastoFijo,
-    { label: string; color: string }
-  >;
+export const FRECUENCIA_LABEL: Record<FrecuenciaGastoFijo, string> =
+  Object.fromEntries(
+    FRECUENCIAS_GASTO_FIJO.map((f) => [f.value, f.label]),
+  ) as Record<FrecuenciaGastoFijo, string>;
 
 export type GastoFijo = {
   id: string;
   nombre: string;
-  categoria: CategoriaGastoFijo;
+  /** Del catálogo compartido con Cuentas por pagar. */
+  categoriaEgresoId: string;
+  categoriaNombre: string;
+  categoriaCodigo: string;
+  /** El valor de UNA cuota, tal como se carga. */
+  valor: number;
+  frecuencia: FrecuenciaGastoFijo;
+  /** Derivado de valor y frecuencia: lo que suma al punto de equilibrio. */
   importeMensual: number;
+  proveedorId: string | null;
+  /** El "Favorecido" del listado. */
+  proveedorNombre: string | null;
+  metodoPagoId: string | null;
+  metodoPagoNombre: string | null;
+  documento: string | null;
   vigenteDesde: string;
   vigenteHasta: string | null;
   activo: boolean;
   notas: string | null;
 };
 
+/**
+ * Lo que se manda al guardar. Va el valor de la cuota, no el mensual: ese lo
+ * deriva el servidor cruzándolo con la frecuencia.
+ */
 export type GastoFijoPayload = {
   nombre: string;
-  categoria: CategoriaGastoFijo;
-  importeMensual: number;
+  categoriaEgresoId: string;
+  valor: number;
+  frecuencia: FrecuenciaGastoFijo;
+  proveedorId?: string | null;
+  metodoPagoId?: string | null;
+  documento?: string | null;
   vigenteDesde: string;
   vigenteHasta?: string | null;
   activo?: boolean;
@@ -91,47 +101,5 @@ export function toggleGastoFijo(id: string) {
 export function eliminarGastoFijo(id: string) {
   return apiRequest<{ id: string; eliminado: boolean }>(`/gastos-fijos/${id}`, {
     method: "DELETE",
-  });
-}
-
-export function importarGastosDesdeTarifas() {
-  return apiRequest<ImportarResultado>("/gastos-fijos/importar-desde-tarifas", {
-    method: "POST",
-  });
-}
-
-/* ─── Conciliación con la nómina ─────────────────────────────────────────────
- * El punto de equilibrio y los centros de costo están desacoplados a propósito.
- * Esto NO fuerza la igualdad: hace visible una diferencia que antes no lo era.
- * Ver docs/legajos-nomina-diseno.md §4.3
- */
-
-export type ConciliacionNomina = {
-  periodo: string;
-  nomina: {
-    periodo: string;
-    personas: number;
-    sueldoNeto: number;
-    cargasSociales: number;
-    /** Incluye la provisión del aguinaldo. */
-    costoMensual: number;
-  };
-  /** Lo que suman hoy las líneas de SUELDOS del punto de equilibrio. */
-  declarado: number;
-  lineas: GastoFijo[];
-  /** declarado − nómina. Positivo = el punto de equilibrio declara de más. */
-  diferencia: number;
-  estado: "alineado" | "declarado_de_mas" | "declarado_de_menos" | "sin_nomina";
-};
-
-export function getConciliacionNomina(periodo?: string) {
-  const qs = periodo ? `?periodo=${periodo}` : "";
-  return apiRequest<ConciliacionNomina>(`/gastos-fijos/conciliacion-nomina${qs}`);
-}
-
-export function alinearConNomina(periodo?: string) {
-  const qs = periodo ? `?periodo=${periodo}` : "";
-  return apiRequest<ConciliacionNomina>(`/gastos-fijos/alinear-con-nomina${qs}`, {
-    method: "POST",
   });
 }

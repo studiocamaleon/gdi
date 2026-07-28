@@ -38,13 +38,6 @@ describe("los reportes que se ofrecen", () => {
     );
   });
 
-  /** Los sueldos no se abren por poder leer los reportes del negocio. */
-  it("Costo laboral pide la llave de remuneraciones", () => {
-    expect(labels(["reportes.ver", "registros.ver_remuneraciones"])).toContain(
-      "Costo laboral",
-    );
-  });
-
   it("Finanzas pide la llave de márgenes", () => {
     expect(labels(["reportes.ver", "finanzas.ver_margenes"])).toContain("Finanzas");
   });

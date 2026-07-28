@@ -65,8 +65,8 @@ export const REPORTES: Reporte[] = [
 
 /**
  * Los reportes que esta persona puede abrir. El permiso del reporte NO se suma
- * al del módulo: lo reemplaza. Tener Reportes no abre el Resumen ejecutivo, y
- * Costo laboral pide la llave de remuneraciones porque muestra sueldos.
+ * al del módulo: lo reemplaza. Tener Reportes no abre el Resumen ejecutivo, ni
+ * Finanzas, que pide la llave de márgenes.
  */
 export function reportesVisibles(
   puede: (permiso: PermisoClave) => boolean,

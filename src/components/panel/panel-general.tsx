@@ -924,10 +924,6 @@ export function TabProduccion({ d }: { d: ProduccionPanel }) {
 /* ═══════════ TAB · Finanzas ═══════════ */
 export type FinanzasData = { meta: MetaPanel; rentabilidad: RentabilidadPanel; cobranza: CobranzaPanel };
 const AGING_COLORS: Record<string, string> = { "0-30": "var(--ok)", "31-60": "#c8c6c0", "61-90": "#d97757", "+90": "var(--signal)" };
-const CATEGORIA_GASTO_LABEL: Record<string, string> = {
-  ALQUILER: "Alquiler", SUELDOS: "Sueldos", SERVICIOS: "Servicios", AMORTIZACION: "Amortización",
-  FINANCIEROS: "Financieros", IMPUESTOS: "Impuestos", MARKETING: "Marketing", OTROS: "Otros",
-};
 export function TabFinanzas({ d }: { d: FinanzasData }) {
   const { moneda } = useConfigRegional();
   const r = d.rentabilidad, co = d.cobranza;
@@ -978,7 +974,7 @@ export function TabFinanzas({ d }: { d: FinanzasData }) {
                 {gasto.slice(0, 8).map((g, i) => (
                   <div key={g.categoria} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5 }}>
                     <span style={{ width: 8, height: 8, borderRadius: 2, background: SEG_COLORS[i % SEG_COLORS.length] }} />
-                    <span style={{ color: "var(--ink-2)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{CATEGORIA_GASTO_LABEL[g.categoria] ?? g.categoria}</span>
+                    <span style={{ color: "var(--ink-2)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.categoria}</span>
                     <span className="mono" style={{ color: "var(--muted-text)" }}>{pct(g.pct)}</span>
                   </div>
                 ))}
