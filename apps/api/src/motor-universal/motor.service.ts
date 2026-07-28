@@ -2796,11 +2796,21 @@ export class MotorUniversalService {
     const minutosOperario = tieneMaquina
       ? setupMin + cleanupMin + tiempoFijoMin
       : totalMin;
-    // Dotación: un paso a N operarios consume N× las horas-hombre. Multiplica
-    // sólo la mano de obra; la máquina es una sola sin importar cuántos la
-    // atienden. Ver docs/hora-hombre-setup-cleanup-diseno.md
+    // Dotación: un paso a N operarios consume N× las horas-hombre.
+    //
+    // En un paso CON máquina multiplica sólo la mano de obra: la capacidad de
+    // ese centro se mide en horas-máquina y la máquina es una sola, la
+    // atiendan uno o cuatro.
+    //
+    // En un paso SIN máquina multiplica todo. La capacidad de un centro de
+    // mano de obra son horas-hombre —los dos diseñadores de un centro de 200 h
+    // aportan 100 cada uno—, así que dos personas media hora consumen una hora
+    // de esas 200 y tienen que pagar por ella completa: sueldos y también la
+    // parte de software, amortización y estructura que esa hora carga. Cobrar
+    // el resto una sola vez dejaba el centro sin recuperar su costo.
     const dotacionOperarios = Math.max(1, Math.round(paso.dotacionOperarios ?? 1));
-    const costoMaquina = (totalMin / 60) * tarifaMaquina;
+    const dotacionSobreElResto = tieneMaquina ? 1 : dotacionOperarios;
+    const costoMaquina = (totalMin / 60) * tarifaMaquina * dotacionSobreElResto;
     const costoManoObra =
       (minutosOperario / 60) * tarifaManoObra * dotacionOperarios;
     const costo = costoMaquina + costoManoObra;
