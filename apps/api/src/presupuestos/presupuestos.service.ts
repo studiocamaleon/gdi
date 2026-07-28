@@ -216,7 +216,23 @@ export class PresupuestosService {
       },
     );
 
-    return this.detalle(auth, dto.cotizacionId, { numero });
+    // Emitir es emitir: el comercial que apretó "Emitir presupuesto" quiere
+    // que salga, no dejarlo en borrador para acordarse de enviarlo después.
+    // `enviar` aplica las reglas de aprobación: si el total supera el umbral
+    // y el actor es OPERADOR, queda en `pendiente_aprobacion` en vez de
+    // salir. Para guardar sin emitir está el botón de borrador.
+    //
+    // Best-effort: si el envío falla, el presupuesto ya existe y queda en
+    // borrador para reintentar desde el listado — mejor eso que perder la
+    // numeración por un error de envío.
+    try {
+      return await this.enviar(auth, dto.cotizacionId);
+    } catch (error) {
+      this.logger.warn(
+        `${numero} quedó en borrador: no pude enviarlo — ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return this.detalle(auth, dto.cotizacionId, { numero });
+    }
   }
 
   // ── PDF ────────────────────────────────────────────────────────────

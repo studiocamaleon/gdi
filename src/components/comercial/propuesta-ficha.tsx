@@ -5344,8 +5344,12 @@ export function PropuestaFicha({
           itemToOrdenItemPayload(item, cotizacionItemId),
         ),
       });
+      // El backend emite y envía de una; si las reglas de aprobación
+      // dispararon, vuelve en `pendiente_aprobacion` en vez de enviado.
       toast.success(
-        `Presupuesto ${presupuesto.numero} emitido. Enviálo al cliente desde el listado.`,
+        presupuesto.estado === "pendiente_aprobacion"
+          ? `Presupuesto ${presupuesto.numero}: espera la aprobación de un supervisor antes de salir.`
+          : `Presupuesto ${presupuesto.numero} emitido y enviado.`,
       );
       router.push("/comercial/presupuestos");
     } catch (error) {
