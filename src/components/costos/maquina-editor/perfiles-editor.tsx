@@ -68,10 +68,9 @@ export function PerfilesOperativosEditor({
   );
   // La columna Tipo sólo aparece si hay algo que elegir.
   const conColumnaTipo = allowedProfileTypeItems.length > 1;
-  // Tintas por perfil: impresoras de la familia, menos láser (tóner por máquina).
-  const conColumnaTinta =
-    PRINTER_TEMPLATES_WITH_CONSUMIBLES.has(form.plantilla) &&
-    form.plantilla !== "impresora_laser";
+  // Tintas por perfil en todas las impresoras de la familia, láser incluida:
+  // el consumo de tóner cambia con el papel, igual que la productividad.
+  const conColumnaTinta = PRINTER_TEMPLATES_WITH_CONSUMIBLES.has(form.plantilla);
 
   const updatePerfil = (uiKey: string, next: LocalPerfil) => {
     setPerfiles((prev) => prev.map((p) => (p.uiKey === uiKey ? next : p)));

@@ -43,7 +43,6 @@ import {
 import { getPlantillaMaquinariaLabel } from "@/lib/maquinaria-templates";
 import type { CentroCosto, Planta } from "@/lib/costos";
 
-import { ConsumiblesImpresionEditor } from "./consumibles-editor";
 import {
   FieldInput,
   STRUCTURED_MARGIN_FIELDS,
@@ -281,15 +280,10 @@ export function MaquinaEditorSecciones({ editor }: { editor: MaquinaEditorState 
     handleDuplicarPerfil,
   } = editor;
 
-  // Las tintas por perfil se configuran desde la tabla de perfiles (modal
-  // por fila): el acordeón Consumibles queda sólo para el láser, cuyo tóner
-  // es una única configuración por máquina.
-  const tintasPorPerfil =
-    form.plantilla !== "impresora_laser";
+  // Las tintas y el tóner se configuran desde la tabla de perfiles (modal por
+  // fila), así que la sección Consumibles ya no tiene nada que mostrar.
   const secciones =
-    template?.sections.filter(
-      (sec) => !(sec.id === "consumibles" && tintasPorPerfil),
-    ) ?? [];
+    template?.sections.filter((sec) => sec.id !== "consumibles") ?? [];
 
   return (
     <>
@@ -317,21 +311,11 @@ export function MaquinaEditorSecciones({ editor }: { editor: MaquinaEditorState 
                   onEliminar={handleEliminarPerfil}
                   onDuplicar={handleDuplicarPerfil}
                 />
-              ) : sec.id === "consumibles" || sec.id === "desgaste_repuestos" ? (
-                sec.id === "consumibles" ? (
-                  <ConsumiblesImpresionEditor
-                    form={form}
-                    setForm={setForm}
-                    perfiles={perfiles}
-                    materiasPrimas={materiasPrimas}
-                    loadingMaterias={loadingMaterias}
-                  />
-                ) : (
-                  <p className="text-muted-foreground text-xs italic">
-                    Editor de desgaste simplificado: editá vía API por ahora.
-                    UI rica pendiente de iteración UX.
-                  </p>
-                )
+              ) : sec.id === "desgaste_repuestos" ? (
+                <p className="text-muted-foreground text-xs italic">
+                  Editor de desgaste simplificado: editá vía API por ahora.
+                  UI rica pendiente de iteración UX.
+                </p>
               ) : (
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                   {sec.fields.filter((field) => shouldShowMaquinaField(field, form)).map((field) => {

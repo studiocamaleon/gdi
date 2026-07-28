@@ -3928,12 +3928,13 @@ export class MotorUniversalService {
     const ejecutados: MaterialEjecutado[] = [];
 
     for (const channel of channels) {
+      // El tóner/tinta del PERFIL gana; el declarado a nivel máquina queda
+      // como respaldo de las láser cargadas antes de que el consumo pudiera
+      // variar por perfil (2026-07-28).
       const consumible = this.findConsumibleMaquina(
         consumibles,
         paso.perfil?.id ?? paso.perfilM1Id,
         channel,
-        maquina.plantilla === 'impresora_laser' ||
-          maquina.plantilla === 'IMPRESORA_LASER',
       );
 
       if (!consumible) {
@@ -4030,6 +4031,7 @@ export class MotorUniversalService {
     >,
     perfilId: string | null | undefined,
     channel: ConsumableChannel,
+    /** Sólo para callers que quieran el de la máquina por delante. */
     preferGlobal = false,
   ) {
     const matchesChannel = (consumible: (typeof consumibles)[number]) =>

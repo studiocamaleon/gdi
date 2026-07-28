@@ -243,6 +243,48 @@ function prepararDetallePerfil(
   return preparado;
 }
 
+/**
+ * El tóner de la láser pasó a declararse por perfil (2026-07-28). Las
+ * máquinas cargadas antes lo tienen a nivel máquina —`perfilOperativoId`
+ * nulo—, donde el editor nuevo no lo muestra: se reparte una copia a cada
+ * perfil que todavía no tenga la suya, así el primer guardado lo deja
+ * donde corresponde. El motor mientras tanto sigue leyendo el de la
+ * máquina como respaldo.
+ */
+function repartirConsumiblesDeMaquinaEnPerfiles(
+  maquina: Maquina,
+  consumibles: MaquinaPayload["consumibles"],
+): MaquinaPayload["consumibles"] {
+  if (maquina.plantilla !== "impresora_laser") return consumibles;
+  const perfiles = maquina.perfilesOperativos.filter((p) => p.activo);
+  if (perfiles.length === 0) return consumibles;
+
+  const deMaquina = consumibles.filter((item) => !item.perfilOperativoId);
+  if (deMaquina.length === 0) return consumibles;
+
+  const yaTiene = new Set(
+    consumibles
+      .filter((item) => item.perfilOperativoId)
+      .map((item) => `${item.perfilOperativoId}::${canalFromConsumible(item)}`),
+  );
+
+  const copias = perfiles.flatMap((perfil) =>
+    deMaquina
+      .filter((item) => !yaTiene.has(`${perfil.id}::${canalFromConsumible(item)}`))
+      .map((item) => ({
+        ...item,
+        // Sin id: es un consumible nuevo del perfil, no una edición del de
+        // la máquina (que se descarta abajo).
+        id: undefined,
+        perfilOperativoId: perfil.id,
+        perfilOperativoNombre: perfil.nombre,
+        detalle: item.detalle ? { ...item.detalle } : undefined,
+      })),
+  );
+
+  return [...consumibles.filter((item) => item.perfilOperativoId), ...copias];
+}
+
 export function maquinaToPayload(maquina: Maquina): MaquinaPayload {
   return {
     nombre: maquina.nombre,
@@ -283,20 +325,23 @@ export function maquinaToPayload(maquina: Maquina): MaquinaPayload {
       ),
       reglaSeleccionJson: p.reglaSeleccionJson ?? undefined,
     })),
-    consumibles: maquina.consumibles.map((c) => ({
-      id: c.id,
-      materiaPrimaVarianteId: c.materiaPrimaVarianteId,
-      nombre: c.nombre,
-      tipo: c.tipo,
-      unidad: c.unidad,
-      rendimientoEstimado: c.rendimientoEstimado ?? undefined,
-      consumoBase: c.consumoBase ?? undefined,
-      perfilOperativoId: c.perfilOperativoId ?? undefined,
-      perfilOperativoNombre: c.perfilOperativoNombre || undefined,
-      activo: c.activo,
-      detalle: c.detalle ?? undefined,
-      observaciones: c.observaciones || undefined,
-    })),
+    consumibles: repartirConsumiblesDeMaquinaEnPerfiles(
+      maquina,
+      maquina.consumibles.map((c) => ({
+        id: c.id,
+        materiaPrimaVarianteId: c.materiaPrimaVarianteId,
+        nombre: c.nombre,
+        tipo: c.tipo,
+        unidad: c.unidad,
+        rendimientoEstimado: c.rendimientoEstimado ?? undefined,
+        consumoBase: c.consumoBase ?? undefined,
+        perfilOperativoId: c.perfilOperativoId ?? undefined,
+        perfilOperativoNombre: c.perfilOperativoNombre || undefined,
+        activo: c.activo,
+        detalle: c.detalle ?? undefined,
+        observaciones: c.observaciones || undefined,
+      })),
+    ),
     componentesDesgaste: maquina.componentesDesgaste.map((d) => ({
       id: d.id,
       materiaPrimaVarianteId: d.materiaPrimaVarianteId,
@@ -555,13 +600,6 @@ export function getRequiredConsumibleKeys(
     string,
     unknown
   >;
-
-  if (form.plantilla === "impresora_laser") {
-    for (const canal of requiredChannelsForLaserMachine(form, perfiles)) {
-      requiredKeys.add(`maquina::${canal}`);
-    }
-    return requiredKeys;
-  }
 
   if (!PRINTER_TEMPLATES_WITH_CONSUMIBLES.has(form.plantilla)) {
     return requiredKeys;

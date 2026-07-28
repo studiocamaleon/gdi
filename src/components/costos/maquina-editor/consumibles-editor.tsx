@@ -1,50 +1,36 @@
 /**
- * Editor de consumibles de impresión (tintas/tóner por canal) + calculadora
- * de tóner g/m². Extraído de maquinaria-panel.tsx en la Fase B (2026-07-28),
- * sin cambios de comportamiento.
+ * Tintas y tóner de UN perfil operativo: el modal "Configurar" que abre la
+ * tabla de perfiles, con la calculadora de consumo para las láser.
+ *
+ * Hasta 2026-07-28 este archivo tenía además un editor de consumibles a
+ * nivel MÁQUINA, que era como se cargaba el tóner de la láser. Se retiró
+ * cuando el tóner pasó a declararse por perfil, igual que las tintas del
+ * resto de las impresoras: el consumo cambia con el papel.
  */
 
 import * as React from "react";
 import { CalculatorIcon, ChevronDownIcon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from "@/components/ui/select";
 import type { MaquinaPayload, PlantillaMaquinaria } from "@/lib/maquinaria";
 import type { MateriaPrima, MateriaPrimaVariante } from "@/lib/materias-primas";
 import { getVarianteDisplayName } from "@/lib/materias-primas-variantes-display";
 
 import {
   CANAL_META,
-  PRINTER_TEMPLATES_WITH_CONSUMIBLES,
-  SelectDisplay,
   canalFromConsumible,
   consumibleTipoFor,
   consumibleUnidadFor,
   defaultConsumoBase,
   normalizeCanal,
-  requiredChannelsForLaserMachine,
   requiredChannelsForPerfil,
   type ConsumibleCanal,
   type LocalPerfil,
 } from "./helpers";
 
 // ─── Sub-componente: editor de consumibles de impresión ────────────
-
-interface ConsumiblesImpresionProps {
-  form: MaquinaPayload;
-  setForm: React.Dispatch<React.SetStateAction<MaquinaPayload>>;
-  perfiles: LocalPerfil[];
-  materiasPrimas: MateriaPrima[];
-  loadingMaterias: boolean;
-}
 
 // Área de una hoja A4 en m² (0,210 × 0,297).
 const A4_AREA_M2 = 0.21 * 0.297;
@@ -220,364 +206,6 @@ function CalculadoraTonerGm2({ onApply }: { onApply: (gm2: number) => void }) {
   );
 }
 
-export function ConsumiblesImpresionEditor({
-  form,
-  setForm,
-  perfiles,
-  materiasPrimas,
-  loadingMaterias,
-}: ConsumiblesImpresionProps) {
-  if (!PRINTER_TEMPLATES_WITH_CONSUMIBLES.has(form.plantilla)) {
-    return (
-      <p className="text-muted-foreground text-xs italic">
-        Este editor aplica a impresoras láser, gran formato y plotter CAD.
-      </p>
-    );
-  }
-
-  if (perfiles.length === 0) {
-    return (
-      <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
-        Primero agregá al menos un perfil operativo para derivar los canales
-        requeridos de impresión.
-      </div>
-    );
-  }
-
-  const variantesCompatibles = getVariantesConsumiblesCompatibles(materiasPrimas, form.plantilla);
-  const isLaser = form.plantilla === "impresora_laser";
-
-  const upsertConsumible = (
-    perfil: LocalPerfil | null,
-    canal: ConsumibleCanal,
-    patch: Partial<MaquinaPayload["consumibles"][number]>,
-  ) => {
-    if (perfil && !perfil.id) return;
-    const perfilOperativoId = perfil?.id;
-    setForm((current) => {
-      const idx = current.consumibles.findIndex(
-        (item) =>
-          (item.perfilOperativoId ?? undefined) === perfilOperativoId &&
-          canalFromConsumible(item) === canal,
-      );
-      const existing = idx >= 0 ? current.consumibles[idx] : null;
-      const scopeLabel = perfil?.nombre ?? "máquina";
-      const nextItem: MaquinaPayload["consumibles"][number] = {
-        id: existing?.id,
-        materiaPrimaVarianteId: existing?.materiaPrimaVarianteId ?? "",
-        nombre: existing?.nombre ?? `${CANAL_META[canal].label} · ${scopeLabel}`,
-        tipo: existing?.tipo ?? consumibleTipoFor(current.plantilla, canal),
-        unidad: existing?.unidad ?? consumibleUnidadFor(current.plantilla),
-        rendimientoEstimado: existing?.rendimientoEstimado,
-        consumoBase: existing?.consumoBase ?? defaultConsumoBase(current.plantilla, canal),
-        perfilOperativoId,
-        perfilOperativoNombre: perfil?.nombre,
-        detalle: { ...(existing?.detalle ?? {}), color: canal },
-        observaciones: existing?.observaciones,
-        ...patch,
-        activo: true,
-      };
-      const next = [...current.consumibles];
-      if (idx >= 0) next[idx] = nextItem;
-      else next.push(nextItem);
-      return { ...current, consumibles: next };
-    });
-  };
-
-  const removeConsumible = (perfilId: string | undefined, canal: ConsumibleCanal) => {
-    setForm((current) => ({
-      ...current,
-      consumibles: current.consumibles.filter(
-        (item) =>
-          !(
-            (item.perfilOperativoId ?? undefined) === perfilId &&
-            canalFromConsumible(item) === canal
-          ),
-      ),
-    }));
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
-        {isLaser
-          ? "El tóner láser se configura una sola vez por canal de la máquina. El modo de color de la cotización define qué canales se consumen."
-          : "Las tintas de impresión se toman automáticamente en el motor desde la máquina y el perfil. En Productos ya no hace falta elegir tinta por paso."}
-      </div>
-
-      {loadingMaterias && (
-        <p className="text-xs text-muted-foreground">Cargando materias primas compatibles...</p>
-      )}
-
-      {isLaser ? (
-        <div className="space-y-2 rounded-md border p-3">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <div className="font-medium">Tóner por canal de la máquina</div>
-              <div className="text-xs text-muted-foreground">
-                Una única configuración de tóner se aplica a todos los perfiles láser.
-              </div>
-            </div>
-            <Badge variant="outline">
-              {requiredChannelsForLaserMachine(form, perfiles).length} canal
-              {requiredChannelsForLaserMachine(form, perfiles).length === 1 ? "" : "es"}
-            </Badge>
-          </div>
-
-          <CalculadoraTonerGm2
-            onApply={(gm2) => {
-              const cmyk: ConsumibleCanal[] = [
-                "cian",
-                "magenta",
-                "amarillo",
-                "negro",
-              ];
-              const objetivo = requiredChannelsForLaserMachine(
-                form,
-                perfiles,
-              ).filter((canal) => cmyk.includes(canal));
-              objetivo.forEach((canal) =>
-                upsertConsumible(null, canal, { consumoBase: gm2 }),
-              );
-              toast.success(
-                `Consumo ${gm2} g/m² aplicado a ${objetivo.length} canal${objetivo.length === 1 ? "" : "es"} CMYK`,
-              );
-            }}
-          />
-
-          <div className="space-y-2">
-            {requiredChannelsForLaserMachine(form, perfiles).map((canal) => {
-              const existing = form.consumibles.find(
-                (item) =>
-                  !item.perfilOperativoId && canalFromConsumible(item) === canal,
-              );
-              const variantesCanal = variantesCompatibles.filter((item) =>
-                varianteMatchesCanal(item.variante, canal),
-              );
-              const selected = existing?.materiaPrimaVarianteId ?? "";
-              const selectedStillAvailable = variantesCanal.some(
-                (item) => item.variante.id === selected,
-              );
-              const opciones =
-                selected && !selectedStillAvailable
-                  ? [
-                      ...variantesCanal,
-                      getSelectedConsumibleVariantFallback(materiasPrimas, selected),
-                    ].filter((item): item is VarianteConsumibleOption => Boolean(item))
-                  : variantesCanal;
-              const selectedOption = opciones.find((item) => item.variante.id === selected);
-
-              return (
-                <div key={`laser-${canal}`} className="grid grid-cols-1 gap-2 rounded-md bg-background p-2 md:grid-cols-[120px_1fr_120px] md:items-end">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Canal</Label>
-                    <div className="flex items-center gap-2 text-sm font-medium">
-                      <span
-                        className="size-4 rounded-full border"
-                        style={{ backgroundColor: CANAL_META[canal].swatch }}
-                      />
-                      <span>{CANAL_META[canal].label}</span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs">Variante vinculada</Label>
-                    <Select
-                      value={selected}
-                      onValueChange={(value) => {
-                        if (!value) {
-                          removeConsumible(undefined, canal);
-                          return;
-                        }
-                        const variante = opciones.find((item) => item.variante.id === value);
-                        upsertConsumible(null, canal, {
-                          materiaPrimaVarianteId: value,
-                          nombre: variante
-                            ? `${CANAL_META[canal].label} · ${variante.materiaPrima.nombre}`
-                            : `${CANAL_META[canal].label} · máquina`,
-                          tipo: consumibleTipoFor(form.plantilla, canal),
-                          unidad: consumibleUnidadFor(form.plantilla),
-                        });
-                      }}
-                    >
-                      <SelectTrigger className="h-9 w-full min-w-0">
-                        <SelectDisplay
-                          label={
-                            selectedOption
-                              ? getConsumibleVariantOptionLabel(selectedOption)
-                              : ""
-                          }
-                          placeholder="Elegir tóner"
-                        />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-80">
-                        {opciones.map((item) => (
-                          <SelectItem key={item.variante.id} value={item.variante.id}>
-                            {getConsumibleVariantOptionLabel(item)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs">
-                      Consumo ({consumibleUnidadFor(form.plantilla)}/m²)
-                    </Label>
-                    <Input
-                      type="number"
-                      min={0}
-                      step={0.01}
-                      disabled={!existing}
-                      value={existing?.consumoBase ?? ""}
-                      placeholder={String(defaultConsumoBase(form.plantilla, canal))}
-                      onChange={(event) =>
-                        upsertConsumible(null, canal, {
-                          consumoBase: event.target.value === "" ? undefined : Number(event.target.value),
-                        })
-                      }
-                    />
-                  </div>
-
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
-
-      {isLaser
-        ? null
-        : perfiles.map((perfil) => {
-        const channels = requiredChannelsForPerfil(
-          perfil,
-          (form.parametrosTecnicos ?? {}) as Record<string, unknown>,
-        );
-        if (channels.length === 0) {
-          return (
-            <div key={perfil.uiKey} className="rounded-md border p-3">
-              <div className="font-medium">{perfil.nombre}</div>
-              <p className="text-xs text-muted-foreground">
-                Este perfil todavía no declara colores. Definí el campo “Colores” en el perfil
-                para generar los canales requeridos.
-              </p>
-            </div>
-          );
-        }
-
-        return (
-          <div key={perfil.uiKey} className="space-y-2 rounded-md border p-3">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <div className="font-medium">{perfil.nombre}</div>
-                <div className="text-xs text-muted-foreground">
-                  {channels.map((channel) => CANAL_META[channel].label).join(" · ")}
-                </div>
-              </div>
-              <Badge variant="outline">{channels.length} canal{channels.length === 1 ? "" : "es"}</Badge>
-            </div>
-
-            <div className="space-y-2">
-              {channels.map((canal) => {
-                const existing = form.consumibles.find(
-                  (item) => item.perfilOperativoId === perfil.id && canalFromConsumible(item) === canal,
-                );
-                const variantesCanal = variantesCompatibles.filter((item) =>
-                  varianteMatchesCanal(item.variante, canal),
-                );
-                const selected = existing?.materiaPrimaVarianteId ?? "";
-                const selectedStillAvailable = variantesCanal.some((item) => item.variante.id === selected);
-                const opciones = selected && !selectedStillAvailable
-                  ? [
-                      ...variantesCanal,
-                      getSelectedConsumibleVariantFallback(materiasPrimas, selected),
-                    ].filter((item): item is VarianteConsumibleOption => Boolean(item))
-                  : variantesCanal;
-                const selectedOption = opciones.find((item) => item.variante.id === selected);
-
-                return (
-                  <div key={`${perfil.uiKey}-${canal}`} className="grid grid-cols-1 gap-2 rounded-md bg-background p-2 md:grid-cols-[120px_1fr_120px] md:items-end">
-                    <div className="space-y-1">
-                      <Label className="text-xs">Canal</Label>
-                      <div className="flex items-center gap-2 text-sm font-medium">
-                        <span
-                          className="size-4 rounded-full border"
-                          style={{ backgroundColor: CANAL_META[canal].swatch }}
-                        />
-                        <span>{CANAL_META[canal].label}</span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1">
-                      <Label className="text-xs">Variante vinculada</Label>
-                      <Select
-                        value={selected}
-                        onValueChange={(value) => {
-                          if (!value) {
-                            removeConsumible(perfil.id, canal);
-                            return;
-                          }
-                          const variante = opciones.find((item) => item.variante.id === value);
-                          upsertConsumible(perfil, canal, {
-                            materiaPrimaVarianteId: value,
-                            nombre: variante
-                              ? `${CANAL_META[canal].label} · ${variante.materiaPrima.nombre}`
-                              : `${CANAL_META[canal].label} · ${perfil.nombre}`,
-                            tipo: consumibleTipoFor(form.plantilla, canal),
-                            unidad: consumibleUnidadFor(form.plantilla),
-                          });
-                        }}
-                      >
-                        <SelectTrigger className="h-9 w-full min-w-0">
-                          <SelectDisplay
-                            label={
-                              selectedOption
-                                ? getConsumibleVariantOptionLabel(selectedOption)
-                                : ""
-                            }
-                            placeholder="Elegir consumible"
-                          />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-80">
-                          {opciones.map((item) => (
-                            <SelectItem key={item.variante.id} value={item.variante.id}>
-                              {getConsumibleVariantOptionLabel(item)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-1">
-                      <Label className="text-xs">
-                        Consumo ({consumibleUnidadFor(form.plantilla)}/m²)
-                      </Label>
-                      <Input
-                        type="number"
-                        min={0}
-                        step={0.01}
-                        disabled={!existing}
-                        value={existing?.consumoBase ?? ""}
-                        placeholder={String(defaultConsumoBase(form.plantilla, canal))}
-                        onChange={(event) =>
-                          upsertConsumible(perfil, canal, {
-                            consumoBase: event.target.value === "" ? undefined : Number(event.target.value),
-                          })
-                        }
-                      />
-                    </div>
-
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-          })}
-    </div>
-  );
-}
-
 type VarianteConsumibleOption = {
   materiaPrima: MateriaPrima;
   variante: MateriaPrimaVariante;
@@ -656,6 +284,7 @@ export function PerfilTintasModal({
     materiasPrimas,
     form.plantilla,
   );
+  const esLaser = form.plantilla === "impresora_laser";
 
   const upsert = (
     canal: ConsumibleCanal,
@@ -715,7 +344,7 @@ export function PerfilTintasModal({
       >
         <div className="maq-modal-head">
           <div>
-            <h2>Configurar tintas</h2>
+            <h2>Configurar {esLaser ? "tóner" : "tintas"}</h2>
             <div className="maq-modal-sub">{perfil.nombre}</div>
           </div>
           <button
@@ -729,6 +358,25 @@ export function PerfilTintasModal({
         </div>
 
         <div className="maq-modal-body">
+          {esLaser && channels.length > 0 ? (
+            <CalculadoraTonerGm2
+              onApply={(gm2) => {
+                const cmyk: ConsumibleCanal[] = [
+                  "cian",
+                  "magenta",
+                  "amarillo",
+                  "negro",
+                ];
+                const objetivo = channels.filter((canal) =>
+                  cmyk.includes(canal),
+                );
+                objetivo.forEach((canal) => upsert(canal, { consumoBase: gm2 }));
+                toast.success(
+                  `Consumo ${gm2} g/m² aplicado a ${objetivo.length} canal${objetivo.length === 1 ? "" : "es"} CMYK`,
+                );
+              }}
+            />
+          ) : null}
           {channels.length === 0 ? (
             <p className="maq-tintas-vacio">
               Este perfil todavía no declara colores. Definí el campo
@@ -853,8 +501,9 @@ export function PerfilTintasModal({
                 </tbody>
               </table>
               <p className="maq-tintas-nota">
-                El motor toma estas tintas automáticamente al cotizar con este
-                perfil; en Productos no hace falta elegirlas por paso.
+                {esLaser
+                  ? "El motor toma este tóner al cotizar con este perfil: un papel que chupe más se declara acá, no en el producto."
+                  : "El motor toma estas tintas automáticamente al cotizar con este perfil; en Productos no hace falta elegirlas por paso."}
               </p>
             </>
           )}
