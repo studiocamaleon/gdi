@@ -50,7 +50,10 @@ export function ConfirmacionSalida({
         if (!next && !guardando) onSeguirEditando();
       }}
     >
-      <AlertDialogContent>
+      {/* Por encima de los modales propios (.mod-bg va en z-index 60): el
+          aviso de que estás por perder lo cargado tiene que verse SIEMPRE
+          sobre aquello de lo que estás saliendo. */}
+      <AlertDialogContent className="z-[80]" overlayClassName="z-[80]">
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
             <TriangleAlertIcon className="size-4 text-amber-600" />

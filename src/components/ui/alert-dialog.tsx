@@ -23,10 +23,17 @@ function AlertDialogOverlay({ className, ...props }: DialogPrimitive.Backdrop.Pr
   )
 }
 
-function AlertDialogContent({ className, ...props }: DialogPrimitive.Popup.Props) {
+function AlertDialogContent({
+  className,
+  overlayClassName,
+  ...props
+}: DialogPrimitive.Popup.Props & {
+  /** Para subir el fondo junto con el diálogo cuando hay modales propios. */
+  overlayClassName?: string
+}) {
   return (
     <AlertDialogPortal>
-      <AlertDialogOverlay />
+      <AlertDialogOverlay className={overlayClassName} />
       <DialogPrimitive.Popup
         data-slot="alert-dialog-content"
         className={cn(
