@@ -24,11 +24,11 @@ import {
   ChevronRightIcon,
   CircleIcon,
   CopyIcon,
-  MapPinIcon,
+  FilterIcon,
   PlusIcon,
-  PrinterIcon,
-  SlidersHorizontalIcon,
+  SearchIcon,
   Trash2Icon,
+  XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -68,7 +68,6 @@ import {
   estadoMaquinaItems,
   geometriaTrabajoMaquinaItems,
   getEstadoMaquinaLabel,
-  getFamiliaPlantillaMaquinariaLabel,
   getGeometriaTrabajoMaquinaLabel,
   tipoPerfilOperativoMaquinaItems,
   type Maquina,
@@ -77,7 +76,6 @@ import {
   type MaquinariaTemplateDefinition,
   type MaquinariaTemplateField,
   type MaquinariaTemplateOption,
-  type FamiliaPlantillaMaquinaria,
   type PlantillaMaquinaria,
   type TipoPerfilOperativoMaquina,
   type TipoConsumibleMaquina,
@@ -529,32 +527,6 @@ function getTemplateUnitLabel(unit: MaquinariaTemplateField["unit"]) {
   return labels[unit] ?? unit;
 }
 
-function getMachineSectionFamilyLabel(family: FamiliaPlantillaMaquinaria) {
-  if (family === "impresion_digital" || family === "impresion_gran_formato") {
-    return "Impresoras";
-  }
-  return getFamiliaPlantillaMaquinariaLabel(family);
-}
-
-function formatMachineNumber(value: number | null | undefined) {
-  if (typeof value !== "number" || !Number.isFinite(value)) return null;
-  return new Intl.NumberFormat("es-AR", {
-    maximumFractionDigits: value % 1 === 0 ? 0 : 2,
-  }).format(value);
-}
-
-function formatMachineValue(
-  value: number | null | undefined,
-  unit: "mm" | "cm" | "micrones" | "g_m2",
-) {
-  const displayValue = unit === "cm" && typeof value === "number" ? value / 10 : value;
-  const formatted = formatMachineNumber(displayValue);
-  if (!formatted) return null;
-  if (unit === "g_m2") return `${formatted} g/m²`;
-  if (unit === "cm") return `${formatted} cm`;
-  return `${formatted} ${unit === "micrones" ? "mic" : unit}`;
-}
-
 function getMachineTechnologyLabel(maquina: Maquina) {
   const tecnologia = maquina.parametrosTecnicos?.tecnologia;
   if (typeof tecnologia === "string" && tecnologia.trim()) {
@@ -568,7 +540,7 @@ function getMachineTechnologyLabel(maquina: Maquina) {
   return getGeometriaTrabajoMaquinaLabel(maquina.geometriaTrabajo);
 }
 
-// Color del punto de la tecnología (chip de la card).
+// Color del punto de la tecnología (columna Tipo de la tabla).
 function getMachineTechColor(maquina: Maquina) {
   const tech = getMachineTechnologyLabel(maquina).toUpperCase();
   if (tech.includes("DTF") && tech.includes("UV")) return "#3b74f0";
@@ -577,33 +549,6 @@ function getMachineTechColor(maquina: Maquina) {
   if (tech.includes("UV")) return "#7c3aed";
   if (tech.includes("INKJET") || tech.includes("LATEX")) return "#0ea5e9";
   return "var(--ink, #14141a)";
-}
-
-// Separa "33 cm" → { num: "33", unit: "cm" } para el estilo de spec.
-function splitSpecValue(value: string) {
-  const idx = value.indexOf(" ");
-  if (idx === -1) return { num: value, unit: "" };
-  return { num: value.slice(0, idx), unit: value.slice(idx + 1) };
-}
-
-function getMachineSummarySpecs(maquina: Maquina) {
-  const specs: Array<{ label: string; value: string }> = [];
-  const ancho = formatMachineValue(maquina.anchoUtil, "cm");
-  if (ancho) specs.push({ label: "Ancho máx.", value: ancho });
-
-  const largo = formatMachineValue(maquina.largoUtil, "cm");
-  if (largo) specs.push({ label: "Largo máx.", value: largo });
-
-  const espesor = formatMachineValue(
-    maquina.espesorMaximo,
-    maquina.plantilla === "laminadora_bopp_rollo" ? "micrones" : "mm",
-  );
-  if (espesor) specs.push({ label: "Espesor", value: espesor });
-
-  const gramaje = formatMachineValue(maquina.gramajeMaxGr, "g_m2");
-  if (gramaje) specs.push({ label: "Gramaje", value: gramaje });
-
-  return specs.slice(0, 4);
 }
 
 function mmToCmForInput(value: unknown) {
@@ -1141,6 +1086,8 @@ export function MaquinariaPanel({
   const [perfiles, setPerfiles] = React.useState<LocalPerfil[]>([]);
   const [filterText, setFilterText] = React.useState("");
   const [filterPlantilla, setFilterPlantilla] = React.useState<PlantillaMaquinaria | "all">("all");
+  const [filterEstado, setFilterEstado] = React.useState<"todas" | "activas" | "inactivas">("todas");
+  const [filtroAbierto, setFiltroAbierto] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [openSection, setOpenSection] = React.useState<string | null>("capacidades_fisicas");
   const [materiasPrimas, setMateriasPrimas] = React.useState<MateriaPrima[]>([]);
@@ -1167,7 +1114,8 @@ export function MaquinariaPanel({
       .finally(() => setLoadingMaterias(false));
   }, [isSheetOpen, loadingMaterias, materiasPrimas.length]);
 
-  // Filtros aplicados
+  // Filtros aplicados. La tabla lista alfabético (como Holdprint): el
+  // agrupado por plantilla que tenían las cards ahora es la columna Tipo.
   const filteredMaquinas = React.useMemo(() => {
     let result = maquinas;
     if (filterText) {
@@ -1180,25 +1128,15 @@ export function MaquinariaPanel({
     if (filterPlantilla !== "all") {
       result = result.filter((m) => m.plantilla === filterPlantilla);
     }
-    return result;
-  }, [maquinas, filterText, filterPlantilla]);
-
-  const groupedMaquinas = React.useMemo(() => {
-    const maquinasByPlantilla = new Map<PlantillaMaquinaria, Maquina[]>();
-    for (const maquina of filteredMaquinas) {
-      maquinasByPlantilla.set(maquina.plantilla, [
-        ...(maquinasByPlantilla.get(maquina.plantilla) ?? []),
-        maquina,
-      ]);
+    if (filterEstado !== "todas") {
+      result = result.filter((m) =>
+        filterEstado === "activas" ? m.activo : !m.activo,
+      );
     }
-
-    return maquinariaTemplates
-      .map((template) => ({
-        template,
-        machines: maquinasByPlantilla.get(template.id) ?? [],
-      }))
-      .filter((group) => group.machines.length > 0);
-  }, [filteredMaquinas]);
+    return [...result].sort((a, b) =>
+      a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }),
+    );
+  }, [maquinas, filterText, filterPlantilla, filterEstado]);
 
   const openNueva = React.useCallback(() => {
     const initialForm = emptyMaquina(plantas[0]?.id ?? "");
@@ -1442,231 +1380,191 @@ export function MaquinariaPanel({
         <div className="title-block">
           <h1>Maquinaria</h1>
           <div className="sub">
-            Catálogo de máquinas + perfiles operativos. Modelo v3.0 alineado a doc §5-§13.
-          </div>
-        </div>
-        <button type="button" className="btn btn-primary" onClick={handleNueva}>
-          <PlusIcon size={14} />
-          Nueva máquina
-        </button>
-      </div>
-
-      <div className="card mb-[14px]">
-        <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-[1fr_220px]">
-          <div className="field">
-            <label htmlFor="filter-text">Buscar</label>
-            <input
-              id="filter-text"
-              placeholder="Nombre..."
-              value={filterText}
-              onChange={(e) => setFilterText(e.target.value)}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="filter-plantilla">Plantilla</label>
-            <select
-              id="filter-plantilla"
-              className="select w-full"
-              value={filterPlantilla}
-              onChange={(event) => setFilterPlantilla(event.target.value as PlantillaMaquinaria | "all")}
-            >
-              <option value="all">Todas</option>
-              {maquinariaTemplates.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {template.label}
-                </option>
-              ))}
-            </select>
+            Catálogo de máquinas y sus perfiles operativos.
           </div>
         </div>
       </div>
 
-      <div className="card">
-        <div className="card-head">
-          <span className="title">Máquinas</span>
-          <span className="count">{filteredMaquinas.length}</span>
+      <div className="maq-toolbar">
+        <div className="maq-buscador">
+          <SearchIcon />
+          <input
+            type="search"
+            placeholder="Búsqueda"
+            value={filterText}
+            onChange={(e) => setFilterText(e.target.value)}
+            aria-label="Buscar máquina"
+          />
         </div>
-          {filteredMaquinas.length === 0 ? (
-            <p className="text-muted-foreground py-8 text-center text-sm italic">
-              Sin máquinas todavía.
-            </p>
-          ) : (
-            <div className="divide-y">
-              {groupedMaquinas.map(({ template, machines }) => (
-                <section key={template.id} className="py-3 first:pt-0 last:pb-0">
-                  <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-muted/30 text-muted-foreground">
-                        <PrinterIcon size={18} />
-                      </span>
-                      <div className="min-w-0">
-                        <h2 className="text-sm font-semibold leading-tight">
-                          {template.label}
-                        </h2>
-                        <p className="text-muted-foreground text-xs">
-                          {getMachineSectionFamilyLabel(template.family)}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="tag">{machines.length}</span>
-                  </div>
-                  <div className="grid gap-3 px-4 pb-2 md:grid-cols-2 xl:grid-cols-3">
-                    {machines.map((m) => {
-                      const specs = getMachineSummarySpecs(m);
-                      const makeModel = [m.fabricante, m.modelo].filter(Boolean).join(" · ");
-                      return (
-                        <div
-                          key={m.id}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => handleEditar(m)}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter" || event.key === " ") {
-                              handleEditar(m);
-                            }
-                          }}
-                          className="group flex min-h-[190px] flex-col rounded-lg border border-border/70 bg-background p-4 text-left shadow-sm transition hover:border-primary/40 hover:shadow-md"
-                        >
-                          <div className="flex items-start gap-3">
-                            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-muted/30 text-muted-foreground">
-                              <PrinterIcon size={18} />
-                            </span>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-start justify-between gap-2">
-                                <h3 className="truncate text-sm font-semibold leading-tight">
-                                  {m.nombre}
-                                </h3>
-                                <span
-                                  className={m.estado === "activa" ? "tag ok shrink-0" : "tag muted shrink-0"}
-                                  title={`código: ${m.estado}`}
-                                >
-                                  <span className="d" />
-                                  {getEstadoMaquinaLabel(m.estado)}
-                                </span>
-                              </div>
-                              <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
-                                {makeModel || m.codigo}
-                              </p>
-                            </div>
-                          </div>
+        <div className="maq-acciones">
+          <button
+            type="button"
+            className={`maq-btn ${filtroAbierto ? "activo" : ""}`}
+            onClick={() => setFiltroAbierto((v) => !v)}
+          >
+            <FilterIcon />
+            Filtrar
+          </button>
+          <button
+            type="button"
+            className="maq-btn maq-btn-primario"
+            onClick={handleNueva}
+          >
+            <PlusIcon />
+            Nueva máquina
+          </button>
+        </div>
+      </div>
 
-                          <div className="mt-3 flex items-center justify-between gap-2">
-                            <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/20 px-2.5 py-1 text-[11px] font-medium">
-                              <span
-                                className="size-1.5 rounded-full"
-                                style={{ backgroundColor: getMachineTechColor(m) }}
-                              />
-                              {getMachineTechnologyLabel(m)}
-                            </span>
-                            <span className="inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
-                              <MapPinIcon size={13} className="shrink-0" />
-                              <span className="truncate">
-                                {m.plantaNombre || "Sin planta"}
-                              </span>
-                            </span>
-                          </div>
+      {filtroAbierto ? (
+        <div className="maq-filtros">
+          <div className="maq-filtros-grupo">
+            <label className="maq-chip">
+              <span>Tipo</span>
+              <select
+                value={filterPlantilla}
+                onChange={(event) =>
+                  setFilterPlantilla(event.target.value as PlantillaMaquinaria | "all")
+                }
+              >
+                <option value="all">Todos</option>
+                {maquinariaTemplates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="maq-chip">
+              <span>Estado</span>
+              <select
+                value={filterEstado}
+                onChange={(e) =>
+                  setFilterEstado(e.target.value as "todas" | "activas" | "inactivas")
+                }
+              >
+                <option value="todas">Todas</option>
+                <option value="activas">Activas</option>
+                <option value="inactivas">Inactivas</option>
+              </select>
+            </label>
+          </div>
+          <button
+            type="button"
+            className="maq-cerrar-filtros"
+            aria-label="Quitar filtros"
+            onClick={() => {
+              setFilterPlantilla("all");
+              setFilterEstado("todas");
+              setFiltroAbierto(false);
+            }}
+          >
+            <XIcon />
+          </button>
+        </div>
+      ) : null}
 
-                          <div className="mt-4 flex flex-wrap gap-x-6 gap-y-3">
-                            {specs.length > 0 ? (
-                              specs.map((spec) => {
-                                const { num, unit } = splitSpecValue(spec.value);
-                                return (
-                                  <div key={spec.label} className="min-w-0">
-                                    <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                                      {spec.label}
-                                    </p>
-                                    <p className="mt-0.5 text-sm font-semibold leading-none">
-                                      {num}
-                                      {unit ? (
-                                        <span className="ml-0.5 text-[11px] font-normal text-muted-foreground">
-                                          {unit}
-                                        </span>
-                                      ) : null}
-                                    </p>
-                                  </div>
-                                );
-                              })
-                            ) : (
-                              <p className="text-xs text-muted-foreground">
-                                Sin capacidades cargadas
-                              </p>
-                            )}
-                          </div>
-
-                          <div className="mt-auto flex items-center justify-between gap-3 border-t border-border/60 pt-3">
-                            <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                              <SlidersHorizontalIcon size={13} className="shrink-0" />
-                              {m.perfilesOperativos.length} perfil
-                              {m.perfilesOperativos.length === 1 ? "" : "es"}
-                            </span>
-                            <span className="inline-flex gap-1.5">
-                              <span
-                                role="button"
-                                tabIndex={0}
-                                className="btn h-7 px-2.5 text-[12px]"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  handleEditar(m);
-                                }}
-                                onKeyDown={(event) => {
-                                  if (event.key === "Enter" || event.key === " ") {
-                                    event.stopPropagation();
-                                    handleEditar(m);
-                                  }
-                                }}
-                              >
-                                Editar
-                              </span>
-                              <span
-                                role="button"
-                                tabIndex={0}
-                                className="icon-btn"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  handleToggle(m);
-                                }}
-                                onKeyDown={(event) => {
-                                  if (event.key === "Enter" || event.key === " ") {
-                                    event.stopPropagation();
-                                    handleToggle(m);
-                                  }
-                                }}
-                                title={m.activo ? "Desactivar rápido" : "Activar rápido"}
-                              >
-                                {m.activo ? (
-                                  <CheckCircle2Icon size={14} />
-                                ) : (
-                                  <CircleIcon size={14} />
-                                )}
-                              </span>
-                              <span
-                                role="button"
-                                tabIndex={0}
-                                className="icon-btn"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  handleDesactivar(m);
-                                }}
-                                onKeyDown={(event) => {
-                                  if (event.key === "Enter" || event.key === " ") {
-                                    event.stopPropagation();
-                                    handleDesactivar(m);
-                                  }
-                                }}
-                                title="Desactivar"
-                              >
-                                <Trash2Icon size={14} />
-                              </span>
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </section>
-              ))}
-            </div>
-          )}
+      <div className="card tbl-scroll">
+        <table className="tbl maq-tabla">
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Tipo</th>
+              <th>Planta</th>
+              <th>Centro de costos</th>
+              <th>Estado</th>
+              <th className="right">Perfiles</th>
+              <th className="right sticky-right">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredMaquinas.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="maq-vacio">
+                  <div>No hay máquinas registradas</div>
+                  <button type="button" onClick={handleNueva}>
+                    Haga clic aquí
+                  </button>{" "}
+                  para añadir
+                </td>
+              </tr>
+            ) : null}
+            {filteredMaquinas.map((m) => {
+              const makeModel = [m.fabricante, m.modelo].filter(Boolean).join(" · ");
+              return (
+                <tr
+                  key={m.id}
+                  className={m.activo ? "" : "maq-inactiva"}
+                  onClick={() => handleEditar(m)}
+                >
+                  <td>
+                    <div className="name">{m.nombre}</div>
+                    {makeModel ? <div className="desc">{makeModel}</div> : null}
+                  </td>
+                  <td className="maq-tipo" title={getMachineTechnologyLabel(m)}>
+                    <span
+                      className="maq-punto"
+                      style={{ background: getMachineTechColor(m) }}
+                    />
+                    {getPlantillaMaquinariaLabel(m.plantilla)}
+                  </td>
+                  <td>{m.plantaNombre || "—"}</td>
+                  <td>{m.centroCostoPrincipalNombre || "—"}</td>
+                  <td>
+                    <span
+                      className={m.estado === "activa" ? "tag ok" : "tag muted"}
+                      title={`código: ${m.estado}`}
+                    >
+                      <span className="d" />
+                      {getEstadoMaquinaLabel(m.estado)}
+                    </span>
+                  </td>
+                  <td className="right numeric">{m.perfilesOperativos.length}</td>
+                  <td className="right sticky-right">
+                    <span
+                      className="centros-actions"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <button
+                        type="button"
+                        className="btn"
+                        onClick={() => handleEditar(m)}
+                      >
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        title={m.activo ? "Desactivar rápido" : "Activar rápido"}
+                        aria-label={
+                          m.activo
+                            ? `Desactivar ${m.nombre}`
+                            : `Activar ${m.nombre}`
+                        }
+                        onClick={() => handleToggle(m)}
+                      >
+                        {m.activo ? (
+                          <CheckCircle2Icon size={14} />
+                        ) : (
+                          <CircleIcon size={14} />
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        title="Desactivar"
+                        aria-label={`Desactivar ${m.nombre}`}
+                        onClick={() => handleDesactivar(m)}
+                      >
+                        <Trash2Icon size={14} />
+                      </button>
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
 
       {/* Sheet editor */}

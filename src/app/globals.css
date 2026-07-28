@@ -6922,6 +6922,188 @@ body {
     border-top: 1px solid var(--border);
   }
 
+  /* ── Maquinaria (estilo Holdprint) ──────────────────────────────────────
+     Prefijo .maq- en TODA clase, hijas incluidas: en esta hoja `.side` es el
+     sidebar y `.main` la columna principal. Mismo patrón toolbar+tabla que
+     Gastos fijos (.gfijo-). */
+
+  .maq-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+
+  .maq-buscador {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 260px;
+    max-width: 420px;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface-1);
+  }
+
+  .maq-buscador svg {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 auto;
+    color: var(--text-muted);
+  }
+
+  .maq-buscador input {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 9px 0;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    font-size: 13px;
+    outline: none;
+  }
+
+  .maq-acciones {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .maq-acciones .maq-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface-1);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .maq-acciones .maq-btn svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .maq-acciones .maq-btn.activo {
+    border-color: #111114;
+  }
+
+  .maq-acciones .maq-btn-primario {
+    border-color: #111114;
+    background: #111114;
+    color: #fff;
+  }
+
+  .maq-filtros {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface-2);
+  }
+
+  .maq-filtros .maq-filtros-grupo {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .maq-filtros .maq-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    color: var(--text-muted);
+  }
+
+  .maq-filtros .maq-chip select {
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--surface-1);
+    color: var(--text);
+    font-size: 13px;
+  }
+
+  .maq-filtros .maq-cerrar-filtros {
+    display: inline-flex;
+    padding: 4px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+
+  .maq-filtros .maq-cerrar-filtros svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  /* La fila entera navega al detalle (hoy: abre el editor). */
+  .maq-tabla tbody tr {
+    cursor: pointer;
+  }
+
+  .maq-tabla .maq-vacio {
+    padding: 40px 16px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+    cursor: default;
+  }
+
+  .maq-tabla .maq-vacio div {
+    margin-bottom: 4px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .maq-tabla .maq-vacio button {
+    border: 0;
+    background: transparent;
+    color: #d9642a;
+    font-size: 13px;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+
+  /* Una máquina desactivada sigue en la lista —sus tarifas y su histórico
+     cuentan— pero no compite visualmente con las vigentes. */
+  .maq-tabla tbody tr.maq-inactiva td {
+    opacity: 0.5;
+  }
+
+  .maq-tabla td.maq-tipo {
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-muted);
+  }
+
+  .maq-tabla .maq-punto {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-right: 6px;
+    border-radius: 50%;
+    vertical-align: middle;
+  }
+
   /* La fila que dice si el prorrateo cuadra: lo que sale de la estructura
      tiene que entrar entero a los productivos. */
   .ccosto-tabla tfoot .ccosto-cuadre td {
@@ -37165,6 +37347,7 @@ body:has(.t-app) {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
 
 
 
