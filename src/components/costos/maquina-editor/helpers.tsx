@@ -789,8 +789,10 @@ export function FieldInput({
   if (STRUCTURED_MARGIN_FIELDS.has(field.key)) {
     const current = normalizeMarginValue(value);
     const definitions = marginFieldDefinitions[field.key] ?? [];
+    // Los 4 bordes en una sola fila: son valores de 2-3 dígitos, no
+    // necesitan media pantalla cada uno.
     return (
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {definitions.map((definition) => (
           <div key={definition.key} className="min-w-0 space-y-1">
             <Label htmlFor={`${id}-${definition.key}`} className="text-xs">
