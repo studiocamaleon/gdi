@@ -6725,6 +6725,16 @@ body {
     opacity: 0.5;
   }
 
+  /* Los nombres del catálogo son largos ("Servicios (luz, gas, agua, internet,
+     telefonía)"): la columna se acota y el nombre entero queda en el title. */
+  .gfijo-tabla td.gfijo-cat {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-muted);
+  }
+
   .gfijo-tabla .gfijo-punto {
     display: inline-block;
     width: 7px;

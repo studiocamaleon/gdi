@@ -375,6 +375,7 @@ export function GastosFijosPanel({ initialGastos }: { initialGastos: GastoFijo[]
           <thead>
             <tr>
               <th>Descripción</th>
+              <th>Categoría</th>
               <th>Favorecido</th>
               <th>Frecuencia</th>
               <th className="right">Valor</th>
@@ -384,7 +385,7 @@ export function GastosFijosPanel({ initialGastos }: { initialGastos: GastoFijo[]
           <tbody>
             {filtrados.length === 0 ? (
               <tr>
-                <td colSpan={5} className="gfijo-vacio">
+                <td colSpan={6} className="gfijo-vacio">
                   <div>No hay elementos registrados</div>
                   <button type="button" onClick={() => abrir(null)}>
                     Haga clic aquí
@@ -397,13 +398,13 @@ export function GastosFijosPanel({ initialGastos }: { initialGastos: GastoFijo[]
               <tr key={g.id} className={g.activo ? "" : "gfijo-inactivo"}>
                 <td>
                   <div className="name">{g.nombre}</div>
-                  <div className="desc">
-                    <span
-                      className="gfijo-punto"
-                      style={{ background: colorCategoria(g.categoriaCodigo) }}
-                    />
-                    {g.categoriaNombre}
-                  </div>
+                </td>
+                <td className="gfijo-cat" title={g.categoriaNombre}>
+                  <span
+                    className="gfijo-punto"
+                    style={{ background: colorCategoria(g.categoriaCodigo) }}
+                  />
+                  {g.categoriaNombre}
                 </td>
                 <td>{g.proveedorNombre ?? "—"}</td>
                 <td>{FRECUENCIA_LABEL[g.frecuencia]}</td>
