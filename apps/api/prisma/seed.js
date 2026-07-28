@@ -1,18 +1,14 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 const {
   PrismaClient,
-  CategoriaGraficaCentroCosto,
   CategoriaComponenteCostoCentro,
   EstadoTarifaCentroCostoPeriodo,
-  ImputacionPreferidaCentroCosto,
-  OrigenComponenteCostoCentro,
   RolSistema,
+  SeccionCentroCostoLinea,
   SexoEmpleado,
   TipoCentroCosto,
   TipoComision,
   TipoDireccion,
-  TipoRecursoCentroCosto,
-  UnidadBaseCentroCosto,
 } = require("@prisma/client");
 const bcrypt = require("bcryptjs");
 
@@ -23,10 +19,38 @@ const { seedMaterialPresets } = require("./seed-modulos/material-presets");
 const { seedMateriales } = require("./seed-modulos/materiales");
 const { seedRutasYProductos } = require("./seed-modulos/rutas-productos");
 
+/**
+ * El seed EMPIEZA BORRANDO TODO. Por eso no corre en cualquier base: sólo en
+ * una que se llame `*_test`, o en la que se nombre explícitamente con
+ * SEED_ALLOW_DB. Sin esto, un `node prisma/seed.js` de más —o un `require()`
+ * distraído, que también ejecuta el archivo— vacía la base de desarrollo.
+ *
+ *   Base de test:   npm run seed
+ *   Otra base:      SEED_ALLOW_DB=gdi_saas npm run seed
+ */
+function verificarBaseDestino() {
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    throw new Error("No hay DATABASE_URL: el seed no sabe a qué base apunta.");
+  }
+  const nombre = decodeURIComponent(
+    new URL(url).pathname.replace(/^\//, ""),
+  ).trim();
+  if (nombre.endsWith("_test")) return nombre;
+  if (process.env.SEED_ALLOW_DB === nombre) return nombre;
+  throw new Error(
+    `El seed borra TODA la base y "${nombre}" no es una base de test.\n` +
+      `Si de verdad querés vaciarla y recargarla:\n\n` +
+      `    SEED_ALLOW_DB=${nombre} npm run seed\n`,
+  );
+}
+
+const baseDestino = verificarBaseDestino();
 const prisma = new PrismaClient();
 
 async function main() {
   const periodoDemo = "2026-03";
+  console.info(`Seed sobre la base "${baseDestino}" — se borra y se recarga.`);
 
   // Cleanup en orden (FKs primero) — entidades V2 incluidas
   await prisma.cotizacionItem.deleteMany();
@@ -56,10 +80,8 @@ async function main() {
   await prisma.invitation.deleteMany();
   await prisma.centroCostoTarifaPeriodo.deleteMany();
   await prisma.centroCostoCapacidadPeriodo.deleteMany();
-  await prisma.centroCostoComponenteCostoPeriodo.deleteMany();
-  await prisma.centroCostoRecurso.deleteMany();
+  await prisma.centroCostoLinea.deleteMany();
   await prisma.centroCosto.deleteMany();
-  await prisma.areaCosto.deleteMany();
   await prisma.planta.deleteMany();
   await prisma.empleadoComision.deleteMany();
   await prisma.empleadoDireccion.deleteMany();
@@ -376,271 +398,206 @@ async function main() {
     },
   });
 
-  const [areaPreprensa, areaImpresion, areaTerminacion] = await Promise.all([
-    prisma.areaCosto.create({
-      data: {
-        tenantId: tenant.id,
-        plantaId: planta.id,
-        codigo: "PRE",
-        nombre: "Preprensa",
-        descripcion: "Diseño, imposicion y planchas",
-        activa: true,
-      },
-    }),
-    prisma.areaCosto.create({
-      data: {
-        tenantId: tenant.id,
-        plantaId: planta.id,
-        codigo: "IMP",
-        nombre: "Impresion",
-        descripcion: "Produccion en maquinas impresoras",
-        activa: true,
-      },
-    }),
-    prisma.areaCosto.create({
-      data: {
-        tenantId: tenant.id,
-        plantaId: planta.id,
-        codigo: "TER",
-        nombre: "Terminacion",
-        descripcion: "Corte, plegado y terminaciones especiales",
-        activa: true,
-      },
-    }),
-  ]);
+  // ============================================================================
+  // CENTROS DE COSTO — planilla manual (docs/centros-de-costo-carga-manual-diseno.md)
+  // ============================================================================
+  // Una sola tabla de líneas en tres secciones reemplazó a las áreas, los
+  // recursos y los componentes de costo. La tarifa ya no se declara suelta:
+  // sale de sumar la planilla y dividir por las horas productivas del mes.
 
-  await Promise.all([
-    prisma.centroCosto.create({
-      data: {
-        tenantId: tenant.id,
-        plantaId: planta.id,
-        areaCostoId: areaPreprensa.id,
-        codigo: "PRE-001",
-        nombre: "CTP principal",
-        descripcion: "Centro productivo de salida a plancha",
-        tipoCentro: TipoCentroCosto.PRODUCTIVO,
-        categoriaGrafica: CategoriaGraficaCentroCosto.PREPRENSA,
-        imputacionPreferida: ImputacionPreferidaCentroCosto.DIRECTA,
-        unidadBaseFutura: UnidadBaseCentroCosto.HORA_HOMBRE,
-        responsableEmpleadoId: empleados[1].id,
-        activo: true,
-      },
-    }),
-    prisma.centroCosto.create({
-      data: {
-        tenantId: tenant.id,
-        plantaId: planta.id,
-        areaCostoId: areaImpresion.id,
-        codigo: "IMP-001",
-        nombre: "Offset 4 colores",
-        descripcion: "Equipo principal de impresion offset",
-        tipoCentro: TipoCentroCosto.PRODUCTIVO,
-        categoriaGrafica: CategoriaGraficaCentroCosto.IMPRESION,
-        imputacionPreferida: ImputacionPreferidaCentroCosto.DIRECTA,
-        unidadBaseFutura: UnidadBaseCentroCosto.HORA_MAQUINA,
-        responsableEmpleadoId: empleados[0].id,
-        activo: true,
-      },
-    }),
-    prisma.centroCosto.create({
-      data: {
-        tenantId: tenant.id,
-        plantaId: planta.id,
-        areaCostoId: areaTerminacion.id,
-        codigo: "TER-001",
-        nombre: "Barniz UV tercerizado",
-        descripcion: "Proveedor externo para procesos especiales",
-        tipoCentro: TipoCentroCosto.TERCERIZADO,
-        categoriaGrafica: CategoriaGraficaCentroCosto.TERCERIZADO,
-        imputacionPreferida: ImputacionPreferidaCentroCosto.REPARTO,
-        unidadBaseFutura: UnidadBaseCentroCosto.UNIDAD,
-        activo: true,
-      },
-    }),
-  ]);
-
-  const centroImpresion = await prisma.centroCosto.findFirstOrThrow({
-    where: {
-      tenantId: tenant.id,
-      codigo: "IMP-001",
-    },
-  });
-
-  await prisma.centroCostoRecurso.createMany({
-    data: [
-      {
-        tenantId: tenant.id,
-        centroCostoId: centroImpresion.id,
-        periodo: periodoDemo,
-        tipoRecurso: TipoRecursoCentroCosto.EMPLEADO,
-        empleadoId: empleados[0].id,
-        descripcion: "Responsable principal del sector",
-        porcentajeAsignacion: "70.00",
-        activo: true,
-      },
-      {
-        tenantId: tenant.id,
-        centroCostoId: centroImpresion.id,
-        periodo: periodoDemo,
-        tipoRecurso: TipoRecursoCentroCosto.EMPLEADO,
-        empleadoId: empleados[1].id,
-        descripcion: "Soporte operativo de preprensa e impresión",
-        porcentajeAsignacion: "30.00",
-        activo: true,
-      },
-      {
-        tenantId: tenant.id,
-        centroCostoId: centroImpresion.id,
-        periodo: periodoDemo,
-        tipoRecurso: TipoRecursoCentroCosto.MAQUINARIA,
-        nombreRecurso: "Heidelberg SM74",
-        descripcion: "Máquina principal offset 4 colores",
-        activo: true,
-      },
-    ],
-  });
-
-  await prisma.centroCostoComponenteCostoPeriodo.createMany({
-    data: [
-      {
-        tenantId: tenant.id,
-        centroCostoId: centroImpresion.id,
-        periodo: periodoDemo,
-        categoria: CategoriaComponenteCostoCentro.SUELDOS,
-        nombre: "Sueldos del equipo",
-        origen: OrigenComponenteCostoCentro.SUGERIDO,
-        importeMensual: "1200000.00",
-      },
-      {
-        tenantId: tenant.id,
-        centroCostoId: centroImpresion.id,
-        periodo: periodoDemo,
-        categoria: CategoriaComponenteCostoCentro.CARGAS,
-        nombre: "Cargas y aportes",
-        origen: OrigenComponenteCostoCentro.SUGERIDO,
-        importeMensual: "800000.00",
-      },
-      {
-        tenantId: tenant.id,
-        centroCostoId: centroImpresion.id,
-        periodo: periodoDemo,
-        categoria: CategoriaComponenteCostoCentro.AMORTIZACION,
-        nombre: "Amortización de máquina",
-        origen: OrigenComponenteCostoCentro.SUGERIDO,
-        importeMensual: "900000.00",
-      },
-      {
-        tenantId: tenant.id,
-        centroCostoId: centroImpresion.id,
-        periodo: periodoDemo,
-        categoria: CategoriaComponenteCostoCentro.ENERGIA,
-        nombre: "Energía",
-        origen: OrigenComponenteCostoCentro.SUGERIDO,
-        importeMensual: "300000.00",
-      },
-      {
-        tenantId: tenant.id,
-        centroCostoId: centroImpresion.id,
-        periodo: periodoDemo,
-        categoria: CategoriaComponenteCostoCentro.MANTENIMIENTO,
-        nombre: "Mantenimiento",
-        origen: OrigenComponenteCostoCentro.SUGERIDO,
-        importeMensual: "200000.00",
-      },
-    ],
-  });
-
-  await prisma.centroCostoCapacidadPeriodo.create({
+  const centroImpresion = await prisma.centroCosto.create({
     data: {
       tenantId: tenant.id,
-      centroCostoId: centroImpresion.id,
-      periodo: periodoDemo,
-      unidadBase: UnidadBaseCentroCosto.HORA_MAQUINA,
-      diasPorMes: "22.00",
-      horasPorDia: "8.00",
-      porcentajeNoProductivo: "15.00",
-      capacidadTeorica: "176.00",
-      capacidadPractica: "149.60",
+      plantaId: planta.id,
+      codigo: "IMP-001",
+      nombre: "Offset 4 colores",
+      descripcion: "Equipo principal de impresion offset",
+      tipoCentro: TipoCentroCosto.PRODUCTIVO,
+      activo: true,
     },
   });
 
-  const resumenTarifa = {
-    periodo: periodoDemo,
-    centroCodigo: "IMP-001",
-    centroNombre: "Offset 4 colores",
-    unidadBase: "hora_maquina",
-    costoMensualTotal: 3400000,
-    capacidadPractica: 149.6,
-    tarifaCalculada: 22727.27,
-    advertencias: [],
-  };
-
-  await prisma.centroCostoTarifaPeriodo.createMany({
-    data: [
-      {
-        tenantId: tenant.id,
-        centroCostoId: centroImpresion.id,
-        periodo: periodoDemo,
-        costoMensualTotal: "3400000.00",
-        capacidadPractica: "149.60",
-        tarifaCalculada: "22727.27",
-        estado: EstadoTarifaCentroCostoPeriodo.BORRADOR,
-        resumenJson: resumenTarifa,
-      },
-      {
-        tenantId: tenant.id,
-        centroCostoId: centroImpresion.id,
-        periodo: periodoDemo,
-        costoMensualTotal: "3400000.00",
-        capacidadPractica: "149.60",
-        tarifaCalculada: "22727.27",
-        estado: EstadoTarifaCentroCostoPeriodo.PUBLICADA,
-        resumenJson: resumenTarifa,
-      },
-    ],
-  });
-
-  const centroPreprensa = await prisma.centroCosto.findFirstOrThrow({
-    where: {
+  const centroPreprensa = await prisma.centroCosto.create({
+    data: {
       tenantId: tenant.id,
+      plantaId: planta.id,
       codigo: "PRE-001",
+      nombre: "CTP principal",
+      descripcion: "Centro productivo de salida a plancha",
+      tipoCentro: TipoCentroCosto.PRODUCTIVO,
+      activo: true,
     },
   });
-  const resumenTarifaPreprensa = {
-    periodo: periodoDemo,
-    centroCodigo: "PRE-001",
-    centroNombre: "CTP principal",
-    unidadBase: "hora_hombre",
-    costoMensualTotal: 900000,
-    capacidadPractica: 150,
-    tarifaCalculada: 6000,
-    advertencias: [],
-  };
 
-  await prisma.centroCostoTarifaPeriodo.createMany({
-    data: [
-      {
+  /**
+   * Arma la planilla de un centro y publica su tarifa con los mismos números
+   * que calcularía `buildTarifaSnapshot`: no hay tarifa inventada, el importe
+   * de cada línea sale de su propia fórmula.
+   *
+   *   EMPLEADO     salario × (1 + cargas%) × dedicacion%
+   *   ACTIVO_FIJO  (valorActual − valorFinalVida) / vidaUtilRestanteMeses
+   *   GASTO_GENERAL  el importe declarado
+   */
+  async function seedPlanillaCentro(centro, horasProductivas, lineas) {
+    const importeDeLinea = (linea) => {
+      if (linea.seccion === SeccionCentroCostoLinea.EMPLEADO) {
+        const cargas = 1 + Number(linea.cargasPct ?? 0) / 100;
+        const dedicacion = Number(linea.dedicacionPct ?? 100) / 100;
+        return Number(linea.salarioMensual) * cargas * dedicacion;
+      }
+      if (linea.seccion === SeccionCentroCostoLinea.ACTIVO_FIJO) {
+        return (
+          (Number(linea.valorActual) - Number(linea.valorFinalVida ?? 0)) /
+          Number(linea.vidaUtilRestanteMeses)
+        );
+      }
+      return Number(linea.importeMensual);
+    };
+    const r2 = (valor) => Math.round(valor * 100) / 100;
+
+    await prisma.centroCostoLinea.createMany({
+      data: lineas.map((linea, indice) => ({
         tenantId: tenant.id,
-        centroCostoId: centroPreprensa.id,
+        centroCostoId: centro.id,
         periodo: periodoDemo,
-        costoMensualTotal: "900000.00",
-        capacidadPractica: "150.00",
-        tarifaCalculada: "6000.00",
-        estado: EstadoTarifaCentroCostoPeriodo.BORRADOR,
-        resumenJson: resumenTarifaPreprensa,
-      },
-      {
+        orden: indice,
+        seccion: linea.seccion,
+        nombre: linea.nombre,
+        categoria: linea.categoria ?? null,
+        ocupacion: linea.ocupacion ?? null,
+        dedicacionPct: linea.dedicacionPct ?? null,
+        salarioMensual: linea.salarioMensual ?? null,
+        cargasPct: linea.cargasPct ?? null,
+        vidaUtilRestanteMeses: linea.vidaUtilRestanteMeses ?? null,
+        valorActual: linea.valorActual ?? null,
+        valorFinalVida: linea.valorFinalVida ?? null,
+        importeMensual: r2(importeDeLinea(linea)).toFixed(2),
+      })),
+    });
+
+    await prisma.centroCostoCapacidadPeriodo.create({
+      data: {
         tenantId: tenant.id,
-        centroCostoId: centroPreprensa.id,
+        centroCostoId: centro.id,
         periodo: periodoDemo,
-        costoMensualTotal: "900000.00",
-        capacidadPractica: "150.00",
-        tarifaCalculada: "6000.00",
-        estado: EstadoTarifaCentroCostoPeriodo.PUBLICADA,
-        resumenJson: resumenTarifaPreprensa,
+        horasProductivas: horasProductivas.toFixed(2),
       },
-    ],
-  });
+    });
+
+    const sumar = (seccion) =>
+      r2(
+        lineas
+          .filter((linea) => linea.seccion === seccion)
+          .reduce((acc, linea) => acc + importeDeLinea(linea), 0),
+      );
+    const gastosGenerales = sumar(SeccionCentroCostoLinea.GASTO_GENERAL);
+    const manoObra = sumar(SeccionCentroCostoLinea.EMPLEADO);
+    const activosFijos = sumar(SeccionCentroCostoLinea.ACTIVO_FIJO);
+    const costoMensualTotal = r2(gastosGenerales + manoObra + activosFijos);
+    const tarifaCalculada = r2(costoMensualTotal / horasProductivas);
+    const tarifaManoObra = r2(manoObra / horasProductivas);
+
+    // Sin centros NO_PRODUCTIVO en el demo no hay estructura que repartir,
+    // así que lo absorbido es cero y la tarifa directa es la tarifa.
+    const resumenJson = {
+      periodo: periodoDemo,
+      centroCodigo: centro.codigo,
+      centroNombre: centro.nombre,
+      costoMensualGastosGenerales: gastosGenerales,
+      costoMensualActivosFijos: activosFijos,
+      costoMensualSinReparto: costoMensualTotal,
+      costoMensualAbsorbidoReparto: 0,
+      desgloseRepartoAbsorbido: [],
+      costoMensualTotal,
+      tarifaDirectaSinReparto: tarifaCalculada,
+      tarifaAbsorbidaReparto: 0,
+      capacidadPractica: horasProductivas,
+      tarifaCalculada,
+      costoMensualManoObra: manoObra,
+      tarifaManoObra,
+      advertencias: [],
+    };
+
+    const snapshot = {
+      costoMensualTotal: costoMensualTotal.toFixed(2),
+      capacidadPractica: horasProductivas.toFixed(2),
+      tarifaCalculada: tarifaCalculada.toFixed(2),
+      costoMensualManoObra: manoObra.toFixed(2),
+      tarifaManoObra: tarifaManoObra.toFixed(2),
+      resumenJson,
+    };
+
+    // Borrador y publicada: la ficha abre en la primera y el motor lee la
+    // segunda.
+    await prisma.centroCostoTarifaPeriodo.createMany({
+      data: [
+        {
+          tenantId: tenant.id,
+          centroCostoId: centro.id,
+          periodo: periodoDemo,
+          estado: EstadoTarifaCentroCostoPeriodo.BORRADOR,
+          ...snapshot,
+        },
+        {
+          tenantId: tenant.id,
+          centroCostoId: centro.id,
+          periodo: periodoDemo,
+          estado: EstadoTarifaCentroCostoPeriodo.PUBLICADA,
+          ...snapshot,
+        },
+      ],
+    });
+  }
+
+  // Offset: $3.400.000 / 149,60 h = $22.727,27 la hora.
+  await seedPlanillaCentro(centroImpresion, 149.6, [
+    {
+      seccion: SeccionCentroCostoLinea.EMPLEADO,
+      nombre: "Lucas Gomez",
+      ocupacion: "Maquinista de impresion",
+      dedicacionPct: "100.00",
+      salarioMensual: "1200000.00",
+      cargasPct: "66.666667",
+    },
+    {
+      seccion: SeccionCentroCostoLinea.ACTIVO_FIJO,
+      nombre: "Heidelberg SM74",
+      categoria: CategoriaComponenteCostoCentro.AMORTIZACION,
+      vidaUtilRestanteMeses: 60,
+      valorActual: "54000000.00",
+      valorFinalVida: "0.00",
+    },
+    {
+      seccion: SeccionCentroCostoLinea.GASTO_GENERAL,
+      nombre: "Energia",
+      categoria: CategoriaComponenteCostoCentro.ENERGIA,
+      importeMensual: "300000.00",
+    },
+    {
+      seccion: SeccionCentroCostoLinea.GASTO_GENERAL,
+      nombre: "Mantenimiento",
+      categoria: CategoriaComponenteCostoCentro.MANTENIMIENTO,
+      importeMensual: "200000.00",
+    },
+  ]);
+
+  // Preprensa: $900.000 / 150 h = $6.000 la hora.
+  await seedPlanillaCentro(centroPreprensa, 150, [
+    {
+      seccion: SeccionCentroCostoLinea.EMPLEADO,
+      nombre: "Valentina Rojas",
+      ocupacion: "Jefa de preprensa",
+      dedicacionPct: "100.00",
+      salarioMensual: "500000.00",
+      cargasPct: "40.000000",
+    },
+    {
+      seccion: SeccionCentroCostoLinea.GASTO_GENERAL,
+      nombre: "Licencias y software",
+      categoria: CategoriaComponenteCostoCentro.INSUMOS_INDIRECTOS,
+      importeMensual: "200000.00",
+    },
+  ]);
 
   // ============================================================================
   // MODELO UNIVERSAL V2 — Bloques nuevos de F.1.5

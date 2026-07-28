@@ -692,6 +692,7 @@ export function GastosFijosPanel({ initialGastos }: { initialGastos: GastoFijo[]
       <ConfirmacionSalida
         open={confirmandoSalida}
         cambios={1}
+        donde="este gasto fijo"
         guardando={guardando}
         onGuardarYSalir={async () => {
           setConfirmandoSalida(false);

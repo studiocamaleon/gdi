@@ -920,7 +920,14 @@ export function CentroCostoFicha({
             <Button variant="outline" onClick={() => pedirCierre(false)}>
               Cancelar
             </Button>
-            <Button onClick={guardar} disabled={isSaving || isLoading}>
+            {/* Sin cambios no hay nada que guardar: el botón lo dice en vez
+                de aceptar un click que no hace nada. En un alta siempre está
+                habilitado —la ficha entera es el cambio—. */}
+            <Button
+              onClick={guardar}
+              disabled={isSaving || isLoading || (!esAlta && !sucio)}
+              title={esAlta || sucio ? undefined : "No hay cambios para guardar"}
+            >
               {isSaving ? <GdiSpinner className="size-4" /> : null}
               Guardar
             </Button>
@@ -931,6 +938,7 @@ export function CentroCostoFicha({
       <ConfirmacionSalida
         open={confirmandoSalida}
         cambios={1}
+        donde="este centro de costo"
         guardando={isSaving}
         onGuardarYSalir={async () => {
           setConfirmandoSalida(false);

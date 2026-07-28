@@ -35,6 +35,7 @@ import type {
   NestingCostingPreview,
   TiempoManualConfig,
   MutacionAplicada,
+  ComponenteDesgasteCargado,
 } from './tipos';
 import {
   runNestingForPaso,
@@ -504,7 +505,11 @@ export class MotorUniversalService {
     // Ver docs/modificaciones-fisicas-lona-diseno.md §3.
     congelarMedidaVisible(jobContext);
 
-    this.enriquecerJobContextConGramajePrincipal(producto, jobContext);
+    await this.enriquecerJobContextConGramajePrincipal(
+      input.tenantId,
+      producto,
+      jobContext,
+    );
     this.enriquecerJobContextConTecnologias(producto.pasos, jobContext);
 
     // 1b. Cargar tarifas horarias publicadas para el período (F.2.10)
@@ -1684,7 +1689,18 @@ export class MotorUniversalService {
     return value !== false;
   }
 
-  private enriquecerJobContextConGramajePrincipal(
+  /**
+   * Deja el gramaje del sustrato principal en el JobContext, que es de donde
+   * lo leen los escalones de perfil (guillotina e impresión láser).
+   *
+   * Contempla las dos formas de llegar al material: el que está fijado en la
+   * ruta (HARDCODED) y el que elige el comercial al cotizar. Sin la segunda,
+   * un producto cuyo papel se elige en la cotización dejaba el contexto sin
+   * gramaje y los escalones no actuaban —el motor se quedaba con el primer
+   * perfil, en silencio—.
+   */
+  private async enriquecerJobContextConGramajePrincipal(
+    tenantId: string,
     producto: ProductoCargado,
     jobContext: JobContext,
   ) {
@@ -1694,24 +1710,47 @@ export class MotorUniversalService {
     ) {
       return;
     }
+
+    const leerGramaje = (atributos: unknown) => {
+      const attrs = this.asRecord(atributos);
+      return this.numeroPositivo(
+        attrs.gramajeGr ?? attrs.gramaje ?? attrs.gramaje_g_m2,
+      );
+    };
+    const anotar = (gramaje: number) => {
+      ctx.gramajeMaterialGr = gramaje;
+      ctx.gramajeGr = gramaje;
+    };
+
     for (const paso of producto.pasos) {
       for (const slot of paso.slots) {
-        if (
-          slot.modoSeleccion !== 'HARDCODED' ||
-          slot.slotCodigo !== 'sustrato_principal'
-        ) {
+        if (slot.slotCodigo !== 'sustrato_principal') continue;
+
+        if (slot.modoSeleccion === 'HARDCODED') {
+          const gramaje = leerGramaje(slot.materialVariante?.atributosVarianteJson);
+          if (gramaje) {
+            anotar(gramaje);
+            return;
+          }
           continue;
         }
-        const attrs = this.asRecord(
-          slot.materialVariante?.atributosVarianteJson,
+
+        // El comercial eligió el papel en la cotización: se carga esa
+        // variante para leerle el gramaje. Sólo se acepta si es uno de los
+        // candidatos declarados, igual que en resolverMaterialSlot.
+        const eleccion = this.getEleccionMaterialComercial(
+          slot,
+          jobContext,
+          paso,
         );
-        const gramaje = this.numeroPositivo(
-          attrs.gramajeGr ?? attrs.gramaje ?? attrs.gramaje_g_m2,
-        );
-        if (!gramaje) continue;
-        ctx.gramajeMaterialGr = gramaje;
-        ctx.gramajeGr = gramaje;
-        return;
+        if (!eleccion) continue;
+        if (!this.getSlotCandidatoVarianteIds(slot).includes(eleccion)) continue;
+        const variante = await this.cargarVariantePorId(tenantId, eleccion);
+        const gramaje = leerGramaje(variante?.atributosVarianteJson);
+        if (gramaje) {
+          anotar(gramaje);
+          return;
+        }
       }
     }
   }
@@ -1994,6 +2033,14 @@ export class MotorUniversalService {
     const perfilResuelto = sinImpresion
       ? null
       : this.resolverPerfil(pasoConMaquina, jobContext);
+    if (!sinImpresion) {
+      this.avisarFaltaPerfilDobleFaz(
+        errores,
+        pasoConMaquina,
+        jobContext,
+        perfilResuelto,
+      );
+    }
     paso = pasoConMaquina; // todo lo siguiente usa el paso con máquina resuelta
 
     // c.0) DOBLE FAZ — si el sustrato de este paso se duplica (aplicaMultiCaras),
@@ -2853,7 +2900,9 @@ export class MotorUniversalService {
     const materialPrincipal =
       materialConCosteo ??
       materiales.find(
-        (material) => material.modoSeleccion !== 'MAQUINA_CONSUMIBLE',
+        (material) =>
+          material.modoSeleccion !== 'MAQUINA_CONSUMIBLE' &&
+          material.modoSeleccion !== 'MAQUINA_DESGASTE',
       ) ??
       materiales[0];
 
@@ -3466,6 +3515,12 @@ export class MotorUniversalService {
           )),
     );
 
+    ejecutados.push(
+      ...(this.esModoSinImpresion(paso, jobContext)
+        ? []
+        : this.calcularDesgasteMaquina(paso, jobContext, nestingDispatch)),
+    );
+
     return ejecutados;
   }
 
@@ -3805,6 +3860,107 @@ export class MotorUniversalService {
     return Number(jobContext.cantidad ?? 0);
   }
 
+  /**
+   * Costo por click: las piezas que se gastan con el uso de la máquina
+   * (drum, fusor, cuchilla de limpieza, barra de cera…).
+   *
+   * A diferencia del tóner, el desgaste NO depende de la cobertura: una hoja
+   * al 2% gasta el cilindro igual que una al 60%, porque dio la misma vuelta.
+   * El driver es la cantidad de páginas —clicks A4-equivalentes—, que es como
+   * el fabricante declara la vida útil de cada pieza.
+   *
+   *   clicks = pliegos × caras × factorA4   (A4 = 1, A3 = 2; entero, como
+   *                                          cuenta el contador del equipo)
+   *   costo  = Σ (precio del repuesto / vida útil) × clicks
+   *
+   * Ver docs/costo-por-click-desgaste-diseno.md
+   */
+  private calcularDesgasteMaquina(
+    paso: PasoCargado,
+    jobContext: JobContext,
+    nestingDispatch: NestingDispatchResult | null,
+  ): MaterialEjecutado[] {
+    const maquina = paso.maquina;
+    const componentes = maquina?.componentesDesgaste ?? [];
+    if (!maquina || componentes.length === 0) return [];
+    if (paso.familiaCodigo !== 'impresion_por_hoja') return [];
+
+    const clicks = this.clicksA4DelPaso(paso, jobContext, nestingDispatch);
+    if (clicks <= 0) return [];
+
+    // Un trabajo en blanco y negro mueve sólo el drum negro: las piezas de
+    // color no giran y no se cobran.
+    const modoColor = this.resolverModoColorEfectivoConsumibles(
+      paso,
+      jobContext,
+    );
+    const esColor = modoColor !== 'BN';
+
+    const ejecutados: MaterialEjecutado[] = [];
+    for (const componente of componentes) {
+      if (componente.soloColor && !esColor) continue;
+
+      const vidaUtil = this.numeroPositivo(componente.vidaUtilEstimada);
+      if (!vidaUtil) continue;
+
+      // El precio de la variante manda; el suelto es para el repuesto que
+      // todavía no está dado de alta en inventario.
+      const precioRepuesto =
+        this.numeroPositivo(
+          componente.materiaPrimaVariante?.precioReferencia,
+        ) ?? this.numeroPositivo(componente.precioUnitario);
+      if (!precioRepuesto) continue;
+
+      const costoPorClick = precioRepuesto / vidaUtil;
+      const costoTotal = costoPorClick * clicks;
+
+      ejecutados.push({
+        slotCodigo: `desgaste_${componente.id}`,
+        slotNombre: componente.nombre,
+        slotRol: 'desgaste',
+        materialVarianteId: componente.materiaPrimaVarianteId ?? '',
+        materialNombre: componente.nombre,
+        materialSku: componente.materiaPrimaVariante?.sku ?? '',
+        materialDisplayName: componente.nombre,
+        materiaPrimaNombre: componente.nombre,
+        tipoLineaCosto: 'DESGASTE_MAQUINA',
+        cantidad: clicks,
+        unidad: 'a4_equiv',
+        precioUnitario: costoPorClick,
+        costoTotal,
+        estrategiaCosto: 'costo_por_click',
+        // La pieza la declara la máquina, no un slot que alguien elija.
+        modoSeleccion: 'MAQUINA_DESGASTE',
+      });
+    }
+
+    return ejecutados;
+  }
+
+  /**
+   * Clicks A4-equivalentes que consume el paso: lo que contaría el contador
+   * de la máquina. Cada cara impresa de cada pliego es un click, y un pliego
+   * más grande que un A4 cuenta como los A4 que entran en él, redondeado
+   * para arriba (un SRA3 son 2 clicks, no 2,31).
+   */
+  private clicksA4DelPaso(
+    paso: PasoCargado,
+    jobContext: JobContext,
+    nestingDispatch: NestingDispatchResult | null,
+  ): number {
+    const pliegos = this.resolverCantidad(paso, jobContext, null);
+    if (!Number.isFinite(pliegos) || pliegos <= 0) return 0;
+    const caras = this.resolverCarasConsumible(paso, jobContext);
+    const factorA4 = Math.ceil(
+      this.factorA4EquivalenteParaImpresionPorHoja(
+        paso,
+        jobContext,
+        nestingDispatch,
+      ),
+    );
+    return Math.ceil(pliegos) * caras * Math.max(1, factorA4);
+  }
+
   private calcularConsumiblesMaquina(
     paso: PasoCargado,
     jobContext: JobContext,
@@ -3882,12 +4038,13 @@ export class MotorUniversalService {
     const ejecutados: MaterialEjecutado[] = [];
 
     for (const channel of channels) {
+      // El tóner/tinta del PERFIL gana; el declarado a nivel máquina queda
+      // como respaldo de las láser cargadas antes de que el consumo pudiera
+      // variar por perfil (2026-07-28).
       const consumible = this.findConsumibleMaquina(
         consumibles,
         paso.perfil?.id ?? paso.perfilM1Id,
         channel,
-        maquina.plantilla === 'impresora_laser' ||
-          maquina.plantilla === 'IMPRESORA_LASER',
       );
 
       if (!consumible) {
@@ -3984,6 +4141,7 @@ export class MotorUniversalService {
     >,
     perfilId: string | null | undefined,
     channel: ConsumableChannel,
+    /** Sólo para callers que quieran el de la máquina por delante. */
     preferGlobal = false,
   ) {
     const matchesChannel = (consumible: (typeof consumibles)[number]) =>
@@ -5080,8 +5238,13 @@ export class MotorUniversalService {
   ): number {
     const detalle = this.asRecord(paso.perfil?.detalleJson);
     const pliegosMaxPorTanda = Number(detalle.pliegosMaxPorTanda ?? 0);
+    // El tiempo por corte vive en el perfil (2026-07-28). El valor de la
+    // máquina queda como respaldo de las guillotinas cargadas antes del
+    // cambio: sin él, ese paso costearía 0 minutos en silencio.
     const tiempoPorCorteSeg = Number(
-      paso.maquina?.parametrosTecnicosJson?.tiempoPorCorteSeg ?? 0,
+      detalle.tiempoPorCorteSeg ??
+        paso.maquina?.parametrosTecnicosJson?.tiempoPorCorteSeg ??
+        0,
     );
     const cortesPorTanda = this.getCortesGuillotinaPorTanda(jobContext);
     const pliegos = this.resolverCantidad(paso, jobContext, null);
@@ -5351,35 +5514,34 @@ export class MotorUniversalService {
     );
   }
 
-  private perfilGuillotinaAceptaGramaje(
-    perfil: { detalleJson?: unknown } | null | undefined,
-    gramaje: number,
-  ) {
-    const detalle = this.asRecord(perfil?.detalleJson);
-    const min = this.numeroPositivo(detalle.gramajeMinGr) ?? 0;
-    const max = this.numeroPositivo(detalle.gramajeMaxGr);
-    if (!max) return false;
-    return gramaje >= min && gramaje <= max;
-  }
-
-  private elegirPerfilGuillotinaPorGramaje<
+  /**
+   * Escalón de gramaje ("hasta N g/m²"), no rango: gana el escalón más chico
+   * que todavía cubre el papel —papel de 150 g/m² con perfiles hasta
+   * 100 / 250 / 400 elige el de 250—. Lo usan guillotina (cuántos pliegos
+   * entran en la pila) e impresión láser (a más gramaje, menos ppm).
+   *
+   * Si ningún escalón lo cubre gana el más grueso: menos pliegos por tanda,
+   * más tandas, que es el lado conservador para cotizar.
+   */
+  private elegirPorEscalonDeGramaje<
     T extends { activo: boolean; detalleJson?: unknown },
   >(perfiles: T[], gramaje: number): T | null {
-    const candidatos = perfiles
+    const escalones = perfiles
       .filter((perfil) => perfil.activo)
-      .filter((perfil) => this.perfilGuillotinaAceptaGramaje(perfil, gramaje))
-      .sort((a, b) => {
-        const da = this.asRecord(a.detalleJson);
-        const db = this.asRecord(b.detalleJson);
-        const maxA =
-          this.numeroPositivo(da.gramajeMaxGr) ?? Number.MAX_SAFE_INTEGER;
-        const maxB =
-          this.numeroPositivo(db.gramajeMaxGr) ?? Number.MAX_SAFE_INTEGER;
-        const minA = this.numeroPositivo(da.gramajeMinGr) ?? 0;
-        const minB = this.numeroPositivo(db.gramajeMinGr) ?? 0;
-        return maxA - maxB || minB - minA;
-      });
-    return candidatos[0] ?? null;
+      .map((perfil) => ({
+        perfil,
+        hasta: this.numeroPositivo(
+          this.asRecord(perfil.detalleJson).gramajeMaxGr,
+        ),
+      }))
+      .filter(
+        (item): item is { perfil: T; hasta: number } => item.hasta !== null,
+      )
+      .sort((a, b) => a.hasta - b.hasta);
+
+    if (escalones.length === 0) return null;
+    const cubre = escalones.find((item) => gramaje <= item.hasta);
+    return (cubre ?? escalones[escalones.length - 1]).perfil;
   }
 
   /**
@@ -5447,71 +5609,74 @@ export class MotorUniversalService {
       // sigue la resolución automática.
     }
 
-    // ─── 1. Modo de color comercial por paso ────────────────────────
+    // ─── 1. Impresión por hoja: color + caras + escalón de gramaje ──
+    //
+    // Los tres discriminantes se ENCADENAN como filtros en vez de competir:
+    // antes ganaba el primer perfil que matcheara el color y el gramaje no
+    // se miraba nunca —tres perfiles de la misma máquina que sólo diferían
+    // en el papel eran inalcanzables—. Ver docs §5.
     const modoColor = this.resolverModoColorComercial(paso, jobContext);
-    if (modoColor) {
-      // Entre los perfiles que matchean el modo de color, preferir el que
-      // coincide con las caras del paso (ej. "B/N Doble faz" 45ppm vs
-      // "B/N Simple" 90ppm). Sin señal de caras, comportamiento histórico.
+    const esImpresionPorHoja = paso.familiaCodigo === 'impresion_por_hoja';
+    if (modoColor || esImpresionPorHoja) {
       const tieneSenalCaras =
-        paso.familiaCodigo === 'impresion_por_hoja' &&
+        esImpresionPorHoja &&
         (typeof jobContext.caras === 'number' ||
           (jobContext as Record<string, unknown>)[
             `caras_${paso.configPasoId}`
           ] !== undefined);
       const buscarDoble =
         tieneSenalCaras && this.carasEfectivasPaso(paso, jobContext) === 2;
-      const matchesCaras = (perfil: { nombre: string; detalleJson?: unknown }) =>
-        !tieneSenalCaras || this.perfilEsDobleFaz(perfil) === buscarDoble;
-      const perfilActual =
-        perfilesDisponibles.find((perfil) => perfil.id === paso.perfilM1Id) ??
-        paso.perfil;
-      if (
-        modoColorMatchesPerfil(perfilActual, modoColor) &&
-        (!perfilActual || matchesCaras(perfilActual))
-      ) {
-        return null;
-      }
-      const candidato =
-        perfilesDisponibles.find(
-          (perfil) =>
-            modoColorMatchesPerfil(perfil, modoColor) && matchesCaras(perfil),
-        ) ??
-        perfilesDisponibles.find((perfil) =>
-          modoColorMatchesPerfil(perfil, modoColor),
+
+      // Filtro 1: modo de color. Si nadie lo declara, no descarta a nadie.
+      let candidatos = modoColor
+        ? perfilesDisponibles.filter((perfil) =>
+            modoColorMatchesPerfil(perfil, modoColor),
+          )
+        : perfilesDisponibles;
+      if (candidatos.length === 0) candidatos = perfilesDisponibles;
+
+      // Filtro 2: caras. Si ningún perfil cubre las caras pedidas se sigue
+      // sin filtrar (el aviso lo emite `avisarFaltaPerfilDobleFaz`).
+      if (tieneSenalCaras) {
+        const porCaras = candidatos.filter(
+          (perfil) => this.perfilEsDobleFaz(perfil) === buscarDoble,
         );
-      if (candidato && candidato.id !== paso.perfilM1Id) {
-        return {
-          id: candidato.id,
-          nombre: candidato.nombre,
-          tipoPerfil: candidato.tipoPerfil,
-          productivityValue: candidato.productivityValue,
-          productivityUnit: candidato.productivityUnit ?? null,
-          setupMin: candidato.setupMin,
-          cleanupMin: candidato.cleanupMin,
-          feedReloadMin: candidato.feedReloadMin,
-          detalleJson: candidato.detalleJson,
-        };
+        if (porCaras.length > 0) candidatos = porCaras;
       }
-      return null;
+
+      // Filtro 3: escalón de gramaje, igual que en guillotina — gana el
+      // "hasta" más chico que todavía cubre el papel. Sin gramaje en el
+      // contexto o sin escalones declarados, queda el orden anterior.
+      const gramaje = this.numeroPositivo(
+        (jobContext as Record<string, unknown>).gramajeMaterialGr ??
+          (jobContext as Record<string, unknown>).gramajeGr ??
+          (jobContext as Record<string, unknown>).gramaje,
+      );
+      const candidato = gramaje
+        ? (this.elegirPorEscalonDeGramaje(candidatos, gramaje) ?? candidatos[0])
+        : candidatos[0];
+
+      if (!candidato || candidato.id === paso.perfilM1Id) return null;
+      return {
+        id: candidato.id,
+        nombre: candidato.nombre,
+        tipoPerfil: candidato.tipoPerfil,
+        productivityValue: candidato.productivityValue,
+        productivityUnit: candidato.productivityUnit ?? null,
+        setupMin: candidato.setupMin,
+        cleanupMin: candidato.cleanupMin,
+        feedReloadMin: candidato.feedReloadMin,
+        detalleJson: candidato.detalleJson,
+      };
     }
 
-    // ─── 2. Guillotina: perfil por rango de gramaje ──────────────────
+    // ─── 2. Guillotina: perfil por escalón de gramaje ────────────────
     if (paso.familiaCodigo === 'corte_guillotina') {
       const gramaje = this.numeroPositivo(
         ctx.gramajeMaterialGr ?? ctx.gramajeGr ?? ctx.gramaje,
       );
       if (gramaje) {
-        const perfilActual =
-          perfilesDisponibles.find((perfil) => perfil.id === paso.perfilM1Id) ??
-          paso.perfil;
-        if (
-          perfilActual &&
-          this.perfilGuillotinaAceptaGramaje(perfilActual, gramaje)
-        ) {
-          return null;
-        }
-        const candidato = this.elegirPerfilGuillotinaPorGramaje(
+        const candidato = this.elegirPorEscalonDeGramaje(
           perfilesDisponibles,
           gramaje,
         );
@@ -5554,39 +5719,63 @@ export class MotorUniversalService {
       }
     }
 
-    // ─── 4. Heurística legacy: impresión por hoja según caras ────────
-    // v3.0 (doc §5): el discriminante canónico es `detalle.caras`
-    // ('SIMPLE_FAZ' | 'DOBLE_FAZ'). Heurística retro-compat: también
-    // detecta el legacy `detalle.dobleFaz === true` y nombre del perfil.
-    if (
-      paso.familiaCodigo === 'impresion_por_hoja' &&
-      (typeof jobContext.caras === 'number' ||
-        (jobContext as Record<string, unknown>)[
-          `caras_${paso.configPasoId}`
-        ] !== undefined)
-    ) {
-      const buscarDoble = this.carasEfectivasPaso(paso, jobContext) === 2;
-      const candidato = perfilesDisponibles.find((p) => {
-        if (!p.activo) return false;
-        return this.perfilEsDobleFaz(p) === buscarDoble;
-      });
-      if (candidato && candidato.id !== paso.perfilM1Id) {
-        return {
-          id: candidato.id,
-          nombre: candidato.nombre,
-          tipoPerfil: candidato.tipoPerfil,
-          productivityValue: candidato.productivityValue,
-          productivityUnit: candidato.productivityUnit ?? null,
-          setupMin: candidato.setupMin,
-          cleanupMin: candidato.cleanupMin,
-          feedReloadMin: candidato.feedReloadMin,
-          detalleJson: candidato.detalleJson,
-        };
-      }
-    }
+    // (La heurística legacy "impresión por hoja según caras" se retiró:
+    // el filtro encadenado del punto 1 corre para toda la familia y ya
+    // contempla las caras, así que nunca se llegaba hasta acá.)
 
     // No hubo cambio
     return null;
+  }
+
+  /**
+   * El trabajo pide doble faz y la máquina no tiene ningún perfil de doble
+   * faz: el motor cae en un perfil de simple faz y el tiempo sale a la
+   * mitad del real. Antes pasaba en silencio; ahora la cotización lo dice.
+   *
+   * Es WARNING y no ERROR a propósito: la cotización sale igual —la
+   * imprenta puede querer cotizar mientras termina de cargar la máquina—,
+   * pero queda escrito que ese tiempo está subestimado.
+   */
+  private avisarFaltaPerfilDobleFaz(
+    errores: ErrorMotor[],
+    paso: PasoCargado,
+    jobContext: JobContext,
+    perfilResuelto: NonNullable<PasoCargado['perfil']> | null,
+  ) {
+    if (paso.familiaCodigo !== 'impresion_por_hoja') return;
+    const ctx = jobContext as Record<string, unknown>;
+    const tieneSenalCaras =
+      typeof jobContext.caras === 'number' ||
+      ctx[`caras_${paso.configPasoId}`] !== undefined;
+    if (!tieneSenalCaras) return;
+    if (this.carasEfectivasPaso(paso, jobContext) !== 2) return;
+
+    const perfilEnUso =
+      perfilResuelto ??
+      paso.perfilesDisponibles?.find((p) => p.id === paso.perfilM1Id) ??
+      paso.perfil;
+    if (perfilEnUso && this.perfilEsDobleFaz(perfilEnUso)) return;
+
+    const hayAlguno = this.filtrarPerfilesCompatibles(
+      paso.familiaCodigo,
+      paso.perfilesDisponibles,
+    ).some((perfil) => this.perfilEsDobleFaz(perfil));
+    if (hayAlguno) return;
+
+    errores.push({
+      codigo: 'perfil_doble_faz_faltante',
+      severidad: 'WARNING',
+      mensaje: `El paso ${paso.rutaPasoOrden} se cotiza a doble faz, pero ${paso.maquina?.nombre ?? 'la máquina'} no tiene ningún perfil de doble faz: el tiempo sale calculado con uno de simple faz y queda subestimado.`,
+      rutaPasoId: paso.rutaPasoId,
+      rutaPasoOrden: paso.rutaPasoOrden,
+      familiaCodigo: paso.familiaCodigo,
+      sugerencia:
+        'Agregar un perfil de doble faz a la máquina con su productividad real.',
+      contexto: {
+        maquinaId: paso.maquina?.id,
+        perfilId: perfilEnUso?.id ?? null,
+      },
+    });
   }
 
   /**
@@ -5756,6 +5945,56 @@ export class MotorUniversalService {
   // CARGA DE DATOS DEL DB
   // ============================================================================
 
+  /**
+   * Pieza de desgaste tal como la ve el motor. El precio sale de la variante
+   * de inventario cuando el repuesto está dado de alta; si no, del precio
+   * suelto que declaró la imprenta en la ficha de la máquina.
+   */
+  private toComponenteDesgasteCargado(componente: {
+    id: string;
+    nombre: string;
+    tipo: string;
+    vidaUtilEstimada: unknown;
+    unidadDesgaste: string;
+    precioUnitario: unknown;
+    soloColor: boolean;
+    activo: boolean;
+    materiaPrimaVarianteId: string | null;
+    materiaPrimaVariante?: {
+      id: string;
+      sku: string;
+      precioReferencia: unknown;
+    } | null;
+  }): ComponenteDesgasteCargado {
+    return {
+      id: componente.id,
+      nombre: componente.nombre,
+      tipo: componente.tipo.toLowerCase(),
+      vidaUtilEstimada:
+        componente.vidaUtilEstimada == null
+          ? null
+          : Number(componente.vidaUtilEstimada),
+      unidadDesgaste: componente.unidadDesgaste.toLowerCase(),
+      precioUnitario:
+        componente.precioUnitario == null
+          ? null
+          : Number(componente.precioUnitario),
+      soloColor: componente.soloColor,
+      activo: componente.activo,
+      materiaPrimaVarianteId: componente.materiaPrimaVarianteId,
+      materiaPrimaVariante: componente.materiaPrimaVariante
+        ? {
+            id: componente.materiaPrimaVariante.id,
+            sku: componente.materiaPrimaVariante.sku,
+            precioReferencia:
+              componente.materiaPrimaVariante.precioReferencia == null
+                ? null
+                : Number(componente.materiaPrimaVariante.precioReferencia),
+          }
+        : null,
+    };
+  }
+
   private toConsumibleCargado(consumible: {
     id: string;
     perfilOperativoId: string | null;
@@ -5840,6 +6079,10 @@ export class MotorUniversalService {
                       select: { id: true, nombre: true },
                     },
                     perfilesOperativos: true,
+                    componentesDesgaste: {
+                      where: { activo: true },
+                      include: { materiaPrimaVariante: true },
+                    },
                     consumibles: {
                       where: { activo: true },
                       include: {
@@ -5921,6 +6164,10 @@ export class MotorUniversalService {
                           select: { id: true, nombre: true },
                         },
                         perfilesOperativos: true,
+                        componentesDesgaste: {
+                          where: { activo: true },
+                          include: { materiaPrimaVariante: true },
+                        },
                         consumibles: {
                           where: { activo: true },
                           include: {
@@ -6067,6 +6314,9 @@ export class MotorUniversalService {
               consumibles: cp.maquinaM1.consumibles.map((c) =>
                 this.toConsumibleCargado(c),
               ),
+              componentesDesgaste: cp.maquinaM1.componentesDesgaste.map((d) =>
+                this.toComponenteDesgasteCargado(d),
+              ),
             }
           : undefined,
         perfil: cp.perfilM1
@@ -6135,6 +6385,9 @@ export class MotorUniversalService {
             > | null,
             consumibles: mc.maquina.consumibles.map((c) =>
               this.toConsumibleCargado(c),
+            ),
+            componentesDesgaste: mc.maquina.componentesDesgaste.map((d) =>
+              this.toComponenteDesgasteCargado(d),
             ),
           },
           perfilesOperativos: mc.maquina.perfilesOperativos.map((p) => ({
@@ -6355,6 +6608,10 @@ export class MotorUniversalService {
           include: {
             centroCostoPrincipal: { select: { id: true, nombre: true } },
             perfilesOperativos: true,
+            componentesDesgaste: {
+              where: { activo: true },
+              include: { materiaPrimaVariante: true },
+            },
             consumibles: {
               where: { activo: true },
               include: {
@@ -6415,6 +6672,10 @@ export class MotorUniversalService {
           include: {
             centroCostoPrincipal: { select: { id: true, nombre: true } },
             perfilesOperativos: true,
+            componentesDesgaste: {
+              where: { activo: true },
+              include: { materiaPrimaVariante: true },
+            },
             consumibles: {
               where: { activo: true },
               include: {
@@ -6476,6 +6737,7 @@ export class MotorUniversalService {
           include: {
             centroCostoPrincipal: { select: { id: true; nombre: true } };
             perfilesOperativos: true;
+            componentesDesgaste: { include: { materiaPrimaVariante: true } };
             consumibles: {
               include: {
                 materiaPrimaVariante: {
@@ -6509,6 +6771,7 @@ export class MotorUniversalService {
         include: {
           centroCostoPrincipal: { select: { id: true; nombre: true } };
           perfilesOperativos: true;
+          componentesDesgaste: { include: { materiaPrimaVariante: true } };
           consumibles: {
             include: {
               materiaPrimaVariante: {
@@ -6587,6 +6850,9 @@ export class MotorUniversalService {
             consumibles: maquina.consumibles.map((c) =>
               this.toConsumibleCargado(c),
             ),
+            componentesDesgaste: maquina.componentesDesgaste.map((d) =>
+              this.toComponenteDesgasteCargado(d),
+            ),
           }
         : undefined,
       perfil: perfil
@@ -6651,6 +6917,7 @@ export class MotorUniversalService {
         include: {
           centroCostoPrincipal: { select: { id: true; nombre: true } };
           perfilesOperativos: true;
+          componentesDesgaste: { include: { materiaPrimaVariante: true } };
           consumibles: {
             include: {
               materiaPrimaVariante: {
@@ -6729,6 +6996,9 @@ export class MotorUniversalService {
                 > | null,
               consumibles: maquina.consumibles.map((con) =>
                 this.toConsumibleCargado(con),
+              ),
+              componentesDesgaste: maquina.componentesDesgaste.map((d) =>
+                this.toComponenteDesgasteCargado(d),
               ),
             },
             perfilesOperativos: maquina.perfilesOperativos.map(toPerfil),

@@ -251,10 +251,26 @@ export class MaquinaComponenteDesgasteItemDto {
   @IsUUID()
   id?: string;
 
+  /**
+   * Repuesto en inventario. Opcional: alcanza con declarar `precioUnitario`
+   * mientras la pieza no esté dada de alta como materia prima.
+   */
+  @IsOptional()
   @IsUUID(undefined, {
     message: 'Selecciona una variante valida para el componente de desgaste.',
   })
-  materiaPrimaVarianteId: string;
+  materiaPrimaVarianteId?: string;
+
+  /** Precio del repuesto cuando no se vincula una variante. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  precioUnitario?: number;
+
+  /** La pieza sólo gira imprimiendo en color (drums/reveladores CMY). */
+  @IsOptional()
+  @IsBoolean()
+  soloColor?: boolean;
 
   @IsString()
   @MinLength(1)

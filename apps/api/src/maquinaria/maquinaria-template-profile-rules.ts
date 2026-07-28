@@ -75,14 +75,15 @@ function buildRule(params: {
 
 const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
   // ─── §5 IMPRESORA_LASER ─────────────────────────────────────────
-  // Discriminantes (detalle): caras, colores, gramajeMinGr, gramajeMaxGr.
+  // Discriminantes (detalle): caras, colores y gramajeMaxGr (escalón).
   [PlantillaMaquinariaDto.impresora_laser]: buildRule({
-    detalleKeys: ['caras', 'colores', 'gramajeMinGr', 'gramajeMaxGr'],
+    detalleKeys: ['caras', 'colores', 'gramajeMaxGr'],
     requiredFieldKeys: [
       'nombre',
       'productivityValue',
       'productivityUnit',
       'caras',
+      'gramajeMaxGr',
     ],
     modeSourceKeys: ['caras', 'colores'],
     allowedProfileTypes: [TipoPerfilOperativoMaquinaDto.impresion],
@@ -110,11 +111,17 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
 
   // ─── §7 GUILLOTINA ──────────────────────────────────────────────
   // Productividad NULL (fórmula no lineal).
-  // Discriminantes (detalle): gramajeMinGr, gramajeMaxGr.
   // paramsPerfilJson (detalle): pliegosMaxPorTanda.
+  // gramajeMaxGr es el ESCALÓN del perfil ("hasta N g/m²"), sin mínimo:
+  // el motor elige el escalón más chico que cubre el papel.
   [PlantillaMaquinariaDto.guillotina]: buildRule({
-    detalleKeys: ['gramajeMinGr', 'gramajeMaxGr', 'pliegosMaxPorTanda'],
-    requiredFieldKeys: ['nombre', 'pliegosMaxPorTanda', 'gramajeMaxGr'],
+    detalleKeys: ['gramajeMaxGr', 'pliegosMaxPorTanda', 'tiempoPorCorteSeg'],
+    requiredFieldKeys: [
+      'nombre',
+      'pliegosMaxPorTanda',
+      'gramajeMaxGr',
+      'tiempoPorCorteSeg',
+    ],
     allowedProfileTypes: [TipoPerfilOperativoMaquinaDto.corte],
   }),
 
@@ -290,25 +297,6 @@ export function validatePerfilOperativoByTemplate(
     if (!hasValue(value)) {
       throw new Error(
         `El perfil operativo ${perfilName} debe completar el campo ${requiredKey} para la plantilla ${plantilla}.`,
-      );
-    }
-  }
-
-  if (
-    plantilla === PlantillaMaquinariaDto.impresora_laser &&
-    parametrosTecnicos
-  ) {
-    const machineMaxGramaje = toFiniteNumber(parametrosTecnicos.gramajeMaxGr);
-    const profileMaxGramaje = toFiniteNumber(
-      getPerfilFieldValue(perfil, 'gramajeMaxGr'),
-    );
-    if (
-      machineMaxGramaje !== null &&
-      profileMaxGramaje !== null &&
-      profileMaxGramaje > machineMaxGramaje
-    ) {
-      throw new Error(
-        `El perfil operativo ${perfilName} no puede superar el gramaje maximo de la maquina (${machineMaxGramaje} g/m²).`,
       );
     }
   }

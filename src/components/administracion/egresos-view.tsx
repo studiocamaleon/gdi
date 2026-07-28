@@ -26,6 +26,7 @@ import { ArchivoUploader } from "@/components/archivos/archivo-uploader";
 import { formatBytes, validarArchivo } from "@/lib/archivos";
 import { subirArchivo } from "@/lib/archivos-api";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
+import { ConfirmacionSalida } from "@/components/ui/confirmacion-salida";
 import { MoneyInput } from "@/components/ui/money-input";
 import {
   SelectBuscable,
@@ -1440,7 +1441,6 @@ function AltaEgreso({
   /** Devuelve el id para que el listado pueda abrir el detalle recién creado. */
   onListo: (creadoId: string) => void;
 }) {
-  useCerrarConEscape(onCerrar);
   const { moneda } = useConfigRegional();
   const fmt = (v: number) => formatearMoneda(v, moneda, { decimales: 0 });
   const activas = categorias.filter((c) => c.activo);
@@ -1492,6 +1492,29 @@ function AltaEgreso({
   const [cuotas, setCuotas] = React.useState(1);
   const [guardando, setGuardando] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  // ─── Cerrar con datos cargados ───────────────────────────────────
+  //
+  // El formulario tiene veinte campos: cerrarlo por Escape o por la × sin
+  // avisar tiraba todo lo tipeado. Se compara el estado contra el que tenía
+  // al abrirse en vez de marcar campo por campo.
+  const instantanea = JSON.stringify([
+    yaPagado, descripcion, categoriaId, proveedorId, beneficiario,
+    competencia, vencimiento, neto, iva, alicuota, tipoComprobante,
+    puntoVenta, numeroComprobante, metodoPagoId, cuentaId, referencia,
+    notas, adjuntos.length, cuotas,
+  ]);
+  const [instantaneaInicial] = React.useState(instantanea);
+  const hayCambios = instantanea !== instantaneaInicial;
+  const [confirmandoSalida, setConfirmandoSalida] = React.useState(false);
+  const pedirCierre = React.useCallback(() => {
+    if (hayCambios) {
+      setConfirmandoSalida(true);
+      return;
+    }
+    onCerrar();
+  }, [hayCambios, onCerrar]);
+  useCerrarConEscape(pedirCierre, !confirmandoSalida);
 
   const conIva = discriminaIva(tipoComprobante);
   const total = neto + iva;
@@ -1615,7 +1638,7 @@ function AltaEgreso({
       <div className="mod">
         <div className="mod-head">
           <h2>Registrar egreso</h2>
-          <button type="button" className="mod-x" onClick={onCerrar}>
+          <button type="button" className="mod-x" onClick={pedirCierre}>
             ×
           </button>
         </div>
@@ -1885,7 +1908,7 @@ function AltaEgreso({
         </div>
 
         <div className="mod-foot">
-          <button type="button" className="btn" onClick={onCerrar}>
+          <button type="button" className="btn" onClick={pedirCierre}>
             Cancelar
           </button>
           <button
@@ -1898,6 +1921,22 @@ function AltaEgreso({
           </button>
         </div>
       </div>
+
+      <ConfirmacionSalida
+        open={confirmandoSalida}
+        cambios={1}
+        donde="este egreso"
+        guardando={guardando}
+        onGuardarYSalir={async () => {
+          setConfirmandoSalida(false);
+          await guardar();
+        }}
+        onDescartarYSalir={() => {
+          setConfirmandoSalida(false);
+          onCerrar();
+        }}
+        onSeguirEditando={() => setConfirmandoSalida(false)}
+      />
     </div>
   );
 }
@@ -1918,7 +1957,6 @@ function RegistrarPago({
   onCerrar: () => void;
   onListo: () => void;
 }) {
-  useCerrarConEscape(onCerrar);
   const { moneda } = useConfigRegional();
   const fmt = (v: number) => formatearMoneda(v, moneda, { decimales: 0 });
   const opcionesMetodo = React.useMemo(
@@ -1952,6 +1990,24 @@ function RegistrarPago({
   const [valores, setValores] = React.useState<ValorEnCartera[] | null>(null);
   const [guardando, setGuardando] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  // Mismo guardián que el alta: el pago también se carga a mano.
+  const instantanea = JSON.stringify([
+    metodoPagoId, cuentaId, fecha, referencia, montos, retenciones,
+    chequeNumero, chequeBanco, chequeFormato, chequeFechaPago, chequeModo,
+    valorId,
+  ]);
+  const [instantaneaInicial] = React.useState(instantanea);
+  const hayCambios = instantanea !== instantaneaInicial;
+  const [confirmandoSalida, setConfirmandoSalida] = React.useState(false);
+  const pedirCierre = React.useCallback(() => {
+    if (hayCambios) {
+      setConfirmandoSalida(true);
+      return;
+    }
+    onCerrar();
+  }, [hayCambios, onCerrar]);
+  useCerrarConEscape(pedirCierre, !confirmandoSalida);
 
   const metodo = metodosPago.find((m) => m.id === metodoPagoId);
   const esCheque = metodo?.tipo === "cheque_echeq";
@@ -2062,7 +2118,7 @@ function RegistrarPago({
       <div className="mod">
         <div className="mod-head">
           <h2>Registrar pago</h2>
-          <button type="button" className="mod-x" onClick={onCerrar}>
+          <button type="button" className="mod-x" onClick={pedirCierre}>
             ×
           </button>
         </div>
@@ -2333,7 +2389,7 @@ function RegistrarPago({
           {error ? <div className="egr-error mod-suelto">{error}</div> : null}
         </div>
         <div className="mod-foot">
-          <button type="button" className="btn" onClick={onCerrar}>
+          <button type="button" className="btn" onClick={pedirCierre}>
             Cancelar
           </button>
           <button
@@ -2365,6 +2421,22 @@ function RegistrarPago({
           </button>
         </div>
       </div>
+
+      <ConfirmacionSalida
+        open={confirmandoSalida}
+        cambios={1}
+        donde="este pago"
+        guardando={guardando}
+        onGuardarYSalir={async () => {
+          setConfirmandoSalida(false);
+          await guardar();
+        }}
+        onDescartarYSalir={() => {
+          setConfirmandoSalida(false);
+          onCerrar();
+        }}
+        onSeguirEditando={() => setConfirmandoSalida(false)}
+      />
     </div>
   );
 }

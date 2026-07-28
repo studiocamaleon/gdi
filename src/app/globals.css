@@ -6144,7 +6144,7 @@ body {
     padding: 0 12px;
     border: 1px solid var(--border);
     border-radius: 8px;
-    background: var(--surface-1);
+    background: var(--surface);
   }
 
   .ccosto-buscador svg {
@@ -6177,7 +6177,7 @@ body {
     padding: 8px 10px;
     border: 1px solid var(--border);
     border-radius: 8px;
-    background: var(--surface-1);
+    background: var(--surface);
     color: var(--text);
     font-size: 13px;
   }
@@ -6241,7 +6241,7 @@ body {
     flex: 0 0 auto;
     border: 1px solid var(--border);
     border-radius: 10px;
-    background: var(--surface-1);
+    background: var(--surface);
     overflow: hidden;
   }
 
@@ -6306,7 +6306,7 @@ body {
     padding: 8px 10px;
     border: 1px solid var(--border);
     border-radius: 7px;
-    background: var(--surface-1);
+    background: var(--surface);
     color: var(--text);
     font-size: 13px;
   }
@@ -6338,7 +6338,7 @@ body {
     padding-right: 8px;
     border: 1px solid var(--border);
     border-radius: 7px;
-    background: var(--surface-1);
+    background: var(--surface);
   }
 
   .ccosto-seccion .ccosto-dedicacion-campo:focus-within {
@@ -6459,7 +6459,7 @@ body {
     padding: 9px 10px;
     border: 1px solid var(--border);
     border-radius: 7px;
-    background: var(--surface-1);
+    background: var(--surface);
     color: var(--text);
     font-size: 13px;
   }
@@ -6593,7 +6593,7 @@ body {
     padding: 0 12px;
     border: 1px solid var(--border);
     border-radius: 8px;
-    background: var(--surface-1);
+    background: var(--surface);
   }
 
   .gfijo-buscador svg {
@@ -6627,7 +6627,7 @@ body {
     padding: 9px 14px;
     border: 1px solid var(--border);
     border-radius: 8px;
-    background: var(--surface-1);
+    background: var(--surface);
     color: var(--text);
     font-size: 13px;
     font-weight: 500;
@@ -6677,7 +6677,7 @@ body {
     padding: 8px 10px;
     border: 1px solid var(--border);
     border-radius: 7px;
-    background: var(--surface-1);
+    background: var(--surface);
     color: var(--text);
     font-size: 13px;
   }
@@ -6753,7 +6753,7 @@ body {
     margin-top: 12px;
     border: 1px solid var(--border);
     border-radius: 10px;
-    background: var(--surface-1);
+    background: var(--surface);
     font-size: 13px;
     color: var(--text-muted);
   }
@@ -6808,7 +6808,7 @@ body {
     flex: 0 0 auto;
     border: 1px solid var(--border);
     border-radius: 10px;
-    background: var(--surface-1);
+    background: var(--surface);
     overflow: hidden;
   }
 
@@ -6920,6 +6920,914 @@ body {
     gap: 8px;
     padding: 14px 24px;
     border-top: 1px solid var(--border);
+  }
+
+  /* ── Maquinaria (estilo Holdprint) ──────────────────────────────────────
+     Prefijo .maq- en TODA clase, hijas incluidas: en esta hoja `.side` es el
+     sidebar y `.main` la columna principal. Mismo patrón toolbar+tabla que
+     Gastos fijos (.gfijo-). */
+
+  .maq-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+
+  .maq-buscador {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 260px;
+    max-width: 420px;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+  }
+
+  .maq-buscador svg {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 auto;
+    color: var(--text-muted);
+  }
+
+  .maq-buscador input {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 9px 0;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    font-size: 13px;
+    outline: none;
+  }
+
+  .maq-acciones {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .maq-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .maq-btn svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .maq-btn.activo {
+    border-color: #111114;
+  }
+
+  .maq-btn-primario {
+    border-color: #111114;
+    background: #111114;
+    color: #fff;
+  }
+
+  .maq-filtros {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface-2);
+  }
+
+  .maq-filtros .maq-filtros-grupo {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .maq-filtros .maq-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    color: var(--text-muted);
+  }
+
+  .maq-filtros .maq-chip select {
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 13px;
+  }
+
+  .maq-filtros .maq-cerrar-filtros {
+    display: inline-flex;
+    padding: 4px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+
+  .maq-filtros .maq-cerrar-filtros svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  /* La fila entera navega al detalle (hoy: abre el editor). */
+  .maq-tabla tbody tr {
+    cursor: pointer;
+  }
+
+  .maq-tabla .maq-vacio {
+    padding: 40px 16px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+    cursor: default;
+  }
+
+  .maq-tabla .maq-vacio div {
+    margin-bottom: 4px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .maq-tabla .maq-vacio button {
+    border: 0;
+    background: transparent;
+    color: #d9642a;
+    font-size: 13px;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+
+  /* Una máquina desactivada sigue en la lista —sus tarifas y su histórico
+     cuentan— pero no compite visualmente con las vigentes. */
+  .maq-tabla tbody tr.maq-inactiva td {
+    opacity: 0.5;
+  }
+
+  .maq-tabla td.maq-tipo {
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-muted);
+  }
+
+  .maq-tabla .maq-punto {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-right: 6px;
+    border-radius: 50%;
+    vertical-align: middle;
+  }
+
+  /* ── Ficha por máquina (tabs estilo Holdprint) ──
+     Tres franjas: título+tabs fijos arriba, cuerpo con scroll propio, pie
+     fijo abajo. El pie NO flota sobre el contenido: el área que scrollea
+     termina justo arriba de él. */
+
+  .maq-ficha {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .maq-ficha .maq-ficha-top {
+    flex: 0 0 auto;
+    padding: 28px 32px 0;
+  }
+
+  .maq-ficha .maq-migas {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 2px;
+    font-size: 12.5px;
+    color: var(--text-muted);
+  }
+
+  .maq-ficha .maq-migas a {
+    color: var(--text-muted);
+    text-decoration: none;
+  }
+
+  .maq-ficha .maq-migas a:hover {
+    color: var(--text);
+    text-decoration: underline;
+  }
+
+  .maq-ficha .maq-migas .sep {
+    color: var(--border);
+  }
+
+  .maq-ficha-tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .maq-ficha-tabs .maq-ficha-tab {
+    padding: 10px 14px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  .maq-ficha-tabs .maq-ficha-tab.activo {
+    color: var(--text);
+    border-bottom-color: #111114;
+  }
+
+  /* El único que scrollea. */
+  .maq-ficha .maq-ficha-cuerpo {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 16px 32px 28px;
+  }
+
+  .maq-ficha-pie {
+    flex: 0 0 auto;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 14px 32px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .maq-historial {
+    padding: 20px 22px;
+  }
+
+  .maq-historial dl {
+    margin: 0;
+  }
+
+  .maq-historial .fila {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--hairline, var(--border));
+    font-size: 13px;
+  }
+
+  .maq-historial .fila:last-of-type {
+    border-bottom: 0;
+  }
+
+  .maq-historial dt {
+    color: var(--text-muted);
+  }
+
+  .maq-historial dd {
+    margin: 0;
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .maq-historial .nota {
+    margin: 14px 0 0;
+    font-size: 12px;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
+  /* ── Alta de máquina (modal estilo Holdprint) ── */
+
+  .maq-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(20, 20, 26, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    opacity: 0;
+    pointer-events: none;
+    transition: 0.18s;
+  }
+
+  .maq-backdrop.show {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .maq-modal {
+    display: flex;
+    flex-direction: column;
+    width: min(480px, 94vw);
+    max-height: min(640px, 90vh);
+    background: var(--surface);
+    border-radius: 12px;
+    box-shadow: var(--shadow-pop, 0 18px 50px rgba(20, 20, 26, 0.25));
+  }
+
+  .maq-modal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 18px 22px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .maq-modal-head h2 {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 600;
+  }
+
+  .maq-modal-head .maq-modal-cerrar {
+    display: inline-flex;
+    padding: 4px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+
+  .maq-modal-head .maq-modal-cerrar svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .maq-modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 18px 22px;
+  }
+
+  .maq-alta-campo {
+    margin-bottom: 16px;
+  }
+
+  .maq-alta-campo:last-child {
+    margin-bottom: 0;
+  }
+
+  .maq-alta-campo > label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .maq-alta-campo > input {
+    width: 100%;
+    padding: 9px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 13px;
+  }
+
+  .maq-alta-buscador {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+  }
+
+  .maq-alta-buscador svg {
+    width: 15px;
+    height: 15px;
+    flex: 0 0 auto;
+    color: var(--text-muted);
+  }
+
+  .maq-alta-buscador input {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 8px 0;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    font-size: 13px;
+    outline: none;
+  }
+
+  .maq-alta-lista {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    max-height: 260px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+
+  .maq-alta-lista li + li {
+    border-top: 1px solid var(--hairline, var(--border));
+  }
+
+  .maq-alta-lista li.vacio {
+    padding: 16px 14px;
+    font-size: 12.5px;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
+  .maq-alta-lista button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    padding: 11px 14px;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .maq-alta-lista button:hover {
+    background: var(--surface-2);
+  }
+
+  .maq-alta-lista button .tilde {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 auto;
+    color: var(--border);
+  }
+
+  .maq-alta-lista button.activo .tilde {
+    color: #111114;
+  }
+
+  .maq-modal-foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 14px 22px;
+    border-top: 1px solid var(--border);
+  }
+
+  .maq-modal-foot .maq-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  /* ── Perfiles operativos como tabla (estilo Holdprint) ── */
+
+  .maq-perfiles .maq-perfiles-vacio {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
+  .maq-perfiles .maq-perfiles-scroll {
+    overflow-x: auto;
+  }
+
+  .maq-perfiles-tabla {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .maq-perfiles-tabla th {
+    padding: 8px 10px 8px 0;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  /* Columnas numéricas angostas: cada una mide lo que mide su label
+     (width 1% + nowrap = el encabezado define el ancho, en una línea).
+     El resto se lo ganan Nombre, Colores y lo que venga junto a Tinta. */
+  .maq-perfiles-tabla th.num,
+  .maq-perfiles-tabla td.num {
+    width: 1%;
+    white-space: nowrap;
+  }
+
+  .maq-perfiles-tabla td.num input {
+    min-width: 64px;
+  }
+
+  .maq-perfiles-tabla th .unidad {
+    font-weight: 400;
+    color: var(--text-muted);
+  }
+
+  .maq-perfiles-tabla th .req {
+    color: #dc2626;
+  }
+
+  .maq-perfiles-tabla td {
+    padding: 5px 10px 5px 0;
+    vertical-align: middle;
+  }
+
+  .maq-perfiles-tabla td.na {
+    color: var(--text-muted);
+    text-align: center;
+  }
+
+  /* Los inputs de la celda van limpios: la unidad vive en el encabezado. */
+  .maq-perfiles-tabla td input[type="number"],
+  .maq-perfiles-tabla td input[type="text"],
+  .maq-perfiles-tabla td select {
+    width: 100%;
+    min-width: 84px;
+  }
+
+  .maq-perfiles-tabla td select {
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 13px;
+  }
+
+  /* Botón, no etiqueta: fondo propio para que se lea como clickeable. El
+     punto distingue "ya tiene tintas" de "todavía no", y el número exacto
+     vive en el title. */
+  .maq-perfiles-tinta-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 13px;
+    border: 1px solid var(--border-strong);
+    border-radius: 7px;
+    background: var(--surface-2);
+    color: var(--text);
+    font-size: 12.5px;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+  }
+
+  .maq-perfiles-tinta-btn:hover {
+    border-color: #111114;
+    background: #f1efec;
+  }
+
+  .maq-perfiles-tinta-btn .punto {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--signal);
+  }
+
+  .maq-perfiles-tinta-btn.ok .punto {
+    background: #16a34a;
+  }
+
+  .maq-perfiles-acciones {
+    display: inline-flex;
+    gap: 2px;
+  }
+
+  .maq-perfiles-acciones button {
+    display: inline-flex;
+    padding: 5px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .maq-perfiles-acciones button svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .maq-perfiles-acciones .dup {
+    color: var(--text-muted);
+  }
+
+  .maq-perfiles-acciones .del {
+    color: #dc2626;
+  }
+
+  .maq-perfiles-agregar {
+    margin-top: 10px;
+  }
+
+  /* ── Modal "Configurar tintas" ── */
+
+  .maq-modal.maq-modal-ancho {
+    width: min(720px, 94vw);
+  }
+
+  .maq-modal-head .maq-modal-sub {
+    margin-top: 2px;
+    font-size: 12.5px;
+    color: var(--text-muted);
+  }
+
+  .maq-tintas-vacio,
+  .maq-tintas-cargando {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
+  .maq-tintas-tabla {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .maq-tintas-tabla th {
+    padding: 6px 10px 6px 0;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+  }
+
+  .maq-tintas-tabla td {
+    padding: 5px 10px 5px 0;
+    vertical-align: middle;
+  }
+
+  .maq-tintas-tabla td input,
+  .maq-tintas-tabla td select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 13px;
+  }
+
+  .maq-tintas-tabla td input:disabled {
+    opacity: 0.5;
+  }
+
+  .maq-tintas-tabla td:nth-child(2) {
+    width: 130px;
+  }
+
+  .maq-tintas-color {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .maq-tintas-color .sw {
+    width: 14px;
+    height: 14px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+
+  .maq-tintas-quitar {
+    display: inline-flex;
+    padding: 5px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #dc2626;
+    cursor: pointer;
+  }
+
+  .maq-tintas-quitar:disabled {
+    color: var(--text-muted);
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  .maq-tintas-quitar svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .maq-tintas-nota {
+    margin: 12px 0 0;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  /* ── Modos de color (pills compactas de una línea) ── */
+
+  .maq-colores {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .maq-color-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    cursor: pointer;
+    transition: border-color 0.12s;
+  }
+
+  .maq-color-pill:hover {
+    border-color: var(--text-muted);
+  }
+
+  .maq-color-pill.activo {
+    border-color: #111114;
+    background: var(--surface-2);
+    box-shadow: inset 0 0 0 1px #111114;
+  }
+
+  .maq-color-pila {
+    display: inline-flex;
+  }
+
+  /* Fichas apiladas: cada punto pisa un poco al anterior; el aro del color
+     del fondo los separa, y el borde tenue define a los claros (W, barniz). */
+  .maq-color-punto {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 1px solid rgba(20, 20, 26, 0.18);
+    box-shadow: 0 0 0 2px var(--surface);
+  }
+
+  .maq-color-punto + .maq-color-punto {
+    margin-left: -5px;
+  }
+
+  .maq-color-etiqueta {
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--text);
+    white-space: nowrap;
+  }
+
+  /* Dentro de la tabla de perfiles las pills van en versión chica: la
+     celda es angosta y compiten con el resto de la fila. */
+  .maq-perfiles-tabla .maq-colores {
+    gap: 5px;
+    flex-wrap: nowrap;
+  }
+
+  .maq-perfiles-tabla .maq-color-pill {
+    gap: 5px;
+    padding: 5px 9px;
+  }
+
+  .maq-perfiles-tabla .maq-color-punto {
+    width: 11px;
+    height: 11px;
+    box-shadow: 0 0 0 1.5px var(--surface);
+  }
+
+  .maq-perfiles-tabla .maq-color-punto + .maq-color-punto {
+    margin-left: -4px;
+  }
+
+  .maq-perfiles-tabla .maq-color-etiqueta {
+    font-size: 12px;
+  }
+
+  /* ── Desgaste y repuestos: misma tabla que Perfiles ── */
+
+  /* Pocas columnas y una tabla al 100%: sin esto el sobrante se lo repartían
+     el nombre (700px de input) y el Tipo. Cada columna mide lo suyo y el
+     sobrante va a una columna de relleno, que deja la X pegada a la derecha
+     como en Perfiles. */
+  /* Anchos fijos: son pocas columnas y con reparto automático el nombre se
+     estiraba 700 px. La columna de relleno se queda con el sobrante, así la
+     X queda pegada a la derecha como en Perfiles. */
+  .maq-desgaste .maq-perfiles-tabla {
+    table-layout: fixed;
+  }
+
+  .maq-desgaste .maq-perfiles-tabla th.nombre {
+    width: 250px;
+  }
+
+  .maq-desgaste .maq-perfiles-tabla th.tipo {
+    width: 265px;
+  }
+
+  .maq-desgaste .maq-perfiles-tabla th.precio {
+    width: 155px;
+  }
+
+  .maq-desgaste .maq-perfiles-tabla th.rinde {
+    width: 135px;
+  }
+
+  .maq-desgaste .maq-perfiles-tabla th.costo {
+    width: 125px;
+  }
+
+  .maq-desgaste .maq-perfiles-tabla th.color {
+    width: 105px;
+  }
+
+  .maq-desgaste .maq-perfiles-tabla th.acciones {
+    width: 40px;
+  }
+
+  .maq-desgaste .maq-perfiles-tabla td.color {
+    white-space: nowrap;
+  }
+
+  /* Cifra calculada, no editable: sin caja, pero alineada con la columna. */
+  .maq-desgaste-costo {
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+    white-space: nowrap;
+    padding-left: 2px;
+  }
+
+  .maq-desgaste-total {
+    margin: 12px 0 0;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .maq-desgaste-total strong {
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Segmented Sí|No para una celda de tabla: el de los formularios ocupa
+     demasiado alto al lado de un input. */
+  .maq-seg.maq-seg-mini button {
+    padding: 5px 11px;
+    font-size: 12px;
+  }
+
+  /* ── Segmented chico Sí | No para campos booleanos ── */
+
+  .maq-seg {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+
+  .maq-seg button {
+    padding: 6px 16px;
+    border: 0;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 12.5px;
+    cursor: pointer;
+  }
+
+  .maq-seg button + button {
+    border-left: 1px solid var(--border);
+  }
+
+  .maq-seg button.activo {
+    background: #111114;
+    color: #fff;
+    font-weight: 500;
   }
 
   /* La fila que dice si el prorrateo cuadra: lo que sale de la estructura
@@ -37165,6 +38073,20 @@ body:has(.t-app) {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

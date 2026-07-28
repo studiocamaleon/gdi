@@ -29,12 +29,10 @@ const RULES: Record<PlantillaMaquinariaDto, MachineTemplateRule> = {
   // paramsTecnicos: margenesNoImprimiblesMm{sup,inf,izq,der}, soporteDobleFaz,
   //   coloresSoportados[].
   [PlantillaMaquinariaDto.impresora_laser]: {
-    requiredMachineKeys: [
-      'anchoUtil',
-      'largoUtil',
-      'gramajeMaxGr',
-      'margenesNoImprimiblesMm',
-    ],
+    // Sin largoUtil ni gramajeMaxGr (2026-07-28): se retiraron de la
+    // plantilla, así que exigirlos dejaba a la máquina "incompleta" para
+    // siempre.
+    requiredMachineKeys: ['anchoUtil', 'margenesNoImprimiblesMm'],
   },
 
   // ─── §6 IMPRESORA_GRAN_FORMATO_POR_AREA ─────────────────────────
@@ -49,7 +47,9 @@ const RULES: Record<PlantillaMaquinariaDto, MachineTemplateRule> = {
   // ─── §7 GUILLOTINA ──────────────────────────────────────────────
   // anchoUtil = largo cuchilla. paramsTecnicos: tiempoPorCorteSeg.
   [PlantillaMaquinariaDto.guillotina]: {
-    requiredMachineKeys: ['anchoUtil', 'altoUtil', 'tiempoPorCorteSeg'],
+    // tiempoPorCorteSeg se mudó al perfil (2026-07-28): puede variar con la
+    // dureza del papel, igual que los pliegos por tanda.
+    requiredMachineKeys: ['anchoUtil', 'altoUtil'],
   },
 
   // ─── §8 PLOTTER_DE_CORTE ────────────────────────────────────────

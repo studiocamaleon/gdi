@@ -844,7 +844,9 @@ export class MaquinariaService {
     return {
       tenantId,
       maquinaId,
-      materiaPrimaVarianteId: payload.materiaPrimaVarianteId,
+      materiaPrimaVarianteId: payload.materiaPrimaVarianteId ?? null,
+      precioUnitario: this.toDecimal(payload.precioUnitario),
+      soloColor: payload.soloColor ?? false,
       nombre: payload.nombre.trim(),
       tipo: this.toPrismaEnum<TipoComponenteDesgasteMaquina>(payload.tipo),
       vidaUtilEstimada: this.toDecimal(payload.vidaUtilEstimada),
@@ -918,6 +920,16 @@ export class MaquinariaService {
       payload.plantilla,
     );
     const hasConsumibleValido = this.hasRequiredPrinterConsumibles(payload);
+    // Gran formato por área no registra piezas de desgaste (decisión
+    // 2026-07-28): la plantilla ya no trae la sección y exigirlas dejaría
+    // a esas máquinas "incompletas" para siempre.
+    // Las plantillas que ya no tienen la sección de desgaste no pueden
+    // exigirlo: quedarían "incompletas" sin dónde cargarlo (2026-07-28).
+    const SIN_DESGASTE = new Set<PlantillaMaquinariaDto>([
+      PlantillaMaquinariaDto.impresora_gran_formato_por_area,
+      PlantillaMaquinariaDto.guillotina,
+    ]);
+    const requireDesgaste = !SIN_DESGASTE.has(payload.plantilla);
     const hasDesgasteValido = payload.componentesDesgaste.some(
       (componente) =>
         Boolean(componente.nombre?.trim()) &&
@@ -929,7 +941,7 @@ export class MaquinariaService {
     return (
       hasPerfilValido &&
       (!requireConsumibles || hasConsumibleValido) &&
-      hasDesgasteValido
+      (!requireDesgaste || hasDesgasteValido)
     );
   }
 
@@ -1140,12 +1152,14 @@ export class MaquinariaService {
     }
 
     const varianteIds = Array.from(
-      new Set([
-        ...payload.consumibles.map((item) => item.materiaPrimaVarianteId),
-        ...payload.componentesDesgaste.map(
-          (item) => item.materiaPrimaVarianteId,
-        ),
-      ]),
+      new Set(
+        [
+          ...payload.consumibles.map((item) => item.materiaPrimaVarianteId),
+          ...payload.componentesDesgaste.map(
+            (item) => item.materiaPrimaVarianteId,
+          ),
+        ].filter((id): id is string => Boolean(id)),
+      ),
     );
 
     const variantesMateriaPrima =
@@ -1246,6 +1260,19 @@ export class MaquinariaService {
 
     for (const componente of payload.componentesDesgaste) {
       const componenteName = componente.nombre.trim() || 'sin nombre';
+
+      // El repuesto puede declararse sólo con su precio, sin darlo de alta en
+      // inventario. Lo que no puede es no tener ninguno de los dos: sin precio
+      // el motor no sabría cuánto vale el click.
+      if (!componente.materiaPrimaVarianteId) {
+        if (!Number.isFinite(Number(componente.precioUnitario))) {
+          throw new BadRequestException(
+            `El componente ${componenteName} necesita un precio, o un repuesto de inventario que lo tenga.`,
+          );
+        }
+        continue;
+      }
+
       const variante = varianteById.get(componente.materiaPrimaVarianteId);
       if (!variante) {
         throw new BadRequestException(
@@ -1474,14 +1501,18 @@ export class MaquinariaService {
       })),
       componentesDesgaste: maquina.componentesDesgaste.map((componente) => ({
         id: componente.id,
-        materiaPrimaVarianteId: componente.materiaPrimaVarianteId,
-        materiaPrimaVarianteSku: componente.materiaPrimaVariante.sku,
+        // Sin variante cuando el repuesto se cargó sólo con su precio.
+        materiaPrimaVarianteId: componente.materiaPrimaVarianteId ?? '',
+        materiaPrimaVarianteSku: componente.materiaPrimaVariante?.sku ?? '',
         materiaPrimaVarianteNombre:
-          componente.materiaPrimaVariante.nombreVariante ?? '',
-        materiaPrimaNombre: componente.materiaPrimaVariante.materiaPrima.nombre,
+          componente.materiaPrimaVariante?.nombreVariante ?? '',
+        materiaPrimaNombre:
+          componente.materiaPrimaVariante?.materiaPrima.nombre ?? '',
         materiaPrimaPrecioReferencia: this.toNumber(
-          componente.materiaPrimaVariante.precioReferencia,
+          componente.materiaPrimaVariante?.precioReferencia,
         ),
+        precioUnitario: this.toNumber(componente.precioUnitario),
+        soloColor: componente.soloColor,
         nombre: componente.nombre,
         tipo: this.toApiEnum(
           componente.tipo,

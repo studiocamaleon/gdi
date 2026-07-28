@@ -53,8 +53,9 @@ export class RentabilidadService {
           AND ot."fechaEmision" >= ${desde}
           AND ot."fechaEmision" < ${hastaExcl}
       `,
-      // Costos VARIABLES: líneas MATERIAL + CONSUMIBLE_MAQUINA de la
-      // trazabilidad (papel + tintas) — lo que escala con cada trabajo.
+      // Costos VARIABLES: líneas MATERIAL + CONSUMIBLE_MAQUINA +
+      // DESGASTE_MAQUINA de la trazabilidad (papel + tintas + costo por
+      // click) — lo que escala con cada trabajo.
       this.prisma.$queryRaw<Array<{ variables: number }>>`
         SELECT COALESCE(SUM((mat->>'costoTotal')::numeric), 0)::float8 AS variables
         FROM "OrdenTrabajoItem" oti
@@ -66,7 +67,7 @@ export class RentabilidadService {
           AND ot.estado NOT IN ('borrador', 'cancelada')
           AND ot."fechaEmision" >= ${desde}
           AND ot."fechaEmision" < ${hastaExcl}
-          AND mat->>'tipoLineaCosto' IN ('MATERIAL', 'CONSUMIBLE_MAQUINA')
+          AND mat->>'tipoLineaCosto' IN ('MATERIAL', 'CONSUMIBLE_MAQUINA', 'DESGASTE_MAQUINA')
       `,
       // Costos FIJOS de estructura (gastos fijos recurrentes con vigencia).
       // Fuente única del pool del punto de equilibrio; se prorratean por rango

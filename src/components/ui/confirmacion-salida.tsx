@@ -24,6 +24,8 @@ interface ConfirmacionSalidaProps {
   open: boolean;
   /** Cantidad de cambios sin guardar (para el copy). */
   cambios: number;
+  /** Dónde están esos cambios. Por defecto "esta orden". */
+  donde?: string;
   /** True mientras corre el guardado en lote. */
   guardando?: boolean;
   onGuardarYSalir: () => void | Promise<void>;
@@ -34,6 +36,7 @@ interface ConfirmacionSalidaProps {
 export function ConfirmacionSalida({
   open,
   cambios,
+  donde = "esta orden",
   guardando = false,
   onGuardarYSalir,
   onDescartarYSalir,
@@ -47,14 +50,17 @@ export function ConfirmacionSalida({
         if (!next && !guardando) onSeguirEditando();
       }}
     >
-      <AlertDialogContent>
+      {/* Por encima de los modales propios (.mod-bg va en z-index 60): el
+          aviso de que estás por perder lo cargado tiene que verse SIEMPRE
+          sobre aquello de lo que estás saliendo. */}
+      <AlertDialogContent className="z-[80]" overlayClassName="z-[80]">
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
             <TriangleAlertIcon className="size-4 text-amber-600" />
             Cambios sin guardar
           </AlertDialogTitle>
           <AlertDialogDescription>
-            Tenés {cambios} cambio{plural} sin guardar en esta orden. Si salís
+            Tenés {cambios} cambio{plural} sin guardar en {donde}. Si salís
             sin guardar, se descarta{plural ? "n" : ""}.
           </AlertDialogDescription>
         </AlertDialogHeader>

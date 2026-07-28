@@ -254,8 +254,10 @@ function buildLaserSections(): MaquinariaTemplateSection[] {
       description: "Medidas máximas de pliego soportadas por la máquina.",
       fields: [
         field({ key: "anchoUtil", label: "Ancho útil máximo", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Ancho máx de pliego (ej. 320mm)." }),
-        field({ key: "largoUtil", label: "Largo útil máximo", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Largo máx de pliego (ej. 1200mm)." }),
-        field({ key: "gramajeMaxGr", label: "Gramaje máximo", scope: "maquina", kind: "number", unit: "g_m2", required: true, description: "Gramaje máx de papel (ej. 400gr)." }),
+        // Sin largoUtil ni gramajeMaxGr (decisión 2026-07-28): el largo del
+        // pliego lo pone el material comprado, no la máquina, y el gramaje
+        // máximo no lo miraba nadie (la precondición que lo usaba leía otro
+        // lugar y nunca disparaba).
       ],
     }),
     section({
@@ -271,21 +273,22 @@ function buildLaserSections(): MaquinariaTemplateSection[] {
     section({
       id: "perfiles_operativos",
       title: "Perfiles operativos",
-      description: "Cada perfil describe una combinación cara/color/formato/gramaje con su productividad.",
+      description: "Cada perfil describe una combinación cara/color con su productividad.",
       fields: [
         field({ key: "nombre", label: "Nombre del perfil", scope: "perfil_operativo", kind: "text", required: true, description: "Ej. Papel grueso doble faz." }),
         field({ key: "productivityValue", label: "Productividad", scope: "perfil_operativo", kind: "number", unit: "ppm", required: true, description: "Pliegos por minuto." }),
         field({ key: "setupMin", label: "Setup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de preparación inicial." }),
         field({ key: "cleanupMin", label: "Cleanup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de limpieza al terminar." }),
         field({ key: "feedReloadMin", label: "Recarga papel", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de recarga entre tandas." }),
+        // Escalón, igual que en guillotina: el papel más grueso baja la
+        // velocidad de la máquina y ese perfil es el que hay que elegir.
+        field({ key: "gramajeMaxGr", label: "Gramaje (hasta)", scope: "perfil_operativo", kind: "number", unit: "g_m2", required: true, description: "Se usa este perfil para papeles de hasta este gramaje." }),
         field({ key: "caras", label: "Caras", scope: "perfil_operativo", kind: "select", required: true, options: carasOptions, description: "Discriminante: simple o doble faz." }),
         field({ key: "colores", label: "Modos de color admitidos", scope: "perfil_operativo", kind: "multiselect", options: coloresImpresorLaserOptions, description: "Modos comerciales que puede imprimir este perfil." }),
-        field({ key: "gramajeMinGr", label: "Gramaje mínimo", scope: "perfil_operativo", kind: "number", unit: "g_m2", description: "Gramaje mínimo del rango." }),
-        field({ key: "gramajeMaxGr", label: "Gramaje máximo", scope: "perfil_operativo", kind: "number", unit: "g_m2", description: "Gramaje máximo del rango." }),
       ],
     }),
     section({ id: "consumibles", title: "Consumibles", description: "Tóner declarado por máquina.", fields: genericConsumableFields }),
-    section({ id: "desgaste_repuestos", title: "Desgaste y repuestos", description: "Fusor, drum, transferencia, etc.", fields: genericWearFields }),
+    section({ id: "desgaste_repuestos", title: "Desgaste y repuestos", description: "Las piezas que se gastan con el uso: cada click de la máquina cuesta lo que gastó de cada una.", fields: genericWearFields }),
   ];
 }
 
@@ -297,16 +300,18 @@ function buildGranFormatoSections(): MaquinariaTemplateSection[] {
       title: "Parámetros técnicos",
       description: "Tecnología y geometría definen las variantes de esta plantilla unificada.",
       fields: [
-        field({ key: "tecnologia", label: "Tecnología", scope: "maquina", kind: "select", required: true, options: tecnologiaGranFormatoOptions, description: "Tipo de impresión (LATEX, UV, etc.)." }),
-        field({ key: "geometria", label: "Geometría", scope: "maquina", kind: "select", required: true, options: geometriaGranFormatoOptions, description: "Rollo o mesa extensora." }),
-        field({ key: "anchoMinRolloMm", label: "Ancho mínimo de rollo", scope: "maquina", kind: "number", unit: "mm", description: "Se usa cuando la máquina admite trabajos en rollo." }),
-        field({ key: "anchoMaxRolloMm", label: "Ancho máximo de rollo", scope: "maquina", kind: "number", unit: "mm", description: "Se usa cuando la máquina admite trabajos en rollo." }),
+        field({ key: "tecnologia", label: "Tecnología", scope: "maquina", kind: "select", required: true, options: tecnologiaGranFormatoOptions }),
+        field({ key: "geometria", label: "Geometría", scope: "maquina", kind: "select", required: true, options: geometriaGranFormatoOptions }),
+        // Sin anchoMinRolloMm ni alturaMaxCabezalMm (decisión 2026-07-28):
+        // nadie los leía —ni el motor ni ninguna validación—; eran datos
+        // decorativos. Si algún día se valida compatibilidad material↔máquina,
+        // se reintroducen junto con esa validación.
+        field({ key: "anchoMaxRolloMm", label: "Ancho máximo de rollo", scope: "maquina", kind: "number", unit: "mm" }),
         field({ key: "anchoMesaMm", label: "Ancho de mesa", scope: "maquina", kind: "number", unit: "mm", description: "Se usa cuando la geometría es Mesa extensora." }),
         field({ key: "largoMesaMm", label: "Largo de mesa", scope: "maquina", kind: "number", unit: "mm", description: "Se usa cuando la geometría es Mesa extensora." }),
-        field({ key: "alturaMaxCabezalMm", label: "Altura máxima del cabezal", scope: "maquina", kind: "number", unit: "mm", description: "Restricción para materiales rígidos en mesa extensora." }),
         field({ key: "soportaCorteIntegrado", label: "Soporta corte integrado", scope: "maquina", kind: "boolean", description: "Permite usar perfiles de corte en esta impresora para trabajos tipo plotter." }),
         field({ key: "margenesNoImprimiblesMm", label: "Márgenes no imprimibles", scope: "maquina", kind: "textarea", required: true, description: "Distancia que la máquina no puede imprimir en cada borde." }),
-        field({ key: "coloresSoportados", label: "Colores soportados", scope: "maquina", kind: "multiselect", options: coloresGranFormatoOptions, description: "Modos de color (CMYK, +blanco, +barniz)." }),
+        field({ key: "coloresSoportados", label: "Colores soportados", scope: "maquina", kind: "multiselect", options: coloresGranFormatoOptions }),
       ],
     }),
     section({
@@ -325,7 +330,9 @@ function buildGranFormatoSections(): MaquinariaTemplateSection[] {
       ],
     }),
     section({ id: "consumibles", title: "Consumibles", description: "Tinta CMYK, blanca, barniz por perfil.", fields: genericConsumableFields }),
-    section({ id: "desgaste_repuestos", title: "Desgaste y repuestos", description: "Cabezal y banda transportadora.", fields: genericWearFields }),
+    // Sin desgaste_repuestos: decisión 2026-07-28 — en gran formato por área
+    // no se registran piezas de desgaste (el costeo por desgaste está en
+    // standby y acá ni siquiera se va a cargar el dato).
   ];
 }
 
@@ -343,28 +350,23 @@ function buildGuillotinaSections(): MaquinariaTemplateSection[] {
       ],
     }),
     section({
-      id: "parametros_tecnicos",
-      title: "Parámetros técnicos",
-      description: "Tiempo por corte (constante en la máquina, casi no varía con material).",
-      fields: [
-        field({ key: "tiempoPorCorteSeg", label: "Tiempo por corte", scope: "maquina", kind: "number", unit: "seg", required: true, description: "Segundos por cada corte individual (ej. 8)." }),
-      ],
-    }),
-    section({
       id: "perfiles_operativos",
-      title: "Perfiles operativos por rango de material",
-      description: "Un perfil por rango de gramaje. La capacidad varía con el grosor.",
+      title: "Perfiles operativos",
+      description: "Cuanto más grueso el papel, menos pliegos entran en la pila.",
       fields: [
-        field({ key: "nombre", label: "Nombre del perfil", scope: "perfil_operativo", kind: "text", required: true, description: "Ej. Papel grueso 100-250gr." }),
+        field({ key: "nombre", label: "Nombre del perfil", scope: "perfil_operativo", kind: "text", required: true, description: "Ej. Papel grueso." }),
         field({ key: "setupMin", label: "Setup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de preparación inicial." }),
         field({ key: "cleanupMin", label: "Cleanup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de limpieza." }),
         field({ key: "feedReloadMin", label: "Tiempo entre tandas", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo para preparar la siguiente tanda." }),
-        field({ key: "gramajeMinGr", label: "Gramaje mínimo", scope: "perfil_operativo", kind: "number", unit: "g_m2", description: "Gramaje mínimo del rango." }),
-        field({ key: "gramajeMaxGr", label: "Gramaje máximo", scope: "perfil_operativo", kind: "number", unit: "g_m2", required: true, description: "Gramaje máximo del rango." }),
-        field({ key: "pliegosMaxPorTanda", label: "Pliegos máx por tanda", scope: "perfil_operativo", kind: "number", required: true, description: "Cantidad máx de pliegos que entran en una tanda (ej. 500)." }),
+        field({ key: "tiempoPorCorteSeg", label: "Tiempo por corte", scope: "perfil_operativo", kind: "number", unit: "seg", required: true, description: "Segundos por cada corte individual (ej. 8). Un papel más duro puede tardar más." }),
+        // Escalón, no rango: el perfil que gana es el del "hasta" más chico
+        // que todavía cubre el papel. Así no quedan huecos ni solapamientos.
+        field({ key: "gramajeMaxGr", label: "Gramaje (hasta)", scope: "perfil_operativo", kind: "number", unit: "g_m2", required: true, description: "Se usa este perfil para papeles de hasta este gramaje." }),
+        field({ key: "pliegosMaxPorTanda", label: "Pliegos por tanda", scope: "perfil_operativo", kind: "number", required: true, description: "Cuántos pliegos de ese grosor entran en una pila." }),
       ],
     }),
-    section({ id: "desgaste_repuestos", title: "Desgaste y repuestos", description: "Cuchilla y tabla de corte.", fields: genericWearFields }),
+    // Sin desgaste_repuestos: misma decisión que gran formato (2026-07-28),
+    // acá tampoco se va a cargar el dato.
   ];
 }
 
@@ -385,7 +387,8 @@ function buildPlotterCorteSections(): MaquinariaTemplateSection[] {
       title: "Parámetros técnicos",
       description: "Rangos de rollo y modos soportados.",
       fields: [
-        field({ key: "anchoMinRolloMm", label: "Ancho mínimo de rollo", scope: "maquina", kind: "number", unit: "mm", description: "Mínimo de rollo aceptado." }),
+        // Sin anchoMinRolloMm (decisión 2026-07-28): nadie lo leía, mismo caso
+        // que en gran formato.
         field({ key: "anchoMaxRolloMm", label: "Ancho máximo de rollo", scope: "maquina", kind: "number", unit: "mm", description: "Máximo de rollo aceptado." }),
         field({ key: "modosOperacionSoportados", label: "Modos soportados", scope: "maquina", kind: "multiselect", required: true, options: modoOperacionPlotterOptions, description: "Rollo y/o hojas." }),
       ],
@@ -425,7 +428,8 @@ function buildPlotterCadSections(): MaquinariaTemplateSection[] {
       title: "Parámetros técnicos",
       description: "Rangos de rollo, márgenes y colores soportados.",
       fields: [
-        field({ key: "anchoMinRolloMm", label: "Ancho mínimo de rollo", scope: "maquina", kind: "number", unit: "mm", description: "Mínimo aceptado." }),
+        // Sin anchoMinRolloMm (decisión 2026-07-28): nadie lo leía, mismo caso
+        // que en gran formato.
         field({ key: "anchoMaxRolloMm", label: "Ancho máximo de rollo", scope: "maquina", kind: "number", unit: "mm", description: "Máximo aceptado." }),
         field({ key: "margenesNoImprimiblesMm", label: "Márgenes no imprimibles", scope: "maquina", kind: "textarea", required: true, description: "Distancia que la máquina no puede imprimir en cada borde." }),
         field({ key: "coloresSoportados", label: "Colores soportados", scope: "maquina", kind: "multiselect", options: [option("CMYK", "CMYK")], description: "Solo CMYK típicamente." }),
@@ -720,8 +724,8 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
     help: {
       summary: "Una sola plantilla unifica las 7 viejas (LATEX, UV, DTF, etc.) usando discriminantes tecnologia + geometria.",
       tips: [
-        "Si geometria=ROLLO, completá anchoMinRolloMm y anchoMaxRolloMm.",
-        "Si geometria=MESA_EXTENSORA, completá anchoMesaMm/largoMesaMm/alturaMaxCabezalMm.",
+        "Si geometria=ROLLO, completá anchoMaxRolloMm.",
+        "Si geometria=MESA_EXTENSORA, completá anchoMesaMm/largoMesaMm.",
         "Las DTF necesitan un paso siguiente de Aplicación de transfer (otra máquina, plancha térmica).",
       ],
       examples: [
@@ -744,7 +748,7 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
     help: {
       summary: "Productividad NULL en perfiles — la guillotina usa fórmula tandas × cortes/tanda.",
       tips: [
-        "tiempoPorCorteSeg es constante en la máquina.",
+        "El tiempo por corte se declara en cada perfil: un papel más duro puede tardar más.",
         "Creá un perfil por rango de gramaje. Cada uno declara pliegosMaxPorTanda.",
       ],
       examples: ["Polar 92 ED para corte de pliegos impresos"],
