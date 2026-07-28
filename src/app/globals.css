@@ -7152,21 +7152,24 @@ body {
     border-bottom-color: #111114;
   }
 
-  /* Deja lugar para la botonera fija. */
   .maq-ficha .maq-ficha-cuerpo {
-    padding-bottom: 76px;
+    padding-bottom: 20px;
   }
 
+  /* Barra de acción pegada al fondo del scroll. Los márgenes negativos se
+     comen el padding de .content (28px 32px 40px) para que llegue de borde
+     a borde y nada asome por abajo ni a los costados. */
   .maq-ficha-pie {
     position: sticky;
     bottom: 0;
     display: flex;
     justify-content: flex-end;
     gap: 8px;
-    padding: 14px 0;
-    margin-top: 12px;
+    margin: 0 -32px -40px;
+    padding: 14px 32px;
     border-top: 1px solid var(--border);
-    background: var(--bg);
+    background: var(--surface);
+    box-shadow: 0 -10px 24px rgba(20, 20, 26, 0.06);
   }
 
   .maq-historial {
@@ -37637,6 +37640,7 @@ body:has(.t-app) {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
 
 
 
