@@ -200,11 +200,17 @@ export function PerfilesOperativosEditor({
                           <button
                             type="button"
                             className={`maq-perfiles-tinta-btn ${cantidadTintas > 0 ? "ok" : ""}`}
+                            title={
+                              cantidadTintas > 0
+                                ? `${cantidadTintas} tinta${cantidadTintas === 1 ? "" : "s"} vinculada${cantidadTintas === 1 ? "" : "s"}`
+                                : "Todavía sin tintas vinculadas"
+                            }
                             onClick={() => setTintasDeUiKey(perfil.uiKey)}
                           >
-                            {cantidadTintas > 0
-                              ? `${cantidadTintas} tinta${cantidadTintas === 1 ? "" : "s"}`
-                              : "Para configurar"}
+                            {/* El punto dice si ya tiene tintas; el texto dice
+                                qué hace el botón. El número vive en el title. */}
+                            <span className="punto" />
+                            Configurar
                           </button>
                         )}
                       </td>
