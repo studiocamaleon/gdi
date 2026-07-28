@@ -7104,6 +7104,109 @@ body {
     vertical-align: middle;
   }
 
+  /* ── Ficha por máquina (tabs estilo Holdprint) ── */
+
+  .maq-ficha .maq-migas {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 2px;
+    font-size: 12.5px;
+    color: var(--text-muted);
+  }
+
+  .maq-ficha .maq-migas a {
+    color: var(--text-muted);
+    text-decoration: none;
+  }
+
+  .maq-ficha .maq-migas a:hover {
+    color: var(--text);
+    text-decoration: underline;
+  }
+
+  .maq-ficha .maq-migas .sep {
+    color: var(--border);
+  }
+
+  .maq-ficha-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .maq-ficha-tabs .maq-ficha-tab {
+    padding: 10px 14px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  .maq-ficha-tabs .maq-ficha-tab.activo {
+    color: var(--text);
+    border-bottom-color: #111114;
+  }
+
+  /* Deja lugar para la botonera fija. */
+  .maq-ficha .maq-ficha-cuerpo {
+    padding-bottom: 76px;
+  }
+
+  .maq-ficha-pie {
+    position: sticky;
+    bottom: 0;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 14px 0;
+    margin-top: 12px;
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+  }
+
+  .maq-historial {
+    padding: 20px 22px;
+  }
+
+  .maq-historial dl {
+    margin: 0;
+  }
+
+  .maq-historial .fila {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--hairline, var(--border));
+    font-size: 13px;
+  }
+
+  .maq-historial .fila:last-of-type {
+    border-bottom: 0;
+  }
+
+  .maq-historial dt {
+    color: var(--text-muted);
+  }
+
+  .maq-historial dd {
+    margin: 0;
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .maq-historial .nota {
+    margin: 14px 0 0;
+    font-size: 12px;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
   /* La fila que dice si el prorrateo cuadra: lo que sale de la estructura
      tiene que entrar entero a los productivos. */
   .ccosto-tabla tfoot .ccosto-cuadre td {

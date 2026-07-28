@@ -59,7 +59,6 @@ type MaquinariaPanelProps = {
   initialMaquinas: Maquina[];
   plantas: Planta[];
   centrosCosto: CentroCosto[];
-  initialEditingId?: string;
   initialCreate?: boolean;
 };
 
@@ -69,7 +68,6 @@ export function MaquinariaPanel({
   initialMaquinas,
   plantas,
   centrosCosto,
-  initialEditingId,
   initialCreate = false,
 }: MaquinariaPanelProps) {
   const router = useRouter();
@@ -87,7 +85,7 @@ export function MaquinariaPanel({
     defaultPlantaId: plantas[0]?.id ?? "",
     activo: isSheetOpen,
   });
-  const { initNueva, initDesdeMaquina } = editor;
+  const { initNueva } = editor;
 
   React.useEffect(() => {
     setMaquinas(initialMaquinas);
@@ -123,12 +121,6 @@ export function MaquinariaPanel({
     setIsSheetOpen(true);
   }, [initNueva]);
 
-  const openEditar = React.useCallback((maquina: Maquina) => {
-    setEditingId(maquina.id);
-    initDesdeMaquina(maquina);
-    setIsSheetOpen(true);
-  }, [initDesdeMaquina]);
-
   const updateMaquinariaUrl = React.useCallback((path: string) => {
     window.history.pushState(null, "", path);
   }, []);
@@ -136,22 +128,17 @@ export function MaquinariaPanel({
   React.useEffect(() => {
     if (initialCreate) {
       openNueva();
-      return;
     }
-    if (initialEditingId) {
-      const maquina = maquinas.find((item) => item.id === initialEditingId);
-      if (maquina) openEditar(maquina);
-    }
-  }, [initialCreate, initialEditingId, maquinas, openEditar, openNueva]);
+  }, [initialCreate, openNueva]);
 
   const handleNueva = () => {
     openNueva();
     updateMaquinariaUrl("/costos/maquinaria/nueva");
   };
 
+  // Fase C: editar es una página, no el sheet.
   const handleEditar = (maquina: Maquina) => {
-    openEditar(maquina);
-    updateMaquinariaUrl(`/costos/maquinaria/${maquina.id}`);
+    router.push(`/costos/maquinaria/${maquina.id}`);
   };
 
   const handleGuardar = async () => {

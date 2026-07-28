@@ -1,14 +1,15 @@
+import { notFound } from "next/navigation";
 import dynamicImport from "next/dynamic";
 import { Suspense } from "react";
 
 import { ModulePageSkeleton } from "@/components/dashboard/module-page-skeleton";
 import { getCentrosCosto, getPlantas } from "@/lib/costos-api";
-import { getMaquinas } from "@/lib/maquinaria-api";
+import { getMaquina } from "@/lib/maquinaria-api";
 
-const MaquinariaPanel = dynamicImport(
+const MaquinaFicha = dynamicImport(
   () =>
-    import("@/components/costos/maquinaria-panel").then(
-      (module) => module.MaquinariaPanel,
+    import("@/components/costos/maquina-ficha").then(
+      (module) => module.MaquinaFicha,
     ),
   {
     loading: () => <ModulePageSkeleton variant="workspace" />,
@@ -35,18 +36,19 @@ async function MaquinariaDetalleContent({
   params: Promise<{ maquinaId: string }>;
 }) {
   const { maquinaId } = await params;
-  const [maquinas, plantas, centrosCosto] = await Promise.all([
-    getMaquinas(),
+  const [maquina, plantas, centrosCosto] = await Promise.all([
+    getMaquina(maquinaId).catch(() => null),
     getPlantas(),
     getCentrosCosto(),
   ]);
 
+  if (!maquina) notFound();
+
   return (
-    <MaquinariaPanel
-      initialMaquinas={maquinas}
+    <MaquinaFicha
+      maquina={maquina}
       plantas={plantas}
       centrosCosto={centrosCosto}
-      initialEditingId={maquinaId}
     />
   );
 }

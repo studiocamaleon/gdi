@@ -44,17 +44,28 @@ import {
 export function useMaquinaEditor({
   defaultPlantaId,
   activo,
+  initialMaquina,
 }: {
   defaultPlantaId: string;
   /** Con el editor cerrado no se cargan materias primas (el sheet las pide al abrir). */
   activo: boolean;
+  /** La ficha edita una máquina existente desde el primer render (sin initDesdeMaquina). */
+  initialMaquina?: Maquina;
 }) {
   const [form, setForm] = React.useState<MaquinaPayload>(() =>
-    emptyMaquina(defaultPlantaId),
+    initialMaquina ? maquinaToPayload(initialMaquina) : emptyMaquina(defaultPlantaId),
   );
-  const [perfiles, setPerfiles] = React.useState<LocalPerfil[]>([]);
-  const [openSection, setOpenSection] = React.useState<string | null>(
-    "capacidades_fisicas",
+  const [perfiles, setPerfiles] = React.useState<LocalPerfil[]>(() => {
+    if (!initialMaquina) return [];
+    const payload = maquinaToPayload(initialMaquina);
+    return payload.perfilesOperativos.map((p, i) =>
+      normalizePerfilTypeForTemplate({ ...p, uiKey: `p-${i}-init` }, payload),
+    );
+  });
+  const [openSection, setOpenSection] = React.useState<string | null>(() =>
+    initialMaquina
+      ? getDefaultOpenSection(initialMaquina.plantilla)
+      : "capacidades_fisicas",
   );
   const [materiasPrimas, setMateriasPrimas] = React.useState<MateriaPrima[]>([]);
   const [loadingMaterias, setLoadingMaterias] = React.useState(false);
