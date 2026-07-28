@@ -354,10 +354,7 @@ export function MaquinaEditorSecciones({ editor }: { editor: MaquinaEditorState 
                         <FieldInput
                           field={displayField}
                           value={displayInCm ? mmToCmForInput(fieldValue) : fieldValue}
-                          renderColorModeCards={
-                            form.plantilla === "impresora_gran_formato_por_area" &&
-                            field.key === "coloresSoportados"
-                          }
+                          renderColorModeCards={field.key === "coloresSoportados"}
                           onChange={(v) =>
                             handleMaquinaFieldChange(
                               field,
