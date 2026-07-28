@@ -28,8 +28,86 @@ export class CostosTarifasService {
     private readonly validaciones: CostosValidacionesService,
   ) {}
 
+  /**
+   * Recalcula y publica TODO el período, no sólo el centro que se tocó.
+   *
+   * Los centros no son independientes: lo que gasta la estructura se reparte
+   * entre los productivos con peso en su gasto propio, así que cambiar uno
+   * mueve la parte que absorben todos los demás. Recalcular de a uno dejaba
+   * fotos tomadas en momentos distintos —el primero que se guardaba absorbía
+   * la estructura entera y los siguientes cada vez menos—, y sumadas repartían
+   * varias veces el mismo pozo.
+   *
+   * Publicar en el mismo movimiento es lo que hace que el motor cotice con lo
+   * que la imprenta acaba de cargar, sin un paso extra que nadie recuerda.
+   */
+  async recalcularYPublicarPeriodo(auth: CurrentAuth, periodo: string) {
+    const normalizedPeriodo = this.validaciones.normalizePeriodo(periodo);
+    const centros = await this.prisma.centroCosto.findMany({
+      where: { tenantId: auth.tenantId, activo: true },
+      select: { id: true, tipoCentro: true },
+    });
+
+    const publicados: string[] = [];
+    for (const centro of centros) {
+      const snapshot = await this.buildTarifaSnapshot(
+        auth,
+        centro.id,
+        normalizedPeriodo,
+      );
+      const valores = {
+        costoMensualTotal: snapshot.costoMensualTotal,
+        capacidadPractica: snapshot.capacidadPractica,
+        tarifaCalculada: snapshot.tarifaCalculada,
+        costoMensualManoObra: snapshot.costoMensualManoObra,
+        tarifaManoObra: snapshot.tarifaManoObra,
+        resumenJson: snapshot.resumenJson,
+      };
+
+      // El borrador refleja siempre lo cargado, aunque todavía no dé para
+      // publicar (un centro a medio llenar tiene que poder verse en la ficha).
+      const estados: EstadoTarifaCentroCostoPeriodo[] = [
+        EstadoTarifaCentroCostoPeriodo.BORRADOR,
+      ];
+      // La estructura no vende horas: su costo ya viaja repartido en los
+      // productivos. Publicarle tarifa propia lo cobraría dos veces si algún
+      // paso llegara a apuntarle.
+      const esProductivo = centro.tipoCentro === TipoCentroCosto.PRODUCTIVO;
+      if (esProductivo && snapshot.validaParaPublicar) {
+        estados.push(EstadoTarifaCentroCostoPeriodo.PUBLICADA);
+        publicados.push(centro.id);
+      }
+
+      for (const estado of estados) {
+        await this.prisma.centroCostoTarifaPeriodo.upsert({
+          where: {
+            tenantId_centroCostoId_periodo_estado: {
+              tenantId: auth.tenantId,
+              centroCostoId: centro.id,
+              periodo: normalizedPeriodo,
+              estado,
+            },
+          },
+          create: {
+            tenantId: auth.tenantId,
+            centroCostoId: centro.id,
+            periodo: normalizedPeriodo,
+            estado,
+            ...valores,
+          },
+          update: valores,
+        });
+      }
+    }
+
+    return { periodo: normalizedPeriodo, centrosPublicados: publicados.length };
+  }
+
   async calcularTarifaCentro(auth: CurrentAuth, id: string, periodo: string) {
     const normalizedPeriodo = this.validaciones.normalizePeriodo(periodo);
+    // Guardar un centro deja al día a todo el período: ver
+    // `recalcularYPublicarPeriodo`.
+    await this.recalcularYPublicarPeriodo(auth, normalizedPeriodo);
     const snapshot = await this.buildTarifaSnapshot(
       auth,
       id,
@@ -85,71 +163,20 @@ export class CostosTarifasService {
       throw new BadRequestException(snapshot.advertencias.join(' '));
     }
 
-    await this.prisma.centroCostoTarifaPeriodo.upsert({
-      where: {
-        tenantId_centroCostoId_periodo_estado: {
-          tenantId: auth.tenantId,
-          centroCostoId: id,
-          periodo: normalizedPeriodo,
-          estado: EstadoTarifaCentroCostoPeriodo.BORRADOR,
-        },
-      },
-      create: {
-        tenantId: auth.tenantId,
-        centroCostoId: id,
-        periodo: normalizedPeriodo,
-        costoMensualTotal: snapshot.costoMensualTotal,
-        capacidadPractica: snapshot.capacidadPractica,
-        tarifaCalculada: snapshot.tarifaCalculada,
-        costoMensualManoObra: snapshot.costoMensualManoObra,
-        tarifaManoObra: snapshot.tarifaManoObra,
-        estado: EstadoTarifaCentroCostoPeriodo.BORRADOR,
-        resumenJson: snapshot.resumenJson,
-      },
-      update: {
-        costoMensualTotal: snapshot.costoMensualTotal,
-        capacidadPractica: snapshot.capacidadPractica,
-        tarifaCalculada: snapshot.tarifaCalculada,
-        costoMensualManoObra: snapshot.costoMensualManoObra,
-        tarifaManoObra: snapshot.tarifaManoObra,
-        resumenJson: snapshot.resumenJson,
-      },
-    });
+    // Publicar uno es publicar el período: al cambiar lo que gasta este
+    // centro cambia la parte de la estructura que absorben los otros, y
+    // dejarlos con la tarifa anterior los desactualiza en silencio.
+    await this.recalcularYPublicarPeriodo(auth, normalizedPeriodo);
 
-    const publicada = await this.prisma.centroCostoTarifaPeriodo.upsert({
-      where: {
-        tenantId_centroCostoId_periodo_estado: {
+    const publicada =
+      await this.prisma.centroCostoTarifaPeriodo.findFirstOrThrow({
+        where: {
           tenantId: auth.tenantId,
           centroCostoId: id,
           periodo: normalizedPeriodo,
           estado: EstadoTarifaCentroCostoPeriodo.PUBLICADA,
         },
-      },
-      create: {
-        tenantId: auth.tenantId,
-        centroCostoId: id,
-        periodo: normalizedPeriodo,
-        costoMensualTotal: snapshot.costoMensualTotal,
-        capacidadPractica: snapshot.capacidadPractica,
-        tarifaCalculada: snapshot.tarifaCalculada,
-        costoMensualManoObra: snapshot.costoMensualManoObra,
-        tarifaManoObra: snapshot.tarifaManoObra,
-        estado: EstadoTarifaCentroCostoPeriodo.PUBLICADA,
-        resumenJson: snapshot.resumenJson,
-      },
-      update: {
-        costoMensualTotal: snapshot.costoMensualTotal,
-        capacidadPractica: snapshot.capacidadPractica,
-        tarifaCalculada: snapshot.tarifaCalculada,
-        costoMensualManoObra: snapshot.costoMensualManoObra,
-        tarifaManoObra: snapshot.tarifaManoObra,
-        resumenJson: snapshot.resumenJson,
-      },
-    });
-
-    if (snapshot.centro.tipoCentro === TipoCentroCosto.NO_PRODUCTIVO) {
-      await this.republishTarifasCentrosProductivos(auth, normalizedPeriodo);
-    }
+      });
 
     return this.mapper.toTarifaResponse(publicada);
   }
