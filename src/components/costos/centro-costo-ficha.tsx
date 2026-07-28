@@ -313,17 +313,6 @@ export function CentroCostoFicha({
   const gastoTotal = gastoPrincipal + absorbido;
   const horas = numero(horasProductivas);
 
-  /**
-   * Las horas que representa un porcentaje sobre las del centro. Si el centro
-   * todavía no declaró sus horas —típico en el alta— no hay contra qué
-   * calcular y se muestra un guion en vez de un cero que engañe.
-   */
-  const horasDedicadas = (pct: string) => {
-    const porcentaje = numero(pct);
-    if (horas <= 0 || porcentaje <= 0) return "—";
-    return `${(Math.round((horas * porcentaje) / 10) / 10)
-      .toLocaleString("es-AR")} h`;
-  };
   const valorHora = horas > 0 ? gastoTotal / horas : null;
 
   const agregar = (seccion: SeccionCentroCostoLinea) => {
@@ -466,7 +455,12 @@ export function CentroCostoFicha({
             {seccion === "empleado" ? (
               <>
                 <span>Ocupación</span>
-                <span className="ccosto-num">Dedicación</span>
+                <span
+                  className="ccosto-num"
+                  title="Qué parte del sueldo paga este centro. Alguien repartido entre dos centros va 75% acá y 25% allá, y ninguno lo paga entero."
+                >
+                  Dedicación
+                </span>
                 <span className="ccosto-num">Salario + benef.</span>
                 <span className="ccosto-num">Cargas %</span>
                 <span className="ccosto-num">Costo total</span>
@@ -553,9 +547,12 @@ export function CentroCostoFicha({
                       editar(fila.key, "ocupacion", event.target.value)
                     }
                   />
-                  {/* Se carga el porcentaje y se muestran las horas que salen
-                      de aplicarlo a las del centro: pensar "20% acá, 80% allá"
-                      es más natural que calcular 35,2 horas a mano. */}
+                  {/* Qué parte del sueldo paga este centro. NO se traduce a
+                      horas: las del centro son la suma de lo que aportan
+                      todos, y aplicarle a esa suma el % de una persona da un
+                      número que no es ni sus horas ni nada —con dos personas
+                      al 75% mostraba 198 h a cada una sobre un centro de 264—.
+                      Lo que el % sí produce se ve en "Costo total" de la fila. */}
                   <div className="ccosto-dedicacion">
                     {/* El % va como unidad fija dentro del campo y no como
                         placeholder: un placeholder desaparece al tipear, justo
@@ -575,9 +572,6 @@ export function CentroCostoFicha({
                       />
                       <span className="ccosto-dedicacion-unidad">%</span>
                     </div>
-                    <span className="ccosto-dedicacion-horas">
-                      {horasDedicadas(fila.dedicacionPct)}
-                    </span>
                   </div>
                   <input
                     className="ccosto-num"
@@ -833,6 +827,10 @@ export function CentroCostoFicha({
                         Las horas productivas se cargan a mano: son las horas
                         que el sector realmente puede producir en el mes, y son
                         las que dividen el gasto para dar el valor de la hora.
+                        Se suman las de todos: dos personas que le dedican 6 h
+                        por día son 12 h por día, no 6. Y si acá entran al 75%,
+                        estas horas son ese 75% —el mismo criterio de los dos
+                        lados de la cuenta.
                       </p>
                     </header>
                     <div className="ccosto-identidad">

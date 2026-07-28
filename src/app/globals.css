@@ -6320,7 +6320,7 @@ body {
     text-align: right;
   }
 
-  /* El porcentaje de dedicación con las horas que representa al lado. */
+  /* El porcentaje de dedicación: qué parte del sueldo paga este centro. */
   .ccosto-seccion .ccosto-dedicacion {
     display: flex;
     align-items: center;
@@ -6361,13 +6361,6 @@ body {
     padding-left: 2px;
     font-size: 12.5px;
     color: var(--text-muted);
-  }
-
-  .ccosto-seccion .ccosto-dedicacion-horas {
-    flex: 0 0 auto;
-    font-size: 11.5px;
-    color: var(--text-muted);
-    white-space: nowrap;
   }
 
   /* Los campos calculados se ven como resultado, no como campo editable: el
