@@ -504,7 +504,11 @@ export class MotorUniversalService {
     // Ver docs/modificaciones-fisicas-lona-diseno.md §3.
     congelarMedidaVisible(jobContext);
 
-    this.enriquecerJobContextConGramajePrincipal(producto, jobContext);
+    await this.enriquecerJobContextConGramajePrincipal(
+      input.tenantId,
+      producto,
+      jobContext,
+    );
     this.enriquecerJobContextConTecnologias(producto.pasos, jobContext);
 
     // 1b. Cargar tarifas horarias publicadas para el período (F.2.10)
@@ -1684,7 +1688,18 @@ export class MotorUniversalService {
     return value !== false;
   }
 
-  private enriquecerJobContextConGramajePrincipal(
+  /**
+   * Deja el gramaje del sustrato principal en el JobContext, que es de donde
+   * lo leen los escalones de perfil (guillotina e impresión láser).
+   *
+   * Contempla las dos formas de llegar al material: el que está fijado en la
+   * ruta (HARDCODED) y el que elige el comercial al cotizar. Sin la segunda,
+   * un producto cuyo papel se elige en la cotización dejaba el contexto sin
+   * gramaje y los escalones no actuaban —el motor se quedaba con el primer
+   * perfil, en silencio—.
+   */
+  private async enriquecerJobContextConGramajePrincipal(
+    tenantId: string,
     producto: ProductoCargado,
     jobContext: JobContext,
   ) {
@@ -1694,24 +1709,47 @@ export class MotorUniversalService {
     ) {
       return;
     }
+
+    const leerGramaje = (atributos: unknown) => {
+      const attrs = this.asRecord(atributos);
+      return this.numeroPositivo(
+        attrs.gramajeGr ?? attrs.gramaje ?? attrs.gramaje_g_m2,
+      );
+    };
+    const anotar = (gramaje: number) => {
+      ctx.gramajeMaterialGr = gramaje;
+      ctx.gramajeGr = gramaje;
+    };
+
     for (const paso of producto.pasos) {
       for (const slot of paso.slots) {
-        if (
-          slot.modoSeleccion !== 'HARDCODED' ||
-          slot.slotCodigo !== 'sustrato_principal'
-        ) {
+        if (slot.slotCodigo !== 'sustrato_principal') continue;
+
+        if (slot.modoSeleccion === 'HARDCODED') {
+          const gramaje = leerGramaje(slot.materialVariante?.atributosVarianteJson);
+          if (gramaje) {
+            anotar(gramaje);
+            return;
+          }
           continue;
         }
-        const attrs = this.asRecord(
-          slot.materialVariante?.atributosVarianteJson,
+
+        // El comercial eligió el papel en la cotización: se carga esa
+        // variante para leerle el gramaje. Sólo se acepta si es uno de los
+        // candidatos declarados, igual que en resolverMaterialSlot.
+        const eleccion = this.getEleccionMaterialComercial(
+          slot,
+          jobContext,
+          paso,
         );
-        const gramaje = this.numeroPositivo(
-          attrs.gramajeGr ?? attrs.gramaje ?? attrs.gramaje_g_m2,
-        );
-        if (!gramaje) continue;
-        ctx.gramajeMaterialGr = gramaje;
-        ctx.gramajeGr = gramaje;
-        return;
+        if (!eleccion) continue;
+        if (!this.getSlotCandidatoVarianteIds(slot).includes(eleccion)) continue;
+        const variante = await this.cargarVariantePorId(tenantId, eleccion);
+        const gramaje = leerGramaje(variante?.atributosVarianteJson);
+        if (gramaje) {
+          anotar(gramaje);
+          return;
+        }
       }
     }
   }

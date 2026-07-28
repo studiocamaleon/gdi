@@ -280,11 +280,11 @@ function buildLaserSections(): MaquinariaTemplateSection[] {
         field({ key: "setupMin", label: "Setup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de preparación inicial." }),
         field({ key: "cleanupMin", label: "Cleanup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de limpieza al terminar." }),
         field({ key: "feedReloadMin", label: "Recarga papel", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de recarga entre tandas." }),
-        field({ key: "caras", label: "Caras", scope: "perfil_operativo", kind: "select", required: true, options: carasOptions, description: "Discriminante: simple o doble faz." }),
-        field({ key: "colores", label: "Modos de color admitidos", scope: "perfil_operativo", kind: "multiselect", options: coloresImpresorLaserOptions, description: "Modos comerciales que puede imprimir este perfil." }),
         // Escalón, igual que en guillotina: el papel más grueso baja la
         // velocidad de la máquina y ese perfil es el que hay que elegir.
         field({ key: "gramajeMaxGr", label: "Gramaje (hasta)", scope: "perfil_operativo", kind: "number", unit: "g_m2", required: true, description: "Se usa este perfil para papeles de hasta este gramaje." }),
+        field({ key: "caras", label: "Caras", scope: "perfil_operativo", kind: "select", required: true, options: carasOptions, description: "Discriminante: simple o doble faz." }),
+        field({ key: "colores", label: "Modos de color admitidos", scope: "perfil_operativo", kind: "multiselect", options: coloresImpresorLaserOptions, description: "Modos comerciales que puede imprimir este perfil." }),
       ],
     }),
     section({ id: "consumibles", title: "Consumibles", description: "Tóner declarado por máquina.", fields: genericConsumableFields }),
