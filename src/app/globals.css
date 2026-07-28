@@ -7432,7 +7432,18 @@ body {
     font-size: 12px;
     font-weight: 600;
     color: var(--text);
-    white-space: nowrap;
+  }
+
+  /* Columnas numéricas angostas: el ancho se lo ganan Colores y las
+     columnas que vengan al lado de Tinta. El encabezado puede partirse
+     en dos líneas ("Recarga rollo (min)"). */
+  .maq-perfiles-tabla th.num,
+  .maq-perfiles-tabla td.num {
+    width: 84px;
+  }
+
+  .maq-perfiles-tabla td.num input {
+    min-width: 64px;
   }
 
   .maq-perfiles-tabla th .unidad {
@@ -37862,6 +37873,7 @@ body:has(.t-app) {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
 
 
 

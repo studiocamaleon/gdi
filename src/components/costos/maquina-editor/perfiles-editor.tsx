@@ -105,7 +105,11 @@ export function PerfilesOperativosEditor({
               <tr>
                 {conColumnaTipo ? <th className="tipo">Tipo</th> : null}
                 {visibleFields.map((field) => (
-                  <th key={field.key} title={field.description}>
+                  <th
+                    key={field.key}
+                    title={field.description}
+                    className={field.kind === "number" ? "num" : undefined}
+                  >
                     {field.label}
                     {field.unit ? (
                       <span className="unidad"> ({getTemplateUnitLabel(field.unit)})</span>
@@ -150,9 +154,10 @@ export function PerfilesOperativosEditor({
                       </td>
                     ) : null}
                     {visibleFields.map((field) => {
+                      const esNum = field.kind === "number";
                       if (!shouldShowPerfilField(field, form, perfil)) {
                         return (
-                          <td key={field.key} className="na">
+                          <td key={field.key} className={esNum ? "na num" : "na"}>
                             —
                           </td>
                         );
@@ -167,7 +172,7 @@ export function PerfilesOperativosEditor({
                         ? { ...field, unit: undefined }
                         : field;
                       return (
-                        <td key={field.key}>
+                        <td key={field.key} className={esNum ? "num" : undefined}>
                           <FieldInput
                             field={cellField}
                             value={getPerfilFieldValue(perfil, field.key)}
