@@ -598,7 +598,6 @@ model Tenant {
   proveedorDireccions                              ProveedorDireccion[]
   empleadoDireccions                               EmpleadoDireccion[]
   empleadoComisions                                EmpleadoComision[]
-  empleadoRemuneraciones                           EmpleadoRemuneracion[]
   productosImpuestosCatalogo                       ProductoImpuestoCatalogo[]
   productosComisionesCatalogo                      ProductoComisionCatalogo[]
   estaciones                                       Estacion[]
@@ -957,7 +956,6 @@ model Empleado {
   user                   User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
   direcciones            EmpleadoDireccion[]
   comisiones             EmpleadoComision[]
-  remuneraciones         EmpleadoRemuneracion[]
   invitations            Invitation[]
   ordenesTrabajoVendidas OrdenTrabajo[]         @relation("OrdenTrabajoVendedor")
   cotizacionesVendidas   Cotizacion[]           @relation("CotizacionVendedor")
@@ -966,53 +964,6 @@ model Empleado {
 
   @@index([tenantId, nombreCompleto])
   @@index([tenantId, sector])
-}
-
-/// Lo que cuesta una persona por mes, con vigencia.
-///
-/// Fuente ÚNICA del costo laboral: los centros de costo CONSUMEN de acá en vez
-/// de pedir el sueldo otra vez. Antes de esto, el sueldo de cada persona se
-/// re-tipeaba en cada centro donde trabajaba, y ya había divergido — la misma
-/// persona con dos sueldos base distintos en centros distintos, sin nada que lo
-/// detectara. Ver docs/legajos-nomina-diseno.md
-///
-/// Filas con vigencia, no un campo que se pisa: el sueldo cambia (paritarias,
-/// ascensos) y "cuánto ganaba en marzo" tiene que seguir siendo respondible.
-model EmpleadoRemuneracion {
-  /// El id lo pone Postgres y no el cliente: la migración que creó la tabla
-  /// hace un backfill por SQL que inserta filas sin pasar id.
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId       String   @db.Uuid
-  empleadoId     String   @db.Uuid
-  /// 'YYYY-MM' — primer mes de vigencia (inclusive).
-  vigenteDesde   String
-  /// 'YYYY-MM' — último mes (inclusive); null = vigente hasta nuevo aviso.
-  vigenteHasta   String?
-  /// Neto de bolsillo.
-  sueldoNeto     Decimal  @db.Decimal(14, 2)
-  /// Cargas sociales y aportes patronales del mes.
-  cargasSociales Decimal  @db.Decimal(14, 2)
-  /// Sueldos que cobra por año: 13 con aguinaldo (lo normal en Argentina), 12
-  /// sin (contratado, monotributista). El costo mensual prorratea el SAC:
-  /// (neto + cargas) × sueldosPorAnio / 12 — un 8,33% de recargo con 13.
-  ///
-  /// Se modela como "cuántos sueldos" y no como un booleano `aguinaldo` para
-  /// que la cuenta esté a la vista y no escondida en una constante del código,
-  /// y para que un convenio con 14 sea un número y no un release. Imputar el
-  /// aguinaldo en junio y diciembre en vez de prorratearlo haría que el mismo
-  /// trabajo costara distinto según el mes, que es lo que un sistema de costeo
-  /// tiene que evitar.
-  sueldosPorAnio Int      @default(13)
-  /// Por qué cambió: 'alta' | 'paritaria' | 'ascenso' | 'correccion' | 'otro'.
-  motivo         String?
-  notas          String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  empleado       Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
-
-  @@index([tenantId, empleadoId, vigenteDesde])
-  @@index([tenantId, vigenteDesde])
 }
 
 model ClienteContacto {

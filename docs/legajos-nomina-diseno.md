@@ -6,6 +6,23 @@ centros de costo lo consumen.
 
 Este documento es el paso de análisis. No hay código todavía.
 
+> **RETIRADO — 2026-07-28.** `EmpleadoRemuneracion` se implementó, vivió tres
+> días y se dio de baja: la tabla, el servicio, los endpoints, la sección de la
+> ficha y el permiso `registros.ver_remuneraciones` ya no existen. Lo que se
+> lee abajo describe un diseño que ya no está en el sistema; se conserva porque
+> el diagnóstico de la §1 —el sueldo re-tipeado en cada centro, divergiendo sin
+> que nada lo detecte— sigue siendo cierto y explica por qué se llegó hasta acá.
+>
+> Lo que cambió no fue el diagnóstico sino el dueño del dato. Al pasar los
+> centros de costo a carga manual (ver `centros-de-costo-carga-manual-diseno.md`),
+> el centro dejó de consumir sueldos del sistema: declara en su propia planilla
+> lo que absorbe de cada persona, con su % de dedicación. Y la nómina completa
+> pasó a ser una línea de Gastos fijos. Con los dos consumidores servidos, el
+> legajo no tenía a quién alimentar, y un sueldo guardado que nadie lee es
+> sobre todo un dato sensible de más.
+>
+> Las 13 filas que había quedaron en `apps/api/scripts/backup-pre-g5-remuneraciones.sql`.
+
 ---
 
 ## 1. El problema, con evidencia
@@ -192,7 +209,7 @@ explícita en vez de accidental.
 
 ## 5. Modelo de datos propuesto
 
-### 5.1 Nueva entidad: `EmpleadoRemuneracion`
+### 5.1 Nueva entidad: `EmpleadoRemuneracion` — retirada, ver la nota inicial
 
 ```prisma
 /// Lo que cuesta una persona por mes, con vigencia. Fuente ÚNICA del costo

@@ -539,6 +539,12 @@ El test que verificaba "cargar un sueldo recalcula los centros donde la persona
 trabaja" se reemplazó por su inverso: **cargar un sueldo no toca ninguna tabla de
 Costos**. Es el contrato nuevo, y conviene que esté afirmado y no sólo ausente.
 
+> Actualización 2026-07-28 (G5): ese test se fue con la tabla. Sin ningún
+> consumidor —el centro declara lo que absorbe en su planilla y la nómina vive
+> en Gastos fijos—, `EmpleadoRemuneracion` se dio de baja entera, así que el
+> contrato pasó a ser cierto por ausencia: ya no hay sueldo que cargar en el
+> legajo. Ver la nota inicial de `legajos-nomina-diseno.md`.
+
 **Maquinaria.** No hubo nada que sacar: la `Maquina` no tiene un solo campo de
 costo — todos vivían en `CentroCostoRecursoMaquinaPeriodo`, que es tabla de
 centros. El editor de costos de máquina estaba dentro del configurador que se

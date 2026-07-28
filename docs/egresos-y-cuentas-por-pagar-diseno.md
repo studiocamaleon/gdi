@@ -37,7 +37,8 @@ y `limiteCredito`. Esa asimetría retrata que las compras nunca se modelaron.
    `CONSUMO_PRODUCCION`) y el movimiento no tiene proveedor ni documento.
 3. **Estructura.** `GastoFijoEstructura` (alquiler, servicios, amortización…) es
    recurrente con vigencia, pero es **insumo de costeo, no obligación**: no genera
-   vencimientos ni pagos. Igual `EmpleadoRemuneracion`.
+   vencimientos ni pagos. (`EmpleadoRemuneracion` estaba en la misma bolsa; se
+   dio de baja el 2026-07-28.)
 
 **No hay contabilidad.** Sin plan de cuentas ni asientos. Esto es CxP **de gestión**.
 
