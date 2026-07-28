@@ -1141,10 +1141,18 @@ model CentroCostoLinea {
 
   // Sólo EMPLEADO
   ocupacion      String?
-  /// Qué parte de las horas productivas del centro le dedica esta persona.
-  /// Se guarda el porcentaje y no las horas porque es como lo piensa el usuario
-  /// ("20% acá, 80% allá") y porque así las horas siguen solas si el centro
-  /// cambia su declaración. Es informativo: no escala el costo de la línea.
+  /// Qué parte de su tiempo le dedica esta persona al centro. Se guarda el
+  /// porcentaje y no las horas porque es como lo piensa el usuario ("20% acá,
+  /// 80% allá").
+  ///
+  /// ESCALA EL COSTO: el importe de la línea es sueldo × (1 + cargas) ×
+  /// dedicación, así alguien repartido entre cuatro centros no se cuenta
+  /// cuatro veces. Ausente significa 100%.
+  ///
+  /// Las horas productivas del centro tienen que declararse con el mismo
+  /// criterio: si acá dice 75%, el centro sólo puede producir el 75% de las
+  /// horas de esa persona. Cargar el 100% de las horas contra el 75% del
+  /// costo abarata la tarifa sin que nadie lo note.
   dedicacionPct  Decimal? @db.Decimal(5, 2)
   salarioMensual Decimal? @db.Decimal(14, 2)
   /// Con 6 decimales aunque la UI muestre 2: con 2, cargas de $786,55 sobre un
