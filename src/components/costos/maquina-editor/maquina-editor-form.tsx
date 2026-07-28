@@ -107,6 +107,40 @@ export function MaquinaEditorIdentidad({
               disabled
             />
           </div>
+          {/* Fabricante y modelo venían del seed y no tenían dónde editarse:
+              aparecían bajo el nombre en la lista como si fueran magia. */}
+          <div className="min-w-0 space-y-1">
+            <Label htmlFor="maquina-fabricante">Fabricante</Label>
+            <Input
+              id="maquina-fabricante"
+              placeholder="Ej: Ricoh"
+              value={form.fabricante ?? ""}
+              onChange={(e) =>
+                setForm({ ...form, fabricante: e.target.value || undefined })
+              }
+            />
+          </div>
+          <div className="min-w-0 space-y-1">
+            <Label htmlFor="maquina-modelo">Modelo</Label>
+            <Input
+              id="maquina-modelo"
+              placeholder="Ej: PRO C5100s"
+              value={form.modelo ?? ""}
+              onChange={(e) =>
+                setForm({ ...form, modelo: e.target.value || undefined })
+              }
+            />
+          </div>
+          <div className="min-w-0 space-y-1">
+            <Label htmlFor="maquina-serie">Número de serie</Label>
+            <Input
+              id="maquina-serie"
+              value={form.numeroSerie ?? ""}
+              onChange={(e) =>
+                setForm({ ...form, numeroSerie: e.target.value || undefined })
+              }
+            />
+          </div>
           <div className="min-w-0 space-y-1">
             <Label>Estado</Label>
             <Select
