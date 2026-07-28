@@ -137,7 +137,7 @@ function MultiLineChart({ series, labels, height = 240, yFormat = (v: number) =>
   const W = Math.max(320, anchoMedido || 640), H = height;
   const padL = 46, padR = 14, padT = 14, padB = 24;
   const innerW = W - padL - padR, innerH = H - padT - padB;
-  const max = Math.max(...series.flatMap((s) => s.values), 0) * 1.08 || 1;
+  const max = picoDeEscala(series.flatMap((s) => s.values), 1.08);
   const step = innerW / Math.max(1, labels.length - 1);
   const x = (i: number) => padL + i * step;
   const y = (v: number) => padT + innerH - (v / max) * innerH;
@@ -181,6 +181,20 @@ function MultiLineChart({ series, labels, height = 240, yFormat = (v: number) =>
   );
 }
 
+/**
+ * El pico de una serie, listo para usar como denominador de una escala.
+ *
+ * `Math.max()` sin argumentos devuelve -Infinity, y el `|| 1` de rigor no lo
+ * atrapa porque -Infinity es truthy: la escala terminaba en NaN y React
+ * escupía "Received NaN for the y attribute" en cada gráfico sin datos. Pasa
+ * apenas un tenant nuevo abre un reporte antes de cargar nada.
+ */
+function picoDeEscala(valores: number[], holgura = 1) {
+  const finitos = valores.filter((v) => Number.isFinite(v));
+  if (finitos.length === 0) return 1;
+  return Math.max(...finitos) * holgura || 1;
+}
+
 export function Sparkline({ values, height = 28, width = 84, signal = false }: { values: number[]; height?: number; width?: number; signal?: boolean }) {
   if (!values?.length || values.length < 2) return null;
   const min = Math.min(...values), max = Math.max(...values), range = max - min || 1;
@@ -208,7 +222,7 @@ export function AreaChart({ series, labels, height = 220, yFormat = (v: number) 
   const W = 800, H = height, padL = 44, padR = 8, padT = 18, padB = 26;
   const innerW = W - padL - padR, innerH = H - padT - padB;
   const all = secondary ? [...series, ...secondary] : series;
-  const max = Math.max(...all) * 1.08, min = Math.min(0, Math.min(...all)), range = max - min || 1;
+  const max = picoDeEscala(all, 1.08), min = Math.min(0, ...all.filter((v) => Number.isFinite(v))), range = max - min || 1;
   const step = innerW / Math.max(1, series.length - 1);
   const xy = (arr: number[]) => arr.map((v, i) => [padL + i * step, padT + innerH - ((v - min) / range) * innerH] as const);
   const pts = xy(series), pts2 = secondary ? xy(secondary) : null;
@@ -279,9 +293,12 @@ function BarChart({ data, labels, height = 220, yFormat = (v: number) => String(
   const groupW = innerW / Math.max(1, barCount);
   const defaults = ["var(--ink)", "#6e6e76", "#c8c6c0", "var(--signal)"];
   const col = (i: number) => colors?.[i] ?? defaults[i % defaults.length];
-  const max = (mode === "stack"
-    ? Math.max(...labels.map((_, i) => data.reduce((s, st) => s + (st[i] ?? 0), 0)))
-    : Math.max(...data.flat())) * 1.12 || 1;
+  const max = picoDeEscala(
+    mode === "stack"
+      ? labels.map((_, i) => data.reduce((s, st) => s + (st[i] ?? 0), 0))
+      : data.flat(),
+    1.12,
+  );
   const ticks = Array.from({ length: 5 }, (_, i) => (max * i) / 4);
   const alBucket = (clientX: number, rect: DOMRect) => {
     const xView = ((clientX - rect.left) / rect.width) * W;
