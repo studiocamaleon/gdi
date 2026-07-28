@@ -7704,6 +7704,32 @@ body {
     white-space: nowrap;
   }
 
+  /* Dentro de la tabla de perfiles las pills van en versión chica: la
+     celda es angosta y compiten con el resto de la fila. */
+  .maq-perfiles-tabla .maq-colores {
+    gap: 5px;
+    flex-wrap: nowrap;
+  }
+
+  .maq-perfiles-tabla .maq-color-pill {
+    gap: 5px;
+    padding: 5px 9px;
+  }
+
+  .maq-perfiles-tabla .maq-color-punto {
+    width: 11px;
+    height: 11px;
+    box-shadow: 0 0 0 1.5px var(--surface);
+  }
+
+  .maq-perfiles-tabla .maq-color-punto + .maq-color-punto {
+    margin-left: -4px;
+  }
+
+  .maq-perfiles-tabla .maq-color-etiqueta {
+    font-size: 12px;
+  }
+
   /* ── Segmented chico Sí | No para campos booleanos ── */
 
   .maq-seg {
@@ -37976,6 +38002,7 @@ body:has(.t-app) {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
 
 
 

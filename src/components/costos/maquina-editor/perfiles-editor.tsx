@@ -179,6 +179,9 @@ export function PerfilesOperativosEditor({
                           <FieldInput
                             field={cellField}
                             value={valor}
+                            // Los modos de color van como pills, no como una
+                            // pila de checkboxes dentro de la celda.
+                            renderColorModeCards={field.key === "colores"}
                             onChange={(v) => {
                               const next = setPerfilFieldValueForTemplate(
                                 perfil,

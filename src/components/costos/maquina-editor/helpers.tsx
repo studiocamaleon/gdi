@@ -410,10 +410,15 @@ export function getSelectedLabels(options: MaquinariaTemplateOption[] | undefine
     .join(", ");
 }
 
+/**
+ * Se decide por la CLAVE y no por las opciones: mirando si existe "CMYK" se
+ * perdían las pills en una máquina que sólo soporta B/N —el filtro por
+ * colores de la máquina deja el campo sin esa opción—.
+ */
 export function isColorModeMultiselect(field: MaquinariaTemplateField) {
   return (
     field.kind === "multiselect" &&
-    Boolean(field.options?.some((optionItem) => optionItem.value === "CMYK"))
+    (field.key === "colores" || field.key === "coloresSoportados")
   );
 }
 
