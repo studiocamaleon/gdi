@@ -241,6 +241,12 @@ export function CentroCostoFicha({
   const [periodo, setPeriodo] = React.useState(
     periodoInicial ?? getCurrentPeriodo(),
   );
+  /**
+   * Guardar publica las tarifas del período que se está editando, pero el
+   * motor cotiza siempre con el mes en curso. Sólo acá, entonces, lo que se
+   * guarda pasa a cotizar en el acto — y el botón tiene que decirlo.
+   */
+  const esPeriodoEnCurso = periodo === getCurrentPeriodo();
   const [tab, setTab] = React.useState<Tab>("datos");
   const [nombre, setNombre] = React.useState("");
   const [tipoCentro, setTipoCentro] =
@@ -383,11 +389,17 @@ export function CentroCostoFicha({
         });
       }
       // Deja el borrador al día con lo que se acaba de cargar, para que el
-      // listado y el motor no queden mirando un cálculo viejo.
+      // listado y el motor no queden mirando un cálculo viejo. Recalcula y
+      // publica TODO el período: el reparto de la estructura ata los centros
+      // entre sí, así que tocar uno mueve la tarifa de los demás.
       await calcularTarifaCentroCosto(centroId, periodo);
 
       setSucio(false);
-      toast.success(esAlta ? "Centro creado." : "Centro guardado.");
+      toast.success(
+        esPeriodoEnCurso
+          ? `${esAlta ? "Centro creado" : "Centro guardado"}: las tarifas del período quedaron publicadas.`
+          : `${esAlta ? "Centro creado" : "Centro guardado"} en ${periodo}.`,
+      );
       await onSaved();
       onOpenChange(false);
     } catch (error) {
@@ -920,14 +932,26 @@ export function CentroCostoFicha({
             </Button>
             {/* Sin cambios no hay nada que guardar: el botón lo dice en vez
                 de aceptar un click que no hace nada. En un alta siempre está
-                habilitado —la ficha entera es el cambio—. */}
+                habilitado —la ficha entera es el cambio—.
+
+                Y el botón dice a qué se compromete: guardar recalcula y
+                publica las tarifas del período, así que en el mes en curso lo
+                que se guarda pasa a cotizar en el acto. En otro mes también se
+                publica, pero el motor no lo va a mirar hasta que ese mes
+                llegue: para el usuario, ahí sólo está guardando. */}
             <Button
               onClick={guardar}
               disabled={isSaving || isLoading || (!esAlta && !sucio)}
-              title={esAlta || sucio ? undefined : "No hay cambios para guardar"}
+              title={
+                esAlta || sucio
+                  ? esPeriodoEnCurso
+                    ? "Las tarifas del período se recalculan y quedan vigentes para cotizar"
+                    : `Las tarifas quedan guardadas en ${periodo}; se usan al cotizar cuando llegue ese mes`
+                  : "No hay cambios para guardar"
+              }
             >
               {isSaving ? <GdiSpinner className="size-4" /> : null}
-              Guardar
+              {esPeriodoEnCurso ? "Guardar y publicar" : "Guardar"}
             </Button>
           </SheetFooter>
         </SheetContent>
