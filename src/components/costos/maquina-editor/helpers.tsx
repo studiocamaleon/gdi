@@ -422,11 +422,9 @@ export function getGranFormatoGeometria(form: MaquinaPayload) {
 }
 
 export const GRAN_FORMATO_CM_FIELD_KEYS = new Set([
-  "anchoMinRolloMm",
   "anchoMaxRolloMm",
   "anchoMesaMm",
   "largoMesaMm",
-  "alturaMaxCabezalMm",
 ]);
 
 export function shouldDisplayGranFormatoFieldInCm(
@@ -674,8 +672,8 @@ export function normalizePerfilTypeForTemplate(
 export function shouldShowMaquinaField(field: MaquinariaTemplateField, form: MaquinaPayload) {
   if (form.plantilla !== "impresora_gran_formato_por_area") return true;
   const geometria = getGranFormatoGeometria(form);
-  const mesaOnly = new Set(["largoUtil", "anchoMesaMm", "largoMesaMm", "alturaMaxCabezalMm"]);
-  const rolloOnly = new Set(["anchoMinRolloMm", "anchoMaxRolloMm"]);
+  const mesaOnly = new Set(["largoUtil", "anchoMesaMm", "largoMesaMm"]);
+  const rolloOnly = new Set(["anchoMaxRolloMm"]);
   if (mesaOnly.has(field.key)) return geometria === "MESA_EXTENSORA";
   if (rolloOnly.has(field.key)) return geometria === "" || geometria === "ROLLO" || geometria === "MESA_EXTENSORA";
   return true;

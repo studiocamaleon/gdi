@@ -299,11 +299,13 @@ function buildGranFormatoSections(): MaquinariaTemplateSection[] {
       fields: [
         field({ key: "tecnologia", label: "Tecnología", scope: "maquina", kind: "select", required: true, options: tecnologiaGranFormatoOptions, description: "Tipo de impresión (LATEX, UV, etc.)." }),
         field({ key: "geometria", label: "Geometría", scope: "maquina", kind: "select", required: true, options: geometriaGranFormatoOptions, description: "Rollo o mesa extensora." }),
-        field({ key: "anchoMinRolloMm", label: "Ancho mínimo de rollo", scope: "maquina", kind: "number", unit: "mm", description: "Se usa cuando la máquina admite trabajos en rollo." }),
+        // Sin anchoMinRolloMm ni alturaMaxCabezalMm (decisión 2026-07-28):
+        // nadie los leía —ni el motor ni ninguna validación—; eran datos
+        // decorativos. Si algún día se valida compatibilidad material↔máquina,
+        // se reintroducen junto con esa validación.
         field({ key: "anchoMaxRolloMm", label: "Ancho máximo de rollo", scope: "maquina", kind: "number", unit: "mm", description: "Se usa cuando la máquina admite trabajos en rollo." }),
         field({ key: "anchoMesaMm", label: "Ancho de mesa", scope: "maquina", kind: "number", unit: "mm", description: "Se usa cuando la geometría es Mesa extensora." }),
         field({ key: "largoMesaMm", label: "Largo de mesa", scope: "maquina", kind: "number", unit: "mm", description: "Se usa cuando la geometría es Mesa extensora." }),
-        field({ key: "alturaMaxCabezalMm", label: "Altura máxima del cabezal", scope: "maquina", kind: "number", unit: "mm", description: "Restricción para materiales rígidos en mesa extensora." }),
         field({ key: "soportaCorteIntegrado", label: "Soporta corte integrado", scope: "maquina", kind: "boolean", description: "Permite usar perfiles de corte en esta impresora para trabajos tipo plotter." }),
         field({ key: "margenesNoImprimiblesMm", label: "Márgenes no imprimibles", scope: "maquina", kind: "textarea", required: true, description: "Distancia que la máquina no puede imprimir en cada borde." }),
         field({ key: "coloresSoportados", label: "Colores soportados", scope: "maquina", kind: "multiselect", options: coloresGranFormatoOptions, description: "Modos de color (CMYK, +blanco, +barniz)." }),
@@ -722,8 +724,8 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
     help: {
       summary: "Una sola plantilla unifica las 7 viejas (LATEX, UV, DTF, etc.) usando discriminantes tecnologia + geometria.",
       tips: [
-        "Si geometria=ROLLO, completá anchoMinRolloMm y anchoMaxRolloMm.",
-        "Si geometria=MESA_EXTENSORA, completá anchoMesaMm/largoMesaMm/alturaMaxCabezalMm.",
+        "Si geometria=ROLLO, completá anchoMaxRolloMm.",
+        "Si geometria=MESA_EXTENSORA, completá anchoMesaMm/largoMesaMm.",
         "Las DTF necesitan un paso siguiente de Aplicación de transfer (otra máquina, plancha térmica).",
       ],
       examples: [
