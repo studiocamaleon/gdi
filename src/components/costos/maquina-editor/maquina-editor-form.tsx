@@ -330,15 +330,27 @@ export function MaquinaEditorSecciones({ editor }: { editor: MaquinaEditorState 
                       field.kind === "multiselect" ||
                       STRUCTURED_MARGIN_FIELDS.has(field.key);
 
+                    // La descripción va como tooltip en el label, no como
+                    // texto debajo del input: ensuciaba la vista.
+                    const descripcion = getFriendlyFieldDescription(field);
                     return (
                       <div
                         key={field.key}
                         className={`space-y-1 ${fullWidth ? "md:col-span-2" : ""}`}
                       >
-                        <Label htmlFor={`field-${field.scope}-${field.key}`} className="text-sm">
-                          {field.label}
-                          {field.required && <span className="text-destructive"> *</span>}
-                        </Label>
+                        {descripcion ? (
+                          <LabelConTooltip
+                            label={field.label}
+                            required={field.required}
+                            tooltip={descripcion}
+                            iconSize="sm"
+                          />
+                        ) : (
+                          <Label htmlFor={`field-${field.scope}-${field.key}`} className="text-sm">
+                            {field.label}
+                            {field.required && <span className="text-destructive"> *</span>}
+                          </Label>
+                        )}
                         <FieldInput
                           field={displayField}
                           value={displayInCm ? mmToCmForInput(fieldValue) : fieldValue}
@@ -353,11 +365,6 @@ export function MaquinaEditorSecciones({ editor }: { editor: MaquinaEditorState 
                             )
                           }
                         />
-                        {getFriendlyFieldDescription(field) && (
-                          <p className="text-muted-foreground text-xs">
-                            {getFriendlyFieldDescription(field)}
-                          </p>
-                        )}
                       </div>
                     );
                   })}

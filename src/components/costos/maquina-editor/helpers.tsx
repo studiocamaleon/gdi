@@ -890,17 +890,30 @@ export function FieldInput({
         </div>
       );
 
-    case "boolean":
+    case "boolean": {
+      // Segmented chico Sí | No en lugar de checkbox.
+      const activo = Boolean(value);
       return (
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={Boolean(value)}
-            onChange={(e) => onChange(e.target.checked)}
-          />
-          <span>Sí</span>
-        </label>
+        <div className="maq-seg" role="group" aria-label={field.label}>
+          <button
+            type="button"
+            className={activo ? "activo" : ""}
+            aria-pressed={activo}
+            onClick={() => onChange(true)}
+          >
+            Sí
+          </button>
+          <button
+            type="button"
+            className={!activo ? "activo" : ""}
+            aria-pressed={!activo}
+            onClick={() => onChange(false)}
+          >
+            No
+          </button>
+        </div>
       );
+    }
 
     case "select":
       return (

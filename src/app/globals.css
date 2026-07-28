@@ -7686,6 +7686,35 @@ body {
     white-space: nowrap;
   }
 
+  /* ── Segmented chico Sí | No para campos booleanos ── */
+
+  .maq-seg {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+
+  .maq-seg button {
+    padding: 6px 16px;
+    border: 0;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 12.5px;
+    cursor: pointer;
+  }
+
+  .maq-seg button + button {
+    border-left: 1px solid var(--border);
+  }
+
+  .maq-seg button.activo {
+    background: #111114;
+    color: #fff;
+    font-weight: 500;
+  }
+
   /* La fila que dice si el prorrateo cuadra: lo que sale de la estructura
      tiene que entrar entero a los productivos. */
   .ccosto-tabla tfoot .ccosto-cuadre td {
@@ -37929,6 +37958,7 @@ body:has(.t-app) {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
 
 
 

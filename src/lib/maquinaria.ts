@@ -183,7 +183,8 @@ export type MaquinariaTemplateField = {
   label: string;
   scope: MaquinariaTemplateFieldScope;
   kind: MaquinariaTemplateFieldKind;
-  description: string;
+  /** Se muestra como tooltip del label. Sin declarar = el label alcanza. */
+  description?: string;
   tooltip?: string;
   placeholder?: string;
   required?: boolean;
