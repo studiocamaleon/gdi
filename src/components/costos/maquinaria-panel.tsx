@@ -1,12 +1,12 @@
 "use client";
 
 /**
- * Panel de gestión de máquinas — lista estilo Holdprint + editor en sheet.
+ * Panel de gestión de máquinas — la lista, estilo Holdprint (2026-07-28).
  *
- * Fase B de la migración de UI (2026-07-28): el editor (estado, helpers y
- * cuerpo del form) vive en ./maquina-editor/ para que la ficha por máquina
- * de la Fase C use exactamente el mismo. Acá queda la lista, el shell del
- * sheet y las llamadas al API.
+ * Acá vive sólo la tabla con sus filtros y las acciones rápidas. Editar
+ * navega a la ficha por máquina (/costos/maquinaria/[id]) y el alta es un
+ * diálogo chico (nombre + tipo) que crea y te manda a la ficha; el editor
+ * completo vive en ./maquina-editor/.
  */
 
 import * as React from "react";
@@ -23,19 +23,8 @@ import {
 import { toast } from "sonner";
 
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
-import {
-  createMaquina,
-  toggleMaquina,
-  updateMaquina,
-} from "@/lib/maquinaria-api";
-import type { CentroCosto, Planta } from "@/lib/costos";
+import { toggleMaquina } from "@/lib/maquinaria-api";
+import type { Planta } from "@/lib/costos";
 import {
   getEstadoMaquinaLabel,
   type Maquina,
@@ -50,15 +39,13 @@ import {
   getMachineTechColor,
   getMachineTechnologyLabel,
 } from "./maquina-editor/helpers";
-import { MaquinaEditorForm } from "./maquina-editor/maquina-editor-form";
-import { useMaquinaEditor } from "./maquina-editor/use-maquina-editor";
+import { MaquinaAltaDialog } from "./maquina-editor/maquina-alta-dialog";
 
 // ─── Props ──────────────────────────────────────────────────────────
 
 type MaquinariaPanelProps = {
   initialMaquinas: Maquina[];
   plantas: Planta[];
-  centrosCosto: CentroCosto[];
   initialCreate?: boolean;
 };
 
@@ -67,25 +54,16 @@ type MaquinariaPanelProps = {
 export function MaquinariaPanel({
   initialMaquinas,
   plantas,
-  centrosCosto,
   initialCreate = false,
 }: MaquinariaPanelProps) {
   const router = useRouter();
   const [maquinas, setMaquinas] = React.useState(initialMaquinas);
-  const [isSheetOpen, setIsSheetOpen] = React.useState(false);
-  const [editingId, setEditingId] = React.useState<string | null>(null);
+  const [altaAbierta, setAltaAbierta] = React.useState(false);
   const [filterText, setFilterText] = React.useState("");
   const [filterPlantilla, setFilterPlantilla] = React.useState<PlantillaMaquinaria | "all">("all");
   const [filterEstado, setFilterEstado] = React.useState<"todas" | "activas" | "inactivas">("todas");
   const [filtroAbierto, setFiltroAbierto] = React.useState(false);
-  const [saving, setSaving] = React.useState(false);
   const [maquinaADesactivar, setMaquinaADesactivar] = React.useState<Maquina | null>(null);
-
-  const editor = useMaquinaEditor({
-    defaultPlantaId: plantas[0]?.id ?? "",
-    activo: isSheetOpen,
-  });
-  const { initNueva } = editor;
 
   React.useEffect(() => {
     setMaquinas(initialMaquinas);
@@ -115,57 +93,31 @@ export function MaquinariaPanel({
     );
   }, [maquinas, filterText, filterPlantilla, filterEstado]);
 
-  const openNueva = React.useCallback(() => {
-    setEditingId(null);
-    initNueva();
-    setIsSheetOpen(true);
-  }, [initNueva]);
-
   const updateMaquinariaUrl = React.useCallback((path: string) => {
     window.history.pushState(null, "", path);
   }, []);
 
   React.useEffect(() => {
     if (initialCreate) {
-      openNueva();
+      setAltaAbierta(true);
     }
-  }, [initialCreate, openNueva]);
+  }, [initialCreate]);
 
+  // Fase D: el alta es un diálogo chico (nombre + tipo); el resto se
+  // completa en la ficha.
   const handleNueva = () => {
-    openNueva();
+    setAltaAbierta(true);
     updateMaquinariaUrl("/costos/maquinaria/nueva");
+  };
+
+  const cerrarAlta = () => {
+    setAltaAbierta(false);
+    updateMaquinariaUrl("/costos/maquinaria");
   };
 
   // Fase C: editar es una página, no el sheet.
   const handleEditar = (maquina: Maquina) => {
     router.push(`/costos/maquinaria/${maquina.id}`);
-  };
-
-  const handleGuardar = async () => {
-    if (!editor.form.nombre.trim()) {
-      toast.error("La máquina necesita un nombre");
-      return;
-    }
-    setSaving(true);
-    try {
-      const payload = editor.buildPayload();
-      if (editingId) {
-        const updated = await updateMaquina(editingId, payload);
-        setMaquinas((prev) => prev.map((m) => (m.id === editingId ? updated : m)));
-        toast.success(`"${updated.nombre}" actualizada`);
-      } else {
-        const created = await createMaquina(payload);
-        setMaquinas((prev) => [...prev, created]);
-        toast.success(`"${created.nombre}" creada`);
-      }
-      setIsSheetOpen(false);
-      updateMaquinariaUrl("/costos/maquinaria");
-      router.refresh();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error guardando");
-    } finally {
-      setSaving(false);
-    }
   };
 
   const handleToggle = async (maquina: Maquina) => {
@@ -374,39 +326,11 @@ export function MaquinariaPanel({
         </table>
       </div>
 
-      {/* Sheet editor */}
-      <Sheet
-        open={isSheetOpen}
-        onOpenChange={(open) => {
-          setIsSheetOpen(open);
-          if (!open) {
-            updateMaquinariaUrl("/costos/maquinaria");
-          }
-        }}
-      >
-        <SheetContent className="w-full overflow-y-auto sm:!w-[min(92vw,56rem)] sm:!max-w-4xl">
-          <SheetHeader>
-            <SheetTitle>{editingId ? "Editar máquina" : "Nueva máquina"}</SheetTitle>
-            <SheetDescription>
-              Completá los campos según la plantilla elegida. Los discriminantes
-              específicos se editan en cada perfil operativo.
-            </SheetDescription>
-          </SheetHeader>
-
-          <MaquinaEditorForm
-            editor={editor}
-            plantas={plantas}
-            centrosCosto={centrosCosto}
-            saving={saving}
-            esEdicion={editingId !== null}
-            onGuardar={handleGuardar}
-            onCancelar={() => {
-              setIsSheetOpen(false);
-              updateMaquinariaUrl("/costos/maquinaria");
-            }}
-          />
-        </SheetContent>
-      </Sheet>
+      <MaquinaAltaDialog
+        open={altaAbierta}
+        onClose={cerrarAlta}
+        plantas={plantas}
+      />
 
       <ConfirmacionDestructiva
         open={maquinaADesactivar !== null}

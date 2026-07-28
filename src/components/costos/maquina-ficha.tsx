@@ -52,11 +52,7 @@ export function MaquinaFicha({ maquina, plantas, centrosCosto }: MaquinaFichaPro
   // El nombre del header no sigue al input: es el de la máquina guardada.
   const [nombreGuardado, setNombreGuardado] = React.useState(maquina.nombre);
 
-  const editor = useMaquinaEditor({
-    defaultPlantaId: maquina.plantaId,
-    activo: true,
-    initialMaquina: maquina,
-  });
+  const editor = useMaquinaEditor({ maquina });
 
   const handleGuardar = async () => {
     if (!editor.form.nombre.trim()) {
@@ -114,7 +110,6 @@ export function MaquinaFicha({ maquina, plantas, centrosCosto }: MaquinaFichaPro
               editor={editor}
               plantas={plantas}
               centrosCosto={centrosCosto}
-              variante="ficha"
             />
           </div>
         ) : null}

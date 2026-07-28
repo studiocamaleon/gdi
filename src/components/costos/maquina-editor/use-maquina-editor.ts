@@ -18,7 +18,6 @@ import type {
   MaquinaPayload,
   MaquinariaTemplateDefinition,
   MaquinariaTemplateField,
-  PlantillaMaquinaria,
 } from "@/lib/maquinaria";
 import { getMaquinariaTemplate } from "@/lib/maquinaria-templates";
 import { getMateriasPrimas } from "@/lib/materias-primas-api";
@@ -27,7 +26,6 @@ import type { MateriaPrima } from "@/lib/materias-primas";
 import {
   cleanGranFormatoGeometryFields,
   cloneRecord,
-  emptyMaquina,
   getDefaultOpenSection,
   getDefaultProductivityUnit,
   getDefaultProfileType,
@@ -42,30 +40,22 @@ import {
 } from "./helpers";
 
 export function useMaquinaEditor({
-  defaultPlantaId,
-  activo,
-  initialMaquina,
+  maquina,
 }: {
-  defaultPlantaId: string;
-  /** Con el editor cerrado no se cargan materias primas (el sheet las pide al abrir). */
-  activo: boolean;
-  /** La ficha edita una máquina existente desde el primer render (sin initDesdeMaquina). */
-  initialMaquina?: Maquina;
+  /** La ficha edita una máquina existente desde el primer render. */
+  maquina: Maquina;
 }) {
   const [form, setForm] = React.useState<MaquinaPayload>(() =>
-    initialMaquina ? maquinaToPayload(initialMaquina) : emptyMaquina(defaultPlantaId),
+    maquinaToPayload(maquina),
   );
   const [perfiles, setPerfiles] = React.useState<LocalPerfil[]>(() => {
-    if (!initialMaquina) return [];
-    const payload = maquinaToPayload(initialMaquina);
+    const payload = maquinaToPayload(maquina);
     return payload.perfilesOperativos.map((p, i) =>
       normalizePerfilTypeForTemplate({ ...p, uiKey: `p-${i}-init` }, payload),
     );
   });
   const [openSection, setOpenSection] = React.useState<string | null>(() =>
-    initialMaquina
-      ? getDefaultOpenSection(initialMaquina.plantilla)
-      : "capacidades_fisicas",
+    getDefaultOpenSection(maquina.plantilla),
   );
   const [materiasPrimas, setMateriasPrimas] = React.useState<MateriaPrima[]>([]);
   const [loadingMaterias, setLoadingMaterias] = React.useState(false);
@@ -76,7 +66,7 @@ export function useMaquinaEditor({
   );
 
   React.useEffect(() => {
-    if (!activo || materiasPrimas.length > 0 || loadingMaterias) return;
+    if (materiasPrimas.length > 0 || loadingMaterias) return;
     setLoadingMaterias(true);
     getMateriasPrimas()
       .then(setMateriasPrimas)
@@ -86,47 +76,7 @@ export function useMaquinaEditor({
         );
       })
       .finally(() => setLoadingMaterias(false));
-  }, [activo, loadingMaterias, materiasPrimas.length]);
-
-  const initNueva = React.useCallback(() => {
-    const initialForm = emptyMaquina(defaultPlantaId);
-    setForm(initialForm);
-    setPerfiles([]);
-    setOpenSection(getDefaultOpenSection(initialForm.plantilla));
-  }, [defaultPlantaId]);
-
-  const initDesdeMaquina = React.useCallback((maquina: Maquina) => {
-    const payload = maquinaToPayload(maquina);
-    setForm(payload);
-    setPerfiles(
-      payload.perfilesOperativos.map((p, i) =>
-        normalizePerfilTypeForTemplate(
-          {
-            ...p,
-            uiKey: `p-${i}-${Date.now()}`,
-          },
-          payload,
-        ),
-      ),
-    );
-    setOpenSection(getDefaultOpenSection(payload.plantilla));
-  }, []);
-
-  const handlePlantillaChange = (newPlantilla: PlantillaMaquinaria) => {
-    const newTemplate = getMaquinariaTemplate(newPlantilla);
-    setForm((prev) => ({
-      ...prev,
-      plantilla: newPlantilla,
-      geometriaTrabajo: newTemplate?.geometry ?? prev.geometriaTrabajo,
-      unidadProduccionPrincipal:
-        newTemplate?.defaultProductionUnit ?? prev.unidadProduccionPrincipal,
-      // Reset paramsTecnicos al cambiar plantilla (el shape es distinto).
-      parametrosTecnicos: {},
-      consumibles: [],
-    }));
-    setPerfiles([]); // los perfiles también dependen del template
-    setOpenSection(getDefaultOpenSection(newPlantilla));
-  };
+  }, [loadingMaterias, materiasPrimas.length]);
 
   const handleMaquinaFieldChange = (
     field: MaquinariaTemplateField,
@@ -280,9 +230,6 @@ export function useMaquinaEditor({
     setOpenSection,
     materiasPrimas,
     loadingMaterias,
-    initNueva,
-    initDesdeMaquina,
-    handlePlantillaChange,
     handleMaquinaFieldChange,
     handleAgregarPerfil,
     handleEliminarPerfil,

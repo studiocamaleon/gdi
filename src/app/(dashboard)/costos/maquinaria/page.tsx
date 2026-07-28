@@ -1,7 +1,7 @@
 import dynamicImport from "next/dynamic";
 import { Suspense } from "react";
 
-import { getCentrosCosto, getPlantas } from "@/lib/costos-api";
+import { getPlantas } from "@/lib/costos-api";
 import { getMaquinas } from "@/lib/maquinaria-api";
 import { ModulePageSkeleton } from "@/components/dashboard/module-page-skeleton";
 
@@ -26,17 +26,15 @@ export default function MaquinariaPage() {
 }
 
 async function MaquinariaPageContent() {
-  const [maquinas, plantas, centrosCosto] = await Promise.all([
+  const [maquinas, plantas] = await Promise.all([
     getMaquinas(),
     getPlantas(),
-    getCentrosCosto(),
   ]);
 
   return (
     <MaquinariaPanel
       initialMaquinas={maquinas}
       plantas={plantas}
-      centrosCosto={centrosCosto}
     />
   );
 }
