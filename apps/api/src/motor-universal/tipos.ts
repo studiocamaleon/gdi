@@ -334,19 +334,12 @@ export interface PasoEjecutado {
     centroCostoNombre?: string | null;
     /** Tarifa horaria del centro de costo aplicada (mezclada: máquina + MO). */
     tarifaHora?: number;
-    /** Tarifa horaria de mano de obra (SUELDOS + CARGAS) del centro. */
-    tarifaManoObra?: number;
     /**
      * Minutos con operario cargado: en pasos con máquina = setup + cleanup +
      * tiempoFijo (no el run autónomo); en pasos sin máquina = totalMin.
      */
-    minutosOperario?: number;
     /** Operarios que ocupa el paso (multiplica el costo de mano de obra). */
     dotacionOperarios?: number;
-    /** Costo de máquina (tarifa sin MO × totalMin). */
-    costoMaquina?: number;
-    /** Costo de mano de obra (tarifaManoObra × minutosOperario). */
-    costoManoObra?: number;
     costo: number;
     /**
      * Origen del tiempo del paso: `manual_comercial` cuando el comercial lo

@@ -94,3 +94,49 @@ costo = minutosMaquina/60  × tarifaMaquina
 4. Motor `computeTiempoPaso`: aplica el split y expone el desglose
    (`costoMaquina`, `costoManoObra`, `tarifaManoObra`, `minutosOperario`).
 5. UI desglose por paso: muestra máquina vs. mano de obra.
+
+---
+
+## Reversión (2026-07-28)
+
+**Esta decisión se revirtió.** El motor volvió a cobrar la tarifa completa del
+centro sobre todo el tiempo ocupado, y el desglose máquina / mano de obra salió
+del detalle de costos.
+
+### Por qué
+
+El razonamiento original —"durante el run el operario no está, no se lo
+cobres"— describe algo cierto, pero el mecanismo elegido rompía la
+recuperación del costo.
+
+La **dedicación** del empleado ya decide qué parte de su sueldo carga este
+centro. Una vez que esa plata entró al pozo, la única forma de recuperarla es
+repartirla entre las horas que el centro vende. Sacarla del run no la manda a
+otro lado: la hace desaparecer. Y si el operario está en otra máquina durante
+el run, su costo ya está en *ese* otro centro vía su dedicación ahí — no había
+doble cobro que evitar.
+
+Peor: era **irrecuperable por construcción**. Un centro de 120 h que absorbe
+$900.000 de sueldos necesita facturar 120 h de operario para recuperarlos. A 5
+minutos de setup por trabajo eso son 1.440 trabajos, que son exactamente 120 h
+de puro setup: la máquina tendría que pasar el mes preparando y sin imprimir un
+minuto. Cualquier run que exista hace que el sueldo no se recupere nunca.
+
+Medido sobre datos reales: en la impresión de 10.000 flyers el paso salía
+$12.722 cuando le correspondían $19.722. En los centros del tenant, entre el
+22% y el 70% de cada tarifa se estaba facturando sólo durante el setup.
+
+### Qué quedó
+
+```
+costo = totalMin/60 × tarifaCalculada × (paso sin máquina ? dotación : 1)
+```
+
+- `tarifaManoObra` se sigue calculando y publicando: describe la composición
+  del centro y sirve para reportes. El motor ya no la usa para costear.
+- La **dotación** multiplica sólo en pasos sin máquina, donde la capacidad se
+  mide en horas-hombre: dos personas media hora consumen una hora de las del
+  centro. Con máquina no multiplica, porque la capacidad son horas-máquina y la
+  máquina es una sola.
+- El control para que una máquina no cargue sueldo de operario es la
+  **dedicación**: 0% en ese centro y el 100% donde la persona realmente está.

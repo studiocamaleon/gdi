@@ -114,8 +114,7 @@ import {
 } from "@/lib/propuestas";
 import {
   calcularCostoItem,
-  getCostoManoObraPaso,
-  getCostoMaquinaPaso,
+  getCostoTiempoPaso,
   getVisibleCostSteps,
   sumCargosPaso,
   sumMaterialesPaso,
@@ -2691,8 +2690,7 @@ function CostosItemView({
               <tr>
                 <th>Paso</th>
                 <th>Centro de costo</th>
-                <th className="num">Máquina</th>
-                <th className="num">Mano de obra</th>
+                <th className="num">Tiempo</th>
                 <th className="num">Materiales</th>
                 <th className="num">Cargos</th>
                 <th className="num">Total</th>
@@ -2778,27 +2776,8 @@ function CostosItemView({
                       <td className="num">
                         {paso.tiempo ? (
                           <>
-                            <strong>
-                              {fmt(getCostoMaquinaPaso(paso))}
-                            </strong>
+                            <strong>{fmt(getCostoTiempoPaso(paso))}</strong>
                             <span>{formatMinutos(paso.tiempo.totalMin)}</span>
-                          </>
-                        ) : (
-                          <span>-</span>
-                        )}
-                      </td>
-                      <td className="num">
-                        {paso.tiempo && getCostoManoObraPaso(paso) > 0 ? (
-                          <>
-                            <strong>
-                              {fmt(getCostoManoObraPaso(paso))}
-                            </strong>
-                            <span>
-                              {formatMinutos(
-                                paso.tiempo.minutosOperario ??
-                                  paso.tiempo.totalMin,
-                              )}
-                            </span>
                           </>
                         ) : (
                           <span>-</span>

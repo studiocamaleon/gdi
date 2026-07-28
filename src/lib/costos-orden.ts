@@ -40,14 +40,9 @@ function getCantidadPrecio(cotizacion: CotizacionItem, itemCantidad: number) {
   );
 }
 
-/** Costo de máquina del paso (tarifa sin MO × todo el tiempo). */
-export function getCostoMaquinaPaso(paso: PasoCosteo) {
-  return paso.tiempo?.costoMaquina ?? paso.tiempo?.costo ?? 0;
-}
-
-/** Costo de mano de obra del paso (setup + cleanup en pasos con máquina). */
-export function getCostoManoObraPaso(paso: PasoCosteo) {
-  return paso.tiempo?.costoManoObra ?? 0;
+/** Costo de tiempo del paso: la tarifa del centro por lo que lo ocupó. */
+export function getCostoTiempoPaso(paso: PasoCosteo) {
+  return paso.tiempo?.costo ?? 0;
 }
 
 export function sumMaterialesPaso(paso: PasoCosteo) {
@@ -95,10 +90,10 @@ export type CostoItemDesglose = {
   margenPct: number;
   contribucionMonto: number;
   contribucionPct: number;
-  /** Buckets del costo, ya desdoblando centro en máquina vs. mano de obra. */
+  /** Buckets del costo. */
   materialesTotal: number;
-  maquinaTotal: number;
-  manoObraTotal: number;
+  /** Lo que costó el tiempo: la tarifa de cada centro por lo que lo ocupó. */
+  tiempoTotal: number;
   tercerizadoTotal: number;
   cargosTotal: number;
   /** Filas que componen el precio neto (suman 100%). */
@@ -130,16 +125,9 @@ export function calcularCostoItem(
   // y no es ingreso).
   const margenPct = precioNeto > 0 ? (margenMonto / precioNeto) * 100 : 0;
 
-  const manoObraTotal = item.cotizacion.pasos.reduce(
-    (acc, paso) => acc + getCostoManoObraPaso(paso),
-    0,
-  );
   const materialesTotal = item.cotizacion.costos.materialesTotal;
   const tercerizadoTotal = item.cotizacion.costos.tercerizadoTotal ?? 0;
   const cargosTotal = item.cotizacion.costos.cargosDirectosTotal;
-  // Máquina = el centro de costo menos la mano de obra, para que los buckets
-  // sumen exactamente el total del centro.
-  const maquinaTotal = item.cotizacion.costos.tiempoTotal - manoObraTotal;
 
   // ── Cascada del precio: cada fila suma hacia abajo hasta el precio de venta.
   //    costo (materiales + centro de costo + cargos) + impuestos internos +
@@ -195,29 +183,12 @@ export function calcularCostoItem(
       tipo: "Materia prima",
       monto: materialesTotal,
     },
-    ...(manoObraTotal > 0
-      ? [
-          {
-            key: "centro-maquina",
-            label: "Centro · Máquina",
-            tipo: "Centro de costo",
-            monto: maquinaTotal,
-          },
-          {
-            key: "centro-mano-obra",
-            label: "Centro · Mano de obra",
-            tipo: "Mano de obra",
-            monto: manoObraTotal,
-          },
-        ]
-      : [
-          {
-            key: "centro-costo",
-            label: "Centro de costo",
-            tipo: "Centro de costo",
-            monto: item.cotizacion.costos.tiempoTotal,
-          },
-        ]),
+    {
+      key: "centro-costo",
+      label: "Centro de costo",
+      tipo: "Centro de costo",
+      monto: item.cotizacion.costos.tiempoTotal,
+    },
     {
       key: "tercerizado",
       label: "Costo de proveedor",
@@ -290,8 +261,7 @@ export function calcularCostoItem(
     contribucionMonto,
     contribucionPct,
     materialesTotal,
-    maquinaTotal,
-    manoObraTotal,
+    tiempoTotal: item.cotizacion.costos.tiempoTotal,
     tercerizadoTotal,
     cargosTotal,
     filasNeto,
@@ -315,9 +285,7 @@ export type CentroCostoConsolidado = {
   nombre: string;
   pasos: number;
   minutosCotizados: number;
-  costoMaquina: number;
-  costoManoObra: number;
-  /** Suma de máquina + mano de obra: lo que el centro le costó a la orden. */
+  /** Lo que el centro le costó a la orden: su tarifa por el tiempo ocupado. */
   costoTotal: number;
 };
 
@@ -346,8 +314,8 @@ export type CostosOrdenConsolidado = {
   contribucionMonto: number;
   contribucionPct: number;
   materialesTotal: number;
-  maquinaTotal: number;
-  manoObraTotal: number;
+  /** Lo que costó el tiempo de todos los centros. */
+  centroCostoTotal: number;
   tercerizadoTotal: number;
   /** Cargos de los items + cargos de la orden. */
   cargosTotal: number;
@@ -395,8 +363,7 @@ export function consolidarCostosOrden(
   const comisionesTotal = suma((d) => d.comisionesTotal);
   const costosInternosTotal = suma((d) => d.costosInternosTotal);
   const materialesTotal = suma((d) => d.materialesTotal);
-  const maquinaTotal = suma((d) => d.maquinaTotal);
-  const manoObraTotal = suma((d) => d.manoObraTotal);
+  const centroCostoTotal = suma((d) => d.tiempoTotal);
   const tercerizadoTotal = suma((d) => d.tercerizadoTotal);
   const cargosItems = suma((d) => d.cargosTotal);
   const cargosTotal = cargosItems + cargosOrdenTotal;
@@ -418,17 +385,12 @@ export function consolidarCostosOrden(
   const sinDesglosar = Math.max(
     0,
     costoItems -
-      (materialesTotal +
-        maquinaTotal +
-        manoObraTotal +
-        tercerizadoTotal +
-        cargosItems),
+      (materialesTotal + centroCostoTotal + tercerizadoTotal + cargosItems),
   );
 
   const composicion = [
     { key: "materiales", label: "Materiales", monto: materialesTotal },
-    { key: "maquina", label: "Máquina", monto: maquinaTotal },
-    { key: "mano-obra", label: "Mano de obra", monto: manoObraTotal },
+    { key: "centro-costo", label: "Centro de costo", monto: centroCostoTotal },
     { key: "proveedor", label: "Proveedor", monto: tercerizadoTotal },
     { key: "cargos", label: "Cargos directos", monto: cargosTotal },
     { key: "sin-desglosar", label: "Sin desglosar", monto: sinDesglosar },
@@ -458,17 +420,11 @@ export function consolidarCostosOrden(
         nombre,
         pasos: 0,
         minutosCotizados: 0,
-        costoMaquina: 0,
-        costoManoObra: 0,
         costoTotal: 0,
       };
-      const maquina = getCostoMaquinaPaso(paso);
-      const manoObra = getCostoManoObraPaso(paso);
       actual.pasos += 1;
       actual.minutosCotizados += paso.tiempo.totalMin;
-      actual.costoMaquina += maquina;
-      actual.costoManoObra += manoObra;
-      actual.costoTotal += maquina + manoObra;
+      actual.costoTotal += getCostoTiempoPaso(paso);
       centrosPorId.set(clave, actual);
       minutosCotizados += paso.tiempo.totalMin;
     }
@@ -490,8 +446,7 @@ export function consolidarCostosOrden(
     contribucionMonto,
     contribucionPct,
     materialesTotal,
-    maquinaTotal,
-    manoObraTotal,
+    centroCostoTotal,
     tercerizadoTotal,
     cargosTotal,
     composicion,
@@ -553,9 +508,8 @@ export type PasoRealVsCotizado = {
   atipico: boolean;
   /** Está hecho pero nadie lo midió: no entra en la comparación. */
   hechoSinMedir: boolean;
-  /** Tarifa horaria del centro CONGELADA al cotizar (máquina + MO). */
+  /** Tarifa horaria del centro CONGELADA al cotizar. */
   tarifaHora: number;
-  tarifaManoObra: number;
   costoCotizado: number;
   /**
    * Costo con los minutos REALES a la tarifa cotizada. Null si el paso no
@@ -670,17 +624,16 @@ export function cruzarRealVsCotizado(
       // atípico" sin que los números se contradigan.
       const hechoSinMedir =
         pasoReal.estado === "hecho" && minutosReales === null;
-      const costoMaquina = getCostoMaquinaPaso(cotizado);
-      const costoManoObra = getCostoManoObraPaso(cotizado);
+      const costoCotizado = getCostoTiempoPaso(cotizado);
       const tarifaHora = cotizado.tiempo?.tarifaHora ?? 0;
-      // El costo real reescala SÓLO la máquina, y con la tarifa cotizada: así
-      // el desvío que se ve es el del TIEMPO, no una mezcla de tiempo con un
-      // cambio de tarifa entre el día que se cotizó y hoy.
+      // El costo real reescala con la tarifa cotizada: así el desvío que se ve
+      // es el del TIEMPO, no una mezcla de tiempo con un cambio de tarifa
+      // entre el día que se cotizó y hoy.
       const costoReal =
         minutosReales != null && minutosCotizados > 0
-          ? (costoMaquina / minutosCotizados) * minutosReales + costoManoObra
+          ? (costoCotizado / minutosCotizados) * minutosReales
           : minutosReales != null
-            ? costoMaquina + costoManoObra
+            ? costoCotizado
             : null;
 
       pasos.push({
@@ -700,8 +653,7 @@ export function cruzarRealVsCotizado(
         atipico,
         hechoSinMedir,
         tarifaHora,
-        tarifaManoObra: cotizado.tiempo?.tarifaManoObra ?? 0,
-        costoCotizado: costoMaquina + costoManoObra,
+        costoCotizado,
         costoReal,
       });
     }
@@ -719,8 +671,6 @@ export function cruzarRealVsCotizado(
       nombre: paso.centroCostoNombre,
       pasos: 0,
       minutosCotizados: 0,
-      costoMaquina: 0,
-      costoManoObra: 0,
       costoTotal: 0,
       pasosMedidos: 0,
       minutosRealesMedidos: 0,

@@ -21,8 +21,6 @@ const COSTOS = [
   'costoEstimado',
   'costoSeparado',
   'costoConsolidado',
-  'costoMaquina',
-  'costoManoObra',
   'costoMateriales',
   'costoProveedor',
   'costoTotalReal',

@@ -1050,14 +1050,6 @@ export interface CotizarResponse {
         centroCostoId?: string | null;
         centroCostoNombre?: string | null;
         tarifaHora: number;
-        /** Tarifa horaria de mano de obra (SUELDOS + CARGAS) del centro. */
-        tarifaManoObra?: number;
-        /** Minutos con operario cargado (setup+cleanup+fijo en pasos con máquina). */
-        minutosOperario?: number;
-        /** Costo de máquina (tarifa sin MO × totalMin). */
-        costoMaquina?: number;
-        /** Costo de mano de obra (tarifaManoObra × minutosOperario). */
-        costoManoObra?: number;
         costo: number;
         /** "manual_comercial" cuando el comercial estimó el tiempo al cotizar. */
         origenTiempo?: "manual_comercial" | "calculado";

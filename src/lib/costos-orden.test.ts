@@ -74,10 +74,6 @@ function item(over: Partial<PropuestaItem> = {}): PropuestaItem {
             centroCostoId: "cc-1",
             centroCostoNombre: "Impresión",
             tarifaHora: 600,
-            tarifaManoObra: 180,
-            minutosOperario: 2,
-            costoMaquina: 100,
-            costoManoObra: 50,
             costo: 150,
           },
         },
@@ -92,10 +88,6 @@ function item(over: Partial<PropuestaItem> = {}): PropuestaItem {
             centroCostoId: "cc-2",
             centroCostoNombre: "Taller",
             tarifaHora: 600,
-            tarifaManoObra: 600,
-            minutosOperario: 5,
-            costoMaquina: 50,
-            costoManoObra: 0,
             costo: 50,
           },
         },
@@ -179,12 +171,11 @@ const cargoOrden = (montoNeto: number): PropuestaCargoDirecto => ({
 });
 
 describe("consolidarCostosOrden", () => {
-  it("suma el costo de los items y desdobla máquina de mano de obra", () => {
+  it("suma el costo de los items separando materiales de centros", () => {
     const c = consolidarCostosOrden([item()], []);
     expect(c.costoItems).toBe(400);
     expect(c.materialesTotal).toBe(200);
-    expect(c.manoObraTotal).toBe(50);
-    expect(c.maquinaTotal).toBe(150);
+    expect(c.centroCostoTotal).toBe(200);
     expect(c.margenMonto).toBe(600);
     expect(c.margenPct).toBe(60);
   });
@@ -238,8 +229,6 @@ describe("consolidarCostosOrden", () => {
     const c = consolidarCostosOrden([item()], []);
     expect(c.centros.map((x) => x.nombre)).toEqual(["Impresión", "Taller"]);
     expect(c.centros[0]).toMatchObject({
-      costoMaquina: 100,
-      costoManoObra: 50,
       costoTotal: 150,
       minutosCotizados: 10,
     });
@@ -276,17 +265,16 @@ describe("tiempoFueMedido", () => {
 });
 
 describe("cruzarRealVsCotizado", () => {
-  it("empareja por rutaPasoId y reescala sólo la máquina", () => {
+  it("empareja por rutaPasoId y reescala el costo con el tiempo real", () => {
     const r = cruzarRealVsCotizado([item()], tablero([paso()]));
     expect(r.pasosMedidos).toBe(1);
     const p = r.pasos[0];
     expect(p.minutosCotizados).toBe(10);
     expect(p.minutosReales).toBe(20);
     expect(p.costoCotizado).toBe(150);
-    // Máquina 100 al doble de tiempo = 200; la mano de obra (50) NO se
-    // reescala porque se paga sobre setup/cleanup.
-    expect(p.costoReal).toBe(250);
-    expect(r.desvioMonto).toBe(100);
+    // El doble de tiempo a la misma tarifa: el desvío que se ve es del tiempo.
+    expect(p.costoReal).toBe(300);
+    expect(r.desvioMonto).toBe(150);
   });
 
   it("empareja por índice cuando el paso no tiene rutaPasoId (orden vieja)", () => {

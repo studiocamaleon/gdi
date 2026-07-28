@@ -222,16 +222,10 @@ function Cascada({
       monto: consolidado.materialesTotal,
     },
     {
-      key: "maquina",
-      label: "Centro · Máquina",
+      key: "centro-costo",
+      label: "Centro de costo",
       tipo: "Centro de costo",
-      monto: consolidado.maquinaTotal,
-    },
-    {
-      key: "mano-obra",
-      label: "Centro · Mano de obra",
-      tipo: "Mano de obra",
-      monto: consolidado.manoObraTotal,
+      monto: consolidado.centroCostoTotal,
     },
     {
       key: "proveedor",
@@ -504,8 +498,6 @@ function Centros({
               <th>Centro de costo</th>
               <th className="num">Pasos</th>
               <th className="num">Tiempo cotizado</th>
-              <th className="num">Máquina</th>
-              <th className="num">Mano de obra</th>
               <th className="num">Costo</th>
               {hayReal ? <th className="num">Desvío de tiempo</th> : null}
             </tr>
@@ -520,10 +512,6 @@ function Centros({
                   <td>{centro.nombre}</td>
                   <td className="num">{centro.pasos}</td>
                   <td className="num">{formatMin(centro.minutosCotizados)}</td>
-                  <td className="num">{fmt(centro.costoMaquina)}</td>
-                  <td className="num">
-                    {centro.costoManoObra > 0 ? fmt(centro.costoManoObra) : "—"}
-                  </td>
                   <td className="num strong">{fmt(centro.costoTotal)}</td>
                   {hayReal ? (
                     <td className="num">

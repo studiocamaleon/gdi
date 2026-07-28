@@ -2743,15 +2743,13 @@ export class MotorUniversalService {
     //   1. Centro de costo principal de la máquina.
     //   2. Centro de costo manual del paso cuando no hay máquina.
     let tarifaHora = 0;
-    let tarifaManoObra = 0;
     const centroCosto = this.resolveCentroCostoPaso(paso);
     if (centroCosto.id) {
       const tarifaCentro = tarifasMap.get(centroCosto.id) as
-        | { tarifa: unknown; manoObra: unknown }
+        | { tarifa: unknown }
         | undefined;
       if (tarifaCentro != null) {
         tarifaHora = Number(tarifaCentro.tarifa);
-        tarifaManoObra = Number(tarifaCentro.manoObra);
       }
     }
 
@@ -2787,33 +2785,27 @@ export class MotorUniversalService {
           'Calculá y publicá la tarifa del centro de costo para el período antes de cotizar.',
       });
     }
-    // Desdoblado de la tarifa (docs/hora-hombre-setup-cleanup-diseno.md):
-    // la máquina se cobra sobre todo el tiempo ocupado; la mano de obra sólo
-    // sobre setup + cleanup + tiempoFijo en pasos con máquina (no el run
-    // autónomo). En pasos sin máquina el operario hace el run → cobra todo.
+    // El paso paga la fracción de la capacidad del centro que ocupó, a la
+    // tarifa del centro —una sola, con sueldos, energía, amortización y la
+    // estructura absorbida adentro—.
+    //
+    // Hasta 2026-07-28 la mano de obra se descontaba del run "porque el
+    // operario no está mientras la máquina corre sola". Se revirtió: la
+    // dedicación del empleado YA decidió qué parte de su sueldo carga este
+    // centro, y sacarla del run no la manda a otro lado, la hace desaparecer.
+    // Peor: era irrecuperable por construcción. Un centro de 120 h que absorbe
+    // $900.000 de sueldos necesitaría 1.440 setups de 5 min para recuperarlos
+    // —o sea, el mes entero preparando y sin imprimir un minuto—.
+    // Ver docs/hora-hombre-setup-cleanup-diseno.md §Reversión.
+    //
+    // Dotación: multiplica sólo donde la capacidad se mide en horas-hombre, o
+    // sea en los pasos sin máquina. Dos personas media hora consumen una hora
+    // de las del centro. Con máquina no multiplica: la capacidad son
+    // horas-máquina y la máquina es una sola, la atiendan uno o cuatro.
     const tieneMaquina = paso.maquina?.centroCostoPrincipalId != null;
-    const tarifaMaquina = Math.max(0, tarifaHora - tarifaManoObra);
-    const minutosOperario = tieneMaquina
-      ? setupMin + cleanupMin + tiempoFijoMin
-      : totalMin;
-    // Dotación: un paso a N operarios consume N× las horas-hombre.
-    //
-    // En un paso CON máquina multiplica sólo la mano de obra: la capacidad de
-    // ese centro se mide en horas-máquina y la máquina es una sola, la
-    // atiendan uno o cuatro.
-    //
-    // En un paso SIN máquina multiplica todo. La capacidad de un centro de
-    // mano de obra son horas-hombre —los dos diseñadores de un centro de 200 h
-    // aportan 100 cada uno—, así que dos personas media hora consumen una hora
-    // de esas 200 y tienen que pagar por ella completa: sueldos y también la
-    // parte de software, amortización y estructura que esa hora carga. Cobrar
-    // el resto una sola vez dejaba el centro sin recuperar su costo.
     const dotacionOperarios = Math.max(1, Math.round(paso.dotacionOperarios ?? 1));
-    const dotacionSobreElResto = tieneMaquina ? 1 : dotacionOperarios;
-    const costoMaquina = (totalMin / 60) * tarifaMaquina * dotacionSobreElResto;
-    const costoManoObra =
-      (minutosOperario / 60) * tarifaManoObra * dotacionOperarios;
-    const costo = costoMaquina + costoManoObra;
+    const costo =
+      (totalMin / 60) * tarifaHora * (tieneMaquina ? 1 : dotacionOperarios);
 
     return {
       setupMin,
@@ -2824,11 +2816,7 @@ export class MotorUniversalService {
       centroCostoId: centroCosto.id,
       centroCostoNombre: centroCosto.nombre,
       tarifaHora,
-      tarifaManoObra,
-      minutosOperario,
       dotacionOperarios,
-      costoMaquina,
-      costoManoObra,
       costo,
       ...(tiempoManualMin != null
         ? { origenTiempo: 'manual_comercial' as const }
