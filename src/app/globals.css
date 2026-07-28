@@ -7409,6 +7409,216 @@ body {
     cursor: default;
   }
 
+  /* ── Perfiles operativos como tabla (estilo Holdprint) ── */
+
+  .maq-perfiles .maq-perfiles-vacio {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
+  .maq-perfiles .maq-perfiles-scroll {
+    overflow-x: auto;
+  }
+
+  .maq-perfiles-tabla {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .maq-perfiles-tabla th {
+    padding: 8px 10px 8px 0;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+  }
+
+  .maq-perfiles-tabla th .unidad {
+    font-weight: 400;
+    color: var(--text-muted);
+  }
+
+  .maq-perfiles-tabla th .req {
+    color: #dc2626;
+  }
+
+  .maq-perfiles-tabla td {
+    padding: 5px 10px 5px 0;
+    vertical-align: middle;
+  }
+
+  .maq-perfiles-tabla td.na {
+    color: var(--text-muted);
+    text-align: center;
+  }
+
+  /* Los inputs de la celda van limpios: la unidad vive en el encabezado. */
+  .maq-perfiles-tabla td input[type="number"],
+  .maq-perfiles-tabla td input[type="text"],
+  .maq-perfiles-tabla td select {
+    width: 100%;
+    min-width: 84px;
+  }
+
+  .maq-perfiles-tabla td select {
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 13px;
+  }
+
+  .maq-perfiles-tinta-btn {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--surface);
+    color: var(--text-muted);
+    font-size: 12.5px;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .maq-perfiles-tinta-btn.ok {
+    border-color: #111114;
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  .maq-perfiles-acciones {
+    display: inline-flex;
+    gap: 2px;
+  }
+
+  .maq-perfiles-acciones button {
+    display: inline-flex;
+    padding: 5px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .maq-perfiles-acciones button svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .maq-perfiles-acciones .dup {
+    color: var(--text-muted);
+  }
+
+  .maq-perfiles-acciones .del {
+    color: #dc2626;
+  }
+
+  .maq-perfiles-agregar {
+    margin-top: 10px;
+  }
+
+  /* ── Modal "Configurar tintas" ── */
+
+  .maq-modal.maq-modal-ancho {
+    width: min(720px, 94vw);
+  }
+
+  .maq-modal-head .maq-modal-sub {
+    margin-top: 2px;
+    font-size: 12.5px;
+    color: var(--text-muted);
+  }
+
+  .maq-tintas-vacio,
+  .maq-tintas-cargando {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
+  .maq-tintas-tabla {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .maq-tintas-tabla th {
+    padding: 6px 10px 6px 0;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+  }
+
+  .maq-tintas-tabla td {
+    padding: 5px 10px 5px 0;
+    vertical-align: middle;
+  }
+
+  .maq-tintas-tabla td input,
+  .maq-tintas-tabla td select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 13px;
+  }
+
+  .maq-tintas-tabla td input:disabled {
+    opacity: 0.5;
+  }
+
+  .maq-tintas-tabla td:nth-child(2) {
+    width: 130px;
+  }
+
+  .maq-tintas-color {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .maq-tintas-color .sw {
+    width: 14px;
+    height: 14px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+
+  .maq-tintas-quitar {
+    display: inline-flex;
+    padding: 5px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #dc2626;
+    cursor: pointer;
+  }
+
+  .maq-tintas-quitar:disabled {
+    color: var(--text-muted);
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  .maq-tintas-quitar svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .maq-tintas-nota {
+    margin: 12px 0 0;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
   /* La fila que dice si el prorrateo cuadra: lo que sale de la estructura
      tiene que entrar entero a los productivos. */
   .ccosto-tabla tfoot .ccosto-cuadre td {
@@ -37652,6 +37862,7 @@ body:has(.t-app) {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
 
 
 

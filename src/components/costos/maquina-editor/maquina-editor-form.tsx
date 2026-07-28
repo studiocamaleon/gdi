@@ -250,9 +250,19 @@ export function MaquinaEditorSecciones({ editor }: { editor: MaquinaEditorState 
     handleDuplicarPerfil,
   } = editor;
 
+  // Las tintas por perfil se configuran desde la tabla de perfiles (modal
+  // por fila): el acordeón Consumibles queda sólo para el láser, cuyo tóner
+  // es una única configuración por máquina.
+  const tintasPorPerfil =
+    form.plantilla !== "impresora_laser";
+  const secciones =
+    template?.sections.filter(
+      (sec) => !(sec.id === "consumibles" && tintasPorPerfil),
+    ) ?? [];
+
   return (
     <>
-      {template?.sections.map((sec) => (
+      {secciones.map((sec) => (
         <Card key={sec.id}>
           <button
             type="button"
@@ -285,6 +295,9 @@ export function MaquinaEditorSecciones({ editor }: { editor: MaquinaEditorState 
                   setPerfiles={setPerfiles}
                   sectionFields={sec.fields}
                   form={form}
+                  setForm={setForm}
+                  materiasPrimas={materiasPrimas}
+                  loadingMaterias={loadingMaterias}
                   onAgregar={handleAgregarPerfil}
                   onEliminar={handleEliminarPerfil}
                   onDuplicar={handleDuplicarPerfil}

@@ -1,37 +1,31 @@
 /**
- * Editor de perfiles operativos de una máquina. Extraído de
- * maquinaria-panel.tsx en la Fase B (2026-07-28), sin cambios de
- * comportamiento.
+ * Editor de perfiles operativos de una máquina — tabla estilo Holdprint
+ * (2026-07-28): una fila por perfil, columnas generadas desde los campos
+ * que declara la plantilla (la unidad va en el encabezado), y la tinta se
+ * configura desde un botón que abre el modal PerfilTintasModal. Antes era
+ * una card con acordeón por perfil.
  */
 
 import * as React from "react";
-import { CopyIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import { CopyIcon, PlusIcon, XIcon } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from "@/components/ui/select";
-import { tipoPerfilOperativoMaquinaItems } from "@/lib/maquinaria";
-import type {
-  MaquinaPayload,
-  MaquinariaTemplateField,
+  tipoPerfilOperativoMaquinaItems,
+  type MaquinaPayload,
+  type MaquinariaTemplateField,
 } from "@/lib/maquinaria";
+import type { MateriaPrima } from "@/lib/materias-primas";
 
+import { PerfilTintasModal } from "./consumibles-editor";
 import {
   FieldInput,
-  SelectDisplay,
+  PRINTER_TEMPLATES_WITH_CONSUMIBLES,
+  canalFromConsumible,
   cleanPerfilDetailsForType,
   getAllowedProfileTypes,
   getDefaultProfileType,
-  getFriendlyFieldDescription,
   getPerfilFieldValue,
+  getTemplateUnitLabel,
   normalizePerfilTypeForTemplate,
   setPerfilFieldValue,
   setPerfilFieldValueForTemplate,
@@ -46,6 +40,9 @@ interface PerfilesProps {
   setPerfiles: React.Dispatch<React.SetStateAction<LocalPerfil[]>>;
   sectionFields: MaquinariaTemplateField[];
   form: MaquinaPayload;
+  setForm: React.Dispatch<React.SetStateAction<MaquinaPayload>>;
+  materiasPrimas: MateriaPrima[];
+  loadingMaterias: boolean;
   onAgregar: () => void;
   onEliminar: (uiKey: string) => void;
   onDuplicar: (uiKey: string) => void;
@@ -56,137 +53,200 @@ export function PerfilesOperativosEditor({
   setPerfiles,
   sectionFields,
   form,
+  setForm,
+  materiasPrimas,
+  loadingMaterias,
   onAgregar,
   onEliminar,
   onDuplicar,
 }: PerfilesProps) {
+  const [tintasDeUiKey, setTintasDeUiKey] = React.useState<string | null>(null);
+
   const allowedProfileTypeItems = tipoPerfilOperativoMaquinaItems.filter((item) =>
     getAllowedProfileTypes(form).includes(item.value),
   );
+  // La columna Tipo sólo aparece si hay algo que elegir.
+  const conColumnaTipo = allowedProfileTypeItems.length > 1;
+  // Tintas por perfil: impresoras de la familia, menos láser (tóner por máquina).
+  const conColumnaTinta =
+    PRINTER_TEMPLATES_WITH_CONSUMIBLES.has(form.plantilla) &&
+    form.plantilla !== "impresora_laser";
+
+  const updatePerfil = (uiKey: string, next: LocalPerfil) => {
+    setPerfiles((prev) => prev.map((p) => (p.uiKey === uiKey ? next : p)));
+  };
+
+  const tintasConfiguradas = (perfil: LocalPerfil) =>
+    form.consumibles.filter(
+      (item) =>
+        item.perfilOperativoId === perfil.id &&
+        item.materiaPrimaVarianteId &&
+        canalFromConsumible(item),
+    ).length;
+
+  const perfilTintas = perfiles.find((p) => p.uiKey === tintasDeUiKey) ?? null;
+
+  // Una columna existe sólo si al menos un perfil la usa: los campos de
+  // corte no ocupan lugar cuando todos los perfiles son de impresión.
+  const visibleFields = sectionFields.filter(
+    (field) =>
+      perfiles.length === 0 ||
+      perfiles.some((perfil) => shouldShowPerfilField(field, form, perfil)),
+  );
 
   return (
-    <div className="space-y-3">
+    <div className="maq-perfiles">
       {perfiles.length === 0 ? (
-        <p className="text-muted-foreground text-xs italic">Sin perfiles. Agregá al menos uno.</p>
+        <p className="maq-perfiles-vacio">Sin perfiles. Agregá al menos uno.</p>
       ) : (
-        perfiles.map((perfil, idx) => (
-          <Card key={perfil.uiKey} className="bg-muted/30">
-            <CardHeader className="flex flex-row items-center justify-between p-3">
-              <div className="flex items-center gap-2">
-                <Badge>{idx + 1}</Badge>
-                <span className="text-sm font-medium">
-                  {perfil.nombre || "(sin nombre)"}
-                </span>
-              </div>
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7"
-                  onClick={() => onDuplicar(perfil.uiKey)}
-                  title="Duplicar perfil"
-                  aria-label={`Duplicar perfil ${perfil.nombre || idx + 1}`}
-                >
-                  <CopyIcon className="size-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="text-destructive size-7"
-                  onClick={() => onEliminar(perfil.uiKey)}
-                  title="Eliminar perfil"
-                  aria-label={`Eliminar perfil ${perfil.nombre || idx + 1}`}
-                >
-                  <Trash2Icon className="size-4" />
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-              <div className="min-w-0 space-y-1">
-                <LabelConTooltip
-                  label="Tipo de perfil"
-                  iconSize="sm"
-                  tooltip="Define qué tipo de operación ejecuta este perfil dentro de la máquina (impresión, corte, laminado, mecanizado, etc.). Una misma máquina puede tener múltiples perfiles si soporta más de un tipo."
-                />
-                <Select
-                  value={perfil.tipoPerfil}
-                  onValueChange={(v) => {
-                    const next = normalizePerfilTypeForTemplate(
-                      cleanPerfilDetailsForType(
-                        setPerfilFieldValue(
-                          perfil,
-                          "tipoPerfil",
-                          v ?? getDefaultProfileType(form),
-                        ),
-                      ),
-                      form,
-                    );
-                    setPerfiles((prev) =>
-                      prev.map((p) => (p.uiKey === perfil.uiKey ? next : p)),
-                    );
-                  }}
-                >
-                  <SelectTrigger className="w-full min-w-0">
-                    <SelectDisplay
-                      label={
-                        tipoPerfilOperativoMaquinaItems.find(
-                          (item) => item.value === perfil.tipoPerfil,
-                        )?.label
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {allowedProfileTypeItems.map((item) => (
-                      <SelectItem key={item.value} value={item.value}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {sectionFields.filter((field) => shouldShowPerfilField(field, form, perfil)).map((field) => {
-                const profileFieldMax =
-                  field.key === "gramajeMaxGr" &&
-                  typeof form.gramajeMaxGr === "number"
-                    ? form.gramajeMaxGr
-                    : undefined;
-
-                return (
-                  <div key={field.key} className="min-w-0 space-y-1">
-                  <Label
-                    htmlFor={`p-${perfil.uiKey}-${field.key}`}
-                    className="text-xs"
-                  >
+        <div className="maq-perfiles-scroll">
+          <table className="maq-perfiles-tabla">
+            <thead>
+              <tr>
+                {conColumnaTipo ? <th className="tipo">Tipo</th> : null}
+                {visibleFields.map((field) => (
+                  <th key={field.key} title={field.description}>
                     {field.label}
-                    {field.required && <span className="text-destructive"> *</span>}
-                  </Label>
-                  <FieldInput
-                    field={field}
-                    value={getPerfilFieldValue(perfil, field.key)}
-                    max={profileFieldMax}
-                    onChange={(v) => {
-                      const next = setPerfilFieldValueForTemplate(perfil, form, field.key, v);
-                      setPerfiles((prev) =>
-                        prev.map((p) => (p.uiKey === perfil.uiKey ? next : p)),
+                    {field.unit ? (
+                      <span className="unidad"> ({getTemplateUnitLabel(field.unit)})</span>
+                    ) : null}
+                    {field.required ? <span className="req"> *</span> : null}
+                  </th>
+                ))}
+                {conColumnaTinta ? <th className="tinta">Tinta</th> : null}
+                <th className="acciones" aria-label="Acciones" />
+              </tr>
+            </thead>
+            <tbody>
+              {perfiles.map((perfil, idx) => {
+                const cantidadTintas = tintasConfiguradas(perfil);
+                return (
+                  <tr key={perfil.uiKey}>
+                    {conColumnaTipo ? (
+                      <td className="tipo">
+                        <select
+                          value={perfil.tipoPerfil}
+                          aria-label={`Tipo del perfil ${perfil.nombre || idx + 1}`}
+                          onChange={(e) => {
+                            const next = normalizePerfilTypeForTemplate(
+                              cleanPerfilDetailsForType(
+                                setPerfilFieldValue(
+                                  perfil,
+                                  "tipoPerfil",
+                                  e.target.value || getDefaultProfileType(form),
+                                ),
+                              ),
+                              form,
+                            );
+                            updatePerfil(perfil.uiKey, next);
+                          }}
+                        >
+                          {allowedProfileTypeItems.map((item) => (
+                            <option key={item.value} value={item.value}>
+                              {item.label}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                    ) : null}
+                    {visibleFields.map((field) => {
+                      if (!shouldShowPerfilField(field, form, perfil)) {
+                        return (
+                          <td key={field.key} className="na">
+                            —
+                          </td>
+                        );
+                      }
+                      const profileFieldMax =
+                        field.key === "gramajeMaxGr" &&
+                        typeof form.gramajeMaxGr === "number"
+                          ? form.gramajeMaxGr
+                          : undefined;
+                      // La unidad vive en el encabezado; la celda va limpia.
+                      const cellField: MaquinariaTemplateField = field.unit
+                        ? { ...field, unit: undefined }
+                        : field;
+                      return (
+                        <td key={field.key}>
+                          <FieldInput
+                            field={cellField}
+                            value={getPerfilFieldValue(perfil, field.key)}
+                            max={profileFieldMax}
+                            onChange={(v) => {
+                              const next = setPerfilFieldValueForTemplate(
+                                perfil,
+                                form,
+                                field.key,
+                                v,
+                              );
+                              updatePerfil(perfil.uiKey, next);
+                            }}
+                          />
+                        </td>
                       );
-                    }}
-                  />
-                  {getFriendlyFieldDescription(field) && (
-                    <p className="text-muted-foreground text-xs">
-                      {getFriendlyFieldDescription(field)}
-                    </p>
-                  )}
-                  </div>
+                    })}
+                    {conColumnaTinta ? (
+                      <td className="tinta">
+                        {perfil.tipoPerfil === "corte" ? (
+                          <span className="na">—</span>
+                        ) : (
+                          <button
+                            type="button"
+                            className={`maq-perfiles-tinta-btn ${cantidadTintas > 0 ? "ok" : ""}`}
+                            onClick={() => setTintasDeUiKey(perfil.uiKey)}
+                          >
+                            {cantidadTintas > 0
+                              ? `${cantidadTintas} tinta${cantidadTintas === 1 ? "" : "s"}`
+                              : "Para configurar"}
+                          </button>
+                        )}
+                      </td>
+                    ) : null}
+                    <td className="acciones">
+                      <span className="maq-perfiles-acciones">
+                        <button
+                          type="button"
+                          className="dup"
+                          title="Duplicar perfil"
+                          aria-label={`Duplicar perfil ${perfil.nombre || idx + 1}`}
+                          onClick={() => onDuplicar(perfil.uiKey)}
+                        >
+                          <CopyIcon />
+                        </button>
+                        <button
+                          type="button"
+                          className="del"
+                          title="Eliminar perfil"
+                          aria-label={`Eliminar perfil ${perfil.nombre || idx + 1}`}
+                          onClick={() => onEliminar(perfil.uiKey)}
+                        >
+                          <XIcon />
+                        </button>
+                      </span>
+                    </td>
+                  </tr>
                 );
               })}
-            </CardContent>
-          </Card>
-        ))
+            </tbody>
+          </table>
+        </div>
       )}
-      <Button variant="outline" size="sm" onClick={onAgregar}>
-        <PlusIcon className="mr-2 size-4" />
+
+      <button type="button" className="maq-btn maq-perfiles-agregar" onClick={onAgregar}>
+        <PlusIcon />
         Agregar perfil
-      </Button>
+      </button>
+
+      {perfilTintas ? (
+        <PerfilTintasModal
+          perfil={perfilTintas}
+          form={form}
+          setForm={setForm}
+          materiasPrimas={materiasPrimas}
+          loadingMaterias={loadingMaterias}
+          onClose={() => setTintasDeUiKey(null)}
+        />
+      ) : null}
     </div>
   );
 }

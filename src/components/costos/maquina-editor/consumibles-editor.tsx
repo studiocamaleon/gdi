@@ -5,7 +5,7 @@
  */
 
 import * as React from "react";
-import { CalculatorIcon, ChevronDownIcon } from "lucide-react";
+import { CalculatorIcon, ChevronDownIcon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -622,4 +622,250 @@ function getSelectedConsumibleVariantFallback(
     if (variante) return { materiaPrima, variante };
   }
   return null;
+}
+
+// ─── Modal "Configurar tintas" de UN perfil (estilo Holdprint) ──────
+//
+// Se abre desde la columna Tinta de la tabla de perfiles. Los canales
+// salen del modo de color del perfil (o de la máquina si el perfil no
+// declara); cada fila vincula la variante de materia prima y su consumo.
+// El láser NO pasa por acá: su tóner es por máquina (acordeón Consumibles).
+
+interface PerfilTintasModalProps {
+  perfil: LocalPerfil;
+  form: MaquinaPayload;
+  setForm: React.Dispatch<React.SetStateAction<MaquinaPayload>>;
+  materiasPrimas: MateriaPrima[];
+  loadingMaterias: boolean;
+  onClose: () => void;
+}
+
+export function PerfilTintasModal({
+  perfil,
+  form,
+  setForm,
+  materiasPrimas,
+  loadingMaterias,
+  onClose,
+}: PerfilTintasModalProps) {
+  const channels = requiredChannelsForPerfil(
+    perfil,
+    (form.parametrosTecnicos ?? {}) as Record<string, unknown>,
+  );
+  const variantesCompatibles = getVariantesConsumiblesCompatibles(
+    materiasPrimas,
+    form.plantilla,
+  );
+
+  const upsert = (
+    canal: ConsumibleCanal,
+    patch: Partial<MaquinaPayload["consumibles"][number]>,
+  ) => {
+    if (!perfil.id) return;
+    setForm((current) => {
+      const idx = current.consumibles.findIndex(
+        (item) =>
+          item.perfilOperativoId === perfil.id &&
+          canalFromConsumible(item) === canal,
+      );
+      const existing = idx >= 0 ? current.consumibles[idx] : null;
+      const nextItem: MaquinaPayload["consumibles"][number] = {
+        id: existing?.id,
+        materiaPrimaVarianteId: existing?.materiaPrimaVarianteId ?? "",
+        nombre: existing?.nombre ?? `${CANAL_META[canal].label} · ${perfil.nombre}`,
+        tipo: existing?.tipo ?? consumibleTipoFor(current.plantilla, canal),
+        unidad: existing?.unidad ?? consumibleUnidadFor(current.plantilla),
+        rendimientoEstimado: existing?.rendimientoEstimado,
+        consumoBase: existing?.consumoBase ?? defaultConsumoBase(current.plantilla, canal),
+        perfilOperativoId: perfil.id,
+        perfilOperativoNombre: perfil.nombre,
+        detalle: { ...(existing?.detalle ?? {}), color: canal },
+        observaciones: existing?.observaciones,
+        ...patch,
+        activo: true,
+      };
+      const next = [...current.consumibles];
+      if (idx >= 0) next[idx] = nextItem;
+      else next.push(nextItem);
+      return { ...current, consumibles: next };
+    });
+  };
+
+  const remove = (canal: ConsumibleCanal) => {
+    setForm((current) => ({
+      ...current,
+      consumibles: current.consumibles.filter(
+        (item) =>
+          !(
+            item.perfilOperativoId === perfil.id &&
+            canalFromConsumible(item) === canal
+          ),
+      ),
+    }));
+  };
+
+  return (
+    <div className="maq-backdrop show" onClick={onClose}>
+      <div
+        className="maq-modal maq-modal-ancho"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Configurar tintas de ${perfil.nombre}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="maq-modal-head">
+          <div>
+            <h2>Configurar tintas</h2>
+            <div className="maq-modal-sub">{perfil.nombre}</div>
+          </div>
+          <button
+            type="button"
+            className="maq-modal-cerrar"
+            aria-label="Cerrar"
+            onClick={onClose}
+          >
+            <XIcon />
+          </button>
+        </div>
+
+        <div className="maq-modal-body">
+          {channels.length === 0 ? (
+            <p className="maq-tintas-vacio">
+              Este perfil todavía no declara colores. Definí el campo
+              “Colores” del perfil para generar los canales de tinta.
+            </p>
+          ) : (
+            <>
+              {loadingMaterias ? (
+                <p className="maq-tintas-cargando">
+                  Cargando materias primas compatibles…
+                </p>
+              ) : null}
+              <table className="maq-tintas-tabla">
+                <thead>
+                  <tr>
+                    <th>Color</th>
+                    <th>
+                      Consumo ({consumibleUnidadFor(form.plantilla)}/m²)
+                    </th>
+                    <th>Material vinculado</th>
+                    <th aria-label="Acciones" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {channels.map((canal) => {
+                    const existing = form.consumibles.find(
+                      (item) =>
+                        item.perfilOperativoId === perfil.id &&
+                        canalFromConsumible(item) === canal,
+                    );
+                    const variantesCanal = variantesCompatibles.filter((item) =>
+                      varianteMatchesCanal(item.variante, canal),
+                    );
+                    const selected = existing?.materiaPrimaVarianteId ?? "";
+                    const selectedStillAvailable = variantesCanal.some(
+                      (item) => item.variante.id === selected,
+                    );
+                    const opciones =
+                      selected && !selectedStillAvailable
+                        ? [
+                            ...variantesCanal,
+                            getSelectedConsumibleVariantFallback(materiasPrimas, selected),
+                          ].filter((item): item is VarianteConsumibleOption => Boolean(item))
+                        : variantesCanal;
+
+                    return (
+                      <tr key={canal}>
+                        <td>
+                          <span className="maq-tintas-color">
+                            <span
+                              className="sw"
+                              style={{ backgroundColor: CANAL_META[canal].swatch }}
+                            />
+                            {CANAL_META[canal].label}
+                          </span>
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            min={0}
+                            step={0.01}
+                            disabled={!existing}
+                            value={existing?.consumoBase ?? ""}
+                            placeholder={String(defaultConsumoBase(form.plantilla, canal))}
+                            aria-label={`Consumo de ${CANAL_META[canal].label}`}
+                            onChange={(event) =>
+                              upsert(canal, {
+                                consumoBase:
+                                  event.target.value === ""
+                                    ? undefined
+                                    : Number(event.target.value),
+                              })
+                            }
+                          />
+                        </td>
+                        <td>
+                          <select
+                            value={selected}
+                            aria-label={`Material vinculado a ${CANAL_META[canal].label}`}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              if (!value) {
+                                remove(canal);
+                                return;
+                              }
+                              const variante = opciones.find(
+                                (item) => item.variante.id === value,
+                              );
+                              upsert(canal, {
+                                materiaPrimaVarianteId: value,
+                                nombre: variante
+                                  ? `${CANAL_META[canal].label} · ${variante.materiaPrima.nombre}`
+                                  : `${CANAL_META[canal].label} · ${perfil.nombre}`,
+                                tipo: consumibleTipoFor(form.plantilla, canal),
+                                unidad: consumibleUnidadFor(form.plantilla),
+                              });
+                            }}
+                          >
+                            <option value="">Sin vincular</option>
+                            {opciones.map((item) => (
+                              <option key={item.variante.id} value={item.variante.id}>
+                                {getConsumibleVariantOptionLabel(item)}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="maq-tintas-quitar"
+                            title="Quitar tinta del perfil"
+                            aria-label={`Quitar ${CANAL_META[canal].label}`}
+                            disabled={!existing}
+                            onClick={() => remove(canal)}
+                          >
+                            <XIcon />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <p className="maq-tintas-nota">
+                El motor toma estas tintas automáticamente al cotizar con este
+                perfil; en Productos no hace falta elegirlas por paso.
+              </p>
+            </>
+          )}
+        </div>
+
+        <div className="maq-modal-foot">
+          <button type="button" className="maq-btn maq-btn-primario" onClick={onClose}>
+            Listo
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
