@@ -1994,6 +1994,14 @@ export class MotorUniversalService {
     const perfilResuelto = sinImpresion
       ? null
       : this.resolverPerfil(pasoConMaquina, jobContext);
+    if (!sinImpresion) {
+      this.avisarFaltaPerfilDobleFaz(
+        errores,
+        pasoConMaquina,
+        jobContext,
+        perfilResuelto,
+      );
+    }
     paso = pasoConMaquina; // todo lo siguiente usa el paso con máquina resuelta
 
     // c.0) DOBLE FAZ — si el sustrato de este paso se duplica (aplicaMultiCaras),
@@ -5357,15 +5365,15 @@ export class MotorUniversalService {
   }
 
   /**
-   * Guillotina: el perfil es un ESCALÓN de gramaje ("hasta N g/m²"), no un
-   * rango. Gana el escalón más chico que todavía cubre el papel —papel de
-   * 150 g/m² con perfiles hasta 100 / 250 / 400 elige el de 250—, porque es
-   * el que declara cuántos pliegos de ese grosor entran en la pila.
+   * Escalón de gramaje ("hasta N g/m²"), no rango: gana el escalón más chico
+   * que todavía cubre el papel —papel de 150 g/m² con perfiles hasta
+   * 100 / 250 / 400 elige el de 250—. Lo usan guillotina (cuántos pliegos
+   * entran en la pila) e impresión láser (a más gramaje, menos ppm).
    *
    * Si ningún escalón lo cubre gana el más grueso: menos pliegos por tanda,
    * más tandas, que es el lado conservador para cotizar.
    */
-  private elegirPerfilGuillotinaPorGramaje<
+  private elegirPorEscalonDeGramaje<
     T extends { activo: boolean; detalleJson?: unknown },
   >(perfiles: T[], gramaje: number): T | null {
     const escalones = perfiles
@@ -5451,53 +5459,65 @@ export class MotorUniversalService {
       // sigue la resolución automática.
     }
 
-    // ─── 1. Modo de color comercial por paso ────────────────────────
+    // ─── 1. Impresión por hoja: color + caras + escalón de gramaje ──
+    //
+    // Los tres discriminantes se ENCADENAN como filtros en vez de competir:
+    // antes ganaba el primer perfil que matcheara el color y el gramaje no
+    // se miraba nunca —tres perfiles de la misma máquina que sólo diferían
+    // en el papel eran inalcanzables—. Ver docs §5.
     const modoColor = this.resolverModoColorComercial(paso, jobContext);
-    if (modoColor) {
-      // Entre los perfiles que matchean el modo de color, preferir el que
-      // coincide con las caras del paso (ej. "B/N Doble faz" 45ppm vs
-      // "B/N Simple" 90ppm). Sin señal de caras, comportamiento histórico.
+    const esImpresionPorHoja = paso.familiaCodigo === 'impresion_por_hoja';
+    if (modoColor || esImpresionPorHoja) {
       const tieneSenalCaras =
-        paso.familiaCodigo === 'impresion_por_hoja' &&
+        esImpresionPorHoja &&
         (typeof jobContext.caras === 'number' ||
           (jobContext as Record<string, unknown>)[
             `caras_${paso.configPasoId}`
           ] !== undefined);
       const buscarDoble =
         tieneSenalCaras && this.carasEfectivasPaso(paso, jobContext) === 2;
-      const matchesCaras = (perfil: { nombre: string; detalleJson?: unknown }) =>
-        !tieneSenalCaras || this.perfilEsDobleFaz(perfil) === buscarDoble;
-      const perfilActual =
-        perfilesDisponibles.find((perfil) => perfil.id === paso.perfilM1Id) ??
-        paso.perfil;
-      if (
-        modoColorMatchesPerfil(perfilActual, modoColor) &&
-        (!perfilActual || matchesCaras(perfilActual))
-      ) {
-        return null;
-      }
-      const candidato =
-        perfilesDisponibles.find(
-          (perfil) =>
-            modoColorMatchesPerfil(perfil, modoColor) && matchesCaras(perfil),
-        ) ??
-        perfilesDisponibles.find((perfil) =>
-          modoColorMatchesPerfil(perfil, modoColor),
+
+      // Filtro 1: modo de color. Si nadie lo declara, no descarta a nadie.
+      let candidatos = modoColor
+        ? perfilesDisponibles.filter((perfil) =>
+            modoColorMatchesPerfil(perfil, modoColor),
+          )
+        : perfilesDisponibles;
+      if (candidatos.length === 0) candidatos = perfilesDisponibles;
+
+      // Filtro 2: caras. Si ningún perfil cubre las caras pedidas se sigue
+      // sin filtrar (el aviso lo emite `avisarFaltaPerfilDobleFaz`).
+      if (tieneSenalCaras) {
+        const porCaras = candidatos.filter(
+          (perfil) => this.perfilEsDobleFaz(perfil) === buscarDoble,
         );
-      if (candidato && candidato.id !== paso.perfilM1Id) {
-        return {
-          id: candidato.id,
-          nombre: candidato.nombre,
-          tipoPerfil: candidato.tipoPerfil,
-          productivityValue: candidato.productivityValue,
-          productivityUnit: candidato.productivityUnit ?? null,
-          setupMin: candidato.setupMin,
-          cleanupMin: candidato.cleanupMin,
-          feedReloadMin: candidato.feedReloadMin,
-          detalleJson: candidato.detalleJson,
-        };
+        if (porCaras.length > 0) candidatos = porCaras;
       }
-      return null;
+
+      // Filtro 3: escalón de gramaje, igual que en guillotina — gana el
+      // "hasta" más chico que todavía cubre el papel. Sin gramaje en el
+      // contexto o sin escalones declarados, queda el orden anterior.
+      const gramaje = this.numeroPositivo(
+        (jobContext as Record<string, unknown>).gramajeMaterialGr ??
+          (jobContext as Record<string, unknown>).gramajeGr ??
+          (jobContext as Record<string, unknown>).gramaje,
+      );
+      const candidato = gramaje
+        ? (this.elegirPorEscalonDeGramaje(candidatos, gramaje) ?? candidatos[0])
+        : candidatos[0];
+
+      if (!candidato || candidato.id === paso.perfilM1Id) return null;
+      return {
+        id: candidato.id,
+        nombre: candidato.nombre,
+        tipoPerfil: candidato.tipoPerfil,
+        productivityValue: candidato.productivityValue,
+        productivityUnit: candidato.productivityUnit ?? null,
+        setupMin: candidato.setupMin,
+        cleanupMin: candidato.cleanupMin,
+        feedReloadMin: candidato.feedReloadMin,
+        detalleJson: candidato.detalleJson,
+      };
     }
 
     // ─── 2. Guillotina: perfil por escalón de gramaje ────────────────
@@ -5506,7 +5526,7 @@ export class MotorUniversalService {
         ctx.gramajeMaterialGr ?? ctx.gramajeGr ?? ctx.gramaje,
       );
       if (gramaje) {
-        const candidato = this.elegirPerfilGuillotinaPorGramaje(
+        const candidato = this.elegirPorEscalonDeGramaje(
           perfilesDisponibles,
           gramaje,
         );
@@ -5549,39 +5569,63 @@ export class MotorUniversalService {
       }
     }
 
-    // ─── 4. Heurística legacy: impresión por hoja según caras ────────
-    // v3.0 (doc §5): el discriminante canónico es `detalle.caras`
-    // ('SIMPLE_FAZ' | 'DOBLE_FAZ'). Heurística retro-compat: también
-    // detecta el legacy `detalle.dobleFaz === true` y nombre del perfil.
-    if (
-      paso.familiaCodigo === 'impresion_por_hoja' &&
-      (typeof jobContext.caras === 'number' ||
-        (jobContext as Record<string, unknown>)[
-          `caras_${paso.configPasoId}`
-        ] !== undefined)
-    ) {
-      const buscarDoble = this.carasEfectivasPaso(paso, jobContext) === 2;
-      const candidato = perfilesDisponibles.find((p) => {
-        if (!p.activo) return false;
-        return this.perfilEsDobleFaz(p) === buscarDoble;
-      });
-      if (candidato && candidato.id !== paso.perfilM1Id) {
-        return {
-          id: candidato.id,
-          nombre: candidato.nombre,
-          tipoPerfil: candidato.tipoPerfil,
-          productivityValue: candidato.productivityValue,
-          productivityUnit: candidato.productivityUnit ?? null,
-          setupMin: candidato.setupMin,
-          cleanupMin: candidato.cleanupMin,
-          feedReloadMin: candidato.feedReloadMin,
-          detalleJson: candidato.detalleJson,
-        };
-      }
-    }
+    // (La heurística legacy "impresión por hoja según caras" se retiró:
+    // el filtro encadenado del punto 1 corre para toda la familia y ya
+    // contempla las caras, así que nunca se llegaba hasta acá.)
 
     // No hubo cambio
     return null;
+  }
+
+  /**
+   * El trabajo pide doble faz y la máquina no tiene ningún perfil de doble
+   * faz: el motor cae en un perfil de simple faz y el tiempo sale a la
+   * mitad del real. Antes pasaba en silencio; ahora la cotización lo dice.
+   *
+   * Es WARNING y no ERROR a propósito: la cotización sale igual —la
+   * imprenta puede querer cotizar mientras termina de cargar la máquina—,
+   * pero queda escrito que ese tiempo está subestimado.
+   */
+  private avisarFaltaPerfilDobleFaz(
+    errores: ErrorMotor[],
+    paso: PasoCargado,
+    jobContext: JobContext,
+    perfilResuelto: NonNullable<PasoCargado['perfil']> | null,
+  ) {
+    if (paso.familiaCodigo !== 'impresion_por_hoja') return;
+    const ctx = jobContext as Record<string, unknown>;
+    const tieneSenalCaras =
+      typeof jobContext.caras === 'number' ||
+      ctx[`caras_${paso.configPasoId}`] !== undefined;
+    if (!tieneSenalCaras) return;
+    if (this.carasEfectivasPaso(paso, jobContext) !== 2) return;
+
+    const perfilEnUso =
+      perfilResuelto ??
+      paso.perfilesDisponibles?.find((p) => p.id === paso.perfilM1Id) ??
+      paso.perfil;
+    if (perfilEnUso && this.perfilEsDobleFaz(perfilEnUso)) return;
+
+    const hayAlguno = this.filtrarPerfilesCompatibles(
+      paso.familiaCodigo,
+      paso.perfilesDisponibles,
+    ).some((perfil) => this.perfilEsDobleFaz(perfil));
+    if (hayAlguno) return;
+
+    errores.push({
+      codigo: 'perfil_doble_faz_faltante',
+      severidad: 'WARNING',
+      mensaje: `El paso ${paso.rutaPasoOrden} se cotiza a doble faz, pero ${paso.maquina?.nombre ?? 'la máquina'} no tiene ningún perfil de doble faz: el tiempo sale calculado con uno de simple faz y queda subestimado.`,
+      rutaPasoId: paso.rutaPasoId,
+      rutaPasoOrden: paso.rutaPasoOrden,
+      familiaCodigo: paso.familiaCodigo,
+      sugerencia:
+        'Agregar un perfil de doble faz a la máquina con su productividad real.',
+      contexto: {
+        maquinaId: paso.maquina?.id,
+        perfilId: perfilEnUso?.id ?? null,
+      },
+    });
   }
 
   /**

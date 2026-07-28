@@ -206,7 +206,9 @@ export function emptyMaquina(plantaId: string): MaquinaPayload {
  * así el primer guardado las deja atrás.
  */
 const PERFIL_DETALLE_RETIRADO: Partial<Record<PlantillaMaquinaria, string[]>> = {
-  impresora_laser: ["gramajeMinGr", "gramajeMaxGr"],
+  // gramajeMaxGr volvió al perfil láser como escalón: acá sólo queda el
+  // mínimo, que ya no existe en ninguna plantilla.
+  impresora_laser: ["gramajeMinGr"],
   guillotina: ["gramajeMinGr"],
 };
 
