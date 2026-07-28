@@ -371,37 +371,43 @@ export function isColorModeMultiselect(field: MaquinariaTemplateField) {
 
 export const COLOR_CHANNEL_META: Record<
   string,
-  { label: string; className: string; textClassName?: string }
+  { label: string; className: string; textClassName?: string; dot: string }
 > = {
   C: {
     label: "C",
     className: "border-cyan-300 bg-cyan-400",
     textClassName: "text-cyan-950",
+    dot: "#22d3ee",
   },
   M: {
     label: "M",
     className: "border-fuchsia-300 bg-fuchsia-500",
     textClassName: "text-white",
+    dot: "#d946ef",
   },
   Y: {
     label: "Y",
     className: "border-yellow-300 bg-yellow-300",
     textClassName: "text-yellow-950",
+    dot: "#fde047",
   },
   K: {
     label: "K",
     className: "border-neutral-700 bg-neutral-950",
     textClassName: "text-white",
+    dot: "#0a0a0a",
   },
   blanco: {
     label: "W",
     className: "border-neutral-300 bg-white",
     textClassName: "text-neutral-700",
+    dot: "#ffffff",
   },
   barniz: {
     label: "V",
     className: "border-amber-300 bg-amber-100",
     textClassName: "text-amber-900",
+    dot: "#fde68a",
   },
 };
 
@@ -920,8 +926,9 @@ export function FieldInput({
           ? [value]
           : [];
       if (renderColorModeCards && isColorModeMultiselect(field)) {
+        // Pills compactas de una línea: puntos de color superpuestos + nombre.
         return (
-          <div className="flex flex-wrap gap-2">
+          <div className="maq-colores">
             {field.options?.map((opt) => {
               const selected = current.includes(opt.value);
               const channels = getColorModeChannels(opt.value);
@@ -937,28 +944,18 @@ export function FieldInput({
                       : [...current, opt.value];
                     onChange(next);
                   }}
-                  className={`min-w-[10rem] rounded-md border px-3 py-2 text-left transition ${
-                    selected
-                      ? "border-primary bg-primary/5 shadow-sm ring-1 ring-primary/30"
-                      : "border-border bg-background hover:border-primary/40 hover:bg-muted/40"
-                  }`}
+                  className={`maq-color-pill ${selected ? "activo" : ""}`}
                 >
-                  <span className="mb-2 flex items-center gap-1.5">
-                    {channels.map((channel) => {
-                      const meta = COLOR_CHANNEL_META[channel];
-                      return (
-                        <span
-                          key={channel}
-                          className={`flex size-6 items-center justify-center rounded-full border text-[10px] font-semibold ${meta.className} ${meta.textClassName ?? ""}`}
-                        >
-                          {meta.label}
-                        </span>
-                      );
-                    })}
+                  <span className="maq-color-pila">
+                    {channels.map((channel) => (
+                      <span
+                        key={channel}
+                        className="maq-color-punto"
+                        style={{ background: COLOR_CHANNEL_META[channel].dot }}
+                      />
+                    ))}
                   </span>
-                  <span className="block text-sm font-medium leading-tight">
-                    {opt.label}
-                  </span>
+                  <span className="maq-color-etiqueta">{opt.label}</span>
                 </button>
               );
             })}

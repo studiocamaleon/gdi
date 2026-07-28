@@ -7631,6 +7631,61 @@ body {
     color: var(--text-muted);
   }
 
+  /* ── Modos de color (pills compactas de una línea) ── */
+
+  .maq-colores {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .maq-color-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    cursor: pointer;
+    transition: border-color 0.12s;
+  }
+
+  .maq-color-pill:hover {
+    border-color: var(--text-muted);
+  }
+
+  .maq-color-pill.activo {
+    border-color: #111114;
+    background: var(--surface-2);
+    box-shadow: inset 0 0 0 1px #111114;
+  }
+
+  .maq-color-pila {
+    display: inline-flex;
+  }
+
+  /* Fichas apiladas: cada punto pisa un poco al anterior; el aro del color
+     del fondo los separa, y el borde tenue define a los claros (W, barniz). */
+  .maq-color-punto {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 1px solid rgba(20, 20, 26, 0.18);
+    box-shadow: 0 0 0 2px var(--surface);
+  }
+
+  .maq-color-punto + .maq-color-punto {
+    margin-left: -5px;
+  }
+
+  .maq-color-etiqueta {
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--text);
+    white-space: nowrap;
+  }
+
   /* La fila que dice si el prorrateo cuadra: lo que sale de la estructura
      tiene que entrar entero a los productivos. */
   .ccosto-tabla tfoot .ccosto-cuadre td {
@@ -37874,6 +37929,7 @@ body:has(.t-app) {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
 
 
 
