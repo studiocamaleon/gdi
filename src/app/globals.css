@@ -7730,6 +7730,23 @@ body {
     font-size: 12px;
   }
 
+  .maq-desgaste-costo {
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  .maq-desgaste-total {
+    margin: 12px 0 0;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .maq-desgaste-total strong {
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+
   /* ── Segmented chico Sí | No para campos booleanos ── */
 
   .maq-seg {
@@ -38002,6 +38019,7 @@ body:has(.t-app) {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
 
 
 

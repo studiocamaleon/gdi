@@ -1502,6 +1502,7 @@ function formatModoSeleccion(value: string) {
     COMERCIAL_ELIGE: "Comercial elige",
     MOTOR_ELIGE_AUTO: "Motor elige",
     MAQUINA_CONSUMIBLE: "Consumible",
+    MAQUINA_DESGASTE: "Desgaste",
   };
   return labels[value] ?? value;
 }

@@ -524,7 +524,10 @@ export type MaquinaConsumible = {
 
 export type MaquinaComponenteDesgaste = {
   id: string;
+  /** Vacío cuando el repuesto se cargó sólo con su precio. */
   materiaPrimaVarianteId: string;
+  precioUnitario: number | null;
+  soloColor: boolean;
   materiaPrimaVarianteSku: string;
   materiaPrimaVarianteNombre: string;
   materiaPrimaNombre: string;
@@ -628,7 +631,10 @@ export type MaquinaPayload = {
   }>;
   componentesDesgaste: Array<{
     id?: string;
-    materiaPrimaVarianteId: string;
+    /** Opcional: el repuesto puede declararse sólo con su precio. */
+    materiaPrimaVarianteId?: string;
+    precioUnitario?: number;
+    soloColor?: boolean;
     nombre: string;
     tipo: TipoComponenteDesgasteMaquina;
     vidaUtilEstimada?: number;

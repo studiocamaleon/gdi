@@ -288,7 +288,7 @@ function buildLaserSections(): MaquinariaTemplateSection[] {
       ],
     }),
     section({ id: "consumibles", title: "Consumibles", description: "Tóner declarado por máquina.", fields: genericConsumableFields }),
-    section({ id: "desgaste_repuestos", title: "Desgaste y repuestos", description: "Fusor, drum, transferencia, etc.", fields: genericWearFields }),
+    section({ id: "desgaste_repuestos", title: "Desgaste y repuestos", description: "Las piezas que se gastan con el uso: cada click de la máquina cuesta lo que gastó de cada una.", fields: genericWearFields }),
   ];
 }
 

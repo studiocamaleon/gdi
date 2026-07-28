@@ -561,7 +561,7 @@ export interface MaterialEjecutado {
   materiaPrimaTemplateId?: string | null;
   materiaPrimaTipoTecnico?: string | null;
   atributosVarianteJson?: Record<string, unknown> | null;
-  tipoLineaCosto: 'MATERIAL' | 'CONSUMIBLE_MAQUINA';
+  tipoLineaCosto: 'MATERIAL' | 'CONSUMIBLE_MAQUINA' | 'DESGASTE_MAQUINA';
   cantidad: number;
   unidad: string;
   precioUnitario: number;
@@ -584,7 +584,11 @@ export interface MaterialEjecutado {
   };
   /** Modo de selección que se aplicó. */
   modoSeleccion:
-    'HARDCODED' | 'COMERCIAL_ELIGE' | 'MOTOR_ELIGE_AUTO' | 'MAQUINA_CONSUMIBLE';
+    | 'HARDCODED'
+    | 'COMERCIAL_ELIGE'
+    | 'MOTOR_ELIGE_AUTO'
+    | 'MAQUINA_CONSUMIBLE'
+    | 'MAQUINA_DESGASTE';
 }
 
 export interface CargoDirectoEjecutado {
@@ -704,6 +708,7 @@ export interface PasoCargado {
     centroCostoPrincipalNombre?: string | null;
     parametrosTecnicosJson?: Record<string, unknown> | null;
     consumibles?: ConsumibleMaquinaCargado[];
+    componentesDesgaste?: ComponenteDesgasteCargado[];
   };
   /** Detalles del perfil (cargados del JOIN). */
   perfil?: {
@@ -746,6 +751,7 @@ export interface PasoCargado {
       centroCostoPrincipalNombre?: string | null;
       parametrosTecnicosJson?: Record<string, unknown> | null;
       consumibles?: ConsumibleMaquinaCargado[];
+      componentesDesgaste?: ComponenteDesgasteCargado[];
     };
     perfilesOperativos: Array<{
       id: string;
@@ -788,6 +794,29 @@ export interface PasoCargado {
   slots: SlotCargado[];
   /** Cargos directos a nivel PASO declarados por el producto (G-M3). */
   cargosDirectosPaso: CargoPasoCargado[];
+}
+
+/**
+ * Pieza que se gasta con el uso de la máquina. El costo se prorratea por
+ * clicks A4-equivalentes. Ver docs/costo-por-click-desgaste-diseno.md
+ */
+export interface ComponenteDesgasteCargado {
+  id: string;
+  nombre: string;
+  tipo: string;
+  vidaUtilEstimada: number | null;
+  unidadDesgaste: string;
+  /** Precio suelto, para el repuesto que no está dado de alta en inventario. */
+  precioUnitario: number | null;
+  /** La pieza sólo gira imprimiendo en color (drums/reveladores CMY). */
+  soloColor: boolean;
+  activo: boolean;
+  materiaPrimaVarianteId: string | null;
+  materiaPrimaVariante?: {
+    id: string;
+    sku: string;
+    precioReferencia: number | null;
+  } | null;
 }
 
 export interface ConsumibleMaquinaCargado {

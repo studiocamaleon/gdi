@@ -35,6 +35,7 @@ import type {
   NestingCostingPreview,
   TiempoManualConfig,
   MutacionAplicada,
+  ComponenteDesgasteCargado,
 } from './tipos';
 import {
   runNestingForPaso,
@@ -2899,7 +2900,9 @@ export class MotorUniversalService {
     const materialPrincipal =
       materialConCosteo ??
       materiales.find(
-        (material) => material.modoSeleccion !== 'MAQUINA_CONSUMIBLE',
+        (material) =>
+          material.modoSeleccion !== 'MAQUINA_CONSUMIBLE' &&
+          material.modoSeleccion !== 'MAQUINA_DESGASTE',
       ) ??
       materiales[0];
 
@@ -3512,6 +3515,12 @@ export class MotorUniversalService {
           )),
     );
 
+    ejecutados.push(
+      ...(this.esModoSinImpresion(paso, jobContext)
+        ? []
+        : this.calcularDesgasteMaquina(paso, jobContext, nestingDispatch)),
+    );
+
     return ejecutados;
   }
 
@@ -3849,6 +3858,107 @@ export class MotorUniversalService {
       return piezas.reduce((acc, pieza) => acc + pieza.cantidad, 0);
     }
     return Number(jobContext.cantidad ?? 0);
+  }
+
+  /**
+   * Costo por click: las piezas que se gastan con el uso de la máquina
+   * (drum, fusor, cuchilla de limpieza, barra de cera…).
+   *
+   * A diferencia del tóner, el desgaste NO depende de la cobertura: una hoja
+   * al 2% gasta el cilindro igual que una al 60%, porque dio la misma vuelta.
+   * El driver es la cantidad de páginas —clicks A4-equivalentes—, que es como
+   * el fabricante declara la vida útil de cada pieza.
+   *
+   *   clicks = pliegos × caras × factorA4   (A4 = 1, A3 = 2; entero, como
+   *                                          cuenta el contador del equipo)
+   *   costo  = Σ (precio del repuesto / vida útil) × clicks
+   *
+   * Ver docs/costo-por-click-desgaste-diseno.md
+   */
+  private calcularDesgasteMaquina(
+    paso: PasoCargado,
+    jobContext: JobContext,
+    nestingDispatch: NestingDispatchResult | null,
+  ): MaterialEjecutado[] {
+    const maquina = paso.maquina;
+    const componentes = maquina?.componentesDesgaste ?? [];
+    if (!maquina || componentes.length === 0) return [];
+    if (paso.familiaCodigo !== 'impresion_por_hoja') return [];
+
+    const clicks = this.clicksA4DelPaso(paso, jobContext, nestingDispatch);
+    if (clicks <= 0) return [];
+
+    // Un trabajo en blanco y negro mueve sólo el drum negro: las piezas de
+    // color no giran y no se cobran.
+    const modoColor = this.resolverModoColorEfectivoConsumibles(
+      paso,
+      jobContext,
+    );
+    const esColor = modoColor !== 'BN';
+
+    const ejecutados: MaterialEjecutado[] = [];
+    for (const componente of componentes) {
+      if (componente.soloColor && !esColor) continue;
+
+      const vidaUtil = this.numeroPositivo(componente.vidaUtilEstimada);
+      if (!vidaUtil) continue;
+
+      // El precio de la variante manda; el suelto es para el repuesto que
+      // todavía no está dado de alta en inventario.
+      const precioRepuesto =
+        this.numeroPositivo(
+          componente.materiaPrimaVariante?.precioReferencia,
+        ) ?? this.numeroPositivo(componente.precioUnitario);
+      if (!precioRepuesto) continue;
+
+      const costoPorClick = precioRepuesto / vidaUtil;
+      const costoTotal = costoPorClick * clicks;
+
+      ejecutados.push({
+        slotCodigo: `desgaste_${componente.id}`,
+        slotNombre: componente.nombre,
+        slotRol: 'desgaste',
+        materialVarianteId: componente.materiaPrimaVarianteId ?? '',
+        materialNombre: componente.nombre,
+        materialSku: componente.materiaPrimaVariante?.sku ?? '',
+        materialDisplayName: componente.nombre,
+        materiaPrimaNombre: componente.nombre,
+        tipoLineaCosto: 'DESGASTE_MAQUINA',
+        cantidad: clicks,
+        unidad: 'a4_equiv',
+        precioUnitario: costoPorClick,
+        costoTotal,
+        estrategiaCosto: 'costo_por_click',
+        // La pieza la declara la máquina, no un slot que alguien elija.
+        modoSeleccion: 'MAQUINA_DESGASTE',
+      });
+    }
+
+    return ejecutados;
+  }
+
+  /**
+   * Clicks A4-equivalentes que consume el paso: lo que contaría el contador
+   * de la máquina. Cada cara impresa de cada pliego es un click, y un pliego
+   * más grande que un A4 cuenta como los A4 que entran en él, redondeado
+   * para arriba (un SRA3 son 2 clicks, no 2,31).
+   */
+  private clicksA4DelPaso(
+    paso: PasoCargado,
+    jobContext: JobContext,
+    nestingDispatch: NestingDispatchResult | null,
+  ): number {
+    const pliegos = this.resolverCantidad(paso, jobContext, null);
+    if (!Number.isFinite(pliegos) || pliegos <= 0) return 0;
+    const caras = this.resolverCarasConsumible(paso, jobContext);
+    const factorA4 = Math.ceil(
+      this.factorA4EquivalenteParaImpresionPorHoja(
+        paso,
+        jobContext,
+        nestingDispatch,
+      ),
+    );
+    return Math.ceil(pliegos) * caras * Math.max(1, factorA4);
   }
 
   private calcularConsumiblesMaquina(
@@ -5835,6 +5945,56 @@ export class MotorUniversalService {
   // CARGA DE DATOS DEL DB
   // ============================================================================
 
+  /**
+   * Pieza de desgaste tal como la ve el motor. El precio sale de la variante
+   * de inventario cuando el repuesto está dado de alta; si no, del precio
+   * suelto que declaró la imprenta en la ficha de la máquina.
+   */
+  private toComponenteDesgasteCargado(componente: {
+    id: string;
+    nombre: string;
+    tipo: string;
+    vidaUtilEstimada: unknown;
+    unidadDesgaste: string;
+    precioUnitario: unknown;
+    soloColor: boolean;
+    activo: boolean;
+    materiaPrimaVarianteId: string | null;
+    materiaPrimaVariante?: {
+      id: string;
+      sku: string;
+      precioReferencia: unknown;
+    } | null;
+  }): ComponenteDesgasteCargado {
+    return {
+      id: componente.id,
+      nombre: componente.nombre,
+      tipo: componente.tipo.toLowerCase(),
+      vidaUtilEstimada:
+        componente.vidaUtilEstimada == null
+          ? null
+          : Number(componente.vidaUtilEstimada),
+      unidadDesgaste: componente.unidadDesgaste.toLowerCase(),
+      precioUnitario:
+        componente.precioUnitario == null
+          ? null
+          : Number(componente.precioUnitario),
+      soloColor: componente.soloColor,
+      activo: componente.activo,
+      materiaPrimaVarianteId: componente.materiaPrimaVarianteId,
+      materiaPrimaVariante: componente.materiaPrimaVariante
+        ? {
+            id: componente.materiaPrimaVariante.id,
+            sku: componente.materiaPrimaVariante.sku,
+            precioReferencia:
+              componente.materiaPrimaVariante.precioReferencia == null
+                ? null
+                : Number(componente.materiaPrimaVariante.precioReferencia),
+          }
+        : null,
+    };
+  }
+
   private toConsumibleCargado(consumible: {
     id: string;
     perfilOperativoId: string | null;
@@ -5919,6 +6079,10 @@ export class MotorUniversalService {
                       select: { id: true, nombre: true },
                     },
                     perfilesOperativos: true,
+                    componentesDesgaste: {
+                      where: { activo: true },
+                      include: { materiaPrimaVariante: true },
+                    },
                     consumibles: {
                       where: { activo: true },
                       include: {
@@ -6000,6 +6164,10 @@ export class MotorUniversalService {
                           select: { id: true, nombre: true },
                         },
                         perfilesOperativos: true,
+                        componentesDesgaste: {
+                          where: { activo: true },
+                          include: { materiaPrimaVariante: true },
+                        },
                         consumibles: {
                           where: { activo: true },
                           include: {
@@ -6146,6 +6314,9 @@ export class MotorUniversalService {
               consumibles: cp.maquinaM1.consumibles.map((c) =>
                 this.toConsumibleCargado(c),
               ),
+              componentesDesgaste: cp.maquinaM1.componentesDesgaste.map((d) =>
+                this.toComponenteDesgasteCargado(d),
+              ),
             }
           : undefined,
         perfil: cp.perfilM1
@@ -6214,6 +6385,9 @@ export class MotorUniversalService {
             > | null,
             consumibles: mc.maquina.consumibles.map((c) =>
               this.toConsumibleCargado(c),
+            ),
+            componentesDesgaste: mc.maquina.componentesDesgaste.map((d) =>
+              this.toComponenteDesgasteCargado(d),
             ),
           },
           perfilesOperativos: mc.maquina.perfilesOperativos.map((p) => ({
@@ -6434,6 +6608,10 @@ export class MotorUniversalService {
           include: {
             centroCostoPrincipal: { select: { id: true, nombre: true } },
             perfilesOperativos: true,
+            componentesDesgaste: {
+              where: { activo: true },
+              include: { materiaPrimaVariante: true },
+            },
             consumibles: {
               where: { activo: true },
               include: {
@@ -6494,6 +6672,10 @@ export class MotorUniversalService {
           include: {
             centroCostoPrincipal: { select: { id: true, nombre: true } },
             perfilesOperativos: true,
+            componentesDesgaste: {
+              where: { activo: true },
+              include: { materiaPrimaVariante: true },
+            },
             consumibles: {
               where: { activo: true },
               include: {
@@ -6555,6 +6737,7 @@ export class MotorUniversalService {
           include: {
             centroCostoPrincipal: { select: { id: true; nombre: true } };
             perfilesOperativos: true;
+            componentesDesgaste: { include: { materiaPrimaVariante: true } };
             consumibles: {
               include: {
                 materiaPrimaVariante: {
@@ -6588,6 +6771,7 @@ export class MotorUniversalService {
         include: {
           centroCostoPrincipal: { select: { id: true; nombre: true } };
           perfilesOperativos: true;
+          componentesDesgaste: { include: { materiaPrimaVariante: true } };
           consumibles: {
             include: {
               materiaPrimaVariante: {
@@ -6666,6 +6850,9 @@ export class MotorUniversalService {
             consumibles: maquina.consumibles.map((c) =>
               this.toConsumibleCargado(c),
             ),
+            componentesDesgaste: maquina.componentesDesgaste.map((d) =>
+              this.toComponenteDesgasteCargado(d),
+            ),
           }
         : undefined,
       perfil: perfil
@@ -6730,6 +6917,7 @@ export class MotorUniversalService {
         include: {
           centroCostoPrincipal: { select: { id: true; nombre: true } };
           perfilesOperativos: true;
+          componentesDesgaste: { include: { materiaPrimaVariante: true } };
           consumibles: {
             include: {
               materiaPrimaVariante: {
@@ -6808,6 +6996,9 @@ export class MotorUniversalService {
                 > | null,
               consumibles: maquina.consumibles.map((con) =>
                 this.toConsumibleCargado(con),
+              ),
+              componentesDesgaste: maquina.componentesDesgaste.map((d) =>
+                this.toComponenteDesgasteCargado(d),
               ),
             },
             perfilesOperativos: maquina.perfilesOperativos.map(toPerfil),

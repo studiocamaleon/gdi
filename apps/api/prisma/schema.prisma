@@ -1338,11 +1338,23 @@ model MaquinaConsumible {
   @@index([tenantId, materiaPrimaVarianteId, activo])
 }
 
+/// Pieza que se gasta con el uso de la máquina (drum, fusor, cuchilla…). El
+/// costo se prorratea por CLICKS: a diferencia del tóner, el desgaste no
+/// depende de la cobertura sino de cuántas páginas pasaron.
+/// Ver docs/costo-por-click-desgaste-diseno.md
 model MaquinaComponenteDesgaste {
   id                     String                        @id @default(uuid()) @db.Uuid
   tenantId               String                        @db.Uuid
   maquinaId              String                        @db.Uuid
-  materiaPrimaVarianteId String                        @db.Uuid
+  /// Repuesto en inventario. Opcional: se puede declarar sólo el precio
+  /// (`precioUnitario`) mientras la pieza no esté dada de alta.
+  materiaPrimaVarianteId String?                       @db.Uuid
+  /// Precio del repuesto cuando NO se vincula una variante de inventario.
+  /// Si hay variante, manda el precio de referencia de la variante.
+  precioUnitario         Decimal?                      @db.Decimal(14, 2)
+  /// La pieza sólo se gasta imprimiendo en color (drums/reveladores CMY).
+  /// Fusor, correa y cuchillas giran siempre: van en false.
+  soloColor              Boolean                       @default(false)
   nombre                 String
   tipo                   TipoComponenteDesgasteMaquina
   vidaUtilEstimada       Decimal?                      @db.Decimal(12, 2)
@@ -1355,7 +1367,7 @@ model MaquinaComponenteDesgaste {
   updatedAt              DateTime                      @updatedAt
   tenant                 Tenant                        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   maquina                Maquina                       @relation(fields: [maquinaId], references: [id], onDelete: Cascade)
-  materiaPrimaVariante   MateriaPrimaVariante          @relation("MaquinaDesgasteMateriaPrimaVariante", fields: [materiaPrimaVarianteId], references: [id], onDelete: Restrict)
+  materiaPrimaVariante   MateriaPrimaVariante?         @relation("MaquinaDesgasteMateriaPrimaVariante", fields: [materiaPrimaVarianteId], references: [id], onDelete: Restrict)
 
   @@index([tenantId, maquinaId, activo])
   @@index([tenantId, materiaPrimaVarianteId, activo])

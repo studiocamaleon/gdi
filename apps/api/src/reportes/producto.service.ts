@@ -270,13 +270,13 @@ export class ProductoService {
       FROM "OrdenTrabajoItem" oti
       JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
       LEFT JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
-      -- Costos variables por item (material + consumibles): escalar por LATERAL
-      -- para no multiplicar filas al agregar ventas/costo.
+      -- Costos variables por item (material + consumibles + desgaste): escalar
+      -- por LATERAL para no multiplicar filas al agregar ventas/costo.
       LEFT JOIN LATERAL (
         SELECT COALESCE(SUM((mat->>'costoTotal')::numeric), 0) AS variables
         FROM jsonb_array_elements(ci."trazabilidadJson"->'pasos') paso
         CROSS JOIN jsonb_array_elements(COALESCE(paso->'materiales', '[]'::jsonb)) mat
-        WHERE mat->>'tipoLineaCosto' IN ('MATERIAL', 'CONSUMIBLE_MAQUINA')
+        WHERE mat->>'tipoLineaCosto' IN ('MATERIAL', 'CONSUMIBLE_MAQUINA', 'DESGASTE_MAQUINA')
       ) v ON true
       WHERE oti."tenantId" = $1::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
         AND ot."fechaEmision" >= $2 AND ot."fechaEmision" < $3

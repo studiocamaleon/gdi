@@ -54,6 +54,7 @@ import {
   shouldDisplayGranFormatoFieldInCm,
   shouldShowMaquinaField,
 } from "./helpers";
+import { DesgasteEditor } from "./desgaste-editor";
 import { PerfilesOperativosEditor } from "./perfiles-editor";
 import type { MaquinaEditorState } from "./use-maquina-editor";
 
@@ -312,10 +313,7 @@ export function MaquinaEditorSecciones({ editor }: { editor: MaquinaEditorState 
                   onDuplicar={handleDuplicarPerfil}
                 />
               ) : sec.id === "desgaste_repuestos" ? (
-                <p className="text-muted-foreground text-xs italic">
-                  Editor de desgaste simplificado: editá vía API por ahora.
-                  UI rica pendiente de iteración UX.
-                </p>
+                <DesgasteEditor form={form} setForm={setForm} />
               ) : (
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                   {sec.fields.filter((field) => shouldShowMaquinaField(field, form)).map((field) => {

@@ -1074,7 +1074,7 @@ export interface CotizarResponse {
         materiaPrimaTemplateId?: string | null;
         materiaPrimaTipoTecnico?: string | null;
         atributosVarianteJson?: Record<string, unknown> | null;
-        tipoLineaCosto: "MATERIAL" | "CONSUMIBLE_MAQUINA";
+        tipoLineaCosto: "MATERIAL" | "CONSUMIBLE_MAQUINA" | "DESGASTE_MAQUINA";
         cantidad: number;
         unidad: string;
         precioUnitario: number;
@@ -1084,7 +1084,8 @@ export interface CotizarResponse {
           | "HARDCODED"
           | "COMERCIAL_ELIGE"
           | "MOTOR_ELIGE_AUTO"
-          | "MAQUINA_CONSUMIBLE";
+          | "MAQUINA_CONSUMIBLE"
+          | "MAQUINA_DESGASTE";
         detalleCosteoNesting?: {
           strategy: string;
           totalCost: number;

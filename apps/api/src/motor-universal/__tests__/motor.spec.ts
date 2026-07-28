@@ -633,6 +633,155 @@ describe('MotorUniversalService — smoke tests', () => {
     );
   });
 
+  it('Desgaste: cobra costo por click y deja las piezas de color fuera del BN', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+    });
+    const impresionConfig = await prisma.productoConfigPaso.findFirstOrThrow({
+      where: {
+        tenantId,
+        rutaPaso: { familiaCodigo: 'impresion_por_hoja' },
+        productoRutaAlternativa: { productoId: tarjetas.id, activo: true },
+        maquinaM1Id: { not: null },
+      },
+    });
+    const maquinaId = impresionConfig.maquinaM1Id!;
+
+    // Dos piezas con costo por click redondo: $1 el drum negro, $2 los de
+    // color. Así el aporte de cada una se lee directo en el resultado.
+    const drumNegro = await prisma.maquinaComponenteDesgaste.create({
+      data: {
+        tenantId,
+        maquinaId,
+        nombre: 'TEST drum negro',
+        tipo: 'DRUM',
+        unidadDesgaste: 'COPIAS_A4_EQUIV',
+        precioUnitario: 100000,
+        vidaUtilEstimada: 100000,
+        soloColor: false,
+        activo: true,
+      },
+    });
+    const drumsColor = await prisma.maquinaComponenteDesgaste.create({
+      data: {
+        tenantId,
+        maquinaId,
+        nombre: 'TEST drums color',
+        tipo: 'DRUM',
+        unidadDesgaste: 'COPIAS_A4_EQUIV',
+        precioUnitario: 200000,
+        vidaUtilEstimada: 100000,
+        soloColor: true,
+        activo: true,
+      },
+    });
+
+    try {
+      const color = await motorService.cotizar({
+        tenantId,
+        productoId: tarjetas.id,
+        periodo: '2026-03',
+        jobContext: { cantidad: 1000, caras: 1, modoColor: 'CMYK' },
+      });
+      const bn = await motorService.cotizar({
+        tenantId,
+        productoId: tarjetas.id,
+        periodo: '2026-03',
+        jobContext: { cantidad: 1000, caras: 1, modoColor: 'BN' },
+      });
+
+      expect(color.exitoso).toBe(true);
+      expect(bn.exitoso).toBe(true);
+
+      const desgasteDe = (r: typeof color) =>
+        r
+          .cotizacion!.pasos.find((p) => p.familiaCodigo === 'impresion_por_hoja')!
+          .materiales!.filter((m) => m.tipoLineaCosto === 'DESGASTE_MAQUINA');
+
+      const enColor = desgasteDe(color);
+      const enBN = desgasteDe(bn);
+
+      // En color giran las dos piezas; en BN, sólo el drum negro.
+      expect(enColor.map((m) => m.slotNombre).sort()).toEqual([
+        'TEST drum negro',
+        'TEST drums color',
+      ]);
+      expect(enBN.map((m) => m.slotNombre)).toEqual(['TEST drum negro']);
+
+      // Clicks enteros, y el costo es precio/vida × clicks.
+      const negroColor = enColor.find((m) => m.slotNombre === 'TEST drum negro')!;
+      expect(Number.isInteger(negroColor.cantidad)).toBe(true);
+      expect(negroColor.cantidad).toBeGreaterThan(0);
+      expect(negroColor.unidad).toBe('a4_equiv');
+      expect(negroColor.precioUnitario).toBeCloseTo(1, 6);
+      expect(negroColor.costoTotal).toBeCloseTo(negroColor.cantidad, 6);
+      expect(negroColor.modoSeleccion).toBe('MAQUINA_DESGASTE');
+      expect(negroColor.estrategiaCosto).toBe('costo_por_click');
+
+      const colorPieza = enColor.find((m) => m.slotNombre === 'TEST drums color')!;
+      expect(colorPieza.precioUnitario).toBeCloseTo(2, 6);
+      expect(colorPieza.cantidad).toBe(negroColor.cantidad);
+
+      // El BN pasa los mismos clicks pero paga sólo un tercio del desgaste.
+      const negroBN = enBN[0];
+      expect(negroBN.cantidad).toBe(negroColor.cantidad);
+      expect(
+        enBN.reduce((acc, m) => acc + m.costoTotal, 0) * 3,
+      ).toBeCloseTo(
+        enColor.reduce((acc, m) => acc + m.costoTotal, 0),
+        6,
+      );
+    } finally {
+      await prisma.maquinaComponenteDesgaste.deleteMany({
+        where: { id: { in: [drumNegro.id, drumsColor.id] } },
+      });
+    }
+  });
+
+  it('Desgaste: una pieza sin precio ni vida útil no suma costo', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+    });
+    const impresionConfig = await prisma.productoConfigPaso.findFirstOrThrow({
+      where: {
+        tenantId,
+        rutaPaso: { familiaCodigo: 'impresion_por_hoja' },
+        productoRutaAlternativa: { productoId: tarjetas.id, activo: true },
+        maquinaM1Id: { not: null },
+      },
+    });
+    const incompleta = await prisma.maquinaComponenteDesgaste.create({
+      data: {
+        tenantId,
+        maquinaId: impresionConfig.maquinaM1Id!,
+        nombre: 'TEST pieza sin datos',
+        tipo: 'FUSOR',
+        unidadDesgaste: 'COPIAS_A4_EQUIV',
+        activo: true,
+      },
+    });
+
+    try {
+      const result = await motorService.cotizar({
+        tenantId,
+        productoId: tarjetas.id,
+        periodo: '2026-03',
+        jobContext: { cantidad: 1000, caras: 1 },
+      });
+      expect(result.exitoso).toBe(true);
+      const desgaste = result
+        .cotizacion!.pasos.find((p) => p.familiaCodigo === 'impresion_por_hoja')!
+        .materiales!.filter((m) => m.tipoLineaCosto === 'DESGASTE_MAQUINA');
+      expect(desgaste).toEqual([]);
+    } finally {
+      await prisma.maquinaComponenteDesgaste.delete({
+        where: { id: incompleta.id },
+      });
+    }
+  });
+
   it('PPM en impresion por hoja calcula paginas A4 equivalentes por minuto', async () => {
     if (!tenantId) return;
     const tarjetas = await prisma.producto.findFirstOrThrow({

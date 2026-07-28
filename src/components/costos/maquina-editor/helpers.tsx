@@ -344,7 +344,11 @@ export function maquinaToPayload(maquina: Maquina): MaquinaPayload {
     ),
     componentesDesgaste: maquina.componentesDesgaste.map((d) => ({
       id: d.id,
-      materiaPrimaVarianteId: d.materiaPrimaVarianteId,
+      // La API devuelve "" cuando el repuesto no está en inventario; el
+      // payload espera que no viaje el campo.
+      materiaPrimaVarianteId: d.materiaPrimaVarianteId || undefined,
+      precioUnitario: d.precioUnitario ?? undefined,
+      soloColor: d.soloColor,
       nombre: d.nombre,
       tipo: d.tipo,
       vidaUtilEstimada: d.vidaUtilEstimada ?? undefined,
