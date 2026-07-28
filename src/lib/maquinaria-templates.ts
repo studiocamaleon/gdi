@@ -389,7 +389,8 @@ function buildPlotterCorteSections(): MaquinariaTemplateSection[] {
       title: "Parámetros técnicos",
       description: "Rangos de rollo y modos soportados.",
       fields: [
-        field({ key: "anchoMinRolloMm", label: "Ancho mínimo de rollo", scope: "maquina", kind: "number", unit: "mm", description: "Mínimo de rollo aceptado." }),
+        // Sin anchoMinRolloMm (decisión 2026-07-28): nadie lo leía, mismo caso
+        // que en gran formato.
         field({ key: "anchoMaxRolloMm", label: "Ancho máximo de rollo", scope: "maquina", kind: "number", unit: "mm", description: "Máximo de rollo aceptado." }),
         field({ key: "modosOperacionSoportados", label: "Modos soportados", scope: "maquina", kind: "multiselect", required: true, options: modoOperacionPlotterOptions, description: "Rollo y/o hojas." }),
       ],
@@ -429,7 +430,8 @@ function buildPlotterCadSections(): MaquinariaTemplateSection[] {
       title: "Parámetros técnicos",
       description: "Rangos de rollo, márgenes y colores soportados.",
       fields: [
-        field({ key: "anchoMinRolloMm", label: "Ancho mínimo de rollo", scope: "maquina", kind: "number", unit: "mm", description: "Mínimo aceptado." }),
+        // Sin anchoMinRolloMm (decisión 2026-07-28): nadie lo leía, mismo caso
+        // que en gran formato.
         field({ key: "anchoMaxRolloMm", label: "Ancho máximo de rollo", scope: "maquina", kind: "number", unit: "mm", description: "Máximo aceptado." }),
         field({ key: "margenesNoImprimiblesMm", label: "Márgenes no imprimibles", scope: "maquina", kind: "textarea", required: true, description: "Distancia que la máquina no puede imprimir en cada borde." }),
         field({ key: "coloresSoportados", label: "Colores soportados", scope: "maquina", kind: "multiselect", options: [option("CMYK", "CMYK")], description: "Solo CMYK típicamente." }),
