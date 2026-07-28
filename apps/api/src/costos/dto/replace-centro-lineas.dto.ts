@@ -73,7 +73,8 @@ export class CentroCostoLineaItemDto {
    * Qué parte de las horas del centro le dedica la persona. Se carga como
    * porcentaje porque es como se piensa —"20% acá, 80% allá"— y la ficha
    * muestra al lado las horas que salen de aplicarlo a las del centro.
-   * No escala el costo: la línea vale el sueldo con sus cargas.
+   * SÍ escala el costo: el centro absorbe esa proporción del sueldo, no el
+   * sueldo entero. Ausente vale 100%.
    */
   @ValidateIf(esEmpleado)
   @IsOptional()

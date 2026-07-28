@@ -156,7 +156,7 @@ export class CostosMapper {
 
   buildCreateCentroData(
     auth: CurrentAuth,
-    payload: UpsertCentroCostoDto,
+    payload: UpsertCentroCostoDto & { plantaId: string },
   ): Prisma.CentroCostoUncheckedCreateInput {
     return {
       tenantId: auth.tenantId,
@@ -173,7 +173,8 @@ export class CostosMapper {
     payload: UpsertCentroCostoDto,
   ): Prisma.CentroCostoUncheckedUpdateInput {
     return {
-      plantaId: payload.plantaId,
+      // Ausente significa "no la toques": la ficha ya no la manda.
+      ...(payload.plantaId ? { plantaId: payload.plantaId } : {}),
       codigo: payload.codigo.trim().toUpperCase(),
       nombre: payload.nombre.trim(),
       descripcion: payload.descripcion?.trim() || null,

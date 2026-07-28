@@ -13,8 +13,14 @@ export enum TipoCentroCostoDto {
 }
 
 export class UpsertCentroCostoDto {
+  /**
+   * Opcional: la ficha dejó de preguntarla. Si no viene se resuelve la única
+   * planta del tenant, o se crea una. La columna sigue siendo obligatoria en la
+   * base porque Maquinaria la necesita.
+   */
+  @IsOptional()
   @IsUUID()
-  plantaId: string;
+  plantaId?: string;
 
   @IsString()
   @MinLength(1)

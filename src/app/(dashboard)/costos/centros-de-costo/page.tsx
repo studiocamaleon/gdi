@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 
-import { getCentrosCosto, getPlantas } from "@/lib/costos-api";
+import { getCentrosCosto } from "@/lib/costos-api";
 import { CostosPanel } from "@/components/costos/costos-panel";
 import { ModulePageSkeleton } from "@/components/dashboard/module-page-skeleton";
 
@@ -15,14 +15,10 @@ export default function CentrosDeCostoPage() {
 }
 
 async function CentrosDeCostoPageContent() {
-  const [plantas, centros] = await Promise.all([
-    getPlantas(),
-    getCentrosCosto(),
-  ]);
+  const centros = await getCentrosCosto();
 
   return (
     <CostosPanel
-      initialPlantas={plantas}
       initialCentros={centros}
     />
   );

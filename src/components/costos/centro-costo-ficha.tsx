@@ -26,7 +26,6 @@ import {
   getCategoriaComponenteCostoLabel,
   getCurrentPeriodo,
   getTipoCentroLabel,
-  Planta,
   SeccionCentroCostoLinea,
   tipoCentroItems,
   type TipoCentroCosto,
@@ -224,7 +223,6 @@ type CentroCostoFichaProps = {
   onOpenChange: (open: boolean) => void;
   /** null = alta. */
   centro: CentroCosto | null;
-  plantas: Planta[];
   periodo?: string;
   onSaved: () => Promise<void> | void;
 };
@@ -233,7 +231,6 @@ export function CentroCostoFicha({
   open,
   onOpenChange,
   centro,
-  plantas,
   periodo: periodoInicial,
   onSaved,
 }: CentroCostoFichaProps) {
@@ -372,7 +369,6 @@ export function CentroCostoFicha({
         // El área y la categoría gráfica ya no se piden: el backend resuelve
         // un área por defecto de la planta.
         const payload: CentroCostoPayload = {
-          plantaId: plantas[0]?.id ?? "",
           codigo: nombre.trim().slice(0, 12).toUpperCase().replace(/\s+/g, "-"),
           nombre: nombre.trim(),
           descripcion: "",
@@ -383,7 +379,6 @@ export function CentroCostoFicha({
         centroId = creado.id;
       } else {
         await updateCentroCosto(centro.id, {
-          plantaId: centro.plantaId,
           codigo: centro.codigo,
           nombre: nombre.trim(),
           descripcion: centro.descripcion,

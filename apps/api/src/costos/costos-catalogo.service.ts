@@ -99,14 +99,42 @@ export class CostosCatalogoService {
     return centros.map((centro) => this.mapper.toCentroResponse(centro));
   }
 
+  /**
+   * La planta salió de la ficha del centro: el taller es uno solo y preguntarla
+   * en cada alta era ruido. Sigue existiendo porque Maquinaria la necesita.
+   */
+  private async resolverPlantaPorDefecto(auth: CurrentAuth) {
+    const existente = await this.prisma.planta.findFirst({
+      where: { tenantId: auth.tenantId },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    if (existente) return existente.id;
+
+    const creada = await this.prisma.planta.create({
+      data: {
+        tenantId: auth.tenantId,
+        codigo: 'PLT-001',
+        nombre: 'Planta principal',
+      },
+      select: { id: true },
+    });
+    return creada.id;
+  }
+
   async createCentro(auth: CurrentAuth, payload: UpsertCentroCostoDto) {
-    await this.validaciones.validateCentroReferences(auth, payload);
+    const plantaId =
+      payload.plantaId ?? (await this.resolverPlantaPorDefecto(auth));
+    await this.validaciones.validateCentroReferences(auth, {
+      ...payload,
+      plantaId,
+    });
 
     let centro: CentroCompleto;
 
     try {
       centro = await this.prisma.centroCosto.create({
-        data: this.mapper.buildCreateCentroData(auth, payload),
+        data: this.mapper.buildCreateCentroData(auth, { ...payload, plantaId }),
         include: {
           planta: true,
           capacidadesPeriodo: true,

@@ -2,9 +2,6 @@
 
 import * as React from "react";
 import {
-  Building2Icon,
-  FolderTreeIcon,
-  PencilIcon,
   PlusIcon,
   PowerIcon,
   RefreshCcwIcon,
@@ -16,60 +13,26 @@ import { toast } from "sonner";
 
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import {
-  createPlanta,
   eliminarCentroCosto,
   getCentrosCosto,
-  getPlantas,
   getResumenCentrosCosto,
   toggleCentroCosto,
-  togglePlanta,
-  updatePlanta,
 } from "@/lib/costos-api";
 import { formatearMoneda, type Moneda } from "@/lib/moneda";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import {
   CentroCosto,
   getCurrentPeriodo,
-  Planta,
   type ResumenCentroCostoFila,
   type ResumenCentrosCosto,
-  type PlantaPayload,
 } from "@/lib/costos";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import { CentroCostoFicha } from "@/components/costos/centro-costo-ficha";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Tabs, TabsContent } from "@/components/ui/tabs";
 
 type CostosPanelProps = {
-  initialPlantas: Planta[];
   initialCentros: CentroCosto[];
 };
 
-function createEmptyPlanta(): PlantaPayload {
-  return {
-    codigo: "",
-    nombre: "",
-    descripcion: "",
-  };
-}
 
 
 
@@ -87,24 +50,22 @@ function formatMoneyOrDash(value: number | null | undefined, moneda: Moneda) {
 }
 
 export function CostosPanel({
-  initialPlantas,
   initialCentros,
 }: CostosPanelProps) {
   const { moneda } = useConfigRegional();
-  const [plantas, setPlantas] = React.useState(initialPlantas);
 
   const [centros, setCentros] = React.useState(initialCentros);
-  const [activeTab, setActiveTab] = React.useState("plantas");
   const [selectedCentro, setSelectedCentro] = React.useState<CentroCosto | null>(null);
   const [centroAEliminar, setCentroAEliminar] = React.useState<CentroCosto | null>(null);
   const [isConfiguratorOpen, setIsConfiguratorOpen] = React.useState(false);
   const [configuracionRefreshKey, setConfiguracionRefreshKey] = React.useState(0);
-  const [editingPlantaId, setEditingPlantaId] = React.useState<string | null>(null);
 
-  const [plantaForm, setPlantaForm] = React.useState<PlantaPayload>(createEmptyPlanta);
+
+
 
   const [isReloading, startReloading] = React.useTransition();
-  const [isSaving, startSaving] = React.useTransition();
+  const [, startSaving] = React.useTransition();
+
   const [periodoResumen, setPeriodoResumen] = React.useState(getCurrentPeriodo);
   const [busquedaCentros, setBusquedaCentros] = React.useState("");
   const [resumen, setResumen] = React.useState<ResumenCentrosCosto | null>(null);
@@ -166,9 +127,8 @@ export function CostosPanel({
   }, []);
 
   React.useEffect(() => {
-    if (activeTab !== "centros") return;
     void cargarResumen(periodoResumen);
-  }, [activeTab, periodoResumen, cargarResumen, configuracionRefreshKey]);
+  }, [periodoResumen, cargarResumen, configuracionRefreshKey]);
 
 
 
@@ -177,16 +137,11 @@ export function CostosPanel({
   const reloadAll = React.useCallback(() => {
     startReloading(async () => {
       try {
-        const [nextPlantas, nextCentros] = await Promise.all([
-          getPlantas(),
-          getCentrosCosto(),
-        ]);
-
-        setPlantas(nextPlantas);
+        const nextCentros = await getCentrosCosto();
         setCentros(nextCentros);
         setSelectedCentro((current) =>
           current
-            ? nextCentros.find((centro) => centro.id === current.id) ?? current
+            ? (nextCentros.find((centro) => centro.id === current.id) ?? current)
             : current,
         );
       } catch (error) {
@@ -195,42 +150,9 @@ export function CostosPanel({
     });
   }, []);
 
-  const handlePlantSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    startSaving(async () => {
-      try {
-        if (editingPlantaId) {
-          await updatePlanta(editingPlantaId, plantaForm);
-          toast.success("Planta actualizada.");
-        } else {
-          await createPlanta(plantaForm);
-          toast.success("Planta creada.");
-        }
-
-        setEditingPlantaId(null);
-        setPlantaForm(createEmptyPlanta());
-        reloadAll();
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "No se pudo guardar la planta.");
-      }
-    });
-  };
 
 
 
-  const handleTogglePlanta = (id: string) => {
-    startSaving(async () => {
-      try {
-        await togglePlanta(id);
-        reloadAll();
-      } catch (error) {
-        toast.error(
-          error instanceof Error ? error.message : "No se pudo cambiar la planta.",
-        );
-      }
-    });
-  };
 
 
   const handleToggleCentro = (id: string) => {
@@ -257,7 +179,7 @@ export function CostosPanel({
         <div className="title-block">
           <h1>Centros de costo</h1>
           <div className="sub">
-            Las plantas y los centros de costo con los que se costea la gráfica. Cada centro es una planilla que se carga a mano.
+            Cada centro es una planilla que se carga a mano: gastos generales, empleados y activos fijos.
           </div>
         </div>
         <button type="button" className="btn cc-refresh" onClick={reloadAll}>
@@ -265,182 +187,6 @@ export function CostosPanel({
           Refrescar
         </button>
       </div>
-
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <div className="cc-tabs">
-          <button
-            type="button"
-            className={`cc-tab ${activeTab === "plantas" ? "active" : ""}`}
-            onClick={() => setActiveTab("plantas")}
-          >
-            Plantas
-          </button>
-          <button
-            type="button"
-            className={`cc-tab ${activeTab === "centros" ? "active" : ""}`}
-            onClick={() => setActiveTab("centros")}
-          >
-            Centros
-          </button>
-        </div>
-
-            <TabsContent value="plantas" className="flex flex-col gap-6">
-              <Card className="rounded-2xl border-border/70 shadow-none">
-                <CardHeader>
-                  <CardTitle className="text-lg">Plantas</CardTitle>
-                  <CardDescription>
-                    Una planta representa una sede o establecimiento productivo del
-                    tenant actual.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form className="flex flex-col gap-4" onSubmit={handlePlantSubmit}>
-                    <FieldGroup className="grid gap-4 lg:grid-cols-3">
-                      <Field>
-                        <FieldLabel htmlFor="planta-codigo">Codigo</FieldLabel>
-                        <Input
-                          id="planta-codigo"
-                          value={plantaForm.codigo}
-                          onChange={(event) =>
-                            setPlantaForm((current) => ({
-                              ...current,
-                              codigo: event.target.value,
-                            }))
-                          }
-                          placeholder="PLT-001"
-                        />
-                      </Field>
-                      <Field>
-                        <FieldLabel htmlFor="planta-nombre">Nombre</FieldLabel>
-                        <Input
-                          id="planta-nombre"
-                          value={plantaForm.nombre}
-                          onChange={(event) =>
-                            setPlantaForm((current) => ({
-                              ...current,
-                              nombre: event.target.value,
-                            }))
-                          }
-                          placeholder="Planta principal"
-                        />
-                      </Field>
-                      <Field>
-                        <FieldLabel htmlFor="planta-descripcion">Descripcion</FieldLabel>
-                        <Input
-                          id="planta-descripcion"
-                          value={plantaForm.descripcion ?? ""}
-                          onChange={(event) =>
-                            setPlantaForm((current) => ({
-                              ...current,
-                              descripcion: event.target.value,
-                            }))
-                          }
-                          placeholder="Observaciones"
-                        />
-                      </Field>
-                    </FieldGroup>
-
-                    <div className="flex gap-2">
-                      <Button type="submit" variant="brand">
-                        {isSaving ? <GdiSpinner className="size-4" /> : <PlusIcon />}
-                        {editingPlantaId ? "Guardar cambios" : "Nueva planta"}
-                      </Button>
-                      {editingPlantaId ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => {
-                            setEditingPlantaId(null);
-                            setPlantaForm(createEmptyPlanta());
-                          }}
-                        >
-                          Cancelar
-                        </Button>
-                      ) : null}
-                    </div>
-                  </form>
-                </CardContent>
-              </Card>
-
-              <Card className="rounded-2xl border-border/70 shadow-none">
-                <CardContent className="px-0">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="px-4">Nombre</TableHead>
-                        <TableHead>Estado</TableHead>
-                        <TableHead className="w-40">Acciones</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {plantas.map((planta) => (
-                        <TableRow key={planta.id}>
-                          <TableCell className="px-4 font-medium">{planta.nombre}</TableCell>
-                          <TableCell>
-                            <Badge variant={planta.activa ? "secondary" : "outline"}>
-                              {planta.activa ? "Activa" : "Inactiva"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setEditingPlantaId(planta.id);
-                                  setPlantaForm({
-                                    codigo: planta.codigo,
-                                    nombre: planta.nombre,
-                                    descripcion: planta.descripcion,
-                                  });
-                                  setActiveTab("plantas");
-                                }}
-                              >
-                                <PencilIcon />
-                                Editar
-                              </Button>
-                              <Button
-                                variant="sidebar"
-                                size="sm"
-                                onClick={() => handleTogglePlanta(planta.id)}
-                              >
-                                {planta.activa ? "Inactivar" : "Activar"}
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="centros" className="cost-centers-tab">
-              <div className="wiz-section centros-form-section">
-                <div className="wiz-section-head">
-                  <div className="body">
-                    <h2>Centros de costo</h2>
-                    <div className="helptext">
-                      Cada centro es una planilla que se carga a mano: gastos
-                      generales, empleados y activos fijos. No se toma nada de
-                      otros módulos.
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={() => {
-                      setSelectedCentro(null);
-                      setIsConfiguratorOpen(true);
-                    }}
-                  >
-                    <PlusIcon />
-                    Añadir centro de costo
-                  </button>
-                </div>
-              </div>
-
 
               <div className="ccosto-toolbar">
                 <div className="ccosto-buscador">
@@ -463,6 +209,17 @@ export function CostosPanel({
                     }
                   />
                 </label>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setSelectedCentro(null);
+                    setIsConfiguratorOpen(true);
+                  }}
+                >
+                  <PlusIcon />
+                  Añadir centro de costo
+                </button>
               </div>
 
               <div className="card tbl-scroll centros-costo-table-card">
@@ -614,26 +371,6 @@ export function CostosPanel({
                 </table>
               </div>
 
-              <div className="kpi-row">
-                <div className="kpi-card">
-                  <div className="lbl">
-                    <Building2Icon />
-                    Plantas
-                  </div>
-                  <div className="val">{plantas.length}</div>
-                </div>
-                <div className="kpi-card">
-                  <div className="lbl">
-                    <FolderTreeIcon />
-                    Centros activos
-                  </div>
-                  <div className="val">
-                    {centros.filter((item) => item.activo).length}
-                  </div>
-                </div>
-              </div>
-        </TabsContent>
-      </Tabs>
       <CentroCostoFicha
         open={isConfiguratorOpen}
         onOpenChange={(next) => {
@@ -641,7 +378,6 @@ export function CostosPanel({
           if (!next) setSelectedCentro(null);
         }}
         centro={selectedCentro}
-        plantas={plantas}
         periodo={periodoResumen}
         onSaved={async () => {
           reloadAll();
