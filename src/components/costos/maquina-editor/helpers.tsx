@@ -725,6 +725,53 @@ export function shouldShowMaquinaField(field: MaquinariaTemplateField, form: Maq
   return true;
 }
 
+/**
+ * Los modos de color de un perfil no pueden salirse de los que declara la
+ * máquina: si la impresora sólo soporta CMYK, ningún perfil puede pedir
+ * blanco o barniz —el modal de tintas generaría un canal inexistente y el
+ * motor lo costearía—. Las opciones del perfil se intersectan con
+ * `coloresSoportados`.
+ *
+ * Un valor ya guardado fuera de la lista NO se borra: se muestra marcado
+ * para que se vea el problema en vez de desaparecer en silencio.
+ */
+export function restringirColoresDelPerfil(
+  field: MaquinariaTemplateField,
+  form: MaquinaPayload,
+  valorActual: unknown,
+): MaquinariaTemplateField {
+  if (field.scope !== "perfil_operativo" || field.key !== "colores") {
+    return field;
+  }
+  const declarados = (form.parametrosTecnicos ?? {}).coloresSoportados;
+  const soportados = Array.isArray(declarados)
+    ? declarados.map(String)
+    : typeof declarados === "string" && declarados
+      ? [declarados]
+      : [];
+  if (soportados.length === 0) return field;
+
+  const opciones = field.options ?? [];
+  const permitidas = opciones.filter((opt) => soportados.includes(opt.value));
+  // Si nada coincide, mejor no dejar el campo sin opciones.
+  if (permitidas.length === 0) return field;
+
+  const actuales = Array.isArray(valorActual)
+    ? valorActual.map(String)
+    : typeof valorActual === "string" && valorActual
+      ? [valorActual]
+      : [];
+  const heredadas = opciones
+    .filter(
+      (opt) =>
+        actuales.includes(opt.value) &&
+        !permitidas.some((permitida) => permitida.value === opt.value),
+    )
+    .map((opt) => ({ ...opt, label: `${opt.label} · no soportado` }));
+
+  return { ...field, options: [...permitidas, ...heredadas] };
+}
+
 export function shouldShowPerfilField(
   field: MaquinariaTemplateField,
   form: MaquinaPayload,

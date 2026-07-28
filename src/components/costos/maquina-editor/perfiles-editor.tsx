@@ -27,6 +27,7 @@ import {
   getPerfilFieldValue,
   getTemplateUnitLabel,
   normalizePerfilTypeForTemplate,
+  restringirColoresDelPerfil,
   setPerfilFieldValue,
   setPerfilFieldValueForTemplate,
   shouldShowPerfilField,
@@ -162,15 +163,22 @@ export function PerfilesOperativosEditor({
                           </td>
                         );
                       }
+                      const valor = getPerfilFieldValue(perfil, field.key);
                       // La unidad vive en el encabezado; la celda va limpia.
-                      const cellField: MaquinariaTemplateField = field.unit
+                      const sinUnidad: MaquinariaTemplateField = field.unit
                         ? { ...field, unit: undefined }
                         : field;
+                      // Los colores del perfil no pueden exceder los de la máquina.
+                      const cellField = restringirColoresDelPerfil(
+                        sinUnidad,
+                        form,
+                        valor,
+                      );
                       return (
                         <td key={field.key} className={esNum ? "num" : undefined}>
                           <FieldInput
                             field={cellField}
-                            value={getPerfilFieldValue(perfil, field.key)}
+                            value={valor}
                             onChange={(v) => {
                               const next = setPerfilFieldValueForTemplate(
                                 perfil,
