@@ -502,7 +502,7 @@ export function PerfilTintasModal({
               </table>
               <p className="maq-tintas-nota">
                 {esLaser
-                  ? "El motor toma este tóner al cotizar con este perfil: un papel que chupe más se declara acá, no en el producto."
+                  ? "El motor toma este tóner al cotizar con este perfil; en Productos no hace falta elegirlo por paso."
                   : "El motor toma estas tintas automáticamente al cotizar con este perfil; en Productos no hace falta elegirlas por paso."}
               </p>
             </>
