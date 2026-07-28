@@ -6144,7 +6144,7 @@ body {
     padding: 0 12px;
     border: 1px solid var(--border);
     border-radius: 8px;
-    background: var(--surface-1);
+    background: var(--surface);
   }
 
   .ccosto-buscador svg {
@@ -6177,7 +6177,7 @@ body {
     padding: 8px 10px;
     border: 1px solid var(--border);
     border-radius: 8px;
-    background: var(--surface-1);
+    background: var(--surface);
     color: var(--text);
     font-size: 13px;
   }
@@ -6241,7 +6241,7 @@ body {
     flex: 0 0 auto;
     border: 1px solid var(--border);
     border-radius: 10px;
-    background: var(--surface-1);
+    background: var(--surface);
     overflow: hidden;
   }
 
@@ -6306,7 +6306,7 @@ body {
     padding: 8px 10px;
     border: 1px solid var(--border);
     border-radius: 7px;
-    background: var(--surface-1);
+    background: var(--surface);
     color: var(--text);
     font-size: 13px;
   }
@@ -6338,7 +6338,7 @@ body {
     padding-right: 8px;
     border: 1px solid var(--border);
     border-radius: 7px;
-    background: var(--surface-1);
+    background: var(--surface);
   }
 
   .ccosto-seccion .ccosto-dedicacion-campo:focus-within {
@@ -6459,7 +6459,7 @@ body {
     padding: 9px 10px;
     border: 1px solid var(--border);
     border-radius: 7px;
-    background: var(--surface-1);
+    background: var(--surface);
     color: var(--text);
     font-size: 13px;
   }
@@ -6593,7 +6593,7 @@ body {
     padding: 0 12px;
     border: 1px solid var(--border);
     border-radius: 8px;
-    background: var(--surface-1);
+    background: var(--surface);
   }
 
   .gfijo-buscador svg {
@@ -6627,7 +6627,7 @@ body {
     padding: 9px 14px;
     border: 1px solid var(--border);
     border-radius: 8px;
-    background: var(--surface-1);
+    background: var(--surface);
     color: var(--text);
     font-size: 13px;
     font-weight: 500;
@@ -6677,7 +6677,7 @@ body {
     padding: 8px 10px;
     border: 1px solid var(--border);
     border-radius: 7px;
-    background: var(--surface-1);
+    background: var(--surface);
     color: var(--text);
     font-size: 13px;
   }
@@ -6753,7 +6753,7 @@ body {
     margin-top: 12px;
     border: 1px solid var(--border);
     border-radius: 10px;
-    background: var(--surface-1);
+    background: var(--surface);
     font-size: 13px;
     color: var(--text-muted);
   }
@@ -6808,7 +6808,7 @@ body {
     flex: 0 0 auto;
     border: 1px solid var(--border);
     border-radius: 10px;
-    background: var(--surface-1);
+    background: var(--surface);
     overflow: hidden;
   }
 
@@ -37637,6 +37637,7 @@ body:has(.t-app) {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
 
 
 
