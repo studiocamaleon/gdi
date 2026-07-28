@@ -75,12 +75,14 @@ export class CostosValidacionesService {
     payload: UpsertCentroCostoDto,
     db: DbClient = this.prisma,
   ) {
-    const planta = await db.planta.findFirst({
-      where: { id: payload.plantaId, tenantId: auth.tenantId },
-    });
+    if (payload.plantaId) {
+      const planta = await db.planta.findFirst({
+        where: { id: payload.plantaId, tenantId: auth.tenantId },
+      });
 
-    if (!planta) {
-      throw new NotFoundException('La planta no existe.');
+      if (!planta) {
+        throw new NotFoundException('La planta no existe.');
+      }
     }
   }
 
