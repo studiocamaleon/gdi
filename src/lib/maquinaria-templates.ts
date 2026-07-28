@@ -254,8 +254,10 @@ function buildLaserSections(): MaquinariaTemplateSection[] {
       description: "Medidas máximas de pliego soportadas por la máquina.",
       fields: [
         field({ key: "anchoUtil", label: "Ancho útil máximo", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Ancho máx de pliego (ej. 320mm)." }),
-        field({ key: "largoUtil", label: "Largo útil máximo", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Largo máx de pliego (ej. 1200mm)." }),
-        field({ key: "gramajeMaxGr", label: "Gramaje máximo", scope: "maquina", kind: "number", unit: "g_m2", required: true, description: "Gramaje máx de papel (ej. 400gr)." }),
+        // Sin largoUtil ni gramajeMaxGr (decisión 2026-07-28): el largo del
+        // pliego lo pone el material comprado, no la máquina, y el gramaje
+        // máximo no lo miraba nadie (la precondición que lo usaba leía otro
+        // lugar y nunca disparaba).
       ],
     }),
     section({
@@ -271,7 +273,7 @@ function buildLaserSections(): MaquinariaTemplateSection[] {
     section({
       id: "perfiles_operativos",
       title: "Perfiles operativos",
-      description: "Cada perfil describe una combinación cara/color/formato/gramaje con su productividad.",
+      description: "Cada perfil describe una combinación cara/color con su productividad.",
       fields: [
         field({ key: "nombre", label: "Nombre del perfil", scope: "perfil_operativo", kind: "text", required: true, description: "Ej. Papel grueso doble faz." }),
         field({ key: "productivityValue", label: "Productividad", scope: "perfil_operativo", kind: "number", unit: "ppm", required: true, description: "Pliegos por minuto." }),
@@ -280,8 +282,6 @@ function buildLaserSections(): MaquinariaTemplateSection[] {
         field({ key: "feedReloadMin", label: "Recarga papel", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de recarga entre tandas." }),
         field({ key: "caras", label: "Caras", scope: "perfil_operativo", kind: "select", required: true, options: carasOptions, description: "Discriminante: simple o doble faz." }),
         field({ key: "colores", label: "Modos de color admitidos", scope: "perfil_operativo", kind: "multiselect", options: coloresImpresorLaserOptions, description: "Modos comerciales que puede imprimir este perfil." }),
-        field({ key: "gramajeMinGr", label: "Gramaje mínimo", scope: "perfil_operativo", kind: "number", unit: "g_m2", description: "Gramaje mínimo del rango." }),
-        field({ key: "gramajeMaxGr", label: "Gramaje máximo", scope: "perfil_operativo", kind: "number", unit: "g_m2", description: "Gramaje máximo del rango." }),
       ],
     }),
     section({ id: "consumibles", title: "Consumibles", description: "Tóner declarado por máquina.", fields: genericConsumableFields }),

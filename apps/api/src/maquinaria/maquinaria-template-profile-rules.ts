@@ -75,9 +75,9 @@ function buildRule(params: {
 
 const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
   // ─── §5 IMPRESORA_LASER ─────────────────────────────────────────
-  // Discriminantes (detalle): caras, colores, gramajeMinGr, gramajeMaxGr.
+  // Discriminantes (detalle): caras, colores.
   [PlantillaMaquinariaDto.impresora_laser]: buildRule({
-    detalleKeys: ['caras', 'colores', 'gramajeMinGr', 'gramajeMaxGr'],
+    detalleKeys: ['caras', 'colores'],
     requiredFieldKeys: [
       'nombre',
       'productivityValue',
@@ -290,25 +290,6 @@ export function validatePerfilOperativoByTemplate(
     if (!hasValue(value)) {
       throw new Error(
         `El perfil operativo ${perfilName} debe completar el campo ${requiredKey} para la plantilla ${plantilla}.`,
-      );
-    }
-  }
-
-  if (
-    plantilla === PlantillaMaquinariaDto.impresora_laser &&
-    parametrosTecnicos
-  ) {
-    const machineMaxGramaje = toFiniteNumber(parametrosTecnicos.gramajeMaxGr);
-    const profileMaxGramaje = toFiniteNumber(
-      getPerfilFieldValue(perfil, 'gramajeMaxGr'),
-    );
-    if (
-      machineMaxGramaje !== null &&
-      profileMaxGramaje !== null &&
-      profileMaxGramaje > machineMaxGramaje
-    ) {
-      throw new Error(
-        `El perfil operativo ${perfilName} no puede superar el gramaje maximo de la maquina (${machineMaxGramaje} g/m²).`,
       );
     }
   }

@@ -162,11 +162,6 @@ export function PerfilesOperativosEditor({
                           </td>
                         );
                       }
-                      const profileFieldMax =
-                        field.key === "gramajeMaxGr" &&
-                        typeof form.gramajeMaxGr === "number"
-                          ? form.gramajeMaxGr
-                          : undefined;
                       // La unidad vive en el encabezado; la celda va limpia.
                       const cellField: MaquinariaTemplateField = field.unit
                         ? { ...field, unit: undefined }
@@ -176,7 +171,6 @@ export function PerfilesOperativosEditor({
                           <FieldInput
                             field={cellField}
                             value={getPerfilFieldValue(perfil, field.key)}
-                            max={profileFieldMax}
                             onChange={(v) => {
                               const next = setPerfilFieldValueForTemplate(
                                 perfil,

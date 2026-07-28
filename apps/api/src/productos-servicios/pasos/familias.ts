@@ -361,16 +361,6 @@ const impresion_por_hoja: DefinicionFamilia = {
       campo: 'caras',
       mensaje: 'Falta declarar simple/doble faz',
     },
-    {
-      codigo: 'maquina_soporta_gramaje',
-      tipo: 'COMPARE',
-      campoJobContext: 'gramajeGr',
-      fuenteB: 'MAQUINA',
-      campoB: 'gramajeMaxGr',
-      operador: '<=',
-      mensaje:
-        'Gramaje del papel ({jc.gramajeGr}gr) excede capacidad de la máquina ({maq.gramajeMaxGr}gr)',
-    },
   ],
   paramsPasoSchema: [],
   productosTipicos: [

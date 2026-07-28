@@ -29,13 +29,11 @@ import {
   getDefaultOpenSection,
   getDefaultProductivityUnit,
   getDefaultProfileType,
-  getPerfilFieldValue,
   maquinaToPayload,
   normalizePerfilTypeForTemplate,
   normalizeProductionUnitForTemplate,
   normalizeRequiredPrinterConsumibles,
   setMaquinaFieldValue,
-  setPerfilFieldValue,
   type LocalPerfil,
 } from "./helpers";
 
@@ -88,15 +86,6 @@ export function useMaquinaEditor({
         ? cleanGranFormatoGeometryFields(next, value)
         : next;
     });
-    if (field.key === "gramajeMaxGr" && typeof value === "number") {
-      setPerfiles((current) =>
-        current.map((perfil) => {
-          const currentMax = Number(getPerfilFieldValue(perfil, "gramajeMaxGr"));
-          if (!Number.isFinite(currentMax) || currentMax <= value) return perfil;
-          return setPerfilFieldValue(perfil, "gramajeMaxGr", value);
-        }),
-      );
-    }
     if (field.key === "soportaCorteIntegrado" && value !== true) {
       const nextForm = setMaquinaFieldValue(form, field.key, value);
       setPerfiles((current) =>
