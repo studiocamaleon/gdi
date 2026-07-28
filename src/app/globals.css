@@ -7730,10 +7730,57 @@ body {
     font-size: 12px;
   }
 
+  /* ── Desgaste y repuestos: misma tabla que Perfiles ── */
+
+  /* Pocas columnas y una tabla al 100%: sin esto el sobrante se lo repartían
+     el nombre (700px de input) y el Tipo. Cada columna mide lo suyo y el
+     sobrante va a una columna de relleno, que deja la X pegada a la derecha
+     como en Perfiles. */
+  /* Anchos fijos: son pocas columnas y con reparto automático el nombre se
+     estiraba 700 px. La columna de relleno se queda con el sobrante, así la
+     X queda pegada a la derecha como en Perfiles. */
+  .maq-desgaste .maq-perfiles-tabla {
+    table-layout: fixed;
+  }
+
+  .maq-desgaste .maq-perfiles-tabla th.nombre {
+    width: 250px;
+  }
+
+  .maq-desgaste .maq-perfiles-tabla th.tipo {
+    width: 265px;
+  }
+
+  .maq-desgaste .maq-perfiles-tabla th.precio {
+    width: 155px;
+  }
+
+  .maq-desgaste .maq-perfiles-tabla th.rinde {
+    width: 135px;
+  }
+
+  .maq-desgaste .maq-perfiles-tabla th.costo {
+    width: 125px;
+  }
+
+  .maq-desgaste .maq-perfiles-tabla th.color {
+    width: 105px;
+  }
+
+  .maq-desgaste .maq-perfiles-tabla th.acciones {
+    width: 40px;
+  }
+
+  .maq-desgaste .maq-perfiles-tabla td.color {
+    white-space: nowrap;
+  }
+
+  /* Cifra calculada, no editable: sin caja, pero alineada con la columna. */
   .maq-desgaste-costo {
     font-variant-numeric: tabular-nums;
     color: var(--text-muted);
     white-space: nowrap;
+    padding-left: 2px;
   }
 
   .maq-desgaste-total {
@@ -7745,6 +7792,13 @@ body {
   .maq-desgaste-total strong {
     color: var(--text);
     font-variant-numeric: tabular-nums;
+  }
+
+  /* Segmented Sí|No para una celda de tabla: el de los formularios ocupa
+     demasiado alto al lado de un input. */
+  .maq-seg.maq-seg-mini button {
+    padding: 5px 11px;
+    font-size: 12px;
   }
 
   /* ── Segmented chico Sí | No para campos booleanos ── */

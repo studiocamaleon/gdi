@@ -10,6 +10,7 @@
 import * as React from "react";
 import { PlusIcon, XIcon } from "lucide-react";
 
+import { Input } from "@/components/ui/input";
 import { formatearMoneda } from "@/lib/moneda";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import {
@@ -99,7 +100,7 @@ export function DesgasteEditor({ form, setForm }: DesgasteEditorProps) {
   );
 
   return (
-    <div className="maq-perfiles">
+    <div className="maq-perfiles maq-desgaste">
       {componentes.length === 0 ? (
         <p className="maq-perfiles-vacio">
           Sin piezas cargadas: la máquina no suma costo por click.
@@ -109,12 +110,20 @@ export function DesgasteEditor({ form, setForm }: DesgasteEditorProps) {
           <table className="maq-perfiles-tabla">
             <thead>
               <tr>
-                <th>Componente</th>
+                <th className="nombre">
+                  Componente<span className="req"> *</span>
+                </th>
                 <th className="tipo">Tipo</th>
-                <th className="num">Precio del repuesto</th>
-                <th className="num">Rinde (clicks A4)</th>
-                <th className="num">Costo por click</th>
-                {conColumnaColor ? <th className="num">Sólo color</th> : null}
+                <th className="num precio">
+                  Precio del repuesto
+                  <span className="unidad"> ({moneda.simbolo})</span>
+                </th>
+                <th className="num rinde">
+                  Rinde<span className="unidad"> (clicks A4)</span>
+                </th>
+                <th className="num costo">Costo por click</th>
+                {conColumnaColor ? <th className="color">Sólo color</th> : null}
+                <th className="relleno" />
                 <th className="acciones" aria-label="Acciones" />
               </tr>
             </thead>
@@ -123,8 +132,8 @@ export function DesgasteEditor({ form, setForm }: DesgasteEditorProps) {
                 const costo = costoPorClick(item);
                 return (
                   <tr key={item.id ?? `nuevo-${indice}`}>
-                    <td>
-                      <input
+                    <td className="nombre">
+                      <Input
                         value={item.nombre}
                         placeholder="Drum negro"
                         aria-label={`Nombre del componente ${indice + 1}`}
@@ -152,8 +161,9 @@ export function DesgasteEditor({ form, setForm }: DesgasteEditorProps) {
                       </select>
                     </td>
                     <td className="num">
-                      <input
+                      <Input
                         type="number"
+                        inputMode="decimal"
                         min={0}
                         step={0.01}
                         value={item.precioUnitario ?? ""}
@@ -169,8 +179,9 @@ export function DesgasteEditor({ form, setForm }: DesgasteEditorProps) {
                       />
                     </td>
                     <td className="num">
-                      <input
+                      <Input
                         type="number"
+                        inputMode="numeric"
                         min={0}
                         step={1}
                         value={item.vidaUtilEstimada ?? ""}
@@ -189,17 +200,36 @@ export function DesgasteEditor({ form, setForm }: DesgasteEditorProps) {
                       {costo === null ? "—" : fmt(costo)}
                     </td>
                     {conColumnaColor ? (
-                      <td className="num">
-                        <input
-                          type="checkbox"
-                          checked={Boolean(item.soloColor)}
+                      <td className="color">
+                        <div
+                          className="maq-seg maq-seg-mini"
+                          role="group"
                           aria-label={`El componente ${indice + 1} sólo se gasta en color`}
-                          onChange={(e) =>
-                            actualizar(indice, { soloColor: e.target.checked })
-                          }
-                        />
+                        >
+                          <button
+                            type="button"
+                            className={item.soloColor ? "activo" : ""}
+                            aria-pressed={Boolean(item.soloColor)}
+                            onClick={() =>
+                              actualizar(indice, { soloColor: true })
+                            }
+                          >
+                            Sí
+                          </button>
+                          <button
+                            type="button"
+                            className={item.soloColor ? "" : "activo"}
+                            aria-pressed={!item.soloColor}
+                            onClick={() =>
+                              actualizar(indice, { soloColor: false })
+                            }
+                          >
+                            No
+                          </button>
+                        </div>
                       </td>
                     ) : null}
+                    <td className="relleno" />
                     <td className="acciones">
                       <span className="maq-perfiles-acciones">
                         <button
