@@ -27,6 +27,7 @@ describe('RecurrentesService', () => {
   let tenantId: string;
   let auth: CurrentAuth;
   let catAlquiler: string;
+  let catPorCodigo: Map<string, string>;
   let gastoFijoId: string;
 
   const periodoActual = () => new Date().toISOString().slice(0, 7);
@@ -48,13 +49,14 @@ describe('RecurrentesService', () => {
 
     await egresos.asegurarCategorias(tenantId);
     const cats = await prisma.categoriaEgreso.findMany({ where: { tenantId } });
-    catAlquiler = cats.find((c) => c.codigo === 'alquiler')!.id;
+    catPorCodigo = new Map(cats.map((c) => [c.codigo, c.id]));
+    catAlquiler = catPorCodigo.get('alquiler')!;
 
     const fijo = await prisma.gastoFijoEstructura.create({
       data: {
         tenantId,
         nombre: 'Alquiler del galpón',
-        categoria: 'ALQUILER',
+        categoriaEgresoId: catAlquiler,
         importeMensual: 900_000,
         vigenteDesde: '2020-01',
       },
@@ -255,7 +257,7 @@ describe('RecurrentesService', () => {
         data: {
           tenantId,
           nombre: 'Internet del taller',
-          categoria: 'SERVICIOS',
+          categoriaEgresoId: catPorCodigo.get('servicios')!,
           importeMensual: 60_000,
           vigenteDesde: '2020-01',
         },
@@ -314,7 +316,7 @@ describe('RecurrentesService', () => {
         data: {
           tenantId,
           nombre: 'Seguro sin registrar',
-          categoria: 'SEGUROS',
+          categoriaEgresoId: catPorCodigo.get('seguros')!,
           importeMensual: 200_000,
           vigenteDesde: '2020-01',
         },

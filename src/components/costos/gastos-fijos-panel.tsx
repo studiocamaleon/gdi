@@ -15,20 +15,19 @@ import { toast } from "sonner";
 
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import {
-  CATEGORIAS_GASTO_FIJO,
-  CATEGORIA_GASTO_INFO,
   createGastoFijo,
   eliminarGastoFijo,
   FRECUENCIAS_GASTO_FIJO,
   FRECUENCIA_LABEL,
   getGastosFijos,
   updateGastoFijo,
-  type CategoriaGastoFijo,
   type FrecuenciaGastoFijo,
   type GastoFijo,
   type GastoFijoPayload,
 } from "@/lib/gastos-fijos-api";
 import { getProveedores } from "@/lib/proveedores-api";
+import { getCategoriasEgreso } from "@/lib/egresos-api";
+import type { CategoriaEgreso } from "@/lib/egresos";
 import { getMetodosPago } from "@/lib/administracion-api";
 import { formatearMoneda } from "@/lib/moneda";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
@@ -53,7 +52,7 @@ type Formulario = {
   metodoPagoId: string;
   proveedorId: string;
   notas: string;
-  categoria: CategoriaGastoFijo;
+  categoriaEgresoId: string;
   documento: string;
   vigenteDesde: string;
   /** Cómo termina la vigencia, como en el modelo de referencia. */
@@ -86,7 +85,7 @@ function formularioVacio(): Formulario {
     metodoPagoId: "",
     proveedorId: "",
     notas: "",
-    categoria: "OTROS",
+    categoriaEgresoId: "",
     documento: "",
     vigenteDesde: periodoActual(),
     fin: "nunca",
@@ -103,13 +102,27 @@ function desdeGasto(g: GastoFijo): Formulario {
     metodoPagoId: g.metodoPagoId ?? "",
     proveedorId: g.proveedorId ?? "",
     notas: g.notas ?? "",
-    categoria: g.categoria,
+    categoriaEgresoId: g.categoriaEgresoId,
     documento: g.documento ?? "",
     vigenteDesde: g.vigenteDesde,
     fin: g.vigenteHasta ? "en" : "nunca",
     vigenteHasta: g.vigenteHasta ?? "",
     repeticiones: "",
   };
+}
+
+/**
+ * El catálogo de categorías no guarda color, así que el punto de la lista lo
+ * deriva del código: mismo código, mismo color siempre, sin tocar el schema.
+ */
+const PALETA = [
+  "#2f6fdb", "#d9642a", "#7a52d0", "#1f9d6b", "#b8791b",
+  "#0e9aa7", "#c0392b", "#3f8f8a", "#9a6b3f", "#c77dab",
+];
+function colorCategoria(codigo: string): string {
+  let h = 0;
+  for (let i = 0; i < codigo.length; i++) h = (h * 31 + codigo.charCodeAt(i)) >>> 0;
+  return PALETA[h % PALETA.length];
 }
 
 const numero = (v: string) => {
@@ -157,19 +170,45 @@ export function GastosFijosPanel({ initialGastos }: { initialGastos: GastoFijo[]
   const [metodos, setMetodos] = React.useState<
     Array<{ id: string; nombre: string }>
   >([]);
+  const [categorias, setCategorias] = React.useState<CategoriaEgreso[]>([]);
 
   // Proveedores y métodos de pago se piden al abrir la ficha por primera vez:
   // son catálogos que casi no cambian y no hacen falta para ver la lista.
   const cargarCatalogos = React.useCallback(async () => {
-    if (proveedores.length > 0 || metodos.length > 0) return;
+    if (categorias.length > 0) return;
     try {
-      const [ps, ms] = await Promise.all([getProveedores(), getMetodosPago()]);
+      const [ps, ms, cs] = await Promise.all([
+        getProveedores(),
+        getMetodosPago(),
+        getCategoriasEgreso(),
+      ]);
       setProveedores(ps.map((p) => ({ id: p.id, nombre: p.nombre })));
       setMetodos(ms.map((m) => ({ id: m.id, nombre: m.nombre })));
+      // Un gasto fijo es por definición de estructura: las de producción o
+      // inversión son del otro lado del catálogo y acá no aplican.
+      setCategorias(
+        cs.filter((c) => c.activo && c.naturaleza === "GASTO_ESTRUCTURA"),
+      );
     } catch {
       // Que no se pueda elegir favorecido no debería impedir cargar el gasto.
     }
-  }, [proveedores.length, metodos.length]);
+  }, [categorias.length]);
+
+  // Un gasto nuevo arranca con una categoría puesta para no obligar a elegirla:
+  // "Otros gastos" si existe, y si no la primera del catálogo.
+  React.useEffect(() => {
+    if (categorias.length === 0) return;
+    setForm((f) =>
+      f.categoriaEgresoId
+        ? f
+        : {
+            ...f,
+            categoriaEgresoId:
+              categorias.find((c) => c.codigo === "otros_gastos")?.id ??
+              categorias[0].id,
+          },
+    );
+  }, [categorias]);
 
   const recargar = React.useCallback(async () => {
     try {
@@ -218,11 +257,15 @@ export function GastosFijosPanel({ initialGastos }: { initialGastos: GastoFijo[]
       toast.error("El gasto necesita una descripción.");
       return;
     }
+    if (!form.categoriaEgresoId) {
+      toast.error("Elegí una categoría para el gasto.");
+      return;
+    }
     setGuardando(true);
     try {
       const payload: GastoFijoPayload = {
         nombre: form.nombre.trim(),
-        categoria: form.categoria,
+        categoriaEgresoId: form.categoriaEgresoId,
         valor: numero(form.valor),
         frecuencia: form.frecuencia,
         proveedorId: form.proveedorId || null,
@@ -357,11 +400,9 @@ export function GastosFijosPanel({ initialGastos }: { initialGastos: GastoFijo[]
                   <div className="desc">
                     <span
                       className="gfijo-punto"
-                      style={{
-                        background: CATEGORIA_GASTO_INFO[g.categoria].color,
-                      }}
+                      style={{ background: colorCategoria(g.categoriaCodigo) }}
                     />
-                    {CATEGORIA_GASTO_INFO[g.categoria].label}
+                    {g.categoriaNombre}
                   </div>
                 </td>
                 <td>{g.proveedorNombre ?? "—"}</td>
@@ -609,14 +650,15 @@ export function GastosFijosPanel({ initialGastos }: { initialGastos: GastoFijo[]
                   <label>
                     <span>Clasificar gasto</span>
                     <select
-                      value={form.categoria}
-                      onChange={(e) =>
-                        editar("categoria", e.target.value as CategoriaGastoFijo)
-                      }
+                      value={form.categoriaEgresoId}
+                      onChange={(e) => editar("categoriaEgresoId", e.target.value)}
                     >
-                      {CATEGORIAS_GASTO_FIJO.map((c) => (
-                        <option key={c.value} value={c.value}>
-                          {c.label}
+                      {categorias.length === 0 ? (
+                        <option value="">Cargando…</option>
+                      ) : null}
+                      {categorias.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.nombre}
                         </option>
                       ))}
                     </select>

@@ -91,20 +91,6 @@ enum FrecuenciaGastoFijo {
   ANUAL
 }
 
-enum CategoriaGastoFijo {
-  ALQUILER
-  SUELDOS
-  SERVICIOS // luz, agua, internet, teléfono
-  AMORTIZACION // depreciación de máquinas/equipos
-  FINANCIEROS // intereses, cuotas, leasing
-  IMPUESTOS // fijos (no IVA/IIBB, que se costean por venta)
-  MARKETING
-  SEGUROS
-  SOFTWARE // software y licencias
-  LEGAL // contable / legal
-  OTROS
-}
-
 enum MetodoDepreciacionMaquina {
   LINEAL
 }
@@ -1496,7 +1482,10 @@ model GastoFijoEstructura {
   id             String              @id @default(uuid()) @db.Uuid
   tenantId       String              @db.Uuid
   nombre         String
-  categoria      CategoriaGastoFijo
+  /// Mismo catálogo que Cuentas por pagar, para que el gasto presupuestado y
+  /// el pago real se clasifiquen igual. Sólo se ofrecen las de naturaleza
+  /// GASTO_ESTRUCTURA: un gasto fijo de "materiales" no existe.
+  categoriaEgresoId String           @db.Uuid
   /// Lo que el usuario carga: el valor de UNA cuota, con su frecuencia.
   valor          Decimal             @default(0) @db.Decimal(14, 2)
   frecuencia     FrecuenciaGastoFijo @default(MENSUAL)
@@ -1518,6 +1507,7 @@ model GastoFijoEstructura {
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
   tenant         Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  categoria      CategoriaEgreso     @relation(fields: [categoriaEgresoId], references: [id], onDelete: Restrict)
   proveedor      Proveedor?          @relation(fields: [proveedorId], references: [id], onDelete: SetNull)
   metodoPago     MetodoPago?         @relation(fields: [metodoPagoId], references: [id], onDelete: SetNull)
   egresos        Egreso[]
@@ -1525,6 +1515,7 @@ model GastoFijoEstructura {
 
   @@index([tenantId])
   @@index([tenantId, proveedorId])
+  @@index([tenantId, categoriaEgresoId])
 }
 
 /// Configuración de producción del tenant. Hoy: margen de seguridad que
@@ -3460,6 +3451,7 @@ model CategoriaEgreso {
   hijos       CategoriaEgreso[] @relation("CategoriaEgresoPadre")
   egresos     Egreso[]
   recurrentes GastoRecurrente[]
+  gastosFijos GastoFijoEstructura[]
 
   @@unique([tenantId, codigo])
   @@index([tenantId, activo])

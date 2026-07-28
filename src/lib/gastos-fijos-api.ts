@@ -5,40 +5,6 @@ import { apiRequest } from "@/lib/api";
  * equilibrio. Ver docs/gastos-fijos-estructura-diseno.md
  */
 
-export type CategoriaGastoFijo =
-  | "SUELDOS"
-  | "ALQUILER"
-  | "SERVICIOS"
-  | "IMPUESTOS"
-  | "SEGUROS"
-  | "SOFTWARE"
-  | "LEGAL"
-  | "FINANCIEROS"
-  | "AMORTIZACION"
-  | "MARKETING"
-  | "OTROS";
-
-/** Etiqueta + color por categoría (colores del diseño Grafoprint). */
-export const CATEGORIAS_GASTO_FIJO: Array<{ value: CategoriaGastoFijo; label: string; color: string }> = [
-  { value: "SUELDOS", label: "Sueldos", color: "#2f6fdb" },
-  { value: "ALQUILER", label: "Alquiler", color: "#d9642a" },
-  { value: "SERVICIOS", label: "Servicios", color: "#7a52d0" },
-  { value: "IMPUESTOS", label: "Impuestos y tasas", color: "#1f9d6b" },
-  { value: "SEGUROS", label: "Seguros", color: "#b8791b" },
-  { value: "SOFTWARE", label: "Software y licencias", color: "#0e9aa7" },
-  { value: "LEGAL", label: "Contable / legal", color: "#c0392b" },
-  { value: "FINANCIEROS", label: "Financieros", color: "#3f8f8a" },
-  { value: "AMORTIZACION", label: "Amortización", color: "#9a6b3f" },
-  { value: "MARKETING", label: "Marketing", color: "#c77dab" },
-  { value: "OTROS", label: "Otros", color: "#8a8a93" },
-];
-
-export const CATEGORIA_GASTO_INFO: Record<CategoriaGastoFijo, { label: string; color: string }> =
-  Object.fromEntries(CATEGORIAS_GASTO_FIJO.map((c) => [c.value, { label: c.label, color: c.color }])) as Record<
-    CategoriaGastoFijo,
-    { label: string; color: string }
-  >;
-
 export type FrecuenciaGastoFijo =
   | "MENSUAL"
   | "BIMESTRAL"
@@ -65,7 +31,10 @@ export const FRECUENCIA_LABEL: Record<FrecuenciaGastoFijo, string> =
 export type GastoFijo = {
   id: string;
   nombre: string;
-  categoria: CategoriaGastoFijo;
+  /** Del catálogo compartido con Cuentas por pagar. */
+  categoriaEgresoId: string;
+  categoriaNombre: string;
+  categoriaCodigo: string;
   /** El valor de UNA cuota, tal como se carga. */
   valor: number;
   frecuencia: FrecuenciaGastoFijo;
@@ -89,7 +58,7 @@ export type GastoFijo = {
  */
 export type GastoFijoPayload = {
   nombre: string;
-  categoria: CategoriaGastoFijo;
+  categoriaEgresoId: string;
   valor: number;
   frecuencia: FrecuenciaGastoFijo;
   proveedorId?: string | null;

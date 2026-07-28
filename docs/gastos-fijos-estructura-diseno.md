@@ -47,23 +47,20 @@ meses desde `vigenteDesde` hasta `vigenteHasta` (null = indefinido). Granularida
 mensual `YYYY-MM`, consistente con `periodo` de los componentes de centro y con
 el prorrateo del panel (`mesesDelRango` / `fraccionMesEnRango`).
 
-```prisma
-enum CategoriaGastoFijo {
-  ALQUILER
-  SUELDOS
-  SERVICIOS        // luz, agua, internet, teléfono
-  AMORTIZACION     // depreciación de máquinas/equipos
-  FINANCIEROS      // intereses, cuotas, leasing
-  IMPUESTOS        // fijos (no IVA/IIBB que ya se costean por venta)
-  MARKETING
-  OTROS
-}
+La categoría **no es un enum propio**: sale del mismo catálogo que Cuentas por
+pagar (`CategoriaEgreso`), filtrado a las de naturaleza `GASTO_ESTRUCTURA` —hoy
+20 de las 35—. Un gasto fijo de "materiales" o de "maquinaria" no existe: eso es
+costo de producción e inversión, del otro lado del catálogo. Se decidió así
+(2026-07-28) porque el enum tenía 11 valores fijos que sólo se ampliaban tocando
+código, y porque clasificar el gasto presupuestado con la misma vara que el pago
+real permite compararlos.
 
+```prisma
 model GastoFijoEstructura {
   id             String             @id @default(uuid()) @db.Uuid
   tenantId       String             @db.Uuid
   nombre         String
-  categoria      CategoriaGastoFijo
+  categoriaEgresoId String          @db.Uuid   // catálogo compartido, GASTO_ESTRUCTURA
   importeMensual Decimal            @db.Decimal(14, 2)
   vigenteDesde   String             // 'YYYY-MM'
   vigenteHasta   String?            // 'YYYY-MM' | null (indefinido)
@@ -125,7 +122,7 @@ categoría de estructura"** (`gastoPorCategoria` en vez de `gastoPorCentro`).
 
 ## 7. Alcance de implementación
 
-1. Schema: `GastoFijoEstructura` + enum `CategoriaGastoFijo` + back-relation en
+1. Schema: `GastoFijoEstructura` + FK a `CategoriaEgreso` + back-relation en
    `Tenant` + migración.
 2. Backend: `GastosFijosModule` (service CRUD + controller) bajo `costos` o
    módulo propio; DTOs con validación; mapper Decimal→number.

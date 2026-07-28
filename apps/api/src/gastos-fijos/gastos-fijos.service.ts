@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { FrecuenciaGastoFijo, Prisma } from '@prisma/client';
+import { FrecuenciaGastoFijo, NaturalezaEgreso, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CurrentAuth } from '../auth/auth.types';
 import { UpsertGastoFijoDto } from './dto/upsert-gasto-fijo.dto';
@@ -16,7 +16,7 @@ import { UpsertGastoFijoDto } from './dto/upsert-gasto-fijo.dto';
  */
 
 type GastoFijoRow = Prisma.GastoFijoEstructuraGetPayload<{
-  include: { proveedor: { select: { nombre: true } }; metodoPago: { select: { nombre: true } } };
+  include: typeof INCLUDE_GASTO;
 }>;
 
 /** Cuántas veces al año se paga cada frecuencia. */
@@ -29,6 +29,7 @@ const CUOTAS_POR_ANIO: Record<FrecuenciaGastoFijo, number> = {
 };
 
 const INCLUDE_GASTO = {
+  categoria: { select: { nombre: true, codigo: true } },
   proveedor: { select: { nombre: true } },
   metodoPago: { select: { nombre: true } },
 } as const;
@@ -43,13 +44,14 @@ export class GastosFijosService {
     const rows = await this.prisma.gastoFijoEstructura.findMany({
       where: { tenantId: auth.tenantId },
       include: INCLUDE_GASTO,
-      orderBy: [{ categoria: 'asc' }, { nombre: 'asc' }],
+      orderBy: [{ categoria: { nombre: 'asc' } }, { nombre: 'asc' }],
     });
     return rows.map((g) => this.toResponse(g));
   }
 
   async crear(auth: CurrentAuth, dto: UpsertGastoFijoDto) {
     this.validarVigencia(dto);
+    await this.validarCategoria(auth, dto.categoriaEgresoId);
     const row = await this.prisma.gastoFijoEstructura.create({
       data: {
         tenantId: auth.tenantId,
@@ -62,6 +64,7 @@ export class GastosFijosService {
 
   async actualizar(auth: CurrentAuth, id: string, dto: UpsertGastoFijoDto) {
     this.validarVigencia(dto);
+    await this.validarCategoria(auth, dto.categoriaEgresoId);
     await this.obtenerOFallar(auth, id);
     const row = await this.prisma.gastoFijoEstructura.update({
       where: { id },
@@ -101,7 +104,7 @@ export class GastosFijosService {
     const cuotas = CUOTAS_POR_ANIO[dto.frecuencia];
     return {
       nombre: dto.nombre.trim(),
-      categoria: dto.categoria,
+      categoriaEgresoId: dto.categoriaEgresoId,
       valor,
       frecuencia: dto.frecuencia,
       importeMensual: valor.mul(cuotas).div(12).toDecimalPlaces(2),
@@ -124,6 +127,24 @@ export class GastosFijosService {
     return row;
   }
 
+  /**
+   * La categoría sale del catálogo de Cuentas por pagar, pero no cualquiera
+   * sirve: un gasto fijo es por definición de estructura, así que "materiales"
+   * o "maquinaria" (que son costo de producción e inversión) quedan afuera.
+   */
+  private async validarCategoria(auth: CurrentAuth, categoriaEgresoId: string) {
+    const categoria = await this.prisma.categoriaEgreso.findFirst({
+      where: { id: categoriaEgresoId, tenantId: auth.tenantId },
+      select: { naturaleza: true, nombre: true },
+    });
+    if (!categoria) throw new NotFoundException('Categoría no encontrada.');
+    if (categoria.naturaleza !== NaturalezaEgreso.GASTO_ESTRUCTURA) {
+      throw new BadRequestException(
+        `"${categoria.nombre}" no es una categoría de gasto de estructura.`,
+      );
+    }
+  }
+
   private validarVigencia(dto: UpsertGastoFijoDto) {
     if (dto.vigenteHasta && dto.vigenteHasta < dto.vigenteDesde) {
       throw new BadRequestException(
@@ -141,7 +162,9 @@ export class GastosFijosService {
     return {
       id: g.id,
       nombre: g.nombre,
-      categoria: g.categoria,
+      categoriaEgresoId: g.categoriaEgresoId,
+      categoriaNombre: g.categoria.nombre,
+      categoriaCodigo: g.categoria.codigo,
       valor: Number(g.valor.toFixed(2)),
       frecuencia: g.frecuencia,
       importeMensual: Number(g.importeMensual.toFixed(2)),

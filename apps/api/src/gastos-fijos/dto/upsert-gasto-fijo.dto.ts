@@ -1,4 +1,4 @@
-import { CategoriaGastoFijo, FrecuenciaGastoFijo } from '@prisma/client';
+import { FrecuenciaGastoFijo } from '@prisma/client';
 import {
   IsBoolean,
   IsEnum,
@@ -21,8 +21,9 @@ export class UpsertGastoFijoDto {
   @MinLength(1)
   nombre: string;
 
-  @IsEnum(CategoriaGastoFijo)
-  categoria: CategoriaGastoFijo;
+  /** Del catálogo compartido con Cuentas por pagar, naturaleza GASTO_ESTRUCTURA. */
+  @IsUUID()
+  categoriaEgresoId: string;
 
   /**
    * El valor de UNA cuota. El importe mensual lo deriva el servidor cruzándolo

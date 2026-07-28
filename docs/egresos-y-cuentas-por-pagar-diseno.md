@@ -184,10 +184,16 @@ NO_RESULTADO
   Ajustes de caja
 ```
 
-**Lo que NO va en el árbol: amortización.** `CategoriaGastoFijo` la tiene
-(`AMORTIZACION`) porque ahí sirve para costear. Pero la amortización **no es un
-egreso**: no sale plata. Si aparece acá, la caja miente. Se queda sólo en
-`GastoFijoEstructura`.
+**Lo que NO va en el árbol: amortización.** No es un egreso: no sale plata, y si
+aparece acá la caja miente.
+
+Esto quedó pendiente al unificar las categorías (2026-07-28): Gastos fijos dejó
+su enum propio —que tenía `AMORTIZACION`— y pasó a usar este catálogo, así que
+hoy la amortización no se puede declarar como gasto fijo. No se perdió nada
+porque ninguna fila la usaba, y la depreciación de las máquinas ya la declara
+cada centro de costo en su planilla. Pero si alguna vez tiene que pesar en el
+punto de equilibrio, hace falta una categoría que sirva para gastos fijos **sin**
+ofrecerse en Egresos, y el catálogo hoy no distingue esa diferencia.
 
 ### 4.3 `Egreso` — la obligación
 

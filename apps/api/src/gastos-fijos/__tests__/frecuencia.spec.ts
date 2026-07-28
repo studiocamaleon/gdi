@@ -19,7 +19,7 @@ describe('gastos fijos · valor por frecuencia', () => {
       )
         .datosDesdeDto({
           nombre: 'x',
-          categoria: 'SEGUROS',
+          categoriaEgresoId: '00000000-0000-0000-0000-000000000001',
           valor,
           frecuencia,
           vigenteDesde: '2026-07',
