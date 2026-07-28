@@ -7434,12 +7434,13 @@ body {
     color: var(--text);
   }
 
-  /* Columnas numéricas angostas: el ancho se lo ganan Colores y las
-     columnas que vengan al lado de Tinta. El encabezado puede partirse
-     en dos líneas ("Recarga rollo (min)"). */
+  /* Columnas numéricas angostas: cada una mide lo que mide su label
+     (width 1% + nowrap = el encabezado define el ancho, en una línea).
+     El resto se lo ganan Nombre, Colores y lo que venga junto a Tinta. */
   .maq-perfiles-tabla th.num,
   .maq-perfiles-tabla td.num {
-    width: 84px;
+    width: 1%;
+    white-space: nowrap;
   }
 
   .maq-perfiles-tabla td.num input {
@@ -37873,6 +37874,7 @@ body:has(.t-app) {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
 
 
 
