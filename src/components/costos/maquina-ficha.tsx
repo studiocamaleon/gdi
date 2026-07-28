@@ -98,33 +98,38 @@ export function MaquinaFicha({ maquina, plantas, centrosCosto }: MaquinaFichaPro
   };
 
   return (
-    <div className="content maq-ficha">
-      <div className="page-head">
-        <div className="title-block">
-          <h1>{nombreGuardado}</h1>
-          <nav className="maq-migas" aria-label="Ubicación">
-            <Link href="/costos/centros-de-costo">Costos</Link>
-            <span className="sep">/</span>
-            <Link href="/costos/maquinaria">Maquinaria</Link>
-            <span className="sep">/</span>
-            <span aria-current="page">{nombreGuardado}</span>
-          </nav>
+    // Tres franjas: título+tabs fijos, cuerpo con scroll propio, pie fijo.
+    // La barra de acciones NO flota sobre el contenido: el área visible
+    // termina justo arriba de ella.
+    <div className="maq-ficha">
+      <div className="maq-ficha-top">
+        <div className="page-head">
+          <div className="title-block">
+            <h1>{nombreGuardado}</h1>
+            <nav className="maq-migas" aria-label="Ubicación">
+              <Link href="/costos/centros-de-costo">Costos</Link>
+              <span className="sep">/</span>
+              <Link href="/costos/maquinaria">Maquinaria</Link>
+              <span className="sep">/</span>
+              <span aria-current="page">{nombreGuardado}</span>
+            </nav>
+          </div>
         </div>
-      </div>
 
-      <div className="maq-ficha-tabs" role="tablist">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            role="tab"
-            aria-selected={tab === t.id}
-            className={`maq-ficha-tab ${tab === t.id ? "activo" : ""}`}
-            onClick={() => setTab(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
+        <div className="maq-ficha-tabs" role="tablist">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={tab === t.id}
+              className={`maq-ficha-tab ${tab === t.id ? "activo" : ""}`}
+              onClick={() => setTab(t.id)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="maq-ficha-cuerpo">

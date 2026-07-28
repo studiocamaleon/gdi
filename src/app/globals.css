@@ -7104,7 +7104,22 @@ body {
     vertical-align: middle;
   }
 
-  /* ── Ficha por máquina (tabs estilo Holdprint) ── */
+  /* ── Ficha por máquina (tabs estilo Holdprint) ──
+     Tres franjas: título+tabs fijos arriba, cuerpo con scroll propio, pie
+     fijo abajo. El pie NO flota sobre el contenido: el área que scrollea
+     termina justo arriba de él. */
+
+  .maq-ficha {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .maq-ficha .maq-ficha-top {
+    flex: 0 0 auto;
+    padding: 28px 32px 0;
+  }
 
   .maq-ficha .maq-migas {
     display: flex;
@@ -7132,7 +7147,6 @@ body {
   .maq-ficha-tabs {
     display: flex;
     gap: 4px;
-    margin-bottom: 16px;
     border-bottom: 1px solid var(--border);
   }
 
@@ -7152,24 +7166,22 @@ body {
     border-bottom-color: #111114;
   }
 
+  /* El único que scrollea. */
   .maq-ficha .maq-ficha-cuerpo {
-    padding-bottom: 20px;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 16px 32px 28px;
   }
 
-  /* Barra de acción pegada al fondo del scroll. Los márgenes negativos se
-     comen el padding de .content (28px 32px 40px) para que llegue de borde
-     a borde y nada asome por abajo ni a los costados. */
   .maq-ficha-pie {
-    position: sticky;
-    bottom: 0;
+    flex: 0 0 auto;
     display: flex;
     justify-content: flex-end;
     gap: 8px;
-    margin: 0 -32px -40px;
     padding: 14px 32px;
     border-top: 1px solid var(--border);
     background: var(--surface);
-    box-shadow: 0 -10px 24px rgba(20, 20, 26, 0.06);
   }
 
   .maq-historial {
@@ -37640,6 +37652,7 @@ body:has(.t-app) {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
 
 
 
