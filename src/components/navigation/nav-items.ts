@@ -174,18 +174,6 @@ export const NAV: NavItem[] = [
         href: "/administracion/tesoreria",
       },
       {
-        key: "comprobantes",
-        label: "Comprobantes",
-        href: "/administracion/comprobantes",
-        soloPais: "AR",
-      },
-      {
-        key: "facturacion",
-        label: "Facturación",
-        href: "/administracion/facturacion",
-        soloPais: "AR",
-      },
-      {
         // La ruta sigue siendo /deudores: renombrar la URL rompería links
         // guardados sin que nadie gane nada. "Deudores" nombraba al sujeto;
         // lo que la vista muestra es la CUENTA (el derecho de cobro por
@@ -226,6 +214,21 @@ export const NAV: NavItem[] = [
         label: "Gastos fijos",
         href: "/administracion/gastos-fijos",
         permiso: "administracion.configurar",
+      },
+      // El circuito fiscal va al final: es el paso opcional que viene DESPUÉS
+      // del movimiento de plata, y sólo para el tenant que emite. Arriba queda
+      // lo que se usa todos los días (tesorería, cuentas, egresos).
+      {
+        key: "comprobantes",
+        label: "Comprobantes",
+        href: "/administracion/comprobantes",
+        soloPais: "AR",
+      },
+      {
+        key: "facturacion",
+        label: "Facturación",
+        href: "/administracion/facturacion",
+        soloPais: "AR",
       },
     ],
   },

@@ -356,19 +356,21 @@ function buildGuillotinaSections(): MaquinariaTemplateSection[] {
     }),
     section({
       id: "perfiles_operativos",
-      title: "Perfiles operativos por rango de material",
-      description: "Un perfil por rango de gramaje. La capacidad varía con el grosor.",
+      title: "Perfiles operativos",
+      description: "Cuanto más grueso el papel, menos pliegos entran en la pila.",
       fields: [
-        field({ key: "nombre", label: "Nombre del perfil", scope: "perfil_operativo", kind: "text", required: true, description: "Ej. Papel grueso 100-250gr." }),
+        field({ key: "nombre", label: "Nombre del perfil", scope: "perfil_operativo", kind: "text", required: true, description: "Ej. Papel grueso." }),
         field({ key: "setupMin", label: "Setup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de preparación inicial." }),
         field({ key: "cleanupMin", label: "Cleanup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de limpieza." }),
         field({ key: "feedReloadMin", label: "Tiempo entre tandas", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo para preparar la siguiente tanda." }),
-        field({ key: "gramajeMinGr", label: "Gramaje mínimo", scope: "perfil_operativo", kind: "number", unit: "g_m2", description: "Gramaje mínimo del rango." }),
-        field({ key: "gramajeMaxGr", label: "Gramaje máximo", scope: "perfil_operativo", kind: "number", unit: "g_m2", required: true, description: "Gramaje máximo del rango." }),
-        field({ key: "pliegosMaxPorTanda", label: "Pliegos máx por tanda", scope: "perfil_operativo", kind: "number", required: true, description: "Cantidad máx de pliegos que entran en una tanda (ej. 500)." }),
+        // Escalón, no rango: el perfil que gana es el del "hasta" más chico
+        // que todavía cubre el papel. Así no quedan huecos ni solapamientos.
+        field({ key: "gramajeMaxGr", label: "Gramaje (hasta)", scope: "perfil_operativo", kind: "number", unit: "g_m2", required: true, description: "Se usa este perfil para papeles de hasta este gramaje." }),
+        field({ key: "pliegosMaxPorTanda", label: "Pliegos por tanda", scope: "perfil_operativo", kind: "number", required: true, description: "Cuántos pliegos de ese grosor entran en una pila." }),
       ],
     }),
-    section({ id: "desgaste_repuestos", title: "Desgaste y repuestos", description: "Cuchilla y tabla de corte.", fields: genericWearFields }),
+    // Sin desgaste_repuestos: misma decisión que gran formato (2026-07-28),
+    // acá tampoco se va a cargar el dato.
   ];
 }
 

@@ -921,9 +921,13 @@ export class MaquinariaService {
     // Gran formato por área no registra piezas de desgaste (decisión
     // 2026-07-28): la plantilla ya no trae la sección y exigirlas dejaría
     // a esas máquinas "incompletas" para siempre.
-    const requireDesgaste =
-      payload.plantilla !==
-      PlantillaMaquinariaDto.impresora_gran_formato_por_area;
+    // Las plantillas que ya no tienen la sección de desgaste no pueden
+    // exigirlo: quedarían "incompletas" sin dónde cargarlo (2026-07-28).
+    const SIN_DESGASTE = new Set<PlantillaMaquinariaDto>([
+      PlantillaMaquinariaDto.impresora_gran_formato_por_area,
+      PlantillaMaquinariaDto.guillotina,
+    ]);
+    const requireDesgaste = !SIN_DESGASTE.has(payload.plantilla);
     const hasDesgasteValido = payload.componentesDesgaste.some(
       (componente) =>
         Boolean(componente.nombre?.trim()) &&

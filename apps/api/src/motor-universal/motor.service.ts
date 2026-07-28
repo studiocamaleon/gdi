@@ -5351,35 +5351,34 @@ export class MotorUniversalService {
     );
   }
 
-  private perfilGuillotinaAceptaGramaje(
-    perfil: { detalleJson?: unknown } | null | undefined,
-    gramaje: number,
-  ) {
-    const detalle = this.asRecord(perfil?.detalleJson);
-    const min = this.numeroPositivo(detalle.gramajeMinGr) ?? 0;
-    const max = this.numeroPositivo(detalle.gramajeMaxGr);
-    if (!max) return false;
-    return gramaje >= min && gramaje <= max;
-  }
-
+  /**
+   * Guillotina: el perfil es un ESCALÓN de gramaje ("hasta N g/m²"), no un
+   * rango. Gana el escalón más chico que todavía cubre el papel —papel de
+   * 150 g/m² con perfiles hasta 100 / 250 / 400 elige el de 250—, porque es
+   * el que declara cuántos pliegos de ese grosor entran en la pila.
+   *
+   * Si ningún escalón lo cubre gana el más grueso: menos pliegos por tanda,
+   * más tandas, que es el lado conservador para cotizar.
+   */
   private elegirPerfilGuillotinaPorGramaje<
     T extends { activo: boolean; detalleJson?: unknown },
   >(perfiles: T[], gramaje: number): T | null {
-    const candidatos = perfiles
+    const escalones = perfiles
       .filter((perfil) => perfil.activo)
-      .filter((perfil) => this.perfilGuillotinaAceptaGramaje(perfil, gramaje))
-      .sort((a, b) => {
-        const da = this.asRecord(a.detalleJson);
-        const db = this.asRecord(b.detalleJson);
-        const maxA =
-          this.numeroPositivo(da.gramajeMaxGr) ?? Number.MAX_SAFE_INTEGER;
-        const maxB =
-          this.numeroPositivo(db.gramajeMaxGr) ?? Number.MAX_SAFE_INTEGER;
-        const minA = this.numeroPositivo(da.gramajeMinGr) ?? 0;
-        const minB = this.numeroPositivo(db.gramajeMinGr) ?? 0;
-        return maxA - maxB || minB - minA;
-      });
-    return candidatos[0] ?? null;
+      .map((perfil) => ({
+        perfil,
+        hasta: this.numeroPositivo(
+          this.asRecord(perfil.detalleJson).gramajeMaxGr,
+        ),
+      }))
+      .filter(
+        (item): item is { perfil: T; hasta: number } => item.hasta !== null,
+      )
+      .sort((a, b) => a.hasta - b.hasta);
+
+    if (escalones.length === 0) return null;
+    const cubre = escalones.find((item) => gramaje <= item.hasta);
+    return (cubre ?? escalones[escalones.length - 1]).perfil;
   }
 
   /**
@@ -5496,21 +5495,12 @@ export class MotorUniversalService {
       return null;
     }
 
-    // ─── 2. Guillotina: perfil por rango de gramaje ──────────────────
+    // ─── 2. Guillotina: perfil por escalón de gramaje ────────────────
     if (paso.familiaCodigo === 'corte_guillotina') {
       const gramaje = this.numeroPositivo(
         ctx.gramajeMaterialGr ?? ctx.gramajeGr ?? ctx.gramaje,
       );
       if (gramaje) {
-        const perfilActual =
-          perfilesDisponibles.find((perfil) => perfil.id === paso.perfilM1Id) ??
-          paso.perfil;
-        if (
-          perfilActual &&
-          this.perfilGuillotinaAceptaGramaje(perfilActual, gramaje)
-        ) {
-          return null;
-        }
         const candidato = this.elegirPerfilGuillotinaPorGramaje(
           perfilesDisponibles,
           gramaje,

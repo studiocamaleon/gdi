@@ -199,6 +199,29 @@ export function emptyMaquina(plantaId: string): MaquinaPayload {
   };
 }
 
+/**
+ * Claves de `detalle` que su plantilla dejó de declarar (2026-07-28). Siguen
+ * guardadas en los perfiles viejos, y el API rechaza guardar un perfil con
+ * una clave que su plantilla no reconoce: se limpian al cargar la máquina,
+ * así el primer guardado las deja atrás.
+ */
+const PERFIL_DETALLE_RETIRADO: Partial<Record<PlantillaMaquinaria, string[]>> = {
+  impresora_laser: ["gramajeMinGr", "gramajeMaxGr"],
+  guillotina: ["gramajeMinGr"],
+};
+
+function limpiarDetalleRetirado(
+  plantilla: PlantillaMaquinaria,
+  detalle: Record<string, unknown> | null | undefined,
+) {
+  if (!detalle) return undefined;
+  const retiradas = PERFIL_DETALLE_RETIRADO[plantilla];
+  if (!retiradas?.length) return detalle;
+  const limpio = { ...detalle };
+  for (const clave of retiradas) delete limpio[clave];
+  return limpio;
+}
+
 export function maquinaToPayload(maquina: Maquina): MaquinaPayload {
   return {
     nombre: maquina.nombre,
@@ -232,7 +255,7 @@ export function maquinaToPayload(maquina: Maquina): MaquinaPayload {
       setupMin: p.setupMin ?? undefined,
       cleanupMin: p.cleanupMin ?? undefined,
       feedReloadMin: p.feedReloadMin ?? undefined,
-      detalle: p.detalle ?? undefined,
+      detalle: limpiarDetalleRetirado(maquina.plantilla, p.detalle),
       reglaSeleccionJson: p.reglaSeleccionJson ?? undefined,
     })),
     consumibles: maquina.consumibles.map((c) => ({
