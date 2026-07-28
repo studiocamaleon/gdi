@@ -205,6 +205,25 @@ export function useMaquinaEditor({
     };
   };
 
+  // ─── ¿Hay cambios sin guardar? ───────────────────────────────────
+  //
+  // Se compara el payload normalizado contra el que había al abrir la
+  // ficha. Compararlo normalizado (y no contra la máquina cruda) evita
+  // que la normalización de carga —tipos de perfil, tintas requeridas,
+  // claves heredadas— cuente como cambio del usuario.
+  const payloadActual = buildPayload();
+  // Estado y no ref: al guardar cambia el punto de comparación y la UI
+  // tiene que volver a renderizar para bloquear el botón.
+  const [snapshotGuardado, setSnapshotGuardado] = React.useState(() =>
+    JSON.stringify(buildPayload()),
+  );
+  const hayCambios = JSON.stringify(payloadActual) !== snapshotGuardado;
+
+  /** Tras guardar, lo guardado pasa a ser el nuevo punto de comparación. */
+  const marcarGuardado = (payload: MaquinaPayload) => {
+    setSnapshotGuardado(JSON.stringify(payload));
+  };
+
   return {
     form,
     setForm,
@@ -218,6 +237,8 @@ export function useMaquinaEditor({
     handleEliminarPerfil,
     handleDuplicarPerfil,
     buildPayload,
+    hayCambios,
+    marcarGuardado,
   };
 }
 

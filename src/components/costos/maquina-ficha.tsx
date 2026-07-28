@@ -11,11 +11,11 @@
  */
 
 import * as React from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { ConfirmacionSalida } from "@/components/ui/confirmacion-salida";
 import type { CentroCosto, Planta } from "@/lib/costos";
 import { fechaHora } from "@/lib/fecha";
 import {
@@ -54,10 +54,10 @@ export function MaquinaFicha({ maquina, plantas, centrosCosto }: MaquinaFichaPro
 
   const editor = useMaquinaEditor({ maquina });
 
-  const handleGuardar = async () => {
+  const handleGuardar = async (): Promise<boolean> => {
     if (!editor.form.nombre.trim()) {
       toast.error("La máquina necesita un nombre");
-      return;
+      return false;
     }
     setSaving(true);
     try {
@@ -86,16 +86,48 @@ export function MaquinaFicha({ maquina, plantas, centrosCosto }: MaquinaFichaPro
         }
       }
       setNombreGuardado(updated.nombre);
+      // Lo guardado pasa a ser el nuevo punto de comparación.
+      editor.marcarGuardado(payload);
       if (updated.estadoConfiguracion !== "borrador") {
         toast.success(`"${updated.nombre}" actualizada`);
       }
       router.refresh();
+      return true;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error guardando");
+      return false;
     } finally {
       setSaving(false);
     }
   };
+
+  // ─── Salir con cambios sin guardar ───────────────────────────────
+  const [salidaPendiente, setSalidaPendiente] = React.useState<string | null>(
+    null,
+  );
+
+  const salir = React.useCallback(
+    (destino: string) => {
+      if (editor.hayCambios) {
+        setSalidaPendiente(destino);
+        return;
+      }
+      router.push(destino);
+    },
+    [editor.hayCambios, router],
+  );
+
+  // La navegación del navegador (cerrar pestaña, atrás) no admite UI propia:
+  // el único aviso posible ahí es el nativo.
+  React.useEffect(() => {
+    if (!editor.hayCambios) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [editor.hayCambios]);
 
   return (
     // Tres franjas: título+tabs fijos, cuerpo con scroll propio, pie fijo.
@@ -107,9 +139,13 @@ export function MaquinaFicha({ maquina, plantas, centrosCosto }: MaquinaFichaPro
           <div className="title-block">
             <h1>{nombreGuardado}</h1>
             <nav className="maq-migas" aria-label="Ubicación">
-              <Link href="/costos/centros-de-costo">Costos</Link>
+              <button type="button" onClick={() => salir("/costos/centros-de-costo")}>
+                Costos
+              </button>
               <span className="sep">/</span>
-              <Link href="/costos/maquinaria">Maquinaria</Link>
+              <button type="button" onClick={() => salir("/costos/maquinaria")}>
+                Maquinaria
+              </button>
               <span className="sep">/</span>
               <span aria-current="page">{nombreGuardado}</span>
             </nav>
@@ -179,17 +215,37 @@ export function MaquinaFicha({ maquina, plantas, centrosCosto }: MaquinaFichaPro
 
       {tab !== "historial" ? (
         <div className="maq-ficha-pie">
-          <Button
-            variant="outline"
-            onClick={() => router.push("/costos/maquinaria")}
-          >
+          <Button variant="outline" onClick={() => salir("/costos/maquinaria")}>
             Cancelar
           </Button>
-          <Button onClick={handleGuardar} disabled={saving}>
+          <Button
+            onClick={() => void handleGuardar()}
+            disabled={saving || !editor.hayCambios}
+            title={editor.hayCambios ? undefined : "No hay cambios para guardar"}
+          >
             {saving ? "Guardando..." : "Guardar"}
           </Button>
         </div>
       ) : null}
+
+      <ConfirmacionSalida
+        open={salidaPendiente !== null}
+        cambios={1}
+        donde="esta máquina"
+        guardando={saving}
+        onGuardarYSalir={async () => {
+          const destino = salidaPendiente;
+          const ok = await handleGuardar();
+          setSalidaPendiente(null);
+          if (ok && destino) router.push(destino);
+        }}
+        onDescartarYSalir={() => {
+          const destino = salidaPendiente;
+          setSalidaPendiente(null);
+          if (destino) router.push(destino);
+        }}
+        onSeguirEditando={() => setSalidaPendiente(null)}
+      />
     </div>
   );
 }

@@ -24,6 +24,8 @@ interface ConfirmacionSalidaProps {
   open: boolean;
   /** Cantidad de cambios sin guardar (para el copy). */
   cambios: number;
+  /** Dónde están esos cambios. Por defecto "esta orden". */
+  donde?: string;
   /** True mientras corre el guardado en lote. */
   guardando?: boolean;
   onGuardarYSalir: () => void | Promise<void>;
@@ -34,6 +36,7 @@ interface ConfirmacionSalidaProps {
 export function ConfirmacionSalida({
   open,
   cambios,
+  donde = "esta orden",
   guardando = false,
   onGuardarYSalir,
   onDescartarYSalir,
@@ -54,7 +57,7 @@ export function ConfirmacionSalida({
             Cambios sin guardar
           </AlertDialogTitle>
           <AlertDialogDescription>
-            Tenés {cambios} cambio{plural} sin guardar en esta orden. Si salís
+            Tenés {cambios} cambio{plural} sin guardar en {donde}. Si salís
             sin guardar, se descarta{plural ? "n" : ""}.
           </AlertDialogDescription>
         </AlertDialogHeader>
