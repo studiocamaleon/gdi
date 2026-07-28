@@ -325,7 +325,9 @@ function buildGranFormatoSections(): MaquinariaTemplateSection[] {
       ],
     }),
     section({ id: "consumibles", title: "Consumibles", description: "Tinta CMYK, blanca, barniz por perfil.", fields: genericConsumableFields }),
-    section({ id: "desgaste_repuestos", title: "Desgaste y repuestos", description: "Cabezal y banda transportadora.", fields: genericWearFields }),
+    // Sin desgaste_repuestos: decisión 2026-07-28 — en gran formato por área
+    // no se registran piezas de desgaste (el costeo por desgaste está en
+    // standby y acá ni siquiera se va a cargar el dato).
   ];
 }
 

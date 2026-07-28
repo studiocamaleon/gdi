@@ -918,6 +918,12 @@ export class MaquinariaService {
       payload.plantilla,
     );
     const hasConsumibleValido = this.hasRequiredPrinterConsumibles(payload);
+    // Gran formato por área no registra piezas de desgaste (decisión
+    // 2026-07-28): la plantilla ya no trae la sección y exigirlas dejaría
+    // a esas máquinas "incompletas" para siempre.
+    const requireDesgaste =
+      payload.plantilla !==
+      PlantillaMaquinariaDto.impresora_gran_formato_por_area;
     const hasDesgasteValido = payload.componentesDesgaste.some(
       (componente) =>
         Boolean(componente.nombre?.trim()) &&
@@ -929,7 +935,7 @@ export class MaquinariaService {
     return (
       hasPerfilValido &&
       (!requireConsumibles || hasConsumibleValido) &&
-      hasDesgasteValido
+      (!requireDesgaste || hasDesgasteValido)
     );
   }
 
