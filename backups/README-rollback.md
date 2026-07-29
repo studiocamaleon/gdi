@@ -84,3 +84,30 @@ cd /Users/lucasgomez/gdi-saas/apps/api && npm run dev
 | `gdi_saas_pre_modelo_universal_20260417_2234.sql` | 2026-04-17 | Pre primer intento modelo universal |
 | `gdi_saas_pre_rollback_2026-04-23.sql` | 2026-04-23 | Pre-rollback del intento anterior |
 | **`gdi_saas_pre_implementacion_modelo_universal_20260424_1645.sql`** | **2026-04-24 16:45** | **ESTE — antes de Big Bang implementación** |
+
+---
+
+# Rollback Safety Net — Pre-abstracción de pasos (familias componibles)
+
+> **Creado**: 2026-07-29
+> **Tag git**: `v3.8-pre-abstraccion-pasos` (apunta a `5abc97f5`, main con el trinquete CSS y el proxy mergeados)
+> **DB dump**: `gdi_saas_pre_abstraccion_pasos_20260729_142253.sql` (+ `.gz`), 111 tablas, `pg_dump --clean --if-exists`
+> **Migración stable**: `20260728030000_desgaste_costo_por_click`
+
+## Cuándo usar este rollback
+
+Si la abstracción de pasos de producción (familias componibles por tenant,
+rama `feat/pasos-produccion-analisis` y sucesoras) falla más adelante y hay
+que volver al sistema exactamente como estaba antes de tocar nada de esto.
+
+## Procedimiento
+
+```bash
+cd /Users/lucasgomez/gdi-saas
+git checkout v3.8-pre-abstraccion-pasos
+docker compose exec -T postgres psql -U postgres gdi_saas < backups/gdi_saas_pre_abstraccion_pasos_20260729_142253.sql
+```
+
+El dump es `--clean --if-exists`: dropea y recrea cada tabla, no hace falta
+vaciar antes. Verificar después que `_prisma_migrations` termina en la
+migración stable de arriba.
