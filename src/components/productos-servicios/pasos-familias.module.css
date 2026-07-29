@@ -163,6 +163,22 @@
   line-height: 1.4;
 }
 
+.fijarActivacion {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border: 1px dashed var(--border, #e7e5e2);
+  border-radius: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+
+.fijarActivacion > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .slotFila {
   display: grid;
   grid-template-columns: 1fr 170px auto auto;

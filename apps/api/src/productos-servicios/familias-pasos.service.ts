@@ -68,7 +68,10 @@ export class FamiliasPasosService {
           modoActivacionDefault: f.modoActivacionDefault as string,
           modosTiempoSoportados: f.modosTiempoSoportados,
           mecanismosCantidadSoportados: f.mecanismosCantidadSoportados,
-          modosActivacionSoportados: MODOS_ACTIVACION_UNIVERSALES,
+          // A diferencia del catálogo (activación universal, decisión D.1),
+          // una familia TENANT puede FIJAR su activación: el editor del
+          // producto sólo ofrece lo que la familia declara.
+          modosActivacionSoportados: f.modosActivacionSoportados,
           multiplicadoresSoportados: f.multiplicadoresSoportados,
           slotsRequeridos: f.slotsRequeridos,
           permiteSlotsAdicionales: f.permiteSlotsAdicionales,
@@ -227,6 +230,22 @@ export class FamiliasPasosService {
     ) {
       throw new BadRequestException(
         `Modo de activación no soportado: ${dto.modoActivacion}`,
+      );
+    }
+
+    // Una familia TENANT puede fijar su activación (wizard: "fijar para
+    // todos los productos"). NO_EJECUTAR queda siempre permitido: es el
+    // interruptor para apagar el paso en una ruta puntual, no un modo más.
+    if (
+      familia.esDeTenant &&
+      dto.modoActivacion &&
+      dto.modoActivacion !== 'NO_EJECUTAR' &&
+      !familia.modosActivacionSoportados.includes(
+        dto.modoActivacion as ModoActivacion,
+      )
+    ) {
+      throw new BadRequestException(
+        `El paso "${familia.nombre}" fija su activación en ${familia.modosActivacionSoportados.join('/')}: no se puede cambiar por producto.`,
       );
     }
 

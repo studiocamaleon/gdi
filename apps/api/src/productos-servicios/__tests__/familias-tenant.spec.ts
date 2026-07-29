@@ -13,6 +13,7 @@ import {
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
+import { FamiliasPasosService } from '../familias-pasos.service';
 import { FamiliasTenantService } from '../familias-tenant.service';
 import {
   validarDefinicionFamiliaTenant,
@@ -250,6 +251,34 @@ describe('FamiliasTenantService (integración, gdi_saas_test)', () => {
     );
     // Sigue existiendo y sigue resolviendo.
     expect(resolverFamilia(fila.id)).toBeDefined();
+  });
+
+  it('activación FIJADA: el producto no puede elegir otro modo (NO_EJECUTAR sí)', async () => {
+    const fila = await service.crear(tenantId, {
+      ...SERIGRAFIA,
+      nombre: 'Fijada en obligatorio',
+      modosActivacion: ['OBLIGATORIO'],
+      modoActivacionDefault: 'OBLIGATORIO',
+    });
+    const pasosService = new FamiliasPasosService(
+      prisma as unknown as PrismaService,
+    );
+    const dto = { modoActivacion: 'OPCIONAL' } as never;
+    expect(() =>
+      pasosService.validarConfigPasoContraFamilia(fila.id, dto),
+    ).toThrow(BadRequestException);
+    // Apagarla en una ruta puntual sigue permitido.
+    expect(() =>
+      pasosService.validarConfigPasoContraFamilia(fila.id, {
+        modoActivacion: 'NO_EJECUTAR',
+      } as never),
+    ).not.toThrow();
+    // Y el modo fijado, obviamente, también.
+    expect(() =>
+      pasosService.validarConfigPasoContraFamilia(fila.id, {
+        modoActivacion: 'OBLIGATORIO',
+      } as never),
+    ).not.toThrow();
   });
 
   it('tenant ajeno no puede tocarla', async () => {

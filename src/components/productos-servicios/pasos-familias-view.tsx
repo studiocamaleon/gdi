@@ -84,6 +84,7 @@ interface FormaDraft {
   slots: SlotDraft[];
   mecanismoCantidad: string;
   modoActivacionDefault: string;
+  activacionForzada: boolean;
   estacionId: string | null;
   modoRegistro: "cronometro" | "solo_completar";
   categoria: string;
@@ -99,6 +100,7 @@ const DRAFT_INICIAL: FormaDraft = {
   slots: [],
   mecanismoCantidad: "DIRECT_FROM_JOBCONTEXT",
   modoActivacionDefault: "OPCIONAL",
+  activacionForzada: false,
   estacionId: null,
   modoRegistro: "cronometro",
   categoria: "operaciones_manuales",
@@ -150,6 +152,11 @@ function draftAInput(d: FormaDraft): UpsertFamiliaTenantInput {
     modosTiempo: [d.modoTiempo],
     mecanismosCantidad: [d.mecanismoCantidad],
     modoActivacionDefault: d.modoActivacionDefault,
+    // Fijado = la familia sólo soporta ese modo y el editor del producto no
+    // ofrece otros. Sin fijar, el service completa los cuatro universales.
+    ...(d.activacionForzada
+      ? { modosActivacion: [d.modoActivacionDefault] }
+      : {}),
     slots: d.slots.map((slot) => ({
       codigo: slugSlot(slot.nombre),
       nombre: slot.nombre.trim(),
@@ -186,6 +193,7 @@ function draftDesdePreset(f: FamiliaListItem): FormaDraft {
         (m) => m !== "CALCULADO_POR_PASO",
       ) ?? "DIRECT_FROM_JOBCONTEXT",
     modoActivacionDefault: f.modoActivacionDefault,
+    activacionForzada: false,
     estacionId: null,
     modoRegistro: "cronometro",
     categoria: f.categoria,
@@ -260,6 +268,15 @@ export function PasosFamiliasView() {
     );
     if (f.slots.length > 0)
       chips.push(`${f.slots.length} material${f.slots.length > 1 ? "es" : ""}`);
+    if (f.modosActivacion.length === 1) {
+      const etiqueta =
+        f.modosActivacion[0] === "OBLIGATORIO"
+          ? "Siempre obligatorio"
+          : f.modosActivacion[0] === "OPCIONAL"
+            ? "Siempre opcional"
+            : "Siempre condicional";
+      chips.push(etiqueta);
+    }
     chips.push(
       (f.modoRegistro ?? "cronometro") === "cronometro"
         ? "Cronómetro"
@@ -847,7 +864,15 @@ function WizardNuevoPaso({
 
           {paso === "activacion" ? (
             <>
-              <div className={s.pregunta}>¿Cómo entra a la ruta de un producto?</div>
+              <div className={s.pregunta}>
+                ¿Cómo entra normalmente a la ruta de un producto?
+              </div>
+              <p className={s.ayuda}>
+                Esto es el punto de partida: cada producto puede cambiarlo al
+                configurar su ruta — el mismo paso puede ser obligatorio en un
+                producto y opcional en otro. Si querés que NO se pueda cambiar,
+                fijalo abajo.
+              </p>
               <div className={s.opciones}>
                 <Opcion
                   activa={draft.modoActivacionDefault === "OPCIONAL"}
@@ -868,6 +893,23 @@ function WizardNuevoPaso({
                   onClick={() => set({ modoActivacionDefault: "CONDICIONAL" })}
                 />
               </div>
+              <label className={s.fijarActivacion}>
+                <Switch
+                  checked={draft.activacionForzada}
+                  onCheckedChange={(activacionForzada) =>
+                    set({ activacionForzada })
+                  }
+                />
+                <span>
+                  <span className={s.opcionTitulo}>
+                    Fijar para todos los productos
+                  </span>
+                  <span className={s.opcionDesc}>
+                    Los productos que usen este paso no van a poder cambiar
+                    esta elección (sólo apagarlo por ruta con “No ejecutar”).
+                  </span>
+                </span>
+              </label>
             </>
           ) : null}
 
