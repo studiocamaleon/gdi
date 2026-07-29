@@ -1,7 +1,7 @@
 {
   "_comentario": "Línea de base de css-guard. NO editar a mano: correr `npm run css:guard -- --update`. Los números sólo deberían bajar.",
-  "totalLineas": 38117,
-  "clasesGlobales": 1637,
+  "totalLineas": 37953,
+  "clasesGlobales": 1636,
   "globales": [
     "aac-back",
     "aac-bruto",
@@ -851,7 +851,6 @@
     "fx-tot-r",
     "fx-transparencia",
     "fx-wrap",
-    "gf",
     "gfijo-acciones",
     "gfijo-acciones-pie",
     "gfijo-buscador",
