@@ -133,10 +133,13 @@ comparaciones**, concentradas en 4 archivos:
 | `motor-universal/nesting-dispatcher.ts` | 9 |
 | `productos-servicios/config-pasos.service.ts` | 5 |
 
-Por familia (api + front): `impresion_por_hoja` 37, `laminado` 22,
-`pre_prensa` 16, `impresion_por_area` 13, `embalaje` 10, `plotter_corte` 8,
-`diseno_grafico` 8, `plastificado_pouch` 7, `corte_guillotina` 7,
-`montaje_sobre_sustrato` 3, `colocacion_ojales` 2, `modificacion_pre` 1.
+Por familia (corregido 2026-07-29 — el conteo original arrastraba tests):
+`impresion_por_hoja` 13, `plotter_corte` 8, `plastificado_pouch` 7,
+`laminado` 7, `impresion_por_area` 6, `montaje_sobre_sustrato` 3,
+`corte_guillotina` 2, `colocacion_ojales` 2, `pre_prensa` 1,
+`modificacion_pre` 1. **`diseno_grafico` y `embalaje` tienen CERO refs
+reales** — aparecían en la primera medición solo por specs del motor. El
+front no compara contra códigos de familia en ningún lado.
 
 Al leerlas, son **dos cosas muy distintas** — y la distinción es el corazón
 del plan:
@@ -149,9 +152,9 @@ if (familiaCodigo === 'plotter_corte')      return tipoPerfil === 'CORTE' || tip
 if (familiaCodigo === 'impresion_por_area') return tipoPerfil === 'IMPRESION' || tipoPerfil === 'MIXTO';
 ```
 
-Eso es un campo `tiposPerfilCompatibles` escrito como `if`. Mover esto a la
-declaración de la familia es barato y no lo discute nadie. `diseno_grafico`
-está cableada solo por cosas de este tipo — por accidente, no por necesidad.
+Eso es un campo `tiposPerfilCompatibles` escrito como `if` (y duplicado:
+la misma lógica vive en `config-pasos.service.ts:18-21`). Mover esto a la
+declaración de la familia es barato y no lo discute nadie.
 
 **Tipo B — primitivas de cálculo de verdad.** Los ~25 refs de nesting:
 acomodar piezas en un rollo, imponer en un pliego, calcular una pouch. Son
@@ -203,15 +206,15 @@ Una familia queda **del sistema** si cumple al menos una:
 2. **El motor tiene ramas Tipo B para ella** que todavía no se movieron a
    la declaración.
 
-Aplicado hoy:
+Aplicado hoy (corregido 2026-07-29 tras limpiar el conteo de tests):
 
 ```
-DEL SISTEMA (12):  impresion_por_area, impresion_por_hoja, pre_prensa,
+DEL SISTEMA (10):  impresion_por_area, impresion_por_hoja, pre_prensa,
                    plotter_corte, laminado, plastificado_pouch,
-                   corte_guillotina, montaje_sobre_sustrato, embalaje,
-                   modificacion_pre, colocacion_ojales, diseno_grafico*
+                   corte_guillotina, montaje_sobre_sustrato,
+                   modificacion_pre, colocacion_ojales
 
-COMPONIBLES (30):  el resto
+COMPONIBLES (32):  el resto
 ```
 
 Con dos precisiones honestas:
@@ -220,20 +223,22 @@ Con dos precisiones honestas:
   máquina + material + T-3. La frontera no es "impresión", es *"¿hay que
   calcular cómo entran las piezas en el material?"*. Área y pliego sí; por
   pieza no.
-- `diseno_grafico`* está en la lista solo porque el motor la nombra (Tipo
-  A). Es justamente la más genérica de todas; ese cableado es de los que
-  hay que sacar. Tras la limpieza Tipo A, la lista del sistema baja de 12.
+- La primera versión de este análisis listaba 12 (incluía `embalaje` y
+  `diseno_grafico` como cableadas). Era un artefacto del conteo: sus refs
+  estaban todos en specs. Justamente las dos más genéricas del catálogo no
+  tienen ni una rama en el motor — la frontera quedó más limpia de lo que
+  parecía.
 
 ### 4.3 Las 12 formas
 
-Los 30 componibles, agrupados por forma gruesa (¿máquina? ¿material? ¿modo
+Los 32 componibles, agrupados por forma gruesa (¿máquina? ¿material? ¿modo
 de tiempo?):
 
 | # | Forma | Familias de hoy que la usan |
 |---|---|---|
-| 7 | sin máquina · con material · T-2 | armado_cajas, atado_banding, encuadernado_engrapado, engomado_emblocado, etiquetado_manual, instalacion_electrica, trabajo_manual |
+| 8 | sin máquina · con material · T-2 | armado_cajas, atado_banding, embalaje, encuadernado_engrapado, engomado_emblocado, etiquetado_manual, instalacion_electrica, trabajo_manual |
+| 5 | sin máquina · sin material · T-1\|T-2 | control_calidad, diseno_grafico, ensamble_estructural, envio, modificacion_post |
 | 4 | sin máquina · sin material · T-2 | conteo_manual, corte_manual, instalacion_in_situ, lijado_canteado |
-| 4 | sin máquina · sin material · T-1\|T-2 | control_calidad, ensamble_estructural, envio, modificacion_post |
 | 3 | con máquina · con material · T-3 | acabado_decorativo, barniz, impresion_por_pieza |
 | 3 | con máquina · sin material · T-3 | cnc, perforado, troquelado_digital |
 | 2 | con máquina · con material · T-2\|T-3 | aplicacion_transfer, pintura_superficial |
@@ -362,7 +367,23 @@ modelo de persistencia, esos códigos tienen que seguir resolviendo — el
 catálogo sistema se siembra como datos y los strings actuales no cambian.
 Restricción dura para el plan técnico.
 
-## 8. Qué NO cambia
+## 8. Decisiones tomadas (2026-07-29)
+
+Revisión del documento hecha; estas ocho quedan **cerradas** y el plan
+técnico se escribe sobre ellas.
+
+| # | Decisión | Elegido |
+|---|---|---|
+| 1 | Persistencia | **Híbrido**: las 42 del sistema siguen en `familias.ts` (versionadas con el deploy, cero migración); las del tenant van a una tabla nueva. Un único resolver: primero tabla, después catálogo. La Etapa C original ("migrar las 42 a la base") queda **descartada**. |
+| 2 | Edición con usos (§7.2) | **Snapshot al usar**: la OT congela la definición completa del paso al materializarse. Editar la familia solo afecta cotizaciones/OTs futuras. |
+| 3 | Secuencia | **A → C → D; B diferida.** Los componibles no calculan geometría, así que la unificación de runners de nesting se hace recién cuando el wizard quiera ofrecer "¿acomoda piezas?". |
+| 4 | Estación (§7.3) | **Pregunta del wizard** (default: estación general). Editable después desde Estaciones, como hoy. |
+| 5 | Identidad (§7.2) | **UUID + nombre visible.** En los `familiaCodigo` string existentes viaja el UUID; el resolver distingue por forma (UUID → tabla, si no → catálogo). Sin prefijos mágicos, imposible chocar con los 42 códigos. |
+| 6 | Borrado (§7.2) | **Borrar solo si virgen** (jamás referenciada); con un solo uso histórico, inhabilitar. Mismo espíritu que clientes. |
+| 7 | Permisos | **Solo ADMIN.** Crear un tipo de paso define cómo se costea: es configuración estructural, nivel tarifas/centros de costo. |
+| 8 | Preview de costeo (§7.1) | **Opcional pero visible** (decisión del usuario, contra la recomendación de hacerlo obligatorio). El riesgo residual de §7.1 queda abierto: una familia mal compuesta puede guardarse sin haber visto un costeo de ejemplo. Mitigación pendiente de diseñar en Etapa D — p. ej. marcar visualmente las cotizaciones que usan pasos custom aún no verificados. |
+
+## 9. Qué NO cambia
 
 Para acotar el miedo del proyecto:
 
@@ -375,33 +396,33 @@ Para acotar el miedo del proyecto:
 - **Los vocabularios de ejes no crecen** por esta iniciativa. Todo lo que
   el wizard produce ya es expresable hoy.
 
-## 9. Plan por etapas (alto nivel, pre-técnico)
+## 10. Plan por etapas (actualizado con las decisiones de §8)
 
-Cada etapa es valiosa por sí sola y deja el sistema mejor aunque la
-siguiente nunca se haga. Criterio de avance entre etapas: la anterior en
-main, verificada, y las preguntas abiertas de la siguiente respondidas en
-este documento.
+Orden decidido: **A → C → D**, con B diferida. Cada etapa es valiosa por sí
+sola y deja el sistema mejor aunque la siguiente nunca se haga. Criterio de
+avance: la anterior en main y verificada. El detalle ejecutable vive en
+`docs/pasos-componibles-plan-tecnico.md`.
 
-- **Etapa A — Limpieza Tipo A.** Mover a la declaración de familia los
-  `if` que son datos (`tiposPerfilCompatibles`, etc.). El motor deja de
-  nombrar familias que no lo necesitan (baja de 12 cableadas). Riesgo
-  bajo, valor inmediato: la frontera §4.2 se vuelve real en el código.
-- **Etapa B — Runner de nesting parametrizado.** Unificar los 4 runners
-  dedicados en uno que reciba geometría + algoritmo de la declaración.
-  La parte más difícil del motor; con la suite de tests del motor como red.
-- **Etapa C — Persistir el catálogo.** Las 42 familias pasan a la base
-  (sembradas, inmutables para el tenant, mismos códigos). El código lee de
-  la base lo que hoy lee del record. Sin UI nueva. Acá se resuelven
-  identidad, namespacing y snapshot (§7.2).
-- **Etapa D — Familias de tenant + wizard de paso.** La feature visible.
-  Presets, preguntas físicas, preview de costeo, estación y modo de
-  registro incluidos.
+- **Etapa A — Limpieza Tipo A.** Censo línea por línea de los 51 cableados
+  con clasificación A/B, y mover los A a la declaración de familia
+  (`tiposPerfilCompatibles`, etc.). El motor deja de nombrar familias que
+  no lo necesitan. Riesgo bajo; la frontera §4.2 se vuelve real en código.
+- **Etapa C — Tabla de familias tenant + resolver.** La tabla nueva (UUID,
+  forma como datos, estación, snapshot-ready), el resolver único
+  (tabla → catálogo) y el CRUD ADMIN. Sin UI de creación todavía: el motor
+  aprende a leer familias de la base sin que exista el wizard.
+- **Etapa D — Wizard de paso.** La feature visible. Presets del catálogo
+  como punto de partida, preguntas físicas, preview de costeo (visible,
+  opcional — §8.8), estación y modo de registro incluidos.
+- **Etapa B (diferida) — Runner de nesting parametrizado.** Unificar los 4
+  runners dedicados en uno que reciba geometría + algoritmo. Se hace
+  cuando el wizard quiera ofrecer "¿acomoda piezas?" — no antes.
 - **Etapa E — Wizard de ruta.** Encadenar con validación por
   inputs/outputs canónicos.
 - **Etapa F — Wizard de producto / cotización ad-hoc.** La escalera
   completa (§6). Se diseña recién cuando D y E hayan visto uso real.
 
-## 10. Conclusiones
+## 11. Conclusiones
 
 1. La intuición original es correcta y la evidencia la refuerza: **la
    abstracción ya existe en el código** (ejes, DSL de validaciones,
