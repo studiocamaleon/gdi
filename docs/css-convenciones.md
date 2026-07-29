@@ -98,16 +98,28 @@ className={cn("selb", abierto && "abierto")}         // helper
 `.side` y `.selb` aparecen como "sin uso" y sin embargo se usan. Antes de borrar
 cualquier cosa hay que mirarla a mano.
 
-### Un hallazgo concreto: `.gf` parece muerto
+### Primer caso resuelto: `.gf` estaba muerto (borrado)
 
-El namespace `.gf` tiene **98 reglas** (líneas ~31529–31670 y otra vez
-~38041–38048, no es contiguo). No aparece aplicado en ningún lado: una búsqueda
-en todo el repo de `class`/`className` con `gf` como token suelto no da nada.
+El namespace `.gf` tenía **98 reglas** en dos bloques no contiguos, más el
+`@keyframes gfRowIn`. No lo aplicaba nadie: la vista de gastos fijos usa
+`gfijo-*` desde que el módulo se reconstruyó estilo Holdprint, y esta era la
+hoja de la versión anterior.
 
-La vista de gastos fijos usa `gfijo-*`, no `.gf`. Encaja con que el módulo se
-reconstruyó estilo Holdprint: esta sería la hoja de la versión anterior, que
-quedó. Es la primera candidata a borrar, pero conviene que lo confirme quien
-sepa si se está guardando a propósito por si hay que volver atrás.
+Se borró: **−164 líneas** y una clase global menos.
+
+Lo que hizo confiable la decisión, y sirve de receta para el próximo:
+
+1. Búsqueda en **todo el repo** de `class`/`className` con el token suelto —no
+   sólo en `src`— incluyendo plantillas y `cn()`.
+2. Mirar qué clases usa de verdad el componente que debería aplicarlo
+   (`gfijo-*`, no `.gf`).
+3. Después de borrar, probar los **vecinos de cada costura** con estilo
+   computado sobre elementos reales, no a ojo: `.prodtab`, `.dash-scroll`,
+   `.egr-adj-x`, `.mod-body .form-grid`.
+4. Ojo con las variables: `.gf` declaraba `--bg`, `--border-strong` y demás,
+   pero eran los mismos valores que ya vienen de `:root`. Un `div` sin clase
+   computaba idéntico, así que no se perdió nada. Conviene comprobarlo antes de
+   dar por muerta cualquier declaración de tokens.
 
 ## La regla
 
