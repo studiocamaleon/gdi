@@ -273,9 +273,9 @@ export function PasosFamiliasView() {
   };
 
   return (
-    <div className={s.wrap}>
+    <div className="content">
       <div className="page-head">
-        <div>
+        <div className="title-block">
           <h1>Pasos de producción</h1>
           <p>
             Los tipos de paso con los que se arman las rutas: el catálogo del
@@ -284,6 +284,7 @@ export function PasosFamiliasView() {
         </div>
         <Button onClick={() => setWizardAbierto(true)}>+ Nuevo paso</Button>
       </div>
+      <div className={s.wrap}>
 
       <section className={s.seccion}>
         <div className={s.seccionHead}>
@@ -362,16 +363,28 @@ export function PasosFamiliasView() {
             </div>
           </div>
         </div>
-        <div className={s.catalogoGrid}>
-          {sistema.map((f) => (
-            <div key={f.codigo} className={s.catalogoItem}>
-              <div className={s.catalogoNombre}>{f.nombre}</div>
-              {f.descripcion ? (
-                <div className={s.catalogoDesc}>{f.descripcion}</div>
-              ) : null}
-            </div>
-          ))}
-        </div>
+        <table className="tbl">
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Descripción</th>
+              <th>Categoría</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sistema.map((f) => (
+              <tr key={f.codigo}>
+                <td>
+                  <div className="name">{f.nombre}</div>
+                </td>
+                <td>
+                  <div className="desc">{f.descripcion}</div>
+                </td>
+                <td>{getLabel(categoriaFamiliaLabels, f.categoria).label}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </section>
 
       {wizardAbierto ? (
@@ -400,6 +413,7 @@ export function PasosFamiliasView() {
           if (aEliminar) await eliminar(aEliminar);
         }}
       />
+      </div>
     </div>
   );
 }
@@ -526,8 +540,14 @@ function WizardNuevoPaso({
       disablePointerDismissal
       onOpenChange={(open) => !open && onCerrar()}
     >
-      <SheetContent className="flex w-full flex-col sm:max-w-xl">
-        <SheetHeader>
+      <SheetContent
+        className="flex w-full flex-col gap-0"
+        // Inline y no utility: el default del sheet (max-w-sm con variante
+        // data-[side]) le gana a una clase max-w-* y el wizard quedaba
+        // angosto y sin aire.
+        style={{ maxWidth: 720 }}
+      >
+        <SheetHeader className={s.wizardHead}>
           <SheetTitle>Nuevo paso de producción</SheetTitle>
           <SheetDescription>
             Contestá en idioma de taller; la forma técnica la arma el sistema.
