@@ -758,47 +758,37 @@ function WizardNuevoPaso({
 
           {paso === "materiales" ? (
             <>
-              <div className={s.pregunta}>¿Consume materiales?</div>
+              <div className={s.pregunta}>
+                ¿Este paso gasta algún material propio?
+              </div>
               <p className={s.ayuda}>
-                Los materiales concretos se eligen al armar cada producto; acá
-                sólo se declara QUÉ pide el paso (tinta, cola, ojales…).
+                Cosas que el paso consume y hay que cobrar: cola, ojales, film,
+                hilo, cinta, bolsas… Acá se declara QUÉ pide el paso; el
+                material concreto y su precio se eligen al armar cada producto.
               </p>
+              {conMaquina ? (
+                <div className={s.notaTinta}>
+                  La tinta o el tóner de la máquina NO van acá: el sistema los
+                  cobra solo, desde el perfil de la máquina elegida.
+                </div>
+              ) : null}
               {draft.slots.length === 0 ? (
-                <div className={s.slotsVacio}>Sin materiales. Puede quedar así.</div>
+                <div className={s.slotsVacio}>
+                  Sin materiales propios. Muchos pasos manuales no gastan nada —
+                  puede quedar así.
+                </div>
               ) : (
                 <div className={s.opciones}>
                   {draft.slots.map((slot, i) => (
                     <div key={i} className={s.slotFila}>
                       <Input
                         value={slot.nombre}
-                        placeholder="Nombre (ej: Tinta de serigrafía)"
+                        placeholder="¿Qué gasta? (ej: Hilo de bordar, Ojales, Cola)"
                         onChange={(e) => {
                           const slots = [...draft.slots];
                           slots[i] = { ...slot, nombre: e.target.value };
                           set({ slots });
                         }}
-                      />
-                      <HumanSelect
-                        value={slot.tipo}
-                        onValueChange={(tipo) => {
-                          const slots = [...draft.slots];
-                          slots[i] = { ...slot, tipo };
-                          set({ slots });
-                        }}
-                        options={[
-                          { value: "INSUMO_PASO", label: "Insumo del paso" },
-                          { value: "SUSTRATO", label: "Sustrato" },
-                          { value: "TAPA", label: "Tapa / cubierta" },
-                          { value: "OTRO", label: "Otro" },
-                          ...(conMaquina
-                            ? [
-                                {
-                                  value: "CONSUMIBLE_MAQUINA",
-                                  label: "Consumible de la máquina",
-                                },
-                              ]
-                            : []),
-                        ]}
                       />
                       <label
                         style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}
@@ -826,6 +816,10 @@ function WizardNuevoPaso({
                   ))}
                 </div>
               )}
+              <p className={s.previewPista}>
+                “Obligatorio” = un producto no se puede cotizar sin elegirle
+                este material. Si a veces se usa y a veces no, dejalo opcional.
+              </p>
               <Button
                 variant="outline"
                 size="sm"
@@ -833,6 +827,11 @@ function WizardNuevoPaso({
                   set({
                     slots: [
                       ...draft.slots,
+                      // Siempre INSUMO_PASO: es el único tipo con sentido para
+                      // un paso componible — SUSTRATO/TAPA/OTRO no cambian
+                      // nada en el motor y CONSUMIBLE_MAQUINA se cobra solo
+                      // desde el perfil (el dropdown de tipos era una decisión
+                      // sin consecuencias, se quitó a propósito).
                       { nombre: "", tipo: "INSUMO_PASO", requerido: false },
                     ],
                   })

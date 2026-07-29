@@ -181,9 +181,20 @@
 
 .slotFila {
   display: grid;
-  grid-template-columns: 1fr 170px auto auto;
-  gap: 8px;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
   align-items: center;
+}
+
+.notaTinta {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-2, #2c2c33);
+  background: var(--surface-2, #fafaf9);
+  border: 1px solid var(--hairline, #efece8);
+  border-left: 3px solid var(--border-strong, #d4d2cd);
+  border-radius: 8px;
+  padding: 10px 12px;
 }
 
 .slotsVacio {
