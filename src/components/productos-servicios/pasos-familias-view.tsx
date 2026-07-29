@@ -137,6 +137,15 @@ function agruparPorPlantilla(
   }));
 }
 
+/** 100 → "1h 40m", 45 → "45 min": el resultado del preview habla en tiempo
+ *  de taller, no en minutos crudos. */
+function formatearMinutos(min: number): string {
+  if (min < 60) return `${min} min`;
+  const horas = Math.floor(min / 60);
+  const resto = min % 60;
+  return resto > 0 ? `${horas}h ${resto}m` : `${horas}h`;
+}
+
 function humanizarPlantilla(plantilla: string): string {
   const texto = plantilla.replaceAll("_", " ").toLowerCase();
   return texto.charAt(0).toUpperCase() + texto.slice(1);
@@ -1083,34 +1092,59 @@ function PasoFinal({
       {previewAplica ? (
         <div className={s.preview}>
           <div className={s.opcionTitulo}>Probalo con un ejemplo (opcional)</div>
+          <div className={s.previewIntro}>
+            {draft.modoTiempo === "T-2"
+              ? "Imaginate un pedido: ¿cuántas piezas trae, a qué ritmo las hace la persona, y quién las hace? Con eso el sistema calcula lo mismo que va a calcular al cotizar."
+              : "Este paso tarda lo mismo sin importar la cantidad: decinos cuántos minutos lleva y quién lo hace."}
+          </div>
           <div className={s.previewGrid}>
-            <Input
-              value={pv.cantidad}
-              onChange={(e) => setPv({ ...pv, cantidad: e.target.value })}
-              placeholder="Cantidad"
-              inputMode="numeric"
-            />
+            <label className={s.previewCampo}>
+              <span className={s.previewLabel}>Cantidad del pedido</span>
+              <Input
+                value={pv.cantidad}
+                onChange={(e) => setPv({ ...pv, cantidad: e.target.value })}
+                placeholder="Ej: 100"
+                inputMode="numeric"
+              />
+              <span className={s.previewPista}>piezas a producir</span>
+            </label>
             {draft.modoTiempo === "T-2" ? (
-              <Input
-                value={pv.productividad}
-                onChange={(e) => setPv({ ...pv, productividad: e.target.value })}
-                placeholder="Piezas por hora"
-                inputMode="numeric"
-              />
+              <label className={s.previewCampo}>
+                <span className={s.previewLabel}>Ritmo de trabajo</span>
+                <Input
+                  value={pv.productividad}
+                  onChange={(e) =>
+                    setPv({ ...pv, productividad: e.target.value })
+                  }
+                  placeholder="Ej: 60"
+                  inputMode="numeric"
+                />
+                <span className={s.previewPista}>piezas por hora</span>
+              </label>
             ) : (
-              <Input
-                value={pv.tiempoFijo}
-                onChange={(e) => setPv({ ...pv, tiempoFijo: e.target.value })}
-                placeholder="Minutos fijos"
-                inputMode="numeric"
-              />
+              <label className={s.previewCampo}>
+                <span className={s.previewLabel}>Duración del paso</span>
+                <Input
+                  value={pv.tiempoFijo}
+                  onChange={(e) => setPv({ ...pv, tiempoFijo: e.target.value })}
+                  placeholder="Ej: 30"
+                  inputMode="numeric"
+                />
+                <span className={s.previewPista}>minutos, fijos</span>
+              </label>
             )}
-            <HumanSelect
-              value={pv.centroCostoId}
-              onValueChange={(centroCostoId) => setPv({ ...pv, centroCostoId })}
-              options={centros.map((c) => ({ value: c.id, label: c.nombre }))}
-              placeholder="Centro de costo"
-            />
+            <label className={s.previewCampo}>
+              <span className={s.previewLabel}>¿Quién lo hace?</span>
+              <HumanSelect
+                value={pv.centroCostoId}
+                onValueChange={(centroCostoId) =>
+                  setPv({ ...pv, centroCostoId })
+                }
+                options={centros.map((c) => ({ value: c.id, label: c.nombre }))}
+                placeholder="Centro de costo"
+              />
+              <span className={s.previewPista}>define la tarifa por hora</span>
+            </label>
           </div>
           <div className={s.previewResultado}>
             <Button
@@ -1119,11 +1153,11 @@ function PasoFinal({
               onClick={probar}
               disabled={probando || !pv.centroCostoId}
             >
-              {probando ? "Calculando…" : "Calcular"}
+              {probando ? "Calculando…" : "Calcular costo"}
             </Button>
             {resultado ? (
               <span className={s.previewMonto}>
-                {resultado.totalMin} min · ${" "}
+                {formatearMinutos(resultado.totalMin)} de trabajo · ${" "}
                 {resultado.costoTiempo.toLocaleString("es-AR")}
               </span>
             ) : null}
@@ -1131,17 +1165,26 @@ function PasoFinal({
           {resultado ? (
             <div className={s.previewAviso}>
               {resultado.tarifaPublicada
-                ? `Tarifa de ${resultado.centroCostoNombre} (${resultado.periodo}): $${resultado.tarifaHora.toLocaleString("es-AR")}/h. La misma cuenta que hará el motor al cotizar.`
+                ? `La cuenta: ${formatearMinutos(resultado.totalMin)} × $${resultado.tarifaHora.toLocaleString("es-AR")}/h (tarifa ${resultado.periodo} de ${resultado.centroCostoNombre}). Es la misma que hará el motor al cotizar.`
                 : `${resultado.centroCostoNombre} no tiene tarifa publicada en ${resultado.periodo}: el costo da $0 hasta publicarla en Centros de costo.`}
             </div>
           ) : (
             <div className={s.previewAviso}>
-              La productividad y el centro reales se configuran por producto; esto
-              es sólo para ver que la cuenta cierra.
+              Es sólo una prueba: el ritmo y el centro reales se configuran en
+              cada producto que use este paso.
             </div>
           )}
         </div>
-      ) : null}
+      ) : (
+        <div className={s.preview}>
+          <div className={s.opcionTitulo}>El costo se ve al cotizar</div>
+          <div className={s.previewAviso}>
+            {draft.modoTiempo === "T-3"
+              ? "El tiempo de este paso lo dicta la máquina elegida (su perfil de productividad), así que el costo aparece al cotizar un producto concreto."
+              : "El tiempo de este paso lo estima el comercial en cada cotización, así que no hay un costo fijo para previsualizar."}
+          </div>
+        </div>
+      )}
 
       {erroresBack.length > 0 ? (
         <div className={s.erroresBox}>
