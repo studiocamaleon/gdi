@@ -15,7 +15,7 @@ const wait = (milliseconds: number) =>
 /**
  * Por qué la persona terminó acá sin pedirlo.
  *
- * `/salir` y el middleware mandan al login cuando la sesión ya no sirve. Sin
+ * `/salir` y el proxy mandan al login cuando la sesión ya no sirve. Sin
  * este cartel, aparecer de golpe en la pantalla de login se lee como que el
  * sistema se cayó — que es exactamente lo que pasó la primera vez.
  */

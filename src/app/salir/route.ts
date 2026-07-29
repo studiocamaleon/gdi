@@ -7,9 +7,9 @@ import { SESSION_COOKIE_NAME } from "@/lib/session";
  *
  * Existe porque un Server Component NO puede tocar cookies, y el layout del
  * dashboard necesita justamente eso cuando el API le contesta 401: el token
- * todavía no venció por reloj —así que el middleware lo da por bueno— pero la
+ * todavía no venció por reloj —así que el proxy lo da por bueno— pero la
  * sesión detrás está revocada o borrada. Sin este paso, el layout mandaba a
- * /login, el middleware veía la cookie y rebotaba a "/", y ahí el bucle.
+ * /login, el proxy veía la cookie y rebotaba a "/", y ahí el bucle.
  *
  * Un Route Handler sí puede escribir cookies, así que la corta acá.
  */
