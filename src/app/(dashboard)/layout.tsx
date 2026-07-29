@@ -34,7 +34,7 @@ export default async function DashboardLayout({
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) {
       // A /salir y no a /login: el token puede seguir vigente por reloj —el
-      // middleware lo daría por bueno y rebotaría de vuelta acá— mientras la
+      // proxy lo daría por bueno y rebotaría de vuelta acá— mientras la
       // sesión detrás está revocada. /salir borra la cookie y corta el bucle.
       redirect("/salir?motivo=sesion");
     }
@@ -44,7 +44,7 @@ export default async function DashboardLayout({
 
   // Clave provisoria puesta por un administrador: la sabe otra persona, así que
   // no se entra a ningún lado hasta cambiarla. El redirect vive acá y no en el
-  // middleware porque el middleware sólo ve la cookie, no la sesión resuelta —
+  // proxy porque el proxy sólo ve la cookie, no la sesión resuelta —
   // y /cambiar-clave está FUERA de este grupo justamente para que mandarlo ahí
   // no rebote contra este mismo layout.
   if (currentUser.debeCambiarPassword) {

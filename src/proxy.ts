@@ -1,8 +1,11 @@
-// OJO dónde vive este archivo: con estructura `src/`, Next SÓLO ejecuta el
-// middleware desde `src/middleware.ts`. Estuvo meses en la raíz del proyecto
-// sin correr nunca — todo lo que "protegía" lo estaban protegiendo en
-// realidad los layouts (redirect del dashboard) y los 401 del API. Se
-// descubrió cuando /plataforma devolvió 500 en vez de rebotar a /login.
+// OJO dónde vive este archivo: con estructura `src/`, Next SÓLO lo ejecuta
+// desde `src/proxy.ts`. Estuvo meses en la raíz del proyecto (y con el nombre
+// viejo, `middleware.ts`) sin correr nunca — todo lo que "protegía" lo estaban
+// protegiendo en realidad los layouts (redirect del dashboard) y los 401 del
+// API. Se descubrió cuando /plataforma devolvió 500 en vez de rebotar a /login.
+//
+// Se llamaba `middleware` hasta Next 16, que renombró la convención a `proxy`:
+// mismo comportamiento, otro nombre de archivo y de función.
 import { NextResponse, type NextRequest } from "next/server";
 
 import { SESSION_COOKIE_NAME } from "@/lib/session";
@@ -30,7 +33,7 @@ const PLATAFORMA_HOME = "/plataforma";
 
 /**
  * ¿El token es de una sesión de plataforma (backoffice)? Decodifica el payload
- * del JWT SIN verificar la firma — acá sólo decide a dónde rebota el middleware
+ * del JWT SIN verificar la firma — acá sólo decide a dónde rebota el proxy
  * (puro UX de ruteo). La autorización real la hacen los guards del API, que sí
  * verifican. Corre en el edge runtime: `atob`, no `Buffer`.
  */
@@ -54,7 +57,7 @@ function esSesionPlataforma(token: string): boolean {
  * ¿La cookie sirve para algo?
  *
  * Que exista NO alcanza. Con una cookie presente pero inservible —el token
- * venció, quedó de un logout que no la borró, o es basura— el middleware
+ * venció, quedó de un logout que no la borró, o es basura— el proxy
  * rebotaba /login → "/" y el layout del dashboard rebotaba "/" → /login: bucle
  * infinito, y la persona no llegaba ni a la pantalla de login. La única salida
  * era borrar cookies a mano.
@@ -72,7 +75,7 @@ function tokenUsable(token: string | undefined): token is string {
   return true;
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const cookie = request.cookies.get(SESSION_COOKIE_NAME)?.value;
   // Una cookie que no sirve se trata como si no estuviera Y se borra: dejarla
   // puesta es lo que arma el bucle en el request siguiente.

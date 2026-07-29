@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 /**
  * La consola del control plane. Fuera del grupo (dashboard) a propósito: es
  * OTRA superficie (staff de Grafo, cross-tenant), no una vista más de la app
- * de tenant. El middleware ya exige sesión; la autorización la decide el API
+ * de tenant. El proxy ya exige sesión; la autorización la decide el API
  * (403 para cualquiera sin User.rolPlataforma).
  * Ver docs/control-plane-diseno.md
  */
