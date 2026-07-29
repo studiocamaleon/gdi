@@ -71,6 +71,10 @@ type PasoWizard =
   | "final";
 
 interface SlotDraft {
+  /** Presente cuando el slot ya existía: se PRESERVA al guardar, porque los
+   *  productos configurados referencian el material por este código. Sólo
+   *  los slots nuevos generan slug. */
+  codigo?: string;
   nombre: string;
   tipo: string;
   requerido: boolean;
@@ -167,7 +171,7 @@ function draftAInput(d: FormaDraft): UpsertFamiliaTenantInput {
       ? { modosActivacion: [d.modoActivacionDefault] }
       : {}),
     slots: d.slots.map((slot) => ({
-      codigo: slugSlot(slot.nombre),
+      codigo: slot.codigo ?? slugSlot(slot.nombre),
       nombre: slot.nombre.trim(),
       tipo: slot.tipo,
       requerido: slot.requerido,
@@ -211,6 +215,32 @@ function draftDesdePreset(f: FamiliaListItem): FormaDraft {
   };
 }
 
+/** Draft desde una familia EXISTENTE (modo edición): forma entera con los
+ *  códigos de slot preservados. */
+function draftDesdeFamilia(f: FamiliaTenant): FormaDraft {
+  const relacion = (f.relacionMaquina[0] ?? "M-0") as "M-0" | "M-1" | "M-2";
+  return {
+    presetOrigen: f.presetOrigen,
+    relacionMaquina: relacion,
+    plantillasCompatibles: f.plantillasCompatibles,
+    modoTiempo: (f.modosTiempo[0] ?? "T-2") as FormaDraft["modoTiempo"],
+    slots: f.slots.map((slot) => ({
+      codigo: slot.codigo,
+      nombre: slot.nombre,
+      tipo: slot.tipo,
+      requerido: slot.requerido,
+    })),
+    mecanismoCantidad: f.mecanismosCantidad[0] ?? "DIRECT_FROM_JOBCONTEXT",
+    modoActivacionDefault: f.modoActivacionDefault,
+    activacionForzada: f.modosActivacion.length === 1,
+    estacionId: f.estacion?.id ?? null,
+    modoRegistro: (f.modoRegistro ?? "cronometro") as FormaDraft["modoRegistro"],
+    categoria: f.categoria,
+    nombre: f.nombre,
+    descripcion: f.descripcion ?? "",
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Vista principal
 // ─────────────────────────────────────────────────────────────────────
@@ -223,6 +253,7 @@ export function PasosFamiliasView() {
   >([]);
   const [cargando, setCargando] = React.useState(true);
   const [wizardAbierto, setWizardAbierto] = React.useState(false);
+  const [aEditar, setAEditar] = React.useState<FamiliaTenant | null>(null);
   const [aEliminar, setAEliminar] = React.useState<FamiliaTenant | null>(null);
 
   const recargar = React.useCallback(async () => {
@@ -388,6 +419,9 @@ export function PasosFamiliasView() {
                     <span className="tag">{f.activo ? "Activo" : "Inhabilitado"}</span>
                   </td>
                   <td className="right">
+                    <Button variant="ghost" size="sm" onClick={() => setAEditar(f)}>
+                      Editar
+                    </Button>
                     <Button variant="ghost" size="sm" onClick={() => toggleActiva(f)}>
                       {f.activo ? "Inhabilitar" : "Reactivar"}
                     </Button>
@@ -436,13 +470,21 @@ export function PasosFamiliasView() {
         </table>
       </section>
 
-      {wizardAbierto ? (
+      {wizardAbierto || aEditar ? (
         <WizardNuevoPaso
+          // key: al pasar de editar una familia a otra (o al alta), el wizard
+          // se remonta con el draft correcto en vez de arrastrar estado.
+          key={aEditar?.id ?? "nuevo"}
           catalogoSistema={sistema}
           estaciones={estaciones}
-          onCerrar={() => setWizardAbierto(false)}
+          editar={aEditar}
+          onCerrar={() => {
+            setWizardAbierto(false);
+            setAEditar(null);
+          }}
           onCreado={async () => {
             setWizardAbierto(false);
+            setAEditar(null);
             await recargar();
           }}
         />
@@ -474,16 +516,25 @@ export function PasosFamiliasView() {
 function WizardNuevoPaso({
   catalogoSistema,
   estaciones,
+  editar,
   onCerrar,
   onCreado,
 }: {
   catalogoSistema: FamiliaListItem[];
   estaciones: Array<{ id: string; nombre: string }>;
+  /** Familia existente: el wizard abre precargado y guarda con PATCH. */
+  editar?: FamiliaTenant | null;
   onCerrar: () => void;
   onCreado: () => Promise<void>;
 }) {
-  const [paso, setPaso] = React.useState<PasoWizard>("arranque");
-  const [draft, setDraft] = React.useState<FormaDraft>(DRAFT_INICIAL);
+  // En edición no tiene sentido "¿partís de un paso existente?": se arranca
+  // directo en la primera pregunta real, con todo precargado.
+  const [paso, setPaso] = React.useState<PasoWizard>(
+    editar ? "maquina" : "arranque",
+  );
+  const [draft, setDraft] = React.useState<FormaDraft>(() =>
+    editar ? draftDesdeFamilia(editar) : DRAFT_INICIAL,
+  );
   const [erroresBack, setErroresBack] = React.useState<string[]>([]);
   const [guardando, setGuardando] = React.useState(false);
   const [lookups, setLookups] = React.useState<LookupsConfigPaso | null>(null);
@@ -504,7 +555,7 @@ function WizardNuevoPaso({
   // cuando el paso es manual.
   const secuencia: PasoWizard[] = React.useMemo(
     () => [
-      "arranque",
+      ...(editar ? [] : (["arranque"] as PasoWizard[])),
       "maquina",
       ...(conMaquina ? (["maquinas-candidatas"] as PasoWizard[]) : []),
       "tiempo",
@@ -515,7 +566,7 @@ function WizardNuevoPaso({
       "registro",
       "final",
     ],
-    [conMaquina],
+    [conMaquina, editar],
   );
   const indice = secuencia.indexOf(paso);
   const avanzar = () => setPaso(secuencia[Math.min(indice + 1, secuencia.length - 1)]);
@@ -536,8 +587,13 @@ function WizardNuevoPaso({
     setGuardando(true);
     setErroresBack([]);
     try {
-      await crearFamiliaTenant(draftAInput(draft));
-      toast.success(`Paso "${draft.nombre.trim()}" creado.`);
+      if (editar) {
+        await actualizarFamiliaTenant(editar.id, draftAInput(draft));
+        toast.success(`Paso "${draft.nombre.trim()}" actualizado.`);
+      } else {
+        await crearFamiliaTenant(draftAInput(draft));
+        toast.success(`Paso "${draft.nombre.trim()}" creado.`);
+      }
       await onCreado();
     } catch (error) {
       if (error instanceof ApiError) {
@@ -597,9 +653,13 @@ function WizardNuevoPaso({
         style={{ maxWidth: 720 }}
       >
         <SheetHeader className={s.wizardHead}>
-          <SheetTitle>Nuevo paso de producción</SheetTitle>
+          <SheetTitle>
+            {editar ? `Editar: ${editar.nombre}` : "Nuevo paso de producción"}
+          </SheetTitle>
           <SheetDescription>
-            Contestá en idioma de taller; la forma técnica la arma el sistema.
+            {editar
+              ? "Los cambios valen para las cotizaciones nuevas; las órdenes en curso no se tocan."
+              : "Contestá en idioma de taller; la forma técnica la arma el sistema."}
           </SheetDescription>
         </SheetHeader>
 
@@ -978,7 +1038,11 @@ function WizardNuevoPaso({
               onClick={guardar}
               disabled={guardando || draft.nombre.trim().length === 0}
             >
-              {guardando ? "Guardando…" : "Crear paso"}
+              {guardando
+                ? "Guardando…"
+                : editar
+                  ? "Guardar cambios"
+                  : "Crear paso"}
             </Button>
           ) : (
             <Button onClick={avanzar} disabled={!puedeAvanzar()}>
