@@ -44,8 +44,8 @@ import type {
 import type { AccionPasoOrdenTrabajoDto } from './dto/accion-paso.dto';
 import type { AhorroConsolidacionDto } from './dto/completar-pasos-lote.dto';
 import {
-  FAMILIAS,
   modoRegistroDeFamilia,
+  resolverFamilia,
 } from '../productos-servicios/pasos/familias';
 import type { FamiliaCodigo } from '../productos-servicios/pasos/types';
 
@@ -1832,9 +1832,7 @@ export class OrdenesTrabajoService {
   ) {
     return pasosActivados(trazabilidad).map((paso, indice) => {
       const familiaCodigo = paso.familiaCodigo ?? 'trabajo_manual';
-      const familia = FAMILIAS[familiaCodigo as FamiliaCodigo] as
-        | (typeof FAMILIAS)[FamiliaCodigo]
-        | undefined;
+      const familia = resolverFamilia(familiaCodigo);
       const esTercerizado = paso.tercerizado === true;
       return {
         tenantId,

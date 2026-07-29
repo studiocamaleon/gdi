@@ -5,8 +5,11 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { FAMILIAS } from '../productos-servicios/pasos/familias';
-import type { FamiliaCodigo } from '../productos-servicios/pasos/types';
+import { resolverFamilia } from '../productos-servicios/pasos/familias';
+import type {
+  DefinicionFamiliaResuelta,
+  FamiliaCodigo,
+} from '../productos-servicios/pasos/types';
 import { evaluarRegla } from './evaluador-jsonlogic';
 import { loadTarifasHorarias } from '../productos-servicios/costing/load-tarifas';
 import { calcularPrecio, type PrecioConfig } from './calculador-precio';
@@ -1953,8 +1956,7 @@ export class MotorUniversalService {
     pasosSiguientes: PasoCargado[] = [],
     outputsAcumulados: Set<string> = new Set(),
   ): Promise<PasoEjecutado> {
-    const familia = FAMILIAS[paso.familiaCodigo as FamiliaCodigo] as
-      (typeof FAMILIAS)[FamiliaCodigo] | undefined;
+    const familia = resolverFamilia(paso.familiaCodigo);
 
     // a) ACTIVACIÓN (D.1)
     const activacion = this.evaluarActivacion(paso, jobContext);
@@ -3296,8 +3298,7 @@ export class MotorUniversalService {
     } | null = null,
   ): Promise<MaterialEjecutado[]> {
     const ejecutados: MaterialEjecutado[] = [];
-    const familia = FAMILIAS[paso.familiaCodigo as FamiliaCodigo] as
-      (typeof FAMILIAS)[FamiliaCodigo] | undefined;
+    const familia = resolverFamilia(paso.familiaCodigo);
     const automaticSlotCodes = new Set(
       (familia?.slotsRequeridos ?? [])
         .filter((slot) => slot.tipo === 'CONSUMIBLE_MAQUINA')
@@ -4720,7 +4721,7 @@ export class MotorUniversalService {
    * Acumula TODOS los errores del mismo paso (multi-error híbrido).
    */
   private ejecutarValidaciones(
-    familia: (typeof FAMILIAS)[FamiliaCodigo],
+    familia: DefinicionFamiliaResuelta,
     paso: PasoCargado,
     jobContext: JobContext,
     outputsAcumulados: Set<string> = new Set(),

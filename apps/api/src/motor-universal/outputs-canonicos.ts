@@ -24,7 +24,7 @@
  *  3. Mostrar trazabilidad por paso en el frontend.
  */
 
-import type { DefinicionFamilia } from '../productos-servicios/pasos/types';
+import type { DefinicionFamiliaResuelta } from '../productos-servicios/pasos/types';
 import { calculateGuillotinaCutsFromImposicion } from '../productos-servicios/nesting/helpers/guillotina-cuts';
 import type {
   PasoCargado,
@@ -48,7 +48,7 @@ export interface OutputContext {
 }
 
 export function calcularOutputsCanonicos(
-  familia: DefinicionFamilia | undefined,
+  familia: DefinicionFamiliaResuelta | undefined,
   ctx: OutputContext,
 ): Record<string, unknown> {
   if (!familia) return {};
@@ -78,7 +78,7 @@ export function calcularOutputsCanonicos(
  */
 function computeOutput(
   key: string,
-  familia: DefinicionFamilia,
+  familia: DefinicionFamiliaResuelta,
   ctx: OutputContext,
 ): unknown {
   const {

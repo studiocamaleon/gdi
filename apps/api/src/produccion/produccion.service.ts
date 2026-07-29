@@ -10,7 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { UpsertEstacionDto } from './dto/upsert-estacion.dto';
 import type { CrearDiaNoLaborableDto } from './dto/crear-dia-no-laborable.dto';
 import type { ActualizarConfiguracionProduccionDto } from './dto/actualizar-configuracion-produccion.dto';
-import { FAMILIAS } from '../productos-servicios/pasos/familias';
+import { FAMILIAS, resolverFamilia } from '../productos-servicios/pasos/familias';
 import type { FamiliaCodigo } from '../productos-servicios/pasos/types';
 import {
   normalizarCalendarioAlmacenado,
@@ -596,13 +596,32 @@ export class ProduccionService {
       });
       porFamilia.set(fila.familiaCodigo, lista);
     }
-    return Object.values(FAMILIAS).map((familia) => ({
-      codigo: familia.codigo,
-      nombre: familia.nombre,
-      categoria: familia.categoria,
-      visibleEnSelector: familia.visibleEnSelector !== false,
-      estaciones: porFamilia.get(familia.codigo) ?? [],
-    }));
+    // Catálogo del sistema + familias del TENANT (pasos componibles, Etapa
+    // C): las dos tienen que poder asignarse a una estación, así que el
+    // picker lista ambas. Las tenant inhabilitadas no se ofrecen.
+    const familiasTenant = await this.prisma.familiaTenant.findMany({
+      where: { tenantId: auth.tenantId, activo: true },
+      select: { id: true, nombre: true, categoria: true },
+      orderBy: { nombre: 'asc' },
+    });
+    return [
+      ...Object.values(FAMILIAS).map((familia) => ({
+        codigo: familia.codigo as string,
+        nombre: familia.nombre,
+        categoria: familia.categoria as string,
+        visibleEnSelector: familia.visibleEnSelector !== false,
+        origen: 'sistema' as const,
+        estaciones: porFamilia.get(familia.codigo) ?? [],
+      })),
+      ...familiasTenant.map((familia) => ({
+        codigo: familia.id,
+        nombre: familia.nombre,
+        categoria: familia.categoria,
+        visibleEnSelector: true,
+        origen: 'tenant' as const,
+        estaciones: porFamilia.get(familia.id) ?? [],
+      })),
+    ];
   }
 
   /**
@@ -1029,9 +1048,7 @@ export class ProduccionService {
     const empleadoIds = [...new Set(payload.empleadoIds ?? [])];
     const maquinaIds = [...new Set(payload.maquinaIds ?? [])];
 
-    const invalidas = familias.filter(
-      (codigo) => !FAMILIAS[codigo as FamiliaCodigo],
-    );
+    const invalidas = familias.filter((codigo) => !resolverFamilia(codigo));
     if (invalidas.length > 0) {
       throw new BadRequestException(
         `Familias de pasos desconocidas: ${invalidas.join(', ')}.`,
@@ -1064,7 +1081,7 @@ export class ProduccionService {
         const detalle = generales
           .map(
             (fila) =>
-              `${FAMILIAS[fila.familiaCodigo as FamiliaCodigo]?.nombre ?? fila.familiaCodigo} (en "${fila.estacion.nombre}")`,
+              `${resolverFamilia(fila.familiaCodigo)?.nombre ?? fila.familiaCodigo} (en "${fila.estacion.nombre}")`,
           )
           .join(' · ');
         throw new ConflictException(

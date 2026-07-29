@@ -9,9 +9,9 @@ import type { UpsertProductoConfigPasoDto } from './dto/producto-ruta.dto';
 import { FamiliasPasosService } from './familias-pasos.service';
 import { construirClaveMatch } from '../motor-universal/tercerizado-costo';
 import {
-  FAMILIAS,
   formulaEfectivaSlot,
   perfilCompatibleConFamilia,
+  resolverFamilia,
 } from './pasos/familias';
 import type { FamiliaCodigo } from './pasos/types';
 
@@ -82,7 +82,7 @@ export class ConfigPasosService {
         );
       }
 
-      const familia = FAMILIAS[rutaPaso.familiaCodigo as FamiliaCodigo];
+      const familia = resolverFamilia(rutaPaso.familiaCodigo);
       if (
         familia?.plantillasCompatibles.length &&
         !familia.plantillasCompatibles.includes(maquina.plantilla)
@@ -401,7 +401,7 @@ export class ConfigPasosService {
       },
     });
     const maquinasById = new Map(maquinas.map((maquina) => [maquina.id, maquina]));
-    const familia = FAMILIAS[familiaCodigo as FamiliaCodigo];
+    const familia = resolverFamilia(familiaCodigo);
 
     for (const candidate of candidates) {
       const maquina = maquinasById.get(candidate.maquinaId);
@@ -484,7 +484,7 @@ export class ConfigPasosService {
     familiaCodigo: string,
     dto: UpsertProductoConfigPasoDto,
   ) {
-    const familia = FAMILIAS[familiaCodigo as FamiliaCodigo];
+    const familia = resolverFamilia(familiaCodigo);
     if (!familia || !dto.slotsMateriales) return;
     const variants = new Map<string, { materiaPrimaId: string }>();
     const materialIds = new Set<string>();

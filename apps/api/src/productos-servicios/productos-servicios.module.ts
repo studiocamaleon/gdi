@@ -4,6 +4,7 @@ import { ProductosServiciosController } from './productos-servicios.controller';
 import { CargosDirectosProductoService } from './cargos-directos-producto.service';
 import { ConfigPasosService } from './config-pasos.service';
 import { FamiliasPasosService } from './familias-pasos.service';
+import { FamiliasTenantService } from './familias-tenant.service';
 import { ProductoRutasService } from './producto-rutas.service';
 import { ProductoValidacionService } from './producto-validacion.service';
 import { ProductosService } from './productos.service';
@@ -34,6 +35,7 @@ import { PrecioModule } from './precio/precio.module';
     ProductoRutasService,
     ConfigPasosService,
     FamiliasPasosService,
+    FamiliasTenantService,
     CargosDirectosProductoService,
     ProductoValidacionService,
   ],

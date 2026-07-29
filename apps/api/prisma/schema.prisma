@@ -602,6 +602,7 @@ model Tenant {
   productosComisionesCatalogo                      ProductoComisionCatalogo[]
   estaciones                                       Estacion[]
   estacionFamilias                                 EstacionFamilia[]
+  familiasTenant                                   FamiliaTenant[]
   diasNoLaborables                                 DiaNoLaborable[]
   configuracionProduccion                          ConfiguracionProduccion?
   configuracionInsights                            ConfiguracionInsights?
@@ -1593,7 +1594,9 @@ model EstacionFamilia {
   id            String   @id @default(uuid()) @db.Uuid
   tenantId      String   @db.Uuid
   estacionId    String   @db.Uuid
-  /// FamiliaCodigo del catálogo fijo (productos-servicios/pasos/familias).
+  /// FamiliaCodigo del catálogo fijo (productos-servicios/pasos/familias)
+  /// O el UUID de una FamiliaTenant (pasos componibles, Etapa C): el ruteo a
+  /// estaciones tiene una sola fuente de verdad y es esta tabla.
   familiaCodigo String
   tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   estacion      Estacion @relation(fields: [estacionId], references: [id], onDelete: Cascade)
@@ -1601,6 +1604,57 @@ model EstacionFamilia {
   @@unique([estacionId, familiaCodigo])
   @@index([tenantId, familiaCodigo])
   @@index([tenantId, estacionId])
+}
+
+/// Familia de pasos creada por el TENANT (pasos componibles —
+/// docs/pasos-componibles-diseno.md §8). Las 42 del sistema NO viven acá:
+/// siguen en productos-servicios/pasos/familias.ts (decisión §8.1, híbrido).
+/// En los `familiaCodigo` string del resto del schema viaja el UUID de esta
+/// fila; el resolver distingue por forma (UUID → esta tabla, si no →
+/// catálogo). La estación NO se duplica acá: el ruteo vive en
+/// EstacionFamilia, que la API de familias escribe con familiaCodigo = id.
+model FamiliaTenant {
+  id          String  @id @default(uuid()) @db.Uuid
+  tenantId    String  @db.Uuid
+  nombre      String
+  descripcion String?
+  /// CategoriaFamiliaCodigo del catálogo: agrupa en UI y da el default de
+  /// modoRegistro (produccion_impresion → solo_completar, resto cronómetro).
+  categoria   String
+
+  /// La FORMA (diseño §4.3): mismos vocabularios que DefinicionFamilia.
+  /// La única puerta de escritura es validarDefinicionFamiliaTenant
+  /// (pasos/familia-tenant-validacion.ts) — acá no hay enums de DB a
+  /// propósito, para no duplicar los vocabularios de types.ts.
+  relacionMaquina         Json
+  modosTiempo             Json
+  mecanismosCantidad      Json
+  modosActivacion         Json
+  modoActivacionDefault   String
+  slots                   Json
+  multiplicadores         Json
+  plantillasCompatibles   Json
+  tiposPerfilCompatibles  Json?
+  inputsRequeridos        Json
+  outputsCanonicos        Json
+  validaciones            Json
+  permiteSlotsAdicionales Boolean @default(false)
+  /// Override del registro en tablero; null = default por categoría.
+  modoRegistro            String?
+
+  /// FamiliaCodigo del preset del catálogo del que nació, si nació de uno.
+  presetOrigen String?
+  /// Inhabilitada: fuera de selectores y wizard, pero el resolver la sigue
+  /// resolviendo para rutas/OTs históricas (decisión §8.6). Borrado físico
+  /// sólo si ninguna ruta/OT la referenció jamás.
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, nombre])
+  @@index([tenantId, activo])
 }
 
 /// Empleado habilitado para trabajar en una estación (N:M).

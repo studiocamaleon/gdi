@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { FAMILIAS } from '../productos-servicios/pasos/familias';
+import { resolverFamilia } from '../productos-servicios/pasos/familias';
 import type { FamiliaCodigo } from '../productos-servicios/pasos/types';
 import { etiquetaMotivoFin } from '../ordenes-trabajo/ordenes-trabajo.types';
 import { finExclusivo, type Rango } from './periodo';
@@ -20,7 +20,7 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 export const MUESTRA_MINIMA_EFICIENCIA = 20;
 
 function nombreFamilia(codigo: string): string {
-  return FAMILIAS[codigo as FamiliaCodigo]?.nombre ?? codigo;
+  return resolverFamilia(codigo)?.nombre ?? codigo;
 }
 
 export type PersonaProduccion = {
