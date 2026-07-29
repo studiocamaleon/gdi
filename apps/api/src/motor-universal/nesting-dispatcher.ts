@@ -1,6 +1,11 @@
 /**
  * G-M1 — Dispatcher de nesting para el motor universal.
  *
+ * FRONTERA-NESTING: este archivo entero es frontera (pasos-componibles-diseno
+ * §3.4 Tipo B). El ruteo por familia hacia los runners (área, plotter,
+ * laminado, pouch, montaje, hoja) son las primitivas de geometría del
+ * sistema. Se unifica en un runner parametrizado recién en la Etapa B.
+ *
  * Cuando un paso usa `mecanismoCantidad = CALCULADO_POR_PASO`, este dispatcher
  * elige el algoritmo de nesting correcto según la familia + sustrato del
  * material resuelto, lo ejecuta, y devuelve la cantidad efectiva (con

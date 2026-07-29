@@ -327,6 +327,9 @@ const impresion_por_hoja: DefinicionFamilia = {
       tipo: 'SUSTRATO',
       requerido: true,
       compatibilidadMaterial: MP.sustratoHoja,
+      // Los pliegos del nesting ya contemplan doble faz: el papel no se
+      // duplica por caras. [Etapa A]
+      ignoraMultiplicadorCaras: true,
     },
     {
       codigo: 'tinta_o_toner',
@@ -383,6 +386,9 @@ const impresion_por_area: DefinicionFamilia = {
   modosActivacionSoportados: ['OBLIGATORIO'],
   modoActivacionDefault: 'OBLIGATORIO',
   multiplicadoresSoportados: ['caras'],
+  // Imprime: en una impresora con corte integrado usa el perfil de
+  // impresión, nunca el de corte. [Etapa A]
+  tiposPerfilCompatibles: ['IMPRESION', 'MIXTO'],
   slotsRequeridos: [
     {
       codigo: 'sustrato_principal',
@@ -607,6 +613,10 @@ const plotter_corte: DefinicionFamilia = {
     'PLOTTER_DE_CORTE',
     'IMPRESORA_GRAN_FORMATO_POR_AREA',
   ],
+  // Corta, no imprime: sobre una impresora con corte integrado usa el perfil
+  // de corte y no factura tinta. [Etapa A]
+  tiposPerfilCompatibles: ['CORTE', 'MIXTO'],
+  sinConsumiblesMaquina: true,
   inputsRequeridos: ['piezas'],
   outputsCanonicos: ['piezas_cortadas', 'metros_lineales_corte'],
   validaciones: [],
@@ -799,6 +809,9 @@ const laminado: DefinicionFamilia = {
       tipo: 'INSUMO_PASO',
       requerido: true,
       compatibilidadMaterial: MP.laminadoFilm,
+      // El nesting de laminado calcula metros de film: la fórmula no es
+      // configurable. [Etapa A]
+      formulaForzada: 'por_metro_lineal',
     },
   ],
   permiteSlotsAdicionales: false,
@@ -1850,6 +1863,71 @@ export function modoRegistroDeFamilia(codigo: string): ModoRegistroPaso {
 
 /** Cantidad total de familias en el catálogo. */
 export const FAMILIAS_TOTAL = Object.keys(FAMILIAS).length;
+
+/**
+ * ¿La familia acepta este tipo de perfil operativo? Lee
+ * `tiposPerfilCompatibles` de la declaración; una familia que no lo declara
+ * (o un código desconocido) acepta cualquiera — mismo fallthrough que tenían
+ * los if duplicados en motor.service y config-pasos.service. [Etapa A]
+ * Acepta string crudo porque los callers manejan códigos planos.
+ */
+export function perfilCompatibleConFamilia(
+  codigo: string,
+  tipoPerfil?: string | null,
+): boolean {
+  const familia = FAMILIAS[codigo as FamiliaCodigo] as
+    | DefinicionFamilia
+    | undefined;
+  const tipos = familia?.tiposPerfilCompatibles;
+  if (!tipos || tipos.length === 0) return true;
+  return tipoPerfil != null && tipos.includes(tipoPerfil);
+}
+
+/**
+ * Fórmula efectiva de consumo de un slot: la que la declaración FUERZA si
+ * existe (`formulaForzada`), si no la configurada, si no el default.
+ * [Etapa A: era `normalizarFormulaSlotMaterial` con un if por familia]
+ */
+export function formulaEfectivaSlot(
+  codigo: string,
+  slotCodigo: string,
+  formula?: string | null,
+): string {
+  const familia = FAMILIAS[codigo as FamiliaCodigo] as
+    | DefinicionFamilia
+    | undefined;
+  const slot = familia?.slotsRequeridos.find((s) => s.codigo === slotCodigo);
+  if (slot?.formulaForzada) return slot.formulaForzada;
+  return formula ?? 'por_unidad_productiva';
+}
+
+/**
+ * ¿El costeo del material de este slot ignora el multiplicador de caras?
+ * Lee `ignoraMultiplicadorCaras` del slot declarado. [Etapa A]
+ */
+export function slotIgnoraMultiplicadorCaras(
+  codigo: string,
+  slotCodigo: string,
+): boolean {
+  const familia = FAMILIAS[codigo as FamiliaCodigo] as
+    | DefinicionFamilia
+    | undefined;
+  return (
+    familia?.slotsRequeridos.find((s) => s.codigo === slotCodigo)
+      ?.ignoraMultiplicadorCaras === true
+  );
+}
+
+/**
+ * ¿La familia factura consumibles de máquina? Lee `sinConsumiblesMaquina`.
+ * [Etapa A: era el if de plotter_corte en motor.service]
+ */
+export function familiaSinConsumiblesMaquina(codigo: string): boolean {
+  const familia = FAMILIAS[codigo as FamiliaCodigo] as
+    | DefinicionFamilia
+    | undefined;
+  return familia?.sinConsumiblesMaquina === true;
+}
 
 /**
  * La familia muta medidas del JobContext y el motor la resuelve en la
