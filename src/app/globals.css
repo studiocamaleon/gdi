@@ -1,3 +1,27 @@
+/* ANTES DE AGREGAR UNA CLASE ACÁ, LEÉ ESTO. Son 30 segundos.
+ *
+ * Este archivo entra ENTERO en todas las páginas (lo importa app/layout.tsx).
+ * CSS no tiene módulos: cada clase que escribís sin ancestro es una variable
+ * global de la aplicación. Hoy hay ~1.600 y ya nadie puede borrar ninguna con
+ * confianza, porque saber quién la usa cuesta más que dejarla. Por eso el
+ * archivo sólo crece.
+ *
+ * LA REGLA: una vista nueva NO escribe acá. Nace con su propio módulo.
+ *
+ *     mi-vista.module.css        import s from "./mi-vista.module.css";
+ *     .wrap { ... }              <div className={s.wrap}>
+ *
+ * Adentro de un módulo los nombres pueden ser cortos y obvios: el compilador
+ * los aísla solo. Nada de prefijos a mano, nada de verificar si `.card` está
+ * libre. Y cuando la vista muera, su CSS muere con ella.
+ *
+ * QUÉ SÍ VA ACÁ: los tokens (las variables de más abajo), el reset, la
+ * tipografía, el tema oscuro y el sistema compartido de verdad — .btn, .tbl,
+ * .tag, .field, .page-head. Eso es la API pública de la hoja.
+ *
+ * Lo viejo se migra al tocarlo, no de una. `npm run css:guard` avisa si
+ * apareció una clase global nueva; ver docs/css-convenciones.md.
+ */
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
