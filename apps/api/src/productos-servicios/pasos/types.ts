@@ -330,6 +330,22 @@ export interface ParamsPasoDeclarado {
 // Definición completa de una familia
 // ============================================================================
 
+/**
+ * Una definición de familia YA RESUELTA por el resolver: puede venir del
+ * catálogo fijo (codigo = FamiliaCodigo) o de una FamiliaTenant de la base
+ * (codigo = UUID de la fila). Mismo contrato que DefinicionFamilia — el
+ * motor no distingue el origen. [Etapa C]
+ */
+export type DefinicionFamiliaResuelta = Omit<DefinicionFamilia, 'codigo'> & {
+  codigo: string;
+  /** true si viene de una FamiliaTenant (fila de la base). */
+  esDeTenant?: boolean;
+  tenantId?: string;
+  /** Sólo para tenant: inhabilitada no aparece en selectores, pero el
+   *  resolver la sigue resolviendo para rutas/OTs históricas (§8.6). */
+  activo?: boolean;
+};
+
 export interface DefinicionFamilia {
   // --- Identidad ---
   codigo: FamiliaCodigo;

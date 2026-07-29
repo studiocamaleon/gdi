@@ -17,6 +17,7 @@
 import type {
   CompatibilidadMaterialSlot,
   DefinicionFamilia,
+  DefinicionFamiliaResuelta,
   FamiliaCodigo,
   ModoRegistroPaso,
 } from './types';
@@ -1849,9 +1850,7 @@ export function listarFamiliasPorCategoria(
  * Acepta string crudo porque el paso materializado guarda el código plano.
  */
 export function modoRegistroDeFamilia(codigo: string): ModoRegistroPaso {
-  const familia = FAMILIAS[codigo as FamiliaCodigo] as
-    | DefinicionFamilia
-    | undefined;
+  const familia = resolverFamilia(codigo);
   if (!familia) return 'cronometro';
   return (
     familia.modoRegistro ??
@@ -1864,6 +1863,58 @@ export function modoRegistroDeFamilia(codigo: string): ModoRegistroPaso {
 /** Cantidad total de familias en el catálogo. */
 export const FAMILIAS_TOTAL = Object.keys(FAMILIAS).length;
 
+// ============================================================================
+// Resolver único (Etapa C — pasos componibles)
+// ============================================================================
+//
+// Además del catálogo fijo de arriba existen las familias que crea cada
+// TENANT (tabla FamiliaTenant). Este registro en memoria las hace resolubles
+// de forma SÍNCRONA, que es como el motor y todos los consumidores leen
+// familias — async-ificar ~10 call sites del motor sería mucho más invasivo.
+//
+// Quién lo llena: FamiliasTenantService — carga todo al bootear el módulo y
+// escribe-through en cada alta/edición/borrado. Trade-off asumido y
+// documentado en el plan: con VARIAS instancias del API una edición tarda
+// hasta el próximo boot en verse en las otras; hoy corre una sola.
+//
+// El registro guarda TAMBIÉN las inhabilitadas: el resolver resuelve siempre
+// (una OT histórica tiene que poder mostrar su paso); `activo` sólo filtra
+// selectores y wizard (decisión §8.6 del diseño).
+
+const REGISTRO_TENANT = new Map<string, DefinicionFamiliaResuelta>();
+
+/** Reemplaza el registro entero (boot del módulo). */
+export function cargarRegistroFamiliasTenant(
+  defs: DefinicionFamiliaResuelta[],
+): void {
+  REGISTRO_TENANT.clear();
+  for (const def of defs) REGISTRO_TENANT.set(def.codigo, def);
+}
+
+/** Alta o edición: escribe-through desde el service. */
+export function registrarFamiliaTenant(def: DefinicionFamiliaResuelta): void {
+  REGISTRO_TENANT.set(def.codigo, def);
+}
+
+/** Borrado físico (sólo familias vírgenes): sale del registro. */
+export function quitarFamiliaTenantDelRegistro(id: string): void {
+  REGISTRO_TENANT.delete(id);
+}
+
+/**
+ * EL punto de resolución: catálogo fijo primero, registro tenant después.
+ * Todo consumidor de familias pasa por acá — no leer FAMILIAS[...] directo,
+ * que una familia tenant se saltearía en silencio.
+ */
+export function resolverFamilia(
+  codigo: string,
+): DefinicionFamiliaResuelta | undefined {
+  return (
+    (FAMILIAS as Record<string, DefinicionFamilia | undefined>)[codigo] ??
+    REGISTRO_TENANT.get(codigo)
+  );
+}
+
 /**
  * ¿La familia acepta este tipo de perfil operativo? Lee
  * `tiposPerfilCompatibles` de la declaración; una familia que no lo declara
@@ -1875,9 +1926,7 @@ export function perfilCompatibleConFamilia(
   codigo: string,
   tipoPerfil?: string | null,
 ): boolean {
-  const familia = FAMILIAS[codigo as FamiliaCodigo] as
-    | DefinicionFamilia
-    | undefined;
+  const familia = resolverFamilia(codigo);
   const tipos = familia?.tiposPerfilCompatibles;
   if (!tipos || tipos.length === 0) return true;
   return tipoPerfil != null && tipos.includes(tipoPerfil);
@@ -1893,9 +1942,7 @@ export function formulaEfectivaSlot(
   slotCodigo: string,
   formula?: string | null,
 ): string {
-  const familia = FAMILIAS[codigo as FamiliaCodigo] as
-    | DefinicionFamilia
-    | undefined;
+  const familia = resolverFamilia(codigo);
   const slot = familia?.slotsRequeridos.find((s) => s.codigo === slotCodigo);
   if (slot?.formulaForzada) return slot.formulaForzada;
   return formula ?? 'por_unidad_productiva';
@@ -1909,9 +1956,7 @@ export function slotIgnoraMultiplicadorCaras(
   codigo: string,
   slotCodigo: string,
 ): boolean {
-  const familia = FAMILIAS[codigo as FamiliaCodigo] as
-    | DefinicionFamilia
-    | undefined;
+  const familia = resolverFamilia(codigo);
   return (
     familia?.slotsRequeridos.find((s) => s.codigo === slotCodigo)
       ?.ignoraMultiplicadorCaras === true
@@ -1923,9 +1968,7 @@ export function slotIgnoraMultiplicadorCaras(
  * [Etapa A: era el if de plotter_corte en motor.service]
  */
 export function familiaSinConsumiblesMaquina(codigo: string): boolean {
-  const familia = FAMILIAS[codigo as FamiliaCodigo] as
-    | DefinicionFamilia
-    | undefined;
+  const familia = resolverFamilia(codigo);
   return familia?.sinConsumiblesMaquina === true;
 }
 
@@ -1934,8 +1977,5 @@ export function familiaSinConsumiblesMaquina(codigo: string): boolean {
  * PRE-PASADA, antes del bucle. Ver `mutaMedidasEnPrePasada` en types.ts.
  */
 export function familiaMutaMedidasEnPrePasada(familiaCodigo: string): boolean {
-  return (
-    (FAMILIAS as Record<string, DefinicionFamilia | undefined>)[familiaCodigo]
-      ?.mutaMedidasEnPrePasada === true
-  );
+  return resolverFamilia(familiaCodigo)?.mutaMedidasEnPrePasada === true;
 }

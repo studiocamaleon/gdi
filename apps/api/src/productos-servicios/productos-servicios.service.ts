@@ -150,8 +150,8 @@ export class ProductosServiciosService {
     return this.configPasos.upsertConfigPaso(tenantId, rutaAltId, dto);
   }
 
-  listarFamilias() {
-    return this.familias.listarFamilias();
+  listarFamilias(tenantId: string) {
+    return this.familias.listarFamilias(tenantId);
   }
 
   listarLookupsConfigPaso(tenantId: string) {

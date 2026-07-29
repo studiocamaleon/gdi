@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { FAMILIAS } from './pasos/familias';
+import { resolverFamilia } from './pasos/familias';
 import { ProductosService } from './productos.service';
 import {
   getConsumableChannelFromDetail,
@@ -50,7 +50,7 @@ export class ProductoValidacionService {
       );
 
       for (const paso of pasosRuta) {
-        const familia = FAMILIAS[paso.familiaCodigo as keyof typeof FAMILIAS];
+        const familia = resolverFamilia(paso.familiaCodigo);
         if (!familia) {
           errores.push({
             severidad: 'ERROR',

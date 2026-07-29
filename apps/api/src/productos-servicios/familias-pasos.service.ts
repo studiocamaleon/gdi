@@ -5,8 +5,10 @@ import { CATEGORIAS } from './pasos/categorias';
 import {
   FAMILIAS,
   listarFamilias as listarFamiliasCatalogo,
+  resolverFamilia,
 } from './pasos/familias';
 import { MODOS_ACTIVACION_UNIVERSALES } from './pasos/types';
+import { proyectarFamiliaTenant } from './pasos/familia-tenant-validacion';
 import { outputsReferenciadosPorRegla } from './pasos/validacion-pre-pasada';
 import type {
   FamiliaCodigo,
@@ -20,19 +22,50 @@ import type { UpsertProductoConfigPasoDto } from './dto/producto-ruta.dto';
 export class FamiliasPasosService {
   constructor(private readonly prisma: PrismaService) {}
 
-  listarFamilias() {
+  /** Catálogo del sistema + familias del TENANT activas (Etapa C): es lo
+   *  que consumen el editor de rutas y los selectores de pasos. */
+  async listarFamilias(tenantId: string) {
+    const familiasTenant = await this.prisma.familiaTenant.findMany({
+      where: { tenantId, activo: true },
+      orderBy: { nombre: 'asc' },
+    });
     return {
       categorias: Object.values(CATEGORIAS).sort((a, b) => a.orden - b.orden),
-      familias: listarFamiliasCatalogo().map((codigo) => {
-        const f = FAMILIAS[codigo];
-        return {
+      familias: [
+        ...listarFamiliasCatalogo().map((codigo) => {
+          const f = FAMILIAS[codigo];
+          return {
+            codigo: f.codigo as string,
+            origen: 'sistema' as const,
+            nombre: f.nombre,
+            categoria: f.categoria as string,
+            descripcion: f.descripcion,
+            visibleEnSelector: f.visibleEnSelector ?? true,
+            relacionMaquinaSoportada: f.relacionMaquinaSoportada,
+            modoActivacionDefault: f.modoActivacionDefault as string,
+            modosTiempoSoportados: f.modosTiempoSoportados,
+            mecanismosCantidadSoportados: f.mecanismosCantidadSoportados,
+            modosActivacionSoportados: MODOS_ACTIVACION_UNIVERSALES,
+            multiplicadoresSoportados: f.multiplicadoresSoportados,
+            slotsRequeridos: f.slotsRequeridos,
+            permiteSlotsAdicionales: f.permiteSlotsAdicionales,
+            plantillasCompatibles: f.plantillasCompatibles,
+            inputsRequeridos: f.inputsRequeridos,
+            outputsCanonicos: f.outputsCanonicos,
+            validaciones: f.validaciones,
+            paramsPasoSchema: f.paramsPasoSchema,
+            productosTipicos: f.productosTipicos,
+          };
+        }),
+        ...familiasTenant.map(proyectarFamiliaTenant).map((f) => ({
           codigo: f.codigo,
+          origen: 'tenant' as const,
           nombre: f.nombre,
-          categoria: f.categoria,
+          categoria: f.categoria as string,
           descripcion: f.descripcion,
-          visibleEnSelector: f.visibleEnSelector ?? true,
+          visibleEnSelector: true,
           relacionMaquinaSoportada: f.relacionMaquinaSoportada,
-          modoActivacionDefault: f.modoActivacionDefault,
+          modoActivacionDefault: f.modoActivacionDefault as string,
           modosTiempoSoportados: f.modosTiempoSoportados,
           mecanismosCantidadSoportados: f.mecanismosCantidadSoportados,
           modosActivacionSoportados: MODOS_ACTIVACION_UNIVERSALES,
@@ -44,9 +77,9 @@ export class FamiliasPasosService {
           outputsCanonicos: f.outputsCanonicos,
           validaciones: f.validaciones,
           paramsPasoSchema: f.paramsPasoSchema,
-          productosTipicos: f.productosTipicos,
-        };
-      }),
+          productosTipicos: [] as string[],
+        })),
+      ],
     };
   }
 
@@ -158,10 +191,12 @@ export class FamiliasPasosService {
   validarFamiliasDePasos(
     pasos: Array<{ familiaCodigo: string; orden: number }>,
   ) {
-    const familiasValidas = new Set(listarFamiliasCatalogo());
     const ordenes = new Set<number>();
     for (const p of pasos) {
-      if (!familiasValidas.has(p.familiaCodigo as never)) {
+      // Resolver, no catálogo: una FamiliaTenant (UUID) es tan válida como
+      // una del sistema. Las inhabilitadas también resuelven — una ruta
+      // existente que las usa tiene que poder re-guardarse (§8.6).
+      if (!resolverFamilia(p.familiaCodigo)) {
         throw new BadRequestException(
           `Familia desconocida: "${p.familiaCodigo}"`,
         );
@@ -179,7 +214,7 @@ export class FamiliasPasosService {
     familiaCodigo: string,
     dto: UpsertProductoConfigPasoDto,
   ) {
-    const familia = FAMILIAS[familiaCodigo as FamiliaCodigo];
+    const familia = resolverFamilia(familiaCodigo);
     if (!familia) {
       throw new BadRequestException(`Familia desconocida: "${familiaCodigo}"`);
     }
@@ -242,7 +277,7 @@ export class FamiliasPasosService {
   }
 
   assertFamiliaExiste(familiaCodigo: string) {
-    if (!FAMILIAS[familiaCodigo as FamiliaCodigo]) {
+    if (!resolverFamilia(familiaCodigo)) {
       throw new BadRequestException(`Familia desconocida: ${familiaCodigo}`);
     }
   }
