@@ -8,32 +8,18 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { UpsertProductoConfigPasoDto } from './dto/producto-ruta.dto';
 import { FamiliasPasosService } from './familias-pasos.service';
 import { construirClaveMatch } from '../motor-universal/tercerizado-costo';
-import { FAMILIAS } from './pasos/familias';
+import {
+  FAMILIAS,
+  formulaEfectivaSlot,
+  perfilCompatibleConFamilia,
+} from './pasos/familias';
 import type { FamiliaCodigo } from './pasos/types';
 
-function tipoPerfilCompatibleConFamilia(
-  familiaCodigo: string,
-  tipoPerfil: string,
-) {
-  if (familiaCodigo === 'plotter_corte') {
-    return tipoPerfil === 'CORTE' || tipoPerfil === 'MIXTO';
-  }
-  if (familiaCodigo === 'impresion_por_area') {
-    return tipoPerfil === 'IMPRESION' || tipoPerfil === 'MIXTO';
-  }
-  return true;
-}
-
-function normalizarFormulaSlotMaterial(
-  familiaCodigo: string,
-  slotCodigo: string,
-  formula?: string | null,
-) {
-  if (familiaCodigo === 'laminado' && slotCodigo === 'film') {
-    return 'por_metro_lineal';
-  }
-  return formula ?? 'por_unidad_productiva';
-}
+// [Etapa A] Ambas reglas viven ahora en la declaración de la familia
+// (tiposPerfilCompatibles / formulaForzada del slot). Estos alias quedan por
+// los call-sites; la lógica única está en pasos/familias.ts.
+const tipoPerfilCompatibleConFamilia = perfilCompatibleConFamilia;
+const normalizarFormulaSlotMaterial = formulaEfectivaSlot;
 
 @Injectable()
 export class ConfigPasosService {
@@ -106,6 +92,8 @@ export class ConfigPasosService {
         );
       }
 
+      // FRONTERA-PRIMITIVA: la exigencia de corte integrado + perfil de corte
+      // es propia de la primitiva plotter sobre impresora híbrida — Tipo B.
       if (
         rutaPaso.familiaCodigo === 'plotter_corte' &&
         maquina.plantilla === 'IMPRESORA_GRAN_FORMATO_POR_AREA'
@@ -462,6 +450,7 @@ export class ConfigPasosService {
         }
       }
 
+      // FRONTERA-PRIMITIVA: misma exigencia que arriba, para candidatas M-2.
       if (
         familiaCodigo === 'plotter_corte' &&
         maquina.plantilla === 'IMPRESORA_GRAN_FORMATO_POR_AREA'

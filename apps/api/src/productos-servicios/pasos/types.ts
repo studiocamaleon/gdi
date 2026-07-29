@@ -229,6 +229,15 @@ export interface SlotDeclarado {
   requerido: boolean;
   /** Filtro técnico de materias primas permitidas para este slot. */
   compatibilidadMaterial?: CompatibilidadMaterialSlot;
+  /** Fórmula de consumo que este slot IMPONE, ignorando lo que configure el
+   *  modelador (ej: el film de laminado siempre es `por_metro_lineal` porque
+   *  su nesting calcula metros). Si se omite, vale lo configurado o el
+   *  default `por_unidad_productiva`. [Etapa A: era un if en config-pasos] */
+  formulaForzada?: string;
+  /** El costeo del material de este slot NO multiplica por caras aunque el
+   *  paso las soporte (ej: el sustrato de impresión por hoja — los pliegos
+   *  del nesting ya contemplan ambas caras). [Etapa A: era un if en motor] */
+  ignoraMultiplicadorCaras?: boolean;
 }
 
 // ============================================================================
@@ -356,6 +365,14 @@ export interface DefinicionFamilia {
   // --- Plantillas de máquinas compatibles (cuando relacionMaquina != M-0) ---
   /** Códigos de plantillas (enum PlantillaMaquinaria) compatibles. Vacío si M-0. */
   plantillasCompatibles: string[];
+  /** Tipos de perfil operativo que la familia acepta (CORTE, IMPRESION,
+   *  MIXTO…). Si se omite, acepta cualquiera. [Etapa A: era un if duplicado
+   *  en motor.service y config-pasos.service] */
+  tiposPerfilCompatibles?: string[];
+  /** La familia NO factura consumibles de máquina (tinta/tóner) aunque la
+   *  plantilla los declare — ej: plotter_corte sobre una impresora con corte
+   *  integrado corta, no imprime. [Etapa A: era un if en motor] */
+  sinConsumiblesMaquina?: boolean;
 
   // --- Inputs / outputs ---
   /** Inputs del JobContext que la familia necesita (validaciones REQUIRES_INPUT van encima). */

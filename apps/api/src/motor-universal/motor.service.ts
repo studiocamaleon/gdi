@@ -69,7 +69,12 @@ import {
   calcularPerimetroPiezasM,
   congelarMedidaVisible,
 } from './job-context-metrics';
-import { familiaMutaMedidasEnPrePasada } from '../productos-servicios/pasos/familias';
+import {
+  familiaMutaMedidasEnPrePasada,
+  familiaSinConsumiblesMaquina,
+  perfilCompatibleConFamilia,
+  slotIgnoraMultiplicadorCaras,
+} from '../productos-servicios/pasos/familias';
 import { resolverArrastreOpcionales } from './arrastre-opcionales';
 import { paramsEfectivos } from './params-runtime';
 import { regionalDelTenant } from '../common/regional';
@@ -678,6 +683,8 @@ export class MotorUniversalService {
 
       // Misma lógica para ojales: sin separación ni lados la cantidad sale 0 y
       // el paso no cobra nada, otra vez en silencio.
+      // FRONTERA-PRIMITIVA: colocacion_ojales calcula su layout con geometría
+      // propia (calcularLayoutOjales) — Tipo B, no es dato declarable.
       if (paso.familiaCodigo === 'colocacion_ojales' && ejecucion.activado) {
         const paramsOjales = parsearParamsColocacionOjales(
           this.paramsEfectivosDelPaso(paso, jobContext),
@@ -2087,6 +2094,10 @@ export class MotorUniversalService {
         },
       );
     }
+    // FRONTERA-NESTING: los guards d.0–d.1 que siguen (laminado, pouch, hoja,
+    // área, montaje, pre_prensa) cortan con error cuando la familia debía
+    // nestear y el dispatcher no produjo layout. Son la cara visible de las
+    // primitivas de geometría — Tipo B, se parametrizan en la Etapa B.
     if (
       paso.familiaCodigo === 'laminado' &&
       materialPreliminar &&
@@ -2688,6 +2699,8 @@ export class MotorUniversalService {
       }
     } else if (
       modoTiempo === 'T-3' &&
+      // FRONTERA-PRIMITIVA: guillotina deriva el run de los cortes calculados,
+      // no de la productividad del perfil — algoritmo propio, Tipo B.
       paso.familiaCodigo === 'corte_guillotina'
     ) {
       runMin = this.calcularRunMinGuillotina(paso, jobContext);
@@ -3000,6 +3013,7 @@ export class MotorUniversalService {
     };
   }
 
+  // FRONTERA-NESTING: laminado nestea sólo si su film va por metro lineal.
   private debeCalcularNestingLaminado(paso: PasoCargado): boolean {
     return (
       paso.familiaCodigo === 'laminado' &&
@@ -3553,10 +3567,8 @@ export class MotorUniversalService {
     paso: PasoCargado,
     slotCodigo: string,
   ): boolean {
-    return (
-      paso.familiaCodigo === 'impresion_por_hoja' &&
-      slotCodigo === 'sustrato_principal'
-    );
+    // [Etapa A] Lo declara el slot de la familia (ignoraMultiplicadorCaras).
+    return slotIgnoraMultiplicadorCaras(paso.familiaCodigo, slotCodigo);
   }
 
   /**
@@ -3976,8 +3988,11 @@ export class MotorUniversalService {
     ) {
       return [];
     }
+    // [Etapa A] `sinConsumiblesMaquina` lo declara la familia; la mitad del
+    // perfil CORTE queda: un perfil de corte no gasta tinta sea cual sea la
+    // familia.
     if (
-      paso.familiaCodigo === 'plotter_corte' ||
+      familiaSinConsumiblesMaquina(paso.familiaCodigo) ||
       paso.perfil?.tipoPerfil === 'CORTE'
     ) {
       return [];
@@ -4911,6 +4926,9 @@ export class MotorUniversalService {
     }
 
     if (mecanismo === 'CALCULADO_POR_PASO') {
+      // FRONTERA-PRIMITIVA: las ramas por familia de este bloque
+      // (modificacion_pre, colocacion_ojales, área/plotter) son los cálculos
+      // propios de cada primitiva de geometría — Tipo B.
       // G-M1: si el dispatcher devolvió nesting, usar la cantidad calculada
       // con desperdicio real (m_lineales para shelf-rollo, pliegos para grid).
       if (nestingDispatch) {
@@ -5070,6 +5088,8 @@ export class MotorUniversalService {
       return areaPersonalizacion;
     }
 
+    // FRONTERA-PRIMITIVA: montaje deriva el tiempo de su plan de montaje
+    // (resolverCantidadMontajeParaTiempo) — Tipo B.
     if (
       paso.familiaCodigo === 'montaje_sobre_sustrato' &&
       (!source || source === 'cantidad' || source === 'cantidad_montaje')
@@ -5415,13 +5435,8 @@ export class MotorUniversalService {
     familiaCodigo: string,
     tipoPerfil?: string | null,
   ) {
-    if (familiaCodigo === 'plotter_corte') {
-      return tipoPerfil === 'CORTE' || tipoPerfil === 'MIXTO';
-    }
-    if (familiaCodigo === 'impresion_por_area') {
-      return tipoPerfil === 'IMPRESION' || tipoPerfil === 'MIXTO';
-    }
-    return true;
+    // [Etapa A] La compatibilidad la declara la familia (tiposPerfilCompatibles).
+    return perfilCompatibleConFamilia(familiaCodigo, tipoPerfil);
   }
 
   private filtrarPerfilesCompatibles<
@@ -5614,6 +5629,8 @@ export class MotorUniversalService {
     // se miraba nunca —tres perfiles de la misma máquina que sólo diferían
     // en el papel eran inalcanzables—. Ver docs §5.
     const modoColor = this.resolverModoColorComercial(paso, jobContext);
+    // FRONTERA-PRIMITIVA: la cadena color→caras→gramaje es la estrategia de
+    // selección de perfil propia de impresión por hoja — Tipo B.
     const esImpresionPorHoja = paso.familiaCodigo === 'impresion_por_hoja';
     if (modoColor || esImpresionPorHoja) {
       const tieneSenalCaras =
@@ -5669,6 +5686,7 @@ export class MotorUniversalService {
     }
 
     // ─── 2. Guillotina: perfil por escalón de gramaje ────────────────
+    // FRONTERA-PRIMITIVA: selección de perfil propia de guillotina — Tipo B.
     if (paso.familiaCodigo === 'corte_guillotina') {
       const gramaje = this.numeroPositivo(
         ctx.gramajeMaterialGr ?? ctx.gramajeGr ?? ctx.gramaje,

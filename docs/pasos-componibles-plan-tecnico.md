@@ -248,6 +248,67 @@ qué es un eje.
 Después de D en main y con uso real: retomar B (nesting) y E/F (wizard de
 ruta/producto) con diseño propio sobre lo aprendido.
 
+## Apéndice — Censo de los cableados (Etapa A, ejecutada 2026-07-29)
+
+Base: 51 líneas con `familiaCodigo === '<literal>'` fuera de tests, medidas
+sobre `5abc97f5` = **50 comparaciones de familia** + 1 `typeof === 'string'`.
+Tras la etapa: **43 comparaciones**, todas Tipo B bajo marcador
+`FRONTERA-NESTING` / `FRONTERA-PRIMITIVA`. Puerta para PRs futuros:
+
+```bash
+grep -rnE "familiaCodigo\s*===\s*'[a-z_]+'" apps/api/src --include='*.ts' | grep -v __tests__
+# toda línea nueva de esa lista necesita justificación de frontera
+```
+
+### Movidas a la declaración (Tipo A — 7 comparaciones eliminadas)
+
+| Estaba en | Era | Ahora lo declara |
+|---|---|---|
+| motor.service `esTipoPerfilCompatibleConFamilia` (2 ifs) | plotter→CORTE\|MIXTO, área→IMPRESION\|MIXTO | `tiposPerfilCompatibles` en la familia |
+| config-pasos `tipoPerfilCompatibleConFamilia` (2 ifs) | **la misma lógica, duplicada** | mismo campo — helper único `perfilCompatibleConFamilia` en familias.ts |
+| config-pasos `normalizarFormulaSlotMaterial` (1 if) | laminado+film fuerza `por_metro_lineal` | `formulaForzada` en el slot film |
+| motor.service `ignoraCarasEnMaterial` (1 if) | hoja+sustrato no multiplica ×caras | `ignoraMultiplicadorCaras` en el slot sustrato |
+| motor.service consumibles de máquina (1 if) | plotter_corte no factura tinta | `sinConsumiblesMaquina` en la familia |
+
+Campos nuevos: `DefinicionFamilia.tiposPerfilCompatibles?`,
+`DefinicionFamilia.sinConsumiblesMaquina?`, `SlotDeclarado.formulaForzada?`,
+`SlotDeclarado.ignoraMultiplicadorCaras?` — con helpers de lectura en
+familias.ts (`perfilCompatibleConFamilia`, `formulaEfectivaSlot`,
+`slotIgnoraMultiplicadorCaras`, `familiaSinConsumiblesMaquina`). Una familia
+que no declara el campo conserva el fallthrough del if original.
+
+### Quedan como frontera (Tipo B — 43 comparaciones)
+
+| Cluster | Refs | Marcador |
+|---|---|---|
+| `nesting-config.ts` — config por familia (márgenes, separación, panelizado, algoritmo) | 16 | archivo entero `FRONTERA-NESTING` |
+| `nesting-dispatcher.ts` — ruteo a runners + casos hoja | 9 | archivo entero `FRONTERA-NESTING` |
+| motor: guards d.0–d.1 (laminado, pouch, hoja, área, montaje, pre_prensa cortan sin layout) | 6 | `FRONTERA-NESTING` en el bloque |
+| motor: `debeCalcularNestingLaminado` | 1 | `FRONTERA-NESTING` |
+| motor: cantidades propias en CALCULADO_POR_PASO (modificacion_pre, ojales, área/plotter m²) | 4 | `FRONTERA-PRIMITIVA` |
+| motor: layout de ojales (traza + params) | 1 | `FRONTERA-PRIMITIVA` |
+| motor: guillotina — runMin por cortes + perfil por gramaje | 2 | `FRONTERA-PRIMITIVA` |
+| motor: hoja — cadena color→caras→gramaje de selección de perfil | 1 | `FRONTERA-PRIMITIVA` |
+| motor: montaje — tiempo desde el plan de montaje | 1 | `FRONTERA-PRIMITIVA` |
+| config-pasos: plotter sobre impresora híbrida exige corte integrado (ruta + candidatas M-2) | 2 | `FRONTERA-PRIMITIVA` |
+
+(La suma de comparaciones por línea difiere de la de clusters porque varias
+líneas comparten un if.)
+
+### Verificación de la etapa
+
+- `tsc --noEmit -p tsconfig.build.json` limpio.
+- Suite completa del API: **resultado idéntico a main, test por nombre**
+  (extraído con `jest --json` y comparado con la base vía `git stash`):
+  1.149 pasan en ambos, y los mismos 18 smoke tests de motor.spec fallan en
+  ambos — **preexistentes**, dependen de fixtures de `gdi_saas_test`
+  (probable secuela del incidente de base del 2026-07-28). Quedan fuera del
+  alcance de la etapa, con task aparte para diagnosticarlos.
+- Ojo al medir: en paralelo el conteo fluctúa (18–20) porque las suites
+  comparten `gdi_saas_test`; con `--runInBand` da 18 estable. Comparar
+  resultados de jest siempre en serie o por nombre de test, nunca por el
+  número del resumen.
+
 ## Qué puede salir mal (por etapa)
 
 - **A**: un `if` clasificado A que en realidad tenía un efecto secundario

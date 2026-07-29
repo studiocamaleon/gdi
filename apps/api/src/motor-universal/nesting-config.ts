@@ -1,3 +1,7 @@
+// FRONTERA-NESTING: este archivo entero es frontera (pasos-componibles-diseno
+// §3.4 Tipo B). Resuelve la config de nesting POR FAMILIA (márgenes,
+// separación, panelizado, algoritmo): son las primitivas de geometría del
+// sistema, no datos de la declaración. Se parametriza recién en la Etapa B.
 import type { PasoCargado, JobContext } from './tipos';
 import type { CostingStrategyKind } from '../productos-servicios/nesting/costing';
 
