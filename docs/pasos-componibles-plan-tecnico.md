@@ -311,12 +311,15 @@ líneas comparten un if.)
 - **E2E manual (usuario, 2026-07-29)**: Tarjetas de visita doble faz con
   laminado re-cotizadas contra una cotización previa al cambio — desglose
   **idéntico**. Cubre `ignoraMultiplicadorCaras` (papel no ×2 con doble faz)
-  y `formulaForzada` (film en metros lineales). Los otros dos campos
-  (`sinConsumiblesMaquina` + `tiposPerfilCompatibles`, camino plotter)
-  quedan cubiertos sólo por equivalencia de código — los smoke tests que los
-  ejercitaban están entre los 18 caídos por fixtures. Chequeo sugerido:
-  re-cotizar "Papel adhesivo / sticker troquelado" (plotter sin tinta,
-  perfil CORTE/MIXTO).
+  y `formulaForzada` (film en metros lineales). **Sticker troquelado también
+  verificado por el usuario**: factura tinta por su paso de impresión
+  (CMYK/ByN — correcto) y el paso de plotter no agrega consumibles propios;
+  cubre la selección de perfil (`tiposPerfilCompatibles`). Matiz honesto
+  sobre `sinConsumiblesMaquina`: su rama sólo se ejercita cuando el paso de
+  plotter corre sobre la impresora híbrida (corte integrado) — sobre un
+  plotter dedicado el código corta antes por plantilla, igual que siempre.
+  Ese sub-caso queda por equivalencia de código; sus smoke tests están entre
+  los 18 caídos por fixtures.
 
 ## Qué puede salir mal (por etapa)
 
