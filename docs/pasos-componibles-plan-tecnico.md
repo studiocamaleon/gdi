@@ -308,6 +308,15 @@ líneas comparten un if.)
   comparten `gdi_saas_test`; con `--runInBand` da 18 estable. Comparar
   resultados de jest siempre en serie o por nombre de test, nunca por el
   número del resumen.
+- **E2E manual (usuario, 2026-07-29)**: Tarjetas de visita doble faz con
+  laminado re-cotizadas contra una cotización previa al cambio — desglose
+  **idéntico**. Cubre `ignoraMultiplicadorCaras` (papel no ×2 con doble faz)
+  y `formulaForzada` (film en metros lineales). Los otros dos campos
+  (`sinConsumiblesMaquina` + `tiposPerfilCompatibles`, camino plotter)
+  quedan cubiertos sólo por equivalencia de código — los smoke tests que los
+  ejercitaban están entre los 18 caídos por fixtures. Chequeo sugerido:
+  re-cotizar "Papel adhesivo / sticker troquelado" (plotter sin tinta,
+  perfil CORTE/MIXTO).
 
 ## Qué puede salir mal (por etapa)
 
