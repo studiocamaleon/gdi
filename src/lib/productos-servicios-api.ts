@@ -8,6 +8,9 @@ import { apiRequest } from "@/lib/api";
 import type {
   CargoDirectoCatalogo,
   CatalogoFamilias,
+  FamiliaTenant,
+  PreviewCosteoFamilia,
+  UpsertFamiliaTenantInput,
   MedidaPredefinidaProducto,
   ModoMedidasProducto,
   ProductoCategoriaComercial,
@@ -427,6 +430,51 @@ export async function upsertConfigPaso(
 
 export async function getCatalogoFamilias(): Promise<CatalogoFamilias> {
   return apiRequest<CatalogoFamilias>("/productos-servicios/familias");
+}
+
+// === Familias del tenant (pasos componibles, Etapa D) ===
+
+export async function getFamiliasTenant(): Promise<FamiliaTenant[]> {
+  return apiRequest<FamiliaTenant[]>("/productos-servicios/familias-tenant");
+}
+
+export async function crearFamiliaTenant(
+  input: UpsertFamiliaTenantInput,
+): Promise<FamiliaTenant> {
+  return apiRequest<FamiliaTenant>("/productos-servicios/familias-tenant", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function actualizarFamiliaTenant(
+  id: string,
+  input: Partial<UpsertFamiliaTenantInput> & { activo?: boolean },
+): Promise<FamiliaTenant> {
+  return apiRequest<FamiliaTenant>(
+    `/productos-servicios/familias-tenant/${id}`,
+    { method: "PATCH", body: JSON.stringify(input) },
+  );
+}
+
+export async function eliminarFamiliaTenant(id: string): Promise<void> {
+  await apiRequest(`/productos-servicios/familias-tenant/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export async function previewCosteoFamiliaTenant(input: {
+  cantidad: number;
+  modoTiempo: string;
+  tiempoFijoMin?: number;
+  productividadPorHora?: number;
+  dotacion?: number;
+  centroCostoId: string;
+}): Promise<PreviewCosteoFamilia> {
+  return apiRequest<PreviewCosteoFamilia>(
+    "/productos-servicios/familias-tenant/preview-costeo",
+    { method: "POST", body: JSON.stringify(input) },
+  );
 }
 
 export async function getCargosDirectosCatalogo(

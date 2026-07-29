@@ -24,6 +24,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { loadTarifasHorarias } from './costing/load-tarifas';
 import {
   cargarRegistroFamiliasTenant,
   quitarFamiliaTenantDelRegistro,
@@ -82,10 +83,10 @@ export class FamiliasTenantService implements OnModuleInit {
   async crear(tenantId: string, input: UpsertFamiliaTenantInput) {
     const errores = validarDefinicionFamiliaTenant(input);
     if (errores.length > 0) {
-      throw new BadRequestException({
-        message: 'La definición del paso tiene errores.',
-        errores,
-      });
+      throw new BadRequestException([
+        'La definición del paso tiene errores:',
+        ...errores,
+      ]);
     }
     if (input.estacionId) {
       await this.assertEstacionDelTenant(tenantId, input.estacionId);
@@ -161,10 +162,10 @@ export class FamiliasTenantService implements OnModuleInit {
     };
     const errores = validarDefinicionFamiliaTenant(merged);
     if (errores.length > 0) {
-      throw new BadRequestException({
-        message: 'La definición del paso tiene errores.',
-        errores,
-      });
+      throw new BadRequestException([
+        'La definición del paso tiene errores:',
+        ...errores,
+      ]);
     }
     if (input.estacionId) {
       await this.assertEstacionDelTenant(tenantId, input.estacionId);
@@ -242,6 +243,83 @@ export class FamiliasTenantService implements OnModuleInit {
     ]);
     quitarFamiliaTenantDelRegistro(id);
     return { eliminada: true };
+  }
+
+  /**
+   * Preview de costeo del wizard (Etapa D, §8.8: visible pero opcional).
+   *
+   * NO corre el motor entero — correrlo exige un producto con ruta y config
+   * reales, que al crear la familia todavía no existen. Espeja la aritmética
+   * EXACTA del motor para un paso sin máquina (F.2.10: totalMin/60 × tarifa
+   * del centro × dotación) usando la MISMA tarifa publicada que usaría una
+   * cotización real (loadTarifasHorarias, período actual). Si la fórmula del
+   * motor cambia, el spec de este service lo pesca porque compara contra el
+   * mismo redondeo (ceil de minutos).
+   */
+  async previewCosteo(
+    tenantId: string,
+    input: {
+      cantidad: number;
+      modoTiempo: string;
+      tiempoFijoMin?: number;
+      productividadPorHora?: number;
+      dotacion?: number;
+      centroCostoId: string;
+    },
+  ) {
+    const cantidad = Math.max(0, Number(input.cantidad) || 0);
+    const dotacion = Math.max(1, Number(input.dotacion) || 1);
+
+    let runMin = 0;
+    if (input.modoTiempo === 'T-1') {
+      runMin = Math.max(0, Number(input.tiempoFijoMin) || 0);
+    } else if (input.modoTiempo === 'T-2') {
+      const productividad = Number(input.productividadPorHora) || 0;
+      if (productividad <= 0) {
+        throw new BadRequestException(
+          'T-2 necesita una productividad por hora mayor a cero.',
+        );
+      }
+      runMin = (cantidad / productividad) * 60;
+    } else {
+      throw new BadRequestException(
+        'El preview soporta T-1 (tiempo fijo) y T-2 (productividad propia). T-3/T-4 dependen de la máquina o del comercial.',
+      );
+    }
+
+    const centro = await this.prisma.centroCosto.findFirst({
+      where: { id: input.centroCostoId, tenantId },
+      select: { id: true, nombre: true },
+    });
+    if (!centro) {
+      throw new BadRequestException('El centro de costo indicado no existe.');
+    }
+
+    const ahora = new Date();
+    const periodo = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}`;
+    const tarifas = await loadTarifasHorarias(this.prisma as never, {
+      tenantId,
+      periodo,
+      centroCostoIds: [centro.id],
+    });
+    const tarifaHora = Number(
+      (tarifas.get(centro.id) as { tarifa?: unknown } | undefined)?.tarifa ?? 0,
+    );
+
+    // Mismo redondeo que el motor: los minutos del paso se techan.
+    const totalMin = Math.ceil(runMin);
+    const costoTiempo = (totalMin / 60) * tarifaHora * dotacion;
+
+    return {
+      periodo,
+      centroCostoNombre: centro.nombre,
+      tarifaHora,
+      tarifaPublicada: tarifaHora > 0,
+      totalMin,
+      dotacion,
+      costoTiempo: Math.round(costoTiempo * 100) / 100,
+      cantidad,
+    };
   }
 
   private aDatosDeFila(

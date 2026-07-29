@@ -208,6 +208,40 @@ Etapa A ya deja mapeados esos accesos.
 
 ## Etapa D — Wizard de paso
 
+> **Estado 2026-07-29: v1 COMPLETA y verificada E2E** (rama
+> `feat/pasos-wizard`). Lo construido: vista "Pasos de producción" en el
+> sidebar de Costos (listado de familias tenant con forma/estación/estado +
+> catálogo del sistema en solo-lectura), wizard de 9 pasos en sheet con
+> preguntas físicas, preview de costeo (visible-opcional §8.8) que usa la
+> MISMA tarifa publicada que el motor, y el grupo "Tus pasos" primero en el
+> selector de pasos extra.
+>
+> **E2E del criterio de done, ejecutado con la sesión del usuario**: se creó
+> "Bordado" partiendo del preset Trabajo manual — el preset precargó todo,
+> las 9 preguntas fluyeron, estación Produccion & Taller elegida, y el
+> preview devolvió **100 min · $41.959,45**, exactamente el número que el
+> motor real produjo en la cotización de serigrafía del E2E de la Etapa C
+> (misma forma, misma tarifa): validación cruzada contra la realidad.
+>
+> Dos bugs cazados EN el E2E, arreglados en el momento: (1) elegir una
+> opción de un HumanSelect cerraba el wizard — la lista se renderiza en un
+> portal fuera del sheet y contaba como click-afuera; `disablePointerDismissal`
+> en el Sheet (Base UI); (2) la segunda fila de "Tus pasos" quedaba
+> RECORTADA — el layout del dashboard restringe altura, `.wrap` es flex
+> column y las secciones se encogían (flex-shrink default) bajo un
+> `overflow: hidden`; `flex: none` en la sección. El preview además tuvo que
+> ajustar el transporte de errores: el ApiError del front sólo lee
+> `message`, así que el validador manda los errores como array (apiRequest
+> los une).
+>
+> **Scope-cut deliberado de la v1**: la edición COMPLETA de la forma (ficha
+> con tabs, patrón maquinaria) queda para una pasada siguiente — hoy el
+> ciclo de vida es crear / inhabilitar / reactivar / eliminar. El preview
+> corre para T-1/T-2 espejando la aritmética exacta del motor (F.2.10, mismo
+> ceil y misma tarifa via loadTarifasHorarias) — correr el motor entero
+> exigiría producto+ruta que aún no existen al crear la familia; el desvío
+> queda anotado en el código.
+
 **Objetivo**: la feature visible. Un ADMIN crea un tipo de paso sin saber
 qué es un eje.
 

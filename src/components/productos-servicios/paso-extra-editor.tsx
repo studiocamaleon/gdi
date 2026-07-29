@@ -132,22 +132,38 @@ export function PasoExtraEditor({
   const [borrando, setBorrando] = React.useState(false);
 
   const familiaOptions = React.useMemo<HumanSelectOption[]>(() => {
+    // Los pasos creados por la empresa van PRIMERO, en su propio grupo: si
+    // alguien se tomó el trabajo de crear "Serigrafía manual", es porque lo
+    // usa — no debería tener que bucearlo entre 42 del catálogo.
+    const propios = familias
+      .filter((f) => f.origen === "tenant")
+      .map((f) => ({
+        value: f.codigo,
+        label: f.nombre,
+        description: f.descripcion,
+        group: "Tus pasos",
+      }));
+
     const porCategoria = new Map<string, typeof familias>();
     for (const f of familias) {
+      if (f.origen === "tenant") continue;
       const arr = porCategoria.get(f.categoria) ?? [];
       arr.push(f);
       porCategoria.set(f.categoria, arr);
     }
-    return Array.from(porCategoria.entries()).flatMap(([categoria, fams]) => {
-      const lblCat = getLabel(categoriaFamiliaLabels, categoria);
-      return fams.map((f) => ({
-        value: f.codigo,
-        label: f.nombre,
-        code: f.codigo,
-        description: f.descripcion,
-        group: lblCat.label,
-      }));
-    });
+    const sistema = Array.from(porCategoria.entries()).flatMap(
+      ([categoria, fams]) => {
+        const lblCat = getLabel(categoriaFamiliaLabels, categoria);
+        return fams.map((f) => ({
+          value: f.codigo,
+          label: f.nombre,
+          code: f.codigo,
+          description: f.descripcion,
+          group: lblCat.label,
+        }));
+      },
+    );
+    return [...propios, ...sistema];
   }, [familias]);
 
   const posicionOptions = React.useMemo<HumanSelectOption[]>(() => {

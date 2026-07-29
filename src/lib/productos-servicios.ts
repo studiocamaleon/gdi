@@ -415,6 +415,9 @@ export interface FamiliaListItem {
   nombre: string;
   categoria: string;
   descripcion?: string;
+  /** 'sistema' = catálogo fijo; 'tenant' = paso creado por la empresa
+   *  (pasos componibles, Etapa C/D). */
+  origen?: "sistema" | "tenant";
   visibleEnSelector?: boolean;
   relacionMaquinaSoportada: string[];
   modoActivacionDefault: string;
@@ -466,6 +469,74 @@ export interface CategoriaFamilia {
 export interface CatalogoFamilias {
   categorias: CategoriaFamilia[];
   familias: FamiliaListItem[];
+}
+
+// ============================================================================
+// FAMILIAS DEL TENANT (pasos componibles, Etapa D)
+// ============================================================================
+
+/** Fila cruda de FamiliaTenant que devuelve el listado admin. */
+export interface FamiliaTenant {
+  id: string;
+  nombre: string;
+  descripcion: string | null;
+  categoria: string;
+  relacionMaquina: string[];
+  modosTiempo: string[];
+  mecanismosCantidad: string[];
+  modosActivacion: string[];
+  modoActivacionDefault: string;
+  slots: Array<{
+    codigo: string;
+    nombre: string;
+    tipo: string;
+    requerido: boolean;
+  }>;
+  multiplicadores: string[];
+  plantillasCompatibles: string[];
+  tiposPerfilCompatibles: string[] | null;
+  modoRegistro: string | null;
+  presetOrigen: string | null;
+  activo: boolean;
+  createdAt: string;
+  updatedAt: string;
+  estacion: { id: string; nombre: string } | null;
+}
+
+export interface UpsertFamiliaTenantInput {
+  nombre: string;
+  descripcion?: string;
+  categoria: string;
+  relacionMaquina: string[];
+  modosTiempo: string[];
+  mecanismosCantidad: string[];
+  modosActivacion?: string[];
+  modoActivacionDefault?: string;
+  slots?: Array<{
+    codigo: string;
+    nombre: string;
+    tipo: string;
+    requerido: boolean;
+  }>;
+  multiplicadores?: string[];
+  plantillasCompatibles?: string[];
+  tiposPerfilCompatibles?: string[];
+  inputsRequeridos?: string[];
+  outputsCanonicos?: string[];
+  modoRegistro?: string;
+  presetOrigen?: string;
+  estacionId?: string | null;
+}
+
+export interface PreviewCosteoFamilia {
+  periodo: string;
+  centroCostoNombre: string;
+  tarifaHora: number;
+  tarifaPublicada: boolean;
+  totalMin: number;
+  dotacion: number;
+  costoTiempo: number;
+  cantidad: number;
 }
 
 // ============================================================================
