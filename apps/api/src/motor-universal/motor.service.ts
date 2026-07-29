@@ -2493,8 +2493,13 @@ export class MotorUniversalService {
     if (this.esModoSinImpresion(paso, jobContext))
       return 'Material sin impresión';
 
+    // [Etapa C] El nombre real de la familia va antes que humanizar el
+    // código: para una familia tenant el código es un UUID y "humanizarlo"
+    // es mostrarle el UUID al comercial (bug encontrado en el E2E).
     const base =
-      paso.nombreVisible?.trim() || this.humanizarCodigo(paso.familiaCodigo);
+      paso.nombreVisible?.trim() ||
+      resolverFamilia(paso.familiaCodigo)?.nombre ||
+      this.humanizarCodigo(paso.familiaCodigo);
     if (!this.esPasoImpresion(paso)) return base;
 
     const modoColor = this.resolverModoColorComercial(paso, jobContext);

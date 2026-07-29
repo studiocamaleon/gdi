@@ -73,15 +73,27 @@ Riesgo: bajo. Es mover datos de lugar con red de tests densa.
 > (3) autorización por `@Permiso('costos.gestionar')` en vez de rol a mano —
 > es el mismo permiso que editar rutas, por default sólo del administrador.
 >
-> **Falta el E2E de cierre (usuario)**: la "Serigrafía manual" ya está
-> insertada en dev para Grafica Corporearte (id
-> `754f8569-0c49-4ff4-9670-7babcaa7e610`, estación Produccion & Taller, con
-> un slot opcional de tinta) y el API la carga al bootear (log "Registro de
-> familias tenant: 1 cargadas"). El flujo: agregarla como paso en la ruta de
-> algún producto de prueba (aparece en el selector de pasos como cualquier
-> familia), cotizar, emitir OT **de un cliente de prueba sin teléfono**
-> (Wati vivo en dev), verla caer en la estación Produccion & Taller del
-> tablero y registrarle tiempo con cronómetro. Eso cierra la etapa.
+> **E2E de cierre EJECUTADO 2026-07-29** (con la sesión del usuario, flujo
+> completo por UI): la "Serigrafía manual"
+> (`754f8569-0c49-4ff4-9670-7babcaa7e610`, estación Produccion & Taller) se
+> agregó como paso extra a un producto duplicado de prueba ("Imanes PRUEBA
+> serigrafia E2E"), se cotizó (OT-2026-0002, cliente de prueba SIN teléfono,
+> cero WhatsApps verificado en NotificacionWhatsapp), se emitió y se
+> ejecutó la ruta entera en el tablero. Todo lo estructural anduvo a la
+> primera: el selector de pasos la ofrece, el editor renderiza su contrato
+> (slot "Tinta de serigrafía", productividad propia T-2), el motor la costeó
+> exacto (100 u ÷ 60/h = 100 min a la tarifa del centro, $41.959, output
+> canónico `piezas_estampadas: 100` en el snapshot), la regla de secuencia
+> la mantuvo no-ejecutable hasta completar los 4 pasos previos, ruteó a
+> Produccion & Taller, corrió con CRONÓMETRO (iniciar/pausar/completar) y la
+> OT cerró finalizada con tiempoRealMin=100 declarado.
+>
+> **Bug encontrado y arreglado en el E2E**: `resolverNombreVisiblePaso`
+> (motor) caía en `humanizarCodigo(familiaCodigo)` sin consultar el nombre
+> de la familia — para una tenant eso mostraba el UUID en el desglose, el
+> snapshot y el paso materializado. Fix: `resolverFamilia(...)?.nombre`
+> antes del humanizador; suite del motor idéntica (mismos 18 preexistentes).
+> Los labels ya guardados de la OT de prueba se corrigieron por SQL.
 
 **Objetivo**: el motor aprende a leer familias desde la base sin que exista
 UI de creación. Al cierre, una familia insertada a mano por API cotiza,
