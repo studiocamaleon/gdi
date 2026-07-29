@@ -239,13 +239,25 @@ qué es un eje.
 
 ## Secuencia de ramas
 
-| Rama | Contenido | Merge cuando |
+**Decisión 2026-07-29: el proyecto se integra en la rama `dev` (creada desde
+main), NO en main.** Cada etapa mergea a dev al cumplir su criterio; main
+queda limpio hasta que el proyecto completo funcione validado de punta a
+punta — recién ahí dev → main de una. Si el proyecto se abandona a mitad de
+camino, main nunca se ensució y el restore point v3.8 cubre la base.
+
+| Rama | Contenido | Merge a `dev` cuando |
 |---|---|---|
-| `feat/pasos-limpieza-tipo-a` | A completa + censo apendizado | suite motor intacta + E2E de desglose idéntico |
+| `feat/pasos-limpieza-tipo-a` | A completa + censo apendizado | ✅ mergeada (4ab3c7f1): suite idéntica + E2E usuario |
 | `feat/pasos-familias-tenant` | C completa (modelo+resolver+API) | E2E "Serigrafía manual" completo |
 | `feat/pasos-wizard` | D completa | E2E wizard + css:guard |
 
-Después de D en main y con uso real: retomar B (nesting) y E/F (wizard de
+Las ramas de etapa nacen de `dev` (no de main) para ver el trabajo previo.
+Ojo con las migraciones de la Etapa C: quedan aplicadas en la base dev
+aunque main no las conozca — si hay que volver a trabajar sobre main antes
+del merge final, la base y el schema van a divergir; el dump v3.8 es la
+vuelta atrás limpia.
+
+Después de D en dev y con uso real: retomar B (nesting) y E/F (wizard de
 ruta/producto) con diseño propio sobre lo aprendido.
 
 ## Apéndice — Censo de los cableados (Etapa A, ejecutada 2026-07-29)
