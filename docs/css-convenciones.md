@@ -61,6 +61,54 @@ una librería — `.code`, `.name`, `.desc`, `.right`, escritas como
 `.tbl .code, .code {}`. Están **en uso** (`className="code mono"`), así que no
 se borran; quedan anotadas como deuda conocida.
 
+## Triage: cuáles de las 1.637 importan
+
+No todas pesan igual. Una global con prefijo de vista (`.maq-perfiles-tabla`) es
+fea pero **no choca con nadie**: el nombre ya es único. La peligrosa es la de
+nombre común sin prefijo, porque cualquiera la reinventa mañana en otra vista y
+la pisa sin enterarse.
+
+| | |
+|---|---|
+| Con prefijo de vista — feas, no chocan | 1.512 |
+| **Sin prefijo — superficie real de colisión** | **125** |
+
+O sea que el problema accionable es **125 clases, no 1.637**. De esas, las que
+más vistas usan son las que de hecho ya son el sistema compartido:
+
+```
+btn (50 archivos)   right (21)   page-head (12)   desc (11)   name (8)
+content (7)   card (7)   code (7)   tbl (6)   tag (6)   field (5)
+```
+
+Las de 1–2 usos son las candidatas naturales a irse a un módulo cuando se toque
+la vista: `ohead`, `oprow-head`, `rbcol`, `cfgnav`, `topbar`, `user-pill`,
+`eta-sugerida`, `resumen-bar`…
+
+### Sobre "CSS muerto": cuidado
+
+Un detector de uso por texto **no es confiable acá**. Las clases se aplican de
+formas que un grep no ve:
+
+```tsx
+className={`side${collapsed ? " collapsed" : ""}`}   // plantilla
+className={cn("selb", abierto && "abierto")}         // helper
+```
+
+`.side` y `.selb` aparecen como "sin uso" y sin embargo se usan. Antes de borrar
+cualquier cosa hay que mirarla a mano.
+
+### Un hallazgo concreto: `.gf` parece muerto
+
+El namespace `.gf` tiene **98 reglas** (líneas ~31529–31670 y otra vez
+~38041–38048, no es contiguo). No aparece aplicado en ningún lado: una búsqueda
+en todo el repo de `class`/`className` con `gf` como token suelto no da nada.
+
+La vista de gastos fijos usa `gfijo-*`, no `.gf`. Encaja con que el módulo se
+reconstruyó estilo Holdprint: esta sería la hoja de la versión anterior, que
+quedó. Es la primera candidata a borrar, pero conviene que lo confirme quien
+sepa si se está guardando a propósito por si hay que volver atrás.
+
 ## La regla
 
 > **Una vista nueva no escribe en `globals.css`. Nace con su propio módulo.**

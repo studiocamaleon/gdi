@@ -100,6 +100,16 @@ function contarModulos(dir, acc = { modulos: 0, vistas: 0 }) {
   return acc;
 }
 
+// Todo lo de abajo corre SÓLO si se ejecuta el script directamente. Si no,
+// importar `analizar` desde otro lado dispararía el chequeo entero y su
+// process.exit().
+if (process.argv[1] !== fileURLToPath(import.meta.url)) {
+  // Importado como módulo: sólo se ofrece `analizar`.
+} else {
+  main();
+}
+
+function main() {
 const css = readFileSync(HOJA, "utf8");
 const globales = analizar(css);
 const clases = [...globales.keys()].sort();
@@ -188,3 +198,4 @@ if (!falla && !eliminadas.length && totalLineas <= base.totalLineas) {
 }
 
 process.exit(falla ? 1 : 0);
+}
