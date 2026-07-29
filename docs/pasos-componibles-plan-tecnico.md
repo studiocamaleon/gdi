@@ -64,6 +64,25 @@ Riesgo: bajo. Es mover datos de lugar con red de tests densa.
 
 ## Etapa C — Tabla de familias tenant + resolver
 
+> **Estado 2026-07-29: código COMPLETO** (commit a87c4301 en
+> `feat/pasos-familias-tenant`): migración, resolver, CRUD, 16 tests en
+> verde, suite idéntica a la base. Tres desvíos del diseño de abajo,
+> deliberados: (1) la estación NO se duplica como columna — la API escribe
+> `EstacionFamilia`, que ya es la fuente del ruteo; (2) validador puro en
+> vez de zod — el repo no tiene zod y usa class-validator para el formato;
+> (3) autorización por `@Permiso('costos.gestionar')` en vez de rol a mano —
+> es el mismo permiso que editar rutas, por default sólo del administrador.
+>
+> **Falta el E2E de cierre (usuario)**: la "Serigrafía manual" ya está
+> insertada en dev para Grafica Corporearte (id
+> `754f8569-0c49-4ff4-9670-7babcaa7e610`, estación Produccion & Taller, con
+> un slot opcional de tinta) y el API la carga al bootear (log "Registro de
+> familias tenant: 1 cargadas"). El flujo: agregarla como paso en la ruta de
+> algún producto de prueba (aparece en el selector de pasos como cualquier
+> familia), cotizar, emitir OT **de un cliente de prueba sin teléfono**
+> (Wati vivo en dev), verla caer en la estación Produccion & Taller del
+> tablero y registrarle tiempo con cronómetro. Eso cierra la etapa.
+
 **Objetivo**: el motor aprende a leer familias desde la base sin que exista
 UI de creación. Al cierre, una familia insertada a mano por API cotiza,
 rutea a estación y registra tiempos exactamente como una del catálogo.
