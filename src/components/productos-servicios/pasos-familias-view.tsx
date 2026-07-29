@@ -117,6 +117,29 @@ function slugSlot(nombre: string): string {
   );
 }
 
+/** Las máquinas del taller agrupadas por plantilla: la compatibilidad de la
+ *  familia es por TIPO, así que la card de selección también (elegir una
+ *  máquina puntual marcaba "de sorpresa" a todas sus hermanas de tipo). */
+function agruparPorPlantilla(
+  maquinas: Array<{ nombre: string; plantilla: string }>,
+): Array<{ plantilla: string; maquinas: string[] }> {
+  const porPlantilla = new Map<string, string[]>();
+  for (const m of maquinas) {
+    const arr = porPlantilla.get(m.plantilla) ?? [];
+    arr.push(m.nombre);
+    porPlantilla.set(m.plantilla, arr);
+  }
+  return Array.from(porPlantilla.entries()).map(([plantilla, nombres]) => ({
+    plantilla,
+    maquinas: nombres,
+  }));
+}
+
+function humanizarPlantilla(plantilla: string): string {
+  const texto = plantilla.replaceAll("_", " ").toLowerCase();
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
 function draftAInput(d: FormaDraft): UpsertFamiliaTenantInput {
   const conMaquina = d.relacionMaquina !== "M-0";
   return {
@@ -621,27 +644,33 @@ function WizardNuevoPaso({
 
           {paso === "maquinas-candidatas" ? (
             <>
-              <div className={s.pregunta}>¿Qué máquinas del taller pueden hacerlo?</div>
+              <div className={s.pregunta}>
+                ¿Qué tipo de máquina puede hacerlo?
+              </div>
               <p className={s.ayuda}>
-                Marcá al menos una: de acá sale qué tipos de máquina son
-                compatibles con el paso.
+                La compatibilidad es por TIPO de máquina, no por máquina
+                puntual: habilitar un tipo habilita todas las tuyas de ese
+                tipo (y las que compres después). Cuál se usa en concreto se
+                decide al armar cada producto.
               </p>
               <div className={s.opciones}>
-                {(lookups?.maquinas ?? []).map((m) => {
-                  const activa = draft.plantillasCompatibles.includes(m.plantilla);
+                {agruparPorPlantilla(lookups?.maquinas ?? []).map((grupo) => {
+                  const activa = draft.plantillasCompatibles.includes(
+                    grupo.plantilla,
+                  );
                   return (
                     <Opcion
-                      key={m.id}
+                      key={grupo.plantilla}
                       activa={activa}
-                      titulo={m.nombre}
-                      desc={m.plantilla.replaceAll("_", " ").toLowerCase()}
+                      titulo={humanizarPlantilla(grupo.plantilla)}
+                      desc={`Tus máquinas de este tipo: ${grupo.maquinas.join(", ")}`}
                       onClick={() =>
                         set({
                           plantillasCompatibles: activa
                             ? draft.plantillasCompatibles.filter(
-                                (p) => p !== m.plantilla,
+                                (p) => p !== grupo.plantilla,
                               )
-                            : [...draft.plantillasCompatibles, m.plantilla],
+                            : [...draft.plantillasCompatibles, grupo.plantilla],
                         })
                       }
                     />
