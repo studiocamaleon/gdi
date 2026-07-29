@@ -121,6 +121,52 @@ Lo que hizo confiable la decisión, y sirve de receta para el próximo:
    computaba idéntico, así que no se perdió nada. Conviene comprobarlo antes de
    dar por muerta cualquier declaración de tokens.
 
+### Buscar familias muertas, no clases muertas
+
+Preguntar "¿se usa `.card`?" no sirve: la respuesta es poco confiable. Pero
+preguntar "¿se usa **alguna** clase de la familia `tpl-*`?" sí, porque una
+familia entera sin una sola referencia en 5.361 archivos no es un falso
+negativo, es un módulo que quedó atrás.
+
+Con ese criterio salieron **siete familias muertas, 135 reglas, −701 líneas**,
+todas del mismo origen: la vista de Integraciones se reescribió con nombres
+prefijados (`int-msg-*`, `int-tpl-*`) y la generación anterior —`msg-*`,
+`tpl-*`, `ev-*`, `we-*`, `event-*`— se quedó. Mismo patrón que `.gf` → `gfijo-*`.
+
+Dos trampas que costaron encontrar:
+
+**1. Las clases construidas en runtime.** `.span-3` … `.span-12` figuraban como
+muertas y están vivísimas:
+
+```tsx
+<div className={`d-card span-${span}`}>   // panel-general.tsx
+```
+
+Antes de borrar una familia hay que buscar `` `prefijo-${ `` además del nombre
+literal. Es el único chequeo que separa a `.span-*` de las que sí estaban
+muertas.
+
+**2. Las que no son globales.** `.st-*` (60 reglas) y `.now-*` viven anidadas
+bajo `.tablero-produccion`, que está muy viva. La regla
+`.tablero-produccion .st-col` sólo puede aplicar sobre un elemento que ya no
+existe, así que se va igual — pero un borrador que sólo mire el primer selector
+no las ve. El criterio correcto es: **se borra la regla si TODOS sus selectores
+contienen una clase de familia muerta en cualquier posición.**
+
+### Cómo verificar un borrado grande
+
+Que el resultado sea un **subconjunto** del original, comparando líneas con
+contenido:
+
+```bash
+comm -13 <(grep -vE '^\s*$' viejo.css | sort -u) <(grep -vE '^\s*$' nuevo.css | sort -u)
+```
+
+Si eso da vacío, no se agregó ni se modificó nada: sólo se borró. Vale la pena
+porque `git diff` reporta "inserciones" que son puro emparejamiento — en este
+borrado marcó 78 y eran cero. Después, llaves balanceadas y los vecinos de cada
+costura probados con estilo computado.
+
 ## La regla
 
 > **Una vista nueva no escribe en `globals.css`. Nace con su propio módulo.**
