@@ -1,0 +1,294 @@
+/* Pasos de producción (familias componibles, Etapa D).
+   Vista nueva = módulo propio; en globals.css no entra nada de esto. */
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.seccion {
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e7e5e2);
+  border-radius: 14px;
+  overflow: hidden;
+  /* El layout del dashboard restringe altura y .wrap es flex column: sin
+     esto las secciones se ENCOGEN (flex-shrink default) y el overflow
+     recorta filas de la tabla — pasó en el E2E con la segunda familia. */
+  flex: none;
+}
+
+.seccionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--hairline, #efece8);
+}
+
+.seccionTitulo {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.seccionSub {
+  font-size: 12px;
+  color: var(--muted-text, #6e6e76);
+  margin-top: 2px;
+}
+
+.forma {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.formaChip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border: 1px solid var(--border, #e7e5e2);
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--ink-2, #2c2c33);
+  background: var(--surface-2, #fafaf9);
+  white-space: nowrap;
+}
+
+.inactiva {
+  opacity: 0.55;
+}
+
+.catalogoGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+  padding: 16px 18px;
+}
+
+.catalogoItem {
+  border: 1px solid var(--hairline, #efece8);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.catalogoNombre {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.catalogoDesc {
+  font-size: 11.5px;
+  color: var(--muted-text, #6e6e76);
+  margin-top: 2px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ── Wizard ── */
+
+.wizardHead {
+  padding: 24px 32px 18px;
+  border-bottom: 1px solid var(--hairline, #efece8);
+}
+
+.wizardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 26px 32px 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.pasoIndicador {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-text, #6e6e76);
+}
+
+.pregunta {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.ayuda {
+  font-size: 12.5px;
+  color: var(--muted-text, #6e6e76);
+  line-height: 1.45;
+  margin-top: -10px;
+}
+
+.opciones {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.opcion {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  border: 1px solid var(--border, #e7e5e2);
+  border-radius: 10px;
+  padding: 14px 16px;
+  background: var(--surface, #fff);
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.opcion:hover {
+  border-color: var(--border-strong, #d4d2cd);
+}
+
+.opcionActiva {
+  border-color: var(--ink, #14141a);
+  background: var(--surface-2, #fafaf9);
+}
+
+.opcionTitulo {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.opcionDesc {
+  font-size: 12px;
+  color: var(--muted-text, #6e6e76);
+  line-height: 1.4;
+}
+
+.fijarActivacion {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border: 1px dashed var(--border, #e7e5e2);
+  border-radius: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+
+.fijarActivacion > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.slotFila {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.notaTinta {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-2, #2c2c33);
+  background: var(--surface-2, #fafaf9);
+  border: 1px solid var(--hairline, #efece8);
+  border-left: 3px solid var(--border-strong, #d4d2cd);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.slotsVacio {
+  font-size: 12.5px;
+  color: var(--muted-text, #6e6e76);
+  border: 1px dashed var(--border, #e7e5e2);
+  border-radius: 10px;
+  padding: 14px;
+  text-align: center;
+}
+
+.wizardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-top: 1px solid var(--hairline, #efece8);
+  padding: 16px 32px 22px;
+  margin-top: auto;
+}
+
+/* Los items del catálogo en cards ocupaban demasiado: quedó la tabla. Estas
+   clases sólo las usa el grid viejo si vuelve a hacer falta en un vacío. */
+
+.erroresBox {
+  border: 1px solid #f3c0b4;
+  background: #fdf1ee;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: #8a2f18;
+}
+
+.erroresBox ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+/* ── Preview de costeo ── */
+
+.preview {
+  border: 1px solid var(--hairline, #efece8);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--surface-2, #fafaf9);
+}
+
+.previewIntro {
+  font-size: 12.5px;
+  color: var(--muted-text, #6e6e76);
+  line-height: 1.45;
+}
+
+.previewGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.previewCampo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.previewLabel {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-2, #2c2c33);
+}
+
+.previewPista {
+  font-size: 11px;
+  color: var(--muted-text, #6e6e76);
+}
+
+.previewResultado {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.previewMonto {
+  font-size: 18px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.previewAviso {
+  font-size: 11.5px;
+  color: var(--muted-text, #6e6e76);
+}

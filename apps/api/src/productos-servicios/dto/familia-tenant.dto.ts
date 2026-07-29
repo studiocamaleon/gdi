@@ -9,6 +9,7 @@ import { Type } from 'class-transformer';
 import {
   IsArray,
   IsBoolean,
+  IsNumber,
   IsOptional,
   IsString,
   MaxLength,
@@ -106,6 +107,30 @@ export class CrearFamiliaTenantDto {
   @IsOptional()
   @IsString()
   estacionId?: string | null;
+}
+
+/** Preview de costeo del wizard (Etapa D): tiempo + tarifa real del centro. */
+export class PreviewCosteoFamiliaDto {
+  @IsNumber()
+  cantidad!: number;
+
+  @IsString()
+  modoTiempo!: string;
+
+  @IsOptional()
+  @IsNumber()
+  tiempoFijoMin?: number;
+
+  @IsOptional()
+  @IsNumber()
+  productividadPorHora?: number;
+
+  @IsOptional()
+  @IsNumber()
+  dotacion?: number;
+
+  @IsString()
+  centroCostoId!: string;
 }
 
 /** PATCH: mismo shape, todo opcional, más el toggle de inhabilitación. El

@@ -116,6 +116,11 @@ export const NAV: NavItem[] = [
         href: "/productos-servicios/rutas",
       },
       {
+        key: "pasos",
+        label: "Pasos de producción",
+        href: "/productos-servicios/pasos",
+      },
+      {
         key: "catalogo",
         label: "Catálogo de productos",
         href: "/productos-servicios",

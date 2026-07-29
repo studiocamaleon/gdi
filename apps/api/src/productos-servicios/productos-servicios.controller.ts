@@ -16,6 +16,7 @@ import { ListProductosQueryDto } from './dto/list-productos-query.dto';
 import {
   ActualizarFamiliaTenantDto,
   CrearFamiliaTenantDto,
+  PreviewCosteoFamiliaDto,
 } from './dto/familia-tenant.dto';
 import { FamiliasTenantService } from './familias-tenant.service';
 import { ProductosServiciosService } from './productos-servicios.service';
@@ -308,6 +309,17 @@ export class ProductosServiciosController {
     const tenantId = req.auth?.tenantId;
     if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
     return this.familiasTenant.actualizar(tenantId, id, dto);
+  }
+
+  @Post('familias-tenant/preview-costeo')
+  @Permiso('costos.gestionar')
+  previewCosteoFamiliaTenant(
+    @Req() req: RequestWithAuth,
+    @Body() dto: PreviewCosteoFamiliaDto,
+  ) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    return this.familiasTenant.previewCosteo(tenantId, dto);
   }
 
   @Delete('familias-tenant/:id')
