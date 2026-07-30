@@ -777,7 +777,7 @@ describe("sección Ajustes del trabajo (oficio)", () => {
     });
     expect(acomodado.visible(granFormato)).toBe(true);
     expect(acomodado.resumen(granFormato)).toBe(
-      "Costeo: el largo usado del rollo/placa · panelizado",
+      "Costeo: el largo usado de la placa · panelizado",
     );
     expect(acomodado.origenValor(granFormato)).toBe("config");
   });

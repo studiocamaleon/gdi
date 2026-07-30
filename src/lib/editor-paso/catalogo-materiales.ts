@@ -71,22 +71,22 @@ export const COSTING_STRATEGY_OPTIONS = opcionesDesdeLabels(
     simple: {
       label: "Según el consumo calculado",
       descripcion:
-        "Cobra exactamente lo que la fórmula de consumo dice que se gasta, sin mirar cómo se aprovecha la placa o el rollo.",
+        "Cobra lo que la fórmula de consumo dice que se gasta. En rollo (vinilo, lona) eso YA es el largo consumido del acomodo, desperdicio incluido — no hace falta elegir otra.",
     },
     "m2-exact": {
-      label: "Sólo los m² de las piezas",
+      label: "Sólo los m² de las piezas (placa)",
       descripcion:
-        "Cobra el área útil de las piezas acomodadas; el sobrante de placa no se le cobra al cliente.",
+        "Cobra el área útil de las piezas acomodadas; el sobrante de placa no se le cobra al cliente. Sólo aplica a placas/pliegos.",
     },
     "consumed-length": {
-      label: "El largo usado del rollo/placa",
+      label: "El largo usado de la placa",
       descripcion:
-        "Cobra las placas completas y el último tramo proporcional a lo que realmente ocupa.",
+        "Cobra las placas completas y el último tramo proporcional a lo que realmente ocupa. Sólo aplica a placas/pliegos.",
     },
     "plate-segments": {
       label: "Por tramos de ocupación de la placa",
       descripcion:
-        "Cobra por escalones (¼, ½, ¾ o placa entera) según cuánto de la placa se usa.",
+        "Cobra por escalones (¼, ½, ¾ o placa entera) según cuánto de la placa se usa. Sólo aplica a placas/pliegos.",
     },
   },
 );
