@@ -428,7 +428,10 @@ un paso tenant; y un paso tenant que elija heredar no tiene entrada en el
 mapa default (UUID → null) → siempre cae a cantidad: el mecanismo aparenta
 andar pero nunca hereda de verdad.
 
-### B.1 Propuesta (a validar)
+### B.1 Propuesta (primera pasada — SUPERADA en parte por B.2)
+
+> P1 y P2 quedaron superadas por el Registro de Capacidades y la herencia
+> explícita de B.2. P3, P4 y P5 siguen vigentes y B.2 las refina.
 
 Principio: **el usuario nunca escribe nombres de outputs; se derivan de
 las respuestas y se informan en humano.**
@@ -486,6 +489,80 @@ real)?
 - **Outputs muertos**: pidió verificar el uso real antes de asumir →
   B.0.1 corrige el censo (4 canales); la decisión de podar/estandarizar
   se toma sobre la lista de muertos REALES.
+
+### B.2 El Registro de Capacidades (diseño CERRADO con el usuario, 2026-07-29)
+
+Modelo de fondo (surgió del análisis de "¿por qué pliegos es una
+magnitud?"): **la magnitud de conteo es UNA sola — lo que cambia es el
+objeto contado** — y un mismo trabajo lleva varios conteos simultáneos
+vinculados por ratios (500 tarjetas = 10 pliegos, poses de por medio).
+Los 52 nombres actuales colapsan en **8 capacidades**; el resto queda
+como alias/etiqueta.
+
+**Conteos** (magnitud cantidad + objeto):
+
+1. `unidades_procesadas` — la unidad final que compra el cliente. La
+   emite TODO paso automáticamente (= cantidad efectiva, ya se calcula).
+   Cada paso la re-etiqueta en display ("500 piezas cortadas", "20
+   libros"). Absorbe los 30 triviales + los tenant.
+2. `pliegos` — el soporte de impresión. Es un OBJETO, no un número
+   suelto: { cantidad, anchoMm, altoMm, mpVarianteId } (con alias planos
+   para la plomería legacy: simulador, mínimo comercial, montaje,
+   slots). **UN emisor por ruta: el paso que corre el acomodo** (decisión
+   del usuario — se elimina la dualidad pre_prensa/impresión emitiendo lo
+   mismo; pre-prensa puede existir como paso pero no emite pliegos si no
+   es él quien acomoda). Absorbe `pliegos_calculados`, `pliegos_impresos`
+   y las 4 keys de identidad del pliego.
+3. `grupos` — agrupaciones intermedias, UNA capacidad genérica etiquetada
+   por el paso ("12 pilas", "5 cajas", "8 atados") (decisión usuario).
+   Absorbe `talonario_pilas`.
+
+**Continuas**:
+
+4. `m2_consumidos` — área real consumida con desperdicio (nesting
+   rollo/mesa, montaje). Absorbe `m2_calculados`.
+5. `metros_lineales` — UNA capacidad etiquetada por el paso ("3,1 m de
+   rollo", "8 m de costura", "3,1 m de film") (decisión usuario; la
+   herencia explícita desambigua porque se señala el paso). Absorbe
+   `metros_lineales_corte/film/union` y `ojales` sigue siendo conteo de
+   unidades del paso.
+6. `minutos_reales` — tiempo total del paso, lo emite todo paso con
+   tiempo. Absorbe `tiempo_real_impresion/corte`. Lector futuro:
+   métricas/ETA (backlog, fuera de B).
+
+**Información/traza** (no se heredan como cantidad):
+
+7. `imposicion` — objeto de traza del acomodo: poses por pliego (el
+   ratio), posiciones, cortes de guillotina derivados. Absorbe
+   `imposicion_calculada`, `poses_por_pliego`, `cortes_calculados`.
+8. `aprovechamiento_pct` — unifica los DOS caños de hoy (key snake_case
+   muerta + camelCase del resultado que sí se muestra) en uno.
+
+**Podas** (decisión usuario): `aprobacion` NO existe — `proof_aprobado` y
+`diseno_aprobado` se eliminan ("no se usa y no se va a usar"); proof y
+diseño emiten lo de cualquier paso. `mutacion_aplicada` queda como traza
+interna de la primitiva, fuera del registro.
+
+**Nombre**: la capacidad del soporte se llama **"pliegos"** en toda la UI
+(decisión usuario: jerga del oficio).
+
+**Emisión derivada por forma** (el wizard nunca pregunta outputs):
+
+```
+Todo paso                        → unidades_procesadas + minutos_reales
++ acomoda piezas sobre PLIEGO    → pliegos + imposicion + aprovechamiento_pct
++ acomoda piezas sobre ROLLO     → m2_consumidos + metros_lineales + aprovechamiento_pct
++ agrupa (N por caja/pila/atado) → grupos
++ consume material lineal (film) → metros_lineales
+```
+
+**Herencia** (decisión usuario, B.0.1): EXPLÍCITA — al configurar el paso
+en el producto se elige el paso ORIGEN y su capacidad, en humano
+("Corte dejó: 500 piezas (venían en 10 pliegos)"); el sistema sugiere el
+anterior pero guarda explícito. `defaultOutputParaHeredar` desaparece.
+
+En el paso final del wizard: bloque "Este paso deja: 500 unidades ·
+10 pliegos SRA3 · 45 minutos".
 
 ---
 
