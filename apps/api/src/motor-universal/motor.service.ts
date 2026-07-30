@@ -47,6 +47,7 @@ import {
 } from './nesting-dispatcher';
 import {
   resolveNestingConfig,
+  type MaterialResueltoParaNestingConfig,
   type NestingConfigResolved,
   type PrintSheetCandidateMaterial,
 } from './nesting-config';
@@ -2119,122 +2120,82 @@ export class MotorUniversalService {
         },
       );
     }
-    // FRONTERA-NESTING: los guards d.0–d.1 que siguen (laminado, pouch, hoja,
-    // área, montaje, pre_prensa) cortan con error cuando la familia debía
-    // nestear y el dispatcher no produjo layout. Son la cara visible de las
-    // primitivas de geometría — Tipo B, se parametrizan en la Etapa B.
-    if (
-      paso.familiaCodigo === 'laminado' &&
-      materialPreliminar &&
-      this.debeCalcularNestingLaminado(paso) &&
-      !nestingDispatch
-    ) {
-      errores.push(
-        this.errorNestingLaminadoInvalido(paso, jobContext, materialPreliminar),
-      );
-      return {
-        rutaPasoId: paso.rutaPasoId,
-        rutaPasoOrden: paso.rutaPasoOrden,
-        familiaCodigo: paso.familiaCodigo,
-        configPasoId: paso.configPasoId,
-        activado: true,
-        costoTotal: 0,
-      };
-    }
-    if (
-      paso.familiaCodigo === 'plastificado_pouch' &&
-      materialPreliminar &&
-      paso.mecanismoCantidad === 'CALCULADO_POR_PASO' &&
-      !nestingDispatch
-    ) {
-      errores.push(
-        this.errorNestingPouchInvalido(paso, jobContext, materialPreliminar),
-      );
-      return {
-        rutaPasoId: paso.rutaPasoId,
-        rutaPasoOrden: paso.rutaPasoOrden,
-        familiaCodigo: paso.familiaCodigo,
-        configPasoId: paso.configPasoId,
-        activado: true,
-        costoTotal: 0,
-      };
-    }
-    if (
-      paso.familiaCodigo === 'impresion_por_hoja' &&
-      this.tienePliegoImpresionAutomatico(paso) &&
-      debeCalcularNestingProductivo &&
-      !nestingDispatch
-    ) {
-      errores.push(this.errorPliegoImpresionAutomaticoInvalido(paso));
-      return {
-        rutaPasoId: paso.rutaPasoId,
-        rutaPasoOrden: paso.rutaPasoOrden,
-        familiaCodigo: paso.familiaCodigo,
-        configPasoId: paso.configPasoId,
-        activado: true,
-        costoTotal: 0,
-      };
-    }
+    // FRONTERA-NESTING: cada familia del sistema que DEBE acomodar declara
+    // cuándo cortar y con qué diagnóstico. El diagnóstico queda PROPIO de cada
+    // familia —ahí está su valor: laminado compara film vs máquina, área
+    // encuentra la pieza que no entra, montaje distingue la fuente de piezas—
+    // pero el andamiaje (condición + corte con la cantidad en 0) es uno solo.
+    // Cortan sólo si la familia debía nestear y el dispatcher no dio layout.
+    // Tipo B, se parametrizan en la Etapa B.
+    if (debeCalcularNestingProductivo && !nestingDispatch) {
+      const guardsNesting: Array<{
+        familia: string;
+        debeCortar: () => boolean;
+        error: () => ErrorMotor;
+      }> = [
+        {
+          familia: 'laminado',
+          debeCortar: () =>
+            !!materialPreliminar && this.debeCalcularNestingLaminado(paso),
+          error: () =>
+            this.errorNestingLaminadoInvalido(
+              paso,
+              jobContext,
+              materialPreliminar!,
+            ),
+        },
+        {
+          familia: 'plastificado_pouch',
+          debeCortar: () =>
+            !!materialPreliminar &&
+            paso.mecanismoCantidad === 'CALCULADO_POR_PASO',
+          error: () =>
+            this.errorNestingPouchInvalido(
+              paso,
+              jobContext,
+              materialPreliminar!,
+            ),
+        },
+        {
+          familia: 'impresion_por_hoja',
+          debeCortar: () => this.tienePliegoImpresionAutomatico(paso),
+          error: () => this.errorPliegoImpresionAutomaticoInvalido(paso),
+        },
+        {
+          // Sólo corta si el sustrato es resoluble (rollo o pliego con
+          // medidas): entonces una pieza NO ENTRA. Sin sustrato resoluble se
+          // mantiene el fallback silencioso (material sin resolver).
+          familia: 'impresion_por_area',
+          debeCortar: () =>
+            this.areaTieneSustratoResoluble(paso, jobContext, materialPreliminar),
+          error: () =>
+            this.errorPiezaNoEntraEnSustrato(
+              paso,
+              jobContext,
+              resolveNestingConfig(
+                paso,
+                this.getJobContextParaNesting(paso, jobContext),
+                materialPreliminar,
+              ),
+            ),
+        },
+        {
+          // Sin layout, cotizar con la cantidad cruda dejaría el montaje sin
+          // plan. Causa típica: fuentePiezasMontaje='pliegos_impresos' cuando
+          // la impresión previa va en rollo y no publica pliegos.
+          familia: 'montaje_sobre_sustrato',
+          debeCortar: () => true,
+          error: () => this.errorMontajeSinNesting(paso, jobContext),
+        },
+      ];
 
-    // d.0.1) impresión por área: si el nesting no produjo layout pese a tener
-    //   un sustrato resoluble (rollo o pliego con dimensiones), significa que
-    //   alguna pieza NO ENTRA (el panelizado está desactivado o no alcanza).
-    //   No debe cotizarse con el área cruda; se corta con error. Si no hay
-    //   sustrato resoluble se mantiene el fallback (material sin resolver).
-    if (
-      paso.familiaCodigo === 'impresion_por_area' &&
-      debeCalcularNestingProductivo &&
-      !nestingDispatch
-    ) {
-      const nestConfig = resolveNestingConfig(
-        paso,
-        this.getJobContextParaNesting(paso, jobContext),
-        materialPreliminar,
+      const guard = guardsNesting.find(
+        (g) => g.familia === paso.familiaCodigo && g.debeCortar(),
       );
-      const anchoUtilRolloMm =
-        nestConfig.rollWidthMm != null
-          ? nestConfig.rollWidthMm -
-            nestConfig.margins.leftMm -
-            nestConfig.margins.rightMm
-          : null;
-      const tieneSustratoRollo = (anchoUtilRolloMm ?? 0) > 0;
-      const tieneSustratoPliego =
-        (nestConfig.sheetWidthMm ?? 0) > 0 &&
-        (nestConfig.sheetHeightMm ?? 0) > 0;
-      if (tieneSustratoRollo || tieneSustratoPliego) {
-        errores.push(
-          this.errorPiezaNoEntraEnSustrato(paso, jobContext, nestConfig),
-        );
-        return {
-          rutaPasoId: paso.rutaPasoId,
-          rutaPasoOrden: paso.rutaPasoOrden,
-          familiaCodigo: paso.familiaCodigo,
-          configPasoId: paso.configPasoId,
-          activado: true,
-          costoTotal: 0,
-        };
+      if (guard) {
+        errores.push(guard.error());
+        return this.pasoAbortado(paso);
       }
-    }
-
-    // d.0.2) montaje sobre sustrato: si debía nestear y no produjo layout, NO
-    //   seguir en silencio (quedaría cotizado con la cantidad cruda, sin plan de
-    //   montaje). Causa típica: la fuente de piezas configurada no está
-    //   disponible (ej. `fuentePiezasMontaje='pliegos_impresos'` cuando la
-    //   impresión previa es en rollo y no publica pliegos).
-    if (
-      paso.familiaCodigo === 'montaje_sobre_sustrato' &&
-      debeCalcularNestingProductivo &&
-      !nestingDispatch
-    ) {
-      errores.push(this.errorMontajeSinNesting(paso, jobContext));
-      return {
-        rutaPasoId: paso.rutaPasoId,
-        rutaPasoOrden: paso.rutaPasoOrden,
-        familiaCodigo: paso.familiaCodigo,
-        configPasoId: paso.configPasoId,
-        activado: true,
-        costoTotal: 0,
-      };
     }
 
     // d.1) El look-ahead de pre_prensa se retiró: pre-prensa espiaba el paso
@@ -2269,14 +2230,7 @@ export class MotorUniversalService {
         sugerencia:
           'Seleccionar un perfil operativo compatible con el tipo de operación del paso.',
       });
-      return {
-        rutaPasoId: pasoConPerfil.rutaPasoId,
-        rutaPasoOrden: pasoConPerfil.rutaPasoOrden,
-        familiaCodigo: pasoConPerfil.familiaCodigo,
-        configPasoId: pasoConPerfil.configPasoId,
-        activado: true,
-        costoTotal: 0,
-      };
+      return this.pasoAbortado(pasoConPerfil);
     }
     const tiempo = sinImpresion
       ? this.tiempoCero()
@@ -3048,6 +3002,45 @@ export class MotorUniversalService {
           slot.slotCodigo === 'film' && slot.formula === 'por_metro_lineal',
       )
     );
+  }
+
+  /** Paso que se activó pero se cortó por error: cotiza en 0. La forma la
+   *  comparten todos los guards de nesting y el de perfil incompatible. */
+  private pasoAbortado(paso: PasoCargado): PasoEjecutado {
+    return {
+      rutaPasoId: paso.rutaPasoId,
+      rutaPasoOrden: paso.rutaPasoOrden,
+      familiaCodigo: paso.familiaCodigo,
+      configPasoId: paso.configPasoId,
+      activado: true,
+      costoTotal: 0,
+    };
+  }
+
+  /** ¿El área tiene un sustrato con dimensiones (rollo con ancho útil o pliego
+   *  con medidas)? Si lo tiene y aun así no hubo layout, una pieza no entra y
+   *  el guard corta; si no, se mantiene el fallback silencioso. */
+  private areaTieneSustratoResoluble(
+    paso: PasoCargado,
+    jobContext: JobContext,
+    material: MaterialResueltoParaNestingConfig | null,
+  ): boolean {
+    const nestConfig = resolveNestingConfig(
+      paso,
+      this.getJobContextParaNesting(paso, jobContext),
+      material,
+    );
+    const anchoUtilRolloMm =
+      nestConfig.rollWidthMm != null
+        ? nestConfig.rollWidthMm -
+          nestConfig.margins.leftMm -
+          nestConfig.margins.rightMm
+        : null;
+    const tieneSustratoRollo = (anchoUtilRolloMm ?? 0) > 0;
+    const tieneSustratoPliego =
+      (nestConfig.sheetWidthMm ?? 0) > 0 &&
+      (nestConfig.sheetHeightMm ?? 0) > 0;
+    return tieneSustratoRollo || tieneSustratoPliego;
   }
 
   private errorPiezaNoEntraEnSustrato(
