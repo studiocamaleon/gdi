@@ -1,4 +1,4 @@
-# Pasos componibles — plan técnico (Etapas A, C, D)
+# Pasos componibles — plan técnico (Etapas A, C, D, E)
 
 > Ejecuta las decisiones cerradas en `docs/pasos-componibles-diseno.md` §8.
 > Orden decidido: **A → C → D**, con B (nesting parametrizado) diferida.
@@ -302,6 +302,39 @@ qué es un eje.
 - **Done** = una persona sin contexto del motor crea "Bordado" partiendo
   del preset trabajo_manual en menos de dos minutos, y su cotización sale
   con el costo esperado.
+
+---
+
+## Etapa E — Familias tenant en rutas y cotizador
+
+> **Estado 2026-07-29: COMPLETA y verificada E2E** (rama
+> `feat/pasos-wizard-ruta`). No hizo falta tocar el backend de rutas: la
+> validación ya pasaba por `validarFamiliasDePasos` → resolver, así que un
+> `RutaPaso` con `familiaCodigo` UUID persiste y cotiza sin cambios. Lo que
+> sí faltaba era la capa visible:
+>
+> - **Editor de rutas**: el selector de familias ahora arma el grupo
+>   "Tus pasos" primero (mismo patrón que pasos extra), después el catálogo
+>   del sistema por categoría.
+> - **Nombres, no UUIDs**: el mismo bug apareció tres veces (patrón
+>   `nombreVisible || humanize(familiaCodigo)`); para una familia tenant el
+>   código es un UUID y "humanizarlo" muestra el UUID. Dos se arreglaron en
+>   el front (checkbox de co-ejecución del editor de pasos, vía
+>   `familiasMap`), y el tercero (chips de Opcionales del cotizador) se
+>   resolvió **en el server**: `obtenerProducto` ahora devuelve
+>   `familiaNombre` resuelto (via `resolverFamilia`) en `ruta.pasos[]` y en
+>   `configPasos[].rutaPaso`, y el front lo usa como fallback antes de
+>   humanizar. Cualquier consumidor futuro del detalle ya lo recibe suelto.
+>
+> **E2E con la sesión del usuario**: ruta "Textil estampado E2E" creada 100%
+> con familias tenant (Bordado + Serigrafía manual), colgada como
+> alternativa del producto de prueba, 2/2 pasos configurados (60/h y 80/h,
+> Produccion & Taller), y cotizada con ambos opcionales activos: el subtotal
+> cerró EXACTO contra la aritmética del motor — Bordado 100 min $41.959,45 +
+> Serigrafía 75 min $31.469,59, ÷0,6 de margen, ×1,0758 de IIBB por dentro =
+> $131.655. Apagar un opcional restó exactamente su parte. No se emitió OT
+> (la materialización ya quedó probada en C); la preferida del producto de
+> prueba volvió a "Estandar".
 
 ---
 

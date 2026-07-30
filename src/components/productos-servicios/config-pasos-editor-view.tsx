@@ -5111,8 +5111,14 @@ export function ConfigPasosEditorView({
                                       const elegido = requeridos.includes(
                                         otro.id,
                                       );
+                                      // El nombre real de la familia antes de
+                                      // humanizar el código: para una familia
+                                      // tenant el código es un UUID (mismo bug
+                                      // que tuvo el motor en la Etapa C).
                                       const nombreOtro =
                                         configs[otro.id]?.nombreVisible?.trim() ||
+                                        familiasMap.get(otro.familiaCodigo)
+                                          ?.nombre ||
                                         humanizeCode(otro.familiaCodigo);
                                       return (
                                         <label

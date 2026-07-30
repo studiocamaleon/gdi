@@ -1773,9 +1773,12 @@ function getOpcionales(
           if (configAvailable) {
             opcionales.set(config.id, {
               code: config.id,
-              // Nombre manual del modelador; el código de familia es fallback.
+              // Nombre manual del modelador → nombre real de la familia
+              // (resuelto en el server; para tenant el código es un UUID) →
+              // recién ahí humanizar el código.
               name:
                 config.nombreVisible?.trim() ||
+                config.rutaPaso.familiaNombre ||
                 humanizeCodigo(config.rutaPaso.familiaCodigo),
               descripcion: "Paso productivo opcional.",
               origen: "paso",
