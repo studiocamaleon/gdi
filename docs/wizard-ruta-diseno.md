@@ -356,6 +356,22 @@ márgenes extra, dotación, multiplicadores) viven en detallado.
   > (ámbar) — verificado en vivo con la alternativa Defaults E2E.
 - **E.3.2 — Question-cards guiadas** en Configurar pasos: el modo guiado
   recorre los pendientes de a uno; "modo detallado" a un click.
+
+  > **Estado 2026-07-30: HECHA y verificada E2E.** `ModoGuiadoPanel`
+  > (default al abrir Configurar pasos; toggle "Modo detallado" en el
+  > header): muestra UNA card por vez — pregunta grande, motivo en
+  > humano, resolución inline — y avanza sola al resolverse (los inputs
+  > usan Aplicar explícito para no desaparecer a mitad de tipeo).
+  > Resolución nativa: máquina+perfil, candidatas M-2 (multi-select,
+  > primera = preferida), centro, ritmo, tiempo fijo, herencia origen
+  > (pasos previos + capacidad); la card tercerizada EMBEBE el
+  > PasoTercerizadoPanel entero; material y regla condicional derivan al
+  > detallado ("Elegir el material en modo detallado"). "Después" omite;
+  > el cierre lista lo omitido y ofrece volver. Estado final: "✓ Listo
+  > para cotizar" + Guardar. E2E real: Serigrafía (2 pendientes) quedó
+  > configurada ÍNTEGRAMENTE por cards — ritmo 80 → Aplicar → avanzó a
+  > "¿Quién lo cobra?" → centro → ✓ → guardada (DB verificada); Bordado
+  > con defaults mostró la card "✓ Listo" con cero preguntas.
 - **E.3.3 — Las preguntas de oficio en humano**: pliego de impresión,
   panelizado y costeo del sustrato salen de Avanzado hacia cards guiadas
   (los 3 grandes del censo; márgenes extra quedan en detallado).
