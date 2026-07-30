@@ -444,6 +444,9 @@ export interface FamiliaListItem {
   plantillasCompatibles: string[];
   inputsRequeridos: string[];
   outputsCanonicos: string[];
+  /** B.3.3 — qué deja este paso (Registro de Capacidades), para el
+   *  selector "hereda de" del editor de configuración. */
+  capacidades?: Array<{ key: string; nombre: string; heredable: boolean }>;
   validaciones: Array<{
     codigo: string;
     tipo: string;

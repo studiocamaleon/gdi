@@ -294,11 +294,68 @@ export function formaEmisionDeFamiliaTenant(input: {
   };
 }
 
+/** Resumen por familia para selectores de UI (B.3.3, "hereda de"). */
+export interface CapacidadResumen {
+  key: CapacidadKey;
+  nombre: string;
+  heredable: boolean;
+}
+
+/**
+ * Qué capacidades ofrece una familia, para UI: las declaradas (vía alias)
+ * MÁS las universales (unidades + minutos), que todo paso emite aunque su
+ * declaración histórica no las nombre — espeja `capacidadesEmitidas`.
+ */
+export function resumenCapacidades(
+  outputsCanonicos: readonly string[] | undefined,
+): CapacidadResumen[] {
+  const set = new Set<CapacidadKey>(['unidades_procesadas', 'minutos_reales']);
+  for (const key of capacidadesDeclaradas(outputsCanonicos)) set.add(key);
+  return [...set].map((key) => ({
+    key,
+    nombre: CAPACIDADES[key].nombre,
+    heredable: CAPACIDADES[key].heredable,
+  }));
+}
+
 /** Una capacidad emitida por un paso ejecutado, para la trazabilidad. */
 export interface CapacidadEmitida {
   capacidad: CapacidadKey;
   etiqueta: string;
   valor: number;
+}
+
+/**
+ * Clave reservada del jobContext mutado donde el motor indexa las
+ * capacidades emitidas por rutaPasoId (no es un output canónico).
+ */
+export const KEY_CAPACIDADES_POR_PASO = '__capacidadesPorPaso';
+
+/**
+ * B.3.3 — Herencia EXPLÍCITA: si la config del paso señala un origen
+ * (`origen: { rutaPasoId, capacidad }`), devuelve el valor que ese paso
+ * publicó para esa capacidad. `null` = sin origen señalado o sin valor
+ * (paso salteado / aún no ejecutado): el motor cae al camino legacy.
+ */
+export function resolverHerenciaExplicita(
+  config: Record<string, unknown>,
+  jobContext: Record<string, unknown>,
+): number | null {
+  const origen = config.origen as
+    | { rutaPasoId?: unknown; capacidad?: unknown }
+    | undefined;
+  if (!origen || typeof origen.rutaPasoId !== 'string') return null;
+  const porPaso = jobContext[KEY_CAPACIDADES_POR_PASO] as
+    | Record<string, CapacidadEmitida[]>
+    | undefined;
+  const capacidad =
+    typeof origen.capacidad === 'string'
+      ? origen.capacidad
+      : 'unidades_procesadas';
+  const hit = porPaso?.[origen.rutaPasoId]?.find(
+    (c) => c.capacidad === capacidad,
+  );
+  return hit && Number.isFinite(hit.valor) && hit.valor > 0 ? hit.valor : null;
 }
 
 /**

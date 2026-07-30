@@ -628,6 +628,23 @@ Cinco sub-fases, cada una con valor propio y verificable sola. Rama
 
 #### B.3.3 — Herencia explícita
 
+> **Estado 2026-07-30: HECHA y verificada E2E** (rama
+> `feat/pasos-capacidades`). `resolverHerenciaExplicita` (función pura en
+> capacidades.ts, testeada con el caso diferencial: origen con CONVERSION
+> deja 10 grupos y el trabajo pide 100 — señalarlo devuelve 10, el
+> fallback jamás podría) + el motor publica las capacidades por rutaPasoId
+> bajo la clave reservada `__capacidadesPorPaso`. UI: cuando el mecanismo
+> es "Hereda del paso anterior", aparece "¿De qué paso hereda la
+> cantidad?" con los pasos previos (mostrando "Deja: …" desde el
+> `capacidades` que ahora devuelve GET /familias) + el selector de
+> capacidad heredable; default "Automático (regla histórica)". El origen
+> viaja DENTRO del JSON de config de cantidad (el textarea sigue siendo la
+> fuente al guardar). E2E real: Serigrafía manual configurada para heredar
+> de Bordado (persistido `origen{rutaPasoId,capacidad}` en DB), cotización
+> exacta. Motor suite = línea de base. Trampa de entorno para recordar: un
+> edit por script de Python NO despierta al nest watch — quedó un dist
+> viejo sirviendo hasta re-guardar el archivo con una escritura normal.
+
 - Contrato: `mecanismoCantidadConfigJson` gana
   `origen: { rutaPasoId, capacidad }`. En `resolverCantidad` (HEREDAR):
   con origen explícito → buscar en `pasosEjecutados` el paso señalado y

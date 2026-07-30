@@ -12,7 +12,10 @@ import {
   capacidadesDeForma,
   capacidadesDeclaradas,
   capacidadesEmitidas,
+  KEY_CAPACIDADES_POR_PASO,
   resolverAliasLegacy,
+  resolverHerenciaExplicita,
+  resumenCapacidades,
 } from '../pasos/capacidades';
 import { derivarOutputsTenant } from '../pasos/familia-tenant-validacion';
 
@@ -149,6 +152,57 @@ describe('Registro de Capacidades (B.3.1)', () => {
     expect(
       derivarOutputsTenant({ mecanismosCantidad: ['DIRECT_FROM_JOBCONTEXT', 'CONVERSION'] }),
     ).toContain('grupos');
+  });
+
+  it('herencia explícita: devuelve el valor del paso señalado, no la cantidad del trabajo', () => {
+    // El caso diferencial que el fallback NO puede dar: el trabajo pide 100
+    // unidades, pero el paso origen (un embolsado con CONVERSION) dejó 10
+    // grupos. Señalarlo tiene que devolver 10, no 100.
+    const jobContext = {
+      cantidad: 100,
+      [KEY_CAPACIDADES_POR_PASO]: {
+        'rp-embolsado': [
+          { capacidad: 'grupos', etiqueta: 'cajas de embalaje', valor: 10 },
+          { capacidad: 'unidades_procesadas', etiqueta: 'unidades procesadas', valor: 100 },
+        ],
+      },
+    } as Record<string, unknown>;
+
+    expect(
+      resolverHerenciaExplicita(
+        { origen: { rutaPasoId: 'rp-embolsado', capacidad: 'grupos' } },
+        jobContext,
+      ),
+    ).toBe(10);
+    // Sin capacidad explícita → default unidades.
+    expect(
+      resolverHerenciaExplicita(
+        { origen: { rutaPasoId: 'rp-embolsado' } },
+        jobContext,
+      ),
+    ).toBe(100);
+    // Paso que no publicó (salteado) → null: el motor cae al camino legacy.
+    expect(
+      resolverHerenciaExplicita(
+        { origen: { rutaPasoId: 'rp-inexistente', capacidad: 'grupos' } },
+        jobContext,
+      ),
+    ).toBeNull();
+    // Sin origen señalado → null (comportamiento histórico intacto).
+    expect(resolverHerenciaExplicita({}, jobContext)).toBeNull();
+    expect(
+      resolverHerenciaExplicita({ campoOutput: 'pliegos_impresos' }, jobContext),
+    ).toBeNull();
+  });
+
+  it('resumenCapacidades: declaradas vía alias + universales, con flag heredable', () => {
+    const resumen = resumenCapacidades(['pliegos_impresos', 'tiempo_real_impresion']);
+    const keys = resumen.map((c) => c.key);
+    expect(keys).toEqual(
+      expect.arrayContaining(['unidades_procesadas', 'minutos_reales', 'pliegos']),
+    );
+    expect(resumen.find((c) => c.key === 'pliegos')?.heredable).toBe(true);
+    expect(resumen.find((c) => c.key === 'minutos_reales')?.heredable).toBe(false);
   });
 
   it('las 42 familias del sistema se proyectan al registro sin sorpresas', () => {
