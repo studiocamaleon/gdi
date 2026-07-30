@@ -2817,18 +2817,24 @@ export function ConfigPasosEditorView({
   // se recuerda por navegador.
   const [vistaEditor, setVistaEditorState] = React.useState<
     "detallado" | "guiado"
-  >(() =>
-    typeof window !== "undefined" &&
-    window.localStorage.getItem("editorPasoVista") === "guiado"
-      ? "guiado"
-      : "detallado",
-  );
+  >("detallado");
+  // La preferencia guardada se lee POST-hidratación: leer localStorage en
+  // el estado inicial hacía divergir SSR y cliente (hydration mismatch).
+  React.useEffect(() => {
+    try {
+      if (window.localStorage.getItem("editorPasoVista") === "guiado") {
+        setVistaEditorState("guiado");
+      }
+    } catch {
+      // sin storage: queda el default
+    }
+  }, []);
   const setVistaEditor = (vista: "detallado" | "guiado") => {
     setVistaEditorState(vista);
     try {
       window.localStorage.setItem("editorPasoVista", vista);
     } catch {
-      // sin storage (SSR/privado): la elección vive sólo en la sesión
+      // sin storage (privado): la elección vive sólo en la sesión
     }
   };
   const [panelEditorPasoId, setPanelEditorPasoId] = React.useState<
@@ -8866,11 +8872,15 @@ function TiempoComercialDetalladoEditor({
   pasoId,
   cfg,
   familia,
+  ocultarSwitch = false,
   updateTiempoManualConfig,
 }: {
   pasoId: string;
   cfg: UpsertConfigPasoPayload;
   familia: FamiliaListItem | undefined;
+  /** El guiado pregunta Sí/No con pills propias: el switch del detallado
+   *  se oculta y sólo quedan los campos de configuración. */
+  ocultarSwitch?: boolean;
   updateTiempoManualConfig: (
     pasoId: string,
     patch: Record<string, unknown>,
@@ -8885,11 +8895,14 @@ function TiempoComercialDetalladoEditor({
   );
   return (
                                   <div className="field md:col-span-full">
-                                    <LabelConTooltip
-                                      label="Tiempo estimado por el comercial"
-                                      tooltip="El comercial ingresa el tiempo de este paso al cotizar (ej. diseño gráfico complejo, minutos de láser según el RIP). El valor ingresado define el tiempo del paso y reemplaza el cálculo del modo de tiempo; setup y cleanup de máquina se suman igual."
-                                      iconSize="sm"
-                                    />
+                                    {!ocultarSwitch && (
+                                      <LabelConTooltip
+                                        label="Tiempo estimado por el comercial"
+                                        tooltip="El comercial ingresa el tiempo de este paso al cotizar (ej. diseño gráfico complejo, minutos de láser según el RIP). El valor ingresado define el tiempo del paso y reemplaza el cálculo del modo de tiempo; setup y cleanup de máquina se suman igual."
+                                        iconSize="sm"
+                                      />
+                                    )}
+                                    {!ocultarSwitch && (
                                     <label className="flex items-start gap-2 rounded-md border bg-white px-3 py-2 text-xs">
                                       <input
                                         className="mt-0.5"
@@ -8913,6 +8926,7 @@ function TiempoComercialDetalladoEditor({
                                         </span>
                                       </span>
                                     </label>
+                                    )}
                                     {tiempoManualHabilitado && (
                                       <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
                                         <div className="space-y-1">
@@ -10311,17 +10325,55 @@ function SeccionesEsquemaPaso({
             );
           }
           if (id === "tiempo-comercial") {
-            // Las clases del detallado (field, segmented, ps-*) están
-            // scopeadas bajo .pasos-sections; el Sheet vive en un
-            // portal, así que el wrapper se repone acá.
+            // Pills Sí/No como el resto de las preguntas (feedback del
+            // usuario: el checkbox desentonaba); la configuración fina del
+            // detallado aparece sólo al activarlo.
+            const estimaComercial =
+              getTiempoManualConfig(cfg.paramsPasoJson).habilitado === true;
             return (
-              <div className="pasos-sections">
-                <TiempoComercialDetalladoEditor
-                  pasoId={pasoActual.id}
-                  cfg={cfg}
-                  familia={familia}
-                  updateTiempoManualConfig={updateTiempoManualConfig}
-                />
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: 8 }}
+              >
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={!estimaComercial ? "default" : "outline"}
+                    onClick={() =>
+                      updateTiempoManualConfig(pasoActual.id, {
+                        habilitado: false,
+                      })
+                    }
+                  >
+                    No, se calcula solo
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={estimaComercial ? "default" : "outline"}
+                    onClick={() =>
+                      updateTiempoManualConfig(pasoActual.id, {
+                        habilitado: true,
+                      })
+                    }
+                  >
+                    Sí, lo estima el comercial
+                  </Button>
+                </div>
+                {estimaComercial ? (
+                  // Las clases del detallado (field, ps-*) están scopeadas
+                  // bajo .pasos-sections; el wrapper se repone acá (el
+                  // Sheet vive en un portal).
+                  <div className="pasos-sections">
+                    <TiempoComercialDetalladoEditor
+                      pasoId={pasoActual.id}
+                      cfg={cfg}
+                      familia={familia}
+                      ocultarSwitch
+                      updateTiempoManualConfig={updateTiempoManualConfig}
+                    />
+                  </div>
+                ) : null}
               </div>
             );
           }

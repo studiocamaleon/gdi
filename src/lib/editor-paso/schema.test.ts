@@ -49,7 +49,6 @@ const CENSO: Record<string, string[]> = {
     "tiempo.herencia",
     "tiempo.calcular_segun",
     "tiempo.piezas_montar",
-    "tiempo.talonario",
     "tiempo.tiempo_fijo",
   ],
   // Sub-fase B — Máquina y perfil: candidatas y modo de color usan LA UI
@@ -83,7 +82,14 @@ const CENSO: Record<string, string[]> = {
   // extraída. La fila 3 (tiempo fijo override) ya vive como
   // tiempo.tiempo_fijo. La sección "ajustes" se eliminó: los escapes
   // viven dentro del acomodado.
-  oficio: ["oficio.setup", "oficio.cleanup", "oficio.acomodado"],
+  // El talonario se movió de Tiempo a oficio (feedback del usuario:
+  // es una decisión sobre cómo se arma el pliego).
+  oficio: [
+    "oficio.talonario",
+    "oficio.setup",
+    "oficio.cleanup",
+    "oficio.acomodado",
+  ],
 };
 
 // Con la D no quedan secciones pendientes: el CENSO está cubierto entero.
@@ -367,15 +373,17 @@ describe("sección Tiempo y costo", () => {
     ).toBe(false);
   });
 
-  it("talonario sólo en pre-prensa; piezas a montar sólo en montaje", () => {
+  it("talonario: vive en oficio y sólo en pre-prensa; piezas a montar sólo en montaje", () => {
     const claves = opcionesDeSeccion("tiempo", ctxBase()).map((o) => o.clave);
-    expect(claves).not.toContain("tiempo.talonario");
     expect(claves).not.toContain("tiempo.piezas_montar");
+    expect(
+      opcionesDeSeccion("oficio", ctxBase()).map((o) => o.clave),
+    ).not.toContain("oficio.talonario");
     const clavesPrensa = opcionesDeSeccion(
-      "tiempo",
+      "oficio",
       ctxBase({ familia: { codigo: "pre_prensa" } }),
     ).map((o) => o.clave);
-    expect(clavesPrensa).toContain("tiempo.talonario");
+    expect(clavesPrensa).toContain("oficio.talonario");
   });
 
   it("la herencia aparece con mecanismo HEREDAR y nombra el paso origen", () => {
@@ -412,6 +420,27 @@ describe("sección Máquina y perfil", () => {
     });
     expect(maquina.resumen(ctxManual)).toBe("Sin máquina (paso manual)");
     expect(maquina.origenValor(ctxManual)).toBe("default-paso");
+  });
+
+  it("con candidatas elegidas, máquina y perfil M-1 no se repiten (viven por candidata)", () => {
+    const maquina = ESQUEMA_PASO.find((op) => op.clave === "maquina.maquina")!;
+    const perfil = ESQUEMA_PASO.find((op) => op.clave === "maquina.perfil")!;
+    const conCandidatas = ctxBase({
+      familia: { relacionMaquinaSoportada: ["M-1", "M-2"] },
+      cfg: {
+        maquinaM1Id: "mq-1",
+        maquinasCandidatas: [{ maquinaId: "mq-1" }],
+      },
+    });
+    expect(maquina.visible(conCandidatas)).toBe(false);
+    expect(perfil.visible(conCandidatas)).toBe(false);
+    // Sin candidatas todavía, las preguntas M-1 siguen.
+    const sinCandidatas = ctxBase({
+      familia: { relacionMaquinaSoportada: ["M-1", "M-2"] },
+      cfg: { maquinaM1Id: "mq-1" },
+    });
+    expect(maquina.visible(sinCandidatas)).toBe(true);
+    expect(perfil.visible(sinCandidatas)).toBe(true);
   });
 
   it("candidatas: visible sólo en M-2, resume por nombre y su pendiente es 'candidatas'", () => {
@@ -627,6 +656,21 @@ describe("sección Materiales", () => {
     expect(costeo.visible(conNesting)).toBe(false);
   });
 
+  it("el costeo del SUSTRATO de un paso que acomoda vive en Ajustes, no acá (una pregunta, un lugar)", () => {
+    const costeo = ESQUEMA_PASO.find((op) => op.clave === "materiales.costeo")!;
+    const sustratoNesting = ctxBase({
+      familia: { codigo: "impresion_por_hoja" },
+      slot: slotCtx({ slotCodigo: "sustrato_principal" }),
+    });
+    expect(costeo.visible(sustratoNesting)).toBe(false);
+    // Otros slots del mismo paso siguen preguntando su costeo.
+    const otroSlot = ctxBase({
+      familia: { codigo: "impresion_por_hoja" },
+      slot: slotCtx({ slotCodigo: "broches" }, { esAdicional: true }),
+    });
+    expect(costeo.visible(otroSlot)).toBe(true);
+  });
+
   it("el nombre sólo aplica a slots adicionales", () => {
     const nombre = ESQUEMA_PASO.find((op) => op.clave === "materiales.nombre")!;
     expect(nombre.visible(ctxBase({ slot: slotCtx({}) }))).toBe(false);
@@ -733,7 +777,7 @@ describe("sección Ajustes del trabajo (oficio)", () => {
     });
     expect(acomodado.visible(granFormato)).toBe(true);
     expect(acomodado.resumen(granFormato)).toBe(
-      "Costeo: largo consumido · panelizado",
+      "Costeo: el largo usado del rollo/placa · panelizado",
     );
     expect(acomodado.origenValor(granFormato)).toBe("config");
   });

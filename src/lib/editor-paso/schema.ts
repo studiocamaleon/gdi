@@ -189,6 +189,17 @@ const MODO_ACTIVACION_LABELS: Record<string, string> = {
   NO_EJECUTAR: "Nunca en esta ruta",
 };
 
+// Los multiplicadores llegan como claves técnicas del motor (caras,
+// tipoCopia): acá se traducen a idioma de taller (feedback del usuario).
+const MULTIPLICADOR_LABELS: Record<string, string> = {
+  caras: "Las caras (simple o doble faz)",
+  tipoCopia: "El tipo de copia (original, duplicado…)",
+};
+
+function labelMultiplicador(valor: string): string {
+  return MULTIPLICADOR_LABELS[valor] ?? valor;
+}
+
 function modosActivacionOfrecidos(ctx: ContextoOpcion): string[] {
   // La familia puede FIJAR su activación (Etapa D): se ofrecen sólo los
   // soportados; NO_EJECUTAR siempre se puede (apagar el paso por ruta).
@@ -548,7 +559,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     resumen: (ctx) => {
       const activos = ctx.cfg.multiplicadoresActivos ?? [];
       return activos.length > 0
-        ? `Multiplica por ${activos.join(", ")}`
+        ? `Multiplica por: ${activos
+            .map((m) => labelMultiplicador(m).toLowerCase())
+            .join(" · ")}`
         : "Sin multiplicadores";
     },
     origenValor: (ctx) =>
@@ -560,7 +573,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
       opciones: (ctx) =>
         (ctx.familia?.multiplicadoresSoportados ?? []).map((m) => ({
           value: m,
-          label: m,
+          label: labelMultiplicador(m),
         })),
       activos: (ctx) => ctx.cfg.multiplicadoresActivos ?? [],
       aplicar: (_ctx, valores) => ({
@@ -830,9 +843,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "tiempo.herencia",
     seccion: "tiempo",
-    pregunta: "¿De qué paso hereda?",
+    pregunta: "¿De qué paso hereda la cantidad?",
     ayuda:
-      "Señalá el paso origen y qué número usa (unidades, pliegos, m²…). Sin origen, hereda del paso anterior que publica cantidad.",
+      "Este paso trabaja sobre lo que dejó un paso anterior (los pliegos impresos, las piezas cortadas…). Señalá cuál y qué número usa; sin origen, toma el del paso anterior que publica cantidad.",
     visible: (ctx) =>
       requiereMecanismoCantidad(ctx.cfg, ctx.familia) &&
       mecanismoCantidadEfectivo(ctx) === "HEREDAR_DEL_OUTPUT_CANONICO",
@@ -933,38 +946,6 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     },
   },
   {
-    clave: "tiempo.talonario",
-    seccion: "tiempo",
-    pregunta: "¿Es un talonario? ¿Cómo se apila?",
-    ayuda:
-      "Agrupa talonarios de a N poses por pliego y define qué hacer con los sueltos: compartir pliego (menos papel) o poses vacías (listo para abrochar).",
-    visible: (ctx) => ctx.familia?.codigo === "pre_prensa",
-    resumen: (ctx) => {
-      const valor = String(ctx.paramsPaso.modoTalonarioIncompleto ?? "off");
-      return (
-        TALONARIO_MODE_OPTIONS.find((o) => o.value === valor)?.label ?? valor
-      );
-    },
-    origenValor: (ctx) =>
-      typeof ctx.paramsPaso.modoTalonarioIncompleto === "string"
-        ? "config"
-        : "default-paso",
-    control: {
-      tipo: "pills",
-      opciones: () =>
-        TALONARIO_MODE_OPTIONS.map((o) => ({
-          value: o.value,
-          label: o.label,
-          descripcion: o.description,
-        })),
-      valor: (ctx) => String(ctx.paramsPaso.modoTalonarioIncompleto ?? "off"),
-      aplicar: (_ctx, v) => ({
-        tipo: "params",
-        patch: { modoTalonarioIncompleto: v === "off" ? null : v },
-      }),
-    },
-  },
-  {
     clave: "tiempo.tiempo_fijo",
     seccion: "tiempo",
     pregunta: "¿Cuántos minutos lleva?",
@@ -1018,8 +999,15 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     pregunta: "¿En qué máquina se hace?",
     ayuda:
       "La máquina fija de este paso: pone su centro de costo y, si el tiempo es por máquina, su velocidad.",
+    // Con candidatas elegidas la máquina (y su perfil) se definen POR
+    // CANDIDATA en esa pregunta: repetirlas acá confundía (feedback del
+    // usuario).
     visible: (ctx) =>
-      (ctx.familia?.relacionMaquinaSoportada ?? []).includes("M-1"),
+      (ctx.familia?.relacionMaquinaSoportada ?? []).includes("M-1") &&
+      !(
+        (ctx.familia?.relacionMaquinaSoportada ?? []).includes("M-2") &&
+        (ctx.cfg.maquinasCandidatas?.length ?? 0) > 0
+      ),
     resumen: (ctx) => {
       const maquina = maquinaElegida(ctx);
       if (maquina) return maquina.nombre;
@@ -1042,7 +1030,12 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     pregunta: "¿Con qué perfil?",
     ayuda:
       "El perfil operativo define velocidad y modos de color de la máquina para este paso.",
-    visible: (ctx) => Boolean(ctx.cfg.maquinaM1Id),
+    visible: (ctx) =>
+      Boolean(ctx.cfg.maquinaM1Id) &&
+      !(
+        (ctx.familia?.relacionMaquinaSoportada ?? []).includes("M-2") &&
+        (ctx.cfg.maquinasCandidatas?.length ?? 0) > 0
+      ),
     resumen: (ctx) => {
       const perfil = maquinaElegida(ctx)?.perfilesOperativos.find(
         (p) => p.id === ctx.cfg.perfilM1Id,
@@ -1305,11 +1298,18 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     seccion: "materiales",
     pregunta: "¿Cómo se costea este material?",
     ayuda:
-      "Simple usa la fórmula del consumo; las otras estrategias cobran el material según cómo se aprovecha la placa o el rollo.",
-    // Si Acomodado/nesting define el costeo, el valor del slot no se usa:
-    // la pregunta no aparece (mismo criterio que el detallado, que la
-    // muestra bloqueada).
-    visible: (ctx) => Boolean(ctx.slot) && !nestingDefineCosteo(ctx),
+      "Cobrar exactamente lo consumido, sólo los m² de las piezas, o la placa/rollo según cómo se aprovecha.",
+    // Un solo lugar por pregunta (feedback del usuario): para el SUSTRATO
+    // de un paso que acomoda, el costeo vive en "Ajustes del trabajo"
+    // (Costeo del sustrato del Acomodado); acá sólo queda para los demás
+    // slots. Y si el nesting ya define el costeo, tampoco aparece.
+    visible: (ctx) =>
+      Boolean(ctx.slot) &&
+      !nestingDefineCosteo(ctx) &&
+      !(
+        ctx.slot?.payload.slotCodigo === "sustrato_principal" &&
+        nestingAplica(ctx.familia?.codigo, ctx.cfg)
+      ),
     resumen: (ctx) =>
       labelDe(
         COSTING_STRATEGY_OPTIONS,
@@ -1400,6 +1400,40 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   // cohesiva del detallado extraída como componente. El tiempo fijo
   // override (fila 3) ya migró como tiempo.tiempo_fijo.
   // ───────────────────────────────────────────────────────────────────
+  {
+    // Vivía en Tiempo y costo; es una decisión de oficio sobre cómo se
+    // arma el pliego (feedback del usuario: "¿dónde se ve?").
+    clave: "oficio.talonario",
+    seccion: "oficio",
+    pregunta: "¿Es un talonario? ¿Cómo se apila?",
+    ayuda:
+      "Agrupa talonarios de a N poses por pliego y define qué hacer con los sueltos: compartir pliego (menos papel) o poses vacías (listo para abrochar).",
+    visible: (ctx) => ctx.familia?.codigo === "pre_prensa",
+    resumen: (ctx) => {
+      const valor = String(ctx.paramsPaso.modoTalonarioIncompleto ?? "off");
+      return (
+        TALONARIO_MODE_OPTIONS.find((o) => o.value === valor)?.label ?? valor
+      );
+    },
+    origenValor: (ctx) =>
+      typeof ctx.paramsPaso.modoTalonarioIncompleto === "string"
+        ? "config"
+        : "default-paso",
+    control: {
+      tipo: "pills",
+      opciones: () =>
+        TALONARIO_MODE_OPTIONS.map((o) => ({
+          value: o.value,
+          label: o.label,
+          descripcion: o.description,
+        })),
+      valor: (ctx) => String(ctx.paramsPaso.modoTalonarioIncompleto ?? "off"),
+      aplicar: (_ctx, v) => ({
+        tipo: "params",
+        patch: { modoTalonarioIncompleto: v === "off" ? null : v },
+      }),
+    },
+  },
   {
     clave: "oficio.setup",
     seccion: "oficio",

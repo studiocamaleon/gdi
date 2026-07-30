@@ -69,20 +69,24 @@ export const COSTING_STRATEGY_OPTIONS = opcionesDesdeLabels(
   COSTING_STRATEGIES,
   {
     simple: {
-      label: "Simple",
-      descripcion: "Usa la fórmula de consumo del slot sin costeo especial.",
+      label: "Según el consumo calculado",
+      descripcion:
+        "Cobra exactamente lo que la fórmula de consumo dice que se gasta, sin mirar cómo se aprovecha la placa o el rollo.",
     },
     "m2-exact": {
-      label: "m² exactos",
-      descripcion: "Cobra el área útil de las piezas.",
+      label: "Sólo los m² de las piezas",
+      descripcion:
+        "Cobra el área útil de las piezas acomodadas; el sobrante de placa no se le cobra al cliente.",
     },
     "consumed-length": {
-      label: "Largo consumido",
-      descripcion: "Cobra placa completa y último tramo proporcional.",
+      label: "El largo usado del rollo/placa",
+      descripcion:
+        "Cobra las placas completas y el último tramo proporcional a lo que realmente ocupa.",
     },
     "plate-segments": {
-      label: "Segmentos de placa",
-      descripcion: "Cobra por escalones de ocupación de la placa.",
+      label: "Por tramos de ocupación de la placa",
+      descripcion:
+        "Cobra por escalones (¼, ½, ¾ o placa entera) según cuánto de la placa se usa.",
     },
   },
 );
