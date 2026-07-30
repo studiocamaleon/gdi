@@ -58,6 +58,15 @@ export class DefaultsFamiliaPasoDto {
   plazoProveedorDias?: number | null;
 }
 
+/** Filtro de materias primas del slot: el tenant elige por FAMILIA
+ *  (las subfamilias siguen siendo del catálogo del sistema). */
+export class CompatibilidadMaterialSlotDto {
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  familiasMateriaPrima?: string[];
+}
+
 export class SlotFamiliaTenantDto {
   @IsString()
   codigo!: string;
@@ -70,6 +79,11 @@ export class SlotFamiliaTenantDto {
 
   @IsBoolean()
   requerido!: boolean;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CompatibilidadMaterialSlotDto)
+  compatibilidadMaterial?: CompatibilidadMaterialSlotDto;
 }
 
 export class CrearFamiliaTenantDto {

@@ -514,6 +514,7 @@ export interface FamiliaTenant {
     nombre: string;
     tipo: string;
     requerido: boolean;
+    compatibilidadMaterial?: { familiasMateriaPrima?: string[] };
   }>;
   multiplicadores: string[];
   plantillasCompatibles: string[];
@@ -544,6 +545,7 @@ export interface UpsertFamiliaTenantInput {
     nombre: string;
     tipo: string;
     requerido: boolean;
+    compatibilidadMaterial?: { familiasMateriaPrima?: string[] };
   }>;
   multiplicadores?: string[];
   plantillasCompatibles?: string[];

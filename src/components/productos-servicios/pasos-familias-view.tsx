@@ -82,6 +82,9 @@ interface SlotDraft {
   nombre: string;
   tipo: string;
   requerido: boolean;
+  /** Familias de materia prima que el slot acepta. Vacío = sin filtro
+   *  (el editor de rutas deja elegir cualquier material). */
+  familiasMateriaPrima: string[];
 }
 
 interface FormaDraft {
@@ -116,6 +119,27 @@ interface FormaDraft {
   nombre: string;
   descripcion: string;
 }
+
+/** Familias de materia prima del sistema, en idioma de taller. El slot
+ *  filtra por familia; las subfamilias siguen siendo del catálogo. */
+const FAMILIAS_MATERIAL = [
+  { value: "SUSTRATO", label: "Sustratos (papel, vinilo, lona, rígidos)" },
+  { value: "TINTA_COLORANTE", label: "Tintas y colorantes" },
+  { value: "TRANSFERENCIA_LAMINACION", label: "Films de transfer y laminado" },
+  { value: "TERMINACION_EDITORIAL", label: "Terminación editorial (anillos, espirales)" },
+  { value: "HERRAJE_ACCESORIO", label: "Herrajes y accesorios (ojales, argollas)" },
+  { value: "MAGNETICO_FIJACION", label: "Magnéticos y fijación" },
+  { value: "ADHESIVO_TECNICO", label: "Adhesivos técnicos" },
+  { value: "QUIMICO_AUXILIAR", label: "Químicos auxiliares" },
+  { value: "PINTURA_RECUBRIMIENTO", label: "Pinturas y recubrimientos" },
+  { value: "METAL_ESTRUCTURA", label: "Metales y estructura" },
+  { value: "POP_EXHIBIDOR", label: "POP y exhibidores" },
+  { value: "PACKING_INSTALACION", label: "Packing e instalación" },
+  { value: "ELECTRONICA_CARTELERIA", label: "Electrónica de cartelería" },
+  { value: "NEON_LUMINARIA", label: "Neón y luminarias" },
+  { value: "ADITIVA_3D", label: "Insumos de impresión 3D" },
+  { value: "SELLOS", label: "Sellos" },
+];
 
 /** Multiplicadores que el tenant puede declarar. Son los dos que el
  *  cotizador SIEMPRE carga en el JobContext (`caras` y `tipoCopia`), así que
@@ -265,6 +289,14 @@ function draftAInput(d: FormaDraft): UpsertFamiliaTenantInput {
       nombre: slot.nombre.trim(),
       tipo: slot.tipo,
       requerido: slot.requerido,
+      // Sin familias marcadas no se manda el filtro: el slot acepta todo.
+      ...(slot.familiasMateriaPrima.length > 0
+        ? {
+            compatibilidadMaterial: {
+              familiasMateriaPrima: slot.familiasMateriaPrima,
+            },
+          }
+        : {}),
     })),
     plantillasCompatibles: conMaquina ? d.plantillasCompatibles : [],
     modoRegistro: d.modoRegistro,
@@ -303,6 +335,10 @@ function draftDesdePreset(f: FamiliaListItem): FormaDraft {
         nombre: slot.nombre,
         tipo: slot.tipo,
         requerido: slot.requerido,
+        // El clon hereda el filtro de materiales del catálogo.
+        familiasMateriaPrima: [
+          ...(slot.compatibilidadMaterial?.familiasMateriaPrima ?? []),
+        ],
       })),
     mecanismoCantidad:
       f.mecanismosCantidadSoportados.find(
@@ -344,6 +380,9 @@ function draftDesdeFamilia(f: FamiliaTenant): FormaDraft {
       nombre: slot.nombre,
       tipo: slot.tipo,
       requerido: slot.requerido,
+      familiasMateriaPrima: [
+        ...(slot.compatibilidadMaterial?.familiasMateriaPrima ?? []),
+      ],
     })),
     mecanismoCantidad: f.mecanismosCantidad.includes("CALCULADO_POR_PASO")
       ? "CALCULADO_POR_PASO"
@@ -1169,6 +1208,58 @@ function WizardNuevoPaso({
                       >
                         Quitar
                       </Button>
+                      <div
+                        style={{
+                          gridColumn: "1 / -1",
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: 6,
+                          marginTop: 4,
+                        }}
+                      >
+                        <span
+                          className={s.previewPista}
+                          style={{ width: "100%", marginBottom: 2 }}
+                        >
+                          ¿Qué tipo de material va acá? Sin marcar nada, al
+                          armar el producto se puede elegir cualquiera.
+                        </span>
+                        {FAMILIAS_MATERIAL.map((fam) => {
+                          const activa = slot.familiasMateriaPrima.includes(
+                            fam.value,
+                          );
+                          return (
+                            <button
+                              key={fam.value}
+                              type="button"
+                              className="btn"
+                              style={{
+                                fontSize: 11.5,
+                                fontWeight: activa ? 650 : 400,
+                                opacity: activa ? 1 : 0.62,
+                              }}
+                              onClick={() => {
+                                const slots = [...draft.slots];
+                                slots[i] = {
+                                  ...slot,
+                                  familiasMateriaPrima: activa
+                                    ? slot.familiasMateriaPrima.filter(
+                                        (f) => f !== fam.value,
+                                      )
+                                    : [
+                                        ...slot.familiasMateriaPrima,
+                                        fam.value,
+                                      ],
+                                };
+                                set({ slots });
+                              }}
+                            >
+                              {activa ? "✓ " : ""}
+                              {fam.label}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1189,7 +1280,12 @@ function WizardNuevoPaso({
                       // nada en el motor y CONSUMIBLE_MAQUINA se cobra solo
                       // desde el perfil (el dropdown de tipos era una decisión
                       // sin consecuencias, se quitó a propósito).
-                      { nombre: "", tipo: "INSUMO_PASO", requerido: false },
+                      {
+                        nombre: "",
+                        tipo: "INSUMO_PASO",
+                        requerido: false,
+                        familiasMateriaPrima: [],
+                      },
                     ],
                   })
                 }

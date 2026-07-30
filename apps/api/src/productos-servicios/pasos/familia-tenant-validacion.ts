@@ -56,12 +56,35 @@ export interface FamiliaTenantInput {
 }
 
 const SUPERFICIES_NESTING = ['pliego', 'pliegos_multiples', 'rollo'];
+/** Espejo del enum FamiliaMateriaPrima (schema.prisma). El slot tenant sólo
+ *  puede filtrar por familia; las subfamilias siguen siendo del sistema. */
+const FAMILIAS_MATERIA_PRIMA = [
+  'SUSTRATO',
+  'TINTA_COLORANTE',
+  'TRANSFERENCIA_LAMINACION',
+  'QUIMICO_AUXILIAR',
+  'ADITIVA_3D',
+  'ELECTRONICA_CARTELERIA',
+  'NEON_LUMINARIA',
+  'METAL_ESTRUCTURA',
+  'PINTURA_RECUBRIMIENTO',
+  'TERMINACION_EDITORIAL',
+  'MAGNETICO_FIJACION',
+  'POP_EXHIBIDOR',
+  'HERRAJE_ACCESORIO',
+  'ADHESIVO_TECNICO',
+  'PACKING_INSTALACION',
+  'SELLOS',
+];
 
 export interface SlotTenantInput {
   codigo: string;
   nombre: string;
   tipo: string;
   requerido: boolean;
+  /** Filtro de materias primas que el slot acepta. Sin esto, el editor de
+   *  rutas deja enchufar cualquier material (tinta en un slot de papel). */
+  compatibilidadMaterial?: { familiasMateriaPrima?: string[] };
 }
 
 const RELACIONES: RelacionMaquina[] = ['M-0', 'M-1', 'M-2'];
@@ -196,6 +219,14 @@ export function validarDefinicionFamiliaTenant(
     if (!TIPOS_SLOT.includes(slot.tipo as TipoSlot)) {
       errores.push(
         `Tipo de slot desconocido en "${slot.codigo}": "${slot.tipo}".`,
+      );
+    }
+    for (const fam of fueraDe(
+      slot.compatibilidadMaterial?.familiasMateriaPrima ?? [],
+      FAMILIAS_MATERIA_PRIMA,
+    )) {
+      errores.push(
+        `Familia de material desconocida en el slot "${slot.codigo}": "${fam}".`,
       );
     }
     if (slot.tipo === 'CONSUMIBLE_MAQUINA' && !conMaquina) {

@@ -442,3 +442,40 @@ avance: la anterior en main y verificada. El detalle ejecutable vive en
    universal de costeo, adicionales como pasos opcionales): correr la
    frontera entre "lo que es código" y "lo que es dato". Hay precedente de
    que sale bien.
+
+## Decisión (2026-07-30): un valor por eje, y el nombre lo dice
+
+El wizard tenant declara UN valor por eje (relación con máquina, modo de
+tiempo, mecanismo de cantidad) mientras el catálogo del sistema declara
+arrays. Se evaluó abrir multi-valor y **se descartó por decisión del
+usuario**, con un argumento de modelado que vale registrar:
+
+> "Si un paso puede ser manual o con máquina, entonces no son el mismo
+> paso: son Laminado manual y Laminado automático. Cada paso tiene una
+> forma de ser; si tiene formas distintas, debería expresarse y llamarse
+> distinto."
+
+Consecuencias:
+
+- El wizard NO gana multi-selección en esos ejes. Un paso con dos formas
+  se modela como dos pasos con nombres que las distinguen — lo que además
+  hace legible la ruta y el tablero.
+- **Pendiente derivado**: revisar el catálogo del sistema y desdoblar (o
+  retirar) las familias que hoy declaran arrays de más de un valor. La
+  meta es que el catálogo quede sólo con pasos que aporten valor real o
+  que un tenant no pueda crear.
+
+## Decisión (2026-07-30): compatibilidad de material declarable por el tenant
+
+Los slots tenant nacían sin `compatibilidadMaterial`, así que al armar un
+producto se podía enchufar cualquier materia prima en cualquier slot
+(tinta en un slot de papel). Ahora el wizard pregunta por slot "¿Qué tipo
+de material va acá?" y ofrece las 16 familias del enum
+`FamiliaMateriaPrima` en idioma de taller.
+
+- El tenant filtra por **familia**; las **subfamilias** siguen siendo
+  autoría del catálogo (el sistema afina con `SUSTRATO_HOJA` vs
+  `SUSTRATO_RIGIDO`, el tenant no).
+- Vacío = sin filtro, que es el comportamiento previo: nada se rompe.
+- El clon de un preset hereda el filtro que declaraba el catálogo.
+- El backend valida contra el enum (antes aceptaba cualquier string).
