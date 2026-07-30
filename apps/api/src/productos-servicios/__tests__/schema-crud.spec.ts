@@ -372,7 +372,7 @@ describe('Schema CRUD — Modelo Universal V2', () => {
       expect(condicion2['>=']).toBeDefined();
     });
 
-    it('Talonario emblocado tiene paramsPaso "modoTalonarioIncompleto" en pre_prensa', async () => {
+    it('Talonario emblocado declara "modoTalonarioIncompleto" en el paso del original', async () => {
       if (!tenantId) return;
       const talonario = await prisma.producto.findFirstOrThrow({
         where: { tenantId, codigo: 'TALON-DUPL-A4' },
@@ -388,11 +388,13 @@ describe('Schema CRUD — Modelo Universal V2', () => {
         },
       });
       const ruta = talonario.rutasAlternativas[0];
-      const prePrensa = ruta.configPasos.find(
-        (c) => c.rutaPaso.familiaCodigo === 'pre_prensa',
-      );
-      expect(prePrensa).toBeDefined();
-      const params = prePrensa!.paramsPasoJson as {
+      // El modo vive en el paso que imprime el original: es el que acomoda y
+      // el que publica las pilas. Pre-prensa ya no calcula nada.
+      const original = ruta.configPasos
+        .filter((c) => c.rutaPaso.familiaCodigo === 'impresion_por_hoja')
+        .sort((a, b) => a.rutaPaso.orden - b.rutaPaso.orden)[0];
+      expect(original).toBeDefined();
+      const params = original!.paramsPasoJson as {
         modoTalonarioIncompleto?: string;
       };
       expect(params.modoTalonarioIncompleto).toBe('aprovechar_pliego');

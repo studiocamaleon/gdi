@@ -2622,7 +2622,7 @@ describe('MotorUniversalService — smoke tests', () => {
     }
   });
 
-  it('v3.1 talonario-grouping: pre_prensa con paramsPaso.modoTalonarioIncompleto aplica grouping post-nesting', async () => {
+  it('v3.1 talonario-grouping: el paso del original aplica el grouping y publica las pilas', async () => {
     if (!tenantId) return;
     const talonario = await prisma.producto.findFirstOrThrow({
       where: { tenantId, codigo: 'TALON-DUPL-A4' },
@@ -2640,14 +2640,16 @@ describe('MotorUniversalService — smoke tests', () => {
       },
     });
     expect(result.exitoso).toBe(true);
-    const prePrensa = result.cotizacion!.pasos.find(
-      (p) => p.familiaCodigo === 'pre_prensa',
+    // El grouping lo aplica el paso que declara `modoTalonarioIncompleto`,
+    // que es el del ORIGINAL: es el que define cómo se arma el talonario y
+    // el único que publica las pilas que después usa el abrochado.
+    const original = result.cotizacion!.pasos.find(
+      (p) =>
+        p.familiaCodigo === 'impresion_por_hoja' &&
+        p.nestingResult?.talonarioGrouping,
     );
-    expect(prePrensa).toBeDefined();
-    expect(prePrensa!.activado).toBe(true);
-    // Verificar que el grouping se aplicó.
-    expect(prePrensa!.nestingResult?.talonarioGrouping).toBeDefined();
-    const tg = prePrensa!.nestingResult!.talonarioGrouping!;
+    expect(original).toBeDefined();
+    const tg = original!.nestingResult!.talonarioGrouping!;
     expect(tg.talonariosPedidos).toBe(100);
     expect(tg.numerosXTalonario).toBe(50);
     expect(tg.modoIncompleto).toBe('aprovechar_pliego');
@@ -2666,7 +2668,7 @@ describe('MotorUniversalService — smoke tests', () => {
     // Desperdicio en poses: lo que sobra de los pliegos del residuo.
     expect(tg.posesDesperdicio).toBeLessThan(tg.posesXPliego);
     // pliegos_calculados publicado debe coincidir con pliegosXCapa.
-    const outs = prePrensa!.outputsCanonicos as Record<string, unknown>;
+    const outs = original!.outputsCanonicos as Record<string, unknown>;
     expect(outs.pliegos_calculados).toBe(tg.pliegosXCapa);
   });
 
@@ -3221,7 +3223,7 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(r!.piezasPorPliego).toBeGreaterThan(0);
   });
 
-  it('G-M2: pre_prensa publica `pliegos_calculados` y `poses_por_pliego` vía look-ahead a impresion_por_hoja', async () => {
+  it('G-M2: impresion_por_hoja publica la imposición (pre-prensa ya no acomoda)', async () => {
     if (!tenantId) return;
     const tarjetas = await prisma.producto.findFirstOrThrow({
       where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
@@ -3239,8 +3241,15 @@ describe('MotorUniversalService — smoke tests', () => {
     );
     expect(prePrensa).toBeDefined();
     expect(prePrensa!.activado).toBe(true);
-    // pre_prensa corrió grid-2d-single look-ahead y publicó los outputs.
-    const outs = prePrensa!.outputsCanonicos as Record<string, unknown>;
+    // Pre-prensa sigue en la ruta y sigue costando su tiempo, pero ya no
+    // acomoda: no publica nada. Acomodar es capacidad del paso que imprime.
+    expect(prePrensa!.outputsCanonicos ?? {}).toEqual({});
+
+    const impresion = result.cotizacion!.pasos.find(
+      (p) => p.familiaCodigo === 'impresion_por_hoja',
+    );
+    expect(impresion).toBeDefined();
+    const outs = impresion!.outputsCanonicos as Record<string, unknown>;
     expect(outs.pliegos_calculados).toBeGreaterThan(0);
     expect(outs.poses_por_pliego).toBeGreaterThan(0);
     expect(outs.imposicion_calculada).toMatchObject({
@@ -3328,7 +3337,7 @@ describe('MotorUniversalService — smoke tests', () => {
     }
   });
 
-  it('G-M2: impresion_por_hoja HEREDA `pliegos_calculados` y calcula tiempo basado en pliegos reales', async () => {
+  it('G-M2: impresion_por_hoja cotiza sobre pliegos, no sobre piezas sueltas', async () => {
     if (!tenantId) return;
     const tarjetas = await prisma.producto.findFirstOrThrow({
       where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
@@ -3349,15 +3358,12 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(prePrensa).toBeDefined();
     expect(impresion).toBeDefined();
 
-    // El paso de impresión debe haberse ejecutado con la cantidad de pliegos
-    // calculada por pre_prensa (no con cantidad cruda 1000 piezas).
-    const pliegos = (prePrensa!.outputsCanonicos as Record<string, unknown>)
-      .pliegos_calculados as number;
+    // La imposición ahora la hace el propio paso de impresión: los pliegos
+    // salen de su acomodo, no de un output de pre-prensa.
+    const outsImp = impresion!.outputsCanonicos as Record<string, unknown>;
+    const pliegos = outsImp.pliegos_calculados as number;
     expect(pliegos).toBeGreaterThan(0);
     expect(pliegos).toBeLessThan(1000); // 1000 tarjetas no requieren 1000 pliegos
-
-    // pliegos_impresos publicado por impresion debe coincidir con la cantidad heredada.
-    const outsImp = impresion!.outputsCanonicos as Record<string, unknown>;
     expect(outsImp.pliegos_impresos).toBe(pliegos);
   });
 

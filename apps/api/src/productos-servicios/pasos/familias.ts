@@ -214,34 +214,27 @@ const MP = {
 
 const pre_prensa: DefinicionFamilia = {
   codigo: 'pre_prensa',
-  nombre: 'Pre-prensa / armado de imposición',
-  categoria: 'pre_prensa',
+  nombre: 'Pre-prensa / revisión y armado',
   descripcion:
-    'Cálculo de imposición sobre el pliego/placa madre, definición de cortes, posiblemente nesting.',
+    'Revisión de archivos, armado y preparación del material para imprimir. La imposición la calcula el paso que imprime.',
+  categoria: 'pre_prensa',
   relacionMaquinaSoportada: ['M-0'],
   modosTiempoSoportados: ['T-1'],
   mecanismosCantidadSoportados: [
     'DIRECT_FROM_JOBCONTEXT',
     'CALCULADO_POR_PASO',
   ],
-  modosActivacionSoportados: ['OBLIGATORIO'],
+  modosActivacionSoportados: ['OBLIGATORIO', 'OPCIONAL', 'CONDICIONAL'],
   modoActivacionDefault: 'OBLIGATORIO',
   multiplicadoresSoportados: [],
   slotsRequeridos: [],
   permiteSlotsAdicionales: false,
   plantillasCompatibles: [],
   inputsRequeridos: ['cantidad'],
-  outputsCanonicos: [
-    'imposicion_calculada',
-    'pliegos_calculados',
-    'cortes_calculados',
-    'poses_por_pliego',
-    'pliego_impresion_ancho_mm',
-    'pliego_impresion_alto_mm',
-    'pliego_impresion_area_m2',
-    'pliego_impresion_mp_variante_id',
-    'talonario_pilas',
-  ],
+  // Ya no publica nada: acomodar es capacidad del paso que imprime, que es
+  // el que conoce la máquina, el pliego y el material. Mientras la imposición
+  // vivió acá, ningún producto podía imprimirse sin pre-prensa.
+  outputsCanonicos: [],
   validaciones: [
     {
       codigo: 'requires_cantidad',
@@ -250,17 +243,7 @@ const pre_prensa: DefinicionFamilia = {
       mensaje: 'Falta declarar cantidad',
     },
   ],
-  paramsPasoSchema: [
-    {
-      campo: 'modoTalonarioIncompleto',
-      etiqueta: 'Modo de talonarios incompletos',
-      tipo: 'enum',
-      valoresPermitidos: ['aprovechar_pliego', 'pose_completa'],
-      default: 'aprovechar_pliego',
-      descripcion:
-        'Solo aplica para talonarios. Decide qué hacer cuando la cantidad pedida no completa un grupo entero de poses.',
-    },
-  ],
+  paramsPasoSchema: [],
   productosTipicos: [
     'Tarjetas de Visita',
     'Vinilo adhesivo',
@@ -347,14 +330,15 @@ const impresion_por_hoja: DefinicionFamilia = {
   // [Etapa A: era `defaultMarginForFamily`]
   margenesNestingDefault: { leftMm: 5, rightMm: 5, topMm: 5, bottomMm: 5 },
   inputsRequeridos: ['cantidad', 'caras'],
+  // Acomodar es capacidad de este paso: es el que conoce la máquina, el
+  // pliego y el material. Todo lo que antes publicaba pre-prensa sale de acá.
   outputsCanonicos: [
+    'imposicion_calculada',
     'pliegos_calculados',
     'pliegos_impresos',
-    // La imposición la puede hacer pre-prensa o, si ese paso no corre, la
-    // propia impresión: en los dos casos hay grilla, y la guillotina saca
-    // sus cortes de ahí. Sin esto, un producto sin pre-prensa cotizaba el
-    // corte en 0 minutos.
+    'poses_por_pliego',
     'cortes_calculados',
+    'talonario_pilas',
     'pliego_impresion_ancho_mm',
     'pliego_impresion_alto_mm',
     'pliego_impresion_area_m2',
@@ -375,7 +359,21 @@ const impresion_por_hoja: DefinicionFamilia = {
       mensaje: 'Falta declarar simple/doble faz',
     },
   ],
-  paramsPasoSchema: [],
+  paramsPasoSchema: [
+    {
+      // Va en el paso que define el armado del talonario — el del original.
+      // Sólo ese hace el agrupamiento y publica las pilas; el duplicado y el
+      // triplicado calculan sus pliegos pero no tocan ese número, que es el
+      // que usa el abrochado para contar broches.
+      campo: 'modoTalonarioIncompleto',
+      etiqueta: 'Modo de talonarios incompletos',
+      tipo: 'enum',
+      valoresPermitidos: ['aprovechar_pliego', 'pose_completa'],
+      default: 'aprovechar_pliego',
+      descripcion:
+        'Solo aplica para talonarios. Decide qué hacer cuando la cantidad pedida no completa un grupo entero de poses.',
+    },
+  ],
   productosTipicos: [
     'Tarjetas de Visita',
     'Volantes',

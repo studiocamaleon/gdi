@@ -164,6 +164,25 @@ export async function runNestingForPaso(
   materialResuelto: MaterialResueltoParaNesting | null,
   opts?: NestingDispatchOpts,
 ): Promise<NestingDispatchResult | null> {
+  const resultado = await despacharNesting(
+    paso,
+    jobContext,
+    materialResuelto,
+    opts,
+  );
+  if (!resultado) return null;
+  // El agrupamiento de talonario es post-nesting y lo activa el paso que
+  // declara `modoTalonarioIncompleto` — el del original. Para el resto es un
+  // no-op. [antes colgaba del look-ahead de pre-prensa]
+  return aplicarTalonarioGroupingSiCorresponde(resultado, paso, jobContext);
+}
+
+async function despacharNesting(
+  paso: PasoCargado,
+  jobContext: JobContext,
+  materialResuelto: MaterialResueltoParaNesting | null,
+  opts?: NestingDispatchOpts,
+): Promise<NestingDispatchResult | null> {
   const config = resolveNestingConfig(paso, jobContext, materialResuelto);
 
   // Modo 'por_candidato': enriquecer los candidatos de pliego con su MP
@@ -1137,7 +1156,14 @@ function runGrid2DSingle(
     cantidadCalculada: pliegosNecesarios,
     unidad: 'pliegos',
     aprovechamientoPct: result.metrics.aprovechamientoPct,
-    substrates: result.substrates,
+    // El acomodo describe UN pliego (los placements son de ese pliego), pero
+    // `substrates` es el sustrato REALMENTE consumido: quien lo lee para
+    // costear —la tinta, por ejemplo— espera el total, no la plantilla. Los
+    // dos caminos de multi ya listan una entrada por placa.
+    substrates: result.substrates.map((sustrato) => ({
+      ...sustrato,
+      count: pliegosNecesarios,
+    })),
     placements: result.placements,
     metricasRaw: result.metrics,
     piezasPorPliego,
@@ -1505,72 +1531,13 @@ function getPiezasParaNesting(jobContext: JobContext) {
 }
 
 /**
- * G-M2 — Look-ahead para `pre_prensa`.
+ * Si el paso declara `paramsPaso.modoTalonarioIncompleto` y el JobContext es
+ * de talonario (`numerosXTalonario` declarado), aplica el grouping al
+ * resultado del nesting base. Sino, devuelve baseResult sin tocar.
  *
- * `pre_prensa` (M-0, T-1, sin slots de material) NO conoce el papel ni la
- * máquina por sí solo, pero su rol semántico es PLANIFICAR la imposición y
- * publicar `pliegos_calculados` para que el siguiente paso de impresión por
- * hoja lo herede.
- *
- * Esta función busca el siguiente paso con familia `impresion_por_hoja`
- * (en el subset `pasosSiguientes`), toma su material + máquina, y corre el
- * dispatcher de grid-2d-single sintetizando un paso virtual. El resultado
- * tiene exactamente el mismo shape que cualquier otro `NestingDispatchResult`,
- * lo que permite reusar el viewer y la lógica de outputs canónicos.
- */
-export async function runNestingForPrePrensa(
-  paso: PasoCargado,
-  jobContext: JobContext,
-  pasosSiguientes: PasoCargado[],
-  resolveMaterialFn: (
-    slot: PasoCargado['slots'][number],
-    jc: JobContext,
-  ) => Promise<MaterialResueltoParaNesting | null>,
-  opts?: NestingDispatchOpts,
-): Promise<NestingDispatchResult | null> {
-  if (paso.familiaCodigo !== 'pre_prensa') return null;
-
-  const proximoImpresionPorHoja = pasosSiguientes.find(
-    (p) => p.familiaCodigo === 'impresion_por_hoja',
-  );
-  if (!proximoImpresionPorHoja) return null;
-
-  const slot = proximoImpresionPorHoja.slots[0] ?? null;
-  if (!slot) return null;
-  const material = await resolveMaterialFn(slot, jobContext);
-  if (!material) return null;
-
-  // Construir un paso sintético que el dispatcher trate como impresion_por_hoja
-  // (mismo material + máquina + paramsPaso del siguiente paso). El resultado se
-  // adjudica luego a pre_prensa para que escriba sus outputs canónicos.
-  const pasoSintetico: PasoCargado = {
-    ...proximoImpresionPorHoja,
-  };
-
-  const baseResult = await runNestingForPaso(
-    pasoSintetico,
-    jobContext,
-    material,
-    opts,
-  );
-  if (!baseResult) return null;
-
-  // ─── Talonario-grouping (post-nesting) ──────────────────────────
-  // Si pre_prensa declara `paramsPaso.modoTalonarioIncompleto` Y el JobContext
-  // tiene `numerosXTalonario`, aplicamos el grouping para obtener
-  // `pliegosXCapa` real considerando si la cantidad pedida no completa un
-  // grupo (modos 'aprovechar_pliego' vs 'pose_completa').
-  //
-  // El resultado sobrescribe la `cantidadCalculada` del base (que era pliegos
-  // sin grouping = ceil(cantidad / piezasPorPliego)) por `pliegosXCapa` que
-  // considera el modo del modelador.
-  return aplicarTalonarioGroupingSiCorresponde(baseResult, paso, jobContext);
-}
-
-/**
- * Si el paso `pre_prensa` declara `paramsPaso.modoTalonarioIncompleto` y el
- * JobContext es de talonario (`numerosXTalonario` declarado), aplica el
- * grouping al resultado del nesting base. Sino, devuelve baseResult sin tocar.
+ * El param lo lleva el paso que define el armado —el del original—, así que
+ * es ese el que publica las pilas que después usa el abrochado para contar
+ * broches. El duplicado y el triplicado calculan sus pliegos sin tocarlas.
  */
 function aplicarTalonarioGroupingSiCorresponde(
   baseResult: NestingDispatchResult,

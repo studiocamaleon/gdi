@@ -43,7 +43,6 @@ import type {
 } from './tipos';
 import {
   runNestingForPaso,
-  runNestingForPrePrensa,
   type NestingDispatchResult,
 } from './nesting-dispatcher';
 import {
@@ -647,7 +646,6 @@ export class MotorUniversalService {
         break;
       }
       const paso = producto.pasos[i];
-      const pasosSiguientes = producto.pasos.slice(i + 1);
 
       const ejecucion = await this.ejecutarPaso(
         input.tenantId,
@@ -656,7 +654,6 @@ export class MotorUniversalService {
         errores,
         tarifasMap,
         periodo,
-        pasosSiguientes,
         outputsAcumulados,
       );
       // Si el paso se encendió por arrastre, el comercial tiene que verlo: si
@@ -1980,7 +1977,6 @@ export class MotorUniversalService {
     errores: ErrorMotor[],
     tarifasMap: Map<string, unknown>,
     periodo: string,
-    pasosSiguientes: PasoCargado[] = [],
     outputsAcumulados: Set<string> = new Set(),
   ): Promise<PasoEjecutado> {
     const familia = resolverFamilia(paso.familiaCodigo);
@@ -2241,24 +2237,11 @@ export class MotorUniversalService {
       };
     }
 
-    // d.1) G-M2 — Look-ahead pre_prensa: si el paso es pre_prensa, busca el
-    //      siguiente impresion_por_hoja, toma su material + máquina y corre
-    //      grid-2d-single con info sintetizada. El resultado se usa solo para
-    //      poblar outputs canónicos (`pliegos_calculados`, `poses_por_pliego`,
-    //      `imposicion_calculada`, `cortes_calculados`); el TIEMPO de pre_prensa
-    //      sigue siendo T-1 fijo.
-    if (!nestingDispatch && paso.familiaCodigo === 'pre_prensa') {
-      nestingDispatch = await runNestingForPrePrensa(
-        paso,
-        jobContext,
-        pasosSiguientes,
-        (slot, jc) => this.resolverMaterialSlot(tenantId, slot, jc),
-        {
-          loadPrintSheetMaterial: (varianteId) =>
-            this.cargarPrintSheetMaterial(tenantId, varianteId),
-        },
-      );
-    }
+    // d.1) El look-ahead de pre_prensa se retiró: pre-prensa espiaba el paso
+    //      de impresión siguiente para correr SU nesting y publicar la
+    //      imposición. Mientras fue así, ningún producto podía imprimirse sin
+    //      un paso de pre-prensa. Ahora acomoda el paso que imprime, que es
+    //      el que conoce la máquina, el pliego y el material.
 
     // e) TIEMPO (D.4) — usa el perfil resuelto si difiere del default; si hay
     //    nesting, su cantidadCalculada se usa como cantidad efectiva del paso.
@@ -4000,7 +3983,12 @@ export class MotorUniversalService {
     jobContext: JobContext,
     nestingDispatch: NestingDispatchResult | null,
   ): number {
-    const pliegos = this.resolverCantidad(paso, jobContext, null);
+    // El acomodo va SÍ o SÍ: los clicks son pliegos que pasan por la máquina,
+    // y sin él la cantidad cae a las piezas del trabajo — 500 tarjetas
+    // contarían 500 clicks cuando la máquina sólo vio 50 pliegos. Mientras la
+    // imposición la hacía pre-prensa, este paso heredaba pliegos y el error
+    // no se veía.
+    const pliegos = this.resolverCantidad(paso, jobContext, nestingDispatch);
     if (!Number.isFinite(pliegos) || pliegos <= 0) return 0;
     const caras = this.resolverCarasConsumible(paso, jobContext);
     const factorA4 = Math.ceil(

@@ -916,3 +916,59 @@ declarativa da los mismos números que los ifs.
   el zod no deja emitir formas inválidas; el tag "paso nuevo" mantiene el
   ojo humano encima; y el precedente Wati aplica: **dev tiene integraciones
   vivas, probar con tenant de prueba**, no con Grafoprint real.
+
+## Retiro del look-ahead de pre-prensa (2026-07-30)
+
+**Qué era.** `pre_prensa` no conoce papel ni máquina, pero publicaba la
+imposición: espiaba el siguiente `impresion_por_hoja`, le tomaba prestados el
+material y la máquina, corría SU nesting y publicaba `pliegos_calculados`,
+`poses_por_pliego`, `cortes_calculados`, `imposicion_calculada` y
+`talonario_pilas`. El paso de impresión heredaba esa cantidad.
+
+Consecuencia: **ningún producto podía imprimirse sin un paso de pre-prensa**,
+aunque pre-prensa sea conceptualmente revisión de archivos y armado.
+
+**Qué se hizo.** Acomodar pasó a ser capacidad del paso que imprime — el que
+conoce la máquina, el pliego y el material.
+
+- `impresion_por_hoja` declara los outputs que publicaba pre-prensa y el param
+  `modoTalonarioIncompleto`. `pre_prensa` queda con `outputsCanonicos: []` y
+  suma OPCIONAL/CONDICIONAL a sus modos de activación.
+- El agrupamiento de talonario colgaba del look-ahead; ahora se aplica en
+  `runNestingForPaso` a cualquier paso que declare el param. **Decisión: lo
+  lleva el paso del ORIGINAL** — es el que define el armado y el único que
+  publica las pilas que el abrochado usa para contar broches. Duplicado y
+  triplicado calculan sus pliegos sin tocar ese número.
+- Migración de datos: los 13 pasos de impresión pasan de
+  `HEREDAR_DEL_OUTPUT_CANONICO` a `CALCULADO_POR_PASO`, y el
+  `modoTalonarioIncompleto` se muda de pre-prensa al primer paso de impresión.
+
+### Tres bugs que el cambio destapó
+
+Ninguno era nuevo: estaban latentes porque impresión **nunca** acomodaba, así
+que sus ramas jamás corrían.
+
+1. `runGrid2DSingle` devolvía `substrates` con `count: 1` —la plantilla de UN
+   pliego— mientras `cantidadCalculada` eran los 125 pliegos reales. Quien lee
+   `substrates` para costear (la tinta) veía 1/125 del área. Los dos caminos
+   de multi ya listaban una entrada por placa; ahora single también.
+2. `clicksA4DelPaso` pedía la cantidad pasando `nestingDispatch: null`, así
+   que caía a las piezas del trabajo: 500 tarjetas contaban 500 clicks cuando
+   la máquina veía 50 pliegos. Mientras impresión heredaba pliegos, el número
+   salía bien de casualidad.
+3. `cortes_calculados` sólo lo declaraba pre-prensa (ver commit 192e20e7), así
+   que un producto sin pre-prensa cotizaba el corte en 0 minutos.
+
+### Verificación
+
+Los **11 productos** con pre-prensa que cotizan hoy dan **exactamente el mismo
+precio que antes del cambio, al céntimo** (Carpetas, Folletos, Dípticos,
+Imanes ×2, Sticker, Postales, Sello, Señaladores, Talonarios, Tarjetas). Que
+el rediseño sea transparente para el costeo es la prueba de que la imposición
+que hace impresión es la misma que hacía pre-prensa.
+
+Y desactivando pre-prensa en Tarjetas, el producto **cotiza igual de bien**:
+impresión publica 50 pliegos y 14 cortes, y la guillotina calcula sus 4,67 min.
+
+Suite: 1.211 pasan, los mismos 18 preexistentes fallan. Cuatro tests que
+describían el diseño viejo se reescribieron.
