@@ -533,4 +533,110 @@ describe('runNestingForPaso montaje sobre sustrato', () => {
     expect(result!.unidad).toBe('pliegos');
     expect(result!.piezasAcomodadas).toBe(10);
   });
+
+  // ── Etapa A: qué piezas acomoda el paso lo declara la familia ──────
+  // Laminado y montaje heredaban pliegos con dos tablas de claves gemelas
+  // en el dispatcher. Ahora es una sola ruta y la diferencia entre ambos
+  // queda declarada, no escondida en el código.
+
+  function buildPasoLaminado() {
+    return {
+      rutaPasoId: 'rp-laminado',
+      rutaPasoOrden: 2,
+      familiaCodigo: 'laminado',
+      configPasoId: 'cp-laminado',
+      modoActivacion: 'OBLIGATORIO',
+      condicionActivacionJson: null,
+      modoTiempo: 'T-3',
+      mecanismoCantidad: 'CALCULADO_POR_PASO',
+      mecanismoCantidadConfigJson: null,
+      multiplicadoresActivos: [],
+      paramsPasoJson: { nestingConfig: { algorithm: 'shelf-rollo' } },
+      maquinaM1Id: null,
+      perfilM1Id: null,
+      setupOverrideMin: null,
+      cleanupOverrideMin: null,
+      tiempoFijoOverrideMin: null,
+      slots: [],
+      cargosDirectosPaso: [],
+      maquina: {
+        id: 'm-lam',
+        codigo: 'LAM',
+        nombre: 'Laminadora',
+        plantilla: 'LAMINADORA_BOPP_ROLLO',
+        parametrosTecnicosJson: { anchoMaxRolloMm: 720 },
+      },
+    };
+  }
+
+  const filmEnRollo = {
+    id: 'film-bopp',
+    atributosVarianteJson: { anchoMm: 720, largoRolloMm: 200_000 },
+  };
+
+  it('el laminado lamina el PLIEGO impreso, no la pieza del cliente', async () => {
+    const result = await runNestingForPaso(
+      buildPasoLaminado() as never,
+      {
+        // 500 tarjetas chicas que salieron de 25 pliegos A3.
+        cantidad: 500,
+        piezas: [{ cantidad: 500, anchoMm: 90, altoMm: 50 }],
+        pliegos_impresos: 25,
+        pliego_impresion_ancho_mm: 297,
+        pliego_impresion_alto_mm: 420,
+      } as never,
+      filmEnRollo,
+    );
+
+    expect(result).not.toBeNull();
+    // Acomoda 25 pliegos, no 500 tarjetas.
+    expect(result!.piezasAcomodadas).toBe(25);
+  });
+
+  it('el laminado no acomoda nada si el paso anterior no imprimió', async () => {
+    const result = await runNestingForPaso(
+      buildPasoLaminado() as never,
+      {
+        cantidad: 500,
+        piezas: [{ cantidad: 500, anchoMm: 90, altoMm: 50 }],
+      } as never,
+      filmEnRollo,
+    );
+
+    expect(result).toBeNull();
+  });
+
+  it('el laminado exige impresión real: el pliego calculado no le alcanza', async () => {
+    const result = await runNestingForPaso(
+      buildPasoLaminado() as never,
+      {
+        cantidad: 500,
+        piezas: [{ cantidad: 500, anchoMm: 90, altoMm: 50 }],
+        // Sólo el cálculo de pre-prensa, sin impresión que lo respalde.
+        pliegos_calculados: 25,
+        pliego_impresion_ancho_mm: 297,
+        pliego_impresion_alto_mm: 420,
+      } as never,
+      filmEnRollo,
+    );
+
+    expect(result).toBeNull();
+  });
+
+  it('el montaje sí acepta el pliego calculado como respaldo', async () => {
+    const result = await runNestingForPaso(
+      buildPasoMontaje('grid-2d-multi', 'pliegos_impresos') as never,
+      {
+        cantidad: 500,
+        piezas: [{ cantidad: 500, anchoMm: 90, altoMm: 50 }],
+        pliegos_calculados: 4,
+        pliego_impresion_ancho_mm: 297,
+        pliego_impresion_alto_mm: 420,
+      } as never,
+      { id: 'pvc', atributosVarianteJson: { anchoMm: 1220, largoMm: 2440 } },
+    );
+
+    expect(result).not.toBeNull();
+    expect(result!.piezasAcomodadas).toBe(4);
+  });
 });

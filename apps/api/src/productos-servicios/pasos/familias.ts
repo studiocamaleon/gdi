@@ -19,6 +19,7 @@ import type {
   DefinicionFamilia,
   DefinicionFamiliaResuelta,
   FamiliaCodigo,
+  FuentePiezasNesting,
   ModoRegistroPaso,
 } from './types';
 
@@ -833,6 +834,17 @@ const laminado: DefinicionFamilia = {
   // [Etapa A: eran tres if por familia en nesting-config]
   origenMargenesNesting: { fuente: 'maquina', campo: 'margenesDesperdicioMm' },
   campoSeparacionMaquina: 'margenEntrePliegosMm',
+  // Lo que se lamina es el PLIEGO impreso, no la pieza terminada: el film
+  // pasa por la hoja entera. Una sola fuente, sin decisión del modelador.
+  // [Etapa A: estaba cableado en runLaminadoRollo]
+  fuentesPiezasNesting: {
+    pliegos_impresos: {
+      cantidadDesde: ['pliegos_impresos'],
+      anchoDesde: 'pliego_impresion_ancho_mm',
+      altoDesde: 'pliego_impresion_alto_mm',
+    },
+  },
+  fuentePiezasDefault: 'pliegos_impresos',
   margenesNestingDefault: {
     leftMm: 0,
     rightMm: 0,
@@ -1264,6 +1276,19 @@ const montaje_sobre_sustrato: DefinicionFamilia = {
   // tiempo cuenta piezas a pegar, no el sustrato que consumió el nesting.
   // [Etapa A: era un if en motor cuyo cuerpo ya existía genérico]
   magnitudTiempoDefault: 'cantidad_montaje',
+  // Se puede montar la pieza terminada o el pliego que salió de imprenta —
+  // lo elige el modelador con `fuentePiezasMontaje`. A diferencia del
+  // laminado, acá la cantidad tolera que el pliego venga del cálculo de
+  // pre-prensa y no de una impresión real.
+  // [Etapa A: la tabla de claves estaba en buildJobContextMontaje]
+  fuentesPiezasNesting: {
+    pliegos_impresos: {
+      cantidadDesde: ['pliegos_impresos', 'pliegos_calculados'],
+      anchoDesde: 'pliego_impresion_ancho_mm',
+      altoDesde: 'pliego_impresion_alto_mm',
+    },
+  },
+  fuentePiezasDefault: 'piezas_jobcontext',
   inputsRequeridos: [],
   outputsCanonicos: [
     'piezas_montadas',
@@ -2068,6 +2093,26 @@ export function magnitudTiempoDefaultDeFamilia(
   codigo: string,
 ): string | null {
   return resolverFamilia(codigo)?.magnitudTiempoDefault ?? null;
+}
+
+/**
+ * De dónde saca las piezas el nesting de este paso.
+ *
+ * Devuelve `null` cuando el paso acomoda las piezas del propio trabajo —
+ * sea porque la familia no declara fuentes heredadas, porque el modelador
+ * eligió `piezas_jobcontext`, o porque eligió una fuente que la familia no
+ * declara (mismo fallthrough que tenían los ifs). [Etapa A]
+ */
+export function fuentePiezasNestingDeFamilia(
+  codigo: string,
+  seleccion?: string | null,
+): FuentePiezasNesting | null {
+  const familia = resolverFamilia(codigo);
+  const fuentes = familia?.fuentesPiezasNesting;
+  if (!fuentes) return null;
+  const clave = seleccion || familia?.fuentePiezasDefault;
+  if (!clave) return null;
+  return fuentes[clave] ?? null;
 }
 
 /**

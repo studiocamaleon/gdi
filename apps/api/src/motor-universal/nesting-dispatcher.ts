@@ -38,7 +38,10 @@ import {
 import { evaluateGranFormatoMaxRectsRollLayout } from '../productos-servicios/nesting/algorithms/maxrects-rollo';
 import { evaluateGranFormatoSequentialRollLayout } from '../productos-servicios/nesting/algorithms/secuencial-rollo';
 import { nestGrid2DSingle } from '../productos-servicios/nesting/algorithms/grid-2d-single';
-import { resolverFamilia } from '../productos-servicios/pasos/familias';
+import {
+  fuentePiezasNestingDeFamilia,
+  resolverFamilia,
+} from '../productos-servicios/pasos/familias';
 import { nestGrid2DMulti } from '../productos-servicios/nesting/algorithms/grid-2d-multi';
 import {
   calculateTalonarioGrouping,
@@ -314,37 +317,9 @@ function runLaminadoRollo(
   materialResuelto: MaterialResueltoParaNesting | null,
   config: NestingConfigResolved,
 ): NestingDispatchResult | null {
-  const ctx = jobContext as Record<string, unknown>;
-  const pliegosImpresos = Number(ctx.pliegos_impresos ?? 0);
-  const anchoPliegoMm = Number(ctx.pliego_impresion_ancho_mm ?? 0);
-  const altoPliegoMm = Number(ctx.pliego_impresion_alto_mm ?? 0);
-  if (
-    !Number.isFinite(pliegosImpresos) ||
-    pliegosImpresos <= 0 ||
-    !Number.isFinite(anchoPliegoMm) ||
-    anchoPliegoMm <= 0 ||
-    !Number.isFinite(altoPliegoMm) ||
-    altoPliegoMm <= 0
-  ) {
-    return null;
-  }
-
-  return runShelfRollo(
-    paso,
-    {
-      ...jobContext,
-      cantidad: Math.ceil(pliegosImpresos),
-      piezas: [
-        {
-          cantidad: Math.ceil(pliegosImpresos),
-          anchoMm: anchoPliegoMm,
-          altoMm: altoPliegoMm,
-        },
-      ],
-    },
-    materialResuelto,
-    config,
-  );
+  const contexto = buildJobContextPiezas(paso, jobContext);
+  if (!contexto) return null;
+  return runShelfRollo(paso, contexto, materialResuelto, config);
 }
 
 function runPlastificadoPouch(
@@ -372,7 +347,7 @@ async function runMontajeSobreSustrato(
   materialResuelto: MaterialResueltoParaNesting | null,
   config: NestingConfigResolved,
 ): Promise<NestingDispatchResult | null> {
-  const montajeContext = buildJobContextMontaje(paso, jobContext);
+  const montajeContext = buildJobContextPiezas(paso, jobContext);
   if (!montajeContext) return null;
 
   if (config.algorithm === 'shelf-rollo' || config.algorithm === 'maxrects-rollo') {
@@ -394,31 +369,34 @@ async function runMontajeSobreSustrato(
   return null;
 }
 
-function buildJobContextMontaje(
+/**
+ * Piezas que el paso va a acomodar.
+ *
+ * Un paso puede acomodar las piezas del propio trabajo o heredar lo que
+ * publicó un paso anterior — el laminado lamina el pliego impreso, no la
+ * tarjeta. Qué claves del JobContext leer lo declara la familia
+ * (`fuentesPiezasNesting`), no este archivo.
+ * [Etapa A: eran dos tablas de claves cableadas, una acá y otra en
+ * runLaminadoRollo, que hacían lo mismo]
+ */
+function buildJobContextPiezas(
   paso: PasoCargado,
   jobContext: JobContext,
 ): JobContext | null {
   const params = asRecord(paso.paramsPasoJson);
-  const fuente =
-    typeof params.fuentePiezasMontaje === 'string'
-      ? params.fuentePiezasMontaje
-      : 'piezas_jobcontext';
-  const ctx = jobContext as Record<string, unknown>;
+  const seleccion =
+    typeof params.fuentePiezas === 'string'
+      ? params.fuentePiezas
+      : typeof params.fuentePiezasMontaje === 'string'
+        ? params.fuentePiezasMontaje
+        : null;
+  const fuente = fuentePiezasNestingDeFamilia(paso.familiaCodigo, seleccion);
 
-  if (fuente === 'pliegos_impresos') {
-    const cantidad = readPositiveNumberFromRecord(
-      ctx,
-      'pliegos_impresos',
-      'pliegos_calculados',
-    );
-    const anchoMm = readPositiveNumberFromRecord(
-      ctx,
-      'pliego_impresion_ancho_mm',
-    );
-    const altoMm = readPositiveNumberFromRecord(
-      ctx,
-      'pliego_impresion_alto_mm',
-    );
+  if (fuente) {
+    const ctx = jobContext as Record<string, unknown>;
+    const cantidad = readPositiveNumberFromRecord(ctx, ...fuente.cantidadDesde);
+    const anchoMm = readPositiveNumberFromRecord(ctx, fuente.anchoDesde);
+    const altoMm = readPositiveNumberFromRecord(ctx, fuente.altoDesde);
     if (!cantidad || !anchoMm || !altoMm) return null;
     return {
       ...jobContext,

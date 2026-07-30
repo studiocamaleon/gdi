@@ -352,6 +352,21 @@ export type DefinicionFamiliaResuelta = Omit<DefinicionFamilia, 'codigo'> & {
   } | null;
 };
 
+/**
+ * Piezas que un paso hereda de otro: en vez de acomodar las piezas del
+ * trabajo, arma una pieza sintética por cada unidad que publicó el paso
+ * anterior (un pliego impreso, por ejemplo).
+ */
+export interface FuentePiezasNesting {
+  /** Claves del JobContext que aportan la cantidad, en orden de preferencia.
+   *  La primera que traiga un número positivo gana. */
+  cantidadDesde: string[];
+  /** Clave del JobContext con el ancho de la pieza heredada. */
+  anchoDesde: string;
+  /** Clave del JobContext con el alto de la pieza heredada. */
+  altoDesde: string;
+}
+
 export interface DefinicionFamilia {
   // --- Identidad ---
   codigo: FamiliaCodigo;
@@ -396,7 +411,25 @@ export interface DefinicionFamilia {
    *  integrado corta, no imprime. [Etapa A: era un if en motor] */
   sinConsumiblesMaquina?: boolean;
 
-  // --- Nesting: de dónde salen los números (Etapa A tardía) ---
+  // --- Nesting: de dónde salen las piezas y los números (Etapa A tardía) ---
+  /**
+   * Fuentes de piezas heredadas que la familia admite, por código.
+   *
+   * Algunos pasos no acomodan las piezas que compró el cliente sino lo que
+   * salió de un paso anterior: el laminado lamina el PLIEGO impreso, no la
+   * tarjeta; el montaje puede pegar la pieza terminada o el pliego. La
+   * fuente `piezas_jobcontext` es implícita y no se declara — es usar las
+   * piezas del propio trabajo.
+   *
+   * Si la familia declara más de una, el modelador elige con el param
+   * `fuentePiezas` (`fuentePiezasMontaje` en los pasos ya guardados).
+   * [Etapa A: laminado tenía estas claves cableadas en el dispatcher]
+   */
+  fuentesPiezasNesting?: Record<string, FuentePiezasNesting>;
+  /** Fuente de piezas cuando el modelador no eligió ninguna. Si se omite,
+   *  el paso acomoda las piezas del propio trabajo. */
+  fuentePiezasDefault?: string;
+
   /**
    * De dónde sale el margen físico que el sustrato NO puede usar.
    *
