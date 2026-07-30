@@ -379,6 +379,48 @@ los leen. Dos clases de emisor:
 3. Slots con `cantidadBase` (ej. `talonario_pilas` para el cartón por pila).
 4. La trazabilidad del desglose por paso en el front.
 
+### B.0.1 Consumo real — censo corregido (2ª pasada, 2026-07-29)
+
+> La 1ª pasada subestimó el consumo (grep a un directorio inexistente y
+> no miró el canal persistido). El consumo real corre por **cuatro
+> canales** distintos:
+
+1. **jobContext en runtime (herencia entre pasos)**: `pliegos_calculados`,
+   `pliegos_impresos`, `piezas_cortadas` (mapa default), `talonario_pilas`
+   (cantidadBase de slot), `pliego_impresion_mp_variante_id` (costeo del
+   sustrato real), medidas del pliego (m² del plotter sobre hojas).
+2. **Snapshot persistido** (`CotizacionItem.trazabilidadJson.pasos[].outputsCanonicos`)
+   — el canal OPERATIVO post-cotización: el **simulador láser** arma la
+   cola con `pliegos_impresos` + medidas del pliego leídos del snapshot
+   (`produccion.service.ts:buildLaserJob`); el **nesting-viewer** de la
+   propuesta muestra 6 keys (`pliegos_calculados`, `poses_por_pliego`,
+   `cortes_calculados`, medidas/área del pliego).
+3. **Config del producto que referencia outputs POR NOMBRE** — el modelo
+   "capacidades" ya existe embrionario y cableado: `minimoComercialBase`
+   puede ser `'pliegos_impresos'`; la fuente del montaje
+   (`MONTAJE_SOURCE_OPTIONS`) ofrece `pliegos_impresos`; los slots cobran
+   por `pliegos_impresos` o `talonario_pilas`
+   (`CANTIDAD_BASE_SLOT_OPTIONS`). Tres UIs distintas ofreciendo outputs
+   como opciones, cada una con su plomería ad-hoc.
+4. **Canal paralelo camelCase**: el `aprovechamientoPct` que se VE en el
+   preview del acomodo, el simulador y el viewer sale del RESULTADO del
+   nesting (camelCase), no del output snake_case — el valor se usa, la
+   key `aprovechamiento_pct` no. Dos representaciones del mismo dato.
+
+**Muertos de verdad** (cero lectores en los 4 canales): `m2_calculados`,
+`aprovechamiento_pct` (la key), `tiempo_real_impresion/corte`,
+`metros_lineales_film/corte/union`, los flags (`mutacion_aplicada`,
+`proof_aprobado`, `diseno_aprobado`) y ~29 de los 30 triviales.
+
+### B.0.2 ¿La lista de unidades es acotada? (pregunta 1, medido)
+
+Los 52 outputs colapsan en **8 magnitudes**: unidades procesadas, pliegos,
+m², metros lineales, minutos, porcentaje, medida (mm), flag/objeto de
+traza. Las unidades nuevas sólo pueden aparecer con PRIMITIVAS nuevas
+(algoritmos, modos de tiempo, tipos de slot) — y primitivas sólo agrega
+Grafo, nunca el tenant. **La lista es acotada por construcción**: la
+gobierna quien agrega primitivas.
+
 **El gap tenant (verificado en DB).** El wizard no declara outputs:
 "Bordado" emite `[]`. ("Serigrafía manual" emite `piezas_estampadas` solo
 porque nació por API en la Etapa C.) Consecuencias: nadie puede heredar DE
@@ -427,6 +469,23 @@ con P1? (b) ¿la elección rollo/pliego expone la variante de algoritmo
 (shelf vs maxrects) o el sistema decide como hoy (mejor candidato)?
 (c) alcance de P5 — ¿entra en B o queda para el wizard de ruta (Etapa E
 real)?
+
+**Posiciones del usuario (2026-07-29, sesión de análisis):**
+
+- **Herencia → EXPLÍCITA.** "Cada paso debería indicar de QUÉ paso hereda
+  (…) nadie mejor modela el producto que el que lo modela." Le generaba
+  dudas desde antes del proyecto que los pasos hereden "de antes" sin
+  saber de qué. Hipótesis de diseño: al configurar el paso en el producto,
+  si hereda, se elige el paso ORIGEN (dropdown de pasos previos con lo
+  que emite cada uno); el sistema puede SUGERIR el anterior, pero lo
+  guardado es explícito (rutaPasoId origen + capacidad en
+  `mecanismoCantidadConfigJson`). Esto reemplaza el mapa
+  `defaultOutputParaHeredar` y el "último que la emitió".
+- **Granularidad**: pidió medir si las unidades son lista acotada antes
+  de decidir → B.0.2 responde: 8 magnitudes, acotada por construcción.
+- **Outputs muertos**: pidió verificar el uso real antes de asumir →
+  B.0.1 corrige el censo (4 canales); la decisión de podar/estandarizar
+  se toma sobre la lista de muertos REALES.
 
 ---
 
