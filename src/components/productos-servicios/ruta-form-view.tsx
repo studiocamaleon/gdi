@@ -341,20 +341,35 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
   );
 
   const familiaOptions = React.useMemo<HumanSelectOption[]>(() => {
-    return Array.from(familiasPorCategoria.entries()).flatMap(
-      ([catCodigo, fams]) => {
-        const cat = catalogoFamilias.categorias.find(
-          (c) => c.codigo === catCodigo,
-        );
-        return fams.map((f) => ({
-          value: f.codigo,
-          label: f.nombre,
-          code: f.codigo,
-          description: f.descripcion,
-          group: cat?.nombre ?? catCodigo,
-        }));
-      },
-    );
+    // Los pasos creados por la empresa van PRIMERO en su propio grupo, igual
+    // que en el selector de pasos extra: si alguien creó "Serigrafía manual"
+    // es para usarla en rutas, no para bucearla entre las del catálogo.
+    const propios: HumanSelectOption[] = [];
+    const sistema: HumanSelectOption[] = [];
+    for (const [catCodigo, fams] of familiasPorCategoria.entries()) {
+      const cat = catalogoFamilias.categorias.find(
+        (c) => c.codigo === catCodigo,
+      );
+      for (const f of fams) {
+        if (f.origen === "tenant") {
+          propios.push({
+            value: f.codigo,
+            label: f.nombre,
+            description: f.descripcion,
+            group: "Tus pasos",
+          });
+        } else {
+          sistema.push({
+            value: f.codigo,
+            label: f.nombre,
+            code: f.codigo,
+            description: f.descripcion,
+            group: cat?.nombre ?? catCodigo,
+          });
+        }
+      }
+    }
+    return [...propios, ...sistema];
   }, [catalogoFamilias.categorias, familiasPorCategoria]);
 
   const agregarPaso = () => {

@@ -145,6 +145,9 @@ export interface RutaPaso {
   id: string;
   orden: number;
   familiaCodigo: string;
+  /** Nombre de la familia resuelto en el server (para familias tenant el
+   *  código es un UUID: nunca mostrarlo humanizado). */
+  familiaNombre?: string | null;
   icono?: string | null;
   activo: boolean;
 }

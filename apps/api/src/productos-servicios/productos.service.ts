@@ -10,6 +10,7 @@ import {
   PaginationDto,
   paginatedResponse,
 } from '../common/dto/pagination.dto';
+import { resolverFamilia } from './pasos/familias';
 import type {
   ActualizarProductoDto,
   CrearProductoDto,
@@ -949,9 +950,16 @@ export class ProductosService {
 	        ...rutaAlt,
         ruta: {
           ...rutaAlt.ruta,
-          pasos: rutaAlt.ruta.pasos.filter(
-	            (paso) => paso.version === rutaAlt.rutaVersion,
-	          ),
+          // `familiaNombre` resuelto en el server: para una familia TENANT el
+          // código es un UUID y todo fallback del front que "humanice" el
+          // código termina mostrando el UUID (pasó 3 veces en los E2E).
+          pasos: rutaAlt.ruta.pasos
+            .filter((paso) => paso.version === rutaAlt.rutaVersion)
+            .map((paso) => ({
+              ...paso,
+              familiaNombre:
+                resolverFamilia(paso.familiaCodigo)?.nombre ?? null,
+            })),
 	        },
 	        // G-F3: extras de ESTA ruta alternativa (scope por ruta).
 	        pasosExtras: producto.pasosExtras
@@ -963,6 +971,14 @@ export class ProductosService {
 	          })),
 	        configPasos: rutaAlt.configPasos.map((configPaso) => ({
 	          ...configPaso,
+	          rutaPaso: configPaso.rutaPaso
+	            ? {
+	                ...configPaso.rutaPaso,
+	                familiaNombre:
+	                  resolverFamilia(configPaso.rutaPaso.familiaCodigo)
+	                    ?.nombre ?? null,
+	              }
+	            : configPaso.rutaPaso,
 	          modoColorOptions: this.buildModoColorOptions(configPaso),
 	          maquinasCandidatas: configPaso.maquinasCandidatas.map(
 	            (candidata) => ({
