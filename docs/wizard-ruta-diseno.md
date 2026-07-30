@@ -88,7 +88,107 @@ humano) · **[P] operativa por producto** (accesible, secundaria) ·
    entera vs. por tramos es una decisión comercial que Holdprint expone
    como feature). En humano, es de las preguntas más valiosas del censo.
 
-## 2. Próximos pasos del plan
+## 2. E.1 — Defaults declarados en el paso (diseño CERRADO)
+
+> Censo E.0 CERRADO 2026-07-30 (con la corrección del usuario:
+> interpretación del ancho se funde con el ancho de panel).
+>
+> **Decisiones del usuario 2026-07-30 (las tres, con lo recomendado):**
+> (a) overlay `FamiliaPasoDefaults` para TODAS las familias;
+> (b) fallback VIVO del motor (cambiar el default corrige los productos
+> que confían en él); (c) las familias del sistema ganan "Configurar
+> defaults" ya en E.1.
+
+### 2.1 La idea
+
+Hoy el que configura la ruta de un producto re-contesta, producto por
+producto, cosas que son del PASO: quién lo cobra, a qué ritmo se hace,
+cuánta demasía pide, cuánto solapa el panel. E.1 invierte la carga: **la
+familia declara sus defaults al crearse (el wizard ya hace las preguntas
+— hoy tira las respuestas), el producto puede pisarlos, y la cotización
+ajusta lo que quedó abierto.** Es el patrón activación-default de la
+Etapa D, generalizado.
+
+Evidencia de que el patrón ya existe a medias: `nesting-config.ts` tiene
+`defaultSeparationForFamily()` y `defaultMarginForFamily()` — defaults
+POR FAMILIA cableados en código (Tipo A puro). E.1 los vuelve datos.
+
+### 2.2 Los cinco defaults de la v1
+
+| Default | Aplica a | Hoy se pide en | Lector (fallback nuevo) |
+|---|---|---|---|
+| Centro de costo | pasos sin máquina (con máquina lo trae la máquina) | cada config de producto | motor: `paso.centroCostoId ?? default de familia` |
+| Ritmo (unid/hora) | T-2 | cada config (productivityValue) | motor: `params.productivityValue ?? default` |
+| Tiempo fijo (min) | T-1 | cada config | motor: `tiempoFijoOverrideMin ?? default` |
+| Demasía por lado (mm) | familias que nestean + tenant que acomodan | Avanzado por producto | nesting-config: se inserta el tier "default de familia" en la cadena (runtime → producto → **familia** → máquina → cableado) |
+| Solape de panel (mm) | gran formato sobre rollo | Avanzado por producto | ídem, en panelizado |
+
+### 2.3 Dónde viven (decisión a: overlay para TODAS las familias)
+
+Tabla nueva `FamiliaPasoDefaults` — el MISMO patrón que `EstacionFamilia`
+(tenantId + familiaCodigo string, que puede ser código del sistema o
+UUID tenant):
+
+```
+FamiliaPasoDefaults
+  tenantId            uuid
+  familiaCodigo       string   // 'corte_manual' o UUID de FamiliaTenant
+  centroCostoId       uuid?
+  productividadHora   decimal?
+  tiempoFijoMin       decimal?
+  demasiaMm           decimal?
+  solapePanelMm       decimal?
+  @@unique([tenantId, familiaCodigo])
+```
+
+Por qué overlay y no columnas en FamiliaTenant: la mitad del dolor de
+configurar rutas está en pasos del SISTEMA (corte, plegado, guillotina),
+y el sistema no puede declarar el centro de costo de un tenant. Una sola
+tabla cubre ambos mundos, igual que el ruteo a estaciones.
+
+### 2.4 Semántica (decisión b: fallback VIVO del motor)
+
+El default aplica como **fallback en el motor al cotizar**, no como
+prefill congelado: un producto que no pisó el valor sigue al default de
+la familia — cambiar el default corrige TODOS los productos que confían
+en él (misma semántica que tarifas y estaciones). El editor de config
+muestra el estado: "Usando el ritmo del paso (60/h) — escribí para
+pisarlo".
+
+### 2.5 De dónde salen (UI)
+
+- **Wizard de paso (tenant)**: las preguntas YA existen — "¿a qué
+  ritmo?" y "¿cuántos minutos?" del preview pasan a GUARDARSE como
+  default; la pregunta de estación se amplía a "¿Dónde se hace y quién
+  lo cobra?" (estación + centro); la rama que acomoda pregunta demasía
+  típica (opcional).
+- **Catálogo del sistema (decisión c)**: en la vista Pasos de
+  producción, cada familia del sistema gana "Configurar defaults" — un
+  sheet chico con los 5 campos aplicables. Ahí es donde el tenant
+  declara que SU guillotina la cobra el centro X y SU gran formato
+  solapa 30 mm.
+- **Config del producto**: mismos campos de siempre, ahora con el
+  default visible como placeholder y estado "usando default del paso".
+
+### 2.6 Sub-fases
+
+- **E.1.1** — Tabla + resolución en motor/nesting-config + tests (el
+  tier nuevo en las cadenas de precedencia; suite intacta por nombre).
+- **E.1.2** — Captura: wizard de paso guarda defaults; sheet "Configurar
+  defaults" para familias del sistema.
+- **E.1.3** — Editor de config: placeholders/estado "usando default" +
+  E2E (configurar un producto nuevo con un paso que trae defaults debe
+  requerir CERO campos de tiempo/costo).
+
+### 2.7 Abierto (no bloquea)
+
+- ¿"Fijar" para defaults (que el producto NO pueda pisar)? La filosofía
+  "nadie modela mejor que el que modela" sugiere que no; se revisa si
+  aparece el caso.
+- Márgenes extra tier de familia: se decide al tocar nesting-config
+  (mismo mecanismo, costo marginal).
+
+## 3. Próximos pasos del plan
 
 - **E.1 — Defaults declarados en el paso**: centro de costo + ritmo +
   los candidatos del censo (demasía, solape, tiempo fijo). Contrato
