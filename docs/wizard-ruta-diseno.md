@@ -216,6 +216,23 @@ pisarlo".
   E2E (configurar un producto nuevo con un paso que trae defaults debe
   requerir CERO campos de tiempo/costo).
 
+  > **Estado 2026-07-30: HECHA — E.1 COMPLETA, done cumplido al centavo.**
+  > Editor de config: el select de centro muestra "Usando el del paso:
+  > Produccion & Taller" y la productividad "Usando el ritmo del paso:
+  > 45/h" como placeholders cuando la config está vacía; y las
+  > validaciones dejan de advertir lo que el default cubre ("Centro sin
+  > definir" / "Tiempo sin definir" ya no aparecen si la familia lo
+  > declara — Bordado se configura SIN el "!" mientras Serigrafía, sin
+  > defaults, lo mantiene). E2E real (alternativa "Defaults E2E" del
+  > producto de prueba): Bordado guardado con CERO campos de tiempo/costo
+  > (centroCostoId null, sin productivityValue en DB) y la cotización
+  > resolvió todo por el fallback vivo — **134 min = ⌈100/45×60⌉ ·
+  > Produccion & Taller · $25.175,67/h · $56.225,66**: el ritmo y el
+  > centro salieron del DEFAULT declarado en el wizard, no de la config.
+  > Suite completa = línea de base (435 verdes / 18 preexistentes).
+  > Alcance anotado: demasía/solape no muestran aún el "usando default"
+  > en la card de nesting (el motor SÍ los aplica; display para E.3).
+
 ### 2.7 Abierto (no bloquea)
 
 - ¿"Fijar" para defaults (que el producto NO pueda pisar)? La filosofía
