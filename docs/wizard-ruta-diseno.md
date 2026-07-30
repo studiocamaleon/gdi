@@ -275,3 +275,108 @@ pisarlo".
   preguntas que le quedan son: qué pasos, en qué orden, máquina/material
   concreto, herencia (ya humana, B.3.3), y las preguntas [O] del censo
   SOLO para los pasos de nesting.
+
+## 4. E.3 — El Wizard de Ruta (diseño)
+
+### 4.1 El principio rector: un motor de preguntas pendientes
+
+El wizard NO es una pantalla nueva con los mismos campos en otro orden.
+Es un **motor de pendientes**: por cada paso de la ruta, computa qué
+falta para que ese paso cotice bien — es decir, lo que la familia + sus
+defaults + lo ya configurado NO resuelven — y pregunta SOLO eso, de a
+una pregunta, en idioma de taller. El corolario que justifica todo el
+camino A→B→E.1→E.2: **un paso bien declarado = cero preguntas**
+(Bordado con sus defaults pasa directo: "✓ Listo — 45/h · Produccion &
+Taller").
+
+Esto invierte la relación con las validaciones existentes: hoy
+`validarBasico`/`validarMateriales` PROTESTAN después; el motor de
+pendientes es la misma información usada ANTES, como guion de preguntas.
+
+### 4.2 Anatomía: dos fases
+
+**FASE A — "¿Cómo se hace este producto?"** Armar la secuencia: buscar
+pasos (Tus pasos primero + catálogo, el selector humano de E.0), ordenar,
+o partir de una ruta existente. El wizard muestra por paso lo que YA
+trae ("Tercerizado — Terminaciones Patagonicas", "45/h · Produccion &
+Taller") para que elegir el paso correcto sea la mitad del trabajo.
+
+**FASE B — recorrido paso a paso.** Cada paso muestra su estado (✓ Listo
+/ "Faltan 2: máquina, papel") y sus question-cards pendientes de a una.
+El inventario COMPLETO de preguntas posibles (derivado del censo §1 +
+validaciones):
+
+| Condición del paso | Pregunta (en humano) |
+|---|---|
+| M-1 sin máquina elegida | "¿En qué máquina se hace?" (+ perfil) |
+| M-2 sin candidatas | "¿Entre qué máquinas elige el comercial?" |
+| Slot requerido sin material | "¿Qué [papel/tinta/…] usa?" (fijo / candidatos / lo elige el comercial / decide el sistema) |
+| HEREDAR sin origen | "¿De qué paso hereda la cantidad?" (B.3.3, ya existe) |
+| Tercerizado sin grilla | "Cargá los precios de [proveedor]" (matriz/tarifa/fijo) |
+| T-2 sin ritmo NI default | "¿A qué ritmo se hace en este producto?" |
+| Sin centro NI default (manual) | "¿Quién lo cobra?" |
+| CONDICIONAL sin regla | "¿Cuándo se activa?" (builder de reglas) |
+| Nestea (oficio, §1): | |
+| — impresión por hoja | "¿En qué pliego se imprime?" (del sustrato / fijo / que el sistema compare) |
+| — gran formato rollo | "¿Puede salir en paneles?" (no / sí automático / sí así: solape+dirección+ancho con su interpretación) |
+| — con placa/rollo | "¿Cómo se cobra el material?" (entero / lo consumido / por tramos) |
+
+Todo lo demás NO se pregunta: activación (default de familia, pisable con
+un toggle en la card del paso), demasía/solape/ritmo/centro/tiempo fijo
+(defaults E.1), proveedor/fuente/plazo (E.2), algoritmo (la física
+decide, B.3.4), estación y registro (familia).
+
+### 4.3 Convivencia
+
+El editor actual NO se borra: el modo guiado es la puerta de entrada y
+el editor completo queda como "modo detallado" (mismo patrón que el JSON
+detrás del selector de herencia). Los overrides finos (setup/cleanup,
+márgenes extra, dotación, multiplicadores) viven en detallado.
+
+### 4.4 Sub-fases
+
+- **E.3.1 — El motor de pendientes** (sin UI nueva): función pura
+  `pendientesDePaso(familia, defaults, cfg, contexto)` → lista tipada de
+  preguntas con su porqué; tests exhaustivos por forma. En el editor
+  actual, banner humano por paso ("Faltan 2: máquina y papel") en lugar
+  del chip críptico — primera entrega visible y sirve de validación del
+  motor con uso real.
+
+  > **Estado 2026-07-30: HECHA y verificada en vivo** (rama
+  > `feat/wizard-ruta`). `src/lib/pendientes-paso.ts`: 11 tipos de
+  > pendiente con etiqueta/motivo en idioma de taller y flag
+  > `bloqueante` (cotiza mal sin esto) vs sugerido (hay fallback, ej.
+  > herencia sin origen); rama tercerizada pregunta SOLO proveedor y
+  > precios; defaults-aware (la invariante madre — paso bien declarado =
+  > lista vacía — es el primer test). 11 tests vitest verdes (el front
+  > tenía vitest: 362 verdes en total). Editor: banner humano bajo el
+  > título — Bordado: "Centro del paso: Produccion & Taller (default) ·
+  > ✓ Listo para cotizar" (verde); Serigrafía sin defaults: "Para
+  > cotizar bien — Faltan: el ritmo de trabajo y quién lo cobra"
+  > (ámbar) — verificado en vivo con la alternativa Defaults E2E.
+- **E.3.2 — Question-cards guiadas** en Configurar pasos: el modo guiado
+  recorre los pendientes de a uno; "modo detallado" a un click.
+- **E.3.3 — Las preguntas de oficio en humano**: pliego de impresión,
+  panelizado y costeo del sustrato salen de Avanzado hacia cards guiadas
+  (los 3 grandes del censo; márgenes extra quedan en detallado).
+- **E.3.4 — FASE A**: armar la secuencia desde el producto (alta de
+  producto y tab Rutas), con la decisión de reuso de rutas de abajo.
+- **E.3.5 — E2E de done.**
+
+**Done** = armar y configurar un producto NUEVO de punta a punta en modo
+guiado, sin abrir el modo detallado ni Avanzado; un paso con defaults
+completos pasa con CERO preguntas; y la cotización sale correcta al
+primer intento.
+
+### 4.5 Decisiones (CERRADAS con el usuario, 2026-07-30)
+
+1. **Convivencia**: el modo guiado es la puerta de entrada; el editor
+   completo queda como "modo detallado" (overrides finos ahí). Sin
+   big-bang.
+2. **Entrada**: el flujo guiado arranca EN EL PRODUCTO — al crear un
+   producto sin ruta y en el tab Rutas ("Armar ruta guiado"); el wizard
+   arma la alternativa entera de corrido (secuencia + config por paso).
+3. **Reuso de rutas**: el sistema decide con aviso — si la secuencia
+   coincide con una ruta existente la reusa; si no, crea una nueva con
+   nombre autogenerado editable. La ruta pasa a ser un detalle técnico
+   visible, no un trámite.
