@@ -1491,7 +1491,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     seccion: "oficio",
     pregunta: "¿Cómo se acomodan y cobran las piezas en el material?",
     ayuda:
-      "Demasía por pieza, pliego de impresión, panelizado, márgenes extra y la política de costeo de la placa o el rollo.",
+      "Demasía por pieza, pliego de impresión, panelizado, márgenes extra y —en placa— cómo se cobra la última placa a medio usar.",
     visible: (ctx) => nestingAplica(ctx.familia?.codigo, ctx.cfg),
     resumen: (ctx) => {
       const nesting = ctx.paramsPaso.nestingConfig as
@@ -1504,11 +1504,19 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
         typeof nesting?.costing?.strategy === "string"
           ? nesting.costing.strategy
           : "simple";
-      const partes = [
-        `Costeo: ${labelDe(COSTING_STRATEGY_OPTIONS, estrategia).toLowerCase()}`,
-      ];
-      if (nesting?.paneling?.enabled === true) partes.push("panelizado");
-      return partes.join(" · ");
+      const partes: string[] = [];
+      // El costeo sólo se nombra si se salió del default: en rollo no es
+      // configurable y decir "placas enteras" ahí confunde.
+      if (estrategia !== "simple") {
+        partes.push(
+          `Costeo: ${labelDe(
+            COSTING_STRATEGY_OPTIONS,
+            estrategia,
+          ).toLowerCase()}`,
+        );
+      }
+      if (nesting?.paneling?.enabled === true) partes.push("Panelizado");
+      return partes.length > 0 ? partes.join(" · ") : "Acomodo estándar";
     },
     origenValor: (ctx) =>
       ctx.paramsPaso.nestingConfig != null ? "config" : "default-paso",

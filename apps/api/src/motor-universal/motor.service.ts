@@ -3502,30 +3502,12 @@ export class MotorUniversalService {
         unidadConsumo,
         materialResuelto.atributosVarianteJson,
       );
-      // Precio/m² del material para m2-exact sobre rollo: sólo si la
-      // conversión desde la unidad de stock es real (M2 directo, o
-      // rollo/metro lineal con dimensiones declaradas en la variante).
-      const precioReferenciaNum = Number(materialResuelto.precioReferencia ?? 0);
-      const stockNormalizado = normalizarUnidad(materialResuelto.unidadStock);
-      const precioPorM2Convertido = precioMaterialPorUnidadDeConsumo(
-        precioReferenciaNum,
-        materialResuelto.unidadStock,
-        'm2',
-        materialResuelto.atributosVarianteJson,
-      );
-      const precioPorM2Material =
-        stockNormalizado === 'M2'
-          ? precioReferenciaNum
-          : precioPorM2Convertido !== precioReferenciaNum
-            ? precioPorM2Convertido
-            : null;
       const costeoNesting = this.calcularCosteoNestingMaterial(
         this.resolverEstrategiaCosteoNesting(paso, slot.estrategiaCosto),
         precioUnitario,
         jobContext,
         nestingDispatch,
         paso,
-        precioPorM2Material,
       );
       if (costeoNesting && precioUnitario > 0) {
         cantidad = costeoNesting.totalCost / precioUnitario;
@@ -3850,43 +3832,10 @@ export class MotorUniversalService {
     jobContext: JobContext,
     nestingDispatch: NestingDispatchResult | null,
     paso: PasoCargado,
-    /** Precio por m² del material (convertido desde su unidad de stock);
-     *  habilita m2-exact sobre ROLLO ("no cobrar el desperdicio"). */
-    precioPorM2: number | null = null,
   ) {
     if (!nestingDispatch || precioUnitario <= 0) return null;
     if (!isNestingCostingStrategy(estrategiaCosto)) return null;
-    const primerSustrato = nestingDispatch.substrates[0];
-    if (!primerSustrato) return null;
-    if (primerSustrato.kind !== 'sheet') {
-      // En rollo la única estrategia con sentido es m2-exact (cobrar sólo
-      // el área de las piezas, sin el desperdicio del acomodo);
-      // consumed-length y plate-segments son geometría de placa. Sin un
-      // precio/m² convertible desde el material, no se puede costear así.
-      if (
-        primerSustrato.kind !== 'roll' ||
-        estrategiaCosto !== 'm2-exact' ||
-        precioPorM2 === null ||
-        precioPorM2 <= 0
-      ) {
-        return null;
-      }
-      return applyCostingStrategy({
-        strategy: 'm2-exact',
-        nesting: {
-          algorithm: nestingDispatch.algorithm,
-          substrates: nestingDispatch.substrates,
-          placements: nestingDispatch.placements,
-          metrics: nestingDispatch.metricasRaw,
-        },
-        unitPrice: precioUnitario,
-        totalPieces: this.totalPiezasParaCosteo(jobContext),
-        unitsNeeded: Math.max(1, Math.ceil(nestingDispatch.cantidadCalculada)),
-        pieceWidthMm: jobContext.medidaCustomMm?.anchoMm,
-        pieceHeightMm: jobContext.medidaCustomMm?.altoMm,
-        pricePerM2Override: precioPorM2,
-      });
-    }
+    if (nestingDispatch.substrates[0]?.kind !== 'sheet') return null;
 
     const params = (paso.paramsPasoJson ?? {}) as Record<string, unknown>;
     const nestingConfig =

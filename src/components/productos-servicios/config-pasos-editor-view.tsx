@@ -7927,84 +7927,75 @@ function AcomodadoDetalladoEditor({
                                       </div>
                                     </div>
 
-                                    <div className="ps-card">
-                                      <div className="ps-card-head">
-                                        <span className="ps-ic">
-                                          <CircleDollarSignIcon />
-                                        </span>
-                                        <LabelConTooltip
-                                          label={
-                                            <span className="ps-tt normal-case tracking-normal">
-                                              Costeo del sustrato
-                                            </span>
-                                          }
-                                          tooltip="Define cómo se cobra el material cuando hay resultado de nesting."
-                                        />
-                                      </div>
-                                      <div className="ps-card-body ps-grid2">
-                                        <HumanSelect
-                                          value={String(
-                                            nestingCosting.strategy ?? "simple",
+                                    {/* En ROLLO no hay nada que elegir: el consumo del acomodo ES
+                                        el costo (largo consumido × ancho). Las tres estrategias
+                                        alternativas son geometría de placa y el motor las ignora,
+                                        así que la card no se muestra. */}
+                                    {!sustratoRolloDisponible && (
+                                      <div className="ps-card">
+                                        <div className="ps-card-head">
+                                          <span className="ps-ic">
+                                            <CircleDollarSignIcon />
+                                          </span>
+                                          <LabelConTooltip
+                                            label={
+                                              <span className="ps-tt normal-case tracking-normal">
+                                                Costeo del sustrato
+                                              </span>
+                                            }
+                                            tooltip="Define cómo se cobra el material cuando hay resultado de nesting."
+                                          />
+                                        </div>
+                                        <div className="ps-card-body ps-grid2">
+                                          <HumanSelect
+                                            value={String(
+                                              nestingCosting.strategy ?? "simple",
+                                            )}
+                                            onValueChange={(v) =>
+                                              updateNestingCosting(pasoId, {
+                                                strategy: v || "simple",
+                                              })
+                                            }
+                                            options={COSTING_STRATEGY_OPTIONS}
+                                          />
+                                          {nestingCosting.strategy ===
+                                            "plate-segments" && (
+                                            <div className="space-y-2">
+                                              <LabelConTooltip
+                                                label="Escalones de ocupación"
+                                                tooltip="Porcentajes de placa que se cobran según ocupación: una placa al 60% cobra el primer escalón igual o superior."
+                                                ejemplo="25, 50, 75, 100"
+                                                iconSize="sm"
+                                              />
+                                              <Input
+                                                value={
+                                                  Array.isArray(
+                                                    nestingCosting.segmentSteps,
+                                                  )
+                                                    ? nestingCosting.segmentSteps.join(
+                                                        ", ",
+                                                      )
+                                                    : "25, 50, 75, 100"
+                                                }
+                                                onChange={(e) =>
+                                                  updateNestingCosting(pasoId, {
+                                                    segmentSteps: e.target.value
+                                                      .split(",")
+                                                      .map((item) =>
+                                                        Number(item.trim()),
+                                                      )
+                                                      .filter((item) =>
+                                                        Number.isFinite(item),
+                                                      ),
+                                                  })
+                                                }
+                                                className="font-sans"
+                                              />
+                                            </div>
                                           )}
-                                          onValueChange={(v) =>
-                                            updateNestingCosting(pasoId, {
-                                              strategy: v || "simple",
-                                            })
-                                          }
-                                          options={
-                                            // En rollo sólo tienen sentido
-                                            // "según el consumo" (largo
-                                            // consumido) y "sólo los m² de
-                                            // las piezas" (sin desperdicio);
-                                            // las otras dos son geometría
-                                            // de placa y el motor las
-                                            // ignora.
-                                            sustratoRolloDisponible
-                                              ? COSTING_STRATEGY_OPTIONS.filter(
-                                                  (option) =>
-                                                    option.value === "simple" ||
-                                                    option.value === "m2-exact",
-                                                )
-                                              : COSTING_STRATEGY_OPTIONS
-                                          }
-                                        />
-                                        {nestingCosting.strategy ===
-                                          "plate-segments" && (
-                                          <div className="space-y-2">
-                                            <LabelConTooltip
-                                              label="Escalones de ocupación"
-                                              tooltip="Porcentajes de placa que se cobran según ocupación: una placa al 60% cobra el primer escalón igual o superior."
-                                              ejemplo="25, 50, 75, 100"
-                                              iconSize="sm"
-                                            />
-                                            <Input
-                                              value={
-                                                Array.isArray(
-                                                  nestingCosting.segmentSteps,
-                                                )
-                                                  ? nestingCosting.segmentSteps.join(
-                                                      ", ",
-                                                    )
-                                                  : "25, 50, 75, 100"
-                                              }
-                                              onChange={(e) =>
-                                                updateNestingCosting(pasoId, {
-                                                  segmentSteps: e.target.value
-                                                    .split(",")
-                                                    .map((item) =>
-                                                      Number(item.trim()),
-                                                    )
-                                                    .filter((item) =>
-                                                      Number.isFinite(item),
-                                                    ),
-                                                })
-                                              }
-                                              className="font-sans"
-                                            />
-                                          </div>
-                                        )}
+                                        </div>
                                       </div>
-                                    </div>
+                                    )}
                                     </>
     </>
   );

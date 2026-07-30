@@ -68,25 +68,29 @@ export const CRITERIO_AUTO_OPTIONS = opcionesDesdeLabels(
 export const COSTING_STRATEGY_OPTIONS = opcionesDesdeLabels(
   COSTING_STRATEGIES,
   {
+    // Las cuatro responden lo mismo: qué se hace con la ÚLTIMA placa que
+    // quedó a medio usar (el resto vuelve al estante y sirve para otro
+    // trabajo). Sólo se ofrecen en placa/pliego: en rollo el consumo del
+    // acomodo ya ES el costo.
     simple: {
-      label: "Según el consumo calculado",
+      label: "Placas enteras",
       descripcion:
-        "Cobra lo que la fórmula de consumo dice que se gasta. En rollo (vinilo, lona) eso es el largo consumido del acomodo, desperdicio incluido.",
+        "Le imputa al trabajo todas las placas que tocó, incluida la última aunque se haya usado a medias.",
     },
     "m2-exact": {
       label: "Sólo los m² de las piezas",
       descripcion:
-        "Cobra el área útil de las piezas acomodadas; el desperdicio no se le cobra al cliente. En rollo: sólo lo impreso, no el largo consumido.",
+        "Cobra únicamente el área de las piezas. Ojo: también descuenta los recortes que sí se tiran, así que el margen se ve más alto de lo real.",
     },
     "consumed-length": {
-      label: "El largo usado de la placa",
+      label: "El largo usado de la última placa",
       descripcion:
-        "Cobra las placas completas y el último tramo proporcional a lo que realmente ocupa. Sólo aplica a placas/pliegos.",
+        "Placas llenas enteras + la última proporcional a lo que ocupó. Ej.: 2 placas + 30% de la tercera.",
     },
     "plate-segments": {
-      label: "Por tramos de ocupación de la placa",
+      label: "Por tramos de la última placa",
       descripcion:
-        "Cobra por escalones (¼, ½, ¾ o placa entera) según cuánto de la placa se usa. Sólo aplica a placas/pliegos.",
+        "Placas llenas enteras + la última redondeada al escalón que corresponda (¼, ½, ¾ o entera).",
     },
   },
 );

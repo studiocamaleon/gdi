@@ -3,9 +3,6 @@
  * del sustrato. No considera desperdicio.
  *
  * Ported (1:1) desde rigid-printed.calculations.ts:costeoM2Exacto.
- * Extensión 2026-07-30: también acepta sustratos ROLLO cuando el caller
- * provee `pricePerM2Override` (en rollo el precio/m² no se deriva del
- * sustrato sino del material) — "no cobrar el desperdicio del acomodo".
  */
 
 import type { CostingInput, CostingResult } from '../types';
@@ -15,22 +12,15 @@ export function costingM2Exact<T = unknown>(
   input: CostingInput<T>,
 ): CostingResult {
   const substrate = input.nesting.substrates[0];
-  if (!substrate) {
-    throw new Error('costingM2Exact requires a substrate.');
-  }
-  if (substrate.kind !== 'sheet' && input.pricePerM2Override == null) {
-    throw new Error(
-      'costingM2Exact requires a sheet substrate (or pricePerM2Override).',
-    );
+  if (!substrate || substrate.kind !== 'sheet') {
+    throw new Error('costingM2Exact requires a sheet substrate.');
   }
 
-  const pricePerM2Value =
-    input.pricePerM2Override ??
-    pricePerM2(
-      input.unitPrice,
-      substrate.kind === 'sheet' ? substrate.widthMm : 0,
-      substrate.kind === 'sheet' ? substrate.heightMm : 0,
-    );
+  const pricePerM2Value = pricePerM2(
+    input.unitPrice,
+    substrate.widthMm,
+    substrate.heightMm,
+  );
   const pieceWidthMm = input.pieceWidthMm;
   const pieceHeightMm = input.pieceHeightMm;
   const areaPiezasM2 =

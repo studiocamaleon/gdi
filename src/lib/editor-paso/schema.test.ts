@@ -777,8 +777,23 @@ describe("sección Ajustes del trabajo (oficio)", () => {
     });
     expect(acomodado.visible(granFormato)).toBe(true);
     expect(acomodado.resumen(granFormato)).toBe(
-      "Costeo: el largo usado de la placa · panelizado",
+      "Costeo: el largo usado de la última placa · Panelizado",
     );
     expect(acomodado.origenValor(granFormato)).toBe("config");
+  });
+
+  it("con el costeo en su default no lo nombra (en rollo no es configurable)", () => {
+    const acomodado = ESQUEMA_PASO.find(
+      (op) => op.clave === "oficio.acomodado",
+    )!;
+    const rollo = ctxBase({
+      familia: { codigo: "impresion_por_area" },
+      cfg: {
+        paramsPasoJson: {
+          nestingConfig: { costing: { strategy: "simple" } },
+        },
+      },
+    });
+    expect(acomodado.resumen(rollo)).toBe("Acomodo estándar");
   });
 });
