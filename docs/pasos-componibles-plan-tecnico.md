@@ -234,9 +234,12 @@ Etapa A ya deja mapeados esos accesos.
 > `message`, así que el validador manda los errores como array (apiRequest
 > los une).
 >
-> **Scope-cut deliberado de la v1**: la edición COMPLETA de la forma (ficha
-> con tabs, patrón maquinaria) queda para una pasada siguiente — hoy el
-> ciclo de vida es crear / inhabilitar / reactivar / eliminar. El preview
+> **Scope-cut de la v1, RESUELTO 2026-07-29** (rama feat/pasos-edicion): la
+> edición reusa el MISMO wizard precargado (sin la pregunta de preset),
+> guarda con PATCH y preserva los códigos de los slots existentes — los
+> productos configurados contra esos slots no pierden el vínculo. El ciclo
+> de vida quedó completo: crear / editar / inhabilitar / reactivar /
+> eliminar. El preview
 > corre para T-1/T-2 espejando la aritmética exacta del motor (F.2.10, mismo
 > ceil y misma tarifa via loadTarifasHorarias) — correr el motor entero
 > exigiría producto+ruta que aún no existen al crear la familia; el desvío
