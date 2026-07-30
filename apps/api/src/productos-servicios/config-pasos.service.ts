@@ -582,6 +582,13 @@ export class ConfigPasosService {
         (decl) => decl.codigo === slot.slotCodigo,
       );
       if (!slotDecl || slotDecl.tipo === 'CONSUMIBLE_MAQUINA') continue;
+      // B.3.5 — slot de familia TENANT sin compatibilidad declarada = sin
+      // restricción de material (el wizard v1 no pregunta compatibilidades;
+      // "sin compat" acá significa "cualquier material del tenant"). El
+      // scope por tenant ya se validó arriba para TODO id referenciado.
+      // Para familias del sistema, sin compat sigue siendo rechazo: todas
+      // declaran la suya y la ausencia sería un bug de catálogo.
+      if (familia.esDeTenant && !slotDecl.compatibilidadMaterial) continue;
       const assertMateria = (materiaId: string) => {
         const materia = materiaById.get(materiaId);
         if (!materia || !compatible(materia, slotDecl.compatibilidadMaterial)) {

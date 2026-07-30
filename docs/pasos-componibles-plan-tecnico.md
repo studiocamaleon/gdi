@@ -707,6 +707,40 @@ Cinco sub-fases, cada una con valor propio y verificable sola. Rama
 
 #### B.3.5 — E2E de cierre
 
+> **Estado 2026-07-30: HECHA — criterio de done CUMPLIDO ÍNTEGRO** (sesión
+> real del usuario). La escena completa: "Estampado en pliego" creado con
+> el wizard (M-0 · T-2 · slot "Papel de estampado" · acomoda sobre pliego
+> · Produccion & Taller — el paso final mostró los chips de pliegos y
+> aprovechamiento), ruta "Nesting E2E" (Estampado → Bordado), alternativa
+> del producto de prueba, Estampado con Papel Autoadhesivo SRA3++
+> (325×500, $214,88) y 30 pliegos/h, Bordado heredando EXPLÍCITO la
+> capacidad **pliegos** del Estampado a 60/h. Cotización de 100 piezas
+> 60×40:
+>
+> - Estampado: `grid-2d-single`, **64 poses** (8×8 rotado — cuenta manual
+>   exacta), **2 pliegos** = ceil(100/64), aprovechamiento **73,85 %**
+>   (240.000 mm² / 325.000 mm² exacto), 4 min (2 pliegos ÷ 30/h) =
+>   $1.678,38, material 2 × $214,88 = $429,75 — el papel se cobra por
+>   pliego CALCULADO. Capacidades: pliegos 2 · aprovechamiento 73,85 ·
+>   minutos 4.
+> - Bordado: cantidad efectiva **2** — heredó LOS PLIEGOS, no las 100
+>   piezas del trabajo: la prueba diferencial de la herencia explícita EN
+>   VIVO (el fallback jamás daría 2) — 2 min = $839,19.
+> - `nestingResult` con placements presente (alimenta el visor); sin
+>   errores; sin OT; Estandar sigue preferida.
+>
+> **Bug real cazado por el E2E** (config-pasos.service): un slot de
+> familia TENANT sin `compatibilidadMaterial` rechazaba TODO material
+> (`if (!compat) return false` — default seguro para el sistema, donde
+> toda familia declara la suya, pero el wizard v1 no pregunta
+> compatibilidades). Fix: slot tenant sin compat = sin restricción (el
+> scope por tenant ya se valida aparte); sistema sigue estricto. Por esto
+> los E2E anteriores nunca habían podido asignar material a un slot
+> tenant (las cotizaciones eran tiempo puro).
+>
+> Suite completa motor+productos-servicios: 428 verdes, los mismos 18
+> rotos preexistentes.
+
 **Done** = un ADMIN crea con el wizard "Estampado en pliego" (acomoda
 sobre pliego), lo mete en una ruta con un paso posterior que hereda
 EXPLÍCITAMENTE sus unidades, y la cotización corre el nesting de verdad:
