@@ -270,6 +270,17 @@ type ControlOpcion =
   > internas se ocultan. 5 tests nuevos (30 del esquema, 392 front).
 - **E — Cobertura 100% verificada → retiro del detallado** (decisión
   final del usuario tras probar).
+  > **Vista guiada EXPANDIDA (2026-07-30, idea del usuario)**: para
+  > decidir con las dos a la vista, el cuerpo del asistente se extrajo
+  > como `SeccionesEsquemaPaso` (una fuente, dos shells) y el editor ganó
+  > un toggle **Detallado | Guiado** en el header del paso (elección
+  > recordada por navegador vía localStorage). "Guiado" renderiza las
+  > secciones-pregunta del esquema A PÁGINA COMPLETA en el panel
+  > principal — mismo header, navegación y Guardar — donde los controles
+  > ricos extraídos lucen mejor que en el Sheet (candidatas en 3
+  > columnas). El asistente flotante sigue existiendo para el recorrido
+  > paso-a-paso; el detallado sigue intacto. Nota: los pasos EXTRAS
+  > mantienen su vista propia (el toggle aplica a los pasos base).
 
 ## 6. Decisiones
 

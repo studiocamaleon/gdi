@@ -46,6 +46,7 @@ import { RuleBuilder } from "@/components/productos-servicios/rule-builder";
 import { PasoTercerizadoPanel } from "@/components/productos-servicios/paso-tercerizado-panel";
 import {
   pendientesDePaso,
+  type PendientePaso,
   resumenPendientes,
 } from "@/lib/pendientes-paso";
 import {
@@ -2810,6 +2811,26 @@ export function ConfigPasosEditorView({
   const [asistenteAbierto, setAsistenteAbierto] = React.useState(
     () => rutaAlternativa.configPasos.length === 0,
   );
+  // Vista del panel del paso: el detallado clásico o el esquema guiado
+  // EXPANDIDO (mismo cuerpo que el asistente, a página completa). Ambas
+  // conviven mientras el usuario decide con cuál quedarse; la elección
+  // se recuerda por navegador.
+  const [vistaEditor, setVistaEditorState] = React.useState<
+    "detallado" | "guiado"
+  >(() =>
+    typeof window !== "undefined" &&
+    window.localStorage.getItem("editorPasoVista") === "guiado"
+      ? "guiado"
+      : "detallado",
+  );
+  const setVistaEditor = (vista: "detallado" | "guiado") => {
+    setVistaEditorState(vista);
+    try {
+      window.localStorage.setItem("editorPasoVista", vista);
+    } catch {
+      // sin storage (SSR/privado): la elección vive sólo en la sesión
+    }
+  };
   const [panelEditorPasoId, setPanelEditorPasoId] = React.useState<
     string | null
   >(null);
@@ -3880,6 +3901,71 @@ export function ConfigPasosEditorView({
     }
     return ids;
   }, [rutaAlternativa.ruta.pasos, pasosExtras]);
+  // Secuencia unificada en el shape que consumen las vistas del esquema
+  // (asistente flotante y vista guiada expandida).
+  const pasosAsistente: PasoAsistente[] = pasosUnificados.map((id) => {
+    const base = rutaAlternativa.ruta.pasos.find((p) => p.id === id);
+    const extra = pasosExtras.find((e) => e.id === id);
+    const familiaCodigo = base?.familiaCodigo ?? extra?.familiaCodigo ?? "";
+    return {
+      id,
+      familiaCodigo,
+      nombre:
+        configs[id]?.nombreVisible?.trim() ||
+        familiasMap.get(familiaCodigo)?.nombre ||
+        humanizeCode(familiaCodigo),
+      esExtra: Boolean(extra),
+      orden: base?.orden ?? null,
+    };
+  });
+  // Props compartidos por las dos presentaciones del esquema (asistente
+  // flotante y vista guiada expandida): una fuente, dos shells.
+  const onHerenciaEsquema = (pasoId: string, origen: OrigenHerencia | null) =>
+    setJsonTexts((prev) => ({
+      ...prev,
+      [pasoId]: {
+        ...(prev[pasoId] ?? { params: "", mecanismo: "" }),
+        mecanismo: escribirOrigenHerencia(
+          prev[pasoId]?.mecanismo ?? "",
+          origen,
+        ),
+      },
+    }));
+  const reglaPropsEsquema = {
+    includeMeasureFields:
+      producto.modoMedidas === "LIBRE" || producto.modoMedidas === "MIXTA",
+    extraFields: technologyRuleFields,
+  };
+  const materialesApiEsquema: MaterialesApiAsistente = {
+    updateSlot,
+    removeSlot,
+    addSlotAdicional,
+    addSlotCandidate,
+    removeSlotCandidate,
+    updateSlotCandidate,
+    candidateMaterials,
+    setCandidateMaterials,
+    hardcodedMaterialSelections,
+    setHardcodedMaterialSelections,
+    getPersistedSlot: (pasoId, slotCodigo) =>
+      rutaAlternativa.configPasos
+        .find((cp) => cp.rutaPasoId === pasoId)
+        ?.slotsMateriales.find((s) => s.slotCodigo === slotCodigo) ?? null,
+  };
+  const nestingApiEsquema: NestingApi = {
+    updateNestingConfig,
+    updateNestingPieceBleed,
+    updateNestingMargins,
+    updateNestingExtraMargins,
+    updateNestingCosting,
+    updateNestingPanelizado,
+    updateNestingPliegoImpresion,
+    updateNestingPliegoPreset,
+    updateNestingPliegoCandidato,
+    addNestingPliegoCandidato,
+    removeNestingPliegoCandidato,
+  };
+  const panelMeasuresProducto = getProductoPanelMeasures(producto);
   // Navegación sobre la secuencia unificada (pasos base + extras en posición).
   const goPrev = () => {
     const i = pasosUnificados.indexOf(activePasoId);
@@ -4483,6 +4569,34 @@ export function ConfigPasosEditorView({
                             : null}
                         </div>
                         <div className="pill-row">
+                          {/* Comparativa guiado vs detallado: misma info,
+                              dos presentaciones; la elección se recuerda. */}
+                          <button
+                            className="btn"
+                            type="button"
+                            aria-pressed={vistaEditor === "detallado"}
+                            style={
+                              vistaEditor === "detallado"
+                                ? { fontWeight: 650 }
+                                : { opacity: 0.6 }
+                            }
+                            onClick={() => setVistaEditor("detallado")}
+                          >
+                            Detallado
+                          </button>
+                          <button
+                            className="btn"
+                            type="button"
+                            aria-pressed={vistaEditor === "guiado"}
+                            style={
+                              vistaEditor === "guiado"
+                                ? { fontWeight: 650 }
+                                : { opacity: 0.6 }
+                            }
+                            onClick={() => setVistaEditor("guiado")}
+                          >
+                            Guiado
+                          </button>
                           <button
                             className="btn"
                             type="button"
@@ -4531,6 +4645,57 @@ export function ConfigPasosEditorView({
                       </div>
 
                       <div className="config-step-content pasos-sections">
+                        {vistaEditor === "guiado" ? (
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 14,
+                              maxWidth: 980,
+                            }}
+                          >
+                            <SeccionesEsquemaPaso
+                              pasoActual={{
+                                id: paso.id,
+                                nombre:
+                                  cfg.nombreVisible?.trim() ||
+                                  familia?.nombre ||
+                                  paso.familiaCodigo,
+                                familiaCodigo: paso.familiaCodigo,
+                                esExtra: false,
+                                orden: paso.orden,
+                              }}
+                              cfg={cfg}
+                              familia={familia}
+                              pasos={pasosAsistente}
+                              familiasMap={familiasMap}
+                              lookups={lookups}
+                              jsonTexts={jsonTexts}
+                              vivos={pendientesDePaso(cfg, familia)}
+                              onPatch={(pasoId, patch) => updateConfig(pasoId, patch)}
+                              onParams={(pasoId, patch) => updateStepParams(pasoId, patch)}
+                              onHerencia={onHerenciaEsquema}
+                              onAddSlotFamilia={(pasoId, slotCodigo) =>
+                                addSlotFromFamilia(pasoId, slotCodigo)
+                              }
+                              reglaProps={reglaPropsEsquema}
+                              updateTiempoManualConfig={updateTiempoManualConfig}
+                              updateModoColorConfig={updateModoColorConfig}
+                              toggleMaquinaCandidata={toggleMaquinaCandidata}
+                              setMaquinaCandidataPreferida={setMaquinaCandidataPreferida}
+                              setMaquinaCandidataPerfilDefault={setMaquinaCandidataPerfilDefault}
+                              setMaquinaCandidataModoColorAllowed={
+                                setMaquinaCandidataModoColorAllowed
+                              }
+                              materialesApi={materialesApiEsquema}
+                              nestingApi={nestingApiEsquema}
+                              panelEditorPasoId={panelEditorPasoId}
+                              setPanelEditorPasoId={setPanelEditorPasoId}
+                              panelMeasures={panelMeasuresProducto}
+                            />
+                          </div>
+                        ) : (
+                          <>
                         <section className="section-block open">
                           <div className="sb-head">
                             <span className="num">T</span>
@@ -6201,7 +6366,7 @@ export function ConfigPasosEditorView({
                                       candidateMaterials={candidateMaterials}
                                       panelEditorPasoId={panelEditorPasoId}
                                       setPanelEditorPasoId={setPanelEditorPasoId}
-                                      panelMeasures={getProductoPanelMeasures(producto)}
+                                      panelMeasures={panelMeasuresProducto}
                                       nestingApi={{
                                         updateNestingConfig,
                                         updateNestingPieceBleed,
@@ -6226,6 +6391,8 @@ export function ConfigPasosEditorView({
                             </section>
                           </>
                         )}
+                          </>
+                        )}
                       </div>
                     </React.Fragment>
                   );
@@ -6237,52 +6404,21 @@ export function ConfigPasosEditorView({
       </div>
       {asistenteAbierto ? (
         <AsistenteGuiado
-          pasos={pasosUnificados.map((id) => {
-            const base = rutaAlternativa.ruta.pasos.find((p) => p.id === id);
-            const extra = pasosExtras.find((e) => e.id === id);
-            const familiaCodigo =
-              base?.familiaCodigo ?? extra?.familiaCodigo ?? "";
-            return {
-              id,
-              familiaCodigo,
-              nombre:
-                configs[id]?.nombreVisible?.trim() ||
-                familiasMap.get(familiaCodigo)?.nombre ||
-                humanizeCode(familiaCodigo),
-              esExtra: Boolean(extra),
-              orden: base?.orden ?? null,
-            };
-          })}
+          pasos={pasosAsistente}
           configs={configs}
           familiasMap={familiasMap}
           lookups={lookups}
           jsonTexts={jsonTexts}
           onPatch={(pasoId, patch) => updateConfig(pasoId, patch)}
           onParams={(pasoId, patch) => updateStepParams(pasoId, patch)}
-          onHerencia={(pasoId, origen) =>
-            setJsonTexts((prev) => ({
-              ...prev,
-              [pasoId]: {
-                ...(prev[pasoId] ?? { params: "", mecanismo: "" }),
-                mecanismo: escribirOrigenHerencia(
-                  prev[pasoId]?.mecanismo ?? "",
-                  origen,
-                ),
-              },
-            }))
-          }
+          onHerencia={onHerenciaEsquema}
           onAddSlotFamilia={(pasoId, slotCodigo) =>
             addSlotFromFamilia(pasoId, slotCodigo)
           }
           onGuardarPaso={(pasoId) => guardarPaso(pasoId)}
           guardando={guardando}
           tieneCambios={(pasoId) => hasUnsavedChanges(pasoId)}
-          reglaProps={{
-            includeMeasureFields:
-              producto.modoMedidas === "LIBRE" ||
-              producto.modoMedidas === "MIXTA",
-            extraFields: technologyRuleFields,
-          }}
+          reglaProps={reglaPropsEsquema}
           updateTiempoManualConfig={updateTiempoManualConfig}
           updateModoColorConfig={updateModoColorConfig}
           toggleMaquinaCandidata={toggleMaquinaCandidata}
@@ -6291,37 +6427,8 @@ export function ConfigPasosEditorView({
           setMaquinaCandidataModoColorAllowed={
             setMaquinaCandidataModoColorAllowed
           }
-          materialesApi={{
-            updateSlot,
-            removeSlot,
-            addSlotAdicional,
-            addSlotCandidate,
-            removeSlotCandidate,
-            updateSlotCandidate,
-            candidateMaterials,
-            setCandidateMaterials,
-            hardcodedMaterialSelections,
-            setHardcodedMaterialSelections,
-            getPersistedSlot: (pasoId, slotCodigo) =>
-              rutaAlternativa.configPasos
-                .find((cp) => cp.rutaPasoId === pasoId)
-                ?.slotsMateriales.find(
-                  (s) => s.slotCodigo === slotCodigo,
-                ) ?? null,
-          }}
-          nestingApi={{
-            updateNestingConfig,
-            updateNestingPieceBleed,
-            updateNestingMargins,
-            updateNestingExtraMargins,
-            updateNestingCosting,
-            updateNestingPanelizado,
-            updateNestingPliegoImpresion,
-            updateNestingPliegoPreset,
-            updateNestingPliegoCandidato,
-            addNestingPliegoCandidato,
-            removeNestingPliegoCandidato,
-          }}
+          materialesApi={materialesApiEsquema}
+          nestingApi={nestingApiEsquema}
           panelEditorPasoId={panelEditorPasoId}
           setPanelEditorPasoId={setPanelEditorPasoId}
           panelMeasures={getProductoPanelMeasures(producto)}
@@ -10033,6 +10140,656 @@ interface PasoAsistente {
   orden: number | null;
 }
 
+/** Las secciones-pregunta del ESQUEMA para UN paso, con su tarjeta de
+ *  estado final. Es el CUERPO compartido de las dos presentaciones
+ *  guiadas: el asistente flotante (Sheet) y la vista expandida del
+ *  editor (toggle Detallado/Guiado). Una fuente, dos shells. */
+function SeccionesEsquemaPaso({
+  pasoActual,
+  cfg,
+  familia,
+  pasos,
+  familiasMap,
+  lookups,
+  jsonTexts,
+  vivos,
+  onPatch,
+  onParams,
+  onHerencia,
+  onAddSlotFamilia,
+  reglaProps,
+  updateTiempoManualConfig,
+  updateModoColorConfig,
+  toggleMaquinaCandidata,
+  setMaquinaCandidataPreferida,
+  setMaquinaCandidataPerfilDefault,
+  setMaquinaCandidataModoColorAllowed,
+  materialesApi,
+  nestingApi,
+  panelEditorPasoId,
+  setPanelEditorPasoId,
+  panelMeasures,
+}: {
+  pasoActual: PasoAsistente;
+  cfg: UpsertConfigPasoPayload;
+  familia: FamiliaListItem | undefined;
+  pasos: PasoAsistente[];
+  familiasMap: Map<string, FamiliaListItem>;
+  lookups: LookupsConfigPaso;
+  jsonTexts: Record<string, { params: string; mecanismo: string }>;
+  vivos: PendientePaso[];
+  onPatch: (pasoId: string, patch: Partial<UpsertConfigPasoPayload>) => void;
+  onParams: (pasoId: string, patch: Record<string, unknown>) => void;
+  onHerencia: (pasoId: string, origen: OrigenHerencia | null) => void;
+  onAddSlotFamilia: (pasoId: string, slotCodigo: string) => void;
+  reglaProps: {
+    includeMeasureFields: boolean;
+    extraFields: RuleFieldDefinition[];
+  };
+  updateTiempoManualConfig: (
+    pasoId: string,
+    patch: Record<string, unknown>,
+  ) => void;
+  updateModoColorConfig: (
+    pasoId: string,
+    patch: Record<string, unknown>,
+  ) => void;
+  toggleMaquinaCandidata: (
+    pasoId: string,
+    maquinaId: string,
+    checked: boolean,
+  ) => void;
+  setMaquinaCandidataPreferida: (pasoId: string, maquinaId: string) => void;
+  setMaquinaCandidataPerfilDefault: (
+    pasoId: string,
+    maquinaId: string,
+    perfilId: string | null,
+  ) => void;
+  setMaquinaCandidataModoColorAllowed: (
+    pasoId: string,
+    maquinaId: string,
+    modes: string[],
+  ) => void;
+  materialesApi: MaterialesApiAsistente;
+  nestingApi: NestingApi;
+  panelEditorPasoId: string | null;
+  setPanelEditorPasoId: React.Dispatch<React.SetStateAction<string | null>>;
+  panelMeasures: ReturnType<typeof getProductoPanelMeasures>;
+}) {
+  const notaStyle: React.CSSProperties = {
+    fontSize: 12.5,
+    color: "var(--muted-text, #6e6e76)",
+  };
+  const cardStyle: React.CSSProperties = {
+    border: "1px solid var(--hairline, #e6e2dc)",
+    borderRadius: 12,
+    padding: "16px 18px",
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+  };
+  return (
+    <>
+      {/* Editor declarativo: Activación (A) + Tiempo y costo +
+          Máquina y perfil (B) salen del ESQUEMA — completas, con
+          abierto/colapsado/Cambiar. Las cards de abajo son
+          transicionales hasta migrar materiales y tercerización
+          (C-D). */}
+      {(() => {
+        const ctx = {
+          cfg,
+          familia,
+          paramsPaso: asRecord(cfg.paramsPasoJson),
+          otrosPasos: pasos
+            .filter((p) => p.id !== pasoActual.id)
+            .map((p) => ({ id: p.id, nombre: p.nombre })),
+          lookups,
+        };
+        const pendientesVivos = new Set(vivos.map((pend) => pend.tipo));
+        const onAplicar = (patch: PatchOpcion) => {
+          if (patch.tipo === "config") onPatch(pasoActual.id, patch.patch);
+          else onParams(pasoActual.id, patch.patch);
+        };
+        const maquinasCompatibles = lookups.maquinas.filter((m) =>
+          maquinaCompatibleConFamilia(
+            pasoActual.familiaCodigo,
+            familia?.plantillasCompatibles,
+            m,
+          ),
+        );
+        const maquinaSel =
+          lookups.maquinas.find((m) => m.id === cfg.maquinaM1Id) ?? null;
+        const renderComponente = (id: string): React.ReactNode => {
+          if (id === "regla-condicional") {
+            return (
+              <RuleBuilder
+                value={
+                  cfg.condicionActivacionJson as
+                    | Record<string, unknown>
+                    | null
+                    | undefined
+                }
+                includeMeasureFields={reglaProps.includeMeasureFields}
+                extraFields={reglaProps.extraFields}
+                onChange={(value) =>
+                  onPatch(pasoActual.id, {
+                    condicionActivacionJson: value,
+                  })
+                }
+              />
+            );
+          }
+          if (id === "co-ejecucion") {
+            const requeridos = cfg.requiereRutaPasoIds ?? [];
+            return (
+              <div
+                style={{ display: "flex", flexWrap: "wrap", gap: 6 }}
+              >
+                {pasos
+                  .filter((p) => p.id !== pasoActual.id)
+                  .map((p) => {
+                    const elegido = requeridos.includes(p.id);
+                    return (
+                      <Button
+                        key={p.id}
+                        type="button"
+                        size="sm"
+                        variant={elegido ? "default" : "outline"}
+                        onClick={() =>
+                          onPatch(pasoActual.id, {
+                            requiereRutaPasoIds: elegido
+                              ? requeridos.filter((id2) => id2 !== p.id)
+                              : [...requeridos, p.id],
+                          })
+                        }
+                      >
+                        {p.nombre}
+                      </Button>
+                    );
+                  })}
+              </div>
+            );
+          }
+          if (id === "tiempo-comercial") {
+            // Las clases del detallado (field, segmented, ps-*) están
+            // scopeadas bajo .pasos-sections; el Sheet vive en un
+            // portal, así que el wrapper se repone acá.
+            return (
+              <div className="pasos-sections">
+                <TiempoComercialDetalladoEditor
+                  pasoId={pasoActual.id}
+                  cfg={cfg}
+                  familia={familia}
+                  updateTiempoManualConfig={updateTiempoManualConfig}
+                />
+              </div>
+            );
+          }
+          if (id === "ritmo-productividad" || id === "ritmo-batch") {
+            return (
+              <RitmoGuiado
+                variante={
+                  id === "ritmo-batch" ? "batch" : "productividad"
+                }
+                pasoId={pasoActual.id}
+                cfg={cfg}
+                familia={familia}
+                onParams={onParams}
+              />
+            );
+          }
+          if (id === "herencia-origen") {
+            return (
+              <HerenciaOrigenGuiada
+                pasoId={pasoActual.id}
+                pasos={pasos}
+                familiasMap={familiasMap}
+                jsonTexts={jsonTexts}
+                onHerencia={onHerencia}
+              />
+            );
+          }
+          if (id === "maquina-m1") {
+            return (
+              <HumanSelect
+                value={cfg.maquinaM1Id ?? ""}
+                onValueChange={(id2) => {
+                  const maq = maquinasCompatibles.find(
+                    (m) => m.id === id2,
+                  );
+                  onPatch(pasoActual.id, {
+                    maquinaM1Id: id2 || null,
+                    perfilM1Id: maq?.perfilesOperativos[0]?.id ?? null,
+                    centroCostoId: null,
+                  });
+                }}
+                options={maquinasCompatibles.map((m) => ({
+                  value: m.id,
+                  label: m.nombre,
+                }))}
+                placeholder="Elegir máquina"
+              />
+            );
+          }
+          if (id === "perfil-m1") {
+            return (
+              <HumanSelect
+                value={cfg.perfilM1Id ?? ""}
+                onValueChange={(id2) =>
+                  onPatch(pasoActual.id, { perfilM1Id: id2 || null })
+                }
+                options={(maquinaSel?.perfilesOperativos ?? [])
+                  .filter((perfil) =>
+                    perfilCompatibleConFamilia(
+                      pasoActual.familiaCodigo,
+                      perfil,
+                    ),
+                  )
+                  .map((perfil) => ({
+                    value: perfil.id,
+                    label: perfil.nombre,
+                  }))}
+                placeholder="Perfil operativo"
+              />
+            );
+          }
+          if (id === "candidatas-detallado") {
+            return (
+              <div className="pasos-sections wiz-grid">
+                <CandidatasDetalladoEditor
+                  pasoId={pasoActual.id}
+                  familiaCodigo={pasoActual.familiaCodigo}
+                  cfg={cfg}
+                  familia={familia}
+                  lookups={lookups}
+                  maquinasCandidatasCompatibles={lookups.maquinas.filter(
+                    (m) =>
+                      maquinaCandidataCompatibleConFamilia(
+                        pasoActual.familiaCodigo,
+                        familia?.plantillasCompatibles,
+                        m,
+                      ),
+                  )}
+                  mostrarModoColor={modoColorAplica(
+                    familia?.codigo,
+                    cfg,
+                  )}
+                  toggleMaquinaCandidata={toggleMaquinaCandidata}
+                  setMaquinaCandidataPreferida={
+                    setMaquinaCandidataPreferida
+                  }
+                  setMaquinaCandidataPerfilDefault={
+                    setMaquinaCandidataPerfilDefault
+                  }
+                  setMaquinaCandidataModoColorAllowed={
+                    setMaquinaCandidataModoColorAllowed
+                  }
+                />
+              </div>
+            );
+          }
+          if (id === "agregar-slot") {
+            const configurados = new Set(
+              (cfg.slotsMateriales ?? []).map((s) => s.slotCodigo),
+            );
+            const slotsManuales = (familia?.slotsRequeridos ?? []).filter(
+              (s) => !isConsumibleMaquinaSlot(s),
+            );
+            return (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {slotsManuales
+                  .filter((s) => !configurados.has(s.codigo))
+                  .map((s) => (
+                    <Button
+                      key={s.codigo}
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        onAddSlotFamilia(pasoActual.id, s.codigo)
+                      }
+                    >
+                      + {s.nombre}
+                      {s.requerido ? (
+                        <span style={{ color: "#c0392b" }}>*</span>
+                      ) : null}
+                    </Button>
+                  ))}
+                {familia?.permiteSlotsAdicionales ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      materialesApi.addSlotAdicional(pasoActual.id)
+                    }
+                  >
+                    + Agregar componente
+                  </Button>
+                ) : null}
+              </div>
+            );
+          }
+          if (id === "tercerizado-panel") {
+            return (
+              <PasoTercerizadoPanel
+                value={cfg}
+                onChange={(patch) => onPatch(pasoActual.id, patch)}
+                onToggle={(tercerizado) =>
+                  onPatch(pasoActual.id, { tercerizado })
+                }
+              />
+            );
+          }
+          if (id === "acomodado-detallado") {
+            return (
+              <div className="pasos-sections">
+                <AcomodadoDetalladoEditor
+                  pasoId={pasoActual.id}
+                  cfg={cfg}
+                  familia={familia}
+                  lookups={lookups}
+                  maquinaParaDefaults={maquinaSel}
+                  candidateMaterials={materialesApi.candidateMaterials}
+                  panelEditorPasoId={panelEditorPasoId}
+                  setPanelEditorPasoId={setPanelEditorPasoId}
+                  panelMeasures={panelMeasures}
+                  nestingApi={nestingApi}
+                />
+              </div>
+            );
+          }
+          if (id === "modo-color-detallado") {
+            const perfilSel =
+              maquinaSel?.perfilesOperativos.find(
+                (perfil) => perfil.id === cfg.perfilM1Id,
+              ) ?? null;
+            return (
+              <div className="pasos-sections">
+                <ModoColorDetalladoEditor
+                  pasoId={pasoActual.id}
+                  cfg={cfg}
+                  modoColorOptions={buildModoColorOptions(
+                    maquinaSel,
+                    null,
+                    ["impresion_por_hoja", "impresion_por_area"].includes(
+                      pasoActual.familiaCodigo,
+                    ),
+                  )}
+                  modoColorPerfilDefault={
+                    modosColorFromPerfil(perfilSel)[0] ?? ""
+                  }
+                  updateModoColorConfig={updateModoColorConfig}
+                />
+              </div>
+            );
+          }
+          return null;
+        };
+        const noEjecutar = cfg.modoActivacion === "NO_EJECUTAR";
+        return (
+          <>
+            {/* Sub-fase D: la bifurcación tercerizado va PRIMERA
+                (E.2); si la familia la declara aparece colapsada. */}
+            <SeccionGuiada
+              titulo="Quién lo hace"
+              seccion="quien"
+              ctx={ctx}
+              pendientesVivos={pendientesVivos}
+              onAplicar={onAplicar}
+              renderComponente={renderComponente}
+            />
+            <SeccionGuiada
+              titulo="Activación"
+              seccion="activacion"
+              ctx={ctx}
+              pendientesVivos={pendientesVivos}
+              onAplicar={onAplicar}
+              renderComponente={renderComponente}
+            />
+            {/* Tercerizado o apagado: no se produce internamente —
+                sin tiempo/costo ni máquina (mismo criterio que el
+                detallado congelado). */}
+            {!noEjecutar && !cfg.tercerizado ? (
+              <>
+                <SeccionGuiada
+                  titulo="Tiempo y costo"
+                  seccion="tiempo"
+                  ctx={ctx}
+                  pendientesVivos={pendientesVivos}
+                  onAplicar={onAplicar}
+                  renderComponente={renderComponente}
+                />
+                <SeccionGuiada
+                  titulo="Máquina y perfil"
+                  seccion="maquina"
+                  ctx={ctx}
+                  pendientesVivos={pendientesVivos}
+                  onAplicar={onAplicar}
+                  renderComponente={renderComponente}
+                />
+                {/* Materiales (sub-fase C): agregar a nivel paso + un
+                    grupo por slot configurado, cada uno con las
+                    preguntas del esquema evaluadas con ese slot. */}
+                <SeccionGuiada
+                  titulo="Materiales"
+                  seccion="materiales"
+                  ctx={ctx}
+                  pendientesVivos={pendientesVivos}
+                  onAplicar={onAplicar}
+                  renderComponente={renderComponente}
+                />
+                {(cfg.slotsMateriales ?? []).map((slot, slotIdx) => {
+                  const decl =
+                    familia?.slotsRequeridos.find(
+                      (sr) => sr.codigo === slot.slotCodigo,
+                    ) ?? null;
+                  if (decl && isConsumibleMaquinaSlot(decl)) return null;
+                  const ctxSlot = {
+                    ...ctx,
+                    slot: {
+                      payload: slot,
+                      decl,
+                      esAdicional: !decl,
+                    },
+                  };
+                  const pendSlot = new Set(
+                    vivos
+                      .filter(
+                        (p) =>
+                          !p.slotCodigo ||
+                          p.slotCodigo === slot.slotCodigo,
+                      )
+                      .map((p) => p.tipo),
+                  );
+                  const onAplicarSlot = (patch: PatchOpcion) => {
+                    if (patch.tipo === "slot") {
+                      materialesApi.updateSlot(
+                        pasoActual.id,
+                        slotIdx,
+                        patch.patch,
+                      );
+                    } else onAplicar(patch);
+                  };
+                  const renderComponenteSlot = (
+                    id: string,
+                  ): React.ReactNode => {
+                    if (id === "material-fijo-detallado") {
+                      return (
+                        <div className="pasos-sections">
+                          <MaterialFijoSlotDetalladoEditor
+                            pasoId={pasoActual.id}
+                            slotIdx={slotIdx}
+                            slot={slot}
+                            slotDecl={decl}
+                            persistedSlot={materialesApi.getPersistedSlot(
+                              pasoActual.id,
+                              slot.slotCodigo,
+                            )}
+                            candidateMaterials={
+                              materialesApi.candidateMaterials
+                            }
+                            setCandidateMaterials={
+                              materialesApi.setCandidateMaterials
+                            }
+                            hardcodedMaterialSelections={
+                              materialesApi.hardcodedMaterialSelections
+                            }
+                            setHardcodedMaterialSelections={
+                              materialesApi.setHardcodedMaterialSelections
+                            }
+                            updateSlot={materialesApi.updateSlot}
+                          />
+                        </div>
+                      );
+                    }
+                    if (id === "candidatos-slot-detallado") {
+                      return (
+                        <div className="pasos-sections">
+                          <CandidatosSlotDetalladoEditor
+                            pasoId={pasoActual.id}
+                            slotIdx={slotIdx}
+                            slot={slot}
+                            slotDecl={decl}
+                            candidateMaterials={
+                              materialesApi.candidateMaterials
+                            }
+                            addSlotCandidate={
+                              materialesApi.addSlotCandidate
+                            }
+                            removeSlotCandidate={
+                              materialesApi.removeSlotCandidate
+                            }
+                            updateSlotCandidate={
+                              materialesApi.updateSlotCandidate
+                            }
+                          />
+                        </div>
+                      );
+                    }
+                    if (id === "base-consumo") {
+                      return (
+                        <BaseConsumoGuiado
+                          slot={slot}
+                          esAdicional={!decl}
+                          onSlotPatch={(patch) =>
+                            materialesApi.updateSlot(
+                              pasoActual.id,
+                              slotIdx,
+                              patch,
+                            )
+                          }
+                        />
+                      );
+                    }
+                    return renderComponente(id);
+                  };
+                  return (
+                    <div
+                      key={`${slot.slotCodigo}:${slotIdx}`}
+                      style={{
+                        border: "1px solid var(--hairline, #e6e2dc)",
+                        borderRadius: 12,
+                        padding: "12px 14px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 8,
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          gap: 8,
+                        }}
+                      >
+                        <div style={{ fontSize: 13.5, fontWeight: 650 }}>
+                          {familia
+                            ? slotDisplayName(slot, familia)
+                            : (slot.slotNombre ?? slot.slotCodigo)}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            materialesApi.removeSlot(
+                              pasoActual.id,
+                              slotIdx,
+                            )
+                          }
+                        >
+                          Quitar
+                        </Button>
+                      </div>
+                      {opcionesDeSeccion("materiales", ctxSlot)
+                        .filter(
+                          (op) => op.clave !== "materiales.agregar",
+                        )
+                        .map((op) => (
+                          <OpcionGuiadaFila
+                            key={op.clave}
+                            opcion={op}
+                            ctx={ctxSlot}
+                            abiertaInicial={
+                              (op.pendiente != null &&
+                                pendSlot.has(op.pendiente)) ||
+                              op.origenValor(ctxSlot) === "sin-definir"
+                            }
+                            pendienteVivo={
+                              op.pendiente != null &&
+                              pendSlot.has(op.pendiente)
+                            }
+                            onAplicar={onAplicarSlot}
+                            renderComponente={renderComponenteSlot}
+                          />
+                        ))}
+                    </div>
+                  );
+                })}
+                {/* Ajustes del trabajo (sub-fase D): setup/cleanup +
+                    el card de Acomodado del detallado. */}
+                <SeccionGuiada
+                  titulo="Ajustes del trabajo"
+                  seccion="oficio"
+                  ctx={ctx}
+                  pendientesVivos={pendientesVivos}
+                  onAplicar={onAplicar}
+                  renderComponente={renderComponente}
+                />
+              </>
+            ) : null}
+          </>
+        );
+      })()}
+
+      {vivos.filter((pend) => pend.bloqueante).length === 0 ? (
+        <div style={cardStyle}>
+          <div style={{ fontSize: 17, fontWeight: 650, color: "#2e7d32" }}>
+            ✓ Listo para cotizar
+          </div>
+          <div style={notaStyle}>
+            Todo sale de lo que el paso ya declara (defaults, estación,
+            activación). Cualquier ajuste fino queda arriba, en sus
+            secciones.
+          </div>
+        </div>
+      ) : (
+        <div style={cardStyle}>
+          <div style={{ fontSize: 15, fontWeight: 650, color: "#8a6d3b" }}>
+            {resumenPendientes(vivos)}
+          </div>
+          <div style={notaStyle}>
+            Las preguntas marcadas en ámbar arriba son las que faltan.
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+
 function AsistenteGuiado({
   pasos,
   configs,
@@ -10121,19 +10878,6 @@ function AsistenteGuiado({
     () => (cfg ? pendientesDePaso(cfg, familia) : []),
     [cfg, familia],
   );
-
-  const notaStyle: React.CSSProperties = {
-    fontSize: 12.5,
-    color: "var(--muted-text, #6e6e76)",
-  };
-  const cardStyle: React.CSSProperties = {
-    border: "1px solid var(--hairline, #e6e2dc)",
-    borderRadius: 12,
-    padding: "16px 18px",
-    display: "flex",
-    flexDirection: "column",
-    gap: 10,
-  };
 
   const avanzar = async () => {
     if (!pasoActual) return;
@@ -10240,561 +10984,34 @@ function AsistenteGuiado({
             {pasoActual.nombre}
           </div>
 
-          {/* Editor declarativo: Activación (A) + Tiempo y costo +
-              Máquina y perfil (B) salen del ESQUEMA — completas, con
-              abierto/colapsado/Cambiar. Las cards de abajo son
-              transicionales hasta migrar materiales y tercerización
-              (C-D). */}
-          {(() => {
-            const ctx = {
-              cfg,
-              familia,
-              paramsPaso: asRecord(cfg.paramsPasoJson),
-              otrosPasos: pasos
-                .filter((p) => p.id !== pasoActual.id)
-                .map((p) => ({ id: p.id, nombre: p.nombre })),
-              lookups,
-            };
-            const pendientesVivos = new Set(vivos.map((pend) => pend.tipo));
-            const onAplicar = (patch: PatchOpcion) => {
-              if (patch.tipo === "config") onPatch(pasoActual.id, patch.patch);
-              else onParams(pasoActual.id, patch.patch);
-            };
-            const maquinasCompatibles = lookups.maquinas.filter((m) =>
-              maquinaCompatibleConFamilia(
-                pasoActual.familiaCodigo,
-                familia?.plantillasCompatibles,
-                m,
-              ),
-            );
-            const maquinaSel =
-              lookups.maquinas.find((m) => m.id === cfg.maquinaM1Id) ?? null;
-            const renderComponente = (id: string): React.ReactNode => {
-              if (id === "regla-condicional") {
-                return (
-                  <RuleBuilder
-                    value={
-                      cfg.condicionActivacionJson as
-                        | Record<string, unknown>
-                        | null
-                        | undefined
-                    }
-                    includeMeasureFields={reglaProps.includeMeasureFields}
-                    extraFields={reglaProps.extraFields}
-                    onChange={(value) =>
-                      onPatch(pasoActual.id, {
-                        condicionActivacionJson: value,
-                      })
-                    }
-                  />
-                );
-              }
-              if (id === "co-ejecucion") {
-                const requeridos = cfg.requiereRutaPasoIds ?? [];
-                return (
-                  <div
-                    style={{ display: "flex", flexWrap: "wrap", gap: 6 }}
-                  >
-                    {pasos
-                      .filter((p) => p.id !== pasoActual.id)
-                      .map((p) => {
-                        const elegido = requeridos.includes(p.id);
-                        return (
-                          <Button
-                            key={p.id}
-                            type="button"
-                            size="sm"
-                            variant={elegido ? "default" : "outline"}
-                            onClick={() =>
-                              onPatch(pasoActual.id, {
-                                requiereRutaPasoIds: elegido
-                                  ? requeridos.filter((id2) => id2 !== p.id)
-                                  : [...requeridos, p.id],
-                              })
-                            }
-                          >
-                            {p.nombre}
-                          </Button>
-                        );
-                      })}
-                  </div>
-                );
-              }
-              if (id === "tiempo-comercial") {
-                // Las clases del detallado (field, segmented, ps-*) están
-                // scopeadas bajo .pasos-sections; el Sheet vive en un
-                // portal, así que el wrapper se repone acá.
-                return (
-                  <div className="pasos-sections">
-                    <TiempoComercialDetalladoEditor
-                      pasoId={pasoActual.id}
-                      cfg={cfg}
-                      familia={familia}
-                      updateTiempoManualConfig={updateTiempoManualConfig}
-                    />
-                  </div>
-                );
-              }
-              if (id === "ritmo-productividad" || id === "ritmo-batch") {
-                return (
-                  <RitmoGuiado
-                    variante={
-                      id === "ritmo-batch" ? "batch" : "productividad"
-                    }
-                    pasoId={pasoActual.id}
-                    cfg={cfg}
-                    familia={familia}
-                    onParams={onParams}
-                  />
-                );
-              }
-              if (id === "herencia-origen") {
-                return (
-                  <HerenciaOrigenGuiada
-                    pasoId={pasoActual.id}
-                    pasos={pasos}
-                    familiasMap={familiasMap}
-                    jsonTexts={jsonTexts}
-                    onHerencia={onHerencia}
-                  />
-                );
-              }
-              if (id === "maquina-m1") {
-                return (
-                  <HumanSelect
-                    value={cfg.maquinaM1Id ?? ""}
-                    onValueChange={(id2) => {
-                      const maq = maquinasCompatibles.find(
-                        (m) => m.id === id2,
-                      );
-                      onPatch(pasoActual.id, {
-                        maquinaM1Id: id2 || null,
-                        perfilM1Id: maq?.perfilesOperativos[0]?.id ?? null,
-                        centroCostoId: null,
-                      });
-                    }}
-                    options={maquinasCompatibles.map((m) => ({
-                      value: m.id,
-                      label: m.nombre,
-                    }))}
-                    placeholder="Elegir máquina"
-                  />
-                );
-              }
-              if (id === "perfil-m1") {
-                return (
-                  <HumanSelect
-                    value={cfg.perfilM1Id ?? ""}
-                    onValueChange={(id2) =>
-                      onPatch(pasoActual.id, { perfilM1Id: id2 || null })
-                    }
-                    options={(maquinaSel?.perfilesOperativos ?? [])
-                      .filter((perfil) =>
-                        perfilCompatibleConFamilia(
-                          pasoActual.familiaCodigo,
-                          perfil,
-                        ),
-                      )
-                      .map((perfil) => ({
-                        value: perfil.id,
-                        label: perfil.nombre,
-                      }))}
-                    placeholder="Perfil operativo"
-                  />
-                );
-              }
-              if (id === "candidatas-detallado") {
-                return (
-                  <div className="pasos-sections wiz-grid">
-                    <CandidatasDetalladoEditor
-                      pasoId={pasoActual.id}
-                      familiaCodigo={pasoActual.familiaCodigo}
-                      cfg={cfg}
-                      familia={familia}
-                      lookups={lookups}
-                      maquinasCandidatasCompatibles={lookups.maquinas.filter(
-                        (m) =>
-                          maquinaCandidataCompatibleConFamilia(
-                            pasoActual.familiaCodigo,
-                            familia?.plantillasCompatibles,
-                            m,
-                          ),
-                      )}
-                      mostrarModoColor={modoColorAplica(
-                        familia?.codigo,
-                        cfg,
-                      )}
-                      toggleMaquinaCandidata={toggleMaquinaCandidata}
-                      setMaquinaCandidataPreferida={
-                        setMaquinaCandidataPreferida
-                      }
-                      setMaquinaCandidataPerfilDefault={
-                        setMaquinaCandidataPerfilDefault
-                      }
-                      setMaquinaCandidataModoColorAllowed={
-                        setMaquinaCandidataModoColorAllowed
-                      }
-                    />
-                  </div>
-                );
-              }
-              if (id === "agregar-slot") {
-                const configurados = new Set(
-                  (cfg.slotsMateriales ?? []).map((s) => s.slotCodigo),
-                );
-                const slotsManuales = (familia?.slotsRequeridos ?? []).filter(
-                  (s) => !isConsumibleMaquinaSlot(s),
-                );
-                return (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    {slotsManuales
-                      .filter((s) => !configurados.has(s.codigo))
-                      .map((s) => (
-                        <Button
-                          key={s.codigo}
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() =>
-                            onAddSlotFamilia(pasoActual.id, s.codigo)
-                          }
-                        >
-                          + {s.nombre}
-                          {s.requerido ? (
-                            <span style={{ color: "#c0392b" }}>*</span>
-                          ) : null}
-                        </Button>
-                      ))}
-                    {familia?.permiteSlotsAdicionales ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          materialesApi.addSlotAdicional(pasoActual.id)
-                        }
-                      >
-                        + Agregar componente
-                      </Button>
-                    ) : null}
-                  </div>
-                );
-              }
-              if (id === "tercerizado-panel") {
-                return (
-                  <PasoTercerizadoPanel
-                    value={cfg}
-                    onChange={(patch) => onPatch(pasoActual.id, patch)}
-                    onToggle={(tercerizado) =>
-                      onPatch(pasoActual.id, { tercerizado })
-                    }
-                  />
-                );
-              }
-              if (id === "acomodado-detallado") {
-                return (
-                  <div className="pasos-sections">
-                    <AcomodadoDetalladoEditor
-                      pasoId={pasoActual.id}
-                      cfg={cfg}
-                      familia={familia}
-                      lookups={lookups}
-                      maquinaParaDefaults={maquinaSel}
-                      candidateMaterials={materialesApi.candidateMaterials}
-                      panelEditorPasoId={panelEditorPasoId}
-                      setPanelEditorPasoId={setPanelEditorPasoId}
-                      panelMeasures={panelMeasures}
-                      nestingApi={nestingApi}
-                    />
-                  </div>
-                );
-              }
-              if (id === "modo-color-detallado") {
-                const perfilSel =
-                  maquinaSel?.perfilesOperativos.find(
-                    (perfil) => perfil.id === cfg.perfilM1Id,
-                  ) ?? null;
-                return (
-                  <div className="pasos-sections">
-                    <ModoColorDetalladoEditor
-                      pasoId={pasoActual.id}
-                      cfg={cfg}
-                      modoColorOptions={buildModoColorOptions(
-                        maquinaSel,
-                        null,
-                        ["impresion_por_hoja", "impresion_por_area"].includes(
-                          pasoActual.familiaCodigo,
-                        ),
-                      )}
-                      modoColorPerfilDefault={
-                        modosColorFromPerfil(perfilSel)[0] ?? ""
-                      }
-                      updateModoColorConfig={updateModoColorConfig}
-                    />
-                  </div>
-                );
-              }
-              return null;
-            };
-            const noEjecutar = cfg.modoActivacion === "NO_EJECUTAR";
-            return (
-              <>
-                {/* Sub-fase D: la bifurcación tercerizado va PRIMERA
-                    (E.2); si la familia la declara aparece colapsada. */}
-                <SeccionGuiada
-                  titulo="Quién lo hace"
-                  seccion="quien"
-                  ctx={ctx}
-                  pendientesVivos={pendientesVivos}
-                  onAplicar={onAplicar}
-                  renderComponente={renderComponente}
-                />
-                <SeccionGuiada
-                  titulo="Activación"
-                  seccion="activacion"
-                  ctx={ctx}
-                  pendientesVivos={pendientesVivos}
-                  onAplicar={onAplicar}
-                  renderComponente={renderComponente}
-                />
-                {/* Tercerizado o apagado: no se produce internamente —
-                    sin tiempo/costo ni máquina (mismo criterio que el
-                    detallado congelado). */}
-                {!noEjecutar && !cfg.tercerizado ? (
-                  <>
-                    <SeccionGuiada
-                      titulo="Tiempo y costo"
-                      seccion="tiempo"
-                      ctx={ctx}
-                      pendientesVivos={pendientesVivos}
-                      onAplicar={onAplicar}
-                      renderComponente={renderComponente}
-                    />
-                    <SeccionGuiada
-                      titulo="Máquina y perfil"
-                      seccion="maquina"
-                      ctx={ctx}
-                      pendientesVivos={pendientesVivos}
-                      onAplicar={onAplicar}
-                      renderComponente={renderComponente}
-                    />
-                    {/* Materiales (sub-fase C): agregar a nivel paso + un
-                        grupo por slot configurado, cada uno con las
-                        preguntas del esquema evaluadas con ese slot. */}
-                    <SeccionGuiada
-                      titulo="Materiales"
-                      seccion="materiales"
-                      ctx={ctx}
-                      pendientesVivos={pendientesVivos}
-                      onAplicar={onAplicar}
-                      renderComponente={renderComponente}
-                    />
-                    {(cfg.slotsMateriales ?? []).map((slot, slotIdx) => {
-                      const decl =
-                        familia?.slotsRequeridos.find(
-                          (sr) => sr.codigo === slot.slotCodigo,
-                        ) ?? null;
-                      if (decl && isConsumibleMaquinaSlot(decl)) return null;
-                      const ctxSlot = {
-                        ...ctx,
-                        slot: {
-                          payload: slot,
-                          decl,
-                          esAdicional: !decl,
-                        },
-                      };
-                      const pendSlot = new Set(
-                        vivos
-                          .filter(
-                            (p) =>
-                              !p.slotCodigo ||
-                              p.slotCodigo === slot.slotCodigo,
-                          )
-                          .map((p) => p.tipo),
-                      );
-                      const onAplicarSlot = (patch: PatchOpcion) => {
-                        if (patch.tipo === "slot") {
-                          materialesApi.updateSlot(
-                            pasoActual.id,
-                            slotIdx,
-                            patch.patch,
-                          );
-                        } else onAplicar(patch);
-                      };
-                      const renderComponenteSlot = (
-                        id: string,
-                      ): React.ReactNode => {
-                        if (id === "material-fijo-detallado") {
-                          return (
-                            <div className="pasos-sections">
-                              <MaterialFijoSlotDetalladoEditor
-                                pasoId={pasoActual.id}
-                                slotIdx={slotIdx}
-                                slot={slot}
-                                slotDecl={decl}
-                                persistedSlot={materialesApi.getPersistedSlot(
-                                  pasoActual.id,
-                                  slot.slotCodigo,
-                                )}
-                                candidateMaterials={
-                                  materialesApi.candidateMaterials
-                                }
-                                setCandidateMaterials={
-                                  materialesApi.setCandidateMaterials
-                                }
-                                hardcodedMaterialSelections={
-                                  materialesApi.hardcodedMaterialSelections
-                                }
-                                setHardcodedMaterialSelections={
-                                  materialesApi.setHardcodedMaterialSelections
-                                }
-                                updateSlot={materialesApi.updateSlot}
-                              />
-                            </div>
-                          );
-                        }
-                        if (id === "candidatos-slot-detallado") {
-                          return (
-                            <div className="pasos-sections">
-                              <CandidatosSlotDetalladoEditor
-                                pasoId={pasoActual.id}
-                                slotIdx={slotIdx}
-                                slot={slot}
-                                slotDecl={decl}
-                                candidateMaterials={
-                                  materialesApi.candidateMaterials
-                                }
-                                addSlotCandidate={
-                                  materialesApi.addSlotCandidate
-                                }
-                                removeSlotCandidate={
-                                  materialesApi.removeSlotCandidate
-                                }
-                                updateSlotCandidate={
-                                  materialesApi.updateSlotCandidate
-                                }
-                              />
-                            </div>
-                          );
-                        }
-                        if (id === "base-consumo") {
-                          return (
-                            <BaseConsumoGuiado
-                              slot={slot}
-                              esAdicional={!decl}
-                              onSlotPatch={(patch) =>
-                                materialesApi.updateSlot(
-                                  pasoActual.id,
-                                  slotIdx,
-                                  patch,
-                                )
-                              }
-                            />
-                          );
-                        }
-                        return renderComponente(id);
-                      };
-                      return (
-                        <div
-                          key={`${slot.slotCodigo}:${slotIdx}`}
-                          style={{
-                            border: "1px solid var(--hairline, #e6e2dc)",
-                            borderRadius: 12,
-                            padding: "12px 14px",
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: 8,
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "center",
-                              gap: 8,
-                            }}
-                          >
-                            <div style={{ fontSize: 13.5, fontWeight: 650 }}>
-                              {familia
-                                ? slotDisplayName(slot, familia)
-                                : (slot.slotNombre ?? slot.slotCodigo)}
-                            </div>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                materialesApi.removeSlot(
-                                  pasoActual.id,
-                                  slotIdx,
-                                )
-                              }
-                            >
-                              Quitar
-                            </Button>
-                          </div>
-                          {opcionesDeSeccion("materiales", ctxSlot)
-                            .filter(
-                              (op) => op.clave !== "materiales.agregar",
-                            )
-                            .map((op) => (
-                              <OpcionGuiadaFila
-                                key={op.clave}
-                                opcion={op}
-                                ctx={ctxSlot}
-                                abiertaInicial={
-                                  (op.pendiente != null &&
-                                    pendSlot.has(op.pendiente)) ||
-                                  op.origenValor(ctxSlot) === "sin-definir"
-                                }
-                                pendienteVivo={
-                                  op.pendiente != null &&
-                                  pendSlot.has(op.pendiente)
-                                }
-                                onAplicar={onAplicarSlot}
-                                renderComponente={renderComponenteSlot}
-                              />
-                            ))}
-                        </div>
-                      );
-                    })}
-                    {/* Ajustes del trabajo (sub-fase D): setup/cleanup +
-                        el card de Acomodado del detallado. */}
-                    <SeccionGuiada
-                      titulo="Ajustes del trabajo"
-                      seccion="oficio"
-                      ctx={ctx}
-                      pendientesVivos={pendientesVivos}
-                      onAplicar={onAplicar}
-                      renderComponente={renderComponente}
-                    />
-                  </>
-                ) : null}
-              </>
-            );
-          })()}
-
-          {vivos.filter((pend) => pend.bloqueante).length === 0 ? (
-            <div style={cardStyle}>
-              <div style={{ fontSize: 17, fontWeight: 650, color: "#2e7d32" }}>
-                ✓ Listo para cotizar
-              </div>
-              <div style={notaStyle}>
-                Todo sale de lo que el paso ya declara (defaults, estación,
-                activación). Cualquier ajuste fino queda arriba, en sus
-                secciones.
-              </div>
-            </div>
-          ) : (
-            <div style={cardStyle}>
-              <div style={{ fontSize: 15, fontWeight: 650, color: "#8a6d3b" }}>
-                {resumenPendientes(vivos)}
-              </div>
-              <div style={notaStyle}>
-                Las preguntas marcadas en ámbar arriba son las que faltan.
-              </div>
-            </div>
-          )}
+          <SeccionesEsquemaPaso
+            pasoActual={pasoActual}
+            cfg={cfg}
+            familia={familia}
+            pasos={pasos}
+            familiasMap={familiasMap}
+            lookups={lookups}
+            jsonTexts={jsonTexts}
+            vivos={vivos}
+            onPatch={onPatch}
+            onParams={onParams}
+            onHerencia={onHerencia}
+            onAddSlotFamilia={onAddSlotFamilia}
+            reglaProps={reglaProps}
+            updateTiempoManualConfig={updateTiempoManualConfig}
+            updateModoColorConfig={updateModoColorConfig}
+            toggleMaquinaCandidata={toggleMaquinaCandidata}
+            setMaquinaCandidataPreferida={setMaquinaCandidataPreferida}
+            setMaquinaCandidataPerfilDefault={setMaquinaCandidataPerfilDefault}
+            setMaquinaCandidataModoColorAllowed={
+              setMaquinaCandidataModoColorAllowed
+            }
+            materialesApi={materialesApi}
+            nestingApi={nestingApi}
+            panelEditorPasoId={panelEditorPasoId}
+            setPanelEditorPasoId={setPanelEditorPasoId}
+            panelMeasures={panelMeasures}
+          />
         </div>
 
         <div
