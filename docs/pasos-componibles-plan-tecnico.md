@@ -571,6 +571,15 @@ Cinco sub-fases, cada una con valor propio y verificable sola. Rama
 
 #### B.3.1 — El registro, como datos puros (sin cambio de comportamiento)
 
+> **Estado 2026-07-30: HECHA** (rama `feat/pasos-capacidades`).
+> `pasos/capacidades.ts` con las 8 capacidades, `ALIAS_LEGACY` completo
+> (el test de cobertura verifica que TODA key declarada por las 42
+> familias tenga lugar: alias, interna o podada), `KEYS_PODADAS`
+> (proof/diseño aprobado), `capacidadesDeForma` y `capacidadesDeclaradas`.
+> 8 tests unit sin DB, verdes; tsc limpio. `piezas_estampadas` (dato
+> tenant de la Etapa C) se resuelve por el fallback hasta el backfill de
+> B.3.2.
+
 - Archivo nuevo `apps/api/src/productos-servicios/pasos/capacidades.ts`
   (patrón `familias.ts`: datos + helpers, cero lógica de negocio):
   - Las 8 entradas: `{ key, nombre, tipo: conteo|continua|traza,
