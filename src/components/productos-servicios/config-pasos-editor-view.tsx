@@ -9526,6 +9526,9 @@ function SeccionGuiada({
               pendientesVivos.has(opcion.pendiente)) ||
             opcion.origenValor(ctx) === "sin-definir"
           }
+          pendienteVivo={
+            opcion.pendiente != null && pendientesVivos.has(opcion.pendiente)
+          }
           onAplicar={onAplicar}
           renderComponente={renderComponente}
         />
@@ -9545,12 +9548,14 @@ function OpcionGuiadaFila({
   opcion,
   ctx,
   abiertaInicial,
+  pendienteVivo,
   onAplicar,
   renderComponente,
 }: {
   opcion: OpcionPaso;
   ctx: ContextoOpcion;
   abiertaInicial: boolean;
+  pendienteVivo: boolean;
   onAplicar: (patch: PatchOpcion) => void;
   renderComponente: (id: string) => React.ReactNode;
 }) {
@@ -9558,6 +9563,10 @@ function OpcionGuiadaFila({
   const resumen = opcion.resumen(ctx);
   const origen = opcion.origenValor(ctx);
   const badge = ORIGEN_BADGE[origen];
+  // Respondida = tiene un valor efectivo (propio o default) y su
+  // pendiente del motor ya no está vivo. Se recalcula en vivo: el check
+  // se pone verde apenas el modelador responde.
+  const respondida = origen !== "sin-definir" && !pendienteVivo;
   const notaStyle: React.CSSProperties = {
     fontSize: 12.5,
     color: "var(--muted-text, #6e6e76)",
@@ -9584,11 +9593,45 @@ function OpcionGuiadaFila({
         }}
       >
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 14.5, fontWeight: 600 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 7,
+              fontSize: 14.5,
+              fontWeight: 600,
+            }}
+          >
+            {/* Check visual por pregunta: verde si está respondida (aunque
+                sea por default del paso), ámbar si falta — mismo lenguaje
+                que los chips de pasos del header. */}
+            <span
+              aria-hidden
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 14,
+                height: 14,
+                borderRadius: "50%",
+                flexShrink: 0,
+                ...(respondida
+                  ? { background: "#22a06b", color: "#fff" }
+                  : {
+                      background:
+                        "color-mix(in srgb, #b7791f 14%, transparent)",
+                      border: "1px solid #d8b671",
+                    }),
+              }}
+            >
+              {respondida ? (
+                <CheckIcon className="size-2.5" strokeWidth={3.2} />
+              ) : null}
+            </span>
             {opcion.pregunta}
           </div>
           {!abierta ? (
-            <div style={{ ...notaStyle, marginTop: 2 }}>
+            <div style={{ ...notaStyle, marginTop: 2, marginLeft: 21 }}>
               {resumen}
               {badge ? (
                 <span
