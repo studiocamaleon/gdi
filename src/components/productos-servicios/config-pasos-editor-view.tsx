@@ -147,13 +147,6 @@ const TECHNOLOGY_RULE_OPTIONS = tecnologiaMaquinaItems.map((item) => ({
   value: item.value,
   label: item.label,
 }));
-const NESTING_ALGORITHMS = [
-  "auto",
-  "shelf-rollo",
-  "maxrects-rollo",
-  "grid-2d-single",
-  "grid-2d-multi",
-];
 const MODO_COLOR_LABELS: Record<string, string> = {
   SIN_IMPRESION: "Sin impresión",
   BN: "Blanco y negro",
@@ -322,29 +315,6 @@ const PANEL_WIDTH_INTERPRETATION_OPTIONS = optionsFromLabels(
 );
 const MIN_PANEL_MAX_WIDTH_MM = 300;
 
-const NESTING_ALGORITHM_OPTIONS = optionsFromLabels(NESTING_ALGORITHMS, {
-  auto: {
-    label: "Automático",
-    descripcion: "El motor elige según la geometría y las piezas.",
-  },
-  "shelf-rollo": {
-    label: "Rollo",
-    descripcion: "Acomoda piezas sobre rollo de ancho fijo.",
-  },
-  "maxrects-rollo": {
-    label: "Rollo optimizado",
-    descripcion:
-      "Acomoda piezas mixtas en rollo minimizando el largo consumido.",
-  },
-  "grid-2d-single": {
-    label: "Grilla simple",
-    descripcion: "Una medida repetida sobre pliego o placa.",
-  },
-  "grid-2d-multi": {
-    label: "Grilla multi",
-    descripcion: "Varias medidas sobre una o más placas.",
-  },
-});
 
 function optionLabel(options: HumanSelectOption[], value: string) {
   return options.find((option) => option.value === value)?.label ?? value;
@@ -6695,25 +6665,13 @@ function AcomodadoDetalladoEditor({
                                         />
                                       </div>
                                       <div className="ps-card-body space-y-4">
+                                      {/* El selector de Algoritmo se retiró: la física
+                                          (superficie del paso, geometría de máquina y
+                                          material) ya determina cuál corre, y de 116 pasos
+                                          uno solo lo había tocado. El motor sigue
+                                          respetando `nestingConfig.algorithm` si viniera
+                                          de una config antigua. */}
                                       <div className="ps-grid2">
-                                        <div className="space-y-2">
-                                          <LabelConTooltip
-                                            label="Algoritmo"
-                                            tooltip="Automático elige según la geometría de máquina/material y las medidas del trabajo."
-                                            iconSize="sm"
-                                          />
-                                          <HumanSelect
-                                            value={String(
-                                              nestingConfig.algorithm ?? "auto",
-                                            )}
-                                            onValueChange={(v) =>
-                                              updateNestingConfig(pasoId, {
-                                                algorithm: v || "auto",
-                                              })
-                                            }
-                                            options={NESTING_ALGORITHM_OPTIONS}
-                                          />
-                                        </div>
                                         <div className="space-y-2">
                                           <LabelConTooltip
                                             label="Demasía por lado"
