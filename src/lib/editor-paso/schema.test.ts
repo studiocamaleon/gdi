@@ -23,6 +23,11 @@ import type { SlotEnContexto } from "./schema";
 
 // ── El censo, por sección (espejo del doc §2, claves canónicas) ───────
 const CENSO: Record<string, string[]> = {
+  // Sub-fase D — Tercerización: si la familia lo declara, no se
+  // re-pregunta (aparece colapsado "— declarado en el paso"). Las filas
+  // proveedor/fuente/plazo/tecnología/grilla del censo §2 viven DENTRO
+  // del panel (una UI cohesiva = un control, como modo_color).
+  quien: ["quien.tercerizado", "quien.proveedor"],
   activacion: [
     "activacion.nombre",
     "activacion.cuando",
@@ -72,12 +77,17 @@ const CENSO: Record<string, string[]> = {
     "materiales.base",
     "materiales.caras",
   ],
-  // Sub-fase D: al migrar una sección, sus claves se listan acá y la
-  // sección entra en SECCIONES_MIGRADAS. Mientras tanto, el detallado
-  // congelado es la única fuente para ellas.
+  // Sub-fase D — oficio: setup/cleanup declarativos; el acomodado
+  // (censo E.0 filas 4-19: algoritmo, demasía, pliego, panelizado,
+  // márgenes, costeo del sustrato) es UNA card cohesiva del detallado
+  // extraída. La fila 3 (tiempo fijo override) ya vive como
+  // tiempo.tiempo_fijo. La sección "ajustes" se eliminó: los escapes
+  // viven dentro del acomodado.
+  oficio: ["oficio.setup", "oficio.cleanup", "oficio.acomodado"],
 };
 
-const SECCIONES_PENDIENTES = ["quien", "oficio", "ajustes"];
+// Con la D no quedan secciones pendientes: el CENSO está cubierto entero.
+const SECCIONES_PENDIENTES: string[] = [];
 
 function ctxBase(extra?: {
   cfg?: Partial<UpsertConfigPasoPayload>;
@@ -625,5 +635,106 @@ describe("sección Materiales", () => {
     });
     expect(nombre.visible(adicional)).toBe(true);
     expect(nombre.resumen(adicional)).toBe('"Ojales"');
+  });
+});
+
+describe("sección Quién lo hace (tercerización)", () => {
+  it("es la PRIMERA pregunta del esquema", () => {
+    expect(ESQUEMA_PASO[0].clave).toBe("quien.tercerizado");
+  });
+
+  it("declarado por la familia: no se re-pregunta (colapsado con origen del paso)", () => {
+    const quien = ESQUEMA_PASO.find((op) => op.clave === "quien.tercerizado")!;
+    const ctx = ctxBase({
+      cfg: { tercerizado: true },
+      familia: { defaults: { tercerizado: true } } as Partial<FamiliaListItem>,
+    });
+    expect(quien.resumen(ctx)).toBe(
+      "Lo hace un proveedor — declarado en el paso",
+    );
+    expect(quien.origenValor(ctx)).toBe("default-paso");
+    // Internalizarlo pese a la declaración es una decisión propia.
+    const internalizado = ctxBase({
+      cfg: { tercerizado: false },
+      familia: { defaults: { tercerizado: true } } as Partial<FamiliaListItem>,
+    });
+    expect(internalizado.cfg.tercerizado).toBe(false);
+    expect(quien.origenValor(internalizado)).toBe("config");
+  });
+
+  it("el proveedor sólo aparece tercerizado y exige proveedor + precios", () => {
+    const proveedor = ESQUEMA_PASO.find(
+      (op) => op.clave === "quien.proveedor",
+    )!;
+    expect(proveedor.visible(ctxBase())).toBe(false);
+    expect(proveedor.pendiente).toBe("proveedor");
+    const sinProveedor = ctxBase({ cfg: { tercerizado: true } });
+    expect(proveedor.visible(sinProveedor)).toBe(true);
+    expect(proveedor.origenValor(sinProveedor)).toBe("sin-definir");
+    // Con proveedor pero la matriz vacía sigue sin definir (cotiza $0).
+    const sinGrilla = ctxBase({
+      cfg: { tercerizado: true, proveedorId: "prov-1" },
+    });
+    expect(proveedor.origenValor(sinGrilla)).toBe("sin-definir");
+    expect(proveedor.resumen(sinGrilla)).toBe(
+      "Proveedor elegido — con matriz de precios · faltan los precios",
+    );
+    const completo = ctxBase({
+      cfg: {
+        tercerizado: true,
+        proveedorId: "prov-1",
+        fuenteCostoTercerizado: "fijo",
+        tercerizadoConfigJson: { costoFijo: 1500 },
+        plazoProveedorDias: 5,
+      },
+    });
+    expect(proveedor.origenValor(completo)).toBe("config");
+    expect(proveedor.resumen(completo)).toBe(
+      "Proveedor elegido — a precio fijo por trabajo · entrega en 5 días",
+    );
+  });
+});
+
+describe("sección Ajustes del trabajo (oficio)", () => {
+  it("setup y cleanup sólo con máquina, heredando del perfil", () => {
+    const setup = ESQUEMA_PASO.find((op) => op.clave === "oficio.setup")!;
+    expect(setup.visible(ctxBase())).toBe(false);
+    const conMaquina = ctxBase({ cfg: { maquinaM1Id: "mq-1" } });
+    expect(setup.visible(conMaquina)).toBe(true);
+    expect(setup.resumen(conMaquina)).toBe("El del perfil de la máquina");
+    expect(setup.origenValor(conMaquina)).toBe("default-maquina");
+    const conOverride = ctxBase({
+      cfg: { maquinaM1Id: "mq-1", setupOverrideMin: 12 },
+    });
+    expect(setup.resumen(conOverride)).toBe("12 min");
+    expect(setup.origenValor(conOverride)).toBe("config");
+  });
+
+  it("el acomodado aparece según la regla de nesting y resume la política de costeo", () => {
+    const acomodado = ESQUEMA_PASO.find(
+      (op) => op.clave === "oficio.acomodado",
+    )!;
+    // trabajo_manual sin CALCULADO_POR_PASO: no acomoda.
+    expect(acomodado.visible(ctxBase())).toBe(false);
+    // pre_prensa nunca (delega el acomodo a impresión).
+    expect(
+      acomodado.visible(ctxBase({ familia: { codigo: "pre_prensa" } })),
+    ).toBe(false);
+    const granFormato = ctxBase({
+      familia: { codigo: "impresion_por_area" },
+      cfg: {
+        paramsPasoJson: {
+          nestingConfig: {
+            costing: { strategy: "consumed-length" },
+            paneling: { enabled: true },
+          },
+        },
+      },
+    });
+    expect(acomodado.visible(granFormato)).toBe(true);
+    expect(acomodado.resumen(granFormato)).toBe(
+      "Costeo: largo consumido · panelizado",
+    );
+    expect(acomodado.origenValor(granFormato)).toBe("config");
   });
 });

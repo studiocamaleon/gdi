@@ -244,8 +244,30 @@ type ControlOpcion =
   > "Sustrato principal" con las 5 preguntas y el buscador del detallado
   > adentro del Sheet; el detallado quedó idéntico. 7 tests nuevos
   > (25 del esquema, 387 front en total).
-- **D — Tercerización + oficio** (panel embebido + censo E.0 en humano;
-  absorbe la E.3.3 del plan wizard-ruta).
+- **D — Tercerización + oficio** — **HECHA (2026-07-30)**.
+  > Sección "Quién lo hace" PRIMERA del esquema (E.2): la bifurcación
+  > tercerizado con tu corrección — si la familia lo declara, la pregunta
+  > no se repite (colapsada "— declarado en el paso"; internalizar es
+  > Cambiar). Las filas proveedor/fuente/plazo/tecnología/grilla del
+  > censo viven DENTRO de `quien.proveedor` (el `PasoTercerizadoPanel`
+  > embebido: una UI cohesiva = un control, como modo_color); su origen
+  > espeja el motor de pendientes (sin proveedor O sin precios =
+  > sin-definir, "cotiza $0"). Sección "Ajustes del trabajo" (oficio):
+  > setup y cleanup declarativos + `oficio.acomodado` — la card entera de
+  > Acomodado/nesting del detallado (censo E.0 filas 4-19: algoritmo,
+  > demasía, pliego, panelizado, márgenes, costeo del sustrato) extraída
+  > como `AcomodadoDetalladoEditor`; la humanización fina de pliego y
+  > panelizado como preguntas separadas queda anotada abajo (§7). La
+  > fila 3 del censo ya vivía como tiempo.tiempo_fijo; la sección
+  > "ajustes" (escapes) se eliminó — algoritmo y layout manual viven
+  > dentro del acomodado, igual que en el detallado. Con esto el CENSO
+  > quedó cubierto COMPLETO (SECCIONES_PENDIENTES = []) y las
+  > question-cards transicionales del asistente se RETIRARON: todo el
+  > asistente sale del esquema. Verificado en vivo: Talonarios muestra
+  > "Quién lo hace" primera y "Ajustes del trabajo" con el card completo
+  > (márgenes con diagrama, costeo); Bordado → "La hace un proveedor"
+  > abre el panel completo, el chip pasa a ámbar 2 y las secciones
+  > internas se ocultan. 5 tests nuevos (30 del esquema, 392 front).
 - **E — Cobertura 100% verificada → retiro del detallado** (decisión
   final del usuario tras probar).
 
@@ -259,3 +281,20 @@ type ControlOpcion =
 3. **El asistente sigue siendo el shell** (Sheet flotante E.3.2 v2):
    sólo cambia su contenido de "cards de pendientes" a "secciones
    completas priorizadas".
+
+## 7. Abierto (no bloquea el retiro, sí lo mejora)
+
+- **Humanización fina de pliego y panelizado**: hoy `oficio.acomodado`
+  entrega el card del detallado entero (paridad garantizada). Las
+  preguntas humanas del censo E.0 ("¿En qué pliego se imprime?",
+  "¿Esta pieza puede salir en paneles?", el ancho máximo con su
+  interpretación fundida y previsualización) son la evolución natural:
+  partir el card en claves propias cuando el editor visual del acomodo
+  entre en agenda.
+- **Nombre del proveedor en el resumen**: `quien.proveedor` resume
+  "Proveedor elegido" porque los lookups del config-paso no traen
+  proveedores (el panel los carga solo). Sumar proveedores al lookup
+  permitiría "Lo hace Terminaciones Patagónicas" también colapsado.
+- **Algoritmo para pasos tenant**: el censo E.0 ya lo marcó — con
+  superficie B.3.4 el selector no debería ofrecerse (el sistema decide);
+  hoy se muestra igual que en el detallado por paridad.

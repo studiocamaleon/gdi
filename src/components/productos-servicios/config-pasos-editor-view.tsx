@@ -47,7 +47,6 @@ import { PasoTercerizadoPanel } from "@/components/productos-servicios/paso-terc
 import {
   pendientesDePaso,
   resumenPendientes,
-  type PendientePaso,
 } from "@/lib/pendientes-paso";
 import {
   opcionesDeSeccion,
@@ -82,6 +81,7 @@ import {
   requiereMecanismoCantidad,
   getModoColorConfig,
   modoColorAplica,
+  nestingAplica,
 } from "@/lib/editor-paso/catalogo-tiempo";
 import {
   actualizarPasoExtra,
@@ -1079,22 +1079,6 @@ function resolveModoColorAllowedModes(
         .filter((item) => optionValues.includes(item))
     : [];
   return normalizedAllowed.length > 0 ? normalizedAllowed : optionValues;
-}
-
-function nestingAplica(
-  familiaCodigo: string | undefined,
-  cfg: UpsertConfigPasoPayload,
-) {
-  if (!familiaCodigo) return false;
-  if (familiaCodigo === "pre_prensa") return false;
-  if (cfg.mecanismoCantidad === "CALCULADO_POR_PASO") return true;
-  return [
-    "impresion_por_area",
-    "impresion_por_hoja",
-    "plotter_corte",
-    "laminado",
-    "montaje_sobre_sustrato",
-  ].includes(familiaCodigo);
 }
 
 function panelizadoAplica(
@@ -2741,11 +2725,6 @@ export function ConfigPasosEditorView({
   // Picker de MP por candidato de pliego (origen de costo 'por_candidato'):
   // qué fila tiene el buscador abierto y la materia elegida a medio resolver
   // (cuando tiene varias variantes). Key: `${pasoId}:${indexCandidato}`.
-  const [mpPickerCandidatoAbierto, setMpPickerCandidatoAbierto] =
-    React.useState<string | null>(null);
-  const [mpMateriaPorCandidato, setMpMateriaPorCandidato] = React.useState<
-    Record<string, MateriaPrimaBusquedaItem>
-  >({});
 
   // JSON text por paso (sólo UI; al guardar se parsea de vuelta a objeto)
   const [jsonTexts, setJsonTexts] = React.useState<
@@ -4327,42 +4306,6 @@ export function ConfigPasosEditorView({
                   const mostrarOverridesTiempo =
                     mostrarSetupCleanupOverrides || mostrarTiempoFijoOverride;
                   const nestingConfig = getNestingConfig(cfg.paramsPasoJson);
-                  const panelizadoConfig = getPanelizadoConfig(
-                    cfg.paramsPasoJson,
-                  );
-                  const pliegoImpresionConfig = getPliegoImpresionConfig(
-                    cfg.paramsPasoJson,
-                  );
-                  const nestingExtraMargins = getExtraMarginsConfig(
-                    cfg.paramsPasoJson,
-                  );
-                  const pliegoImpresionPreset = getPliegoPresetValue(
-                    pliegoImpresionConfig,
-                  );
-                  const pliegoImpresionEsPersonalizado =
-                    pliegoImpresionPreset === "personalizado";
-                  const pliegoImpresionEsAutomatico =
-                    pliegoImpresionPreset === "automatico";
-                  const pliegoCandidatos =
-                    getPliegoCandidatos(pliegoImpresionConfig);
-                  const pliegoOrigenCosto = getPliegoOrigenCosto(
-                    pliegoImpresionConfig,
-                  );
-                  const pliegoPorCandidato =
-                    pliegoImpresionEsAutomatico &&
-                    pliegoOrigenCosto === "por_candidato";
-                  const sustratoCompatibilidad =
-                    familia?.slotsRequeridos?.find(
-                      (slot) => slot.codigo === "sustrato_principal",
-                    )?.compatibilidadMaterial;
-                  const variantesLookup = lookups.materiasPrimas.flatMap(
-                    (materia) =>
-                      materia.variantes.map((variante) => ({
-                        materia,
-                        variante,
-                      })),
-                  );
-                  const nestingMargins = asRecord(nestingConfig.margins);
                   const nestingCosting = asRecord(nestingConfig.costing);
                   const nestingCostingStrategy =
                     typeof nestingCosting.strategy === "string"
@@ -4372,48 +4315,12 @@ export function ConfigPasosEditorView({
                     mostrarNesting && nestingCostingStrategy !== "simple";
                   const multiplicadoresSoportados =
                     familia?.multiplicadoresSoportados ?? [];
-                  const sustratoPrincipal = cfg.slotsMateriales?.find(
-                    (slot) => slot.slotCodigo === "sustrato_principal",
-                  );
-                  const varianteSustrato = lookups.materiasPrimas
-                    .flatMap((materia) => materia.variantes)
-                    .find(
-                      (variante) =>
-                        variante.id === sustratoPrincipal?.materialVarianteId,
-                    );
-                  const attrsSustrato = asRecord(
-                    varianteSustrato?.atributosVarianteJson,
-                  );
-                  const sustratoRolloDisponible =
-                    varianteLooksLikeRoll(varianteSustrato) ||
-                    (sustratoPrincipal?.candidatos ?? []).some((candidate) => {
-                      const materiaPrima =
-                        candidateMaterials[candidate.materiaPrimaId];
-                      if (!materiaPrima) return false;
-                      if (materiaPrimaLooksLikeRoll(materiaPrima)) return true;
-                      const enabledVariantIds = new Set(candidate.varianteIds);
-                      return materiaPrima.variantes.some((variante) => {
-                        const enabled =
-                          enabledVariantIds.size === 0 ||
-                          enabledVariantIds.has(variante.id);
-                        return enabled && varianteLooksLikeRoll(variante);
-                      });
-                    });
-                  const sustratoAnchoLabel = formatMm(
-                    attrsSustrato.anchoMm ?? attrsSustrato.widthMm,
-                  );
-                  const sustratoAltoLabel = formatMm(
-                    attrsSustrato.largoMm ??
-                      attrsSustrato.altoMm ??
-                      attrsSustrato.heightMm,
-                  );
                   const maquinaParaDefaults = maquinaSel?.parametrosTecnicosJson
                     ? maquinaSel
                     : configExistente?.maquinaM1?.id === cfg.maquinaM1Id &&
                         configExistente?.maquinaM1?.parametrosTecnicosJson
                       ? configExistente.maquinaM1
                       : (maquinaSel ?? configExistente?.maquinaM1);
-                  const machineMargins = getMachineMargins(maquinaParaDefaults);
                   const mostrarModoColor = modoColorAplica(
                     familia?.codigo,
                     cfg,
@@ -4427,94 +4334,6 @@ export function ConfigPasosEditorView({
                   );
                   const modoColorPerfilDefault =
                     modosColorFromPerfil(perfilGuardado)[0] ?? "";
-                  const defaultSeparation = defaultNestingSeparationForFamily(
-                    familia?.codigo,
-                  );
-                  const legacySeparationH = getResolvedNestingNumber(
-                    nestingConfig.separationHMm,
-                    undefined,
-                    defaultSeparation,
-                  );
-                  const legacySeparationV = getResolvedNestingNumber(
-                    nestingConfig.separationVMm,
-                    undefined,
-                    defaultSeparation,
-                  );
-                  const resolvedPieceBleed = getResolvedNestingNumber(
-                    nestingConfig.pieceBleedMm,
-                    Math.max(legacySeparationH, legacySeparationV) / 2,
-                    0,
-                  );
-                  const mostrarPanelizado = panelizadoAplica(
-                    familia?.codigo,
-                    nestingConfig,
-                    maquinaParaDefaults,
-                    sustratoRolloDisponible,
-                  );
-                  const resolvedPanelMaxWidth = getDisplayPanelMaxWidth(
-                    panelizadoConfig.maxPanelWidthMm,
-                  );
-                  const resolvedPanelOverlap = getResolvedNestingNumber(
-                    panelizadoConfig.overlapMm,
-                    undefined,
-                    20,
-                  );
-                  const panelizadoMode =
-                    panelizadoConfig.mode === "manual" ? "manual" : "automatic";
-                  const panelizadoAxis =
-                    panelizadoConfig.axis === "automatic" ||
-                    panelizadoConfig.axis === "automatica"
-                      ? "automatic"
-                      : panelizadoConfig.axis === "horizontal"
-                        ? "horizontal"
-                        : panelizadoConfig.axis === "vertical"
-                          ? "vertical"
-                          : "automatic";
-                  const panelizadoWidthInterpretation =
-                    panelizadoConfig.widthInterpretation === "util"
-                      ? "util"
-                      : "total";
-                  const panelManualLayout = readManualLayout(
-                    panelizadoConfig.manualLayout,
-                  );
-                  const panelMeasures = getProductoPanelMeasures(producto);
-                  const rollWidthForPanelMm =
-                    readOptionalNumber(attrsSustrato.anchoMm) ??
-                    readOptionalNumber(attrsSustrato.widthMm) ??
-                    readOptionalNumber(
-                      maquinaParaDefaults?.parametrosTecnicosJson
-                        ?.anchoMaxRolloMm,
-                    ) ??
-                    readOptionalNumber(
-                      maquinaParaDefaults?.parametrosTecnicosJson?.anchoMaxMm,
-                    ) ??
-                    readOptionalNumber(
-                      maquinaParaDefaults?.parametrosTecnicosJson?.anchoUtil,
-                    );
-                  const printableWidthForPanelMm =
-                    rollWidthForPanelMm != null
-                      ? Math.max(
-                          0,
-                          rollWidthForPanelMm -
-                            (machineMargins.leftMm ?? 0) -
-                            (machineMargins.rightMm ?? 0),
-                        )
-                      : null;
-                  const panelSummary =
-                    panelizadoConfig.enabled === true
-                      ? [
-                          panelizadoMode === "manual" ? "Manual" : "Automático",
-                          panelizadoAxis === "automatic"
-                            ? "dirección automática"
-                            : panelizadoAxis === "vertical"
-                              ? "vertical"
-                              : "horizontal",
-                          `${resolvedPanelOverlap} mm solape`,
-                          resolvedPanelMaxWidth > 0
-                            ? `${formatNumber(resolvedPanelMaxWidth / 10)} cm máx.`
-                            : "máx. ancho imprimible",
-                        ].join(" · ")
-                      : "";
                   const valBasico =
                     noEjecutar || cfg.tercerizado
                       ? { errores: [], warnings: [] }
@@ -6373,1313 +6192,30 @@ export function ConfigPasosEditorView({
                                   )}
 
                                   {mostrarNesting && (
-                                    <>
-                                    <div className="ps-card">
-                                      <div className="ps-card-head">
-                                        <span className="ps-ic">
-                                          <Grid2X2Icon />
-                                        </span>
-                                        <LabelConTooltip
-                                          label={
-                                            <span className="ps-tt normal-case tracking-normal">
-                                              Acomodado / nesting
-                                            </span>
-                                          }
-                                          tooltip="Configuración del acomodo de piezas para este paso. Se guarda como nestingConfig, pero se edita desde controles visuales."
-                                        />
-                                      </div>
-                                      <div className="ps-card-body space-y-4">
-                                      <div className="ps-grid2">
-                                        <div className="space-y-2">
-                                          <LabelConTooltip
-                                            label="Algoritmo"
-                                            tooltip="Automático elige según la geometría de máquina/material y las medidas del trabajo."
-                                            iconSize="sm"
-                                          />
-                                          <HumanSelect
-                                            value={String(
-                                              nestingConfig.algorithm ?? "auto",
-                                            )}
-                                            onValueChange={(v) =>
-                                              updateNestingConfig(paso.id, {
-                                                algorithm: v || "auto",
-                                              })
-                                            }
-                                            options={NESTING_ALGORITHM_OPTIONS}
-                                          />
-                                        </div>
-                                        <div className="space-y-2">
-                                          <LabelConTooltip
-                                            label="Demasía por lado"
-                                            tooltip="Margen extra alrededor de cada pieza. Entre dos piezas se acumulan ambos lados."
-                                            iconSize="sm"
-                                          />
-                                          <div className="ps-inp">
-                                            <Input
-                                              type="number"
-                                              min={0}
-                                              step={0.5}
-                                              value={String(
-                                                resolvedPieceBleed,
-                                              )}
-                                              onChange={(e) =>
-                                                updateNestingPieceBleed(
-                                                  paso.id,
-                                                  e.target.value === ""
-                                                    ? 0
-                                                    : Number(e.target.value),
-                                                )
-                                              }
-                                            />
-                                            <span className="ps-u">mm</span>
-                                          </div>
-                                        </div>
-                                      </div>
-                                      {familia?.codigo ===
-                                        "impresion_por_hoja" && (
-                                        <div className="space-y-3 rounded-[11px] border p-4">
-                                          <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-                                            <LabelConTooltip
-                                              label="Pliego de impresión"
-                                              tooltip="Tamaño real de hoja que entra a la impresora. Si queda vacío, el motor usa el tamaño del sustrato principal comprado."
-                                              iconSize="sm"
-                                            />
-                                            {sustratoAnchoLabel &&
-                                              sustratoAltoLabel && (
-                                                <span className="text-muted-foreground text-xs">
-                                                  Sustrato comprado:{" "}
-                                                  {sustratoAnchoLabel} ×{" "}
-                                                  {sustratoAltoLabel}
-                                                </span>
-                                              )}
-                                          </div>
-                                          <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-                                            <div className="space-y-1">
-                                              <LabelConTooltip
-                                                label="Tamaño"
-                                                tooltip="Elegí un formato estándar o personalizado si el pliego del producto tiene otra medida."
-                                                iconSize="sm"
-                                              />
-                                              <HumanSelect
-                                                value={pliegoImpresionPreset}
-                                                onValueChange={(v) =>
-                                                  updateNestingPliegoPreset(
-                                                    paso.id,
-                                                    v || "materia_prima",
-                                                  )
-                                                }
-                                                options={
-                                                  PLIEGO_IMPRESION_OPTIONS
-                                                }
-                                                triggerClassName="min-h-9 text-xs"
-                                              />
-                                            </div>
-                                            <div className="space-y-1">
-                                              <LabelConTooltip
-                                                label="Ancho del pliego"
-                                                tooltip="Ancho en milímetros del pliego ya cortado para imprimir."
-                                                iconSize="sm"
-                                              />
-                                              <Input
-                                                type="number"
-                                                min={1}
-                                                step={1}
-                                                disabled={
-                                                  !pliegoImpresionEsPersonalizado
-                                                }
-                                                value={String(
-                                                  pliegoImpresionConfig.anchoMm ??
-                                                    "",
-                                                )}
-                                                onChange={(e) =>
-                                                  updateNestingPliegoImpresion(
-                                                    paso.id,
-                                                    {
-                                                      anchoMm:
-                                                        e.target.value === ""
-                                                          ? null
-                                                          : Number(
-                                                              e.target.value,
-                                                            ),
-                                                    },
-                                                  )
-                                                }
-                                                placeholder="Usar sustrato"
-                                                className="h-8 text-xs"
-                                              />
-                                            </div>
-                                            <div className="space-y-1">
-                                              <LabelConTooltip
-                                                label="Alto del pliego"
-                                                tooltip="Alto/largo en milímetros del pliego ya cortado para imprimir."
-                                                iconSize="sm"
-                                              />
-                                              <Input
-                                                type="number"
-                                                min={1}
-                                                step={1}
-                                                disabled={
-                                                  !pliegoImpresionEsPersonalizado
-                                                }
-                                                value={String(
-                                                  pliegoImpresionConfig.altoMm ??
-                                                    "",
-                                                )}
-                                                onChange={(e) =>
-                                                  updateNestingPliegoImpresion(
-                                                    paso.id,
-                                                    {
-                                                      altoMm:
-                                                        e.target.value === ""
-                                                          ? null
-                                                          : Number(
-                                                              e.target.value,
-                                                            ),
-                                                    },
-                                                  )
-                                                }
-                                                placeholder="Usar sustrato"
-                                                className="h-8 text-xs"
-                                              />
-                                            </div>
-                                          </div>
-                                          {pliegoImpresionEsAutomatico && (
-                                            <div className="ps-compact space-y-2 rounded-[10px] border border-dashed p-3">
-                                              <div className="space-y-1">
-                                                <LabelConTooltip
-                                                  label="Origen del costo"
-                                                  tooltip="Cómo se costea cada candidato al compararlos: derivado (todos salen de la materia prima del paso, costo proporcional al área) o materia prima por candidato (cada tamaño se compra ya cortado con su precio real)."
-                                                />
-                                                <HumanSelect
-                                                  value={pliegoOrigenCosto}
-                                                  onValueChange={(value) =>
-                                                    updateNestingPliegoImpresion(
-                                                      paso.id,
-                                                      {
-                                                        origenCosto:
-                                                          value ===
-                                                          "por_candidato"
-                                                            ? "por_candidato"
-                                                            : "derivado",
-                                                      },
-                                                    )
-                                                  }
-                                                  options={
-                                                    PLIEGO_ORIGEN_COSTO_OPTIONS
-                                                  }
-                                                  triggerClassName="min-h-8 text-xs"
-                                                />
-                                              </div>
-                                              <div className="flex items-center justify-between gap-2">
-                                                <span className="text-xs font-medium">
-                                                  Candidatos activos
-                                                </span>
-                                                <Button
-                                                  type="button"
-                                                  size="sm"
-                                                  variant="outline"
-                                                  className="h-7 gap-1 px-2 text-xs"
-                                                  onClick={() =>
-                                                    addNestingPliegoCandidato(
-                                                      paso.id,
-                                                      "A4",
-                                                    )
-                                                  }
-                                                >
-                                                  <PlusIcon className="h-3 w-3" />
-                                                  Agregar candidato
-                                                </Button>
-                                              </div>
-                                              {pliegoCandidatos.length === 0 ? (
-                                                <div className="rounded bg-muted/50 px-2 py-2 text-xs text-muted-foreground">
-                                                  Agregá al menos un tamaño para
-                                                  que el motor pueda comparar.
-                                                </div>
-                                              ) : (
-                                                <div className="space-y-2">
-                                                  {pliegoCandidatos.map(
-                                                    (candidato, index) => {
-                                                      const candidatoPreset =
-                                                        typeof candidato.preset ===
-                                                        "string"
-                                                          ? candidato.preset
-                                                          : "personalizado";
-                                                      const candidatoKey = `${paso.id}:${index}`;
-                                                      const candidatoMpVarianteId =
-                                                        getCandidatoMateriaPrimaVarianteId(
-                                                          candidato,
-                                                        );
-                                                      const candidatoMpLookup =
-                                                        candidatoMpVarianteId
-                                                          ? variantesLookup.find(
-                                                              (item) =>
-                                                                item.variante
-                                                                  .id ===
-                                                                candidatoMpVarianteId,
-                                                            )
-                                                          : undefined;
-                                                      const candidatoMpMateria =
-                                                        mpMateriaPorCandidato[
-                                                          candidatoKey
-                                                        ];
-                                                      return (
-                                                        <div
-                                                          key={`${candidato.id ?? index}-${index}`}
-                                                          className="space-y-2 rounded border bg-background/80 p-2"
-                                                        >
-                                                        <div
-                                                          className="grid grid-cols-1 gap-2 md:grid-cols-[80px_1fr_120px_100px_100px_36px]"
-                                                        >
-                                                          <label className="flex items-center gap-2 text-xs">
-                                                            <input
-                                                              type="checkbox"
-                                                              checked={
-                                                                candidato.activo !==
-                                                                false
-                                                              }
-                                                              onChange={(e) =>
-                                                                updateNestingPliegoCandidato(
-                                                                  paso.id,
-                                                                  index,
-                                                                  {
-                                                                    activo:
-                                                                      e.target
-                                                                        .checked,
-                                                                  },
-                                                                )
-                                                              }
-                                                            />
-                                                            Activo
-                                                          </label>
-                                                          <div className="space-y-1">
-                                                            <Label className="text-[11px]">
-                                                              Nombre
-                                                            </Label>
-                                                            <Input
-                                                              value={String(
-                                                                candidato.nombre ??
-                                                                  "",
-                                                              )}
-                                                              onChange={(e) =>
-                                                                updateNestingPliegoCandidato(
-                                                                  paso.id,
-                                                                  index,
-                                                                  {
-                                                                    nombre:
-                                                                      e.target
-                                                                        .value,
-                                                                  },
-                                                                )
-                                                              }
-                                                              className="h-8 text-xs"
-                                                            />
-                                                          </div>
-                                                          <div className="space-y-1">
-                                                            <Label className="text-[11px]">
-                                                              Preset
-                                                            </Label>
-                                                            <HumanSelect
-                                                              value={
-                                                                PLIEGO_IMPRESION_PRESETS.some(
-                                                                  (preset) =>
-                                                                    preset.value ===
-                                                                    candidatoPreset,
-                                                                )
-                                                                  ? candidatoPreset
-                                                                  : "personalizado"
-                                                              }
-                                                              onValueChange={(v) => {
-                                                                const preset =
-                                                                  PLIEGO_IMPRESION_PRESETS.find(
-                                                                    (item) =>
-                                                                      item.value ===
-                                                                      v,
-                                                                  );
-                                                                if (
-                                                                  !preset ||
-                                                                  preset.value ===
-                                                                    "personalizado" ||
-                                                                  !preset.anchoMm ||
-                                                                  !preset.altoMm
-                                                                ) {
-                                                                  updateNestingPliegoCandidato(
-                                                                    paso.id,
-                                                                    index,
-                                                                    {
-                                                                      preset:
-                                                                        "personalizado",
-                                                                    },
-                                                                  );
-                                                                  return;
-                                                                }
-                                                                updateNestingPliegoCandidato(
-                                                                  paso.id,
-                                                                  index,
-                                                                  {
-                                                                    preset:
-                                                                      preset.value,
-                                                                    nombre:
-                                                                      preset.label,
-                                                                    anchoMm:
-                                                                      preset.anchoMm,
-                                                                    altoMm:
-                                                                      preset.altoMm,
-                                                                  },
-                                                                );
-                                                              }}
-                                                              options={PLIEGO_IMPRESION_OPTIONS.filter(
-                                                                (option) =>
-                                                                  ![
-                                                                    "materia_prima",
-                                                                    "automatico",
-                                                                  ].includes(
-                                                                    option.value,
-                                                                  ),
-                                                              )}
-                                                              triggerClassName="min-h-8 text-xs"
-                                                            />
-                                                          </div>
-                                                          <div className="space-y-1">
-                                                            <Label className="text-[11px]">
-                                                              Ancho mm
-                                                            </Label>
-                                                            <Input
-                                                              type="number"
-                                                              min={1}
-                                                              step={1}
-                                                              value={String(
-                                                                candidato.anchoMm ??
-                                                                  "",
-                                                              )}
-                                                              onChange={(e) =>
-                                                                updateNestingPliegoCandidato(
-                                                                  paso.id,
-                                                                  index,
-                                                                  {
-                                                                    preset:
-                                                                      "personalizado",
-                                                                    anchoMm:
-                                                                      e.target
-                                                                        .value ===
-                                                                      ""
-                                                                        ? ""
-                                                                        : Number(
-                                                                            e
-                                                                              .target
-                                                                              .value,
-                                                                          ),
-                                                                  },
-                                                                )
-                                                              }
-                                                              className="h-8 text-xs"
-                                                            />
-                                                          </div>
-                                                          <div className="space-y-1">
-                                                            <Label className="text-[11px]">
-                                                              Alto mm
-                                                            </Label>
-                                                            <Input
-                                                              type="number"
-                                                              min={1}
-                                                              step={1}
-                                                              value={String(
-                                                                candidato.altoMm ??
-                                                                  "",
-                                                              )}
-                                                              onChange={(e) =>
-                                                                updateNestingPliegoCandidato(
-                                                                  paso.id,
-                                                                  index,
-                                                                  {
-                                                                    preset:
-                                                                      "personalizado",
-                                                                    altoMm:
-                                                                      e.target
-                                                                        .value ===
-                                                                      ""
-                                                                        ? ""
-                                                                        : Number(
-                                                                            e
-                                                                              .target
-                                                                              .value,
-                                                                          ),
-                                                                  },
-                                                                )
-                                                              }
-                                                              className="h-8 text-xs"
-                                                            />
-                                                          </div>
-                                                          <Button
-                                                            type="button"
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="self-end text-destructive"
-                                                            onClick={() =>
-                                                              removeNestingPliegoCandidato(
-                                                                paso.id,
-                                                                index,
-                                                              )
-                                                            }
-                                                          >
-                                                            <Trash2Icon className="h-4 w-4" />
-                                                          </Button>
-                                                        </div>
-                                                        {pliegoPorCandidato && (
-                                                          <div className="space-y-2 border-t border-dashed pt-2">
-                                                            <div className="flex flex-wrap items-center gap-2">
-                                                              <span className="text-muted-foreground text-[11px] font-medium">
-                                                                Materia prima
-                                                                propia
-                                                              </span>
-                                                              {candidatoMpVarianteId ? (
-                                                                <span className="ps-spec-chip">
-                                                                  {candidatoMpLookup
-                                                                    ? `${candidatoMpLookup.materia.nombre} · ${candidatoMpLookup.variante.sku}`
-                                                                    : typeof candidato.materiaPrimaSku ===
-                                                                        "string"
-                                                                      ? candidato.materiaPrimaSku
-                                                                      : "Variante seleccionada"}
-                                                                  {candidatoMpLookup
-                                                                    ?.variante
-                                                                    .precioReferencia
-                                                                    ? ` · ${formatearMoneda(Number(candidatoMpLookup.variante.precioReferencia), monedaDe(candidatoMpLookup.variante.moneda))}`
-                                                                    : ""}
-                                                                </span>
-                                                              ) : (
-                                                                <span className="text-muted-foreground text-[11px]">
-                                                                  Sin asignar:
-                                                                  compite con el
-                                                                  costo derivado
-                                                                  del material
-                                                                  del paso.
-                                                                </span>
-                                                              )}
-                                                              <Button
-                                                                type="button"
-                                                                size="sm"
-                                                                variant="outline"
-                                                                className="h-6 px-2 text-[11px]"
-                                                                onClick={() =>
-                                                                  setMpPickerCandidatoAbierto(
-                                                                    mpPickerCandidatoAbierto ===
-                                                                      candidatoKey
-                                                                      ? null
-                                                                      : candidatoKey,
-                                                                  )
-                                                                }
-                                                              >
-                                                                {candidatoMpVarianteId
-                                                                  ? "Cambiar"
-                                                                  : "Elegir"}
-                                                              </Button>
-                                                              {candidatoMpVarianteId && (
-                                                                <Button
-                                                                  type="button"
-                                                                  size="sm"
-                                                                  variant="ghost"
-                                                                  className="text-destructive h-6 px-2 text-[11px]"
-                                                                  onClick={() => {
-                                                                    updateNestingPliegoCandidato(
-                                                                      paso.id,
-                                                                      index,
-                                                                      {
-                                                                        materiaPrimaVarianteId:
-                                                                          null,
-                                                                        materiaPrimaSku:
-                                                                          null,
-                                                                      },
-                                                                    );
-                                                                    setMpMateriaPorCandidato(
-                                                                      (prev) => {
-                                                                        const next =
-                                                                          {
-                                                                            ...prev,
-                                                                          };
-                                                                        delete next[
-                                                                          candidatoKey
-                                                                        ];
-                                                                        return next;
-                                                                      },
-                                                                    );
-                                                                  }}
-                                                                >
-                                                                  Quitar
-                                                                </Button>
-                                                              )}
-                                                            </div>
-                                                            {mpPickerCandidatoAbierto ===
-                                                              candidatoKey && (
-                                                              <div className="space-y-2">
-                                                                <MaterialSearchSelect
-                                                                  compatibilidad={
-                                                                    sustratoCompatibilidad
-                                                                  }
-                                                                  placeholder="Buscar materia prima para este candidato..."
-                                                                  selectedIds={
-                                                                    candidatoMpLookup
-                                                                      ? [
-                                                                          candidatoMpLookup
-                                                                            .materia
-                                                                            .id,
-                                                                        ]
-                                                                      : []
-                                                                  }
-                                                                  onSelect={(
-                                                                    materiaPrima,
-                                                                  ) => {
-                                                                    if (
-                                                                      materiaPrima
-                                                                        .variantes
-                                                                        .length ===
-                                                                      1
-                                                                    ) {
-                                                                      const variante =
-                                                                        materiaPrima
-                                                                          .variantes[0];
-                                                                      updateNestingPliegoCandidato(
-                                                                        paso.id,
-                                                                        index,
-                                                                        {
-                                                                          materiaPrimaVarianteId:
-                                                                            variante.id,
-                                                                          materiaPrimaSku:
-                                                                            variante.sku,
-                                                                        },
-                                                                      );
-                                                                      setMpPickerCandidatoAbierto(
-                                                                        null,
-                                                                      );
-                                                                      setMpMateriaPorCandidato(
-                                                                        (
-                                                                          prev,
-                                                                        ) => {
-                                                                          const next =
-                                                                            {
-                                                                              ...prev,
-                                                                            };
-                                                                          delete next[
-                                                                            candidatoKey
-                                                                          ];
-                                                                          return next;
-                                                                        },
-                                                                      );
-                                                                      return;
-                                                                    }
-                                                                    setMpMateriaPorCandidato(
-                                                                      (
-                                                                        prev,
-                                                                      ) => ({
-                                                                        ...prev,
-                                                                        [candidatoKey]:
-                                                                          materiaPrima,
-                                                                      }),
-                                                                    );
-                                                                  }}
-                                                                />
-                                                                {candidatoMpMateria &&
-                                                                  candidatoMpMateria
-                                                                    .variantes
-                                                                    .length >
-                                                                    1 && (
-                                                                    <div className="space-y-1">
-                                                                      <Label className="text-[11px]">
-                                                                        Variante
-                                                                        de{" "}
-                                                                        {
-                                                                          candidatoMpMateria.nombre
-                                                                        }
-                                                                      </Label>
-                                                                      <HumanSelect
-                                                                        value=""
-                                                                        onValueChange={(
-                                                                          varianteId,
-                                                                        ) => {
-                                                                          const variante =
-                                                                            candidatoMpMateria.variantes.find(
-                                                                              (
-                                                                                item,
-                                                                              ) =>
-                                                                                item.id ===
-                                                                                varianteId,
-                                                                            );
-                                                                          if (
-                                                                            !variante
-                                                                          )
-                                                                            return;
-                                                                          updateNestingPliegoCandidato(
-                                                                            paso.id,
-                                                                            index,
-                                                                            {
-                                                                              materiaPrimaVarianteId:
-                                                                                variante.id,
-                                                                              materiaPrimaSku:
-                                                                                variante.sku,
-                                                                            },
-                                                                          );
-                                                                          setMpPickerCandidatoAbierto(
-                                                                            null,
-                                                                          );
-                                                                          setMpMateriaPorCandidato(
-                                                                            (
-                                                                              prev,
-                                                                            ) => {
-                                                                              const next =
-                                                                                {
-                                                                                  ...prev,
-                                                                                };
-                                                                              delete next[
-                                                                                candidatoKey
-                                                                              ];
-                                                                              return next;
-                                                                            },
-                                                                          );
-                                                                        }}
-                                                                        options={candidatoMpMateria.variantes.map(
-                                                                          (
-                                                                            variante,
-                                                                          ) => ({
-                                                                            value:
-                                                                              variante.id,
-                                                                            label:
-                                                                              variante.nombreVariante?.trim() ||
-                                                                              variante.sku,
-                                                                            description:
-                                                                              variante.precioReferencia
-                                                                                ? `${formatearMoneda(Number(variante.precioReferencia), monedaDe(variante.moneda))} · ${variante.sku}`
-                                                                                : variante.sku,
-                                                                          }),
-                                                                        )}
-                                                                        placeholder="Elegir variante"
-                                                                      />
-                                                                    </div>
-                                                                  )}
-                                                              </div>
-                                                            )}
-                                                          </div>
-                                                        )}
-                                                        </div>
-                                                      );
-                                                    },
-                                                  )}
-                                                </div>
-                                              )}
-                                            </div>
-                                          )}
-                                          <p className="text-muted-foreground text-xs">
-                                            La imposición, el tiempo y los
-                                            consumibles se calculan sobre este
-                                            pliego; el sustrato principal se
-                                            convierte contra el tamaño comprado
-                                            cuando corresponde.
-                                          </p>
-                                        </div>
-                                      )}
-                                      <label
-                                        className={`ps-toggle ${
-                                          nestingConfig.allowRotation !== false
-                                            ? "on"
-                                            : ""
-                                        }`}
-                                      >
-                                        <input
-                                          type="checkbox"
-                                          checked={
-                                            nestingConfig.allowRotation !==
-                                            false
-                                          }
-                                          onChange={(e) =>
-                                            updateNestingConfig(paso.id, {
-                                              allowRotation: e.target.checked,
-                                            })
-                                          }
-                                        />
-                                        <span className="ps-sw" />
-                                        <span>Permitir rotar piezas</span>
-                                      </label>
-
-                                      {mostrarPanelizado && (
-                                        <div className="ps-nest">
-                                          <div className="ps-nest-head">
-                                            <label
-                                              className={`ps-toggle ${
-                                                panelizadoConfig.enabled ===
-                                                true
-                                                  ? "on"
-                                                  : ""
-                                              }`}
-                                            >
-                                              <input
-                                                type="checkbox"
-                                                checked={
-                                                  panelizadoConfig.enabled ===
-                                                  true
-                                                }
-                                                onChange={(e) =>
-                                                  updateNestingPanelizado(
-                                                    paso.id,
-                                                    {
-                                                      enabled: e.target.checked,
-                                                      mode: e.target.checked
-                                                        ? panelizadoMode
-                                                        : "automatic",
-                                                      axis: e.target.checked
-                                                        ? panelizadoAxis
-                                                        : "automatic",
-                                                      manualLayout: e.target
-                                                        .checked
-                                                        ? panelizadoConfig.manualLayout
-                                                        : null,
-                                                    },
-                                                  )
-                                                }
-                                              />
-                                              <span className="ps-sw" />
-                                              <span>
-                                                Panelizar piezas grandes
-                                              </span>
-                                            </label>
-                                            {panelSummary ? (
-                                              <span className="ps-badge">
-                                                {panelSummary}
-                                              </span>
-                                            ) : null}
-                                          </div>
-                                          {panelizadoConfig.enabled ===
-                                            true && (
-                                            <div className="ps-nest-body space-y-4">
-                                            <div className="ps-grid3">
-                                              <div className="space-y-1">
-                                                <LabelConTooltip
-                                                  label="Modo"
-                                                  tooltip="Automático divide las piezas grandes según reglas. Manual usa el layout de paneles definido por el usuario."
-                                                  iconSize="sm"
-                                                />
-                                                <HumanSelect
-                                                  value={panelizadoMode}
-                                                  onValueChange={(v) =>
-                                                    updateNestingPanelizado(
-                                                      paso.id,
-                                                      {
-                                                        mode:
-                                                          v === "manual"
-                                                            ? "manual"
-                                                            : "automatic",
-                                                        axis:
-                                                          v === "manual" &&
-                                                          panelizadoAxis ===
-                                                            "automatic"
-                                                            ? "vertical"
-                                                            : panelizadoAxis,
-                                                        manualLayout:
-                                                          v === "manual"
-                                                            ? (panelizadoConfig.manualLayout ??
-                                                              null)
-                                                            : null,
-                                                      },
-                                                    )
-                                                  }
-                                                  options={PANEL_MODE_OPTIONS}
-                                                  triggerClassName="min-h-9 text-xs"
-                                                />
-                                              </div>
-                                              <div className="space-y-1">
-                                                <LabelConTooltip
-                                                  label="Dirección"
-                                                  tooltip="Define si se divide el ancho o el alto de la pieza cuando no entra en el rollo."
-                                                  iconSize="sm"
-                                                />
-                                                <HumanSelect
-                                                  value={
-                                                    panelizadoMode ===
-                                                      "manual" &&
-                                                    panelizadoAxis ===
-                                                      "automatic"
-                                                      ? "vertical"
-                                                      : panelizadoAxis
-                                                  }
-                                                  onValueChange={(v) =>
-                                                    updateNestingPanelizado(
-                                                      paso.id,
-                                                      {
-                                                        axis:
-                                                          panelizadoMode ===
-                                                            "manual" &&
-                                                          v === "automatic"
-                                                            ? "vertical"
-                                                            : v || "vertical",
-                                                        manualLayout:
-                                                          panelizadoMode ===
-                                                          "manual"
-                                                            ? null
-                                                            : panelizadoConfig.manualLayout,
-                                                      },
-                                                    )
-                                                  }
-                                                  options={
-                                                    panelizadoMode === "manual"
-                                                      ? PANEL_MANUAL_AXIS_OPTIONS
-                                                      : PANEL_AXIS_OPTIONS
-                                                  }
-                                                  triggerClassName="min-h-9 text-xs"
-                                                />
-                                              </div>
-                                              <div className="space-y-1">
-                                                <LabelConTooltip
-                                                  label="Solape"
-                                                  tooltip="Milímetros que se agregan entre paneles para poder montarlos."
-                                                  iconSize="sm"
-                                                />
-                                                <div className="ps-inp">
-                                                  <Input
-                                                    type="number"
-                                                    min={0}
-                                                    step={1}
-                                                    value={String(
-                                                      resolvedPanelOverlap,
-                                                    )}
-                                                    onChange={(e) =>
-                                                      updateNestingPanelizado(
-                                                        paso.id,
-                                                        {
-                                                          overlapMm:
-                                                            e.target.value ===
-                                                            ""
-                                                              ? 0
-                                                              : Number(
-                                                                  e.target
-                                                                    .value,
-                                                                ),
-                                                        },
-                                                      )
-                                                    }
-                                                  />
-                                                  <span className="ps-u">
-                                                    mm
-                                                  </span>
-                                                </div>
-                                              </div>
-                                              <div className="space-y-1">
-                                                <LabelConTooltip
-                                                  label="Ancho máx. por panel"
-                                                  tooltip="Límite físico de cada panel en centímetros. Si queda en 0, el motor usa el ancho útil del rollo. Valores menores a 30 cm se tratan como 0 para evitar paneles demasiado angostos."
-                                                  iconSize="sm"
-                                                />
-                                                <div className="ps-inp">
-                                                  {/* Se edita en cm y se guarda en mm (patrón de los
-                                                      márgenes). El valor crudo se muestra mientras se
-                                                      edita; la regla "<30 cm se trata como 0" se aplica
-                                                      al salir del campo (blur), no por keystroke — si
-                                                      no, es imposible tipear un valor. */}
-                                                  <Input
-                                                    type="number"
-                                                    min={0}
-                                                    step={0.5}
-                                                    value={mmToCmInput(
-                                                      getResolvedNestingNumber(
-                                                        panelizadoConfig.maxPanelWidthMm,
-                                                        undefined,
-                                                        0,
-                                                      ),
-                                                    )}
-                                                    onChange={(e) =>
-                                                      updateNestingPanelizado(
-                                                        paso.id,
-                                                        {
-                                                          maxPanelWidthMm:
-                                                            cmInputToMm(
-                                                              e.target.value,
-                                                            ) ?? 0,
-                                                        },
-                                                      )
-                                                    }
-                                                    onBlur={(e) => {
-                                                      const valorMm =
-                                                        (cmInputToMm(
-                                                          e.target.value,
-                                                        ) ?? 0);
-                                                      if (
-                                                        valorMm > 0 &&
-                                                        valorMm <
-                                                          MIN_PANEL_MAX_WIDTH_MM
-                                                      ) {
-                                                        updateNestingPanelizado(
-                                                          paso.id,
-                                                          {
-                                                            maxPanelWidthMm: 0,
-                                                          },
-                                                        );
-                                                      }
-                                                    }}
-                                                  />
-                                                  <span className="ps-u">
-                                                    cm
-                                                  </span>
-                                                </div>
-                                              </div>
-                                              <div className="space-y-1">
-                                                <LabelConTooltip
-                                                  label="Distribución"
-                                                  tooltip="Define cómo reparte la medida útil entre paneles."
-                                                  iconSize="sm"
-                                                />
-                                                <HumanSelect
-                                                  value={String(
-                                                    panelizadoConfig.distribution ??
-                                                      "equilibrada",
-                                                  )}
-                                                  onValueChange={(v) =>
-                                                    updateNestingPanelizado(
-                                                      paso.id,
-                                                      {
-                                                        distribution:
-                                                          v || "equilibrada",
-                                                      },
-                                                    )
-                                                  }
-                                                  options={
-                                                    PANEL_DISTRIBUTION_OPTIONS
-                                                  }
-                                                  triggerClassName="min-h-9 text-xs"
-                                                />
-                                              </div>
-                                              <div className="space-y-1 md:col-span-2">
-                                                <LabelConTooltip
-                                                  label="Interpretación del ancho"
-                                                  tooltip="Define si el ancho máximo contempla el panel completo o sólo la parte útil."
-                                                  iconSize="sm"
-                                                />
-                                                <HumanSelect
-                                                  value={String(
-                                                    panelizadoConfig.widthInterpretation ??
-                                                      "total",
-                                                  )}
-                                                  onValueChange={(v) =>
-                                                    updateNestingPanelizado(
-                                                      paso.id,
-                                                      {
-                                                        widthInterpretation:
-                                                          v || "total",
-                                                      },
-                                                    )
-                                                  }
-                                                  options={
-                                                    PANEL_WIDTH_INTERPRETATION_OPTIONS
-                                                  }
-                                                  triggerClassName="min-h-9 text-xs"
-                                                />
-                                              </div>
-                                              {panelizadoMode === "manual" ? (
-                                                <div className="space-y-1 md:col-span-3">
-                                                  <LabelConTooltip
-                                                    label="Layout manual de paneles"
-                                                    tooltip="Define los cortes de panel para las medidas fijas o predefinidas del producto."
-                                                    iconSize="sm"
-                                                  />
-                                                  <div className="flex flex-wrap items-center gap-2">
-                                                    <Button
-                                                      type="button"
-                                                      size="sm"
-                                                      variant="outline"
-                                                      disabled={
-                                                        panelMeasures.length ===
-                                                        0
-                                                      }
-                                                      onClick={() =>
-                                                        setPanelEditorPasoId(
-                                                          paso.id,
-                                                        )
-                                                      }
-                                                    >
-                                                      Editar paneles
-                                                    </Button>
-                                                    <span className="text-xs text-muted-foreground">
-                                                      {panelManualLayout
-                                                        ? `${panelManualLayout.items.length} medida${panelManualLayout.items.length === 1 ? "" : "s"} con layout manual`
-                                                        : "Sin layout manual guardado"}
-                                                    </span>
-                                                  </div>
-                                                </div>
-                                              ) : null}
-                                            </div>
-                                            </div>
-                                          )}
-                                          <PanelManualEditorSheet
-                                            open={panelEditorPasoId === paso.id}
-                                            onOpenChange={(open) =>
-                                              setPanelEditorPasoId(
-                                                open ? paso.id : null,
-                                              )
-                                            }
-                                            measures={panelMeasures}
-                                            layout={panelManualLayout}
-                                            axis={
-                                              panelizadoAxis === "horizontal"
-                                                ? "horizontal"
-                                                : "vertical"
-                                            }
-                                            overlapMm={resolvedPanelOverlap}
-                                            maxPanelWidthMm={
-                                              resolvedPanelMaxWidth > 0
-                                                ? resolvedPanelMaxWidth
-                                                : null
-                                            }
-                                            printableWidthMm={
-                                              printableWidthForPanelMm
-                                            }
-                                            widthInterpretation={
-                                              panelizadoWidthInterpretation
-                                            }
-                                            onApply={(layout) =>
-                                              updateNestingPanelizado(paso.id, {
-                                                mode: "manual",
-                                                axis:
-                                                  layout.items[0]?.axis ??
-                                                  (panelizadoAxis ===
-                                                  "horizontal"
-                                                    ? "horizontal"
-                                                    : "vertical"),
-                                                manualLayout: layout,
-                                              })
-                                            }
-                                          />
-                                        </div>
-                                      )}
-
-                                      </div>
-                                    </div>
-
-                                    <div className="ps-card">
-                                      <div className="ps-card-head">
-                                        <span className="ps-ic">
-                                          <svg
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth="1.7"
-                                          >
-                                            <rect
-                                              x="3"
-                                              y="3"
-                                              width="18"
-                                              height="18"
-                                              rx="2"
-                                            />
-                                            <rect
-                                              x="7"
-                                              y="7"
-                                              width="10"
-                                              height="10"
-                                              rx="1"
-                                              strokeDasharray="2 2"
-                                            />
-                                          </svg>
-                                        </span>
-                                        <span className="ps-tt">
-                                          Márgenes del pliego
-                                        </span>
-                                      </div>
-                                      <div className="ps-card-body">
-                                        <div className="ps-margins-grid">
-                                          <div>
-                                            <div className="ps-mbox-t">
-                                              Margen extra del pliego
-                                            </div>
-                                            <p className="ps-mbox-help">
-                                              Se suma al margen de máquina. No
-                                              cambia la separación entre
-                                              piezas.
-                                            </p>
-                                            <div className="ps-bm">
-                                              {(
-                                                [
-                                                  ["topMm", "Sup.", "ps-bm-top"],
-                                                  ["leftMm", "Izq.", "ps-bm-left"],
-                                                  ["rightMm", "Der.", "ps-bm-right"],
-                                                  ["bottomMm", "Inf.", "ps-bm-bot"],
-                                                ] as const
-                                              ).map(([key, label, pos]) => (
-                                                <div
-                                                  key={key}
-                                                  className={`ps-mini ${pos}`}
-                                                >
-                                                  <label>{label}</label>
-                                                  <div className="ps-box">
-                                                    <Input
-                                                      type="number"
-                                                      min={0}
-                                                      step={0.5}
-                                                      value={String(
-                                                        nestingExtraMargins[
-                                                          key
-                                                        ] ?? "",
-                                                      )}
-                                                      onChange={(e) =>
-                                                        updateNestingExtraMargins(
-                                                          paso.id,
-                                                          {
-                                                            [key]:
-                                                              e.target
-                                                                .value === ""
-                                                                ? null
-                                                                : Number(
-                                                                    e.target
-                                                                      .value,
-                                                                  ),
-                                                          },
-                                                        )
-                                                      }
-                                                      placeholder="0"
-                                                    />
-                                                    <span className="ps-u">
-                                                      mm
-                                                    </span>
-                                                  </div>
-                                                </div>
-                                              ))}
-                                              <div className="ps-bm-sheet">
-                                                <div className="ps-sheet">
-                                                  <div className="ps-inner" />
-                                                  <span className="ps-lbl">
-                                                    Pliego
-                                                  </span>
-                                                </div>
-                                              </div>
-                                            </div>
-                                          </div>
-                                          <div>
-                                            <div className="ps-mbox-t">
-                                              Márgenes no imprimibles
-                                            </div>
-                                            <p className="ps-mbox-help">
-                                              Margen técnico efectivo. Si lo
-                                              editás, sobrescribe el heredado
-                                              de la máquina.
-                                            </p>
-                                            <div className="ps-bm">
-                                              {(
-                                                [
-                                                  ["topMm", "Sup.", "ps-bm-top"],
-                                                  ["leftMm", "Izq.", "ps-bm-left"],
-                                                  ["rightMm", "Der.", "ps-bm-right"],
-                                                  ["bottomMm", "Inf.", "ps-bm-bot"],
-                                                ] as const
-                                              ).map(([key, label, pos]) => (
-                                                <div
-                                                  key={key}
-                                                  className={`ps-mini ${pos}`}
-                                                >
-                                                  <label>{label}</label>
-                                                  <div className="ps-box">
-                                                    <Input
-                                                      type="number"
-                                                      min={0}
-                                                      step={0.1}
-                                                      value={mmToCmInput(
-                                                        getResolvedNestingNumber(
-                                                          nestingMargins[key],
-                                                          machineMargins[
-                                                            key as keyof typeof machineMargins
-                                                          ],
-                                                          0,
-                                                        ),
-                                                      )}
-                                                      onChange={(e) =>
-                                                        updateNestingMargins(
-                                                          paso.id,
-                                                          {
-                                                            [key]: cmInputToMm(
-                                                              e.target.value,
-                                                            ),
-                                                          },
-                                                        )
-                                                      }
-                                                    />
-                                                    <span className="ps-u">
-                                                      cm
-                                                    </span>
-                                                  </div>
-                                                </div>
-                                              ))}
-                                              <div className="ps-bm-sheet">
-                                                <div className="ps-sheet blue">
-                                                  <div className="ps-inner" />
-                                                  <span className="ps-lbl">
-                                                    Área
-                                                    <br />
-                                                    imprimible
-                                                  </span>
-                                                </div>
-                                              </div>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </div>
-
-                                    <div className="ps-card">
-                                      <div className="ps-card-head">
-                                        <span className="ps-ic">
-                                          <CircleDollarSignIcon />
-                                        </span>
-                                        <LabelConTooltip
-                                          label={
-                                            <span className="ps-tt normal-case tracking-normal">
-                                              Costeo del sustrato
-                                            </span>
-                                          }
-                                          tooltip="Define cómo se cobra el material cuando hay resultado de nesting."
-                                        />
-                                      </div>
-                                      <div className="ps-card-body ps-grid2">
-                                        <HumanSelect
-                                          value={String(
-                                            nestingCosting.strategy ?? "simple",
-                                          )}
-                                          onValueChange={(v) =>
-                                            updateNestingCosting(paso.id, {
-                                              strategy: v || "simple",
-                                            })
-                                          }
-                                          options={COSTING_STRATEGY_OPTIONS}
-                                        />
-                                        {nestingCosting.strategy ===
-                                          "plate-segments" && (
-                                          <div className="space-y-2">
-                                            <LabelConTooltip
-                                              label="Escalones de ocupación"
-                                              tooltip="Porcentajes de placa que se cobran según ocupación: una placa al 60% cobra el primer escalón igual o superior."
-                                              ejemplo="25, 50, 75, 100"
-                                              iconSize="sm"
-                                            />
-                                            <Input
-                                              value={
-                                                Array.isArray(
-                                                  nestingCosting.segmentSteps,
-                                                )
-                                                  ? nestingCosting.segmentSteps.join(
-                                                      ", ",
-                                                    )
-                                                  : "25, 50, 75, 100"
-                                              }
-                                              onChange={(e) =>
-                                                updateNestingCosting(paso.id, {
-                                                  segmentSteps: e.target.value
-                                                    .split(",")
-                                                    .map((item) =>
-                                                      Number(item.trim()),
-                                                    )
-                                                    .filter((item) =>
-                                                      Number.isFinite(item),
-                                                    ),
-                                                })
-                                              }
-                                              className="font-sans"
-                                            />
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                    </>
+                                    <AcomodadoDetalladoEditor
+                                      pasoId={paso.id}
+                                      cfg={cfg}
+                                      familia={familia}
+                                      lookups={lookups}
+                                      maquinaParaDefaults={maquinaParaDefaults}
+                                      candidateMaterials={candidateMaterials}
+                                      panelEditorPasoId={panelEditorPasoId}
+                                      setPanelEditorPasoId={setPanelEditorPasoId}
+                                      panelMeasures={getProductoPanelMeasures(producto)}
+                                      nestingApi={{
+                                        updateNestingConfig,
+                                        updateNestingPieceBleed,
+                                        updateNestingMargins,
+                                        updateNestingExtraMargins,
+                                        updateNestingCosting,
+                                        updateNestingPanelizado,
+                                        updateNestingPliegoImpresion,
+                                        updateNestingPliegoPreset,
+                                        updateNestingPliegoCandidato,
+                                        addNestingPliegoCandidato,
+                                        removeNestingPliegoCandidato,
+                                      }}
+                                    />
                                   )}
 
                                   {valAvanzado.errores.length > 0 && (
@@ -7773,6 +6309,22 @@ export function ConfigPasosEditorView({
                   (s) => s.slotCodigo === slotCodigo,
                 ) ?? null,
           }}
+          nestingApi={{
+            updateNestingConfig,
+            updateNestingPieceBleed,
+            updateNestingMargins,
+            updateNestingExtraMargins,
+            updateNestingCosting,
+            updateNestingPanelizado,
+            updateNestingPliegoImpresion,
+            updateNestingPliegoPreset,
+            updateNestingPliegoCandidato,
+            addNestingPliegoCandidato,
+            removeNestingPliegoCandidato,
+          }}
+          panelEditorPasoId={panelEditorPasoId}
+          setPanelEditorPasoId={setPanelEditorPasoId}
+          panelMeasures={getProductoPanelMeasures(producto)}
           onCerrar={() => setAsistenteAbierto(false)}
         />
       ) : null}
@@ -7782,6 +6334,1553 @@ export function ConfigPasosEditorView({
 
 
 
+
+// ─── Acomodado / nesting: LA card del detallado, extraída (sub-fase D) ──
+// Algoritmo, demasía, pliego de impresión, panelizado, márgenes extra y
+// costeo del sustrato — una sola card cohesiva. La usan el detallado y
+// el asistente guiado vía el esquema (oficio.acomodado).
+
+interface NestingApi {
+  updateNestingConfig: (pasoId: string, patch: Record<string, unknown>) => void;
+  updateNestingPieceBleed: (pasoId: string, value: number) => void;
+  updateNestingMargins: (
+    pasoId: string,
+    patch: Record<string, number | null>,
+  ) => void;
+  updateNestingExtraMargins: (
+    pasoId: string,
+    patch: Record<string, number | null>,
+  ) => void;
+  updateNestingCosting: (pasoId: string, patch: Record<string, unknown>) => void;
+  updateNestingPanelizado: (
+    pasoId: string,
+    patch: Record<string, unknown>,
+  ) => void;
+  updateNestingPliegoImpresion: (
+    pasoId: string,
+    patch: Record<string, unknown>,
+  ) => void;
+  updateNestingPliegoPreset: (pasoId: string, preset: string) => void;
+  updateNestingPliegoCandidato: (
+    pasoId: string,
+    index: number,
+    patch: Record<string, unknown>,
+  ) => void;
+  addNestingPliegoCandidato: (pasoId: string, presetValue?: string) => void;
+  removeNestingPliegoCandidato: (pasoId: string, index: number) => void;
+}
+
+function AcomodadoDetalladoEditor({
+  pasoId,
+  cfg,
+  familia,
+  lookups,
+  maquinaParaDefaults,
+  candidateMaterials,
+  panelEditorPasoId,
+  setPanelEditorPasoId,
+  panelMeasures,
+  nestingApi,
+}: {
+  pasoId: string;
+  cfg: UpsertConfigPasoPayload;
+  familia: FamiliaListItem | undefined;
+  lookups: LookupsConfigPaso;
+  maquinaParaDefaults:
+    | { parametrosTecnicosJson?: Record<string, unknown> | null }
+    | null
+    | undefined;
+  panelMeasures: ReturnType<typeof getProductoPanelMeasures>;
+  candidateMaterials: Record<string, MateriaPrimaBusquedaItem>;
+  panelEditorPasoId: string | null;
+  setPanelEditorPasoId: React.Dispatch<React.SetStateAction<string | null>>;
+  nestingApi: NestingApi;
+}) {
+  const {
+    updateNestingConfig,
+    updateNestingPieceBleed,
+    updateNestingMargins,
+    updateNestingExtraMargins,
+    updateNestingCosting,
+    updateNestingPanelizado,
+    updateNestingPliegoImpresion,
+    updateNestingPliegoPreset,
+    updateNestingPliegoCandidato,
+    addNestingPliegoCandidato,
+    removeNestingPliegoCandidato,
+  } = nestingApi;
+  const [mpPickerCandidatoAbierto, setMpPickerCandidatoAbierto] =
+    React.useState<string | null>(null);
+  const [mpMateriaPorCandidato, setMpMateriaPorCandidato] = React.useState<
+    Record<string, MateriaPrimaBusquedaItem>
+  >({});
+  const nestingConfig = getNestingConfig(cfg.paramsPasoJson);
+  const sustratoPrincipal = cfg.slotsMateriales?.find(
+    (slot) => slot.slotCodigo === "sustrato_principal",
+  );
+  const varianteSustrato = lookups.materiasPrimas
+    .flatMap((materia) => materia.variantes)
+    .find(
+      (variante) => variante.id === sustratoPrincipal?.materialVarianteId,
+    );
+  const attrsSustrato = asRecord(varianteSustrato?.atributosVarianteJson);
+  const sustratoRolloDisponible =
+    varianteLooksLikeRoll(varianteSustrato) ||
+    (sustratoPrincipal?.candidatos ?? []).some((candidate) => {
+      const materiaPrima = candidateMaterials[candidate.materiaPrimaId];
+      if (!materiaPrima) return false;
+      if (materiaPrimaLooksLikeRoll(materiaPrima)) return true;
+      const enabledVariantIds = new Set(candidate.varianteIds);
+      return materiaPrima.variantes.some((variante) => {
+        const enabled =
+          enabledVariantIds.size === 0 || enabledVariantIds.has(variante.id);
+        return enabled && varianteLooksLikeRoll(variante);
+      });
+    });
+  const defaultSeparation = defaultNestingSeparationForFamily(
+    familia?.codigo,
+  );
+  const legacySeparationH = getResolvedNestingNumber(
+    nestingConfig.separationHMm,
+    undefined,
+    defaultSeparation,
+  );
+  const legacySeparationV = getResolvedNestingNumber(
+    nestingConfig.separationVMm,
+    undefined,
+    defaultSeparation,
+  );
+  const rollWidthForPanelMm =
+    readOptionalNumber(attrsSustrato.anchoMm) ??
+    readOptionalNumber(attrsSustrato.widthMm) ??
+    readOptionalNumber(
+      maquinaParaDefaults?.parametrosTecnicosJson?.anchoMaxRolloMm,
+    ) ??
+    readOptionalNumber(
+      maquinaParaDefaults?.parametrosTecnicosJson?.anchoMaxMm,
+    ) ??
+    readOptionalNumber(
+      maquinaParaDefaults?.parametrosTecnicosJson?.anchoUtil,
+    );
+  const panelizadoConfig = getPanelizadoConfig(
+    cfg.paramsPasoJson,
+  );
+  const pliegoImpresionConfig = getPliegoImpresionConfig(
+    cfg.paramsPasoJson,
+  );
+  const nestingExtraMargins = getExtraMarginsConfig(
+    cfg.paramsPasoJson,
+  );
+  const pliegoImpresionPreset = getPliegoPresetValue(
+    pliegoImpresionConfig,
+  );
+  const pliegoImpresionEsPersonalizado =
+    pliegoImpresionPreset === "personalizado";
+  const pliegoImpresionEsAutomatico =
+    pliegoImpresionPreset === "automatico";
+  const pliegoCandidatos =
+    getPliegoCandidatos(pliegoImpresionConfig);
+  const pliegoOrigenCosto = getPliegoOrigenCosto(
+    pliegoImpresionConfig,
+  );
+  const pliegoPorCandidato =
+    pliegoImpresionEsAutomatico &&
+    pliegoOrigenCosto === "por_candidato";
+  const sustratoCompatibilidad =
+    familia?.slotsRequeridos?.find(
+      (slot) => slot.codigo === "sustrato_principal",
+    )?.compatibilidadMaterial;
+  const variantesLookup = lookups.materiasPrimas.flatMap(
+    (materia) =>
+      materia.variantes.map((variante) => ({
+        materia,
+        variante,
+      })),
+  );
+  const nestingMargins = asRecord(nestingConfig.margins);
+  const nestingCosting = asRecord(nestingConfig.costing);
+  const sustratoAnchoLabel = formatMm(
+    attrsSustrato.anchoMm ?? attrsSustrato.widthMm,
+  );
+  const sustratoAltoLabel = formatMm(
+    attrsSustrato.largoMm ??
+      attrsSustrato.altoMm ??
+      attrsSustrato.heightMm,
+  );
+  const machineMargins = getMachineMargins(maquinaParaDefaults);
+  const resolvedPieceBleed = getResolvedNestingNumber(
+    nestingConfig.pieceBleedMm,
+    Math.max(legacySeparationH, legacySeparationV) / 2,
+    0,
+  );
+  const mostrarPanelizado = panelizadoAplica(
+    familia?.codigo,
+    nestingConfig,
+    maquinaParaDefaults,
+    sustratoRolloDisponible,
+  );
+  const resolvedPanelMaxWidth = getDisplayPanelMaxWidth(
+    panelizadoConfig.maxPanelWidthMm,
+  );
+  const resolvedPanelOverlap = getResolvedNestingNumber(
+    panelizadoConfig.overlapMm,
+    undefined,
+    20,
+  );
+  const panelizadoMode =
+    panelizadoConfig.mode === "manual" ? "manual" : "automatic";
+  const panelizadoAxis =
+    panelizadoConfig.axis === "automatic" ||
+    panelizadoConfig.axis === "automatica"
+      ? "automatic"
+      : panelizadoConfig.axis === "horizontal"
+        ? "horizontal"
+        : panelizadoConfig.axis === "vertical"
+          ? "vertical"
+          : "automatic";
+  const panelizadoWidthInterpretation =
+    panelizadoConfig.widthInterpretation === "util"
+      ? "util"
+      : "total";
+  const panelManualLayout = readManualLayout(
+    panelizadoConfig.manualLayout,
+  );
+  const printableWidthForPanelMm =
+    rollWidthForPanelMm != null
+      ? Math.max(
+          0,
+          rollWidthForPanelMm -
+            (machineMargins.leftMm ?? 0) -
+            (machineMargins.rightMm ?? 0),
+        )
+      : null;
+  const panelSummary =
+    panelizadoConfig.enabled === true
+      ? [
+          panelizadoMode === "manual" ? "Manual" : "Automático",
+          panelizadoAxis === "automatic"
+            ? "dirección automática"
+            : panelizadoAxis === "vertical"
+              ? "vertical"
+              : "horizontal",
+          `${resolvedPanelOverlap} mm solape`,
+          resolvedPanelMaxWidth > 0
+            ? `${formatNumber(resolvedPanelMaxWidth / 10)} cm máx.`
+            : "máx. ancho imprimible",
+        ].join(" · ")
+      : "";
+  return (
+    <>
+                                    <>
+                                    <div className="ps-card">
+                                      <div className="ps-card-head">
+                                        <span className="ps-ic">
+                                          <Grid2X2Icon />
+                                        </span>
+                                        <LabelConTooltip
+                                          label={
+                                            <span className="ps-tt normal-case tracking-normal">
+                                              Acomodado / nesting
+                                            </span>
+                                          }
+                                          tooltip="Configuración del acomodo de piezas para este paso. Se guarda como nestingConfig, pero se edita desde controles visuales."
+                                        />
+                                      </div>
+                                      <div className="ps-card-body space-y-4">
+                                      <div className="ps-grid2">
+                                        <div className="space-y-2">
+                                          <LabelConTooltip
+                                            label="Algoritmo"
+                                            tooltip="Automático elige según la geometría de máquina/material y las medidas del trabajo."
+                                            iconSize="sm"
+                                          />
+                                          <HumanSelect
+                                            value={String(
+                                              nestingConfig.algorithm ?? "auto",
+                                            )}
+                                            onValueChange={(v) =>
+                                              updateNestingConfig(pasoId, {
+                                                algorithm: v || "auto",
+                                              })
+                                            }
+                                            options={NESTING_ALGORITHM_OPTIONS}
+                                          />
+                                        </div>
+                                        <div className="space-y-2">
+                                          <LabelConTooltip
+                                            label="Demasía por lado"
+                                            tooltip="Margen extra alrededor de cada pieza. Entre dos piezas se acumulan ambos lados."
+                                            iconSize="sm"
+                                          />
+                                          <div className="ps-inp">
+                                            <Input
+                                              type="number"
+                                              min={0}
+                                              step={0.5}
+                                              value={String(
+                                                resolvedPieceBleed,
+                                              )}
+                                              onChange={(e) =>
+                                                updateNestingPieceBleed(
+                                                  pasoId,
+                                                  e.target.value === ""
+                                                    ? 0
+                                                    : Number(e.target.value),
+                                                )
+                                              }
+                                            />
+                                            <span className="ps-u">mm</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                      {familia?.codigo ===
+                                        "impresion_por_hoja" && (
+                                        <div className="space-y-3 rounded-[11px] border p-4">
+                                          <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                                            <LabelConTooltip
+                                              label="Pliego de impresión"
+                                              tooltip="Tamaño real de hoja que entra a la impresora. Si queda vacío, el motor usa el tamaño del sustrato principal comprado."
+                                              iconSize="sm"
+                                            />
+                                            {sustratoAnchoLabel &&
+                                              sustratoAltoLabel && (
+                                                <span className="text-muted-foreground text-xs">
+                                                  Sustrato comprado:{" "}
+                                                  {sustratoAnchoLabel} ×{" "}
+                                                  {sustratoAltoLabel}
+                                                </span>
+                                              )}
+                                          </div>
+                                          <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+                                            <div className="space-y-1">
+                                              <LabelConTooltip
+                                                label="Tamaño"
+                                                tooltip="Elegí un formato estándar o personalizado si el pliego del producto tiene otra medida."
+                                                iconSize="sm"
+                                              />
+                                              <HumanSelect
+                                                value={pliegoImpresionPreset}
+                                                onValueChange={(v) =>
+                                                  updateNestingPliegoPreset(
+                                                    pasoId,
+                                                    v || "materia_prima",
+                                                  )
+                                                }
+                                                options={
+                                                  PLIEGO_IMPRESION_OPTIONS
+                                                }
+                                                triggerClassName="min-h-9 text-xs"
+                                              />
+                                            </div>
+                                            <div className="space-y-1">
+                                              <LabelConTooltip
+                                                label="Ancho del pliego"
+                                                tooltip="Ancho en milímetros del pliego ya cortado para imprimir."
+                                                iconSize="sm"
+                                              />
+                                              <Input
+                                                type="number"
+                                                min={1}
+                                                step={1}
+                                                disabled={
+                                                  !pliegoImpresionEsPersonalizado
+                                                }
+                                                value={String(
+                                                  pliegoImpresionConfig.anchoMm ??
+                                                    "",
+                                                )}
+                                                onChange={(e) =>
+                                                  updateNestingPliegoImpresion(
+                                                    pasoId,
+                                                    {
+                                                      anchoMm:
+                                                        e.target.value === ""
+                                                          ? null
+                                                          : Number(
+                                                              e.target.value,
+                                                            ),
+                                                    },
+                                                  )
+                                                }
+                                                placeholder="Usar sustrato"
+                                                className="h-8 text-xs"
+                                              />
+                                            </div>
+                                            <div className="space-y-1">
+                                              <LabelConTooltip
+                                                label="Alto del pliego"
+                                                tooltip="Alto/largo en milímetros del pliego ya cortado para imprimir."
+                                                iconSize="sm"
+                                              />
+                                              <Input
+                                                type="number"
+                                                min={1}
+                                                step={1}
+                                                disabled={
+                                                  !pliegoImpresionEsPersonalizado
+                                                }
+                                                value={String(
+                                                  pliegoImpresionConfig.altoMm ??
+                                                    "",
+                                                )}
+                                                onChange={(e) =>
+                                                  updateNestingPliegoImpresion(
+                                                    pasoId,
+                                                    {
+                                                      altoMm:
+                                                        e.target.value === ""
+                                                          ? null
+                                                          : Number(
+                                                              e.target.value,
+                                                            ),
+                                                    },
+                                                  )
+                                                }
+                                                placeholder="Usar sustrato"
+                                                className="h-8 text-xs"
+                                              />
+                                            </div>
+                                          </div>
+                                          {pliegoImpresionEsAutomatico && (
+                                            <div className="ps-compact space-y-2 rounded-[10px] border border-dashed p-3">
+                                              <div className="space-y-1">
+                                                <LabelConTooltip
+                                                  label="Origen del costo"
+                                                  tooltip="Cómo se costea cada candidato al compararlos: derivado (todos salen de la materia prima del paso, costo proporcional al área) o materia prima por candidato (cada tamaño se compra ya cortado con su precio real)."
+                                                />
+                                                <HumanSelect
+                                                  value={pliegoOrigenCosto}
+                                                  onValueChange={(value) =>
+                                                    updateNestingPliegoImpresion(
+                                                      pasoId,
+                                                      {
+                                                        origenCosto:
+                                                          value ===
+                                                          "por_candidato"
+                                                            ? "por_candidato"
+                                                            : "derivado",
+                                                      },
+                                                    )
+                                                  }
+                                                  options={
+                                                    PLIEGO_ORIGEN_COSTO_OPTIONS
+                                                  }
+                                                  triggerClassName="min-h-8 text-xs"
+                                                />
+                                              </div>
+                                              <div className="flex items-center justify-between gap-2">
+                                                <span className="text-xs font-medium">
+                                                  Candidatos activos
+                                                </span>
+                                                <Button
+                                                  type="button"
+                                                  size="sm"
+                                                  variant="outline"
+                                                  className="h-7 gap-1 px-2 text-xs"
+                                                  onClick={() =>
+                                                    addNestingPliegoCandidato(
+                                                      pasoId,
+                                                      "A4",
+                                                    )
+                                                  }
+                                                >
+                                                  <PlusIcon className="h-3 w-3" />
+                                                  Agregar candidato
+                                                </Button>
+                                              </div>
+                                              {pliegoCandidatos.length === 0 ? (
+                                                <div className="rounded bg-muted/50 px-2 py-2 text-xs text-muted-foreground">
+                                                  Agregá al menos un tamaño para
+                                                  que el motor pueda comparar.
+                                                </div>
+                                              ) : (
+                                                <div className="space-y-2">
+                                                  {pliegoCandidatos.map(
+                                                    (candidato, index) => {
+                                                      const candidatoPreset =
+                                                        typeof candidato.preset ===
+                                                        "string"
+                                                          ? candidato.preset
+                                                          : "personalizado";
+                                                      const candidatoKey = `${pasoId}:${index}`;
+                                                      const candidatoMpVarianteId =
+                                                        getCandidatoMateriaPrimaVarianteId(
+                                                          candidato,
+                                                        );
+                                                      const candidatoMpLookup =
+                                                        candidatoMpVarianteId
+                                                          ? variantesLookup.find(
+                                                              (item) =>
+                                                                item.variante
+                                                                  .id ===
+                                                                candidatoMpVarianteId,
+                                                            )
+                                                          : undefined;
+                                                      const candidatoMpMateria =
+                                                        mpMateriaPorCandidato[
+                                                          candidatoKey
+                                                        ];
+                                                      return (
+                                                        <div
+                                                          key={`${candidato.id ?? index}-${index}`}
+                                                          className="space-y-2 rounded border bg-background/80 p-2"
+                                                        >
+                                                        <div
+                                                          className="grid grid-cols-1 gap-2 md:grid-cols-[80px_1fr_120px_100px_100px_36px]"
+                                                        >
+                                                          <label className="flex items-center gap-2 text-xs">
+                                                            <input
+                                                              type="checkbox"
+                                                              checked={
+                                                                candidato.activo !==
+                                                                false
+                                                              }
+                                                              onChange={(e) =>
+                                                                updateNestingPliegoCandidato(
+                                                                  pasoId,
+                                                                  index,
+                                                                  {
+                                                                    activo:
+                                                                      e.target
+                                                                        .checked,
+                                                                  },
+                                                                )
+                                                              }
+                                                            />
+                                                            Activo
+                                                          </label>
+                                                          <div className="space-y-1">
+                                                            <Label className="text-[11px]">
+                                                              Nombre
+                                                            </Label>
+                                                            <Input
+                                                              value={String(
+                                                                candidato.nombre ??
+                                                                  "",
+                                                              )}
+                                                              onChange={(e) =>
+                                                                updateNestingPliegoCandidato(
+                                                                  pasoId,
+                                                                  index,
+                                                                  {
+                                                                    nombre:
+                                                                      e.target
+                                                                        .value,
+                                                                  },
+                                                                )
+                                                              }
+                                                              className="h-8 text-xs"
+                                                            />
+                                                          </div>
+                                                          <div className="space-y-1">
+                                                            <Label className="text-[11px]">
+                                                              Preset
+                                                            </Label>
+                                                            <HumanSelect
+                                                              value={
+                                                                PLIEGO_IMPRESION_PRESETS.some(
+                                                                  (preset) =>
+                                                                    preset.value ===
+                                                                    candidatoPreset,
+                                                                )
+                                                                  ? candidatoPreset
+                                                                  : "personalizado"
+                                                              }
+                                                              onValueChange={(v) => {
+                                                                const preset =
+                                                                  PLIEGO_IMPRESION_PRESETS.find(
+                                                                    (item) =>
+                                                                      item.value ===
+                                                                      v,
+                                                                  );
+                                                                if (
+                                                                  !preset ||
+                                                                  preset.value ===
+                                                                    "personalizado" ||
+                                                                  !preset.anchoMm ||
+                                                                  !preset.altoMm
+                                                                ) {
+                                                                  updateNestingPliegoCandidato(
+                                                                    pasoId,
+                                                                    index,
+                                                                    {
+                                                                      preset:
+                                                                        "personalizado",
+                                                                    },
+                                                                  );
+                                                                  return;
+                                                                }
+                                                                updateNestingPliegoCandidato(
+                                                                  pasoId,
+                                                                  index,
+                                                                  {
+                                                                    preset:
+                                                                      preset.value,
+                                                                    nombre:
+                                                                      preset.label,
+                                                                    anchoMm:
+                                                                      preset.anchoMm,
+                                                                    altoMm:
+                                                                      preset.altoMm,
+                                                                  },
+                                                                );
+                                                              }}
+                                                              options={PLIEGO_IMPRESION_OPTIONS.filter(
+                                                                (option) =>
+                                                                  ![
+                                                                    "materia_prima",
+                                                                    "automatico",
+                                                                  ].includes(
+                                                                    option.value,
+                                                                  ),
+                                                              )}
+                                                              triggerClassName="min-h-8 text-xs"
+                                                            />
+                                                          </div>
+                                                          <div className="space-y-1">
+                                                            <Label className="text-[11px]">
+                                                              Ancho mm
+                                                            </Label>
+                                                            <Input
+                                                              type="number"
+                                                              min={1}
+                                                              step={1}
+                                                              value={String(
+                                                                candidato.anchoMm ??
+                                                                  "",
+                                                              )}
+                                                              onChange={(e) =>
+                                                                updateNestingPliegoCandidato(
+                                                                  pasoId,
+                                                                  index,
+                                                                  {
+                                                                    preset:
+                                                                      "personalizado",
+                                                                    anchoMm:
+                                                                      e.target
+                                                                        .value ===
+                                                                      ""
+                                                                        ? ""
+                                                                        : Number(
+                                                                            e
+                                                                              .target
+                                                                              .value,
+                                                                          ),
+                                                                  },
+                                                                )
+                                                              }
+                                                              className="h-8 text-xs"
+                                                            />
+                                                          </div>
+                                                          <div className="space-y-1">
+                                                            <Label className="text-[11px]">
+                                                              Alto mm
+                                                            </Label>
+                                                            <Input
+                                                              type="number"
+                                                              min={1}
+                                                              step={1}
+                                                              value={String(
+                                                                candidato.altoMm ??
+                                                                  "",
+                                                              )}
+                                                              onChange={(e) =>
+                                                                updateNestingPliegoCandidato(
+                                                                  pasoId,
+                                                                  index,
+                                                                  {
+                                                                    preset:
+                                                                      "personalizado",
+                                                                    altoMm:
+                                                                      e.target
+                                                                        .value ===
+                                                                      ""
+                                                                        ? ""
+                                                                        : Number(
+                                                                            e
+                                                                              .target
+                                                                              .value,
+                                                                          ),
+                                                                  },
+                                                                )
+                                                              }
+                                                              className="h-8 text-xs"
+                                                            />
+                                                          </div>
+                                                          <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="self-end text-destructive"
+                                                            onClick={() =>
+                                                              removeNestingPliegoCandidato(
+                                                                pasoId,
+                                                                index,
+                                                              )
+                                                            }
+                                                          >
+                                                            <Trash2Icon className="h-4 w-4" />
+                                                          </Button>
+                                                        </div>
+                                                        {pliegoPorCandidato && (
+                                                          <div className="space-y-2 border-t border-dashed pt-2">
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                              <span className="text-muted-foreground text-[11px] font-medium">
+                                                                Materia prima
+                                                                propia
+                                                              </span>
+                                                              {candidatoMpVarianteId ? (
+                                                                <span className="ps-spec-chip">
+                                                                  {candidatoMpLookup
+                                                                    ? `${candidatoMpLookup.materia.nombre} · ${candidatoMpLookup.variante.sku}`
+                                                                    : typeof candidato.materiaPrimaSku ===
+                                                                        "string"
+                                                                      ? candidato.materiaPrimaSku
+                                                                      : "Variante seleccionada"}
+                                                                  {candidatoMpLookup
+                                                                    ?.variante
+                                                                    .precioReferencia
+                                                                    ? ` · ${formatearMoneda(Number(candidatoMpLookup.variante.precioReferencia), monedaDe(candidatoMpLookup.variante.moneda))}`
+                                                                    : ""}
+                                                                </span>
+                                                              ) : (
+                                                                <span className="text-muted-foreground text-[11px]">
+                                                                  Sin asignar:
+                                                                  compite con el
+                                                                  costo derivado
+                                                                  del material
+                                                                  del paso.
+                                                                </span>
+                                                              )}
+                                                              <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                variant="outline"
+                                                                className="h-6 px-2 text-[11px]"
+                                                                onClick={() =>
+                                                                  setMpPickerCandidatoAbierto(
+                                                                    mpPickerCandidatoAbierto ===
+                                                                      candidatoKey
+                                                                      ? null
+                                                                      : candidatoKey,
+                                                                  )
+                                                                }
+                                                              >
+                                                                {candidatoMpVarianteId
+                                                                  ? "Cambiar"
+                                                                  : "Elegir"}
+                                                              </Button>
+                                                              {candidatoMpVarianteId && (
+                                                                <Button
+                                                                  type="button"
+                                                                  size="sm"
+                                                                  variant="ghost"
+                                                                  className="text-destructive h-6 px-2 text-[11px]"
+                                                                  onClick={() => {
+                                                                    updateNestingPliegoCandidato(
+                                                                      pasoId,
+                                                                      index,
+                                                                      {
+                                                                        materiaPrimaVarianteId:
+                                                                          null,
+                                                                        materiaPrimaSku:
+                                                                          null,
+                                                                      },
+                                                                    );
+                                                                    setMpMateriaPorCandidato(
+                                                                      (prev) => {
+                                                                        const next =
+                                                                          {
+                                                                            ...prev,
+                                                                          };
+                                                                        delete next[
+                                                                          candidatoKey
+                                                                        ];
+                                                                        return next;
+                                                                      },
+                                                                    );
+                                                                  }}
+                                                                >
+                                                                  Quitar
+                                                                </Button>
+                                                              )}
+                                                            </div>
+                                                            {mpPickerCandidatoAbierto ===
+                                                              candidatoKey && (
+                                                              <div className="space-y-2">
+                                                                <MaterialSearchSelect
+                                                                  compatibilidad={
+                                                                    sustratoCompatibilidad
+                                                                  }
+                                                                  placeholder="Buscar materia prima para este candidato..."
+                                                                  selectedIds={
+                                                                    candidatoMpLookup
+                                                                      ? [
+                                                                          candidatoMpLookup
+                                                                            .materia
+                                                                            .id,
+                                                                        ]
+                                                                      : []
+                                                                  }
+                                                                  onSelect={(
+                                                                    materiaPrima,
+                                                                  ) => {
+                                                                    if (
+                                                                      materiaPrima
+                                                                        .variantes
+                                                                        .length ===
+                                                                      1
+                                                                    ) {
+                                                                      const variante =
+                                                                        materiaPrima
+                                                                          .variantes[0];
+                                                                      updateNestingPliegoCandidato(
+                                                                        pasoId,
+                                                                        index,
+                                                                        {
+                                                                          materiaPrimaVarianteId:
+                                                                            variante.id,
+                                                                          materiaPrimaSku:
+                                                                            variante.sku,
+                                                                        },
+                                                                      );
+                                                                      setMpPickerCandidatoAbierto(
+                                                                        null,
+                                                                      );
+                                                                      setMpMateriaPorCandidato(
+                                                                        (
+                                                                          prev,
+                                                                        ) => {
+                                                                          const next =
+                                                                            {
+                                                                              ...prev,
+                                                                            };
+                                                                          delete next[
+                                                                            candidatoKey
+                                                                          ];
+                                                                          return next;
+                                                                        },
+                                                                      );
+                                                                      return;
+                                                                    }
+                                                                    setMpMateriaPorCandidato(
+                                                                      (
+                                                                        prev,
+                                                                      ) => ({
+                                                                        ...prev,
+                                                                        [candidatoKey]:
+                                                                          materiaPrima,
+                                                                      }),
+                                                                    );
+                                                                  }}
+                                                                />
+                                                                {candidatoMpMateria &&
+                                                                  candidatoMpMateria
+                                                                    .variantes
+                                                                    .length >
+                                                                    1 && (
+                                                                    <div className="space-y-1">
+                                                                      <Label className="text-[11px]">
+                                                                        Variante
+                                                                        de{" "}
+                                                                        {
+                                                                          candidatoMpMateria.nombre
+                                                                        }
+                                                                      </Label>
+                                                                      <HumanSelect
+                                                                        value=""
+                                                                        onValueChange={(
+                                                                          varianteId,
+                                                                        ) => {
+                                                                          const variante =
+                                                                            candidatoMpMateria.variantes.find(
+                                                                              (
+                                                                                item,
+                                                                              ) =>
+                                                                                item.id ===
+                                                                                varianteId,
+                                                                            );
+                                                                          if (
+                                                                            !variante
+                                                                          )
+                                                                            return;
+                                                                          updateNestingPliegoCandidato(
+                                                                            pasoId,
+                                                                            index,
+                                                                            {
+                                                                              materiaPrimaVarianteId:
+                                                                                variante.id,
+                                                                              materiaPrimaSku:
+                                                                                variante.sku,
+                                                                            },
+                                                                          );
+                                                                          setMpPickerCandidatoAbierto(
+                                                                            null,
+                                                                          );
+                                                                          setMpMateriaPorCandidato(
+                                                                            (
+                                                                              prev,
+                                                                            ) => {
+                                                                              const next =
+                                                                                {
+                                                                                  ...prev,
+                                                                                };
+                                                                              delete next[
+                                                                                candidatoKey
+                                                                              ];
+                                                                              return next;
+                                                                            },
+                                                                          );
+                                                                        }}
+                                                                        options={candidatoMpMateria.variantes.map(
+                                                                          (
+                                                                            variante,
+                                                                          ) => ({
+                                                                            value:
+                                                                              variante.id,
+                                                                            label:
+                                                                              variante.nombreVariante?.trim() ||
+                                                                              variante.sku,
+                                                                            description:
+                                                                              variante.precioReferencia
+                                                                                ? `${formatearMoneda(Number(variante.precioReferencia), monedaDe(variante.moneda))} · ${variante.sku}`
+                                                                                : variante.sku,
+                                                                          }),
+                                                                        )}
+                                                                        placeholder="Elegir variante"
+                                                                      />
+                                                                    </div>
+                                                                  )}
+                                                              </div>
+                                                            )}
+                                                          </div>
+                                                        )}
+                                                        </div>
+                                                      );
+                                                    },
+                                                  )}
+                                                </div>
+                                              )}
+                                            </div>
+                                          )}
+                                          <p className="text-muted-foreground text-xs">
+                                            La imposición, el tiempo y los
+                                            consumibles se calculan sobre este
+                                            pliego; el sustrato principal se
+                                            convierte contra el tamaño comprado
+                                            cuando corresponde.
+                                          </p>
+                                        </div>
+                                      )}
+                                      <label
+                                        className={`ps-toggle ${
+                                          nestingConfig.allowRotation !== false
+                                            ? "on"
+                                            : ""
+                                        }`}
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={
+                                            nestingConfig.allowRotation !==
+                                            false
+                                          }
+                                          onChange={(e) =>
+                                            updateNestingConfig(pasoId, {
+                                              allowRotation: e.target.checked,
+                                            })
+                                          }
+                                        />
+                                        <span className="ps-sw" />
+                                        <span>Permitir rotar piezas</span>
+                                      </label>
+
+                                      {mostrarPanelizado && (
+                                        <div className="ps-nest">
+                                          <div className="ps-nest-head">
+                                            <label
+                                              className={`ps-toggle ${
+                                                panelizadoConfig.enabled ===
+                                                true
+                                                  ? "on"
+                                                  : ""
+                                              }`}
+                                            >
+                                              <input
+                                                type="checkbox"
+                                                checked={
+                                                  panelizadoConfig.enabled ===
+                                                  true
+                                                }
+                                                onChange={(e) =>
+                                                  updateNestingPanelizado(
+                                                    pasoId,
+                                                    {
+                                                      enabled: e.target.checked,
+                                                      mode: e.target.checked
+                                                        ? panelizadoMode
+                                                        : "automatic",
+                                                      axis: e.target.checked
+                                                        ? panelizadoAxis
+                                                        : "automatic",
+                                                      manualLayout: e.target
+                                                        .checked
+                                                        ? panelizadoConfig.manualLayout
+                                                        : null,
+                                                    },
+                                                  )
+                                                }
+                                              />
+                                              <span className="ps-sw" />
+                                              <span>
+                                                Panelizar piezas grandes
+                                              </span>
+                                            </label>
+                                            {panelSummary ? (
+                                              <span className="ps-badge">
+                                                {panelSummary}
+                                              </span>
+                                            ) : null}
+                                          </div>
+                                          {panelizadoConfig.enabled ===
+                                            true && (
+                                            <div className="ps-nest-body space-y-4">
+                                            <div className="ps-grid3">
+                                              <div className="space-y-1">
+                                                <LabelConTooltip
+                                                  label="Modo"
+                                                  tooltip="Automático divide las piezas grandes según reglas. Manual usa el layout de paneles definido por el usuario."
+                                                  iconSize="sm"
+                                                />
+                                                <HumanSelect
+                                                  value={panelizadoMode}
+                                                  onValueChange={(v) =>
+                                                    updateNestingPanelizado(
+                                                      pasoId,
+                                                      {
+                                                        mode:
+                                                          v === "manual"
+                                                            ? "manual"
+                                                            : "automatic",
+                                                        axis:
+                                                          v === "manual" &&
+                                                          panelizadoAxis ===
+                                                            "automatic"
+                                                            ? "vertical"
+                                                            : panelizadoAxis,
+                                                        manualLayout:
+                                                          v === "manual"
+                                                            ? (panelizadoConfig.manualLayout ??
+                                                              null)
+                                                            : null,
+                                                      },
+                                                    )
+                                                  }
+                                                  options={PANEL_MODE_OPTIONS}
+                                                  triggerClassName="min-h-9 text-xs"
+                                                />
+                                              </div>
+                                              <div className="space-y-1">
+                                                <LabelConTooltip
+                                                  label="Dirección"
+                                                  tooltip="Define si se divide el ancho o el alto de la pieza cuando no entra en el rollo."
+                                                  iconSize="sm"
+                                                />
+                                                <HumanSelect
+                                                  value={
+                                                    panelizadoMode ===
+                                                      "manual" &&
+                                                    panelizadoAxis ===
+                                                      "automatic"
+                                                      ? "vertical"
+                                                      : panelizadoAxis
+                                                  }
+                                                  onValueChange={(v) =>
+                                                    updateNestingPanelizado(
+                                                      pasoId,
+                                                      {
+                                                        axis:
+                                                          panelizadoMode ===
+                                                            "manual" &&
+                                                          v === "automatic"
+                                                            ? "vertical"
+                                                            : v || "vertical",
+                                                        manualLayout:
+                                                          panelizadoMode ===
+                                                          "manual"
+                                                            ? null
+                                                            : panelizadoConfig.manualLayout,
+                                                      },
+                                                    )
+                                                  }
+                                                  options={
+                                                    panelizadoMode === "manual"
+                                                      ? PANEL_MANUAL_AXIS_OPTIONS
+                                                      : PANEL_AXIS_OPTIONS
+                                                  }
+                                                  triggerClassName="min-h-9 text-xs"
+                                                />
+                                              </div>
+                                              <div className="space-y-1">
+                                                <LabelConTooltip
+                                                  label="Solape"
+                                                  tooltip="Milímetros que se agregan entre paneles para poder montarlos."
+                                                  iconSize="sm"
+                                                />
+                                                <div className="ps-inp">
+                                                  <Input
+                                                    type="number"
+                                                    min={0}
+                                                    step={1}
+                                                    value={String(
+                                                      resolvedPanelOverlap,
+                                                    )}
+                                                    onChange={(e) =>
+                                                      updateNestingPanelizado(
+                                                        pasoId,
+                                                        {
+                                                          overlapMm:
+                                                            e.target.value ===
+                                                            ""
+                                                              ? 0
+                                                              : Number(
+                                                                  e.target
+                                                                    .value,
+                                                                ),
+                                                        },
+                                                      )
+                                                    }
+                                                  />
+                                                  <span className="ps-u">
+                                                    mm
+                                                  </span>
+                                                </div>
+                                              </div>
+                                              <div className="space-y-1">
+                                                <LabelConTooltip
+                                                  label="Ancho máx. por panel"
+                                                  tooltip="Límite físico de cada panel en centímetros. Si queda en 0, el motor usa el ancho útil del rollo. Valores menores a 30 cm se tratan como 0 para evitar paneles demasiado angostos."
+                                                  iconSize="sm"
+                                                />
+                                                <div className="ps-inp">
+                                                  {/* Se edita en cm y se guarda en mm (patrón de los
+                                                      márgenes). El valor crudo se muestra mientras se
+                                                      edita; la regla "<30 cm se trata como 0" se aplica
+                                                      al salir del campo (blur), no por keystroke — si
+                                                      no, es imposible tipear un valor. */}
+                                                  <Input
+                                                    type="number"
+                                                    min={0}
+                                                    step={0.5}
+                                                    value={mmToCmInput(
+                                                      getResolvedNestingNumber(
+                                                        panelizadoConfig.maxPanelWidthMm,
+                                                        undefined,
+                                                        0,
+                                                      ),
+                                                    )}
+                                                    onChange={(e) =>
+                                                      updateNestingPanelizado(
+                                                        pasoId,
+                                                        {
+                                                          maxPanelWidthMm:
+                                                            cmInputToMm(
+                                                              e.target.value,
+                                                            ) ?? 0,
+                                                        },
+                                                      )
+                                                    }
+                                                    onBlur={(e) => {
+                                                      const valorMm =
+                                                        (cmInputToMm(
+                                                          e.target.value,
+                                                        ) ?? 0);
+                                                      if (
+                                                        valorMm > 0 &&
+                                                        valorMm <
+                                                          MIN_PANEL_MAX_WIDTH_MM
+                                                      ) {
+                                                        updateNestingPanelizado(
+                                                          pasoId,
+                                                          {
+                                                            maxPanelWidthMm: 0,
+                                                          },
+                                                        );
+                                                      }
+                                                    }}
+                                                  />
+                                                  <span className="ps-u">
+                                                    cm
+                                                  </span>
+                                                </div>
+                                              </div>
+                                              <div className="space-y-1">
+                                                <LabelConTooltip
+                                                  label="Distribución"
+                                                  tooltip="Define cómo reparte la medida útil entre paneles."
+                                                  iconSize="sm"
+                                                />
+                                                <HumanSelect
+                                                  value={String(
+                                                    panelizadoConfig.distribution ??
+                                                      "equilibrada",
+                                                  )}
+                                                  onValueChange={(v) =>
+                                                    updateNestingPanelizado(
+                                                      pasoId,
+                                                      {
+                                                        distribution:
+                                                          v || "equilibrada",
+                                                      },
+                                                    )
+                                                  }
+                                                  options={
+                                                    PANEL_DISTRIBUTION_OPTIONS
+                                                  }
+                                                  triggerClassName="min-h-9 text-xs"
+                                                />
+                                              </div>
+                                              <div className="space-y-1 md:col-span-2">
+                                                <LabelConTooltip
+                                                  label="Interpretación del ancho"
+                                                  tooltip="Define si el ancho máximo contempla el panel completo o sólo la parte útil."
+                                                  iconSize="sm"
+                                                />
+                                                <HumanSelect
+                                                  value={String(
+                                                    panelizadoConfig.widthInterpretation ??
+                                                      "total",
+                                                  )}
+                                                  onValueChange={(v) =>
+                                                    updateNestingPanelizado(
+                                                      pasoId,
+                                                      {
+                                                        widthInterpretation:
+                                                          v || "total",
+                                                      },
+                                                    )
+                                                  }
+                                                  options={
+                                                    PANEL_WIDTH_INTERPRETATION_OPTIONS
+                                                  }
+                                                  triggerClassName="min-h-9 text-xs"
+                                                />
+                                              </div>
+                                              {panelizadoMode === "manual" ? (
+                                                <div className="space-y-1 md:col-span-3">
+                                                  <LabelConTooltip
+                                                    label="Layout manual de paneles"
+                                                    tooltip="Define los cortes de panel para las medidas fijas o predefinidas del producto."
+                                                    iconSize="sm"
+                                                  />
+                                                  <div className="flex flex-wrap items-center gap-2">
+                                                    <Button
+                                                      type="button"
+                                                      size="sm"
+                                                      variant="outline"
+                                                      disabled={
+                                                        panelMeasures.length ===
+                                                        0
+                                                      }
+                                                      onClick={() =>
+                                                        setPanelEditorPasoId(
+                                                          pasoId,
+                                                        )
+                                                      }
+                                                    >
+                                                      Editar paneles
+                                                    </Button>
+                                                    <span className="text-xs text-muted-foreground">
+                                                      {panelManualLayout
+                                                        ? `${panelManualLayout.items.length} medida${panelManualLayout.items.length === 1 ? "" : "s"} con layout manual`
+                                                        : "Sin layout manual guardado"}
+                                                    </span>
+                                                  </div>
+                                                </div>
+                                              ) : null}
+                                            </div>
+                                            </div>
+                                          )}
+                                          <PanelManualEditorSheet
+                                            open={panelEditorPasoId === pasoId}
+                                            onOpenChange={(open) =>
+                                              setPanelEditorPasoId(
+                                                open ? pasoId : null,
+                                              )
+                                            }
+                                            measures={panelMeasures}
+                                            layout={panelManualLayout}
+                                            axis={
+                                              panelizadoAxis === "horizontal"
+                                                ? "horizontal"
+                                                : "vertical"
+                                            }
+                                            overlapMm={resolvedPanelOverlap}
+                                            maxPanelWidthMm={
+                                              resolvedPanelMaxWidth > 0
+                                                ? resolvedPanelMaxWidth
+                                                : null
+                                            }
+                                            printableWidthMm={
+                                              printableWidthForPanelMm
+                                            }
+                                            widthInterpretation={
+                                              panelizadoWidthInterpretation
+                                            }
+                                            onApply={(layout) =>
+                                              updateNestingPanelizado(pasoId, {
+                                                mode: "manual",
+                                                axis:
+                                                  layout.items[0]?.axis ??
+                                                  (panelizadoAxis ===
+                                                  "horizontal"
+                                                    ? "horizontal"
+                                                    : "vertical"),
+                                                manualLayout: layout,
+                                              })
+                                            }
+                                          />
+                                        </div>
+                                      )}
+
+                                      </div>
+                                    </div>
+
+                                    <div className="ps-card">
+                                      <div className="ps-card-head">
+                                        <span className="ps-ic">
+                                          <svg
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth="1.7"
+                                          >
+                                            <rect
+                                              x="3"
+                                              y="3"
+                                              width="18"
+                                              height="18"
+                                              rx="2"
+                                            />
+                                            <rect
+                                              x="7"
+                                              y="7"
+                                              width="10"
+                                              height="10"
+                                              rx="1"
+                                              strokeDasharray="2 2"
+                                            />
+                                          </svg>
+                                        </span>
+                                        <span className="ps-tt">
+                                          Márgenes del pliego
+                                        </span>
+                                      </div>
+                                      <div className="ps-card-body">
+                                        <div className="ps-margins-grid">
+                                          <div>
+                                            <div className="ps-mbox-t">
+                                              Margen extra del pliego
+                                            </div>
+                                            <p className="ps-mbox-help">
+                                              Se suma al margen de máquina. No
+                                              cambia la separación entre
+                                              piezas.
+                                            </p>
+                                            <div className="ps-bm">
+                                              {(
+                                                [
+                                                  ["topMm", "Sup.", "ps-bm-top"],
+                                                  ["leftMm", "Izq.", "ps-bm-left"],
+                                                  ["rightMm", "Der.", "ps-bm-right"],
+                                                  ["bottomMm", "Inf.", "ps-bm-bot"],
+                                                ] as const
+                                              ).map(([key, label, pos]) => (
+                                                <div
+                                                  key={key}
+                                                  className={`ps-mini ${pos}`}
+                                                >
+                                                  <label>{label}</label>
+                                                  <div className="ps-box">
+                                                    <Input
+                                                      type="number"
+                                                      min={0}
+                                                      step={0.5}
+                                                      value={String(
+                                                        nestingExtraMargins[
+                                                          key
+                                                        ] ?? "",
+                                                      )}
+                                                      onChange={(e) =>
+                                                        updateNestingExtraMargins(
+                                                          pasoId,
+                                                          {
+                                                            [key]:
+                                                              e.target
+                                                                .value === ""
+                                                                ? null
+                                                                : Number(
+                                                                    e.target
+                                                                      .value,
+                                                                  ),
+                                                          },
+                                                        )
+                                                      }
+                                                      placeholder="0"
+                                                    />
+                                                    <span className="ps-u">
+                                                      mm
+                                                    </span>
+                                                  </div>
+                                                </div>
+                                              ))}
+                                              <div className="ps-bm-sheet">
+                                                <div className="ps-sheet">
+                                                  <div className="ps-inner" />
+                                                  <span className="ps-lbl">
+                                                    Pliego
+                                                  </span>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </div>
+                                          <div>
+                                            <div className="ps-mbox-t">
+                                              Márgenes no imprimibles
+                                            </div>
+                                            <p className="ps-mbox-help">
+                                              Margen técnico efectivo. Si lo
+                                              editás, sobrescribe el heredado
+                                              de la máquina.
+                                            </p>
+                                            <div className="ps-bm">
+                                              {(
+                                                [
+                                                  ["topMm", "Sup.", "ps-bm-top"],
+                                                  ["leftMm", "Izq.", "ps-bm-left"],
+                                                  ["rightMm", "Der.", "ps-bm-right"],
+                                                  ["bottomMm", "Inf.", "ps-bm-bot"],
+                                                ] as const
+                                              ).map(([key, label, pos]) => (
+                                                <div
+                                                  key={key}
+                                                  className={`ps-mini ${pos}`}
+                                                >
+                                                  <label>{label}</label>
+                                                  <div className="ps-box">
+                                                    <Input
+                                                      type="number"
+                                                      min={0}
+                                                      step={0.1}
+                                                      value={mmToCmInput(
+                                                        getResolvedNestingNumber(
+                                                          nestingMargins[key],
+                                                          machineMargins[
+                                                            key as keyof typeof machineMargins
+                                                          ],
+                                                          0,
+                                                        ),
+                                                      )}
+                                                      onChange={(e) =>
+                                                        updateNestingMargins(
+                                                          pasoId,
+                                                          {
+                                                            [key]: cmInputToMm(
+                                                              e.target.value,
+                                                            ),
+                                                          },
+                                                        )
+                                                      }
+                                                    />
+                                                    <span className="ps-u">
+                                                      cm
+                                                    </span>
+                                                  </div>
+                                                </div>
+                                              ))}
+                                              <div className="ps-bm-sheet">
+                                                <div className="ps-sheet blue">
+                                                  <div className="ps-inner" />
+                                                  <span className="ps-lbl">
+                                                    Área
+                                                    <br />
+                                                    imprimible
+                                                  </span>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div className="ps-card">
+                                      <div className="ps-card-head">
+                                        <span className="ps-ic">
+                                          <CircleDollarSignIcon />
+                                        </span>
+                                        <LabelConTooltip
+                                          label={
+                                            <span className="ps-tt normal-case tracking-normal">
+                                              Costeo del sustrato
+                                            </span>
+                                          }
+                                          tooltip="Define cómo se cobra el material cuando hay resultado de nesting."
+                                        />
+                                      </div>
+                                      <div className="ps-card-body ps-grid2">
+                                        <HumanSelect
+                                          value={String(
+                                            nestingCosting.strategy ?? "simple",
+                                          )}
+                                          onValueChange={(v) =>
+                                            updateNestingCosting(pasoId, {
+                                              strategy: v || "simple",
+                                            })
+                                          }
+                                          options={COSTING_STRATEGY_OPTIONS}
+                                        />
+                                        {nestingCosting.strategy ===
+                                          "plate-segments" && (
+                                          <div className="space-y-2">
+                                            <LabelConTooltip
+                                              label="Escalones de ocupación"
+                                              tooltip="Porcentajes de placa que se cobran según ocupación: una placa al 60% cobra el primer escalón igual o superior."
+                                              ejemplo="25, 50, 75, 100"
+                                              iconSize="sm"
+                                            />
+                                            <Input
+                                              value={
+                                                Array.isArray(
+                                                  nestingCosting.segmentSteps,
+                                                )
+                                                  ? nestingCosting.segmentSteps.join(
+                                                      ", ",
+                                                    )
+                                                  : "25, 50, 75, 100"
+                                              }
+                                              onChange={(e) =>
+                                                updateNestingCosting(pasoId, {
+                                                  segmentSteps: e.target.value
+                                                    .split(",")
+                                                    .map((item) =>
+                                                      Number(item.trim()),
+                                                    )
+                                                    .filter((item) =>
+                                                      Number.isFinite(item),
+                                                    ),
+                                                })
+                                              }
+                                              className="font-sans"
+                                            />
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                    </>
+    </>
+  );
+}
 
 // ─── Material fijo del slot: LA UI del detallado, extraída ─────────────
 // (sub-fase C). La usan el detallado y el asistente guiado vía el esquema
@@ -8426,19 +8525,6 @@ interface MaterialesApiAsistente {
   ) => SlotMaterialDetalle | null;
 }
 
-// Pendientes cuyos campos ya viven en el ESQUEMA declarativo: el asistente
-// no les crea card transicional (la pregunta abre sola en su sección).
-const PENDIENTES_EN_ESQUEMA = new Set<PendientePaso["tipo"]>([
-  "regla_condicional",
-  "centro",
-  "ritmo",
-  "tiempo_fijo",
-  "herencia_origen",
-  "maquina",
-  "perfil",
-  "candidatas",
-  "material_slot",
-]);
 
 /** Ritmo T-2 del asistente guiado (tiempo.productividad / tiempo.batch):
  *  mismos params que el detallado, con estado local para tipeo a medias. */
@@ -9939,20 +10025,6 @@ function ControlGuiado({
 // usuario sobre las candidatas). Guarda cada paso al avanzar. El objetivo
 // es paridad total con el modo detallado para poder reemplazarlo.
 
-const PREGUNTA_GUIADA: Record<string, string> = {
-  maquina: "¿En qué máquina se hace?",
-  candidatas: "¿Entre qué máquinas elige el comercial?",
-  perfil: "¿Con qué perfil de la máquina?",
-  material_slot: "¿Qué material usa?",
-  grilla_tercerizado: "¿A qué precio se le compra?",
-  proveedor: "¿A quién se le compra?",
-  ritmo: "¿A qué ritmo se hace en este producto?",
-  tiempo_fijo: "¿Cuántos minutos lleva en este producto?",
-  centro: "¿En qué centro productivo se realiza este paso?",
-  regla_condicional: "¿Cuándo se activa?",
-  herencia_origen: "¿De qué paso hereda la cantidad?",
-};
-
 interface PasoAsistente {
   id: string;
   nombre: string;
@@ -9982,6 +10054,10 @@ function AsistenteGuiado({
   setMaquinaCandidataPerfilDefault,
   setMaquinaCandidataModoColorAllowed,
   materialesApi,
+  nestingApi,
+  panelEditorPasoId,
+  setPanelEditorPasoId,
+  panelMeasures,
   onCerrar,
 }: {
   pasos: PasoAsistente[];
@@ -10025,6 +10101,10 @@ function AsistenteGuiado({
     modes: string[],
   ) => void;
   materialesApi: MaterialesApiAsistente;
+  nestingApi: NestingApi;
+  panelEditorPasoId: string | null;
+  setPanelEditorPasoId: React.Dispatch<React.SetStateAction<string | null>>;
+  panelMeasures: ReturnType<typeof getProductoPanelMeasures>;
   onCerrar: () => void;
 }) {
   const [indice, setIndice] = React.useState(0);
@@ -10034,31 +10114,13 @@ function AsistenteGuiado({
     ? familiasMap.get(pasoActual.familiaCodigo)
     : undefined;
 
-  // Snapshot de cards AL ENTRAR al paso: así una card no desaparece a
-  // mitad de edición; el estado ✓ se calcula en vivo.
-  const [cards, setCards] = React.useState<PendientePaso[]>([]);
-  React.useEffect(() => {
-    if (pasoActual && configs[pasoActual.id]) {
-      setCards(
-        pendientesDePaso(
-          configs[pasoActual.id],
-          familiasMap.get(pasoActual.familiaCodigo),
-          // Activación (A) y Tiempo/Máquina (B) ya viven en el ESQUEMA:
-          // sus pendientes no necesitan card transicional. Quedan las de
-          // materiales y tercerización (sub-fases C-D).
-        ).filter((pend) => !PENDIENTES_EN_ESQUEMA.has(pend.tipo)),
-      );
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [indice, pasoActual?.id]);
-
+  // Con la sub-fase D todos los pendientes viven en el ESQUEMA: las
+  // question-cards transicionales se retiraron; sólo queda el estado
+  // vivo para los badges y el cierre "listo para cotizar".
   const vivos = React.useMemo(
     () => (cfg ? pendientesDePaso(cfg, familia) : []),
     [cfg, familia],
   );
-  const claveDe = (pend: PendientePaso) =>
-    `${pend.tipo}:${pend.slotCodigo ?? ""}`;
-  const vivosSet = new Set(vivos.map(claveDe));
 
   const notaStyle: React.CSSProperties = {
     fontSize: 12.5,
@@ -10418,6 +10480,35 @@ function AsistenteGuiado({
                   </div>
                 );
               }
+              if (id === "tercerizado-panel") {
+                return (
+                  <PasoTercerizadoPanel
+                    value={cfg}
+                    onChange={(patch) => onPatch(pasoActual.id, patch)}
+                    onToggle={(tercerizado) =>
+                      onPatch(pasoActual.id, { tercerizado })
+                    }
+                  />
+                );
+              }
+              if (id === "acomodado-detallado") {
+                return (
+                  <div className="pasos-sections">
+                    <AcomodadoDetalladoEditor
+                      pasoId={pasoActual.id}
+                      cfg={cfg}
+                      familia={familia}
+                      lookups={lookups}
+                      maquinaParaDefaults={maquinaSel}
+                      candidateMaterials={materialesApi.candidateMaterials}
+                      panelEditorPasoId={panelEditorPasoId}
+                      setPanelEditorPasoId={setPanelEditorPasoId}
+                      panelMeasures={panelMeasures}
+                      nestingApi={nestingApi}
+                    />
+                  </div>
+                );
+              }
               if (id === "modo-color-detallado") {
                 const perfilSel =
                   maquinaSel?.perfilesOperativos.find(
@@ -10448,6 +10539,16 @@ function AsistenteGuiado({
             const noEjecutar = cfg.modoActivacion === "NO_EJECUTAR";
             return (
               <>
+                {/* Sub-fase D: la bifurcación tercerizado va PRIMERA
+                    (E.2); si la familia la declara aparece colapsada. */}
+                <SeccionGuiada
+                  titulo="Quién lo hace"
+                  seccion="quien"
+                  ctx={ctx}
+                  pendientesVivos={pendientesVivos}
+                  onAplicar={onAplicar}
+                  renderComponente={renderComponente}
+                />
                 <SeccionGuiada
                   titulo="Activación"
                   seccion="activacion"
@@ -10657,67 +10758,42 @@ function AsistenteGuiado({
                         </div>
                       );
                     })}
+                    {/* Ajustes del trabajo (sub-fase D): setup/cleanup +
+                        el card de Acomodado del detallado. */}
+                    <SeccionGuiada
+                      titulo="Ajustes del trabajo"
+                      seccion="oficio"
+                      ctx={ctx}
+                      pendientesVivos={pendientesVivos}
+                      onAplicar={onAplicar}
+                      renderComponente={renderComponente}
+                    />
                   </>
                 ) : null}
               </>
             );
           })()}
 
-          {cards.length === 0 ? (
+          {vivos.filter((pend) => pend.bloqueante).length === 0 ? (
             <div style={cardStyle}>
               <div style={{ fontSize: 17, fontWeight: 650, color: "#2e7d32" }}>
                 ✓ Listo para cotizar
               </div>
               <div style={notaStyle}>
                 Todo sale de lo que el paso ya declara (defaults, estación,
-                activación). Cualquier ajuste fino queda en el editor.
+                activación). Cualquier ajuste fino queda arriba, en sus
+                secciones.
               </div>
             </div>
           ) : (
-            cards.map((card) => {
-              const resuelta = !vivosSet.has(claveDe(card));
-              return (
-                <div key={claveDe(card)} style={cardStyle}>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "baseline",
-                      gap: 8,
-                    }}
-                  >
-                    <div style={{ fontSize: 16.5, fontWeight: 650 }}>
-                      {card.tipo === "material_slot"
-                        ? `¿Qué ${card.etiqueta} usa?`
-                        : (PREGUNTA_GUIADA[card.tipo] ?? card.etiqueta)}
-                    </div>
-                    <span
-                      style={{
-                        fontSize: 12,
-                        color: resuelta ? "#2e7d32" : "#8a6d3b",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {resuelta
-                        ? "✓ Resuelto"
-                        : card.bloqueante
-                          ? "Pendiente"
-                          : "Opcional"}
-                    </span>
-                  </div>
-                  {!resuelta ? (
-                    <div style={notaStyle}>{card.motivo}</div>
-                  ) : null}
-
-                  <CuerpoCard
-                    card={card}
-                    pasoActual={pasoActual}
-                    cfg={cfg}
-                    onPatch={onPatch}
-                  />
-                </div>
-              );
-            })
+            <div style={cardStyle}>
+              <div style={{ fontSize: 15, fontWeight: 650, color: "#8a6d3b" }}>
+                {resumenPendientes(vivos)}
+              </div>
+              <div style={notaStyle}>
+                Las preguntas marcadas en ámbar arriba son las que faltan.
+              </div>
+            </div>
           )}
         </div>
 
@@ -10752,34 +10828,6 @@ function AsistenteGuiado({
     </Sheet>
   );
 }
-
-/** El cuerpo editable de cada card. Vive separado para que el estado local
- *  (búsquedas, textos) no se pierda por re-render del contenedor. */
-function CuerpoCard({
-  card,
-  pasoActual,
-  cfg,
-  onPatch,
-}: {
-  card: PendientePaso;
-  pasoActual: PasoAsistente;
-  cfg: UpsertConfigPasoPayload;
-  onPatch: (pasoId: string, patch: Partial<UpsertConfigPasoPayload>) => void;
-}) {
-  const pasoId = pasoActual.id;
-  if (card.tipo === "proveedor" || card.tipo === "grilla_tercerizado") {
-    return (
-      <PasoTercerizadoPanel
-        value={cfg}
-        onChange={(patch) => onPatch(pasoId, patch)}
-        onToggle={(tercerizado) => onPatch(pasoId, { tercerizado })}
-      />
-    );
-  }
-
-  return null;
-}
-
 
 // ─── Sub-componente: lista de validaciones ─────────────────────────
 

@@ -35,6 +35,7 @@ import {
   requiereMecanismoCantidad,
   getModoColorConfig,
   modoColorAplica,
+  nestingAplica,
 } from "./catalogo-tiempo";
 import {
   SELECCION_MATERIAL_OPTIONS,
@@ -48,14 +49,16 @@ import {
   mecanismoCantidadLabels,
 } from "../labels-humanos";
 
+// "ajustes" (escape hatches) se eliminó como sección: los dos escapes
+// genuinos (algoritmo y layout manual de paneles) viven dentro del card
+// de Acomodado (oficio.acomodado), igual que en el detallado.
 export type SeccionPaso =
   | "quien"
   | "activacion"
   | "tiempo"
   | "maquina"
   | "materiales"
-  | "oficio"
-  | "ajustes";
+  | "oficio";
 
 /** Otro paso de la misma ruta (para co-ejecución y herencia). */
 export interface PasoVecino {
@@ -155,7 +158,9 @@ export type ControlOpcion =
         | "agregar-slot"
         | "material-fijo-detallado"
         | "candidatos-slot-detallado"
-        | "base-consumo";
+        | "base-consumo"
+        | "tercerizado-panel"
+        | "acomodado-detallado";
     };
 
 export interface OpcionPaso {
@@ -336,6 +341,40 @@ function labelDe(
   return opciones.find((o) => o.value === value)?.label ?? value;
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Helpers de Tercerización y oficio (sub-fase D) — todos puros.
+// ─────────────────────────────────────────────────────────────────────
+
+/** ¿La familia declara el paso como tercerizado (E.1/E.2)? */
+function familiaDeclaraTercerizado(ctx: ContextoOpcion): boolean {
+  return ctx.familia?.defaults?.tercerizado === true;
+}
+
+const FUENTE_TERCERIZADO_LABELS: Record<string, string> = {
+  matriz: "con matriz de precios",
+  tarifa_magnitud: "por tarifa",
+  fijo: "a precio fijo por trabajo",
+};
+
+/** ¿La grilla/tarifa/costo del proveedor está cargada? (espejo del motor
+ *  de pendientes: sin esto el paso cotiza $0). */
+function grillaTercerizadoCompleta(ctx: ContextoOpcion): boolean {
+  const fuente = ctx.cfg.fuenteCostoTercerizado ?? "matriz";
+  if (fuente === "matriz") {
+    return (ctx.cfg.tercerizadoEntradas?.length ?? 0) > 0;
+  }
+  const configTerc = (ctx.cfg.tercerizadoConfigJson ?? {}) as Record<
+    string,
+    unknown
+  >;
+  const crudo =
+    fuente === "tarifa_magnitud"
+      ? configTerc.tarifa
+      : (configTerc.costoFijo ?? configTerc.monto);
+  const numero = typeof crudo === "string" ? Number(crudo) : crudo;
+  return typeof numero === "number" && Number.isFinite(numero);
+}
+
 /** ¿El costeo del material lo define Acomodado/nesting (y no el slot)? */
 function nestingDefineCosteo(ctx: ContextoOpcion): boolean {
   const nesting = ctx.paramsPaso.nestingConfig as
@@ -346,6 +385,67 @@ function nestingDefineCosteo(ctx: ContextoOpcion): boolean {
 }
 
 export const ESQUEMA_PASO: OpcionPaso[] = [
+  // ───────────────────────────────────────────────────────────────────
+  // Sección QUIÉN LO HACE (sub-fase D) — la bifurcación tercerizado.
+  // Si la familia lo declara (E.1/E.2), la pregunta NO se repite:
+  // aparece colapsada "— declarado en el paso" (corrección del usuario).
+  // ───────────────────────────────────────────────────────────────────
+  {
+    clave: "quien.tercerizado",
+    seccion: "quien",
+    pregunta: "¿Quién hace este paso?",
+    ayuda:
+      "Interno lo produce el taller; tercerizado se compra hecho y el costo lo define el proveedor.",
+    visible: () => true,
+    resumen: (ctx) => {
+      if (!ctx.cfg.tercerizado) return "Lo produce la empresa";
+      return familiaDeclaraTercerizado(ctx)
+        ? "Lo hace un proveedor — declarado en el paso"
+        : "Lo hace un proveedor";
+    },
+    origenValor: (ctx) => {
+      const declarado = familiaDeclaraTercerizado(ctx);
+      if (declarado) return ctx.cfg.tercerizado ? "default-paso" : "config";
+      return ctx.cfg.tercerizado ? "config" : "default-paso";
+    },
+    control: {
+      tipo: "pills",
+      opciones: () => [
+        { value: "empresa", label: "La produce la empresa" },
+        { value: "proveedor", label: "La hace un proveedor" },
+      ],
+      valor: (ctx) => (ctx.cfg.tercerizado ? "proveedor" : "empresa"),
+      aplicar: (_ctx, v) => ({
+        tipo: "config",
+        patch: { tercerizado: v === "proveedor" },
+      }),
+    },
+  },
+  {
+    clave: "quien.proveedor",
+    seccion: "quien",
+    pregunta: "¿A quién se le compra y a qué precio?",
+    ayuda:
+      "El proveedor, cómo cotiza (matriz de cantidades, tarifa por magnitud o precio fijo) y su plazo de entrega.",
+    visible: (ctx) => ctx.cfg.tercerizado === true,
+    resumen: (ctx) => {
+      if (!ctx.cfg.proveedorId) return "Sin proveedor elegido";
+      const fuente = ctx.cfg.fuenteCostoTercerizado ?? "matriz";
+      const partes = [
+        `Proveedor elegido — ${FUENTE_TERCERIZADO_LABELS[fuente] ?? fuente}`,
+      ];
+      if (!grillaTercerizadoCompleta(ctx)) partes.push("faltan los precios");
+      else if (ctx.cfg.plazoProveedorDias != null)
+        partes.push(`entrega en ${ctx.cfg.plazoProveedorDias} días`);
+      return partes.join(" · ");
+    },
+    origenValor: (ctx) =>
+      ctx.cfg.proveedorId && grillaTercerizadoCompleta(ctx)
+        ? "config"
+        : "sin-definir",
+    pendiente: "proveedor",
+    control: { tipo: "componente", id: "tercerizado-panel" },
+  },
   {
     clave: "activacion.nombre",
     seccion: "activacion",
@@ -1292,6 +1392,94 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
       }),
     },
   },
+
+  // ───────────────────────────────────────────────────────────────────
+  // Sección AJUSTES DEL TRABAJO / oficio (sub-fase D). Setup y cleanup
+  // declarativos; el acomodado (algoritmo, demasía, pliego, panelizado,
+  // márgenes y costeo del sustrato — censo E.0 filas 4-19) es UNA card
+  // cohesiva del detallado extraída como componente. El tiempo fijo
+  // override (fila 3) ya migró como tiempo.tiempo_fijo.
+  // ───────────────────────────────────────────────────────────────────
+  {
+    clave: "oficio.setup",
+    seccion: "oficio",
+    pregunta: "¿Preparar la máquina lleva un tiempo distinto acá?",
+    ayuda:
+      "Sobrescribe el setup del perfil de máquina sólo para este producto. Vacío = el del perfil.",
+    visible: (ctx) => Boolean(ctx.cfg.maquinaM1Id),
+    resumen: (ctx) =>
+      ctx.cfg.setupOverrideMin != null
+        ? `${ctx.cfg.setupOverrideMin} min`
+        : "El del perfil de la máquina",
+    origenValor: (ctx) =>
+      ctx.cfg.setupOverrideMin != null ? "config" : "default-maquina",
+    control: {
+      tipo: "numero",
+      min: 0,
+      step: 0.5,
+      sufijo: () => "min",
+      placeholder: () => "Hereda del perfil",
+      valor: (ctx) => ctx.cfg.setupOverrideMin ?? null,
+      aplicar: (_ctx, v) => ({
+        tipo: "config",
+        patch: { setupOverrideMin: v },
+      }),
+    },
+  },
+  {
+    clave: "oficio.cleanup",
+    seccion: "oficio",
+    pregunta: "¿Y la limpieza al terminar?",
+    ayuda:
+      "Sobrescribe el cierre/post-proceso del perfil de máquina sólo para este producto. Vacío = el del perfil.",
+    visible: (ctx) => Boolean(ctx.cfg.maquinaM1Id),
+    resumen: (ctx) =>
+      ctx.cfg.cleanupOverrideMin != null
+        ? `${ctx.cfg.cleanupOverrideMin} min`
+        : "El del perfil de la máquina",
+    origenValor: (ctx) =>
+      ctx.cfg.cleanupOverrideMin != null ? "config" : "default-maquina",
+    control: {
+      tipo: "numero",
+      min: 0,
+      step: 0.5,
+      sufijo: () => "min",
+      placeholder: () => "Hereda del perfil",
+      valor: (ctx) => ctx.cfg.cleanupOverrideMin ?? null,
+      aplicar: (_ctx, v) => ({
+        tipo: "config",
+        patch: { cleanupOverrideMin: v },
+      }),
+    },
+  },
+  {
+    clave: "oficio.acomodado",
+    seccion: "oficio",
+    pregunta: "¿Cómo se acomodan y cobran las piezas en el material?",
+    ayuda:
+      "Demasía por pieza, pliego de impresión, panelizado, márgenes extra y la política de costeo de la placa o el rollo.",
+    visible: (ctx) => nestingAplica(ctx.familia?.codigo, ctx.cfg),
+    resumen: (ctx) => {
+      const nesting = ctx.paramsPaso.nestingConfig as
+        | {
+            costing?: { strategy?: unknown };
+            paneling?: { enabled?: unknown };
+          }
+        | undefined;
+      const estrategia =
+        typeof nesting?.costing?.strategy === "string"
+          ? nesting.costing.strategy
+          : "simple";
+      const partes = [
+        `Costeo: ${labelDe(COSTING_STRATEGY_OPTIONS, estrategia).toLowerCase()}`,
+      ];
+      if (nesting?.paneling?.enabled === true) partes.push("panelizado");
+      return partes.join(" · ");
+    },
+    origenValor: (ctx) =>
+      ctx.paramsPaso.nestingConfig != null ? "config" : "default-paso",
+    control: { tipo: "componente", id: "acomodado-detallado" },
+  },
 ];
 
 /** Las opciones visibles de una sección, en orden de declaración. */
@@ -1304,10 +1492,14 @@ export function opcionesDeSeccion(
   );
 }
 
-/** Secciones ya migradas al esquema (crece por sub-fase). */
+/** Secciones ya migradas al esquema (crece por sub-fase). Con la D
+ *  (quien + oficio) el censo quedó cubierto COMPLETO: el detallado ya no
+ *  es fuente de ninguna opción. */
 export const SECCIONES_MIGRADAS: SeccionPaso[] = [
+  "quien",
   "activacion",
   "tiempo",
   "maquina",
   "materiales",
+  "oficio",
 ];

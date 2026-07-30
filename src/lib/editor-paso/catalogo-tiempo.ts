@@ -270,3 +270,21 @@ export function modoColorAplica(
   if (!familiaCodigo || !cfg.maquinaM1Id) return false;
   return ["impresion_por_hoja", "impresion_por_area"].includes(familiaCodigo);
 }
+
+/** ¿El paso muestra la card de Acomodado/nesting? (misma regla que el
+ *  detallado congelado). */
+export function nestingAplica(
+  familiaCodigo: string | undefined,
+  cfg: UpsertConfigPasoPayload,
+) {
+  if (!familiaCodigo) return false;
+  if (familiaCodigo === "pre_prensa") return false;
+  if (cfg.mecanismoCantidad === "CALCULADO_POR_PASO") return true;
+  return [
+    "impresion_por_area",
+    "impresion_por_hoja",
+    "plotter_corte",
+    "laminado",
+    "montaje_sobre_sustrato",
+  ].includes(familiaCodigo);
+}
