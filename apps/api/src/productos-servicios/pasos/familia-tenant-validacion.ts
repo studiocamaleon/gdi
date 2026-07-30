@@ -82,6 +82,12 @@ const TIPOS_SLOT: TipoSlot[] = [
 ];
 const MODOS_REGISTRO: ModoRegistroPaso[] = ['cronometro', 'solo_completar'];
 const TIPOS_PERFIL = ['IMPRESION', 'CORTE', 'MIXTO'];
+/** Multiplicadores que una familia TENANT puede declarar: son los que el
+ *  cotizador siempre pone en el JobContext, así que siempre tienen un valor
+ *  real. Los del catálogo que dependen de params propios (hojasPorLibro,
+ *  perforacionesPorPieza, cantidadModificacionesPorPieza) NO se aceptan acá:
+ *  se guardarían y no multiplicarían nunca. */
+const MULTIPLICADORES_TENANT = ['caras', 'tipoCopia'];
 
 function fueraDe(valores: string[], validos: readonly string[]): string[] {
   return valores.filter((v) => !validos.includes(v));
@@ -224,6 +230,13 @@ export function validarDefinicionFamiliaTenant(
   }
   if (sinMaquina && plantillas.length > 0) {
     errores.push('Un paso sin máquina (M-0) no lleva plantillas compatibles.');
+  }
+
+  // --- multiplicadores ---
+  for (const v of fueraDe(input.multiplicadores ?? [], MULTIPLICADORES_TENANT)) {
+    errores.push(
+      `Multiplicador no disponible para pasos propios: "${v}". Se puede usar: ${MULTIPLICADORES_TENANT.join(', ')}.`,
+    );
   }
 
   // --- perfiles ---

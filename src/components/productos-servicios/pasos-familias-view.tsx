@@ -93,6 +93,9 @@ interface FormaDraft {
   mecanismoCantidad: string;
   /** B.3.4 — superficie de acomodo cuando mecanismo = CALCULADO_POR_PASO. */
   superficie: "pliego" | "pliegos_multiples" | "rollo" | null;
+  /** Variables del pedido que multiplican el trabajo del paso (caras,
+   *  tipoCopia). Sin esto el paso nunca duplica por doble faz. */
+  multiplicadores: string[];
   /** E.2 — bifurcación inicial: quién hace el paso. La rama proveedor
    *  salta máquina/tiempo/materiales/cantidad/estación/registro. */
   quienLoHace: "taller" | "proveedor";
@@ -114,6 +117,25 @@ interface FormaDraft {
   descripcion: string;
 }
 
+/** Multiplicadores que el tenant puede declarar. Son los dos que el
+ *  cotizador SIEMPRE carga en el JobContext (`caras` y `tipoCopia`), así que
+ *  siempre tienen un valor real con el que multiplicar. Los otros que usa el
+ *  catálogo (hojasPorLibro, perforacionesPorPieza…) dependen de params
+ *  propios de esas familias y no se ofrecen: elegirlos acá no multiplicaría
+ *  nada. */
+const MULTIPLICADORES_DISPONIBLES = [
+  {
+    value: "caras",
+    titulo: "Las caras (simple o doble faz)",
+    desc: "Una lona impresa de los dos lados lleva el doble de trabajo que de un lado.",
+  },
+  {
+    value: "tipoCopia",
+    titulo: "El tipo de copia (original, duplicado…)",
+    desc: "Un talonario por triplicado repite el paso en cada juego de copias.",
+  },
+];
+
 const DRAFT_INICIAL: FormaDraft = {
   presetOrigen: null,
   relacionMaquina: "M-0",
@@ -122,6 +144,7 @@ const DRAFT_INICIAL: FormaDraft = {
   slots: [],
   mecanismoCantidad: "DIRECT_FROM_JOBCONTEXT",
   superficie: null,
+  multiplicadores: [],
   quienLoHace: "taller",
   proveedorDefaultId: null,
   fuenteCostoDefault: "matriz",
@@ -224,6 +247,7 @@ function draftAInput(d: FormaDraft): UpsertFamiliaTenantInput {
     relacionMaquina: [d.relacionMaquina],
     modosTiempo: [d.modoTiempo],
     mecanismosCantidad: [d.mecanismoCantidad],
+    multiplicadores: d.multiplicadores,
     // B.3.4 — acomoda piezas: la superficie viaja con la forma; presente
     // ⇔ CALCULADO_POR_PASO (el validador exige la coherencia).
     nestingConfig:
@@ -285,6 +309,9 @@ function draftDesdePreset(f: FamiliaListItem): FormaDraft {
         (m) => m !== "CALCULADO_POR_PASO",
       ) ?? "DIRECT_FROM_JOBCONTEXT",
     superficie: null,
+    // El clon hereda los multiplicadores del preset: antes se perdían y
+    // el paso nuevo nunca podía duplicar por doble faz.
+    multiplicadores: [...(f.multiplicadoresSoportados ?? [])],
     quienLoHace: "taller",
     proveedorDefaultId: null,
     fuenteCostoDefault: "matriz",
@@ -326,6 +353,7 @@ function draftDesdeFamilia(f: FamiliaTenant): FormaDraft {
       | "pliegos_multiples"
       | "rollo"
       | null,
+    multiplicadores: [...(f.multiplicadores ?? [])],
     quienLoHace: f.defaults?.tercerizado ? "proveedor" : "taller",
     proveedorDefaultId: f.defaults?.proveedorId ?? null,
     fuenteCostoDefault: (f.defaults?.fuenteCostoTercerizado ?? "matriz") as
@@ -1239,6 +1267,42 @@ function WizardNuevoPaso({
                   </div>
                 </>
               ) : null}
+
+              <div className={s.pregunta} style={{ marginTop: 20 }}>
+                ¿El trabajo se multiplica por algo del pedido?
+              </div>
+              <p className={s.ayuda}>
+                Si el paso se hace una vez por cara o por copia, marcalo acá y
+                el tiempo (y el material que lo declare) se multiplica solo al
+                cotizar. Cada producto puede desactivarlo en su ruta.
+              </p>
+              <div className={s.opciones}>
+                {MULTIPLICADORES_DISPONIBLES.map((mult) => {
+                  const activa = draft.multiplicadores.includes(mult.value);
+                  return (
+                    <Opcion
+                      key={mult.value}
+                      activa={activa}
+                      titulo={mult.titulo}
+                      desc={mult.desc}
+                      onClick={() =>
+                        set({
+                          multiplicadores: activa
+                            ? draft.multiplicadores.filter(
+                                (m) => m !== mult.value,
+                              )
+                            : [...draft.multiplicadores, mult.value],
+                        })
+                      }
+                    />
+                  );
+                })}
+              </div>
+              <p className={s.ayuda} style={{ marginTop: 8 }}>
+                {draft.multiplicadores.length === 0
+                  ? "Sin multiplicadores: el trabajo se cobra una vez, sin importar caras ni copias."
+                  : "Podés desmarcarlos para volver al comportamiento simple."}
+              </p>
             </>
           ) : null}
 
