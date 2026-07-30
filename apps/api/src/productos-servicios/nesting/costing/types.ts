@@ -41,6 +41,13 @@ export interface CostingInput<T = unknown> {
    */
   pieceWidthMm?: number;
   pieceHeightMm?: number;
+  /**
+   * Para m2-exact sobre ROLLO: el precio/m² no puede derivarse del
+   * sustrato (unitPrice es por unidad de consumo, no por placa); el
+   * caller lo provee ya convertido desde el material. Con esto presente,
+   * la estrategia acepta sustratos `roll`.
+   */
+  pricePerM2Override?: number;
   /** Para plate-segments: escalones de % ocupación (default [25, 50, 75, 100]). */
   segmentSteps?: number[];
 }

@@ -7951,7 +7951,22 @@ function AcomodadoDetalladoEditor({
                                               strategy: v || "simple",
                                             })
                                           }
-                                          options={COSTING_STRATEGY_OPTIONS}
+                                          options={
+                                            // En rollo sólo tienen sentido
+                                            // "según el consumo" (largo
+                                            // consumido) y "sólo los m² de
+                                            // las piezas" (sin desperdicio);
+                                            // las otras dos son geometría
+                                            // de placa y el motor las
+                                            // ignora.
+                                            sustratoRolloDisponible
+                                              ? COSTING_STRATEGY_OPTIONS.filter(
+                                                  (option) =>
+                                                    option.value === "simple" ||
+                                                    option.value === "m2-exact",
+                                                )
+                                              : COSTING_STRATEGY_OPTIONS
+                                          }
                                         />
                                         {nestingCosting.strategy ===
                                           "plate-segments" && (
