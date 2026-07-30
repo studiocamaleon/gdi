@@ -72,9 +72,25 @@ describe('calcularOutputsCanonicos - cortes_calculados', () => {
         metricasRaw: {},
         visualConfig: { pieceBleedMm: 0 },
       } as never,
-      cantidadEfectiva: 0,
+      // Distinto de cero a propósito: si el output cae al fallback defensivo
+      // del final, publica ESTE número y la guillotina lo lee como cortes.
+      cantidadEfectiva: 50,
     });
 
-    expect(outputs.cortes_calculados ?? null).toBeNull();
+    expect(outputs.cortes_calculados).toBeNull();
+  });
+
+  it('no publica cortes si el paso no hizo imposición propia', () => {
+    // Impresión que hereda los pliegos de pre-prensa: declara el output
+    // pero no corrió nesting. Si publicara algo, pisaría los cortes reales
+    // que ya calculó pre-prensa.
+    const outputs = calcularOutputsCanonicos(familia as never, {
+      paso: {} as never,
+      jobContext: {},
+      nestingDispatch: null,
+      cantidadEfectiva: 50,
+    });
+
+    expect(outputs.cortes_calculados).toBeNull();
   });
 });

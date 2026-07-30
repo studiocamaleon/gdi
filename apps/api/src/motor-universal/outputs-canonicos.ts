@@ -105,10 +105,13 @@ function computeOutput(
     };
   }
 
-  if (
-    key === 'cortes_calculados' &&
-    nestingDispatch?.algorithm === 'grid-2d-single'
-  ) {
+  if (key === 'cortes_calculados') {
+    // Este output SIEMPRE sale por acá: si cae al fallback defensivo del
+    // final publica la cantidad efectiva del paso — un número que la
+    // guillotina interpreta como "cortes" y le multiplica el tiempo.
+    // Pasa cuando la familia lo declara pero el paso no hizo imposición
+    // propia (impresión que hereda los pliegos de pre-prensa).
+    if (nestingDispatch?.algorithm !== 'grid-2d-single') return null;
     // Cortes de guillotina derivados de la imposición:
     // - sin demasía: columnas + filas + 2
     // - con demasía: 2 * columnas + 2 * filas
