@@ -88,6 +88,7 @@ import {
   familiaMutaMedidasEnPrePasada,
   familiaSinConsumiblesMaquina,
   magnitudTiempoDefaultDeFamilia,
+  superficieDeFamiliaTenant,
   perfilCompatibleConFamilia,
   slotIgnoraMultiplicadorCaras,
 } from '../productos-servicios/pasos/familias';
@@ -2196,6 +2197,19 @@ export class MotorUniversalService {
         errores.push(guard.error());
         return this.pasoAbortado(paso);
       }
+
+      // Familias de TENANT que eligieron una superficie en el wizard: deben
+      // acomodar como las del sistema, pero no tienen un guard propio. Si no
+      // salió layout, avisar en vez de cotizar con la cantidad cruda en
+      // silencio. Una familia de tenant SIN superficie (T-2, sin nesting) no
+      // llega acá: su fallback silencioso es legítimo.
+      const superficieTenant = superficieDeFamiliaTenant(familia);
+      if (superficieTenant) {
+        errores.push(
+          this.errorNestingTenantSinLayout(paso, superficieTenant),
+        );
+        return this.pasoAbortado(paso);
+      }
     }
 
     // d.1) El look-ahead de pre_prensa se retiró: pre-prensa espiaba el paso
@@ -3097,6 +3111,27 @@ export class MotorUniversalService {
       },
       sugerencia:
         'Activá el panelizado en la configuración del paso para dividir la pieza, o usá un sustrato/rollo más ancho.',
+    };
+  }
+
+  /** Guard genérico para familias de tenant que acomodan: no hay un
+   *  diagnóstico específico como en las del sistema, pero al menos nombra la
+   *  superficie y evita que un paso mal configurado cotice en silencio. */
+  private errorNestingTenantSinLayout(
+    paso: PasoCargado,
+    superficie: string,
+  ): ErrorMotor {
+    const dondeLabel = superficie === 'rollo' ? 'el rollo' : 'el pliego';
+    return {
+      codigo: 'nesting_sin_layout',
+      severidad: 'ERROR',
+      mensaje: `El paso no pudo acomodar las piezas sobre ${dondeLabel}: alguna no entra, o falta el material del sustrato o sus medidas.`,
+      rutaPasoId: paso.rutaPasoId,
+      rutaPasoOrden: paso.rutaPasoOrden,
+      familiaCodigo: paso.familiaCodigo,
+      contexto: { superficie },
+      sugerencia:
+        'Revisá que el sustrato tenga medidas y que las piezas entren; si son más grandes que el sustrato, achicá la pieza o elegí uno más grande.',
     };
   }
 

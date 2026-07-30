@@ -2103,6 +2103,20 @@ export function separacionEsLiteral(codigo: string): boolean {
   return resolverFamilia(codigo)?.semanticaSeparacion === 'literal';
 }
 
+/**
+ * Superficie sobre la que acomoda una familia de TENANT (la que eligió en el
+ * wizard), o null si no aplica. Sólo devuelve algo para familias de tenant que
+ * declararon superficie: las del sistema acomodan por su propio ruteo y las de
+ * tenant sin superficie (T-2) no acomodan. El motor lo usa para el guard
+ * genérico "no pudo acomodar" que las familias del sistema tienen a mano.
+ */
+export function superficieDeFamiliaTenant(
+  familia: DefinicionFamiliaResuelta | null | undefined,
+): string | null {
+  if (!familia?.esDeTenant) return null;
+  return familia.nestingConfig?.superficie ?? null;
+}
+
 /** Magnitud que alimenta la productividad cuando el modelador no eligió una.
  *  [Etapa A] */
 export function magnitudTiempoDefaultDeFamilia(

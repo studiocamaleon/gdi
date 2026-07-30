@@ -12,8 +12,13 @@ import {
   getFamilia,
   listarFamilias,
   listarFamiliasPorCategoria,
+  superficieDeFamiliaTenant,
 } from '../familias';
-import type { CategoriaFamiliaCodigo, FamiliaCodigo } from '../types';
+import type {
+  CategoriaFamiliaCodigo,
+  DefinicionFamiliaResuelta,
+  FamiliaCodigo,
+} from '../types';
 
 describe('Catálogo de familias', () => {
   it('contiene exactamente 42 familias', () => {
@@ -254,5 +259,44 @@ describe('Helpers', () => {
 
   it('listarFamilias devuelve los 42 códigos', () => {
     expect(listarFamilias().length).toBe(42);
+  });
+});
+
+describe('superficieDeFamiliaTenant', () => {
+  const tenant = (
+    nestingConfig: DefinicionFamiliaResuelta['nestingConfig'],
+  ): DefinicionFamiliaResuelta =>
+    ({ esDeTenant: true, nestingConfig }) as DefinicionFamiliaResuelta;
+
+  it('devuelve la superficie de una familia de tenant que acomoda', () => {
+    expect(superficieDeFamiliaTenant(tenant({ superficie: 'pliego' }))).toBe(
+      'pliego',
+    );
+    expect(superficieDeFamiliaTenant(tenant({ superficie: 'rollo' }))).toBe(
+      'rollo',
+    );
+  });
+
+  it('null si la familia de tenant no declaró superficie (no acomoda)', () => {
+    expect(superficieDeFamiliaTenant(tenant(null))).toBeNull();
+    expect(
+      superficieDeFamiliaTenant({ esDeTenant: true } as DefinicionFamiliaResuelta),
+    ).toBeNull();
+  });
+
+  it('null para familias del sistema (acomodan por su propio ruteo)', () => {
+    // Aunque una del sistema tuviera nestingConfig, no es de tenant → el guard
+    // genérico no aplica; esas tienen su guard específico.
+    expect(
+      superficieDeFamiliaTenant({
+        esDeTenant: false,
+        nestingConfig: { superficie: 'pliego' },
+      } as DefinicionFamiliaResuelta),
+    ).toBeNull();
+  });
+
+  it('null si no hay familia', () => {
+    expect(superficieDeFamiliaTenant(null)).toBeNull();
+    expect(superficieDeFamiliaTenant(undefined)).toBeNull();
   });
 });
