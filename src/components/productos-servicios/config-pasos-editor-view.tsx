@@ -1029,6 +1029,31 @@ function jsonToText(value: Record<string, unknown> | null | undefined): string {
   }
 }
 
+// B.3.3 — Herencia explícita: `origen { rutaPasoId, capacidad }` vive dentro
+// del JSON de "Config de cantidad" (el textarea sigue siendo la fuente al
+// guardar); estos helpers leen/escriben esa clave sin pisar el resto.
+type OrigenHerencia = { rutaPasoId: string; capacidad: string };
+
+function leerOrigenHerencia(texto: string): Partial<OrigenHerencia> | null {
+  const r = textToJson(texto);
+  if (!r.ok || !r.value) return null;
+  const o = r.value.origen;
+  return o && typeof o === "object" && !Array.isArray(o)
+    ? (o as Partial<OrigenHerencia>)
+    : null;
+}
+
+function escribirOrigenHerencia(
+  texto: string,
+  origen: OrigenHerencia | null,
+): string {
+  const r = textToJson(texto);
+  const obj: Record<string, unknown> = r.ok && r.value ? { ...r.value } : {};
+  if (origen) obj.origen = origen;
+  else delete obj.origen;
+  return jsonToText(obj);
+}
+
 function textToJson(
   text: string,
 ):
@@ -5618,6 +5643,136 @@ export function ConfigPasosEditorView({
                                       </div>
                                     </div>
                                   )}
+                                  {cantidadRelevante &&
+                                    cfg.mecanismoCantidad ===
+                                      "HEREDAR_DEL_OUTPUT_CANONICO" &&
+                                    (() => {
+                                      // B.3.3 — herencia explícita: señalar
+                                      // el paso origen y qué capacidad usa.
+                                      const pasosPrevios =
+                                        rutaAlternativa.ruta.pasos.filter(
+                                          (p) => p.orden < paso.orden,
+                                        );
+                                      const origen = leerOrigenHerencia(
+                                        jsonTexts[paso.id]?.mecanismo ?? "",
+                                      );
+                                      const origenPasoId =
+                                        typeof origen?.rutaPasoId === "string"
+                                          ? origen.rutaPasoId
+                                          : null;
+                                      const origenCapacidad =
+                                        typeof origen?.capacidad === "string"
+                                          ? origen.capacidad
+                                          : "unidades_procesadas";
+                                      const setOrigen = (
+                                        o: OrigenHerencia | null,
+                                      ) =>
+                                        setJsonTexts((prev) => ({
+                                          ...prev,
+                                          [paso.id]: {
+                                            ...(prev[paso.id] ?? {
+                                              params: "",
+                                              mecanismo: "",
+                                            }),
+                                            mecanismo: escribirOrigenHerencia(
+                                              prev[paso.id]?.mecanismo ?? "",
+                                              o,
+                                            ),
+                                          },
+                                        }));
+                                      const nombrePaso = (p: {
+                                        id: string;
+                                        familiaCodigo: string;
+                                      }) =>
+                                        configs[p.id]?.nombreVisible?.trim() ||
+                                        familiasMap.get(p.familiaCodigo)
+                                          ?.nombre ||
+                                        humanizeCode(p.familiaCodigo);
+                                      const heredablesDe = (
+                                        familiaCodigo: string,
+                                      ) =>
+                                        (
+                                          familiasMap.get(familiaCodigo)
+                                            ?.capacidades ?? []
+                                        ).filter((c) => c.heredable);
+                                      const familiaOrigenCodigo =
+                                        pasosPrevios.find(
+                                          (p) => p.id === origenPasoId,
+                                        )?.familiaCodigo;
+                                      const capacidadesOrigen =
+                                        familiaOrigenCodigo
+                                          ? heredablesDe(familiaOrigenCodigo)
+                                          : [];
+                                      return (
+                                        <div className="field">
+                                          <LabelConTooltip
+                                            label="¿De qué paso hereda la cantidad?"
+                                            tooltip="Señalá el paso origen: la cantidad de este paso sale de lo que ese paso dejó. En Automático el sistema usa la regla histórica (el output natural del paso anterior)."
+                                          />
+                                          <div className="grid gap-2 sm:grid-cols-2">
+                                            <HumanSelect
+                                              value={origenPasoId ?? "auto"}
+                                              onValueChange={(v) => {
+                                                if (!v || v === "auto") {
+                                                  setOrigen(null);
+                                                  return;
+                                                }
+                                                setOrigen({
+                                                  rutaPasoId: v,
+                                                  capacidad: origenCapacidad,
+                                                });
+                                              }}
+                                              options={[
+                                                {
+                                                  value: "auto",
+                                                  label:
+                                                    "Automático (regla histórica)",
+                                                  description:
+                                                    "Como hasta ahora: el output natural del paso anterior.",
+                                                },
+                                                ...pasosPrevios.map((p) => {
+                                                  const deja = heredablesDe(
+                                                    p.familiaCodigo,
+                                                  )
+                                                    .map((c) =>
+                                                      c.nombre.toLowerCase(),
+                                                    )
+                                                    .join(", ");
+                                                  return {
+                                                    value: p.id,
+                                                    label: nombrePaso(p),
+                                                    description: deja
+                                                      ? `Deja: ${deja}`
+                                                      : undefined,
+                                                  };
+                                                }),
+                                              ]}
+                                              placeholder="Elegir paso"
+                                            />
+                                            {origenPasoId ? (
+                                              <HumanSelect
+                                                value={origenCapacidad}
+                                                onValueChange={(v) =>
+                                                  setOrigen({
+                                                    rutaPasoId: origenPasoId,
+                                                    capacidad:
+                                                      v ||
+                                                      "unidades_procesadas",
+                                                  })
+                                                }
+                                                options={capacidadesOrigen.map(
+                                                  (c) => ({
+                                                    value: c.key,
+                                                    label: c.nombre,
+                                                  }),
+                                                )}
+                                                placeholder="Qué número usa"
+                                              />
+                                            ) : null}
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
                                   {mostrarProductividadPropia && (
                                     <div className="field">
                                       <LabelConTooltip

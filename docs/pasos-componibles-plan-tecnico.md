@@ -571,6 +571,15 @@ Cinco sub-fases, cada una con valor propio y verificable sola. Rama
 
 #### B.3.1 — El registro, como datos puros (sin cambio de comportamiento)
 
+> **Estado 2026-07-30: HECHA** (rama `feat/pasos-capacidades`).
+> `pasos/capacidades.ts` con las 8 capacidades, `ALIAS_LEGACY` completo
+> (el test de cobertura verifica que TODA key declarada por las 42
+> familias tenga lugar: alias, interna o podada), `KEYS_PODADAS`
+> (proof/diseño aprobado), `capacidadesDeForma` y `capacidadesDeclaradas`.
+> 8 tests unit sin DB, verdes; tsc limpio. `piezas_estampadas` (dato
+> tenant de la Etapa C) se resuelve por el fallback hasta el backfill de
+> B.3.2.
+
 - Archivo nuevo `apps/api/src/productos-servicios/pasos/capacidades.ts`
   (patrón `familias.ts`: datos + helpers, cero lógica de negocio):
   - Las 8 entradas: `{ key, nombre, tipo: conteo|continua|traza,
@@ -589,6 +598,22 @@ Cinco sub-fases, cada una con valor propio y verificable sola. Rama
 
 #### B.3.2 — Emisión estandarizada + el wizard informa
 
+> **Estado 2026-07-30: HECHA y verificada E2E** (rama
+> `feat/pasos-capacidades`). El motor publica `capacidades` en cada paso
+> ejecutado (aditivo, keys planas intactas); los outputs tenant se DERIVAN
+> en el service (crear y PATCH re-derivan — un PATCH cualquiera normaliza
+> filas legacy, verificado en vivo contra Bordado y Serigrafía); el
+> validador cierra el vocabulario; el wizard muestra "Qué deja este paso a
+> los siguientes". E2E con la sesión real: cotización de la ruta 100%
+> tenant devuelve `capacidades` exactas (100 unidades · 100/75 min) con
+> los MISMOS costos de la línea de base. **Bug cazado en el E2E**: las
+> keys del propio registro caían al fallback de `resolverAliasLegacy`
+> (minutos_reales → "unidades" + duplicado con la universal); fix: una key
+> del registro se representa a sí misma. Motor suite = línea de base
+> exacta (18 rotos preexistentes, 261 verdes). Nota: los pasos con
+> snapshot viejo (`piezas_estampadas`) siguen resolviendo por fallback —
+> por diseño.
+
 - Motor (F.2.9): al publicar outputs, agrega a la trazabilidad del paso
   `capacidades: [{ capacidad, etiqueta, valor }]` VÍA alias — aditivo;
   las keys planas del jobContext no se tocan (compat con los 4 canales).
@@ -602,6 +627,23 @@ Cinco sub-fases, cada una con valor propio y verificable sola. Rama
   trazabilidad.
 
 #### B.3.3 — Herencia explícita
+
+> **Estado 2026-07-30: HECHA y verificada E2E** (rama
+> `feat/pasos-capacidades`). `resolverHerenciaExplicita` (función pura en
+> capacidades.ts, testeada con el caso diferencial: origen con CONVERSION
+> deja 10 grupos y el trabajo pide 100 — señalarlo devuelve 10, el
+> fallback jamás podría) + el motor publica las capacidades por rutaPasoId
+> bajo la clave reservada `__capacidadesPorPaso`. UI: cuando el mecanismo
+> es "Hereda del paso anterior", aparece "¿De qué paso hereda la
+> cantidad?" con los pasos previos (mostrando "Deja: …" desde el
+> `capacidades` que ahora devuelve GET /familias) + el selector de
+> capacidad heredable; default "Automático (regla histórica)". El origen
+> viaja DENTRO del JSON de config de cantidad (el textarea sigue siendo la
+> fuente al guardar). E2E real: Serigrafía manual configurada para heredar
+> de Bordado (persistido `origen{rutaPasoId,capacidad}` en DB), cotización
+> exacta. Motor suite = línea de base. Trampa de entorno para recordar: un
+> edit por script de Python NO despierta al nest watch — quedó un dist
+> viejo sirviendo hasta re-guardar el archivo con una escritura normal.
 
 - Contrato: `mecanismoCantidadConfigJson` gana
   `origen: { rutaPasoId, capacidad }`. En `resolverCantidad` (HEREDAR):
@@ -619,6 +661,29 @@ Cinco sub-fases, cada una con valor propio y verificable sola. Rama
   del corte y la cotización da el número esperado.
 
 #### B.3.4 — Nesting para pasos tenant (la feature)
+
+> **Estado 2026-07-30: HECHA** (rama `feat/pasos-capacidades`); el E2E
+> completo con cotización real queda para B.3.5. Lo construido:
+> `nestingConfigJson` en FamiliaTenant (migración ADD COLUMN,
+> 20260730041500, aplicada a dev y test), la superficie proyectada al
+> resolver, el validador que relaja CALCULADO_POR_PASO SOLO con superficie
+> declarada (y lo exige cuando la hay), y la **entrada tenant del
+> dispatcher** ANTES del switch por familiaCodigo: rollo → shelf/maxrects,
+> pliego(s) → grid-2d-multi (piezas uniformes caen solas a single, con
+> poses e imposición completa). La medida del pliego/rollo sale del
+> material del slot o de la máquina vía `resolveNestingConfig`, que ya era
+> genérico. `outputs-canonicos` aprende las keys del registro con
+> semántica idéntica a las legacy (`pliegos` = `pliegos_calculados`, etc.).
+> Wizard: la 4ª opción de cantidad ("El paso la calcula acomodando
+> piezas") despliega "¿Sobre qué acomoda?" con las 3 superficies en
+> lenguaje físico (verificado en browser), y el bloque "Qué deja este
+> paso" suma los chips del set elegido. Desvío del plan anotado: la
+> pregunta vive DENTRO del paso de cantidad (es una respuesta a "¿de dónde
+> sale la cantidad?"), no como paso nuevo tras máquina — evita renumerar
+> el wizard y es más coherente. Tests: 3 nuevos de dispatcher tenant (sin
+> DB, familias sintéticas registradas al resolver; pliego uniforme da
+> exactamente 2 pliegos con ≥50 poses) + validador + derivación; suite
+> motor = línea de base.
 
 - `FamiliaTenant.nestingConfigJson` (migración ADD COLUMN only):
   `{ superficie: 'pliego' | 'pliegos_multiples' | 'rollo' }` (la
@@ -641,6 +706,40 @@ Cinco sub-fases, cada una con valor propio y verificable sola. Rama
   intacta por nombre.
 
 #### B.3.5 — E2E de cierre
+
+> **Estado 2026-07-30: HECHA — criterio de done CUMPLIDO ÍNTEGRO** (sesión
+> real del usuario). La escena completa: "Estampado en pliego" creado con
+> el wizard (M-0 · T-2 · slot "Papel de estampado" · acomoda sobre pliego
+> · Produccion & Taller — el paso final mostró los chips de pliegos y
+> aprovechamiento), ruta "Nesting E2E" (Estampado → Bordado), alternativa
+> del producto de prueba, Estampado con Papel Autoadhesivo SRA3++
+> (325×500, $214,88) y 30 pliegos/h, Bordado heredando EXPLÍCITO la
+> capacidad **pliegos** del Estampado a 60/h. Cotización de 100 piezas
+> 60×40:
+>
+> - Estampado: `grid-2d-single`, **64 poses** (8×8 rotado — cuenta manual
+>   exacta), **2 pliegos** = ceil(100/64), aprovechamiento **73,85 %**
+>   (240.000 mm² / 325.000 mm² exacto), 4 min (2 pliegos ÷ 30/h) =
+>   $1.678,38, material 2 × $214,88 = $429,75 — el papel se cobra por
+>   pliego CALCULADO. Capacidades: pliegos 2 · aprovechamiento 73,85 ·
+>   minutos 4.
+> - Bordado: cantidad efectiva **2** — heredó LOS PLIEGOS, no las 100
+>   piezas del trabajo: la prueba diferencial de la herencia explícita EN
+>   VIVO (el fallback jamás daría 2) — 2 min = $839,19.
+> - `nestingResult` con placements presente (alimenta el visor); sin
+>   errores; sin OT; Estandar sigue preferida.
+>
+> **Bug real cazado por el E2E** (config-pasos.service): un slot de
+> familia TENANT sin `compatibilidadMaterial` rechazaba TODO material
+> (`if (!compat) return false` — default seguro para el sistema, donde
+> toda familia declara la suya, pero el wizard v1 no pregunta
+> compatibilidades). Fix: slot tenant sin compat = sin restricción (el
+> scope por tenant ya se valida aparte); sistema sigue estricto. Por esto
+> los E2E anteriores nunca habían podido asignar material a un slot
+> tenant (las cotizaciones eran tiempo puro).
+>
+> Suite completa motor+productos-servicios: 428 verdes, los mismos 18
+> rotos preexistentes.
 
 **Done** = un ADMIN crea con el wizard "Estampado en pliego" (acomoda
 sobre pliego), lo mete en una ruta con un paso posterior que hereda

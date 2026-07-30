@@ -9,6 +9,8 @@ import {
 } from './pasos/familias';
 import { MODOS_ACTIVACION_UNIVERSALES } from './pasos/types';
 import { proyectarFamiliaTenant } from './pasos/familia-tenant-validacion';
+import { resumenCapacidades } from './pasos/capacidades';
+
 import { outputsReferenciadosPorRegla } from './pasos/validacion-pre-pasada';
 import type {
   FamiliaCodigo,
@@ -52,6 +54,8 @@ export class FamiliasPasosService {
             plantillasCompatibles: f.plantillasCompatibles,
             inputsRequeridos: f.inputsRequeridos,
             outputsCanonicos: f.outputsCanonicos,
+            // B.3.3 — para el selector "hereda de": qué deja este paso.
+            capacidades: resumenCapacidades(f.outputsCanonicos),
             validaciones: f.validaciones,
             paramsPasoSchema: f.paramsPasoSchema,
             productosTipicos: f.productosTipicos,
@@ -78,6 +82,7 @@ export class FamiliasPasosService {
           plantillasCompatibles: f.plantillasCompatibles,
           inputsRequeridos: f.inputsRequeridos,
           outputsCanonicos: f.outputsCanonicos,
+          capacidades: resumenCapacidades(f.outputsCanonicos),
           validaciones: f.validaciones,
           paramsPasoSchema: f.paramsPasoSchema,
           productosTipicos: [] as string[],

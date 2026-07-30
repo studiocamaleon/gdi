@@ -1641,6 +1641,11 @@ model FamiliaTenant {
   permiteSlotsAdicionales Boolean @default(false)
   /// Override del registro en tablero; null = default por categoría.
   modoRegistro            String?
+  /// B.3.4 — el paso acomoda piezas: { superficie: 'pliego' |
+  /// 'pliegos_multiples' | 'rollo' }. Presente ⇔ mecanismo
+  /// CALCULADO_POR_PASO (el tenant ELIGE nuestro algoritmo, nunca escribe
+  /// uno). null = no acomoda.
+  nestingConfigJson       Json?
 
   /// FamiliaCodigo del preset del catálogo del que nació, si nació de uno.
   presetOrigen String?

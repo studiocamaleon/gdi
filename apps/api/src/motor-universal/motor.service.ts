@@ -52,6 +52,12 @@ import {
 } from './nesting-config';
 import { calcularOutputsCanonicos } from './outputs-canonicos';
 import {
+  capacidadesEmitidas,
+  KEY_CAPACIDADES_POR_PASO,
+  resolverHerenciaExplicita,
+  type CapacidadEmitida,
+} from '../productos-servicios/pasos/capacidades';
+import {
   getConsumableChannelFromDetail,
   getPerfilConsumableChannels,
   PRINTER_TEMPLATES_WITH_MACHINE_CONSUMABLES,
@@ -675,6 +681,20 @@ export class MotorUniversalService {
           (jobContext as Record<string, unknown>)[key] = value;
           outputsAcumulados.add(key);
         }
+      }
+
+      // B.3.3 — Herencia explícita: además del merge flat (donde el último
+      // emisor pisa al anterior), publicar las capacidades del paso
+      // indexadas por rutaPasoId bajo una clave reservada, para que un
+      // paso posterior pueda heredar "de ESTE paso" sin ambigüedad.
+      if (ejecucion.capacidades?.length) {
+        const ctx = jobContext as Record<string, unknown>;
+        const porPaso = (ctx[KEY_CAPACIDADES_POR_PASO] ?? {}) as Record<
+          string,
+          CapacidadEmitida[]
+        >;
+        porPaso[paso.rutaPasoId] = ejecucion.capacidades;
+        ctx[KEY_CAPACIDADES_POR_PASO] = porPaso;
       }
 
       // Sub-tarea (i) — la mutación YA se aplicó en la pre-pasada (va antes del
@@ -2331,6 +2351,14 @@ export class MotorUniversalService {
       cantidadEfectiva,
     });
 
+    // B.3.2 — Vista estandarizada de los outputs (Registro de Capacidades),
+    // para trazabilidad y UI. Aditiva: las keys planas siguen intactas.
+    const capacidades = capacidadesEmitidas({
+      outputsCanonicos,
+      cantidadEfectiva,
+      totalMin: tiempo?.totalMin,
+    });
+
     const nestingResult: NestingEjecutado | undefined = nestingDispatch
       ? {
           algorithm: nestingDispatch.algorithm,
@@ -2366,6 +2394,7 @@ export class MotorUniversalService {
       cargosDirectosPaso,
       costoTotal: subtotalPaso + cargosPasoTotal,
       outputsCanonicos,
+      capacidades,
       nestingResult,
     };
   }
@@ -4911,12 +4940,21 @@ export class MotorUniversalService {
     if (mecanismo === 'HEREDAR_DEL_OUTPUT_CANONICO') {
       // G-M2: lee el output canónico publicado por un paso anterior. La key
       // se determina por:
+      //  0) B.3.3 — `config.origen { rutaPasoId, capacidad }`: herencia
+      //     EXPLÍCITA, el que modela señala el paso. Manda sobre todo.
       //  1) `mecanismoCantidadConfigJson.campoOutput` (override explícito).
       //  2) Default por familia (mapeo abajo).
       const config = (paso.mecanismoCantidadConfigJson ?? {}) as Record<
         string,
         unknown
       >;
+      const heredadoExplicito = resolverHerenciaExplicita(
+        config,
+        jobContext as Record<string, unknown>,
+      );
+      if (heredadoExplicito !== null) return heredadoExplicito;
+      // Si había origen señalado pero no publicó (paso salteado o aún no
+      // ejecutado), cae al camino legacy — mismo comportamiento histórico.
       const campoExplicito =
         typeof config.campoOutput === 'string' ? config.campoOutput : null;
       const campo =

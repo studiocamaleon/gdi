@@ -47,13 +47,40 @@ describe('validarDefinicionFamiliaTenant (el validador puro)', () => {
     expect(validarDefinicionFamiliaTenant(SERIGRAFIA)).toEqual([]);
   });
 
-  it('rechaza CALCULADO_POR_PASO: la geometría es frontera del sistema', () => {
+  it('rechaza CALCULADO_POR_PASO sin superficie: la frontera sólo se relaja por elección (B.3.4)', () => {
     const errores = validarDefinicionFamiliaTenant({
       ...SERIGRAFIA,
       mecanismosCantidad: ['CALCULADO_POR_PASO'],
     });
     expect(
-      errores.some((e) => e.includes('exclusivo de las familias del sistema')),
+      errores.some((e) => e.includes('superficie de acomodo')),
+    ).toBe(true);
+  });
+
+  it('acepta CALCULADO_POR_PASO con superficie declarada (el tenant ELIGE nuestro algoritmo)', () => {
+    expect(
+      validarDefinicionFamiliaTenant({
+        ...SERIGRAFIA,
+        nombre: 'Estampado en pliego',
+        mecanismosCantidad: ['CALCULADO_POR_PASO'],
+        nestingConfig: { superficie: 'pliego' },
+      }),
+    ).toEqual([]);
+  });
+
+  it('rechaza superficie desconocida y superficie sin CALCULADO_POR_PASO', () => {
+    expect(
+      validarDefinicionFamiliaTenant({
+        ...SERIGRAFIA,
+        mecanismosCantidad: ['CALCULADO_POR_PASO'],
+        nestingConfig: { superficie: 'mesa_flotante' },
+      }).some((e) => e.includes('Superficie de acomodo desconocida')),
+    ).toBe(true);
+    expect(
+      validarDefinicionFamiliaTenant({
+        ...SERIGRAFIA,
+        nestingConfig: { superficie: 'rollo' },
+      }).some((e) => e.includes('tiene que incluir CALCULADO_POR_PASO')),
     ).toBe(true);
   });
 
@@ -155,6 +182,27 @@ describe('FamiliasTenantService (integración, gdi_saas_test)', () => {
       where: { tenantId, familiaCodigo: fila.id },
     });
     expect(ruteo?.estacionId).toBe(estacionId);
+  });
+
+  it('B.3.2: los outputs se DERIVAN de la forma — lo que declare el input se descarta', async () => {
+    const fila = await service.crear(tenantId, {
+      ...SERIGRAFIA,
+      nombre: 'Estampado con outputs basura',
+      outputsCanonicos: ['piezas_estampadas', 'lo_que_sea'],
+    });
+    expect(fila.outputsCanonicos).toEqual([
+      'unidades_procesadas',
+      'minutos_reales',
+    ]);
+
+    // Un PATCH cualquiera re-deriva (normaliza filas legacy).
+    const parchada = await service.actualizar(tenantId, fila.id, {
+      descripcion: 'normalizada',
+    });
+    expect(parchada.outputsCanonicos).toEqual([
+      'unidades_procesadas',
+      'minutos_reales',
+    ]);
   });
 
   it('el override de modoRegistro le gana al default de la categoría', async () => {

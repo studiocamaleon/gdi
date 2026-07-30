@@ -226,6 +226,72 @@ function computeOutput(
     return tiempo?.totalMin ?? null;
   }
 
+  // ─── Keys del Registro de Capacidades (familias tenant, B.3.2/4) ──
+  // Las familias tenant declaran directamente las keys del registro; acá
+  // se les da valor. `minutos_reales` NECESITA regla propia: el fallback
+  // genérico devolvería cantidad efectiva, que es otro número.
+  if (key === 'minutos_reales') {
+    return tiempo?.totalMin ?? null;
+  }
+  if (key === 'unidades_procesadas' || key === 'grupos') {
+    return cantidadEfectiva || null;
+  }
+  // B.3.4 — paso tenant que acomoda: mismas semánticas que las keys legacy
+  // (`pliegos_calculados`, `m2_calculados`, `metros_lineales_corte`), para
+  // que la herencia y el visor lean lo mismo venga de donde venga.
+  if (key === 'pliegos') {
+    if (
+      nestingDispatch?.algorithm === 'grid-2d-single' ||
+      nestingDispatch?.algorithm === 'grid-2d-multi' ||
+      nestingDispatch?.algorithm === 'packingsolver-rectangle'
+    ) {
+      return nestingDispatch.cantidadCalculada;
+    }
+    return null;
+  }
+  if (key === 'm2_consumidos') {
+    if (
+      nestingDispatch?.algorithm === 'shelf-rollo' ||
+      nestingDispatch?.algorithm === 'maxrects-rollo'
+    ) {
+      const sub = nestingDispatch.substrates[0];
+      if (sub?.kind === 'roll') return (sub.lengthMm * sub.widthMm) / 1_000_000;
+    }
+    if (
+      nestingDispatch?.algorithm === 'grid-2d-single' ||
+      nestingDispatch?.algorithm === 'grid-2d-multi' ||
+      nestingDispatch?.algorithm === 'packingsolver-rectangle'
+    ) {
+      return nestingDispatch.substrates.reduce((acc, sub) => {
+        if (sub.kind !== 'sheet') return acc;
+        return acc + (sub.count * sub.widthMm * sub.heightMm) / 1_000_000;
+      }, 0);
+    }
+    return null;
+  }
+  if (key === 'metros_lineales') {
+    if (
+      nestingDispatch?.algorithm === 'shelf-rollo' ||
+      nestingDispatch?.algorithm === 'maxrects-rollo'
+    ) {
+      return (nestingDispatch.consumedLengthMm ?? 0) / 1000;
+    }
+    return null;
+  }
+  if (key === 'imposicion') {
+    if (nestingDispatch?.algorithm === 'grid-2d-single') {
+      return {
+        algorithm: nestingDispatch.algorithm,
+        piezasPorPliego: nestingDispatch.piezasPorPliego,
+        pliegosNecesarios: nestingDispatch.cantidadCalculada,
+        aprovechamientoPct: nestingDispatch.aprovechamientoPct,
+        placements: nestingDispatch.placements,
+        substrates: nestingDispatch.substrates,
+      };
+    }
+    return null;
+  }
+
   // ─── Outputs derivados de materiales ──────────────────────────────
   if (key === 'metros_lineales_film' && materiales) {
     const film = materiales.find(

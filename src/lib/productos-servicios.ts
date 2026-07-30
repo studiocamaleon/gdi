@@ -444,6 +444,9 @@ export interface FamiliaListItem {
   plantillasCompatibles: string[];
   inputsRequeridos: string[];
   outputsCanonicos: string[];
+  /** B.3.3 — qué deja este paso (Registro de Capacidades), para el
+   *  selector "hereda de" del editor de configuración. */
+  capacidades?: Array<{ key: string; nombre: string; heredable: boolean }>;
   validaciones: Array<{
     codigo: string;
     tipo: string;
@@ -500,6 +503,8 @@ export interface FamiliaTenant {
   tiposPerfilCompatibles: string[] | null;
   modoRegistro: string | null;
   presetOrigen: string | null;
+  /** B.3.4 — superficie de acomodo; null = el paso no acomoda piezas. */
+  nestingConfigJson: { superficie?: string } | null;
   activo: boolean;
   createdAt: string;
   updatedAt: string;
@@ -528,6 +533,8 @@ export interface UpsertFamiliaTenantInput {
   outputsCanonicos?: string[];
   modoRegistro?: string;
   presetOrigen?: string;
+  /** B.3.4 — presente ⇔ mecanismo CALCULADO_POR_PASO. */
+  nestingConfig?: { superficie: string } | null;
   estacionId?: string | null;
 }
 
