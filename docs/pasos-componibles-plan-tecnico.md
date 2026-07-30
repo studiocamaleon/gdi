@@ -564,6 +564,115 @@ anterior pero guarda explícito. `defaultOutputParaHeredar` desaparece.
 En el paso final del wizard: bloque "Este paso deja: 500 unidades ·
 10 pliegos SRA3 · 45 minutos".
 
+### B.3 Plan de implementación (2026-07-30)
+
+Cinco sub-fases, cada una con valor propio y verificable sola. Rama
+`feat/pasos-capacidades` desde dev; una rama hija por sub-fase si crece.
+
+#### B.3.1 — El registro, como datos puros (sin cambio de comportamiento)
+
+- Archivo nuevo `apps/api/src/productos-servicios/pasos/capacidades.ts`
+  (patrón `familias.ts`: datos + helpers, cero lógica de negocio):
+  - Las 8 entradas: `{ key, nombre, tipo: conteo|continua|traza,
+    descripcion }`.
+  - `ALIAS_LEGACY`: mapa de TODAS las keys viejas → `{ capacidad,
+    etiqueta }` (`piezas_cortadas` → `unidades_procesadas` / "piezas
+    cortadas"; las 4 keys de identidad del pliego → `pliegos`; etc.).
+  - `capacidadesDeForma(familia)`: deriva la emisión — siempre
+    `unidades_procesadas` + `minutos_reales`; con nestingConfig pliego →
+    `pliegos` + `imposicion` + `aprovechamiento_pct`; rollo →
+    `m2_consumidos` + `metros_lineales` + `aprovechamiento_pct`;
+    CONVERSION con capacidad → `grupos`; slot film → `metros_lineales`.
+- Tests unit: toda key del catálogo tiene alias; ningún alias huérfano;
+  la derivación por forma cubre las 42 del sistema sin sorpresas.
+- **Verificación**: tsc; suite idéntica (no toca motor ni UI).
+
+#### B.3.2 — Emisión estandarizada + el wizard informa
+
+- Motor (F.2.9): al publicar outputs, agrega a la trazabilidad del paso
+  `capacidades: [{ capacidad, etiqueta, valor }]` VÍA alias — aditivo;
+  las keys planas del jobContext no se tocan (compat con los 4 canales).
+- Familias tenant: `outputsCanonicos` deja de ser texto libre — el
+  service lo DERIVA de la forma al guardar (validador rechaza keys fuera
+  del registro). Backfill de "Bordado" y "Serigrafía manual" en dev.
+- Wizard, paso final: bloque "Este paso deja: …" desde
+  `capacidadesDeForma`.
+- **Verificación**: tsc + jest + css:guard; E2E corto: crear/editar paso
+  → ver el bloque; cotizar el producto tenant → capacidades en la
+  trazabilidad.
+
+#### B.3.3 — Herencia explícita
+
+- Contrato: `mecanismoCantidadConfigJson` gana
+  `origen: { rutaPasoId, capacidad }`. En `resolverCantidad` (HEREDAR):
+  con origen explícito → buscar en `pasosEjecutados` el paso señalado y
+  leer esa capacidad (unidades → cantidadEfectiva; pliegos → cantidad;
+  m²/metros → valor). Sin origen → **fallback al mapa legacy intacto**
+  (las configs existentes no se migran y siguen andando).
+- UI Configurar pasos: cuando mecanismo = HEREDAR, el textarea de JSON
+  libre se reemplaza por un selector humano: dropdown de pasos PREVIOS
+  de la ruta mostrando qué deja cada uno ("Impresión — pliegos ·
+  unidades"), sugerencia = el paso anterior. El JSON queda como avanzado.
+- Tests motor: origen explícito tenant→tenant, sistema→tenant,
+  tenant→sistema; fallback legacy byte a byte (suite por nombre).
+- **Verificación**: E2E usuario — un paso tenant hereda explícitamente
+  del corte y la cotización da el número esperado.
+
+#### B.3.4 — Nesting para pasos tenant (la feature)
+
+- `FamiliaTenant.nestingConfigJson` (migración ADD COLUMN only):
+  `{ superficie: 'pliego' | 'pliegos_multiples' | 'rollo' }` (la
+  variante de algoritmo la decide el sistema como hoy — mejor candidato;
+  revisable).
+- Wizard: pregunta nueva después de máquina: "¿Este paso acomoda piezas
+  en una superficie? → ¿Sobre qué?" con ejemplos físicos. Elegir setea
+  `CALCULADO_POR_PASO` + nestingConfig; el validador relaja la
+  prohibición SOLO si nestingConfig está presente y válido (la frontera
+  se mantiene: se ELIGE nuestro algoritmo, nunca se escribe uno).
+- Dispatcher: entrada parametrizada ANTES del switch por familiaCodigo —
+  si `resolverFamilia(...)?.nestingConfig` existe, arma la config del
+  algoritmo reutilizando los builders existentes. **Los branches del
+  sistema no se tocan** (quedan como presets de facto; unificarlos es
+  otra etapa).
+- Emisión: `capacidadesDeForma` ya incluye pliegos/m² → el paso tenant
+  publica las MISMAS keys canónicas del sistema (compat total con
+  herencia, simulador y visor).
+- Tests: dispatcher con familia tenant (pliego y rollo); suite motor
+  intacta por nombre.
+
+#### B.3.5 — E2E de cierre
+
+**Done** = un ADMIN crea con el wizard "Estampado en pliego" (acomoda
+sobre pliego), lo mete en una ruta con un paso posterior que hereda
+EXPLÍCITAMENTE sus unidades, y la cotización corre el nesting de verdad:
+pliegos calculados = cuenta manual, desglose con pliegos y
+aprovechamiento, visor de nesting funcionando, y el simulador/tablero
+sin romperse. Cliente de prueba SIN teléfono (Wati vivo en dev).
+
+#### Qué NO entra en B (guardrails)
+
+- Migración física de los nombres triviales (quedan como alias, quizás
+  para siempre).
+- Retirar `defaultOutputParaHeredar` ni el look-ahead de pre_prensa para
+  las familias del sistema: "un emisor por ruta" rige el modelo NUEVO;
+  lo legacy sigue igual hasta una etapa de unificación.
+- Unificar los branches del dispatcher del sistema al mecanismo nuevo.
+- Lectores nuevos para `minutos_reales` / `aprovechamiento_pct`
+  (métricas/ETA) — backlog.
+- Preview de nesting dentro del wizard (el preview de costeo sigue
+  T-1/T-2).
+- El wizard de ruta (Etapa E real).
+
+#### Riesgos
+
+| Riesgo | Mitigación |
+|---|---|
+| Regresión del dispatcher (FRONTERA-NESTING) | los branches del sistema no se tocan; entrada tenant aditiva; suite motor comparada por nombre |
+| Cotizaciones viejas en snapshot con keys viejas | los lectores resuelven vía alias; nada se migra |
+| Configs con JSON libre malformado | parse defensivo + fallback legacy |
+| Los 18 smoke tests rotos preexistentes ensucian la señal | comparar por nombre contra baseline, como en A/C/D |
+| Base dev con Wati viva | cliente de prueba sin teléfono, siempre |
+
 ---
 
 ## Secuencia de ramas
