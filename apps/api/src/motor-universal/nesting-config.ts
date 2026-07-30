@@ -1,9 +1,20 @@
-// FRONTERA-NESTING: este archivo entero es frontera (pasos-componibles-diseno
-// §3.4 Tipo B). Resuelve la config de nesting POR FAMILIA (márgenes,
-// separación, panelizado, algoritmo): son las primitivas de geometría del
-// sistema, no datos de la declaración. Se parametriza recién en la Etapa B.
+// FRONTERA-NESTING: este archivo resuelve la config de nesting por familia
+// (pasos-componibles-diseno §3.4 Tipo B).
+//
+// Etapa A tardía: lo que era una TABLA por familia — de qué campo salen los
+// márgenes, con qué valores arrancan, cuánta separación por defecto, si la
+// separación es aire o demasía — ya no vive acá: lo declara la familia y se
+// lee con los helpers de familias.ts. Lo que queda son las primitivas de
+// geometría (panelizado, pliego automático, algoritmo).
 import type { PasoCargado, JobContext } from './tipos';
 import type { CostingStrategyKind } from '../productos-servicios/nesting/costing';
+import {
+  campoSeparacionMaquinaDeFamilia,
+  margenesNestingDefaultDeFamilia,
+  origenMargenesNestingDeFamilia,
+  separacionEsLiteral,
+  separacionNestingDefaultDeFamilia,
+} from '../productos-servicios/pasos/familias';
 
 export type NestingAlgorithmPolicy =
   | 'auto'
@@ -107,15 +118,18 @@ export function resolveNestingConfig(
   const nestingConfig = asRecord(params.nestingConfig);
   const maqParams = paso.maquina?.parametrosTecnicosJson ?? {};
   const materialAttrs = materialResuelto?.atributosVarianteJson ?? {};
+  // La familia declara de dónde salen sus márgenes físicos y con qué valores
+  // arranca si nadie los declara. [Etapa A: eran ifs por familia]
+  const origenMargenes = origenMargenesNestingDeFamilia(paso.familiaCodigo);
+  const fuenteMargenes: Record<string, unknown> =
+    origenMargenes.fuente === 'material' ? materialAttrs : maqParams;
   const machineMarginSource =
-    paso.familiaCodigo === 'laminado'
-      ? asRecord(maqParams.margenesDesperdicioMm)
-      : paso.familiaCodigo === 'plastificado_pouch'
-        ? uniformMargins(readNumber(materialAttrs.margenNoUsableMm) ?? 0)
-      : asRecord(maqParams.margenesNoImprimiblesMm);
+    origenMargenes.forma === 'uniforme'
+      ? uniformMargins(readNumber(fuenteMargenes[origenMargenes.campo]) ?? 0)
+      : asRecord(fuenteMargenes[origenMargenes.campo]);
   const machineMargins = normalizeMargins(
     machineMarginSource,
-    defaultMarginForFamily(paso.familiaCodigo),
+    margenesNestingDefaultDeFamilia(paso.familiaCodigo),
   );
   const overrideMargins = normalizeMargins(asRecord(nestingConfig.margins), {});
   const legacyMargins = normalizeMargins(params, {});
@@ -140,10 +154,15 @@ export function resolveNestingConfig(
       : null;
   const costingConfig = asRecord(nestingConfig.costing);
   const strategy = normalizeCostingStrategy(costingConfig.strategy);
-  const machineSheetGapMm =
-    paso.familiaCodigo === 'laminado'
-      ? readNumber(maqParams.margenEntrePliegosMm)
-      : null;
+  const campoSeparacionMaquina = campoSeparacionMaquinaDeFamilia(
+    paso.familiaCodigo,
+  );
+  const machineSheetGapMm = campoSeparacionMaquina
+    ? readNumber(maqParams[campoSeparacionMaquina])
+    : null;
+  const separacionDefault = separacionNestingDefaultDeFamilia(
+    paso.familiaCodigo,
+  );
   const legacySeparationHMm =
     readNumber(
       runtimeNestingConfig.separationHMm,
@@ -151,8 +170,8 @@ export function resolveNestingConfig(
       params.separacionEntrePiezasMm,
       params.separacionHorizontalMm,
       machineSheetGapMm,
-      defaultSeparationForFamily(paso.familiaCodigo),
-    ) ?? defaultSeparationForFamily(paso.familiaCodigo);
+      separacionDefault,
+    ) ?? separacionDefault;
   const legacySeparationVMm =
     readNumber(
       runtimeNestingConfig.separationVMm,
@@ -160,30 +179,32 @@ export function resolveNestingConfig(
       params.separacionEntrePiezasMm,
       params.separacionVerticalMm,
       machineSheetGapMm,
-      defaultSeparationForFamily(paso.familiaCodigo),
-    ) ?? defaultSeparationForFamily(paso.familiaCodigo);
+      separacionDefault,
+    ) ?? separacionDefault;
   const configuredPieceBleedMm = readNumber(
     runtimeNestingConfig.pieceBleedMm,
     nestingConfig.pieceBleedMm,
   );
   // E.1 — tier "default declarado de la familia" (FamiliaPasoDefaults):
   // runtime → config del producto → default de familia → derivado legacy.
+  // Con separación literal (pouch) el número es aire entre piezas y se usa
+  // tal cual; si no, es demasía por pieza y la separación real es el doble.
+  // [Etapa A: eran ifs de plastificado_pouch]
+  const separacionLiteral = separacionEsLiteral(paso.familiaCodigo);
   const pieceBleedMm = Math.max(
     0,
     configuredPieceBleedMm ??
       paso.defaultsFamilia?.demasiaMm ??
-      (paso.familiaCodigo === 'plastificado_pouch'
+      (separacionLiteral
         ? 0
         : Math.max(legacySeparationHMm, legacySeparationVMm) / 2),
   );
-  const separationHMm =
-    paso.familiaCodigo === 'plastificado_pouch'
-      ? Math.max(0, legacySeparationHMm)
-      : pieceBleedMm * 2;
-  const separationVMm =
-    paso.familiaCodigo === 'plastificado_pouch'
-      ? Math.max(0, legacySeparationVMm)
-      : pieceBleedMm * 2;
+  const separationHMm = separacionLiteral
+    ? Math.max(0, legacySeparationHMm)
+    : pieceBleedMm * 2;
+  const separationVMm = separacionLiteral
+    ? Math.max(0, legacySeparationVMm)
+    : pieceBleedMm * 2;
   const baseMargins = {
     leftMm: readNumber(
       runtimeMargins.leftMm,
@@ -367,32 +388,6 @@ export function resolveNestingConfig(
   };
 }
 
-function defaultMarginForFamily(familiaCodigo: string) {
-  if (familiaCodigo === 'impresion_por_hoja') {
-    return { leftMm: 5, rightMm: 5, topMm: 5, bottomMm: 5 };
-  }
-  if (familiaCodigo === 'laminado') {
-    return {
-      leftMm: 0,
-      rightMm: 0,
-      topMm: 0,
-      bottomMm: 0,
-      startMm: 0,
-      endMm: 0,
-    };
-  }
-  if (familiaCodigo === 'plastificado_pouch') {
-    return { leftMm: 0, rightMm: 0, topMm: 0, bottomMm: 0 };
-  }
-  return { leftMm: 0, rightMm: 0, topMm: 0, bottomMm: 0 };
-}
-
-function defaultSeparationForFamily(familiaCodigo: string) {
-  return familiaCodigo === 'impresion_por_area' ||
-    familiaCodigo === 'plotter_corte'
-    ? 5
-    : 0;
-}
 
 function uniformMargins(value: number) {
   const margin = Number.isFinite(value) ? Math.max(0, value) : 0;

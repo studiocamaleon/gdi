@@ -87,6 +87,7 @@ import {
 import {
   familiaMutaMedidasEnPrePasada,
   familiaSinConsumiblesMaquina,
+  magnitudTiempoDefaultDeFamilia,
   perfilCompatibleConFamilia,
   slotIgnoraMultiplicadorCaras,
 } from '../productos-servicios/pasos/familias';
@@ -5122,10 +5123,23 @@ export class MotorUniversalService {
     } | null = null,
   ): number {
     const params = (paso.paramsPasoJson ?? {}) as Record<string, unknown>;
-    const source =
+    const sourceConfigurado =
       typeof params.productivityQuantitySource === 'string'
         ? params.productivityQuantitySource
         : '';
+    // Si el modelador no eligió magnitud, la familia puede declarar la suya:
+    // montaje cuenta piezas a pegar, no las placas que consumió el nesting.
+    // 'cantidad' es lo que queda escrito cuando no se eligió nada, así que
+    // cuenta como sin elegir. [Etapa A: era un if por familia cuyo cuerpo ya
+    // existía idéntico en la rama genérica de abajo]
+    const magnitudDefaultFamilia = magnitudTiempoDefaultDeFamilia(
+      paso.familiaCodigo,
+    );
+    const source =
+      magnitudDefaultFamilia &&
+      (!sourceConfigurado || sourceConfigurado === 'cantidad')
+        ? magnitudDefaultFamilia
+        : sourceConfigurado;
 
     // Si el paso decora una personalización y su productividad es por área, la
     // magnitud es el área de esa personalización (film DTF), no las piezas
@@ -5136,18 +5150,6 @@ export class MotorUniversalService {
       (source === 'area_piezas_m2' || source === 'm2_instalados')
     ) {
       return areaPersonalizacion;
-    }
-
-    // FRONTERA-PRIMITIVA: montaje deriva el tiempo de su plan de montaje
-    // (resolverCantidadMontajeParaTiempo) — Tipo B.
-    if (
-      paso.familiaCodigo === 'montaje_sobre_sustrato' &&
-      (!source || source === 'cantidad' || source === 'cantidad_montaje')
-    ) {
-      return (
-        this.numeroPositivo(this.resolverCantidadMontajeParaTiempo(paso, jobContext)) ??
-        this.resolverCantidad(paso, jobContext, nestingDispatch, materialResuelto)
-      );
     }
 
     if (!source || source === 'cantidad') {

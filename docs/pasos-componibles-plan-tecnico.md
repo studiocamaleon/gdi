@@ -801,8 +801,10 @@ ruta/producto) con diseño propio sobre lo aprendido.
 
 Base: 51 líneas con `familiaCodigo === '<literal>'` fuera de tests, medidas
 sobre `5abc97f5` = **50 comparaciones de familia** + 1 `typeof === 'string'`.
-Tras la etapa: **43 comparaciones**, todas Tipo B bajo marcador
-`FRONTERA-NESTING` / `FRONTERA-PRIMITIVA`. Puerta para PRs futuros:
+Tras la etapa: **43 comparaciones** bajo marcador `FRONTERA-NESTING` /
+`FRONTERA-PRIMITIVA`. Una segunda pasada (2026-07-30, ver más abajo) encontró
+que 12 de esas no eran Tipo B y las movió: hoy quedan **32**. Puerta para PRs
+futuros:
 
 ```bash
 grep -rnE "familiaCodigo\s*===\s*'[a-z_]+'" apps/api/src --include='*.ts' | grep -v __tests__
@@ -830,7 +832,7 @@ que no declara el campo conserva el fallthrough del if original.
 
 | Cluster | Refs | Marcador |
 |---|---|---|
-| `nesting-config.ts` — config por familia (márgenes, separación, panelizado, algoritmo) | 16 | archivo entero `FRONTERA-NESTING` |
+| `nesting-config.ts` — config por familia (márgenes, separación, panelizado, algoritmo) | 16 → **5** | archivo entero `FRONTERA-NESTING` |
 | `nesting-dispatcher.ts` — ruteo a runners + casos hoja | 9 | archivo entero `FRONTERA-NESTING` |
 | motor: guards d.0–d.1 (laminado, pouch, hoja, área, montaje, pre_prensa cortan sin layout) | 6 | `FRONTERA-NESTING` en el bloque |
 | motor: `debeCalcularNestingLaminado` | 1 | `FRONTERA-NESTING` |
@@ -838,11 +840,44 @@ que no declara el campo conserva el fallthrough del if original.
 | motor: layout de ojales (traza + params) | 1 | `FRONTERA-PRIMITIVA` |
 | motor: guillotina — runMin por cortes + perfil por gramaje | 2 | `FRONTERA-PRIMITIVA` |
 | motor: hoja — cadena color→caras→gramaje de selección de perfil | 1 | `FRONTERA-PRIMITIVA` |
-| motor: montaje — tiempo desde el plan de montaje | 1 | `FRONTERA-PRIMITIVA` |
+| motor: montaje — tiempo desde el plan de montaje | 1 → **0** | `FRONTERA-PRIMITIVA` |
 | config-pasos: plotter sobre impresora híbrida exige corte integrado (ruta + candidatas M-2) | 2 | `FRONTERA-PRIMITIVA` |
 
 (La suma de comparaciones por línea difiere de la de clusters porque varias
 líneas comparten un if.)
+
+### Segunda pasada Tipo A (2026-07-30) — 12 comparaciones más
+
+Al analizar las 10 familias cableadas apareció que la clasificación de la
+Etapa A se pasó de conservadora: parte de lo marcado como frontera no era una
+primitiva de cálculo sino **una tabla de números o un nombre de campo**. El
+caso testigo: la rama de `montaje_sobre_sustrato` en `resolverMagnitudTiempo`
+tenía el **cuerpo idéntico** a la rama genérica `cantidad_montaje` veinte
+líneas más abajo — once líneas de código cuya única función era cambiar un
+valor por defecto, anotadas como Tipo B.
+
+| Estaba en | Era | Ahora lo declara |
+|---|---|---|
+| `nesting-config` `defaultMarginForFamily` (3 ifs) | tabla de márgenes iniciales por familia | `margenesNestingDefault` |
+| `nesting-config` `defaultSeparationForFamily` (2 ifs) | 5 mm para área y plotter, 0 para el resto | `separacionNestingDefaultMm` |
+| `nesting-config` `machineMarginSource` (2 ifs) | laminado lee `margenesDesperdicioMm`; pouch lee `margenNoUsableMm` **del material**, uniforme | `origenMargenesNesting {fuente, campo, forma}` |
+| `nesting-config` `machineSheetGapMm` (1 if) | laminado toma la separación de `margenEntrePliegosMm` | `campoSeparacionMaquina` |
+| `nesting-config` semántica de separación (3 ifs) | en pouch el número es aire literal, no demasía ×2 | `semanticaSeparacion: 'literal'` |
+| motor `resolverMagnitudTiempo` (1 if) | montaje cuenta piezas a pegar, no placas consumidas | `magnitudTiempoDefault` |
+
+Campos nuevos en `DefinicionFamilia`, con lectores en familias.ts
+(`origenMargenesNestingDeFamilia`, `campoSeparacionMaquinaDeFamilia`,
+`margenesNestingDefaultDeFamilia`, `separacionNestingDefaultDeFamilia`,
+`separacionEsLiteral`, `magnitudTiempoDefaultDeFamilia`). Una familia que no
+declara el campo conserva el fallthrough del if original — y como los lectores
+usan `resolverFamilia`, una familia de tenant puede declararlos igual.
+
+**Verificación.** `tsc` limpio; suite completa 1.204 pasan y fallan los mismos
+18 preexistentes de motor.spec, test por nombre contra `git stash`. Se
+agregaron 8 casos a `nesting-config.spec` que fijan estas semánticas
+(laminado, pouch, defaults por familia); los 23 casos del archivo **pasan
+igual contra el código viejo y el nuevo**, que es la prueba de que la ruta
+declarativa da los mismos números que los ifs.
 
 ### Verificación de la etapa
 

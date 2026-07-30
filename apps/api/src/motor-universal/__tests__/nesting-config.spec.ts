@@ -421,4 +421,139 @@ describe('resolveNestingConfig', () => {
 
     expect(config.panelizado.maxPanelWidthMm).toBe(1355);
   });
+
+  // ── Etapa A: de dónde salen márgenes y separación lo declara la familia ──
+  // Estos casos fijan el comportamiento que antes vivía en los ifs por
+  // familia de nesting-config (defaultMarginForFamily, defaultSeparation-
+  // ForFamily, el origen del margen y la semántica de la separación).
+
+  it('laminado lee el desperdicio de la laminadora, no el área no imprimible', () => {
+    const config = resolveNestingConfig(
+      paso({
+        familiaCodigo: 'laminado',
+        maquina: {
+          id: 'maq-1',
+          codigo: 'M1',
+          nombre: 'Laminadora',
+          plantilla: 'laminadora_bopp_rollo',
+          parametrosTecnicosJson: {
+            // El campo genérico existe y debe ser IGNORADO por laminado.
+            margenesNoImprimiblesMm: { izq: 20, der: 20, sup: 20, inf: 20 },
+            margenesDesperdicioMm: { izq: 3, der: 3, sup: 0, inf: 0 },
+            margenEntrePliegosMm: 8,
+          },
+        },
+      }),
+      jobContext,
+      null,
+    );
+
+    // El paso entre pliegos (8) alimenta la separación → demasía 4 por lado,
+    // y el margen exterior es el desperdicio de la máquina más esa demasía.
+    expect(config.pieceBleedMm).toBe(4);
+    expect(config.separationHMm).toBe(8);
+    expect(config.margins.leftMm).toBe(3 + 4);
+    expect(config.margins.rightMm).toBe(3 + 4);
+    // Y no los 20 mm del campo genérico, que laminado ignora.
+    expect(config.margins.topMm).toBe(0 + 4);
+  });
+
+  it('laminado sin datos de máquina arranca con todo en cero', () => {
+    const config = resolveNestingConfig(
+      paso({ familiaCodigo: 'laminado' }),
+      jobContext,
+      null,
+    );
+
+    expect(config.margins).toMatchObject({
+      leftMm: 0,
+      rightMm: 0,
+      topMm: 0,
+      bottomMm: 0,
+      startMm: 0,
+      endMm: 0,
+    });
+  });
+
+  it('el pouch toma el borde sellado del MATERIAL, igual en los 4 lados', () => {
+    const config = resolveNestingConfig(
+      paso({
+        familiaCodigo: 'plastificado_pouch',
+        maquina: {
+          id: 'maq-1',
+          codigo: 'M1',
+          nombre: 'Plastificadora',
+          plantilla: 'plastificadora',
+          parametrosTecnicosJson: {
+            margenesNoImprimiblesMm: { izq: 9, der: 9, sup: 9, inf: 9 },
+          },
+        },
+      }),
+      jobContext,
+      { atributosVarianteJson: { anchoMm: 216, largoMm: 303, margenNoUsableMm: 4 } },
+    );
+
+    expect(config.margins).toMatchObject({
+      leftMm: 4,
+      rightMm: 4,
+      topMm: 4,
+      bottomMm: 4,
+    });
+  });
+
+  it('en el pouch la separación es aire literal, no demasía por pieza', () => {
+    const config = resolveNestingConfig(
+      paso({
+        familiaCodigo: 'plastificado_pouch',
+        paramsPasoJson: { separacionEntrePiezasMm: 6 },
+      }),
+      jobContext,
+      { atributosVarianteJson: { anchoMm: 216, largoMm: 303 } },
+    );
+
+    // Literal: los 6 mm se usan tal cual y no se agranda la pieza.
+    expect(config.pieceBleedMm).toBe(0);
+    expect(config.separationHMm).toBe(6);
+    expect(config.separationVMm).toBe(6);
+  });
+
+  it('la misma separación en gran formato es demasía y vale el doble', () => {
+    const config = resolveNestingConfig(
+      paso({
+        familiaCodigo: 'impresion_por_area',
+        paramsPasoJson: { separacionEntrePiezasMm: 6 },
+      }),
+      jobContext,
+      null,
+    );
+
+    expect(config.pieceBleedMm).toBe(3);
+    expect(config.separationHMm).toBe(6);
+  });
+
+  it('gran formato y plotter arrancan con 5 mm de separación', () => {
+    for (const familiaCodigo of ['impresion_por_area', 'plotter_corte']) {
+      const config = resolveNestingConfig(
+        paso({ familiaCodigo }),
+        jobContext,
+        null,
+      );
+      expect(config.pieceBleedMm).toBe(2.5);
+    }
+  });
+
+  it('impresión por hoja arranca con 5 mm de margen alrededor', () => {
+    const config = resolveNestingConfig(
+      paso({ familiaCodigo: 'impresion_por_hoja' }),
+      jobContext,
+      null,
+    );
+
+    expect(config.margins).toMatchObject({
+      leftMm: 5,
+      rightMm: 5,
+      topMm: 5,
+      bottomMm: 5,
+    });
+  });
 });

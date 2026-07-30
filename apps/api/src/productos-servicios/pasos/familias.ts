@@ -342,6 +342,9 @@ const impresion_por_hoja: DefinicionFamilia = {
   permiteSlotsAdicionales: false,
   // v3.0: solo IMPRESORA_LASER (INYECCION_TINTA descartada según doc §4).
   plantillasCompatibles: ['IMPRESORA_LASER'],
+  // Pinza y borde no imprimible: 5 mm alrededor si la máquina no los declara.
+  // [Etapa A: era `defaultMarginForFamily`]
+  margenesNestingDefault: { leftMm: 5, rightMm: 5, topMm: 5, bottomMm: 5 },
   inputsRequeridos: ['cantidad', 'caras'],
   outputsCanonicos: [
     'pliegos_calculados',
@@ -411,6 +414,9 @@ const impresion_por_area: DefinicionFamilia = {
   // SUBLIMACION|DTF_*) + .geometria (ROLLO|MESA_EXTENSORA).
   // PLOTTER_CAD también aplica para impresión técnica/CAD por área.
   plantillasCompatibles: ['IMPRESORA_GRAN_FORMATO_POR_AREA', 'PLOTTER_CAD'],
+  // Gran formato: 5 mm de aire entre piezas si nadie configuró otra cosa.
+  // [Etapa A: era `defaultSeparationForFamily`]
+  separacionNestingDefaultMm: 5,
   inputsRequeridos: ['piezas'], // gap H7: lista de piezas
   outputsCanonicos: [
     'm2_calculados',
@@ -618,6 +624,9 @@ const plotter_corte: DefinicionFamilia = {
   // de corte y no factura tinta. [Etapa A]
   tiposPerfilCompatibles: ['CORTE', 'MIXTO'],
   sinConsumiblesMaquina: true,
+  // Gran formato: 5 mm de aire entre piezas si nadie configuró otra cosa.
+  // [Etapa A: era `defaultSeparationForFamily`]
+  separacionNestingDefaultMm: 5,
   inputsRequeridos: ['piezas'],
   outputsCanonicos: ['piezas_cortadas', 'metros_lineales_corte'],
   validaciones: [],
@@ -817,6 +826,21 @@ const laminado: DefinicionFamilia = {
   ],
   permiteSlotsAdicionales: false,
   plantillasCompatibles: ['LAMINADORA_BOPP_ROLLO'],
+  // El film se desperdicia en los bordes, no hay "área no imprimible": la
+  // laminadora declara su desperdicio en su propio campo, y el paso entre
+  // pliegos es la separación. Sin datos de máquina, todo en cero: el film
+  // arranca y termina pegado al pliego.
+  // [Etapa A: eran tres if por familia en nesting-config]
+  origenMargenesNesting: { fuente: 'maquina', campo: 'margenesDesperdicioMm' },
+  campoSeparacionMaquina: 'margenEntrePliegosMm',
+  margenesNestingDefault: {
+    leftMm: 0,
+    rightMm: 0,
+    topMm: 0,
+    bottomMm: 0,
+    startMm: 0,
+    endMm: 0,
+  },
   inputsRequeridos: [],
   outputsCanonicos: ['piezas_laminadas', 'metros_lineales_film'],
   validaciones: [],
@@ -847,6 +871,17 @@ const plastificado_pouch: DefinicionFamilia = {
   ],
   permiteSlotsAdicionales: false,
   plantillasCompatibles: [],
+  // El pouch es un formato cerrado: el borde sellado no sirve y lo declara el
+  // MATERIAL (un solo número para los cuatro lados), no la máquina. Y acá no
+  // hay refile: la separación que carga el modelador es aire entre piezas, se
+  // usa tal cual. [Etapa A: eran cuatro if por familia en nesting-config]
+  origenMargenesNesting: {
+    fuente: 'material',
+    campo: 'margenNoUsableMm',
+    forma: 'uniforme',
+  },
+  margenesNestingDefault: { leftMm: 0, rightMm: 0, topMm: 0, bottomMm: 0 },
+  semanticaSeparacion: 'literal',
   inputsRequeridos: ['cantidad'],
   outputsCanonicos: ['piezas_laminadas'],
   validaciones: [],
@@ -1225,6 +1260,10 @@ const montaje_sobre_sustrato: DefinicionFamilia = {
   ],
   permiteSlotsAdicionales: true,
   plantillasCompatibles: [],
+  // Montar 200 piezas lleva 200 operaciones aunque salgan de 3 placas: el
+  // tiempo cuenta piezas a pegar, no el sustrato que consumió el nesting.
+  // [Etapa A: era un if en motor cuyo cuerpo ya existía genérico]
+  magnitudTiempoDefault: 'cantidad_montaje',
   inputsRequeridos: [],
   outputsCanonicos: [
     'piezas_montadas',
@@ -1970,6 +2009,65 @@ export function slotIgnoraMultiplicadorCaras(
 export function familiaSinConsumiblesMaquina(codigo: string): boolean {
   const familia = resolverFamilia(codigo);
   return familia?.sinConsumiblesMaquina === true;
+}
+
+/**
+ * De dónde sale el margen físico que el sustrato no puede usar. Una familia
+ * que no lo declara lee `margenesNoImprimiblesMm` de la máquina — el mismo
+ * fallthrough que tenía el if. [Etapa A]
+ */
+export function origenMargenesNestingDeFamilia(
+  codigo: string,
+): NonNullable<DefinicionFamilia['origenMargenesNesting']> {
+  return (
+    resolverFamilia(codigo)?.origenMargenesNesting ?? {
+      fuente: 'maquina',
+      campo: 'margenesNoImprimiblesMm',
+    }
+  );
+}
+
+/** Campo de la máquina que aporta la separación entre piezas, si la familia
+ *  declara uno. [Etapa A] */
+export function campoSeparacionMaquinaDeFamilia(
+  codigo: string,
+): string | null {
+  return resolverFamilia(codigo)?.campoSeparacionMaquina ?? null;
+}
+
+/** Márgenes de nesting por defecto de la familia; cero si no declara. [Etapa A] */
+export function margenesNestingDefaultDeFamilia(
+  codigo: string,
+): NonNullable<DefinicionFamilia['margenesNestingDefault']> {
+  return (
+    resolverFamilia(codigo)?.margenesNestingDefault ?? {
+      leftMm: 0,
+      rightMm: 0,
+      topMm: 0,
+      bottomMm: 0,
+    }
+  );
+}
+
+/** Separación entre piezas por defecto de la familia, en mm. [Etapa A] */
+export function separacionNestingDefaultDeFamilia(codigo: string): number {
+  return resolverFamilia(codigo)?.separacionNestingDefaultMm ?? 0;
+}
+
+/**
+ * ¿La separación configurada es aire literal entre piezas (pouch) en vez de
+ * demasía por pieza? Ver `semanticaSeparacion` en types.ts. [Etapa A]
+ */
+export function separacionEsLiteral(codigo: string): boolean {
+  return resolverFamilia(codigo)?.semanticaSeparacion === 'literal';
+}
+
+/** Magnitud que alimenta la productividad cuando el modelador no eligió una.
+ *  [Etapa A] */
+export function magnitudTiempoDefaultDeFamilia(
+  codigo: string,
+): string | null {
+  return resolverFamilia(codigo)?.magnitudTiempoDefault ?? null;
 }
 
 /**

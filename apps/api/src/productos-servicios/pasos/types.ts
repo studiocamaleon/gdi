@@ -396,6 +396,53 @@ export interface DefinicionFamilia {
    *  integrado corta, no imprime. [Etapa A: era un if en motor] */
   sinConsumiblesMaquina?: boolean;
 
+  // --- Nesting: de dónde salen los números (Etapa A tardía) ---
+  /**
+   * De dónde sale el margen físico que el sustrato NO puede usar.
+   *
+   * Por defecto es la máquina, campo `margenesNoImprimiblesMm`. Laminado mide
+   * su desperdicio en otro campo, y en el pouch el borde sellado lo trae el
+   * material, no la máquina: un escalar que vale para los cuatro lados.
+   * [Etapa A: eran dos if por familia en nesting-config]
+   */
+  origenMargenesNesting?: {
+    fuente: 'maquina' | 'material';
+    campo: string;
+    /** El campo trae un escalar y se aplica igual a los 4 lados. */
+    forma?: 'uniforme';
+  };
+  /** Campo de `parametrosTecnicosJson` que aporta la separación entre piezas
+   *  cuando nadie la configuró — laminado usa el paso entre pliegos de la
+   *  laminadora. [Etapa A: era un if por familia en nesting-config] */
+  campoSeparacionMaquina?: string;
+  /** Márgenes a usar cuando ni la máquina ni el material los declaran.
+   *  [Etapa A: era la tabla `defaultMarginForFamily`] */
+  margenesNestingDefault?: {
+    leftMm: number;
+    rightMm: number;
+    topMm: number;
+    bottomMm: number;
+    startMm?: number;
+    endMm?: number;
+  };
+  /** Separación entre piezas por defecto, en mm.
+   *  [Etapa A: era la tabla `defaultSeparationForFamily`] */
+  separacionNestingDefaultMm?: number;
+  /**
+   * Cómo se interpreta el número de separación que cargó el modelador.
+   *
+   * `demasia` (default) — es demasía por pieza: cada pieza se agranda y la
+   * separación real entre dos vecinas es el doble.
+   * `literal` — es aire entre piezas y se usa tal cual, sin demasía. Es el
+   * caso del pouch: ahí no hay refile, las piezas se separan y listo.
+   * [Etapa A: eran tres if de plastificado_pouch en nesting-config]
+   */
+  semanticaSeparacion?: 'literal' | 'demasia';
+  /** Magnitud que alimenta la productividad cuando el modelador no eligió una.
+   *  Montaje cuenta piezas a pegar, no las placas que consumió.
+   *  [Etapa A: era un if en motor cuyo cuerpo ya existía genérico] */
+  magnitudTiempoDefault?: string;
+
   // --- Inputs / outputs ---
   /** Inputs del JobContext que la familia necesita (validaciones REQUIRES_INPUT van encima). */
   inputsRequeridos: string[];
