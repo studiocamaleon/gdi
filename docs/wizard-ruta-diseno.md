@@ -372,6 +372,22 @@ márgenes extra, dotación, multiplicadores) viven en detallado.
   > configurada ÍNTEGRAMENTE por cards — ritmo 80 → Aplicar → avanzó a
   > "¿Quién lo cobra?" → centro → ✓ → guardada (DB verificada); Bordado
   > con defaults mostró la card "✓ Listo" con cero preguntas.
+  >
+  > **v2 (2026-07-30, feedback del usuario)** — tres correcciones de
+  > fondo: (1) el guiado pasó de embebido a **wizard FLOTANTE** (Sheet
+  > como el de pasos) que recorre TODA la ruta con chips por paso,
+  > auto-abre en alternativas vírgenes y guarda al avanzar; el detallado
+  > vuelve a ser la página (queda hasta que el guiado lo reemplace);
+  > (2) las cards son APILADAS y persistentes (snapshot al entrar al
+  > paso, ✓ en vivo): la de candidatas ya no se resuelve al primer click
+  > — multi-select que permite seguir sumando máquinas + POR CANDIDATA
+  > perfil default, preferida y modos de color permitidos (paridad);
+  > (3) la card de material es NATIVA: modo de selección en humano +
+  > buscador de MP compatible (filtros del slot) + variante para fijo /
+  > candidatos para elegibles — ya no obliga a ir al detallado (sólo
+  > pasos extra y regla condicional derivan). Objetivo declarado del
+  > usuario: **paridad total para que el guiado REEMPLACE al detallado**;
+  > el detallado se mantiene mientras se prueba todo.
 - **E.3.3 — Las preguntas de oficio en humano**: pliego de impresión,
   panelizado y costeo del sustrato salen de Avanzado hacia cards guiadas
   (los 3 grandes del censo; márgenes extra quedan en detallado).

@@ -59,6 +59,7 @@ import {
   type UpsertSlotMaterialPayload,
 } from "@/lib/productos-servicios-api";
 import type {
+  FamiliaListItem,
   CatalogoFamilias,
   PasoExtra,
   ProductoDetalle,
@@ -3105,10 +3106,11 @@ export function ConfigPasosEditorView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rutaAlternativa.pasosExtras]);
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
-  // E.3.2 — el modo guiado es la puerta de entrada; "detallado" es el
-  // editor completo de siempre.
-  const [modoVista, setModoVista] = React.useState<"guiado" | "detallado">(
-    "guiado",
+  // E.3.2 v2 — el asistente guiado es un wizard FLOTANTE (feedback del
+  // usuario: no mezclar guiado y detallado en la misma vista). Abre solo
+  // cuando la alternativa está sin configurar; siempre disponible a botón.
+  const [asistenteAbierto, setAsistenteAbierto] = React.useState(
+    () => rutaAlternativa.configPasos.length === 0,
   );
   const [panelEditorPasoId, setPanelEditorPasoId] = React.useState<
     string | null
@@ -5024,15 +5026,9 @@ export function ConfigPasosEditorView({
                           <button
                             className="btn"
                             type="button"
-                            onClick={() =>
-                              setModoVista(
-                                modoVista === "guiado" ? "detallado" : "guiado",
-                              )
-                            }
+                            onClick={() => setAsistenteAbierto(true)}
                           >
-                            {modoVista === "guiado"
-                              ? "Modo detallado"
-                              : "Modo guiado"}
+                            Asistente guiado
                           </button>
                           <button
                             className="btn"
@@ -5074,65 +5070,7 @@ export function ConfigPasosEditorView({
                         </div>
                       </div>
 
-                      {modoVista === "guiado" && !noEjecutar ? (
-                        <ModoGuiadoPanel
-                          cfg={cfg}
-                          pendientes={pendientesDePaso(cfg, familia)}
-                          maquinas={maquinasCompatibles}
-                          centros={lookups.centrosCosto}
-                          pasosPrevios={rutaAlternativa.ruta.pasos
-                            .filter(
-                              (p) =>
-                                p.orden <
-                                ((paso as { orden?: number }).orden ??
-                                  Number.MAX_SAFE_INTEGER),
-                            )
-                            .map((p) => ({
-                              id: p.id,
-                              nombre:
-                                configs[p.id]?.nombreVisible?.trim() ||
-                                familiasMap.get(p.familiaCodigo)?.nombre ||
-                                humanizeCode(p.familiaCodigo),
-                              capacidades: (
-                                familiasMap.get(p.familiaCodigo)
-                                  ?.capacidades ?? []
-                              ).filter((c) => c.heredable),
-                            }))}
-                          herenciaOrigen={leerOrigenHerencia(
-                            jsonTexts[paso.id]?.mecanismo ?? "",
-                          )}
-                          onPatch={(patch) => updateConfig(paso.id, patch)}
-                          onParams={(patch) => updateStepParams(paso.id, patch)}
-                          onHerencia={(origen) =>
-                            setJsonTexts((prev) => ({
-                              ...prev,
-                              [paso.id]: {
-                                ...(prev[paso.id] ?? {
-                                  params: "",
-                                  mecanismo: "",
-                                }),
-                                mecanismo: escribirOrigenHerencia(
-                                  prev[paso.id]?.mecanismo ?? "",
-                                  origen,
-                                ),
-                              },
-                            }))
-                          }
-                          onDetallado={() => setModoVista("detallado")}
-                          onGuardar={() => guardarPaso(paso.id)}
-                          guardando={guardando === paso.id}
-                          tieneCambios={pasoTieneCambios}
-                          configExistente={Boolean(configExistente)}
-                        />
-                      ) : null}
-                      <div
-                        className="config-step-content pasos-sections"
-                        style={
-                          modoVista === "guiado" && !noEjecutar
-                            ? { display: "none" }
-                            : undefined
-                        }
-                      >
+                      <div className="config-step-content pasos-sections">
                         <section className="section-block open">
                           <div className="sb-head">
                             <span className="num">T</span>
@@ -9355,15 +9293,62 @@ export function ConfigPasosEditorView({
           )}
         </main>
       </div>
+      {asistenteAbierto ? (
+        <AsistenteGuiado
+          pasos={pasosUnificados.map((id) => {
+            const base = rutaAlternativa.ruta.pasos.find((p) => p.id === id);
+            const extra = pasosExtras.find((e) => e.id === id);
+            const familiaCodigo =
+              base?.familiaCodigo ?? extra?.familiaCodigo ?? "";
+            return {
+              id,
+              familiaCodigo,
+              nombre:
+                configs[id]?.nombreVisible?.trim() ||
+                familiasMap.get(familiaCodigo)?.nombre ||
+                humanizeCode(familiaCodigo),
+              esExtra: Boolean(extra),
+              orden: base?.orden ?? null,
+            };
+          })}
+          configs={configs}
+          familiasMap={familiasMap}
+          lookups={lookups}
+          jsonTexts={jsonTexts}
+          onPatch={(pasoId, patch) => updateConfig(pasoId, patch)}
+          onParams={(pasoId, patch) => updateStepParams(pasoId, patch)}
+          onHerencia={(pasoId, origen) =>
+            setJsonTexts((prev) => ({
+              ...prev,
+              [pasoId]: {
+                ...(prev[pasoId] ?? { params: "", mecanismo: "" }),
+                mecanismo: escribirOrigenHerencia(
+                  prev[pasoId]?.mecanismo ?? "",
+                  origen,
+                ),
+              },
+            }))
+          }
+          onAddSlotFamilia={(pasoId, slotCodigo) =>
+            addSlotFromFamilia(pasoId, slotCodigo)
+          }
+          onGuardarPaso={(pasoId) => guardarPaso(pasoId)}
+          guardando={guardando}
+          tieneCambios={(pasoId) => hasUnsavedChanges(pasoId)}
+          onCerrar={() => setAsistenteAbierto(false)}
+        />
+      ) : null}
     </div>
   );
 }
 
 
-// ─── E.3.2 — Modo guiado: las question-cards del motor de pendientes ───
-// Recorre los pendientes de a uno; cada card resuelve UN pendiente
-// escribiendo en el mismo draft que usa el editor detallado. Los casos
-// ricos (material, grilla condicional) derivan al detallado.
+// ─── E.3.2 v2 — Asistente guiado FLOTANTE (paridad con el detallado) ───
+// Sheet como el wizard de pasos: recorre la ruta paso a paso y muestra las
+// question-cards del motor de pendientes APILADAS (no desaparecen al
+// resolverse: quedan con ✓ y se pueden seguir editando — feedback del
+// usuario sobre las candidatas). Guarda cada paso al avanzar. El objetivo
+// es paridad total con el modo detallado para poder reemplazarlo.
 
 const PREGUNTA_GUIADA: Record<string, string> = {
   maquina: "¿En qué máquina se hace?",
@@ -9379,363 +9364,847 @@ const PREGUNTA_GUIADA: Record<string, string> = {
   herencia_origen: "¿De qué paso hereda la cantidad?",
 };
 
-function ModoGuiadoPanel({
-  cfg,
-  pendientes,
-  maquinas,
-  centros,
-  pasosPrevios,
-  herenciaOrigen,
+interface PasoAsistente {
+  id: string;
+  nombre: string;
+  familiaCodigo: string;
+  esExtra: boolean;
+  orden: number | null;
+}
+
+function AsistenteGuiado({
+  pasos,
+  configs,
+  familiasMap,
+  lookups,
+  jsonTexts,
   onPatch,
   onParams,
   onHerencia,
-  onDetallado,
-  onGuardar,
+  onAddSlotFamilia,
+  onGuardarPaso,
   guardando,
   tieneCambios,
-  configExistente,
+  onCerrar,
 }: {
-  cfg: UpsertConfigPasoPayload;
-  pendientes: PendientePaso[];
-  maquinas: Array<{
-    id: string;
-    nombre: string;
-    perfilesOperativos: Array<{ id: string; nombre: string }>;
-  }>;
-  centros: Array<{ id: string; nombre: string }>;
-  pasosPrevios: Array<{
-    id: string;
-    nombre: string;
-    capacidades: Array<{ key: string; nombre: string; heredable: boolean }>;
-  }>;
-  herenciaOrigen: Partial<OrigenHerencia> | null;
-  onPatch: (patch: Partial<UpsertConfigPasoPayload>) => void;
-  onParams: (patch: Record<string, unknown>) => void;
-  onHerencia: (origen: OrigenHerencia | null) => void;
-  onDetallado: () => void;
-  onGuardar: () => void;
-  guardando: boolean;
-  tieneCambios: boolean;
-  configExistente: boolean;
+  pasos: PasoAsistente[];
+  configs: Record<string, UpsertConfigPasoPayload>;
+  familiasMap: Map<string, FamiliaListItem>;
+  lookups: LookupsConfigPaso;
+  jsonTexts: Record<string, { params: string; mecanismo: string }>;
+  onPatch: (pasoId: string, patch: Partial<UpsertConfigPasoPayload>) => void;
+  onParams: (pasoId: string, patch: Record<string, unknown>) => void;
+  onHerencia: (pasoId: string, origen: OrigenHerencia | null) => void;
+  onAddSlotFamilia: (pasoId: string, slotCodigo: string) => void;
+  onGuardarPaso: (pasoId: string) => Promise<void>;
+  guardando: string | null;
+  tieneCambios: (pasoId: string) => boolean;
+  onCerrar: () => void;
 }) {
-  const clave = (pend: PendientePaso) => `${pend.tipo}:${pend.slotCodigo ?? ""}`;
-  const [omitidos, setOmitidos] = React.useState<Set<string>>(new Set());
-  // Inputs con Aplicar explícito: si escribieran directo al draft, la card
-  // desaparecería en la primera tecla válida.
-  const [ritmoTexto, setRitmoTexto] = React.useState("");
-  const [tiempoTexto, setTiempoTexto] = React.useState("");
-  const [herenciaPasoSel, setHerenciaPasoSel] = React.useState<string>("");
-  const [herenciaCapSel, setHerenciaCapSel] = React.useState<string>(
-    "unidades_procesadas",
-  );
+  const [indice, setIndice] = React.useState(0);
+  const pasoActual = pasos[indice];
+  const cfg = pasoActual ? configs[pasoActual.id] : undefined;
+  const familia = pasoActual
+    ? familiasMap.get(pasoActual.familiaCodigo)
+    : undefined;
 
-  const visibles = pendientes.filter((pend) => !omitidos.has(clave(pend)));
-  const actual = visibles[0] ?? null;
-  const omitidosPresentes = pendientes.filter((pend) =>
-    omitidos.has(clave(pend)),
-  );
+  // Snapshot de cards AL ENTRAR al paso: así una card no desaparece a
+  // mitad de edición; el estado ✓ se calcula en vivo.
+  const [cards, setCards] = React.useState<PendientePaso[]>([]);
+  React.useEffect(() => {
+    if (pasoActual && configs[pasoActual.id]) {
+      setCards(
+        pendientesDePaso(
+          configs[pasoActual.id],
+          familiasMap.get(pasoActual.familiaCodigo),
+        ),
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [indice, pasoActual?.id]);
 
-  const cardStyle: React.CSSProperties = {
-    border: "1px solid var(--hairline, #e6e2dc)",
-    borderRadius: 12,
-    padding: "18px 20px",
-    display: "flex",
-    flexDirection: "column",
-    gap: 12,
-    background: "var(--surface-1, #fff)",
-    maxWidth: 640,
-  };
+  const vivos = React.useMemo(
+    () => (cfg ? pendientesDePaso(cfg, familia) : []),
+    [cfg, familia],
+  );
+  const claveDe = (pend: PendientePaso) =>
+    `${pend.tipo}:${pend.slotCodigo ?? ""}`;
+  const vivosSet = new Set(vivos.map(claveDe));
+
   const notaStyle: React.CSSProperties = {
     fontSize: 12.5,
     color: "var(--muted-text, #6e6e76)",
   };
+  const cardStyle: React.CSSProperties = {
+    border: "1px solid var(--hairline, #e6e2dc)",
+    borderRadius: 12,
+    padding: "16px 18px",
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+  };
 
-  const maquinaSel = maquinas.find((m) => m.id === cfg.maquinaM1Id) ?? null;
+  const avanzar = async () => {
+    if (!pasoActual) return;
+    if (tieneCambios(pasoActual.id)) await onGuardarPaso(pasoActual.id);
+    if (indice >= pasos.length - 1) onCerrar();
+    else setIndice(indice + 1);
+  };
+
+  if (!pasoActual || !cfg) return null;
 
   return (
-    <div
-      className="config-step-content"
-      style={{ display: "flex", flexDirection: "column", gap: 14 }}
-    >
-      {actual ? (
-        <div style={cardStyle}>
-          <div style={{ fontSize: 12, color: "var(--muted-text, #6e6e76)" }}>
-            {visibles.length === 1
-              ? "Última pregunta"
-              : `${visibles.length} preguntas pendientes`}
-            {actual.bloqueante ? "" : " · esta es opcional"}
+    <Sheet open disablePointerDismissal onOpenChange={(o) => !o && onCerrar()}>
+      <SheetContent
+        className="flex w-full flex-col gap-0"
+        style={{ maxWidth: 760 }}
+      >
+        <SheetHeader
+          style={{ padding: "18px 24px 10px", borderBottom: "1px solid var(--hairline, #eee)" }}
+        >
+          <SheetTitle>Asistente de configuración</SheetTitle>
+          <SheetDescription>
+            Recorre los pasos de la ruta y pregunta sólo lo que falta; lo que
+            el paso ya declara no se vuelve a preguntar.
+          </SheetDescription>
+          <div
+            style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}
+          >
+            {pasos.map((paso, i) => {
+              const pend = pendientesDePaso(
+                configs[paso.id],
+                familiasMap.get(paso.familiaCodigo),
+              );
+              const bloq = pend.filter((x) => x.bloqueante).length;
+              return (
+                <button
+                  key={paso.id}
+                  type="button"
+                  className="btn"
+                  style={{
+                    fontSize: 12,
+                    opacity: i === indice ? 1 : 0.65,
+                    fontWeight: i === indice ? 650 : 400,
+                  }}
+                  onClick={() => setIndice(i)}
+                >
+                  {bloq === 0 ? "✓ " : `${bloq} · `}
+                  {paso.nombre}
+                </button>
+              );
+            })}
           </div>
-          <div style={{ fontSize: 18, fontWeight: 650 }}>
-            {actual.tipo === "material_slot"
-              ? `¿Qué ${actual.etiqueta} usa?`
-              : (PREGUNTA_GUIADA[actual.tipo] ?? actual.etiqueta)}
+        </SheetHeader>
+
+        <div
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            padding: "18px 24px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 14,
+          }}
+        >
+          <div style={{ fontSize: 20, fontWeight: 700 }}>
+            {pasoActual.nombre}
           </div>
-          <div style={notaStyle}>{actual.motivo}</div>
 
-          {actual.tipo === "maquina" ? (
-            <HumanSelect
-              value={cfg.maquinaM1Id ?? ""}
-              onValueChange={(id) => {
-                const maq = maquinas.find((m) => m.id === id);
-                onPatch({
-                  maquinaM1Id: id || null,
-                  perfilM1Id: maq?.perfilesOperativos[0]?.id ?? null,
-                  centroCostoId: null,
-                });
-              }}
-              options={maquinas.map((m) => ({ value: m.id, label: m.nombre }))}
-              placeholder="Elegir máquina"
-            />
-          ) : null}
-
-          {actual.tipo === "perfil" && maquinaSel ? (
-            <HumanSelect
-              value={cfg.perfilM1Id ?? ""}
-              onValueChange={(id) => onPatch({ perfilM1Id: id || null })}
-              options={maquinaSel.perfilesOperativos.map((perfil) => ({
-                value: perfil.id,
-                label: perfil.nombre,
-              }))}
-              placeholder="Elegir perfil"
-            />
-          ) : null}
-
-          {actual.tipo === "candidatas" ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {maquinas.map((m) => {
-                const seleccionadas = cfg.maquinasCandidatas ?? [];
-                const activa = seleccionadas.some(
-                  (candidata) => candidata.maquinaId === m.id,
-                );
-                return (
-                  <Button
-                    key={m.id}
-                    type="button"
-                    variant={activa ? "default" : "outline"}
-                    size="sm"
-                    style={{ justifyContent: "flex-start" }}
-                    onClick={() => {
-                      const restantes = activa
-                        ? seleccionadas.filter(
-                            (candidata) => candidata.maquinaId !== m.id,
-                          )
-                        : [
-                            ...seleccionadas,
-                            {
-                              maquinaId: m.id,
-                              perfilDefaultId:
-                                m.perfilesOperativos[0]?.id ?? null,
-                              modoColorAllowedModes: [],
-                              esPreferida: seleccionadas.length === 0,
-                              orden: seleccionadas.length,
-                            },
-                          ];
-                      onPatch({ maquinasCandidatas: restantes });
-                    }}
-                  >
-                    {activa ? "✓ " : ""}
-                    {m.nombre}
-                  </Button>
-                );
-              })}
+          {cards.length === 0 ? (
+            <div style={cardStyle}>
+              <div style={{ fontSize: 17, fontWeight: 650, color: "#2e7d32" }}>
+                ✓ Listo para cotizar
+              </div>
               <div style={notaStyle}>
-                La primera que marques queda como preferida; se afina en modo
-                detallado si hace falta.
+                Todo sale de lo que el paso ya declara (defaults, estación,
+                activación). Cualquier ajuste fino queda en el editor.
               </div>
             </div>
-          ) : null}
-
-          {actual.tipo === "centro" ? (
-            <HumanSelect
-              value={cfg.centroCostoId ?? ""}
-              onValueChange={(id) => onPatch({ centroCostoId: id || null })}
-              options={centros.map((centro) => ({
-                value: centro.id,
-                label: centro.nombre,
-              }))}
-              placeholder="Elegir centro de costo"
-            />
-          ) : null}
-
-          {actual.tipo === "ritmo" ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <Input
-                value={ritmoTexto}
-                onChange={(e) => setRitmoTexto(e.target.value)}
-                placeholder="Ej: 60"
-                inputMode="decimal"
-                style={{ maxWidth: 140 }}
-              />
-              <span style={notaStyle}>unidades por hora</span>
-              <Button
-                type="button"
-                size="sm"
-                disabled={!(Number(ritmoTexto) > 0)}
-                onClick={() =>
-                  onParams({ productivityValue: Number(ritmoTexto) })
-                }
-              >
-                Aplicar
-              </Button>
-            </div>
-          ) : null}
-
-          {actual.tipo === "tiempo_fijo" ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <Input
-                value={tiempoTexto}
-                onChange={(e) => setTiempoTexto(e.target.value)}
-                placeholder="Ej: 30"
-                inputMode="decimal"
-                style={{ maxWidth: 140 }}
-              />
-              <span style={notaStyle}>minutos, fijos</span>
-              <Button
-                type="button"
-                size="sm"
-                disabled={!(Number(tiempoTexto) > 0)}
-                onClick={() =>
-                  onPatch({ tiempoFijoOverrideMin: Number(tiempoTexto) })
-                }
-              >
-                Aplicar
-              </Button>
-            </div>
-          ) : null}
-
-          {actual.tipo === "herencia_origen" ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <HumanSelect
-                value={herenciaPasoSel}
-                onValueChange={(id) => setHerenciaPasoSel(id)}
-                options={pasosPrevios.map((previo) => ({
-                  value: previo.id,
-                  label: previo.nombre,
-                  description: previo.capacidades.length
-                    ? `Deja: ${previo.capacidades
-                        .map((c) => c.nombre.toLowerCase())
-                        .join(", ")}`
-                    : undefined,
-                }))}
-                placeholder="¿De qué paso?"
-              />
-              {herenciaPasoSel ? (
-                <div
-                  style={{ display: "flex", alignItems: "center", gap: 8 }}
-                >
-                  <HumanSelect
-                    value={herenciaCapSel}
-                    onValueChange={(v) =>
-                      setHerenciaCapSel(v || "unidades_procesadas")
-                    }
-                    options={(
-                      pasosPrevios.find(
-                        (previo) => previo.id === herenciaPasoSel,
-                      )?.capacidades ?? []
-                    ).map((c) => ({ value: c.key, label: c.nombre }))}
-                    placeholder="Qué número usa"
-                  />
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() =>
-                      onHerencia({
-                        rutaPasoId: herenciaPasoSel,
-                        capacidad: herenciaCapSel,
-                      })
-                    }
+          ) : (
+            cards.map((card) => {
+              const resuelta = !vivosSet.has(claveDe(card));
+              return (
+                <div key={claveDe(card)} style={cardStyle}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "baseline",
+                      gap: 8,
+                    }}
                   >
-                    Aplicar
-                  </Button>
+                    <div style={{ fontSize: 16.5, fontWeight: 650 }}>
+                      {card.tipo === "material_slot"
+                        ? `¿Qué ${card.etiqueta} usa?`
+                        : (PREGUNTA_GUIADA[card.tipo] ?? card.etiqueta)}
+                    </div>
+                    <span
+                      style={{
+                        fontSize: 12,
+                        color: resuelta ? "#2e7d32" : "#8a6d3b",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {resuelta
+                        ? "✓ Resuelto"
+                        : card.bloqueante
+                          ? "Pendiente"
+                          : "Opcional"}
+                    </span>
+                  </div>
+                  {!resuelta ? (
+                    <div style={notaStyle}>{card.motivo}</div>
+                  ) : null}
+
+                  <CuerpoCard
+                    card={card}
+                    pasoActual={pasoActual}
+                    cfg={cfg}
+                    familia={familia}
+                    pasos={pasos}
+                    configs={configs}
+                    familiasMap={familiasMap}
+                    lookups={lookups}
+                    jsonTexts={jsonTexts}
+                    onPatch={onPatch}
+                    onParams={onParams}
+                    onHerencia={onHerencia}
+                    onAddSlotFamilia={onAddSlotFamilia}
+                    onCerrar={onCerrar}
+                  />
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 8,
+            padding: "14px 24px",
+            borderTop: "1px solid var(--hairline, #eee)",
+          }}
+        >
+          <Button
+            variant="ghost"
+            onClick={() => (indice === 0 ? onCerrar() : setIndice(indice - 1))}
+          >
+            {indice === 0 ? "Cerrar" : "← Paso anterior"}
+          </Button>
+          <Button onClick={avanzar} disabled={guardando === pasoActual.id}>
+            {guardando === pasoActual.id
+              ? "Guardando…"
+              : indice >= pasos.length - 1
+                ? tieneCambios(pasoActual.id)
+                  ? "Guardar y terminar"
+                  : "Terminar"
+                : tieneCambios(pasoActual.id)
+                  ? "Guardar y seguir →"
+                  : "Seguir →"}
+          </Button>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+/** El cuerpo editable de cada card. Vive separado para que el estado local
+ *  (búsquedas, textos) no se pierda por re-render del contenedor. */
+function CuerpoCard({
+  card,
+  pasoActual,
+  cfg,
+  familia,
+  pasos,
+  configs,
+  familiasMap,
+  lookups,
+  jsonTexts,
+  onPatch,
+  onParams,
+  onHerencia,
+  onAddSlotFamilia,
+  onCerrar,
+}: {
+  card: PendientePaso;
+  pasoActual: PasoAsistente;
+  cfg: UpsertConfigPasoPayload;
+  familia: FamiliaListItem | undefined;
+  pasos: PasoAsistente[];
+  configs: Record<string, UpsertConfigPasoPayload>;
+  familiasMap: Map<string, FamiliaListItem>;
+  lookups: LookupsConfigPaso;
+  jsonTexts: Record<string, { params: string; mecanismo: string }>;
+  onPatch: (pasoId: string, patch: Partial<UpsertConfigPasoPayload>) => void;
+  onParams: (pasoId: string, patch: Record<string, unknown>) => void;
+  onHerencia: (pasoId: string, origen: OrigenHerencia | null) => void;
+  onAddSlotFamilia: (pasoId: string, slotCodigo: string) => void;
+  onCerrar: () => void;
+}) {
+  const pasoId = pasoActual.id;
+  const notaStyle: React.CSSProperties = {
+    fontSize: 12.5,
+    color: "var(--muted-text, #6e6e76)",
+  };
+  const maquinas = React.useMemo(
+    () =>
+      lookups.maquinas.filter((m) =>
+        maquinaCompatibleConFamilia(
+          pasoActual.familiaCodigo,
+          familia?.plantillasCompatibles,
+          m,
+        ),
+      ),
+    [lookups.maquinas, pasoActual.familiaCodigo, familia],
+  );
+  const params = asRecord(cfg.paramsPasoJson);
+  const familiaConColor = ["impresion_por_hoja", "impresion_por_area"].includes(
+    pasoActual.familiaCodigo,
+  );
+
+  // Estado local de inputs numéricos (para no escribir a medias).
+  const [ritmoTexto, setRitmoTexto] = React.useState(
+    params.productivityValue != null ? String(params.productivityValue) : "",
+  );
+  const [tiempoTexto, setTiempoTexto] = React.useState(
+    cfg.tiempoFijoOverrideMin != null ? String(cfg.tiempoFijoOverrideMin) : "",
+  );
+  // Herencia.
+  const origenActual = leerOrigenHerencia(jsonTexts[pasoId]?.mecanismo ?? "");
+  const [herenciaPaso, setHerenciaPaso] = React.useState(
+    typeof origenActual?.rutaPasoId === "string" ? origenActual.rutaPasoId : "",
+  );
+  const [herenciaCap, setHerenciaCap] = React.useState(
+    typeof origenActual?.capacidad === "string"
+      ? origenActual.capacidad
+      : "unidades_procesadas",
+  );
+  // Búsqueda de materiales.
+  const [mpQuery, setMpQuery] = React.useState("");
+  const [mpResultados, setMpResultados] = React.useState<
+    MateriaPrimaBusquedaItem[]
+  >([]);
+  const [mpBuscando, setMpBuscando] = React.useState(false);
+  const [mpEtiquetaElegida, setMpEtiquetaElegida] = React.useState<string | null>(
+    null,
+  );
+
+  if (card.tipo === "maquina" || card.tipo === "perfil") {
+    const maquinaSel = maquinas.find((m) => m.id === cfg.maquinaM1Id) ?? null;
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <HumanSelect
+          value={cfg.maquinaM1Id ?? ""}
+          onValueChange={(id) => {
+            const maq = maquinas.find((m) => m.id === id);
+            onPatch(pasoId, {
+              maquinaM1Id: id || null,
+              perfilM1Id: maq?.perfilesOperativos[0]?.id ?? null,
+              centroCostoId: null,
+            });
+          }}
+          options={maquinas.map((m) => ({ value: m.id, label: m.nombre }))}
+          placeholder="Elegir máquina"
+        />
+        {maquinaSel ? (
+          <HumanSelect
+            value={cfg.perfilM1Id ?? ""}
+            onValueChange={(id) => onPatch(pasoId, { perfilM1Id: id || null })}
+            options={maquinaSel.perfilesOperativos.map((perfil) => ({
+              value: perfil.id,
+              label: perfil.nombre,
+            }))}
+            placeholder="Perfil operativo"
+          />
+        ) : null}
+      </div>
+    );
+  }
+
+  if (card.tipo === "candidatas") {
+    const seleccionadas = cfg.maquinasCandidatas ?? [];
+    const setCandidatas = (lista: typeof seleccionadas) =>
+      onPatch(pasoId, { maquinasCandidatas: lista });
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {maquinas.map((m) => {
+            const activa = seleccionadas.some(
+              (cand) => cand.maquinaId === m.id,
+            );
+            return (
+              <Button
+                key={m.id}
+                type="button"
+                variant={activa ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  if (activa) {
+                    const resto = seleccionadas.filter(
+                      (cand) => cand.maquinaId !== m.id,
+                    );
+                    if (
+                      resto.length > 0 &&
+                      !resto.some((cand) => cand.esPreferida)
+                    ) {
+                      resto[0] = { ...resto[0], esPreferida: true };
+                    }
+                    setCandidatas(resto);
+                  } else {
+                    setCandidatas([
+                      ...seleccionadas,
+                      {
+                        maquinaId: m.id,
+                        perfilDefaultId: m.perfilesOperativos[0]?.id ?? null,
+                        modoColorAllowedModes: [],
+                        esPreferida: seleccionadas.length === 0,
+                        orden: seleccionadas.length,
+                      },
+                    ]);
+                  }
+                }}
+              >
+                {activa ? "✓ " : "+ "}
+                {m.nombre}
+              </Button>
+            );
+          })}
+        </div>
+        {seleccionadas.map((cand, i) => {
+          const maq = maquinas.find((m) => m.id === cand.maquinaId);
+          if (!maq) return null;
+          const perfil =
+            maq.perfilesOperativos.find(
+              (perf) => perf.id === cand.perfilDefaultId,
+            ) ?? null;
+          const modosPerfil = modosColorFromPerfil(perfil);
+          const permitidos = cand.modoColorAllowedModes ?? [];
+          const setCand = (patch: Partial<typeof cand>) =>
+            setCandidatas(
+              seleccionadas.map((c, j) => (j === i ? { ...c, ...patch } : c)),
+            );
+          return (
+            <div
+              key={cand.maquinaId}
+              style={{
+                border: "1px solid var(--hairline, #eee)",
+                borderRadius: 10,
+                padding: "10px 12px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <strong style={{ fontSize: 13.5 }}>{maq.nombre}</strong>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontSize: 12.5,
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="radio"
+                    checked={Boolean(cand.esPreferida)}
+                    onChange={() =>
+                      setCandidatas(
+                        seleccionadas.map((c, j) => ({
+                          ...c,
+                          esPreferida: j === i,
+                        })),
+                      )
+                    }
+                  />
+                  Preferida
+                </label>
+              </div>
+              <HumanSelect
+                value={cand.perfilDefaultId ?? ""}
+                onValueChange={(id) =>
+                  setCand({ perfilDefaultId: id || null })
+                }
+                options={maq.perfilesOperativos.map((perf) => ({
+                  value: perf.id,
+                  label: perf.nombre,
+                }))}
+                placeholder="Perfil default"
+              />
+              {familiaConColor && modosPerfil.length > 0 ? (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: 6,
+                  }}
+                >
+                  <span style={notaStyle}>Modos de color:</span>
+                  {modosPerfil.map((modo) => {
+                    const activo =
+                      permitidos.length === 0 || permitidos.includes(modo);
+                    return (
+                      <Button
+                        key={modo}
+                        type="button"
+                        size="sm"
+                        variant={activo ? "default" : "outline"}
+                        onClick={() => {
+                          const base =
+                            permitidos.length === 0
+                              ? [...modosPerfil]
+                              : [...permitidos];
+                          const proximos = activo
+                            ? base.filter((x) => x !== modo)
+                            : [...base, modo];
+                          setCand({
+                            modoColorAllowedModes:
+                              proximos.length === modosPerfil.length
+                                ? []
+                                : proximos,
+                          });
+                        }}
+                      >
+                        {modo}
+                      </Button>
+                    );
+                  })}
                 </div>
               ) : null}
-              {herenciaOrigen?.rutaPasoId ? (
-                <div style={notaStyle}>Origen ya señalado — listo.</div>
-              ) : null}
             </div>
-          ) : null}
+          );
+        })}
+        {seleccionadas.length > 0 ? (
+          <div style={notaStyle}>
+            Podés seguir sumando máquinas de la lista; la preferida es la que
+            el motor usa si el comercial no elige.
+          </div>
+        ) : null}
+      </div>
+    );
+  }
 
-          {actual.tipo === "proveedor" || actual.tipo === "grilla_tercerizado" ? (
-            <PasoTercerizadoPanel
-              value={cfg}
-              onChange={(patch) => onPatch(patch)}
-              onToggle={(tercerizado) => onPatch({ tercerizado })}
+  if (card.tipo === "centro") {
+    return (
+      <HumanSelect
+        value={cfg.centroCostoId ?? ""}
+        onValueChange={(id) => onPatch(pasoId, { centroCostoId: id || null })}
+        options={lookups.centrosCosto.map((centro) => ({
+          value: centro.id,
+          label: centro.nombre,
+        }))}
+        placeholder="Elegir centro de costo"
+      />
+    );
+  }
+
+  if (card.tipo === "ritmo") {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <Input
+          value={ritmoTexto}
+          onChange={(e) => {
+            setRitmoTexto(e.target.value);
+            const n = Number(e.target.value);
+            onParams(pasoId, {
+              productivityValue:
+                e.target.value.trim() !== "" && Number.isFinite(n) && n > 0
+                  ? n
+                  : null,
+            });
+          }}
+          placeholder="Ej: 60"
+          inputMode="decimal"
+          style={{ maxWidth: 140 }}
+        />
+        <span style={notaStyle}>unidades por hora</span>
+      </div>
+    );
+  }
+
+  if (card.tipo === "tiempo_fijo") {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <Input
+          value={tiempoTexto}
+          onChange={(e) => {
+            setTiempoTexto(e.target.value);
+            const n = Number(e.target.value);
+            onPatch(pasoId, {
+              tiempoFijoOverrideMin:
+                e.target.value.trim() !== "" && Number.isFinite(n) && n > 0
+                  ? n
+                  : null,
+            });
+          }}
+          placeholder="Ej: 30"
+          inputMode="decimal"
+          style={{ maxWidth: 140 }}
+        />
+        <span style={notaStyle}>minutos, fijos</span>
+      </div>
+    );
+  }
+
+  if (card.tipo === "herencia_origen") {
+    const previos = pasos
+      .filter((p, i) => i < pasos.findIndex((x) => x.id === pasoId))
+      .map((p) => ({
+        id: p.id,
+        nombre: p.nombre,
+        capacidades: (
+          familiasMap.get(p.familiaCodigo)?.capacidades ?? []
+        ).filter((c: { heredable: boolean }) => c.heredable),
+      }));
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <HumanSelect
+          value={herenciaPaso}
+          onValueChange={(id) => setHerenciaPaso(id)}
+          options={previos.map((p) => ({
+            value: p.id,
+            label: p.nombre,
+            description: p.capacidades.length
+              ? `Deja: ${p.capacidades.map((c: { nombre: string }) => c.nombre.toLowerCase()).join(", ")}`
+              : undefined,
+          }))}
+          placeholder="¿De qué paso?"
+        />
+        {herenciaPaso ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <HumanSelect
+              value={herenciaCap}
+              onValueChange={(v) => setHerenciaCap(v || "unidades_procesadas")}
+              options={(
+                previos.find((p) => p.id === herenciaPaso)?.capacidades ?? []
+              ).map((c: { key: string; nombre: string }) => ({ value: c.key, label: c.nombre }))}
+              placeholder="Qué número usa"
             />
-          ) : null}
-
-          {actual.tipo === "material_slot" ||
-          actual.tipo === "regla_condicional" ? (
-            <Button type="button" variant="outline" onClick={onDetallado}>
-              {actual.tipo === "material_slot"
-                ? "Elegir el material en modo detallado"
-                : "Definir la regla en modo detallado"}
-            </Button>
-          ) : null}
-
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              gap: 8,
-              marginTop: 4,
-            }}
-          >
             <Button
               type="button"
-              variant="ghost"
               size="sm"
               onClick={() =>
-                setOmitidos((prev) => new Set([...prev, clave(actual)]))
+                onHerencia(pasoId, {
+                  rutaPasoId: herenciaPaso,
+                  capacidad: herenciaCap,
+                })
               }
             >
-              {actual.bloqueante ? "Después" : "Dejar la regla automática"}
+              Aplicar
             </Button>
           </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (card.tipo === "proveedor" || card.tipo === "grilla_tercerizado") {
+    return (
+      <PasoTercerizadoPanel
+        value={cfg}
+        onChange={(patch) => onPatch(pasoId, patch)}
+        onToggle={(tercerizado) => onPatch(pasoId, { tercerizado })}
+      />
+    );
+  }
+
+  if (card.tipo === "material_slot" && card.slotCodigo) {
+    const slotCodigo = card.slotCodigo;
+    const decl = familia?.slotsRequeridos.find((s) => s.codigo === slotCodigo);
+    const entry = (cfg.slotsMateriales ?? []).find(
+      (s) => s.slotCodigo === slotCodigo,
+    );
+    if (pasoActual.esExtra) {
+      return (
+        <Button type="button" variant="outline" onClick={onCerrar}>
+          Este paso es un extra: elegí su material en el editor
+        </Button>
+      );
+    }
+    if (!entry) {
+      // El slot todavía no existe en la config: crearlo con defaults.
+      return (
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => onAddSlotFamilia(pasoId, slotCodigo)}
+        >
+          Configurar {decl?.nombre ?? slotCodigo}
+        </Button>
+      );
+    }
+    const setEntry = (patch: Partial<UpsertSlotMaterialPayload>) =>
+      onPatch(pasoId, {
+        slotsMateriales: (cfg.slotsMateriales ?? []).map(
+          (s: UpsertSlotMaterialPayload) =>
+            s.slotCodigo === slotCodigo ? { ...s, ...patch } : s,
+        ),
+      });
+    const compat = decl?.compatibilidadMaterial;
+    const buscar = async () => {
+      setMpBuscando(true);
+      try {
+        const res = await buscarMateriasPrimasConfigPaso({
+          q: mpQuery || undefined,
+          familias: compat?.familiasMateriaPrima,
+          subfamilias: compat?.subfamiliasMateriaPrima,
+          templateIds: compat?.templateIds,
+          tipoTecnico: compat?.tipoTecnico,
+          limit: 8,
+        });
+        setMpResultados(res);
+      } catch {
+        setMpResultados([]);
+      } finally {
+        setMpBuscando(false);
+      }
+    };
+    const modo = entry.modoSeleccion;
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <HumanSelect
+          value={modo}
+          onValueChange={(v) =>
+            setEntry({
+              modoSeleccion: (v ||
+                "HARDCODED") as UpsertSlotMaterialPayload["modoSeleccion"],
+            })
+          }
+          options={[
+            { value: "HARDCODED", label: "Material fijo" },
+            { value: "COMERCIAL_ELIGE", label: "El comercial elige al cotizar" },
+            { value: "MOTOR_ELIGE_AUTO", label: "Lo decide el sistema" },
+          ]}
+        />
+        <div style={{ display: "flex", gap: 8 }}>
+          <Input
+            value={mpQuery}
+            onChange={(e) => setMpQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void buscar();
+            }}
+            placeholder={`Buscar ${decl?.nombre?.toLowerCase() ?? "materia prima"} compatible…`}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void buscar()}
+            disabled={mpBuscando}
+          >
+            {mpBuscando ? "Buscando…" : "Buscar"}
+          </Button>
         </div>
-      ) : (
-        <div style={cardStyle}>
-          <div style={{ fontSize: 18, fontWeight: 650, color: "#2e7d32" }}>
-            ✓ {pendientes.length === 0 ? "Listo para cotizar" : "Sin preguntas a la vista"}
+        {mpResultados.map((mp) => (
+          <div
+            key={mp.id}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 8,
+              border: "1px solid var(--hairline, #eee)",
+              borderRadius: 8,
+              padding: "8px 10px",
+            }}
+          >
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 550 }}>{mp.nombre}</div>
+              <div style={notaStyle}>
+                {mp.variantes.length} variante
+                {mp.variantes.length === 1 ? "" : "s"}
+              </div>
+            </div>
+            {modo === "HARDCODED" ? (
+              <HumanSelect
+                value=""
+                onValueChange={(varianteId) => {
+                  if (!varianteId) return;
+                  const variante = mp.variantes.find(
+                    (v) => v.id === varianteId,
+                  );
+                  setEntry({ materialVarianteId: varianteId });
+                  setMpEtiquetaElegida(
+                    `${mp.nombre}${variante ? ` · ${varianteOptionFromBusqueda(mp, variante).label}` : ""}`,
+                  );
+                }}
+                options={mp.variantes.map((variante) =>
+                  varianteOptionFromBusqueda(mp, variante),
+                )}
+                placeholder="Elegir variante"
+              />
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  const ya = entry.candidatos ?? [];
+                  if (ya.some((c) => c.materiaPrimaId === mp.id)) return;
+                  setEntry({
+                    candidatos: [
+                      ...ya,
+                      {
+                        materiaPrimaId: mp.id,
+                        defaultVarianteId: mp.variantes[0]?.id ?? null,
+                        orden: ya.length,
+                        varianteIds: mp.variantes.map((v) => v.id),
+                      },
+                    ],
+                  });
+                  setMpEtiquetaElegida(null);
+                }}
+              >
+                + Agregar
+              </Button>
+            )}
           </div>
-          {omitidosPresentes.length > 0 ? (
-            <div style={notaStyle}>
-              Omitiste: {omitidosPresentes.map((pend) => pend.etiqueta).join(", ")}.{" "}
+        ))}
+        {modo === "HARDCODED" && (mpEtiquetaElegida || entry.materialVarianteId) ? (
+          <div style={{ ...notaStyle, color: "#2e7d32" }}>
+            ✓ Elegido: {mpEtiquetaElegida ?? "material ya configurado"}
+          </div>
+        ) : null}
+        {modo !== "HARDCODED" ? (
+          <div style={notaStyle}>
+            Candidatos cargados: {(entry.candidatos ?? []).length}
+            {(entry.candidatos ?? []).length > 0 ? (
               <button
                 type="button"
                 className="btn"
-                style={{ marginLeft: 6 }}
-                onClick={() => setOmitidos(new Set())}
+                style={{ marginLeft: 8 }}
+                onClick={() => setEntry({ candidatos: [] })}
               >
-                Volver a verlas
+                Vaciar
               </button>
-            </div>
-          ) : (
-            <div style={notaStyle}>
-              Todo lo demás sale de lo que el paso ya declara (defaults,
-              estación, activación). El modo detallado queda para ajustes
-              finos.
-            </div>
-          )}
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <Button
-              type="button"
-              onClick={onGuardar}
-              disabled={guardando || !tieneCambios}
-            >
-              {guardando
-                ? "Guardando…"
-                : tieneCambios
-                  ? "Guardar paso"
-                  : configExistente
-                    ? "Guardado"
-                    : "Guardar paso"}
-            </Button>
+            ) : null}
           </div>
-        </div>
-      )}
-    </div>
-  );
+        ) : null}
+      </div>
+    );
+  }
+
+  if (card.tipo === "regla_condicional") {
+    return (
+      <Button type="button" variant="outline" onClick={onCerrar}>
+        Definir la regla en el editor (constructor de reglas)
+      </Button>
+    );
+  }
+
+  return null;
 }
+
 
 // ─── Sub-componente: lista de validaciones ─────────────────────────
 
