@@ -1478,6 +1478,9 @@ function formatUnidadCosto(unidad: string, cantidad = 1) {
     caja: { singular: "caja", plural: "cajas" },
     pack: { singular: "pack", plural: "packs" },
     pieza: { singular: "pieza", plural: "piezas" },
+    // El desgaste se mide en clicks A4-equivalentes; para el comercial son
+    // "clicks" a secas — el equivalente A4 es detalle interno del cálculo.
+    a4_equiv: { singular: "click", plural: "clicks" },
   };
   const pluralized = pluralizable[normalized];
   if (pluralized) return isSingular ? pluralized.singular : pluralized.plural;
@@ -2400,7 +2403,8 @@ function CommercialPriceDetailPanel({
               <div className="op-price-material" key={material.key}>
                 <span>{material.nombre}</span>
                 <small>
-                  {formatDecimal(material.cantidad)} {material.unidad}
+                  {formatDecimal(material.cantidad)}{" "}
+                  {formatUnidadCosto(material.unidad, material.cantidad)}
                 </small>
                 <strong>{fmt(material.costo)}</strong>
               </div>
