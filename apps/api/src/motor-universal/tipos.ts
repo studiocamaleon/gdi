@@ -658,6 +658,21 @@ export interface ProductoCargado {
   cargosDirectosCotizacion: CargoCotizacionCargado[];
 }
 
+/**
+ * E.1 — Defaults declarados de la familia (FamiliaPasoDefaults): el motor
+ * los aplica como fallback VIVO cuando la config del producto dejó el
+ * campo vacío. Ver docs/wizard-ruta-diseno.md §2.
+ */
+export interface DefaultsFamiliaPaso {
+  centroCostoId: string | null;
+  centroCostoCodigo: string | null;
+  centroCostoNombre: string | null;
+  productividadHora: number | null;
+  tiempoFijoMin: number | null;
+  demasiaMm: number | null;
+  solapePanelMm: number | null;
+}
+
 export interface PasoCargado {
   rutaPasoId: string;
   rutaPasoOrden: number;
@@ -729,6 +744,8 @@ export interface PasoCargado {
     codigo: string;
     nombre: string;
   };
+  /** E.1 — defaults declarados de la familia (fallback vivo del motor). */
+  defaultsFamilia?: DefaultsFamiliaPaso;
   /**
    * G-F2 — Máquinas candidatas M-2 declaradas para este paso.
    * Cuando hay >1 candidata, el comercial puede elegir desde el cotizador

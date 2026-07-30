@@ -2237,6 +2237,12 @@ function validarBasico(
           requerido: boolean;
           tipo?: string;
         }>;
+        /** E.1 — defaults declarados: lo que cubren no se advierte. */
+        defaults?: {
+          centroCostoId: string | null;
+          productividadHora: number | null;
+          tiempoFijoMin: number | null;
+        } | null;
       }
     | undefined,
   contexto?: { familiaCodigo?: string },
@@ -2279,7 +2285,13 @@ function validarBasico(
   if (requiereMecanismoCantidad(cfg, familia) && !cfg.mecanismoCantidad) {
     warnings.push("Mecanismo de cantidad sin definir");
   }
-  if (!cfg.maquinaM1Id && cfg.modoTiempo && !cfg.centroCostoId) {
+  if (
+    !cfg.maquinaM1Id &&
+    cfg.modoTiempo &&
+    !cfg.centroCostoId &&
+    // E.1 — el default declarado del paso lo cubre: el motor lo aplica vivo.
+    !familia?.defaults?.centroCostoId
+  ) {
     warnings.push("Centro de costo horario sin definir");
   }
   if (cfg.modoTiempo === "T-2") {
@@ -2304,7 +2316,9 @@ function validarBasico(
       !tiempoManualHabilitado &&
       (modoCalculo === "batch_time"
         ? !batchTimeMin || !batchSize
-        : !productividad)
+        : !productividad &&
+          // E.1 — el ritmo default declarado del paso lo cubre.
+          !familia?.defaults?.productividadHora)
     ) {
       warnings.push("Tiempo del paso sin definir");
     }
@@ -5254,7 +5268,16 @@ export function ConfigPasosEditorView({
                                         placeholder={
                                           lookups.centrosCosto.length === 0
                                             ? "No hay centros horarios activos"
-                                            : "Elegir centro horario"
+                                            : familia?.defaults?.centroCostoId
+                                              ? `Usando el del paso: ${
+                                                  lookups.centrosCosto.find(
+                                                    (c) =>
+                                                      c.id ===
+                                                      familia?.defaults
+                                                        ?.centroCostoId,
+                                                  )?.nombre ?? "default"
+                                                }`
+                                              : "Elegir centro horario"
                                         }
                                       />
                                     )}
@@ -5588,7 +5611,12 @@ export function ConfigPasosEditorView({
                                                           ),
                                                   })
                                                 }
-                                                placeholder="Ej. 500"
+                                                placeholder={
+                                                  familia?.defaults
+                                                    ?.productividadHora
+                                                    ? `Usando el ritmo del paso: ${familia.defaults.productividadHora}/h`
+                                                    : "Ej. 500"
+                                                }
                                               />
                                               <span className="text-muted-foreground whitespace-nowrap text-xs">
                                                 {productivityUnitSuffix}

@@ -661,6 +661,7 @@ model Tenant {
   comprobanteContadores                            ComprobanteContador[]
   cobroImputaciones                                CobroImputacion[]
   comprobanteOrdenes                               ComprobanteOrden[]
+  familiaPasoDefaults FamiliaPasoDefaults[]
 }
 
 model User {
@@ -1120,6 +1121,7 @@ model CentroCosto {
   @@unique([tenantId, codigo])
   @@index([tenantId, plantaId])
   @@index([tenantId, nombre])
+  familiaPasoDefaults FamiliaPasoDefaults[]
 }
 
 /// La planilla del centro de costo: una línea por gasto, por persona o por
@@ -1604,6 +1606,36 @@ model EstacionFamilia {
   @@unique([estacionId, familiaCodigo])
   @@index([tenantId, familiaCodigo])
   @@index([tenantId, estacionId])
+}
+
+/// E.1 (wizard de ruta, docs/wizard-ruta-diseno.md §2) — defaults declarados
+/// del paso: la familia sugiere, el producto pisa, la cotización ajusta.
+/// El motor los aplica como fallback VIVO al cotizar cuando la config del
+/// producto dejó el campo vacío. `familiaCodigo` puede ser un código del
+/// catálogo fijo O el UUID de una FamiliaTenant — mismo patrón que
+/// EstacionFamilia: una sola tabla para ambos mundos.
+model FamiliaPasoDefaults {
+  id            String  @id @default(uuid()) @db.Uuid
+  tenantId      String  @db.Uuid
+  familiaCodigo String
+  /// Quién cobra el tiempo en pasos SIN máquina (con máquina lo trae ella).
+  centroCostoId String? @db.Uuid
+  /// Ritmo típico (unidades/hora) para T-2. La config del producto lo pisa.
+  productividadHora Decimal? @db.Decimal(12, 2)
+  /// Duración típica (min) para T-1 sin máquina.
+  tiempoFijoMin Decimal? @db.Decimal(10, 2)
+  /// Demasía por lado típica (mm) para pasos que nestean.
+  demasiaMm Decimal? @db.Decimal(8, 2)
+  /// Solape de panelizado típico (mm), gran formato sobre rollo.
+  solapePanelMm Decimal? @db.Decimal(8, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  centroCosto CentroCosto? @relation(fields: [centroCostoId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, familiaCodigo])
 }
 
 /// Familia de pasos creada por el TENANT (pasos componibles —

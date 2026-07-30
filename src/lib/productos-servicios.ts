@@ -447,6 +447,8 @@ export interface FamiliaListItem {
   /** B.3.3 — qué deja este paso (Registro de Capacidades), para el
    *  selector "hereda de" del editor de configuración. */
   capacidades?: Array<{ key: string; nombre: string; heredable: boolean }>;
+  /** E.1 — defaults declarados del paso (null = sin defaults). */
+  defaults?: DefaultsFamiliaPaso | null;
   validaciones: Array<{
     codigo: string;
     tipo: string;
@@ -482,6 +484,16 @@ export interface CatalogoFamilias {
 // ============================================================================
 
 /** Fila cruda de FamiliaTenant que devuelve el listado admin. */
+
+/** E.1 — defaults declarados del paso (FamiliaPasoDefaults). */
+export interface DefaultsFamiliaPaso {
+  centroCostoId: string | null;
+  productividadHora: number | null;
+  tiempoFijoMin: number | null;
+  demasiaMm: number | null;
+  solapePanelMm: number | null;
+}
+
 export interface FamiliaTenant {
   id: string;
   nombre: string;
@@ -509,6 +521,8 @@ export interface FamiliaTenant {
   createdAt: string;
   updatedAt: string;
   estacion: { id: string; nombre: string } | null;
+  /** E.1 — defaults declarados del paso. */
+  defaults?: DefaultsFamiliaPaso | null;
 }
 
 export interface UpsertFamiliaTenantInput {
@@ -536,6 +550,8 @@ export interface UpsertFamiliaTenantInput {
   /** B.3.4 — presente ⇔ mecanismo CALCULADO_POR_PASO. */
   nestingConfig?: { superficie: string } | null;
   estacionId?: string | null;
+  /** E.1 — defaults declarados del paso. */
+  defaults?: Partial<DefaultsFamiliaPaso> | null;
 }
 
 export interface PreviewCosteoFamilia {
