@@ -252,7 +252,7 @@ describe("pendientesDePaso (E.3.1)", () => {
     const sinDefaults = { ...FAMILIA_MANUAL, defaults: null };
     const pendientes = pendientesDePaso(cfgBase(), sinDefaults);
     expect(resumenPendientes(pendientes)).toBe(
-      "Faltan: el ritmo de trabajo y quién lo cobra",
+      "Faltan: el ritmo de trabajo y el centro productivo",
     );
     expect(resumenPendientes([])).toBeNull();
     const soloSugerido = pendientesDePaso(

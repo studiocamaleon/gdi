@@ -175,7 +175,26 @@ type ControlOpcion =
 
 ## 5. Plan por sub-fases
 
-- **A — Esquema + shell + Activación** (validación de la forma): el
+- **A — Esquema + shell + Activación** (validación de la forma):
+
+  > **Estado 2026-07-30: HECHA — a validar por el usuario.**
+  > `src/lib/editor-paso/schema.ts` (OpcionPaso completo: pregunta,
+  > ayuda, visible, resumen, origenValor, pendiente, control declarativo
+  > o componente) + `schema.test.ts` con el TEST DE PARIDAD (el censo
+  > §2 vive como constante: clave censada sin declarar o declarada sin
+  > censar = test roto; migrar una sección = acto consciente). Renderer
+  > `SeccionGuiada`/`OpcionGuiadaFila`/`ControlGuiado` en el asistente:
+  > toda opción visible se muestra SIEMPRE — abierta si su pendiente
+  > está vivo o está sin-definir, colapsada con resumen + badge de
+  > origen ("· del paso") + Cambiar. Activación completa: nombre,
+  > cuándo (pills restringidas si la familia fijó), regla condicional
+  > (RuleBuilder del detallado EMBEBIDO), co-ejecución, multiplicadores
+  > (toggles). Las cards transicionales siguen para las secciones B-D y
+  > ya excluyen lo cubierto. Copys "centro productivo" barridos
+  > (pendientes, asistente, wizard de pasos, ficha defaults). Verificado
+  > en vivo: Bordado muestra las 3 preguntas visibles colapsadas con
+  > "· del paso" y ✓ Listo. 9 tests nuevos (371 front en total).
+ el
   módulo `editor-paso/` con el schema, el renderer guiado de
   secciones-pregunta (abierto/colapsado/Cambiar), el test de paridad, y
   la sección Activación COMPLETA (nombre, cuándo, regla, co-ejecución,

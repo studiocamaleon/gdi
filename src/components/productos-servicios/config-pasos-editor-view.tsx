@@ -50,6 +50,12 @@ import {
   type PendientePaso,
 } from "@/lib/pendientes-paso";
 import {
+  opcionesDeSeccion,
+  type ContextoOpcion,
+  type OpcionPaso,
+  type PatchOpcion,
+} from "@/lib/editor-paso/schema";
+import {
   actualizarPasoExtra,
   buscarMateriasPrimasConfigPaso,
   upsertConfigPaso,
@@ -9335,6 +9341,12 @@ export function ConfigPasosEditorView({
           onGuardarPaso={(pasoId) => guardarPaso(pasoId)}
           guardando={guardando}
           tieneCambios={(pasoId) => hasUnsavedChanges(pasoId)}
+          reglaProps={{
+            includeMeasureFields:
+              producto.modoMedidas === "LIBRE" ||
+              producto.modoMedidas === "MIXTA",
+            extraFields: technologyRuleFields,
+          }}
           onCerrar={() => setAsistenteAbierto(false)}
         />
       ) : null}
@@ -9342,6 +9354,236 @@ export function ConfigPasosEditorView({
   );
 }
 
+
+
+// ─── Editor declarativo (sub-fase A) — renderer de secciones-pregunta ──
+// Renderiza TODAS las opciones visibles de una sección del esquema:
+// abiertas si su pendiente está vivo, colapsadas con resumen + "Cambiar"
+// si están resueltas. Nada desaparece: paridad visible.
+
+function SeccionGuiada({
+  titulo,
+  seccion,
+  ctx,
+  pendientesVivos,
+  onAplicar,
+  renderComponente,
+}: {
+  titulo: string;
+  seccion: Parameters<typeof opcionesDeSeccion>[0];
+  ctx: ContextoOpcion;
+  pendientesVivos: Set<string>;
+  onAplicar: (patch: PatchOpcion) => void;
+  renderComponente: (id: string) => React.ReactNode;
+}) {
+  const opciones = opcionesDeSeccion(seccion, ctx);
+  if (opciones.length === 0) return null;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div
+        style={{
+          fontSize: 12,
+          fontWeight: 650,
+          letterSpacing: 0.4,
+          textTransform: "uppercase",
+          color: "var(--muted-text, #6e6e76)",
+        }}
+      >
+        {titulo}
+      </div>
+      {opciones.map((opcion) => (
+        <OpcionGuiadaFila
+          key={opcion.clave}
+          opcion={opcion}
+          ctx={ctx}
+          abiertaInicial={
+            (opcion.pendiente != null &&
+              pendientesVivos.has(opcion.pendiente)) ||
+            opcion.origenValor(ctx) === "sin-definir"
+          }
+          onAplicar={onAplicar}
+          renderComponente={renderComponente}
+        />
+      ))}
+    </div>
+  );
+}
+
+const ORIGEN_BADGE: Record<string, string | null> = {
+  config: null,
+  "default-paso": "del paso",
+  "default-maquina": "de la máquina",
+  "sin-definir": "sin definir",
+};
+
+function OpcionGuiadaFila({
+  opcion,
+  ctx,
+  abiertaInicial,
+  onAplicar,
+  renderComponente,
+}: {
+  opcion: OpcionPaso;
+  ctx: ContextoOpcion;
+  abiertaInicial: boolean;
+  onAplicar: (patch: PatchOpcion) => void;
+  renderComponente: (id: string) => React.ReactNode;
+}) {
+  const [abierta, setAbierta] = React.useState(abiertaInicial);
+  const resumen = opcion.resumen(ctx);
+  const origen = opcion.origenValor(ctx);
+  const badge = ORIGEN_BADGE[origen];
+  const notaStyle: React.CSSProperties = {
+    fontSize: 12.5,
+    color: "var(--muted-text, #6e6e76)",
+  };
+
+  return (
+    <div
+      style={{
+        border: "1px solid var(--hairline, #e6e2dc)",
+        borderRadius: 10,
+        padding: abierta ? "12px 14px" : "10px 14px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+        background: "var(--surface-1, #fff)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "baseline",
+          gap: 10,
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 14.5, fontWeight: 600 }}>
+            {opcion.pregunta}
+          </div>
+          {!abierta ? (
+            <div style={{ ...notaStyle, marginTop: 2 }}>
+              {resumen}
+              {badge ? (
+                <span
+                  style={{
+                    marginLeft: 6,
+                    fontSize: 11,
+                    color:
+                      origen === "sin-definir" ? "#8a6d3b" : "#7a7a80",
+                  }}
+                >
+                  · {badge}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          className="btn"
+          style={{ fontSize: 12, whiteSpace: "nowrap" }}
+          onClick={() => setAbierta(!abierta)}
+        >
+          {abierta ? "Listo" : "Cambiar"}
+        </button>
+      </div>
+      {abierta ? (
+        <>
+          {opcion.ayuda ? <div style={notaStyle}>{opcion.ayuda}</div> : null}
+          <ControlGuiado
+            opcion={opcion}
+            ctx={ctx}
+            onAplicar={onAplicar}
+            renderComponente={renderComponente}
+          />
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function ControlGuiado({
+  opcion,
+  ctx,
+  onAplicar,
+  renderComponente,
+}: {
+  opcion: OpcionPaso;
+  ctx: ContextoOpcion;
+  onAplicar: (patch: PatchOpcion) => void;
+  renderComponente: (id: string) => React.ReactNode;
+}) {
+  const control = opcion.control;
+  if (control.tipo === "texto") {
+    return (
+      <Input
+        value={control.valor(ctx)}
+        placeholder={control.placeholder?.(ctx)}
+        onChange={(e) => onAplicar(control.aplicar(ctx, e.target.value))}
+      />
+    );
+  }
+  if (control.tipo === "pills") {
+    const actual = control.valor(ctx);
+    return (
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {control.opciones(ctx).map((op) => (
+          <Button
+            key={op.value}
+            type="button"
+            size="sm"
+            variant={actual === op.value ? "default" : "outline"}
+            onClick={() => onAplicar(control.aplicar(ctx, op.value))}
+          >
+            {op.label}
+          </Button>
+        ))}
+      </div>
+    );
+  }
+  if (control.tipo === "select") {
+    return (
+      <HumanSelect
+        value={control.valor(ctx)}
+        onValueChange={(v) => onAplicar(control.aplicar(ctx, v))}
+        options={control.opciones(ctx).map((op) => ({
+          value: op.value,
+          label: op.label,
+          description: op.descripcion,
+        }))}
+      />
+    );
+  }
+  if (control.tipo === "toggles") {
+    const activos = new Set(control.activos(ctx));
+    return (
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {control.opciones(ctx).map((op) => (
+          <Button
+            key={op.value}
+            type="button"
+            size="sm"
+            variant={activos.has(op.value) ? "default" : "outline"}
+            onClick={() => {
+              const proximos = activos.has(op.value)
+                ? [...activos].filter((v) => v !== op.value)
+                : [...activos, op.value];
+              onAplicar(control.aplicar(ctx, proximos));
+            }}
+          >
+            {op.label}
+          </Button>
+        ))}
+      </div>
+    );
+  }
+  if (control.tipo === "componente") {
+    return <>{renderComponente(control.id)}</>;
+  }
+  return null;
+}
 
 // ─── E.3.2 v2 — Asistente guiado FLOTANTE (paridad con el detallado) ───
 // Sheet como el wizard de pasos: recorre la ruta paso a paso y muestra las
@@ -9359,7 +9601,7 @@ const PREGUNTA_GUIADA: Record<string, string> = {
   proveedor: "¿A quién se le compra?",
   ritmo: "¿A qué ritmo se hace en este producto?",
   tiempo_fijo: "¿Cuántos minutos lleva en este producto?",
-  centro: "¿Quién lo cobra?",
+  centro: "¿En qué centro productivo se realiza este paso?",
   regla_condicional: "¿Cuándo se activa?",
   herencia_origen: "¿De qué paso hereda la cantidad?",
 };
@@ -9385,6 +9627,7 @@ function AsistenteGuiado({
   onGuardarPaso,
   guardando,
   tieneCambios,
+  reglaProps,
   onCerrar,
 }: {
   pasos: PasoAsistente[];
@@ -9399,6 +9642,10 @@ function AsistenteGuiado({
   onGuardarPaso: (pasoId: string) => Promise<void>;
   guardando: string | null;
   tieneCambios: (pasoId: string) => boolean;
+  reglaProps: {
+    includeMeasureFields: boolean;
+    extraFields: RuleFieldDefinition[];
+  };
   onCerrar: () => void;
 }) {
   const [indice, setIndice] = React.useState(0);
@@ -9417,7 +9664,9 @@ function AsistenteGuiado({
         pendientesDePaso(
           configs[pasoActual.id],
           familiasMap.get(pasoActual.familiaCodigo),
-        ),
+          // La sección Activación ya vive en el ESQUEMA (sub-fase A): su
+          // pendiente no necesita card transicional.
+        ).filter((pend) => pend.tipo !== "regla_condicional"),
       );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -9509,6 +9758,81 @@ function AsistenteGuiado({
           <div style={{ fontSize: 20, fontWeight: 700 }}>
             {pasoActual.nombre}
           </div>
+
+          {/* Editor declarativo (sub-fase A): la sección Activación sale
+              del ESQUEMA — completa, con abierto/colapsado/Cambiar. Las
+              cards de abajo son transicionales hasta migrar sus
+              secciones (B-D). */}
+          <SeccionGuiada
+            titulo="Activación"
+            seccion="activacion"
+            ctx={{
+              cfg,
+              familia,
+              paramsPaso: asRecord(cfg.paramsPasoJson),
+              otrosPasos: pasos
+                .filter((p) => p.id !== pasoActual.id)
+                .map((p) => ({ id: p.id, nombre: p.nombre })),
+            }}
+            pendientesVivos={new Set(vivos.map((pend) => pend.tipo))}
+            onAplicar={(patch) => {
+              if (patch.tipo === "config") onPatch(pasoActual.id, patch.patch);
+              else onParams(pasoActual.id, patch.patch);
+            }}
+            renderComponente={(id) => {
+              if (id === "regla-condicional") {
+                return (
+                  <RuleBuilder
+                    value={
+                      cfg.condicionActivacionJson as
+                        | Record<string, unknown>
+                        | null
+                        | undefined
+                    }
+                    includeMeasureFields={reglaProps.includeMeasureFields}
+                    extraFields={reglaProps.extraFields}
+                    onChange={(value) =>
+                      onPatch(pasoActual.id, {
+                        condicionActivacionJson: value,
+                      })
+                    }
+                  />
+                );
+              }
+              if (id === "co-ejecucion") {
+                const requeridos = cfg.requiereRutaPasoIds ?? [];
+                return (
+                  <div
+                    style={{ display: "flex", flexWrap: "wrap", gap: 6 }}
+                  >
+                    {pasos
+                      .filter((p) => p.id !== pasoActual.id)
+                      .map((p) => {
+                        const elegido = requeridos.includes(p.id);
+                        return (
+                          <Button
+                            key={p.id}
+                            type="button"
+                            size="sm"
+                            variant={elegido ? "default" : "outline"}
+                            onClick={() =>
+                              onPatch(pasoActual.id, {
+                                requiereRutaPasoIds: elegido
+                                  ? requeridos.filter((id2) => id2 !== p.id)
+                                  : [...requeridos, p.id],
+                              })
+                            }
+                          >
+                            {p.nombre}
+                          </Button>
+                        );
+                      })}
+                  </div>
+                );
+              }
+              return null;
+            }}
+          />
 
           {cards.length === 0 ? (
             <div style={cardStyle}>

@@ -1312,7 +1312,7 @@ function WizardNuevoPaso({
 
           {paso === "estacion" ? (
             <>
-              <div className={s.pregunta}>¿Dónde se hace y quién lo cobra?</div>
+              <div className={s.pregunta}>¿Dónde se hace y en qué centro productivo?</div>
               <p className={s.ayuda}>
                 La estación define a qué cola del tablero llega el paso. Se
                 puede cambiar después desde Estaciones.
@@ -1520,8 +1520,8 @@ function PasoFinal({
           <div className={s.opcionTitulo}>Valores típicos del paso (y una prueba de costo)</div>
           <div className={s.previewIntro}>
             {draft.modoTiempo === "T-2"
-              ? "¿A qué ritmo se hace normalmente y quién lo cobra? Estas respuestas quedan como sugerencia del paso — cada producto puede pisarlas. La cantidad es sólo para probar el costo."
-              : "¿Cuántos minutos lleva normalmente y quién lo cobra? Queda como sugerencia del paso — cada producto puede pisarla."}
+              ? "¿A qué ritmo se hace normalmente y en qué centro productivo? Estas respuestas quedan como sugerencia del paso — cada producto puede pisarlas. La cantidad es sólo para probar el costo."
+              : "¿Cuántos minutos lleva normalmente y en qué centro productivo? Queda como sugerencia del paso — cada producto puede pisarla."}
           </div>
           <div className={s.previewGrid}>
             <label className={s.previewCampo}>
@@ -1560,7 +1560,7 @@ function PasoFinal({
               </label>
             )}
             <label className={s.previewCampo}>
-              <span className={s.previewLabel}>¿Quién lo hace?</span>
+              <span className={s.previewLabel}>¿En qué centro productivo?</span>
               <HumanSelect
                 value={draft.centroCostoDefaultId ?? ""}
                 onValueChange={(centroCostoId) =>
@@ -1730,7 +1730,7 @@ function DefaultsSheet({
           ) : null}
           {soportaManual ? (
             <div className="field">
-              <span className={s.previewLabel}>¿Quién lo cobra?</span>
+              <span className={s.previewLabel}>¿En qué centro productivo se hace?</span>
               <HumanSelect
                 value={centroCostoId ?? ""}
                 onValueChange={(id) => setCentroCostoId(id || null)}

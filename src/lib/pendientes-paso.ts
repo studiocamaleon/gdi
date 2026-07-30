@@ -262,9 +262,9 @@ export function pendientesDePaso(
   ) {
     pendientes.push({
       tipo: "centro",
-      etiqueta: "quién lo cobra",
+      etiqueta: "el centro productivo",
       motivo:
-        "Sin centro de costo (ni acá ni declarado en el paso), no hay tarifa horaria y el tiempo cotiza $0.",
+        "Sin centro productivo (ni acá ni declarado en el paso), no hay tarifa horaria y el tiempo cotiza $0.",
       bloqueante: true,
     });
   }
