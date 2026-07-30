@@ -598,6 +598,22 @@ Cinco sub-fases, cada una con valor propio y verificable sola. Rama
 
 #### B.3.2 — Emisión estandarizada + el wizard informa
 
+> **Estado 2026-07-30: HECHA y verificada E2E** (rama
+> `feat/pasos-capacidades`). El motor publica `capacidades` en cada paso
+> ejecutado (aditivo, keys planas intactas); los outputs tenant se DERIVAN
+> en el service (crear y PATCH re-derivan — un PATCH cualquiera normaliza
+> filas legacy, verificado en vivo contra Bordado y Serigrafía); el
+> validador cierra el vocabulario; el wizard muestra "Qué deja este paso a
+> los siguientes". E2E con la sesión real: cotización de la ruta 100%
+> tenant devuelve `capacidades` exactas (100 unidades · 100/75 min) con
+> los MISMOS costos de la línea de base. **Bug cazado en el E2E**: las
+> keys del propio registro caían al fallback de `resolverAliasLegacy`
+> (minutos_reales → "unidades" + duplicado con la universal); fix: una key
+> del registro se representa a sí misma. Motor suite = línea de base
+> exacta (18 rotos preexistentes, 261 verdes). Nota: los pasos con
+> snapshot viejo (`piezas_estampadas`) siguen resolviendo por fallback —
+> por diseño.
+
 - Motor (F.2.9): al publicar outputs, agrega a la trazabilidad del paso
   `capacidades: [{ capacidad, etiqueta, valor }]` VÍA alias — aditivo;
   las keys planas del jobContext no se tocan (compat con los 4 canales).

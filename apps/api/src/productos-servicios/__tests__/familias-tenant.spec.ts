@@ -157,6 +157,27 @@ describe('FamiliasTenantService (integración, gdi_saas_test)', () => {
     expect(ruteo?.estacionId).toBe(estacionId);
   });
 
+  it('B.3.2: los outputs se DERIVAN de la forma — lo que declare el input se descarta', async () => {
+    const fila = await service.crear(tenantId, {
+      ...SERIGRAFIA,
+      nombre: 'Estampado con outputs basura',
+      outputsCanonicos: ['piezas_estampadas', 'lo_que_sea'],
+    });
+    expect(fila.outputsCanonicos).toEqual([
+      'unidades_procesadas',
+      'minutos_reales',
+    ]);
+
+    // Un PATCH cualquiera re-deriva (normaliza filas legacy).
+    const parchada = await service.actualizar(tenantId, fila.id, {
+      descripcion: 'normalizada',
+    });
+    expect(parchada.outputsCanonicos).toEqual([
+      'unidades_procesadas',
+      'minutos_reales',
+    ]);
+  });
+
   it('el override de modoRegistro le gana al default de la categoría', async () => {
     const fila = await service.crear(tenantId, {
       ...SERIGRAFIA,

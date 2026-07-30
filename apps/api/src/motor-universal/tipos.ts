@@ -7,6 +7,8 @@
  * Ver `docs/motor-por-pasos-analisis/04-modelo-conceptual-motor.md`.
  */
 
+import type { CapacidadEmitida } from '../productos-servicios/pasos/capacidades';
+
 // ============================================================================
 // INPUT — Lo que el motor recibe
 // ============================================================================
@@ -373,6 +375,12 @@ export interface PasoEjecutado {
   costoTotal: number;
   /** Outputs canónicos que el paso escribió al JobContext. */
   outputsCanonicos?: Record<string, unknown>;
+  /**
+   * B.3.2 — Los outputs proyectados al Registro de Capacidades (vista
+   * estandarizada, aditiva: las keys planas siguen siendo la fuente para
+   * los lectores legacy). Ver `productos-servicios/pasos/capacidades.ts`.
+   */
+  capacidades?: CapacidadEmitida[];
   /**
    * Resultado del nesting cuando el paso usa `mecanismoCantidad =
    * CALCULADO_POR_PASO` y la familia tiene un algoritmo soportado por el

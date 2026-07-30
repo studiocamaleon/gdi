@@ -219,6 +219,12 @@ export const KEYS_PODADAS: ReadonlySet<string> = new Set([
  * `outputs-canonicos.ts` aplica al calcular valores.
  */
 export function resolverAliasLegacy(key: string): AliasLegacy {
+  // Una key del registro se representa a sí misma (las familias tenant
+  // declaran directamente capacidades — no son legacy ni fallback).
+  if (key in CAPACIDADES) {
+    const def = CAPACIDADES[key as CapacidadKey];
+    return { capacidad: def.key, etiqueta: def.nombre.toLowerCase() };
+  }
   return (
     ALIAS_LEGACY[key] ?? {
       capacidad: 'unidades_procesadas',
@@ -273,4 +279,82 @@ export function capacidadesDeclaradas(
     set.add(resolverAliasLegacy(key).capacidad);
   }
   return [...set];
+}
+
+/**
+ * La forma de emisión de una familia TENANT, leída de su definición. La
+ * `superficie` llega en B.3.4 (nestingConfig); hoy el único disparador
+ * extra es CONVERSION → el paso arma grupos (N unidades por caja/pila).
+ */
+export function formaEmisionDeFamiliaTenant(input: {
+  mecanismosCantidad?: readonly string[];
+}): FormaEmision {
+  return {
+    agrupa: (input.mecanismosCantidad ?? []).includes('CONVERSION'),
+  };
+}
+
+/** Una capacidad emitida por un paso ejecutado, para la trazabilidad. */
+export interface CapacidadEmitida {
+  capacidad: CapacidadKey;
+  etiqueta: string;
+  valor: number;
+}
+
+/**
+ * B.3.2 — Proyecta los outputs de un paso ejecutado al registro. Aditivo:
+ * las keys planas del jobContext no se tocan; esto es la vista
+ * estandarizada que viaja en la trazabilidad.
+ *
+ * Reglas: internas/podadas/atributos no emiten entrada propia; solo
+ * valores numéricos positivos (la imposición-objeto sigue viajando por su
+ * key plana). Las universales (unidades, minutos) se agregan si ninguna
+ * key declarada ya cubrió esa capacidad — así "piezas cortadas: 500" no
+ * duplica con "unidades procesadas: 500".
+ */
+export function capacidadesEmitidas(params: {
+  outputsCanonicos?: Record<string, unknown>;
+  cantidadEfectiva?: number;
+  totalMin?: number;
+}): CapacidadEmitida[] {
+  const out: CapacidadEmitida[] = [];
+  const presentes = new Set<CapacidadKey>();
+
+  for (const [key, valor] of Object.entries(params.outputsCanonicos ?? {})) {
+    if (KEYS_INTERNAS.has(key) || KEYS_PODADAS.has(key)) continue;
+    const alias = resolverAliasLegacy(key);
+    if (alias.atributo) continue;
+    if (typeof valor !== 'number' || !Number.isFinite(valor) || valor <= 0) {
+      continue;
+    }
+    out.push({ capacidad: alias.capacidad, etiqueta: alias.etiqueta, valor });
+    presentes.add(alias.capacidad);
+  }
+
+  const { cantidadEfectiva, totalMin } = params;
+  if (
+    !presentes.has('unidades_procesadas') &&
+    typeof cantidadEfectiva === 'number' &&
+    Number.isFinite(cantidadEfectiva) &&
+    cantidadEfectiva > 0
+  ) {
+    out.push({
+      capacidad: 'unidades_procesadas',
+      etiqueta: 'unidades procesadas',
+      valor: cantidadEfectiva,
+    });
+  }
+  if (
+    !presentes.has('minutos_reales') &&
+    typeof totalMin === 'number' &&
+    Number.isFinite(totalMin) &&
+    totalMin > 0
+  ) {
+    out.push({
+      capacidad: 'minutos_reales',
+      etiqueta: 'minutos de trabajo',
+      valor: totalMin,
+    });
+  }
+  return out;
 }

@@ -31,6 +31,7 @@ import {
   registrarFamiliaTenant,
 } from './pasos/familias';
 import {
+  derivarOutputsTenant,
   proyectarFamiliaTenant,
   validarDefinicionFamiliaTenant,
   type FamiliaTenantInput,
@@ -81,6 +82,9 @@ export class FamiliasTenantService implements OnModuleInit {
   }
 
   async crear(tenantId: string, input: UpsertFamiliaTenantInput) {
+    // B.3.2 — los outputs no son texto libre: se DERIVAN de la forma. Lo
+    // que venga en el input se descarta.
+    input = { ...input, outputsCanonicos: derivarOutputsTenant(input) };
     const errores = validarDefinicionFamiliaTenant(input);
     if (errores.length > 0) {
       throw new BadRequestException([
@@ -155,11 +159,13 @@ export class FamiliasTenantService implements OnModuleInit {
         undefined,
       inputsRequeridos:
         input.inputsRequeridos ?? (existente.inputsRequeridos as string[]),
-      outputsCanonicos:
-        input.outputsCanonicos ?? (existente.outputsCanonicos as string[]),
+      // B.3.2 — siempre derivados de la forma mergeada (nunca del input ni
+      // de la fila vieja): un PATCH cualquiera normaliza outputs legacy.
+      outputsCanonicos: [],
       modoRegistro: input.modoRegistro ?? existente.modoRegistro,
       presetOrigen: input.presetOrigen ?? existente.presetOrigen,
     };
+    merged.outputsCanonicos = derivarOutputsTenant(merged);
     const errores = validarDefinicionFamiliaTenant(merged);
     if (errores.length > 0) {
       throw new BadRequestException([

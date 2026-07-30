@@ -1152,6 +1152,24 @@ function PasoFinal({
         placeholder="Categoría"
       />
 
+      {/* B.3.2 — derivado de las respuestas (espeja derivarOutputsTenant
+          del back); acá sólo se INFORMA, no hay nada que configurar. */}
+      <div className={s.dejaBox}>
+        <div className={s.opcionTitulo}>Qué deja este paso a los siguientes</div>
+        <div className={s.dejaChips}>
+          <span className={s.dejaChip}>Unidades procesadas</span>
+          <span className={s.dejaChip}>Minutos de trabajo</span>
+          {draft.mecanismoCantidad === "CONVERSION" ? (
+            <span className={s.dejaChip}>Grupos armados</span>
+          ) : null}
+        </div>
+        <div className={s.previewAviso}>
+          Los pasos siguientes de una ruta pueden usar estos números — por
+          ejemplo, heredar la cantidad. Sale de tus respuestas: no hay nada
+          que configurar acá.
+        </div>
+      </div>
+
       {previewAplica ? (
         <div className={s.preview}>
           <div className={s.opcionTitulo}>Probalo con un ejemplo (opcional)</div>

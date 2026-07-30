@@ -226,6 +226,17 @@ function computeOutput(
     return tiempo?.totalMin ?? null;
   }
 
+  // ─── Keys del Registro de Capacidades (familias tenant, B.3.2) ────
+  // Las familias tenant declaran directamente las keys del registro; acá
+  // se les da valor. `minutos_reales` NECESITA regla propia: el fallback
+  // genérico devolvería cantidad efectiva, que es otro número.
+  if (key === 'minutos_reales') {
+    return tiempo?.totalMin ?? null;
+  }
+  if (key === 'unidades_procesadas' || key === 'grupos') {
+    return cantidadEfectiva || null;
+  }
+
   // ─── Outputs derivados de materiales ──────────────────────────────
   if (key === 'metros_lineales_film' && materiales) {
     const film = materiales.find(

@@ -292,3 +292,30 @@
   font-size: 11.5px;
   color: var(--muted-text, #6e6e76);
 }
+
+/* B.3.2 — "Qué deja este paso a los siguientes" (capacidades derivadas) */
+.dejaBox {
+  border: 1px solid var(--hairline, #efece8);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--surface-2, #fafaf9);
+}
+
+.dejaChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dejaChip {
+  font-size: 12px;
+  line-height: 1;
+  padding: 5px 9px;
+  border: 1px solid var(--hairline, #e6e2dc);
+  border-radius: 999px;
+  background: var(--surface-1, #fff);
+  color: var(--text, #232323);
+}

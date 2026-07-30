@@ -12,6 +12,12 @@
  * testea igual de fácil.
  */
 import { PlantillaMaquinaria } from '@prisma/client';
+import {
+  ALIAS_LEGACY,
+  CAPACIDADES,
+  capacidadesDeForma,
+  formaEmisionDeFamiliaTenant,
+} from './capacidades';
 import { CATEGORIAS } from './categorias';
 import { FAMILIAS } from './familias';
 import { MODOS_ACTIVACION_UNIVERSALES } from './types';
@@ -178,6 +184,18 @@ export function validarDefinicionFamiliaTenant(
   for (const v of fueraDe(plantillas, plantillasValidas)) {
     errores.push(`Plantilla de máquina desconocida: "${v}".`);
   }
+
+  // --- outputs (B.3.2) ---
+  // El vocabulario es del Registro de Capacidades; el service DERIVA los
+  // outputs de la forma antes de validar, así que desde ese camino esto es
+  // un invariante. Protege a quien use el validador directo.
+  for (const key of input.outputsCanonicos ?? []) {
+    if (!(key in CAPACIDADES) && !(key in ALIAS_LEGACY)) {
+      errores.push(
+        `Output desconocido: "${key}". Los outputs se derivan de la forma del paso, no se declaran a mano.`,
+      );
+    }
+  }
   if (conMaquina && plantillas.length === 0) {
     errores.push(
       'Un paso con máquina (M-1/M-2) necesita al menos una plantilla compatible — sin eso ninguna máquina puede ejecutarlo.',
@@ -212,6 +230,17 @@ export function validarDefinicionFamiliaTenant(
  * Proyecta una fila de FamiliaTenant (ya validada al escribirse) a la
  * interfaz que consume el motor. `codigo` = el UUID de la fila.
  */
+/**
+ * B.3.2 — Los outputs de una familia tenant se DERIVAN de su forma (el
+ * usuario nunca los escribe). Hoy: unidades + minutos siempre, + grupos si
+ * soporta CONVERSION. En B.3.4 la superficie de nesting suma su set.
+ */
+export function derivarOutputsTenant(input: {
+  mecanismosCantidad?: readonly string[];
+}): string[] {
+  return capacidadesDeForma(formaEmisionDeFamiliaTenant(input));
+}
+
 export function proyectarFamiliaTenant(row: {
   id: string;
   tenantId: string;

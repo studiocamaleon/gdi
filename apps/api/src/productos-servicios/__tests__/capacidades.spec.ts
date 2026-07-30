@@ -11,8 +11,10 @@ import {
   KEYS_PODADAS,
   capacidadesDeForma,
   capacidadesDeclaradas,
+  capacidadesEmitidas,
   resolverAliasLegacy,
 } from '../pasos/capacidades';
+import { derivarOutputsTenant } from '../pasos/familia-tenant-validacion';
 
 describe('Registro de Capacidades (B.3.1)', () => {
   const keysDelCatalogo = new Set<string>();
@@ -96,6 +98,57 @@ describe('Registro de Capacidades (B.3.1)', () => {
     expect(capacidadesDeclaradas(['metros_lineales_union', 'mutacion_aplicada'])).toEqual([
       'metros_lineales',
     ]);
+  });
+
+  it('capacidadesEmitidas: alias-mapea, salta atributos/podadas y agrega universales sin duplicar', () => {
+    const emitidas = capacidadesEmitidas({
+      outputsCanonicos: {
+        piezas_cortadas: 500,
+        pliego_impresion_ancho_mm: 320, // atributo → no emite entrada propia
+        proof_aprobado: true, // podada
+        imposicion_calculada: { algo: true }, // objeto → no numérico
+      },
+      cantidadEfectiva: 500,
+      totalMin: 45,
+    });
+    expect(emitidas).toEqual([
+      // piezas_cortadas cubre unidades: la universal NO duplica.
+      { capacidad: 'unidades_procesadas', etiqueta: 'piezas cortadas', valor: 500 },
+      { capacidad: 'minutos_reales', etiqueta: 'minutos de trabajo', valor: 45 },
+    ]);
+  });
+
+  it('capacidadesEmitidas: las keys del propio registro se representan a sí mismas, sin duplicar', () => {
+    // Bug cazado en el E2E de B.3.2: minutos_reales caía al fallback
+    // (→ unidades) y encima la universal lo re-agregaba.
+    const emitidas = capacidadesEmitidas({
+      outputsCanonicos: { unidades_procesadas: 100, minutos_reales: 75 },
+      cantidadEfectiva: 100,
+      totalMin: 75,
+    });
+    expect(emitidas).toEqual([
+      { capacidad: 'unidades_procesadas', etiqueta: 'unidades procesadas', valor: 100 },
+      { capacidad: 'minutos_reales', etiqueta: 'minutos de trabajo', valor: 75 },
+    ]);
+  });
+
+  it('capacidadesEmitidas: un paso tenant sin outputs declara igual sus universales', () => {
+    expect(
+      capacidadesEmitidas({ outputsCanonicos: {}, cantidadEfectiva: 100, totalMin: 100 }),
+    ).toEqual([
+      { capacidad: 'unidades_procesadas', etiqueta: 'unidades procesadas', valor: 100 },
+      { capacidad: 'minutos_reales', etiqueta: 'minutos de trabajo', valor: 100 },
+    ]);
+  });
+
+  it('derivarOutputsTenant: unidades+minutos siempre; CONVERSION suma grupos', () => {
+    expect(derivarOutputsTenant({ mecanismosCantidad: ['DIRECT_FROM_JOBCONTEXT'] })).toEqual([
+      'unidades_procesadas',
+      'minutos_reales',
+    ]);
+    expect(
+      derivarOutputsTenant({ mecanismosCantidad: ['DIRECT_FROM_JOBCONTEXT', 'CONVERSION'] }),
+    ).toContain('grupos');
   });
 
   it('las 42 familias del sistema se proyectan al registro sin sorpresas', () => {

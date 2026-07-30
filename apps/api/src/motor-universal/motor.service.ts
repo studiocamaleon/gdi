@@ -51,6 +51,7 @@ import {
   type PrintSheetCandidateMaterial,
 } from './nesting-config';
 import { calcularOutputsCanonicos } from './outputs-canonicos';
+import { capacidadesEmitidas } from '../productos-servicios/pasos/capacidades';
 import {
   getConsumableChannelFromDetail,
   getPerfilConsumableChannels,
@@ -2331,6 +2332,14 @@ export class MotorUniversalService {
       cantidadEfectiva,
     });
 
+    // B.3.2 — Vista estandarizada de los outputs (Registro de Capacidades),
+    // para trazabilidad y UI. Aditiva: las keys planas siguen intactas.
+    const capacidades = capacidadesEmitidas({
+      outputsCanonicos,
+      cantidadEfectiva,
+      totalMin: tiempo?.totalMin,
+    });
+
     const nestingResult: NestingEjecutado | undefined = nestingDispatch
       ? {
           algorithm: nestingDispatch.algorithm,
@@ -2366,6 +2375,7 @@ export class MotorUniversalService {
       cargosDirectosPaso,
       costoTotal: subtotalPaso + cargosPasoTotal,
       outputsCanonicos,
+      capacidades,
       nestingResult,
     };
   }
