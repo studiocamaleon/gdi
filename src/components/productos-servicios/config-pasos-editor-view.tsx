@@ -47,6 +47,7 @@ import { PasoTercerizadoPanel } from "@/components/productos-servicios/paso-terc
 import {
   pendientesDePaso,
   resumenPendientes,
+  type PendientePaso,
 } from "@/lib/pendientes-paso";
 import {
   actualizarPasoExtra,
@@ -3104,6 +3105,11 @@ export function ConfigPasosEditorView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rutaAlternativa.pasosExtras]);
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
+  // E.3.2 — el modo guiado es la puerta de entrada; "detallado" es el
+  // editor completo de siempre.
+  const [modoVista, setModoVista] = React.useState<"guiado" | "detallado">(
+    "guiado",
+  );
   const [panelEditorPasoId, setPanelEditorPasoId] = React.useState<
     string | null
   >(null);
@@ -5018,6 +5024,19 @@ export function ConfigPasosEditorView({
                           <button
                             className="btn"
                             type="button"
+                            onClick={() =>
+                              setModoVista(
+                                modoVista === "guiado" ? "detallado" : "guiado",
+                              )
+                            }
+                          >
+                            {modoVista === "guiado"
+                              ? "Modo detallado"
+                              : "Modo guiado"}
+                          </button>
+                          <button
+                            className="btn"
+                            type="button"
                             onClick={goPrev}
                             disabled={idx === 0}
                           >
@@ -5055,7 +5074,65 @@ export function ConfigPasosEditorView({
                         </div>
                       </div>
 
-                      <div className="config-step-content pasos-sections">
+                      {modoVista === "guiado" && !noEjecutar ? (
+                        <ModoGuiadoPanel
+                          cfg={cfg}
+                          pendientes={pendientesDePaso(cfg, familia)}
+                          maquinas={maquinasCompatibles}
+                          centros={lookups.centrosCosto}
+                          pasosPrevios={rutaAlternativa.ruta.pasos
+                            .filter(
+                              (p) =>
+                                p.orden <
+                                ((paso as { orden?: number }).orden ??
+                                  Number.MAX_SAFE_INTEGER),
+                            )
+                            .map((p) => ({
+                              id: p.id,
+                              nombre:
+                                configs[p.id]?.nombreVisible?.trim() ||
+                                familiasMap.get(p.familiaCodigo)?.nombre ||
+                                humanizeCode(p.familiaCodigo),
+                              capacidades: (
+                                familiasMap.get(p.familiaCodigo)
+                                  ?.capacidades ?? []
+                              ).filter((c) => c.heredable),
+                            }))}
+                          herenciaOrigen={leerOrigenHerencia(
+                            jsonTexts[paso.id]?.mecanismo ?? "",
+                          )}
+                          onPatch={(patch) => updateConfig(paso.id, patch)}
+                          onParams={(patch) => updateStepParams(paso.id, patch)}
+                          onHerencia={(origen) =>
+                            setJsonTexts((prev) => ({
+                              ...prev,
+                              [paso.id]: {
+                                ...(prev[paso.id] ?? {
+                                  params: "",
+                                  mecanismo: "",
+                                }),
+                                mecanismo: escribirOrigenHerencia(
+                                  prev[paso.id]?.mecanismo ?? "",
+                                  origen,
+                                ),
+                              },
+                            }))
+                          }
+                          onDetallado={() => setModoVista("detallado")}
+                          onGuardar={() => guardarPaso(paso.id)}
+                          guardando={guardando === paso.id}
+                          tieneCambios={pasoTieneCambios}
+                          configExistente={Boolean(configExistente)}
+                        />
+                      ) : null}
+                      <div
+                        className="config-step-content pasos-sections"
+                        style={
+                          modoVista === "guiado" && !noEjecutar
+                            ? { display: "none" }
+                            : undefined
+                        }
+                      >
                         <section className="section-block open">
                           <div className="sb-head">
                             <span className="num">T</span>
@@ -9278,6 +9355,384 @@ export function ConfigPasosEditorView({
           )}
         </main>
       </div>
+    </div>
+  );
+}
+
+
+// ─── E.3.2 — Modo guiado: las question-cards del motor de pendientes ───
+// Recorre los pendientes de a uno; cada card resuelve UN pendiente
+// escribiendo en el mismo draft que usa el editor detallado. Los casos
+// ricos (material, grilla condicional) derivan al detallado.
+
+const PREGUNTA_GUIADA: Record<string, string> = {
+  maquina: "¿En qué máquina se hace?",
+  candidatas: "¿Entre qué máquinas elige el comercial?",
+  perfil: "¿Con qué perfil de la máquina?",
+  material_slot: "¿Qué material usa?",
+  grilla_tercerizado: "¿A qué precio se le compra?",
+  proveedor: "¿A quién se le compra?",
+  ritmo: "¿A qué ritmo se hace en este producto?",
+  tiempo_fijo: "¿Cuántos minutos lleva en este producto?",
+  centro: "¿Quién lo cobra?",
+  regla_condicional: "¿Cuándo se activa?",
+  herencia_origen: "¿De qué paso hereda la cantidad?",
+};
+
+function ModoGuiadoPanel({
+  cfg,
+  pendientes,
+  maquinas,
+  centros,
+  pasosPrevios,
+  herenciaOrigen,
+  onPatch,
+  onParams,
+  onHerencia,
+  onDetallado,
+  onGuardar,
+  guardando,
+  tieneCambios,
+  configExistente,
+}: {
+  cfg: UpsertConfigPasoPayload;
+  pendientes: PendientePaso[];
+  maquinas: Array<{
+    id: string;
+    nombre: string;
+    perfilesOperativos: Array<{ id: string; nombre: string }>;
+  }>;
+  centros: Array<{ id: string; nombre: string }>;
+  pasosPrevios: Array<{
+    id: string;
+    nombre: string;
+    capacidades: Array<{ key: string; nombre: string; heredable: boolean }>;
+  }>;
+  herenciaOrigen: Partial<OrigenHerencia> | null;
+  onPatch: (patch: Partial<UpsertConfigPasoPayload>) => void;
+  onParams: (patch: Record<string, unknown>) => void;
+  onHerencia: (origen: OrigenHerencia | null) => void;
+  onDetallado: () => void;
+  onGuardar: () => void;
+  guardando: boolean;
+  tieneCambios: boolean;
+  configExistente: boolean;
+}) {
+  const clave = (pend: PendientePaso) => `${pend.tipo}:${pend.slotCodigo ?? ""}`;
+  const [omitidos, setOmitidos] = React.useState<Set<string>>(new Set());
+  // Inputs con Aplicar explícito: si escribieran directo al draft, la card
+  // desaparecería en la primera tecla válida.
+  const [ritmoTexto, setRitmoTexto] = React.useState("");
+  const [tiempoTexto, setTiempoTexto] = React.useState("");
+  const [herenciaPasoSel, setHerenciaPasoSel] = React.useState<string>("");
+  const [herenciaCapSel, setHerenciaCapSel] = React.useState<string>(
+    "unidades_procesadas",
+  );
+
+  const visibles = pendientes.filter((pend) => !omitidos.has(clave(pend)));
+  const actual = visibles[0] ?? null;
+  const omitidosPresentes = pendientes.filter((pend) =>
+    omitidos.has(clave(pend)),
+  );
+
+  const cardStyle: React.CSSProperties = {
+    border: "1px solid var(--hairline, #e6e2dc)",
+    borderRadius: 12,
+    padding: "18px 20px",
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
+    background: "var(--surface-1, #fff)",
+    maxWidth: 640,
+  };
+  const notaStyle: React.CSSProperties = {
+    fontSize: 12.5,
+    color: "var(--muted-text, #6e6e76)",
+  };
+
+  const maquinaSel = maquinas.find((m) => m.id === cfg.maquinaM1Id) ?? null;
+
+  return (
+    <div
+      className="config-step-content"
+      style={{ display: "flex", flexDirection: "column", gap: 14 }}
+    >
+      {actual ? (
+        <div style={cardStyle}>
+          <div style={{ fontSize: 12, color: "var(--muted-text, #6e6e76)" }}>
+            {visibles.length === 1
+              ? "Última pregunta"
+              : `${visibles.length} preguntas pendientes`}
+            {actual.bloqueante ? "" : " · esta es opcional"}
+          </div>
+          <div style={{ fontSize: 18, fontWeight: 650 }}>
+            {actual.tipo === "material_slot"
+              ? `¿Qué ${actual.etiqueta} usa?`
+              : (PREGUNTA_GUIADA[actual.tipo] ?? actual.etiqueta)}
+          </div>
+          <div style={notaStyle}>{actual.motivo}</div>
+
+          {actual.tipo === "maquina" ? (
+            <HumanSelect
+              value={cfg.maquinaM1Id ?? ""}
+              onValueChange={(id) => {
+                const maq = maquinas.find((m) => m.id === id);
+                onPatch({
+                  maquinaM1Id: id || null,
+                  perfilM1Id: maq?.perfilesOperativos[0]?.id ?? null,
+                  centroCostoId: null,
+                });
+              }}
+              options={maquinas.map((m) => ({ value: m.id, label: m.nombre }))}
+              placeholder="Elegir máquina"
+            />
+          ) : null}
+
+          {actual.tipo === "perfil" && maquinaSel ? (
+            <HumanSelect
+              value={cfg.perfilM1Id ?? ""}
+              onValueChange={(id) => onPatch({ perfilM1Id: id || null })}
+              options={maquinaSel.perfilesOperativos.map((perfil) => ({
+                value: perfil.id,
+                label: perfil.nombre,
+              }))}
+              placeholder="Elegir perfil"
+            />
+          ) : null}
+
+          {actual.tipo === "candidatas" ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {maquinas.map((m) => {
+                const seleccionadas = cfg.maquinasCandidatas ?? [];
+                const activa = seleccionadas.some(
+                  (candidata) => candidata.maquinaId === m.id,
+                );
+                return (
+                  <Button
+                    key={m.id}
+                    type="button"
+                    variant={activa ? "default" : "outline"}
+                    size="sm"
+                    style={{ justifyContent: "flex-start" }}
+                    onClick={() => {
+                      const restantes = activa
+                        ? seleccionadas.filter(
+                            (candidata) => candidata.maquinaId !== m.id,
+                          )
+                        : [
+                            ...seleccionadas,
+                            {
+                              maquinaId: m.id,
+                              perfilDefaultId:
+                                m.perfilesOperativos[0]?.id ?? null,
+                              modoColorAllowedModes: [],
+                              esPreferida: seleccionadas.length === 0,
+                              orden: seleccionadas.length,
+                            },
+                          ];
+                      onPatch({ maquinasCandidatas: restantes });
+                    }}
+                  >
+                    {activa ? "✓ " : ""}
+                    {m.nombre}
+                  </Button>
+                );
+              })}
+              <div style={notaStyle}>
+                La primera que marques queda como preferida; se afina en modo
+                detallado si hace falta.
+              </div>
+            </div>
+          ) : null}
+
+          {actual.tipo === "centro" ? (
+            <HumanSelect
+              value={cfg.centroCostoId ?? ""}
+              onValueChange={(id) => onPatch({ centroCostoId: id || null })}
+              options={centros.map((centro) => ({
+                value: centro.id,
+                label: centro.nombre,
+              }))}
+              placeholder="Elegir centro de costo"
+            />
+          ) : null}
+
+          {actual.tipo === "ritmo" ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Input
+                value={ritmoTexto}
+                onChange={(e) => setRitmoTexto(e.target.value)}
+                placeholder="Ej: 60"
+                inputMode="decimal"
+                style={{ maxWidth: 140 }}
+              />
+              <span style={notaStyle}>unidades por hora</span>
+              <Button
+                type="button"
+                size="sm"
+                disabled={!(Number(ritmoTexto) > 0)}
+                onClick={() =>
+                  onParams({ productivityValue: Number(ritmoTexto) })
+                }
+              >
+                Aplicar
+              </Button>
+            </div>
+          ) : null}
+
+          {actual.tipo === "tiempo_fijo" ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Input
+                value={tiempoTexto}
+                onChange={(e) => setTiempoTexto(e.target.value)}
+                placeholder="Ej: 30"
+                inputMode="decimal"
+                style={{ maxWidth: 140 }}
+              />
+              <span style={notaStyle}>minutos, fijos</span>
+              <Button
+                type="button"
+                size="sm"
+                disabled={!(Number(tiempoTexto) > 0)}
+                onClick={() =>
+                  onPatch({ tiempoFijoOverrideMin: Number(tiempoTexto) })
+                }
+              >
+                Aplicar
+              </Button>
+            </div>
+          ) : null}
+
+          {actual.tipo === "herencia_origen" ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <HumanSelect
+                value={herenciaPasoSel}
+                onValueChange={(id) => setHerenciaPasoSel(id)}
+                options={pasosPrevios.map((previo) => ({
+                  value: previo.id,
+                  label: previo.nombre,
+                  description: previo.capacidades.length
+                    ? `Deja: ${previo.capacidades
+                        .map((c) => c.nombre.toLowerCase())
+                        .join(", ")}`
+                    : undefined,
+                }))}
+                placeholder="¿De qué paso?"
+              />
+              {herenciaPasoSel ? (
+                <div
+                  style={{ display: "flex", alignItems: "center", gap: 8 }}
+                >
+                  <HumanSelect
+                    value={herenciaCapSel}
+                    onValueChange={(v) =>
+                      setHerenciaCapSel(v || "unidades_procesadas")
+                    }
+                    options={(
+                      pasosPrevios.find(
+                        (previo) => previo.id === herenciaPasoSel,
+                      )?.capacidades ?? []
+                    ).map((c) => ({ value: c.key, label: c.nombre }))}
+                    placeholder="Qué número usa"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() =>
+                      onHerencia({
+                        rutaPasoId: herenciaPasoSel,
+                        capacidad: herenciaCapSel,
+                      })
+                    }
+                  >
+                    Aplicar
+                  </Button>
+                </div>
+              ) : null}
+              {herenciaOrigen?.rutaPasoId ? (
+                <div style={notaStyle}>Origen ya señalado — listo.</div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {actual.tipo === "proveedor" || actual.tipo === "grilla_tercerizado" ? (
+            <PasoTercerizadoPanel
+              value={cfg}
+              onChange={(patch) => onPatch(patch)}
+              onToggle={(tercerizado) => onPatch({ tercerizado })}
+            />
+          ) : null}
+
+          {actual.tipo === "material_slot" ||
+          actual.tipo === "regla_condicional" ? (
+            <Button type="button" variant="outline" onClick={onDetallado}>
+              {actual.tipo === "material_slot"
+                ? "Elegir el material en modo detallado"
+                : "Definir la regla en modo detallado"}
+            </Button>
+          ) : null}
+
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "flex-end",
+              gap: 8,
+              marginTop: 4,
+            }}
+          >
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                setOmitidos((prev) => new Set([...prev, clave(actual)]))
+              }
+            >
+              {actual.bloqueante ? "Después" : "Dejar la regla automática"}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div style={cardStyle}>
+          <div style={{ fontSize: 18, fontWeight: 650, color: "#2e7d32" }}>
+            ✓ {pendientes.length === 0 ? "Listo para cotizar" : "Sin preguntas a la vista"}
+          </div>
+          {omitidosPresentes.length > 0 ? (
+            <div style={notaStyle}>
+              Omitiste: {omitidosPresentes.map((pend) => pend.etiqueta).join(", ")}.{" "}
+              <button
+                type="button"
+                className="btn"
+                style={{ marginLeft: 6 }}
+                onClick={() => setOmitidos(new Set())}
+              >
+                Volver a verlas
+              </button>
+            </div>
+          ) : (
+            <div style={notaStyle}>
+              Todo lo demás sale de lo que el paso ya declara (defaults,
+              estación, activación). El modo detallado queda para ajustes
+              finos.
+            </div>
+          )}
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <Button
+              type="button"
+              onClick={onGuardar}
+              disabled={guardando || !tieneCambios}
+            >
+              {guardando
+                ? "Guardando…"
+                : tieneCambios
+                  ? "Guardar paso"
+                  : configExistente
+                    ? "Guardado"
+                    : "Guardar paso"}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
