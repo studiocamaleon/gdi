@@ -782,11 +782,11 @@ describe("sección Ajustes del trabajo (oficio)", () => {
     expect(acomodado.origenValor(granFormato)).toBe("config");
   });
 
-  it("con el costeo en su default no lo nombra (en rollo no es configurable)", () => {
+  it("con el costeo en su default no lo nombra", () => {
     const acomodado = ESQUEMA_PASO.find(
       (op) => op.clave === "oficio.acomodado",
     )!;
-    const rollo = ctxBase({
+    const ctx = ctxBase({
       familia: { codigo: "impresion_por_area" },
       cfg: {
         paramsPasoJson: {
@@ -794,6 +794,54 @@ describe("sección Ajustes del trabajo (oficio)", () => {
         },
       },
     });
-    expect(acomodado.resumen(rollo)).toBe("Acomodo estándar");
+    expect(acomodado.resumen(ctx)).toBe("Acomodo estándar");
+  });
+
+  it("en ROLLO no nombra el costeo aunque haya una estrategia guardada (dato muerto)", () => {
+    const acomodado = ESQUEMA_PASO.find(
+      (op) => op.clave === "oficio.acomodado",
+    )!;
+    // Vinilo en rollo con plate-segments heredado de una config previa:
+    // la card no lo ofrece y el motor lo ignora, así que no se nombra.
+    const rollo = ctxBase({
+      familia: { codigo: "impresion_por_area" },
+      cfg: {
+        slotsMateriales: [
+          {
+            slotCodigo: "sustrato_principal",
+            modoSeleccion: "HARDCODED",
+            materialVarianteId: "v-rollo",
+          },
+        ],
+        paramsPasoJson: {
+          nestingConfig: {
+            costing: { strategy: "plate-segments" },
+            paneling: { enabled: true },
+          },
+        },
+      },
+      lookups: {
+        materiasPrimas: [
+          {
+            id: "mp-vinilo",
+            codigo: "VIN",
+            nombre: "Vinilo blanco",
+            familia: "VINILOS",
+            subfamilia: "",
+            templateId: "t",
+            variantes: [
+              {
+                id: "v-rollo",
+                sku: "VIN-50",
+                nombreVariante: "1,50 × 50 m",
+                precioReferencia: null,
+                atributosVarianteJson: { anchoMm: 1500, largoRolloMm: 50000 },
+              },
+            ],
+          },
+        ],
+      },
+    });
+    expect(acomodado.resumen(rollo)).toBe("Panelizado");
   });
 });

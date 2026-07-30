@@ -1216,43 +1216,26 @@ function WizardNuevoPaso({
                     de Grafoprint).
                   </p>
                   <div className={s.opciones}>
+                    {/* "pliego" y "pliegos_multiples" rutean al MISMO
+                        algoritmo (grid-2d-multi, que degrada solo a
+                        single con piezas uniformes): eran una elección
+                        sin consecuencia. Se ofrecen como una sola; el
+                        valor legacy sigue siendo válido en el motor. */}
                     <Opcion
-                      activa={draft.superficie === "pliego"}
-                      titulo="Un pliego u hoja"
-                      desc="Las piezas se acomodan en hojas sueltas: calcula poses por pliego y pliegos necesarios."
+                      activa={
+                        draft.superficie === "pliego" ||
+                        draft.superficie === "pliegos_multiples"
+                      }
+                      titulo="Pliegos, hojas o placas"
+                      desc="Tarjetas, talonarios, placas rígidas: calcula cuántas piezas entran por hoja y cuántas hojas hacen falta. Si el trabajo trae piezas de distintas medidas, las combina solo."
                       onClick={() => set({ superficie: "pliego" })}
-                    />
-                    <Opcion
-                      activa={draft.superficie === "pliegos_multiples"}
-                      titulo="Varios pliegos combinados"
-                      desc="Trabajos con piezas de distintas medidas repartidas en varias hojas."
-                      onClick={() => set({ superficie: "pliegos_multiples" })}
                     />
                     <Opcion
                       activa={draft.superficie === "rollo"}
                       titulo="Un rollo"
-                      desc="Las piezas se acomodan a lo ancho del rollo: calcula los metros consumidos, con desperdicio real."
+                      desc="Vinilo, lona: las piezas se acomodan a lo ancho del rollo y calcula los metros consumidos, con desperdicio real."
                       onClick={() => set({ superficie: "rollo" })}
                     />
-                  </div>
-                  <div className="field" style={{ marginTop: 12 }}>
-                    <span className={s.previewLabel}>
-                      ¿Cuánto aire necesita cada pieza? (opcional)
-                    </span>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <Input
-                        value={draft.demasiaDefaultMm}
-                        onChange={(e) => set({ demasiaDefaultMm: e.target.value })}
-                        placeholder="Ej: 3"
-                        inputMode="decimal"
-                        style={{ maxWidth: 120 }}
-                      />
-                      <span className={s.previewPista}>mm por lado</span>
-                    </div>
-                    <span className={s.previewPista}>
-                      Queda como la demasía típica del paso; cada producto
-                      puede pisarla.
-                    </span>
                   </div>
                 </>
               ) : null}

@@ -386,6 +386,66 @@ function grillaTercerizadoCompleta(ctx: ContextoOpcion): boolean {
   return typeof numero === "number" && Number.isFinite(numero);
 }
 
+const CLAVES_LARGO_ROLLO = [
+  "largoRolloMm",
+  "largoRolloM",
+  "rollLengthMm",
+  "rollLengthM",
+  "longitudRolloMm",
+  "longitudRolloM",
+];
+
+function atributosLucenRollo(
+  attrs: Record<string, unknown> | null | undefined,
+): boolean {
+  if (!attrs) return false;
+  return CLAVES_LARGO_ROLLO.some((clave) => {
+    const valor = attrs[clave];
+    const numero = typeof valor === "string" ? Number(valor) : valor;
+    return typeof numero === "number" && Number.isFinite(numero);
+  });
+}
+
+/** ¿El sustrato del paso es (o puede ser) un rollo? Espeja la señal que
+ *  usa el card de Acomodado para ocultar el costeo del sustrato: en rollo
+ *  ese ajuste no es configurable y el motor lo ignora. */
+function sustratoLuceRollo(ctx: ContextoOpcion): boolean {
+  const slot = (ctx.cfg.slotsMateriales ?? []).find(
+    (item) => item.slotCodigo === "sustrato_principal",
+  );
+  if (!slot) return false;
+  if (slot.materialVarianteId) {
+    for (const materia of ctx.lookups.materiasPrimas) {
+      const variante = materia.variantes.find(
+        (item) => item.id === slot.materialVarianteId,
+      );
+      if (variante) return atributosLucenRollo(variante.atributosVarianteJson);
+    }
+  }
+  return (slot.candidatos ?? []).some((candidato) => {
+    const materia = ctx.lookups.materiasPrimas.find(
+      (item) => item.id === candidato.materiaPrimaId,
+    );
+    if (!materia) return false;
+    const texto = [
+      materia.codigo,
+      materia.nombre,
+      materia.familia,
+      materia.subfamilia,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toUpperCase();
+    if (texto.includes("ROLLO") || texto.includes("ROLL")) return true;
+    const habilitadas = new Set(candidato.varianteIds);
+    return materia.variantes.some(
+      (variante) =>
+        (habilitadas.size === 0 || habilitadas.has(variante.id)) &&
+        atributosLucenRollo(variante.atributosVarianteJson),
+    );
+  });
+}
+
 /** ¿El costeo del material lo define Acomodado/nesting (y no el slot)? */
 function nestingDefineCosteo(ctx: ContextoOpcion): boolean {
   const nesting = ctx.paramsPaso.nestingConfig as
@@ -1505,9 +1565,10 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
           ? nesting.costing.strategy
           : "simple";
       const partes: string[] = [];
-      // El costeo sólo se nombra si se salió del default: en rollo no es
-      // configurable y decir "placas enteras" ahí confunde.
-      if (estrategia !== "simple") {
+      // El costeo se nombra sólo si se salió del default Y el sustrato es
+      // placa: en rollo la card no lo ofrece (el motor lo ignora), así que
+      // mostrar una estrategia guardada de antes sería un dato muerto.
+      if (estrategia !== "simple" && !sustratoLuceRollo(ctx)) {
         partes.push(
           `Costeo: ${labelDe(
             COSTING_STRATEGY_OPTIONS,
