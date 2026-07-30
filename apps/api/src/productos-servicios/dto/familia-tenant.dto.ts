@@ -39,6 +39,23 @@ export class DefaultsFamiliaPasoDto {
   @IsOptional()
   @IsNumber()
   solapePanelMm?: number | null;
+
+  /** E.2 — tercerización declarada; la grilla sigue por producto. */
+  @IsOptional()
+  @IsBoolean()
+  tercerizado?: boolean | null;
+
+  @IsOptional()
+  @IsString()
+  proveedorId?: string | null;
+
+  @IsOptional()
+  @IsString()
+  fuenteCostoTercerizado?: string | null;
+
+  @IsOptional()
+  @IsNumber()
+  plazoProveedorDias?: number | null;
 }
 
 export class SlotFamiliaTenantDto {

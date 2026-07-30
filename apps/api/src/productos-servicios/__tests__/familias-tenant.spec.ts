@@ -236,6 +236,39 @@ describe('FamiliasTenantService (integración, gdi_saas_test)', () => {
     ).toBeNull();
   });
 
+  it('E.2: la tercerización declarada viaja en los defaults (proveedor validado)', async () => {
+    const fila = await service.crear(tenantId, {
+      nombre: 'Troquelado tercerizado test',
+      categoria: 'operaciones_manuales',
+      relacionMaquina: ['M-0'],
+      modosTiempo: ['T-4'],
+      mecanismosCantidad: ['DIRECT_FROM_JOBCONTEXT'],
+      defaults: {
+        tercerizado: true,
+        fuenteCostoTercerizado: 'matriz',
+        plazoProveedorDias: 5,
+      },
+    });
+    const row = await prisma.familiaPasoDefaults.findUnique({
+      where: {
+        tenantId_familiaCodigo: { tenantId, familiaCodigo: fila.id },
+      },
+    });
+    expect(row?.tercerizado).toBe(true);
+    expect(row?.fuenteCostoTercerizado).toBe('matriz');
+    expect(row?.plazoProveedorDias).toBe(5);
+
+    // Proveedor de otro tenant (inexistente acá) → 400.
+    await expect(
+      service.actualizar(tenantId, fila.id, {
+        defaults: {
+          tercerizado: true,
+          proveedorId: randomUUID(),
+        },
+      }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
   it('E.1: guardarDefaultsFamilia funciona para familias del SISTEMA', async () => {
     const familiasService = new FamiliasPasosService(
       prisma as unknown as PrismaService,

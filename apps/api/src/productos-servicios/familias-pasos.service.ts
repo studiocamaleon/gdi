@@ -48,6 +48,10 @@ export class FamiliasPasosService {
           demasiaMm: d.demasiaMm != null ? Number(d.demasiaMm) : null,
           solapePanelMm:
             d.solapePanelMm != null ? Number(d.solapePanelMm) : null,
+          tercerizado: d.tercerizado,
+          proveedorId: d.proveedorId,
+          fuenteCostoTercerizado: d.fuenteCostoTercerizado,
+          plazoProveedorDias: d.plazoProveedorDias,
         },
       ]),
     );
@@ -126,6 +130,10 @@ export class FamiliasPasosService {
       tiempoFijoMin?: number | null;
       demasiaMm?: number | null;
       solapePanelMm?: number | null;
+      tercerizado?: boolean | null;
+      proveedorId?: string | null;
+      fuenteCostoTercerizado?: string | null;
+      plazoProveedorDias?: number | null;
     },
   ) {
     if (!resolverFamilia(familiaCodigo)) {
@@ -137,7 +145,20 @@ export class FamiliasPasosService {
       tiempoFijoMin: input.tiempoFijoMin ?? null,
       demasiaMm: input.demasiaMm ?? null,
       solapePanelMm: input.solapePanelMm ?? null,
+      tercerizado: input.tercerizado ?? null,
+      proveedorId: input.proveedorId ?? null,
+      fuenteCostoTercerizado: input.fuenteCostoTercerizado ?? null,
+      plazoProveedorDias: input.plazoProveedorDias ?? null,
     };
+    if (limpio.proveedorId) {
+      const proveedor = await this.prisma.proveedor.findFirst({
+        where: { id: limpio.proveedorId, tenantId },
+        select: { id: true },
+      });
+      if (!proveedor) {
+        throw new BadRequestException('El proveedor del default no existe.');
+      }
+    }
     for (const [campo, valor] of Object.entries(limpio)) {
       if (campo !== 'centroCostoId' && typeof valor === 'number' && valor < 0) {
         throw new BadRequestException(`${campo} no puede ser negativo.`);

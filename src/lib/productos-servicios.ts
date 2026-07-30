@@ -492,6 +492,11 @@ export interface DefaultsFamiliaPaso {
   tiempoFijoMin: number | null;
   demasiaMm: number | null;
   solapePanelMm: number | null;
+  /** E.2 — tercerización declarada; la grilla sigue por producto. */
+  tercerizado?: boolean | null;
+  proveedorId?: string | null;
+  fuenteCostoTercerizado?: string | null;
+  plazoProveedorDias?: number | null;
 }
 
 export interface FamiliaTenant {

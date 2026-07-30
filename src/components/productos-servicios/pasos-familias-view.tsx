@@ -33,6 +33,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ApiError } from "@/lib/api";
 import { getEstaciones } from "@/lib/estaciones-api";
 import { getCentrosCosto } from "@/lib/costos-api";
+import { getProveedores } from "@/lib/proveedores-api";
 import { categoriaFamiliaLabels, getLabel } from "@/lib/labels-humanos";
 import {
   actualizarFamiliaTenant,
@@ -61,6 +62,8 @@ import s from "./pasos-familias.module.css";
 
 type PasoWizard =
   | "arranque"
+  | "quien"
+  | "proveedor"
   | "maquina"
   | "maquinas-candidatas"
   | "tiempo"
@@ -90,6 +93,12 @@ interface FormaDraft {
   mecanismoCantidad: string;
   /** B.3.4 — superficie de acomodo cuando mecanismo = CALCULADO_POR_PASO. */
   superficie: "pliego" | "pliegos_multiples" | "rollo" | null;
+  /** E.2 — bifurcación inicial: quién hace el paso. La rama proveedor
+   *  salta máquina/tiempo/materiales/cantidad/estación/registro. */
+  quienLoHace: "taller" | "proveedor";
+  proveedorDefaultId: string | null;
+  fuenteCostoDefault: "matriz" | "tarifa_magnitud" | "fijo";
+  plazoDefaultDias: string;
   /** E.1 — defaults declarados del paso (strings porque son inputs;
    *  vacío = sin default). Se guardan en FamiliaPasoDefaults. */
   centroCostoDefaultId: string | null;
@@ -113,6 +122,10 @@ const DRAFT_INICIAL: FormaDraft = {
   slots: [],
   mecanismoCantidad: "DIRECT_FROM_JOBCONTEXT",
   superficie: null,
+  quienLoHace: "taller",
+  proveedorDefaultId: null,
+  fuenteCostoDefault: "matriz",
+  plazoDefaultDias: "",
   centroCostoDefaultId: null,
   ritmoDefaultHora: "",
   tiempoFijoDefaultMin: "",
@@ -175,6 +188,34 @@ function numeroONull(texto: string): number | null {
 }
 
 function draftAInput(d: FormaDraft): UpsertFamiliaTenantInput {
+  // E.2 — un paso de proveedor no tiene máquina, tiempo interno, materiales
+  // propios ni estación: forma canónica mínima + defaults de tercerización.
+  // La GRILLA de precios se carga por producto, como siempre.
+  if (d.quienLoHace === "proveedor") {
+    return {
+      nombre: d.nombre.trim(),
+      descripcion: d.descripcion.trim() || undefined,
+      categoria: d.categoria,
+      relacionMaquina: ["M-0"],
+      modosTiempo: ["T-4"],
+      mecanismosCantidad: ["DIRECT_FROM_JOBCONTEXT"],
+      modoActivacionDefault: d.modoActivacionDefault,
+      ...(d.activacionForzada
+        ? { modosActivacion: [d.modoActivacionDefault] }
+        : {}),
+      slots: [],
+      plantillasCompatibles: [],
+      modoRegistro: "solo_completar",
+      presetOrigen: d.presetOrigen ?? undefined,
+      estacionId: null,
+      defaults: {
+        tercerizado: true,
+        proveedorId: d.proveedorDefaultId,
+        fuenteCostoTercerizado: d.fuenteCostoDefault,
+        plazoProveedorDias: numeroONull(d.plazoDefaultDias),
+      },
+    };
+  }
   const conMaquina = d.relacionMaquina !== "M-0";
   return {
     nombre: d.nombre.trim(),
@@ -244,6 +285,10 @@ function draftDesdePreset(f: FamiliaListItem): FormaDraft {
         (m) => m !== "CALCULADO_POR_PASO",
       ) ?? "DIRECT_FROM_JOBCONTEXT",
     superficie: null,
+    quienLoHace: "taller",
+    proveedorDefaultId: null,
+    fuenteCostoDefault: "matriz",
+    plazoDefaultDias: "",
     centroCostoDefaultId: null,
     ritmoDefaultHora: "",
     tiempoFijoDefaultMin: "",
@@ -281,6 +326,16 @@ function draftDesdeFamilia(f: FamiliaTenant): FormaDraft {
       | "pliegos_multiples"
       | "rollo"
       | null,
+    quienLoHace: f.defaults?.tercerizado ? "proveedor" : "taller",
+    proveedorDefaultId: f.defaults?.proveedorId ?? null,
+    fuenteCostoDefault: (f.defaults?.fuenteCostoTercerizado ?? "matriz") as
+      | "matriz"
+      | "tarifa_magnitud"
+      | "fijo",
+    plazoDefaultDias:
+      f.defaults?.plazoProveedorDias != null
+        ? String(f.defaults.plazoProveedorDias)
+        : "",
     centroCostoDefaultId: f.defaults?.centroCostoId ?? null,
     ritmoDefaultHora:
       f.defaults?.productividadHora != null
@@ -315,6 +370,9 @@ export function PasosFamiliasView() {
   const [centros, setCentros] = React.useState<
     Array<{ id: string; nombre: string }>
   >([]);
+  const [proveedores, setProveedores] = React.useState<
+    Array<{ id: string; nombre: string }>
+  >([]);
   const [cargando, setCargando] = React.useState(true);
   const [wizardAbierto, setWizardAbierto] = React.useState(false);
   const [aEditar, setAEditar] = React.useState<FamiliaTenant | null>(null);
@@ -333,11 +391,12 @@ export function PasosFamiliasView() {
     let vivo = true;
     (async () => {
       try {
-        const [filas, cat, ests, ccs] = await Promise.all([
+        const [filas, cat, ests, ccs, provs] = await Promise.all([
           getFamiliasTenant(),
           getCatalogoFamilias(),
           getEstaciones(),
           getCentrosCosto(),
+          getProveedores().catch(() => []),
         ]);
         if (!vivo) return;
         setFamilias(filas);
@@ -347,6 +406,12 @@ export function PasosFamiliasView() {
           (ccs as Array<{ id: string; nombre: string }>).map((c) => ({
             id: c.id,
             nombre: c.nombre,
+          })),
+        );
+        setProveedores(
+          (provs as Array<{ id: string; nombre: string }>).map((pv) => ({
+            id: pv.id,
+            nombre: pv.nombre,
           })),
         );
       } catch {
@@ -370,6 +435,10 @@ export function PasosFamiliasView() {
 
   const resumenForma = (f: FamiliaTenant): string[] => {
     const chips: string[] = [];
+    if (f.defaults?.tercerizado) {
+      chips.push("Tercerizado");
+      return chips;
+    }
     chips.push(f.relacionMaquina.includes("M-0") ? "Sin máquina" : "Con máquina");
     const tiempo = f.modosTiempo[0];
     chips.push(
@@ -563,6 +632,7 @@ export function PasosFamiliasView() {
           catalogoSistema={sistema}
           estaciones={estaciones}
           centros={centros}
+          proveedores={proveedores}
           editar={aEditar}
           onCerrar={() => {
             setWizardAbierto(false);
@@ -580,6 +650,7 @@ export function PasosFamiliasView() {
         <DefaultsSheet
           familia={defaultsDe}
           centros={centros}
+          proveedores={proveedores}
           onCerrar={() => setDefaultsDe(null)}
           onGuardado={async () => {
             setDefaultsDe(null);
@@ -619,6 +690,7 @@ function WizardNuevoPaso({
   catalogoSistema,
   estaciones,
   centros,
+  proveedores,
   editar,
   onCerrar,
   onCreado,
@@ -626,6 +698,7 @@ function WizardNuevoPaso({
   catalogoSistema: FamiliaListItem[];
   estaciones: Array<{ id: string; nombre: string }>;
   centros: Array<{ id: string; nombre: string }>;
+  proveedores: Array<{ id: string; nombre: string }>;
   /** Familia existente: el wizard abre precargado y guarda con PATCH. */
   editar?: FamiliaTenant | null;
   onCerrar: () => void;
@@ -634,7 +707,7 @@ function WizardNuevoPaso({
   // En edición no tiene sentido "¿partís de un paso existente?": se arranca
   // directo en la primera pregunta real, con todo precargado.
   const [paso, setPaso] = React.useState<PasoWizard>(
-    editar ? "maquina" : "arranque",
+    editar ? "quien" : "arranque",
   );
   const [draft, setDraft] = React.useState<FormaDraft>(() =>
     editar ? draftDesdeFamilia(editar) : DRAFT_INICIAL,
@@ -657,20 +730,31 @@ function WizardNuevoPaso({
 
   // El orden real del flujo, saltando la pregunta de máquinas candidatas
   // cuando el paso es manual.
+  const esProveedor = draft.quienLoHace === "proveedor";
   const secuencia: PasoWizard[] = React.useMemo(
-    () => [
-      ...(editar ? [] : (["arranque"] as PasoWizard[])),
-      "maquina",
-      ...(conMaquina ? (["maquinas-candidatas"] as PasoWizard[]) : []),
-      "tiempo",
-      "materiales",
-      "cantidad",
-      "activacion",
-      "estacion",
-      "registro",
-      "final",
-    ],
-    [conMaquina, editar],
+    () =>
+      esProveedor
+        ? [
+            ...(editar ? [] : (["arranque"] as PasoWizard[])),
+            "quien",
+            "proveedor",
+            "activacion",
+            "final",
+          ]
+        : [
+            ...(editar ? [] : (["arranque"] as PasoWizard[])),
+            "quien",
+            "maquina",
+            ...(conMaquina ? (["maquinas-candidatas"] as PasoWizard[]) : []),
+            "tiempo",
+            "materiales",
+            "cantidad",
+            "activacion",
+            "estacion",
+            "registro",
+            "final",
+          ],
+    [conMaquina, editar, esProveedor],
   );
   const indice = secuencia.indexOf(paso);
   const avanzar = () => setPaso(secuencia[Math.min(indice + 1, secuencia.length - 1)]);
@@ -796,6 +880,87 @@ function WizardNuevoPaso({
                 options={presetOptions}
                 placeholder="…o elegí un paso del catálogo como base"
               />
+            </>
+          ) : null}
+
+          {paso === "quien" ? (
+            <>
+              <div className={s.pregunta}>¿Quién hace este paso?</div>
+              <div className={s.opciones}>
+                <Opcion
+                  activa={draft.quienLoHace === "taller"}
+                  titulo="Tu taller"
+                  desc="Lo produce tu equipo: máquinas, tiempos y materiales propios."
+                  onClick={() => set({ quienLoHace: "taller" })}
+                />
+                <Opcion
+                  activa={draft.quienLoHace === "proveedor"}
+                  titulo="Un proveedor"
+                  desc="Se compra hecho: definís proveedor, cómo cotiza y plazo. Los precios se cargan en cada producto."
+                  onClick={() => set({ quienLoHace: "proveedor" })}
+                />
+              </div>
+            </>
+          ) : null}
+
+          {paso === "proveedor" ? (
+            <>
+              <div className={s.pregunta}>¿Cómo se le compra?</div>
+              <p className={s.ayuda}>
+                Esto queda como sugerencia del paso: cada producto puede
+                cambiar proveedor o internalizarlo. La grilla de precios se
+                carga al configurar cada producto.
+              </p>
+              <div className="field">
+                <span className={s.previewLabel}>Proveedor habitual</span>
+                <HumanSelect
+                  value={draft.proveedorDefaultId ?? ""}
+                  onValueChange={(id) =>
+                    set({ proveedorDefaultId: id || null })
+                  }
+                  options={proveedores.map((pv) => ({
+                    value: pv.id,
+                    label: pv.nombre,
+                  }))}
+                  placeholder="Elegir proveedor (opcional)"
+                />
+              </div>
+              <div className={s.pregunta} style={{ marginTop: 8 }}>
+                ¿Cómo cotiza el proveedor?
+              </div>
+              <div className={s.opciones}>
+                <Opcion
+                  activa={draft.fuenteCostoDefault === "matriz"}
+                  titulo="Con una grilla de precios"
+                  desc="Precio por combinación (medida, material…): la matriz se carga en cada producto."
+                  onClick={() => set({ fuenteCostoDefault: "matriz" })}
+                />
+                <Opcion
+                  activa={draft.fuenteCostoDefault === "tarifa_magnitud"}
+                  titulo="Por cantidad o medida"
+                  desc="Una tarifa por unidad, m² o metro: se define en cada producto."
+                  onClick={() => set({ fuenteCostoDefault: "tarifa_magnitud" })}
+                />
+                <Opcion
+                  activa={draft.fuenteCostoDefault === "fijo"}
+                  titulo="Precio fijo por trabajo"
+                  desc="Cobra lo mismo sin importar la cantidad."
+                  onClick={() => set({ fuenteCostoDefault: "fijo" })}
+                />
+              </div>
+              <div className="field" style={{ marginTop: 8 }}>
+                <span className={s.previewLabel}>Plazo típico (opcional)</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <Input
+                    value={draft.plazoDefaultDias}
+                    onChange={(e) => set({ plazoDefaultDias: e.target.value })}
+                    placeholder="Ej: 5"
+                    inputMode="numeric"
+                    style={{ maxWidth: 120 }}
+                  />
+                  <span className={s.previewPista}>días hábiles</span>
+                </div>
+              </div>
             </>
           ) : null}
 
@@ -1255,7 +1420,9 @@ function PasoFinal({
   );
   const [probando, setProbando] = React.useState(false);
 
-  const previewAplica = draft.modoTiempo === "T-1" || draft.modoTiempo === "T-2";
+  const esProveedor = draft.quienLoHace === "proveedor";
+  const previewAplica =
+    !esProveedor && (draft.modoTiempo === "T-1" || draft.modoTiempo === "T-2");
 
   const probar = async () => {
     if (!draft.centroCostoDefaultId) return;
@@ -1318,7 +1485,9 @@ function PasoFinal({
         <div className={s.opcionTitulo}>Qué deja este paso a los siguientes</div>
         <div className={s.dejaChips}>
           <span className={s.dejaChip}>Unidades procesadas</span>
-          <span className={s.dejaChip}>Minutos de trabajo</span>
+          {esProveedor ? null : (
+            <span className={s.dejaChip}>Minutos de trabajo</span>
+          )}
           {draft.mecanismoCantidad === "CONVERSION" ? (
             <span className={s.dejaChip}>Grupos armados</span>
           ) : null}
@@ -1437,9 +1606,11 @@ function PasoFinal({
         <div className={s.preview}>
           <div className={s.opcionTitulo}>El costo se ve al cotizar</div>
           <div className={s.previewAviso}>
-            {draft.modoTiempo === "T-3"
-              ? "El tiempo de este paso lo dicta la máquina elegida (su perfil de productividad), así que el costo aparece al cotizar un producto concreto."
-              : "El tiempo de este paso lo estima el comercial en cada cotización, así que no hay un costo fijo para previsualizar."}
+            {esProveedor
+              ? "El costo lo pone el proveedor: la grilla o tarifa se carga al configurar cada producto, y ahí se ve el precio."
+              : draft.modoTiempo === "T-3"
+                ? "El tiempo de este paso lo dicta la máquina elegida (su perfil de productividad), así que el costo aparece al cotizar un producto concreto."
+                : "El tiempo de este paso lo estima el comercial en cada cotización, así que no hay un costo fijo para previsualizar."}
           </div>
         </div>
       )}
@@ -1466,11 +1637,13 @@ function PasoFinal({
 function DefaultsSheet({
   familia,
   centros,
+  proveedores,
   onCerrar,
   onGuardado,
 }: {
   familia: FamiliaListItem;
   centros: Array<{ id: string; nombre: string }>;
+  proveedores: Array<{ id: string; nombre: string }>;
   onCerrar: () => void;
   onGuardado: () => Promise<void>;
 }) {
@@ -1489,6 +1662,17 @@ function DefaultsSheet({
   );
   const [solape, setSolape] = React.useState(
     d?.solapePanelMm != null ? String(d.solapePanelMm) : "",
+  );
+  // E.2 — tercerización declarada del paso.
+  const [tercerizado, setTercerizado] = React.useState(d?.tercerizado ?? false);
+  const [proveedorId, setProveedorId] = React.useState<string | null>(
+    d?.proveedorId ?? null,
+  );
+  const [fuenteCosto, setFuenteCosto] = React.useState(
+    d?.fuenteCostoTercerizado ?? "matriz",
+  );
+  const [plazoDias, setPlazoDias] = React.useState(
+    d?.plazoProveedorDias != null ? String(d.plazoProveedorDias) : "",
   );
   const [guardando, setGuardando] = React.useState(false);
 
@@ -1510,6 +1694,10 @@ function DefaultsSheet({
         tiempoFijoMin: soportaT1 ? numeroONull(tiempoFijo) : null,
         demasiaMm: nestea ? numeroONull(demasia) : null,
         solapePanelMm: panela ? numeroONull(solape) : null,
+        tercerizado: tercerizado ? true : null,
+        proveedorId: tercerizado ? proveedorId : null,
+        fuenteCostoTercerizado: tercerizado ? fuenteCosto : null,
+        plazoProveedorDias: tercerizado ? numeroONull(plazoDias) : null,
       });
       toast.success("Defaults guardados");
       await onGuardado();
@@ -1535,8 +1723,9 @@ function DefaultsSheet({
         <div className={s.wizardBody}>
           {!soportaManual && !soportaT2 && !soportaT1 && !nestea && !panela ? (
             <p className={s.ayuda}>
-              Este paso no tiene defaults configurables: la máquina pone la
-              tarifa y el tiempo, y su cantidad no depende de un acomodo.
+              Este paso no tiene defaults de tiempo/costo propios: la máquina
+              pone la tarifa y el tiempo. Igual podés declarar que lo
+              terceriza un proveedor.
             </p>
           ) : null}
           {soportaManual ? (
@@ -1598,6 +1787,61 @@ function DefaultsSheet({
                 <span className={s.previewPista}>mm por lado</span>
               </div>
             </div>
+          ) : null}
+          <label className={s.fijarActivacion}>
+            <Switch
+              checked={tercerizado}
+              onCheckedChange={(v) => setTercerizado(v)}
+            />
+            <span>
+              <span className={s.opcionTitulo}>Lo terceriza un proveedor</span>
+              <span className={s.opcionDesc}>
+                Las configuraciones nuevas de producto nacen con la
+                tercerización prendida y precargada; cada producto puede
+                internalizarlo o cambiar de proveedor.
+              </span>
+            </span>
+          </label>
+          {tercerizado ? (
+            <>
+              <div className="field">
+                <span className={s.previewLabel}>Proveedor habitual</span>
+                <HumanSelect
+                  value={proveedorId ?? ""}
+                  onValueChange={(id) => setProveedorId(id || null)}
+                  options={proveedores.map((pv) => ({
+                    value: pv.id,
+                    label: pv.nombre,
+                  }))}
+                  placeholder="Elegir proveedor (opcional)"
+                />
+              </div>
+              <div className="field">
+                <span className={s.previewLabel}>¿Cómo cotiza?</span>
+                <HumanSelect
+                  value={fuenteCosto}
+                  onValueChange={(v) => setFuenteCosto(v || "matriz")}
+                  options={[
+                    { value: "matriz", label: "Con una grilla de precios" },
+                    { value: "tarifa_magnitud", label: "Por cantidad o medida" },
+                    { value: "fijo", label: "Precio fijo por trabajo" },
+                  ]}
+                />
+              </div>
+              <div className="field">
+                <span className={s.previewLabel}>Plazo típico</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <Input
+                    value={plazoDias}
+                    onChange={(e) => setPlazoDias(e.target.value)}
+                    placeholder="Ej: 5"
+                    inputMode="numeric"
+                    style={{ maxWidth: 120 }}
+                  />
+                  <span className={s.previewPista}>días hábiles</span>
+                </div>
+              </div>
+            </>
           ) : null}
           {panela ? (
             <div className="field">

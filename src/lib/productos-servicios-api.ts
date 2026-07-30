@@ -472,6 +472,10 @@ export async function guardarDefaultsFamilia(
     tiempoFijoMin?: number | null;
     demasiaMm?: number | null;
     solapePanelMm?: number | null;
+    tercerizado?: boolean | null;
+    proveedorId?: string | null;
+    fuenteCostoTercerizado?: string | null;
+    plazoProveedorDias?: number | null;
   },
 ): Promise<unknown> {
   return apiRequest(
