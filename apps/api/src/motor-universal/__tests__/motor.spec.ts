@@ -3412,6 +3412,15 @@ describe('MotorUniversalService — smoke tests', () => {
           .pliegos_calculados,
       ).toBeGreaterThan(0);
       expect(guillotina!.activado).toBe(true);
+
+      // Sin pre-prensa, la imposición la hace la propia impresión: es ella la
+      // que tiene la grilla, así que es ella la que publica los cortes. Sin
+      // esto la guillotina costaría 0 minutos en silencio.
+      const cortes = (impresion!.outputsCanonicos as Record<string, unknown>)
+        .cortes_calculados as { cortesTotales?: number } | null;
+      expect(cortes).not.toBeNull();
+      expect(cortes!.cortesTotales).toBeGreaterThan(0);
+      expect(guillotina!.tiempo!.runMin).toBeGreaterThan(0);
     } finally {
       await prisma.productoConfigPaso.update({
         where: { id: prePrensa!.id },
