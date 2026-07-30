@@ -305,7 +305,12 @@ qué es un eje.
 
 ---
 
-## Etapa E — Familias tenant en rutas y cotizador
+## Etapa E.0 — Familias tenant en rutas y cotizador
+
+> **Ojo con el nombre**: la "Etapa E" del diseño (§10) es el **wizard de
+> ruta** (encadenar con validación por inputs/outputs). Eso NO se hizo.
+> Lo de abajo es la capa previa de utilización — que las familias tenant
+> entren al creador de rutas EXISTENTE y coticen — por eso E.0.
 
 > **Estado 2026-07-29: COMPLETA y verificada E2E** (rama
 > `feat/pasos-wizard-ruta`). No hizo falta tocar el backend de rutas: la
@@ -335,6 +340,93 @@ qué es un eje.
 > $131.655. Apagar un opcional restó exactamente su parte. No se emitió OT
 > (la materialización ya quedó probada en C); la preferida del producto de
 > prueba volvió a "Estandar".
+
+---
+
+## Etapa B — Nesting parametrizado + outputs canónicos
+
+> **Análisis 2026-07-29 (insumo, decisiones abiertas al final).** Motivo de
+> activación: el wizard no tiene ninguna pregunta que termine eligiendo qué
+> algoritmo de nesting usa el paso, y el eslabón que lo habilita son los
+> outputs canónicos.
+
+### B.0 Outputs canónicos — quién emite, quién consume (medido)
+
+**Quién emite.** Todos los pasos. La familia *declara* los nombres
+(`outputsCanonicos: string[]` en el contrato) y el motor *calcula* los
+valores al terminar cada paso (`motor-universal/outputs-canonicos.ts`,
+G-M2) y los publica flat al JobContext mutado, donde los pasos siguientes
+los leen. Dos clases de emisor:
+
+| Emisor | Outputs | De dónde salen |
+|---|---|---|
+| `pre_prensa` | `imposicion_calculada`, `pliegos_calculados`, `poses_por_pliego`, `cortes_calculados`, medidas del pliego, `pliego_impresion_mp_variante_id`, `talonario_pilas` | del **nesting** (grid-2d) |
+| `impresion_por_hoja` | `pliegos_impresos`, `tiempo_real_impresion`, medidas | nesting + tiempo |
+| `impresion_por_area` | `m2_calculados`, `aprovechamiento_pct`, `tiempo_real_impresion` | nesting rollo/mesa |
+| cortes | `piezas_cortadas`, `metros_lineales_corte`, `tiempo_real_corte` | nesting + tiempo |
+| `laminado` | `metros_lineales_film` | materiales |
+| `modificacion_pre` | `metros_lineales_union`, `mutacion_aplicada` | primitiva propia |
+| el resto (~30) | `piezas_X` | **trivial**: = cantidad efectiva del paso (fallback por prefijo; una key desconocida también devuelve cantidad efectiva) |
+
+**Quién consume.**
+1. `HEREDAR_DEL_OUTPUT_CANONICO` (la respuesta "del resultado del paso
+   anterior" en la pregunta de cantidad): lee `jobContext[campo]`, donde
+   `campo` sale de `mecanismoCantidadConfigJson.campoOutput` — que **hoy
+   ninguna UI expone** — o de `defaultOutputParaHeredar(familiaCodigo)`,
+   un mapa cableado consumidor→key (frontera Tipo A restante). Si el
+   output no está, **cae en silencio a `jobContext.cantidad`**.
+2. Validaciones `EXISTS_OUTPUT` del DSL.
+3. Slots con `cantidadBase` (ej. `talonario_pilas` para el cartón por pila).
+4. La trazabilidad del desglose por paso en el front.
+
+**El gap tenant (verificado en DB).** El wizard no declara outputs:
+"Bordado" emite `[]`. ("Serigrafía manual" emite `piezas_estampadas` solo
+porque nació por API en la Etapa C.) Consecuencias: nadie puede heredar DE
+un paso tenant; y un paso tenant que elija heredar no tiene entrada en el
+mapa default (UUID → null) → siempre cae a cantidad: el mecanismo aparenta
+andar pero nunca hereda de verdad.
+
+### B.1 Propuesta (a validar)
+
+Principio: **el usuario nunca escribe nombres de outputs; se derivan de
+las respuestas y se informan en humano.**
+
+- **P1 — Emisión automática**: todo paso tenant publica su cantidad
+  procesada bajo la key estable `piezas_procesadas`. Costo casi cero: el
+  cálculo ya existe (fallback = cantidad efectiva); sólo hay que declarar
+  la key al guardar la familia (y backfillear las 2 existentes).
+- **P2 — Herencia genérica**: cuando el consumidor es una familia tenant
+  sin `campoOutput` explícito, el default pasa a ser "la cantidad que
+  produjo el paso anterior ejecutado" (el motor ya la tiene en
+  `pasosEjecutados`), en lugar del mapa por familia que no lo conoce.
+- **P3 — La pregunta de nesting es física, no de algoritmo**: "¿Este paso
+  acomoda piezas? → ¿Sobre qué?" — *pliego suelto* (grid-2d-single /
+  packingsolver-rectangle), *varios pliegos* (grid-2d-multi), *rollo*
+  (shelf-rollo / maxrects-rollo). Elegir le da al paso
+  `CALCULADO_POR_PASO` (la prohibición del validador se relaja SOLO si hay
+  algoritmo elegido — el tenant elige NUESTRO algoritmo parametrizado,
+  nunca escribe uno) y emite los outputs ricos **con los mismos nombres
+  canónicos del sistema** (`pliegos_calculados`, `m2_calculados`,
+  `aprovechamiento_pct`, …) para que herencias y validaciones existentes
+  funcionen sin tocar nada.
+- **P4 — Dispatcher por configuración**: `nesting-dispatcher.ts` rutea hoy
+  por `familiaCodigo` cableado (el archivo entero es FRONTERA-NESTING). B
+  lo parametriza: la familia declara `nestingConfig { geometria, algorithm,
+  … }` y el dispatcher lee esa config vía resolver; los códigos del
+  sistema quedan como presets del mismo mecanismo.
+- **P5 — El `campoOutput` fino se elige en el producto, no en la familia**
+  (al crear la familia no se sabe qué paso vendrá antes): en Configurar
+  pasos, si el paso hereda, dropdown en humano con lo que publican los
+  pasos previos de esa ruta.
+- **UI**: en el paso final del wizard, bloque "Qué deja este paso para los
+  siguientes" con chips en humano ("Cantidad de piezas procesadas",
+  "Pliegos calculados y su medida", "m² consumidos del rollo").
+
+**Decisiones abiertas**: (a) ¿P2 entra en B o es un mini-fix previo junto
+con P1? (b) ¿la elección rollo/pliego expone la variante de algoritmo
+(shelf vs maxrects) o el sistema decide como hoy (mejor candidato)?
+(c) alcance de P5 — ¿entra en B o queda para el wizard de ruta (Etapa E
+real)?
 
 ---
 
