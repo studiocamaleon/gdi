@@ -56,6 +56,25 @@ import {
   type PatchOpcion,
 } from "@/lib/editor-paso/schema";
 import {
+  MONTAJE_SOURCE_OPTIONS,
+  TALONARIO_MODE_OPTIONS,
+  T2_PRODUCTIVITY_UNIT_OPTIONS,
+  T2_TIME_CALCULATION_MODE_OPTIONS,
+  TIEMPO_MANUAL_UNIDAD_OPTIONS,
+  getT2ProductivityUnitSuffix,
+  getT2BatchUnitSuffix,
+  getDefaultT2ProductivityUnit,
+  getDefaultT2TimeCalculationMode,
+  getDefaultT2QuantitySource,
+  getDefaultMecanismoCantidad,
+  getT2QuantitySourceOptions,
+  getTiempoManualConfig,
+  isConsumibleMaquinaSlot,
+  requiereMecanismoCantidad,
+  getModoColorConfig,
+  modoColorAplica,
+} from "@/lib/editor-paso/catalogo-tiempo";
+import {
   actualizarPasoExtra,
   buscarMateriasPrimasConfigPaso,
   upsertConfigPaso,
@@ -142,194 +161,6 @@ const NESTING_ALGORITHMS = [
   "grid-2d-multi",
   "packingsolver-rectangle",
 ];
-const MONTAJE_SOURCE_OPTIONS = [
-  {
-    value: "piezas_jobcontext",
-    label: "Piezas del producto",
-    description: "Usa cantidad, ancho y alto cargados por el comercial.",
-  },
-  {
-    value: "pliegos_impresos",
-    label: "Pliegos impresos",
-    description:
-      "Usa pliegos_impresos y el tamaño de pliego publicado por impresión.",
-  },
-];
-const TALONARIO_MODE_OPTIONS = [
-  {
-    value: "off",
-    label: "No es talonario",
-    description:
-      "El paso calcula pliegos de forma estándar, sin agrupar por talonario.",
-  },
-  {
-    value: "aprovechar_pliego",
-    label: "Aprovechar papel",
-    description:
-      "El talonario suelto comparte pliego entre sus propios números: mínimo papel, pero producción debe cortar y acomodar ese bloque a mano.",
-  },
-  {
-    value: "pose_completa",
-    label: "Pose completa",
-    description:
-      "El talonario suelto se imprime con poses vacías: sale apilado listo para abrochar y cortar, a costa de desperdiciar papel en cantidades impares.",
-  },
-];
-const T2_PRODUCTIVITY_UNIT_OPTIONS = [
-  {
-    value: "unidades_h",
-    label: "Unidades o pliegos/h",
-    description: "Usa la cantidad del paso: pliegos, piezas, packs u otra unidad contable.",
-  },
-  {
-    value: "m2_h",
-    label: "m²/h",
-    description: "Metros cuadrados por hora.",
-  },
-  {
-    value: "ml_h",
-    label: "ml/h",
-    description: "Metros lineales por hora.",
-  },
-];
-const T2_TIME_CALCULATION_MODE_OPTIONS = [
-  {
-    value: "productivity",
-    label: "Productividad por hora",
-    description: "Ejemplo: 120 pliegos por hora.",
-  },
-  {
-    value: "batch_time",
-    label: "Tiempo por lote",
-    description: "Ejemplo: 2 pliegos cada 1 minuto.",
-  },
-];
-const TIEMPO_MANUAL_UNIDAD_OPTIONS = [
-  {
-    value: "min",
-    label: "Minutos",
-    description: "El comercial carga el tiempo en minutos (típico: láser).",
-  },
-  {
-    value: "h",
-    label: "Horas",
-    description: "El comercial carga el tiempo en horas (típico: diseño).",
-  },
-];
-const T2_QUANTITY_SOURCE_OPTIONS = [
-  {
-    value: "cantidad",
-    label: "Cantidad efectiva del paso",
-    description: "Respeta el mecanismo de cantidad configurado para el paso.",
-  },
-  {
-    value: "cantidad_montaje",
-    label: "Piezas/pliegos a montar",
-    description: "Usa la cantidad definida en Piezas a montar para calcular tiempo.",
-  },
-  {
-    value: "area_piezas_m2",
-    label: "Área calculada desde piezas",
-    description: "Usa el área real de las medidas cargadas al cotizar.",
-  },
-  {
-    value: "m2_instalados",
-    label: "m² instalados manuales",
-    description: "Usa el campo m² instalados que carga comercial.",
-  },
-  {
-    value: "metros_lineales",
-    label: "Metros lineales cotizados",
-    description: "Usa los metros lineales comerciales del producto.",
-  },
-  {
-    value: "perimetro_piezas_m",
-    label: "Perímetro total de piezas",
-    description: "Suma el perímetro rectangular de todas las piezas.",
-  },
-];
-const T2_PRODUCTIVITY_UNIT_SUFFIX: Record<string, string> = {
-  unidades_h: "unid./h",
-  m2_h: "m²/h",
-  ml_h: "ml/h",
-};
-const T2_BATCH_UNIT_SUFFIX: Record<string, string> = {
-  unidades_h: "unid./pliegos",
-  m2_h: "m²",
-  ml_h: "ml",
-};
-
-function getT2ProductivityUnitSuffix(unit: string, quantitySource: string) {
-  if (unit === "ml_h" && quantitySource === "perimetro_piezas_m") {
-    return "m perímetro/h";
-  }
-  return (
-    T2_PRODUCTIVITY_UNIT_SUFFIX[unit] ?? T2_PRODUCTIVITY_UNIT_SUFFIX.unidades_h
-  );
-}
-
-function getT2BatchUnitSuffix(unit: string, quantitySource: string) {
-  if (unit === "ml_h" && quantitySource === "perimetro_piezas_m") {
-    return "m perímetro";
-  }
-  return T2_BATCH_UNIT_SUFFIX[unit] ?? T2_BATCH_UNIT_SUFFIX.unidades_h;
-}
-
-function getDefaultT2ProductivityUnit(familiaCodigo?: string) {
-  return familiaCodigo === "instalacion_in_situ" ? "m2_h" : "unidades_h";
-}
-
-function getDefaultT2TimeCalculationMode(familiaCodigo?: string) {
-  return familiaCodigo === "embalaje" || familiaCodigo === "montaje_sobre_sustrato"
-    ? "batch_time"
-    : "productivity";
-}
-
-function getDefaultT2QuantitySource(familiaCodigo?: string, unit?: string) {
-  if (familiaCodigo === "montaje_sobre_sustrato" && unit === "unidades_h") {
-    return "cantidad_montaje";
-  }
-  if (unit === "unidades_h") return "cantidad";
-  if (unit === "m2_h") return "area_piezas_m2";
-  if (unit === "ml_h") return "metros_lineales";
-  if (familiaCodigo === "instalacion_in_situ") return "area_piezas_m2";
-  return "cantidad";
-}
-
-function getDefaultMecanismoCantidad(
-  familiaCodigo?: string,
-  mecanismosSoportados: string[] = [],
-) {
-  if (familiaCodigo === "impresion_por_hoja")
-    return "HEREDAR_DEL_OUTPUT_CANONICO";
-  if (familiaCodigo === "corte_manual") return "HEREDAR_DEL_OUTPUT_CANONICO";
-  if (familiaCodigo === "montaje_sobre_sustrato") return "CALCULADO_POR_PASO";
-  return mecanismosSoportados[0] ?? null;
-}
-
-function getT2QuantitySourceOptions(unit: string, familiaCodigo?: string) {
-  if (familiaCodigo === "montaje_sobre_sustrato" && unit === "unidades_h") {
-    return T2_QUANTITY_SOURCE_OPTIONS.filter((option) =>
-      ["cantidad_montaje", "cantidad"].includes(option.value),
-    );
-  }
-  if (unit === "m2_h") {
-    return T2_QUANTITY_SOURCE_OPTIONS.filter((option) =>
-      ["area_piezas_m2", "m2_instalados", "cantidad"].includes(option.value),
-    );
-  }
-  if (unit === "ml_h") {
-    return T2_QUANTITY_SOURCE_OPTIONS.filter((option) =>
-      ["metros_lineales", "perimetro_piezas_m", "cantidad"].includes(
-        option.value,
-      ),
-    );
-  }
-  return T2_QUANTITY_SOURCE_OPTIONS.filter(
-    (option) => option.value === "cantidad",
-  );
-}
-
 const COSTING_STRATEGIES = [
   "simple",
   "m2-exact",
@@ -1022,14 +853,6 @@ function slotDisplayName(
   return slot.slotNombre?.trim() || slotNombre(slot.slotCodigo, familia);
 }
 
-function isConsumibleMaquinaSlot(slot: {
-  tipo?: string;
-  codigo?: string;
-  slotCodigo?: string;
-}) {
-  return slot.tipo === "CONSUMIBLE_MAQUINA";
-}
-
 // ─── Helpers de JSON ───────────────────────────────────────────────
 
 function jsonToText(value: Record<string, unknown> | null | undefined): string {
@@ -1198,23 +1021,11 @@ function getExtraMarginsConfig(
   return asRecord(getNestingConfig(params).extraMargins);
 }
 
-function getModoColorConfig(
-  params: Record<string, unknown> | null | undefined,
-) {
-  return asRecord(asRecord(params).modoColorConfig);
-}
-
 /**
  * Config de tiempo manual por paso (`paramsPasoJson.tiempoManual`).
  * Ver docs/tiempo-manual-por-paso-diseno.md: el comercial estima el tiempo
  * al cotizar y el motor lo usa como runMin (gana sobre cualquier modoTiempo).
  */
-function getTiempoManualConfig(
-  params: Record<string, unknown> | null | undefined,
-) {
-  return asRecord(asRecord(params).tiempoManual);
-}
-
 function normalizeModoColor(value: unknown) {
   if (typeof value !== "string") return null;
   const normalized = value
@@ -1267,14 +1078,6 @@ function modosColorFromPerfil(
         .filter((value): value is string => Boolean(value)),
     ),
   );
-}
-
-function modoColorAplica(
-  familiaCodigo: string | undefined,
-  cfg: UpsertConfigPasoPayload,
-) {
-  if (!familiaCodigo || !cfg.maquinaM1Id) return false;
-  return ["impresion_por_hoja", "impresion_por_area"].includes(familiaCodigo);
 }
 
 function buildModoColorOptions(
@@ -2216,27 +2019,6 @@ function ColorThicknessVariantSelector({
 interface TabValidacion {
   errores: string[];
   warnings: string[];
-}
-
-function requiereMecanismoCantidad(
-  cfg: UpsertConfigPasoPayload,
-  familia:
-    | {
-        slotsRequeridos: Array<{
-          codigo: string;
-          requerido: boolean;
-          tipo?: string;
-        }>;
-      }
-    | undefined,
-) {
-  if (!cfg.modoTiempo) return true;
-  if (cfg.modoTiempo !== "T-1") return true;
-
-  const tieneMaterialesDeclarados =
-    (familia?.slotsRequeridos.filter((slot) => !isConsumibleMaquinaSlot(slot))
-      .length ?? 0) > 0 || (cfg.slotsMateriales?.length ?? 0) > 0;
-  return tieneMaterialesDeclarados;
 }
 
 function validarBasico(
@@ -4447,31 +4229,6 @@ export function ConfigPasosEditorView({
                   const candidatasCfg = normalizeMaquinasCandidatas(
                     cfg.maquinasCandidatas ?? [],
                   );
-                  const candidatasSeleccionadas = new Set(
-                    candidatasCfg.map((candidata) => candidata.maquinaId),
-                  );
-                  const candidataPreferidaId =
-                    candidatasCfg.find((candidata) => candidata.esPreferida)
-                      ?.maquinaId ??
-                    candidatasCfg[0]?.maquinaId ??
-                    null;
-                  const tecnologiasCandidatas = Array.from(
-                    new Set(
-                      candidatasCfg
-                        .map((candidata) =>
-                          maquinasCandidatasCompatibles.find(
-                            (maquina) => maquina.id === candidata.maquinaId,
-                          ),
-                        )
-                        .filter((maquina): maquina is MaquinaLookup =>
-                          Boolean(maquina),
-                        )
-                        .map(
-                          (maquina) =>
-                            getMachineTechnology(maquina) ?? "sin_tecnologia",
-                        ),
-                    ),
-                  );
                   const maquinaSel = lookups.maquinas.find(
                     (m) => m.id === cfg.maquinaM1Id,
                   );
@@ -4639,19 +4396,6 @@ export function ConfigPasosEditorView({
                   const mostrarOverridesTiempo =
                     mostrarSetupCleanupOverrides || mostrarTiempoFijoOverride;
                   const nestingConfig = getNestingConfig(cfg.paramsPasoJson);
-                  const tiempoManualConfig = getTiempoManualConfig(
-                    cfg.paramsPasoJson,
-                  );
-                  const tiempoManualHabilitado =
-                    tiempoManualConfig.habilitado === true;
-                  const tiempoManualUnidad =
-                    tiempoManualConfig.unidadInput === "h" ? "h" : "min";
-                  const tiempoManualDefaultMin = readOptionalNumber(
-                    tiempoManualConfig.defaultMin,
-                  );
-                  const modoColorConfig = getModoColorConfig(
-                    cfg.paramsPasoJson,
-                  );
                   const panelizadoConfig = getPanelizadoConfig(
                     cfg.paramsPasoJson,
                   );
@@ -4750,48 +4494,8 @@ export function ConfigPasosEditorView({
                       paso.familiaCodigo,
                     ),
                   );
-                  const modoColorAllowed = Array.isArray(
-                    modoColorConfig.allowedModes,
-                  )
-                    ? modoColorConfig.allowedModes
-                        .map((item) => normalizeModoColor(item))
-                        .filter((item): item is string => item !== null)
-                    : [];
-                  const modoColorEnabled = modoColorConfig.enabled === true;
                   const modoColorPerfilDefault =
                     modosColorFromPerfil(perfilGuardado)[0] ?? "";
-                  const modoColorEffectiveAllowed =
-                    modoColorEnabled && modoColorAllowed.length > 0
-                      ? modoColorAllowed.filter((mode) =>
-                          modoColorOptions.some(
-                            (option) => option.value === mode,
-                          ),
-                        )
-                      : modoColorOptions.map((option) => option.value);
-                  const modoColorDefaultOptions = modoColorOptions.filter(
-                    (option) =>
-                      modoColorEffectiveAllowed.includes(option.value),
-                  );
-                  const modoColorDefault =
-                    modoColorDefaultOptions.find(
-                      (option) => option.value === modoColorPerfilDefault,
-                    )?.value ??
-                    modoColorDefaultOptions[0]?.value ??
-                    "";
-                  const modoColorIsSelectable =
-                    modoColorDefaultOptions.length > 1;
-                  const modoColorSummary = !modoColorEnabled
-                    ? modoColorOptions.length > 1
-                      ? "Sin restricción: el comercial elige entre todos los modos compatibles."
-                      : modoColorOptions.length === 1
-                        ? `Sin restricción: se usa ${modoColorOptions[0]?.label} automáticamente.`
-                        : "La máquina/perfil todavía no declara modos de color."
-                    : modoColorIsSelectable
-                      ? "El comercial elegirá entre los modos permitidos."
-                      : `Modo fijo: ${
-                          modoColorDefaultOptions[0]?.label ??
-                          "sin modo disponible"
-                        }.`;
                   const defaultSeparation = defaultNestingSeparationForFamily(
                     familia?.codigo,
                   );
@@ -5957,214 +5661,12 @@ export function ConfigPasosEditorView({
                                       }
                                     />
                                   ) : null}
-                                  <div className="field md:col-span-full">
-                                    <LabelConTooltip
-                                      label="Tiempo estimado por el comercial"
-                                      tooltip="El comercial ingresa el tiempo de este paso al cotizar (ej. diseño gráfico complejo, minutos de láser según el RIP). El valor ingresado define el tiempo del paso y reemplaza el cálculo del modo de tiempo; setup y cleanup de máquina se suman igual."
-                                      iconSize="sm"
-                                    />
-                                    <label className="flex items-start gap-2 rounded-md border bg-white px-3 py-2 text-xs">
-                                      <input
-                                        className="mt-0.5"
-                                        type="checkbox"
-                                        checked={tiempoManualHabilitado}
-                                        onChange={(e) =>
-                                          updateTiempoManualConfig(paso.id, {
-                                            habilitado: e.target.checked,
-                                          })
-                                        }
-                                      />
-                                      <span className="space-y-0.5">
-                                        <span className="block font-medium text-foreground">
-                                          El comercial estima el tiempo al
-                                          cotizar
-                                        </span>
-                                        <span className="block text-muted-foreground">
-                                          Muestra un input de tiempo en el
-                                          cotizador. Sin valor ingresado, el
-                                          paso se calcula como siempre.
-                                        </span>
-                                      </span>
-                                    </label>
-                                    {tiempoManualHabilitado && (
-                                      <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
-                                        <div className="space-y-1">
-                                          <span className="text-muted-foreground text-xs">
-                                            Unidad del input
-                                          </span>
-                                          <HumanSelect
-                                            value={tiempoManualUnidad}
-                                            onValueChange={(value) =>
-                                              updateTiempoManualConfig(
-                                                paso.id,
-                                                {
-                                                  unidadInput:
-                                                    value === "h" ? "h" : "min",
-                                                },
-                                              )
-                                            }
-                                            options={
-                                              TIEMPO_MANUAL_UNIDAD_OPTIONS
-                                            }
-                                            placeholder="Elegir unidad"
-                                          />
-                                        </div>
-                                        <div className="space-y-1">
-                                          <LabelConTooltip
-                                            label="Valor sugerido"
-                                            tooltip="Valor inicial del input en el cotizador, siempre en minutos. El comercial lo ajusta solo cuando el trabajo lo amerita."
-                                            iconSize="sm"
-                                          />
-                                          <div className="flex items-center gap-2">
-                                            <Input
-                                              type="number"
-                                              min={0}
-                                              step={1}
-                                              value={
-                                                tiempoManualDefaultMin ?? ""
-                                              }
-                                              onChange={(e) =>
-                                                updateTiempoManualConfig(
-                                                  paso.id,
-                                                  {
-                                                    defaultMin:
-                                                      e.target.value === ""
-                                                        ? null
-                                                        : Number(
-                                                            e.target.value,
-                                                          ),
-                                                  },
-                                                )
-                                              }
-                                              placeholder="Opcional"
-                                            />
-                                            <span className="text-muted-foreground whitespace-nowrap text-xs">
-                                              min
-                                            </span>
-                                          </div>
-                                        </div>
-                                        <div className="space-y-1">
-                                          <span className="text-muted-foreground text-xs">
-                                            Mínimo permitido (min)
-                                          </span>
-                                          <Input
-                                            type="number"
-                                            min={0}
-                                            step={1}
-                                            value={
-                                              readOptionalNumber(
-                                                tiempoManualConfig.minMin,
-                                              ) ?? ""
-                                            }
-                                            onChange={(e) =>
-                                              updateTiempoManualConfig(
-                                                paso.id,
-                                                {
-                                                  minMin:
-                                                    e.target.value === ""
-                                                      ? null
-                                                      : Number(e.target.value),
-                                                },
-                                              )
-                                            }
-                                            placeholder="Opcional"
-                                          />
-                                        </div>
-                                        <div className="space-y-1">
-                                          <span className="text-muted-foreground text-xs">
-                                            Máximo permitido (min)
-                                          </span>
-                                          <Input
-                                            type="number"
-                                            min={0}
-                                            step={1}
-                                            value={
-                                              readOptionalNumber(
-                                                tiempoManualConfig.maxMin,
-                                              ) ?? ""
-                                            }
-                                            onChange={(e) =>
-                                              updateTiempoManualConfig(
-                                                paso.id,
-                                                {
-                                                  maxMin:
-                                                    e.target.value === ""
-                                                      ? null
-                                                      : Number(e.target.value),
-                                                },
-                                              )
-                                            }
-                                            placeholder="Opcional"
-                                          />
-                                        </div>
-                                        <div className="space-y-1 md:col-span-full">
-                                          <span className="text-muted-foreground text-xs">
-                                            Etiqueta del input
-                                          </span>
-                                          <Input
-                                            type="text"
-                                            value={
-                                              typeof tiempoManualConfig.etiqueta ===
-                                              "string"
-                                                ? tiempoManualConfig.etiqueta
-                                                : ""
-                                            }
-                                            onChange={(e) =>
-                                              updateTiempoManualConfig(
-                                                paso.id,
-                                                {
-                                                  etiqueta:
-                                                    e.target.value || null,
-                                                },
-                                              )
-                                            }
-                                            placeholder={`Ej. "Tiempo estimado de ${(cfg.nombreVisible?.trim() || familia?.nombre || "trabajo").toLowerCase()}"`}
-                                          />
-                                        </div>
-                                        <label className="flex items-start gap-2 rounded-md border bg-white px-3 py-2 text-xs md:col-span-full">
-                                          <input
-                                            className="mt-0.5"
-                                            type="checkbox"
-                                            checked={
-                                              tiempoManualConfig.obligatorio ===
-                                              true
-                                            }
-                                            onChange={(e) =>
-                                              updateTiempoManualConfig(
-                                                paso.id,
-                                                {
-                                                  obligatorio:
-                                                    e.target.checked || null,
-                                                },
-                                              )
-                                            }
-                                          />
-                                          <span className="space-y-0.5">
-                                            <span className="block font-medium text-foreground">
-                                              Obligatorio
-                                            </span>
-                                            <span className="block text-muted-foreground">
-                                              No se puede agregar el producto a
-                                              la OT sin ingresar el tiempo
-                                              (típico: corte láser).
-                                            </span>
-                                          </span>
-                                        </label>
-                                        {tiempoManualConfig.obligatorio ===
-                                          true &&
-                                          tiempoManualDefaultMin == null && (
-                                            <div className="text-amber-700 text-xs md:col-span-full">
-                                              Sin valor sugerido, la cotización
-                                              queda bloqueada hasta que el
-                                              comercial ingrese el tiempo. Es
-                                              el comportamiento esperado para
-                                              pasos tipo láser — confirmá que
-                                              es lo que querés.
-                                            </div>
-                                          )}
-                                      </div>
-                                    )}
-                                  </div>
+                                  <TiempoComercialDetalladoEditor
+                                    pasoId={paso.id}
+                                    cfg={cfg}
+                                    familia={familia}
+                                    updateTiempoManualConfig={updateTiempoManualConfig}
+                                  />
                                 </div>
                               </div>
                             </section>
@@ -6241,620 +5743,30 @@ export function ConfigPasosEditorView({
                                         </div>
                                       ) : null}
                                       {soportaM2 ? (
-                                        <div className="field md:col-span-full space-y-3">
-                                          <div className="ps-cand-title">
-                                            <LabelConTooltip
-                                              label="Máquinas candidatas para este paso"
-                                              tooltip="Máquinas que este producto puede usar para este paso. En la OT el comercial elegirá tecnología; si una tecnología tiene una sola máquina, no se muestra selector de máquina."
-                                            />
-                                            <div className="ps-meta">
-                                              {candidatasCfg.length > 0 ? (
-                                                <>
-                                                  <span className="ps-meta-chip">
-                                                    {candidatasCfg.length}{" "}
-                                                    máquina
-                                                    {candidatasCfg.length === 1
-                                                      ? ""
-                                                      : "s"}
-                                                  </span>
-                                                  <span className="ps-meta-chip">
-                                                    {
-                                                      tecnologiasCandidatas.length
-                                                    }{" "}
-                                                    tecnología
-                                                    {tecnologiasCandidatas.length ===
-                                                    1
-                                                      ? ""
-                                                      : "s"}
-                                                  </span>
-                                                </>
-                                              ) : (
-                                                <span className="ps-meta-chip">
-                                                  Sin candidatas
-                                                </span>
-                                              )}
-                                              {candidataPreferidaId ? (
-                                                <span className="ps-meta-chip pref">
-                                                  <StarIcon
-                                                    className="size-3"
-                                                    fill="currentColor"
-                                                  />
-                                                  Preferida:{" "}
-                                                  {lookups.maquinas.find(
-                                                    (maquina) =>
-                                                      maquina.id ===
-                                                      candidataPreferidaId,
-                                                  )?.nombre ?? "sin máquina"}
-                                                </span>
-                                              ) : null}
-                                            </div>
-                                          </div>
-                                          {maquinasCandidatasCompatibles.length ===
-                                          0 ? (
-                                            <p className="text-xs text-muted-foreground">
-                                              No hay máquinas compatibles con
-                                              perfiles activos para esta
-                                              familia.
-                                            </p>
-                                          ) : (
-                                            <div className="ps-cand-grid">
-                                              {maquinasCandidatasCompatibles.map(
-                                                (maquina) => {
-                                                  const selected =
-                                                    candidatasSeleccionadas.has(
-                                                      maquina.id,
-                                                    );
-                                                  const preferred =
-                                                    selected &&
-                                                    candidataPreferidaId ===
-                                                      maquina.id;
-                                                  const chip = techChipStyle(
-                                                    getMachineTechnology(
-                                                      maquina,
-                                                    ),
-                                                  );
-                                                  return (
-                                                    <div
-                                                      key={maquina.id}
-                                                      role="button"
-                                                      tabIndex={0}
-                                                      className={`ps-cand ${
-                                                        preferred
-                                                          ? "pref"
-                                                          : selected
-                                                            ? "on"
-                                                            : ""
-                                                      }`}
-                                                      onClick={() =>
-                                                        toggleMaquinaCandidata(
-                                                          paso.id,
-                                                          maquina.id,
-                                                          !selected,
-                                                        )
-                                                      }
-                                                      onKeyDown={(event) => {
-                                                        if (
-                                                          event.key ===
-                                                            "Enter" ||
-                                                          event.key === " "
-                                                        ) {
-                                                          event.preventDefault();
-                                                          toggleMaquinaCandidata(
-                                                            paso.id,
-                                                            maquina.id,
-                                                            !selected,
-                                                          );
-                                                        }
-                                                      }}
-                                                    >
-                                                      {preferred ? (
-                                                        <span className="ps-principal-tag">
-                                                          PRINCIPAL
-                                                        </span>
-                                                      ) : null}
-                                                      <div className="ps-cand-top">
-                                                        <span
-                                                          className="ps-cand-chip"
-                                                          style={{
-                                                            background:
-                                                              chip.bg,
-                                                          }}
-                                                        >
-                                                          {chip.ini}
-                                                        </span>
-                                                        <span className="ps-cand-tech">
-                                                          {machineTechnologyLabel(
-                                                            maquina,
-                                                          )}
-                                                        </span>
-                                                        <button
-                                                          type="button"
-                                                          className={`ps-cand-star ${
-                                                            preferred
-                                                              ? "on"
-                                                              : ""
-                                                          }`}
-                                                          disabled={!selected}
-                                                          title="Marcar como preferida"
-                                                          onClick={(event) => {
-                                                            event.stopPropagation();
-                                                            setMaquinaCandidataPreferida(
-                                                              paso.id,
-                                                              maquina.id,
-                                                            );
-                                                          }}
-                                                        >
-                                                          <StarIcon
-                                                            className="size-3.5"
-                                                            fill={
-                                                              preferred
-                                                                ? "currentColor"
-                                                                : "none"
-                                                            }
-                                                          />
-                                                        </button>
-                                                      </div>
-                                                      <div className="min-w-0">
-                                                        <div className="ps-cand-nm truncate">
-                                                          {maquina.nombre}
-                                                        </div>
-                                                        <div className="ps-cand-code truncate">
-                                                          {maquina.codigo}
-                                                        </div>
-                                                      </div>
-                                                      <div className="ps-cand-foot">
-                                                        <span className="ps-cand-check">
-                                                          <CheckIcon strokeWidth={3.4} />
-                                                        </span>
-                                                        <span className="ps-cand-check-lbl">
-                                                          {selected
-                                                            ? "Candidata"
-                                                            : "Agregar"}
-                                                        </span>
-                                                      </div>
-                                                    </div>
-                                                  );
-                                                },
-                                              )}
-                                            </div>
-                                          )}
-                                          {candidatasCfg.map((cfgCand) => {
-                                            const maquina =
-                                              maquinasCandidatasCompatibles.find(
-                                                (item) =>
-                                                  item.id === cfgCand.maquinaId,
-                                              ) ??
-                                              lookups.maquinas.find(
-                                                (item) =>
-                                                  item.id === cfgCand.maquinaId,
-                                              );
-                                            if (!maquina) return null;
-                                            const preferred =
-                                              candidataPreferidaId ===
-                                              maquina.id;
-                                            const chip = techChipStyle(
-                                              getMachineTechnology(maquina),
-                                            );
-                                            const perfilesCompatibles =
-                                              maquina.perfilesOperativos.filter(
-                                                (perfil) =>
-                                                  perfilCompatibleConFamilia(
-                                                    paso.familiaCodigo,
-                                                    perfil,
-                                                  ),
-                                              );
-                                            const candidateModoOptions =
-                                              mostrarModoColor
-                                                ? buildModoColorOptions(
-                                                    maquina,
-                                                    null,
-                                                    true,
-                                                  )
-                                                : [];
-                                            const candidateAllowed =
-                                              resolveModoColorAllowedModes(
-                                                cfgCand.modoColorAllowedModes,
-                                                candidateModoOptions,
-                                              );
-                                            return (
-                                              <div
-                                                key={maquina.id}
-                                                className={`ps-cfg ${
-                                                  preferred ? "pref" : ""
-                                                }`}
-                                              >
-                                                <div className="ps-cfg-head">
-                                                  <span
-                                                    className="ps-cand-chip sm"
-                                                    style={{
-                                                      background: chip.bg,
-                                                    }}
-                                                  >
-                                                    {chip.ini}
-                                                  </span>
-                                                  <div>
-                                                    <div className="ps-cfg-t">
-                                                      {maquina.nombre}
-                                                    </div>
-                                                    <div className="ps-cfg-s">
-                                                      {preferred
-                                                        ? "Configuración de la máquina principal"
-                                                        : "Configuración de la candidata"}
-                                                    </div>
-                                                  </div>
-                                                  {preferred ? (
-                                                    <span className="ps-star-pill">
-                                                      <StarIcon
-                                                        className="size-3"
-                                                        fill="currentColor"
-                                                      />
-                                                      Preferida
-                                                    </span>
-                                                  ) : null}
-                                                </div>
-                                                <div className="ps-cfg-body">
-                                                  <div className="space-y-2">
-                                                    <span className="ps-label">
-                                                      Perfil default
-                                                    </span>
-                                                    <select
-                                                      className="h-11 w-full rounded-[10px] border bg-background px-3 text-[13px] transition-colors hover:border-[var(--border-strong)]"
-                                                      value={
-                                                        cfgCand.perfilDefaultId ??
-                                                        ""
-                                                      }
-                                                      onChange={(event) =>
-                                                        setMaquinaCandidataPerfilDefault(
-                                                          paso.id,
-                                                          maquina.id,
-                                                          event.target.value ||
-                                                            null,
-                                                        )
-                                                      }
-                                                    >
-                                                      <option value="">
-                                                        Primer perfil
-                                                        compatible
-                                                      </option>
-                                                      {perfilesCompatibles.map(
-                                                        (perfil) => (
-                                                          <option
-                                                            key={perfil.id}
-                                                            value={perfil.id}
-                                                          >
-                                                            {perfil.nombre}
-                                                          </option>
-                                                        ),
-                                                      )}
-                                                    </select>
-                                                  </div>
-                                                  {mostrarModoColor ? (
-                                                    <div className="space-y-2">
-                                                      <span className="ps-label">
-                                                        Modos de color
-                                                        habilitados
-                                                      </span>
-                                                      {candidateModoOptions.length ===
-                                                      0 ? (
-                                                        <p className="text-[11px] text-muted-foreground">
-                                                          Esta máquina todavía
-                                                          no declara modos de
-                                                          color en sus
-                                                          perfiles.
-                                                        </p>
-                                                      ) : (
-                                                        <div className="ps-modes">
-                                                          {candidateModoOptions.map(
-                                                            (option) => {
-                                                              const optionSelected =
-                                                                candidateAllowed.includes(
-                                                                  option.value,
-                                                                );
-                                                              const nextAllowed =
-                                                                optionSelected
-                                                                  ? candidateAllowed.filter(
-                                                                      (item) =>
-                                                                        item !==
-                                                                        option.value,
-                                                                    )
-                                                                  : [
-                                                                      ...candidateAllowed,
-                                                                      option.value,
-                                                                    ];
-                                                              const safeNextAllowed =
-                                                                nextAllowed.length >
-                                                                0
-                                                                  ? nextAllowed
-                                                                  : [
-                                                                      option.value,
-                                                                    ];
-                                                              const swatches =
-                                                                modoColorSwatches(
-                                                                  option.value,
-                                                                );
-                                                              return (
-                                                                <button
-                                                                  key={
-                                                                    option.value
-                                                                  }
-                                                                  type="button"
-                                                                  className={`ps-mode ${
-                                                                    optionSelected
-                                                                      ? "on"
-                                                                      : ""
-                                                                  }`}
-                                                                  title={
-                                                                    option.code ??
-                                                                    undefined
-                                                                  }
-                                                                  onClick={() =>
-                                                                    setMaquinaCandidataModoColorAllowed(
-                                                                      paso.id,
-                                                                      maquina.id,
-                                                                      safeNextAllowed,
-                                                                    )
-                                                                  }
-                                                                >
-                                                                  <span className="ps-mcheck">
-                                                                    <CheckIcon strokeWidth={3.4} />
-                                                                  </span>
-                                                                  {swatches.length >
-                                                                  0 ? (
-                                                                    <span className="ps-swatch">
-                                                                      {swatches.map(
-                                                                        (
-                                                                          sw,
-                                                                          swIdx,
-                                                                        ) => (
-                                                                          <span
-                                                                            key={
-                                                                              swIdx
-                                                                            }
-                                                                            className="ps-sw"
-                                                                            style={{
-                                                                              background:
-                                                                                sw.bg,
-                                                                              ...(sw.borde
-                                                                                ? {
-                                                                                    border:
-                                                                                      "1px solid #d4d2cd",
-                                                                                  }
-                                                                                : {}),
-                                                                            }}
-                                                                          />
-                                                                        ),
-                                                                      )}
-                                                                    </span>
-                                                                  ) : null}
-                                                                  {
-                                                                    option.label
-                                                                  }
-                                                                </button>
-                                                              );
-                                                            },
-                                                          )}
-                                                        </div>
-                                                      )}
-                                                    </div>
-                                                  ) : null}
-                                                  {mostrarModoColor &&
-                                                  candidateModoOptions.length >
-                                                    0 ? (
-                                                    <div className="ps-cfg-note">
-                                                      <svg
-                                                        viewBox="0 0 24 24"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        strokeWidth="1.7"
-                                                      >
-                                                        <circle
-                                                          cx="12"
-                                                          cy="12"
-                                                          r="9"
-                                                        />
-                                                        <path d="M12 11v5M12 8h.01" />
-                                                      </svg>
-                                                      <span>
-                                                        Si queda más de un modo
-                                                        habilitado, el
-                                                        comercial elige cuál
-                                                        usar al agregar el
-                                                        producto.
-                                                      </span>
-                                                    </div>
-                                                  ) : null}
-                                                </div>
-                                              </div>
-                                            );
-                                          })}
-                                        </div>
+                                        <CandidatasDetalladoEditor
+                                          pasoId={paso.id}
+                                          familiaCodigo={paso.familiaCodigo}
+                                          cfg={cfg}
+                                          familia={familia}
+                                          lookups={lookups}
+                                          maquinasCandidatasCompatibles={maquinasCandidatasCompatibles}
+                                          mostrarModoColor={mostrarModoColor}
+                                          toggleMaquinaCandidata={toggleMaquinaCandidata}
+                                          setMaquinaCandidataPreferida={setMaquinaCandidataPreferida}
+                                          setMaquinaCandidataPerfilDefault={setMaquinaCandidataPerfilDefault}
+                                          setMaquinaCandidataModoColorAllowed={setMaquinaCandidataModoColorAllowed}
+                                        />
                                       ) : null}
                                       {mostrarModoColor &&
                                       (!soportaM2 ||
                                         candidatasCfg.length === 0) ? (
-                                        <div className="field md:col-span-full">
-                                          <LabelConTooltip
-                                            label="Modo de color del producto"
-                                            tooltip="Define si este producto usa todos los modos compatibles de la ruta/máquina o si limita modos específicos para cotizar."
-                                          />
-                                          <div className="space-y-3 rounded border bg-background/70 p-3">
-                                            <div className="rounded-md border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-                                              {modoColorConfig.enabled ===
-                                              true ? (
-                                                <span>
-                                                  Este producto{" "}
-                                                  <strong className="text-foreground">
-                                                    limita
-                                                  </strong>{" "}
-                                                  los modos de color que se
-                                                  pueden cotizar. Si queda más
-                                                  de un modo permitido, el
-                                                  comercial deberá elegir al
-                                                  agregar el producto.
-                                                </span>
-                                              ) : (
-                                                <span>
-                                                  Sin configuración propia: el
-                                                  comercial verá todos los modos
-                                                  de color compatibles con la
-                                                  ruta, máquina y perfiles
-                                                  disponibles.
-                                                </span>
-                                              )}
-                                            </div>
-                                            <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(220px,0.7fr)_minmax(0,1.3fr)]">
-                                              <label className="flex items-start gap-2 rounded-md border bg-white px-3 py-2 text-xs">
-                                                <input
-                                                  className="mt-0.5"
-                                                  type="checkbox"
-                                                  checked={
-                                                    modoColorConfig.enabled ===
-                                                    true
-                                                  }
-                                                  onChange={(e) =>
-                                                    updateModoColorConfig(
-                                                      paso.id,
-                                                      {
-                                                        enabled:
-                                                          e.target.checked,
-                                                        comercialElige: e.target
-                                                          .checked
-                                                          ? modoColorDefaultOptions.length >
-                                                            1
-                                                          : null,
-                                                        defaultMode:
-                                                          e.target.checked &&
-                                                          !modoColorDefault
-                                                            ? (modoColorDefaultOptions[0]
-                                                                ?.value ?? null)
-                                                            : modoColorDefault ||
-                                                              null,
-                                                      },
-                                                    )
-                                                  }
-                                                />
-                                                <span className="space-y-0.5">
-                                                  <span className="block font-medium text-foreground">
-                                                    Definir modos para este
-                                                    producto
-                                                  </span>
-                                                  <span className="block text-muted-foreground">
-                                                    Restringe las opciones
-                                                    disponibles en Agregar
-                                                    producto.
-                                                  </span>
-                                                </span>
-                                              </label>
-                                              <div className="space-y-2 rounded-md border bg-white px-3 py-2">
-                                                <LabelConTooltip
-                                                  label="Modos de color"
-                                                  tooltip="Los modos salen de los perfiles de la máquina. Si hay más de uno permitido, el comercial elegirá al cotizar."
-                                                  iconSize="sm"
-                                                />
-                                                {modoColorOptions.length ===
-                                                0 ? (
-                                                  <p className="text-xs text-muted-foreground">
-                                                    La máquina/perfil todavía no
-                                                    declara modos de color.
-                                                  </p>
-                                                ) : (
-                                                  <div
-                                                    className={`segmented w-full ${
-                                                      modoColorOptions.length >
-                                                      2
-                                                        ? "segmented-grid-2"
-                                                        : ""
-                                                    }`}
-                                                  >
-                                                    {modoColorOptions.map(
-                                                      (option) => {
-                                                        const selected =
-                                                          modoColorEffectiveAllowed.includes(
-                                                            option.value,
-                                                          );
-                                                        const nextAllowed =
-                                                          selected
-                                                            ? modoColorEffectiveAllowed.filter(
-                                                                (item) =>
-                                                                  item !==
-                                                                  option.value,
-                                                              )
-                                                            : [
-                                                                ...modoColorEffectiveAllowed,
-                                                                option.value,
-                                                              ];
-                                                        const safeNextAllowed =
-                                                          nextAllowed.length > 0
-                                                            ? nextAllowed
-                                                            : [option.value];
-                                                        const nextDefault =
-                                                          safeNextAllowed.includes(
-                                                            modoColorPerfilDefault,
-                                                          )
-                                                            ? modoColorPerfilDefault
-                                                            : safeNextAllowed[0];
-                                                        return (
-                                                          <button
-                                                            key={option.value}
-                                                            type="button"
-                                                            className={
-                                                              selected
-                                                                ? "on"
-                                                                : ""
-                                                            }
-                                                            disabled={
-                                                              !modoColorEnabled
-                                                            }
-                                                            onClick={() => {
-                                                              updateModoColorConfig(
-                                                                paso.id,
-                                                                {
-                                                                  enabled: true,
-                                                                  allowedModes:
-                                                                    safeNextAllowed.length ===
-                                                                      modoColorOptions.length &&
-                                                                    !safeNextAllowed.includes(
-                                                                      "SIN_IMPRESION",
-                                                                    )
-                                                                      ? null
-                                                                      : safeNextAllowed,
-                                                                  defaultMode:
-                                                                    nextDefault,
-                                                                  comercialElige:
-                                                                    safeNextAllowed.length >
-                                                                    1,
-                                                                },
-                                                              );
-                                                            }}
-                                                            title={option.code}
-                                                          >
-                                                            {option.label}
-                                                          </button>
-                                                        );
-                                                      },
-                                                    )}
-                                                  </div>
-                                                )}
-                                                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                                  <span>
-                                                    {modoColorSummary}
-                                                  </span>
-                                                  {modoColorDefault ? (
-                                                    <span className="tag muted">
-                                                      Default por perfil:{" "}
-                                                      {modoColorOptions.find(
-                                                        (option) =>
-                                                          option.value ===
-                                                          modoColorDefault,
-                                                      )?.label ??
-                                                        modoColorDefault}
-                                                    </span>
-                                                  ) : null}
-                                                </div>
-                                              </div>
-                                            </div>
-                                          </div>
-                                        </div>
+                                        <ModoColorDetalladoEditor
+                                          pasoId={paso.id}
+                                          cfg={cfg}
+                                          modoColorOptions={modoColorOptions}
+                                          modoColorPerfilDefault={modoColorPerfilDefault}
+                                          updateModoColorConfig={updateModoColorConfig}
+                                        />
                                       ) : null}
                                     </div>
                                   </div>
@@ -9347,6 +8259,14 @@ export function ConfigPasosEditorView({
               producto.modoMedidas === "MIXTA",
             extraFields: technologyRuleFields,
           }}
+          updateTiempoManualConfig={updateTiempoManualConfig}
+          updateModoColorConfig={updateModoColorConfig}
+          toggleMaquinaCandidata={toggleMaquinaCandidata}
+          setMaquinaCandidataPreferida={setMaquinaCandidataPreferida}
+          setMaquinaCandidataPerfilDefault={setMaquinaCandidataPerfilDefault}
+          setMaquinaCandidataModoColorAllowed={
+            setMaquinaCandidataModoColorAllowed
+          }
           onCerrar={() => setAsistenteAbierto(false)}
         />
       ) : null}
@@ -9355,6 +8275,1211 @@ export function ConfigPasosEditorView({
 }
 
 
+
+
+// Pendientes cuyos campos ya viven en el ESQUEMA declarativo: el asistente
+// no les crea card transicional (la pregunta abre sola en su sección).
+const PENDIENTES_EN_ESQUEMA = new Set<PendientePaso["tipo"]>([
+  "regla_condicional",
+  "centro",
+  "ritmo",
+  "tiempo_fijo",
+  "herencia_origen",
+  "maquina",
+  "perfil",
+  "candidatas",
+]);
+
+/** Ritmo T-2 del asistente guiado (tiempo.productividad / tiempo.batch):
+ *  mismos params que el detallado, con estado local para tipeo a medias. */
+function RitmoGuiado({
+  variante,
+  pasoId,
+  cfg,
+  familia,
+  onParams,
+}: {
+  variante: "productividad" | "batch";
+  pasoId: string;
+  cfg: UpsertConfigPasoPayload;
+  familia: FamiliaListItem | undefined;
+  onParams: (pasoId: string, patch: Record<string, unknown>) => void;
+}) {
+  const params = asRecord(cfg.paramsPasoJson);
+  const unidad =
+    typeof params.productivityUnit === "string"
+      ? params.productivityUnit
+      : getDefaultT2ProductivityUnit(familia?.codigo);
+  const fuente =
+    typeof params.productivityQuantitySource === "string"
+      ? params.productivityQuantitySource
+      : getDefaultT2QuantitySource(familia?.codigo, unidad);
+  const [ritmoTexto, setRitmoTexto] = React.useState(
+    params.productivityValue != null ? String(params.productivityValue) : "",
+  );
+  const [loteTiempoTexto, setLoteTiempoTexto] = React.useState(
+    params.batchTimeMin != null ? String(params.batchTimeMin) : "",
+  );
+  const [loteTamTexto, setLoteTamTexto] = React.useState(
+    params.batchSize != null ? String(params.batchSize) : "",
+  );
+  const [horasTexto, setHorasTexto] = React.useState(
+    params.horasEstimadas != null ? String(params.horasEstimadas) : "",
+  );
+  const numOrNull = (texto: string) => {
+    const n = Number(texto);
+    return texto.trim() !== "" && Number.isFinite(n) && n > 0 ? n : null;
+  };
+  const filaStyle: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap",
+  };
+  const notaStyle: React.CSSProperties = {
+    fontSize: 12.5,
+    color: "var(--muted-text, #6e6e76)",
+  };
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {variante === "productividad" ? (
+        <div style={filaStyle}>
+          <Input
+            value={ritmoTexto}
+            onChange={(e) => {
+              setRitmoTexto(e.target.value);
+              onParams(pasoId, {
+                productivityValue: numOrNull(e.target.value),
+              });
+            }}
+            placeholder={
+              familia?.defaults?.productividadHora
+                ? `Usando el ritmo del paso: ${familia.defaults.productividadHora}/h`
+                : "Ej: 60"
+            }
+            inputMode="decimal"
+            style={{ maxWidth: 220 }}
+          />
+          <span style={notaStyle}>
+            {getT2ProductivityUnitSuffix(unidad, fuente)}
+          </span>
+        </div>
+      ) : (
+        <div style={filaStyle}>
+          <Input
+            value={loteTamTexto}
+            onChange={(e) => {
+              setLoteTamTexto(e.target.value);
+              onParams(pasoId, { batchSize: numOrNull(e.target.value) });
+            }}
+            placeholder="Ej: 2"
+            inputMode="decimal"
+            style={{ maxWidth: 110 }}
+          />
+          <span style={notaStyle}>
+            {getT2BatchUnitSuffix(unidad, fuente)} cada
+          </span>
+          <Input
+            value={loteTiempoTexto}
+            onChange={(e) => {
+              setLoteTiempoTexto(e.target.value);
+              onParams(pasoId, { batchTimeMin: numOrNull(e.target.value) });
+            }}
+            placeholder="Ej: 1"
+            inputMode="decimal"
+            style={{ maxWidth: 110 }}
+          />
+          <span style={notaStyle}>min</span>
+        </div>
+      )}
+      <div style={filaStyle}>
+        <span style={notaStyle}>Unidad:</span>
+        <HumanSelect
+          value={unidad}
+          onValueChange={(value) => {
+            const nextUnit = value || getDefaultT2ProductivityUnit(familia?.codigo);
+            onParams(pasoId, {
+              productivityUnit: nextUnit,
+              productivityQuantitySource: getDefaultT2QuantitySource(
+                familia?.codigo,
+                nextUnit,
+              ),
+            });
+          }}
+          options={T2_PRODUCTIVITY_UNIT_OPTIONS}
+          placeholder="Elegir unidad"
+        />
+      </div>
+      {/* Paridad con el detallado: el escape de tiempo fijo del ritmo
+          (horasEstimadas) — si se completa, el motor lo usa y no calcula
+          por ritmo. */}
+      <div style={filaStyle}>
+        <span style={notaStyle}>O un tiempo fijo estimado:</span>
+        <Input
+          value={horasTexto}
+          onChange={(e) => {
+            setHorasTexto(e.target.value);
+            const n = Number(e.target.value);
+            onParams(pasoId, {
+              horasEstimadas:
+                e.target.value.trim() !== "" && Number.isFinite(n) && n >= 0
+                  ? n
+                  : null,
+            });
+          }}
+          placeholder="Opcional"
+          inputMode="decimal"
+          style={{ maxWidth: 110 }}
+        />
+        <span style={notaStyle}>h — si lo completás, no se calcula por ritmo</span>
+      </div>
+    </div>
+  );
+}
+
+/** Origen de herencia (tiempo.herencia): señalar el paso y qué capacidad
+ *  usa. Vivía en la card transicional; ahora lo renderiza el esquema. */
+function HerenciaOrigenGuiada({
+  pasoId,
+  pasos,
+  familiasMap,
+  jsonTexts,
+  onHerencia,
+}: {
+  pasoId: string;
+  pasos: PasoAsistente[];
+  familiasMap: Map<string, FamiliaListItem>;
+  jsonTexts: Record<string, { params: string; mecanismo: string }>;
+  onHerencia: (pasoId: string, origen: OrigenHerencia | null) => void;
+}) {
+  const origenActual = leerOrigenHerencia(jsonTexts[pasoId]?.mecanismo ?? "");
+  const [herenciaPaso, setHerenciaPaso] = React.useState(
+    typeof origenActual?.rutaPasoId === "string" ? origenActual.rutaPasoId : "",
+  );
+  const [herenciaCap, setHerenciaCap] = React.useState(
+    typeof origenActual?.capacidad === "string"
+      ? origenActual.capacidad
+      : "unidades_procesadas",
+  );
+  const previos = pasos
+    .filter((p, i) => i < pasos.findIndex((x) => x.id === pasoId))
+    .map((p) => ({
+      id: p.id,
+      nombre: p.nombre,
+      capacidades: (familiasMap.get(p.familiaCodigo)?.capacidades ?? []).filter(
+        (c: { heredable: boolean }) => c.heredable,
+      ),
+    }));
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <HumanSelect
+        value={herenciaPaso}
+        onValueChange={(id) => setHerenciaPaso(id)}
+        options={previos.map((p) => ({
+          value: p.id,
+          label: p.nombre,
+          description: p.capacidades.length
+            ? `Deja: ${p.capacidades.map((c: { nombre: string }) => c.nombre.toLowerCase()).join(", ")}`
+            : undefined,
+        }))}
+        placeholder="¿De qué paso?"
+      />
+      {herenciaPaso ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <HumanSelect
+            value={herenciaCap}
+            onValueChange={(v) => setHerenciaCap(v || "unidades_procesadas")}
+            options={(
+              previos.find((p) => p.id === herenciaPaso)?.capacidades ?? []
+            ).map((c: { key: string; nombre: string }) => ({
+              value: c.key,
+              label: c.nombre,
+            }))}
+            placeholder="Qué número usa"
+          />
+          <Button
+            type="button"
+            size="sm"
+            onClick={() =>
+              onHerencia(pasoId, {
+                rutaPasoId: herenciaPaso,
+                capacidad: herenciaCap,
+              })
+            }
+          >
+            Aplicar
+          </Button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// ─── Tiempo del comercial: LA UI del detallado, extraída como componente ─
+// La usan el detallado y el asistente guiado vía el esquema
+// (tiempo.comercial — PRIMERA pregunta de Tiempo y costo).
+
+function TiempoComercialDetalladoEditor({
+  pasoId,
+  cfg,
+  familia,
+  updateTiempoManualConfig,
+}: {
+  pasoId: string;
+  cfg: UpsertConfigPasoPayload;
+  familia: FamiliaListItem | undefined;
+  updateTiempoManualConfig: (
+    pasoId: string,
+    patch: Record<string, unknown>,
+  ) => void;
+}) {
+  const tiempoManualConfig = getTiempoManualConfig(cfg.paramsPasoJson);
+  const tiempoManualHabilitado = tiempoManualConfig.habilitado === true;
+  const tiempoManualUnidad =
+    tiempoManualConfig.unidadInput === "h" ? "h" : "min";
+  const tiempoManualDefaultMin = readOptionalNumber(
+    tiempoManualConfig.defaultMin,
+  );
+  return (
+                                  <div className="field md:col-span-full">
+                                    <LabelConTooltip
+                                      label="Tiempo estimado por el comercial"
+                                      tooltip="El comercial ingresa el tiempo de este paso al cotizar (ej. diseño gráfico complejo, minutos de láser según el RIP). El valor ingresado define el tiempo del paso y reemplaza el cálculo del modo de tiempo; setup y cleanup de máquina se suman igual."
+                                      iconSize="sm"
+                                    />
+                                    <label className="flex items-start gap-2 rounded-md border bg-white px-3 py-2 text-xs">
+                                      <input
+                                        className="mt-0.5"
+                                        type="checkbox"
+                                        checked={tiempoManualHabilitado}
+                                        onChange={(e) =>
+                                          updateTiempoManualConfig(pasoId, {
+                                            habilitado: e.target.checked,
+                                          })
+                                        }
+                                      />
+                                      <span className="space-y-0.5">
+                                        <span className="block font-medium text-foreground">
+                                          El comercial estima el tiempo al
+                                          cotizar
+                                        </span>
+                                        <span className="block text-muted-foreground">
+                                          Muestra un input de tiempo en el
+                                          cotizador. Sin valor ingresado, el
+                                          paso se calcula como siempre.
+                                        </span>
+                                      </span>
+                                    </label>
+                                    {tiempoManualHabilitado && (
+                                      <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
+                                        <div className="space-y-1">
+                                          <span className="text-muted-foreground text-xs">
+                                            Unidad del input
+                                          </span>
+                                          <HumanSelect
+                                            value={tiempoManualUnidad}
+                                            onValueChange={(value) =>
+                                              updateTiempoManualConfig(
+                                                pasoId,
+                                                {
+                                                  unidadInput:
+                                                    value === "h" ? "h" : "min",
+                                                },
+                                              )
+                                            }
+                                            options={
+                                              TIEMPO_MANUAL_UNIDAD_OPTIONS
+                                            }
+                                            placeholder="Elegir unidad"
+                                          />
+                                        </div>
+                                        <div className="space-y-1">
+                                          <LabelConTooltip
+                                            label="Valor sugerido"
+                                            tooltip="Valor inicial del input en el cotizador, siempre en minutos. El comercial lo ajusta solo cuando el trabajo lo amerita."
+                                            iconSize="sm"
+                                          />
+                                          <div className="flex items-center gap-2">
+                                            <Input
+                                              type="number"
+                                              min={0}
+                                              step={1}
+                                              value={
+                                                tiempoManualDefaultMin ?? ""
+                                              }
+                                              onChange={(e) =>
+                                                updateTiempoManualConfig(
+                                                  pasoId,
+                                                  {
+                                                    defaultMin:
+                                                      e.target.value === ""
+                                                        ? null
+                                                        : Number(
+                                                            e.target.value,
+                                                          ),
+                                                  },
+                                                )
+                                              }
+                                              placeholder="Opcional"
+                                            />
+                                            <span className="text-muted-foreground whitespace-nowrap text-xs">
+                                              min
+                                            </span>
+                                          </div>
+                                        </div>
+                                        <div className="space-y-1">
+                                          <span className="text-muted-foreground text-xs">
+                                            Mínimo permitido (min)
+                                          </span>
+                                          <Input
+                                            type="number"
+                                            min={0}
+                                            step={1}
+                                            value={
+                                              readOptionalNumber(
+                                                tiempoManualConfig.minMin,
+                                              ) ?? ""
+                                            }
+                                            onChange={(e) =>
+                                              updateTiempoManualConfig(
+                                                pasoId,
+                                                {
+                                                  minMin:
+                                                    e.target.value === ""
+                                                      ? null
+                                                      : Number(e.target.value),
+                                                },
+                                              )
+                                            }
+                                            placeholder="Opcional"
+                                          />
+                                        </div>
+                                        <div className="space-y-1">
+                                          <span className="text-muted-foreground text-xs">
+                                            Máximo permitido (min)
+                                          </span>
+                                          <Input
+                                            type="number"
+                                            min={0}
+                                            step={1}
+                                            value={
+                                              readOptionalNumber(
+                                                tiempoManualConfig.maxMin,
+                                              ) ?? ""
+                                            }
+                                            onChange={(e) =>
+                                              updateTiempoManualConfig(
+                                                pasoId,
+                                                {
+                                                  maxMin:
+                                                    e.target.value === ""
+                                                      ? null
+                                                      : Number(e.target.value),
+                                                },
+                                              )
+                                            }
+                                            placeholder="Opcional"
+                                          />
+                                        </div>
+                                        <div className="space-y-1 md:col-span-full">
+                                          <span className="text-muted-foreground text-xs">
+                                            Etiqueta del input
+                                          </span>
+                                          <Input
+                                            type="text"
+                                            value={
+                                              typeof tiempoManualConfig.etiqueta ===
+                                              "string"
+                                                ? tiempoManualConfig.etiqueta
+                                                : ""
+                                            }
+                                            onChange={(e) =>
+                                              updateTiempoManualConfig(
+                                                pasoId,
+                                                {
+                                                  etiqueta:
+                                                    e.target.value || null,
+                                                },
+                                              )
+                                            }
+                                            placeholder={`Ej. "Tiempo estimado de ${(cfg.nombreVisible?.trim() || familia?.nombre || "trabajo").toLowerCase()}"`}
+                                          />
+                                        </div>
+                                        <label className="flex items-start gap-2 rounded-md border bg-white px-3 py-2 text-xs md:col-span-full">
+                                          <input
+                                            className="mt-0.5"
+                                            type="checkbox"
+                                            checked={
+                                              tiempoManualConfig.obligatorio ===
+                                              true
+                                            }
+                                            onChange={(e) =>
+                                              updateTiempoManualConfig(
+                                                pasoId,
+                                                {
+                                                  obligatorio:
+                                                    e.target.checked || null,
+                                                },
+                                              )
+                                            }
+                                          />
+                                          <span className="space-y-0.5">
+                                            <span className="block font-medium text-foreground">
+                                              Obligatorio
+                                            </span>
+                                            <span className="block text-muted-foreground">
+                                              No se puede agregar el producto a
+                                              la OT sin ingresar el tiempo
+                                              (típico: corte láser).
+                                            </span>
+                                          </span>
+                                        </label>
+                                        {tiempoManualConfig.obligatorio ===
+                                          true &&
+                                          tiempoManualDefaultMin == null && (
+                                            <div className="text-amber-700 text-xs md:col-span-full">
+                                              Sin valor sugerido, la cotización
+                                              queda bloqueada hasta que el
+                                              comercial ingrese el tiempo. Es
+                                              el comportamiento esperado para
+                                              pasos tipo láser — confirmá que
+                                              es lo que querés.
+                                            </div>
+                                          )}
+                                      </div>
+                                    )}
+                                  </div>
+  );
+}
+
+// ─── Modo de color: LA UI del detallado, extraída como componente ──────
+// La usan el detallado (gate mostrarModoColor && sin candidatas) y el
+// asistente guiado vía el esquema (maquina.modo_color).
+
+function ModoColorDetalladoEditor({
+  pasoId,
+  cfg,
+  modoColorOptions,
+  modoColorPerfilDefault,
+  updateModoColorConfig,
+}: {
+  pasoId: string;
+  cfg: UpsertConfigPasoPayload;
+  modoColorOptions: ReturnType<typeof buildModoColorOptions>;
+  modoColorPerfilDefault: string;
+  updateModoColorConfig: (
+    pasoId: string,
+    patch: Record<string, unknown>,
+  ) => void;
+}) {
+  const modoColorConfig = getModoColorConfig(cfg.paramsPasoJson);
+  const modoColorAllowed = Array.isArray(modoColorConfig.allowedModes)
+    ? modoColorConfig.allowedModes
+        .map((item) => normalizeModoColor(item))
+        .filter((item): item is string => item !== null)
+    : [];
+  const modoColorEnabled = modoColorConfig.enabled === true;
+  const modoColorEffectiveAllowed =
+    modoColorEnabled && modoColorAllowed.length > 0
+      ? modoColorAllowed.filter((mode) =>
+          modoColorOptions.some((option) => option.value === mode),
+        )
+      : modoColorOptions.map((option) => option.value);
+  const modoColorDefaultOptions = modoColorOptions.filter((option) =>
+    modoColorEffectiveAllowed.includes(option.value),
+  );
+  const modoColorDefault =
+    modoColorDefaultOptions.find(
+      (option) => option.value === modoColorPerfilDefault,
+    )?.value ??
+    modoColorDefaultOptions[0]?.value ??
+    "";
+  const modoColorIsSelectable = modoColorDefaultOptions.length > 1;
+  const modoColorSummary = !modoColorEnabled
+    ? modoColorOptions.length > 1
+      ? "Sin restricción: el comercial elige entre todos los modos compatibles."
+      : modoColorOptions.length === 1
+        ? `Sin restricción: se usa ${modoColorOptions[0]?.label} automáticamente.`
+        : "La máquina/perfil todavía no declara modos de color."
+    : modoColorIsSelectable
+      ? "El comercial elegirá entre los modos permitidos."
+      : `Modo fijo: ${
+          modoColorDefaultOptions[0]?.label ?? "sin modo disponible"
+        }.`;
+  return (
+    <>
+
+                                        <div className="field md:col-span-full">
+                                          <LabelConTooltip
+                                            label="Modo de color del producto"
+                                            tooltip="Define si este producto usa todos los modos compatibles de la ruta/máquina o si limita modos específicos para cotizar."
+                                          />
+                                          <div className="space-y-3 rounded border bg-background/70 p-3">
+                                            <div className="rounded-md border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                                              {modoColorConfig.enabled ===
+                                              true ? (
+                                                <span>
+                                                  Este producto{" "}
+                                                  <strong className="text-foreground">
+                                                    limita
+                                                  </strong>{" "}
+                                                  los modos de color que se
+                                                  pueden cotizar. Si queda más
+                                                  de un modo permitido, el
+                                                  comercial deberá elegir al
+                                                  agregar el producto.
+                                                </span>
+                                              ) : (
+                                                <span>
+                                                  Sin configuración propia: el
+                                                  comercial verá todos los modos
+                                                  de color compatibles con la
+                                                  ruta, máquina y perfiles
+                                                  disponibles.
+                                                </span>
+                                              )}
+                                            </div>
+                                            <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(220px,0.7fr)_minmax(0,1.3fr)]">
+                                              <label className="flex items-start gap-2 rounded-md border bg-white px-3 py-2 text-xs">
+                                                <input
+                                                  className="mt-0.5"
+                                                  type="checkbox"
+                                                  checked={
+                                                    modoColorConfig.enabled ===
+                                                    true
+                                                  }
+                                                  onChange={(e) =>
+                                                    updateModoColorConfig(
+                                                      pasoId,
+                                                      {
+                                                        enabled:
+                                                          e.target.checked,
+                                                        comercialElige: e.target
+                                                          .checked
+                                                          ? modoColorDefaultOptions.length >
+                                                            1
+                                                          : null,
+                                                        defaultMode:
+                                                          e.target.checked &&
+                                                          !modoColorDefault
+                                                            ? (modoColorDefaultOptions[0]
+                                                                ?.value ?? null)
+                                                            : modoColorDefault ||
+                                                              null,
+                                                      },
+                                                    )
+                                                  }
+                                                />
+                                                <span className="space-y-0.5">
+                                                  <span className="block font-medium text-foreground">
+                                                    Definir modos para este
+                                                    producto
+                                                  </span>
+                                                  <span className="block text-muted-foreground">
+                                                    Restringe las opciones
+                                                    disponibles en Agregar
+                                                    producto.
+                                                  </span>
+                                                </span>
+                                              </label>
+                                              <div className="space-y-2 rounded-md border bg-white px-3 py-2">
+                                                <LabelConTooltip
+                                                  label="Modos de color"
+                                                  tooltip="Los modos salen de los perfiles de la máquina. Si hay más de uno permitido, el comercial elegirá al cotizar."
+                                                  iconSize="sm"
+                                                />
+                                                {modoColorOptions.length ===
+                                                0 ? (
+                                                  <p className="text-xs text-muted-foreground">
+                                                    La máquina/perfil todavía no
+                                                    declara modos de color.
+                                                  </p>
+                                                ) : (
+                                                  <div
+                                                    className={`segmented w-full ${
+                                                      modoColorOptions.length >
+                                                      2
+                                                        ? "segmented-grid-2"
+                                                        : ""
+                                                    }`}
+                                                  >
+                                                    {modoColorOptions.map(
+                                                      (option) => {
+                                                        const selected =
+                                                          modoColorEffectiveAllowed.includes(
+                                                            option.value,
+                                                          );
+                                                        const nextAllowed =
+                                                          selected
+                                                            ? modoColorEffectiveAllowed.filter(
+                                                                (item) =>
+                                                                  item !==
+                                                                  option.value,
+                                                              )
+                                                            : [
+                                                                ...modoColorEffectiveAllowed,
+                                                                option.value,
+                                                              ];
+                                                        const safeNextAllowed =
+                                                          nextAllowed.length > 0
+                                                            ? nextAllowed
+                                                            : [option.value];
+                                                        const nextDefault =
+                                                          safeNextAllowed.includes(
+                                                            modoColorPerfilDefault,
+                                                          )
+                                                            ? modoColorPerfilDefault
+                                                            : safeNextAllowed[0];
+                                                        return (
+                                                          <button
+                                                            key={option.value}
+                                                            type="button"
+                                                            className={
+                                                              selected
+                                                                ? "on"
+                                                                : ""
+                                                            }
+                                                            disabled={
+                                                              !modoColorEnabled
+                                                            }
+                                                            onClick={() => {
+                                                              updateModoColorConfig(
+                                                                pasoId,
+                                                                {
+                                                                  enabled: true,
+                                                                  allowedModes:
+                                                                    safeNextAllowed.length ===
+                                                                      modoColorOptions.length &&
+                                                                    !safeNextAllowed.includes(
+                                                                      "SIN_IMPRESION",
+                                                                    )
+                                                                      ? null
+                                                                      : safeNextAllowed,
+                                                                  defaultMode:
+                                                                    nextDefault,
+                                                                  comercialElige:
+                                                                    safeNextAllowed.length >
+                                                                    1,
+                                                                },
+                                                              );
+                                                            }}
+                                                            title={option.code}
+                                                          >
+                                                            {option.label}
+                                                          </button>
+                                                        );
+                                                      },
+                                                    )}
+                                                  </div>
+                                                )}
+                                                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                                  <span>
+                                                    {modoColorSummary}
+                                                  </span>
+                                                  {modoColorDefault ? (
+                                                    <span className="tag muted">
+                                                      Default por perfil:{" "}
+                                                      {modoColorOptions.find(
+                                                        (option) =>
+                                                          option.value ===
+                                                          modoColorDefault,
+                                                      )?.label ??
+                                                        modoColorDefault}
+                                                    </span>
+                                                  ) : null}
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      
+    </>
+  );
+}
+
+// ─── Candidatas M-2: LA UI del detallado, extraída como componente ─────
+// (decisión del usuario en la revisión del editor declarativo: el guiado
+// usa exactamente esta UI, no cards propias). La usan el detallado y el
+// asistente; los handlers viven en el editor y se pasan por props.
+
+function CandidatasDetalladoEditor({
+  pasoId,
+  familiaCodigo,
+  cfg,
+  familia,
+  lookups,
+  maquinasCandidatasCompatibles,
+  mostrarModoColor,
+  toggleMaquinaCandidata,
+  setMaquinaCandidataPreferida,
+  setMaquinaCandidataPerfilDefault,
+  setMaquinaCandidataModoColorAllowed,
+}: {
+  pasoId: string;
+  familiaCodigo: string;
+  cfg: UpsertConfigPasoPayload;
+  familia: FamiliaListItem | undefined;
+  lookups: LookupsConfigPaso;
+  maquinasCandidatasCompatibles: LookupsConfigPaso["maquinas"];
+  mostrarModoColor: boolean;
+  toggleMaquinaCandidata: (pasoId: string, maquinaId: string, checked: boolean) => void;
+  setMaquinaCandidataPreferida: (pasoId: string, maquinaId: string) => void;
+  setMaquinaCandidataPerfilDefault: (pasoId: string, maquinaId: string, perfilId: string | null) => void;
+  setMaquinaCandidataModoColorAllowed: (pasoId: string, maquinaId: string, modes: string[]) => void;
+}) {
+  const candidatasCfg = cfg.maquinasCandidatas ?? [];
+  const candidatasSeleccionadas = new Set(
+    candidatasCfg.map((candidata) => candidata.maquinaId),
+  );
+  const candidataPreferidaId =
+    candidatasCfg.find((candidata) => candidata.esPreferida)?.maquinaId ?? null;
+  const tecnologiasCandidatas = Array.from(
+    new Set(
+      candidatasCfg
+        .map((candidata) => {
+          const maquina = lookups.maquinas.find(
+            (item) => item.id === candidata.maquinaId,
+          );
+          return maquina ? getMachineTechnology(maquina) : null;
+        })
+        .filter((tech) => Boolean(tech)),
+    ),
+  );
+  void familia;
+  return (
+    <>
+
+                                        <div className="field md:col-span-full space-y-3">
+                                          <div className="ps-cand-title">
+                                            <LabelConTooltip
+                                              label="Máquinas candidatas para este paso"
+                                              tooltip="Máquinas que este producto puede usar para este paso. En la OT el comercial elegirá tecnología; si una tecnología tiene una sola máquina, no se muestra selector de máquina."
+                                            />
+                                            <div className="ps-meta">
+                                              {candidatasCfg.length > 0 ? (
+                                                <>
+                                                  <span className="ps-meta-chip">
+                                                    {candidatasCfg.length}{" "}
+                                                    máquina
+                                                    {candidatasCfg.length === 1
+                                                      ? ""
+                                                      : "s"}
+                                                  </span>
+                                                  <span className="ps-meta-chip">
+                                                    {
+                                                      tecnologiasCandidatas.length
+                                                    }{" "}
+                                                    tecnología
+                                                    {tecnologiasCandidatas.length ===
+                                                    1
+                                                      ? ""
+                                                      : "s"}
+                                                  </span>
+                                                </>
+                                              ) : (
+                                                <span className="ps-meta-chip">
+                                                  Sin candidatas
+                                                </span>
+                                              )}
+                                              {candidataPreferidaId ? (
+                                                <span className="ps-meta-chip pref">
+                                                  <StarIcon
+                                                    className="size-3"
+                                                    fill="currentColor"
+                                                  />
+                                                  Preferida:{" "}
+                                                  {lookups.maquinas.find(
+                                                    (maquina) =>
+                                                      maquina.id ===
+                                                      candidataPreferidaId,
+                                                  )?.nombre ?? "sin máquina"}
+                                                </span>
+                                              ) : null}
+                                            </div>
+                                          </div>
+                                          {maquinasCandidatasCompatibles.length ===
+                                          0 ? (
+                                            <p className="text-xs text-muted-foreground">
+                                              No hay máquinas compatibles con
+                                              perfiles activos para esta
+                                              familia.
+                                            </p>
+                                          ) : (
+                                            <div className="ps-cand-grid">
+                                              {maquinasCandidatasCompatibles.map(
+                                                (maquina) => {
+                                                  const selected =
+                                                    candidatasSeleccionadas.has(
+                                                      maquina.id,
+                                                    );
+                                                  const preferred =
+                                                    selected &&
+                                                    candidataPreferidaId ===
+                                                      maquina.id;
+                                                  const chip = techChipStyle(
+                                                    getMachineTechnology(
+                                                      maquina,
+                                                    ),
+                                                  );
+                                                  return (
+                                                    <div
+                                                      key={maquina.id}
+                                                      role="button"
+                                                      tabIndex={0}
+                                                      className={`ps-cand ${
+                                                        preferred
+                                                          ? "pref"
+                                                          : selected
+                                                            ? "on"
+                                                            : ""
+                                                      }`}
+                                                      onClick={() =>
+                                                        toggleMaquinaCandidata(
+                                                          pasoId,
+                                                          maquina.id,
+                                                          !selected,
+                                                        )
+                                                      }
+                                                      onKeyDown={(event) => {
+                                                        if (
+                                                          event.key ===
+                                                            "Enter" ||
+                                                          event.key === " "
+                                                        ) {
+                                                          event.preventDefault();
+                                                          toggleMaquinaCandidata(
+                                                            pasoId,
+                                                            maquina.id,
+                                                            !selected,
+                                                          );
+                                                        }
+                                                      }}
+                                                    >
+                                                      {preferred ? (
+                                                        <span className="ps-principal-tag">
+                                                          PRINCIPAL
+                                                        </span>
+                                                      ) : null}
+                                                      <div className="ps-cand-top">
+                                                        <span
+                                                          className="ps-cand-chip"
+                                                          style={{
+                                                            background:
+                                                              chip.bg,
+                                                          }}
+                                                        >
+                                                          {chip.ini}
+                                                        </span>
+                                                        <span className="ps-cand-tech">
+                                                          {machineTechnologyLabel(
+                                                            maquina,
+                                                          )}
+                                                        </span>
+                                                        <button
+                                                          type="button"
+                                                          className={`ps-cand-star ${
+                                                            preferred
+                                                              ? "on"
+                                                              : ""
+                                                          }`}
+                                                          disabled={!selected}
+                                                          title="Marcar como preferida"
+                                                          onClick={(event) => {
+                                                            event.stopPropagation();
+                                                            setMaquinaCandidataPreferida(
+                                                              pasoId,
+                                                              maquina.id,
+                                                            );
+                                                          }}
+                                                        >
+                                                          <StarIcon
+                                                            className="size-3.5"
+                                                            fill={
+                                                              preferred
+                                                                ? "currentColor"
+                                                                : "none"
+                                                            }
+                                                          />
+                                                        </button>
+                                                      </div>
+                                                      <div className="min-w-0">
+                                                        <div className="ps-cand-nm truncate">
+                                                          {maquina.nombre}
+                                                        </div>
+                                                        <div className="ps-cand-code truncate">
+                                                          {maquina.codigo}
+                                                        </div>
+                                                      </div>
+                                                      <div className="ps-cand-foot">
+                                                        <span className="ps-cand-check">
+                                                          <CheckIcon strokeWidth={3.4} />
+                                                        </span>
+                                                        <span className="ps-cand-check-lbl">
+                                                          {selected
+                                                            ? "Candidata"
+                                                            : "Agregar"}
+                                                        </span>
+                                                      </div>
+                                                    </div>
+                                                  );
+                                                },
+                                              )}
+                                            </div>
+                                          )}
+                                          {candidatasCfg.map((cfgCand) => {
+                                            const maquina =
+                                              maquinasCandidatasCompatibles.find(
+                                                (item) =>
+                                                  item.id === cfgCand.maquinaId,
+                                              ) ??
+                                              lookups.maquinas.find(
+                                                (item) =>
+                                                  item.id === cfgCand.maquinaId,
+                                              );
+                                            if (!maquina) return null;
+                                            const preferred =
+                                              candidataPreferidaId ===
+                                              maquina.id;
+                                            const chip = techChipStyle(
+                                              getMachineTechnology(maquina),
+                                            );
+                                            const perfilesCompatibles =
+                                              maquina.perfilesOperativos.filter(
+                                                (perfil) =>
+                                                  perfilCompatibleConFamilia(
+                                                    familiaCodigo,
+                                                    perfil,
+                                                  ),
+                                              );
+                                            const candidateModoOptions =
+                                              mostrarModoColor
+                                                ? buildModoColorOptions(
+                                                    maquina,
+                                                    null,
+                                                    true,
+                                                  )
+                                                : [];
+                                            const candidateAllowed =
+                                              resolveModoColorAllowedModes(
+                                                cfgCand.modoColorAllowedModes,
+                                                candidateModoOptions,
+                                              );
+                                            return (
+                                              <div
+                                                key={maquina.id}
+                                                className={`ps-cfg ${
+                                                  preferred ? "pref" : ""
+                                                }`}
+                                              >
+                                                <div className="ps-cfg-head">
+                                                  <span
+                                                    className="ps-cand-chip sm"
+                                                    style={{
+                                                      background: chip.bg,
+                                                    }}
+                                                  >
+                                                    {chip.ini}
+                                                  </span>
+                                                  <div>
+                                                    <div className="ps-cfg-t">
+                                                      {maquina.nombre}
+                                                    </div>
+                                                    <div className="ps-cfg-s">
+                                                      {preferred
+                                                        ? "Configuración de la máquina principal"
+                                                        : "Configuración de la candidata"}
+                                                    </div>
+                                                  </div>
+                                                  {preferred ? (
+                                                    <span className="ps-star-pill">
+                                                      <StarIcon
+                                                        className="size-3"
+                                                        fill="currentColor"
+                                                      />
+                                                      Preferida
+                                                    </span>
+                                                  ) : null}
+                                                </div>
+                                                <div className="ps-cfg-body">
+                                                  <div className="space-y-2">
+                                                    <span className="ps-label">
+                                                      Perfil default
+                                                    </span>
+                                                    <select
+                                                      className="h-11 w-full rounded-[10px] border bg-background px-3 text-[13px] transition-colors hover:border-[var(--border-strong)]"
+                                                      value={
+                                                        cfgCand.perfilDefaultId ??
+                                                        ""
+                                                      }
+                                                      onChange={(event) =>
+                                                        setMaquinaCandidataPerfilDefault(
+                                                          pasoId,
+                                                          maquina.id,
+                                                          event.target.value ||
+                                                            null,
+                                                        )
+                                                      }
+                                                    >
+                                                      <option value="">
+                                                        Primer perfil
+                                                        compatible
+                                                      </option>
+                                                      {perfilesCompatibles.map(
+                                                        (perfil) => (
+                                                          <option
+                                                            key={perfil.id}
+                                                            value={perfil.id}
+                                                          >
+                                                            {perfil.nombre}
+                                                          </option>
+                                                        ),
+                                                      )}
+                                                    </select>
+                                                  </div>
+                                                  {mostrarModoColor ? (
+                                                    <div className="space-y-2">
+                                                      <span className="ps-label">
+                                                        Modos de color
+                                                        habilitados
+                                                      </span>
+                                                      {candidateModoOptions.length ===
+                                                      0 ? (
+                                                        <p className="text-[11px] text-muted-foreground">
+                                                          Esta máquina todavía
+                                                          no declara modos de
+                                                          color en sus
+                                                          perfiles.
+                                                        </p>
+                                                      ) : (
+                                                        <div className="ps-modes">
+                                                          {candidateModoOptions.map(
+                                                            (option) => {
+                                                              const optionSelected =
+                                                                candidateAllowed.includes(
+                                                                  option.value,
+                                                                );
+                                                              const nextAllowed =
+                                                                optionSelected
+                                                                  ? candidateAllowed.filter(
+                                                                      (item) =>
+                                                                        item !==
+                                                                        option.value,
+                                                                    )
+                                                                  : [
+                                                                      ...candidateAllowed,
+                                                                      option.value,
+                                                                    ];
+                                                              const safeNextAllowed =
+                                                                nextAllowed.length >
+                                                                0
+                                                                  ? nextAllowed
+                                                                  : [
+                                                                      option.value,
+                                                                    ];
+                                                              const swatches =
+                                                                modoColorSwatches(
+                                                                  option.value,
+                                                                );
+                                                              return (
+                                                                <button
+                                                                  key={
+                                                                    option.value
+                                                                  }
+                                                                  type="button"
+                                                                  className={`ps-mode ${
+                                                                    optionSelected
+                                                                      ? "on"
+                                                                      : ""
+                                                                  }`}
+                                                                  title={
+                                                                    option.code ??
+                                                                    undefined
+                                                                  }
+                                                                  onClick={() =>
+                                                                    setMaquinaCandidataModoColorAllowed(
+                                                                      pasoId,
+                                                                      maquina.id,
+                                                                      safeNextAllowed,
+                                                                    )
+                                                                  }
+                                                                >
+                                                                  <span className="ps-mcheck">
+                                                                    <CheckIcon strokeWidth={3.4} />
+                                                                  </span>
+                                                                  {swatches.length >
+                                                                  0 ? (
+                                                                    <span className="ps-swatch">
+                                                                      {swatches.map(
+                                                                        (
+                                                                          sw,
+                                                                          swIdx,
+                                                                        ) => (
+                                                                          <span
+                                                                            key={
+                                                                              swIdx
+                                                                            }
+                                                                            className="ps-sw"
+                                                                            style={{
+                                                                              background:
+                                                                                sw.bg,
+                                                                              ...(sw.borde
+                                                                                ? {
+                                                                                    border:
+                                                                                      "1px solid #d4d2cd",
+                                                                                  }
+                                                                                : {}),
+                                                                            }}
+                                                                          />
+                                                                        ),
+                                                                      )}
+                                                                    </span>
+                                                                  ) : null}
+                                                                  {
+                                                                    option.label
+                                                                  }
+                                                                </button>
+                                                              );
+                                                            },
+                                                          )}
+                                                        </div>
+                                                      )}
+                                                    </div>
+                                                  ) : null}
+                                                  {mostrarModoColor &&
+                                                  candidateModoOptions.length >
+                                                    0 ? (
+                                                    <div className="ps-cfg-note">
+                                                      <svg
+                                                        viewBox="0 0 24 24"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        strokeWidth="1.7"
+                                                      >
+                                                        <circle
+                                                          cx="12"
+                                                          cy="12"
+                                                          r="9"
+                                                        />
+                                                        <path d="M12 11v5M12 8h.01" />
+                                                      </svg>
+                                                      <span>
+                                                        Si queda más de un modo
+                                                        habilitado, el
+                                                        comercial elige cuál
+                                                        usar al agregar el
+                                                        producto.
+                                                      </span>
+                                                    </div>
+                                                  ) : null}
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      
+    </>
+  );
+}
 
 // ─── Editor declarativo (sub-fase A) — renderer de secciones-pregunta ──
 // Renderiza TODAS las opciones visibles de una sección del esquema:
@@ -9579,6 +9704,35 @@ function ControlGuiado({
       </div>
     );
   }
+  if (control.tipo === "numero") {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <Input
+          type="number"
+          min={control.min}
+          step={control.step}
+          value={control.valor(ctx) ?? ""}
+          placeholder={control.placeholder?.(ctx)}
+          onChange={(e) =>
+            onAplicar(
+              control.aplicar(
+                ctx,
+                e.target.value === "" ? null : Number(e.target.value),
+              ),
+            )
+          }
+          style={{ maxWidth: 160 }}
+        />
+        {control.sufijo ? (
+          <span
+            style={{ fontSize: 12.5, color: "var(--muted-text, #6e6e76)" }}
+          >
+            {control.sufijo(ctx)}
+          </span>
+        ) : null}
+      </div>
+    );
+  }
   if (control.tipo === "componente") {
     return <>{renderComponente(control.id)}</>;
   }
@@ -9628,6 +9782,12 @@ function AsistenteGuiado({
   guardando,
   tieneCambios,
   reglaProps,
+  updateTiempoManualConfig,
+  updateModoColorConfig,
+  toggleMaquinaCandidata,
+  setMaquinaCandidataPreferida,
+  setMaquinaCandidataPerfilDefault,
+  setMaquinaCandidataModoColorAllowed,
   onCerrar,
 }: {
   pasos: PasoAsistente[];
@@ -9646,6 +9806,30 @@ function AsistenteGuiado({
     includeMeasureFields: boolean;
     extraFields: RuleFieldDefinition[];
   };
+  updateTiempoManualConfig: (
+    pasoId: string,
+    patch: Record<string, unknown>,
+  ) => void;
+  updateModoColorConfig: (
+    pasoId: string,
+    patch: Record<string, unknown>,
+  ) => void;
+  toggleMaquinaCandidata: (
+    pasoId: string,
+    maquinaId: string,
+    checked: boolean,
+  ) => void;
+  setMaquinaCandidataPreferida: (pasoId: string, maquinaId: string) => void;
+  setMaquinaCandidataPerfilDefault: (
+    pasoId: string,
+    maquinaId: string,
+    perfilId: string | null,
+  ) => void;
+  setMaquinaCandidataModoColorAllowed: (
+    pasoId: string,
+    maquinaId: string,
+    modes: string[],
+  ) => void;
   onCerrar: () => void;
 }) {
   const [indice, setIndice] = React.useState(0);
@@ -9664,9 +9848,10 @@ function AsistenteGuiado({
         pendientesDePaso(
           configs[pasoActual.id],
           familiasMap.get(pasoActual.familiaCodigo),
-          // La sección Activación ya vive en el ESQUEMA (sub-fase A): su
-          // pendiente no necesita card transicional.
-        ).filter((pend) => pend.tipo !== "regla_condicional"),
+          // Activación (A) y Tiempo/Máquina (B) ya viven en el ESQUEMA:
+          // sus pendientes no necesitan card transicional. Quedan las de
+          // materiales y tercerización (sub-fases C-D).
+        ).filter((pend) => !PENDIENTES_EN_ESQUEMA.has(pend.tipo)),
       );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -9759,27 +9944,36 @@ function AsistenteGuiado({
             {pasoActual.nombre}
           </div>
 
-          {/* Editor declarativo (sub-fase A): la sección Activación sale
-              del ESQUEMA — completa, con abierto/colapsado/Cambiar. Las
-              cards de abajo son transicionales hasta migrar sus
-              secciones (B-D). */}
-          <SeccionGuiada
-            titulo="Activación"
-            seccion="activacion"
-            ctx={{
+          {/* Editor declarativo: Activación (A) + Tiempo y costo +
+              Máquina y perfil (B) salen del ESQUEMA — completas, con
+              abierto/colapsado/Cambiar. Las cards de abajo son
+              transicionales hasta migrar materiales y tercerización
+              (C-D). */}
+          {(() => {
+            const ctx = {
               cfg,
               familia,
               paramsPaso: asRecord(cfg.paramsPasoJson),
               otrosPasos: pasos
                 .filter((p) => p.id !== pasoActual.id)
                 .map((p) => ({ id: p.id, nombre: p.nombre })),
-            }}
-            pendientesVivos={new Set(vivos.map((pend) => pend.tipo))}
-            onAplicar={(patch) => {
+              lookups,
+            };
+            const pendientesVivos = new Set(vivos.map((pend) => pend.tipo));
+            const onAplicar = (patch: PatchOpcion) => {
               if (patch.tipo === "config") onPatch(pasoActual.id, patch.patch);
               else onParams(pasoActual.id, patch.patch);
-            }}
-            renderComponente={(id) => {
+            };
+            const maquinasCompatibles = lookups.maquinas.filter((m) =>
+              maquinaCompatibleConFamilia(
+                pasoActual.familiaCodigo,
+                familia?.plantillasCompatibles,
+                m,
+              ),
+            );
+            const maquinaSel =
+              lookups.maquinas.find((m) => m.id === cfg.maquinaM1Id) ?? null;
+            const renderComponente = (id: string): React.ReactNode => {
               if (id === "regla-condicional") {
                 return (
                   <RuleBuilder
@@ -9830,9 +10024,188 @@ function AsistenteGuiado({
                   </div>
                 );
               }
+              if (id === "tiempo-comercial") {
+                // Las clases del detallado (field, segmented, ps-*) están
+                // scopeadas bajo .pasos-sections; el Sheet vive en un
+                // portal, así que el wrapper se repone acá.
+                return (
+                  <div className="pasos-sections">
+                    <TiempoComercialDetalladoEditor
+                      pasoId={pasoActual.id}
+                      cfg={cfg}
+                      familia={familia}
+                      updateTiempoManualConfig={updateTiempoManualConfig}
+                    />
+                  </div>
+                );
+              }
+              if (id === "ritmo-productividad" || id === "ritmo-batch") {
+                return (
+                  <RitmoGuiado
+                    variante={
+                      id === "ritmo-batch" ? "batch" : "productividad"
+                    }
+                    pasoId={pasoActual.id}
+                    cfg={cfg}
+                    familia={familia}
+                    onParams={onParams}
+                  />
+                );
+              }
+              if (id === "herencia-origen") {
+                return (
+                  <HerenciaOrigenGuiada
+                    pasoId={pasoActual.id}
+                    pasos={pasos}
+                    familiasMap={familiasMap}
+                    jsonTexts={jsonTexts}
+                    onHerencia={onHerencia}
+                  />
+                );
+              }
+              if (id === "maquina-m1") {
+                return (
+                  <HumanSelect
+                    value={cfg.maquinaM1Id ?? ""}
+                    onValueChange={(id2) => {
+                      const maq = maquinasCompatibles.find(
+                        (m) => m.id === id2,
+                      );
+                      onPatch(pasoActual.id, {
+                        maquinaM1Id: id2 || null,
+                        perfilM1Id: maq?.perfilesOperativos[0]?.id ?? null,
+                        centroCostoId: null,
+                      });
+                    }}
+                    options={maquinasCompatibles.map((m) => ({
+                      value: m.id,
+                      label: m.nombre,
+                    }))}
+                    placeholder="Elegir máquina"
+                  />
+                );
+              }
+              if (id === "perfil-m1") {
+                return (
+                  <HumanSelect
+                    value={cfg.perfilM1Id ?? ""}
+                    onValueChange={(id2) =>
+                      onPatch(pasoActual.id, { perfilM1Id: id2 || null })
+                    }
+                    options={(maquinaSel?.perfilesOperativos ?? [])
+                      .filter((perfil) =>
+                        perfilCompatibleConFamilia(
+                          pasoActual.familiaCodigo,
+                          perfil,
+                        ),
+                      )
+                      .map((perfil) => ({
+                        value: perfil.id,
+                        label: perfil.nombre,
+                      }))}
+                    placeholder="Perfil operativo"
+                  />
+                );
+              }
+              if (id === "candidatas-detallado") {
+                return (
+                  <div className="pasos-sections wiz-grid">
+                    <CandidatasDetalladoEditor
+                      pasoId={pasoActual.id}
+                      familiaCodigo={pasoActual.familiaCodigo}
+                      cfg={cfg}
+                      familia={familia}
+                      lookups={lookups}
+                      maquinasCandidatasCompatibles={lookups.maquinas.filter(
+                        (m) =>
+                          maquinaCandidataCompatibleConFamilia(
+                            pasoActual.familiaCodigo,
+                            familia?.plantillasCompatibles,
+                            m,
+                          ),
+                      )}
+                      mostrarModoColor={modoColorAplica(
+                        familia?.codigo,
+                        cfg,
+                      )}
+                      toggleMaquinaCandidata={toggleMaquinaCandidata}
+                      setMaquinaCandidataPreferida={
+                        setMaquinaCandidataPreferida
+                      }
+                      setMaquinaCandidataPerfilDefault={
+                        setMaquinaCandidataPerfilDefault
+                      }
+                      setMaquinaCandidataModoColorAllowed={
+                        setMaquinaCandidataModoColorAllowed
+                      }
+                    />
+                  </div>
+                );
+              }
+              if (id === "modo-color-detallado") {
+                const perfilSel =
+                  maquinaSel?.perfilesOperativos.find(
+                    (perfil) => perfil.id === cfg.perfilM1Id,
+                  ) ?? null;
+                return (
+                  <div className="pasos-sections">
+                    <ModoColorDetalladoEditor
+                      pasoId={pasoActual.id}
+                      cfg={cfg}
+                      modoColorOptions={buildModoColorOptions(
+                        maquinaSel,
+                        null,
+                        ["impresion_por_hoja", "impresion_por_area"].includes(
+                          pasoActual.familiaCodigo,
+                        ),
+                      )}
+                      modoColorPerfilDefault={
+                        modosColorFromPerfil(perfilSel)[0] ?? ""
+                      }
+                      updateModoColorConfig={updateModoColorConfig}
+                    />
+                  </div>
+                );
+              }
               return null;
-            }}
-          />
+            };
+            const noEjecutar = cfg.modoActivacion === "NO_EJECUTAR";
+            return (
+              <>
+                <SeccionGuiada
+                  titulo="Activación"
+                  seccion="activacion"
+                  ctx={ctx}
+                  pendientesVivos={pendientesVivos}
+                  onAplicar={onAplicar}
+                  renderComponente={renderComponente}
+                />
+                {/* Tercerizado o apagado: no se produce internamente —
+                    sin tiempo/costo ni máquina (mismo criterio que el
+                    detallado congelado). */}
+                {!noEjecutar && !cfg.tercerizado ? (
+                  <>
+                    <SeccionGuiada
+                      titulo="Tiempo y costo"
+                      seccion="tiempo"
+                      ctx={ctx}
+                      pendientesVivos={pendientesVivos}
+                      onAplicar={onAplicar}
+                      renderComponente={renderComponente}
+                    />
+                    <SeccionGuiada
+                      titulo="Máquina y perfil"
+                      seccion="maquina"
+                      ctx={ctx}
+                      pendientesVivos={pendientesVivos}
+                      onAplicar={onAplicar}
+                      renderComponente={renderComponente}
+                    />
+                  </>
+                ) : null}
+              </>
+            );
+          })()}
 
           {cards.length === 0 ? (
             <div style={cardStyle}>
@@ -9885,14 +10258,7 @@ function AsistenteGuiado({
                     pasoActual={pasoActual}
                     cfg={cfg}
                     familia={familia}
-                    pasos={pasos}
-                    configs={configs}
-                    familiasMap={familiasMap}
-                    lookups={lookups}
-                    jsonTexts={jsonTexts}
                     onPatch={onPatch}
-                    onParams={onParams}
-                    onHerencia={onHerencia}
                     onAddSlotFamilia={onAddSlotFamilia}
                     onCerrar={onCerrar}
                   />
@@ -9941,14 +10307,7 @@ function CuerpoCard({
   pasoActual,
   cfg,
   familia,
-  pasos,
-  configs,
-  familiasMap,
-  lookups,
-  jsonTexts,
   onPatch,
-  onParams,
-  onHerencia,
   onAddSlotFamilia,
   onCerrar,
 }: {
@@ -9956,14 +10315,7 @@ function CuerpoCard({
   pasoActual: PasoAsistente;
   cfg: UpsertConfigPasoPayload;
   familia: FamiliaListItem | undefined;
-  pasos: PasoAsistente[];
-  configs: Record<string, UpsertConfigPasoPayload>;
-  familiasMap: Map<string, FamiliaListItem>;
-  lookups: LookupsConfigPaso;
-  jsonTexts: Record<string, { params: string; mecanismo: string }>;
   onPatch: (pasoId: string, patch: Partial<UpsertConfigPasoPayload>) => void;
-  onParams: (pasoId: string, patch: Record<string, unknown>) => void;
-  onHerencia: (pasoId: string, origen: OrigenHerencia | null) => void;
   onAddSlotFamilia: (pasoId: string, slotCodigo: string) => void;
   onCerrar: () => void;
 }) {
@@ -9972,39 +10324,6 @@ function CuerpoCard({
     fontSize: 12.5,
     color: "var(--muted-text, #6e6e76)",
   };
-  const maquinas = React.useMemo(
-    () =>
-      lookups.maquinas.filter((m) =>
-        maquinaCompatibleConFamilia(
-          pasoActual.familiaCodigo,
-          familia?.plantillasCompatibles,
-          m,
-        ),
-      ),
-    [lookups.maquinas, pasoActual.familiaCodigo, familia],
-  );
-  const params = asRecord(cfg.paramsPasoJson);
-  const familiaConColor = ["impresion_por_hoja", "impresion_por_area"].includes(
-    pasoActual.familiaCodigo,
-  );
-
-  // Estado local de inputs numéricos (para no escribir a medias).
-  const [ritmoTexto, setRitmoTexto] = React.useState(
-    params.productivityValue != null ? String(params.productivityValue) : "",
-  );
-  const [tiempoTexto, setTiempoTexto] = React.useState(
-    cfg.tiempoFijoOverrideMin != null ? String(cfg.tiempoFijoOverrideMin) : "",
-  );
-  // Herencia.
-  const origenActual = leerOrigenHerencia(jsonTexts[pasoId]?.mecanismo ?? "");
-  const [herenciaPaso, setHerenciaPaso] = React.useState(
-    typeof origenActual?.rutaPasoId === "string" ? origenActual.rutaPasoId : "",
-  );
-  const [herenciaCap, setHerenciaCap] = React.useState(
-    typeof origenActual?.capacidad === "string"
-      ? origenActual.capacidad
-      : "unidades_procesadas",
-  );
   // Búsqueda de materiales.
   const [mpQuery, setMpQuery] = React.useState("");
   const [mpResultados, setMpResultados] = React.useState<
@@ -10014,324 +10333,6 @@ function CuerpoCard({
   const [mpEtiquetaElegida, setMpEtiquetaElegida] = React.useState<string | null>(
     null,
   );
-
-  if (card.tipo === "maquina" || card.tipo === "perfil") {
-    const maquinaSel = maquinas.find((m) => m.id === cfg.maquinaM1Id) ?? null;
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <HumanSelect
-          value={cfg.maquinaM1Id ?? ""}
-          onValueChange={(id) => {
-            const maq = maquinas.find((m) => m.id === id);
-            onPatch(pasoId, {
-              maquinaM1Id: id || null,
-              perfilM1Id: maq?.perfilesOperativos[0]?.id ?? null,
-              centroCostoId: null,
-            });
-          }}
-          options={maquinas.map((m) => ({ value: m.id, label: m.nombre }))}
-          placeholder="Elegir máquina"
-        />
-        {maquinaSel ? (
-          <HumanSelect
-            value={cfg.perfilM1Id ?? ""}
-            onValueChange={(id) => onPatch(pasoId, { perfilM1Id: id || null })}
-            options={maquinaSel.perfilesOperativos.map((perfil) => ({
-              value: perfil.id,
-              label: perfil.nombre,
-            }))}
-            placeholder="Perfil operativo"
-          />
-        ) : null}
-      </div>
-    );
-  }
-
-  if (card.tipo === "candidatas") {
-    const seleccionadas = cfg.maquinasCandidatas ?? [];
-    const setCandidatas = (lista: typeof seleccionadas) =>
-      onPatch(pasoId, { maquinasCandidatas: lista });
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-          {maquinas.map((m) => {
-            const activa = seleccionadas.some(
-              (cand) => cand.maquinaId === m.id,
-            );
-            return (
-              <Button
-                key={m.id}
-                type="button"
-                variant={activa ? "default" : "outline"}
-                size="sm"
-                onClick={() => {
-                  if (activa) {
-                    const resto = seleccionadas.filter(
-                      (cand) => cand.maquinaId !== m.id,
-                    );
-                    if (
-                      resto.length > 0 &&
-                      !resto.some((cand) => cand.esPreferida)
-                    ) {
-                      resto[0] = { ...resto[0], esPreferida: true };
-                    }
-                    setCandidatas(resto);
-                  } else {
-                    setCandidatas([
-                      ...seleccionadas,
-                      {
-                        maquinaId: m.id,
-                        perfilDefaultId: m.perfilesOperativos[0]?.id ?? null,
-                        modoColorAllowedModes: [],
-                        esPreferida: seleccionadas.length === 0,
-                        orden: seleccionadas.length,
-                      },
-                    ]);
-                  }
-                }}
-              >
-                {activa ? "✓ " : "+ "}
-                {m.nombre}
-              </Button>
-            );
-          })}
-        </div>
-        {seleccionadas.map((cand, i) => {
-          const maq = maquinas.find((m) => m.id === cand.maquinaId);
-          if (!maq) return null;
-          const perfil =
-            maq.perfilesOperativos.find(
-              (perf) => perf.id === cand.perfilDefaultId,
-            ) ?? null;
-          const modosPerfil = modosColorFromPerfil(perfil);
-          const permitidos = cand.modoColorAllowedModes ?? [];
-          const setCand = (patch: Partial<typeof cand>) =>
-            setCandidatas(
-              seleccionadas.map((c, j) => (j === i ? { ...c, ...patch } : c)),
-            );
-          return (
-            <div
-              key={cand.maquinaId}
-              style={{
-                border: "1px solid var(--hairline, #eee)",
-                borderRadius: 10,
-                padding: "10px 12px",
-                display: "flex",
-                flexDirection: "column",
-                gap: 8,
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  gap: 8,
-                }}
-              >
-                <strong style={{ fontSize: 13.5 }}>{maq.nombre}</strong>
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    fontSize: 12.5,
-                    cursor: "pointer",
-                  }}
-                >
-                  <input
-                    type="radio"
-                    checked={Boolean(cand.esPreferida)}
-                    onChange={() =>
-                      setCandidatas(
-                        seleccionadas.map((c, j) => ({
-                          ...c,
-                          esPreferida: j === i,
-                        })),
-                      )
-                    }
-                  />
-                  Preferida
-                </label>
-              </div>
-              <HumanSelect
-                value={cand.perfilDefaultId ?? ""}
-                onValueChange={(id) =>
-                  setCand({ perfilDefaultId: id || null })
-                }
-                options={maq.perfilesOperativos.map((perf) => ({
-                  value: perf.id,
-                  label: perf.nombre,
-                }))}
-                placeholder="Perfil default"
-              />
-              {familiaConColor && modosPerfil.length > 0 ? (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                    gap: 6,
-                  }}
-                >
-                  <span style={notaStyle}>Modos de color:</span>
-                  {modosPerfil.map((modo) => {
-                    const activo =
-                      permitidos.length === 0 || permitidos.includes(modo);
-                    return (
-                      <Button
-                        key={modo}
-                        type="button"
-                        size="sm"
-                        variant={activo ? "default" : "outline"}
-                        onClick={() => {
-                          const base =
-                            permitidos.length === 0
-                              ? [...modosPerfil]
-                              : [...permitidos];
-                          const proximos = activo
-                            ? base.filter((x) => x !== modo)
-                            : [...base, modo];
-                          setCand({
-                            modoColorAllowedModes:
-                              proximos.length === modosPerfil.length
-                                ? []
-                                : proximos,
-                          });
-                        }}
-                      >
-                        {modo}
-                      </Button>
-                    );
-                  })}
-                </div>
-              ) : null}
-            </div>
-          );
-        })}
-        {seleccionadas.length > 0 ? (
-          <div style={notaStyle}>
-            Podés seguir sumando máquinas de la lista; la preferida es la que
-            el motor usa si el comercial no elige.
-          </div>
-        ) : null}
-      </div>
-    );
-  }
-
-  if (card.tipo === "centro") {
-    return (
-      <HumanSelect
-        value={cfg.centroCostoId ?? ""}
-        onValueChange={(id) => onPatch(pasoId, { centroCostoId: id || null })}
-        options={lookups.centrosCosto.map((centro) => ({
-          value: centro.id,
-          label: centro.nombre,
-        }))}
-        placeholder="Elegir centro de costo"
-      />
-    );
-  }
-
-  if (card.tipo === "ritmo") {
-    return (
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <Input
-          value={ritmoTexto}
-          onChange={(e) => {
-            setRitmoTexto(e.target.value);
-            const n = Number(e.target.value);
-            onParams(pasoId, {
-              productivityValue:
-                e.target.value.trim() !== "" && Number.isFinite(n) && n > 0
-                  ? n
-                  : null,
-            });
-          }}
-          placeholder="Ej: 60"
-          inputMode="decimal"
-          style={{ maxWidth: 140 }}
-        />
-        <span style={notaStyle}>unidades por hora</span>
-      </div>
-    );
-  }
-
-  if (card.tipo === "tiempo_fijo") {
-    return (
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <Input
-          value={tiempoTexto}
-          onChange={(e) => {
-            setTiempoTexto(e.target.value);
-            const n = Number(e.target.value);
-            onPatch(pasoId, {
-              tiempoFijoOverrideMin:
-                e.target.value.trim() !== "" && Number.isFinite(n) && n > 0
-                  ? n
-                  : null,
-            });
-          }}
-          placeholder="Ej: 30"
-          inputMode="decimal"
-          style={{ maxWidth: 140 }}
-        />
-        <span style={notaStyle}>minutos, fijos</span>
-      </div>
-    );
-  }
-
-  if (card.tipo === "herencia_origen") {
-    const previos = pasos
-      .filter((p, i) => i < pasos.findIndex((x) => x.id === pasoId))
-      .map((p) => ({
-        id: p.id,
-        nombre: p.nombre,
-        capacidades: (
-          familiasMap.get(p.familiaCodigo)?.capacidades ?? []
-        ).filter((c: { heredable: boolean }) => c.heredable),
-      }));
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <HumanSelect
-          value={herenciaPaso}
-          onValueChange={(id) => setHerenciaPaso(id)}
-          options={previos.map((p) => ({
-            value: p.id,
-            label: p.nombre,
-            description: p.capacidades.length
-              ? `Deja: ${p.capacidades.map((c: { nombre: string }) => c.nombre.toLowerCase()).join(", ")}`
-              : undefined,
-          }))}
-          placeholder="¿De qué paso?"
-        />
-        {herenciaPaso ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <HumanSelect
-              value={herenciaCap}
-              onValueChange={(v) => setHerenciaCap(v || "unidades_procesadas")}
-              options={(
-                previos.find((p) => p.id === herenciaPaso)?.capacidades ?? []
-              ).map((c: { key: string; nombre: string }) => ({ value: c.key, label: c.nombre }))}
-              placeholder="Qué número usa"
-            />
-            <Button
-              type="button"
-              size="sm"
-              onClick={() =>
-                onHerencia(pasoId, {
-                  rutaPasoId: herenciaPaso,
-                  capacidad: herenciaCap,
-                })
-              }
-            >
-              Aplicar
-            </Button>
-          </div>
-        ) : null}
-      </div>
-    );
-  }
 
   if (card.tipo === "proveedor" || card.tipo === "grilla_tercerizado") {
     return (

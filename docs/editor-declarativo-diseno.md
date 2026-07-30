@@ -199,8 +199,30 @@ type ControlOpcion =
   secciones-pregunta (abierto/colapsado/Cambiar), el test de paridad, y
   la sección Activación COMPLETA (nombre, cuándo, regla, co-ejecución,
   multiplicadores). El usuario valida la forma final acá.
-- **B — Tiempo y costo + Máquina y perfil** (las 19 opciones más
-  densas, reusando cards v2).
+- **B — Tiempo y costo + Máquina y perfil** — **HECHA (2026-07-30)**.
+  > Las 13 opciones de Tiempo y las 4 de Máquina declaradas en el
+  > esquema con el test de paridad ampliado (18 tests). El tiempo del
+  > comercial va PRIMERO y suprime ritmo/tanda/tiempo fijo/calcular-según
+  > (verificado en vivo con Bordado). Tres bloques del detallado se
+  > extrajeron como componentes compartidos —
+  > `CandidatasDetalladoEditor`, `ModoColorDetalladoEditor` y
+  > `TiempoComercialDetalladoEditor` — y el asistente los renderiza
+  > idénticos al detallado (las cards v2 de botones se ELIMINARON, tal
+  > como pediste). El catálogo de opciones T-2 (unidades, modos, fuentes,
+  > defaults por familia) se movió a `src/lib/editor-paso/catalogo-tiempo.ts`
+  > para que esquema y detallado lean la misma fuente. Ajustes sobre el
+  > censo descubiertos al implementar: (1) `maquina.modo_color` es UNA
+  > clave — "modo del producto" y "modos permitidos" son un solo control
+  > en el detallado, y por candidata los modos viven dentro de
+  > candidatas; (2) el escape "tiempo fijo estimado (h)" del ritmo T-2
+  > (`horasEstimadas`) no es clave propia: vive dentro del control de
+  > ritmo en ambas vistas. Trampa de portal: las clases del detallado
+  > (`ps-*`, `field`, `segmented`) están scopeadas bajo `.pasos-sections`
+  > y el Sheet vive en un portal — los componentes extraídos se envuelven
+  > con ese wrapper en el asistente. Verificado en vivo: Talonarios →
+  > Impresión de original muestra Máquina y perfil con las 2 candidatas
+  > Ricoh (perfil default + modos por candidata) y Pre-prensa muestra el
+  > modo talonario.
 - **C — Materiales** (slots completos, 11 opciones).
 - **D — Tercerización + oficio** (panel embebido + censo E.0 en humano;
   absorbe la E.3.3 del plan wizard-ruta).
