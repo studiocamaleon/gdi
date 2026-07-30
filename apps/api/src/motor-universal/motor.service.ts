@@ -39,6 +39,7 @@ import type {
   TiempoManualConfig,
   MutacionAplicada,
   ComponenteDesgasteCargado,
+  DefaultsFamiliaPaso,
 } from './tipos';
 import {
   runNestingForPaso,
@@ -57,6 +58,11 @@ import {
   resolverHerenciaExplicita,
   type CapacidadEmitida,
 } from '../productos-servicios/pasos/capacidades';
+import {
+  aplicarCentroDefault,
+  productividadPropiaEfectiva,
+  tiempoFijoEfectivoMin,
+} from './familia-defaults';
 import {
   getConsumableChannelFromDetail,
   getPerfilConsumableChannels,
@@ -2658,7 +2664,7 @@ export class MotorUniversalService {
     const setupMin = paso.setupOverrideMin ?? paso.perfil?.setupMin ?? 0;
     const cleanupMin = paso.cleanupOverrideMin ?? paso.perfil?.cleanupMin ?? 0;
     const tiempoFijoMin =
-      tiempoManualMin != null ? 0 : (paso.tiempoFijoOverrideMin ?? 0);
+      tiempoManualMin != null ? 0 : tiempoFijoEfectivoMin(paso);
 
     let runMin = 0;
 
@@ -2691,7 +2697,7 @@ export class MotorUniversalService {
         ? Number((jobContext as Record<string, unknown>)[campoOverride])
         : NaN;
       const horasParams = Number(params.horasEstimadas ?? NaN);
-      const productividadPropia = Number(params.productivityValue ?? 0);
+      const productividadPropia = productividadPropiaEfectiva(params, paso);
       const modoCalculoT2 =
         typeof params.timeCalculationMode === 'string'
           ? params.timeCalculationMode
@@ -6317,9 +6323,22 @@ export class MotorUniversalService {
         return ordenA - ordenB;
       });
 
+    // E.1 — defaults declarados de las familias de la ruta (fallback vivo).
+    const defaultsPorFamilia = await this.cargarDefaultsFamilias(
+      tenantId,
+      configPasosVersionados.map(
+        (cp) =>
+          snapshotById.get(cp.rutaPasoId)?.familiaCodigo ??
+          cp.rutaPaso.familiaCodigo,
+      ),
+    );
+
     const pasos: PasoCargado[] = configPasosVersionados.map((cp) => {
       const snapshotPaso = snapshotById.get(cp.rutaPasoId);
-      return {
+      const defaultsFamilia = defaultsPorFamilia.get(
+        snapshotPaso?.familiaCodigo ?? cp.rutaPaso.familiaCodigo,
+      );
+      return aplicarCentroDefault({
         rutaPasoId: cp.rutaPaso.id,
         rutaPasoOrden: snapshotPaso?.orden ?? cp.rutaPaso.orden,
         familiaCodigo: snapshotPaso?.familiaCodigo ?? cp.rutaPaso.familiaCodigo,
@@ -6408,6 +6427,7 @@ export class MotorUniversalService {
                 nombre: cp.centroCosto.nombre,
               }
             : undefined,
+        defaultsFamilia,
         perfilesDisponibles: cp.maquinaM1?.perfilesOperativos.map((p) => ({
           id: p.id,
           nombre: p.nombre,
@@ -6551,7 +6571,7 @@ export class MotorUniversalService {
             configJson: c.cargoDirectoCatalogo.configJson,
           },
         })),
-      };
+      });
     });
 
     // G-F3 — Pasos extras inline: pasos puntuales de ESTA ruta alternativa del
@@ -6865,10 +6885,15 @@ export class MotorUniversalService {
       row.configMaquinasCandidatasJson,
       candidataMaquinaMap,
     );
-    return {
+    // E.1 — defaults declarados de la familia del extra (fallback vivo).
+    const defaultsFamilia = (
+      await this.cargarDefaultsFamilias(tenantId, [row.familiaCodigo])
+    ).get(row.familiaCodigo);
+    return aplicarCentroDefault({
       // El extra no tiene RutaPaso ni ConfigPaso: usamos su propio id como
       // identificador sintético (único) para overrides/snapshots/tecnología.
       rutaPasoId: row.id,
+      defaultsFamilia,
       rutaPasoOrden: 0, // se renumera al insertar en la secuencia final
       familiaCodigo: row.familiaCodigo,
       nombreVisible: row.nombreVisible,
@@ -6957,7 +6982,43 @@ export class MotorUniversalService {
       maquinasCandidatas,
       slots,
       cargosDirectosPaso,
-    };
+    });
+  }
+
+  /**
+   * E.1 — Carga los defaults declarados (FamiliaPasoDefaults) de un set de
+   * familias, con el centro de costo resuelto para display/tarifa. Devuelve
+   * un mapa por familiaCodigo (código del catálogo o UUID tenant).
+   */
+  private async cargarDefaultsFamilias(
+    tenantId: string,
+    familiaCodigos: string[],
+  ): Promise<Map<string, DefaultsFamiliaPaso>> {
+    const codigos = [...new Set(familiaCodigos)];
+    if (codigos.length === 0) return new Map();
+    const rows = await this.prisma.familiaPasoDefaults.findMany({
+      where: { tenantId, familiaCodigo: { in: codigos } },
+      include: {
+        centroCosto: { select: { id: true, codigo: true, nombre: true } },
+      },
+    });
+    return new Map(
+      rows.map((r) => [
+        r.familiaCodigo,
+        {
+          centroCostoId: r.centroCostoId,
+          centroCostoCodigo: r.centroCosto?.codigo ?? null,
+          centroCostoNombre: r.centroCosto?.nombre ?? null,
+          productividadHora:
+            r.productividadHora != null ? Number(r.productividadHora) : null,
+          tiempoFijoMin:
+            r.tiempoFijoMin != null ? Number(r.tiempoFijoMin) : null,
+          demasiaMm: r.demasiaMm != null ? Number(r.demasiaMm) : null,
+          solapePanelMm:
+            r.solapePanelMm != null ? Number(r.solapePanelMm) : null,
+        },
+      ]),
+    );
   }
 
   /**

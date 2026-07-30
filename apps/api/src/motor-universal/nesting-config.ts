@@ -167,9 +167,12 @@ export function resolveNestingConfig(
     runtimeNestingConfig.pieceBleedMm,
     nestingConfig.pieceBleedMm,
   );
+  // E.1 — tier "default declarado de la familia" (FamiliaPasoDefaults):
+  // runtime → config del producto → default de familia → derivado legacy.
   const pieceBleedMm = Math.max(
     0,
     configuredPieceBleedMm ??
+      paso.defaultsFamilia?.demasiaMm ??
       (paso.familiaCodigo === 'plastificado_pouch'
         ? 0
         : Math.max(legacySeparationHMm, legacySeparationVMm) / 2),
@@ -360,6 +363,7 @@ export function resolveNestingConfig(
       runtimePanelizadoConfig,
       panelizadoConfig,
       printableWidthMm,
+      paso.defaultsFamilia?.solapePanelMm ?? null,
     ),
   };
 }
@@ -437,6 +441,7 @@ function normalizePanelizado(
   runtimeConfig: Record<string, unknown>,
   config: Record<string, unknown>,
   printableWidthMm: number | null,
+  defaultOverlapMm: number | null = null,
 ): NestingPanelizadoConfig {
   const modeRaw = readFirst(runtimeConfig.mode, config.mode);
   const axisRaw = readFirst(runtimeConfig.axis, config.axis);
@@ -466,8 +471,14 @@ function normalizePanelizado(
           : axisRaw === 'vertical'
             ? 'vertical'
             : 'automatic',
+    // E.1 — runtime → config del producto → default de familia → 20.
     overlapMm:
-      readNumber(runtimeConfig.overlapMm, config.overlapMm, 20) ?? 20,
+      readNumber(
+        runtimeConfig.overlapMm,
+        config.overlapMm,
+        defaultOverlapMm,
+        20,
+      ) ?? 20,
     maxPanelWidthMm,
     distribution: distributionRaw === 'libre' ? 'libre' : 'equilibrada',
     widthInterpretation:

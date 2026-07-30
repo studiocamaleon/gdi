@@ -174,6 +174,21 @@ pisarlo".
 
 - **E.1.1** — Tabla + resolución en motor/nesting-config + tests (el
   tier nuevo en las cadenas de precedencia; suite intacta por nombre).
+
+  > **Estado 2026-07-30: HECHA** (rama `feat/wizard-ruta`). Tabla
+  > `FamiliaPasoDefaults` (migración 20260730054500, dev+test) con FK a
+  > CentroCosto (SetNull). `familia-defaults.ts`: funciones PURAS de
+  > precedencia (`tiempoFijoEfectivoMin`, `productividadPropiaEfectiva`,
+  > `centroCostoEfectivo`/`aplicarCentroDefault`) — testeadas sin DB. El
+  > motor carga los defaults por familia en `cargarPasos` Y en pasos
+  > extras (`cargarDefaultsFamilias`), aplica el centro en la carga (aguas
+  > abajo hay un solo origen de centro) y tiempo/productividad en los dos
+  > sitios de cálculo. `nesting-config`: tier de familia insertado en
+  > demasía (runtime → producto → familia → derivado legacy) y solape
+  > (→ 20). 5 tests nuevos de precedencia; suite completa = línea de base
+  > (433 verdes / mismos 18 rotos preexistentes). Sanity live: default de
+  > Bordado (45/h) insertado en dev y la cotización conocida NO cambió —
+  > la config del producto (60/h) le gana, como debe.
 - **E.1.2** — Captura: wizard de paso guarda defaults; sheet "Configurar
   defaults" para familias del sistema.
 - **E.1.3** — Editor de config: placeholders/estado "usando default" +
