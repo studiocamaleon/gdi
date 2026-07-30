@@ -37,7 +37,7 @@ esto agrega las otras cinco secciones. **~62 opciones en total.**
 
 | Campo | Aparece | Pregunta guiada propuesta |
 |---|---|---|
-| Lo terceriza (switch) | siempre | "¿Quién hace este paso?" (taller/proveedor — espejo del wizard de paso E.2) |
+| Lo terceriza (switch) | **sólo si la familia NO lo declara** | Si el paso nació tercerizado (E.2, defaults de familia), la pregunta NO se repite: aparece colapsado — "Lo hace **Terminaciones Patagonicas** — declarado en el paso · Cambiar (internalizar)". Sólo pasos sin declaración ven "¿Quién hace este paso?" |
 | Proveedor | tercerizado | "¿A quién se le compra?" |
 | Fuente de costo (matriz/tarifa/fijo) | tercerizado | "¿Cómo cotiza el proveedor?" |
 | Plazo (días) | tercerizado | "¿Cuánto tarda en entregar?" |
@@ -56,14 +56,15 @@ esto agrega las otras cinco secciones. **~62 opciones en total.**
 | Cuándo se ejecuta (4 pills) | siempre | "¿Cuándo se ejecuta?" (resumen: "Siempre — fijado por el paso" si familia fijó) |
 | Regla condicional (builder) | modo=condicional | "¿Con qué regla se activa?" (control rico existente) |
 | Necesita que también se ejecuten | hay otros pasos | "¿Arrastra otros pasos al activarse?" |
-| Multiplicadores (chips) | familia los declara | informativo: "Multiplica por: caras…" |
+| Multiplicadores | familia los declara | **"¿Qué variables multiplican el trabajo acá?"** — toggles de los soportados por la familia (caras, tipo de copia…) que activan `multiplicadoresActivos`; resumen: "Multiplica por caras" / "Sin multiplicadores". **GAP detectado (usuario)**: el wizard de CREACIÓN de pasos nunca pregunta multiplicadores — las familias tenant nacen sin (`multiplicadores: []`). Tarea nueva: pregunta "¿el trabajo cambia con las caras/copias?" en el wizard de pasos |
 
 ### Tiempo y costo
 
 | Campo | Aparece | Pregunta guiada |
 |---|---|---|
-| ¿Cómo se calcula el tiempo? (modo) | familia soporta >1 | "¿Cómo se mide el tiempo acá?" (resumen: el único soportado) |
-| Centro de costo | sin máquina | "¿Quién lo cobra?" (resumen: "Usando el del paso: X") |
+| **Tiempo del comercial** (switch + valor sugerido + unidad) | siempre, **PRIMERA pregunta de la sección** (corrección del usuario) | "¿El tiempo lo estima el comercial al cotizar?" — si SÍ, se SUPRIMEN ritmo, tandas, tiempo fijo y calcular-según (hoy el detallado los muestra igual y confunde) |
+| ¿Cómo se calcula el tiempo? (modo) | familia soporta >1 y NO estima el comercial | "¿Cómo se mide el tiempo acá?" (resumen: el único soportado) |
+| Centro de costo | sin máquina | **"¿En qué centro productivo se realiza este paso?"** (corrección del usuario; resumen: "Usando el del paso: X"). Actualizar también los copys ya en producción que dicen "quién lo cobra" (banner E.3.1, wizard de pasos, ficha de defaults) |
 | Operarios (dotación) | siempre | "¿Cuántas personas trabajan?" |
 | Cómo cargar el ritmo (productividad/por tanda) | T-2 | "¿Cómo medís el ritmo?" |
 | Productividad + unidad | T-2 ritmo | "¿A qué ritmo?" (resumen: "Usando el del paso: 45/h") |
@@ -74,7 +75,6 @@ esto agrega las otras cinco secciones. **~62 opciones en total.**
 | Piezas a montar | montaje | "¿Qué monta: piezas del pedido o pliegos impresos?" |
 | Modo talonario | pre_prensa | "¿Es un talonario? ¿Cómo se apila?" |
 | Tiempo fijo estimado | T-1 | "¿Cuántos minutos lleva?" (resumen: default del paso) |
-| Tiempo del comercial (switch + valor sugerido + unidad) | siempre | "¿El comercial puede estimar el tiempo a mano?" |
 
 ### Máquina y perfil
 
@@ -82,7 +82,7 @@ esto agrega las otras cinco secciones. **~62 opciones en total.**
 |---|---|---|
 | Máquina (M-1) | familia con máquina | "¿En qué máquina se hace?" |
 | Perfil operativo | máquina elegida | "¿Con qué perfil?" |
-| Máquinas candidatas (+ por candidata: perfil default, preferida, orden) | familia M-2 | "¿Entre qué máquinas elige el comercial?" (card v2 ya hecha) |
+| Máquinas candidatas (+ por candidata: perfil default, preferida, orden) | familia M-2 | "¿Entre qué máquinas elige el comercial?" — **control: la UI del DETALLADO extraída como componente** (corrección del usuario: la card v2 de botones se descarta) |
 | Modo de color del producto | impresión | "¿Se imprime a color o en negro?" |
 | Modos de color permitidos (por candidata / M-1) | impresión | "¿Qué modos ofrece esta máquina acá?" |
 
@@ -92,13 +92,13 @@ esto agrega las otras cinco secciones. **~62 opciones en total.**
 |---|---|---|
 | Agregar slot declarado / adicional | familia lo permite | "¿Qué materiales gasta acá?" |
 | Nombre del componente | slot adicional | "¿Cómo se llama?" |
-| Rol (sustrato/componente/consumible/packaging) | slot adicional | "¿Qué papel juega?" |
+| Rol (sustrato/componente/consumible/packaging) | slot adicional | **PODA (decisión del usuario)**: medido — el motor no decide nada con el rol; sólo dos heurísticas de display en la ficha de propuesta, ambas con fallback por código de slot. La pregunta se elimina del guiado (y del detallado al retirarlo); la columna queda, los usos de la ficha se ajustan |
 | ¿Quién elige el material? (fijo/candidatos/comercial/motor) | por slot | "¿Quién decide cuál se usa?" |
-| Material fijo (búsqueda MP + variante) | modo fijo | "¿Cuál exactamente?" (card v2 ya hecha) |
+| Material fijo (búsqueda MP + variante) | modo fijo | "¿Cuál exactamente?" — **control: el buscador del DETALLADO extraído como componente** (corrección del usuario: la card v2 se descarta) |
 | Materiales candidatos (+ default por candidato) | modos elegibles | "¿Entre cuáles se elige?" |
 | Criterio del sistema | modo motor | "¿Con qué criterio elige el sistema?" |
-| ¿Cómo se calcula el consumo? (fórmula) | por slot | "¿Cuánto gasta por unidad?" |
-| Costeo (simple/exacto) | por slot | "¿Cómo se cobra el material?" |
+| ¿Cómo se calcula el consumo? (fórmula) | por slot | **"¿Cómo se calcula el consumo?"** (corrección del usuario: "cuánto gasta por unidad" era peor) |
+| Costeo (simple/exacto) | por slot | **"¿Cómo se costea este material?"** (corrección del usuario: "cómo se cobra" se confunde con el precio al cliente). Misma corrección aplica al costeo del sustrato del censo Avanzado: "¿Cómo se costea la placa/rollo?" |
 | Base de consumo + cantidad por base | fórmula por base | "¿Por cada cuántos se gasta uno?" |
 | Multiplicar por caras | por slot | "¿La doble faz gasta doble?" |
 
@@ -108,6 +108,16 @@ Los 19 campos del censo E.0 (wizard-ruta-diseno.md §1): overrides de
 tiempo (3), acomodo (algoritmo/demasía), pliego de impresión (4),
 panelizado (6, con interpretación fundida al ancho), márgenes extra,
 costeo del sustrato (2). Clasificación y preguntas YA definidas ahí.
+
+### Revisión del usuario (2026-07-30) — incorporada
+
+Las nueve anotaciones de la lectura del doc quedaron aplicadas arriba:
+tercerizado no se re-pregunta si la familia lo declara; multiplicadores
+definidos como toggles + gap del wizard de pasos anotado; "centro
+productivo" como pregunta; el tiempo del comercial va PRIMERO y suprime
+las preguntas de ritmo; las cards v2 de máquina/candidatas y material
+se DESCARTAN a favor de la UI del detallado extraída como componentes;
+el rol de materiales se PODA; consumo y costeo reformulados.
 
 ## 3. El esquema (shape propuesto)
 
