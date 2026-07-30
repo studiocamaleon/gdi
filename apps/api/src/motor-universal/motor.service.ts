@@ -42,6 +42,7 @@ import type {
   DefaultsFamiliaPaso,
 } from './tipos';
 import {
+  esSustratoRollo,
   runNestingForPaso,
   type NestingDispatchResult,
 } from './nesting-dispatcher';
@@ -302,15 +303,6 @@ function getRolloLargoMm(attrs: Record<string, unknown> | null | undefined) {
   if (largoMm > 0) return largoMm;
   const largoM = readPositiveNumber(attrs, ['largoRolloM', 'largo', 'heightM']);
   return largoM > 0 ? largoM * 1000 : 0;
-}
-
-function isRolloMaterial(
-  unidadStock: string | null | undefined,
-  attrs: Record<string, unknown> | null | undefined,
-) {
-  return (
-    normalizarUnidad(unidadStock) === 'ROLLO' || getRolloLargoMm(attrs) > 0
-  );
 }
 
 function precioMaterialPorUnidadDeConsumo(
@@ -4037,6 +4029,8 @@ export class MotorUniversalService {
     materialPreliminar: {
       id: string;
       atributosVarianteJson?: Record<string, unknown> | null;
+      unidadStock?: string | null;
+      subfamilia?: string | null;
     } | null,
   ): MaterialEjecutado[] {
     const maquina = paso.maquina;
@@ -4289,6 +4283,7 @@ export class MotorUniversalService {
       id: string;
       unidadStock?: string | null;
       atributosVarianteJson?: Record<string, unknown> | null;
+      subfamilia?: string | null;
     } | null,
   ) {
     // Prioridad máxima: si el paso decora una personalización, su área es la de
@@ -4314,7 +4309,7 @@ export class MotorUniversalService {
     if (areaPliegoImpresion > 0) return areaPliegoImpresion;
 
     const attrs = materialPreliminar?.atributosVarianteJson ?? null;
-    if (!isRolloMaterial(materialPreliminar?.unidadStock, attrs)) {
+    if (!esSustratoRollo(materialPreliminar?.subfamilia)) {
       const areaSustratoM2 = this.getAreaM2FromAttrs(attrs);
       if (areaSustratoM2 > 0) {
         const cantidad = this.resolverCantidad(
@@ -4421,6 +4416,7 @@ export class MotorUniversalService {
     materiaPrimaTipoTecnico?: string | null;
     precioReferencia: number | null;
     unidadStock?: string | null;
+    subfamilia?: string | null;
     atributosVarianteJson?: Record<string, unknown> | null;
   } | null> {
     if (slot.modoSeleccion === 'HARDCODED') {
@@ -4482,6 +4478,7 @@ export class MotorUniversalService {
               const dispatch = await runNestingForPaso(paso, jobContext, {
                 id: v.id,
                 atributosVarianteJson: v.atributosVarianteJson ?? null,
+                subfamilia: v.subfamilia ?? null,
               });
               return { v, aprovechamiento: dispatch?.aprovechamientoPct ?? -1 };
             }),
@@ -4634,6 +4631,9 @@ export class MotorUniversalService {
     anchoMm?: number;
     /** G-M9: unidad de stock heredada (PLIEGO, METRO_LINEAL, etc.). */
     unidadStock?: string | null;
+    /** Formato del sustrato (SUSTRATO_ROLLO_FLEXIBLE, _HOJA, _RIGIDO…) para
+     *  rutear rollo vs pliego/placa sin sniffing de atributos. */
+    subfamilia?: string | null;
     /** G-M7: necesario para correr nesting con cada candidato. */
     atributosVarianteJson?: Record<string, unknown> | null;
   } | null> {
@@ -4645,6 +4645,7 @@ export class MotorUniversalService {
           select: {
             nombre: true,
             unidadStock: true,
+            subfamilia: true,
             templateId: true,
             tipoTecnico: true,
           },
@@ -4664,6 +4665,8 @@ export class MotorUniversalService {
       anchoMm: typeof attrs?.anchoMm === 'number' ? attrs.anchoMm : undefined,
       // Variante puede tener override; sino hereda de la materia prima padre.
       unidadStock: v.unidadStock ?? v.materiaPrima?.unidadStock ?? null,
+      // Formato del sustrato (rollo/hoja/rígido) para el ruteo de nesting.
+      subfamilia: v.materiaPrima?.subfamilia ?? null,
       atributosVarianteJson: attrs,
     };
   }
@@ -6197,6 +6200,7 @@ export class MotorUniversalService {
                           select: {
                             nombre: true,
                             unidadStock: true,
+                            subfamilia: true,
                             templateId: true,
                             tipoTecnico: true,
                           },
@@ -6573,6 +6577,8 @@ export class MotorUniversalService {
                   s.materialVariante.unidadStock ??
                   s.materialVariante.materiaPrima?.unidadStock ??
                   null,
+                subfamilia:
+                  s.materialVariante.materiaPrima?.subfamilia ?? null,
               }
             : undefined,
         })),

@@ -134,6 +134,23 @@ export interface MaterialResueltoParaNesting {
   /** Atributos: anchoMm (rollo o pliego), largoMm (pliego), largoRolloMm (rollo). */
   atributosVarianteJson?: Record<string, unknown> | null;
   precioReferencia?: number | null;
+  /** Subfamilia de la materia prima padre (SUSTRATO_ROLLO_FLEXIBLE, _HOJA,
+   *  _RIGIDO…). Dice el FORMATO del sustrato — rollo vs hoja/placa — sin
+   *  adivinarlo por los atributos. Reemplaza el sniffing de `isRollMaterial`. */
+  subfamilia?: string | null;
+}
+
+/**
+ * ¿El sustrato es un rollo? Lo dice la subfamilia de la materia prima, no los
+ * atributos: hoy todo SUSTRATO_ROLLO_FLEXIBLE trae largo de rollo y ninguna
+ * hoja/rígido lo trae, pero la subfamilia es la señal estructural y no depende
+ * de que el atributo esté cargado. LAMINADO_FILM también es rollo (aunque
+ * laminado rutea por su propia vía y no pasa por acá).
+ */
+export function esSustratoRollo(subfamilia: string | null | undefined): boolean {
+  return (
+    subfamilia === 'SUSTRATO_ROLLO_FLEXIBLE' || subfamilia === 'LAMINADO_FILM'
+  );
 }
 
 /** Hooks async que el motor puede inyectar al dispatcher. */
@@ -315,7 +332,7 @@ async function runImpresionPorArea(
     return runShelfRollo(paso, jobContext, materialResuelto, config);
   }
 
-  if (isRollMaterial(materialResuelto?.atributosVarianteJson)) {
+  if (esSustratoRollo(materialResuelto?.subfamilia)) {
     return runShelfRollo(paso, jobContext, materialResuelto, config);
   }
 
@@ -379,7 +396,7 @@ async function runMontajeSobreSustrato(
     return runGrid2DMultiForArea(paso, montajeContext, config);
   }
 
-  if (isRollMaterial(materialResuelto?.atributosVarianteJson)) {
+  if (esSustratoRollo(materialResuelto?.subfamilia)) {
     return runShelfRollo(paso, montajeContext, materialResuelto, config);
   }
   if (config.sheetWidthMm && config.sheetHeightMm) {
@@ -597,17 +614,6 @@ function disablePanelizado(
       manualLayout: null,
     },
   };
-}
-
-function isRollMaterial(attrs: Record<string, unknown> | null | undefined) {
-  return (
-    readNumber(attrs, 'largoRolloMm') != null ||
-    readNumber(attrs, 'largoRolloM') != null ||
-    readNumber(attrs, 'rollLengthMm') != null ||
-    readNumber(attrs, 'rollLengthM') != null ||
-    readNumber(attrs, 'longitudRolloMm') != null ||
-    readNumber(attrs, 'longitudRolloM') != null
-  );
 }
 
 function buildShelfInputsForPanelizado(

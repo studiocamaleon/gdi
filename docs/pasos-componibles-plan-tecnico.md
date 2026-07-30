@@ -972,3 +972,103 @@ impresión publica 50 pliegos y 14 cortes, y la guillotina calcula sus 4,67 min.
 
 Suite: 1.211 pasan, los mismos 18 preexistentes fallan. Cuatro tests que
 describían el diseño viejo se reescribieron.
+
+## Palanca 1 — La superficie la dice el material, no un sniffing (diseño 2026-07-30)
+
+### El hallazgo que cambia el enfoque
+
+La idea original era agregar un campo `formatoPresentacion` a la variante de
+material y backfillear datos sucios. **No hace falta.** El modelo ya distingue
+rollo/hoja/rígido: `MateriaPrima.subfamilia` es un enum con `SUSTRATO_HOJA`,
+`SUSTRATO_ROLLO_FLEXIBLE`, `SUSTRATO_RIGIDO` (más `LAMINADO_FILM`,
+`LAMINADO_POUCH` para los otros sustratos que se acomodan).
+
+Y clasifica perfecto. En dev:
+
+| subfamilia | variantes | con atributo de rollo |
+|---|---|---|
+| SUSTRATO_ROLLO_FLEXIBLE | 25 | 25 |
+| SUSTRATO_HOJA | 12 | 0 |
+| SUSTRATO_RIGIDO | 6 | 0 |
+
+Cero misclasificación: todos los rollos son ROLLO_FLEXIBLE y ninguna hoja o
+rígido tiene atributo de rollo. La subfamilia es **más confiable** que el
+sniffing, porque no depende de que el atributo de largo esté cargado.
+
+Además, el query que carga el slot para el motor **ya trae**
+`materiaPrima.subfamilia` (motor.service ~6214). Sólo falta exponerla al
+material resuelto.
+
+### Lo que hoy adivina (y se reemplaza)
+
+Dos detectores por sniffing, que no coinciden entre sí:
+- `isRollMaterial(attrs)` en el dispatcher — prueba 6 nombres de atributo.
+- `isRolloMaterial(unidadStock, attrs)` en el motor — mira unidadStock + attrs.
+
+Y tres cascadas que deciden la superficie:
+- `runImpresionPorArea` — 6 pasos (algoritmo → máquina ROLLO → sniffing →
+  MESA → pliego-sin-rollo → fallback rollo).
+- `plotter_corte` — `perfil.detalleJson.modoOperacion` HOJAS vs ROLLO.
+- laminado (siempre rollo) / pouch (siempre pliego finito), hardcodeados.
+
+El destino es la primitiva que YA existe para familias de tenant:
+`nestingConfig.superficie: 'rollo' | 'pliego' | 'pliegos_multiples'`
+(dispatcher Caso 0). Las del sistema deberían rutear igual.
+
+### Diseño — dos sub-etapas
+
+**1a — Matar el sniffing (seguro, alto valor).**
+- Derivar `formatoSustrato: 'ROLLO' | 'HOJA' | 'RIGIDO' | null` de la
+  subfamilia y llevarlo en `MaterialResueltoParaNesting`.
+- Reemplazar los dos detectores por una lectura de ese campo. En la cascada
+  de `runImpresionPorArea`, el paso "si el material parece rollo" pasa de
+  `isRollMaterial(attrs)` a `formatoSustrato === 'ROLLO'` — mismo lugar, mismo
+  orden, sin tocar el resto. Neutro por construcción (la subfamilia coincide
+  con el sniffing en todos los datos), y verificable contra los precios.
+- Borrar `isRollMaterial` e `isRolloMaterial`.
+
+**1b — Unificar las cascadas bajo `superficie` (estructural, opcional).**
+- `impresion_por_area` declara `superficie: 'segun_material'`; el dispatcher,
+  para ese valor, mapea `formatoSustrato → superficie` (ROLLO→rollo,
+  RIGIDO→placa/multi, HOJA→pliego) con la máquina como override (una máquina
+  ROLLO fuerza rollo). Reemplaza `runImpresionPorArea` entero.
+- plotter, laminado, pouch declaran su superficie (o `segun_perfil` para el
+  modo del plotter). Las 3 cascadas colapsan en un resolver de superficie.
+- Al terminar, las familias del sistema rutean por la MISMA vía que las de
+  tenant (Caso 0), y el `familiaCodigo ===` del dispatch se reduce a los
+  runners que quedan.
+
+Recomendación: hacer 1a primero (mata la parte fea, neutro, verificable),
+1b como paso aparte. El mapeo subfamilia→superficie de 1a es la base de 1b.
+
+### Lo que NO cambia
+- Los algoritmos (shelf-rollo, grid 2D, maxrects) — son geometría, Tipo B.
+- El costeo por largo vs por placa — lo define la superficie elegida, que da
+  el mismo resultado que hoy porque la clasificación coincide.
+
+### 1a — EJECUTADO (2026-07-30)
+
+La subfamilia de la materia prima (`SUSTRATO_ROLLO_FLEXIBLE` / `_HOJA` /
+`_RIGIDO`, más `LAMINADO_FILM`) ahora viaja hasta la capa de nesting en
+`MaterialResueltoParaNesting.subfamilia`, y un helper `esSustratoRollo`
+reemplaza los dos detectores por sniffing:
+- `isRollMaterial(attrs)` (dispatcher, 6 alias) — **borrado**.
+- `isRolloMaterial(unidadStock, attrs)` (motor, consumibles) — **borrado**.
+
+Threading: el material que llega al nesting sale de sólo dos caminos
+—`cargarVariantePorId` (COMERCIAL/MOTOR_ELIGE) y `slot.materialVariante`
+(HARDCODED)—, más el material que alimenta el cálculo de consumibles. Se
+agregó `subfamilia: true` a los tres selects y `subfamilia` a los objetos y
+tipos (incluido el param de `calcularConsumiblesMaquina`, que era el hueco que
+faltaba). `getRolloLargoMm` se conserva: lo usa la conversión de precio, no la
+detección de superficie.
+
+**Verificación (neutro al céntimo):**
+- Precios de rollo (Lona Frontlight, Vinilo impreso, Papel Foto GF) idénticos
+  con el detector viejo (attrs) y el nuevo (subfamilia), vía `git stash`.
+- Ruteo correcto: rollos → algoritmo de rollo, rígidos → grid.
+- Baseline de hoja (Tarjetas, Folletos, Talonarios, Carpetas) sin cambios.
+- Suite: sin fallos nuevos (los 17 son subconjunto de los 18 preexistentes;
+  uno flaky del baseline pasó a verde).
+
+Queda 1b (unificar las 3 cascadas bajo `superficie`), como paso aparte.

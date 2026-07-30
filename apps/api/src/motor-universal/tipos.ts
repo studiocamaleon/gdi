@@ -896,6 +896,8 @@ export interface SlotCargado {
     atributosVarianteJson?: Record<string, unknown> | null;
     /** G-M9: unidad de stock heredada de la materia prima padre. */
     unidadStock?: string | null;
+    /** Formato del sustrato (subfamilia de la MP padre) para rutear nesting. */
+    subfamilia?: string | null;
   };
 }
 
