@@ -305,7 +305,12 @@ qué es un eje.
 
 ---
 
-## Etapa E — Familias tenant en rutas y cotizador
+## Etapa E.0 — Familias tenant en rutas y cotizador
+
+> **Ojo con el nombre**: la "Etapa E" del diseño (§10) es el **wizard de
+> ruta** (encadenar con validación por inputs/outputs). Eso NO se hizo.
+> Lo de abajo es la capa previa de utilización — que las familias tenant
+> entren al creador de rutas EXISTENTE y coticen — por eso E.0.
 
 > **Estado 2026-07-29: COMPLETA y verificada E2E** (rama
 > `feat/pasos-wizard-ruta`). No hizo falta tocar el backend de rutas: la
@@ -335,6 +340,338 @@ qué es un eje.
 > $131.655. Apagar un opcional restó exactamente su parte. No se emitió OT
 > (la materialización ya quedó probada en C); la preferida del producto de
 > prueba volvió a "Estandar".
+
+---
+
+## Etapa B — Nesting parametrizado + outputs canónicos
+
+> **Análisis 2026-07-29 (insumo, decisiones abiertas al final).** Motivo de
+> activación: el wizard no tiene ninguna pregunta que termine eligiendo qué
+> algoritmo de nesting usa el paso, y el eslabón que lo habilita son los
+> outputs canónicos.
+
+### B.0 Outputs canónicos — quién emite, quién consume (medido)
+
+**Quién emite.** Todos los pasos. La familia *declara* los nombres
+(`outputsCanonicos: string[]` en el contrato) y el motor *calcula* los
+valores al terminar cada paso (`motor-universal/outputs-canonicos.ts`,
+G-M2) y los publica flat al JobContext mutado, donde los pasos siguientes
+los leen. Dos clases de emisor:
+
+| Emisor | Outputs | De dónde salen |
+|---|---|---|
+| `pre_prensa` | `imposicion_calculada`, `pliegos_calculados`, `poses_por_pliego`, `cortes_calculados`, medidas del pliego, `pliego_impresion_mp_variante_id`, `talonario_pilas` | del **nesting** (grid-2d) |
+| `impresion_por_hoja` | `pliegos_impresos`, `tiempo_real_impresion`, medidas | nesting + tiempo |
+| `impresion_por_area` | `m2_calculados`, `aprovechamiento_pct`, `tiempo_real_impresion` | nesting rollo/mesa |
+| cortes | `piezas_cortadas`, `metros_lineales_corte`, `tiempo_real_corte` | nesting + tiempo |
+| `laminado` | `metros_lineales_film` | materiales |
+| `modificacion_pre` | `metros_lineales_union`, `mutacion_aplicada` | primitiva propia |
+| el resto (~30) | `piezas_X` | **trivial**: = cantidad efectiva del paso (fallback por prefijo; una key desconocida también devuelve cantidad efectiva) |
+
+**Quién consume.**
+1. `HEREDAR_DEL_OUTPUT_CANONICO` (la respuesta "del resultado del paso
+   anterior" en la pregunta de cantidad): lee `jobContext[campo]`, donde
+   `campo` sale de `mecanismoCantidadConfigJson.campoOutput` — que **hoy
+   ninguna UI expone** — o de `defaultOutputParaHeredar(familiaCodigo)`,
+   un mapa cableado consumidor→key (frontera Tipo A restante). Si el
+   output no está, **cae en silencio a `jobContext.cantidad`**.
+2. Validaciones `EXISTS_OUTPUT` del DSL.
+3. Slots con `cantidadBase` (ej. `talonario_pilas` para el cartón por pila).
+4. La trazabilidad del desglose por paso en el front.
+
+### B.0.1 Consumo real — censo corregido (2ª pasada, 2026-07-29)
+
+> La 1ª pasada subestimó el consumo (grep a un directorio inexistente y
+> no miró el canal persistido). El consumo real corre por **cuatro
+> canales** distintos:
+
+1. **jobContext en runtime (herencia entre pasos)**: `pliegos_calculados`,
+   `pliegos_impresos`, `piezas_cortadas` (mapa default), `talonario_pilas`
+   (cantidadBase de slot), `pliego_impresion_mp_variante_id` (costeo del
+   sustrato real), medidas del pliego (m² del plotter sobre hojas).
+2. **Snapshot persistido** (`CotizacionItem.trazabilidadJson.pasos[].outputsCanonicos`)
+   — el canal OPERATIVO post-cotización: el **simulador láser** arma la
+   cola con `pliegos_impresos` + medidas del pliego leídos del snapshot
+   (`produccion.service.ts:buildLaserJob`); el **nesting-viewer** de la
+   propuesta muestra 6 keys (`pliegos_calculados`, `poses_por_pliego`,
+   `cortes_calculados`, medidas/área del pliego).
+3. **Config del producto que referencia outputs POR NOMBRE** — el modelo
+   "capacidades" ya existe embrionario y cableado: `minimoComercialBase`
+   puede ser `'pliegos_impresos'`; la fuente del montaje
+   (`MONTAJE_SOURCE_OPTIONS`) ofrece `pliegos_impresos`; los slots cobran
+   por `pliegos_impresos` o `talonario_pilas`
+   (`CANTIDAD_BASE_SLOT_OPTIONS`). Tres UIs distintas ofreciendo outputs
+   como opciones, cada una con su plomería ad-hoc.
+4. **Canal paralelo camelCase**: el `aprovechamientoPct` que se VE en el
+   preview del acomodo, el simulador y el viewer sale del RESULTADO del
+   nesting (camelCase), no del output snake_case — el valor se usa, la
+   key `aprovechamiento_pct` no. Dos representaciones del mismo dato.
+
+**Muertos de verdad** (cero lectores en los 4 canales): `m2_calculados`,
+`aprovechamiento_pct` (la key), `tiempo_real_impresion/corte`,
+`metros_lineales_film/corte/union`, los flags (`mutacion_aplicada`,
+`proof_aprobado`, `diseno_aprobado`) y ~29 de los 30 triviales.
+
+### B.0.2 ¿La lista de unidades es acotada? (pregunta 1, medido)
+
+Los 52 outputs colapsan en **8 magnitudes**: unidades procesadas, pliegos,
+m², metros lineales, minutos, porcentaje, medida (mm), flag/objeto de
+traza. Las unidades nuevas sólo pueden aparecer con PRIMITIVAS nuevas
+(algoritmos, modos de tiempo, tipos de slot) — y primitivas sólo agrega
+Grafo, nunca el tenant. **La lista es acotada por construcción**: la
+gobierna quien agrega primitivas.
+
+**El gap tenant (verificado en DB).** El wizard no declara outputs:
+"Bordado" emite `[]`. ("Serigrafía manual" emite `piezas_estampadas` solo
+porque nació por API en la Etapa C.) Consecuencias: nadie puede heredar DE
+un paso tenant; y un paso tenant que elija heredar no tiene entrada en el
+mapa default (UUID → null) → siempre cae a cantidad: el mecanismo aparenta
+andar pero nunca hereda de verdad.
+
+### B.1 Propuesta (primera pasada — SUPERADA en parte por B.2)
+
+> P1 y P2 quedaron superadas por el Registro de Capacidades y la herencia
+> explícita de B.2. P3, P4 y P5 siguen vigentes y B.2 las refina.
+
+Principio: **el usuario nunca escribe nombres de outputs; se derivan de
+las respuestas y se informan en humano.**
+
+- **P1 — Emisión automática**: todo paso tenant publica su cantidad
+  procesada bajo la key estable `piezas_procesadas`. Costo casi cero: el
+  cálculo ya existe (fallback = cantidad efectiva); sólo hay que declarar
+  la key al guardar la familia (y backfillear las 2 existentes).
+- **P2 — Herencia genérica**: cuando el consumidor es una familia tenant
+  sin `campoOutput` explícito, el default pasa a ser "la cantidad que
+  produjo el paso anterior ejecutado" (el motor ya la tiene en
+  `pasosEjecutados`), en lugar del mapa por familia que no lo conoce.
+- **P3 — La pregunta de nesting es física, no de algoritmo**: "¿Este paso
+  acomoda piezas? → ¿Sobre qué?" — *pliego suelto* (grid-2d-single /
+  packingsolver-rectangle), *varios pliegos* (grid-2d-multi), *rollo*
+  (shelf-rollo / maxrects-rollo). Elegir le da al paso
+  `CALCULADO_POR_PASO` (la prohibición del validador se relaja SOLO si hay
+  algoritmo elegido — el tenant elige NUESTRO algoritmo parametrizado,
+  nunca escribe uno) y emite los outputs ricos **con los mismos nombres
+  canónicos del sistema** (`pliegos_calculados`, `m2_calculados`,
+  `aprovechamiento_pct`, …) para que herencias y validaciones existentes
+  funcionen sin tocar nada.
+- **P4 — Dispatcher por configuración**: `nesting-dispatcher.ts` rutea hoy
+  por `familiaCodigo` cableado (el archivo entero es FRONTERA-NESTING). B
+  lo parametriza: la familia declara `nestingConfig { geometria, algorithm,
+  … }` y el dispatcher lee esa config vía resolver; los códigos del
+  sistema quedan como presets del mismo mecanismo.
+- **P5 — El `campoOutput` fino se elige en el producto, no en la familia**
+  (al crear la familia no se sabe qué paso vendrá antes): en Configurar
+  pasos, si el paso hereda, dropdown en humano con lo que publican los
+  pasos previos de esa ruta.
+- **UI**: en el paso final del wizard, bloque "Qué deja este paso para los
+  siguientes" con chips en humano ("Cantidad de piezas procesadas",
+  "Pliegos calculados y su medida", "m² consumidos del rollo").
+
+**Decisiones abiertas**: (a) ¿P2 entra en B o es un mini-fix previo junto
+con P1? (b) ¿la elección rollo/pliego expone la variante de algoritmo
+(shelf vs maxrects) o el sistema decide como hoy (mejor candidato)?
+(c) alcance de P5 — ¿entra en B o queda para el wizard de ruta (Etapa E
+real)?
+
+**Posiciones del usuario (2026-07-29, sesión de análisis):**
+
+- **Herencia → EXPLÍCITA.** "Cada paso debería indicar de QUÉ paso hereda
+  (…) nadie mejor modela el producto que el que lo modela." Le generaba
+  dudas desde antes del proyecto que los pasos hereden "de antes" sin
+  saber de qué. Hipótesis de diseño: al configurar el paso en el producto,
+  si hereda, se elige el paso ORIGEN (dropdown de pasos previos con lo
+  que emite cada uno); el sistema puede SUGERIR el anterior, pero lo
+  guardado es explícito (rutaPasoId origen + capacidad en
+  `mecanismoCantidadConfigJson`). Esto reemplaza el mapa
+  `defaultOutputParaHeredar` y el "último que la emitió".
+- **Granularidad**: pidió medir si las unidades son lista acotada antes
+  de decidir → B.0.2 responde: 8 magnitudes, acotada por construcción.
+- **Outputs muertos**: pidió verificar el uso real antes de asumir →
+  B.0.1 corrige el censo (4 canales); la decisión de podar/estandarizar
+  se toma sobre la lista de muertos REALES.
+
+### B.2 El Registro de Capacidades (diseño CERRADO con el usuario, 2026-07-29)
+
+Modelo de fondo (surgió del análisis de "¿por qué pliegos es una
+magnitud?"): **la magnitud de conteo es UNA sola — lo que cambia es el
+objeto contado** — y un mismo trabajo lleva varios conteos simultáneos
+vinculados por ratios (500 tarjetas = 10 pliegos, poses de por medio).
+Los 52 nombres actuales colapsan en **8 capacidades**; el resto queda
+como alias/etiqueta.
+
+**Conteos** (magnitud cantidad + objeto):
+
+1. `unidades_procesadas` — la unidad final que compra el cliente. La
+   emite TODO paso automáticamente (= cantidad efectiva, ya se calcula).
+   Cada paso la re-etiqueta en display ("500 piezas cortadas", "20
+   libros"). Absorbe los 30 triviales + los tenant.
+2. `pliegos` — el soporte de impresión. Es un OBJETO, no un número
+   suelto: { cantidad, anchoMm, altoMm, mpVarianteId } (con alias planos
+   para la plomería legacy: simulador, mínimo comercial, montaje,
+   slots). **UN emisor por ruta: el paso que corre el acomodo** (decisión
+   del usuario — se elimina la dualidad pre_prensa/impresión emitiendo lo
+   mismo; pre-prensa puede existir como paso pero no emite pliegos si no
+   es él quien acomoda). Absorbe `pliegos_calculados`, `pliegos_impresos`
+   y las 4 keys de identidad del pliego.
+3. `grupos` — agrupaciones intermedias, UNA capacidad genérica etiquetada
+   por el paso ("12 pilas", "5 cajas", "8 atados") (decisión usuario).
+   Absorbe `talonario_pilas`.
+
+**Continuas**:
+
+4. `m2_consumidos` — área real consumida con desperdicio (nesting
+   rollo/mesa, montaje). Absorbe `m2_calculados`.
+5. `metros_lineales` — UNA capacidad etiquetada por el paso ("3,1 m de
+   rollo", "8 m de costura", "3,1 m de film") (decisión usuario; la
+   herencia explícita desambigua porque se señala el paso). Absorbe
+   `metros_lineales_corte/film/union` y `ojales` sigue siendo conteo de
+   unidades del paso.
+6. `minutos_reales` — tiempo total del paso, lo emite todo paso con
+   tiempo. Absorbe `tiempo_real_impresion/corte`. Lector futuro:
+   métricas/ETA (backlog, fuera de B).
+
+**Información/traza** (no se heredan como cantidad):
+
+7. `imposicion` — objeto de traza del acomodo: poses por pliego (el
+   ratio), posiciones, cortes de guillotina derivados. Absorbe
+   `imposicion_calculada`, `poses_por_pliego`, `cortes_calculados`.
+8. `aprovechamiento_pct` — unifica los DOS caños de hoy (key snake_case
+   muerta + camelCase del resultado que sí se muestra) en uno.
+
+**Podas** (decisión usuario): `aprobacion` NO existe — `proof_aprobado` y
+`diseno_aprobado` se eliminan ("no se usa y no se va a usar"); proof y
+diseño emiten lo de cualquier paso. `mutacion_aplicada` queda como traza
+interna de la primitiva, fuera del registro.
+
+**Nombre**: la capacidad del soporte se llama **"pliegos"** en toda la UI
+(decisión usuario: jerga del oficio).
+
+**Emisión derivada por forma** (el wizard nunca pregunta outputs):
+
+```
+Todo paso                        → unidades_procesadas + minutos_reales
++ acomoda piezas sobre PLIEGO    → pliegos + imposicion + aprovechamiento_pct
++ acomoda piezas sobre ROLLO     → m2_consumidos + metros_lineales + aprovechamiento_pct
++ agrupa (N por caja/pila/atado) → grupos
++ consume material lineal (film) → metros_lineales
+```
+
+**Herencia** (decisión usuario, B.0.1): EXPLÍCITA — al configurar el paso
+en el producto se elige el paso ORIGEN y su capacidad, en humano
+("Corte dejó: 500 piezas (venían en 10 pliegos)"); el sistema sugiere el
+anterior pero guarda explícito. `defaultOutputParaHeredar` desaparece.
+
+En el paso final del wizard: bloque "Este paso deja: 500 unidades ·
+10 pliegos SRA3 · 45 minutos".
+
+### B.3 Plan de implementación (2026-07-30)
+
+Cinco sub-fases, cada una con valor propio y verificable sola. Rama
+`feat/pasos-capacidades` desde dev; una rama hija por sub-fase si crece.
+
+#### B.3.1 — El registro, como datos puros (sin cambio de comportamiento)
+
+- Archivo nuevo `apps/api/src/productos-servicios/pasos/capacidades.ts`
+  (patrón `familias.ts`: datos + helpers, cero lógica de negocio):
+  - Las 8 entradas: `{ key, nombre, tipo: conteo|continua|traza,
+    descripcion }`.
+  - `ALIAS_LEGACY`: mapa de TODAS las keys viejas → `{ capacidad,
+    etiqueta }` (`piezas_cortadas` → `unidades_procesadas` / "piezas
+    cortadas"; las 4 keys de identidad del pliego → `pliegos`; etc.).
+  - `capacidadesDeForma(familia)`: deriva la emisión — siempre
+    `unidades_procesadas` + `minutos_reales`; con nestingConfig pliego →
+    `pliegos` + `imposicion` + `aprovechamiento_pct`; rollo →
+    `m2_consumidos` + `metros_lineales` + `aprovechamiento_pct`;
+    CONVERSION con capacidad → `grupos`; slot film → `metros_lineales`.
+- Tests unit: toda key del catálogo tiene alias; ningún alias huérfano;
+  la derivación por forma cubre las 42 del sistema sin sorpresas.
+- **Verificación**: tsc; suite idéntica (no toca motor ni UI).
+
+#### B.3.2 — Emisión estandarizada + el wizard informa
+
+- Motor (F.2.9): al publicar outputs, agrega a la trazabilidad del paso
+  `capacidades: [{ capacidad, etiqueta, valor }]` VÍA alias — aditivo;
+  las keys planas del jobContext no se tocan (compat con los 4 canales).
+- Familias tenant: `outputsCanonicos` deja de ser texto libre — el
+  service lo DERIVA de la forma al guardar (validador rechaza keys fuera
+  del registro). Backfill de "Bordado" y "Serigrafía manual" en dev.
+- Wizard, paso final: bloque "Este paso deja: …" desde
+  `capacidadesDeForma`.
+- **Verificación**: tsc + jest + css:guard; E2E corto: crear/editar paso
+  → ver el bloque; cotizar el producto tenant → capacidades en la
+  trazabilidad.
+
+#### B.3.3 — Herencia explícita
+
+- Contrato: `mecanismoCantidadConfigJson` gana
+  `origen: { rutaPasoId, capacidad }`. En `resolverCantidad` (HEREDAR):
+  con origen explícito → buscar en `pasosEjecutados` el paso señalado y
+  leer esa capacidad (unidades → cantidadEfectiva; pliegos → cantidad;
+  m²/metros → valor). Sin origen → **fallback al mapa legacy intacto**
+  (las configs existentes no se migran y siguen andando).
+- UI Configurar pasos: cuando mecanismo = HEREDAR, el textarea de JSON
+  libre se reemplaza por un selector humano: dropdown de pasos PREVIOS
+  de la ruta mostrando qué deja cada uno ("Impresión — pliegos ·
+  unidades"), sugerencia = el paso anterior. El JSON queda como avanzado.
+- Tests motor: origen explícito tenant→tenant, sistema→tenant,
+  tenant→sistema; fallback legacy byte a byte (suite por nombre).
+- **Verificación**: E2E usuario — un paso tenant hereda explícitamente
+  del corte y la cotización da el número esperado.
+
+#### B.3.4 — Nesting para pasos tenant (la feature)
+
+- `FamiliaTenant.nestingConfigJson` (migración ADD COLUMN only):
+  `{ superficie: 'pliego' | 'pliegos_multiples' | 'rollo' }` (la
+  variante de algoritmo la decide el sistema como hoy — mejor candidato;
+  revisable).
+- Wizard: pregunta nueva después de máquina: "¿Este paso acomoda piezas
+  en una superficie? → ¿Sobre qué?" con ejemplos físicos. Elegir setea
+  `CALCULADO_POR_PASO` + nestingConfig; el validador relaja la
+  prohibición SOLO si nestingConfig está presente y válido (la frontera
+  se mantiene: se ELIGE nuestro algoritmo, nunca se escribe uno).
+- Dispatcher: entrada parametrizada ANTES del switch por familiaCodigo —
+  si `resolverFamilia(...)?.nestingConfig` existe, arma la config del
+  algoritmo reutilizando los builders existentes. **Los branches del
+  sistema no se tocan** (quedan como presets de facto; unificarlos es
+  otra etapa).
+- Emisión: `capacidadesDeForma` ya incluye pliegos/m² → el paso tenant
+  publica las MISMAS keys canónicas del sistema (compat total con
+  herencia, simulador y visor).
+- Tests: dispatcher con familia tenant (pliego y rollo); suite motor
+  intacta por nombre.
+
+#### B.3.5 — E2E de cierre
+
+**Done** = un ADMIN crea con el wizard "Estampado en pliego" (acomoda
+sobre pliego), lo mete en una ruta con un paso posterior que hereda
+EXPLÍCITAMENTE sus unidades, y la cotización corre el nesting de verdad:
+pliegos calculados = cuenta manual, desglose con pliegos y
+aprovechamiento, visor de nesting funcionando, y el simulador/tablero
+sin romperse. Cliente de prueba SIN teléfono (Wati vivo en dev).
+
+#### Qué NO entra en B (guardrails)
+
+- Migración física de los nombres triviales (quedan como alias, quizás
+  para siempre).
+- Retirar `defaultOutputParaHeredar` ni el look-ahead de pre_prensa para
+  las familias del sistema: "un emisor por ruta" rige el modelo NUEVO;
+  lo legacy sigue igual hasta una etapa de unificación.
+- Unificar los branches del dispatcher del sistema al mecanismo nuevo.
+- Lectores nuevos para `minutos_reales` / `aprovechamiento_pct`
+  (métricas/ETA) — backlog.
+- Preview de nesting dentro del wizard (el preview de costeo sigue
+  T-1/T-2).
+- El wizard de ruta (Etapa E real).
+
+#### Riesgos
+
+| Riesgo | Mitigación |
+|---|---|
+| Regresión del dispatcher (FRONTERA-NESTING) | los branches del sistema no se tocan; entrada tenant aditiva; suite motor comparada por nombre |
+| Cotizaciones viejas en snapshot con keys viejas | los lectores resuelven vía alias; nada se migra |
+| Configs con JSON libre malformado | parse defensivo + fallback legacy |
+| Los 18 smoke tests rotos preexistentes ensucian la señal | comparar por nombre contra baseline, como en A/C/D |
+| Base dev con Wati viva | cliente de prueba sin teléfono, siempre |
 
 ---
 
