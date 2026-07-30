@@ -350,6 +350,11 @@ const impresion_por_hoja: DefinicionFamilia = {
   outputsCanonicos: [
     'pliegos_calculados',
     'pliegos_impresos',
+    // La imposición la puede hacer pre-prensa o, si ese paso no corre, la
+    // propia impresión: en los dos casos hay grilla, y la guillotina saca
+    // sus cortes de ahí. Sin esto, un producto sin pre-prensa cotizaba el
+    // corte en 0 minutos.
+    'cortes_calculados',
     'pliego_impresion_ancho_mm',
     'pliego_impresion_alto_mm',
     'pliego_impresion_area_m2',
@@ -597,6 +602,19 @@ const corte_guillotina: DefinicionFamilia = {
       tipo: 'EXISTS_OUTPUT',
       outputCanonico: 'pliegos_calculados',
       mensaje: 'Guillotina necesita pliegos calculados por pre-prensa',
+    },
+    {
+      // El run sale de los cortes, no de la productividad: sin cortes el
+      // paso costaba 0 minutos en silencio. Pasa cuando el trabajo lleva
+      // más de una medida y el acomodo deja de ser una grilla.
+      codigo: 'existe_cortes',
+      tipo: 'EXISTS_OUTPUT',
+      outputCanonico: 'cortes_calculados',
+      mensaje:
+        'Guillotina no puede calcular el tiempo: el acomodo de pre-prensa no ' +
+        'dejó una grilla de columnas por filas, así que no hay cortes que ' +
+        'contar. Suele pasar cuando el trabajo tiene piezas de medidas ' +
+        'distintas en el mismo pliego.',
     },
   ],
   paramsPasoSchema: [],

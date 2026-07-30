@@ -121,6 +121,11 @@ function computeOutput(
       rows: filas,
       demasiaCorteMm: demasiaMm,
     });
+    // Sin grilla no hay cortes que derivar: el acomodo colocó las piezas
+    // libremente y `columnas × filas` no existe. Publicar cero acá haría que
+    // la guillotina costara 0 minutos sin que nadie se entere — mejor no
+    // publicar nada y dejar que la validación del paso corte la cotización.
+    if (cortesTotales <= 0) return null;
     return {
       columnas,
       filas,

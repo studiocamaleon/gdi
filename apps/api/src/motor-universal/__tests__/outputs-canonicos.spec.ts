@@ -42,4 +42,39 @@ describe('calcularOutputsCanonicos - cortes_calculados', () => {
       formula: '2 * columnas + 2 * filas',
     });
   });
+
+  // El run de la guillotina sale de los cortes, no de la productividad: si
+  // publicamos un objeto con cortesTotales 0, el paso cuesta 0 minutos y
+  // nadie se entera. Sin grilla no publicamos nada, y la validación
+  // EXISTS_OUTPUT del paso corta la cotización.
+  it('no publica cortes si el acomodo no dejó una grilla', () => {
+    const outputs = calcularOutputsCanonicos(familia as never, {
+      paso: {} as never,
+      jobContext: {},
+      nestingDispatch: {
+        algorithm: 'grid-2d-single',
+        // Es lo que deja el acomodo por área: colocó las piezas libremente.
+        metricasRaw: { columnas: undefined, filas: undefined },
+        visualConfig: { pieceBleedMm: 0 },
+      } as never,
+      cantidadEfectiva: 0,
+    });
+
+    expect(outputs.cortes_calculados).toBeNull();
+  });
+
+  it('tampoco los publica si el acomodo fue multi-medida', () => {
+    const outputs = calcularOutputsCanonicos(familia as never, {
+      paso: {} as never,
+      jobContext: {},
+      nestingDispatch: {
+        algorithm: 'grid-2d-multi',
+        metricasRaw: {},
+        visualConfig: { pieceBleedMm: 0 },
+      } as never,
+      cantidadEfectiva: 0,
+    });
+
+    expect(outputs.cortes_calculados ?? null).toBeNull();
+  });
 });
