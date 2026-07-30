@@ -16,6 +16,7 @@
 import type {
   LookupsConfigPaso,
   UpsertConfigPasoPayload,
+  UpsertSlotMaterialPayload,
 } from "../productos-servicios-api";
 import type { FamiliaListItem } from "../productos-servicios";
 import type { PendientePasoTipo } from "../pendientes-paso";
@@ -36,6 +37,13 @@ import {
   modoColorAplica,
 } from "./catalogo-tiempo";
 import {
+  SELECCION_MATERIAL_OPTIONS,
+  FORMULA_OPTIONS,
+  CRITERIO_AUTO_OPTIONS,
+  COSTING_STRATEGY_OPTIONS,
+  CANTIDAD_BASE_SLOT_OPTIONS,
+} from "./catalogo-materiales";
+import {
   modoTiempoLabels,
   mecanismoCantidadLabels,
 } from "../labels-humanos";
@@ -55,6 +63,22 @@ export interface PasoVecino {
   nombre: string;
 }
 
+/** Declaración del slot en la familia (subset de slotsRequeridos). */
+export interface SlotDeclarado {
+  codigo: string;
+  nombre: string;
+  requerido: boolean;
+  tipo?: string;
+}
+
+/** Contexto de UN slot de material (sub-fase C): las claves materiales.*
+ *  se evalúan una vez por slot con este campo poblado. */
+export interface SlotEnContexto {
+  payload: UpsertSlotMaterialPayload;
+  decl: SlotDeclarado | null;
+  esAdicional: boolean;
+}
+
 export interface ContextoOpcion {
   cfg: UpsertConfigPasoPayload;
   familia: FamiliaListItem | undefined;
@@ -63,11 +87,16 @@ export interface ContextoOpcion {
   otrosPasos: PasoVecino[];
   /** Máquinas, centros y materias primas del tenant (sub-fase B). */
   lookups: LookupsConfigPaso;
+  /** El slot activo cuando la sección Materiales itera por slot. */
+  slot?: SlotEnContexto;
 }
 
 export type PatchOpcion =
   | { tipo: "config"; patch: Partial<UpsertConfigPasoPayload> }
-  | { tipo: "params"; patch: Record<string, unknown> };
+  | { tipo: "params"; patch: Record<string, unknown> }
+  /** Patch sobre el slot del contexto (materiales.*): el renderer lo
+   *  aplica al slot de cfg.slotsMateriales con ese slotCodigo. */
+  | { tipo: "slot"; patch: Partial<UpsertSlotMaterialPayload> };
 
 export type OrigenValor =
   | "config"
@@ -122,7 +151,11 @@ export type ControlOpcion =
         | "maquina-m1"
         | "perfil-m1"
         | "candidatas-detallado"
-        | "modo-color-detallado";
+        | "modo-color-detallado"
+        | "agregar-slot"
+        | "material-fijo-detallado"
+        | "candidatos-slot-detallado"
+        | "base-consumo";
     };
 
 export interface OpcionPaso {
@@ -261,6 +294,55 @@ function maquinaRequerida(ctx: ContextoOpcion): boolean {
     modoTiempoEfectivo(ctx) === "T-3" ||
     (relacion.includes("M-1") && !relacion.includes("M-0"))
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Helpers de la sección Materiales (sub-fase C) — todos puros.
+// ─────────────────────────────────────────────────────────────────────
+
+function esConsumibleMaquina(slot: { tipo?: string }): boolean {
+  return slot.tipo === "CONSUMIBLE_MAQUINA";
+}
+
+/** Slots que declara la familia y configura el modelador (sin los
+ *  consumibles automáticos de máquina). */
+function slotsManualesDeFamilia(ctx: ContextoOpcion) {
+  return (ctx.familia?.slotsRequeridos ?? []).filter(
+    (slot) => !esConsumibleMaquina(slot),
+  );
+}
+
+/** Nombre humano de una variante buscándola en los lookups. */
+function nombreVariante(
+  ctx: ContextoOpcion,
+  varianteId: string | null | undefined,
+): string | null {
+  if (!varianteId) return null;
+  for (const materia of ctx.lookups.materiasPrimas) {
+    const variante = materia.variantes.find((v) => v.id === varianteId);
+    if (variante) {
+      return variante.nombreVariante
+        ? `${materia.nombre} — ${variante.nombreVariante}`
+        : materia.nombre;
+    }
+  }
+  return null;
+}
+
+function labelDe(
+  opciones: Array<{ value: string; label: string }>,
+  value: string,
+): string {
+  return opciones.find((o) => o.value === value)?.label ?? value;
+}
+
+/** ¿El costeo del material lo define Acomodado/nesting (y no el slot)? */
+function nestingDefineCosteo(ctx: ContextoOpcion): boolean {
+  const nesting = ctx.paramsPaso.nestingConfig as
+    | { costing?: { strategy?: unknown } }
+    | undefined;
+  const estrategia = nesting?.costing?.strategy;
+  return typeof estrategia === "string" && estrategia !== "simple";
 }
 
 export const ESQUEMA_PASO: OpcionPaso[] = [
@@ -925,6 +1007,291 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
         : "default-maquina",
     control: { tipo: "componente", id: "modo-color-detallado" },
   },
+
+  // ───────────────────────────────────────────────────────────────────
+  // Sección MATERIALES (sub-fase C). materiales.agregar es a nivel paso;
+  // el resto se evalúa POR SLOT (ctx.slot poblado). El rol del slot está
+  // PODADO del guiado (decisión del usuario). Material fijo y candidatos
+  // usan LA UI del detallado extraída como componentes.
+  // ───────────────────────────────────────────────────────────────────
+  {
+    clave: "materiales.agregar",
+    seccion: "materiales",
+    pregunta: "¿Qué materiales gasta acá?",
+    ayuda:
+      "Cada slot es un tipo de material que el paso necesita (papel, tinta, film…). Sumá los que declara el paso o un componente propio.",
+    visible: (ctx) =>
+      !ctx.slot &&
+      (slotsManualesDeFamilia(ctx).length > 0 ||
+        Boolean(ctx.familia?.permiteSlotsAdicionales)),
+    resumen: (ctx) => {
+      const configurados = (ctx.cfg.slotsMateriales ?? []).length;
+      if (configurados === 0) return "Sin materiales configurados";
+      return configurados === 1
+        ? "1 material configurado"
+        : `${configurados} materiales configurados`;
+    },
+    origenValor: (ctx) => {
+      const configurados = new Set(
+        (ctx.cfg.slotsMateriales ?? []).map((slot) => slot.slotCodigo),
+      );
+      const faltaRequerido = slotsManualesDeFamilia(ctx).some(
+        (slot) => slot.requerido && !configurados.has(slot.codigo),
+      );
+      if (faltaRequerido) return "sin-definir";
+      return configurados.size > 0 ? "config" : "default-paso";
+    },
+    control: { tipo: "componente", id: "agregar-slot" },
+  },
+  {
+    clave: "materiales.nombre",
+    seccion: "materiales",
+    pregunta: "¿Cómo se llama?",
+    ayuda:
+      "El nombre operativo del componente o accesorio dentro del paso (portabanner, solapa, ojales…).",
+    visible: (ctx) => Boolean(ctx.slot?.esAdicional),
+    resumen: (ctx) =>
+      ctx.slot?.payload.slotNombre?.trim()
+        ? `"${ctx.slot.payload.slotNombre.trim()}"`
+        : "Sin nombre",
+    origenValor: (ctx) =>
+      ctx.slot?.payload.slotNombre?.trim() ? "config" : "sin-definir",
+    control: {
+      tipo: "texto",
+      placeholder: () => "Ej. Portabanner, Solapa, Ojales",
+      valor: (ctx) => ctx.slot?.payload.slotNombre ?? "",
+      aplicar: (_ctx, v) => ({
+        tipo: "slot",
+        patch: { slotNombre: v || null },
+      }),
+    },
+  },
+  {
+    clave: "materiales.quien",
+    seccion: "materiales",
+    pregunta: "¿Quién decide cuál se usa?",
+    ayuda:
+      "Material fijo (lo dejás definido acá), el comercial elige al cotizar, o el sistema elige solo con un criterio.",
+    visible: (ctx) => Boolean(ctx.slot),
+    resumen: (ctx) =>
+      labelDe(
+        SELECCION_MATERIAL_OPTIONS,
+        ctx.slot?.payload.modoSeleccion ?? "HARDCODED",
+      ),
+    origenValor: () => "config",
+    control: {
+      tipo: "pills",
+      opciones: () =>
+        SELECCION_MATERIAL_OPTIONS.map((o) => ({
+          value: o.value,
+          label: o.label,
+          descripcion: o.description,
+        })),
+      valor: (ctx) => ctx.slot?.payload.modoSeleccion ?? "HARDCODED",
+      aplicar: (_ctx, v) => ({
+        tipo: "slot",
+        patch: {
+          modoSeleccion: (v || "HARDCODED") as
+            | "HARDCODED"
+            | "COMERCIAL_ELIGE"
+            | "MOTOR_ELIGE_AUTO",
+        },
+      }),
+    },
+  },
+  {
+    clave: "materiales.material",
+    seccion: "materiales",
+    pregunta: "¿Cuál exactamente?",
+    ayuda:
+      "Buscá la materia prima compatible y dejá fija la variante que usa este paso.",
+    visible: (ctx) => ctx.slot?.payload.modoSeleccion === "HARDCODED",
+    resumen: (ctx) => {
+      const varianteId = ctx.slot?.payload.materialVarianteId;
+      if (!varianteId) return "Sin material elegido";
+      return nombreVariante(ctx, varianteId) ?? "Material definido";
+    },
+    origenValor: (ctx) =>
+      ctx.slot?.payload.materialVarianteId ? "config" : "sin-definir",
+    pendiente: "material_slot",
+    control: { tipo: "componente", id: "material-fijo-detallado" },
+  },
+  {
+    clave: "materiales.candidatos",
+    seccion: "materiales",
+    pregunta: "¿Entre cuáles se elige?",
+    ayuda:
+      "Las variantes entre las que elige el comercial al cotizar (o el sistema, según su criterio). Marcá una como predeterminada.",
+    visible: (ctx) =>
+      Boolean(ctx.slot) &&
+      ctx.slot?.payload.modoSeleccion !== "HARDCODED",
+    resumen: (ctx) => {
+      const candidatos = ctx.slot?.payload.candidatos ?? [];
+      if (candidatos.length === 0) return "Sin candidatos elegidos";
+      const variantes = candidatos.reduce(
+        (total, candidato) => total + candidato.varianteIds.length,
+        0,
+      );
+      return `${candidatos.length} material${candidatos.length === 1 ? "" : "es"} · ${variantes} variante${variantes === 1 ? "" : "s"}`;
+    },
+    origenValor: (ctx) =>
+      (ctx.slot?.payload.candidatos?.length ?? 0) > 0
+        ? "config"
+        : "sin-definir",
+    pendiente: "material_slot",
+    control: { tipo: "componente", id: "candidatos-slot-detallado" },
+  },
+  {
+    clave: "materiales.criterio",
+    seccion: "materiales",
+    pregunta: "¿Con qué criterio elige el sistema?",
+    ayuda:
+      "Entre los candidatos: el más barato, el de mejor aprovechamiento, o la capacidad mínima que cumpla.",
+    visible: (ctx) => ctx.slot?.payload.modoSeleccion === "MOTOR_ELIGE_AUTO",
+    resumen: (ctx) => {
+      const criterio = ctx.slot?.payload.criterioMotorAuto;
+      return criterio
+        ? labelDe(CRITERIO_AUTO_OPTIONS, criterio)
+        : "Sin criterio elegido";
+    },
+    origenValor: (ctx) =>
+      ctx.slot?.payload.criterioMotorAuto ? "config" : "sin-definir",
+    control: {
+      tipo: "pills",
+      opciones: () =>
+        CRITERIO_AUTO_OPTIONS.map((o) => ({
+          value: o.value,
+          label: o.label,
+          descripcion: o.description,
+        })),
+      valor: (ctx) => ctx.slot?.payload.criterioMotorAuto ?? "",
+      aplicar: (_ctx, v) => ({
+        tipo: "slot",
+        patch: { criterioMotorAuto: v || null },
+      }),
+    },
+  },
+  {
+    clave: "materiales.consumo",
+    seccion: "materiales",
+    pregunta: "¿Cómo se calcula el consumo?",
+    ayuda:
+      "La fórmula del motor para saber cuánto material gasta: por pieza, por m², por metro lineal…",
+    visible: (ctx) => Boolean(ctx.slot),
+    resumen: (ctx) =>
+      labelDe(
+        FORMULA_OPTIONS,
+        ctx.slot?.payload.formula ?? "por_unidad_productiva",
+      ),
+    origenValor: (ctx) =>
+      ctx.slot?.payload.formula ? "config" : "default-paso",
+    control: {
+      tipo: "select",
+      opciones: () =>
+        FORMULA_OPTIONS.map((o) => ({
+          value: o.value,
+          label: o.label,
+          descripcion: o.description,
+        })),
+      valor: (ctx) => ctx.slot?.payload.formula ?? "por_unidad_productiva",
+      aplicar: (_ctx, v) => ({
+        tipo: "slot",
+        patch: { formula: v || "por_unidad_productiva" },
+      }),
+    },
+  },
+  {
+    clave: "materiales.costeo",
+    seccion: "materiales",
+    pregunta: "¿Cómo se costea este material?",
+    ayuda:
+      "Simple usa la fórmula del consumo; las otras estrategias cobran el material según cómo se aprovecha la placa o el rollo.",
+    // Si Acomodado/nesting define el costeo, el valor del slot no se usa:
+    // la pregunta no aparece (mismo criterio que el detallado, que la
+    // muestra bloqueada).
+    visible: (ctx) => Boolean(ctx.slot) && !nestingDefineCosteo(ctx),
+    resumen: (ctx) =>
+      labelDe(
+        COSTING_STRATEGY_OPTIONS,
+        ctx.slot?.payload.estrategiaCosto ?? "simple",
+      ),
+    origenValor: (ctx) =>
+      ctx.slot?.payload.estrategiaCosto &&
+      ctx.slot.payload.estrategiaCosto !== "simple"
+        ? "config"
+        : "default-paso",
+    control: {
+      tipo: "select",
+      opciones: () =>
+        COSTING_STRATEGY_OPTIONS.map((o) => ({
+          value: o.value,
+          label: o.label,
+          descripcion: o.description,
+        })),
+      valor: (ctx) => ctx.slot?.payload.estrategiaCosto ?? "simple",
+      aplicar: (_ctx, v) => ({
+        tipo: "slot",
+        patch: { estrategiaCosto: v || "simple" },
+      }),
+    },
+  },
+  {
+    clave: "materiales.base",
+    seccion: "materiales",
+    pregunta: "¿Por cada cuántos se gasta uno?",
+    ayuda:
+      "Base × factor: 2 broches por talonario, 1 cartón por pila, 4 ojales por pieza.",
+    visible: (ctx) =>
+      Boolean(
+        ctx.slot &&
+          (ctx.slot.esAdicional || ctx.slot.decl?.tipo === "INSUMO_PASO"),
+      ),
+    resumen: (ctx) => {
+      const slot = ctx.slot;
+      if (!slot) return "";
+      const base =
+        slot.payload.cantidadBase ??
+        (slot.esAdicional ? "cantidad_pedida" : "formula");
+      if (base === "formula") return "Según fórmula del consumo";
+      const factor = slot.payload.cantidadFactor ?? 1;
+      return `${factor} por ${labelDe(
+        CANTIDAD_BASE_SLOT_OPTIONS,
+        base,
+      ).toLowerCase()}`;
+    },
+    origenValor: (ctx) =>
+      ctx.slot?.payload.cantidadBase != null ||
+      ctx.slot?.payload.cantidadFactor != null
+        ? "config"
+        : "default-paso",
+    control: { tipo: "componente", id: "base-consumo" },
+  },
+  {
+    clave: "materiales.caras",
+    seccion: "materiales",
+    pregunta: "¿La doble faz gasta doble?",
+    ayuda:
+      "Si el trabajo va a dos caras, el consumo de este material se multiplica por las caras.",
+    visible: (ctx) => Boolean(ctx.slot),
+    resumen: (ctx) =>
+      ctx.slot?.payload.aplicaMultiCaras
+        ? "Sí — multiplica por caras"
+        : "No — el consumo no cambia",
+    origenValor: (ctx) =>
+      ctx.slot?.payload.aplicaMultiCaras ? "config" : "default-paso",
+    control: {
+      tipo: "pills",
+      opciones: () => [
+        { value: "no", label: "No" },
+        { value: "si", label: "Sí, multiplica" },
+      ],
+      valor: (ctx) => (ctx.slot?.payload.aplicaMultiCaras ? "si" : "no"),
+      aplicar: (_ctx, v) => ({
+        tipo: "slot",
+        patch: { aplicaMultiCaras: v === "si" },
+      }),
+    },
+  },
 ];
 
 /** Las opciones visibles de una sección, en orden de declaración. */
@@ -942,4 +1309,5 @@ export const SECCIONES_MIGRADAS: SeccionPaso[] = [
   "activacion",
   "tiempo",
   "maquina",
+  "materiales",
 ];

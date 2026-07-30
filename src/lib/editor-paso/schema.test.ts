@@ -17,7 +17,9 @@ import type { FamiliaListItem } from "../productos-servicios";
 import type {
   LookupsConfigPaso,
   UpsertConfigPasoPayload,
+  UpsertSlotMaterialPayload,
 } from "../productos-servicios-api";
+import type { SlotEnContexto } from "./schema";
 
 // ── El censo, por sección (espejo del doc §2, claves canónicas) ───────
 const CENSO: Record<string, string[]> = {
@@ -55,18 +57,34 @@ const CENSO: Record<string, string[]> = {
     "maquina.candidatas",
     "maquina.modo_color",
   ],
-  // Sub-fases C-D: al migrar una sección, sus claves se listan acá y la
+  // Sub-fase C — Materiales: agregar es a nivel paso; el resto se evalúa
+  // POR SLOT (ctx.slot). El rol del slot está PODADO del guiado (decisión
+  // del usuario); "base + cantidad por base" es UNA clave (un control).
+  materiales: [
+    "materiales.agregar",
+    "materiales.nombre",
+    "materiales.quien",
+    "materiales.material",
+    "materiales.candidatos",
+    "materiales.criterio",
+    "materiales.consumo",
+    "materiales.costeo",
+    "materiales.base",
+    "materiales.caras",
+  ],
+  // Sub-fase D: al migrar una sección, sus claves se listan acá y la
   // sección entra en SECCIONES_MIGRADAS. Mientras tanto, el detallado
   // congelado es la única fuente para ellas.
 };
 
-const SECCIONES_PENDIENTES = ["quien", "materiales", "oficio", "ajustes"];
+const SECCIONES_PENDIENTES = ["quien", "oficio", "ajustes"];
 
 function ctxBase(extra?: {
   cfg?: Partial<UpsertConfigPasoPayload>;
   familia?: Partial<FamiliaListItem>;
   otros?: Array<{ id: string; nombre: string }>;
   lookups?: Partial<LookupsConfigPaso>;
+  slot?: SlotEnContexto;
 }): ContextoOpcion {
   const cfg = {
     rutaPasoId: "rp-1",
@@ -103,6 +121,29 @@ function ctxBase(extra?: {
       materiasPrimas: [],
       ...extra?.lookups,
     } as LookupsConfigPaso,
+    slot: extra?.slot,
+  };
+}
+
+function slotCtx(
+  payload: Partial<UpsertSlotMaterialPayload>,
+  opts?: { esAdicional?: boolean; declTipo?: string },
+): SlotEnContexto {
+  return {
+    payload: {
+      slotCodigo: payload.slotCodigo ?? "sustrato_principal",
+      modoSeleccion: payload.modoSeleccion ?? "HARDCODED",
+      ...payload,
+    } as UpsertSlotMaterialPayload,
+    decl: opts?.esAdicional
+      ? null
+      : {
+          codigo: payload.slotCodigo ?? "sustrato_principal",
+          nombre: "Sustrato principal",
+          requerido: true,
+          tipo: opts?.declTipo,
+        },
+    esAdicional: opts?.esAdicional ?? false,
   };
 }
 
@@ -423,5 +464,166 @@ describe("sección Máquina y perfil", () => {
       },
     });
     expect(modoColor.visible(ctxCandidatas)).toBe(false);
+  });
+});
+
+describe("sección Materiales", () => {
+  const familiaConSlot = {
+    slotsRequeridos: [
+      {
+        codigo: "sustrato_principal",
+        nombre: "Sustrato principal",
+        requerido: true,
+      },
+    ],
+    permiteSlotsAdicionales: true,
+  } as Partial<FamiliaListItem>;
+
+  it("agregar: sin el slot requerido configurado queda sin-definir", () => {
+    const agregar = ESQUEMA_PASO.find(
+      (op) => op.clave === "materiales.agregar",
+    )!;
+    const ctx = ctxBase({ familia: familiaConSlot });
+    expect(agregar.visible(ctx)).toBe(true);
+    expect(agregar.origenValor(ctx)).toBe("sin-definir");
+    const ctxConSlot = ctxBase({
+      familia: familiaConSlot,
+      cfg: {
+        slotsMateriales: [
+          { slotCodigo: "sustrato_principal", modoSeleccion: "HARDCODED" },
+        ],
+      },
+    });
+    expect(agregar.origenValor(ctxConSlot)).toBe("config");
+    expect(agregar.resumen(ctxConSlot)).toBe("1 material configurado");
+    // Con un slot en contexto (iteración por slot) no se repite.
+    expect(
+      agregar.visible(ctxBase({ familia: familiaConSlot, slot: slotCtx({}) })),
+    ).toBe(false);
+  });
+
+  it("las claves por slot sólo aparecen con slot en contexto", () => {
+    const sinSlot = opcionesDeSeccion("materiales", ctxBase()).map(
+      (o) => o.clave,
+    );
+    expect(sinSlot).not.toContain("materiales.quien");
+    const conSlot = opcionesDeSeccion(
+      "materiales",
+      ctxBase({ slot: slotCtx({}) }),
+    ).map((o) => o.clave);
+    expect(conSlot).toEqual([
+      "materiales.quien",
+      "materiales.material",
+      "materiales.consumo",
+      "materiales.costeo",
+      "materiales.caras",
+    ]);
+  });
+
+  it("material fijo vs candidatos vs criterio siguen al modo de selección", () => {
+    const material = ESQUEMA_PASO.find(
+      (op) => op.clave === "materiales.material",
+    )!;
+    const candidatos = ESQUEMA_PASO.find(
+      (op) => op.clave === "materiales.candidatos",
+    )!;
+    const criterio = ESQUEMA_PASO.find(
+      (op) => op.clave === "materiales.criterio",
+    )!;
+    const fijo = ctxBase({ slot: slotCtx({ modoSeleccion: "HARDCODED" }) });
+    expect(material.visible(fijo)).toBe(true);
+    expect(candidatos.visible(fijo)).toBe(false);
+    expect(material.pendiente).toBe("material_slot");
+    expect(material.origenValor(fijo)).toBe("sin-definir");
+
+    const motor = ctxBase({
+      slot: slotCtx({
+        modoSeleccion: "MOTOR_ELIGE_AUTO",
+        candidatos: [
+          {
+            materiaPrimaId: "mp-1",
+            varianteIds: ["v1", "v2"],
+          },
+        ],
+      }),
+    });
+    expect(material.visible(motor)).toBe(false);
+    expect(candidatos.visible(motor)).toBe(true);
+    expect(candidatos.resumen(motor)).toBe("1 material · 2 variantes");
+    expect(criterio.visible(motor)).toBe(true);
+    expect(criterio.origenValor(motor)).toBe("sin-definir");
+  });
+
+  it("el material fijo resume la variante por nombre desde los lookups", () => {
+    const material = ESQUEMA_PASO.find(
+      (op) => op.clave === "materiales.material",
+    )!;
+    const ctx = ctxBase({
+      slot: slotCtx({ materialVarianteId: "v-9" }),
+      lookups: {
+        materiasPrimas: [
+          {
+            id: "mp-1",
+            codigo: "VIN",
+            nombre: "Vinilo blanco",
+            familia: "VINILOS",
+            subfamilia: "",
+            templateId: "t",
+            variantes: [
+              {
+                id: "v-9",
+                sku: "VIN-9",
+                nombreVariante: "80 µm mate",
+                precioReferencia: null,
+              },
+            ],
+          },
+        ],
+      },
+    });
+    expect(material.resumen(ctx)).toBe("Vinilo blanco — 80 µm mate");
+    expect(material.origenValor(ctx)).toBe("config");
+  });
+
+  it("base de consumo: sólo adicional o insumo declarado, y resume base × factor", () => {
+    const base = ESQUEMA_PASO.find((op) => op.clave === "materiales.base")!;
+    expect(base.visible(ctxBase({ slot: slotCtx({}) }))).toBe(false);
+    const adicional = ctxBase({
+      slot: slotCtx(
+        { cantidadBase: "cantidad_pedida", cantidadFactor: 2 },
+        { esAdicional: true },
+      ),
+    });
+    expect(base.visible(adicional)).toBe(true);
+    expect(base.resumen(adicional)).toBe("2 por cantidad pedida");
+    const insumo = ctxBase({
+      slot: slotCtx({}, { declTipo: "INSUMO_PASO" }),
+    });
+    expect(base.visible(insumo)).toBe(true);
+    expect(base.resumen(insumo)).toBe("Según fórmula del consumo");
+  });
+
+  it("el costeo se oculta cuando Acomodado/nesting lo define", () => {
+    const costeo = ESQUEMA_PASO.find((op) => op.clave === "materiales.costeo")!;
+    expect(costeo.visible(ctxBase({ slot: slotCtx({}) }))).toBe(true);
+    const conNesting = ctxBase({
+      cfg: {
+        paramsPasoJson: {
+          nestingConfig: { costing: { strategy: "consumed-length" } },
+        },
+      },
+      slot: slotCtx({}),
+    });
+    expect(costeo.visible(conNesting)).toBe(false);
+  });
+
+  it("el nombre sólo aplica a slots adicionales", () => {
+    const nombre = ESQUEMA_PASO.find((op) => op.clave === "materiales.nombre")!;
+    expect(nombre.visible(ctxBase({ slot: slotCtx({}) }))).toBe(false);
+    const adicional = ctxBase({
+      slot: slotCtx({ slotNombre: "Ojales" }, { esAdicional: true }),
+    });
+    expect(nombre.visible(adicional)).toBe(true);
+    expect(nombre.resumen(adicional)).toBe('"Ojales"');
   });
 });

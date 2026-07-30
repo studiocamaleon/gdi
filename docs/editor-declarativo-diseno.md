@@ -223,7 +223,27 @@ type ControlOpcion =
   > Impresión de original muestra Máquina y perfil con las 2 candidatas
   > Ricoh (perfil default + modos por candidata) y Pre-prensa muestra el
   > modo talonario.
-- **C — Materiales** (slots completos, 11 opciones).
+- **C — Materiales** — **HECHA (2026-07-30)**.
+  > Las 10 claves declaradas (el rol quedó PODADO como pediste;
+  > "base + cantidad por base" es UN control). `materiales.agregar` es a
+  > nivel paso; el resto se evalúa POR SLOT: el contexto del esquema ganó
+  > `slot` y el patch ganó el tipo `"slot"`. El asistente renderiza un
+  > grupo por slot configurado (título + Quitar + sus preguntas) y los
+  > chips para sumar slots declarados o componentes adicionales. Dos
+  > bloques más del detallado extraídos como componentes compartidos:
+  > `MaterialFijoSlotDetalladoEditor` (buscador + variante fija) y
+  > `CandidatosSlotDetalladoEditor` (candidatos con variantes habilitadas
+  > y default) — el buscador `MaterialSearchSelect` ya era un componente
+  > autónomo y se reusa tal cual. El catálogo de opciones de materiales
+  > (quién elige, fórmulas, costeo, bases, criterios) se movió a
+  > `src/lib/editor-paso/catalogo-materiales.ts`. La card transicional de
+  > material del asistente se RETIRÓ (ya no obliga a ir al detallado —
+  > el reclamo original de tus capturas). El costeo del slot se oculta
+  > cuando Acomodado/nesting lo define (mismo criterio que el detallado).
+  > Verificado en vivo con Talonarios → Impresión de original: grupo
+  > "Sustrato principal" con las 5 preguntas y el buscador del detallado
+  > adentro del Sheet; el detallado quedó idéntico. 7 tests nuevos
+  > (25 del esquema, 387 front en total).
 - **D — Tercerización + oficio** (panel embebido + censo E.0 en humano;
   absorbe la E.3.3 del plan wizard-ruta).
 - **E — Cobertura 100% verificada → retiro del detallado** (decisión
