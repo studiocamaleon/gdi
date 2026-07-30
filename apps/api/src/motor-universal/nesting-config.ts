@@ -10,8 +10,7 @@ export type NestingAlgorithmPolicy =
   | 'shelf-rollo'
   | 'maxrects-rollo'
   | 'grid-2d-single'
-  | 'grid-2d-multi'
-  | 'packingsolver-rectangle';
+  | 'grid-2d-multi';
 
 export interface NestingCostingConfig {
   strategy: 'simple' | CostingStrategyKind;
@@ -415,8 +414,7 @@ function normalizeAlgorithm(value: unknown): NestingAlgorithmPolicy {
   return value === 'shelf-rollo' ||
     value === 'maxrects-rollo' ||
     value === 'grid-2d-single' ||
-    value === 'grid-2d-multi' ||
-    value === 'packingsolver-rectangle'
+    value === 'grid-2d-multi'
     ? value
     : 'auto';
 }

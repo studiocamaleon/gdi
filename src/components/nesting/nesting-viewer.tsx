@@ -142,9 +142,9 @@ function algorithmLabel(algorithm: NestingViewerInput["algorithm"]): string {
     "secuencial-rollo": "Acomodo secuencial en rollo",
     "grid-2d-single": "Acomodo en pliego",
     "grid-2d-multi": "Acomodo multi-placa",
-    "packingsolver-rectangle": "Acomodo optimizado en placa",
   };
-  return labels[algorithm];
+  // Snapshots viejos pueden traer un algoritmo ya retirado.
+  return labels[algorithm] ?? "Acomodo";
 }
 
 function costingLabel(strategy: string) {

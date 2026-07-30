@@ -128,7 +128,6 @@ export interface NestingResult<T = unknown> {
 export type NestingAlgorithm =
   | 'grid-2d-single'
   | 'grid-2d-multi'
-  | 'packingsolver-rectangle'
   | 'maxrects-rollo'
   | 'shelf-rollo'
   | 'secuencial-rollo';

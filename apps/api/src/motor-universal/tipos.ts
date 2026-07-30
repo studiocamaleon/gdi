@@ -397,8 +397,7 @@ export interface NestingEjecutado {
     | 'maxrects-rollo'
     | 'secuencial-rollo'
     | 'grid-2d-single'
-    | 'grid-2d-multi'
-    | 'packingsolver-rectangle';
+    | 'grid-2d-multi';
   /** Cantidad calculada en su unidad (m_lineales, pliegos, pouches, m2, piezas). */
   cantidadCalculada: number;
   unidad: 'm_lineales' | 'pliegos' | 'pouches' | 'm2' | 'piezas';

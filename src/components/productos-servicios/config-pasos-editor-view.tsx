@@ -153,7 +153,6 @@ const NESTING_ALGORITHMS = [
   "maxrects-rollo",
   "grid-2d-single",
   "grid-2d-multi",
-  "packingsolver-rectangle",
 ];
 const MODO_COLOR_LABELS: Record<string, string> = {
   SIN_IMPRESION: "Sin impresión",
@@ -344,10 +343,6 @@ const NESTING_ALGORITHM_OPTIONS = optionsFromLabels(NESTING_ALGORITHMS, {
   "grid-2d-multi": {
     label: "Grilla multi",
     descripcion: "Varias medidas sobre una o más placas.",
-  },
-  "packingsolver-rectangle": {
-    label: "PackingSolver Rectangle",
-    descripcion: "Motor profesional para rígidos sobre placa.",
   },
 });
 

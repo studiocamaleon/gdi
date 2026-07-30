@@ -2780,7 +2780,7 @@ describe('MotorUniversalService — smoke tests', () => {
       fakeMaterial,
     );
     expect(r).not.toBeNull();
-    expect(['packingsolver-rectangle', 'grid-2d-multi']).toContain(
+    expect(['grid-2d-multi']).toContain(
       r!.algorithm,
     );
     expect(r!.unidad).toBe('pliegos');

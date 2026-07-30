@@ -1521,7 +1521,9 @@ function nestingTabLabel(result: NestingViewerInput | undefined) {
   const kind = result?.substrates[0]?.kind;
   if (algorithm === "grid-2d-single") return "Acomodado en pliego";
   if (algorithm === "grid-2d-multi") return "Acomodado multi-placa";
-  if (algorithm === "packingsolver-rectangle") return "Acomodado en placa";
+  // Cotizaciones viejas pueden traer el algoritmo retirado en su snapshot.
+  if ((algorithm as string) === "packingsolver-rectangle")
+    return "Acomodado en placa";
   if (algorithm === "maxrects-rollo") return "Acomodado en rollo";
   if (algorithm === "shelf-rollo") return "Acomodado en rollo";
   if (kind === "sheet") return "Acomodado en pliego";

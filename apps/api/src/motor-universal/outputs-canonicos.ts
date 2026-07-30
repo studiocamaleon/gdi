@@ -137,8 +137,7 @@ function computeOutput(
   if (key === 'pliegos_calculados') {
     if (
       nestingDispatch?.algorithm === 'grid-2d-single' ||
-      nestingDispatch?.algorithm === 'grid-2d-multi' ||
-      nestingDispatch?.algorithm === 'packingsolver-rectangle'
+      nestingDispatch?.algorithm === 'grid-2d-multi'
     ) {
       return nestingDispatch.cantidadCalculada;
     }
@@ -206,8 +205,7 @@ function computeOutput(
       }
     }
     if (
-      nestingDispatch?.algorithm === 'grid-2d-multi' ||
-      nestingDispatch?.algorithm === 'packingsolver-rectangle'
+      nestingDispatch?.algorithm === 'grid-2d-multi'
     ) {
       return nestingDispatch.substrates.reduce((acc, sub) => {
         if (sub.kind !== 'sheet') return acc;
@@ -242,8 +240,7 @@ function computeOutput(
   if (key === 'pliegos') {
     if (
       nestingDispatch?.algorithm === 'grid-2d-single' ||
-      nestingDispatch?.algorithm === 'grid-2d-multi' ||
-      nestingDispatch?.algorithm === 'packingsolver-rectangle'
+      nestingDispatch?.algorithm === 'grid-2d-multi'
     ) {
       return nestingDispatch.cantidadCalculada;
     }
@@ -259,8 +256,7 @@ function computeOutput(
     }
     if (
       nestingDispatch?.algorithm === 'grid-2d-single' ||
-      nestingDispatch?.algorithm === 'grid-2d-multi' ||
-      nestingDispatch?.algorithm === 'packingsolver-rectangle'
+      nestingDispatch?.algorithm === 'grid-2d-multi'
     ) {
       return nestingDispatch.substrates.reduce((acc, sub) => {
         if (sub.kind !== 'sheet') return acc;

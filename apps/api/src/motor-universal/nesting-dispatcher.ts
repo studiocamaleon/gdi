@@ -40,7 +40,6 @@ import { evaluateGranFormatoSequentialRollLayout } from '../productos-servicios/
 import { nestGrid2DSingle } from '../productos-servicios/nesting/algorithms/grid-2d-single';
 import { resolverFamilia } from '../productos-servicios/pasos/familias';
 import { nestGrid2DMulti } from '../productos-servicios/nesting/algorithms/grid-2d-multi';
-import { nestPackingSolverRectangle } from '../productos-servicios/nesting/algorithms/packingsolver-rectangle';
 import {
   calculateTalonarioGrouping,
   type TalonarioGroupingResult,
@@ -68,8 +67,7 @@ export interface NestingDispatchResult {
     | 'maxrects-rollo'
     | 'secuencial-rollo'
     | 'grid-2d-single'
-    | 'grid-2d-multi'
-    | 'packingsolver-rectangle';
+    | 'grid-2d-multi';
   /**
    * Cantidad CALCULADA del paso, en la unidad correcta:
    *  - Para shelf-rollo: metros lineales consumidos del rollo.
@@ -290,9 +288,6 @@ async function runImpresionPorArea(
   if (config.algorithm === 'grid-2d-multi') {
     return runGrid2DMultiForArea(paso, jobContext, config);
   }
-  if (config.algorithm === 'packingsolver-rectangle') {
-    return await runPackingSolverRectangleForArea(paso, jobContext, config);
-  }
 
   if (config.machineGeometry === 'ROLLO') {
     return runShelfRollo(paso, jobContext, materialResuelto, config);
@@ -303,11 +298,11 @@ async function runImpresionPorArea(
   }
 
   if (config.machineGeometry === 'MESA_EXTENSORA') {
-    return await runPackingSolverRectangleForArea(paso, jobContext, config);
+    return runGrid2DMultiForArea(paso, jobContext, config);
   }
 
   if (config.sheetWidthMm && config.sheetHeightMm && !config.rollWidthMm) {
-    return await runPackingSolverRectangleForArea(paso, jobContext, config);
+    return runGrid2DMultiForArea(paso, jobContext, config);
   }
 
   return runShelfRollo(paso, jobContext, materialResuelto, config);
@@ -389,15 +384,12 @@ async function runMontajeSobreSustrato(
   if (config.algorithm === 'grid-2d-multi') {
     return runGrid2DMultiForArea(paso, montajeContext, config);
   }
-  if (config.algorithm === 'packingsolver-rectangle') {
-    return await runPackingSolverRectangleForArea(paso, montajeContext, config);
-  }
 
   if (isRollMaterial(materialResuelto?.atributosVarianteJson)) {
     return runShelfRollo(paso, montajeContext, materialResuelto, config);
   }
   if (config.sheetWidthMm && config.sheetHeightMm) {
-    return await runPackingSolverRectangleForArea(paso, montajeContext, config);
+    return runGrid2DMultiForArea(paso, montajeContext, config);
   }
   return null;
 }
@@ -792,83 +784,6 @@ function runGrid2DMultiForArea(
     substrates: result.substrates,
     placements: result.placements,
     metricasRaw: result.metrics,
-    piezasAcomodadas: result.placements.length,
-    visualConfig: buildVisualConfig({
-      kind: 'sheet',
-      widthMm: config.sheetWidthMm,
-      heightMm: config.sheetHeightMm,
-      margins: {
-        leftMm: config.margins.leftMm,
-        rightMm: config.margins.rightMm,
-        topMm: config.margins.topMm,
-        bottomMm: config.margins.bottomMm,
-      },
-      pieceBleedMm: config.pieceBleedMm,
-      separationHMm: config.separationHMm,
-      separationVMm: config.separationVMm,
-      allowRotation: config.allowRotation,
-      substrateLabel: 'Placa',
-    }),
-  };
-}
-
-async function runPackingSolverRectangleForArea(
-  paso: PasoCargado,
-  jobContext: JobContext,
-  config: NestingConfigResolved,
-): Promise<NestingDispatchResult | null> {
-  const piezas = getPiezasParaNesting(jobContext);
-  if (piezas.length === 0) return null;
-  void paso;
-  if (!config.sheetWidthMm || !config.sheetHeightMm) return null;
-
-  const result = await nestPackingSolverRectangle(
-    piezas.map((p, idx) => ({
-      id: `pieza_${idx}`,
-      widthMm: p.anchoMm,
-      heightMm: p.altoMm,
-      quantity: p.cantidad,
-    })),
-    {
-      kind: 'sheet',
-      widthMm: config.sheetWidthMm,
-      heightMm: config.sheetHeightMm,
-      margins: {
-        leftMm: config.margins.leftMm,
-        rightMm: config.margins.rightMm,
-        topMm: config.margins.topMm,
-        bottomMm: config.margins.bottomMm,
-      },
-    },
-    {
-      separationHMm: config.separationHMm,
-      separationVMm: config.separationVMm,
-      allowRotation: config.allowRotation,
-      binHeightSegmentsPct:
-        config.costing.strategy === 'plate-segments'
-          ? config.costing.segmentSteps
-          : [100],
-    },
-  );
-
-  if (!result) {
-    return runGrid2DMultiForArea(paso, jobContext, {
-      ...config,
-      algorithm: 'grid-2d-multi',
-    });
-  }
-
-  return {
-    algorithm: 'packingsolver-rectangle',
-    cantidadCalculada: result.substrates.length,
-    unidad: 'pliegos',
-    aprovechamientoPct: result.metrics.aprovechamientoPct,
-    substrates: result.substrates,
-    placements: result.placements,
-    metricasRaw: {
-      ...result.metrics,
-      perSubstrate: result.perSubstrate,
-    },
     piezasAcomodadas: result.placements.length,
     visualConfig: buildVisualConfig({
       kind: 'sheet',

@@ -47,8 +47,7 @@ function buildPasoMontaje(
     | 'shelf-rollo'
     | 'maxrects-rollo'
     | 'grid-2d-single'
-    | 'grid-2d-multi'
-    | 'packingsolver-rectangle',
+    | 'grid-2d-multi',
   fuentePiezasMontaje = 'piezas_jobcontext',
 ) {
   return {
@@ -214,7 +213,7 @@ function buildPasoAreaPlaca() {
     multiplicadoresActivos: [],
     paramsPasoJson: {
       nestingConfig: {
-        algorithm: 'packingsolver-rectangle',
+        algorithm: 'grid-2d-multi',
         allowRotation: true,
         separationHMm: 0,
         separationVMm: 0,
@@ -528,7 +527,9 @@ describe('runNestingForPaso montaje sobre sustrato', () => {
     );
 
     expect(result).not.toBeNull();
-    expect(result!.algorithm).toBe('packingsolver-rectangle');
+    // 10 piezas de la misma medida: grid-2d-multi degrada a single (el
+    // acomodo en placa ya no pasa por el solver externo retirado).
+    expect(result!.algorithm).toBe('grid-2d-single');
     expect(result!.unidad).toBe('pliegos');
     expect(result!.piezasAcomodadas).toBe(10);
   });

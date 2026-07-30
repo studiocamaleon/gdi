@@ -821,8 +821,7 @@ export interface NestingViewerInput {
     | "maxrects-rollo"
     | "secuencial-rollo"
     | "grid-2d-single"
-    | "grid-2d-multi"
-    | "packingsolver-rectangle";
+    | "grid-2d-multi";
   cantidadCalculada: number;
   unidad: "m_lineales" | "pliegos" | "pouches" | "m2" | "piezas";
   aprovechamientoPct: number;
