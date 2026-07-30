@@ -249,6 +249,28 @@ pisarlo".
 - **E.2 — Tercerizado como bifurcación inicial** del wizard de paso
   ("¿Quién lo hace: tu taller o un proveedor?"), con la decisión de
   diseño familia-vs-config a cerrar antes.
+
+  > **Estado 2026-07-30: HECHA y verificada E2E.** Decisión del usuario:
+  > la tercerización declarada vive en los DEFAULTS de E.1
+  > (`FamiliaPasoDefaults` ganó tercerizado + proveedorId + fuente +
+  > plazo, migración 20260730071000) — cubre sistema Y tenant, y el
+  > switch del producto pasa de parche a mecanismo de pisar (internalizar
+  > o cambiar proveedor). La GRILLA de precios sigue por producto.
+  >
+  > Wizard: pregunta nueva **"¿Quién hace este paso?"** tras el arranque;
+  > la rama proveedor reduce el flujo de 10 pasos a 5 (proveedor
+  > habitual + "¿cómo cotiza?" en humano —grilla / por cantidad o medida /
+  > precio fijo— + plazo → activación → nombre) y guarda la familia con
+  > forma canónica M-0/T-4 sin slots ni estación. La ficha "Configurar
+  > defaults" del catálogo ganó la sección de tercerización (cualquier
+  > paso del sistema puede declararse tercerizado). El editor de config
+  > PRECARGA el panel completo en configs nuevas — verificado E2E: config
+  > de "Troquelado tercerizado E2E" nació con el switch prendido,
+  > Terminaciones Patagonicas, matriz y 5 días; sólo falta la grilla.
+  > Chip "Tercerizado" en Tus pasos; el paso final del wizard esconde
+  > los valores típicos de tiempo/costo (no aplican) y "qué deja" omite
+  > los minutos internos. 1 test de integración nuevo (defaults
+  > tercerizado + proveedor ajeno → 400); suite = línea de base.
 - **E.3 — Wizard de ruta**: con el inventario de §1 ya clasificado, las
   preguntas que le quedan son: qué pasos, en qué orden, máquina/material
   concreto, herencia (ya humana, B.3.3), y las preguntas [O] del censo

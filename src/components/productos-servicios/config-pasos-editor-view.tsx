@@ -2940,15 +2940,26 @@ export function ConfigPasosEditorView({
             cantidadBase: s.cantidadBase ?? null,
             aplicaMultiCaras: s.aplicaMultiCaras,
           })) ?? [],
-        tercerizado: existente?.tercerizado ?? false,
-        proveedorId: existente?.proveedorId ?? null,
-        fuenteCostoTercerizado: existente?.fuenteCostoTercerizado ?? null,
+        // E.2 — config NUEVA de una familia declarada tercerizada: el panel
+        // nace prendido y precargado desde los defaults (el producto pisa).
+        tercerizado:
+          existente?.tercerizado ?? familia?.defaults?.tercerizado ?? false,
+        proveedorId:
+          existente?.proveedorId ??
+          (existente ? null : (familia?.defaults?.proveedorId ?? null)),
+        fuenteCostoTercerizado:
+          existente?.fuenteCostoTercerizado ??
+          (existente
+            ? null
+            : (familia?.defaults?.fuenteCostoTercerizado ?? null)),
         tercerizadoConfigJson:
           (existente?.tercerizadoConfigJson as
             | Record<string, unknown>
             | null
             | undefined) ?? null,
-        plazoProveedorDias: existente?.plazoProveedorDias ?? null,
+        plazoProveedorDias:
+          existente?.plazoProveedorDias ??
+          (existente ? null : (familia?.defaults?.plazoProveedorDias ?? null)),
         tercerizadoEntradas:
           existente?.tercerizadoEntradas?.map((e) => ({
             valores: e.valoresJson,

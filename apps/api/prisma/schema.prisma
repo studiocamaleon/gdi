@@ -936,6 +936,7 @@ model Proveedor {
 
   @@unique([tenantId, nombre])
   @@index([tenantId, nombre])
+  familiaPasoDefaults FamiliaPasoDefaults[]
 }
 
 model Empleado {
@@ -1629,11 +1630,22 @@ model FamiliaPasoDefaults {
   /// Solape de panelizado típico (mm), gran formato sobre rollo.
   solapePanelMm Decimal? @db.Decimal(8, 2)
 
+  /// E.2 — el paso lo hace un proveedor (bifurcación del wizard). true =
+  /// las configs de producto nacen con el panel de tercerización prendido
+  /// y precargado; el producto puede pisar (internalizar o cambiar
+  /// proveedor). La GRILLA de precios sigue siendo por producto.
+  tercerizado            Boolean?
+  proveedorId            String?  @db.Uuid
+  /// 'tarifa_magnitud' | 'matriz' | 'fijo'
+  fuenteCostoTercerizado String?
+  plazoProveedorDias     Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   centroCosto CentroCosto? @relation(fields: [centroCostoId], references: [id], onDelete: SetNull)
+  proveedor   Proveedor?   @relation(fields: [proveedorId], references: [id], onDelete: SetNull)
 
   @@unique([tenantId, familiaCodigo])
 }

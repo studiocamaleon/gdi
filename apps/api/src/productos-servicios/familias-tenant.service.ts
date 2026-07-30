@@ -51,6 +51,11 @@ export interface DefaultsFamiliaInput {
   tiempoFijoMin?: number | null;
   demasiaMm?: number | null;
   solapePanelMm?: number | null;
+  /** E.2 — tercerización declarada del paso. */
+  tercerizado?: boolean | null;
+  proveedorId?: string | null;
+  fuenteCostoTercerizado?: string | null;
+  plazoProveedorDias?: number | null;
 }
 
 @Injectable()
@@ -102,6 +107,10 @@ export class FamiliasTenantService implements OnModuleInit {
           demasiaMm: d.demasiaMm != null ? Number(d.demasiaMm) : null,
           solapePanelMm:
             d.solapePanelMm != null ? Number(d.solapePanelMm) : null,
+          tercerizado: d.tercerizado,
+          proveedorId: d.proveedorId,
+          fuenteCostoTercerizado: d.fuenteCostoTercerizado,
+          plazoProveedorDias: d.plazoProveedorDias,
         },
       ]),
     );
@@ -422,7 +431,21 @@ export class FamiliasTenantService implements OnModuleInit {
       tiempoFijoMin: defaults?.tiempoFijoMin ?? null,
       demasiaMm: defaults?.demasiaMm ?? null,
       solapePanelMm: defaults?.solapePanelMm ?? null,
+      tercerizado: defaults?.tercerizado ?? null,
+      proveedorId: defaults?.proveedorId ?? null,
+      fuenteCostoTercerizado: defaults?.fuenteCostoTercerizado ?? null,
+      plazoProveedorDias: defaults?.plazoProveedorDias ?? null,
     };
+    const tieneAlgoTercerizado = limpio.tercerizado === true;
+    if (tieneAlgoTercerizado && limpio.proveedorId) {
+      const proveedor = await tx.proveedor.findFirst({
+        where: { id: limpio.proveedorId, tenantId },
+        select: { id: true },
+      });
+      if (!proveedor) {
+        throw new BadRequestException('El proveedor del default no existe.');
+      }
+    }
     const tieneAlgo = Object.values(limpio).some((v) => v !== null);
     if (!tieneAlgo) {
       await tx.familiaPasoDefaults.deleteMany({
