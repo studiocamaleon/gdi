@@ -51,9 +51,9 @@ humano) · **[P] operativa por producto** (accesible, secundaria) ·
 | 10 | Panelizado: modo (auto/manual) | solo `impresion_por_area` + rollo | nesting (paneles) | **O** | **"¿Esta pieza puede salir en paneles?"** — No / Sí, decide el sistema / Sí, así — decisión del oficio de gran formato (el usuario lo marcó explícitamente: no todos los productos se pueden panelar) |
 | 11 | Panelizado: dirección (auto/V/H) | ídem 10 | nesting | O | "¿Los paneles van a lo largo o a lo ancho?" |
 | 12 | Panelizado: solape (mm) | ídem 10 | nesting | **O** | "¿Cuánto se solapan para soldar?" — candidato a DEFAULT de familia (E.1: la soldadora de lona tiene SU solape) |
-| 13 | Panelizado: ancho máx. por panel (mm) | ídem 10 | nesting | O | "¿Ancho máximo de cada panel?" (default = ancho útil del rollo/máquina) |
+| 13 | Panelizado: ancho máx. por panel (mm) | ídem 10 | nesting | O | "¿Ancho máximo de cada panel?" (default = ancho útil del rollo/máquina) — **UNA pregunta junto con 15** |
 | 14 | Panelizado: distribución (equilibrada/libre) | ídem 10 | nesting | P | "¿Paneles parejos o como convenga?" |
-| 15 | Panelizado: interpretación del ancho (total/útil) | ídem 10 | nesting | X | tecnicismo de compatibilidad; escape hatch |
+| 15 | Panelizado: interpretación del ancho (total/útil) | ídem 10 | nesting (califica a `maxPanelWidthMm` en el MISMO input del algoritmo) | **O** | NO se separa del 13 (corrección del usuario 2026-07-30): es la semántica del número recién tipeado — "¿ese ancho incluye el solape?" Sí = total / No = útil. Una sola pregunta compuesta, o mejor: el wizard fija una interpretación y PREVISUALIZA el resultado ("paneles de 1500 mm, 1470 útiles tras el solape") |
 | 16 | Layout manual de paneles (JSON) | ídem 10, modo manual | nesting | X | escape hatch (el editor visual del acomodo es el camino largo correcto) |
 | 17 | Márgenes extra del pliego (sup/izq/der/inf) | familias con nesting | nesting (SUMAN al margen técnico de la máquina) | **O** | "¿Aire extra en los bordes, además del de la máquina?" — la máquina ya aporta el técnico; esto es del trabajo |
 | 18 | Costeo del sustrato: estrategia (simple / m² exacto / largo consumido / placa por tramos) | familias con nesting | costing del nesting | **O**(!) | parece técnica pero es POLÍTICA DE PRECIO: "¿La placa/rollo se cobra entera, por lo consumido, o por tramos de ocupación?" — decisión comercial del negocio, merece humano |
@@ -77,8 +77,12 @@ humano) · **[P] operativa por producto** (accesible, secundaria) ·
    que ya habíamos anotado: centro de costo y ritmo. Todos con el mismo
    contrato: la familia sugiere, el producto puede pisar, la cotización
    ajusta si el modelador lo dejó abierto.
-4. **Dos campos deben DESAPARECER como preguntas**: Algoritmo (4) — la
-   física ya lo decide — e Interpretación del ancho (15). Escape hatch.
+4. **Un solo campo desaparece como pregunta**: Algoritmo (4) — la física
+   ya lo decide. (Interpretación del ancho NO va al escape hatch: se
+   funde con la pregunta del ancho máximo de panel — corrección del
+   usuario. El único escape hatch genuino que queda además del algoritmo
+   es el layout manual de paneles en JSON, cuyo camino largo correcto es
+   un editor visual.)
 5. **Una reclasificación sorpresa**: el costeo del sustrato (18-19)
    estaba vestido de técnica pero es política de precio (cobrar la placa
    entera vs. por tramos es una decisión comercial que Holdprint expone
