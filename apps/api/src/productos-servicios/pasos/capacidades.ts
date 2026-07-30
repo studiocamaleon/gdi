@@ -288,8 +288,16 @@ export function capacidadesDeclaradas(
  */
 export function formaEmisionDeFamiliaTenant(input: {
   mecanismosCantidad?: readonly string[];
+  nestingConfig?: { superficie?: string | null } | null;
 }): FormaEmision {
+  const superficie = input.nestingConfig?.superficie;
   return {
+    superficie:
+      superficie === 'pliego' ||
+      superficie === 'pliegos_multiples' ||
+      superficie === 'rollo'
+        ? superficie
+        : null,
     agrupa: (input.mecanismosCantidad ?? []).includes('CONVERSION'),
   };
 }

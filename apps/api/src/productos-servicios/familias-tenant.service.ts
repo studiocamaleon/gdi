@@ -164,6 +164,13 @@ export class FamiliasTenantService implements OnModuleInit {
       outputsCanonicos: [],
       modoRegistro: input.modoRegistro ?? existente.modoRegistro,
       presetOrigen: input.presetOrigen ?? existente.presetOrigen,
+      // `nestingConfig` presente en el patch (aunque sea null) = reemplazar;
+      // ausente = conservar el de la fila.
+      nestingConfig:
+        'nestingConfig' in input
+          ? input.nestingConfig
+          : ((existente.nestingConfigJson as { superficie?: string } | null) ??
+            null),
     };
     merged.outputsCanonicos = derivarOutputsTenant(merged);
     const errores = validarDefinicionFamiliaTenant(merged);
@@ -356,6 +363,9 @@ export class FamiliasTenantService implements OnModuleInit {
       validaciones: [],
       modoRegistro: input.modoRegistro ?? null,
       presetOrigen: input.presetOrigen ?? null,
+      nestingConfigJson: input.nestingConfig?.superficie
+        ? ({ superficie: input.nestingConfig.superficie } as Prisma.InputJsonValue)
+        : Prisma.JsonNull,
     };
   }
 

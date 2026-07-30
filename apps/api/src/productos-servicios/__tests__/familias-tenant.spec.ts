@@ -47,13 +47,40 @@ describe('validarDefinicionFamiliaTenant (el validador puro)', () => {
     expect(validarDefinicionFamiliaTenant(SERIGRAFIA)).toEqual([]);
   });
 
-  it('rechaza CALCULADO_POR_PASO: la geometría es frontera del sistema', () => {
+  it('rechaza CALCULADO_POR_PASO sin superficie: la frontera sólo se relaja por elección (B.3.4)', () => {
     const errores = validarDefinicionFamiliaTenant({
       ...SERIGRAFIA,
       mecanismosCantidad: ['CALCULADO_POR_PASO'],
     });
     expect(
-      errores.some((e) => e.includes('exclusivo de las familias del sistema')),
+      errores.some((e) => e.includes('superficie de acomodo')),
+    ).toBe(true);
+  });
+
+  it('acepta CALCULADO_POR_PASO con superficie declarada (el tenant ELIGE nuestro algoritmo)', () => {
+    expect(
+      validarDefinicionFamiliaTenant({
+        ...SERIGRAFIA,
+        nombre: 'Estampado en pliego',
+        mecanismosCantidad: ['CALCULADO_POR_PASO'],
+        nestingConfig: { superficie: 'pliego' },
+      }),
+    ).toEqual([]);
+  });
+
+  it('rechaza superficie desconocida y superficie sin CALCULADO_POR_PASO', () => {
+    expect(
+      validarDefinicionFamiliaTenant({
+        ...SERIGRAFIA,
+        mecanismosCantidad: ['CALCULADO_POR_PASO'],
+        nestingConfig: { superficie: 'mesa_flotante' },
+      }).some((e) => e.includes('Superficie de acomodo desconocida')),
+    ).toBe(true);
+    expect(
+      validarDefinicionFamiliaTenant({
+        ...SERIGRAFIA,
+        nestingConfig: { superficie: 'rollo' },
+      }).some((e) => e.includes('tiene que incluir CALCULADO_POR_PASO')),
     ).toBe(true);
   });
 

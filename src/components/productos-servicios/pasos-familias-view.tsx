@@ -87,6 +87,8 @@ interface FormaDraft {
   modoTiempo: "T-1" | "T-2" | "T-3" | "T-4";
   slots: SlotDraft[];
   mecanismoCantidad: string;
+  /** B.3.4 — superficie de acomodo cuando mecanismo = CALCULADO_POR_PASO. */
+  superficie: "pliego" | "pliegos_multiples" | "rollo" | null;
   modoActivacionDefault: string;
   activacionForzada: boolean;
   estacionId: string | null;
@@ -103,6 +105,7 @@ const DRAFT_INICIAL: FormaDraft = {
   modoTiempo: "T-2",
   slots: [],
   mecanismoCantidad: "DIRECT_FROM_JOBCONTEXT",
+  superficie: null,
   modoActivacionDefault: "OPCIONAL",
   activacionForzada: false,
   estacionId: null,
@@ -164,6 +167,12 @@ function draftAInput(d: FormaDraft): UpsertFamiliaTenantInput {
     relacionMaquina: [d.relacionMaquina],
     modosTiempo: [d.modoTiempo],
     mecanismosCantidad: [d.mecanismoCantidad],
+    // B.3.4 — acomoda piezas: la superficie viaja con la forma; presente
+    // ⇔ CALCULADO_POR_PASO (el validador exige la coherencia).
+    nestingConfig:
+      d.mecanismoCantidad === "CALCULADO_POR_PASO" && d.superficie
+        ? { superficie: d.superficie }
+        : null,
     modoActivacionDefault: d.modoActivacionDefault,
     // Fijado = la familia sólo soporta ese modo y el editor del producto no
     // ofrece otros. Sin fijar, el service completa los cuatro universales.
@@ -205,6 +214,7 @@ function draftDesdePreset(f: FamiliaListItem): FormaDraft {
       f.mecanismosCantidadSoportados.find(
         (m) => m !== "CALCULADO_POR_PASO",
       ) ?? "DIRECT_FROM_JOBCONTEXT",
+    superficie: null,
     modoActivacionDefault: f.modoActivacionDefault,
     activacionForzada: false,
     estacionId: null,
@@ -230,7 +240,14 @@ function draftDesdeFamilia(f: FamiliaTenant): FormaDraft {
       tipo: slot.tipo,
       requerido: slot.requerido,
     })),
-    mecanismoCantidad: f.mecanismosCantidad[0] ?? "DIRECT_FROM_JOBCONTEXT",
+    mecanismoCantidad: f.mecanismosCantidad.includes("CALCULADO_POR_PASO")
+      ? "CALCULADO_POR_PASO"
+      : (f.mecanismosCantidad[0] ?? "DIRECT_FROM_JOBCONTEXT"),
+    superficie: (f.nestingConfigJson?.superficie ?? null) as
+      | "pliego"
+      | "pliegos_multiples"
+      | "rollo"
+      | null,
     modoActivacionDefault: f.modoActivacionDefault,
     activacionForzada: f.modosActivacion.length === 1,
     estacionId: f.estacion?.id ?? null,
@@ -926,7 +943,48 @@ function WizardNuevoPaso({
                   desc="Agrupa o divide: 1000 piezas en cajas de 100 → 10 cajas."
                   onClick={() => set({ mecanismoCantidad: "CONVERSION" })}
                 />
+                <Opcion
+                  activa={draft.mecanismoCantidad === "CALCULADO_POR_PASO"}
+                  titulo="El paso la calcula acomodando piezas"
+                  desc="El sistema acomoda las piezas en el material y calcula cuánto entra: pliegos necesarios, metros de rollo."
+                  onClick={() =>
+                    set({
+                      mecanismoCantidad: "CALCULADO_POR_PASO",
+                      superficie: draft.superficie ?? "pliego",
+                    })
+                  }
+                />
               </div>
+              {draft.mecanismoCantidad === "CALCULADO_POR_PASO" ? (
+                <>
+                  <div className={s.pregunta}>¿Sobre qué acomoda?</div>
+                  <p className={s.ayuda}>
+                    Elegís la superficie física; el algoritmo de acomodo lo
+                    pone el sistema (el mismo que usan la impresión y el corte
+                    de Grafoprint).
+                  </p>
+                  <div className={s.opciones}>
+                    <Opcion
+                      activa={draft.superficie === "pliego"}
+                      titulo="Un pliego u hoja"
+                      desc="Las piezas se acomodan en hojas sueltas: calcula poses por pliego y pliegos necesarios."
+                      onClick={() => set({ superficie: "pliego" })}
+                    />
+                    <Opcion
+                      activa={draft.superficie === "pliegos_multiples"}
+                      titulo="Varios pliegos combinados"
+                      desc="Trabajos con piezas de distintas medidas repartidas en varias hojas."
+                      onClick={() => set({ superficie: "pliegos_multiples" })}
+                    />
+                    <Opcion
+                      activa={draft.superficie === "rollo"}
+                      titulo="Un rollo"
+                      desc="Las piezas se acomodan a lo ancho del rollo: calcula los metros consumidos, con desperdicio real."
+                      onClick={() => set({ superficie: "rollo" })}
+                    />
+                  </div>
+                </>
+              ) : null}
             </>
           ) : null}
 
@@ -1161,6 +1219,22 @@ function PasoFinal({
           <span className={s.dejaChip}>Minutos de trabajo</span>
           {draft.mecanismoCantidad === "CONVERSION" ? (
             <span className={s.dejaChip}>Grupos armados</span>
+          ) : null}
+          {draft.mecanismoCantidad === "CALCULADO_POR_PASO" &&
+          (draft.superficie === "pliego" ||
+            draft.superficie === "pliegos_multiples") ? (
+            <>
+              <span className={s.dejaChip}>Pliegos (con su medida)</span>
+              <span className={s.dejaChip}>Aprovechamiento</span>
+            </>
+          ) : null}
+          {draft.mecanismoCantidad === "CALCULADO_POR_PASO" &&
+          draft.superficie === "rollo" ? (
+            <>
+              <span className={s.dejaChip}>m² consumidos</span>
+              <span className={s.dejaChip}>Metros lineales</span>
+              <span className={s.dejaChip}>Aprovechamiento</span>
+            </>
           ) : null}
         </div>
         <div className={s.previewAviso}>

@@ -10,6 +10,7 @@ import {
   IsArray,
   IsBoolean,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   MaxLength,
@@ -102,6 +103,11 @@ export class CrearFamiliaTenantDto {
   @IsOptional()
   @IsString()
   presetOrigen?: string;
+
+  /** B.3.4 — superficie de acomodo; null = el paso no acomoda piezas. */
+  @IsOptional()
+  @IsObject()
+  nestingConfig?: { superficie?: string | null } | null;
 
   /** Estación donde se hace el paso (§8.4). */
   @IsOptional()
@@ -212,6 +218,11 @@ export class ActualizarFamiliaTenantDto {
   @IsOptional()
   @IsString()
   presetOrigen?: string;
+
+  /** B.3.4 — superficie de acomodo; null = el paso no acomoda piezas. */
+  @IsOptional()
+  @IsObject()
+  nestingConfig?: { superficie?: string | null } | null;
 
   @IsOptional()
   @IsString()

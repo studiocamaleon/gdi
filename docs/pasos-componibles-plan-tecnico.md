@@ -662,6 +662,29 @@ Cinco sub-fases, cada una con valor propio y verificable sola. Rama
 
 #### B.3.4 — Nesting para pasos tenant (la feature)
 
+> **Estado 2026-07-30: HECHA** (rama `feat/pasos-capacidades`); el E2E
+> completo con cotización real queda para B.3.5. Lo construido:
+> `nestingConfigJson` en FamiliaTenant (migración ADD COLUMN,
+> 20260730041500, aplicada a dev y test), la superficie proyectada al
+> resolver, el validador que relaja CALCULADO_POR_PASO SOLO con superficie
+> declarada (y lo exige cuando la hay), y la **entrada tenant del
+> dispatcher** ANTES del switch por familiaCodigo: rollo → shelf/maxrects,
+> pliego(s) → grid-2d-multi (piezas uniformes caen solas a single, con
+> poses e imposición completa). La medida del pliego/rollo sale del
+> material del slot o de la máquina vía `resolveNestingConfig`, que ya era
+> genérico. `outputs-canonicos` aprende las keys del registro con
+> semántica idéntica a las legacy (`pliegos` = `pliegos_calculados`, etc.).
+> Wizard: la 4ª opción de cantidad ("El paso la calcula acomodando
+> piezas") despliega "¿Sobre qué acomoda?" con las 3 superficies en
+> lenguaje físico (verificado en browser), y el bloque "Qué deja este
+> paso" suma los chips del set elegido. Desvío del plan anotado: la
+> pregunta vive DENTRO del paso de cantidad (es una respuesta a "¿de dónde
+> sale la cantidad?"), no como paso nuevo tras máquina — evita renumerar
+> el wizard y es más coherente. Tests: 3 nuevos de dispatcher tenant (sin
+> DB, familias sintéticas registradas al resolver; pliego uniforme da
+> exactamente 2 pliegos con ≥50 poses) + validador + derivación; suite
+> motor = línea de base.
+
 - `FamiliaTenant.nestingConfigJson` (migración ADD COLUMN only):
   `{ superficie: 'pliego' | 'pliegos_multiples' | 'rollo' }` (la
   variante de algoritmo la decide el sistema como hoy — mejor candidato;

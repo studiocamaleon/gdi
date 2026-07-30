@@ -344,6 +344,12 @@ export type DefinicionFamiliaResuelta = Omit<DefinicionFamilia, 'codigo'> & {
   /** Sólo para tenant: inhabilitada no aparece en selectores, pero el
    *  resolver la sigue resolviendo para rutas/OTs históricas (§8.6). */
   activo?: boolean;
+  /** B.3.4 — sólo tenant: el paso acomoda piezas sobre esta superficie
+   *  (elección del wizard). Presente ⇔ mecanismo CALCULADO_POR_PASO; el
+   *  dispatcher rutea por esto ANTES del switch por familiaCodigo. */
+  nestingConfig?: {
+    superficie: 'pliego' | 'pliegos_multiples' | 'rollo';
+  } | null;
 };
 
 export interface DefinicionFamilia {

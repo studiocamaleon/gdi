@@ -38,6 +38,7 @@ import {
 import { evaluateGranFormatoMaxRectsRollLayout } from '../productos-servicios/nesting/algorithms/maxrects-rollo';
 import { evaluateGranFormatoSequentialRollLayout } from '../productos-servicios/nesting/algorithms/secuencial-rollo';
 import { nestGrid2DSingle } from '../productos-servicios/nesting/algorithms/grid-2d-single';
+import { resolverFamilia } from '../productos-servicios/pasos/familias';
 import { nestGrid2DMulti } from '../productos-servicios/nesting/algorithms/grid-2d-multi';
 import { nestPackingSolverRectangle } from '../productos-servicios/nesting/algorithms/packingsolver-rectangle';
 import {
@@ -184,6 +185,27 @@ export async function runNestingForPaso(
       ),
     );
   }
+  // ─── Caso 0 (B.3.4): FAMILIAS TENANT que acomodan piezas ─────────
+  // El paso eligió una superficie en el wizard (NUESTRO algoritmo
+  // parametrizado, nunca uno propio): rutea por la DECLARACIÓN, no por el
+  // código. Los branches del sistema de abajo no se tocan.
+  const familiaResuelta = resolverFamilia(paso.familiaCodigo);
+  const superficieTenant = familiaResuelta?.esDeTenant
+    ? (familiaResuelta.nestingConfig?.superficie ?? null)
+    : null;
+  if (superficieTenant === 'rollo') {
+    return runShelfRollo(paso, jobContext, materialResuelto, config);
+  }
+  if (
+    superficieTenant === 'pliego' ||
+    superficieTenant === 'pliegos_multiples'
+  ) {
+    // Hoja finita: la medida del pliego sale del material del slot (o de la
+    // mesa de la máquina) vía resolveNestingConfig. Piezas uniformes caen
+    // solas a grid-2d-single (poses + imposición completa).
+    return runGrid2DMultiForArea(paso, jobContext, config);
+  }
+
   // ─── Caso 1: gran formato por área ──────────────────────────────
   // Si la máquina/material trabajan en rollo usa shelf-rollo; si trabajan
   // sobre mesa/placa usa grid 2D multi. Esto permite que rígidos impresos

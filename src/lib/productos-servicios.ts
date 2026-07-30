@@ -503,6 +503,8 @@ export interface FamiliaTenant {
   tiposPerfilCompatibles: string[] | null;
   modoRegistro: string | null;
   presetOrigen: string | null;
+  /** B.3.4 — superficie de acomodo; null = el paso no acomoda piezas. */
+  nestingConfigJson: { superficie?: string } | null;
   activo: boolean;
   createdAt: string;
   updatedAt: string;
@@ -531,6 +533,8 @@ export interface UpsertFamiliaTenantInput {
   outputsCanonicos?: string[];
   modoRegistro?: string;
   presetOrigen?: string;
+  /** B.3.4 — presente ⇔ mecanismo CALCULADO_POR_PASO. */
+  nestingConfig?: { superficie: string } | null;
   estacionId?: string | null;
 }
 

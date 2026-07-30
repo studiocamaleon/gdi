@@ -144,6 +144,28 @@ describe('Registro de Capacidades (B.3.1)', () => {
     ]);
   });
 
+  it('derivarOutputsTenant: la superficie de nesting suma su set (B.3.4)', () => {
+    const pliego = derivarOutputsTenant({
+      mecanismosCantidad: ['CALCULADO_POR_PASO'],
+      nestingConfig: { superficie: 'pliego' },
+    });
+    expect(pliego).toEqual(
+      expect.arrayContaining(['pliegos', 'imposicion', 'aprovechamiento_pct']),
+    );
+    const rollo = derivarOutputsTenant({
+      mecanismosCantidad: ['CALCULADO_POR_PASO'],
+      nestingConfig: { superficie: 'rollo' },
+    });
+    expect(rollo).toEqual(
+      expect.arrayContaining([
+        'm2_consumidos',
+        'metros_lineales',
+        'aprovechamiento_pct',
+      ]),
+    );
+    expect(rollo).not.toContain('pliegos');
+  });
+
   it('derivarOutputsTenant: unidades+minutos siempre; CONVERSION suma grupos', () => {
     expect(derivarOutputsTenant({ mecanismosCantidad: ['DIRECT_FROM_JOBCONTEXT'] })).toEqual([
       'unidades_procesadas',

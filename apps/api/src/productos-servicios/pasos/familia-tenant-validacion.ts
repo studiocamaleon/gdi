@@ -50,7 +50,12 @@ export interface FamiliaTenantInput {
   outputsCanonicos?: string[];
   modoRegistro?: string | null;
   presetOrigen?: string | null;
+  /** B.3.4 — el paso acomoda piezas: superficie elegida en el wizard.
+   *  Presente ⇔ mecanismo CALCULADO_POR_PASO. */
+  nestingConfig?: { superficie?: string | null } | null;
 }
+
+const SUPERFICIES_NESTING = ['pliego', 'pliegos_multiples', 'rollo'];
 
 export interface SlotTenantInput {
   codigo: string;
@@ -129,9 +134,25 @@ export function validarDefinicionFamiliaTenant(
   if (mecanismos.length === 0) {
     errores.push('mecanismosCantidad no puede estar vacío.');
   }
-  if (mecanismos.includes('CALCULADO_POR_PASO')) {
+  // --- nesting (B.3.4) ---
+  // La frontera se relaja SOLO por elección: con superficie declarada, el
+  // paso adquiere CALCULADO_POR_PASO (elige NUESTRO algoritmo, nunca
+  // escribe uno). Sin superficie, la prohibición histórica sigue.
+  const superficie = input.nestingConfig?.superficie ?? null;
+  if (superficie !== null && !SUPERFICIES_NESTING.includes(superficie)) {
     errores.push(
-      'CALCULADO_POR_PASO es exclusivo de las familias del sistema: implica un algoritmo de geometría (nesting) que un paso compuesto no tiene. Usá DIRECT_FROM_JOBCONTEXT, HEREDAR_DEL_OUTPUT_CANONICO o CONVERSION.',
+      `Superficie de acomodo desconocida: "${superficie}". Opciones: ${SUPERFICIES_NESTING.join(', ')}.`,
+    );
+  }
+  const acomoda = superficie !== null && SUPERFICIES_NESTING.includes(superficie);
+  if (acomoda && !mecanismos.includes('CALCULADO_POR_PASO')) {
+    errores.push(
+      'Un paso que acomoda piezas calcula su propia cantidad: mecanismosCantidad tiene que incluir CALCULADO_POR_PASO.',
+    );
+  }
+  if (mecanismos.includes('CALCULADO_POR_PASO') && !acomoda) {
+    errores.push(
+      'CALCULADO_POR_PASO implica un algoritmo de geometría (nesting): declaralo eligiendo una superficie de acomodo (nestingConfig.superficie) — o usá DIRECT_FROM_JOBCONTEXT, HEREDAR_DEL_OUTPUT_CANONICO o CONVERSION.',
     );
   }
   for (const v of fueraDe(mecanismos, [
@@ -237,6 +258,7 @@ export function validarDefinicionFamiliaTenant(
  */
 export function derivarOutputsTenant(input: {
   mecanismosCantidad?: readonly string[];
+  nestingConfig?: { superficie?: string | null } | null;
 }): string[] {
   return capacidadesDeForma(formaEmisionDeFamiliaTenant(input));
 }
@@ -261,8 +283,24 @@ export function proyectarFamiliaTenant(row: {
   validaciones: unknown;
   permiteSlotsAdicionales: boolean;
   modoRegistro: string | null;
+  nestingConfigJson?: unknown;
   activo: boolean;
 }): DefinicionFamiliaResuelta {
+  const nestingRaw = row.nestingConfigJson as {
+    superficie?: string;
+  } | null;
+  const nestingConfig =
+    nestingRaw &&
+    typeof nestingRaw === 'object' &&
+    typeof nestingRaw.superficie === 'string' &&
+    SUPERFICIES_NESTING.includes(nestingRaw.superficie)
+      ? {
+          superficie: nestingRaw.superficie as
+            | 'pliego'
+            | 'pliegos_multiples'
+            | 'rollo',
+        }
+      : null;
   return {
     codigo: row.id,
     nombre: row.nombre,
@@ -282,6 +320,7 @@ export function proyectarFamiliaTenant(row: {
       (row.tiposPerfilCompatibles as string[] | null) ?? undefined,
     inputsRequeridos: (row.inputsRequeridos as string[]) ?? [],
     outputsCanonicos: (row.outputsCanonicos as string[]) ?? [],
+    nestingConfig,
     validaciones:
       (row.validaciones as DefinicionFamiliaResuelta['validaciones']) ?? [],
     // Los params declarados son autoría del sistema (formularios ricos por
