@@ -341,6 +341,19 @@ márgenes extra, dotación, multiplicadores) viven en detallado.
   actual, banner humano por paso ("Faltan 2: máquina y papel") en lugar
   del chip críptico — primera entrega visible y sirve de validación del
   motor con uso real.
+
+  > **Estado 2026-07-30: HECHA y verificada en vivo** (rama
+  > `feat/wizard-ruta`). `src/lib/pendientes-paso.ts`: 11 tipos de
+  > pendiente con etiqueta/motivo en idioma de taller y flag
+  > `bloqueante` (cotiza mal sin esto) vs sugerido (hay fallback, ej.
+  > herencia sin origen); rama tercerizada pregunta SOLO proveedor y
+  > precios; defaults-aware (la invariante madre — paso bien declarado =
+  > lista vacía — es el primer test). 11 tests vitest verdes (el front
+  > tenía vitest: 362 verdes en total). Editor: banner humano bajo el
+  > título — Bordado: "Centro del paso: Produccion & Taller (default) ·
+  > ✓ Listo para cotizar" (verde); Serigrafía sin defaults: "Para
+  > cotizar bien — Faltan: el ritmo de trabajo y quién lo cobra"
+  > (ámbar) — verificado en vivo con la alternativa Defaults E2E.
 - **E.3.2 — Question-cards guiadas** en Configurar pasos: el modo guiado
   recorre los pendientes de a uno; "modo detallado" a un click.
 - **E.3.3 — Las preguntas de oficio en humano**: pliego de impresión,

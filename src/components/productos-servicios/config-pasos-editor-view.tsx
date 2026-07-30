@@ -45,6 +45,10 @@ import {
 import { RuleBuilder } from "@/components/productos-servicios/rule-builder";
 import { PasoTercerizadoPanel } from "@/components/productos-servicios/paso-tercerizado-panel";
 import {
+  pendientesDePaso,
+  resumenPendientes,
+} from "@/lib/pendientes-paso";
+import {
   actualizarPasoExtra,
   buscarMateriasPrimasConfigPaso,
   upsertConfigPaso,
@@ -4962,10 +4966,53 @@ export function ConfigPasosEditorView({
                                   )?.nombre ?? "Seleccionado"}
                                 </strong>
                               </>
+                            ) : familia?.defaults?.centroCostoId ? (
+                              <>
+                                Centro del paso:{" "}
+                                <strong
+                                  style={{
+                                    color: "var(--ink)",
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  {lookups.centrosCosto.find(
+                                    (centro) =>
+                                      centro.id ===
+                                      familia?.defaults?.centroCostoId,
+                                  )?.nombre ?? "default"}
+                                </strong>{" "}
+                                (default)
+                              </>
                             ) : (
                               "Sin centro asignado"
                             )}
                           </div>
+                          {/* E.3.1 — el motor de pendientes, en humano. */}
+                          {!noEjecutar
+                            ? (() => {
+                                const resumen = resumenPendientes(
+                                  pendientesDePaso(cfg, familia),
+                                );
+                                return resumen ? (
+                                  <div
+                                    className="sub"
+                                    style={{ color: "#8a6d3b", marginTop: 4 }}
+                                  >
+                                    Para cotizar bien — {resumen}
+                                  </div>
+                                ) : (
+                                  <div
+                                    className="sub"
+                                    style={{ color: "#2e7d32", marginTop: 4 }}
+                                  >
+                                    ✓ Listo para cotizar
+                                    {configExistente
+                                      ? ""
+                                      : " — guardalo para confirmar"}
+                                  </div>
+                                );
+                              })()
+                            : null}
                         </div>
                         <div className="pill-row">
                           <button
