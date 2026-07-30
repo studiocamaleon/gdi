@@ -9910,6 +9910,7 @@ function AsistenteGuiado({
                 familiasMap.get(paso.familiaCodigo),
               );
               const bloq = pend.filter((x) => x.bloqueante).length;
+              const completo = bloq === 0;
               return (
                 <button
                   key={paso.id}
@@ -9917,12 +9918,50 @@ function AsistenteGuiado({
                   className="btn"
                   style={{
                     fontSize: 12,
-                    opacity: i === indice ? 1 : 0.65,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    opacity: i === indice ? 1 : 0.7,
                     fontWeight: i === indice ? 650 : 400,
                   }}
                   onClick={() => setIndice(i)}
                 >
-                  {bloq === 0 ? "✓ " : `${bloq} · `}
+                  {/* Badge de completitud: check verde si no quedan
+                      pendientes bloqueantes; contador ámbar si faltan. */}
+                  <span
+                    aria-hidden
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: 15,
+                      height: 15,
+                      borderRadius: "50%",
+                      flexShrink: 0,
+                      fontSize: 9.5,
+                      fontWeight: 700,
+                      lineHeight: 1,
+                      ...(completo
+                        ? {
+                            background: "#22a06b",
+                            color: "#fff",
+                            boxShadow:
+                              "0 0 0 2px color-mix(in srgb, #22a06b 22%, transparent)",
+                          }
+                        : {
+                            background:
+                              "color-mix(in srgb, #b7791f 14%, transparent)",
+                            color: "#8a6d3b",
+                            border: "1px solid #d8b671",
+                          }),
+                    }}
+                  >
+                    {completo ? (
+                      <CheckIcon className="size-2.5" strokeWidth={3.2} />
+                    ) : (
+                      bloq
+                    )}
+                  </span>
                   {paso.nombre}
                 </button>
               );
