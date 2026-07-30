@@ -27,10 +27,30 @@ export class FamiliasPasosService {
   /** Catálogo del sistema + familias del TENANT activas (Etapa C): es lo
    *  que consumen el editor de rutas y los selectores de pasos. */
   async listarFamilias(tenantId: string) {
-    const familiasTenant = await this.prisma.familiaTenant.findMany({
-      where: { tenantId, activo: true },
-      orderBy: { nombre: 'asc' },
-    });
+    const [familiasTenant, defaultsRows] = await Promise.all([
+      this.prisma.familiaTenant.findMany({
+        where: { tenantId, activo: true },
+        orderBy: { nombre: 'asc' },
+      }),
+      // E.1 — defaults declarados (sistema Y tenant) para selectores y la
+      // ficha "Configurar defaults" del catálogo.
+      this.prisma.familiaPasoDefaults.findMany({ where: { tenantId } }),
+    ]);
+    const defaultsPorFamilia = new Map(
+      defaultsRows.map((d) => [
+        d.familiaCodigo,
+        {
+          centroCostoId: d.centroCostoId,
+          productividadHora:
+            d.productividadHora != null ? Number(d.productividadHora) : null,
+          tiempoFijoMin:
+            d.tiempoFijoMin != null ? Number(d.tiempoFijoMin) : null,
+          demasiaMm: d.demasiaMm != null ? Number(d.demasiaMm) : null,
+          solapePanelMm:
+            d.solapePanelMm != null ? Number(d.solapePanelMm) : null,
+        },
+      ]),
+    );
     return {
       categorias: Object.values(CATEGORIAS).sort((a, b) => a.orden - b.orden),
       familias: [
@@ -56,6 +76,7 @@ export class FamiliasPasosService {
             outputsCanonicos: f.outputsCanonicos,
             // B.3.3 — para el selector "hereda de": qué deja este paso.
             capacidades: resumenCapacidades(f.outputsCanonicos),
+            defaults: defaultsPorFamilia.get(f.codigo as string) ?? null,
             validaciones: f.validaciones,
             paramsPasoSchema: f.paramsPasoSchema,
             productosTipicos: f.productosTipicos,
@@ -83,12 +104,67 @@ export class FamiliasPasosService {
           inputsRequeridos: f.inputsRequeridos,
           outputsCanonicos: f.outputsCanonicos,
           capacidades: resumenCapacidades(f.outputsCanonicos),
+          defaults: defaultsPorFamilia.get(f.codigo) ?? null,
           validaciones: f.validaciones,
           paramsPasoSchema: f.paramsPasoSchema,
           productosTipicos: [] as string[],
         })),
       ],
     };
+  }
+
+  /**
+   * E.1 — Upsert de los defaults declarados de CUALQUIER familia (código del
+   * catálogo o UUID tenant). Vacío/todo-null borra la fila.
+   */
+  async guardarDefaultsFamilia(
+    tenantId: string,
+    familiaCodigo: string,
+    input: {
+      centroCostoId?: string | null;
+      productividadHora?: number | null;
+      tiempoFijoMin?: number | null;
+      demasiaMm?: number | null;
+      solapePanelMm?: number | null;
+    },
+  ) {
+    if (!resolverFamilia(familiaCodigo)) {
+      throw new BadRequestException(`Familia desconocida: ${familiaCodigo}.`);
+    }
+    const limpio = {
+      centroCostoId: input.centroCostoId ?? null,
+      productividadHora: input.productividadHora ?? null,
+      tiempoFijoMin: input.tiempoFijoMin ?? null,
+      demasiaMm: input.demasiaMm ?? null,
+      solapePanelMm: input.solapePanelMm ?? null,
+    };
+    for (const [campo, valor] of Object.entries(limpio)) {
+      if (campo !== 'centroCostoId' && typeof valor === 'number' && valor < 0) {
+        throw new BadRequestException(`${campo} no puede ser negativo.`);
+      }
+    }
+    if (!Object.values(limpio).some((v) => v !== null)) {
+      await this.prisma.familiaPasoDefaults.deleteMany({
+        where: { tenantId, familiaCodigo },
+      });
+      return null;
+    }
+    if (limpio.centroCostoId) {
+      const centro = await this.prisma.centroCosto.findFirst({
+        where: { id: limpio.centroCostoId, tenantId },
+        select: { id: true },
+      });
+      if (!centro) {
+        throw new BadRequestException(
+          'El centro de costo del default no existe.',
+        );
+      }
+    }
+    return this.prisma.familiaPasoDefaults.upsert({
+      where: { tenantId_familiaCodigo: { tenantId, familiaCodigo } },
+      create: { tenantId, familiaCodigo, ...limpio },
+      update: limpio,
+    });
   }
 
   async listarLookupsConfigPaso(tenantId: string) {

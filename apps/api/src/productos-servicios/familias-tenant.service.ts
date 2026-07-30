@@ -40,6 +40,17 @@ import {
 export interface UpsertFamiliaTenantInput extends FamiliaTenantInput {
   /** Estación donde se hace el paso (decisión §8.4). null = quitarla. */
   estacionId?: string | null;
+  /** E.1 — defaults declarados del paso (FamiliaPasoDefaults). */
+  defaults?: DefaultsFamiliaInput | null;
+}
+
+/** E.1 — payload de defaults; null en un campo lo limpia. */
+export interface DefaultsFamiliaInput {
+  centroCostoId?: string | null;
+  productividadHora?: number | null;
+  tiempoFijoMin?: number | null;
+  demasiaMm?: number | null;
+  solapePanelMm?: number | null;
 }
 
 @Injectable()
@@ -75,9 +86,29 @@ export class FamiliasTenantService implements OnModuleInit {
     const estacionPorFamilia = new Map(
       asignaciones.map((a) => [a.familiaCodigo, a.estacion]),
     );
+    // E.1 — defaults declarados, para precargar la edición en el wizard.
+    const defaultsRows = await this.prisma.familiaPasoDefaults.findMany({
+      where: { tenantId, familiaCodigo: { in: filas.map((f) => f.id) } },
+    });
+    const defaultsPorFamilia = new Map(
+      defaultsRows.map((d) => [
+        d.familiaCodigo,
+        {
+          centroCostoId: d.centroCostoId,
+          productividadHora:
+            d.productividadHora != null ? Number(d.productividadHora) : null,
+          tiempoFijoMin:
+            d.tiempoFijoMin != null ? Number(d.tiempoFijoMin) : null,
+          demasiaMm: d.demasiaMm != null ? Number(d.demasiaMm) : null,
+          solapePanelMm:
+            d.solapePanelMm != null ? Number(d.solapePanelMm) : null,
+        },
+      ]),
+    );
     return filas.map((fila) => ({
       ...fila,
       estacion: estacionPorFamilia.get(fila.id) ?? null,
+      defaults: defaultsPorFamilia.get(fila.id) ?? null,
     }));
   }
 
@@ -110,6 +141,8 @@ export class FamiliasTenantService implements OnModuleInit {
             },
           });
         }
+        // E.1 — defaults declarados del paso, en la misma transacción.
+        await this.upsertDefaultsEnTx(tx, tenantId, creada.id, input.defaults);
         return creada;
       });
       registrarFamiliaTenant(proyectarFamiliaTenant(fila));
@@ -196,6 +229,10 @@ export class FamiliasTenantService implements OnModuleInit {
               : {}),
           },
         });
+        // E.1 — `defaults` presente en el patch = reemplazar; ausente = no tocar.
+        if ('defaults' in input) {
+          await this.upsertDefaultsEnTx(tx, tenantId, id, input.defaults);
+        }
         // estacionId presente en el patch (aunque sea null) = reemplazar la
         // asignación. Ausente = no tocarla.
         if ('estacionId' in input) {
@@ -367,6 +404,48 @@ export class FamiliasTenantService implements OnModuleInit {
         ? ({ superficie: input.nestingConfig.superficie } as Prisma.InputJsonValue)
         : Prisma.JsonNull,
     };
+  }
+
+  /**
+   * E.1 — Upsert de FamiliaPasoDefaults dentro de una transacción. Vacío o
+   * todo-null borra la fila (sin defaults = sin fila, no una fila hueca).
+   */
+  private async upsertDefaultsEnTx(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    familiaCodigo: string,
+    defaults: DefaultsFamiliaInput | null | undefined,
+  ) {
+    const limpio = {
+      centroCostoId: defaults?.centroCostoId ?? null,
+      productividadHora: defaults?.productividadHora ?? null,
+      tiempoFijoMin: defaults?.tiempoFijoMin ?? null,
+      demasiaMm: defaults?.demasiaMm ?? null,
+      solapePanelMm: defaults?.solapePanelMm ?? null,
+    };
+    const tieneAlgo = Object.values(limpio).some((v) => v !== null);
+    if (!tieneAlgo) {
+      await tx.familiaPasoDefaults.deleteMany({
+        where: { tenantId, familiaCodigo },
+      });
+      return;
+    }
+    if (limpio.centroCostoId) {
+      const centro = await tx.centroCosto.findFirst({
+        where: { id: limpio.centroCostoId, tenantId },
+        select: { id: true },
+      });
+      if (!centro) {
+        throw new BadRequestException(
+          'El centro de costo del default no existe.',
+        );
+      }
+    }
+    await tx.familiaPasoDefaults.upsert({
+      where: { tenantId_familiaCodigo: { tenantId, familiaCodigo } },
+      create: { tenantId, familiaCodigo, ...limpio },
+      update: limpio,
+    });
   }
 
   private async assertEstacionDelTenant(tenantId: string, estacionId: string) {

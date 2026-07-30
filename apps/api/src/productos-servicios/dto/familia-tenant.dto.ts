@@ -17,6 +17,30 @@ import {
   ValidateNested,
 } from 'class-validator';
 
+
+/** E.1 — defaults declarados del paso (FamiliaPasoDefaults). null limpia. */
+export class DefaultsFamiliaPasoDto {
+  @IsOptional()
+  @IsString()
+  centroCostoId?: string | null;
+
+  @IsOptional()
+  @IsNumber()
+  productividadHora?: number | null;
+
+  @IsOptional()
+  @IsNumber()
+  tiempoFijoMin?: number | null;
+
+  @IsOptional()
+  @IsNumber()
+  demasiaMm?: number | null;
+
+  @IsOptional()
+  @IsNumber()
+  solapePanelMm?: number | null;
+}
+
 export class SlotFamiliaTenantDto {
   @IsString()
   codigo!: string;
@@ -109,6 +133,12 @@ export class CrearFamiliaTenantDto {
   @IsObject()
   nestingConfig?: { superficie?: string | null } | null;
 
+
+  /** E.1 — defaults declarados del paso; se upsertea junto con la familia. */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DefaultsFamiliaPasoDto)
+  defaults?: DefaultsFamiliaPasoDto | null;
   /** Estación donde se hace el paso (§8.4). */
   @IsOptional()
   @IsString()
@@ -227,6 +257,12 @@ export class ActualizarFamiliaTenantDto {
   @IsOptional()
   @IsString()
   estacionId?: string | null;
+
+  /** E.1 — defaults declarados del paso; se upsertea junto con la familia. */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DefaultsFamiliaPasoDto)
+  defaults?: DefaultsFamiliaPasoDto | null;
 
   @IsOptional()
   @IsBoolean()

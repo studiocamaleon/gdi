@@ -41,6 +41,7 @@ import {
   getCatalogoFamilias,
   getFamiliasTenant,
   getLookupsConfigPaso,
+  guardarDefaultsFamilia,
   previewCosteoFamiliaTenant,
   type LookupsConfigPaso,
 } from "@/lib/productos-servicios-api";
@@ -89,6 +90,12 @@ interface FormaDraft {
   mecanismoCantidad: string;
   /** B.3.4 — superficie de acomodo cuando mecanismo = CALCULADO_POR_PASO. */
   superficie: "pliego" | "pliegos_multiples" | "rollo" | null;
+  /** E.1 — defaults declarados del paso (strings porque son inputs;
+   *  vacío = sin default). Se guardan en FamiliaPasoDefaults. */
+  centroCostoDefaultId: string | null;
+  ritmoDefaultHora: string;
+  tiempoFijoDefaultMin: string;
+  demasiaDefaultMm: string;
   modoActivacionDefault: string;
   activacionForzada: boolean;
   estacionId: string | null;
@@ -106,6 +113,10 @@ const DRAFT_INICIAL: FormaDraft = {
   slots: [],
   mecanismoCantidad: "DIRECT_FROM_JOBCONTEXT",
   superficie: null,
+  centroCostoDefaultId: null,
+  ritmoDefaultHora: "",
+  tiempoFijoDefaultMin: "",
+  demasiaDefaultMm: "",
   modoActivacionDefault: "OPCIONAL",
   activacionForzada: false,
   estacionId: null,
@@ -158,6 +169,11 @@ function humanizarPlantilla(plantilla: string): string {
   return texto.charAt(0).toUpperCase() + texto.slice(1);
 }
 
+function numeroONull(texto: string): number | null {
+  const n = Number(texto);
+  return texto.trim() !== "" && Number.isFinite(n) && n > 0 ? n : null;
+}
+
 function draftAInput(d: FormaDraft): UpsertFamiliaTenantInput {
   const conMaquina = d.relacionMaquina !== "M-0";
   return {
@@ -189,6 +205,19 @@ function draftAInput(d: FormaDraft): UpsertFamiliaTenantInput {
     modoRegistro: d.modoRegistro,
     presetOrigen: d.presetOrigen ?? undefined,
     estacionId: d.estacionId,
+    // E.1 — las respuestas del wizard quedan como defaults del paso
+    // (la familia sugiere, el producto pisa).
+    defaults: {
+      centroCostoId: d.centroCostoDefaultId,
+      productividadHora:
+        d.modoTiempo === "T-2" ? numeroONull(d.ritmoDefaultHora) : null,
+      tiempoFijoMin:
+        d.modoTiempo === "T-1" ? numeroONull(d.tiempoFijoDefaultMin) : null,
+      demasiaMm:
+        d.mecanismoCantidad === "CALCULADO_POR_PASO"
+          ? numeroONull(d.demasiaDefaultMm)
+          : null,
+    },
   };
 }
 
@@ -215,6 +244,10 @@ function draftDesdePreset(f: FamiliaListItem): FormaDraft {
         (m) => m !== "CALCULADO_POR_PASO",
       ) ?? "DIRECT_FROM_JOBCONTEXT",
     superficie: null,
+    centroCostoDefaultId: null,
+    ritmoDefaultHora: "",
+    tiempoFijoDefaultMin: "",
+    demasiaDefaultMm: "",
     modoActivacionDefault: f.modoActivacionDefault,
     activacionForzada: false,
     estacionId: null,
@@ -248,6 +281,17 @@ function draftDesdeFamilia(f: FamiliaTenant): FormaDraft {
       | "pliegos_multiples"
       | "rollo"
       | null,
+    centroCostoDefaultId: f.defaults?.centroCostoId ?? null,
+    ritmoDefaultHora:
+      f.defaults?.productividadHora != null
+        ? String(f.defaults.productividadHora)
+        : "",
+    tiempoFijoDefaultMin:
+      f.defaults?.tiempoFijoMin != null
+        ? String(f.defaults.tiempoFijoMin)
+        : "",
+    demasiaDefaultMm:
+      f.defaults?.demasiaMm != null ? String(f.defaults.demasiaMm) : "",
     modoActivacionDefault: f.modoActivacionDefault,
     activacionForzada: f.modosActivacion.length === 1,
     estacionId: f.estacion?.id ?? null,
@@ -268,10 +312,17 @@ export function PasosFamiliasView() {
   const [estaciones, setEstaciones] = React.useState<
     Array<{ id: string; nombre: string }>
   >([]);
+  const [centros, setCentros] = React.useState<
+    Array<{ id: string; nombre: string }>
+  >([]);
   const [cargando, setCargando] = React.useState(true);
   const [wizardAbierto, setWizardAbierto] = React.useState(false);
   const [aEditar, setAEditar] = React.useState<FamiliaTenant | null>(null);
   const [aEliminar, setAEliminar] = React.useState<FamiliaTenant | null>(null);
+  // E.1 — familia del SISTEMA cuyos defaults se están configurando.
+  const [defaultsDe, setDefaultsDe] = React.useState<FamiliaListItem | null>(
+    null,
+  );
 
   const recargar = React.useCallback(async () => {
     const filas = await getFamiliasTenant();
@@ -282,15 +333,22 @@ export function PasosFamiliasView() {
     let vivo = true;
     (async () => {
       try {
-        const [filas, cat, ests] = await Promise.all([
+        const [filas, cat, ests, ccs] = await Promise.all([
           getFamiliasTenant(),
           getCatalogoFamilias(),
           getEstaciones(),
+          getCentrosCosto(),
         ]);
         if (!vivo) return;
         setFamilias(filas);
         setCatalogo(cat);
         setEstaciones(ests.map((e) => ({ id: e.id, nombre: e.nombre })));
+        setCentros(
+          (ccs as Array<{ id: string; nombre: string }>).map((c) => ({
+            id: c.id,
+            nombre: c.nombre,
+          })),
+        );
       } catch {
         if (vivo) toast.error("No se pudieron cargar los pasos.");
       } finally {
@@ -469,6 +527,7 @@ export function PasosFamiliasView() {
               <th>Nombre</th>
               <th>Descripción</th>
               <th>Categoría</th>
+              <th className="right">Defaults</th>
             </tr>
           </thead>
           <tbody>
@@ -481,6 +540,15 @@ export function PasosFamiliasView() {
                   <div className="desc">{f.descripcion}</div>
                 </td>
                 <td>{getLabel(categoriaFamiliaLabels, f.categoria).label}</td>
+                <td className="right">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setDefaultsDe(f)}
+                  >
+                    {f.defaults ? "Defaults ✓" : "Configurar"}
+                  </Button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -494,6 +562,7 @@ export function PasosFamiliasView() {
           key={aEditar?.id ?? "nuevo"}
           catalogoSistema={sistema}
           estaciones={estaciones}
+          centros={centros}
           editar={aEditar}
           onCerrar={() => {
             setWizardAbierto(false);
@@ -503,6 +572,22 @@ export function PasosFamiliasView() {
             setWizardAbierto(false);
             setAEditar(null);
             await recargar();
+          }}
+        />
+      ) : null}
+
+      {defaultsDe ? (
+        <DefaultsSheet
+          familia={defaultsDe}
+          centros={centros}
+          onCerrar={() => setDefaultsDe(null)}
+          onGuardado={async () => {
+            setDefaultsDe(null);
+            try {
+              setCatalogo(await getCatalogoFamilias());
+            } catch {
+              /* la próxima carga lo trae */
+            }
           }}
         />
       ) : null}
@@ -533,12 +618,14 @@ export function PasosFamiliasView() {
 function WizardNuevoPaso({
   catalogoSistema,
   estaciones,
+  centros,
   editar,
   onCerrar,
   onCreado,
 }: {
   catalogoSistema: FamiliaListItem[];
   estaciones: Array<{ id: string; nombre: string }>;
+  centros: Array<{ id: string; nombre: string }>;
   /** Familia existente: el wizard abre precargado y guarda con PATCH. */
   editar?: FamiliaTenant | null;
   onCerrar: () => void;
@@ -983,6 +1070,25 @@ function WizardNuevoPaso({
                       onClick={() => set({ superficie: "rollo" })}
                     />
                   </div>
+                  <div className="field" style={{ marginTop: 12 }}>
+                    <span className={s.previewLabel}>
+                      ¿Cuánto aire necesita cada pieza? (opcional)
+                    </span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <Input
+                        value={draft.demasiaDefaultMm}
+                        onChange={(e) => set({ demasiaDefaultMm: e.target.value })}
+                        placeholder="Ej: 3"
+                        inputMode="decimal"
+                        style={{ maxWidth: 120 }}
+                      />
+                      <span className={s.previewPista}>mm por lado</span>
+                    </div>
+                    <span className={s.previewPista}>
+                      Queda como la demasía típica del paso; cada producto
+                      puede pisarla.
+                    </span>
+                  </div>
                 </>
               ) : null}
             </>
@@ -1041,7 +1147,7 @@ function WizardNuevoPaso({
 
           {paso === "estacion" ? (
             <>
-              <div className={s.pregunta}>¿Dónde se hace?</div>
+              <div className={s.pregunta}>¿Dónde se hace y quién lo cobra?</div>
               <p className={s.ayuda}>
                 La estación define a qué cola del tablero llega el paso. Se
                 puede cambiar después desde Estaciones.
@@ -1054,6 +1160,17 @@ function WizardNuevoPaso({
                   ...estaciones.map((e) => ({ value: e.id, label: e.nombre })),
                 ]}
                 placeholder="Estación"
+              />
+              <p className={s.ayuda} style={{ marginTop: 12 }}>
+                El centro de costo pone la tarifa horaria cuando el paso no
+                usa máquina. Queda como sugerencia: cada producto puede
+                elegir otro.
+              </p>
+              <HumanSelect
+                value={draft.centroCostoDefaultId ?? ""}
+                onValueChange={(id) => set({ centroCostoDefaultId: id || null })}
+                options={centros.map((c) => ({ value: c.id, label: c.nombre }))}
+                placeholder="Centro de costo (opcional)"
               />
             </>
           ) : null}
@@ -1082,6 +1199,7 @@ function WizardNuevoPaso({
             <PasoFinal
               draft={draft}
               set={set}
+              centros={centros}
               erroresBack={erroresBack}
             />
           ) : null}
@@ -1120,51 +1238,35 @@ function WizardNuevoPaso({
 function PasoFinal({
   draft,
   set,
+  centros,
   erroresBack,
 }: {
   draft: FormaDraft;
   set: (p: Partial<FormaDraft>) => void;
+  centros: Array<{ id: string; nombre: string }>;
   erroresBack: string[];
 }) {
-  const [centros, setCentros] = React.useState<
-    Array<{ id: string; nombre: string }>
-  >([]);
-  const [pv, setPv] = React.useState({
-    cantidad: "100",
-    productividad: "60",
-    tiempoFijo: "30",
-    centroCostoId: "",
-  });
+  // E.1 — el ritmo, el tiempo fijo y el centro YA no son de la prueba: son
+  // los valores típicos del paso (draft) y se guardan como defaults. La
+  // prueba sólo aporta la cantidad de ejemplo.
+  const [pvCantidad, setPvCantidad] = React.useState("100");
   const [resultado, setResultado] = React.useState<PreviewCosteoFamilia | null>(
     null,
   );
   const [probando, setProbando] = React.useState(false);
 
-  React.useEffect(() => {
-    getCentrosCosto()
-      .then((cs) =>
-        setCentros(
-          (cs as Array<{ id: string; nombre: string }>).map((c) => ({
-            id: c.id,
-            nombre: c.nombre,
-          })),
-        ),
-      )
-      .catch(() => setCentros([]));
-  }, []);
-
   const previewAplica = draft.modoTiempo === "T-1" || draft.modoTiempo === "T-2";
 
   const probar = async () => {
-    if (!pv.centroCostoId) return;
+    if (!draft.centroCostoDefaultId) return;
     setProbando(true);
     try {
       const r = await previewCosteoFamiliaTenant({
-        cantidad: Number(pv.cantidad) || 0,
+        cantidad: Number(pvCantidad) || 0,
         modoTiempo: draft.modoTiempo,
-        tiempoFijoMin: Number(pv.tiempoFijo) || 0,
-        productividadPorHora: Number(pv.productividad) || 0,
-        centroCostoId: pv.centroCostoId,
+        tiempoFijoMin: Number(draft.tiempoFijoDefaultMin) || 0,
+        productividadPorHora: Number(draft.ritmoDefaultHora) || 0,
+        centroCostoId: draft.centroCostoDefaultId,
       });
       setResultado(r);
     } catch (error) {
@@ -1246,18 +1348,18 @@ function PasoFinal({
 
       {previewAplica ? (
         <div className={s.preview}>
-          <div className={s.opcionTitulo}>Probalo con un ejemplo (opcional)</div>
+          <div className={s.opcionTitulo}>Valores típicos del paso (y una prueba de costo)</div>
           <div className={s.previewIntro}>
             {draft.modoTiempo === "T-2"
-              ? "Imaginate un pedido: ¿cuántas piezas trae, a qué ritmo las hace la persona, y quién las hace? Con eso el sistema calcula lo mismo que va a calcular al cotizar."
-              : "Este paso tarda lo mismo sin importar la cantidad: decinos cuántos minutos lleva y quién lo hace."}
+              ? "¿A qué ritmo se hace normalmente y quién lo cobra? Estas respuestas quedan como sugerencia del paso — cada producto puede pisarlas. La cantidad es sólo para probar el costo."
+              : "¿Cuántos minutos lleva normalmente y quién lo cobra? Queda como sugerencia del paso — cada producto puede pisarla."}
           </div>
           <div className={s.previewGrid}>
             <label className={s.previewCampo}>
               <span className={s.previewLabel}>Cantidad del pedido</span>
               <Input
-                value={pv.cantidad}
-                onChange={(e) => setPv({ ...pv, cantidad: e.target.value })}
+                value={pvCantidad}
+                onChange={(e) => setPvCantidad(e.target.value)}
                 placeholder="Ej: 100"
                 inputMode="numeric"
               />
@@ -1267,9 +1369,9 @@ function PasoFinal({
               <label className={s.previewCampo}>
                 <span className={s.previewLabel}>Ritmo de trabajo</span>
                 <Input
-                  value={pv.productividad}
+                  value={draft.ritmoDefaultHora}
                   onChange={(e) =>
-                    setPv({ ...pv, productividad: e.target.value })
+                    set({ ritmoDefaultHora: e.target.value })
                   }
                   placeholder="Ej: 60"
                   inputMode="numeric"
@@ -1280,8 +1382,8 @@ function PasoFinal({
               <label className={s.previewCampo}>
                 <span className={s.previewLabel}>Duración del paso</span>
                 <Input
-                  value={pv.tiempoFijo}
-                  onChange={(e) => setPv({ ...pv, tiempoFijo: e.target.value })}
+                  value={draft.tiempoFijoDefaultMin}
+                  onChange={(e) => set({ tiempoFijoDefaultMin: e.target.value })}
                   placeholder="Ej: 30"
                   inputMode="numeric"
                 />
@@ -1291,9 +1393,9 @@ function PasoFinal({
             <label className={s.previewCampo}>
               <span className={s.previewLabel}>¿Quién lo hace?</span>
               <HumanSelect
-                value={pv.centroCostoId}
+                value={draft.centroCostoDefaultId ?? ""}
                 onValueChange={(centroCostoId) =>
-                  setPv({ ...pv, centroCostoId })
+                  set({ centroCostoDefaultId: centroCostoId || null })
                 }
                 options={centros.map((c) => ({ value: c.id, label: c.nombre }))}
                 placeholder="Centro de costo"
@@ -1306,7 +1408,7 @@ function PasoFinal({
               variant="outline"
               size="sm"
               onClick={probar}
-              disabled={probando || !pv.centroCostoId}
+              disabled={probando || !draft.centroCostoDefaultId}
             >
               {probando ? "Calculando…" : "Calcular costo"}
             </Button>
@@ -1325,8 +1427,9 @@ function PasoFinal({
             </div>
           ) : (
             <div className={s.previewAviso}>
-              Es sólo una prueba: el ritmo y el centro reales se configuran en
-              cada producto que use este paso.
+              El ritmo y el centro quedan guardados como los típicos del paso:
+              al configurar un producto ya vienen puestos, y ahí se pueden
+              pisar.
             </div>
           )}
         </div>
@@ -1352,5 +1455,177 @@ function PasoFinal({
         </div>
       ) : null}
     </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// E.1 — Defaults declarados de una familia del SISTEMA ("tu guillotina la
+// cobra el centro X"). Sólo muestra los campos que la forma soporta.
+// ─────────────────────────────────────────────────────────────────────
+
+function DefaultsSheet({
+  familia,
+  centros,
+  onCerrar,
+  onGuardado,
+}: {
+  familia: FamiliaListItem;
+  centros: Array<{ id: string; nombre: string }>;
+  onCerrar: () => void;
+  onGuardado: () => Promise<void>;
+}) {
+  const d = familia.defaults;
+  const [centroCostoId, setCentroCostoId] = React.useState<string | null>(
+    d?.centroCostoId ?? null,
+  );
+  const [ritmo, setRitmo] = React.useState(
+    d?.productividadHora != null ? String(d.productividadHora) : "",
+  );
+  const [tiempoFijo, setTiempoFijo] = React.useState(
+    d?.tiempoFijoMin != null ? String(d.tiempoFijoMin) : "",
+  );
+  const [demasia, setDemasia] = React.useState(
+    d?.demasiaMm != null ? String(d.demasiaMm) : "",
+  );
+  const [solape, setSolape] = React.useState(
+    d?.solapePanelMm != null ? String(d.solapePanelMm) : "",
+  );
+  const [guardando, setGuardando] = React.useState(false);
+
+  const soportaT2 = familia.modosTiempoSoportados.includes("T-2");
+  const soportaT1 = familia.modosTiempoSoportados.includes("T-1");
+  const soportaManual = familia.relacionMaquinaSoportada.includes("M-0");
+  // Nestea = deja pliegos o m² (Registro de Capacidades, B.3).
+  const nestea = (familia.capacidades ?? []).some(
+    (c) => c.key === "pliegos" || c.key === "m2_consumidos",
+  );
+  const panela = familia.codigo === "impresion_por_area";
+
+  const guardar = async () => {
+    setGuardando(true);
+    try {
+      await guardarDefaultsFamilia(familia.codigo, {
+        centroCostoId,
+        productividadHora: soportaT2 ? numeroONull(ritmo) : null,
+        tiempoFijoMin: soportaT1 ? numeroONull(tiempoFijo) : null,
+        demasiaMm: nestea ? numeroONull(demasia) : null,
+        solapePanelMm: panela ? numeroONull(solape) : null,
+      });
+      toast.success("Defaults guardados");
+      await onGuardado();
+    } catch (error) {
+      toast.error(
+        error instanceof ApiError ? error.message : "No se pudo guardar.",
+      );
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <Sheet open onOpenChange={(open) => !open && onCerrar()}>
+      <SheetContent className={s.wizard} style={{ maxWidth: 480 }}>
+        <SheetHeader className={s.wizardHead}>
+          <SheetTitle>Defaults de {familia.nombre}</SheetTitle>
+          <SheetDescription>
+            Valores típicos de TU taller para este paso. Cada producto puede
+            pisarlos al configurar su ruta; vacío = sin sugerencia.
+          </SheetDescription>
+        </SheetHeader>
+        <div className={s.wizardBody}>
+          {!soportaManual && !soportaT2 && !soportaT1 && !nestea && !panela ? (
+            <p className={s.ayuda}>
+              Este paso no tiene defaults configurables: la máquina pone la
+              tarifa y el tiempo, y su cantidad no depende de un acomodo.
+            </p>
+          ) : null}
+          {soportaManual ? (
+            <div className="field">
+              <span className={s.previewLabel}>¿Quién lo cobra?</span>
+              <HumanSelect
+                value={centroCostoId ?? ""}
+                onValueChange={(id) => setCentroCostoId(id || null)}
+                options={centros.map((c) => ({ value: c.id, label: c.nombre }))}
+                placeholder="Centro de costo (para pasos sin máquina)"
+              />
+              <span className={s.previewPista}>
+                Aplica cuando el paso se hace a mano; con máquina la tarifa la
+                pone la máquina.
+              </span>
+            </div>
+          ) : null}
+          {soportaT2 ? (
+            <div className="field">
+              <span className={s.previewLabel}>Ritmo típico</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Input
+                  value={ritmo}
+                  onChange={(e) => setRitmo(e.target.value)}
+                  placeholder="Ej: 60"
+                  inputMode="decimal"
+                  style={{ maxWidth: 120 }}
+                />
+                <span className={s.previewPista}>unidades por hora</span>
+              </div>
+            </div>
+          ) : null}
+          {soportaT1 ? (
+            <div className="field">
+              <span className={s.previewLabel}>Duración típica</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Input
+                  value={tiempoFijo}
+                  onChange={(e) => setTiempoFijo(e.target.value)}
+                  placeholder="Ej: 30"
+                  inputMode="decimal"
+                  style={{ maxWidth: 120 }}
+                />
+                <span className={s.previewPista}>minutos, fijos</span>
+              </div>
+            </div>
+          ) : null}
+          {nestea ? (
+            <div className="field">
+              <span className={s.previewLabel}>Demasía típica por pieza</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Input
+                  value={demasia}
+                  onChange={(e) => setDemasia(e.target.value)}
+                  placeholder="Ej: 3"
+                  inputMode="decimal"
+                  style={{ maxWidth: 120 }}
+                />
+                <span className={s.previewPista}>mm por lado</span>
+              </div>
+            </div>
+          ) : null}
+          {panela ? (
+            <div className="field">
+              <span className={s.previewLabel}>Solape típico de panel</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Input
+                  value={solape}
+                  onChange={(e) => setSolape(e.target.value)}
+                  placeholder="Ej: 30"
+                  inputMode="decimal"
+                  style={{ maxWidth: 120 }}
+                />
+                <span className={s.previewPista}>
+                  mm donde un panel pisa al otro para soldar
+                </span>
+              </div>
+            </div>
+          ) : null}
+        </div>
+        <div className={s.wizardFooter}>
+          <Button variant="ghost" onClick={onCerrar}>
+            Cancelar
+          </Button>
+          <Button onClick={guardar} disabled={guardando}>
+            {guardando ? "Guardando…" : "Guardar defaults"}
+          </Button>
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }

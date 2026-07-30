@@ -205,6 +205,58 @@ describe('FamiliasTenantService (integración, gdi_saas_test)', () => {
     ]);
   });
 
+  it('E.1: crear con defaults los persiste; el PATCH con null los borra', async () => {
+    const centro = await prisma.centroCosto.findFirst({
+      where: { tenantId },
+      select: { id: true },
+    });
+    const fila = await service.crear(tenantId, {
+      ...SERIGRAFIA,
+      nombre: 'Estampado con defaults',
+      defaults: {
+        centroCostoId: centro?.id ?? null,
+        productividadHora: 45,
+      },
+    });
+    const row = await prisma.familiaPasoDefaults.findUnique({
+      where: {
+        tenantId_familiaCodigo: { tenantId, familiaCodigo: fila.id },
+      },
+    });
+    expect(Number(row?.productividadHora)).toBe(45);
+
+    // defaults: null en el PATCH = borrar la fila (sin defaults = sin fila).
+    await service.actualizar(tenantId, fila.id, { defaults: null });
+    expect(
+      await prisma.familiaPasoDefaults.findUnique({
+        where: {
+          tenantId_familiaCodigo: { tenantId, familiaCodigo: fila.id },
+        },
+      }),
+    ).toBeNull();
+  });
+
+  it('E.1: guardarDefaultsFamilia funciona para familias del SISTEMA', async () => {
+    const familiasService = new FamiliasPasosService(
+      prisma as unknown as PrismaService,
+    );
+    await familiasService.guardarDefaultsFamilia(tenantId, 'corte_manual', {
+      productividadHora: 120,
+      demasiaMm: 2,
+    });
+    const listado = await familiasService.listarFamilias(tenantId);
+    const corte = listado.familias.find((f) => f.codigo === 'corte_manual');
+    expect(corte?.defaults?.productividadHora).toBe(120);
+    expect(corte?.defaults?.demasiaMm).toBe(2);
+
+    // familia inexistente → 400
+    await expect(
+      familiasService.guardarDefaultsFamilia(tenantId, 'no_existe', {
+        productividadHora: 1,
+      }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
   it('el override de modoRegistro le gana al default de la categoría', async () => {
     const fila = await service.crear(tenantId, {
       ...SERIGRAFIA,

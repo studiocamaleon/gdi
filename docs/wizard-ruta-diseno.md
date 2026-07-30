@@ -191,6 +191,27 @@ pisarlo".
   > la config del producto (60/h) le gana, como debe.
 - **E.1.2** — Captura: wizard de paso guarda defaults; sheet "Configurar
   defaults" para familias del sistema.
+
+  > **Estado 2026-07-30: HECHA y verificada E2E** (rama
+  > `feat/wizard-ruta`). Backend: `defaults` viaja en el DTO del wizard
+  > tenant (upsert en la MISMA transacción; null = borrar fila) + endpoint
+  > `PUT /familias/:codigo/defaults` para CUALQUIER familia +
+  > `defaults` en GET /familias y en el listado tenant (precarga). Front:
+  > el preview del paso final se re-encuadró como **"Valores típicos del
+  > paso (y una prueba de costo)"** — el ritmo, el tiempo fijo y el centro
+  > YA NO se tiran: se guardan como defaults (bindeados al draft); la
+  > pregunta de estación pasó a "¿Dónde se hace y quién lo cobra?"; la
+  > rama que acomoda pregunta la demasía típica; y el catálogo del sistema
+  > ganó la columna Defaults con el sheet (campos condicionales a la
+  > forma: centro sólo M-0, ritmo sólo T-2, demasía sólo si nestea vía
+  > capacidades B.3, solape sólo gran formato; formas sin defaults
+  > muestran el porqué). E2E real: defaults de Corte manual (120/h +
+  > Produccion & Taller) guardados por la ficha y verificados en DB;
+  > edición de Bordado precarga 45/h + centro desde sus defaults. 2 tests
+  > de integración nuevos (crear-con-defaults / PATCH null / familia
+  > sistema / familia inexistente 400). Trampa repetida y confirmada: los
+  > edits por script NO despiertan al nest watch — re-guardar con
+  > escritura normal (dos veces nos pasó: B.3.3 y acá).
 - **E.1.3** — Editor de config: placeholders/estado "usando default" +
   E2E (configurar un producto nuevo con un paso que trae defaults debe
   requerir CERO campos de tiempo/costo).
