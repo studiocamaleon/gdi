@@ -426,11 +426,12 @@ function buildPlotterCadSections(): MaquinariaTemplateSection[] {
     section({
       id: "parametros_tecnicos",
       title: "Parámetros técnicos",
-      description: "Rangos de rollo, márgenes y colores soportados.",
+      description: "Márgenes y colores soportados.",
       fields: [
-        // Sin anchoMinRolloMm (decisión 2026-07-28): nadie lo leía, mismo caso
-        // que en gran formato.
-        field({ key: "anchoMaxRolloMm", label: "Ancho máximo de rollo", scope: "maquina", kind: "number", unit: "mm", description: "Máximo aceptado." }),
+        // Sin anchoMaxRolloMm (decisión 2026-07-31): duplicaba "Ancho útil
+        // máximo" (anchoUtil, Capacidades físicas), que es el campo requerido y
+        // canónico del rollo. El motor ya prefiere anchoUtil. Sin anchoMinRolloMm
+        // desde 2026-07-28 (nadie lo leía), mismo caso que gran formato.
         field({ key: "margenesNoImprimiblesMm", label: "Márgenes no imprimibles", scope: "maquina", kind: "textarea", required: true, description: "Distancia que la máquina no puede imprimir en cada borde." }),
         field({ key: "coloresSoportados", label: "Colores soportados", scope: "maquina", kind: "multiselect", options: [option("CMYK", "CMYK")], description: "Solo CMYK típicamente." }),
       ],
