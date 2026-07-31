@@ -339,6 +339,12 @@ export class UpsertSlotMaterialCandidatoDto {
   @IsArray()
   @IsUUID(undefined, { each: true })
   varianteIds!: string[];
+
+  /** true = usa todas las variantes activas del material (absorbe las nuevas);
+   *  false = la lista fija `varianteIds`. */
+  @IsOptional()
+  @IsBoolean()
+  todasLasVariantes?: boolean;
 }
 
 /**

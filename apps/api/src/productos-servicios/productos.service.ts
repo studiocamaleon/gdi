@@ -830,6 +830,20 @@ export class ProductosService {
                             familia: true,
                             subfamilia: true,
                             templateId: true,
+                            // Modo "todas las variantes": la lista viva de
+                            // variantes activas del material, para que el editor
+                            // muestre todas (y absorba las nuevas).
+                            variantes: {
+                              where: { activo: true },
+                              orderBy: { sku: 'asc' },
+                              select: {
+                                id: true,
+                                sku: true,
+                                nombreVariante: true,
+                                precioReferencia: true,
+                                atributosVarianteJson: true,
+                              },
+                            },
                           },
                         },
                         defaultVariante: {
@@ -1117,6 +1131,7 @@ export class ProductosService {
       defaultVarianteId?: string | null;
       orden?: number;
       varianteIds?: string[];
+      todasLasVariantes?: boolean;
     };
     type SlotJson = {
       slotCodigo?: string;
@@ -1191,6 +1206,11 @@ export class ProductosService {
             },
           });
     const mpMap = new Map(materiaPrimas.map((mp) => [mp.id, mp]));
+    // Variantes activas por id (para resolver el modo "todas": sus ids no
+    // están en el JSON, salen de la lista viva del material).
+    const mpVarianteMap = new Map(
+      materiaPrimas.flatMap((mp) => mp.variantes.map((v) => [v.id, v] as const)),
+    );
 
     return new Map(
       pasosExtras.map((pe) => {
@@ -1244,6 +1264,7 @@ export class ProductosService {
                   materiaPrimaId: c.materiaPrimaId as string,
                   defaultVarianteId: c.defaultVarianteId ?? null,
                   orden: c.orden ?? ci,
+                  todasLasVariantes: c.todasLasVariantes ?? false,
                   materiaPrima: {
                     id: mp.id,
                     codigo: mp.codigo,
@@ -1251,6 +1272,7 @@ export class ProductosService {
                     familia: mp.familia,
                     subfamilia: mp.subfamilia,
                     templateId: mp.templateId,
+                    variantes: mp.variantes,
                   },
                   defaultVariante: defaultVariante
                     ? {
@@ -1260,8 +1282,13 @@ export class ProductosService {
                         precioReferencia: defaultVariante.precioReferencia,
                       }
                     : null,
-                  variantes: (c.varianteIds ?? []).flatMap((vid) => {
-                    const v = varianteMap.get(vid);
+                  // Modo "todas": todas las variantes activas del material; si
+                  // no, la lista fija guardada en el JSON.
+                  variantes: (c.todasLasVariantes
+                    ? mp.variantes.map((v) => v.id)
+                    : (c.varianteIds ?? [])
+                  ).flatMap((vid) => {
+                    const v = varianteMap.get(vid) ?? mpVarianteMap.get(vid);
                     return v
                       ? [
                           {

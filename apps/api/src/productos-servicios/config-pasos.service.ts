@@ -268,6 +268,7 @@ export class ConfigPasosService {
                   materiaPrimaId: candidate.materiaPrimaId,
                   defaultVarianteId: candidate.defaultVarianteId ?? null,
                   orden: candidate.orden ?? candidateIndex,
+                  todasLasVariantes: candidate.todasLasVariantes ?? false,
                 },
               });
             if (candidate.varianteIds.length > 0) {
