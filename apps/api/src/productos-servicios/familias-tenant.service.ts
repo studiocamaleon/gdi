@@ -79,16 +79,17 @@ export class FamiliasTenantService implements OnModuleInit {
         where: { tenantId },
         orderBy: [{ activo: 'desc' }, { nombre: 'asc' }],
       }),
-      this.prisma.estacionFamilia.findMany({
-        where: { tenantId },
+      // Fase D: la regla "por familia" vive en EstacionRegla (tipo='familia').
+      this.prisma.estacionRegla.findMany({
+        where: { tenantId, tipo: 'familia' },
         select: {
-          familiaCodigo: true,
+          valor: true,
           estacion: { select: { id: true, nombre: true } },
         },
       }),
     ]);
     const estacionPorFamilia = new Map(
-      asignaciones.map((a) => [a.familiaCodigo, a.estacion]),
+      asignaciones.map((a) => [a.valor, a.estacion]),
     );
     // E.1 — defaults declarados, para precargar la edición en el wizard.
     const defaultsRows = await this.prisma.familiaPasoDefaults.findMany({
@@ -261,8 +262,9 @@ export class FamiliasTenantService implements OnModuleInit {
     }
 
     await this.prisma.$transaction([
-      this.prisma.estacionFamilia.deleteMany({
-        where: { tenantId, familiaCodigo: id },
+      // Fase D: limpiar las reglas "por familia" que apuntan a esta familia.
+      this.prisma.estacionRegla.deleteMany({
+        where: { tenantId, tipo: 'familia', valor: id },
       }),
       this.prisma.familiaTenant.delete({ where: { id } }),
     ]);

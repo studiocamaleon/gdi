@@ -525,7 +525,8 @@ function isUniqueConstraintError(error: unknown) {
 
 /** Include de la proyección completa de una estación. */
 const ESTACION_INCLUDE = {
-  familias: { select: { familiaCodigo: true } },
+  // Fase D: la regla "por familia" vive en EstacionRegla (tipo='familia'), junto
+  // con tecnología/paso. Ya no se lee EstacionFamilia (legacy, sólo respaldo).
   reglas: { select: { tipo: true, valor: true } },
   empleados: {
     include: {
@@ -571,8 +572,9 @@ export class ProduccionService {
    * + qué estación tiene tomada cada una, para el picker del panel.
    */
   async findFamiliasPasos(auth: CurrentAuth) {
-    const asignadas = await this.prisma.estacionFamilia.findMany({
-      where: { tenantId: auth.tenantId },
+    // Fase D: las reglas "por familia" viven en EstacionRegla (tipo='familia').
+    const asignadas = await this.prisma.estacionRegla.findMany({
+      where: { tenantId: auth.tenantId, tipo: 'familia' },
       include: {
         estacion: {
           select: {
@@ -589,13 +591,13 @@ export class ProduccionService {
       Array<{ id: string; nombre: string; conMaquinas: boolean }>
     >();
     for (const fila of asignadas) {
-      const lista = porFamilia.get(fila.familiaCodigo) ?? [];
+      const lista = porFamilia.get(fila.valor) ?? [];
       lista.push({
         id: fila.estacion.id,
         nombre: fila.estacion.nombre,
         conMaquinas: fila.estacion.maquinas.length > 0,
       });
-      porFamilia.set(fila.familiaCodigo, lista);
+      porFamilia.set(fila.valor, lista);
     }
     // Catálogo del sistema + familias del TENANT (pasos componibles, Etapa
     // C): las dos tienen que poder asignarse a una estación, así que el
@@ -1067,10 +1069,12 @@ export class ProduccionService {
     // máquinas) por familia: dos generales serían ruteo ambiguo (D1 del doc).
     const payloadEsGeneral = maquinaIds.length === 0;
     if (familias.length > 0 && payloadEsGeneral) {
-      const tomadas = await this.prisma.estacionFamilia.findMany({
+      // Fase D: las reglas "por familia" viven en EstacionRegla (tipo='familia').
+      const tomadas = await this.prisma.estacionRegla.findMany({
         where: {
           tenantId: auth.tenantId,
-          familiaCodigo: { in: familias },
+          tipo: 'familia',
+          valor: { in: familias },
           ...(exceptoEstacionId
             ? { estacionId: { not: exceptoEstacionId } }
             : {}),
@@ -1088,7 +1092,7 @@ export class ProduccionService {
         const detalle = generales
           .map(
             (fila) =>
-              `${resolverFamilia(fila.familiaCodigo)?.nombre ?? fila.familiaCodigo} (en "${fila.estacion.nombre}")`,
+              `${resolverFamilia(fila.valor)?.nombre ?? fila.valor} (en "${fila.estacion.nombre}")`,
           )
           .join(' · ');
         throw new ConflictException(
@@ -1158,26 +1162,18 @@ export class ProduccionService {
       reglas: Array<{ tipo: string; valor: string }>;
     },
   ) {
-    await tx.estacionFamilia.deleteMany({
-      where: { tenantId: auth.tenantId, estacionId },
-    });
-    if (listas.familias.length > 0) {
-      await tx.estacionFamilia.createMany({
-        data: listas.familias.map((familiaCodigo) => ({
-          tenantId: auth.tenantId,
-          estacionId,
-          familiaCodigo,
-        })),
-      });
-    }
-
-    // Reglas nuevas (tecnología / paso): replace-all en EstacionRegla.
+    // Fase D: todo el ruteo declarado (familia + tecnología + paso) vive en
+    // EstacionRegla; se reemplaza entero. Ya no se escribe EstacionFamilia.
     await tx.estacionRegla.deleteMany({
       where: { tenantId: auth.tenantId, estacionId },
     });
-    if (listas.reglas.length > 0) {
+    const reglasAEscribir = [
+      ...listas.familias.map((valor) => ({ tipo: 'familia', valor })),
+      ...listas.reglas.map((regla) => ({ tipo: regla.tipo, valor: regla.valor })),
+    ];
+    if (reglasAEscribir.length > 0) {
       await tx.estacionRegla.createMany({
-        data: listas.reglas.map((regla) => ({
+        data: reglasAEscribir.map((regla) => ({
           tenantId: auth.tenantId,
           estacionId,
           tipo: regla.tipo,
@@ -1345,8 +1341,14 @@ export class ProduccionService {
       tiempoPreparacionMin: item.tiempoPreparacionMin,
       // Normaliza el shape legado (una franja suelta por día) al de listas.
       calendario: normalizarCalendarioAlmacenado(item.calendarioJson),
-      familias: item.familias.map((fila) => fila.familiaCodigo),
-      reglas: item.reglas.map((r) => ({ tipo: r.tipo, valor: r.valor })),
+      // Fase D: familia y tecnología/paso salen de EstacionRegla. El shape de la
+      // API no cambia (el front sigue viendo `familias` y `reglas` separadas).
+      familias: item.reglas
+        .filter((r) => r.tipo === 'familia')
+        .map((r) => r.valor),
+      reglas: item.reglas
+        .filter((r) => r.tipo !== 'familia')
+        .map((r) => ({ tipo: r.tipo, valor: r.valor })),
       empleados: item.empleados.map((fila) => ({
         id: fila.empleado.id,
         nombreCompleto: fila.empleado.nombreCompleto,

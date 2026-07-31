@@ -142,20 +142,14 @@ export function resolverEstacionDePaso<T extends EstacionRuteo>(
   );
   if (porPaso) return porPaso;
 
+  // 4. Por familia: general (sin máquinas) o única candidata. Sin centro de
+  //    costo (Fase D). Espejo de src/lib/tablero-produccion.ts.
   const candidatas = activas.filter((estacion) =>
     estacion.familias.includes(paso.familiaCodigo),
   );
   if (candidatas.length === 0) return null;
-  if (paso.centroCostoId) {
-    const porCentro = candidatas.find((estacion) =>
-      estacion.maquinas.some(
-        (maquina) => maquina.centroCostoId === paso.centroCostoId,
-      ),
-    );
-    if (porCentro) return porCentro;
-  }
   const general = candidatas.find((estacion) => estacion.maquinas.length === 0);
   if (general) return general;
-  if (!paso.centroCostoId && candidatas.length === 1) return candidatas[0];
+  if (candidatas.length === 1) return candidatas[0];
   return null;
 }

@@ -31,13 +31,15 @@ function paso(over: Partial<Paso> = {}): Paso {
   return { familiaCodigo: "impresion", centroCostoId: null, ...over };
 }
 
-describe("resolverEstacionDePaso — fallback legacy (neutral)", () => {
-  it("única candidata por familia, paso sin centro → la devuelve", () => {
+describe("resolverEstacionDePaso — fallback por familia (Fase D)", () => {
+  it("única candidata por familia → la devuelve", () => {
     const e = est("A", { familias: ["impresion"] });
     expect(resolverEstacionDePaso([e], paso())?.id).toBe("A");
   });
 
-  it("familia + centro: gana la estación cuya máquina tiene ese centro", () => {
+  it("Fase D: el centro de costo YA NO rutea — dos candidatas con máquinas → null", () => {
+    // Antes ganaba la estación cuya máquina compartía el centro del paso; ahora
+    // el centro es sólo un eje de costeo y no participa del ruteo.
     const a = est("A", {
       familias: ["impresion"],
       maquinas: [{ centroCostoId: "c1" }],
@@ -46,20 +48,16 @@ describe("resolverEstacionDePaso — fallback legacy (neutral)", () => {
       familias: ["impresion"],
       maquinas: [{ centroCostoId: "c2" }],
     });
-    const r = resolverEstacionDePaso([a, b], paso({ centroCostoId: "c2" }));
-    expect(r?.id).toBe("B");
+    expect(resolverEstacionDePaso([a, b], paso({ centroCostoId: "c2" }))).toBeNull();
   });
 
-  it("sin match de centro → gana la general (con familia, sin máquinas)", () => {
+  it("gana la general (con familia, sin máquinas) sobre las que tienen máquinas", () => {
     const conMaq = est("A", {
       familias: ["impresion"],
       maquinas: [{ centroCostoId: "c1" }],
     });
     const general = est("G", { familias: ["impresion"] });
-    const r = resolverEstacionDePaso(
-      [conMaq, general],
-      paso({ centroCostoId: "cX" }),
-    );
+    const r = resolverEstacionDePaso([conMaq, general], paso());
     expect(r?.id).toBe("G");
   });
 
@@ -68,10 +66,10 @@ describe("resolverEstacionDePaso — fallback legacy (neutral)", () => {
     expect(resolverEstacionDePaso([e], paso())).toBeNull();
   });
 
-  it("dos candidatas con máquinas, sin centro-match ni general → null", () => {
+  it("dos candidatas con máquinas, sin general → null", () => {
     const a = est("A", { familias: ["impresion"], maquinas: [{ centroCostoId: "c1" }] });
     const b = est("B", { familias: ["impresion"], maquinas: [{ centroCostoId: "c2" }] });
-    expect(resolverEstacionDePaso([a, b], paso({ centroCostoId: "cX" }))).toBeNull();
+    expect(resolverEstacionDePaso([a, b], paso())).toBeNull();
   });
 });
 

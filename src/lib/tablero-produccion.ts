@@ -370,8 +370,9 @@ type PasoRuteo = Pick<
  *   1. por MÁQUINA (la máquina del paso está en la estación) — señal real;
  *   2. por TECNOLOGÍA (regla) — la máquina del paso es de esa tecnología;
  *   3. por PASO concreto (regla) — separa pasos de la misma familia;
- *   4. FALLBACK legacy: familia + centro de costo (INTACTO). Cubre las órdenes
- *      viejas (sin `maquinaId`) y las estaciones sin reglas nuevas → neutral.
+ *   4. por FAMILIA — la estación general (sin máquinas) de esa familia, o la
+ *      única candidata. (Fase D: se retiró el ruteo por centro de costo, que era
+ *      un eje de costeo, no de piso de taller.)
  *
  * Determinista: primer match por nivel. Sin match → null ("Sin estación").
  */
@@ -405,22 +406,15 @@ export function resolverEstacionDePaso<T extends EstacionRuteo>(
   );
   if (porPaso) return porPaso;
 
-  // 4. Fallback legacy: familia + centro de costo. Igual que antes.
+  // 4. Por familia: la estación general (sin máquinas) de esa familia, o —si no
+  //    hay general— la única candidata. Sin centro de costo (Fase D).
   const candidatas = activas.filter((estacion) =>
     estacion.familias.includes(paso.familiaCodigo),
   );
   if (candidatas.length === 0) return null;
-  if (paso.centroCostoId) {
-    const porCentro = candidatas.find((estacion) =>
-      estacion.maquinas.some(
-        (maquina) => maquina.centroCostoId === paso.centroCostoId,
-      ),
-    );
-    if (porCentro) return porCentro;
-  }
   const general = candidatas.find((estacion) => estacion.maquinas.length === 0);
   if (general) return general;
-  if (!paso.centroCostoId && candidatas.length === 1) return candidatas[0];
+  if (candidatas.length === 1) return candidatas[0];
   return null;
 }
 
