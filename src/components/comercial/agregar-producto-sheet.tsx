@@ -4079,11 +4079,19 @@ function ApConfigStep({
     onChange: (value: string) => void,
     opts?: { columns?: 2 | 3; layout?: "row" | "tile" },
   ) => {
-    const columns = opts?.columns ?? (options.length <= 2 ? 2 : 3);
+    const requested = opts?.columns ?? (options.length <= 2 ? 2 : 3);
+    // Nunca más columnas que opciones: 2 tecnologías no deben quedar en una
+    // grilla de 3 (llena 2/3 y deja hueco a la derecha), y un único modo de
+    // color ocupa el ancho entero en vez de media fila. Así cada grupo llena
+    // la fila y los bordes derechos quedan alineados entre secciones.
+    const columns = Math.max(1, Math.min(options.length, requested));
     const layout = opts?.layout ?? "row";
+    // columns === 1 → sin clase numerada: la grilla base es una sola columna
+    // a ancho completo (evita sumar un `ap-choice-grid-1` global).
+    const colsClass = columns >= 2 ? `ap-choice-grid-${columns}` : "";
     return (
       <div
-        className={`ap-choice-grid ap-choice-grid-${columns} ap-choice-${layout}`}
+        className={`ap-choice-grid ${colsClass} ap-choice-${layout}`}
         role="radiogroup"
         aria-label={name}
       >
