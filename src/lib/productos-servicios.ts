@@ -307,6 +307,8 @@ export interface SlotMaterialDetalle {
     materiaPrimaId: string;
     defaultVarianteId: string | null;
     orden: number;
+    /** true = usa todas las variantes activas del material (absorbe las nuevas). */
+    todasLasVariantes?: boolean;
     materiaPrima: {
       id: string;
       codigo: string;
@@ -314,6 +316,14 @@ export interface SlotMaterialDetalle {
       familia: string;
       subfamilia: string;
       templateId: string;
+      /** Variantes activas del material (para el modo "todas"). */
+      variantes?: Array<{
+        id: string;
+        sku: string;
+        nombreVariante: string | null;
+        precioReferencia: string | null;
+        atributosVarianteJson?: unknown;
+      }>;
     };
     defaultVariante: {
       id: string;

@@ -2605,6 +2605,7 @@ export function ConfigPasosEditorView({
               defaultVarianteId: candidate.defaultVarianteId,
               orden: candidate.orden,
               varianteIds: candidate.variantes.map((item) => item.variante.id),
+              todasLasVariantes: candidate.todasLasVariantes ?? false,
             })),
             estrategiaCosto: s.estrategiaCosto,
             formula: s.formula,
@@ -8324,7 +8325,47 @@ function CandidatosSlotDetalladoEditor({
                                                               </button>
                                                             </div>
                                                             <div className="ps-sel-body">
-                                                            {materiaPrima &&
+                                                            <label className="mb-3 flex cursor-pointer select-none items-center gap-2">
+                                                              <input
+                                                                type="checkbox"
+                                                                checked={
+                                                                  candidate.todasLasVariantes ??
+                                                                  false
+                                                                }
+                                                                onChange={(
+                                                                  event,
+                                                                ) =>
+                                                                  updateSlotCandidate(
+                                                                    pasoId,
+                                                                    slotIdx,
+                                                                    candidate.materiaPrimaId,
+                                                                    {
+                                                                      todasLasVariantes:
+                                                                        event
+                                                                          .target
+                                                                          .checked,
+                                                                    },
+                                                                  )
+                                                                }
+                                                              />
+                                                              <span className="text-[13px] font-medium">
+                                                                Usar todas las
+                                                                variantes del
+                                                                material
+                                                              </span>
+                                                            </label>
+                                                            {candidate.todasLasVariantes ? (
+                                                              <p className="text-muted-foreground mb-3 text-xs">
+                                                                Usa todas las
+                                                                variantes activas
+                                                                de {nombreMat}.
+                                                                Las variantes
+                                                                nuevas se agregan
+                                                                solas — no hace
+                                                                falta re-editar el
+                                                                producto.
+                                                              </p>
+                                                            ) : materiaPrima &&
                                                             materiaPrima
                                                               .variantes
                                                               .length > 1 ? (
@@ -8483,6 +8524,7 @@ function CandidatosSlotDetalladoEditor({
                                                                 }
                                                                 options={variantOptions.filter(
                                                                   (option) =>
+                                                                    candidate.todasLasVariantes ||
                                                                     candidate.varianteIds.includes(
                                                                       option.value,
                                                                     ),
