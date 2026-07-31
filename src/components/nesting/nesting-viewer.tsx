@@ -645,7 +645,14 @@ function SubstrateView({
   const displayWidthMm = displayLandscape ? heightMm : widthMm;
   const displayHeightMm = displayLandscape ? widthMm : heightMm;
   const longestMm = Math.max(displayWidthMm, displayHeightMm);
-  const scale = maxPx / longestMm;
+  const isRoll = substrate.kind === "roll";
+  // Un rollo largo escala por el LARGO al lado más largo → el ancho queda
+  // diminuto. Para rollos escalamos por el ANCHO (a un ancho legible fijo) y el
+  // largo se muestra a escala real, con scroll vertical cuando no entra.
+  const ROLL_WIDTH_PX = 280;
+  const scale = isRoll
+    ? ROLL_WIDTH_PX / displayWidthMm
+    : maxPx / longestMm;
   const wPx = displayWidthMm * scale;
   const hPx = displayHeightMm * scale;
   const padPx = 34;
@@ -671,10 +678,16 @@ function SubstrateView({
   const viewBoxH = hPx + padYPx * 2;
   const hasMargins = Object.values(effectiveVisualConfig.margins).some((value) => value > 0);
   const largeSheet = substrate.kind === "sheet" && Math.max(widthMm, heightMm) >= 1000;
-  const canvasMaxWidth = Math.min(
-    Math.max(viewBoxW, substrate.kind === "sheet" ? (largeSheet ? 820 : 520) : 680),
-    substrate.kind === "sheet" ? (largeSheet ? 1180 : 760) : 980,
-  );
+  // Rollo: ancho natural (no estirar el rollo angosto a lo ancho del canvas).
+  // El scroll vertical se hace cargo del largo. Alto máximo del contenedor.
+  const ROLL_MAX_CANVAS_HEIGHT_PX = 520;
+  const rollScrolls = isRoll && viewBoxH > ROLL_MAX_CANVAS_HEIGHT_PX;
+  const canvasMaxWidth = isRoll
+    ? viewBoxW
+    : Math.min(
+        Math.max(viewBoxW, substrate.kind === "sheet" ? (largeSheet ? 820 : 520) : 680),
+        substrate.kind === "sheet" ? (largeSheet ? 1180 : 760) : 980,
+      );
   const substrateRect = mapDisplayRect(displayTransform, 0, 0, widthMm, heightMm);
   const printableArea = getPrintableArea(effectiveVisualConfig, widthMm, heightMm);
   const printableClipRect = mapDisplayRect(
@@ -692,7 +705,14 @@ function SubstrateView({
           Sustrato {substrateIndex + 1} / {totalSubstrates}
         </div>
       ) : null}
-      <div className="nesting-canvas-wrap">
+      <div
+        className="nesting-canvas-wrap"
+        style={
+          rollScrolls
+            ? { maxHeight: `${ROLL_MAX_CANVAS_HEIGHT_PX}px`, overflowY: "auto" }
+            : undefined
+        }
+      >
         <svg
           className="nesting-canvas-svg"
           viewBox={`0 0 ${viewBoxW} ${viewBoxH}`}
