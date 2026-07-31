@@ -1255,30 +1255,41 @@ export class MotorUniversalService {
     // Fase 2 — el IVA (POR_FUERA) se resuelve por CATEGORÍA del producto ×
     // RÉGIMEN del emisor, no por tildes por producto. Los de alcance TENANT
     // (IIBB, imp. al cheque) siguen aplicando a toda cotización sin asociación.
-    const [comisionesAplicadas, impuestosTenant, ivaRows, configFiscal] =
-      await Promise.all([
-        this.prisma.productoComisionAplicada.findMany({
-          where: { tenantId: args.tenantId, productoId: args.productoId },
-          include: { comisionCatalogo: true },
-          orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
-        }),
-        this.prisma.productoImpuestoCatalogo.findMany({
-          where: { tenantId: args.tenantId, alcance: 'TENANT', activo: true },
-          orderBy: { nombre: 'asc' },
-        }),
-        this.prisma.productoImpuestoCatalogo.findMany({
-          where: {
-            tenantId: args.tenantId,
-            alcance: 'PRODUCTO',
-            traslado: 'POR_FUERA',
-            activo: true,
-          },
-        }),
-        this.prisma.configuracionFiscal.findUnique({
-          where: { tenantId: args.tenantId },
-          select: { condicionFiscal: true },
-        }),
-      ]);
+    const [
+      comisionesAplicadas,
+      comisionesTenant,
+      impuestosTenant,
+      ivaRows,
+      configFiscal,
+    ] = await Promise.all([
+      this.prisma.productoComisionAplicada.findMany({
+        where: { tenantId: args.tenantId, productoId: args.productoId },
+        include: { comisionCatalogo: true },
+        orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
+      }),
+      // Comisiones de alcance TENANT (ej. pasarela de pago): aplican a toda
+      // cotización sin tildar por producto. Espejo de los impuestos TENANT.
+      this.prisma.productoComisionCatalogo.findMany({
+        where: { tenantId: args.tenantId, alcance: 'TENANT', activo: true },
+        orderBy: { nombre: 'asc' },
+      }),
+      this.prisma.productoImpuestoCatalogo.findMany({
+        where: { tenantId: args.tenantId, alcance: 'TENANT', activo: true },
+        orderBy: { nombre: 'asc' },
+      }),
+      this.prisma.productoImpuestoCatalogo.findMany({
+        where: {
+          tenantId: args.tenantId,
+          alcance: 'PRODUCTO',
+          traslado: 'POR_FUERA',
+          activo: true,
+        },
+      }),
+      this.prisma.configuracionFiscal.findUnique({
+        where: { tenantId: args.tenantId },
+        select: { condicionFiscal: true },
+      }),
+    ]);
 
     const toImpuestoSnapshot = (
       catalogo: (typeof impuestosTenant)[number],
@@ -1326,18 +1337,34 @@ export class MotorUniversalService {
         toImpuestoSnapshot(catalogo, impuestosSnapshot.length),
       );
     }
+    const toComisionSnapshot = (
+      catalogo: (typeof comisionesTenant)[number],
+      orden: number,
+    ): PrecioComisionSnapshot => ({
+      catalogoId: catalogo.id,
+      codigo: catalogo.codigo,
+      nombre: catalogo.nombre,
+      porcentaje: catalogo.porcentaje,
+      orden,
+      baseCalculo:
+        catalogo.baseCalculo === 'BRUTO_COBRADO' ? 'BRUTO_COBRADO' : 'NETO',
+    });
+
     const comisionesSnapshot: PrecioComisionSnapshot[] =
-      comisionesAplicadas.map((ca) => ({
-        catalogoId: ca.comisionCatalogo.id,
-        codigo: ca.comisionCatalogo.codigo,
-        nombre: ca.comisionCatalogo.nombre,
-        porcentaje: ca.comisionCatalogo.porcentaje,
-        orden: ca.orden,
-        baseCalculo:
-          ca.comisionCatalogo.baseCalculo === 'BRUTO_COBRADO'
-            ? 'BRUTO_COBRADO'
-            : 'NETO',
-      }));
+      comisionesAplicadas.map((ca) =>
+        toComisionSnapshot(ca.comisionCatalogo, ca.orden),
+      );
+    // Merge de las comisiones TENANT (ej. pasarela de pago) no asociadas
+    // explícitamente al producto (dedupe por catálogo). Espejo de impuestos.
+    const comisionesYaAplicadas = new Set(
+      comisionesSnapshot.map((c) => c.catalogoId),
+    );
+    for (const catalogo of comisionesTenant) {
+      if (comisionesYaAplicadas.has(catalogo.id)) continue;
+      comisionesSnapshot.push(
+        toComisionSnapshot(catalogo, comisionesSnapshot.length),
+      );
+    }
 
     // 4. Aplicar
     // El redondeo del dinero lo decide el tenant: los decimales de su moneda

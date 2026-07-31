@@ -1965,6 +1965,11 @@ model ProductoComisionCatalogo {
   /// Base de cálculo del %: NETO (comisión de vendedor, sobre el precio sin IVA)
   /// | BRUTO_COBRADO (comisión de pasarela de pago/tarjeta, sobre lo cobrado con IVA).
   baseCalculo        String                     @default("NETO")
+  /// PRODUCTO: se asocia producto por producto (ej. comisión de vendedor).
+  /// TENANT: aplica a toda cotización sin asociar (ej. comisión de pasarela de
+  /// pago: es de "cómo te pagan", no del producto). Espejo del alcance de
+  /// ProductoImpuestoCatalogo. Ver docs/comisiones-modelo-diseno.md.
+  alcance            String                     @default("PRODUCTO")
   detalleJson        Json?
   activo             Boolean                    @default(true)
   createdAt          DateTime                   @default(now())
@@ -1974,6 +1979,7 @@ model ProductoComisionCatalogo {
 
   @@unique([tenantId, codigo])
   @@index([tenantId, nombre, activo])
+  @@index([tenantId, alcance, activo])
 }
 
 /// Pivot Producto ⇄ ProductoImpuestoCatalogo. Reemplaza el embebido

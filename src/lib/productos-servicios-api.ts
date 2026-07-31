@@ -1335,6 +1335,8 @@ export interface ComisionCatalogoItem {
   porcentaje: number;
   /** NETO (vendedor, sobre el precio sin IVA) | BRUTO_COBRADO (pasarela, sobre lo cobrado). */
   baseCalculo: ImpuestoBaseCalculo;
+  /** PRODUCTO (vendedor, se asigna por producto) | TENANT (pasarela, a todo). */
+  alcance: ImpuestoAlcance;
   detalleJson: unknown | null;
   activo: boolean;
   _count?: { productosAplicados: number };
@@ -1345,6 +1347,7 @@ export interface CrearComisionCatalogoPayload {
   nombre: string;
   porcentaje: number;
   baseCalculo?: ImpuestoBaseCalculo;
+  alcance?: ImpuestoAlcance;
   detalleJson?: Record<string, unknown>;
 }
 
@@ -1352,6 +1355,7 @@ export interface ActualizarComisionCatalogoPayload {
   nombre?: string;
   porcentaje?: number;
   baseCalculo?: ImpuestoBaseCalculo;
+  alcance?: ImpuestoAlcance;
   detalleJson?: Record<string, unknown>;
   activo?: boolean;
 }

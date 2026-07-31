@@ -13,6 +13,7 @@ import {
 } from 'class-validator';
 
 const BASES_CALCULO = ['NETO', 'BRUTO_COBRADO'] as const;
+const ALCANCES = ['PRODUCTO', 'TENANT'] as const;
 
 export class CrearComisionCatalogoDto {
   @IsString()
@@ -35,6 +36,11 @@ export class CrearComisionCatalogoDto {
   @IsOptional()
   @IsIn(BASES_CALCULO)
   baseCalculo?: (typeof BASES_CALCULO)[number];
+
+  /** PRODUCTO (default: se asigna por producto) | TENANT (pasarela: a todo). */
+  @IsOptional()
+  @IsIn(ALCANCES)
+  alcance?: (typeof ALCANCES)[number];
 
   /**
    * Forma esperada (preserva semántica del modelo viejo):
@@ -60,6 +66,10 @@ export class ActualizarComisionCatalogoDto {
   @IsOptional()
   @IsIn(BASES_CALCULO)
   baseCalculo?: (typeof BASES_CALCULO)[number];
+
+  @IsOptional()
+  @IsIn(ALCANCES)
+  alcance?: (typeof ALCANCES)[number];
 
   @IsOptional()
   @IsObject()

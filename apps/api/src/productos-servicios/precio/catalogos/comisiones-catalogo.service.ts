@@ -46,6 +46,7 @@ export class ComisionesCatalogoService {
           nombre: dto.nombre,
           porcentaje: dto.porcentaje,
           baseCalculo: dto.baseCalculo ?? 'NETO',
+          alcance: dto.alcance ?? 'PRODUCTO',
           detalleJson: (dto.detalleJson ??
             Prisma.JsonNull) as Prisma.InputJsonValue,
           activo: true,
@@ -78,6 +79,7 @@ export class ComisionesCatalogoService {
     if (dto.nombre !== undefined) data.nombre = dto.nombre;
     if (dto.porcentaje !== undefined) data.porcentaje = dto.porcentaje;
     if (dto.baseCalculo !== undefined) data.baseCalculo = dto.baseCalculo;
+    if (dto.alcance !== undefined) data.alcance = dto.alcance;
     if (dto.detalleJson !== undefined)
       data.detalleJson = dto.detalleJson as Prisma.InputJsonValue;
     if (dto.activo !== undefined) data.activo = dto.activo;

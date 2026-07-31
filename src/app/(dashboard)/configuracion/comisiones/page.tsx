@@ -1,6 +1,6 @@
 import { SinPermiso } from "@/components/navigation/sin-permiso";
 import { tienePermiso } from "@/lib/permisos-server";
-import { PrecioCatalogoManager } from "@/components/productos-servicios/precio-catalogo-manager";
+import { ComisionesConfigView } from "@/components/productos-servicios/comisiones-config-view";
 import { getComisionesCatalogo } from "@/lib/productos-servicios-api";
 
 export const dynamic = "force-dynamic";
@@ -11,5 +11,5 @@ export default async function ComisionesCatalogoPage() {
     return <SinPermiso modulo="Comisiones" />;
   }
   const items = await getComisionesCatalogo(false);
-  return <PrecioCatalogoManager initialItems={items} tipo="comisiones" />;
+  return <ComisionesConfigView initialItems={items} />;
 }
