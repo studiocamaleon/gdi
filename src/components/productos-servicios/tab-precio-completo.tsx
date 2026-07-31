@@ -63,16 +63,15 @@ import {
   actualizarPrecioEspecialCliente,
   crearPrecioEspecialCliente,
   eliminarPrecioEspecialCliente,
+  getCategoriaFiscal,
   getComisionesAplicadas,
   getComisionesCatalogo,
-  getImpuestosAplicados,
   getImpuestosCatalogo,
   getPreciosEspecialesProducto,
+  setCategoriaFiscal,
   setComisionesAplicadas,
-  setImpuestosAplicados,
   type ComisionAplicada,
   type ComisionCatalogoItem,
-  type ImpuestoAplicado,
   type ImpuestoCatalogoItem,
   type PrecioEspecialClienteItem,
 } from "@/lib/productos-servicios-api";
@@ -209,6 +208,12 @@ export function TabPrecioCompleto({
 // SECCIÓN 2 — Impuestos
 // ════════════════════════════════════════════════════════════════════════
 
+/** Opciones de categoría fiscal del producto (Fase 2, AR). */
+const CATEGORIA_FISCAL_OPCIONES = [
+  { value: "general", nombre: "Normal", sub: "Lleva IVA" },
+  { value: "exento", nombre: "Exento", sub: "Sin IVA" },
+] as const;
+
 function SeccionImpuestos({
   productoId,
   onStateChange,
@@ -217,20 +222,20 @@ function SeccionImpuestos({
   onStateChange?: (state: PricingSaveState) => void;
 }) {
   const [catalogo, setCatalogo] = React.useState<ImpuestoCatalogoItem[]>([]);
-  const [aplicados, setAplicados] = React.useState<ImpuestoAplicado[]>([]);
-  const [seleccionados, setSeleccionados] = React.useState<string[]>([]);
+  const [categoria, setCategoria] = React.useState<string>("general");
+  const [original, setOriginal] = React.useState<string>("general");
   const [cargando, setCargando] = React.useState(true);
   const [guardando, setGuardando] = React.useState(false);
 
   React.useEffect(() => {
     let cancelled = false;
     setCargando(true);
-    Promise.all([getImpuestosCatalogo(true), getImpuestosAplicados(productoId)])
-      .then(([cat, apli]) => {
+    Promise.all([getImpuestosCatalogo(true), getCategoriaFiscal(productoId)])
+      .then(([cat, cf]) => {
         if (cancelled) return;
         setCatalogo(cat);
-        setAplicados(apli);
-        setSeleccionados(apli.map((a) => a.impuestoCatalogoId));
+        setCategoria(cf.categoriaFiscal);
+        setOriginal(cf.categoriaFiscal);
       })
       .catch(() => undefined)
       .finally(() => !cancelled && setCargando(false));
@@ -239,38 +244,33 @@ function SeccionImpuestos({
     };
   }, [productoId]);
 
-  const toggle = (id: string) => {
-    setSeleccionados((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    );
-  };
+  const dirty = categoria !== original;
 
-  const dirty = React.useMemo(() => {
-    const apliIds = aplicados.map((a) => a.impuestoCatalogoId).sort();
-    const selIds = [...seleccionados].sort();
-    return JSON.stringify(apliIds) !== JSON.stringify(selIds);
-  }, [aplicados, seleccionados]);
-
-  const totalPct = React.useMemo(() => {
-    return catalogo
-      .filter((c) => seleccionados.includes(c.id))
-      .reduce((acc, c) => acc + c.porcentaje, 0);
-  }, [catalogo, seleccionados]);
+  // Datos informativos: la alícuota del IVA general y los impuestos de empresa
+  // (alcance TENANT) que se aplican solos a todo, sin marcar por producto.
+  const ivaGeneralPct = React.useMemo(
+    () =>
+      catalogo.find(
+        (c) => c.traslado === "POR_FUERA" && c.alcance === "PRODUCTO",
+      )?.porcentaje ?? null,
+    [catalogo],
+  );
+  const impuestosEmpresa = React.useMemo(
+    () => catalogo.filter((c) => c.alcance === "TENANT" && c.activo),
+    [catalogo],
+  );
 
   const guardar = React.useCallback(async () => {
     setGuardando(true);
-    const items = seleccionados.map((id, idx) => ({
-      impuestoCatalogoId: id,
-      orden: idx,
-    }));
     try {
-      const nuevos = await setImpuestosAplicados(productoId, items);
-      setAplicados(nuevos);
-      if (!onStateChange) toast.success("Impuestos del producto actualizados");
+      const res = await setCategoriaFiscal(productoId, categoria);
+      setOriginal(res.categoriaFiscal);
+      setCategoria(res.categoriaFiscal);
+      if (!onStateChange) toast.success("Categoría fiscal del producto actualizada");
     } finally {
       setGuardando(false);
     }
-  }, [onStateChange, productoId, seleccionados]);
+  }, [onStateChange, productoId, categoria]);
 
   React.useEffect(() => {
     onStateChange?.({ dirty: !cargando && dirty, loaded: !cargando, saving: guardando, save: guardar });
@@ -282,7 +282,8 @@ function SeccionImpuestos({
         <div className="body">
           <CardTitle>Impuestos</CardTitle>
           <CardDescription>
-            Esquemas impositivos del catálogo del tenant que se aplican al cotizar este producto.
+            El IVA se resuelve según la categoría del producto y tu condición
+            fiscal. Los impuestos de empresa se aplican solos a todo.
           </CardDescription>
         </div>
         <CardAction className="pricing-section-action">
@@ -297,43 +298,44 @@ function SeccionImpuestos({
       <CardContent className="pricing-section-content">
         {cargando ? (
           <p className="text-muted-foreground text-sm italic">Cargando...</p>
-        ) : catalogo.length === 0 ? (
-          <EstadoVacio
-            variant="compacto"
-            titulo="Sin impuestos en el catálogo"
-            descripcion="Antes de aplicar impuestos a este producto, creá al menos uno en el catálogo del tenant."
-            cta={{
-              label: "Ir al catálogo",
-              href: "/configuracion/impuestos",
-              icon: ExternalLinkIcon,
-            }}
-          />
         ) : (
           <>
             <div className="checkpill-row">
-              {catalogo.map((c) => {
-                const checked = seleccionados.includes(c.id);
+              {CATEGORIA_FISCAL_OPCIONES.map((op) => {
+                const on = categoria === op.value;
                 return (
-                  <label key={c.id} className={`checkpill ${checked ? "on" : ""}`}>
-                    <span className="cb">{checked ? "✓" : ""}</span>
-                    <input type="checkbox" checked={checked} onChange={() => toggle(c.id)} />
+                  <label key={op.value} className={`checkpill ${on ? "on" : ""}`}>
+                    <span className="cb">{on ? "●" : ""}</span>
+                    <input
+                      type="radio"
+                      name={`categoria-fiscal-${productoId}`}
+                      checked={on}
+                      onChange={() => setCategoria(op.value)}
+                    />
                     <div className="body">
-                      <div className="name">{c.nombre}</div>
-                      <div className="sub">{c.codigo}</div>
+                      <div className="name">{op.nombre}</div>
+                      <div className="sub">{op.sub}</div>
                     </div>
-                    <Badge variant="outline" className="pct">
-                      {c.porcentaje.toFixed(2)}%
-                    </Badge>
+                    {op.value === "general" && ivaGeneralPct != null && (
+                      <Badge variant="outline" className="pct">
+                        {ivaGeneralPct.toFixed(2)}%
+                      </Badge>
+                    )}
                   </label>
                 );
               })}
             </div>
-            <div className="pricing-total-row">
-              <div className="text-sm">
-                <span className="text-muted-foreground">Total impuestos seleccionados:</span>{" "}
-                <span className="font-mono font-semibold">{totalPct.toFixed(2)}%</span>
-              </div>
-              {!onStateChange && (
+            {impuestosEmpresa.length > 0 && (
+              <p className="text-muted-foreground mt-1 text-xs">
+                Se aplican a todo automáticamente:{" "}
+                {impuestosEmpresa
+                  .map((c) => `${c.nombre} (${c.porcentaje.toFixed(2)}%)`)
+                  .join(" · ")}
+                .
+              </p>
+            )}
+            {!onStateChange && (
+              <div className="pricing-total-row">
                 <Button
                   className="btn btn-primary"
                   onClick={() => {
@@ -344,10 +346,10 @@ function SeccionImpuestos({
                   disabled={!dirty || guardando}
                   size="sm"
                 >
-                  {guardando ? "Guardando..." : "Guardar selección"}
+                  {guardando ? "Guardando..." : "Guardar categoría"}
                 </Button>
-              )}
-            </div>
+              </div>
+            )}
           </>
         )}
       </CardContent>

@@ -1220,7 +1220,7 @@ export class MotorUniversalService {
     // 1. Producto y su precio standard
     const productoDb = await this.prisma.producto.findFirst({
       where: { id: args.productoId, tenantId: args.tenantId },
-      select: { precioConfigJson: true },
+      select: { precioConfigJson: true, categoriaFiscal: true },
     });
     if (!productoDb?.precioConfigJson) return null;
     const precioStandard =
@@ -1252,13 +1252,11 @@ export class MotorUniversalService {
     //    Además de los asociados al producto, entran los de alcance TENANT
     //    (IIBB, imp. al cheque): son de la empresa y aplican a toda cotización
     //    sin asociación explícita por producto.
-    const [impuestosAplicados, comisionesAplicadas, impuestosTenant] =
+    // Fase 2 — el IVA (POR_FUERA) se resuelve por CATEGORÍA del producto ×
+    // RÉGIMEN del emisor, no por tildes por producto. Los de alcance TENANT
+    // (IIBB, imp. al cheque) siguen aplicando a toda cotización sin asociación.
+    const [comisionesAplicadas, impuestosTenant, ivaRows, configFiscal] =
       await Promise.all([
-        this.prisma.productoImpuestoAplicado.findMany({
-          where: { tenantId: args.tenantId, productoId: args.productoId },
-          include: { impuestoCatalogo: true },
-          orderBy: [{ orden: 'asc' }, { createdAt: 'asc' }],
-        }),
         this.prisma.productoComisionAplicada.findMany({
           where: { tenantId: args.tenantId, productoId: args.productoId },
           include: { comisionCatalogo: true },
@@ -1267,6 +1265,18 @@ export class MotorUniversalService {
         this.prisma.productoImpuestoCatalogo.findMany({
           where: { tenantId: args.tenantId, alcance: 'TENANT', activo: true },
           orderBy: { nombre: 'asc' },
+        }),
+        this.prisma.productoImpuestoCatalogo.findMany({
+          where: {
+            tenantId: args.tenantId,
+            alcance: 'PRODUCTO',
+            traslado: 'POR_FUERA',
+            activo: true,
+          },
+        }),
+        this.prisma.configuracionFiscal.findUnique({
+          where: { tenantId: args.tenantId },
+          select: { condicionFiscal: true },
         }),
       ]);
 
@@ -1286,9 +1296,20 @@ export class MotorUniversalService {
       desglosarCliente: this.getDesglosarImpuestoCliente(catalogo.detalleJson),
     });
 
-    const impuestosSnapshot: PrecioImpuestoSnapshot[] = impuestosAplicados.map(
-      (ia) => toImpuestoSnapshot(ia.impuestoCatalogo, ia.orden),
-    );
+    const impuestosSnapshot: PrecioImpuestoSnapshot[] = [];
+    // IVA por categoría del producto + régimen del emisor. Sólo un Responsable
+    // Inscripto (RI) discrimina IVA; Monotributo/Exento no lo cobran. Un
+    // producto 'exento' no lleva IVA. 'general' (default) resuelve a la fila de
+    // IVA etiquetada 'general' (iva_21) ⇒ idéntico a lo que hoy se tildaba.
+    // Ver docs/impuestos-modelo-latam-diseno.md.
+    const cobraIva = (configFiscal?.condicionFiscal ?? 'RI') === 'RI';
+    const categoriaFiscal = productoDb.categoriaFiscal ?? 'general';
+    if (cobraIva && categoriaFiscal !== 'exento') {
+      const ivaRow = ivaRows.find(
+        (r) => (r.categoriaFiscal ?? 'general') === categoriaFiscal,
+      );
+      if (ivaRow) impuestosSnapshot.push(toImpuestoSnapshot(ivaRow, 0));
+    }
     // Merge de los TENANT no asociados explícitamente (dedupe por catálogo).
     const catalogosYaAplicados = new Set(
       impuestosSnapshot.map((i) => i.catalogoId),

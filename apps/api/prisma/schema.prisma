@@ -1939,6 +1939,11 @@ model ProductoImpuestoCatalogo {
   /// TENANT: aplica a todas las cotizaciones del tenant sin asociación explícita
   /// (ej. IIBB, imp. al cheque — son de la empresa, no del producto).
   alcance            String                     @default("PRODUCTO")
+  /// Clase de tasa que representa esta fila de IVA para el modelo por categoría:
+  /// 'general' | 'reducida' | null. El producto declara su `categoriaFiscal` y
+  /// el motor busca la fila de IVA (POR_FUERA) del tenant etiquetada con esa
+  /// misma categoría. Sólo aplica a filas de IVA; null en IIBB/cheque/tenant.
+  categoriaFiscal    String?
   detalleJson        Json?
   activo             Boolean                    @default(true)
   createdAt          DateTime                   @default(now())
@@ -2126,6 +2131,13 @@ model Producto {
   /// Configuración del Tab Precio (preservado del modelo viejo).
   precioConfigJson          Json?
   atributosComercialesJson  Json?
+  /// Categoría fiscal del producto para el IVA: 'general' | 'exento' (y a
+  /// futuro 'reducida'). Reemplaza al "tildar el IVA por producto": el motor
+  /// resuelve la alícuota cruzando esta categoría con el régimen del emisor y
+  /// la fila de IVA del catálogo etiquetada con la misma categoría. Default
+  /// 'general' ⇒ producto nuevo no requiere acción. Ver
+  /// docs/impuestos-modelo-latam-diseno.md.
+  categoriaFiscal           String                            @default("general")
   activo                    Boolean                           @default(true)
   createdAt                 DateTime                          @default(now())
   updatedAt                 DateTime                          @updatedAt

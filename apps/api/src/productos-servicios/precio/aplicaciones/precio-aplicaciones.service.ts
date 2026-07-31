@@ -8,6 +8,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import {
   AsignarComisionesBatchDto,
   AsignarImpuestosBatchDto,
+  CategoriaFiscalDto,
 } from '../dto/precio-aplicacion.dto';
 
 /**
@@ -254,6 +255,34 @@ export class PrecioAplicacionesService {
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────
+
+  // ── Categoría fiscal (Fase 2) ───────────────────────────────────────
+  // El IVA del producto ya no se "tilda": se resuelve en el motor cruzando
+  // esta categoría con el régimen del emisor. Ver
+  // docs/impuestos-modelo-latam-diseno.md.
+
+  async getCategoriaFiscal(tenantId: string, productoId: string) {
+    await this.assertProductoExiste(tenantId, productoId);
+    const p = await this.prisma.producto.findFirst({
+      where: { id: productoId, tenantId },
+      select: { categoriaFiscal: true },
+    });
+    return { categoriaFiscal: p?.categoriaFiscal ?? 'general' };
+  }
+
+  async setCategoriaFiscal(
+    tenantId: string,
+    productoId: string,
+    dto: CategoriaFiscalDto,
+  ) {
+    await this.assertProductoExiste(tenantId, productoId);
+    // updateMany con tenantId: tenant-safe (el id es global, el guard es el par).
+    await this.prisma.producto.updateMany({
+      where: { id: productoId, tenantId },
+      data: { categoriaFiscal: dto.categoriaFiscal },
+    });
+    return { categoriaFiscal: dto.categoriaFiscal };
+  }
 
   private async assertProductoExiste(tenantId: string, productoId: string) {
     const p = await this.prisma.producto.findFirst({

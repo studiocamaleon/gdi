@@ -1578,6 +1578,111 @@ describe('MotorUniversalService — smoke tests', () => {
     );
   });
 
+  // Fase 2 — el IVA se resuelve por CATEGORÍA del producto × RÉGIMEN del emisor
+  // (no por tildes). general (RI) lleva IVA; exento no; Monotributo lo apaga.
+  it('Fase 2: el IVA sale de la categoría del producto y el régimen del emisor', async () => {
+    if (!tenantId) return;
+    const tid = tenantId;
+    const producto = await prisma.producto.findFirstOrThrow({
+      where: { tenantId: tid, codigo: 'TARJ-PREMIUM-300' },
+      select: { id: true, categoriaFiscal: true },
+    });
+    const configOriginal = await prisma.configuracionFiscal.findUnique({
+      where: { tenantId: tid },
+    });
+
+    await ensureCentroHorarioConTarifa(tid);
+    const cotizar = async () => {
+      const r = await motorService.cotizar({
+        tenantId: tid,
+        productoId: producto.id,
+        periodo: '2026-03',
+        jobContext: { cantidad: 1000, caras: 2 },
+      });
+      expect(r.exitoso).toBe(true);
+      expect(r.cotizacion!.desglosePrecio).toBeDefined();
+      return r.cotizacion!.desglosePrecio!;
+    };
+
+    try {
+      // Setup fiscal del emisor: Responsable Inscripto + fila IVA general 21%.
+      await prisma.configuracionFiscal.upsert({
+        where: { tenantId: tid },
+        update: { condicionFiscal: 'RI' },
+        create: {
+          tenantId: tid,
+          razonSocial: 'Fase2 Test',
+          cuit: '20111111112',
+          condicionFiscal: 'RI',
+        },
+      });
+      await prisma.productoImpuestoCatalogo.upsert({
+        where: { tenantId_codigo: { tenantId: tid, codigo: 'IVA_TEST_F2' } },
+        update: { activo: true, categoriaFiscal: 'general' },
+        create: {
+          tenantId: tid,
+          codigo: 'IVA_TEST_F2',
+          nombre: 'IVA test',
+          porcentaje: 21,
+          baseCalculo: 'NETO',
+          traslado: 'POR_FUERA',
+          alcance: 'PRODUCTO',
+          categoriaFiscal: 'general',
+          activo: true,
+        },
+      });
+
+      // general + RI ⇒ lleva IVA: bruto = neto × 1.21.
+      await prisma.producto.update({
+        where: { id: producto.id },
+        data: { categoriaFiscal: 'general' },
+      });
+      const gen = await cotizar();
+      expect(gen.totalImpuestos).toBeGreaterThan(0);
+      expect(gen.precioBrutoUnitario / gen.precioNetoUnitario).toBeCloseTo(
+        1.21,
+        2,
+      );
+
+      // exento ⇒ sin IVA: bruto = neto.
+      await prisma.producto.update({
+        where: { id: producto.id },
+        data: { categoriaFiscal: 'exento' },
+      });
+      const ex = await cotizar();
+      expect(ex.precioBrutoUnitario).toBe(ex.precioNetoUnitario);
+
+      // Monotributo apaga el IVA aunque el producto sea general.
+      await prisma.configuracionFiscal.update({
+        where: { tenantId: tid },
+        data: { condicionFiscal: 'monotributo' },
+      });
+      await prisma.producto.update({
+        where: { id: producto.id },
+        data: { categoriaFiscal: 'general' },
+      });
+      const mono = await cotizar();
+      expect(mono.precioBrutoUnitario).toBe(mono.precioNetoUnitario);
+    } finally {
+      // Teardown: dejar el tenant como estaba (otros tests cotizan lo mismo).
+      await prisma.producto.update({
+        where: { id: producto.id },
+        data: { categoriaFiscal: producto.categoriaFiscal },
+      });
+      await prisma.productoImpuestoCatalogo.deleteMany({
+        where: { tenantId: tid, codigo: 'IVA_TEST_F2' },
+      });
+      if (configOriginal) {
+        await prisma.configuracionFiscal.update({
+          where: { tenantId: tid },
+          data: { condicionFiscal: configOriginal.condicionFiscal },
+        });
+      } else {
+        await prisma.configuracionFiscal.deleteMany({ where: { tenantId: tid } });
+      }
+    }
+  });
+
   it('F.2.12: Vinilo (precioConfig margen_variable) → margen depende de cantidad', async () => {
     if (!tenantId) return;
     const vinilo = await prisma.producto.findFirstOrThrow({

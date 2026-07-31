@@ -14,6 +14,7 @@ import { PrecioAplicacionesService } from './precio-aplicaciones.service';
 import {
   AsignarComisionesBatchDto,
   AsignarImpuestosBatchDto,
+  CategoriaFiscalDto,
 } from '../dto/precio-aplicacion.dto';
 import { Permiso } from '../../../auth/permiso.decorator';
 
@@ -75,6 +76,26 @@ export class PrecioAplicacionesController {
       productoId,
       impuestoCatalogoId,
     );
+  }
+
+  // ── Categoría fiscal (Fase 2: el IVA se resuelve por categoría) ──────
+
+  @Get('categoria-fiscal')
+  async getCategoriaFiscal(
+    @Req() req: RequestWithAuth,
+    @Param('productoId') productoId: string,
+  ) {
+    return this.service.getCategoriaFiscal(tenantId(req), productoId);
+  }
+
+  @Permiso('costos.gestionar')
+  @Put('categoria-fiscal')
+  async setCategoriaFiscal(
+    @Req() req: RequestWithAuth,
+    @Param('productoId') productoId: string,
+    @Body() dto: CategoriaFiscalDto,
+  ) {
+    return this.service.setCategoriaFiscal(tenantId(req), productoId, dto);
   }
 
   // ── Comisiones ──────────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsIn,
   IsInt,
   IsOptional,
   IsUUID,
@@ -7,6 +8,19 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+
+/**
+ * Categorías fiscales soportadas para el IVA por producto (Fase 2, AR).
+ * 'general' resuelve a la fila de IVA general del catálogo (default);
+ * 'exento' no lleva IVA. 'reducida' queda para más adelante.
+ */
+export const CATEGORIAS_FISCALES = ['general', 'exento'] as const;
+
+/** Setea la categoría fiscal del producto (dispara la resolución del IVA). */
+export class CategoriaFiscalDto {
+  @IsIn(CATEGORIAS_FISCALES)
+  categoriaFiscal!: (typeof CATEGORIAS_FISCALES)[number];
+}
 
 /**
  * Asociar UN impuesto del catálogo al producto.

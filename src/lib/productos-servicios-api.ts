@@ -1438,6 +1438,30 @@ export async function getImpuestosAplicados(
   );
 }
 
+/** Categoría fiscal del producto: 'general' | 'exento' (Fase 2). El IVA se
+ *  resuelve en el motor por categoría × régimen del emisor. */
+export async function getCategoriaFiscal(
+  productoId: string,
+): Promise<{ categoriaFiscal: string }> {
+  return apiRequest<{ categoriaFiscal: string }>(
+    `/productos-servicios/productos/${productoId}/precio/categoria-fiscal`,
+  );
+}
+
+export async function setCategoriaFiscal(
+  productoId: string,
+  categoriaFiscal: string,
+): Promise<{ categoriaFiscal: string }> {
+  return apiRequest<{ categoriaFiscal: string }>(
+    `/productos-servicios/productos/${productoId}/precio/categoria-fiscal`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ categoriaFiscal }),
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+}
+
 export async function setImpuestosAplicados(
   productoId: string,
   items: Array<{ impuestoCatalogoId: string; orden?: number }>,
