@@ -15,7 +15,9 @@ import { usePathname } from "next/navigation";
 import {
   BuildingIcon,
   CreditCardIcon,
+  HandCoinsIcon,
   HardDriveIcon,
+  LandmarkIcon,
   PlugIcon,
   ReceiptTextIcon,
   UsersIcon,
@@ -32,6 +34,8 @@ const ICONOS: Record<string, IconCmp> = {
   usuarios: UsersIcon,
   "datos-fiscales": ReceiptTextIcon,
   "metodos-pago": CreditCardIcon,
+  impuestos: LandmarkIcon,
+  comisiones: HandCoinsIcon,
   almacenamiento: HardDriveIcon,
   integraciones: PlugIcon,
 };

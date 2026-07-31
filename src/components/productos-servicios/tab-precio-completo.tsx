@@ -286,7 +286,7 @@ function SeccionImpuestos({
           </CardDescription>
         </div>
         <CardAction className="pricing-section-action">
-          <Link href="/productos-servicios/impuestos-catalogo"
+          <Link href="/configuracion/impuestos"
             className={cn(buttonVariants({ variant: "outline", size: "sm" }), "btn")}
           >
             <ExternalLinkIcon className="mr-2 size-3" />
@@ -304,7 +304,7 @@ function SeccionImpuestos({
             descripcion="Antes de aplicar impuestos a este producto, creá al menos uno en el catálogo del tenant."
             cta={{
               label: "Ir al catálogo",
-              href: "/productos-servicios/impuestos-catalogo",
+              href: "/configuracion/impuestos",
               icon: ExternalLinkIcon,
             }}
           />
@@ -437,7 +437,7 @@ function SeccionComisiones({
           </CardDescription>
         </div>
         <CardAction className="pricing-section-action">
-          <Link href="/productos-servicios/comisiones-catalogo"
+          <Link href="/configuracion/comisiones"
             className={cn(buttonVariants({ variant: "outline", size: "sm" }), "btn")}
           >
             <ExternalLinkIcon className="mr-2 size-3" />
@@ -455,7 +455,7 @@ function SeccionComisiones({
             descripcion="Antes de aplicar comisiones a este producto, creá al menos una en el catálogo del tenant."
             cta={{
               label: "Ir al catálogo",
-              href: "/productos-servicios/comisiones-catalogo",
+              href: "/configuracion/comisiones",
               icon: ExternalLinkIcon,
             }}
           />

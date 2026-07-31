@@ -62,6 +62,24 @@ export const SECCIONES_CONFIG: SeccionConfig[] = [
     detalle: "Qué medios acepta el taller y con qué comisión",
     permiso: "administracion.configurar",
   },
+  // Impuestos y comisiones vivían bajo Costos, pero no son costos técnicos: se
+  // configuran una vez y casi no se tocan. Su lugar es Configuración (tenant).
+  // Permiso `costos.ver` = el MISMO que guarda su API (@Permiso 'costos.ver'):
+  // mudamos la ubicación, no el acceso. Revisar en el rediseño fiscal (fase 2).
+  {
+    key: "impuestos",
+    href: "/configuracion/impuestos",
+    label: "Impuestos",
+    detalle: "Los tributos que el taller aplica al cotizar",
+    permiso: "costos.ver",
+  },
+  {
+    key: "comisiones",
+    href: "/configuracion/comisiones",
+    label: "Comisiones",
+    detalle: "Comisiones de vendedor y de pasarela de pago",
+    permiso: "costos.ver",
+  },
   {
     key: "almacenamiento",
     href: "/configuracion/almacenamiento",

@@ -130,16 +130,8 @@ export const NAV: NavItem[] = [
         label: "Cargos directos",
         href: "/productos-servicios/cargos-directos",
       },
-      {
-        key: "impuestos",
-        label: "Impuestos",
-        href: "/productos-servicios/impuestos-catalogo",
-      },
-      {
-        key: "comisiones",
-        label: "Comisiones",
-        href: "/productos-servicios/comisiones-catalogo",
-      },
+      // Impuestos y Comisiones se mudaron a Configuración (no son costos
+      // técnicos, se tocan una vez): ver configuracion-secciones.ts.
     ],
   },
   {

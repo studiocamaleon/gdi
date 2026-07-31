@@ -1,9 +1,7 @@
-import { PrecioCatalogoManager } from "@/components/productos-servicios/precio-catalogo-manager";
-import { getImpuestosCatalogo } from "@/lib/productos-servicios-api";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
-export default async function ImpuestosCatalogoPage() {
-  const items = await getImpuestosCatalogo(false); // incluye inactivos
-  return <PrecioCatalogoManager initialItems={items} tipo="impuestos" />;
+// El catálogo de impuestos se mudó a Configuración. Se deja este redirect para
+// bookmarks y enlaces viejos. Ver docs/impuestos-modelo-latam-diseno.md.
+export default function ImpuestosCatalogoRedirect() {
+  redirect("/configuracion/impuestos");
 }

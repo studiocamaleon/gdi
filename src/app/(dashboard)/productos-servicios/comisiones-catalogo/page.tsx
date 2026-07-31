@@ -1,9 +1,7 @@
-import { PrecioCatalogoManager } from "@/components/productos-servicios/precio-catalogo-manager";
-import { getComisionesCatalogo } from "@/lib/productos-servicios-api";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
-export default async function ComisionesCatalogoPage() {
-  const items = await getComisionesCatalogo(false);
-  return <PrecioCatalogoManager initialItems={items} tipo="comisiones" />;
+// El catálogo de comisiones se mudó a Configuración. Se deja este redirect para
+// bookmarks y enlaces viejos. Ver docs/impuestos-modelo-latam-diseno.md.
+export default function ComisionesCatalogoRedirect() {
+  redirect("/configuracion/comisiones");
 }
