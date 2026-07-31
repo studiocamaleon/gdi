@@ -426,3 +426,11 @@ export function resolverEstacionDePaso<T extends EstacionRuteo>(
 
 /** Clave del bucket de pasos sin estación asignada. */
 export const SIN_ESTACION_KEY = "sin-estacion";
+
+/**
+ * Clave del bucket sintético de pasos TERCERIZADOS (compras a proveedor). Como
+ * "Sin estación", existe para todos los tenants sin ser una `Estacion` real: el
+ * trabajo tercerizado no se ejecuta en el piso, se gestiona desde Compras de la
+ * OT, pero se agrupa acá para verlo junto.
+ */
+export const TERCERIZADOS_KEY = "proveedor-tercerizado";
