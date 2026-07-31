@@ -303,6 +303,11 @@ export function SelectBuscable({
             width: caja.ancho,
             top: caja.top,
             maxHeight: caja.alto,
+            // El popover vive en un portal sobre <body>. Su z-index tiene que
+            // ganarle al contenedor que lo dispara (el sheet de estaciones está
+            // en 1001): inline y no en `.selb-pop` porque Turbopack a veces no
+            // recompila globals.css y el popover quedaba invisible detrás.
+            zIndex: 4000,
           }}
         >
           {conBusqueda ? (

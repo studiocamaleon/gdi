@@ -6489,7 +6489,11 @@ function AcomodadoDetalladoEditor({
   familia: FamiliaListItem | undefined;
   lookups: LookupsConfigPaso;
   maquinaParaDefaults:
-    | { parametrosTecnicosJson?: Record<string, unknown> | null }
+    | {
+        /** Columna universal: ancho de rollo canónico de la máquina. */
+        anchoUtil?: number | string | null;
+        parametrosTecnicosJson?: Record<string, unknown> | null;
+      }
     | null
     | undefined;
   panelMeasures: ReturnType<typeof getProductoPanelMeasures>;
@@ -6555,14 +6559,17 @@ function AcomodadoDetalladoEditor({
   const rollWidthForPanelMm =
     readOptionalNumber(attrsSustrato.anchoMm) ??
     readOptionalNumber(attrsSustrato.widthMm) ??
+    // Ancho de la máquina = anchoUtil (columna canónica) primero; el resto es
+    // fallback legacy. Sync con el motor (nesting-config.ts).
+    readOptionalNumber(maquinaParaDefaults?.anchoUtil) ??
+    readOptionalNumber(
+      maquinaParaDefaults?.parametrosTecnicosJson?.anchoUtil,
+    ) ??
     readOptionalNumber(
       maquinaParaDefaults?.parametrosTecnicosJson?.anchoMaxRolloMm,
     ) ??
     readOptionalNumber(
       maquinaParaDefaults?.parametrosTecnicosJson?.anchoMaxMm,
-    ) ??
-    readOptionalNumber(
-      maquinaParaDefaults?.parametrosTecnicosJson?.anchoUtil,
     );
   const panelizadoConfig = getPanelizadoConfig(
     cfg.paramsPasoJson,

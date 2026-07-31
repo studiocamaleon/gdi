@@ -241,10 +241,19 @@ export type Estacion = {
   calendario: CalendarioEstacion | null;
   /** Códigos de familias de pasos asignadas. */
   familias: string[];
+  /** Reglas de captura nuevas (tecnología / paso). Ver
+   *  docs/estaciones-reglas-diseno.md. */
+  reglas?: ReglaEstacion[];
   empleados: EstacionEmpleadoRef[];
   maquinas: EstacionMaquinaRef[];
   createdAt: string;
   updatedAt: string;
+};
+
+/** Regla de captura de una estación (tipos nuevos del rediseño). */
+export type ReglaEstacion = {
+  tipo: "tecnologia" | "paso";
+  valor: string;
 };
 
 export type EstacionPayload = {
@@ -257,10 +266,12 @@ export type EstacionPayload = {
   /** Minutos de traslado hasta esta estación. null = default del taller. */
   tiempoPreparacionMin?: number | null;
   calendario?: CalendarioEstacion | null;
-  /** Reemplazo completo de las tres listas. */
+  /** Reemplazo completo de las listas. */
   familias: string[];
   empleadoIds: string[];
   maquinaIds: string[];
+  /** Reglas de captura nuevas (tecnología / paso). */
+  reglas?: ReglaEstacion[];
 };
 
 /**
@@ -289,6 +300,7 @@ export function createEmptyEstacion(): EstacionPayload {
     familias: [],
     empleadoIds: [],
     maquinaIds: [],
+    reglas: [],
   };
 }
 

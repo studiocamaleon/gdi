@@ -526,6 +526,7 @@ function isUniqueConstraintError(error: unknown) {
 /** Include de la proyección completa de una estación. */
 const ESTACION_INCLUDE = {
   familias: { select: { familiaCodigo: true } },
+  reglas: { select: { tipo: true, valor: true } },
   empleados: {
     include: {
       empleado: { select: { id: true, nombreCompleto: true, sector: true } },
@@ -1047,6 +1048,12 @@ export class ProduccionService {
     const familias = [...new Set(payload.familias ?? [])];
     const empleadoIds = [...new Set(payload.empleadoIds ?? [])];
     const maquinaIds = [...new Set(payload.maquinaIds ?? [])];
+    // Reglas nuevas (tecnología / paso), dedup por tipo+valor.
+    const reglas = [
+      ...new Map(
+        (payload.reglas ?? []).map((r) => [`${r.tipo}::${r.valor}`, r]),
+      ).values(),
+    ];
 
     const invalidas = familias.filter((codigo) => !resolverFamilia(codigo));
     if (invalidas.length > 0) {
@@ -1090,6 +1097,31 @@ export class ProduccionService {
       }
     }
 
+    // Una tecnología / paso concreto lo captura A LO SUMO UNA estación: si dos
+    // lo reclamaran, el ruteo por ese nivel sería ambiguo (docs/estaciones-
+    // reglas-diseno.md §5). Mensaje con la dueña; el front ya lo deshabilita,
+    // esto es la red de seguridad del backend.
+    if (reglas.length > 0) {
+      const enConflicto = await this.prisma.estacionRegla.findMany({
+        where: {
+          tenantId: auth.tenantId,
+          OR: reglas.map((r) => ({ tipo: r.tipo, valor: r.valor })),
+          ...(exceptoEstacionId
+            ? { estacionId: { not: exceptoEstacionId } }
+            : {}),
+        },
+        include: { estacion: { select: { nombre: true } } },
+      });
+      if (enConflicto.length > 0) {
+        const detalle = enConflicto
+          .map((fila) => `${fila.tipo} "${fila.valor}" (en "${fila.estacion.nombre}")`)
+          .join(' · ');
+        throw new ConflictException(
+          `Estas reglas ya las captura otra estación: ${detalle}. Cada tecnología o paso concreto vive en una sola estación.`,
+        );
+      }
+    }
+
     if (empleadoIds.length > 0) {
       const encontrados = await this.prisma.empleado.count({
         where: { tenantId: auth.tenantId, id: { in: empleadoIds } },
@@ -1107,7 +1139,7 @@ export class ProduccionService {
       }
     }
 
-    return { familias, empleadoIds, maquinaIds };
+    return { familias, empleadoIds, maquinaIds, reglas };
   }
 
   /**
@@ -1123,6 +1155,7 @@ export class ProduccionService {
       familias: string[];
       empleadoIds: string[];
       maquinaIds: string[];
+      reglas: Array<{ tipo: string; valor: string }>;
     },
   ) {
     await tx.estacionFamilia.deleteMany({
@@ -1134,6 +1167,21 @@ export class ProduccionService {
           tenantId: auth.tenantId,
           estacionId,
           familiaCodigo,
+        })),
+      });
+    }
+
+    // Reglas nuevas (tecnología / paso): replace-all en EstacionRegla.
+    await tx.estacionRegla.deleteMany({
+      where: { tenantId: auth.tenantId, estacionId },
+    });
+    if (listas.reglas.length > 0) {
+      await tx.estacionRegla.createMany({
+        data: listas.reglas.map((regla) => ({
+          tenantId: auth.tenantId,
+          estacionId,
+          tipo: regla.tipo,
+          valor: regla.valor,
         })),
       });
     }
@@ -1298,6 +1346,7 @@ export class ProduccionService {
       // Normaliza el shape legado (una franja suelta por día) al de listas.
       calendario: normalizarCalendarioAlmacenado(item.calendarioJson),
       familias: item.familias.map((fila) => fila.familiaCodigo),
+      reglas: item.reglas.map((r) => ({ tipo: r.tipo, valor: r.valor })),
       empleados: item.empleados.map((fila) => ({
         id: fila.empleado.id,
         nombreCompleto: fila.empleado.nombreCompleto,

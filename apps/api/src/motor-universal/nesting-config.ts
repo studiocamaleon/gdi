@@ -288,11 +288,15 @@ export function resolveNestingConfig(
       pieceBleedMm,
   };
   const materialRollWidthMm = readNumber(materialAttrs.anchoMm);
+  // El ancho del rollo de la máquina sale de `anchoUtil` (columna universal,
+  // canónica y requerida). `anchoMaxRolloMm` quedó como fallback legacy: para
+  // gran formato `anchoUtil` se deriva de él (coinciden), y para plotter CAD
+  // `anchoUtil` es la fuente única (ver maquinaria-templates.ts).
   const machineMaxRollWidthMm = readNumber(
+    paso.maquina?.anchoUtil,
+    maqParams.anchoUtil,
     maqParams.anchoMaxRolloMm,
     maqParams.anchoMaxMm,
-    maqParams.anchoUtil,
-    paso.maquina?.anchoUtil,
   );
   const shouldValidateRollWidthAgainstMachine =
     geometry === 'ROLLO' && algorithm !== 'shelf-rollo' && algorithm !== 'maxrects-rollo';

@@ -56,6 +56,11 @@ export type TableroPasoData = {
   centroCostoId: string | null;
   /** Centro de costo que tarifó el paso — proxy de "estación" en fase 1. */
   centroCostoNombre: string | null;
+  /** Máquina que ejecutó el paso: señal REAL para el ruteo a estaciones (rediseño
+   *  por reglas). Null en pasos sin máquina o en órdenes viejas. */
+  maquinaId?: string | null;
+  /** Tecnología de esa máquina (derivada). Base del ruteo "por tecnología". */
+  tecnologia?: string | null;
   duracionEstimadaMin: number | null;
   estado: TableroPasoEstado;
   motivoBloqueo: string | null;
@@ -347,41 +352,85 @@ type EstacionRuteo = {
   id: string;
   activo: boolean;
   familias: string[];
-  maquinas: Array<{ centroCostoId: string | null }>;
+  maquinas: Array<{ id?: string | null; centroCostoId: string | null }>;
+  /** Reglas nuevas (rediseño): 'tecnologia' | 'paso' (+ 'maquina'/'familia'). */
+  reglas?: Array<{ tipo: string; valor: string }>;
 };
 
+type PasoRuteo = Pick<
+  TableroPasoData,
+  "familiaCodigo" | "centroCostoId" | "maquinaId" | "tecnologia"
+>;
+
 /**
- * Ruteo paso → estación (estaciones ACTIVAS): el paso llega por su FAMILIA,
- * y las máquinas de la estación son FILTROS — si la estación tiene máquinas,
- * sólo recibe los pasos que usan esas máquinas (vía el centro de costo del
- * paso, que identifica la máquina). Resolución determinista:
- *   1. estación con la familia cuya máquina matchea el centro del paso;
- *   2. estación general (con la familia y sin máquinas);
- *   3. paso manual (sin centro) con única candidata;
- *   4. sin estación (null).
+ * Ruteo paso → estación (rediseño "estaciones por reglas",
+ * docs/estaciones-reglas-diseno.md). La estación declara qué agrupa; el paso no
+ * declara estación. Se prueba por prioridad, de lo más específico a lo general:
+ *
+ *   1. por MÁQUINA (la máquina del paso está en la estación) — señal real;
+ *   2. por TECNOLOGÍA (regla) — la máquina del paso es de esa tecnología;
+ *   3. por PASO concreto (regla) — separa pasos de la misma familia;
+ *   4. FALLBACK legacy: familia + centro de costo (INTACTO). Cubre las órdenes
+ *      viejas (sin `maquinaId`) y las estaciones sin reglas nuevas → neutral.
+ *
+ * Determinista: primer match por nivel. Sin match → null ("Sin estación").
  */
 export function resolverEstacionDePaso<T extends EstacionRuteo>(
   estaciones: T[],
-  paso: Pick<TableroPasoData, "familiaCodigo" | "centroCostoId">,
+  paso: PasoRuteo,
 ): T | null {
-  const candidatas = estaciones.filter(
-    (estacion) => estacion.activo && estacion.familias.includes(paso.familiaCodigo),
-  );
-  if (candidatas.length === 0) return null;
+  const activas = estaciones.filter((estacion) => estacion.activo);
 
-  if (paso.centroCostoId) {
-    const porMaquina = candidatas.find((estacion) =>
-      estacion.maquinas.some((maquina) => maquina.centroCostoId === paso.centroCostoId),
+  // 1. Por máquina: la máquina que ejecutó el paso está asignada a la estación.
+  if (paso.maquinaId) {
+    const porMaquina = activas.find((estacion) =>
+      estacion.maquinas.some((maquina) => maquina.id === paso.maquinaId),
     );
     if (porMaquina) return porMaquina;
   }
+  // 2. Por tecnología (regla nueva).
+  if (paso.tecnologia) {
+    const porTecnologia = activas.find((estacion) =>
+      (estacion.reglas ?? []).some(
+        (regla) => regla.tipo === "tecnologia" && regla.valor === paso.tecnologia,
+      ),
+    );
+    if (porTecnologia) return porTecnologia;
+  }
+  // 3. Por paso concreto (regla nueva; identidad del paso = su familiaCodigo).
+  const porPaso = activas.find((estacion) =>
+    (estacion.reglas ?? []).some(
+      (regla) => regla.tipo === "paso" && regla.valor === paso.familiaCodigo,
+    ),
+  );
+  if (porPaso) return porPaso;
 
+  // 4. Fallback legacy: familia + centro de costo. Igual que antes.
+  const candidatas = activas.filter((estacion) =>
+    estacion.familias.includes(paso.familiaCodigo),
+  );
+  if (candidatas.length === 0) return null;
+  if (paso.centroCostoId) {
+    const porCentro = candidatas.find((estacion) =>
+      estacion.maquinas.some(
+        (maquina) => maquina.centroCostoId === paso.centroCostoId,
+      ),
+    );
+    if (porCentro) return porCentro;
+  }
   const general = candidatas.find((estacion) => estacion.maquinas.length === 0);
   if (general) return general;
-
   if (!paso.centroCostoId && candidatas.length === 1) return candidatas[0];
   return null;
 }
 
 /** Clave del bucket de pasos sin estación asignada. */
 export const SIN_ESTACION_KEY = "sin-estacion";
+
+/**
+ * Clave del bucket sintético de pasos TERCERIZADOS (compras a proveedor). Como
+ * "Sin estación", existe para todos los tenants sin ser una `Estacion` real: el
+ * trabajo tercerizado no se ejecuta en el piso, se gestiona desde Compras de la
+ * OT, pero se agrupa acá para verlo junto.
+ */
+export const TERCERIZADOS_KEY = "proveedor-tercerizado";

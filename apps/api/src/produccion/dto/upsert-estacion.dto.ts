@@ -12,8 +12,26 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import type { CalendarioEstacion } from '../calendario';
+
+/** Tipos de regla que viven en EstacionRegla (las nuevas del rediseño). La
+ *  familia sigue en `familias` y la máquina en `maquinaIds`. Ver
+ *  docs/estaciones-reglas-diseno.md. */
+export const TIPOS_REGLA_ESTACION = ['tecnologia', 'paso'] as const;
+export type TipoReglaEstacion = (typeof TIPOS_REGLA_ESTACION)[number];
+
+export class ReglaEstacionDto {
+  @IsIn(TIPOS_REGLA_ESTACION)
+  tipo: TipoReglaEstacion;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  valor: string;
+}
 
 /** Etapas productivas FIJAS del taller (ordenan las vistas operativas). */
 export const ETAPAS_ESTACION = [
@@ -94,4 +112,13 @@ export class UpsertEstacionDto {
   @ArrayMaxSize(100)
   @IsUUID(undefined, { each: true })
   maquinaIds?: string[];
+
+  /** Reglas de captura nuevas (tecnología / paso). Familia va en `familias`,
+   *  máquina en `maquinaIds`. Ver docs/estaciones-reglas-diseno.md. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => ReglaEstacionDto)
+  reglas?: ReglaEstacionDto[];
 }

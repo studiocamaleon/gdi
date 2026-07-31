@@ -67,6 +67,102 @@ function chipsDeclarar(estimado: number | null): number[] {
   return [...new Set([redondo(estimado / 2), redondo(estimado), redondo(estimado * 2)])];
 }
 
+const POS_STORAGE_KEY = "pasos-widget-pos";
+/** Píxeles a mover antes de considerarlo arrastre (así el click sigue vivo). */
+const DRAG_THRESHOLD = 4;
+const BORDE = 8;
+
+/**
+ * Hace el widget arrastrable por su handle (la píldora o el encabezado). El
+ * usuario lo lleva a donde quiera y la posición se recuerda (localStorage). Con
+ * umbral: mover < 4px sigue contando como click, así no se rompe expandir/pausar.
+ */
+function useWidgetArrastrable() {
+  const rootRef = React.useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = React.useState<{ x: number; y: number } | null>(null);
+  const drag = React.useRef<{
+    sx: number; sy: number; ox: number; oy: number; moved: boolean; id: number;
+  } | null>(null);
+  /** True mientras se arrastra: suprime el click que dispara el pointerup. */
+  const arrastrando = React.useRef(false);
+
+  const clamp = React.useCallback((x: number, y: number) => {
+    const el = rootRef.current;
+    const w = el?.offsetWidth ?? 0;
+    const h = el?.offsetHeight ?? 0;
+    const maxX = Math.max(BORDE, window.innerWidth - w - BORDE);
+    const maxY = Math.max(BORDE, window.innerHeight - h - BORDE);
+    return { x: Math.min(Math.max(BORDE, x), maxX), y: Math.min(Math.max(BORDE, y), maxY) };
+  }, []);
+
+  // Posición guardada; se re-encajota por si la ventana cambió de tamaño.
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem(POS_STORAGE_KEY);
+      if (!raw) return;
+      const p = JSON.parse(raw) as { x: number; y: number };
+      if (typeof p?.x === "number" && typeof p?.y === "number") setPos(clamp(p.x, p.y));
+    } catch {
+      /* posición corrupta: se ignora, vuelve al ancla por defecto */
+    }
+  }, [clamp]);
+
+  // Al achicar la ventana, mantenerlo dentro.
+  React.useEffect(() => {
+    const onResize = () => setPos((p) => (p ? clamp(p.x, p.y) : p));
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [clamp]);
+
+  // Persistir en cada cambio de posición (no en el pointerup): así no depende
+  // de que ese evento llegue, y sobrevive a recargas y cambios de página.
+  React.useEffect(() => {
+    if (!pos) return;
+    try { localStorage.setItem(POS_STORAGE_KEY, JSON.stringify(pos)); } catch { /* sin persistencia */ }
+  }, [pos]);
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0 || !rootRef.current) return;
+    const rect = rootRef.current.getBoundingClientRect();
+    drag.current = {
+      sx: e.clientX, sy: e.clientY,
+      ox: e.clientX - rect.left, oy: e.clientY - rect.top,
+      moved: false, id: e.pointerId,
+    };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    const st = drag.current;
+    if (!st || e.pointerId !== st.id) return;
+    if (!st.moved && Math.hypot(e.clientX - st.sx, e.clientY - st.sy) < DRAG_THRESHOLD) return;
+    st.moved = true;
+    arrastrando.current = true;
+    setPos(clamp(e.clientX - st.ox, e.clientY - st.oy));
+  };
+  const onPointerUp = (e: React.PointerEvent) => {
+    const st = drag.current;
+    if (!st || e.pointerId !== st.id) return;
+    (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+    if (st.moved) {
+      // La persistencia la hace el efecto sobre `pos`. Acá sólo se suprime el
+      // click sintético que llega justo después del pointerup.
+      setTimeout(() => { arrastrando.current = false; }, 0);
+    }
+    drag.current = null;
+  };
+
+  const handleProps = {
+    onPointerDown,
+    onPointerMove,
+    onPointerUp,
+    style: { cursor: "grab", touchAction: "none" as const },
+  };
+  const rootStyle: React.CSSProperties = pos
+    ? { left: pos.x, top: pos.y, right: "auto", bottom: "auto" }
+    : {};
+  return { rootRef, handleProps, rootStyle, arrastrando };
+}
+
 export function PasosEnCursoWidget() {
   const [tramos, setTramos] = React.useState<Tramo[]>([]);
   const [expanded, setExpanded] = React.useState(false);
@@ -81,6 +177,7 @@ export function PasosEnCursoWidget() {
   const [ahora, setAhora] = React.useState(() => Date.now());
   const snoozesRef = React.useRef(new Map<string, number>());
   const disparandoRef = React.useRef(false);
+  const { rootRef, handleProps, rootStyle, arrastrando } = useWidgetArrastrable();
 
   const refetch = React.useCallback(async () => {
     try {
@@ -204,8 +301,17 @@ export function PasosEnCursoWidget() {
 
   if (!expanded) {
     return (
-      <div className="pasos-widget">
-        <button type="button" className="pw-pill" onClick={() => setExpanded(true)}>
+      <div className="pasos-widget" ref={rootRef} style={rootStyle}>
+        <button
+          type="button"
+          className="pw-pill"
+          {...handleProps}
+          title="Arrastrá para mover · clic para abrir"
+          onClick={() => {
+            if (arrastrando.current) return; // fue un arrastre, no un clic
+            setExpanded(true);
+          }}
+        >
           <span className="pw-pill-dot" />
           <TimerIcon />
           <span>
@@ -222,10 +328,10 @@ export function PasosEnCursoWidget() {
   }
 
   return (
-    <div className="pasos-widget">
+    <div className="pasos-widget" ref={rootRef} style={rootStyle}>
       <div className="pw-panel">
         <div className="pw-head">
-          <span className="pw-title">
+          <span className="pw-title" {...handleProps} title="Arrastrá para mover">
             <TimerIcon />
             En curso · {tramos.length}
           </span>

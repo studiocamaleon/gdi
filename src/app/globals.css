@@ -37019,7 +37019,11 @@ body:has(.t-app) {
   /* El disparador puede ser angosto (la variante mini mide ~60px) pero la
      lista tiene que poder leerse. */
   min-width: 150px;
-  z-index: 90;
+  /* Va en un portal sobre <body>, así que su z tiene que ganarle al contenedor
+     que lo dispara. El sheet de estaciones está en 1001 (los modales `.mod-bg`
+     en 60): con 90 el popover quedaba DETRÁS del sheet y parecía no abrir.
+     1100 lo deja arriba de todo modal y debajo del overlay de emisión/toasts. */
+  z-index: 1100;
   display: flex;
   flex-direction: column;
   overflow: hidden;

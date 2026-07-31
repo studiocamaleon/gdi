@@ -56,6 +56,7 @@ import {
   prioridadDerivada,
   progresoItem,
   SIN_ESTACION_KEY,
+  TERCERIZADOS_KEY,
   TIEMPO_FUENTE_LABELS,
   type TableroItemData,
   type TableroPasoAccion,
@@ -1217,7 +1218,7 @@ function ItemDetailSheet({
                 : null}
           </div>
           <div className="spacer" />
-          <Link className="btn" href={`/produccion/ordenes?orden=${item.data.ordenId}`}>
+          <Link className="btn" href={`/produccion/ordenes/${item.data.ordenId}`}>
             Ver orden {item.otCode}
           </Link>
         </div>
@@ -1241,6 +1242,8 @@ type StationInfo = {
   /** Etapa productiva fija elegida en la estación (null = sin estación). */
   etapa: string | null;
   sinEstacion: boolean;
+  /** Bucket sintético de tercerizados (compras a proveedor, no trabajo de piso). */
+  tercerizada: boolean;
 };
 
 type StationTask = {
@@ -1275,18 +1278,26 @@ function ordenarTareas(tasks: StationTask[]): StationTask[] {
  * estación", con sus tareas activas (la COLA: el paso listo de cada item)
  * y sus pasos EN CAMINO (futuros pendientes de items vivos, que caerán acá
  * cuando avance la secuencia — D10, se muestran aparte, nunca sumados a la
- * cola). El paso llega a su estación por la FAMILIA, y las máquinas de la
- * estación FILTRAN (ver resolverEstacionDePaso).
+ * cola). El paso interno llega a su estación por las REGLAS de captura (ver
+ * resolverEstacionDePaso); los TERCERIZADOS van a un bucket sintético propio
+ * ("Proveedor tercerizado"), no a la estación que les tocaría por familia.
  */
 function buildStationsModel(items: ItemView[], estaciones: Estacion[]) {
   const tareas = new Map<string, StationTask[]>();
   const entrantes = new Map<string, IncomingTask[]>();
 
+  // Un paso tercerizado es una compra al proveedor, no trabajo de piso: se
+  // agrupa en el bucket sintético "Proveedor tercerizado", no en la estación
+  // que le tocaría por familia. Los internos sí ruteando por reglas.
+  const estacionDe = (step: StepView) =>
+    step.paso.tipoEjecucion === "tercerizado"
+      ? TERCERIZADOS_KEY
+      : (resolverEstacionDePaso(estaciones, step.paso)?.id ?? SIN_ESTACION_KEY);
+
   for (const item of items) {
     for (const step of item.steps) {
       if (pasoActivo(item.data, step.paso)) {
-        const estacion = resolverEstacionDePaso(estaciones, step.paso);
-        const key = estacion?.id ?? SIN_ESTACION_KEY;
+        const key = estacionDe(step);
         const lista = tareas.get(key) ?? [];
         lista.push({
           item,
@@ -1302,8 +1313,7 @@ function buildStationsModel(items: ItemView[], estaciones: Estacion[]) {
       }
       // Futuro = pendiente no activo (los hechos ya no son carga).
       if (step.paso.estado !== "pendiente") continue;
-      const estacion = resolverEstacionDePaso(estaciones, step.paso);
-      const key = estacion?.id ?? SIN_ESTACION_KEY;
+      const key = estacionDe(step);
       const lista = entrantes.get(key) ?? [];
       lista.push({ item, step });
       entrantes.set(key, lista);
@@ -1322,7 +1332,21 @@ function buildStationsModel(items: ItemView[], estaciones: Estacion[]) {
       horario: etiquetaCalendario(estacion.calendario),
       etapa: estacion.etapa,
       sinEstacion: false,
+      tercerizada: false,
     }));
+  if (tareas.has(TERCERIZADOS_KEY) || entrantes.has(TERCERIZADOS_KEY)) {
+    stations.push({
+      key: TERCERIZADOS_KEY,
+      nm: "Proveedor tercerizado",
+      icono: null,
+      capacidad: null,
+      calendario: null,
+      horario: null,
+      etapa: null,
+      sinEstacion: false,
+      tercerizada: true,
+    });
+  }
   if (tareas.has(SIN_ESTACION_KEY) || entrantes.has(SIN_ESTACION_KEY)) {
     stations.push({
       key: SIN_ESTACION_KEY,
@@ -1333,6 +1357,7 @@ function buildStationsModel(items: ItemView[], estaciones: Estacion[]) {
       horario: null,
       etapa: null,
       sinEstacion: true,
+      tercerizada: false,
     });
   }
 
@@ -1441,6 +1466,7 @@ function LoadBar({ pending, urgent, blocked, incoming = 0, max }: { pending: num
 }
 
 function stationIcon(station: StationInfo) {
+  if (station.tercerizada) return <TruckIcon />;
   if (station.sinEstacion) return <BanIcon />;
   const IconCmp = station.icono ? getStepIcon(station.icono) : FactoryIcon;
   return <IconCmp />;
@@ -1487,7 +1513,7 @@ function StationCard({
         <span className="sta-card-ico">{stationIcon(station)}</span>
         <div className="sta-card-titles">
           <div className="nm">{station.nm}</div>
-          <div className="desc">{station.sinEstacion ? "Familias sin estación asignada" : etapa?.nm ?? "Estación del taller"}</div>
+          <div className="desc">{station.tercerizada ? "Compras a proveedores" : station.sinEstacion ? "Familias sin estación asignada" : etapa?.nm ?? "Estación del taller"}</div>
         </div>
       </div>
       <div className="sta-card-load">
@@ -1540,9 +1566,10 @@ function StationGrid({
   const urgentTotal = allStats.reduce((acc, entry) => acc + entry.stats.urgent, 0);
   // Una estación sin cola pero CON carga en camino muestra card igual (D12):
   // es exactamente la que el vendedor necesita ver antes de prometer.
-  const active = allStats.filter((entry) => (entry.stats.total > 0 || entry.stats.entranteCount > 0) && !entry.station.sinEstacion);
-  const idle = allStats.filter((entry) => entry.stats.total === 0 && entry.stats.entranteCount === 0);
+  const active = allStats.filter((entry) => (entry.stats.total > 0 || entry.stats.entranteCount > 0) && !entry.station.sinEstacion && !entry.station.tercerizada);
+  const idle = allStats.filter((entry) => entry.stats.total === 0 && entry.stats.entranteCount === 0 && !entry.station.tercerizada);
   const sinEstacion = allStats.find((entry) => entry.station.sinEstacion);
+  const tercerizados = allStats.find((entry) => entry.station.tercerizada);
   const byEtapa = ETAPAS_ESTACION.map((etapa) => ({
     ...etapa,
     items: active
@@ -1557,7 +1584,7 @@ function StationGrid({
           <span className="stat"><strong>{totalActive}</strong>pasos activos</span>
           {totalEntrante > 0 ? <><span className="sep">·</span><span className="stat"><strong>{totalEntrante}</strong>en camino</span></> : null}
           <span className="sep">·</span>
-          <span className="stat"><strong>{active.length}</strong>de {stations.filter((s) => !s.sinEstacion).length} estaciones con trabajo</span>
+          <span className="stat"><strong>{active.length}</strong>de {stations.filter((s) => !s.sinEstacion && !s.tercerizada).length} estaciones con trabajo</span>
           {blockedTotal > 0 ? <><span className="sep">·</span><span className="stat warn"><strong>{blockedTotal}</strong>bloqueado{blockedTotal > 1 ? "s" : ""}</span></> : null}
           {urgentTotal > 0 ? <><span className="sep">·</span><span className="stat amber"><strong>{urgentTotal}</strong>urgente{urgentTotal > 1 ? "s" : ""}</span></> : null}
           {sinEstacion && sinEstacion.stats.total > 0 ? <><span className="sep">·</span><span className="stat danger"><strong>{sinEstacion.stats.total}</strong>sin estación</span></> : null}
@@ -1587,6 +1614,19 @@ function StationGrid({
           </section>
         );
       })}
+
+      {tercerizados ? (
+        <section className="sta-cat">
+          <div className="sta-cat-head">
+            <h3>Proveedor tercerizado</h3>
+            <span className="rule" />
+            <span className="ct"><strong>{tercerizados.stats.total}</strong> pasos · se gestionan desde Compras de la orden</span>
+          </div>
+          <div className="sta-grid">
+            <StationCard station={tercerizados.station} stats={tercerizados.stats} noLaborables={noLaborables} hoyMin={llegadasHoyMin.get(tercerizados.station.key) ?? 0} onSelect={onSelect} />
+          </div>
+        </section>
+      ) : null}
 
       {sinEstacion ? (
         <section className="sta-cat">
@@ -1767,7 +1807,9 @@ function StationDetail({
           <div className="body">
             <h2>{station?.nm ?? "Estación"}</h2>
             <p>
-              {station?.sinEstacion
+              {station?.tercerizada
+                ? "Pasos tercerizados (compras a proveedor): se gestionan desde Compras de la orden, no se ejecutan en el piso"
+                : station?.sinEstacion
                 ? "Pasos cuya familia no está asignada a ninguna estación activa"
                 : estacionConfig?.descripcion ||
                   [etapa?.nm, etiquetaCalendario(estacionConfig?.calendario)].filter(Boolean).join(" · ") ||

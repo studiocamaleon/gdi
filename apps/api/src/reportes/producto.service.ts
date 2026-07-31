@@ -12,6 +12,21 @@ import { finExclusivo, granularidad, type Granularidad, type Rango } from './per
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
+/**
+ * Join para llegar del item al PRODUCTO vivo (vía la cotización de origen).
+ * LEFT porque las OT manuales no tienen cotización y el producto pudo borrarse.
+ */
+const JOIN_PRODUCTO =
+  'LEFT JOIN "Producto" p ON p.id = ci."productoId"';
+
+/**
+ * Dimensión "producto" de los reportes: agrupa por el nombre ACTUAL del
+ * producto, con fallback al snapshot del item (OT manual o producto borrado).
+ * Antes se agrupaba por `oti.nombre` (snapshot congelado): renombrar un
+ * producto partía sus métricas en dos filas. Requiere `JOIN_PRODUCTO`.
+ */
+const DIM_PRODUCTO = 'COALESCE(p.nombre, oti.nombre)';
+
 export type ProductoMargen = {
   nombre: string;
   ventas: number;
@@ -88,7 +103,7 @@ export class ProductoService {
     const [categoria, producto, papel, tintas, medidas, totalM2, tecnologia, mixEvolutivo, adicionales] =
       await Promise.all([
         this.margenPor(filtro, `COALESCE(NULLIF(oti."categoriaComercial", ''), 'Sin categoría')`),
-        this.margenPor(filtro, `oti.nombre`, 20),
+        this.margenPor(filtro, DIM_PRODUCTO, 20),
         this.materialesPorTipo(filtro, 'MATERIAL'),
         this.materialesPorTipo(filtro, 'CONSUMIBLE_MAQUINA'),
         this.medidasModo(filtro),
@@ -119,7 +134,7 @@ export class ProductoService {
     const filtro = { tenantId, desde: rango.desde, hastaExcl: finExclusivo(rango) };
     const [serie, productos] = await Promise.all([
       this.serieMix(filtro, granularidad(rango), rango.zona, categoria),
-      this.margenPor(filtro, `oti.nombre`, 20, categoria),
+      this.margenPor(filtro, DIM_PRODUCTO, 20, categoria),
     ]);
     return { categoria, serie, productos };
   }
@@ -135,7 +150,7 @@ export class ProductoService {
     categoria?: string,
   ): Promise<PuntoMix[]> {
     const dimension = categoria
-      ? `oti.nombre`
+      ? DIM_PRODUCTO
       : `COALESCE(NULLIF(oti."categoriaComercial", ''), 'Sin categoría')`;
     // timestamp sin zona con UTC adentro → se declara el UTC y se lleva al
     // reloj del tenant ($4), para que el bucket sea el día de SU pared.
@@ -146,6 +161,8 @@ export class ProductoService {
              COALESCE(SUM(oti.subtotal), 0)::float8 AS monto
       FROM "OrdenTrabajoItem" oti
       JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
+      LEFT JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
+      ${JOIN_PRODUCTO}
       WHERE oti."tenantId" = $1::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
         AND ot."fechaEmision" >= $2 AND ot."fechaEmision" < $3
         ${categoria ? `AND COALESCE(NULLIF(oti."categoriaComercial", ''), 'Sin categoría') = $5` : ''}
@@ -207,10 +224,12 @@ export class ProductoService {
       ),
       this.prisma.$queryRawUnsafe<Array<{ nombre: string; items: number; con: number }>>(
         `
-        SELECT oti.nombre, COUNT(*)::int AS items,
+        SELECT ${DIM_PRODUCTO} AS nombre, COUNT(*)::int AS items,
                COUNT(*) FILTER (WHERE ${conAdic})::int AS con
         FROM "OrdenTrabajoItem" oti
         JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
+        LEFT JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
+        ${JOIN_PRODUCTO}
         WHERE oti."tenantId" = $1::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
           AND ot."fechaEmision" >= $2 AND ot."fechaEmision" < $3
         GROUP BY 1 ORDER BY items DESC LIMIT 12
@@ -246,7 +265,7 @@ export class ProductoService {
   async topProductos(tenantId: string, rango: Rango, limite = 5): Promise<ProductoMargen[]> {
     return this.margenPor(
       { tenantId, desde: rango.desde, hastaExcl: finExclusivo(rango) },
-      'oti.nombre',
+      DIM_PRODUCTO,
       limite,
     );
   }
@@ -270,6 +289,7 @@ export class ProductoService {
       FROM "OrdenTrabajoItem" oti
       JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
       LEFT JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
+      ${JOIN_PRODUCTO}
       -- Costos variables por item (material + consumibles + desgaste): escalar
       -- por LATERAL para no multiplicar filas al agregar ventas/costo.
       LEFT JOIN LATERAL (
@@ -367,10 +387,11 @@ export class ProductoService {
         Array<{ nombre: string; modo: string | null; items: number }>
       >(
         `
-        SELECT oti.nombre, ci."jobContextJson"->>'medidaModo' AS modo, COUNT(*)::int AS items
+        SELECT ${DIM_PRODUCTO} AS nombre, ci."jobContextJson"->>'medidaModo' AS modo, COUNT(*)::int AS items
         FROM "OrdenTrabajoItem" oti
         JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
         JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
+        ${JOIN_PRODUCTO}
         WHERE oti."tenantId" = $1::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
           AND ot."fechaEmision" >= $2 AND ot."fechaEmision" < $3
         GROUP BY 1, 2

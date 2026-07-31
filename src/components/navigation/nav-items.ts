@@ -111,14 +111,14 @@ export const NAV: NavItem[] = [
       },
       { key: "maquinaria", label: "Maquinaria", href: "/costos/maquinaria" },
       {
-        key: "rutas",
-        label: "Rutas de producción",
-        href: "/productos-servicios/rutas",
-      },
-      {
         key: "pasos",
         label: "Pasos de producción",
         href: "/productos-servicios/pasos",
+      },
+      {
+        key: "rutas",
+        label: "Rutas de producción",
+        href: "/productos-servicios/rutas",
       },
       {
         key: "catalogo",
@@ -156,7 +156,6 @@ export const NAV: NavItem[] = [
         href: "/produccion/simulador-laser",
       },
       { key: "estaciones", label: "Estaciones", href: "/produccion/estaciones" },
-      { key: "salud-eta", label: "Salud del ETA", href: "/produccion/eta" },
     ],
   },
   {

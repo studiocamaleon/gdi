@@ -31,7 +31,6 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiError } from "@/lib/api";
-import { getEstaciones } from "@/lib/estaciones-api";
 import { getCentrosCosto } from "@/lib/costos-api";
 import { getProveedores } from "@/lib/proveedores-api";
 import { categoriaFamiliaLabels, getLabel } from "@/lib/labels-humanos";
@@ -70,7 +69,7 @@ type PasoWizard =
   | "materiales"
   | "cantidad"
   | "activacion"
-  | "estacion"
+  | "centro"
   | "registro"
   | "final";
 
@@ -113,7 +112,6 @@ interface FormaDraft {
   demasiaDefaultMm: string;
   modoActivacionDefault: string;
   activacionForzada: boolean;
-  estacionId: string | null;
   modoRegistro: "cronometro" | "solo_completar";
   categoria: string;
   nombre: string;
@@ -179,7 +177,6 @@ const DRAFT_INICIAL: FormaDraft = {
   demasiaDefaultMm: "",
   modoActivacionDefault: "OPCIONAL",
   activacionForzada: false,
-  estacionId: null,
   modoRegistro: "cronometro",
   categoria: "operaciones_manuales",
   nombre: "",
@@ -254,7 +251,6 @@ function draftAInput(d: FormaDraft): UpsertFamiliaTenantInput {
       plantillasCompatibles: [],
       modoRegistro: "solo_completar",
       presetOrigen: d.presetOrigen ?? undefined,
-      estacionId: null,
       defaults: {
         tercerizado: true,
         proveedorId: d.proveedorDefaultId,
@@ -301,7 +297,6 @@ function draftAInput(d: FormaDraft): UpsertFamiliaTenantInput {
     plantillasCompatibles: conMaquina ? d.plantillasCompatibles : [],
     modoRegistro: d.modoRegistro,
     presetOrigen: d.presetOrigen ?? undefined,
-    estacionId: d.estacionId,
     // E.1 — las respuestas del wizard quedan como defaults del paso
     // (la familia sugiere, el producto pisa).
     defaults: {
@@ -358,7 +353,6 @@ function draftDesdePreset(f: FamiliaListItem): FormaDraft {
     demasiaDefaultMm: "",
     modoActivacionDefault: f.modoActivacionDefault,
     activacionForzada: false,
-    estacionId: null,
     modoRegistro: "cronometro",
     categoria: f.categoria,
     nombre: "",
@@ -416,7 +410,6 @@ function draftDesdeFamilia(f: FamiliaTenant): FormaDraft {
       f.defaults?.demasiaMm != null ? String(f.defaults.demasiaMm) : "",
     modoActivacionDefault: f.modoActivacionDefault,
     activacionForzada: f.modosActivacion.length === 1,
-    estacionId: f.estacion?.id ?? null,
     modoRegistro: (f.modoRegistro ?? "cronometro") as FormaDraft["modoRegistro"],
     categoria: f.categoria,
     nombre: f.nombre,
@@ -431,9 +424,6 @@ function draftDesdeFamilia(f: FamiliaTenant): FormaDraft {
 export function PasosFamiliasView() {
   const [familias, setFamilias] = React.useState<FamiliaTenant[]>([]);
   const [catalogo, setCatalogo] = React.useState<CatalogoFamilias | null>(null);
-  const [estaciones, setEstaciones] = React.useState<
-    Array<{ id: string; nombre: string }>
-  >([]);
   const [centros, setCentros] = React.useState<
     Array<{ id: string; nombre: string }>
   >([]);
@@ -458,17 +448,15 @@ export function PasosFamiliasView() {
     let vivo = true;
     (async () => {
       try {
-        const [filas, cat, ests, ccs, provs] = await Promise.all([
+        const [filas, cat, ccs, provs] = await Promise.all([
           getFamiliasTenant(),
           getCatalogoFamilias(),
-          getEstaciones(),
           getCentrosCosto(),
           getProveedores().catch(() => []),
         ]);
         if (!vivo) return;
         setFamilias(filas);
         setCatalogo(cat);
-        setEstaciones(ests.map((e) => ({ id: e.id, nombre: e.nombre })));
         setCentros(
           (ccs as Array<{ id: string; nombre: string }>).map((c) => ({
             id: c.id,
@@ -603,7 +591,6 @@ export function PasosFamiliasView() {
                 <th>Nombre</th>
                 <th>Forma</th>
                 <th>Categoría</th>
-                <th>Estación</th>
                 <th>Estado</th>
                 <th className="right">Acciones</th>
               </tr>
@@ -625,7 +612,6 @@ export function PasosFamiliasView() {
                     </div>
                   </td>
                   <td>{getLabel(categoriaFamiliaLabels, f.categoria).label}</td>
-                  <td>{f.estacion?.nombre ?? "—"}</td>
                   <td>
                     <span className="tag">{f.activo ? "Activo" : "Inhabilitado"}</span>
                   </td>
@@ -697,7 +683,6 @@ export function PasosFamiliasView() {
           // se remonta con el draft correcto en vez de arrastrar estado.
           key={aEditar?.id ?? "nuevo"}
           catalogoSistema={sistema}
-          estaciones={estaciones}
           centros={centros}
           proveedores={proveedores}
           editar={aEditar}
@@ -755,7 +740,6 @@ export function PasosFamiliasView() {
 
 function WizardNuevoPaso({
   catalogoSistema,
-  estaciones,
   centros,
   proveedores,
   editar,
@@ -763,7 +747,6 @@ function WizardNuevoPaso({
   onCreado,
 }: {
   catalogoSistema: FamiliaListItem[];
-  estaciones: Array<{ id: string; nombre: string }>;
   centros: Array<{ id: string; nombre: string }>;
   proveedores: Array<{ id: string; nombre: string }>;
   /** Familia existente: el wizard abre precargado y guarda con PATCH. */
@@ -817,7 +800,7 @@ function WizardNuevoPaso({
             "materiales",
             "cantidad",
             "activacion",
-            "estacion",
+            "centro",
             "registro",
             "final",
           ],
@@ -1453,26 +1436,14 @@ function WizardNuevoPaso({
             </>
           ) : null}
 
-          {paso === "estacion" ? (
+          {paso === "centro" ? (
             <>
-              <div className={s.pregunta}>¿Dónde se hace y en qué centro productivo?</div>
+              <div className={s.pregunta}>¿En qué centro productivo se costea?</div>
               <p className={s.ayuda}>
-                La estación define a qué cola del tablero llega el paso. Se
-                puede cambiar después desde Estaciones.
-              </p>
-              <HumanSelect
-                value={draft.estacionId ?? ""}
-                onValueChange={(id) => set({ estacionId: id || null })}
-                options={[
-                  { value: "", label: "Elegir más tarde" },
-                  ...estaciones.map((e) => ({ value: e.id, label: e.nombre })),
-                ]}
-                placeholder="Estación"
-              />
-              <p className={s.ayuda} style={{ marginTop: 12 }}>
                 El centro de costo pone la tarifa horaria cuando el paso no
                 usa máquina. Queda como sugerencia: cada producto puede
-                elegir otro.
+                elegir otro. La estación del tablero se arma aparte, desde
+                Estaciones (por máquina, tecnología, paso o familia).
               </p>
               <HumanSelect
                 value={draft.centroCostoDefaultId ?? ""}

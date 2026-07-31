@@ -16,6 +16,7 @@ import {
 import { EtaService } from '../eta/eta.service';
 import type { CurrentAuth } from '../auth/auth.types';
 import { firmaActor } from '../common/firma-actor';
+import { resolverTecnologiaMaquina } from '../common/tecnologia-maquina';
 import { paginatedResponse } from '../common/dto/pagination.dto';
 import {
   esCancelable,
@@ -151,6 +152,7 @@ type PasoTrazabilidad = {
     totalMin?: number;
     centroCostoId?: string | null;
     centroCostoNombre?: string | null;
+    maquinaId?: string | null;
   };
   /// Paso tercerizado (compra a proveedor) — ver F2 en el diseño.
   tercerizado?: boolean;
@@ -1845,6 +1847,7 @@ export class OrdenesTrabajoService {
         nombre: paso.nombreVisible?.trim() || familia?.nombre || familiaCodigo,
         centroCostoId: paso.tiempo?.centroCostoId ?? null,
         centroCostoNombre: paso.tiempo?.centroCostoNombre ?? null,
+        maquinaId: paso.tiempo?.maquinaId ?? null,
         duracionEstimadaMin: paso.tiempo?.totalMin ?? null,
         modoRegistro: modoRegistroDeFamilia(familiaCodigo),
         // === Tercerización (F2): el paso comprado va al panel de Compras. ===
@@ -2118,6 +2121,9 @@ export class OrdenesTrabajoService {
         items: {
           orderBy: { ordenIndice: 'asc' as const },
           include: {
+            // Producto vivo (vía cotización): su nombre ACTUAL para el card, así
+            // renombrar el producto se refleja en el tablero. Null en OT manuales.
+            cotizacionItem: { select: { producto: { select: { nombre: true } } } },
             // Sólo el conteo de archivos LISTO: el tablero muestra un clip
             // con el número, no la lista. Traer las filas para contarlas
             // sería N+1 disfrazado.
@@ -2153,9 +2159,15 @@ export class OrdenesTrabajoService {
         { createdAt: 'asc' as const },
       ],
     });
+    const tecnologias = await this.tecnologiaPorMaquinaDeItems(
+      auth.tenantId,
+      ordenes.flatMap((orden) => orden.items),
+    );
     return {
       items: ordenes.flatMap((orden) =>
-        orden.items.map((item) => this.toTableroItem(orden, item, auth.userId)),
+        orden.items.map((item) =>
+          this.toTableroItem(orden, item, auth.userId, tecnologias),
+        ),
       ),
     };
   }
@@ -2193,6 +2205,9 @@ export class OrdenesTrabajoService {
         items: {
           orderBy: { ordenIndice: 'asc' as const },
           include: {
+            // Producto vivo (vía cotización): su nombre ACTUAL para el card, así
+            // renombrar el producto se refleja en el tablero. Null en OT manuales.
+            cotizacionItem: { select: { producto: { select: { nombre: true } } } },
             // Sólo el conteo de archivos LISTO: el tablero muestra un clip
             // con el número, no la lista. Traer las filas para contarlas
             // sería N+1 disfrazado.
@@ -2224,9 +2239,13 @@ export class OrdenesTrabajoService {
         },
       },
     });
+    const tecnologias = await this.tecnologiaPorMaquinaDeItems(
+      auth.tenantId,
+      orden?.items ?? [],
+    );
     return {
       items: (orden?.items ?? []).map((item) =>
-        this.toTableroItem(orden!, item, auth.userId),
+        this.toTableroItem(orden!, item, auth.userId, tecnologias),
       ),
     };
   }
@@ -2733,6 +2752,7 @@ export class OrdenesTrabajoService {
     const item = await this.prisma.ordenTrabajoItem.findFirst({
       where: { id: itemId, tenantId: auth.tenantId },
       include: {
+        cotizacionItem: { select: { producto: { select: { nombre: true } } } },
         pasos: {
           orderBy: { indice: 'asc' as const },
           include: {
@@ -2763,7 +2783,10 @@ export class OrdenesTrabajoService {
     if (!item) {
       throw new NotFoundException('No se encontró el item de la orden.');
     }
-    return this.toTableroItem(item.orden, item, auth.userId);
+    const tecnologias = await this.tecnologiaPorMaquinaDeItems(auth.tenantId, [
+      item,
+    ]);
+    return this.toTableroItem(item.orden, item, auth.userId, tecnologias);
   }
 
   /**
@@ -2877,6 +2900,36 @@ export class OrdenesTrabajoService {
     };
   }
 
+  /**
+   * Mapa `maquinaId → tecnología` para el lote de items del tablero. La
+   * tecnología NO se persiste en el paso (una sola fuente de verdad); se deriva
+   * de `Maquina` en lectura para rutear "por tecnología". Una query por lote.
+   */
+  private async tecnologiaPorMaquinaDeItems(
+    tenantId: string,
+    items: Array<{ pasos: Array<{ maquinaId: string | null }> }>,
+  ): Promise<Map<string, string | null>> {
+    const maquinaIds = new Set<string>();
+    for (const item of items) {
+      for (const paso of item.pasos) {
+        if (paso.maquinaId) maquinaIds.add(paso.maquinaId);
+      }
+    }
+    if (maquinaIds.size === 0) return new Map();
+    const maquinas = await this.prisma.maquina.findMany({
+      where: { tenantId, id: { in: Array.from(maquinaIds) } },
+      select: {
+        id: true,
+        plantilla: true,
+        parametrosTecnicosJson: true,
+        capacidadesAvanzadasJson: true,
+      },
+    });
+    return new Map(
+      maquinas.map((m) => [m.id, resolverTecnologiaMaquina(m)] as const),
+    );
+  }
+
   private toTableroItem(
     orden: {
       id: string;
@@ -2895,6 +2948,9 @@ export class OrdenesTrabajoService {
       cantidadUnidad: string;
       specsJson: Prisma.JsonValue;
       cotizacionItemId: string | null;
+      /** Producto vivo (vía la cotización): su nombre ACTUAL, para no mostrar
+       *  el snapshot viejo si se renombró el producto. Null en OT manuales. */
+      cotizacionItem?: { producto: { nombre: string } | null } | null;
       /** Sólo el conteo: el tablero muestra un clip, no la lista. */
       _count?: { archivos: number };
       pasos: Array<{
@@ -2907,6 +2963,7 @@ export class OrdenesTrabajoService {
         categoriaFamilia: string;
         centroCostoId: string | null;
         centroCostoNombre: string | null;
+        maquinaId: string | null;
         duracionEstimadaMin: Prisma.Decimal | null;
         estado: string;
         motivoBloqueo: string | null;
@@ -2936,6 +2993,12 @@ export class OrdenesTrabajoService {
     },
     /** Usuario que MIRA el tablero: define `mesaEsMia` por paso. */
     viewerUserId: string,
+    /**
+     * Tecnología por máquina (derivada), para rutear el paso a su estación
+     * "por tecnología" (docs/estaciones-reglas-diseno.md). No se persiste: se
+     * arma en lectura desde `Maquina`. Default vacío = ruteo por fallback.
+     */
+    tecnologiaPorMaquina: Map<string, string | null> = new Map(),
   ) {
     return {
       id: item.id,
@@ -2944,7 +3007,9 @@ export class OrdenesTrabajoService {
       ordenEstado: orden.estado,
       itemIndice: item.ordenIndice,
       codigo: item.codigo,
-      nombre: item.nombre,
+      // Nombre ACTUAL del producto (renombrarlo se refleja en el tablero), con
+      // fallback al snapshot del item para OT manuales o producto borrado.
+      nombre: item.cotizacionItem?.producto?.nombre ?? item.nombre,
       clienteNombre: orden.cliente?.nombre ?? 'Sin cliente',
       vendedorNombre: orden.vendedor?.nombreCompleto ?? '—',
       cantidad: Number(item.cantidad),
@@ -2972,6 +3037,13 @@ export class OrdenesTrabajoService {
         categoriaFamilia: paso.categoriaFamilia,
         centroCostoId: paso.centroCostoId,
         centroCostoNombre: paso.centroCostoNombre,
+        // Señal real de ruteo a estación (rediseño por reglas): la máquina que
+        // ejecutó el paso y su tecnología derivada. Null en pasos sin máquina
+        // o en órdenes viejas → caen al fallback por familia + centro.
+        maquinaId: paso.maquinaId,
+        tecnologia: paso.maquinaId
+          ? (tecnologiaPorMaquina.get(paso.maquinaId) ?? null)
+          : null,
         duracionEstimadaMin:
           paso.duracionEstimadaMin != null
             ? Number(paso.duracionEstimadaMin)

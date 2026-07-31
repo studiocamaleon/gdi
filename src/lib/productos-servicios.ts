@@ -566,7 +566,6 @@ export interface UpsertFamiliaTenantInput {
   presetOrigen?: string;
   /** B.3.4 — presente ⇔ mecanismo CALCULADO_POR_PASO. */
   nestingConfig?: { superficie: string } | null;
-  estacionId?: string | null;
   /** E.1 — defaults declarados del paso. */
   defaults?: Partial<DefaultsFamiliaPaso> | null;
 }

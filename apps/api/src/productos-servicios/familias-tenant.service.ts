@@ -7,8 +7,9 @@
  *  - El registro en memoria que hace resolubles las familias de forma
  *    síncrona para el motor (pasos/familias.ts): se carga entero al bootear
  *    y se escribe-through en cada alta/edición/borrado.
- *  - El ruteo a estaciones NO se duplica acá: se escribe en EstacionFamilia
- *    (la fuente de verdad que ya usa el tablero) con familiaCodigo = UUID.
+ *  - El ruteo a estaciones NO se arma acá: la estación declara qué captura
+ *    (por máquina/tecnología/paso/familia) desde su propio panel. El editor de
+ *    pasos ya no asigna estación (rediseño, docs/estaciones-reglas-diseno.md).
  *
  * Borrado (decisión §8.6): físico sólo si NINGUNA ruta/paso-extra/OT la
  * referenció jamás; con un solo uso histórico, inhabilitar. El resolver
@@ -38,8 +39,6 @@ import {
 } from './pasos/familia-tenant-validacion';
 
 export interface UpsertFamiliaTenantInput extends FamiliaTenantInput {
-  /** Estación donde se hace el paso (decisión §8.4). null = quitarla. */
-  estacionId?: string | null;
   /** E.1 — defaults declarados del paso (FamiliaPasoDefaults). */
   defaults?: DefaultsFamiliaInput | null;
 }
@@ -132,24 +131,11 @@ export class FamiliasTenantService implements OnModuleInit {
         ...errores,
       ]);
     }
-    if (input.estacionId) {
-      await this.assertEstacionDelTenant(tenantId, input.estacionId);
-    }
-
     try {
       const fila = await this.prisma.$transaction(async (tx) => {
         const creada = await tx.familiaTenant.create({
           data: this.aDatosDeFila(tenantId, input),
         });
-        if (input.estacionId) {
-          await tx.estacionFamilia.create({
-            data: {
-              tenantId,
-              estacionId: input.estacionId,
-              familiaCodigo: creada.id,
-            },
-          });
-        }
         // E.1 — defaults declarados del paso, en la misma transacción.
         await this.upsertDefaultsEnTx(tx, tenantId, creada.id, input.defaults);
         return creada;
@@ -222,10 +208,6 @@ export class FamiliasTenantService implements OnModuleInit {
         ...errores,
       ]);
     }
-    if (input.estacionId) {
-      await this.assertEstacionDelTenant(tenantId, input.estacionId);
-    }
-
     try {
       const fila = await this.prisma.$transaction(async (tx) => {
         const actualizada = await tx.familiaTenant.update({
@@ -241,22 +223,6 @@ export class FamiliasTenantService implements OnModuleInit {
         // E.1 — `defaults` presente en el patch = reemplazar; ausente = no tocar.
         if ('defaults' in input) {
           await this.upsertDefaultsEnTx(tx, tenantId, id, input.defaults);
-        }
-        // estacionId presente en el patch (aunque sea null) = reemplazar la
-        // asignación. Ausente = no tocarla.
-        if ('estacionId' in input) {
-          await tx.estacionFamilia.deleteMany({
-            where: { tenantId, familiaCodigo: id },
-          });
-          if (input.estacionId) {
-            await tx.estacionFamilia.create({
-              data: {
-                tenantId,
-                estacionId: input.estacionId,
-                familiaCodigo: id,
-              },
-            });
-          }
         }
         return actualizada;
       });
@@ -469,16 +435,6 @@ export class FamiliasTenantService implements OnModuleInit {
       create: { tenantId, familiaCodigo, ...limpio },
       update: limpio,
     });
-  }
-
-  private async assertEstacionDelTenant(tenantId: string, estacionId: string) {
-    const estacion = await this.prisma.estacion.findFirst({
-      where: { id: estacionId, tenantId },
-      select: { id: true },
-    });
-    if (!estacion) {
-      throw new BadRequestException('La estación indicada no existe.');
-    }
   }
 
   private reLanzarNombreDuplicado(error: unknown, nombre: string): void {

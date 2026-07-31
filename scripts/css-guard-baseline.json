@@ -1,6 +1,6 @@
 {
   "_comentario": "Línea de base de css-guard. NO editar a mano: correr `npm run css:guard -- --update`. Los números sólo deberían bajar.",
-  "totalLineas": 37252,
+  "totalLineas": 37256,
   "clasesGlobales": 1607,
   "globales": [
     "aac-back",

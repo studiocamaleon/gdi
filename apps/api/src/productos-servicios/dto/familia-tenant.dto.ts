@@ -170,10 +170,6 @@ export class CrearFamiliaTenantDto {
   @ValidateNested()
   @Type(() => DefaultsFamiliaPasoDto)
   defaults?: DefaultsFamiliaPasoDto | null;
-  /** Estación donde se hace el paso (§8.4). */
-  @IsOptional()
-  @IsString()
-  estacionId?: string | null;
 }
 
 /** Preview de costeo del wizard (Etapa D): tiempo + tarifa real del centro. */
@@ -284,10 +280,6 @@ export class ActualizarFamiliaTenantDto {
   @IsOptional()
   @IsObject()
   nestingConfig?: { superficie?: string | null } | null;
-
-  @IsOptional()
-  @IsString()
-  estacionId?: string | null;
 
   /** E.1 — defaults declarados del paso; se upsertea junto con la familia. */
   @IsOptional()
