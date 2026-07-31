@@ -421,6 +421,10 @@ const impresion_por_area: DefinicionFamilia = {
   // Gran formato: 5 mm de aire entre piezas si nadie configuró otra cosa.
   // [Etapa A: era `defaultSeparationForFamily`]
   separacionNestingDefaultMm: 5,
+  // Acomoda sobre rollo (lona/vinilo) o placa (rígido) según el material y la
+  // máquina — el dispatcher lo resuelve por `segun_material`. Ruteaba por un
+  // `familiaCodigo === 'impresion_por_area'` con cascada propia. [Palanca 1b]
+  nestingConfig: { superficie: 'segun_material' },
   inputsRequeridos: ['piezas'], // gap H7: lista de piezas
   outputsCanonicos: [
     'm2_calculados',

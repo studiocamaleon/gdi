@@ -222,33 +222,25 @@ async function despacharNesting(
       ),
     );
   }
-  // ─── Caso 0 (B.3.4): FAMILIAS TENANT que acomodan piezas ─────────
-  // El paso eligió una superficie en el wizard (NUESTRO algoritmo
-  // parametrizado, nunca uno propio): rutea por la DECLARACIÓN, no por el
-  // código. Los branches del sistema de abajo no se tocan.
+  // ─── Caso 0: la familia DECLARA su superficie ────────────────────
+  // Rutea por la declaración, no por `familiaCodigo`. Lo declaran las familias
+  // de tenant (superficie fija, elegida en el wizard) y las del sistema que ya
+  // se pasaron a esta vía. `segun_material` decide en runtime por máquina +
+  // subfamilia del material (impresión por área corre sobre rollo Y placa).
   const familiaResuelta = resolverFamilia(paso.familiaCodigo);
-  const superficieTenant = familiaResuelta?.esDeTenant
-    ? (familiaResuelta.nestingConfig?.superficie ?? null)
-    : null;
-  if (superficieTenant === 'rollo') {
-    return runShelfRollo(paso, jobContext, materialResuelto, config);
-  }
-  if (
-    superficieTenant === 'pliego' ||
-    superficieTenant === 'pliegos_multiples'
-  ) {
-    // Hoja finita: la medida del pliego sale del material del slot (o de la
-    // mesa de la máquina) vía resolveNestingConfig. Piezas uniformes caen
-    // solas a grid-2d-single (poses + imposición completa).
+  const superficieDeclarada = familiaResuelta?.nestingConfig?.superficie ?? null;
+  if (superficieDeclarada) {
+    const superficie =
+      superficieDeclarada === 'segun_material'
+        ? resolverSuperficieDinamica(config, materialResuelto)
+        : superficieDeclarada;
+    if (superficie === 'rollo') {
+      return runShelfRollo(paso, jobContext, materialResuelto, config);
+    }
+    // Hoja/placa finita: la medida sale del material del slot (o de la mesa de
+    // la máquina) vía resolveNestingConfig. Piezas uniformes caen solas a
+    // grid-2d-single (poses + imposición completa) dentro del multi.
     return runGrid2DMultiForArea(paso, jobContext, config);
-  }
-
-  // ─── Caso 1: gran formato por área ──────────────────────────────
-  // Si la máquina/material trabajan en rollo usa shelf-rollo; si trabajan
-  // sobre mesa/placa usa grid 2D multi. Esto permite que rígidos impresos
-  // generen nesting en el paso productivo sin depender de pre-prensa.
-  if (paso.familiaCodigo === 'impresion_por_area') {
-    return await runImpresionPorArea(paso, jobContext, materialResuelto, config);
   }
 
   // ─── Caso 2: shelf-rollo (corte sobre rollo) ─────────────────────
@@ -312,39 +304,27 @@ function getPlotterModoOperacion(paso: PasoCargado): string | null {
 // Implementaciones
 // ────────────────────────────────────────────────────────────────────
 
-async function runImpresionPorArea(
-  paso: PasoCargado,
-  jobContext: JobContext,
-  materialResuelto: MaterialResueltoParaNesting | null,
+/**
+ * Superficie de un paso que declara `segun_material`: la decide la máquina y
+ * la subfamilia del material. Gana el rollo — una impresora de rollo o un
+ * material rollo (lona, vinilo) fuerzan rollo; una flatbed (MESA_EXTENSORA) o
+ * un pliego con medidas sin ancho de rollo dan placa; el fallback es rollo.
+ *
+ * Reproduce la cascada que tenía `runImpresionPorArea`. Las ramas de algoritmo
+ * explícito de aquella (shelf-rollo/grid) se retiraron: ningún paso fija
+ * `nestingConfig.algorithm` (el selector se quitó), así que eran código muerto.
+ */
+export function resolverSuperficieDinamica(
   config: NestingConfigResolved,
-): Promise<NestingDispatchResult | null> {
-  if (config.algorithm === 'shelf-rollo') {
-    return runShelfRollo(paso, jobContext, materialResuelto, config);
-  }
-  if (config.algorithm === 'grid-2d-single') {
-    return runGrid2DSingle(paso, jobContext, materialResuelto, config);
-  }
-  if (config.algorithm === 'grid-2d-multi') {
-    return runGrid2DMultiForArea(paso, jobContext, config);
-  }
-
-  if (config.machineGeometry === 'ROLLO') {
-    return runShelfRollo(paso, jobContext, materialResuelto, config);
-  }
-
-  if (esSustratoRollo(materialResuelto?.subfamilia)) {
-    return runShelfRollo(paso, jobContext, materialResuelto, config);
-  }
-
-  if (config.machineGeometry === 'MESA_EXTENSORA') {
-    return runGrid2DMultiForArea(paso, jobContext, config);
-  }
-
+  materialResuelto: MaterialResueltoParaNesting | null,
+): 'rollo' | 'pliegos_multiples' {
+  if (config.machineGeometry === 'ROLLO') return 'rollo';
+  if (esSustratoRollo(materialResuelto?.subfamilia)) return 'rollo';
+  if (config.machineGeometry === 'MESA_EXTENSORA') return 'pliegos_multiples';
   if (config.sheetWidthMm && config.sheetHeightMm && !config.rollWidthMm) {
-    return runGrid2DMultiForArea(paso, jobContext, config);
+    return 'pliegos_multiples';
   }
-
-  return runShelfRollo(paso, jobContext, materialResuelto, config);
+  return 'rollo';
 }
 
 function runLaminadoRollo(

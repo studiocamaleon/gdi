@@ -1072,3 +1072,27 @@ detección de superficie.
   uno flaky del baseline pasó a verde).
 
 Queda 1b (unificar las 3 cascadas bajo `superficie`), como paso aparte.
+
+### 1b — EJECUTADO acotado (2026-07-31)
+
+`impresion_por_area` dejó de rutear por `familiaCodigo` y ahora declara su
+superficie como cualquier familia de tenant: `nestingConfig.superficie:
+'segun_material'`. El dispatcher lee esa declaración (Caso 0, antes sólo para
+tenant, ahora para cualquier familia que la declare) y, para `segun_material`,
+resuelve rollo vs placa en runtime con `resolverSuperficieDinamica` (máquina +
+subfamilia). `runImpresionPorArea` y el `familiaCodigo === 'impresion_por_area'`
+del dispatch se borraron.
+
+Las ramas de algoritmo explícito de la vieja cascada (shelf-rollo/grid) se
+retiraron: los 22 pasos de área y 3 de montaje tienen `algorithm` nulo (el
+selector se quitó), así que eran código muerto.
+
+**Verificación (neutro al céntimo):** Lona/Vinilo/Papel Foto (rollo) siguen en
+maxrects-rollo con el mismo precio; MDF (rígido) rutea a grid-2d-single;
+baseline de hoja (Tarjetas, Talonarios) sin cambios; suite sin fallos nuevos.
+
+**Hasta dónde llega:** sólo `impresion_por_area` se pasó a esta vía. Laminado,
+pouch y montaje tienen runners propios (reconstruyen piezas, cambian la unidad,
+arman contexto) — son primitivas Tipo B y se quedan con su caso. La capa de
+DECISIÓN de superficie converge con las de tenant; la capa de RUNNER no, y no
+debería (al tenant se le entrega la elección, no la autoría).

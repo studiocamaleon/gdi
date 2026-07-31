@@ -336,6 +336,22 @@ export interface ParamsPasoDeclarado {
  * (codigo = UUID de la fila). Mismo contrato que DefinicionFamilia — el
  * motor no distingue el origen. [Etapa C]
  */
+/**
+ * Superficie sobre la que un paso acomoda piezas. El dispatcher rutea por esto
+ * en vez de por `familiaCodigo`, así una familia de tenant y una del sistema
+ * que declaren la misma superficie corren por la misma vía.
+ *  - `rollo` → acomodo en rollo continuo (shelf-rollo).
+ *  - `pliego` / `pliegos_multiples` → hoja/placa finita (grid 2D).
+ *  - `segun_material` → se decide en runtime por la máquina y la subfamilia del
+ *    material (una impresora de rollo o un vinilo dan rollo; una flatbed o un
+ *    rígido dan placa). Lo usa impresión por área, que corre sobre ambos.
+ */
+export type SuperficieNesting =
+  | 'pliego'
+  | 'pliegos_multiples'
+  | 'rollo'
+  | 'segun_material';
+
 export type DefinicionFamiliaResuelta = Omit<DefinicionFamilia, 'codigo'> & {
   codigo: string;
   /** true si viene de una FamiliaTenant (fila de la base). */
@@ -344,12 +360,6 @@ export type DefinicionFamiliaResuelta = Omit<DefinicionFamilia, 'codigo'> & {
   /** Sólo para tenant: inhabilitada no aparece en selectores, pero el
    *  resolver la sigue resolviendo para rutas/OTs históricas (§8.6). */
   activo?: boolean;
-  /** B.3.4 — sólo tenant: el paso acomoda piezas sobre esta superficie
-   *  (elección del wizard). Presente ⇔ mecanismo CALCULADO_POR_PASO; el
-   *  dispatcher rutea por esto ANTES del switch por familiaCodigo. */
-  nestingConfig?: {
-    superficie: 'pliego' | 'pliegos_multiples' | 'rollo';
-  } | null;
 };
 
 /**
@@ -429,6 +439,16 @@ export interface DefinicionFamilia {
   /** Fuente de piezas cuando el modelador no eligió ninguna. Si se omite,
    *  el paso acomoda las piezas del propio trabajo. */
   fuentePiezasDefault?: string;
+
+  /**
+   * Superficie sobre la que el paso acomoda. Presente ⇔ el dispatcher rutea
+   * por esta declaración en vez de por `familiaCodigo`. Lo declaran las
+   * familias de tenant (elección del wizard, superficie fija) y las del
+   * sistema que ya se pasaron a esta vía (impresión por área, `segun_material`).
+   */
+  nestingConfig?: {
+    superficie: SuperficieNesting;
+  } | null;
 
   /**
    * De dónde sale el margen físico que el sustrato NO puede usar.
