@@ -300,6 +300,7 @@ export function createEmptyEstacion(): EstacionPayload {
     familias: [],
     empleadoIds: [],
     maquinaIds: [],
+    reglas: [],
   };
 }
 

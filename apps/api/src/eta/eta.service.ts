@@ -4,6 +4,7 @@ import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProduccionService } from '../produccion/produccion.service';
 import { regionalDelTenant } from '../common/regional';
+import { resolverTecnologiaMaquina } from '../common/tecnologia-maquina';
 import { claveFechaEnZona } from '../common/zona';
 import {
   descomponerCiclo,
@@ -97,6 +98,7 @@ export class EtaService {
                 nombre: true,
                 familiaCodigo: true,
                 centroCostoId: true,
+                maquinaId: true,
                 duracionEstimadaMin: true,
                 estado: true,
                 iniciadoEl: true,
@@ -110,6 +112,14 @@ export class EtaService {
     });
     const fechaEntregaIso = (f: Date | null) =>
       f ? f.toISOString().slice(0, 10) : null;
+    // Tecnología por máquina (derivada, no persistida): habilita el ruteo a
+    // estación "por tecnología" en el motor de flujo. Espejo del tablero.
+    const tecnologias = await this.tecnologiaPorMaquina(
+      tenantId,
+      ordenes.flatMap((orden) =>
+        orden.items.flatMap((item) => item.pasos.map((p) => p.maquinaId)),
+      ),
+    );
     return ordenes.flatMap((orden) =>
       orden.items.map((item) => ({
         id: item.id,
@@ -125,6 +135,10 @@ export class EtaService {
             nombre: paso.nombre,
             familiaCodigo: paso.familiaCodigo,
             centroCostoId: paso.centroCostoId,
+            maquinaId: paso.maquinaId,
+            tecnologia: paso.maquinaId
+              ? (tecnologias.get(paso.maquinaId) ?? null)
+              : null,
             duracionEstimadaMin:
               paso.duracionEstimadaMin === null
                 ? null
@@ -136,6 +150,32 @@ export class EtaService {
           }),
         ),
       })),
+    );
+  }
+
+  /**
+   * Mapa `maquinaId → tecnología` para un lote de pasos. La tecnología se
+   * deriva de `Maquina` en lectura (no se persiste). Una query por corrida.
+   */
+  private async tecnologiaPorMaquina(
+    tenantId: string,
+    maquinaIds: Array<string | null>,
+  ): Promise<Map<string, string | null>> {
+    const ids = Array.from(
+      new Set(maquinaIds.filter((id): id is string => id !== null)),
+    );
+    if (ids.length === 0) return new Map();
+    const maquinas = await this.prisma.maquina.findMany({
+      where: { tenantId, id: { in: ids } },
+      select: {
+        id: true,
+        plantilla: true,
+        parametrosTecnicosJson: true,
+        capacidadesAvanzadasJson: true,
+      },
+    });
+    return new Map(
+      maquinas.map((m) => [m.id, resolverTecnologiaMaquina(m)] as const),
     );
   }
 

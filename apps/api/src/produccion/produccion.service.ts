@@ -1097,6 +1097,31 @@ export class ProduccionService {
       }
     }
 
+    // Una tecnología / paso concreto lo captura A LO SUMO UNA estación: si dos
+    // lo reclamaran, el ruteo por ese nivel sería ambiguo (docs/estaciones-
+    // reglas-diseno.md §5). Mensaje con la dueña; el front ya lo deshabilita,
+    // esto es la red de seguridad del backend.
+    if (reglas.length > 0) {
+      const enConflicto = await this.prisma.estacionRegla.findMany({
+        where: {
+          tenantId: auth.tenantId,
+          OR: reglas.map((r) => ({ tipo: r.tipo, valor: r.valor })),
+          ...(exceptoEstacionId
+            ? { estacionId: { not: exceptoEstacionId } }
+            : {}),
+        },
+        include: { estacion: { select: { nombre: true } } },
+      });
+      if (enConflicto.length > 0) {
+        const detalle = enConflicto
+          .map((fila) => `${fila.tipo} "${fila.valor}" (en "${fila.estacion.nombre}")`)
+          .join(' · ');
+        throw new ConflictException(
+          `Estas reglas ya las captura otra estación: ${detalle}. Cada tecnología o paso concreto vive en una sola estación.`,
+        );
+      }
+    }
+
     if (empleadoIds.length > 0) {
       const encontrados = await this.prisma.empleado.count({
         where: { tenantId: auth.tenantId, id: { in: empleadoIds } },

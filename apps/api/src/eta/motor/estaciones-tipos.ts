@@ -16,7 +16,10 @@ export type Estacion = {
   tiempoPreparacionMin: number | null;
   calendario: CalendarioEstacion | null;
   familias: string[];
-  maquinas: Array<{ centroCostoId: string | null }>;
+  /** `id` habilita el ruteo "por máquina" del rediseño de estaciones. */
+  maquinas: Array<{ id?: string | null; centroCostoId: string | null }>;
+  /** Reglas de captura (rediseño): 'tecnologia' | 'paso' (+ 'maquina'/'familia'). */
+  reglas?: Array<{ tipo: string; valor: string }>;
 };
 
 /** Default cuando una estación no tiene calendario: L–V 9:00–18:00. */

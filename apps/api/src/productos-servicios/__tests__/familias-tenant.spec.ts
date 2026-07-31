@@ -140,7 +140,6 @@ describe('validarDefinicionFamiliaTenant (el validador puro)', () => {
 
 describe('FamiliasTenantService (integración, gdi_saas_test)', () => {
   let tenantId: string;
-  let estacionId: string;
 
   beforeAll(async () => {
     const tenant = await prisma.tenant.create({
@@ -150,10 +149,6 @@ describe('FamiliasTenantService (integración, gdi_saas_test)', () => {
       },
     });
     tenantId = tenant.id;
-    const estacion = await prisma.estacion.create({
-      data: { tenantId, nombre: 'Mesa de serigrafía', etapa: 'terminaciones' },
-    });
-    estacionId = estacion.id;
   });
 
   afterAll(async () => {
@@ -161,11 +156,8 @@ describe('FamiliasTenantService (integración, gdi_saas_test)', () => {
     await prisma.$disconnect();
   });
 
-  it('crear → la familia resuelve SÍNCRONO por UUID y rutea a su estación', async () => {
-    const fila = await service.crear(tenantId, {
-      ...SERIGRAFIA,
-      estacionId,
-    });
+  it('crear → la familia resuelve SÍNCRONO por UUID; el editor NO rutea a estación', async () => {
+    const fila = await service.crear(tenantId, SERIGRAFIA);
 
     // El resolver la ve sin tocar la base (registro write-through).
     const def = resolverFamilia(fila.id);
@@ -177,11 +169,13 @@ describe('FamiliasTenantService (integración, gdi_saas_test)', () => {
     // Tablero: cronómetro por default de categoría (operaciones_manuales).
     expect(modoRegistroDeFamilia(fila.id)).toBe('cronometro');
 
-    // Ruteo: la fuente de verdad es EstacionFamilia, con el UUID como código.
+    // Rediseño "estaciones por reglas": el editor de pasos ya no asigna
+    // estación. El ruteo se arma sólo desde el panel de estación, así que
+    // crear la familia NO deja ninguna fila en EstacionFamilia.
     const ruteo = await prisma.estacionFamilia.findFirst({
       where: { tenantId, familiaCodigo: fila.id },
     });
-    expect(ruteo?.estacionId).toBe(estacionId);
+    expect(ruteo).toBeNull();
   });
 
   it('B.3.2: los outputs se DERIVAN de la forma — lo que declare el input se descarta', async () => {

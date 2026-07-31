@@ -3,10 +3,11 @@
 import * as React from "react";
 import {
   BookOpenIcon,
-  CheckIcon,
+  ChevronRightIcon,
   CircleDotIcon,
   CogIcon,
   FactoryIcon,
+  InfoIcon,
   LayersIcon,
   LayoutDashboardIcon,
   PackageIcon,
@@ -53,6 +54,12 @@ import {
   type DiaNoLaborable,
 } from "@/lib/estaciones-api";
 import { CATEGORIAS_FAMILIA } from "@/lib/tablero-produccion";
+import { tecnologiaMaquinaItems } from "@/lib/maquinaria";
+import {
+  SelectBuscable,
+  type OpcionSelect,
+} from "@/components/ui/select-buscable";
+import s2 from "./estaciones-panel.module.css";
 
 type IconComponent = React.ComponentType<React.SVGProps<SVGSVGElement>>;
 
@@ -110,13 +117,17 @@ function iconEl(icon: string | null | undefined) {
   return <IconCmp />;
 }
 
-function iniciales(nombre: string): string {
-  return nombre
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((parte) => parte[0]?.toUpperCase() ?? "")
-    .join("");
+/**
+ * Ícono de ayuda con el detalle en un tooltip: saca el texto chico de la UI
+ * (queda sólo la etiqueta) sin perder la explicación. Nativo (`title`) para
+ * que no lo recorte el `overflow` del sheet.
+ */
+function InfoTip({ text }: { text: string }) {
+  return (
+    <span className={s2.info} title={text} tabIndex={0} role="img" aria-label={text}>
+      <InfoIcon size={13} aria-hidden />
+    </span>
+  );
 }
 
 // ── Form (sheet) ─────────────────────────────────────────────────────────
@@ -569,6 +580,7 @@ function StationForm({
           familias: initial.familias,
           empleadoIds: initial.empleados.map((entry) => entry.id),
           maquinaIds: initial.maquinas.map((entry) => entry.id),
+          reglas: initial.reglas ?? [],
         }
       : { ...createEmptyEstacion(), ...(etapaInicial ? { etapa: etapaInicial } : {}) },
   );
@@ -581,22 +593,145 @@ function StationForm({
       return { ...current, [key]: [...next] };
     });
   };
+  // Reglas de captura por tecnología / paso concreto (rediseño por reglas):
+  // conviven con la familia y la máquina como filtros de la estación.
+  const tieneRegla = (tipo: "tecnologia" | "paso", valor: string) =>
+    (draft.reglas ?? []).some((r) => r.tipo === tipo && r.valor === valor);
+  const toggleRegla = (tipo: "tecnologia" | "paso", valor: string) => {
+    setDraft((current) => {
+      const reglas = current.reglas ?? [];
+      const existe = reglas.some((r) => r.tipo === tipo && r.valor === valor);
+      return {
+        ...current,
+        reglas: existe
+          ? reglas.filter((r) => !(r.tipo === tipo && r.valor === valor))
+          : [...reglas, { tipo, valor }],
+      };
+    });
+  };
+  // Qué OTRA estación ya captura una tecnología / paso: una tecnología o un
+  // paso concreto vive en una sola estación (evita el ruteo ambiguo). Espeja el
+  // "en X" de las familias, contra la lista de estaciones cargadas.
+  const reglaEnEstacion = (tipo: "tecnologia" | "paso") => {
+    const mapa = new Map<string, string>();
+    for (const est of estaciones) {
+      if (est.id === initial?.id) continue;
+      for (const regla of est.reglas ?? []) {
+        if (regla.tipo === tipo && !mapa.has(regla.valor)) {
+          mapa.set(regla.valor, est.nombre);
+        }
+      }
+    }
+    return mapa;
+  };
+  const tecnologiaEnEstacion = reglaEnEstacion("tecnologia");
+  const pasoEnEstacion = reglaEnEstacion("paso");
+  // El ajuste fino por paso concreto arranca plegado, salvo que ya tenga reglas.
+  const [mostrarPaso, setMostrarPaso] = React.useState(() =>
+    (initial?.reglas ?? []).some((r) => r.tipo === "paso"),
+  );
 
   const valid =
     draft.nombre.trim().length > 0 &&
     diasInvalidos(draft.calendario ?? null).length === 0;
   const etapa = etapaDeEstacion(draft.etapa);
 
-  // Familias agrupadas por categoría; las tomadas por OTRA estación se
-  // muestran deshabilitadas con la dueña (una familia, una estación).
-  const familiasPorCategoria = CATEGORIAS_FAMILIA.map((cat) => ({
-    ...cat,
-    items: familias.filter(
-      (familia) =>
-        familia.categoria === cat.key &&
-        (familia.visibleEnSelector || draft.familias.includes(familia.codigo)),
-    ),
-  })).filter((cat) => cat.items.length > 0);
+  // "Reglas de captura": chips de lo elegido + un buscable para agregar (evita
+  // pintar el catálogo entero como paredes de chips). Máquina vive en Recursos.
+  const catLabel = new Map(CATEGORIAS_FAMILIA.map((cat) => [cat.key, cat.nm]));
+  const nombreFamilia = (codigo: string) =>
+    familias.find((f) => f.codigo === codigo)?.nombre ?? codigo;
+  const labelTecnologia = (valor: string) =>
+    tecnologiaMaquinaItems.find((t) => t.value === valor)?.label ?? valor;
+
+  const reglasTecnologia = (draft.reglas ?? []).filter(
+    (r) => r.tipo === "tecnologia",
+  );
+  const reglasPaso = (draft.reglas ?? []).filter((r) => r.tipo === "paso");
+
+  // Opciones del buscable = catálogo MENOS lo ya elegido; las tomadas por otra
+  // estación quedan deshabilitadas con la dueña en el detalle.
+  const opcionesTecnologia: OpcionSelect[] = tecnologiaMaquinaItems
+    .filter((t) => !tieneRegla("tecnologia", t.value))
+    .map((t) => {
+      const enOtra = tecnologiaEnEstacion.get(t.value);
+      return {
+        value: t.value,
+        label: t.label,
+        disabled: Boolean(enOtra),
+        detalle: enOtra ? `Ya en "${enOtra}"` : null,
+      };
+    });
+
+  const opcionesFamilia: OpcionSelect[] = familias
+    .filter(
+      (f) =>
+        (f.visibleEnSelector || draft.familias.includes(f.codigo)) &&
+        !draft.familias.includes(f.codigo),
+    )
+    .map((f) => {
+      const otras = f.estaciones.filter((e) => e.id !== initial?.id);
+      const generalAjena = otras.find((e) => !e.conMaquinas);
+      // Bloqueada sólo si crearía dos estaciones generales con la misma familia.
+      const bloqueada = Boolean(generalAjena) && draft.maquinaIds.length === 0;
+      return {
+        value: f.codigo,
+        label: f.nombre,
+        grupo: catLabel.get(f.categoria) ?? f.categoria,
+        disabled: bloqueada,
+        detalle: bloqueada
+          ? `General en "${generalAjena?.nombre}"`
+          : otras.length > 0
+            ? `también en ${otras[0].nombre}`
+            : null,
+      };
+    });
+
+  const opcionesPaso: OpcionSelect[] = familias
+    .filter(
+      (f) =>
+        (f.visibleEnSelector || tieneRegla("paso", f.codigo)) &&
+        !tieneRegla("paso", f.codigo),
+    )
+    .map((f) => {
+      const enOtra = pasoEnEstacion.get(f.codigo);
+      return {
+        value: f.codigo,
+        label: f.nombre,
+        grupo: catLabel.get(f.categoria) ?? f.categoria,
+        disabled: Boolean(enOtra),
+        detalle: enOtra ? `Ya en "${enOtra}"` : null,
+      };
+    });
+
+  // Recursos: mismo patrón compacto (chips elegidos + buscable para agregar).
+  const nombreMaquina = (id: string) =>
+    maquinas.find((m) => m.id === id)?.nombre ?? id;
+  const nombreEmpleado = (id: string) =>
+    empleados.find((e) => e.id === id)?.nombreCompleto ?? id;
+
+  const opcionesMaquina: OpcionSelect[] = maquinas
+    .filter((m) => !draft.maquinaIds.includes(m.id))
+    .map((m) => {
+      const enOtra = maquinaEnEstacion.get(m.id);
+      const enOtraDistinta =
+        enOtra && enOtra !== initial?.nombre ? enOtra : undefined;
+      return {
+        value: m.id,
+        label: m.nombre,
+        // Elegirla la MUEVE acá (una máquina vive en una estación): se avisa,
+        // no se bloquea.
+        detalle: enOtraDistinta ? `hoy en ${enOtraDistinta} · se mueve acá` : null,
+      };
+    });
+
+  const opcionesEmpleado: OpcionSelect[] = empleados
+    .filter((e) => !draft.empleadoIds.includes(e.id))
+    .map((e) => ({
+      value: e.id,
+      label: e.nombreCompleto,
+      grupo: e.sector || null,
+    }));
 
   return (
     <>
@@ -664,126 +799,190 @@ function StationForm({
           </section>
 
           <section className="est-section">
-            <div className="est-section-head"><span className="num">02</span><div><div className="ttl">Familias de pasos</div><div className="sub">Qué tipo de trabajo se ejecuta acá: la clave que rutea cada paso del tablero. Una familia puede repetirse entre estaciones CON máquinas (las máquinas filtran); a lo sumo una estación general (sin máquinas) por familia.</div></div></div>
-            {familiasPorCategoria.map((cat) => (
-              <div key={cat.key} className="est-field">
-                <label>{cat.nm}</label>
-                <div className="multi-chips">
-                  {cat.items.map((familia) => {
-                    const seleccionada = draft.familias.includes(familia.codigo);
-                    const otras = familia.estaciones.filter((entry) => entry.id !== initial?.id);
-                    const generalAjena = otras.find((entry) => !entry.conMaquinas);
-                    // Bloqueada sólo si ELEGIRLA crearía dos estaciones
-                    // generales con la misma familia (ruteo ambiguo).
-                    const bloqueada =
-                      !seleccionada && Boolean(generalAjena) && draft.maquinaIds.length === 0;
-                    const tag =
-                      otras.length > 0
-                        ? `en ${otras[0].nombre}${otras.length > 1 ? ` +${otras.length - 1}` : ""}`
-                        : null;
-                    return (
-                      <button
-                        key={familia.codigo}
-                        type="button"
-                        className={`m-chip ${seleccionada ? "on" : ""} ${bloqueada ? "taken" : ""}`}
-                        disabled={bloqueada}
-                        title={
-                          bloqueada
-                            ? `Ya está en la estación general "${generalAjena?.nombre}". Asigná máquinas a esta estación para repartir la familia por máquina.`
-                            : otras.length > 0
-                              ? `También en: ${otras.map((entry) => entry.nombre).join(", ")}`
-                              : familia.codigo
-                        }
-                        onClick={() => toggleLista("familias", familia.codigo)}
-                      >
-                        {seleccionada ? <CheckIcon /> : null}
-                        <span className="nm">{familia.nombre}</span>
-                        {tag ? <span className="en-tag">{tag}</span> : null}
-                      </button>
-                    );
-                  })}
-                </div>
+            <div className="est-section-head"><span className="num">02</span><div><div className="ttl">Reglas de captura</div><div className="sub">Qué pasos agarra esta estación. Se evalúan de lo más específico a lo general: <strong>máquina</strong> (en Recursos) › <strong>tecnología</strong> › <strong>paso concreto</strong> › <strong>familia</strong>. Un paso cae en una sola estación: gana la regla más específica.</div></div></div>
+
+            <div className={s2.eje}>
+              <div className={s2.ejeHead}>
+                <label>Por tecnología<InfoTip text="La máquina del paso es de esta tecnología. Ej: UV y eco solvente, cada una a su estación de impresión. La tecnología sale de la máquina que ejecutó el paso." /></label>
+                {reglasTecnologia.length > 0 ? <span className={s2.conteo}>{reglasTecnologia.length}</span> : null}
               </div>
-            ))}
-            {draft.familias.length > 0 ? <div className="help">{draft.familias.length} familia(s) asignada(s).</div> : <div className="help">Sin familias, esta estación no recibe pasos del tablero.</div>}
+              {reglasTecnologia.length > 0 ? (
+                <div className="multi-chips">
+                  {reglasTecnologia.map((regla) => (
+                    <button key={regla.valor} type="button" className="m-chip on" title="Quitar" onClick={() => toggleRegla("tecnologia", regla.valor)}>
+                      <span className="nm">{labelTecnologia(regla.valor)}</span>
+                      <span className={s2.quitar}><XIcon size={12} /></span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              <SelectBuscable
+                className={s2.agregar}
+                value=""
+                onChange={(valor) => valor && toggleRegla("tecnologia", valor)}
+                opciones={opcionesTecnologia}
+                placeholder="Agregar tecnología…"
+                placeholderBusqueda="Buscar tecnología…"
+                vacio="No quedan tecnologías por agregar."
+                ariaLabel="Agregar regla por tecnología"
+              />
+            </div>
+
+            <div className={s2.eje}>
+              <div className={s2.ejeHead}>
+                <label>Por familia<InfoTip text="Captura todo el trabajo de esta familia de pasos. Una familia puede repetirse entre estaciones con máquinas (filtran); a lo sumo una estación general (sin máquinas) por familia." /></label>
+                {draft.familias.length > 0 ? <span className={s2.conteo}>{draft.familias.length}</span> : null}
+              </div>
+              {draft.familias.length > 0 ? (
+                <div className="multi-chips">
+                  {draft.familias.map((codigo) => (
+                    <button key={codigo} type="button" className="m-chip on" title="Quitar" onClick={() => toggleLista("familias", codigo)}>
+                      <span className="nm">{nombreFamilia(codigo)}</span>
+                      <span className={s2.quitar}><XIcon size={12} /></span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className={s2.vacio}>Sin familias: por este eje no recibe pasos.</div>
+              )}
+              <SelectBuscable
+                className={s2.agregar}
+                value=""
+                onChange={(valor) => valor && toggleLista("familias", valor)}
+                opciones={opcionesFamilia}
+                placeholder="Agregar familia…"
+                placeholderBusqueda="Buscar familia…"
+                vacio="No quedan familias por agregar."
+                ariaLabel="Agregar regla por familia"
+              />
+            </div>
+
+            <div className={s2.avanzado}>
+              <button type="button" className={s2.avToggle} data-abierto={mostrarPaso ? "si" : undefined} onClick={() => setMostrarPaso((v) => !v)}>
+                <ChevronRightIcon size={14} />
+                Ajuste fino por paso concreto
+                {reglasPaso.length > 0 ? <span className={s2.conteo}>· {reglasPaso.length}</span> : null}
+              </button>
+              <InfoTip text="Manda un paso puntual a esta estación aunque su familia esté en otra. Gana sobre la regla por familia." />
+              {mostrarPaso ? (
+                <div className={s2.avBody}>
+                  {reglasPaso.length > 0 ? (
+                    <div className="multi-chips">
+                      {reglasPaso.map((regla) => (
+                        <button key={regla.valor} type="button" className="m-chip on" title="Quitar" onClick={() => toggleRegla("paso", regla.valor)}>
+                          <span className="nm">{nombreFamilia(regla.valor)}</span>
+                          <span className={s2.quitar}><XIcon size={12} /></span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                  <SelectBuscable
+                    className={s2.agregar}
+                    value=""
+                    onChange={(valor) => valor && toggleRegla("paso", valor)}
+                    opciones={opcionesPaso}
+                    placeholder="Agregar paso…"
+                    placeholderBusqueda="Buscar paso…"
+                    vacio="No quedan pasos por agregar."
+                    ariaLabel="Agregar regla por paso concreto"
+                  />
+                </div>
+              ) : null}
+            </div>
           </section>
 
           <section className="est-section">
-            <div className="est-section-head"><span className="num">03</span><div><div className="ttl">Recursos asignados</div><div className="sub">Máquinas y personal que opera en esta estación.</div></div></div>
-            <div className="est-field">
-              <label>Máquinas <span className="opt">una máquina vive en una sola estación</span></label>
-              <div className="multi-chips">
-                {maquinas.map((machine) => {
-                  const seleccionada = draft.maquinaIds.includes(machine.id);
-                  const enOtra = !seleccionada ? maquinaEnEstacion.get(machine.id) : undefined;
-                  const enOtraDistinta = enOtra && enOtra !== initial?.nombre ? enOtra : undefined;
-                  return (
-                    <button
-                      key={machine.id}
-                      type="button"
-                      className={`m-chip ${seleccionada ? "on" : ""}`}
-                      title={enOtraDistinta ? `Hoy está en "${enOtraDistinta}": seleccionarla la mueve acá.` : machine.nombre}
-                      onClick={() => toggleLista("maquinaIds", machine.id)}
-                    >
-                      {seleccionada ? <CheckIcon /> : null}
-                      <span className="nm">{machine.nombre}</span>
-                      {enOtraDistinta ? <span className="en-tag">en {enOtraDistinta}</span> : null}
-                    </button>
-                  );
-                })}
-                {maquinas.length === 0 ? <div className="help">No hay máquinas cargadas en el sistema.</div> : null}
+            <div className="est-section-head"><span className="num">03</span><div><div className="ttl">Recursos asignados</div><div className="sub">Máquinas y personal que opera en esta estación. La <strong>máquina</strong> es la regla de captura más específica: un paso hecho con ella cae acá antes que por tecnología, paso o familia.</div></div></div>
+            <div className={s2.eje}>
+              <div className={s2.ejeHead}>
+                <label>Máquinas<InfoTip text="Una máquina vive en una sola estación. Es la regla de captura más específica. Elegir una que hoy está en otra estación la mueve acá." /></label>
+                {draft.maquinaIds.length > 0 ? <span className={s2.conteo}>{draft.maquinaIds.length}</span> : null}
               </div>
-              {draft.maquinaIds.length > 0 ? <div className="help">{draft.maquinaIds.length} máquina(s) en esta estación.</div> : null}
+              {draft.maquinaIds.length > 0 ? (
+                <div className="multi-chips">
+                  {draft.maquinaIds.map((id) => (
+                    <button key={id} type="button" className="m-chip on" title="Quitar" onClick={() => toggleLista("maquinaIds", id)}>
+                      <span className="nm">{nombreMaquina(id)}</span>
+                      <span className={s2.quitar}><XIcon size={12} /></span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className={s2.vacio}>Sin máquinas: captura por tecnología, paso o familia.</div>
+              )}
+              <SelectBuscable
+                className={s2.agregar}
+                value=""
+                onChange={(valor) => valor && toggleLista("maquinaIds", valor)}
+                opciones={opcionesMaquina}
+                placeholder="Agregar máquina…"
+                placeholderBusqueda="Buscar máquina…"
+                vacio={maquinas.length === 0 ? "No hay máquinas en el sistema." : "No quedan máquinas por agregar."}
+                ariaLabel="Agregar máquina a la estación"
+              />
             </div>
 
-            <div className="est-field">
-              <label>Empleados habilitados <span className="opt">pueden estar en varias estaciones</span></label>
-              <div className="emp-chips">
-                {empleados.map((employee) => (
-                  <button key={employee.id} type="button" className={`emp-chip ${draft.empleadoIds.includes(employee.id) ? "on" : ""}`} onClick={() => toggleLista("empleadoIds", employee.id)}>
-                    <span className="av">{iniciales(employee.nombreCompleto)}</span>
-                    <span className="info"><span className="nm">{employee.nombreCompleto}</span><span className="role">{employee.sector}</span></span>
-                    {draft.empleadoIds.includes(employee.id) ? <CheckIcon /> : null}
-                  </button>
-                ))}
-                {empleados.length === 0 ? <div className="help">No hay empleados cargados en el sistema.</div> : null}
+            <div className={s2.eje}>
+              <div className={s2.ejeHead}>
+                <label>Empleados habilitados<InfoTip text="Quiénes pueden operar en esta estación. Un empleado puede estar habilitado en varias estaciones." /></label>
+                {draft.empleadoIds.length > 0 ? <span className={s2.conteo}>{draft.empleadoIds.length}</span> : null}
               </div>
+              {draft.empleadoIds.length > 0 ? (
+                <div className="multi-chips">
+                  {draft.empleadoIds.map((id) => (
+                    <button key={id} type="button" className="m-chip on" title="Quitar" onClick={() => toggleLista("empleadoIds", id)}>
+                      <span className="nm">{nombreEmpleado(id)}</span>
+                      <span className={s2.quitar}><XIcon size={12} /></span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              <SelectBuscable
+                className={s2.agregar}
+                value=""
+                onChange={(valor) => valor && toggleLista("empleadoIds", valor)}
+                opciones={opcionesEmpleado}
+                placeholder="Agregar empleado…"
+                placeholderBusqueda="Buscar empleado…"
+                vacio={empleados.length === 0 ? "No hay empleados en el sistema." : "No quedan empleados por agregar."}
+                ariaLabel="Habilitar empleado en la estación"
+              />
             </div>
           </section>
 
           <section className="est-section">
             <div className="est-section-head"><span className="num">04</span><div><div className="ttl">Capacidad y planificación</div><div className="sub">Puestos y calendario: la cola del tablero se mide en horas.</div></div></div>
-            <Stepper label="Puestos de trabajo" value={draft.capacidadConcurrente ?? 1} min={1} step={1} onChange={(value) => update({ capacidadConcurrente: value })} help="Cuántos pasos avanzan EN PARALELO de verdad (2 mesas con 2 operarios = 2). Una impresora es 1, aunque tenga cola." />
-            <div className="est-field">
-              <label>Tiempo entre pasos</label>
-              <label className="est-check">
-                <input
-                  type="checkbox"
-                  checked={draft.tiempoPreparacionMin == null}
-                  onChange={(event) =>
-                    update({
-                      tiempoPreparacionMin: event.target.checked
-                        ? null
-                        : entrePasosDefault,
-                    })
-                  }
-                />
-                <span>Usar el del taller ({entrePasosDefault} min)</span>
-              </label>
-              {draft.tiempoPreparacionMin != null ? (
-                <Stepper
-                  label=""
-                  value={draft.tiempoPreparacionMin}
-                  min={0}
-                  step={5}
-                  unit="min"
-                  onChange={(value) => update({ tiempoPreparacionMin: value })}
-                  help="Minutos para traer el material hasta acá. Ocupa un puesto (lo hace el operario), no la máquina."
-                />
-              ) : (
-                <div className="help">Traslado hasta esta estación antes de empezar un paso. Destildá para darle un valor propio.</div>
-              )}
+            <div className={s2.capTop}>
+              <div className="est-field">
+                <label>Puestos<InfoTip text="Cuántos pasos avanzan EN PARALELO de verdad (2 mesas con 2 operarios = 2). Una impresora es 1, aunque tenga cola." /></label>
+                <div className={`est-stepper ${s2.puestosStepper}`}>
+                  <button type="button" onClick={() => update({ capacidadConcurrente: Math.max(1, (draft.capacidadConcurrente ?? 1) - 1) })}>−</button>
+                  <input type="number" value={draft.capacidadConcurrente ?? 1} onChange={(event) => update({ capacidadConcurrente: Math.max(1, Number.parseInt(event.target.value, 10) || 1) })} />
+                  <button type="button" onClick={() => update({ capacidadConcurrente: (draft.capacidadConcurrente ?? 1) + 1 })}>+</button>
+                </div>
+              </div>
+
+              <div className="est-field">
+                <label>Tiempo entre pasos<InfoTip text="Traslado hasta esta estación antes de empezar un paso. Ocupa un puesto (lo hace el operario), no la máquina. «Del taller» hereda el valor global; «Propio» le da uno distinto." /></label>
+                <div className={`est-toggle ${s2.tiempoToggle}`}>
+                  <button type="button" className={draft.tiempoPreparacionMin == null ? "on" : ""} onClick={() => update({ tiempoPreparacionMin: null })}>
+                    Del taller · {entrePasosDefault} min
+                  </button>
+                  <button type="button" className={draft.tiempoPreparacionMin != null ? "on" : ""} onClick={() => update({ tiempoPreparacionMin: draft.tiempoPreparacionMin ?? entrePasosDefault })}>
+                    Propio
+                  </button>
+                </div>
+                {draft.tiempoPreparacionMin != null ? (
+                  <div className={`est-stepper ${s2.tiempoStepper}`}>
+                    <button type="button" onClick={() => update({ tiempoPreparacionMin: Math.max(0, (draft.tiempoPreparacionMin ?? 0) - 5) })}>−</button>
+                    <input type="number" value={draft.tiempoPreparacionMin} onChange={(event) => update({ tiempoPreparacionMin: Math.max(0, Number.parseInt(event.target.value, 10) || 0) })} />
+                    <span className="unit">min</span>
+                    <button type="button" onClick={() => update({ tiempoPreparacionMin: (draft.tiempoPreparacionMin ?? 0) + 5 })}>+</button>
+                  </div>
+                ) : null}
+              </div>
             </div>
+
             <CalendarioEditor
               value={draft.calendario ?? null}
               onChange={(calendario) => update({ calendario })}
@@ -791,7 +990,7 @@ function StationForm({
             />
           </section>
 
-          <div className="est-tip"><CogIcon /><span>Los pasos del Tablero llegan a esta estación por su <strong>familia</strong>; si la estación tiene <strong>máquinas</strong>, sólo recibe los pasos que usan esas máquinas. El tiempo estimado por paso sale de la ruta real de cada item, no se configura acá.</span></div>
+          <div className="est-tip"><CogIcon /><span>Cada paso del Tablero cae en <strong>una sola</strong> estación: gana la regla más específica que lo matchea (<strong>máquina › tecnología › paso › familia</strong>). El tiempo estimado por paso sale de la ruta real de cada item, no se configura acá.</span></div>
         </div>
 
         <div className="sheet-foot est-foot">
@@ -832,7 +1031,7 @@ function EstacionCard({
       <div className="est-card-foot">
         <span className={`est-status ${est.activo ? "ok" : "off"}`}><span className="dot" />{est.activo ? "Activa" : "Inactiva"}</span>
         {etiquetaCalendario(est.calendario) ? <span className="est-card-id">{etiquetaCalendario(est.calendario)}</span> : null}
-        {est.familias.length === 0 ? <span className="est-tasks">Sin familias: no recibe pasos</span> : null}
+        {est.familias.length === 0 && (est.reglas?.length ?? 0) === 0 && est.maquinas.length === 0 ? <span className="est-tasks">Sin reglas: no recibe pasos</span> : null}
       </div>
     </button>
   );

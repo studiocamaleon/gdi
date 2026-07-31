@@ -10,10 +10,44 @@
 | A — persistir máquina en el paso | `33e93864` | `OrdenTrabajoItemPaso.maquinaId` (migración 20260731150000). Motor setea `tiempo.maquinaId`; materialización lo guarda. Test verde. |
 | B — modelo de reglas + derivación | `c56f4f86` | `EstacionRegla` (migración 20260731160000). Nueva `resolverEstacionDePaso` por prioridad (front + copia ETA). 12 tests. |
 | C — backend CRUD de reglas | `74b5ca22` | Upsert de estación acepta/persiste/devuelve `reglas` (tipo tecnología/paso). Tipos front. |
+| C — cableado + UI + saca selector | (sin commitear) | **Todo lo de abajo (§4.1/4.2/4.3) HECHO.** Ver "Qué se hizo en esta sesión". |
 
-**Estado en prod: NEUTRAL.** La derivación nueva cae al fallback legacy (familia
-+ centro) mientras los pasos no traigan `maquinaId` y no haya reglas cargadas.
-Todo lo de arriba es aditivo. Migraciones aplicadas a dev **y** test.
+**Estado tras esta sesión: ACTIVO.** El paso ya trae `maquinaId` + `tecnologia`
+derivada (tablero + ETA), el panel de estación arma reglas por tecnología/paso/
+familia/máquina, y el editor de pasos del tenant ya no asigna estación. La
+derivación por reglas está en uso; el fallback legacy sólo cubre órdenes viejas
+sin `maquinaId` y estaciones sin reglas nuevas.
+
+## Qué se hizo en esta sesión (Fase C completa)
+
+- **4.1 Cableado de lectura.** Helper puro `apps/api/src/common/tecnologia-maquina.ts`
+  (espejo backend de `getMachineTechnology`, 6 tests). El paso del tablero
+  (`ordenes-trabajo.service.ts`, `toTableroItem` + `tecnologiaPorMaquinaDeItems`,
+  3 call sites) y del ETA (`eta.service.ts`, `assembleItems` + `tecnologiaPorMaquina`)
+  ahora traen `maquinaId` + `tecnologia` (derivada en lectura, una query por lote).
+  Tipo `Estacion` del motor ETA extendido con `maquinas[].id` + `reglas`
+  (`findEstaciones` ya los devolvía).
+- **4.2 Panel de estación.** `estaciones-panel.tsx` sección 02 ahora "Reglas de
+  captura": por tecnología (catálogo `tecnologiaMaquinaItems`), por familia (lo de
+  antes), por paso concreto (regla `paso`), + máquina en Recursos (sección 03).
+  Reusa clases globales existentes (css:guard OK, sin globales nuevas). Validación
+  de consistencia nueva en `produccion.service.ts` (`validarReferencias`): una
+  tecnología/paso lo captura a lo sumo una estación.
+- **4.3 Selector fuera del editor de pasos.** `pasos-familias-view.tsx`: step
+  "estacion" → "centro" (sólo centro de costo), quitado el campo/estado
+  `estacionId`, la columna "Estación" y la carga de `getEstaciones`.
+  `familias-tenant.service.ts` + DTO: dejó de escribir `EstacionFamilia` desde
+  `input.estacionId` (campo eliminado). Test de integración actualizado.
+
+Verificado: `tsc` front + `tsc -p tsconfig.build.json` API limpios · `css:guard`
+sin globales nuevas · vitest derivación 12/12 · jest eta 37/37, produccion+
+familias-tenant 65/65, tecnologia-maquina 6/6 · motor-universal idéntico al
+baseline (17 fallos preexistentes, sin regresión). **Sin verificación visual del
+panel** (bar del handoff §5 = checks automáticos). **Falta commitear.**
+
+**Estado histórico (pre-sesión): NEUTRAL.** La derivación nueva caía al fallback
+legacy mientras los pasos no trajeran `maquinaId` y no hubiera reglas cargadas.
+Todo aditivo. Migraciones aplicadas a dev **y** test.
 
 ## 2. Decisiones ya tomadas
 
