@@ -2789,7 +2789,9 @@ export function ConfigPasosEditorView({
   // usuario: no mezclar guiado y detallado en la misma vista). Abre solo
   // cuando la alternativa está sin configurar; siempre disponible a botón.
   const [asistenteAbierto, setAsistenteAbierto] = React.useState(
-    () => rutaAlternativa.configPasos.length === 0,
+    // Deshabilitado 2026-07-31: el asistente ya no auto-abre. Antes:
+    //   () => rutaAlternativa.configPasos.length === 0
+    false,
   );
   // Vista del panel del paso: el detallado clásico o el esquema guiado
   // EXPANDIDO (mismo cuerpo que el asistente, a página completa). Ambas
@@ -2797,7 +2799,7 @@ export function ConfigPasosEditorView({
   // se recuerda por navegador.
   const [vistaEditor, setVistaEditorState] = React.useState<
     "detallado" | "guiado"
-  >("detallado");
+  >("guiado");
   // La preferencia guardada se lee POST-hidratación: leer localStorage en
   // el estado inicial hacía divergir SSR y cliente (hydration mismatch).
   React.useEffect(() => {
@@ -4555,41 +4557,48 @@ export function ConfigPasosEditorView({
                             : null}
                         </div>
                         <div className="pill-row">
-                          {/* Comparativa guiado vs detallado: misma info,
-                              dos presentaciones; la elección se recuerda. */}
-                          <button
-                            className="btn"
-                            type="button"
-                            aria-pressed={vistaEditor === "detallado"}
-                            style={
-                              vistaEditor === "detallado"
-                                ? { fontWeight: 650 }
-                                : { opacity: 0.6 }
-                            }
-                            onClick={() => setVistaEditor("detallado")}
-                          >
-                            Detallado
-                          </button>
-                          <button
-                            className="btn"
-                            type="button"
-                            aria-pressed={vistaEditor === "guiado"}
-                            style={
-                              vistaEditor === "guiado"
-                                ? { fontWeight: 650 }
-                                : { opacity: 0.6 }
-                            }
-                            onClick={() => setVistaEditor("guiado")}
-                          >
-                            Guiado
-                          </button>
-                          <button
-                            className="btn"
-                            type="button"
-                            onClick={() => setAsistenteAbierto(true)}
-                          >
-                            Asistente guiado
-                          </button>
+                          {/* Deshabilitado 2026-07-31: la ficha usa SÓLO la
+                              vista Guiada (paridad completa — reusa los mismos
+                              sub-editores). Detallado y Asistente quedan en el
+                              código, ocultos con `false &&`, para revertir sin
+                              reescribir nada. Borrado quirúrgico = paso 2. */}
+                          {false && (
+                            <>
+                              <button
+                                className="btn"
+                                type="button"
+                                aria-pressed={vistaEditor === "detallado"}
+                                style={
+                                  vistaEditor === "detallado"
+                                    ? { fontWeight: 650 }
+                                    : { opacity: 0.6 }
+                                }
+                                onClick={() => setVistaEditor("detallado")}
+                              >
+                                Detallado
+                              </button>
+                              <button
+                                className="btn"
+                                type="button"
+                                aria-pressed={vistaEditor === "guiado"}
+                                style={
+                                  vistaEditor === "guiado"
+                                    ? { fontWeight: 650 }
+                                    : { opacity: 0.6 }
+                                }
+                                onClick={() => setVistaEditor("guiado")}
+                              >
+                                Guiado
+                              </button>
+                              <button
+                                className="btn"
+                                type="button"
+                                onClick={() => setAsistenteAbierto(true)}
+                              >
+                                Asistente guiado
+                              </button>
+                            </>
+                          )}
                           <button
                             className="btn"
                             type="button"

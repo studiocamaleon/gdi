@@ -3067,6 +3067,25 @@ function describirEta(
   };
 }
 
+/**
+ * Fecha (YYYY-MM-DD) que el sistema recomienda comprometer: la ETA cruda más
+ * el colchón de días hábiles del taller — la MISMA fecha "sugerida" que
+ * describirEta muestra como recomendación. Es la que sale por defecto en el
+ * item y en la OT (el usuario después la puede cambiar).
+ */
+function fechaRecomendadaEta(
+  eta: SimulacionItem | null | undefined,
+  opts?: { margenDias?: number; noLaborables?: Set<string>; zona?: string },
+): string | null {
+  if (!eta || !eta.finEstimado) return null;
+  const margen = opts?.margenDias ?? 0;
+  const fecha =
+    margen > 0
+      ? sumarDiasHabiles(eta.finEstimado, margen, opts?.noLaborables, opts?.zona)
+      : eta.finEstimado;
+  return claveFechaEta(fecha);
+}
+
 export function ProductRow({
   item,
   index,
@@ -4793,6 +4812,45 @@ export function PropuestaFicha({
     return { finEstimado: fin, sinEstimar, parcial, asumeDesbloqueo };
   }, [demoraPorItem]);
 
+  // Fechas que el usuario fijó a mano (o que ya venían en la OT persistida):
+  // la ETA no las vuelve a pisar. El resto sigue a la estimación del sistema.
+  const otFechaTocadaRef = React.useRef(Boolean(orden?.fechaEntrega));
+  const itemFechaTocadaRef = React.useRef<Set<string>>(new Set());
+
+  // Por defecto, cada item se compromete en la fecha que el sistema estima
+  // (ETA + colchón). Sigue a la estimación hasta que el usuario la toca.
+  React.useEffect(() => {
+    if (!demoraPorItem) return;
+    const noLaborables = colasTaller?.noLaborables;
+    setItems((current) => {
+      let cambio = false;
+      const next = current.map((item) => {
+        if (itemFechaTocadaRef.current.has(item.id)) return item;
+        const fecha = fechaRecomendadaEta(demoraPorItem.get(item.id), {
+          margenDias: margenEtaDias,
+          noLaborables,
+          zona: zonaHoraria,
+        });
+        if (!fecha || item.fechaEntrega === fecha) return item;
+        cambio = true;
+        return { ...item, fechaEntrega: fecha };
+      });
+      return cambio ? next : current;
+    });
+  }, [demoraPorItem, margenEtaDias, colasTaller?.noLaborables, zonaHoraria]);
+
+  // La fecha de la OT sigue a la ETA de la orden completa (el item que termina
+  // último) hasta que el usuario la fija a mano.
+  React.useEffect(() => {
+    if (otFechaTocadaRef.current) return;
+    const fecha = fechaRecomendadaEta(demoraOrden, {
+      margenDias: margenEtaDias,
+      noLaborables: colasTaller?.noLaborables,
+      zona: zonaHoraria,
+    });
+    if (fecha) setFechaEstimada((prev) => (prev === fecha ? prev : fecha));
+  }, [demoraOrden, margenEtaDias, colasTaller?.noLaborables, zonaHoraria]);
+
   const router = useRouter();
   const [emitiendo, setEmitiendo] = React.useState(false);
   const [emisionNumero, setEmisionNumero] = React.useState<string | null>(null);
@@ -5074,6 +5132,9 @@ export function PropuestaFicha({
     setClienteId(orden.clienteId ?? "");
     setCanalVenta(orden.canalVenta ?? "mostrador");
     setFechaEstimada(orden.fechaEntrega ?? orden.creadaEl.slice(0, 10));
+    // Vuelve a seguir a la ETA salvo que la OT ya tuviera fecha comprometida.
+    otFechaTocadaRef.current = Boolean(orden.fechaEntrega);
+    itemFechaTocadaRef.current.clear();
     setItems(orden.productos.map(rehidratarOrdenItem));
     setEditadosIds(new Set());
     setEditandoOrden(false);
@@ -6055,7 +6116,10 @@ export function PropuestaFicha({
                 type="date"
                 value={fechaEstimada}
                 onClick={() => fechaEstimadaInputRef.current?.showPicker?.()}
-                onChange={(event) => setFechaEstimada(event.target.value)}
+                onChange={(event) => {
+                  otFechaTocadaRef.current = true;
+                  setFechaEstimada(event.target.value);
+                }}
                 aria-label="Fecha de entrega"
               />
             </div>
@@ -6188,6 +6252,7 @@ export function PropuestaFicha({
                       setPanelEditor({ item: targetItem, paso });
                     }}
                     onChangeFechaEntrega={(fechaEntrega) => {
+                      itemFechaTocadaRef.current.add(item.id);
                       setItems((current) =>
                         current.map((candidate) =>
                           candidate.id === item.id
