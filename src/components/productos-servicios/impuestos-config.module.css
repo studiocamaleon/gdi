@@ -247,11 +247,12 @@
 }
 
 /* ── Formulario del sheet (editar tasa / impuesto de empresa) ── */
+/* Formulario dentro del modal chico (AlertDialogContent, p-6). */
 .form {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 4px 4px 0;
+  margin: 18px 0 20px;
 }
 
 .campo {

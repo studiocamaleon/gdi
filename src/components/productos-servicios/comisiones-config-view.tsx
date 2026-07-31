@@ -23,13 +23,13 @@ import { Button } from "@/components/ui/button";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import { Input } from "@/components/ui/input";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   actualizarComisionCatalogo,
   crearComisionCatalogo,
@@ -246,22 +246,22 @@ export function ComisionesConfigView({ initialItems }: Props) {
       </section>
 
       {/* ── Sheet ── */}
-      <Sheet open={openSheet} onOpenChange={setOpenSheet}>
-        <SheetContent>
-          <SheetHeader>
-            <SheetTitle>
+      <AlertDialog open={openSheet} onOpenChange={setOpenSheet}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
               {editItem
                 ? "Editar comisión"
                 : seccion === "pasarela"
                   ? "Nueva comisión de pasarela"
                   : "Nueva comisión de vendedor"}
-            </SheetTitle>
-            <SheetDescription>
+            </AlertDialogTitle>
+            <AlertDialogDescription>
               {seccion === "pasarela"
                 ? "Se aplica a todas tus ventas, sobre lo cobrado."
                 : "Se asigna por producto, sobre el precio sin IVA."}
-            </SheetDescription>
-          </SheetHeader>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
 
           <div className={s.form}>
             <div className={s.campo}>
@@ -294,16 +294,16 @@ export function ComisionesConfigView({ initialItems }: Props) {
             </div>
           </div>
 
-          <SheetFooter>
+          <AlertDialogFooter>
             <Button variant="outline" onClick={() => setOpenSheet(false)}>
               Cancelar
             </Button>
             <Button onClick={guardar} disabled={guardando || !porcentaje}>
               {guardando ? "Guardando..." : "Guardar"}
             </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <ConfirmacionDestructiva
         open={!!aBorrar}

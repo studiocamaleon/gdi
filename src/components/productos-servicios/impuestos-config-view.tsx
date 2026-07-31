@@ -27,13 +27,13 @@ import { Button } from "@/components/ui/button";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import { Input } from "@/components/ui/input";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   actualizarImpuestoCatalogo,
   crearImpuestoCatalogo,
@@ -403,22 +403,22 @@ export function ImpuestosConfigView({ initialItems }: Props) {
       )}
 
       {/* ── Sheet de edición ── */}
-      <Sheet open={openSheet} onOpenChange={setOpenSheet}>
-        <SheetContent>
-          <SheetHeader>
-            <SheetTitle>
+      <AlertDialog open={openSheet} onOpenChange={setOpenSheet}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
               {!esEmpresa
                 ? `Alícuota de ${perfil.impuesto} general`
                 : kind === "empresa-edit"
                   ? "Editar impuesto de empresa"
                   : "Nuevo impuesto de empresa"}
-            </SheetTitle>
-            <SheetDescription>
+            </AlertDialogTitle>
+            <AlertDialogDescription>
               {!esEmpresa
                 ? `El porcentaje del ${perfil.impuesto} general que se suma al precio.`
                 : "Un costo de tu empresa que se embebe en el precio."}
-            </SheetDescription>
-          </SheetHeader>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
 
           <div className={s.form}>
             {esEmpresa && (
@@ -473,16 +473,16 @@ export function ImpuestosConfigView({ initialItems }: Props) {
             )}
           </div>
 
-          <SheetFooter>
+          <AlertDialogFooter>
             <Button variant="outline" onClick={() => setOpenSheet(false)}>
               Cancelar
             </Button>
             <Button onClick={guardar} disabled={guardando || !porcentaje}>
               {guardando ? "Guardando..." : "Guardar"}
             </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <ConfirmacionDestructiva
         open={!!aBorrar}
