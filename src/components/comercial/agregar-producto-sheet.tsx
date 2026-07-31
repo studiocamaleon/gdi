@@ -2021,25 +2021,63 @@ function medidasPersonalizadasIncompletas(
  * neutro con aro para lo desconocido. `ring` agrega un borde interno para que
  * los colores muy claros (blanco, crema) no se pierdan contra el fondo.
  */
+// El ORDEN importa: gana el primer match, así que los colores específicos van
+// ANTES que los generales (celeste antes que azul, bordó antes que rojo, oliva
+// antes que verde). Match parcial e insensible a mayúsculas, español + inglés.
 const SUBSTRATE_SWATCHES: Array<{ match: RegExp; background: string; ring?: boolean }> = [
+  // Especiales / efectos
   {
-    match: /transparente|cristal|clear|incoloro/i,
+    match: /transparente|cristal|clear|incoloro|traslu/i,
     background:
       "repeating-conic-gradient(#dedede 0% 25%, #ffffff 0% 50%) 50% / 8px 8px",
     ring: true,
   },
-  { match: /blanc|white/i, background: "#fafafa", ring: true },
+  {
+    match: /holograf|tornasol|iridis|perlad|nacar|nácar/i,
+    background: "linear-gradient(135deg,#a8e6ff,#ffd1f0,#c9b8ff,#fff3b0)",
+    ring: true,
+  },
+  // Neutros
   { match: /negr|black/i, background: "#1c1c1e" },
+  { match: /antracit|carbon|carbón|grafit/i, background: "#36393f" },
+  { match: /blanc|white/i, background: "#fafafa", ring: true },
   { match: /gris|gray|grey|plom/i, background: "#9aa0a6" },
-  { match: /plat|silver|alumini/i, background: "linear-gradient(135deg,#e2e2e4,#b7b9bd)", ring: true },
-  { match: /dorad|\boro\b|gold/i, background: "linear-gradient(135deg,#e8cf8a,#c8a13a)" },
-  { match: /roj|red|bordo|granate/i, background: "#d93636" },
-  { match: /azul|blue|celeste/i, background: "#2f6fe0" },
+  // Metálicos
+  { match: /plat|silver|alumini|aluminio|niquel|níquel|acero/i, background: "linear-gradient(135deg,#e2e2e4,#b7b9bd)", ring: true },
+  { match: /dorad|\boro\b|gold|laton|latón/i, background: "linear-gradient(135deg,#e8cf8a,#c8a13a)" },
+  { match: /cobre|copper|bronce|bronze/i, background: "linear-gradient(135deg,#e0a487,#b06a43)" },
+  // Rojos / rosados
+  { match: /bordo|bordó|borravino|vinotinto|\bvino\b|granate/i, background: "#7a1f2b" },
+  { match: /roj|red|carmin|carmín|escarlata|teja/i, background: "#d93636" },
+  { match: /coral|salmon|salmón/i, background: "#f28066", ring: true },
+  { match: /fucsia|fuchsia|magenta/i, background: "#d81b8c" },
+  { match: /rosa|rosad|\bpink\b/i, background: "#f18fb4", ring: true },
+  // Naranjas / amarillos
+  { match: /naranj|orange|mandarin|ambar|ámbar/i, background: "#e2712b" },
+  { match: /mostaz|mustard/i, background: "#c99a2e" },
+  { match: /amarill|yellow|canario|limon amarillo/i, background: "#e6b800" },
+  // Verdes
+  { match: /lima|\blime\b/i, background: "#9bcf3a" },
+  { match: /oliva|olive/i, background: "#7a7d2a" },
+  { match: /menta|mint/i, background: "#5fc9a3", ring: true },
+  { match: /esmeralda|emerald/i, background: "#0f9d6b" },
   { match: /verde|green/i, background: "#1f9d57" },
-  { match: /amarill|yellow/i, background: "#e6b800" },
-  { match: /naranj|orange/i, background: "#e2712b" },
-  { match: /beige|crema|marfil|ivory|hueso/i, background: "#efe7d6", ring: true },
-  { match: /madera|wood|roble|nogal/i, background: "linear-gradient(135deg,#c8a06a,#9c6b3a)" },
+  // Cianes / azules
+  { match: /turquesa|turquoise|teal|aqua/i, background: "#1fb6b0" },
+  { match: /cian|cyan/i, background: "#22b8d6" },
+  { match: /celest|ciel|sky/i, background: "#5db3f0", ring: true },
+  { match: /marino|navy|cobalt|cobalto/i, background: "#1c3f8f" },
+  { match: /azul|blue/i, background: "#2f6fe0" },
+  // Violetas
+  { match: /violeta|violet|lila|lavand|malva/i, background: "#8a63d2" },
+  { match: /purpur|púrpura|purple|morad/i, background: "#7a3fb0" },
+  // Marrones / tierra
+  { match: /marron|marrón|cafe|café|brown|chocolate/i, background: "#6b4326" },
+  { match: /terracot|ladrillo|tierra|ocre/i, background: "#b5603f" },
+  { match: /kraft|tabaco|habano/i, background: "#c19a6b", ring: true },
+  // Claros / madera
+  { match: /beige|crema|marfil|ivory|hueso|arena|natural/i, background: "#efe7d6", ring: true },
+  { match: /madera|wood|roble|nogal|pino|cedro|haya/i, background: "linear-gradient(135deg,#c8a06a,#9c6b3a)" },
 ];
 
 function substrateColorSwatch(label: string | null): { background: string; ring: boolean } {
