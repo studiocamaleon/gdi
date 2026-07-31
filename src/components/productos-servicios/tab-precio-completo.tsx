@@ -483,7 +483,6 @@ function SeccionComisiones({
                     <input type="checkbox" checked={checked} onChange={() => toggle(c.id)} />
                     <div className="body">
                       <div className="name">{c.nombre}</div>
-                      <div className="sub">{c.codigo}</div>
                     </div>
                     <Badge variant="outline" className="pct">
                       {c.porcentaje.toFixed(2)}%
