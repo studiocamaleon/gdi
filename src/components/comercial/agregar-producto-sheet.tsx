@@ -3448,6 +3448,8 @@ type ConfigStepProps = {
   toggleAdi: (code: string) => void;
   motorConfig: MotorConfigState;
   setMotorConfig: React.Dispatch<React.SetStateAction<MotorConfigState>>;
+  /** Los PDF medidos se retienen en el padre para subirlos al guardar. */
+  setPlanosAdjuntos: React.Dispatch<React.SetStateAction<File[]>>;
   notaProduccion: string;
   setNotaProduccion: (value: string) => void;
   cotizacion: CotizarResponse | null;
@@ -3466,6 +3468,7 @@ function ApConfigStep({
   toggleAdi,
   motorConfig,
   setMotorConfig,
+  setPlanosAdjuntos,
   notaProduccion,
   setNotaProduccion,
   cotizacion,
@@ -3795,6 +3798,16 @@ function ApConfigStep({
             });
           }
         }
+        // Retener los PDF que leyeron bien, para subirlos al guardar la orden.
+        const claveFile = (f: File) => `${f.name}::${f.size}`;
+        const okFiles = lista.filter((_, j) => resultados[j]?.ok);
+        if (okFiles.length > 0) {
+          setPlanosAdjuntos((prev) => {
+            const vistos = new Set(prev.map(claveFile));
+            const agregar = okFiles.filter((f) => !vistos.has(claveFile(f)));
+            return agregar.length > 0 ? [...prev, ...agregar] : prev;
+          });
+        }
         if (nuevas.length > 0) {
           setMotorConfig((current) => {
             const previas = current.piezas.filter(
@@ -3818,7 +3831,7 @@ function ApConfigStep({
         setLeyendoPlanos(false);
       }
     },
-    [setMotorConfig],
+    [setMotorConfig, setPlanosAdjuntos],
   );
 
   const getPiezaMeasureValue = React.useCallback(
@@ -6207,6 +6220,9 @@ export function AgregarProductoSheet({
   const [adi, setAdi] = React.useState<string[]>([]);
   const [motorConfig, setMotorConfig] =
     React.useState<MotorConfigState>(DEFAULT_MOTOR_CONFIG);
+  // PDF medidos retenidos: se suben como Archivos del ítem al guardar (Fase 2
+  // del lector de planos). Transitorio; ver docs/planos-persistir-diseno.md.
+  const [planosAdjuntos, setPlanosAdjuntos] = React.useState<File[]>([]);
   const [notaProduccion, setNotaProduccion] = React.useState("");
   const [loadingProductId, setLoadingProductId] = React.useState<string | null>(null);
   const [cotizacion, setCotizacion] = React.useState<CotizarResponse | null>(null);
@@ -6369,6 +6385,7 @@ export function AgregarProductoSheet({
     setNotaProduccion("");
     setCotizacion(null);
     setCotizacionError(null);
+    setPlanosAdjuntos([]);
     const rutaPreferida =
       detalle?.rutasAlternativas.find((ruta) => ruta.esPreferida) ??
       detalle?.rutasAlternativas[0] ??
@@ -6513,7 +6530,7 @@ export function AgregarProductoSheet({
         motorConfig,
         (config) => isConfigPasoVisibleForContext(config, motorConfig, ruleContext),
       );
-      const nextItem = buildItem(product, qty, specs, adi, {
+      const construido = buildItem(product, qty, specs, adi, {
         productoDetalle,
         motorConfig,
         slotsComercialElige,
@@ -6523,6 +6540,11 @@ export function AgregarProductoSheet({
         itemId: editingItem?.id,
         fechaEntrega: editingItem?.fechaEntrega ?? fechaEntregaDefault,
       });
+      // Los PDF medidos viajan como campo transitorio: se suben al guardar.
+      const nextItem: PropuestaItem =
+        planosAdjuntos.length > 0
+          ? { ...construido, planosPendientes: planosAdjuntos }
+          : construido;
       if (editingItem) {
         onSaveItem?.(nextItem);
         toast.success(`${product.name} actualizado.`);
@@ -6542,6 +6564,7 @@ export function AgregarProductoSheet({
         setMotorConfig(DEFAULT_MOTOR_CONFIG);
         setCotizacion(null);
         setCotizacionError(null);
+        setPlanosAdjuntos([]);
         return;
       }
       close();
@@ -6654,6 +6677,7 @@ export function AgregarProductoSheet({
               toggleAdi={toggleAdi}
               motorConfig={motorConfig}
               setMotorConfig={setMotorConfig}
+              setPlanosAdjuntos={setPlanosAdjuntos}
               notaProduccion={notaProduccion}
               setNotaProduccion={setNotaProduccion}
               cotizacion={cotizacion}

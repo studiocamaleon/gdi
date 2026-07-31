@@ -60,6 +60,7 @@ import { emitirPresupuesto } from "@/lib/presupuestos-api";
 import { enlacePublicoUrl } from "@/lib/enlaces-publicos";
 import { itemsConSelloDe } from "@/lib/sello-arte/diseno";
 import { mensajeDeArtes, publicarArtesDeSello } from "@/lib/sello-arte/publicar";
+import { publicarPlanos, type PlanosDeItem } from "@/lib/planos-persistir";
 import {
   getConfiguracionProduccion,
   getDiasNoLaborables,
@@ -5048,6 +5049,40 @@ export function PropuestaFicha({
     [],
   );
 
+  // Los PDF medidos (transitorios en item.planosPendientes) se suben a los
+  // Archivos del ítem persistido. Se matchea staging→persistido por
+  // cotizacionItemId (el id del item no sobrevive; el server genera uno nuevo),
+  // con el índice como fallback. Ver docs/planos-persistir-diseno.md.
+  const publicarPlanosDeOrden = React.useCallback(
+    async (
+      itemsConSnapshot: Array<{
+        item: PropuestaItem;
+        cotizacionItemId?: string;
+      }>,
+      productos: OrdenTrabajoProducto[],
+    ) => {
+      const porCotiz = new Map<string, string>();
+      productos.forEach((p) => {
+        if (p.cotizacionItemId && p.id) porCotiz.set(p.cotizacionItemId, p.id);
+      });
+      const objetivo: PlanosDeItem[] = [];
+      itemsConSnapshot.forEach(({ item, cotizacionItemId }, i) => {
+        const planos = item.planosPendientes;
+        if (!planos?.length) return;
+        const ordenItemId =
+          (cotizacionItemId ? porCotiz.get(cotizacionItemId) : undefined) ??
+          productos[i]?.id;
+        if (ordenItemId) objetivo.push({ ordenItemId, planos });
+      });
+      if (objetivo.length === 0) return;
+      const { errores } = await publicarPlanos(objetivo);
+      if (errores.length > 0) {
+        toast.error(`Algunos planos no se subieron: ${errores.join(" · ")}`);
+      }
+    },
+    [],
+  );
+
   /**
    * Persiste alta/edición de un item: primero el snapshot del cotizador
    * (recotizar si ya existía, cotizar-y-guardar encadenado a la Cotizacion
@@ -5109,6 +5144,16 @@ export function PropuestaFicha({
           : p.id === item.id,
       );
       await publicarArtes(tocado);
+      // Los PDF medidos del ítem (si se adjuntaron en el sheet) → Archivos del
+      // ítem recién persistido.
+      if (item.planosPendientes?.length && tocado[0]?.id) {
+        const { errores } = await publicarPlanos([
+          { ordenItemId: tocado[0].id, planos: item.planosPendientes },
+        ]);
+        if (errores.length > 0) {
+          toast.error(`Algunos planos no se subieron: ${errores.join(" · ")}`);
+        }
+      }
     },
     [orden, clienteId, publicarArtes],
   );
@@ -5507,6 +5552,7 @@ export function PropuestaFicha({
       // El arte de los sellos, antes de mostrar el cartel de emitida: si algo
       // falla, el aviso llega mientras la orden todavía está en pantalla.
       await publicarArtes(orden.productos);
+      await publicarPlanosDeOrden(itemsConSnapshot, orden.productos);
 
       setEmisionNumero(orden.numero);
     } catch (error) {
@@ -5526,6 +5572,7 @@ export function PropuestaFicha({
     persistirSnapshotsItems,
     fechaEntregaOrden,
     publicarArtes,
+    publicarPlanosDeOrden,
   ]);
 
   const finalizarEmision = React.useCallback(() => {
@@ -5566,6 +5613,7 @@ export function PropuestaFicha({
         ),
       });
       await publicarArtes(orden.productos);
+      await publicarPlanosDeOrden(itemsConSnapshot, orden.productos);
       toast.success(
         `Borrador ${orden.numero} guardado. Seguí trabajándolo desde acá.`,
       );
