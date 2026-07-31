@@ -403,11 +403,22 @@ function SeccionComisiones({
     return JSON.stringify(apliIds) !== JSON.stringify(selIds);
   }, [aplicadas, seleccionadas]);
 
+  // La pasarela ahora es TENANT (se aplica sola a todo): acá sólo se tildan las
+  // de vendedor (por producto). Las de pasarela se muestran como nota.
+  const catalogoVendedor = React.useMemo(
+    () => catalogo.filter((c) => c.alcance !== "TENANT"),
+    [catalogo],
+  );
+  const pasarelas = React.useMemo(
+    () => catalogo.filter((c) => c.alcance === "TENANT"),
+    [catalogo],
+  );
+
   const totalPct = React.useMemo(() => {
-    return catalogo
+    return catalogoVendedor
       .filter((c) => seleccionadas.includes(c.id))
       .reduce((acc, c) => acc + c.porcentaje, 0);
-  }, [catalogo, seleccionadas]);
+  }, [catalogoVendedor, seleccionadas]);
 
   const guardar = React.useCallback(async () => {
     setGuardando(true);
@@ -434,8 +445,8 @@ function SeccionComisiones({
         <div className="body">
           <CardTitle>Comisiones</CardTitle>
           <CardDescription>
-            Esquemas reusables de comisiones (vendedor, financiera, etc.) que se cobran al cotizar
-            este producto.
+            Comisiones de vendedor que se asignan a este producto. La de
+            pasarela de pago se aplica sola a todo, no hace falta tildarla.
           </CardDescription>
         </div>
         <CardAction className="pricing-section-action">
@@ -450,11 +461,11 @@ function SeccionComisiones({
       <CardContent className="pricing-section-content">
         {cargando ? (
           <p className="text-muted-foreground text-sm italic">Cargando...</p>
-        ) : catalogo.length === 0 ? (
+        ) : catalogoVendedor.length === 0 ? (
           <EstadoVacio
             variant="compacto"
-            titulo="Sin comisiones en el catálogo"
-            descripcion="Antes de aplicar comisiones a este producto, creá al menos una en el catálogo del tenant."
+            titulo="Sin comisiones de vendedor"
+            descripcion="Creá una comisión de vendedor en el catálogo para asignarla a este producto. La de pasarela se aplica sola."
             cta={{
               label: "Ir al catálogo",
               href: "/configuracion/comisiones",
@@ -464,7 +475,7 @@ function SeccionComisiones({
         ) : (
           <>
             <div className="checkpill-row">
-              {catalogo.map((c) => {
+              {catalogoVendedor.map((c) => {
                 const checked = seleccionadas.includes(c.id);
                 return (
                   <label key={c.id} className={`checkpill ${checked ? "on" : ""}`}>
@@ -501,6 +512,15 @@ function SeccionComisiones({
                 </Button>
               )}
             </div>
+            {pasarelas.length > 0 && (
+              <p className="text-muted-foreground mt-2 text-xs">
+                Se aplican solas a todo:{" "}
+                {pasarelas
+                  .map((c) => `${c.nombre} (${c.porcentaje.toFixed(2)}%)`)
+                  .join(" · ")}
+                .
+              </p>
+            )}
           </>
         )}
       </CardContent>

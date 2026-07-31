@@ -1,7 +1,9 @@
 # Comisiones — modelo (diseño)
 
-> Estado: **diseño**, ejecución arrancando. Rama `feat/impuestos-comisiones`.
-> Hermano de `docs/impuestos-modelo-latam-diseno.md` (mismo patrón).
+> Estado: Fase A (librito + alcance TENANT) y Fase B (reconciliación del margen
+> real vs la comisión de pasarela real) **implementadas**, más el ajuste del Tab
+> Precio (tilda sólo vendedor; la pasarela se aplica sola). Rama
+> `feat/impuestos-comisiones`. Hermano de `docs/impuestos-modelo-latam-diseno.md`.
 > Fecha: 2026-07-31.
 
 ## 1. Objetivo
