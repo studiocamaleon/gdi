@@ -5877,11 +5877,15 @@ export class MotorUniversalService {
       perfil.detalleJson && typeof perfil.detalleJson === 'object'
         ? (perfil.detalleJson as Record<string, unknown>)
         : {};
-    return (
-      detalle.caras === 'DOBLE_FAZ' ||
-      detalle.dobleFaz === true ||
-      /doble/i.test(perfil.nombre)
-    );
+    // La señal EXPLÍCITA gana sobre el nombre: un perfil "Simple faz doble
+    // pasada" declara caras=SIMPLE_FAZ y no debe leerse como doble faz sólo
+    // porque el nombre contiene "doble". El regex queda como último recurso
+    // para perfiles que no declaran nada (hoy ninguno de impresión).
+    if (detalle.caras === 'DOBLE_FAZ' || detalle.dobleFaz === true) return true;
+    if (detalle.caras === 'SIMPLE_FAZ' || detalle.dobleFaz === false) {
+      return false;
+    }
+    return /doble/i.test(perfil.nombre);
   }
 
   /**
