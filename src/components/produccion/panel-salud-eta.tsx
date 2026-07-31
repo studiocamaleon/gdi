@@ -28,10 +28,14 @@ export function PanelSaludEta({
   initialPrecision,
   initialSalud,
   familiaNombres,
+  enReportes = false,
 }: {
   initialPrecision: PrecisionEta;
   initialSalud: SaludEta;
   familiaNombres: Record<string, string>;
+  /** Dentro del shell de Reportes: el cromo (título, período, tabs) ya lo pone
+   *  el shell, así que se rinde sólo el cuerpo. */
+  enReportes?: boolean;
 }) {
   const [precision, setPrecision] = React.useState(initialPrecision);
   const [salud, setSalud] = React.useState(initialSalud);
@@ -59,29 +63,9 @@ export function PanelSaludEta({
   // + = tiende a terminar tarde; lo mostramos con su signo y una etiqueta.
   const sesgo = precision.sesgoMin;
 
-  return (
-    <div className="dash-scroll" style={{ padding: "26px 30px 44px" }}>
-      <div className="dash">
-        <div className="dash-head">
-          <div className="title-block">
-            <h1>Salud del ETA</h1>
-            <div className="sub">
-              Qué tan confiable es la fecha que prometemos, medida contra lo que
-              realmente pasó.
-            </div>
-          </div>
-          <div className="actions">
-            <button
-              className="btn-ghost"
-              onClick={refrescar}
-              disabled={cargando}
-            >
-              {cargando ? "Actualizando…" : "Actualizar"}
-            </button>
-          </div>
-        </div>
-
-        {error ? <div className="d-empty">{error}</div> : null}
+  const cuerpo = (
+    <>
+      {error ? <div className="d-empty">{error}</div> : null}
 
         {/* ── Precisión de las promesas ── */}
         <div className="d-kpi-row cols-4">
@@ -291,6 +275,30 @@ export function PanelSaludEta({
             )}
           </Card>
         </div>
+    </>
+  );
+
+  // Dentro de Reportes: el shell ya pone scroll, título y tabs.
+  if (enReportes) return cuerpo;
+
+  return (
+    <div className="dash-scroll" style={{ padding: "26px 30px 44px" }}>
+      <div className="dash">
+        <div className="dash-head">
+          <div className="title-block">
+            <h1>Salud del ETA</h1>
+            <div className="sub">
+              Qué tan confiable es la fecha que prometemos, medida contra lo que
+              realmente pasó.
+            </div>
+          </div>
+          <div className="actions">
+            <button className="btn-ghost" onClick={refrescar} disabled={cargando}>
+              {cargando ? "Actualizando…" : "Actualizar"}
+            </button>
+          </div>
+        </div>
+        {cuerpo}
       </div>
     </div>
   );

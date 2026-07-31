@@ -15,6 +15,7 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
+  ActivityIcon,
   BriefcaseIcon,
   CircleDollarSignIcon,
   FactoryIcon,
@@ -53,6 +54,7 @@ export const REPORTES: Reporte[] = [
   { href: "/reportes/embudo", label: "Embudo", Icon: FilterIcon },
   { href: "/reportes/clientes", label: "Clientes", Icon: UsersIcon },
   { href: "/reportes/produccion", label: "Producción", Icon: FactoryIcon },
+  { href: "/reportes/salud-eta", label: "Salud del ETA", Icon: ActivityIcon },
   { href: "/reportes/equipo", label: "Equipo", Icon: HardHatIcon },
   {
     href: "/reportes/finanzas",
