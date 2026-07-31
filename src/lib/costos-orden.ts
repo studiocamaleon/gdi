@@ -80,6 +80,9 @@ export type CostoItemDesglose = {
   precioBruto: number;
   precioBaseTotal: number;
   comisionesTotal: number;
+  /** Parte de las comisiones que es de PASARELA (base bruto): la que depende de
+   *  cómo pagó el cliente y se reconcilia contra los cobros reales (Fase B). */
+  comisionesPasarelaTotal: number;
   /** Impuestos POR DENTRO: ya están en el precio, no se le muestran al cliente. */
   costosInternosTotal: number;
   impuestosInternosFilas: Array<{ key: string; nombre: string; monto: number }>;
@@ -118,6 +121,12 @@ export function calcularCostoItem(
   const comisionesTotal = desglosePrecio
     ? desglosePrecio.totalComisiones * cantidadPrecio
     : 0;
+  // La parte PASARELA es la de base BRUTO_COBRADO (% sobre lo cobrado). Es la
+  // única que cambia según cómo pague el cliente; la de vendedor (base neto) es
+  // real llueve o truene. precioBruto ya es el total, así que %×bruto = total.
+  const comisionesPasarelaTotal = (desglosePrecio?.comisiones ?? [])
+    .filter((c) => (c.baseCalculo ?? "NETO") === "BRUTO_COBRADO")
+    .reduce((acc, c) => acc + (precioBruto * c.porcentaje) / 100, 0);
   const margenMonto = precioBaseTotal - costo;
   // El margen se expresa sobre el NETO (sin IVA): es la base sobre la que se
   // configura el margen del Tab Precio — así "margen 40%" configurado se lee
@@ -252,6 +261,7 @@ export function calcularCostoItem(
     precioBruto,
     precioBaseTotal,
     comisionesTotal,
+    comisionesPasarelaTotal,
     costosInternosTotal,
     impuestosInternosFilas,
     impuestosPorFueraNombres,
@@ -308,6 +318,9 @@ export type CostosOrdenConsolidado = {
   precioBruto: number;
   ivaTotal: number;
   comisionesTotal: number;
+  /** Parte pasarela (base bruto) del total de comisiones — se reconcilia
+   *  contra los cobros reales de la orden (Fase B). */
+  comisionesPasarelaTotal: number;
   costosInternosTotal: number;
   margenMonto: number;
   margenPct: number;
@@ -361,6 +374,7 @@ export function consolidarCostosOrden(
   const precioNeto = suma((d) => d.precioNeto);
   const precioBruto = suma((d) => d.precioBruto);
   const comisionesTotal = suma((d) => d.comisionesTotal);
+  const comisionesPasarelaTotal = suma((d) => d.comisionesPasarelaTotal);
   const costosInternosTotal = suma((d) => d.costosInternosTotal);
   const materialesTotal = suma((d) => d.materialesTotal);
   const centroCostoTotal = suma((d) => d.tiempoTotal);
@@ -440,6 +454,7 @@ export function consolidarCostosOrden(
     precioBruto,
     ivaTotal: suma((d) => d.ivaTotal),
     comisionesTotal,
+    comisionesPasarelaTotal,
     costosInternosTotal,
     margenMonto,
     margenPct,
@@ -749,5 +764,63 @@ export function cruzarRealVsCotizado(
     fuentes: [...fuentesPorClave.entries()]
       .map(([fuente, pasosFuente]) => ({ fuente, pasos: pasosFuente }))
       .sort((a, b) => b.pasos - a.pasos),
+  };
+}
+
+// ── Reconciliación de la comisión de pasarela (Fase B) ───────────────────
+
+/**
+ * La comisión de pasarela se cotiza fija ("8% por las dudas"), pero el costo
+ * REAL depende de cómo pagó el cliente (efectivo = 0). Esto compara la pasarela
+ * ESTIMADA contra la REAL de los cobros y ajusta el margen. NUNCA toca el precio
+ * al cliente: es un ajuste de margen interno, por eso el riesgo es bajo. Ver
+ * docs/comisiones-modelo-diseno.md.
+ */
+export type ComisionPasarelaReconciliacion = {
+  /** Pasarela cotizada (parte base-bruto de las comisiones estimadas). */
+  estimada: number;
+  /** Pasarela real: suma de la comisión de los cobros de la orden. */
+  real: number;
+  /** estimada − real. Positivo = margen a favor (se pagó más barato). */
+  ahorro: number;
+  /** Bruto cobrado hasta ahora. */
+  cobradoBruto: number;
+  /** Total bruto de la orden (lo que hay para cobrar). */
+  totalOrden: number;
+  /** Se cobró (casi) todo ⇒ reconciliación DEFINITIVA; si no, provisional. */
+  saldada: boolean;
+  /** Cantidad de cobros considerados. */
+  cobros: number;
+  margenAjustadoMonto: number;
+  margenAjustadoPct: number | null;
+};
+
+export function reconciliarComisionPasarela(input: {
+  comisionPasarelaEstimada: number;
+  margenMonto: number;
+  precioNeto: number;
+  totalOrden: number;
+  cobros: Array<{ montoBruto: number; comisionMonto: number }>;
+}): ComisionPasarelaReconciliacion {
+  const real = input.cobros.reduce((acc, c) => acc + c.comisionMonto, 0);
+  const cobradoBruto = input.cobros.reduce((acc, c) => acc + c.montoBruto, 0);
+  // Epsilon de 1 unidad de moneda: la orden puede quedar cobrada con centavos de
+  // diferencia por redondeo y no por eso deja de estar saldada.
+  const saldada = input.totalOrden > 0 && cobradoBruto >= input.totalOrden - 1;
+  const ahorro = input.comisionPasarelaEstimada - real;
+  const margenAjustadoMonto = input.margenMonto + ahorro;
+  return {
+    estimada: input.comisionPasarelaEstimada,
+    real,
+    ahorro,
+    cobradoBruto,
+    totalOrden: input.totalOrden,
+    saldada,
+    cobros: input.cobros.length,
+    margenAjustadoMonto,
+    margenAjustadoPct:
+      input.precioNeto > 0
+        ? (margenAjustadoMonto / input.precioNeto) * 100
+        : null,
   };
 }

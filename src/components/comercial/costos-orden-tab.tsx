@@ -23,11 +23,15 @@ import { useConfigRegional } from "@/components/navigation/config-regional-provi
 import {
   consolidarCostosOrden,
   cruzarRealVsCotizado,
+  reconciliarComisionPasarela,
   MARGEN_ALERTA_PCT,
+  type ComisionPasarelaReconciliacion,
   type CostosOrdenConsolidado,
   type RealVsCotizado,
 } from "@/lib/costos-orden";
 import { getOrdenPasos } from "@/lib/ordenes-trabajo-api";
+import { getCobros } from "@/lib/administracion-api";
+import type { Cobro } from "@/lib/administracion";
 import {
   formatCurrency,
   formatUnidad,
@@ -99,6 +103,38 @@ export function CostosOrdenTab({
     [items, itemsTablero],
   );
 
+  // Cobros de la orden: para reconciliar la comisión de pasarela ESTIMADA con
+  // la REAL de cada forma de pago (efectivo = 0). Sólo si hay pasarela cotizada.
+  const [cobros, setCobros] = React.useState<Cobro[] | null>(null);
+  React.useEffect(() => {
+    if (!ordenId || consolidado.comisionesPasarelaTotal <= 0) return;
+    let vigente = true;
+    setCobros(null);
+    getCobros({ ordenId })
+      .then((res) => vigente && setCobros(res))
+      .catch(() => vigente && setCobros([]));
+    return () => {
+      vigente = false;
+    };
+  }, [ordenId, consolidado.comisionesPasarelaTotal]);
+
+  const reconPasarela = React.useMemo<ComisionPasarelaReconciliacion | null>(
+    () =>
+      cobros && consolidado.comisionesPasarelaTotal > 0
+        ? reconciliarComisionPasarela({
+            comisionPasarelaEstimada: consolidado.comisionesPasarelaTotal,
+            margenMonto: consolidado.margenMonto,
+            precioNeto: consolidado.precioNeto,
+            totalOrden: consolidado.precioBruto,
+            cobros: cobros.map((c) => ({
+              montoBruto: c.montoBruto,
+              comisionMonto: c.comisionMonto,
+            })),
+          })
+        : null,
+    [cobros, consolidado],
+  );
+
   if (items.length === 0) {
     return (
       <div className="orden-tab-empty">
@@ -145,7 +181,92 @@ export function CostosOrdenTab({
           </div>
         </section>
       )}
+
+      {ordenId && consolidado.comisionesPasarelaTotal > 0 ? (
+        <ComisionPasarelaSeccion recon={reconPasarela} fmt={fmt} />
+      ) : null}
     </div>
+  );
+}
+
+/**
+ * Reconciliación de la comisión de pasarela: lo cotizado ("8% por las dudas")
+ * contra lo que realmente costó cobrar (efectivo = 0). Ajusta el MARGEN, nunca
+ * el precio al cliente. Provisional hasta que la orden esté saldada.
+ */
+function ComisionPasarelaSeccion({
+  recon,
+  fmt,
+}: {
+  recon: ComisionPasarelaReconciliacion | null;
+  fmt: (v: number) => string;
+}) {
+  if (!recon) {
+    return (
+      <section className="otc-card">
+        <div className="otc-card-head">
+          <span className="otc-ttl">Comisión de pasarela — real vs. cotizado</span>
+        </div>
+        <div className="otc-vacio">Leyendo los cobros de la orden…</div>
+      </section>
+    );
+  }
+
+  const tono = recon.ahorro > 0.5 ? "bien" : recon.ahorro < -0.5 ? "mal" : "";
+
+  return (
+    <section className="otc-card">
+      <div className="otc-card-head">
+        <span className="otc-ttl">Comisión de pasarela — real vs. cotizado</span>
+        <span className="otc-sub">
+          Lo que se cotizó para cubrir el cobro, contra lo que realmente costó
+          según cómo pagó el cliente
+        </span>
+      </div>
+
+      {recon.cobros === 0 ? (
+        <div className="otc-vacio">
+          Todavía no hay cobros. Se cotizó {fmt(recon.estimada)} de comisión de
+          pasarela; cuando cobres vas a ver la comisión real y el margen
+          ajustado.
+        </div>
+      ) : (
+        <>
+          <div className="otc-real-kpis">
+            <div className="otc-kpi">
+              <span className="otc-kpi-lbl">Cotizada</span>
+              <span className="otc-kpi-val">{fmt(recon.estimada)}</span>
+            </div>
+            <div className="otc-kpi">
+              <span className="otc-kpi-lbl">Real (cobros)</span>
+              <span className="otc-kpi-val">{fmt(recon.real)}</span>
+            </div>
+            <div className={`otc-kpi ${tono}`}>
+              <span className="otc-kpi-lbl">
+                {recon.ahorro >= 0 ? "Margen a favor" : "Margen en contra"}
+              </span>
+              <span className="otc-kpi-val">{fmt(Math.abs(recon.ahorro))}</span>
+            </div>
+            <div className="otc-kpi">
+              <span className="otc-kpi-lbl">Margen ajustado</span>
+              <span className="otc-kpi-val">
+                {fmt(recon.margenAjustadoMonto)}
+              </span>
+              {recon.margenAjustadoPct != null ? (
+                <span className="otc-kpi-hint">
+                  {pct1(recon.margenAjustadoPct)}% del neto
+                </span>
+              ) : null}
+            </div>
+          </div>
+          <div className="otc-nota">
+            {recon.saldada
+              ? "Orden saldada: la reconciliación es definitiva."
+              : `Provisional: se cobró ${fmt(recon.cobradoBruto)} de ${fmt(recon.totalOrden)}. El número se cierra cuando la orden esté saldada.`}
+          </div>
+        </>
+      )}
+    </section>
   );
 }
 

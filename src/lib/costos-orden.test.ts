@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   consolidarCostosOrden,
   cruzarRealVsCotizado,
+  reconciliarComisionPasarela,
   tiempoFueMedido,
   tiempoRealAtipico,
 } from "@/lib/costos-orden";
@@ -360,5 +361,57 @@ describe("cruzarRealVsCotizado", () => {
     );
     expect(r.pasosSinEmparejar).toBe(1);
     expect(r.pasos).toHaveLength(0);
+  });
+});
+
+describe("reconciliarComisionPasarela", () => {
+  const base = {
+    comisionPasarelaEstimada: 80, // 8% de 1000
+    margenMonto: 300,
+    precioNeto: 1000,
+    totalOrden: 1000,
+  };
+
+  it("pago en efectivo: comisión real 0 ⇒ el margen recupera lo estimado", () => {
+    const r = reconciliarComisionPasarela({
+      ...base,
+      cobros: [{ montoBruto: 1000, comisionMonto: 0 }],
+    });
+    expect(r.real).toBe(0);
+    expect(r.ahorro).toBe(80);
+    expect(r.margenAjustadoMonto).toBe(380);
+    expect(r.saldada).toBe(true);
+  });
+
+  it("pagó con un método más barato: ahorro parcial", () => {
+    const r = reconciliarComisionPasarela({
+      ...base,
+      cobros: [{ montoBruto: 1000, comisionMonto: 40 }], // 4% real vs 8% estimado
+    });
+    expect(r.ahorro).toBe(40);
+    expect(r.margenAjustadoMonto).toBe(340);
+  });
+
+  it("cobro parcial: no está saldada (reconciliación provisional)", () => {
+    const r = reconciliarComisionPasarela({
+      ...base,
+      cobros: [{ montoBruto: 500, comisionMonto: 0 }],
+    });
+    expect(r.saldada).toBe(false);
+    expect(r.cobros).toBe(1);
+  });
+
+  it("varios cobros: suma la comisión real y el bruto cobrado", () => {
+    const r = reconciliarComisionPasarela({
+      ...base,
+      cobros: [
+        { montoBruto: 600, comisionMonto: 30 },
+        { montoBruto: 400, comisionMonto: 0 },
+      ],
+    });
+    expect(r.real).toBe(30);
+    expect(r.cobradoBruto).toBe(1000);
+    expect(r.saldada).toBe(true);
+    expect(r.margenAjustadoMonto).toBe(350); // 300 + (80 - 30)
   });
 });
