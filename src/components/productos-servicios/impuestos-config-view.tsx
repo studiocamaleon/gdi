@@ -45,13 +45,15 @@ import {
   type CondicionFiscalEmisor,
 } from "@/lib/administracion";
 import { getConfiguracionFiscal } from "@/lib/administracion-api";
+import { useConfigRegional } from "@/components/navigation/config-regional-provider";
+import { perfilPais } from "@/lib/perfiles-pais-impuestos";
 import s from "./impuestos-config.module.css";
 
 interface Props {
   initialItems: PrecioCatalogoItem[];
 }
 
-type EditKind = "iva" | "empresa-nuevo" | "empresa-edit";
+type EditKind = "iva" | "iva-nuevo" | "empresa-nuevo" | "empresa-edit";
 
 /** Cómo se calcula un impuesto de empresa, en criollo → base técnica. */
 const BASES_EMPRESA = [
@@ -80,12 +82,17 @@ function slugCodigo(nombre: string): string {
 
 export function ImpuestosConfigView({ initialItems }: Props) {
   const router = useRouter();
+  const { paisCodigo } = useConfigRegional();
+  const perfil = perfilPais(paisCodigo);
 
   const [condicion, setCondicion] = React.useState<
     CondicionFiscalEmisor | null | "desconocida"
   >("desconocida");
 
   React.useEffect(() => {
+    // La condición fiscal (RI/Monotributo) es de Argentina; el resto de países
+    // no la usa para gatear el impuesto.
+    if (!perfil.usaCondicionFiscal) return;
     let cancel = false;
     getConfiguracionFiscal()
       .then((cf) => !cancel && setCondicion(cf?.condicionFiscal ?? null))
@@ -93,7 +100,7 @@ export function ImpuestosConfigView({ initialItems }: Props) {
     return () => {
       cancel = true;
     };
-  }, []);
+  }, [perfil.usaCondicionFiscal]);
 
   // IVA = lo que se suma al precio (POR_FUERA). Empresa = costo tuyo (el resto).
   // Sólo activos: es lo que el motor aplica (los inactivos ya no cotizan).
@@ -101,7 +108,10 @@ export function ImpuestosConfigView({ initialItems }: Props) {
   const ivaRows = activos.filter((i) => i.traslado === "POR_FUERA");
   const empresaRows = activos.filter((i) => i.traslado !== "POR_FUERA");
 
-  const cobraIva = condicion === "RI";
+  // AR gatea por condición fiscal; el resto cobra por defecto (el motor cobra
+  // salvo Monotributo/Exento, que esos países no marcan).
+  const cobraIva = perfil.usaCondicionFiscal ? condicion === "RI" : true;
+  const mostrarEmpresa = perfil.tieneImpuestosEmpresa || empresaRows.length > 0;
 
   // ── Sheet de edición ──
   const [openSheet, setOpenSheet] = React.useState(false);
@@ -120,6 +130,14 @@ export function ImpuestosConfigView({ initialItems }: Props) {
     setEditItem(item);
     setNombre(item.nombre);
     setPorcentaje(String(item.porcentaje));
+    setOpenSheet(true);
+  };
+
+  const abrirNuevaIva = () => {
+    setKind("iva-nuevo");
+    setEditItem(null);
+    setNombre(perfil.impuesto);
+    setPorcentaje(String(perfil.tasaGeneral));
     setOpenSheet(true);
   };
 
@@ -147,7 +165,10 @@ export function ImpuestosConfigView({ initialItems }: Props) {
       toast.error("El porcentaje tiene que ser un número entre 0 y 100.");
       return;
     }
-    if (kind !== "iva" && !nombre.trim()) {
+    if (
+      (kind === "empresa-nuevo" || kind === "empresa-edit") &&
+      !nombre.trim()
+    ) {
       toast.error("Poné un nombre al impuesto.");
       return;
     }
@@ -155,7 +176,17 @@ export function ImpuestosConfigView({ initialItems }: Props) {
     try {
       if (kind === "iva" && editItem) {
         await actualizarImpuestoCatalogo(editItem.id, { porcentaje: pct });
-        toast.success("Alícuota de IVA actualizada");
+        toast.success(`Alícuota de ${perfil.impuesto} actualizada`);
+      } else if (kind === "iva-nuevo") {
+        await crearImpuestoCatalogo({
+          codigo: "iva",
+          nombre: perfil.impuesto,
+          porcentaje: pct,
+          traslado: "POR_FUERA",
+          baseCalculo: "NETO",
+          alcance: "PRODUCTO",
+        });
+        toast.success(`Alícuota de ${perfil.impuesto} definida`);
       } else if (kind === "empresa-edit" && editItem) {
         await actualizarImpuestoCatalogo(editItem.id, {
           nombre: nombre.trim(),
@@ -195,12 +226,16 @@ export function ImpuestosConfigView({ initialItems }: Props) {
     }
   };
 
+  const esEmpresa = kind === "empresa-nuevo" || kind === "empresa-edit";
+
   return (
     <div className={s.wrap}>
       <div className={s.head}>
         <div className={s.headRow}>
           <span className={s.headTitle}>Impuestos</span>
-          <span className={s.paisChip}>🇦🇷 Argentina</span>
+          <span className={s.paisChip}>
+            {perfil.bandera} {perfil.nombre}
+          </span>
         </div>
         <p className={s.sub}>
           Cómo se calculan los impuestos de tus ventas. Se configura una vez y
@@ -212,7 +247,7 @@ export function ImpuestosConfigView({ initialItems }: Props) {
       <section className={`${s.seccion} ${cobraIva ? "" : s.apagado}`}>
         <div className={s.seccionHead}>
           <div>
-            <div className={s.seccionTitulo}>IVA</div>
+            <div className={s.seccionTitulo}>{perfil.impuesto}</div>
             <div className={s.seccionSub}>
               Se suma al precio y lo paga el cliente. Vos lo cobrás y se lo
               pasás al Estado — no es un costo tuyo.
@@ -221,31 +256,57 @@ export function ImpuestosConfigView({ initialItems }: Props) {
         </div>
 
         <div className={s.regimen}>
-          <div className={s.regimenTexto}>
-            <span className={`${s.dot} ${cobraIva ? s.dotOn : s.dotOff}`} />
-            {condicion === "desconocida" ? (
-              <span>Definí tu condición fiscal para saber si cobrás IVA.</span>
-            ) : cobraIva ? (
-              <span>
-                Cobrás IVA · sos {CONDICION_EMISOR_LABELS.RI}.
-              </span>
-            ) : (
-              <span>
-                No cobrás IVA ·{" "}
-                {condicion ? CONDICION_EMISOR_LABELS[condicion] : "sin definir"}
-                .
-              </span>
-            )}
-          </div>
-          <Link href="/configuracion/datos-fiscales" className={s.regimenLink}>
-            Cambiar en Datos fiscales →
-          </Link>
+          {perfil.usaCondicionFiscal ? (
+            <>
+              <div className={s.regimenTexto}>
+                <span
+                  className={`${s.dot} ${cobraIva ? s.dotOn : s.dotOff}`}
+                />
+                {condicion === "desconocida" ? (
+                  <span>
+                    Definí tu condición fiscal para saber si cobrás{" "}
+                    {perfil.impuesto}.
+                  </span>
+                ) : cobraIva ? (
+                  <span>
+                    Cobrás {perfil.impuesto} · sos {CONDICION_EMISOR_LABELS.RI}.
+                  </span>
+                ) : (
+                  <span>
+                    No cobrás {perfil.impuesto} ·{" "}
+                    {condicion
+                      ? CONDICION_EMISOR_LABELS[condicion]
+                      : "sin definir"}
+                    .
+                  </span>
+                )}
+              </div>
+              <Link
+                href="/configuracion/datos-fiscales"
+                className={s.regimenLink}
+              >
+                Cambiar en Datos fiscales →
+              </Link>
+            </>
+          ) : (
+            <div className={s.regimenTexto}>
+              <span className={`${s.dot} ${s.dotOn}`} />
+              <span>{perfil.regimenNota}</span>
+            </div>
+          )}
         </div>
 
         <div className={s.filas}>
           {ivaRows.length === 0 ? (
-            <div className={s.vacio}>
-              Todavía no hay una alícuota de IVA general cargada.
+            <div className={s.addRow}>
+              <button
+                type="button"
+                className={s.addBtn}
+                onClick={abrirNuevaIva}
+              >
+                <PlusIcon className="size-4" />
+                Definir alícuota de {perfil.impuesto}
+              </button>
             </div>
           ) : (
             ivaRows.map((row) => (
@@ -253,7 +314,7 @@ export function ImpuestosConfigView({ initialItems }: Props) {
                 <div className={s.filaBody}>
                   <div className={s.filaNombre}>Normal</div>
                   <div className={s.filaNota}>
-                    IVA general — la mayoría de los productos
+                    {perfil.impuesto} general — la mayoría de los productos
                   </div>
                 </div>
                 <span className={s.pct}>{row.porcentaje.toFixed(2)}%</span>
@@ -262,7 +323,7 @@ export function ImpuestosConfigView({ initialItems }: Props) {
                     type="button"
                     className={s.iconBtn}
                     onClick={() => abrirEditarIva(row)}
-                    aria-label="Editar alícuota de IVA"
+                    aria-label={`Editar alícuota de ${perfil.impuesto}`}
                   >
                     <PencilIcon className="size-4" />
                   </button>
@@ -273,14 +334,15 @@ export function ImpuestosConfigView({ initialItems }: Props) {
           <div className={`${s.fila} ${s.filaExenta}`}>
             <div className={s.filaBody}>
               <div className={s.filaNombre}>Exento</div>
-              <div className={s.filaNota}>Sin IVA — ej. libros</div>
+              <div className={s.filaNota}>{perfil.notaExento}</div>
             </div>
             <span className={`${s.pct} ${s.pctMuted}`}>0%</span>
           </div>
         </div>
       </section>
 
-      {/* ── Impuestos de empresa ── */}
+      {/* ── Impuestos de empresa (según el país) ── */}
+      {mostrarEmpresa && (
       <section className={s.seccion}>
         <div className={s.seccionHead}>
           <div>
@@ -338,27 +400,28 @@ export function ImpuestosConfigView({ initialItems }: Props) {
           </button>
         </div>
       </section>
+      )}
 
       {/* ── Sheet de edición ── */}
       <Sheet open={openSheet} onOpenChange={setOpenSheet}>
         <SheetContent>
           <SheetHeader>
             <SheetTitle>
-              {kind === "iva"
-                ? "Alícuota de IVA general"
+              {!esEmpresa
+                ? `Alícuota de ${perfil.impuesto} general`
                 : kind === "empresa-edit"
                   ? "Editar impuesto de empresa"
                   : "Nuevo impuesto de empresa"}
             </SheetTitle>
             <SheetDescription>
-              {kind === "iva"
-                ? "El porcentaje del IVA general que se suma al precio."
+              {!esEmpresa
+                ? `El porcentaje del ${perfil.impuesto} general que se suma al precio.`
                 : "Un costo de tu empresa que se embebe en el precio."}
             </SheetDescription>
           </SheetHeader>
 
           <div className={s.form}>
-            {kind !== "iva" && (
+            {esEmpresa && (
               <div className={s.campo}>
                 <label className={s.campoLabel} htmlFor="imp-nombre">
                   Nombre
@@ -388,7 +451,7 @@ export function ImpuestosConfigView({ initialItems }: Props) {
               />
             </div>
 
-            {kind !== "iva" && (
+            {esEmpresa && (
               <div className={s.campo}>
                 <span className={s.campoLabel}>¿Sobre qué se calcula?</span>
                 <div className={s.opciones}>

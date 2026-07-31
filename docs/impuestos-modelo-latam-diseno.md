@@ -1,6 +1,10 @@
 # Impuestos — modelo LATAM (diseño)
 
-> Estado: **investigación + diseño**, sin ejecución. Rama `feat/impuestos-comisiones`.
+> Estado: Fases 1 (reubicación), 2 (categoría × régimen, AR neutral), 2.5 (vista
+> "librito") y perfiles por país (AR/CL/UY/PY/PE/CO/BO/MX/EC/HN) **implementadas**
+> en `feat/impuestos-comisiones`. Motor multi-país: cobra salvo Monotributo/Exento.
+> Pendiente: régimen fino por país (NRUS, RESIMPLE…), capa sub-nacional, retenciones,
+> Brasil (aparte), y Comisiones (dominio separado).
 > Alcance de este doc: **sólo Impuestos**. Comisiones se analiza aparte después.
 > Fecha: 2026-07-31.
 
@@ -68,6 +72,7 @@ servicios gráficos.
 | 🇧🇴 BO | IVA 13% | No: tasa única (+ tasa cero) | **Sí (efectiva ~14,94%)** | RTS (sin factura) | Siempre incluido | **IT 3%** nacional concurrente | Tasa cero | SIN (SIAT) |
 | 🇲🇽 MX | IVA 16% (8% frontera) | Sí: 16 / 8 / 0 / exento | No | RESICO **no toca IVA** (sólo ISR) | Discriminado en CFDI | Ninguno | Comercial 16% | SAT (CFDI) |
 | 🇪🇨 EC | IVA 15% | Sí: 15 / 0 / exento | No | RIMPE-NP no cobra / RIMPE-Empr sí | Discriminado | Ninguno | Tasa 0% | SRI |
+| 🇭🇳 HN | **ISV** 15% (18% selectivo) | Sí: 15 / 18 / exento / exonerado | No | Régimen Simplificado (< L 250k/año) no cobra | Discriminado | **Municipal** (Industria/Comercio, por dentro) | Exento | SAR (CAI) |
 | 🇧🇷 BR | **Multi-tributo** (ICMS+IPI+ISS+PIS/COFINS; reforma IBS/CBS 2026-33) | Sí, y por nivel de gobierno | Sí (ICMS) | Simples Nacional (sustituye todo) | Por dentro | **ICMS estatal / ISS municipal** | Servicio vs mercadería (Súmula 156) | SEFAZ+municipio |
 
 ### Hallazgos estructurales (lo que importa para el modelo)

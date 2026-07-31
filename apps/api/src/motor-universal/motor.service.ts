@@ -1302,7 +1302,13 @@ export class MotorUniversalService {
     // producto 'exento' no lleva IVA. 'general' (default) resuelve a la fila de
     // IVA etiquetada 'general' (iva_21) ⇒ idéntico a lo que hoy se tildaba.
     // Ver docs/impuestos-modelo-latam-diseno.md.
-    const cobraIva = (configFiscal?.condicionFiscal ?? 'RI') === 'RI';
+    // Cobra el impuesto salvo que el emisor sea Monotributo/Exento. Es neutral
+    // para AR (Responsable Inscripto igual cobra) y hace que los países que
+    // "cobran siempre" (Chile, México, Honduras en régimen general…) anden sin
+    // config extra: no marcan Monotributo/Exento ⇒ cobran. Ver
+    // docs/impuestos-modelo-latam-diseno.md.
+    const regimen = configFiscal?.condicionFiscal;
+    const cobraIva = regimen !== 'monotributo' && regimen !== 'exento';
     const categoriaFiscal = productoDb.categoriaFiscal ?? 'general';
     if (cobraIva && categoriaFiscal !== 'exento') {
       const ivaRow = ivaRows.find(
