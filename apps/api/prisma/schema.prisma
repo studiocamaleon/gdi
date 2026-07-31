@@ -1419,9 +1419,32 @@ model Estacion {
   familias             EstacionFamilia[]
   empleados            EstacionEmpleado[]
   maquinas             Maquina[]
+  reglas               EstacionRegla[]
 
   @@unique([tenantId, nombre])
   @@index([tenantId, activo])
+}
+
+/// Reglas de captura de una estación (rediseño "estaciones por reglas"): la
+/// estación declara QUÉ agrupa; el paso no declara estación. La derivación
+/// matchea el paso contra las reglas por prioridad (máquina > tecnología >
+/// paso > familia). Convive con EstacionFamilia (regla "familia" legacy) y con
+/// Maquina.estacionId (regla "máquina" legacy) como fallback.
+/// Ver docs/estaciones-reglas-diseno.md.
+model EstacionRegla {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @db.Uuid
+  estacionId String   @db.Uuid
+  /// 'maquina' | 'tecnologia' | 'paso' | 'familia'.
+  tipo       String
+  /// El valor a matchear: maquinaId | código de tecnología | familiaCodigo.
+  valor      String
+  createdAt  DateTime @default(now())
+  estacion   Estacion @relation(fields: [estacionId], references: [id], onDelete: Cascade)
+
+  @@unique([estacionId, tipo, valor])
+  @@index([tenantId, tipo, valor])
+  @@index([tenantId, estacionId])
 }
 
 /// Umbrales configurables de las alertas del Panel (inteligencia de

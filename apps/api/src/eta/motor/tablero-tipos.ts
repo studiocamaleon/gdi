@@ -22,6 +22,10 @@ export type TableroPasoData = {
   nombre: string;
   familiaCodigo: string;
   centroCostoId: string | null;
+  /** Máquina que ejecutó el paso (rediseño de estaciones por reglas). */
+  maquinaId?: string | null;
+  /** Tecnología de esa máquina (derivada). */
+  tecnologia?: string | null;
   duracionEstimadaMin: number | null;
   estado: TableroPasoEstado;
   /** ISO datetime o null (para el restante de un paso en curso). */
@@ -96,39 +100,62 @@ type EstacionRuteo = {
   id: string;
   activo: boolean;
   familias: string[];
-  maquinas: Array<{ centroCostoId: string | null }>;
+  maquinas: Array<{ id?: string | null; centroCostoId: string | null }>;
+  reglas?: Array<{ tipo: string; valor: string }>;
 };
 
 /**
- * Ruteo paso → estación (estaciones ACTIVAS): el paso llega por su FAMILIA, y
- * las máquinas de la estación son FILTROS. Resolución determinista:
- *   1. estación con la familia cuya máquina matchea el centro del paso;
- *   2. estación general (con la familia y sin máquinas);
- *   3. paso manual (sin centro) con única candidata;
- *   4. sin estación (null).
+ * Ruteo paso → estación (rediseño "estaciones por reglas",
+ * docs/estaciones-reglas-diseno.md). Prioridad de lo más específico a lo
+ * general: 1) máquina del paso en la estación; 2) tecnología (regla); 3) paso
+ * concreto (regla); 4) FALLBACK legacy familia + centro (intacto → neutral para
+ * órdenes viejas y estaciones sin reglas). Espejo de src/lib/tablero-produccion.ts.
  */
 export function resolverEstacionDePaso<T extends EstacionRuteo>(
   estaciones: T[],
-  paso: Pick<TableroPasoData, 'familiaCodigo' | 'centroCostoId'>,
+  paso: Pick<
+    TableroPasoData,
+    'familiaCodigo' | 'centroCostoId' | 'maquinaId' | 'tecnologia'
+  >,
 ): T | null {
-  const candidatas = estaciones.filter(
-    (estacion) =>
-      estacion.activo && estacion.familias.includes(paso.familiaCodigo),
+  const activas = estaciones.filter((estacion) => estacion.activo);
+
+  if (paso.maquinaId) {
+    const porMaquina = activas.find((estacion) =>
+      estacion.maquinas.some((maquina) => maquina.id === paso.maquinaId),
+    );
+    if (porMaquina) return porMaquina;
+  }
+  if (paso.tecnologia) {
+    const porTecnologia = activas.find((estacion) =>
+      (estacion.reglas ?? []).some(
+        (regla) =>
+          regla.tipo === 'tecnologia' && regla.valor === paso.tecnologia,
+      ),
+    );
+    if (porTecnologia) return porTecnologia;
+  }
+  const porPaso = activas.find((estacion) =>
+    (estacion.reglas ?? []).some(
+      (regla) => regla.tipo === 'paso' && regla.valor === paso.familiaCodigo,
+    ),
+  );
+  if (porPaso) return porPaso;
+
+  const candidatas = activas.filter((estacion) =>
+    estacion.familias.includes(paso.familiaCodigo),
   );
   if (candidatas.length === 0) return null;
-
   if (paso.centroCostoId) {
-    const porMaquina = candidatas.find((estacion) =>
+    const porCentro = candidatas.find((estacion) =>
       estacion.maquinas.some(
         (maquina) => maquina.centroCostoId === paso.centroCostoId,
       ),
     );
-    if (porMaquina) return porMaquina;
+    if (porCentro) return porCentro;
   }
-
   const general = candidatas.find((estacion) => estacion.maquinas.length === 0);
   if (general) return general;
-
   if (!paso.centroCostoId && candidatas.length === 1) return candidatas[0];
   return null;
 }
