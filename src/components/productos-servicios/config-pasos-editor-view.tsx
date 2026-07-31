@@ -60,6 +60,7 @@ import {
   FORMULA_OPTIONS,
   CRITERIO_AUTO_OPTIONS,
   COSTING_STRATEGY_OPTIONS,
+  costingStrategyOptions,
   SLOT_ROL_OPTIONS,
   CANTIDAD_BASE_SLOT_OPTIONS,
   CANTIDAD_BASE_SLOT_OPTIONS_INSUMO,
@@ -7923,7 +7924,12 @@ function AcomodadoDetalladoEditor({
                                                 strategy: v || "simple",
                                               })
                                             }
-                                            options={COSTING_STRATEGY_OPTIONS}
+                                            options={costingStrategyOptions(
+                                              familia?.codigo ===
+                                                "impresion_por_hoja"
+                                                ? "pliego"
+                                                : "placa",
+                                            )}
                                           />
                                           {nestingCosting.strategy ===
                                             "plate-segments" && (

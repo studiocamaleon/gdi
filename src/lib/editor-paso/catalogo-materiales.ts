@@ -65,13 +65,20 @@ export const CRITERIO_AUTO_OPTIONS = opcionesDesdeLabels(
   CRITERIOS_AUTO,
   criterioMotorAutoLabels,
 );
-export const COSTING_STRATEGY_OPTIONS = opcionesDesdeLabels(
-  COSTING_STRATEGIES,
-  {
-    // Las cuatro responden lo mismo: qué se hace con la ÚLTIMA placa que
-    // quedó a medio usar (el resto vuelve al estante y sirve para otro
-    // trabajo). Sólo se ofrecen en placa/pliego: en rollo el consumo del
-    // acomodo ya ES el costo.
+/** Unidad del sustrato que se acomoda: una placa rígida o un pliego de
+ *  impresión. Cambia sólo el sustantivo de las etiquetas del costeo — decir
+ *  "placas" en un paso de impresión por hoja confunde. */
+export type UnidadCosteoSustrato = "placa" | "pliego";
+
+// Las cuatro estrategias responden lo mismo: qué se hace con la ÚLTIMA unidad
+// que quedó a medio usar (el resto vuelve al estante y sirve para otro
+// trabajo). Sólo se ofrecen en placa/pliego: en rollo el consumo del acomodo ya
+// ES el costo.
+const COSTING_LABELS_POR_UNIDAD: Record<
+  UnidadCosteoSustrato,
+  Record<string, { label: string; descripcion: string }>
+> = {
+  placa: {
     simple: {
       label: "Placas enteras",
       descripcion:
@@ -93,7 +100,37 @@ export const COSTING_STRATEGY_OPTIONS = opcionesDesdeLabels(
         "Placas llenas enteras + la última redondeada al escalón que corresponda (¼, ½, ¾ o entera).",
     },
   },
-);
+  pliego: {
+    simple: {
+      label: "Pliegos enteros",
+      descripcion:
+        "Le imputa al trabajo todos los pliegos que tocó, incluido el último aunque se haya usado a medias.",
+    },
+    "m2-exact": {
+      label: "Sólo los m² de las piezas",
+      descripcion:
+        "Cobra únicamente el área de las piezas. Ojo: también descuenta los recortes que sí se tiran, así que el margen se ve más alto de lo real.",
+    },
+    "consumed-length": {
+      label: "El largo usado del último pliego",
+      descripcion:
+        "Pliegos llenos enteros + el último proporcional a lo que ocupó. Ej.: 2 pliegos + 30% del tercero.",
+    },
+    "plate-segments": {
+      label: "Por tramos del último pliego",
+      descripcion:
+        "Pliegos llenos enteros + el último redondeado al escalón que corresponda (¼, ½, ¾ o entero).",
+    },
+  },
+};
+
+/** Opciones de costeo del sustrato con el sustantivo (placa/pliego) que
+ *  corresponde. Por defecto "placa" (compat con los usos existentes). */
+export function costingStrategyOptions(unidad: UnidadCosteoSustrato = "placa") {
+  return opcionesDesdeLabels(COSTING_STRATEGIES, COSTING_LABELS_POR_UNIDAD[unidad]);
+}
+
+export const COSTING_STRATEGY_OPTIONS = costingStrategyOptions("placa");
 
 export const SLOT_ROL_OPTIONS: OpcionMaterialCatalogo[] = [
   { value: "COMPONENTE", label: "Componente" },

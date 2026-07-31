@@ -42,6 +42,7 @@ import {
   FORMULA_OPTIONS,
   CRITERIO_AUTO_OPTIONS,
   COSTING_STRATEGY_OPTIONS,
+  costingStrategyOptions,
   CANTIDAD_BASE_SLOT_OPTIONS,
 } from "./catalogo-materiales";
 import {
@@ -1571,7 +1572,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
       if (estrategia !== "simple" && !sustratoLuceRollo(ctx)) {
         partes.push(
           `Costeo: ${labelDe(
-            COSTING_STRATEGY_OPTIONS,
+            costingStrategyOptions(
+              ctx.familia?.codigo === "impresion_por_hoja" ? "pliego" : "placa",
+            ),
             estrategia,
           ).toLowerCase()}`,
         );
