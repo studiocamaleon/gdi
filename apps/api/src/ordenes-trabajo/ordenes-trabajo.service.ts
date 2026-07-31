@@ -151,6 +151,7 @@ type PasoTrazabilidad = {
     totalMin?: number;
     centroCostoId?: string | null;
     centroCostoNombre?: string | null;
+    maquinaId?: string | null;
   };
   /// Paso tercerizado (compra a proveedor) — ver F2 en el diseño.
   tercerizado?: boolean;
@@ -1845,6 +1846,7 @@ export class OrdenesTrabajoService {
         nombre: paso.nombreVisible?.trim() || familia?.nombre || familiaCodigo,
         centroCostoId: paso.tiempo?.centroCostoId ?? null,
         centroCostoNombre: paso.tiempo?.centroCostoNombre ?? null,
+        maquinaId: paso.tiempo?.maquinaId ?? null,
         duracionEstimadaMin: paso.tiempo?.totalMin ?? null,
         modoRegistro: modoRegistroDeFamilia(familiaCodigo),
         // === Tercerización (F2): el paso comprado va al panel de Compras. ===

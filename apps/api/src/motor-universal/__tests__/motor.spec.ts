@@ -1683,6 +1683,26 @@ describe('MotorUniversalService — smoke tests', () => {
     }
   });
 
+  // Fase A del rediseño de estaciones: el motor persiste la MÁQUINA elegida en
+  // el tiempo del paso (base del ruteo a estaciones por máquina/tecnología).
+  it('Fase A estaciones: un paso con máquina lleva su maquinaId en el tiempo', async () => {
+    if (!tenantId) return;
+    const tarjetas = await prisma.producto.findFirstOrThrow({
+      where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+    });
+    const result = await motorService.cotizar({
+      tenantId,
+      productoId: tarjetas.id,
+      jobContext: { cantidad: 500, caras: 2 },
+    });
+    expect(result.exitoso).toBe(true);
+    const impresion = result.cotizacion!.pasos.find(
+      (p) => p.familiaCodigo === 'impresion_por_hoja',
+    );
+    // El paso de impresión usa máquina ⇒ maquinaId presente.
+    expect(impresion?.tiempo?.maquinaId).toBeTruthy();
+  });
+
   it('F.2.12: Vinilo (precioConfig margen_variable) → margen depende de cantidad', async () => {
     if (!tenantId) return;
     const vinilo = await prisma.producto.findFirstOrThrow({

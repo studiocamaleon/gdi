@@ -334,6 +334,9 @@ export interface PasoEjecutado {
     /** Centro de costo usado para tarifar este tiempo. */
     centroCostoId?: string | null;
     centroCostoNombre?: string | null;
+    /** Máquina que ejecutó el paso (la que eligió el motor). Base del ruteo a
+     *  estaciones por máquina/tecnología. Ver docs/estaciones-reglas-diseno.md. */
+    maquinaId?: string | null;
     /** Tarifa horaria del centro de costo aplicada (mezclada: máquina + MO). */
     tarifaHora?: number;
     /**

@@ -2901,6 +2901,11 @@ model OrdenTrabajoItemPaso {
   /// Centro de costo que tarifó el paso — proxy de "estación" en fase 1.
   centroCostoId       String?                 @db.Uuid
   centroCostoNombre   String?
+  /// Máquina que ejecutó el paso (la que eligió el motor). Señal REAL para
+  /// rutear a estaciones por máquina/tecnología, en vez del centro de costo
+  /// (que es de costeo). Null en pasos sin máquina o en órdenes viejas.
+  /// Ver docs/estaciones-reglas-diseno.md.
+  maquinaId           String?                 @db.Uuid
   duracionEstimadaMin Decimal?                @db.Decimal(10, 2)
   /// 'pendiente' | 'en_curso' | 'pausado' | 'hecho' | 'bloqueado'.
   estado              String                  @default("pendiente")
@@ -2959,6 +2964,7 @@ model OrdenTrabajoItemPaso {
   @@index([tenantId, itemId])
   @@index([tenantId, estado])
   @@index([tenantId, mesaUsuarioId])
+  @@index([tenantId, maquinaId])
 }
 
 /// Sesión de trabajo sobre un paso (registro-tiempos-produccion D2): quién,

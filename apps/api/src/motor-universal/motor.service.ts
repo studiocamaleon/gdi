@@ -2869,6 +2869,9 @@ export class MotorUniversalService {
       totalMin,
       centroCostoId: centroCosto.id,
       centroCostoNombre: centroCosto.nombre,
+      // Máquina que ejecutó el paso: base del ruteo a estaciones por máquina/
+      // tecnología (docs/estaciones-reglas-diseno.md). Null en pasos sin máquina.
+      maquinaId: paso.maquina?.id ?? null,
       tarifaHora,
       dotacionOperarios,
       costo,
