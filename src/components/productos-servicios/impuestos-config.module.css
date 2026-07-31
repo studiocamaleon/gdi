@@ -1,0 +1,305 @@
+/* Impuestos — el "librito" del país (Fase 2.5).
+   Vista nueva = módulo propio; en globals.css no entra nada de esto.
+   Reemplaza al catálogo crudo (PrecioCatalogoManager) para impuestos: en vez
+   de crear filas con traslado/base/alcance, muestra el IVA por categoría + los
+   impuestos de empresa, con la jerga técnica escondida abajo. */
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── Encabezado ── */
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.headRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.headTitle {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.paisChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--border, #e7e5e2);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-2, #2c2c33);
+  background: var(--surface-2, #fafaf9);
+}
+
+.sub {
+  font-size: 13px;
+  color: var(--muted-text, #6e6e76);
+  max-width: 60ch;
+}
+
+/* ── Secciones (cards) ── */
+.seccion {
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e7e5e2);
+  border-radius: 14px;
+  overflow: hidden;
+  flex: none;
+}
+
+.seccionHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--hairline, #efece8);
+}
+
+.seccionTitulo {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.seccionSub {
+  font-size: 12px;
+  color: var(--muted-text, #6e6e76);
+  margin-top: 3px;
+  line-height: 1.45;
+  max-width: 62ch;
+}
+
+/* ── Barra de régimen (cobrás IVA o no) ── */
+.regimen {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 18px;
+  background: var(--surface-2, #fafaf9);
+  border-bottom: 1px solid var(--hairline, #efece8);
+  font-size: 12.5px;
+}
+
+.regimenTexto {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-2, #2c2c33);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex: none;
+}
+
+.dotOn {
+  background: #16a34a;
+}
+
+.dotOff {
+  background: var(--muted-text, #9a9aa2);
+}
+
+.regimenLink {
+  font-size: 12px;
+  color: var(--muted-text, #6e6e76);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.regimenLink:hover {
+  color: var(--ink, #14141a);
+}
+
+/* ── Filas de impuesto ── */
+.filas {
+  display: flex;
+  flex-direction: column;
+}
+
+.fila {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 18px;
+}
+
+.fila + .fila {
+  border-top: 1px solid var(--hairline, #efece8);
+}
+
+.filaBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.filaNombre {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.filaNota {
+  font-size: 11.5px;
+  color: var(--muted-text, #6e6e76);
+  margin-top: 2px;
+}
+
+.pct {
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink, #14141a);
+  white-space: nowrap;
+}
+
+.pctMuted {
+  color: var(--muted-text, #9a9aa2);
+  font-weight: 500;
+}
+
+.filaAcciones {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted-text, #6e6e76);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.iconBtn:hover {
+  background: var(--surface-2, #fafaf9);
+  color: var(--ink, #14141a);
+}
+
+.iconBtnDanger:hover {
+  color: #dc2626;
+}
+
+/* Fila exenta: informativa, atenuada */
+.filaExenta {
+  opacity: 0.72;
+}
+
+/* Sección con el IVA apagado (Monotributo/Exento) */
+.apagado .filas {
+  opacity: 0.5;
+}
+
+/* Agregar impuesto de empresa */
+.addRow {
+  padding: 12px 18px;
+  border-top: 1px solid var(--hairline, #efece8);
+}
+
+.addBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 12px;
+  border: 1px dashed var(--border, #e7e5e2);
+  border-radius: 9px;
+  background: transparent;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-2, #2c2c33);
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.addBtn:hover {
+  border-color: var(--border-strong, #d4d2cd);
+  background: var(--surface-2, #fafaf9);
+}
+
+.vacio {
+  padding: 16px 18px;
+  font-size: 12.5px;
+  color: var(--muted-text, #6e6e76);
+}
+
+/* ── Formulario del sheet (editar tasa / impuesto de empresa) ── */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 4px 4px 0;
+}
+
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.campoLabel {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.opciones {
+  display: flex;
+  gap: 8px;
+}
+
+.opcion {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  border: 1px solid var(--border, #e7e5e2);
+  border-radius: 10px;
+  padding: 11px 13px;
+  background: var(--surface, #fff);
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.opcion:hover {
+  border-color: var(--border-strong, #d4d2cd);
+}
+
+.opcionActiva {
+  border-color: var(--ink, #14141a);
+  background: var(--surface-2, #fafaf9);
+}
+
+.opcionTitulo {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.opcionDesc {
+  font-size: 11px;
+  color: var(--muted-text, #6e6e76);
+  line-height: 1.35;
+}
