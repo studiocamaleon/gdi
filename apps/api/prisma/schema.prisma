@@ -2319,6 +2319,9 @@ model ProductoConfigPasoSlotMaterialCandidato {
   materiaPrimaId    String                                            @db.Uuid
   defaultVarianteId String?                                           @db.Uuid
   orden             Int                                               @default(0)
+  /// true = usa TODAS las variantes activas del material (resueltas en vivo);
+  /// las variantes nuevas se absorben solas. false = la lista fija `variantes`.
+  todasLasVariantes Boolean                                           @default(false)
   createdAt         DateTime                                          @default(now())
   updatedAt         DateTime                                          @updatedAt
   tenant            Tenant                                            @relation(fields: [tenantId], references: [id], onDelete: Cascade)

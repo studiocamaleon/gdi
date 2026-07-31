@@ -132,6 +132,7 @@ interface PasoExtraSlotJson {
     defaultVarianteId?: string | null;
     orden?: number;
     varianteIds?: string[];
+    todasLasVariantes?: boolean;
   }>;
   estrategiaCosto?: string;
   formula?: string;
@@ -6221,6 +6222,13 @@ export class MotorUniversalService {
                             familia: true,
                             subfamilia: true,
                             templateId: true,
+                            // Para el modo `todasLasVariantes`: la lista viva de
+                            // variantes activas del material.
+                            variantes: {
+                              where: { activo: true },
+                              orderBy: { createdAt: 'asc' },
+                              select: { id: true },
+                            },
                           },
                         },
                         defaultVariante: true,
@@ -6548,10 +6556,18 @@ export class MotorUniversalService {
             materiaPrimaId: c.materiaPrimaId,
             defaultVarianteId: c.defaultVarianteId,
             orden: c.orden,
-            variantes: c.variantes.map((cv) => ({
-              varianteId: cv.varianteId,
-              orden: cv.orden,
-            })),
+            // Modo "todas": la lista fija se ignora y se usan todas las
+            // variantes activas del material (resueltas en vivo). Una variante
+            // nueva se absorbe sola sin re-guardar el producto.
+            variantes: c.todasLasVariantes
+              ? c.materiaPrima.variantes.map((v, i) => ({
+                  varianteId: v.id,
+                  orden: i,
+                }))
+              : c.variantes.map((cv) => ({
+                  varianteId: cv.varianteId,
+                  orden: cv.orden,
+                })),
           })),
           estrategiaCosto: s.estrategiaCosto,
           formula: s.formula,
@@ -7167,6 +7183,20 @@ export class MotorUniversalService {
    * (precio/atributos) por id; los candidatos se hidratan on-demand en
    * `resolverMaterialSlot` durante la cotización.
    */
+  /** Ids de las variantes ACTIVAS de un material, en vivo. Para el modo
+   *  `todasLasVariantes` de un candidato (absorbe variantes nuevas solo). */
+  private async varianteIdsActivas(
+    tenantId: string,
+    materiaPrimaId: string,
+  ): Promise<string[]> {
+    const variantes = await this.prisma.materiaPrimaVariante.findMany({
+      where: { materiaPrimaId, activo: true, materiaPrima: { tenantId } },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    return variantes.map((v) => v.id);
+  }
+
   private async buildSlotsPasoExtra(
     tenantId: string,
     pasoExtraId: string,
@@ -7190,16 +7220,24 @@ export class MotorUniversalService {
           criterioInputCampo: s.criterioInputCampo ?? null,
           criterioMaterialCampo: s.criterioMaterialCampo ?? null,
           materialVarianteId: s.materialVarianteId ?? null,
-          candidatos: (s.candidatos ?? []).map((c, ci) => ({
-            id: `${pasoExtraId}:slot:${i}:cand:${ci}`,
-            materiaPrimaId: c.materiaPrimaId,
-            defaultVarianteId: c.defaultVarianteId ?? null,
-            orden: c.orden ?? ci,
-            variantes: (c.varianteIds ?? []).map((vid, vi) => ({
-              varianteId: vid,
-              orden: vi,
-            })),
-          })),
+          candidatos: await Promise.all(
+            (s.candidatos ?? []).map(async (c, ci) => {
+              // Modo "todas": lista viva de variantes activas del material.
+              const varianteIds = c.todasLasVariantes
+                ? await this.varianteIdsActivas(tenantId, c.materiaPrimaId)
+                : (c.varianteIds ?? []);
+              return {
+                id: `${pasoExtraId}:slot:${i}:cand:${ci}`,
+                materiaPrimaId: c.materiaPrimaId,
+                defaultVarianteId: c.defaultVarianteId ?? null,
+                orden: c.orden ?? ci,
+                variantes: varianteIds.map((vid, vi) => ({
+                  varianteId: vid,
+                  orden: vi,
+                })),
+              };
+            }),
+          ),
           estrategiaCosto: s.estrategiaCosto ?? 'AUTO',
           formula: s.formula ?? '',
           cantidadFactor:
