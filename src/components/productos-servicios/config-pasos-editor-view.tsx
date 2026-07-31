@@ -2668,8 +2668,15 @@ export function ConfigPasosEditorView({
         variantes: materiaPrima.variantes,
       };
     }
-    for (const config of rutaAlternativa.configPasos) {
-      for (const slot of config.slotsMateriales) {
+    // Hidrata el material de cada candidato al lookup. Sirve para los pasos de
+    // la ruta base Y para los pasos extra (montaje, etc.): ambos traen sus
+    // slotsMateriales hidratados por el detalle. Sin recorrer los extras, sus
+    // candidatos guardados no encontraban su materia prima y el editor mostraba
+    // el UUID crudo + "Variante no disponible".
+    const hidratarSlots = (
+      slotsMateriales: (typeof rutaAlternativa.configPasos)[number]["slotsMateriales"],
+    ) => {
+      for (const slot of slotsMateriales) {
         for (const candidate of slot.candidatos) {
           map[candidate.materiaPrimaId] = {
             id: candidate.materiaPrima.id,
@@ -2683,6 +2690,12 @@ export function ConfigPasosEditorView({
           };
         }
       }
+    };
+    for (const config of rutaAlternativa.configPasos) {
+      hidratarSlots(config.slotsMateriales);
+    }
+    for (const extra of rutaAlternativa.pasosExtras ?? []) {
+      hidratarSlots(extra.slotsMateriales ?? []);
     }
     return map;
   });
