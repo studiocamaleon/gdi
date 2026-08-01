@@ -2659,9 +2659,21 @@ export class MotorUniversalService {
       errores,
     );
 
+    // Omitir setup/cleanup: la cotización declara que NO debe contar la preparación
+    // de máquina (ni en costo ni en precio). Lo usa el TPV Centro de copiado, que
+    // por decisión de negocio no cobra el setup (busca volumen y precio por hoja
+    // claro). Su producto plantilla tiene un solo paso, así que el flag global
+    // aplica al paso de impresión.
+    const jc = jobContext as Record<string, unknown> | undefined;
+    const omitirSetupCleanup = jc?.omitirSetupCleanup === true;
+
     // Setup, cleanup, tiempoFijo: jerarquía override > perfil > familia > 0
-    const setupMin = paso.setupOverrideMin ?? paso.perfil?.setupMin ?? 0;
-    const cleanupMin = paso.cleanupOverrideMin ?? paso.perfil?.cleanupMin ?? 0;
+    const setupMin = omitirSetupCleanup
+      ? 0
+      : (paso.setupOverrideMin ?? paso.perfil?.setupMin ?? 0);
+    const cleanupMin = omitirSetupCleanup
+      ? 0
+      : (paso.cleanupOverrideMin ?? paso.perfil?.cleanupMin ?? 0);
     const tiempoFijoMin =
       tiempoManualMin != null ? 0 : tiempoFijoEfectivoMin(paso);
 

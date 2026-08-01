@@ -1,0 +1,533 @@
+/* z-index 50 = capa de overlays del sistema (Sheet, AlertDialog y el popup de
+   los Select del sistema viven todos en z-50). El modal debe quedar en esa capa
+   para que el popup de los Select —portalado al body después— se dibuje encima
+   por orden de DOM; con z mayor (60/61) el popup quedaba detrás. */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 20, 26, 0.42);
+  z-index: 50;
+  animation: fade 0.12s ease;
+}
+
+.sheet {
+  position: fixed;
+  z-index: 50;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(1160px, calc(100vw - 40px));
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: var(--r-4);
+  box-shadow: var(--shadow-pop);
+  overflow: hidden;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Header */
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--hairline);
+}
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-text-2);
+  font-family: var(--font-mono);
+}
+.titulo {
+  margin: 4px 0 6px;
+  font-size: 22px;
+  font-weight: 650;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.badge {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--signal);
+  background: var(--signal-bg);
+  border: 1px solid var(--signal);
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-weight: 600;
+}
+.sub {
+  margin: 0;
+  color: var(--muted-text);
+  font-size: 13px;
+  max-width: 640px;
+}
+.close {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: var(--r-2);
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  color: var(--muted-text);
+  flex: none;
+}
+.close:hover {
+  color: var(--ink);
+}
+
+/* Body scroll: en un flex-column con max-height, el hijo scrolleable necesita
+   flex:1 (flex-basis 0, NO auto: con basis auto el body toma el alto del
+   contenido y puede empujar al sheet en vez de encogerse) + min-height:0 — si no,
+   crece con el contenido y el overflow:hidden del sheet lo recorta sin scroll. */
+/* El body NO scrollea: reparte el alto entre la zona de carga (fija) y la tabla
+   (que se lleva el resto). El scroll vive sólo en la lista de documentos. */
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Cargar: drop + defaults. Fija (no se encoge): sólo scrollea la lista de docs. */
+.cargar {
+  flex: none;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 20px;
+}
+.drop {
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--r-3);
+  background: var(--surface-2);
+  padding: 22px 16px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition:
+    border-color 0.12s ease,
+    background 0.12s ease;
+}
+.drop:hover {
+  border-color: var(--signal);
+}
+.dropActive {
+  border-color: var(--signal);
+  background: var(--signal-bg);
+}
+.dropIcon {
+  font-size: 26px;
+  color: var(--muted-text-2);
+}
+.dropTitle {
+  font-weight: 600;
+  font-size: 14px;
+}
+.dropHint {
+  font-size: 12px;
+  color: var(--muted-text);
+  margin-bottom: 6px;
+}
+
+.defaults {
+  border: 1px solid var(--border);
+  border-radius: var(--r-3);
+  padding: 14px 16px;
+  background: var(--surface);
+}
+.defaultsHead {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted-text-2);
+  margin-bottom: 12px;
+}
+.defaultsGrid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px;
+}
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--muted-text);
+}
+.campo > span {
+  font-weight: 500;
+}
+
+/* Controles */
+.select {
+  border: 1px solid var(--border);
+  border-radius: var(--r-1);
+  background: var(--surface);
+  color: var(--ink);
+  height: 32px;
+  padding: 0 6px;
+  font-size: 13px;
+  min-width: 92px;
+  max-width: 150px;
+}
+.inputMini {
+  border: 1px solid var(--border);
+  border-radius: var(--r-1);
+  background: var(--surface);
+  color: var(--ink);
+  height: 32px;
+  width: 62px;
+  padding: 0 8px;
+  font-size: 13px;
+  font-family: var(--font-mono);
+}
+/* Páginas leídas del PDF por el sistema. */
+.inputAuto {
+  border-color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 12%, var(--surface));
+  color: var(--ok);
+  font-weight: 600;
+}
+/* Páginas sin cargar (manual / no-PDF): el usuario las tiene que indicar. */
+.inputFalta {
+  border-color: var(--signal);
+  background: color-mix(in srgb, var(--signal) 8%, var(--surface));
+}
+/* Nombre de documento editable (crece, se ve como texto hasta hover/foco). */
+.docNombreInput {
+  flex: 1;
+  min-width: 120px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink);
+  font-weight: 550;
+  font-size: 13.5px;
+  padding: 4px 6px;
+  border-radius: var(--r-1);
+}
+.docNombreInput:hover,
+.docNombreInput:focus {
+  border-color: var(--border);
+  background: var(--surface);
+  outline: none;
+}
+.docNombreInput::placeholder {
+  color: var(--muted-text-2);
+  font-weight: 400;
+}
+.tablaHeadBtns {
+  display: flex;
+  gap: 8px;
+}
+
+/* Segmented (B/N|Color, Simple|Doble) */
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--r-1);
+  overflow: hidden;
+  height: 32px;
+}
+.segOff,
+.segOn {
+  border: none;
+  background: var(--surface);
+  color: var(--muted-text);
+  font-size: 12px;
+  padding: 0 12px;
+  cursor: pointer;
+}
+.segOff + .segOff,
+.segOn + .segOff,
+.segOff + .segOn,
+.segOn + .segOn {
+  border-left: 1px solid var(--border);
+}
+.segOn {
+  background: var(--ink);
+  color: var(--surface);
+  font-weight: 600;
+}
+
+/* Tabla: se lleva el alto restante del body y es columna flex, así el header de
+   la tabla queda fijo y sólo la lista de documentos scrollea adentro. */
+.tablaWrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--r-3);
+  overflow: hidden;
+}
+.tablaHead {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--hairline);
+  font-weight: 600;
+  font-size: 14px;
+}
+.vacio {
+  padding: 28px;
+  text-align: center;
+  color: var(--muted-text);
+  font-size: 13px;
+}
+.tablaScroll {
+  overflow-x: auto;
+}
+.errChip {
+  color: var(--signal);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.errBanner {
+  margin: -6px 24px 0;
+  padding: 8px 12px;
+  background: var(--signal-bg);
+  border: 1px solid var(--signal);
+  border-radius: var(--r-2);
+  color: var(--signal);
+  font-size: 12.5px;
+}
+/* Lista de documentos: ÚNICO contenedor scrolleable del modal. overscroll:contain
+   evita encadenar el wheel a la página al llegar al borde. */
+.lista {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+.card {
+  /* No encoger: en la lista scrolleable (flex column) los hijos se comprimirían
+     para caber y, con overflow:hidden del tomo, recortarían documentos. */
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+  background: var(--surface);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cardTop {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.chk {
+  flex: none;
+}
+.docNum {
+  font-family: var(--font-mono);
+  color: var(--muted-text-2);
+  font-size: 12px;
+  flex: none;
+}
+.docNombre {
+  font-weight: 550;
+  font-size: 13.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cardSub {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.cardCtrls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 11px;
+  padding-left: 26px;
+}
+.ctrl {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted-text);
+}
+.ctrl > span {
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 10px;
+}
+.delTomo {
+  font-size: 12px;
+  color: var(--muted-text-2);
+  height: 32px;
+  display: flex;
+  align-items: center;
+}
+
+.del {
+  border: none;
+  background: transparent;
+  color: var(--muted-text-2);
+  cursor: pointer;
+  font-size: 13px;
+  flex: none;
+}
+.del:hover {
+  color: var(--signal);
+}
+.muted {
+  color: var(--muted-text-2);
+}
+
+/* Tomo (grupo anillado): contenedor con sus documentos en orden */
+.tomo {
+  /* No encoger: si no, el contenedor del tomo se comprime en la lista y su
+     overflow:hidden recorta los documentos internos (queda con menos ítems). */
+  flex: none;
+  border: 1px solid var(--signal);
+  border-radius: var(--r-2);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.cardGrupo {
+  border: none;
+  border-top: 1px solid var(--hairline);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--signal-bg) 30%, var(--surface));
+}
+.tomoHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--signal-bg);
+  border-bottom: 1px solid var(--signal);
+}
+.tomoTitle {
+  font-weight: 600;
+  color: var(--signal);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.tomoNombre {
+  border: 1px solid var(--signal);
+  border-radius: var(--r-1);
+  background: var(--surface);
+  color: var(--ink);
+  height: 28px;
+  padding: 0 8px;
+  font-size: 13px;
+  min-width: 160px;
+  flex: 1;
+  max-width: 280px;
+}
+.tomoNombre::placeholder {
+  color: var(--muted-text-2);
+}
+.tomoJuegos {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink);
+}
+.tomoMeta {
+  font-size: 12px;
+  color: var(--muted-text);
+}
+.tomoSub {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Footer */
+.foot {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 14px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.stats {
+  display: flex;
+  gap: 22px;
+}
+.stats > div {
+  display: flex;
+  flex-direction: column;
+}
+.statNum {
+  font-size: 18px;
+  font-weight: 650;
+  font-family: var(--font-mono);
+}
+.statLbl {
+  font-size: 11px;
+  color: var(--muted-text);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.totalBox {
+  margin-left: auto;
+  text-align: right;
+}
+.totalNeto {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--muted-text);
+}
+.totalNeto strong {
+  font-size: 20px;
+  color: var(--ink);
+  font-family: var(--font-mono);
+}
+.totalIva {
+  font-size: 12px;
+  color: var(--muted-text-2);
+}
+
+@media (max-width: 860px) {
+  .cargar {
+    grid-template-columns: 1fr;
+  }
+  .foot {
+    flex-wrap: wrap;
+  }
+}

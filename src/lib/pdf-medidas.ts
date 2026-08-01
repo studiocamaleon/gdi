@@ -29,7 +29,13 @@ async function leerUnArchivo(file: File): Promise<LecturaArchivoResultado> {
   try {
     const { PDFDocument, PDFName, PDFNumber } = await import("pdf-lib");
     const bytes = await file.arrayBuffer();
-    const doc = await PDFDocument.load(bytes, { updateMetadata: false });
+    // `ignoreEncryption`: muchos PDFs (ej. facturas de ARCA/AFIP) vienen con
+    // permisos/encriptación con contraseña de usuario vacía; sin esto pdf-lib
+    // tira "Input document is encrypted" y no se leen las páginas.
+    const doc = await PDFDocument.load(bytes, {
+      updateMetadata: false,
+      ignoreEncryption: true,
+    });
     const pages = doc.getPages();
     if (pages.length === 0) {
       return { ok: false, archivoNombre: file.name, error: "PDF sin páginas" };

@@ -17,6 +17,7 @@ import {
   ExpandIcon,
   FactoryIcon,
   FileIcon,
+  EyeIcon,
   FolderIcon,
   HistoryIcon,
   PackageIcon,
@@ -122,6 +123,10 @@ import {
 import { type Moneda } from "@/lib/moneda";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { AgregarProductoSheet } from "@/components/comercial/agregar-producto-sheet";
+import CentroCopiadoSheet from "@/components/comercial/centro-copiado-sheet";
+import CentroCopiadoPreciosSheet from "@/components/comercial/centro-copiado-precios-sheet";
+import ccFicha from "@/components/comercial/centro-copiado-ficha.module.css";
+import { guardarTomoCentroCopiado, dimsDeFormato } from "@/lib/centro-copiado-api";
 import { CostosOrdenTab } from "@/components/comercial/costos-orden-tab";
 import {
   type MutacionAplicadaView,
@@ -3096,6 +3101,7 @@ export function ProductRow({
   onToggle,
   onRemove,
   onEdit,
+  onVerPrecios,
   onEditPanels,
   onChangeFechaEntrega,
   fechaEstimada,
@@ -3113,6 +3119,8 @@ export function ProductRow({
   /** Ausentes en modo lectura (OT emitida): la fila no se puede mutar. */
   onRemove?: () => void;
   onEdit?: () => void;
+  /** Sólo para ítems de centro de copiado: abre el resumen de precios por hoja. */
+  onVerPrecios?: () => void;
   onEditPanels?: (item: PropuestaItem, paso: PanelEditorPaso) => void;
   onChangeFechaEntrega?: (fechaEntrega: string) => void;
   fechaEstimada: string;
@@ -3169,6 +3177,30 @@ export function ProductRow({
         <div className="prod">
           <div className="nm">
             {item.productoNombre}
+            {item.varianteNombre ? (
+              <span className={ccFicha.variante}>· {item.varianteNombre}</span>
+            ) : null}
+            {onVerPrecios ? (
+              <span
+                role="button"
+                tabIndex={0}
+                className={ccFicha.verPrecios}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onVerPrecios();
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onVerPrecios();
+                  }
+                }}
+                title="Ver precios de impresión por hoja"
+              >
+                <EyeIcon />
+              </span>
+            ) : null}
             {tienePrecioEspecial ? (
               <span
                 className="op-especial"
@@ -4717,6 +4749,13 @@ export function PropuestaFicha({
     [items, cargosOrden],
   );
   const [addOpen, setAddOpen] = React.useState(false);
+  const [copiadoOpen, setCopiadoOpen] = React.useState(false);
+  // Resumen de precios de impresión por hoja (modal OT-wide).
+  const [preciosOpen, setPreciosOpen] = React.useState(false);
+  // Edición: la CARGA completa (todos los renglones que entraron juntos).
+  const [copiadoEditItems, setCopiadoEditItems] = React.useState<
+    PropuestaItem[] | null
+  >(null);
   const [cargoOpen, setCargoOpen] = React.useState(false);
   const [editingItem, setEditingItem] = React.useState<PropuestaItem | null>(
     null,
@@ -5313,6 +5352,75 @@ export function PropuestaFicha({
     setAddOpen(true);
   }, []);
 
+  const abrirCentroCopiado = React.useCallback(() => {
+    setCopiadoEditItems(null);
+    setCopiadoOpen(true);
+  }, []);
+
+  /** Un renglón que salió del centro de copiado (para rutear su edición). */
+  const esCentroCopiado = React.useCallback(
+    (item: PropuestaItem) =>
+      item.productoCodigo === "SYS-IMPRESION-DOC" ||
+      Boolean(
+        (item.jobContext as { _centroCopiado?: unknown } | undefined)
+          ?._centroCopiado,
+      ),
+    [],
+  );
+
+  /** Id del tomo (grupo anillado) al que pertenece un renglón del centro de copiado. */
+  const tomoDeItem = React.useCallback(
+    (item: PropuestaItem | undefined): string | null =>
+      (
+        item?.jobContext as
+          | { _centroCopiado?: { grupoTomoId?: string | null } }
+          | undefined
+      )?._centroCopiado?.grupoTomoId ?? null,
+    [],
+  );
+  const tomoNombreDeItem = React.useCallback(
+    (item: PropuestaItem): string | null =>
+      (
+        item.jobContext as
+          | { _centroCopiado?: { tomoNombre?: string | null } }
+          | undefined
+      )?._centroCopiado?.tomoNombre ?? null,
+    [],
+  );
+
+  /** Id de la carga (todos los renglones de una misma pasada del centro de copiado). */
+  const cargaDeItem = React.useCallback(
+    (item: PropuestaItem | undefined): string | null =>
+      (
+        item?.jobContext as
+          | { _centroCopiado?: { grupoCargaId?: string | null } }
+          | undefined
+      )?._centroCopiado?.grupoCargaId ?? null,
+    [],
+  );
+
+  /**
+   * Editar: los del centro de copiado reabren SU modal con la CARGA COMPLETA
+   * (todos los renglones que entraron juntos), para no re-cotizar aislado; el
+   * resto abre el sheet normal.
+   */
+  const abrirEdicion = React.useCallback(
+    (item: PropuestaItem) => {
+      if (esCentroCopiado(item)) {
+        const carga = cargaDeItem(item);
+        const deLaCarga = carga
+          ? items.filter((i) => cargaDeItem(i) === carga)
+          : [item];
+        setCopiadoEditItems(deLaCarga);
+        setCopiadoOpen(true);
+      } else {
+        setEditingItem(item);
+        setAddOpen(true);
+      }
+    },
+    [esCentroCopiado, cargaDeItem, items],
+  );
+
   /**
    * Persiste el snapshot de cada item (cotizar-y-guardar, encadenando la
    * misma Cotizacion). Los que ya se guardaron (recotizaciones) conservan
@@ -5330,6 +5438,64 @@ export function PropuestaFicha({
           item,
           cotizacionItemId: item.cotizacionItemId,
         });
+        continue;
+      }
+      // Tomo compuesto (centro de copiado): se persiste como UN CotizacionItem
+      // sintético; no pasa por cotizarYGuardar (que cotiza un solo jobContext).
+      const metaTomo = (
+        item.jobContext as
+          | {
+              _centroCopiado?: {
+                esTomo?: boolean;
+                tomoNombre?: string;
+                juegos?: number;
+                segmentos?: Array<{
+                  nombre?: string | null;
+                  paginas: number;
+                  tamano: string;
+                  tamanoAnchoMm?: number;
+                  tamanoAltoMm?: number;
+                  papelMateriaPrimaId: string;
+                  gramaje?: number | null;
+                  color: "BN" | "COLOR";
+                  faz: 1 | 2;
+                }>;
+              };
+            }
+          | undefined
+      )?._centroCopiado;
+      if (metaTomo?.esTomo) {
+        const resp = await guardarTomoCentroCopiado({
+          documentos: (metaTomo.segmentos ?? []).map((s, i) => ({
+            id: `s${i}`,
+            nombre: s.nombre ?? undefined,
+            paginas: s.paginas,
+            copias: 1,
+            tamano: s.tamano,
+            // Cargas nuevas traen las medidas; para las viejas, se resuelven por
+            // el nombre del formato contra el catálogo del sistema.
+            tamanoAnchoMm: s.tamanoAnchoMm ?? dimsDeFormato(s.tamano).anchoMm,
+            tamanoAltoMm: s.tamanoAltoMm ?? dimsDeFormato(s.tamano).altoMm,
+            papelMateriaPrimaId: s.papelMateriaPrimaId,
+            gramaje: s.gramaje,
+            color: s.color,
+            faz: s.faz,
+            grupoId: "T",
+          })),
+          grupos: [
+            { id: "T", nombre: metaTomo.tomoNombre, juegos: metaTomo.juegos ?? 1 },
+          ],
+          cotizacionId,
+          clienteId: clienteId || null,
+        });
+        if (resp.error || !resp.cotizacionItemId) {
+          throw new Error(
+            resp.error ??
+              `No se pudo guardar el tomo ${item.productoNombre}.`,
+          );
+        }
+        cotizacionId = resp.cotizacionId ?? cotizacionId;
+        itemsConSnapshot.push({ item, cotizacionItemId: resp.cotizacionItemId });
         continue;
       }
       if (!item.motorCodigo || !item.jobContext) {
@@ -5709,24 +5875,34 @@ export function PropuestaFicha({
       const isEditableTarget =
         target?.closest("input, textarea, select, [contenteditable='true']") !=
         null;
+      if (
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        event.shiftKey ||
+        isEditableTarget
+      ) {
+        return;
+      }
       const key = event.key.toLowerCase();
-      const isAddShortcut =
-        key === "n" &&
-        !event.metaKey &&
-        !event.ctrlKey &&
-        !event.altKey &&
-        !event.shiftKey &&
-        !isEditableTarget;
-      if (!isAddShortcut) return;
-
+      // P = agregar producto · C = centro de copiado.
+      if (key !== "p" && key !== "c") return;
       event.preventDefault();
-      if (addOpen || cargoOpen || panelEditor) return;
-      abrirAgregarProducto();
+      if (addOpen || cargoOpen || panelEditor || copiadoOpen) return;
+      if (key === "p") abrirAgregarProducto();
+      else abrirCentroCopiado();
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [abrirAgregarProducto, addOpen, cargoOpen, panelEditor]);
+  }, [
+    abrirAgregarProducto,
+    abrirCentroCopiado,
+    addOpen,
+    cargoOpen,
+    panelEditor,
+    copiadoOpen,
+  ]);
 
   function toggle(id: string) {
     setOpenIds((prev) => {
@@ -6172,8 +6348,18 @@ export function PropuestaFicha({
               ) : null}
               <button
                 type="button"
+                className="btn"
+                onClick={abrirCentroCopiado}
+                title="Centro de copiado (C)"
+              >
+                <PlusIcon />
+                Centro de copiado
+              </button>
+              <button
+                type="button"
                 className="btn btn-primary"
                 onClick={abrirAgregarProducto}
+                title="Agregar producto (P)"
               >
                 <PlusIcon />
                 Agregar producto
@@ -6203,10 +6389,23 @@ export function PropuestaFicha({
               </div>
             ) : null}
             <div className="orows">
-              {items.map((item, index) => (
+              {items.map((item, index) => {
+                const tomo = tomoDeItem(item);
+                const iniciaTomo = !!tomo && tomo !== tomoDeItem(items[index - 1]);
+                const cuentaTomo = tomo
+                  ? items.filter((x) => tomoDeItem(x) === tomo).length
+                  : 0;
+                return (
+                <React.Fragment key={item.id}>
+                {iniciaTomo && (
+                  <div className={ccFicha.tomoHead}>
+                    Tomo anillado
+                    {tomoNombreDeItem(item) ? ` · ${tomoNombreDeItem(item)}` : ""}
+                    <span className={ccFicha.cuenta}>· {cuentaTomo} documentos</span>
+                  </div>
+                )}
                 <div
-                  key={item.id}
-                  className={`order-row-wrap${recotizandoIds.has(item.id) ? " is-requoting" : ""}`}
+                  className={`order-row-wrap${recotizandoIds.has(item.id) ? " is-requoting" : ""}${tomo ? ` ${ccFicha.enTomo}` : ""}`}
                   ref={(node) => {
                     if (node) {
                       rowRefs.current.set(item.id, node);
@@ -6238,15 +6437,14 @@ export function PropuestaFicha({
                     onEdit={
                       modoOrden
                         ? itemsEnEdicion && item.jobContext && item.motorCodigo
-                          ? () => {
-                              setEditingItem(item);
-                              setAddOpen(true);
-                            }
+                          ? () => abrirEdicion(item)
                           : undefined
-                        : () => {
-                            setEditingItem(item);
-                            setAddOpen(true);
-                          }
+                        : () => abrirEdicion(item)
+                    }
+                    onVerPrecios={
+                      esCentroCopiado(item)
+                        ? () => setPreciosOpen(true)
+                        : undefined
                     }
                     onEditPanels={(targetItem, paso) => {
                       setPanelEditor({ item: targetItem, paso });
@@ -6268,7 +6466,9 @@ export function PropuestaFicha({
                     readOnly={modoOrden}
                   />
                 </div>
-              ))}
+                </React.Fragment>
+                );
+              })}
             </div>
             {!modoOrden || itemsEnEdicion ? (
               <button
@@ -6589,6 +6789,38 @@ export function PropuestaFicha({
           setEditingItem(null);
           focusProductRow(item.id);
         }}
+      />
+      <CentroCopiadoSheet
+        open={copiadoOpen}
+        editItems={copiadoEditItems}
+        onOpenChange={(open) => {
+          setCopiadoOpen(open);
+          if (!open) setCopiadoEditItems(null);
+        }}
+        onAgregar={(nuevos) => {
+          if (nuevos.length === 0) return;
+          // En edición se reemplaza la CARGA completa (todos sus renglones).
+          const cargaEditada = copiadoEditItems?.length
+            ? cargaDeItem(copiadoEditItems[0])
+            : null;
+          setItems((current) => {
+            const base = cargaEditada
+              ? current.filter((i) => cargaDeItem(i) !== cargaEditada)
+              : current;
+            return [...base, ...nuevos];
+          });
+          // Se agregan COLAPSADOS (son varios renglones; expandir todos ocupa
+          // demasiado). Se los diferencia por la referencia (varianteNombre).
+          setCopiadoOpen(false);
+          setCopiadoEditItems(null);
+          focusProductRow(nuevos[0].id);
+        }}
+      />
+      <CentroCopiadoPreciosSheet
+        open={preciosOpen}
+        onClose={() => setPreciosOpen(false)}
+        items={items}
+        moneda={moneda}
       />
       <CargoOrdenSheet
         open={cargoOpen}
