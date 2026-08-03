@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Req,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -12,6 +13,7 @@ import {
   AgregarAOrdenCentroCopiadoDto,
   CotizarCentroCopiadoDto,
 } from './dto/cotizar-centro-copiado.dto';
+import { ActualizarCentroCopiadoConfigDto } from './dto/centro-copiado-config.dto';
 import { Permiso } from '../auth/permiso.decorator';
 import { OcultaMargenes } from '../auth/margenes.decorator';
 
@@ -24,6 +26,18 @@ interface RequestWithAuth extends Request {
 @Controller('centro-copiado')
 export class CentroCopiadoController {
   constructor(private readonly centroCopiado: CentroCopiadoService) {}
+
+  /** GET /centro-copiado/estado — si el módulo está activo (para el botón/atajo). */
+  @Get('estado')
+  async estado(@Req() req: RequestWithAuth) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) {
+      throw new UnauthorizedException(
+        'Falta tenant en el contexto de autenticación',
+      );
+    }
+    return this.centroCopiado.estado(tenantId);
+  }
 
   /** GET /centro-copiado/opciones — papeles disponibles para el modal. */
   @Get('opciones')
@@ -118,5 +132,37 @@ export class CentroCopiadoController {
       );
     }
     return this.centroCopiado.agregarAOrden(tenantId, dto);
+  }
+
+  /**
+   * GET /centro-copiado/config — configuración del módulo + universo disponible
+   * (papeles/terminaciones a elegir). Para la página de Configuración.
+   */
+  @Get('config')
+  @Permiso('costos.gestionar')
+  async getConfig(@Req() req: RequestWithAuth) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) {
+      throw new UnauthorizedException(
+        'Falta tenant en el contexto de autenticación',
+      );
+    }
+    return this.centroCopiado.getConfig(tenantId);
+  }
+
+  /** PUT /centro-copiado/config — actualiza la curación del módulo. */
+  @Put('config')
+  @Permiso('costos.gestionar')
+  async actualizarConfig(
+    @Body() dto: ActualizarCentroCopiadoConfigDto,
+    @Req() req: RequestWithAuth,
+  ) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) {
+      throw new UnauthorizedException(
+        'Falta tenant en el contexto de autenticación',
+      );
+    }
+    return this.centroCopiado.actualizarConfig(tenantId, dto);
   }
 }

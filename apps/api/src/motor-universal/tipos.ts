@@ -599,7 +599,9 @@ export interface CargoDirectoEjecutado {
   cargoCodigo: string;
   cargoNombre: string;
   modoCalculo:
-    'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT';
+    | 'MONTO_FIJO_PLANO'
+    | 'PORCENTAJE_SOBRE_BASE'
+    | 'POR_UNIDAD_INPUT';
   monto: number;
   detalle?: Record<string, unknown>;
 }
@@ -847,6 +849,8 @@ export interface ConsumibleMaquinaCargado {
   unidad: string;
   rendimientoEstimado: number | null;
   consumoBase: number | null;
+  /** g/m² por nivel de cobertura { borrador, normal, alta }; null = usar consumoBase. */
+  consumoPorCoberturaJson: unknown;
   activo: boolean;
   detalleJson: unknown;
   materialVariante: {

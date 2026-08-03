@@ -335,6 +335,7 @@ export function maquinaToPayload(maquina: Maquina): MaquinaPayload {
         unidad: c.unidad,
         rendimientoEstimado: c.rendimientoEstimado ?? undefined,
         consumoBase: c.consumoBase ?? undefined,
+        consumoPorCobertura: c.consumoPorCobertura ?? undefined,
         perfilOperativoId: c.perfilOperativoId ?? undefined,
         perfilOperativoNombre: c.perfilOperativoNombre || undefined,
         activo: c.activo,

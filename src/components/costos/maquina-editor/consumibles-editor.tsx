@@ -14,6 +14,11 @@ import { toast } from "sonner";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  NIVELES_COBERTURA,
+  NIVEL_COBERTURA_LABELS,
+  type NivelCobertura,
+} from "@/lib/cobertura-toner";
 import type { MaquinaPayload, PlantillaMaquinaria } from "@/lib/maquinaria";
 import type { MateriaPrima, MateriaPrimaVariante } from "@/lib/materias-primas";
 import { getVarianteDisplayName } from "@/lib/materias-primas-variantes-display";
@@ -41,13 +46,19 @@ const A4_AREA_M2 = 0.21 * 0.297;
  * elija el usuario (ISO o full-color ~40%). Ver docs de investigación de
  * cobertura. El resultado se aplica a los 4 canales CMYK.
  */
-function CalculadoraTonerGm2({ onApply }: { onApply: (gm2: number) => void }) {
+function CalculadoraTonerGm2({
+  onApply,
+}: {
+  onApply: (gm2: number, nivel: NivelCobertura) => void;
+}) {
   const [abierta, setAbierta] = React.useState(false);
   const [gramos, setGramos] = React.useState("");
   const [rendimiento, setRendimiento] = React.useState("");
   const [coberturaIso, setCoberturaIso] = React.useState("5");
   const [modo, setModo] = React.useState<"iso" | "full">("full");
   const [coberturaFull, setCoberturaFull] = React.useState("40");
+  // Columna destino del resultado (baja/ISO→Borrador/Normal, full-color→Alta).
+  const [destino, setDestino] = React.useState<NivelCobertura>("alta");
 
   const g = Number(gramos);
   const rend = Number(rendimiento);
@@ -191,14 +202,30 @@ function CalculadoraTonerGm2({ onApply }: { onApply: (gm2: number) => void }) {
             </div>
           </div>
 
+          <div className="space-y-1">
+            <Label className="text-xs">Aplicar a la columna</Label>
+            <div className="inline-flex overflow-hidden rounded-md border">
+              {NIVELES_COBERTURA.map((nivel) => (
+                <button
+                  key={nivel}
+                  type="button"
+                  onClick={() => setDestino(nivel)}
+                  className={`px-3 py-1.5 text-xs ${destino === nivel ? "bg-primary text-primary-foreground" : "bg-background"}`}
+                >
+                  {NIVEL_COBERTURA_LABELS[nivel]}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <button
             type="button"
             disabled={!valido}
-            onClick={() => onApply(consumoRedondeado)}
+            onClick={() => onApply(consumoRedondeado, destino)}
             className="btn btn-primary h-8 w-full text-xs disabled:opacity-50"
           >
-            Usar {valido ? `${consumoRedondeado} g/m²` : "el valor"} en los 4
-            canales CMYK
+            Usar {valido ? `${consumoRedondeado} g/m²` : "el valor"} en la columna{" "}
+            {NIVEL_COBERTURA_LABELS[destino]} (4 canales CMYK)
           </button>
         </div>
       ) : null}
@@ -306,6 +333,7 @@ export function PerfilTintasModal({
         unidad: existing?.unidad ?? consumibleUnidadFor(current.plantilla),
         rendimientoEstimado: existing?.rendimientoEstimado,
         consumoBase: existing?.consumoBase ?? defaultConsumoBase(current.plantilla, canal),
+        consumoPorCobertura: existing?.consumoPorCobertura ?? null,
         perfilOperativoId: perfil.id,
         perfilOperativoNombre: perfil.nombre,
         detalle: { ...(existing?.detalle ?? {}), color: canal },
@@ -317,6 +345,27 @@ export function PerfilTintasModal({
       if (idx >= 0) next[idx] = nextItem;
       else next.push(nextItem);
       return { ...current, consumibles: next };
+    });
+  };
+
+  // Setea el g/m² de un nivel de cobertura de un canal. Mantiene consumoBase =
+  // Normal (compat + fallback del motor). Valor vacío → quita ese nivel.
+  const setNivel = (
+    canal: ConsumibleCanal,
+    nivel: NivelCobertura,
+    valor: number | undefined,
+  ) => {
+    const existing = form.consumibles.find(
+      (item) =>
+        item.perfilOperativoId === perfil.id &&
+        canalFromConsumible(item) === canal,
+    );
+    const prev = { ...(existing?.consumoPorCobertura ?? {}) };
+    if (valor === undefined) delete prev[nivel];
+    else prev[nivel] = valor;
+    upsert(canal, {
+      consumoPorCobertura: prev,
+      ...(nivel === "normal" ? { consumoBase: valor } : {}),
     });
   };
 
@@ -360,7 +409,7 @@ export function PerfilTintasModal({
         <div className="maq-modal-body">
           {esLaser && channels.length > 0 ? (
             <CalculadoraTonerGm2
-              onApply={(gm2) => {
+              onApply={(gm2, nivel) => {
                 const cmyk: ConsumibleCanal[] = [
                   "cian",
                   "magenta",
@@ -370,9 +419,9 @@ export function PerfilTintasModal({
                 const objetivo = channels.filter((canal) =>
                   cmyk.includes(canal),
                 );
-                objetivo.forEach((canal) => upsert(canal, { consumoBase: gm2 }));
+                objetivo.forEach((canal) => setNivel(canal, nivel, gm2));
                 toast.success(
-                  `Consumo ${gm2} g/m² aplicado a ${objetivo.length} canal${objetivo.length === 1 ? "" : "es"} CMYK`,
+                  `Consumo ${gm2} g/m² aplicado a la columna ${NIVEL_COBERTURA_LABELS[nivel]} en ${objetivo.length} canal${objetivo.length === 1 ? "" : "es"} CMYK`,
                 );
               }}
             />
@@ -393,9 +442,18 @@ export function PerfilTintasModal({
                 <thead>
                   <tr>
                     <th>Color</th>
-                    <th>
-                      Consumo ({consumibleUnidadFor(form.plantilla)}/m²)
-                    </th>
+                    {/* Cobertura por nivel es exclusiva de láser (tóner). Gran
+                        formato y demás usan un único consumo por m². */}
+                    {esLaser ? (
+                      NIVELES_COBERTURA.map((nivel) => (
+                        <th key={nivel}>
+                          {NIVEL_COBERTURA_LABELS[nivel]} (
+                          {consumibleUnidadFor(form.plantilla)}/m²)
+                        </th>
+                      ))
+                    ) : (
+                      <th>Consumo ({consumibleUnidadFor(form.plantilla)}/m²)</th>
+                    )}
                     <th>Material vinculado</th>
                     <th aria-label="Acciones" />
                   </tr>
@@ -433,25 +491,64 @@ export function PerfilTintasModal({
                             {CANAL_META[canal].label}
                           </span>
                         </td>
-                        <td>
-                          <input
-                            type="number"
-                            min={0}
-                            step={0.01}
-                            disabled={!existing}
-                            value={existing?.consumoBase ?? ""}
-                            placeholder={String(defaultConsumoBase(form.plantilla, canal))}
-                            aria-label={`Consumo de ${CANAL_META[canal].label}`}
-                            onChange={(event) =>
-                              upsert(canal, {
-                                consumoBase:
-                                  event.target.value === ""
-                                    ? undefined
-                                    : Number(event.target.value),
-                              })
-                            }
-                          />
-                        </td>
+                        {esLaser ? (
+                          NIVELES_COBERTURA.map((nivel) => {
+                            const actual =
+                              existing?.consumoPorCobertura?.[nivel];
+                            // Compat: consumibles viejos sin JSON muestran consumoBase en Normal.
+                            const valor =
+                              actual ??
+                              (nivel === "normal"
+                                ? (existing?.consumoBase ?? undefined)
+                                : undefined);
+                            return (
+                              <td key={nivel}>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step={0.01}
+                                  disabled={!existing}
+                                  value={valor ?? ""}
+                                  placeholder={String(
+                                    defaultConsumoBase(form.plantilla, canal),
+                                  )}
+                                  aria-label={`Consumo ${NIVEL_COBERTURA_LABELS[nivel]} de ${CANAL_META[canal].label}`}
+                                  onChange={(event) =>
+                                    setNivel(
+                                      canal,
+                                      nivel,
+                                      event.target.value === ""
+                                        ? undefined
+                                        : Number(event.target.value),
+                                    )
+                                  }
+                                />
+                              </td>
+                            );
+                          })
+                        ) : (
+                          <td>
+                            <input
+                              type="number"
+                              min={0}
+                              step={0.01}
+                              disabled={!existing}
+                              value={existing?.consumoBase ?? ""}
+                              placeholder={String(
+                                defaultConsumoBase(form.plantilla, canal),
+                              )}
+                              aria-label={`Consumo de ${CANAL_META[canal].label}`}
+                              onChange={(event) =>
+                                upsert(canal, {
+                                  consumoBase:
+                                    event.target.value === ""
+                                      ? undefined
+                                      : Number(event.target.value),
+                                })
+                              }
+                            />
+                          </td>
+                        )}
                         <td>
                           <select
                             value={selected}

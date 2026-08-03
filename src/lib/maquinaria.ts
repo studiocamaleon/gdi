@@ -4,6 +4,8 @@
  * 12 plantillas finales (las 8 viejas de impresoras gran formato unificadas
  * en `impresora_gran_formato_por_area` con discriminantes tecnologia + geometria).
  */
+import type { ConsumoPorCobertura } from "@/lib/cobertura-toner";
+
 export type PlantillaMaquinaria =
   | "impresora_laser"
   | "impresora_gran_formato_por_area"
@@ -515,6 +517,8 @@ export type MaquinaConsumible = {
   unidad: UnidadConsumoMaquina;
   rendimientoEstimado: number | null;
   consumoBase: number | null;
+  /** g/m² de tóner por nivel de cobertura; null = usar consumoBase (Normal). */
+  consumoPorCobertura: ConsumoPorCobertura | null;
   perfilOperativoId: string | null;
   perfilOperativoNombre: string;
   activo: boolean;
@@ -623,6 +627,7 @@ export type MaquinaPayload = {
     unidad?: UnidadConsumoMaquina;
     rendimientoEstimado?: number;
     consumoBase?: number;
+    consumoPorCobertura?: ConsumoPorCobertura | null;
     perfilOperativoId?: string;
     perfilOperativoNombre?: string;
     activo: boolean;

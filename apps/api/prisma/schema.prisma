@@ -662,6 +662,42 @@ model Tenant {
   cobroImputaciones                                CobroImputacion[]
   comprobanteOrdenes                               ComprobanteOrden[]
   familiaPasoDefaults FamiliaPasoDefaults[]
+  centroCopiadoConfig CentroCopiadoConfig?
+}
+
+/// Configuración del módulo Centro de copiado por tenant. Es CURACIÓN OPCIONAL:
+/// un campo null = comportamiento por defecto (todos los papeles / todos los
+/// tamaños producibles / Anillado). El tenant restringe/elige lo que ofrece el
+/// TPV. La plantilla del motor se sigue reusando; esto sólo decide qué se
+/// ofrece. Ver docs/centro-copiado-modulo-configurable-diseno.md.
+model CentroCopiadoConfig {
+  id       String  @id @default(uuid()) @db.Uuid
+  tenantId String  @unique @db.Uuid
+  /// El tenant puede pausar el módulo aunque el plan lo habilite.
+  activo   Boolean @default(true)
+
+  /// Cobrar la preparación/limpieza de máquina en cada documento. Default false:
+  /// el centro de copiado no la cobra (volumen + precio por hoja claro). Si se
+  /// activa, el motor deja de omitir setup/cleanup del paso de impresión.
+  cobraSetup Boolean @default(false)
+
+  /// Máquinas del centro (override de la auto-resolución por rol). Nullable:
+  /// hoy default = auto-resuelto; se aplican en un incremento posterior.
+  maquinaColorId String? @db.Uuid
+  maquinaBnId    String? @db.Uuid
+
+  /// Papeles ofrecidos: [{ materiaPrimaId, gramajes?: number[] }]. null = todos.
+  papelesJson       Json?
+  /// Nombres de formato ofrecidos (del catálogo). null = todos los producibles.
+  tamanosJson       Json?
+  /// Terminaciones ofrecidas (nombres). null = ['Anillado'].
+  terminacionesJson Json?
+  /// Config de precio del producto plantilla (margen, etc.). null = default.
+  precioConfigJson  Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
 model User {
@@ -1335,6 +1371,10 @@ model MaquinaConsumible {
   unidad                 UnidadConsumoMaquina
   rendimientoEstimado    Decimal?                @db.Decimal(12, 2)
   consumoBase            Decimal?                @db.Decimal(12, 4)
+  /// Consumo g/m² por nivel de cobertura: { borrador, normal, alta }. null =
+  /// usar consumoBase (que equivale a la columna Normal). Ver
+  /// docs/cobertura-toner-por-nivel-diseno.md
+  consumoPorCoberturaJson Json?
   activo                 Boolean                 @default(true)
   detalleJson            Json?
   observaciones          String?
@@ -2054,6 +2094,9 @@ model Ruta {
   nombre                String
   descripcion           String?
   versionActual         Int                       @default(1)
+  /// Gestionada por un módulo del sistema (ej. "centro_copiado"): oculta y no
+  /// editable/borrable desde la UI. Ver el producto con el mismo criterio.
+  sistemaCodigo         String?
   activo                Boolean                   @default(true)
   createdAt             DateTime                  @default(now())
   updatedAt             DateTime                  @updatedAt
@@ -2167,6 +2210,11 @@ model Producto {
   /// 'general' ⇒ producto nuevo no requiere acción. Ver
   /// docs/impuestos-modelo-latam-diseno.md.
   categoriaFiscal           String                            @default("general")
+  /// Si != null, este producto lo GESTIONA un módulo del sistema (ej.
+  /// "centro_copiado"): no se lista en el catálogo, no se edita ni se borra
+  /// desde la UI, y lo materializa/regenera el módulo. Reemplaza al acople por
+  /// `codigo` mágico. Ver docs/centro-copiado-modulo-configurable-diseno.md.
+  sistemaCodigo             String?
   activo                    Boolean                           @default(true)
   createdAt                 DateTime                          @default(now())
   updatedAt                 DateTime                          @updatedAt

@@ -62,6 +62,11 @@ export class DocumentoCentroCopiadoDto {
   @IsIn([1, 2])
   faz!: 1 | 2;
 
+  /** Cobertura de tóner del documento; ausente = 'alta'. */
+  @IsOptional()
+  @IsIn(['borrador', 'normal', 'alta'])
+  cobertura?: string;
+
   /** Terminaciones (pasos opcionales) de un documento suelto. */
   @IsOptional()
   @IsArray()

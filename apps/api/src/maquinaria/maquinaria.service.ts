@@ -808,6 +808,7 @@ export class MaquinariaService {
       unidad: this.toPrismaEnum<UnidadConsumoMaquina>(unidad),
       rendimientoEstimado: this.toDecimal(payload.rendimientoEstimado),
       consumoBase: this.toDecimal(payload.consumoBase),
+      consumoPorCoberturaJson: this.toNullableJson(payload.consumoPorCobertura),
       activo: payload.activo,
       detalleJson: this.toNullableJson(payload.detalle),
       observaciones: payload.observaciones?.trim() || null,
@@ -1492,6 +1493,12 @@ export class MaquinariaService {
         unidad: this.toApiEnum(consumible.unidad) as UnidadConsumoMaquinaDto,
         rendimientoEstimado: this.toNumber(consumible.rendimientoEstimado),
         consumoBase: this.toNumber(consumible.consumoBase),
+        consumoPorCobertura:
+          (consumible.consumoPorCoberturaJson as {
+            borrador?: number;
+            normal?: number;
+            alta?: number;
+          } | null) ?? null,
         perfilOperativoId: consumible.perfilOperativoId ?? null,
         perfilOperativoNombre: consumible.perfilOperativo?.nombre ?? '',
         activo: consumible.activo,

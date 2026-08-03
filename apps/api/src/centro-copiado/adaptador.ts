@@ -29,6 +29,8 @@ export interface DocumentoInput {
   gramaje?: number | null;
   color: ColorDocumento;
   faz: FazDocumento;
+  /** Cobertura de tóner: 'borrador' | 'normal' | 'alta'. Ausente = 'alta'. */
+  cobertura?: string | null;
   /** Terminaciones (pasos opcionales) de un documento suelto. */
   terminaciones?: string[];
   /** null/undefined = suelto; mismo id = anillar juntos (tomo). */
@@ -43,6 +45,8 @@ export interface PlantillaContexto {
   maquinaColorId: string | null;
   /** Láser B/N (mono); null si el tenant no tiene. */
   maquinaBnId: string | null;
+  /** El tenant cobra setup/limpieza de máquina (config). Default: no cobra. */
+  cobraSetup: boolean;
 }
 
 export interface SegmentoCalculado {
@@ -103,9 +107,17 @@ export function construirSegmento(
     },
     [`maquinaSeleccionada_${ctx.configPasoId}`]: maquinaId,
     ...runtimePliegoImpresion(ctx.configPasoId, pliego),
-    // Centro de copiado NO cobra setup de máquina (decisión de negocio: volumen +
-    // precio por hoja claro). Vale para todos los documentos de la carga.
-    omitirSetupCleanup: true,
+    // Cobertura de tóner del documento (default Alta en centro de copiado). El
+    // motor la lee de jobContext.cobertura y elige la columna de consumo del nivel.
+    cobertura: doc.cobertura ?? 'alta',
+    // Setup/limpieza de máquina: por defecto el centro de copiado NO la cobra
+    // (volumen + precio por hoja claro), pero el tenant lo puede activar en la
+    // config (cobraSetup). Cuando cobra, el motor deja de omitirla.
+    omitirSetupCleanup: !ctx.cobraSetup,
+    // Tiempo de máquina REAL (fraccionado) en vez del ceil a minutos enteros: así
+    // el precio por hoja no salta tanto entre cargas chicas y grandes. El piso por
+    // trabajo, si el tenant lo quiere, lo da el setup/cleanup configurable.
+    tiempoReal: true,
   };
 
   return { carillas, hojas, jobContext };

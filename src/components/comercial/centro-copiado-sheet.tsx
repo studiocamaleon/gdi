@@ -25,6 +25,10 @@ import {
   type PapelOpcion,
   type CotizarCentroCopiadoResponse,
 } from "@/lib/centro-copiado-api";
+import {
+  NIVELES_COBERTURA,
+  NIVEL_COBERTURA_LABELS,
+} from "@/lib/cobertura-toner";
 import s from "./centro-copiado-sheet.module.css";
 
 /** Un tamaño resuelto en una fila: nombre + medidas (para el payload y el motor). */
@@ -40,9 +44,13 @@ type DocRow = TamanoFila & {
   gramaje: number | null;
   color: ColorDoc;
   faz: FazDoc;
+  /** Cobertura de tóner del documento ('borrador'|'normal'|'alta'). */
+  cobertura: string;
   copias: number;
   /** Terminaciones (pasos opcionales) del documento suelto. */
   terminaciones: string[];
+  /** Archivo original subido (para persistir en R2 al guardar la orden). */
+  file: File | null;
   grupoId: string | null;
 };
 
@@ -75,6 +83,7 @@ type SegMeta = {
   gramaje?: number | null;
   color: ColorDoc;
   faz: FazDoc;
+  cobertura?: string | null;
 };
 
 /** Metadata que el backend deja en jobContext._centroCopiado para rehidratar. */
@@ -89,6 +98,7 @@ type MetaCarga = {
   gramaje?: number | null;
   color?: ColorDoc;
   faz?: FazDoc;
+  cobertura?: string | null;
   terminaciones?: string[];
   // Tomo compuesto:
   esTomo?: boolean;
@@ -221,6 +231,10 @@ export default function CentroCopiadoSheet({
   editItems,
 }: Props) {
   const [papeles, setPapeles] = React.useState<PapelOpcion[]>([]);
+  // Tamaños que la config del tenant ofrece; null = todos los producibles.
+  const [tamanosOfrecidos, setTamanosOfrecidos] = React.useState<
+    string[] | null
+  >(null);
   const [defaults, setDefaults] = React.useState<Defaults>({
     tamano: "A4",
     tamanoAnchoMm: 210,
@@ -242,8 +256,8 @@ export default function CentroCopiadoSheet({
   // Tamaños que ese papel + gramaje puede producir (exacto o cortado del mayor).
   const tamanosDe = React.useCallback(
     (papelId: string, gramaje: number | null): FormatoTamano[] =>
-      tamanosProducibles(papelDe(papelId), gramaje),
-    [papelDe],
+      tamanosProducibles(papelDe(papelId), gramaje, tamanosOfrecidos),
+    [papelDe, tamanosOfrecidos],
   );
   // Resuelve un tamaño para (papel, gramaje): mantiene el preferido si se puede
   // producir; si no, cae al primero producible; null si el papel no produce nada.
@@ -281,12 +295,12 @@ export default function CentroCopiadoSheet({
         if (!vivo) return;
         setPapeles(o.papeles);
         setTerminacionesDisp(o.terminaciones ?? []);
+        setTamanosOfrecidos(o.tamanosOfrecidos ?? null);
         if (o.papelDefaultId) {
           const tipo = o.papeles.find((p) => p.materiaPrimaId === o.papelDefaultId);
           const g = tipo?.gramajes[0] ?? null;
-          const t =
-            tamanosProducibles(tipo, g).find((x) => x.nombre === "A4") ??
-            tamanosProducibles(tipo, g)[0];
+          const producibles = tamanosProducibles(tipo, g, o.tamanosOfrecidos ?? null);
+          const t = producibles.find((x) => x.nombre === "A4") ?? producibles[0];
           setDefaults((d) =>
             d.papelMateriaPrimaId
               ? d
@@ -364,8 +378,10 @@ export default function CentroCopiadoSheet({
             gramaje: seg.gramaje ?? null,
             color: seg.color ?? "BN",
             faz: seg.faz ?? 1,
+            cobertura: seg.cobertura ?? "alta",
             copias: meta.juegos ?? 1,
             terminaciones: [], // las terminaciones viven en el tomo, no en el segmento
+            file: null, // al editar no se re-sube el archivo original (ya está en R2)
             grupoId: gid,
           });
         }
@@ -384,8 +400,10 @@ export default function CentroCopiadoSheet({
           gramaje: meta.gramaje ?? null,
           color: meta.color ?? "BN",
           faz: meta.faz ?? 1,
+          cobertura: meta.cobertura ?? "alta",
           copias: Number(meta.copias) || 1,
           terminaciones: meta.terminaciones ?? [],
+          file: null, // al editar no se re-sube el archivo original (ya está en R2)
           grupoId: null,
         });
       }
@@ -443,6 +461,7 @@ export default function CentroCopiadoSheet({
           gramaje: d.gramaje,
           color: d.color,
           faz: d.faz,
+          cobertura: d.cobertura,
           terminaciones: d.terminaciones,
           grupoId: d.grupoId,
         })),
@@ -470,7 +489,14 @@ export default function CentroCopiadoSheet({
   }, [open, docs, grupos]);
 
   const agregarDocs = React.useCallback(
-    (nuevos: { nombre: string; paginas: number; paginasAuto: boolean }[]) => {
+    (
+      nuevos: {
+        nombre: string;
+        paginas: number;
+        paginasAuto: boolean;
+        file?: File | null;
+      }[],
+    ) => {
       setDocs((prev) => [
         ...prev,
         ...nuevos.map((n) => ({
@@ -485,8 +511,10 @@ export default function CentroCopiadoSheet({
           gramaje: defaults.gramaje,
           color: defaults.color,
           faz: defaults.faz,
+          cobertura: "alta",
           copias: defaults.copias,
           terminaciones: [],
+          file: n.file ?? null,
           grupoId: null,
         })),
       ]);
@@ -497,16 +525,24 @@ export default function CentroCopiadoSheet({
   const onArchivos = React.useCallback(
     async (files: FileList | File[]) => {
       // Sólo el PDF se auto-lee (páginas en verde); DOC/Excel quedan en 0 para
-      // cargar a mano, pero el archivo igual queda asociado a la fila.
-      const lecturas = await leerMedidasPdf(files);
-      const nuevos = lecturas.map((l) =>
+      // cargar a mano, pero el archivo igual queda asociado a la fila (para R2).
+      const lista = Array.from(files);
+      const lecturas = await leerMedidasPdf(lista);
+      // leerMedidasPdf preserva el orden ⇒ lecturas[i] ↔ lista[i].
+      const nuevos = lecturas.map((l, i) =>
         l.ok
           ? {
               nombre: l.archivoNombre,
               paginas: l.paginas[0]?.totalPaginas ?? 1,
               paginasAuto: true,
+              file: lista[i] ?? null,
             }
-          : { nombre: l.archivoNombre, paginas: 0, paginasAuto: false },
+          : {
+              nombre: l.archivoNombre,
+              paginas: 0,
+              paginasAuto: false,
+              file: lista[i] ?? null,
+            },
       );
       agregarDocs(nuevos);
     },
@@ -514,7 +550,7 @@ export default function CentroCopiadoSheet({
   );
 
   const agregarFilaManual = React.useCallback(() => {
-    agregarDocs([{ nombre: "", paginas: 0, paginasAuto: false }]);
+    agregarDocs([{ nombre: "", paginas: 0, paginasAuto: false, file: null }]);
   }, [agregarDocs]);
 
   const aplicarATodos = React.useCallback(() => {
@@ -608,6 +644,18 @@ export default function CentroCopiadoSheet({
   const previewDoc = (id: string) => preview?.documentos.find((d) => d.id === id);
   const subtotalDoc = (id: string) => previewDoc(id)?.subtotal ?? null;
   const errorDoc = (id: string) => previewDoc(id)?.error ?? null;
+  // Precio (neto) por hoja física: le sirve al comercial para tenerlo claro.
+  const precioHojaDoc = (id: string) => {
+    const p = previewDoc(id);
+    if (!p || p.error || !p.hojas) return null;
+    return p.subtotal / p.hojas;
+  };
+  const fmtHoja = (n: number) =>
+    "$" +
+    (Math.round(n * 100) / 100).toLocaleString("es-AR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
 
   const agregar = React.useCallback(async () => {
     if (docs.length === 0) return;
@@ -630,6 +678,7 @@ export default function CentroCopiadoSheet({
           gramaje: d.gramaje,
           color: d.color,
           faz: d.faz,
+          cobertura: d.cobertura,
           terminaciones: d.terminaciones,
           grupoId: d.grupoId,
         })),
@@ -645,7 +694,22 @@ export default function CentroCopiadoSheet({
         toast.error(`${conError.length} documento(s) no se pudieron cotizar.`);
         return;
       }
-      const items = r.items.map(itemConstruidoAPropuestaItem);
+      // Adjunta los archivos originales a cada ítem para subirlos a R2 al
+      // guardar la orden: un suelto lleva su file; un tomo, los de sus miembros
+      // (ic.documentoId es el id del grupo). Se conservan sólo en memoria.
+      const filesDe = (ic: (typeof r.items)[number]): File[] => {
+        const suelto = docs.find((d) => d.id === ic.documentoId);
+        if (suelto) return suelto.file ? [suelto.file] : [];
+        return docs
+          .filter((d) => d.grupoId === ic.documentoId)
+          .map((d) => d.file)
+          .filter((f): f is File => !!f);
+      };
+      const items = r.items.map((ic) => {
+        const pi = itemConstruidoAPropuestaItem(ic);
+        const files = filesDe(ic);
+        return files.length ? { ...pi, archivosPendientes: files } : pi;
+      });
       onAgregar(items);
       toast.success(`${items.length} renglón(es) agregados desde el centro de copiado.`);
       // Reset.
@@ -698,13 +762,21 @@ export default function CentroCopiadoSheet({
             className={s.docNombreInput}
             aria-label="Nombre del documento"
           />
-          <span className={s.cardSub}>
+          <span className={s.cardPrecio}>
             {errorDoc(d.id) ? (
               <span className={s.errChip} title={errorDoc(d.id)!}>
                 ⚠ sin precio
               </span>
             ) : subtotalDoc(d.id) != null ? (
-              fmt(subtotalDoc(d.id)!)
+              <>
+                {precioHojaDoc(d.id) != null ? (
+                  <span className={s.cardUnit}>
+                    {fmtHoja(precioHojaDoc(d.id)!)}/hoja
+                  </span>
+                ) : null}
+                <span className={s.cardSub}>{fmt(subtotalDoc(d.id)!)}</span>
+                <span className={s.cardIva}>sin IVA</span>
+              </>
             ) : (
               <span className={s.muted}>…</span>
             )}
@@ -822,6 +894,21 @@ export default function CentroCopiadoSheet({
                 Doble
               </button>
             </div>
+          </label>
+          {/* Cobertura de tóner del documento (default Alta). Modula el consumo
+              de tóner; el perfil de máquina lo resuelve el sistema. */}
+          <label className={s.ctrl}>
+            <span>Cobertura</span>
+            <SysSelect
+              value={d.cobertura}
+              onChange={(v) => editar(d.id, { cobertura: v })}
+              options={NIVELES_COBERTURA.map((nivel) => ({
+                value: nivel,
+                label: NIVEL_COBERTURA_LABELS[nivel],
+              }))}
+              ariaLabel="Cobertura de tóner"
+              triggerClassName="w-[120px]"
+            />
           </label>
           {/* Terminaciones (pasos opcionales) del suelto; en el tomo van una sola
               vez en el header del grupo. Sólo aparece si hay alguna ofrecida. */}
@@ -1166,11 +1253,13 @@ export default function CentroCopiadoSheet({
             </div>
           </div>
           <div className={s.totalBox}>
-            <div className={s.totalNeto}>
-              <span>Subtotal</span>
-              <strong>{fmt(t?.subtotal ?? 0)}</strong>
+            <div className={s.totalFinal}>
+              <span>Total c/IVA</span>
+              <strong>{fmt((t?.subtotal ?? 0) + (t?.iva ?? 0))}</strong>
             </div>
-            <div className={s.totalIva}>+ IVA · {fmt((t?.subtotal ?? 0) + (t?.iva ?? 0))} total</div>
+            <div className={s.totalNetoSub}>
+              Neto {fmt(t?.subtotal ?? 0)} · IVA {fmt(t?.iva ?? 0)}
+            </div>
           </div>
           <button
             type="button"

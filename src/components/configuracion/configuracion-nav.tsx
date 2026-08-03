@@ -19,6 +19,7 @@ import {
   HardDriveIcon,
   LandmarkIcon,
   PlugIcon,
+  PrinterIcon,
   ReceiptTextIcon,
   UsersIcon,
 } from "lucide-react";
@@ -36,6 +37,7 @@ const ICONOS: Record<string, IconCmp> = {
   "metodos-pago": CreditCardIcon,
   impuestos: LandmarkIcon,
   comisiones: HandCoinsIcon,
+  "centro-copiado": PrinterIcon,
   almacenamiento: HardDriveIcon,
   integraciones: PlugIcon,
 };

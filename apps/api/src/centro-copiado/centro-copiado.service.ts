@@ -4,9 +4,14 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { MotorUniversalService } from '../motor-universal/motor.service';
 import type { CotizarOutput } from '../motor-universal/tipos';
+import {
+  NIVEL_COBERTURA_LABELS,
+  normalizarNivelCobertura,
+} from '../productos-servicios/cobertura-toner';
 import {
   provisionarPlantillaCentroCopiado,
   CC_PRODUCTO_CODIGO,
@@ -32,12 +37,19 @@ interface PapelTipo {
 }
 
 /** Contexto del plantilla + papeles disponibles (resueltos por request). */
-type Ctx = PlantillaContexto & { papeles: PapelTipo[] };
+type Ctx = PlantillaContexto & {
+  papeles: PapelTipo[];
+};
+
+/** Papel ofrecido en la config: el tipo y, opcional, sus gramajes ofrecidos. */
+type PapelConfig = { materiaPrimaId: string; gramajes?: number[] };
+
 import {
   AgregarAOrdenCentroCopiadoDto,
   CotizarCentroCopiadoDto,
   GrupoCentroCopiadoDto,
 } from './dto/cotizar-centro-copiado.dto';
+import { ActualizarCentroCopiadoConfigDto } from './dto/centro-copiado-config.dto';
 
 export interface DocumentoResultado {
   id: string;
@@ -156,25 +168,347 @@ export class CentroCopiadoService {
     }[];
     papelDefaultId: string | null;
     terminaciones: string[];
+    /** Nombres de formato ofrecidos; null = todos los producibles. */
+    tamanosOfrecidos: string[] | null;
+    /** El tenant tiene el módulo activo. */
+    activo: boolean;
   }> {
     const ctx = await this.contexto(tenantId);
-    const obra = ctx.papeles.find((p) => /obra/i.test(p.nombre));
-    return {
-      papeles: ctx.papeles.map((p) => ({
+    const config = await this.configDe(tenantId);
+    // La config es CURACIÓN opcional: papelesJson null = todos los papeles; si
+    // trae una lista, sólo esos (y, si el papel fija gramajes, sólo esos).
+    const papelesCfg = (config.papelesJson as PapelConfig[] | null) ?? null;
+    const permitido = papelesCfg
+      ? new Map(papelesCfg.map((c) => [c.materiaPrimaId, c.gramajes ?? null]))
+      : null;
+    const papeles = (
+      permitido
+        ? ctx.papeles.filter((p) => permitido.has(p.materiaPrimaId))
+        : ctx.papeles
+    ).map((p) => {
+      const gramajesOk = permitido?.get(p.materiaPrimaId) ?? null;
+      const usaFiltro = !!gramajesOk?.length;
+      return {
         materiaPrimaId: p.materiaPrimaId,
         nombre: p.nombre,
-        gramajes: p.gramajes,
-        variantes: p.variantes.map((v) => ({
-          formatoComercial: v.formatoComercial,
-          anchoMm: v.anchoMm,
-          altoMm: v.altoMm,
-          gramajeGr: v.gramajeGr,
-        })),
-      })),
+        gramajes: usaFiltro
+          ? p.gramajes.filter((g) => gramajesOk!.includes(g))
+          : p.gramajes,
+        variantes: p.variantes
+          .filter(
+            (v) =>
+              !usaFiltro ||
+              v.gramajeGr == null ||
+              gramajesOk!.includes(v.gramajeGr),
+          )
+          .map((v) => ({
+            formatoComercial: v.formatoComercial,
+            anchoMm: v.anchoMm,
+            altoMm: v.altoMm,
+            gramajeGr: v.gramajeGr,
+          })),
+      };
+    });
+    const obra = papeles.find((p) => /obra/i.test(p.nombre));
+    return {
+      papeles,
       papelDefaultId:
-        obra?.materiaPrimaId ?? ctx.papeles[0]?.materiaPrimaId ?? null,
-      terminaciones: TERMINACIONES_DISPONIBLES,
+        obra?.materiaPrimaId ?? papeles[0]?.materiaPrimaId ?? null,
+      terminaciones:
+        (config.terminacionesJson as string[] | null) ??
+        TERMINACIONES_DISPONIBLES,
+      tamanosOfrecidos: (config.tamanosJson as string[] | null) ?? null,
+      activo: config.activo,
     };
+  }
+
+  /**
+   * Estado liviano del módulo para el front (esconder el botón/atajo si está
+   * pausado). Lectura pura: sin config aún = activo (default). Lo usa el flujo
+   * comercial, así que NO exige el permiso de configurar.
+   */
+  async estado(tenantId: string): Promise<{ activo: boolean }> {
+    const c = await this.prisma.centroCopiadoConfig.findUnique({
+      where: { tenantId },
+      select: { activo: true },
+    });
+    return { activo: c?.activo ?? true };
+  }
+
+  /** Carga (o crea vacía) la configuración del centro de copiado del tenant. */
+  private async configDe(tenantId: string) {
+    return this.prisma.centroCopiadoConfig.upsert({
+      where: { tenantId },
+      create: { tenantId },
+      update: {},
+    });
+  }
+
+  /**
+   * Precio y tiempos de máquina del producto/paso plantilla de CC (que el usuario
+   * no ve en el editor de rutas). Margen vive en Producto.precioConfigJson; setup/
+   * cleanup en ProductoConfigPaso.setupOverrideMin/cleanupOverrideMin (override
+   * propio de CC, gana sobre el perfil de la máquina sin pisarlo).
+   */
+  private async preciosYTiemposCC(tenantId: string): Promise<{
+    productoId: string | null;
+    configPasoId: string | null;
+    margenPct: number;
+    margenMinimoPct: number;
+    setupMin: number;
+    cleanupMin: number;
+  }> {
+    const producto = await this.prisma.producto.findUnique({
+      where: { tenantId_codigo: { tenantId, codigo: CC_PRODUCTO_CODIGO } },
+      select: {
+        id: true,
+        precioConfigJson: true,
+        rutasAlternativas: {
+          where: { activo: true },
+          take: 1,
+          select: {
+            configPasos: {
+              take: 1,
+              select: {
+                id: true,
+                setupOverrideMin: true,
+                cleanupOverrideMin: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    const cp = producto?.rutasAlternativas[0]?.configPasos[0] ?? null;
+    const detalle = ((
+      producto?.precioConfigJson as Record<string, unknown> | null
+    )?.detalle ?? {}) as Record<string, unknown>;
+    return {
+      productoId: producto?.id ?? null,
+      configPasoId: cp?.id ?? null,
+      margenPct: Number(detalle.marginPct ?? 40),
+      margenMinimoPct: Number(detalle.minimumMarginPct ?? 25),
+      setupMin: Number(cp?.setupOverrideMin ?? 0),
+      cleanupMin: Number(cp?.cleanupOverrideMin ?? 0),
+    };
+  }
+
+  /** Config + universo disponible, para la página de Configuración. */
+  async getConfig(tenantId: string) {
+    const ctx = await this.contexto(tenantId);
+    const config = await this.configDe(tenantId);
+    const precios = await this.preciosYTiemposCC(tenantId);
+    const laseres = await this.prisma.maquina.findMany({
+      where: { tenantId, plantilla: 'IMPRESORA_LASER', activo: true },
+      include: { componentesDesgaste: { select: { soloColor: true } } },
+      orderBy: { nombre: 'asc' },
+    });
+    return {
+      activo: config.activo,
+      cobraSetup: config.cobraSetup,
+      margenPct: precios.margenPct,
+      margenMinimoPct: precios.margenMinimoPct,
+      setupMin: precios.setupMin,
+      cleanupMin: precios.cleanupMin,
+      // Selección actual del tenant (null = todos / default / auto-resolver).
+      papeles: (config.papelesJson as PapelConfig[] | null) ?? null,
+      tamanos: (config.tamanosJson as string[] | null) ?? null,
+      terminaciones: (config.terminacionesJson as string[] | null) ?? null,
+      maquinaColorId: config.maquinaColorId,
+      maquinaBnId: config.maquinaBnId,
+      // Universo para elegir (el menú de tamaños lo tiene el front).
+      disponibles: {
+        papeles: ctx.papeles.map((p) => ({
+          materiaPrimaId: p.materiaPrimaId,
+          nombre: p.nombre,
+          gramajes: p.gramajes,
+        })),
+        terminaciones: TERMINACIONES_DISPONIBLES,
+        maquinas: laseres.map((m) => ({
+          id: m.id,
+          nombre: m.nombre,
+          esColor: m.componentesDesgaste.some((c) => c.soloColor),
+        })),
+      },
+    };
+  }
+
+  /** Actualiza la config. Un campo en null LIMPIA (vuelve al default). */
+  async actualizarConfig(
+    tenantId: string,
+    dto: ActualizarCentroCopiadoConfigDto,
+  ) {
+    await this.configDe(tenantId);
+    const jsonOrNull = (v: unknown) =>
+      v == null ? Prisma.DbNull : (v as never);
+    await this.prisma.centroCopiadoConfig.update({
+      where: { tenantId },
+      data: {
+        ...(dto.activo !== undefined ? { activo: dto.activo } : {}),
+        ...(dto.cobraSetup !== undefined ? { cobraSetup: dto.cobraSetup } : {}),
+        ...(dto.papeles !== undefined
+          ? { papelesJson: jsonOrNull(dto.papeles) }
+          : {}),
+        ...(dto.tamanos !== undefined
+          ? { tamanosJson: jsonOrNull(dto.tamanos) }
+          : {}),
+        ...(dto.terminaciones !== undefined
+          ? { terminacionesJson: jsonOrNull(dto.terminaciones) }
+          : {}),
+        ...(dto.maquinaColorId !== undefined
+          ? { maquinaColorId: dto.maquinaColorId }
+          : {}),
+        ...(dto.maquinaBnId !== undefined
+          ? { maquinaBnId: dto.maquinaBnId }
+          : {}),
+      },
+    });
+    // Si cambió la selección de máquinas, se regeneran las candidatas del paso
+    // (el motor sólo rutea a candidatas). Si no se eligió ninguna, se deja lo
+    // auto-resuelto por el provisionador.
+    if (dto.maquinaColorId !== undefined || dto.maquinaBnId !== undefined) {
+      await this.regenerarCandidatas(tenantId);
+    }
+    // Margen (Producto.precioConfigJson) y setup/cleanup (config paso) viven en el
+    // producto/paso plantilla, no en CentroCopiadoConfig — el motor los lee de ahí.
+    await this.aplicarPrecioYTiempos(tenantId, dto);
+    return this.getConfig(tenantId);
+  }
+
+  /**
+   * Persiste margen (en el precioConfigJson del producto CC) y setup/cleanup (en
+   * los overrides del config paso). Sólo escribe lo que vino en el dto.
+   */
+  private async aplicarPrecioYTiempos(
+    tenantId: string,
+    dto: ActualizarCentroCopiadoConfigDto,
+  ): Promise<void> {
+    const tocaMargen =
+      dto.margenPct !== undefined || dto.margenMinimoPct !== undefined;
+    const tocaTiempos =
+      dto.setupMin !== undefined || dto.cleanupMin !== undefined;
+    if (!tocaMargen && !tocaTiempos) return;
+
+    const actual = await this.preciosYTiemposCC(tenantId);
+
+    if (tocaMargen && actual.productoId) {
+      await this.prisma.producto.update({
+        where: { id: actual.productoId },
+        data: {
+          precioConfigJson: {
+            metodoCalculo: 'por_margen',
+            detalle: {
+              marginPct: dto.margenPct ?? actual.margenPct,
+              minimumMarginPct: dto.margenMinimoPct ?? actual.margenMinimoPct,
+            },
+          },
+        },
+      });
+    }
+    if (tocaTiempos && actual.configPasoId) {
+      await this.prisma.productoConfigPaso.update({
+        where: { id: actual.configPasoId },
+        data: {
+          ...(dto.setupMin !== undefined
+            ? { setupOverrideMin: dto.setupMin }
+            : {}),
+          ...(dto.cleanupMin !== undefined
+            ? { cleanupOverrideMin: dto.cleanupMin }
+            : {}),
+        },
+      });
+    }
+  }
+
+  /**
+   * Regenera las máquinas candidatas del paso de impresión desde la config del
+   * tenant: color = maquinaColorId (modo CMYK), B/N = maquinaBnId (modo BN). Si
+   * ambas son la misma máquina, una candidata con ambos modos. Si no hay
+   * selección, no toca nada (queda lo auto-resuelto). Idempotente y contenido:
+   * ante error el motor cae a la M-1 default del paso.
+   */
+  private async regenerarCandidatas(tenantId: string): Promise<void> {
+    const config = await this.configDe(tenantId);
+    const colorId = config.maquinaColorId;
+    const bnId = config.maquinaBnId;
+    if (!colorId && !bnId) return; // sin selección: se respeta lo auto-resuelto
+
+    const producto = await this.prisma.producto.findUnique({
+      where: { tenantId_codigo: { tenantId, codigo: CC_PRODUCTO_CODIGO } },
+      include: {
+        rutasAlternativas: {
+          where: { activo: true },
+          include: { configPasos: true },
+        },
+      },
+    });
+    const cp = producto?.rutasAlternativas[0]?.configPasos[0];
+    if (!cp) return;
+
+    const ids = [colorId, bnId].filter((x): x is string => !!x);
+    const maquinas = await this.prisma.maquina.findMany({
+      where: { id: { in: ids }, tenantId },
+      include: { perfilesOperativos: { select: { id: true, nombre: true } } },
+    });
+    const perfilId = (mid: string | null): string | null => {
+      const m = maquinas.find((x) => x.id === mid);
+      if (!m) return null;
+      const simple = m.perfilesOperativos.find((p) => /simple/i.test(p.nombre));
+      return (simple ?? m.perfilesOperativos[0])?.id ?? null;
+    };
+    const existe = (mid: string | null) =>
+      !!mid && maquinas.some((m) => m.id === mid);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.productoConfigPasoMaquinaCandidata.deleteMany({
+        where: { productoConfigPasoId: cp.id },
+      });
+      if (existe(colorId) && colorId === bnId) {
+        // Una sola láser hace color y B/N.
+        await tx.productoConfigPasoMaquinaCandidata.create({
+          data: {
+            tenantId,
+            productoConfigPasoId: cp.id,
+            maquinaId: colorId!,
+            esPreferida: true,
+            orden: 0,
+            activo: true,
+            perfilDefaultId: perfilId(colorId),
+            modoColorAllowedModes: ['CMYK', 'BN'],
+          },
+        });
+        return;
+      }
+      let orden = 0;
+      if (existe(colorId)) {
+        await tx.productoConfigPasoMaquinaCandidata.create({
+          data: {
+            tenantId,
+            productoConfigPasoId: cp.id,
+            maquinaId: colorId!,
+            esPreferida: true,
+            orden: orden++,
+            activo: true,
+            perfilDefaultId: perfilId(colorId),
+            modoColorAllowedModes: ['CMYK'],
+          },
+        });
+      }
+      if (existe(bnId)) {
+        await tx.productoConfigPasoMaquinaCandidata.create({
+          data: {
+            tenantId,
+            productoConfigPasoId: cp.id,
+            maquinaId: bnId!,
+            esPreferida: !existe(colorId),
+            orden: orden++,
+            activo: true,
+            perfilDefaultId: perfilId(bnId),
+            modoColorAllowedModes: ['BN'],
+          },
+        });
+      }
+    });
   }
 
   /** Resuelve la variante + etiqueta legible para (tipo, gramaje, tamaño). */
@@ -198,6 +532,7 @@ export class CentroCopiadoService {
   /** Provisiona (idempotente) y resuelve el contexto del plantilla + papeles. */
   private async contexto(tenantId: string): Promise<Ctx> {
     await provisionarPlantillaCentroCopiado(this.prisma, tenantId);
+    const config = await this.configDe(tenantId);
     const producto = await this.prisma.producto.findUniqueOrThrow({
       where: { tenantId_codigo: { tenantId, codigo: CC_PRODUCTO_CODIGO } },
       include: {
@@ -251,12 +586,15 @@ export class CentroCopiadoService {
         return { materiaPrimaId: m.id, nombre: m.nombre, gramajes, variantes };
       })
       .filter((p) => p.variantes.length > 0);
+    const maquinaColorId = color?.maquinaId ?? null;
+    const maquinaBnId = bn?.maquinaId ?? null;
     return {
       productoId: producto.id,
       rutaAlternativaId: rutaAlt.id,
       configPasoId: cp.id,
-      maquinaColorId: color?.maquinaId ?? null,
-      maquinaBnId: bn?.maquinaId ?? null,
+      maquinaColorId,
+      maquinaBnId,
+      cobraSetup: config.cobraSetup,
       papeles,
     };
   }
@@ -531,6 +869,8 @@ export class CentroCopiadoService {
       'Hojas físicas': String(hojas),
       Terminación: terminacion,
     };
+    especificaciones['Cobertura'] =
+      NIVEL_COBERTURA_LABELS[normalizarNivelCobertura(doc.cobertura ?? 'alta')];
     if (tomoNombre) especificaciones['Tomo'] = tomoNombre;
     if (!varianteId) {
       return {
@@ -564,6 +904,7 @@ export class CentroCopiadoService {
         papelLabel,
         color: doc.color,
         faz: doc.faz,
+        cobertura: doc.cobertura ?? 'alta',
         carillas,
         hojas,
       },
@@ -910,6 +1251,7 @@ export class CentroCopiadoService {
           gramaje: d.gramaje ?? null,
           color: d.color,
           faz: d.faz,
+          cobertura: d.cobertura ?? 'alta',
         })),
       },
     };

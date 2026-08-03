@@ -47,6 +47,12 @@ export type PropuestaItem = {
     visible: boolean;
     orden: number;
   }>;
+  /**
+   * Archivos originales a subir a R2 cuando el ítem se persista como ORDEN_ITEM
+   * (los PDF del centro de copiado). Sólo en memoria — no se serializa ni se
+   * manda al backend; se sube por el flujo de Archivos al guardar la orden.
+   */
+  archivosPendientes?: File[];
 };
 
 export type PropuestaCargoDirecto = {

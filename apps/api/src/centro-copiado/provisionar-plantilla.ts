@@ -24,6 +24,9 @@ import { PrismaClient } from '@prisma/client';
 export const CC_RUTA_CODIGO = 'CC-IMPRESION-DOC';
 export const CC_PRODUCTO_CODIGO = 'SYS-IMPRESION-DOC';
 export const CC_SUBCAT_CODIGO = 'papeleria_comercial';
+/** Marca de sistema del producto/ruta del centro de copiado: oculto del
+ *  catálogo, no editable/borrable. Ver docs/centro-copiado-modulo-configurable-diseno.md. */
+export const CC_SISTEMA_CODIGO = 'centro_copiado';
 export const CC_PLIEGO_A4 = { preset: 'A4', anchoMm: 210, altoMm: 297 };
 
 type MaquinaConDetalle = {
@@ -50,8 +53,24 @@ export async function provisionarPlantillaCentroCopiado(
 ): Promise<ProvisionResultado> {
   const existente = await prisma.producto.findUnique({
     where: { tenantId_codigo: { tenantId, codigo: CC_PRODUCTO_CODIGO } },
+    select: { id: true, sistemaCodigo: true },
   });
-  if (existente) return { estado: 'ya_existe', productoId: existente.id };
+  if (existente) {
+    // Backfill idempotente: la plantilla creada antes de existir la marca de
+    // sistema queda sin flag; se la sana en el primer uso (así se esconde del
+    // catálogo y se bloquea su edición sin una migración de datos aparte).
+    if (existente.sistemaCodigo !== CC_SISTEMA_CODIGO) {
+      await prisma.producto.update({
+        where: { id: existente.id },
+        data: { sistemaCodigo: CC_SISTEMA_CODIGO },
+      });
+      await prisma.ruta.updateMany({
+        where: { tenantId, codigo: CC_RUTA_CODIGO },
+        data: { sistemaCodigo: CC_SISTEMA_CODIGO },
+      });
+    }
+    return { estado: 'ya_existe', productoId: existente.id };
+  }
 
   const subcat = await prisma.productoSubcategoriaComercial.findUnique({
     where: { codigo: CC_SUBCAT_CODIGO },
@@ -103,6 +122,7 @@ export async function provisionarPlantillaCentroCopiado(
           descripcion:
             'Ruta plantilla del TPV Centro de copiado. Solo impresión por hoja; anillado diferido.',
           versionActual: 1,
+          sistemaCodigo: CC_SISTEMA_CODIGO,
           activo: true,
         },
       });
@@ -144,6 +164,7 @@ export async function provisionarPlantillaCentroCopiado(
           medidaDefaultAnchoMm: CC_PLIEGO_A4.anchoMm,
           medidaDefaultAltoMm: CC_PLIEGO_A4.altoMm,
           categoriaFiscal: 'general',
+          sistemaCodigo: CC_SISTEMA_CODIGO,
           precioConfigJson: {
             metodoCalculo: 'por_margen',
             detalle: { marginPct: 40, minimumMarginPct: 25 },

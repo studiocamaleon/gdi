@@ -62,6 +62,11 @@ import { enlacePublicoUrl } from "@/lib/enlaces-publicos";
 import { itemsConSelloDe } from "@/lib/sello-arte/diseno";
 import { mensajeDeArtes, publicarArtesDeSello } from "@/lib/sello-arte/publicar";
 import {
+  subirArchivo,
+  listarArchivos,
+  eliminarArchivo,
+} from "@/lib/archivos-api";
+import {
   getConfiguracionProduccion,
   getDiasNoLaborables,
   getDuracionesFamilias,
@@ -126,7 +131,11 @@ import { AgregarProductoSheet } from "@/components/comercial/agregar-producto-sh
 import CentroCopiadoSheet from "@/components/comercial/centro-copiado-sheet";
 import CentroCopiadoPreciosSheet from "@/components/comercial/centro-copiado-precios-sheet";
 import ccFicha from "@/components/comercial/centro-copiado-ficha.module.css";
-import { guardarTomoCentroCopiado, dimsDeFormato } from "@/lib/centro-copiado-api";
+import {
+  guardarTomoCentroCopiado,
+  dimsDeFormato,
+  estadoCentroCopiado,
+} from "@/lib/centro-copiado-api";
 import { CostosOrdenTab } from "@/components/comercial/costos-orden-tab";
 import {
   type MutacionAplicadaView,
@@ -4750,6 +4759,20 @@ export function PropuestaFicha({
   );
   const [addOpen, setAddOpen] = React.useState(false);
   const [copiadoOpen, setCopiadoOpen] = React.useState(false);
+  // Módulo activo (config del tenant): esconde el botón/atajo si está pausado.
+  // Fail-open: ante error de red se asume activo (no esconder por un glitch).
+  const [ccActivo, setCcActivo] = React.useState(true);
+  React.useEffect(() => {
+    let vivo = true;
+    void estadoCentroCopiado()
+      .then((e) => {
+        if (vivo) setCcActivo(e.activo);
+      })
+      .catch(() => {});
+    return () => {
+      vivo = false;
+    };
+  }, []);
   // Resumen de precios de impresión por hoja (modal OT-wide).
   const [preciosOpen, setPreciosOpen] = React.useState(false);
   // Edición: la CARGA completa (todos los renglones que entraron juntos).
@@ -5088,6 +5111,74 @@ export function PropuestaFicha({
   );
 
   /**
+   * Sube a R2 los PDF originales del centro de copiado, colgándolos del ítem de
+   * la OT (scope ORDEN_ITEM), igual que los sellos suben sus artes. Los archivos
+   * viajan en memoria en `item.archivosPendientes` y acá se matchean por
+   * `cotizacionItemId` con el producto ya persistido. Nunca lanza: la orden ya
+   * está guardada. Reemplaza sólo lo autogenerado por el centro de copiado.
+   */
+  const subirArchivosCentroCopiado = React.useCallback(
+    async (
+      productos: OrdenTrabajoProducto[],
+      filesPorCotItem: Map<string, File[]>,
+    ) => {
+      if (filesPorCotItem.size === 0) return;
+      const MARCA = "centro-copiado";
+      const fallidos: string[] = [];
+      for (const p of productos) {
+        const files = p.cotizacionItemId
+          ? filesPorCotItem.get(p.cotizacionItemId)
+          : undefined;
+        if (!files?.length) continue;
+        try {
+          const previos = await listarArchivos("ORDEN_ITEM", p.id);
+          for (const a of previos) {
+            if (a.autogeneradoPor === MARCA) await eliminarArchivo(a.id);
+          }
+          for (const file of files) {
+            await subirArchivo(file, {
+              scope: "ORDEN_ITEM",
+              entidadId: p.id,
+              descripcion: `Documento · ${file.name}`,
+              autogeneradoPor: MARCA,
+            });
+          }
+        } catch (error) {
+          fallidos.push(
+            error instanceof Error ? error.message : "no se pudo subir",
+          );
+        }
+      }
+      if (fallidos.length > 0) {
+        toast.warning(
+          `${fallidos.length} archivo(s) del centro de copiado no se pudieron guardar (${fallidos.join(" · ")}). Podés subirlos a mano desde la pestaña Archivos del ítem.`,
+          { duration: 10000 },
+        );
+      }
+    },
+    [],
+  );
+
+  /** Mapea cotizacionItemId → archivos pendientes, para el matcheo con la OT. */
+  const mapaArchivosCC = React.useCallback(
+    (
+      itemsConSnapshot: Array<{
+        item: PropuestaItem;
+        cotizacionItemId?: string;
+      }>,
+    ): Map<string, File[]> => {
+      const m = new Map<string, File[]>();
+      for (const { item, cotizacionItemId } of itemsConSnapshot) {
+        if (cotizacionItemId && item.archivosPendientes?.length) {
+          m.set(cotizacionItemId, item.archivosPendientes);
+        }
+      }
+      return m;
+    },
+    [],
+  );
+
+  /**
    * Persiste alta/edición de un item: primero el snapshot del cotizador
    * (recotizar si ya existía, cotizar-y-guardar encadenado a la Cotizacion
    * de origen si es nuevo), después la proyección. Lanza en error — el
@@ -5148,8 +5239,12 @@ export function PropuestaFicha({
           : p.id === item.id,
       );
       await publicarArtes(tocado);
+      await subirArchivosCentroCopiado(
+        tocado,
+        mapaArchivosCC([{ item, cotizacionItemId }]),
+      );
     },
-    [orden, clienteId, publicarArtes],
+    [orden, clienteId, publicarArtes, subirArchivosCentroCopiado, mapaArchivosCC],
   );
 
   /** Baja en staging: sólo saca la fila local; el DELETE va en Guardar. */
@@ -5670,9 +5765,14 @@ export function PropuestaFicha({
         }
       }
 
-      // El arte de los sellos, antes de mostrar el cartel de emitida: si algo
-      // falla, el aviso llega mientras la orden todavía está en pantalla.
+      // El arte de los sellos + los PDF del centro de copiado, antes de mostrar
+      // el cartel de emitida: si algo falla, el aviso llega con la orden en
+      // pantalla.
       await publicarArtes(orden.productos);
+      await subirArchivosCentroCopiado(
+        orden.productos,
+        mapaArchivosCC(itemsConSnapshot),
+      );
 
       setEmisionNumero(orden.numero);
     } catch (error) {
@@ -5692,6 +5792,8 @@ export function PropuestaFicha({
     persistirSnapshotsItems,
     fechaEntregaOrden,
     publicarArtes,
+    subirArchivosCentroCopiado,
+    mapaArchivosCC,
   ]);
 
   const finalizarEmision = React.useCallback(() => {
@@ -5732,6 +5834,10 @@ export function PropuestaFicha({
         ),
       });
       await publicarArtes(orden.productos);
+      await subirArchivosCentroCopiado(
+        orden.productos,
+        mapaArchivosCC(itemsConSnapshot),
+      );
       toast.success(
         `Borrador ${orden.numero} guardado. Seguí trabajándolo desde acá.`,
       );
@@ -5753,6 +5859,8 @@ export function PropuestaFicha({
     persistirSnapshotsItems,
     fechaEntregaOrden,
     publicarArtes,
+    subirArchivosCentroCopiado,
+    mapaArchivosCC,
     router,
   ]);
 
@@ -5885,8 +5993,9 @@ export function PropuestaFicha({
         return;
       }
       const key = event.key.toLowerCase();
-      // P = agregar producto · C = centro de copiado.
+      // P = agregar producto · C = centro de copiado (si el módulo está activo).
       if (key !== "p" && key !== "c") return;
+      if (key === "c" && !ccActivo) return;
       event.preventDefault();
       if (addOpen || cargoOpen || panelEditor || copiadoOpen) return;
       if (key === "p") abrirAgregarProducto();
@@ -5902,6 +6011,7 @@ export function PropuestaFicha({
     cargoOpen,
     panelEditor,
     copiadoOpen,
+    ccActivo,
   ]);
 
   function toggle(id: string) {
@@ -6346,15 +6456,17 @@ export function PropuestaFicha({
                   Agregar cargo
                 </button>
               ) : null}
-              <button
-                type="button"
-                className="btn"
-                onClick={abrirCentroCopiado}
-                title="Centro de copiado (C)"
-              >
-                <PlusIcon />
-                Centro de copiado
-              </button>
+              {ccActivo ? (
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={abrirCentroCopiado}
+                  title="Centro de copiado (C)"
+                >
+                  <PlusIcon />
+                  Centro de copiado
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="btn btn-primary"

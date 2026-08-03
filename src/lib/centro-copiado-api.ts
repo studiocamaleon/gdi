@@ -27,6 +27,8 @@ export interface DocumentoCentroCopiado {
   gramaje?: number | null;
   color: ColorDoc;
   faz: FazDoc;
+  /** Cobertura de tóner: 'borrador' | 'normal' | 'alta'. Ausente = 'alta'. */
+  cobertura?: string | null;
   /** Terminaciones (pasos opcionales) de un documento suelto. */
   terminaciones?: string[];
   grupoId?: string | null;
@@ -123,10 +125,88 @@ export interface OpcionesCentroCopiado {
   papelDefaultId: string | null;
   /** Terminaciones disponibles (pasos opcionales) que puede elegir el usuario. */
   terminaciones: string[];
+  /** Nombres de formato ofrecidos (config del tenant); null = todos los producibles. */
+  tamanosOfrecidos: string[] | null;
+  /** El tenant tiene el módulo activo. */
+  activo: boolean;
 }
 
 export async function opcionesCentroCopiado(): Promise<OpcionesCentroCopiado> {
   return apiRequest<OpcionesCentroCopiado>("/centro-copiado/opciones");
+}
+
+/** Si el módulo está activo (para esconder el botón/atajo cuando está pausado). */
+export async function estadoCentroCopiado(): Promise<{ activo: boolean }> {
+  return apiRequest<{ activo: boolean }>("/centro-copiado/estado");
+}
+
+// ── Configuración del módulo (Configuración › Centro de copiado) ──────────────
+
+/** Un papel ofrecido: el tipo y, opcional, los gramajes de ese tipo que se ofrecen. */
+export interface PapelConfigItem {
+  materiaPrimaId: string;
+  gramajes?: number[];
+}
+
+export interface MaquinaOpcion {
+  id: string;
+  nombre: string;
+  esColor: boolean;
+}
+
+export interface CentroCopiadoConfig {
+  activo: boolean;
+  /** Cobrar preparación/limpieza de máquina en cada documento (default false). */
+  cobraSetup: boolean;
+  /** Margen % del producto plantilla (precio = costo × margen). */
+  margenPct: number;
+  /** Margen mínimo % (piso de rentabilidad). */
+  margenMinimoPct: number;
+  /** Minutos de setup por documento (override propio de CC). */
+  setupMin: number;
+  /** Minutos de cleanup por documento (override propio de CC). */
+  cleanupMin: number;
+  /** Selección del tenant; null = todos / default. */
+  papeles: PapelConfigItem[] | null;
+  tamanos: string[] | null;
+  terminaciones: string[] | null;
+  /** Máquinas elegidas; null = auto-resolver por rol. */
+  maquinaColorId: string | null;
+  maquinaBnId: string | null;
+  /** Universo para elegir (el menú de tamaños está en CC_FORMATOS_MENU). */
+  disponibles: {
+    papeles: { materiaPrimaId: string; nombre: string; gramajes: number[] }[];
+    terminaciones: string[];
+    maquinas: MaquinaOpcion[];
+  };
+}
+
+/** Campos a actualizar. Omitir = no tocar; enviar null = limpiar (default). */
+export interface ActualizarConfigRequest {
+  activo?: boolean;
+  cobraSetup?: boolean;
+  margenPct?: number;
+  margenMinimoPct?: number;
+  setupMin?: number;
+  cleanupMin?: number;
+  papeles?: PapelConfigItem[] | null;
+  tamanos?: string[] | null;
+  terminaciones?: string[] | null;
+  maquinaColorId?: string | null;
+  maquinaBnId?: string | null;
+}
+
+export async function getConfigCentroCopiado(): Promise<CentroCopiadoConfig> {
+  return apiRequest<CentroCopiadoConfig>("/centro-copiado/config");
+}
+
+export async function actualizarConfigCentroCopiado(
+  req: ActualizarConfigRequest,
+): Promise<CentroCopiadoConfig> {
+  return apiRequest<CentroCopiadoConfig>("/centro-copiado/config", {
+    method: "PUT",
+    body: JSON.stringify(req),
+  });
 }
 
 /** Un formato del catálogo del sistema, con sus medidas en milímetros. */
@@ -177,6 +257,8 @@ function varianteCubre(v: VariantePapelOpcion, f: FormatoTamano): boolean {
 export function tamanosProducibles(
   papel: PapelOpcion | undefined,
   gramaje: number | null,
+  /** Restringe al subconjunto ofrecido por la config (null/undefined = todos). */
+  ofrecidos?: string[] | null,
 ): FormatoTamano[] {
   if (!papel) return [];
   let variantes = papel.variantes;
@@ -184,7 +266,11 @@ export function tamanosProducibles(
     const conGramaje = variantes.filter((v) => v.gramajeGr === gramaje);
     if (conGramaje.length) variantes = conGramaje;
   }
-  return CC_FORMATOS_MENU.filter((f) => variantes.some((v) => varianteCubre(v, f)));
+  const menu =
+    ofrecidos && ofrecidos.length
+      ? CC_FORMATOS_MENU.filter((f) => ofrecidos.includes(f.nombre))
+      : CC_FORMATOS_MENU;
+  return menu.filter((f) => variantes.some((v) => varianteCubre(v, f)));
 }
 
 export async function cotizarCentroCopiado(

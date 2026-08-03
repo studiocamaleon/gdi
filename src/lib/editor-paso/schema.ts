@@ -21,6 +21,10 @@ import type {
 import type { FamiliaListItem } from "../productos-servicios";
 import type { PendientePasoTipo } from "../pendientes-paso";
 import {
+  NIVEL_COBERTURA_LABELS,
+  type NivelCobertura,
+} from "../cobertura-toner";
+import {
   MONTAJE_SOURCE_OPTIONS,
   TALONARIO_MODE_OPTIONS,
   T2_TIME_CALCULATION_MODE_OPTIONS,
@@ -155,6 +159,7 @@ export type ControlOpcion =
         | "maquina-m1"
         | "perfil-m1"
         | "candidatas-detallado"
+        | "cobertura-toner"
         | "modo-color-detallado"
         | "agregar-slot"
         | "material-fijo-detallado"
@@ -301,6 +306,21 @@ function labelMecanismoCantidad(
 
 function maquinaElegida(ctx: ContextoOpcion) {
   return ctx.lookups.maquinas.find((m) => m.id === ctx.cfg.maquinaM1Id);
+}
+
+/** El paso imprime con láser (tóner) → aplica la cobertura por nivel. */
+function pasoUsaLaser(ctx: ContextoOpcion): boolean {
+  const ids =
+    (ctx.cfg.maquinasCandidatas?.length ?? 0) > 0
+      ? ctx.cfg.maquinasCandidatas!.map((c) => c.maquinaId)
+      : ctx.cfg.maquinaM1Id
+        ? [ctx.cfg.maquinaM1Id]
+        : [];
+  return ids.some((mid) => {
+    const plantilla = ctx.lookups.maquinas.find((m) => m.id === mid)?.plantilla;
+    // El lookup trae el enum de DB en MAYÚSCULAS (IMPRESORA_LASER).
+    return String(plantilla ?? "").toUpperCase() === "IMPRESORA_LASER";
+  });
 }
 
 /** La máquina es obligatoria si el tiempo sale de ella (T-3) o si la
@@ -1131,6 +1151,24 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
       (ctx.cfg.maquinasCandidatas?.length ?? 0) > 0 ? "config" : "sin-definir",
     pendiente: "candidatas",
     control: { tipo: "componente", id: "candidatas-detallado" },
+  },
+  {
+    clave: "maquina.cobertura",
+    seccion: "maquina",
+    pregunta: "¿Cuánto tóner gasta por defecto?",
+    ayuda:
+      "Cobertura de tóner por defecto de este paso (Borrador / Normal / Alta). Sólo aplica a impresoras láser; el perfil lo sigue eligiendo el sistema automáticamente. Ajusta el consumo de tóner, no el precio de venta.",
+    visible: (ctx) => pasoUsaLaser(ctx),
+    resumen: (ctx) => {
+      const params = (ctx.cfg.paramsPasoJson ?? {}) as Record<string, unknown>;
+      const nivel =
+        typeof params.coberturaDefault === "string"
+          ? (params.coberturaDefault as NivelCobertura)
+          : "alta";
+      return NIVEL_COBERTURA_LABELS[nivel] ?? "Alta";
+    },
+    origenValor: () => "config",
+    control: { tipo: "componente", id: "cobertura-toner" },
   },
   {
     clave: "maquina.modo_color",
