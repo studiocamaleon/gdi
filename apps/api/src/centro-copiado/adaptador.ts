@@ -33,6 +33,8 @@ export interface DocumentoInput {
   cobertura?: string | null;
   /** Terminaciones (pasos opcionales) de un documento suelto. */
   terminaciones?: string[];
+  /** Tipo de anillo elegido para el anillado (ESPIRAL_PLASTICO | WIRE_O). */
+  tipoAnillo?: string | null;
   /** null/undefined = suelto; mismo id = anillar juntos (tomo). */
   grupoId?: string | null;
 }
@@ -121,6 +123,54 @@ export function construirSegmento(
   };
 
   return { carillas, hojas, jobContext };
+}
+
+/**
+ * jobContext de un ítem que representa SÓLO el anillado (1 anillo por libro). La
+ * impresión de la ruta (obligatoria) va en 0 (`cantidad = 0`), así el ítem sale
+ * puro anillado. El paso de anillado toma su cantidad de `juegos` (= libros) y
+ * su tiempo escala por `hojasPorLibro` (la anilladora perfora hoja por hoja).
+ * `papelVarianteId` es sólo andamiaje para que la impresión no falte material.
+ */
+export function construirSegmentoAnillado(
+  reprDoc: DocumentoInput,
+  ctx: PlantillaContexto,
+  juegos: number,
+  hojasPorLibro: number,
+  papelVarianteId: string,
+  anilladoConfigPasoId: string,
+  /** Tipo de anillo elegido (ESPIRAL_PLASTICO | WIRE_O): filtra el Ø auto. */
+  tipoAnillo: string,
+  /** Tapa/contratapa pineadas por tamaño (claves `${anilladoConfigPasoId}_tapa_*`). */
+  tapaSlotMateriales: Record<string, string> = {},
+): Record<string, unknown> {
+  const maquinaId = maquinaParaColor(ctx, reprDoc.color);
+  const pliego = pliegoDeDoc(reprDoc);
+  return {
+    cantidad: 0,
+    juegos,
+    hojasPorLibro,
+    // El motor elige el Ø del slot DENTRO de este tipo (criterioFiltroCampo).
+    tipoAnillo,
+    caras: 1,
+    piezas: [piezaDocumento(pliego, 0)],
+    modoColor: reprDoc.color === 'COLOR' ? 'CMYK' : 'BN',
+    slotMateriales: {
+      [`${ctx.configPasoId}_sustrato_principal`]: papelVarianteId,
+      // Tapa frontal + contratapa del anillado (1 por libro). Pineadas por el
+      // service según el tamaño del documento; vacío si el tenant no tiene tapas.
+      ...tapaSlotMateriales,
+    },
+    [`maquinaSeleccionada_${ctx.configPasoId}`]: maquinaId,
+    ...runtimePliegoImpresion(ctx.configPasoId, pliego),
+    opcionalesActivados: { [anilladoConfigPasoId]: true },
+    // El ítem de anillado NO imprime: la impresión sólo es andamiaje (cantidad 0).
+    // Se omite SIEMPRE el setup/cleanup para que la impresora no cobre su
+    // preparación en una línea que sólo anilla. El tiempo del anillado es su
+    // run (perforar hoja por hoja); su propio setup no se cobra en v1.
+    omitirSetupCleanup: true,
+    tiempoReal: true,
+  };
 }
 
 export interface VariantePapel {

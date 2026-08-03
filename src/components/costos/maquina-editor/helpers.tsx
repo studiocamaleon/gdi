@@ -452,14 +452,6 @@ export function getOptionLabel(options: MaquinariaTemplateOption[] | undefined, 
   return options?.find((optionItem) => optionItem.value === value)?.label ?? value;
 }
 
-export function getSelectedLabels(options: MaquinariaTemplateOption[] | undefined, value: unknown) {
-  if (!Array.isArray(value)) return "";
-  return value
-    .map((item) => getOptionLabel(options, item))
-    .filter(Boolean)
-    .join(", ");
-}
-
 /**
  * Se decide por la CLAVE y no por las opciones: mirando si existe "CMYK" se
  * perdían las pills en una máquina que sólo soporta B/N —el filtro por
@@ -556,6 +548,7 @@ export function getTemplateUnitLabel(unit: MaquinariaTemplateField["unit"]) {
     g_m2: "g/m²",
     m_min: "m/min",
     piezas_h: "piezas/h",
+    hojas_h: "hojas/h",
     copias_min: "copias/min",
     unidades_min: "unid/min",
   };
@@ -1114,28 +1107,29 @@ export function FieldInput({
           </div>
         );
       }
+      // Botones tipo selector (pills) en lugar de checkboxes: misma estética que
+      // el resto de la app (reusa las clases de las pills de color).
       return (
-        <div className="flex flex-col gap-1.5">
-          {current.length > 0 && (
-            <p className="text-muted-foreground text-xs">
-              Seleccionado: {getSelectedLabels(field.options, current)}
-            </p>
-          )}
-          {field.options?.map((opt) => (
-            <label key={opt.value} className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={current.includes(opt.value)}
-                onChange={(e) => {
-                  const next = e.target.checked
-                    ? [...current, opt.value]
-                    : current.filter((v) => v !== opt.value);
+        <div className="maq-colores" role="group" aria-label={field.label}>
+          {field.options?.map((opt) => {
+            const selected = current.includes(opt.value);
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => {
+                  const next = selected
+                    ? current.filter((v) => v !== opt.value)
+                    : [...current, opt.value];
                   onChange(next);
                 }}
-              />
-              <span>{opt.label}</span>
-            </label>
-          ))}
+                className={`maq-color-pill ${selected ? "activo" : ""}`}
+              >
+                <span className="maq-color-etiqueta">{opt.label}</span>
+              </button>
+            );
+          })}
         </div>
       );
     }

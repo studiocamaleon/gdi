@@ -189,6 +189,133 @@ la terminación "Anillado" mapea a este paso opcional.
 5. **Capacidad como Ø→hojas fijo, o editable por variante.** Recomiendo editable por
    variante (ya que varía por fabricante), con el default de las tablas §1.
 
+## 4.bis Plan técnico v1 (2026-08-03 — confirmado)
+
+> **ESTADO (2026-08-03): IMPLEMENTADO (Etapas A–E), sin commitear.** Motor +
+> selector `MENOR_CAPACIDAD_QUE_CUMPLA` (`seleccion-capacidad.ts`), fix del
+> multiplicador de material (`hojasPorLibro` es de TIEMPO, no de material),
+> biblioteca `ESPIRAL_PLASTICO` (preset + template), provisionador idempotente
+> `asegurarPasoAnilladoCC` (agrega el paso opcional a la ruta de CC + lo mete al
+> snapshot, self-heal ante rutaPaso recreado), config CC con anilladora, y el
+> tomo suma la línea de anillado por **DELTA** (cotización del andamiaje con y sin
+> el paso activado, `cantidad = juegos`) con degradación por motivo si ningún
+> espiral cubre las hojas. UI: línea de anillado (Ø + precio) bajo el head del
+> tomo. Tests: `seleccion-capacidad.spec` (6), `anillo-biblioteca.spec` (5),
+> `anillado-provisionar.spec` (3), `anillado-tomo.spec` (4) — 46 CC en verde,
+> motor sin regresión (17 fallos pre-existentes por tarifas del test). Datos dev:
+> `prisma/install-anilladora-dev.js` (idempotente). Pendiente: commit.
+>
+> **Descubrimiento clave (Etapa D original):** `DIRECT_FROM_JOBCONTEXT` lee
+> `jobContext.cantidad` compartido, así que impresión (hojas) y anillado (juegos)
+> no podían co-cotizarse con distinta cantidad → se resolvió primero con un DELTA.
+> Y el motor filtra los configPasos por el `id` del snapshot de la RutaVersion: un
+> paso fuera del snapshot se excluye silenciosamente (por eso el provisionador lo
+> agrega ahí).
+>
+> **UNIFICACIÓN modelo `juegos` (2026-08-03, reemplaza el DELTA):** El anillado
+> pasó a ser un RENGLÓN PROPIO (tanto en tomo como en documento suelto), no una
+> resta del preview. Claves:
+> - El paso de anillado toma su cantidad de `jobContext.juegos` (libros) vía
+>   `mecanismoCantidad: HEREDAR_DEL_OUTPUT_CANONICO` + `{campoOutput:'juegos'}`. Así
+>   impresión (`cantidad`=hojas) y anillado (`juegos`) conviven sin pisarse.
+> - El ítem de anillado se cotiza con `cantidad=0` (impresión de andamiaje en 0) +
+>   `juegos=N` ⇒ sale PURO anillado. Requirió un fix del motor: **área impresa = 0
+>   ⇒ 0 consumibles (no error)**; sólo NaN/negativa es error (motor.service.ts).
+> - `armarAnillado()` arma el jobContext una sola vez; lo usan el preview
+>   (`cotizarAnilladoGrupo`) y el guardado (`construirAnilladoItem` en
+>   `construirItems`), así **preview == lo que se cobra**. Sin delta.
+> - Suelto: `juegos = copias` (cada copia = 1 libro). Tomo: `juegos = grupo.juegos`.
+>   Subtotales de doc/tomo = impresión sola; el anillado suma en los totales.
+> - El renglón de anillado lleva `_centroCopiado.esAnillado`; la rehidratación al
+>   editar lo saltea (se re-deriva de la terminación).
+>
+> **Tiempo = T-3 (productividad del PERFIL), en hojas/h:** el paso quedó en `T-3`,
+> NO `T-2`. Con `T-2` el motor lee la productividad de los *params del paso*
+> (`productividadPropiaEfectiva`), no del perfil de la máquina → el tiempo salía 0.
+> `T-3` (motor.service.ts ~2797) usa `paso.perfil.productivityValue`. El tiempo =
+> `juegos × hojasPorLibro / productividad`: la productividad se carga en **hojas/h**
+> (hojas perforadas por hora), y el multiplicador `hojasPorLibro` escala los libros
+> a hojas totales (un libro grueso tarda más). El provisionador **self-heala** T-2→T-3.
+>
+> **Paridad `agregarAOrden`:** el renglón de anillado también se persiste en el
+> camino eager `agregarAOrden` (no sólo en el staging `construirItems` del modal),
+> vía `agregarAnilladoItem` (cotizar-y-guardar). Mismo `armarAnillado()` compartido.
+>
+> **Perfil de la anilladora = SÓLO tiempo:** el motor no lee `diametrosSoportadosMm`
+> ni `tipoAnillo` del perfil (se sacó "Diámetros soportados" del form). La capacidad
+> (hojas por Ø) vive en la VARIANTE del espiral (`capacidadMaxHojas`, dimensión de
+> variante — antes faltaba en `dimensionesVariante` y no se veía en el editor). El
+> provisionador elige el perfil real de la anilladora (`perfilAnilladora`, no la
+> heurística de la láser) y **self-heala** máquina/perfil/mecanismo si el paso ya
+> existía (cargar el perfil DESPUÉS ya no deja el tiempo en 0).
+
+
+**Alcance v1 confirmado:** sólo `ESPIRAL_PLASTICO`; biblioteca sembrada y editable;
+capacidad de referencia a 80g (sin factor por gramaje); largo estándar A4/carta
+(sin 2º eje de selección). Wire-O/comb, factor por gramaje y largo-por-formato =
+futuro.
+
+Verificado contra el código actual (2026-08-03): los 4 hallazgos siguen vigentes
+(bug del motor, template sin `capacidadMaxHojas`, sin biblioteca, ruta de CC sólo
+impresión — provisionar-plantilla.ts).
+
+### Etapa A — Fix del motor (capacidadMaxHojas)
+`MENOR_CAPACIDAD_QUE_CUMPLA` (motor.service.ts:4640) lee `v[criterioMaterialCampo]`
+top-level, pero `cargarVariantePorId` (:4788) sólo aplana `anchoMm`. **Fix general**
+(no anillo-específico): en la rama del criterio, leer el campo de
+`v.atributosVarianteJson[campo] ?? v[campo]`. Test unitario: dado un set de
+variantes con `capacidadMaxHojas` en `atributosVarianteJson`, elige la de menor
+capacidad que cubre `hojasPorLibro`.
+
+### Etapa B — Template de material + biblioteca sembrada
+1. Ampliar `anillado_encuadernacion_v1` (materia-prima-templates.ts:724):
+   `camposTecnicos` += `capacidadMaxHojas` (number, required) + `tipoAnillo`
+   (select ESPIRAL_PLASTICO) + `color` (text). Actualizar `dimensionesVariante` /
+   `requiredAtributos`.
+2. Seed de biblioteca (patrón sellos Trodat): 1 materia prima "Espiral plástico
+   4:1" + variantes 6–50mm de la tabla §1, cada una con `capacidadMaxHojas` (80g),
+   `tipoAnillo=ESPIRAL_PLASTICO`, `diametro`, `color`, `pasoPerforacion=4:1`.
+   Idempotente, editable por el tenant.
+
+### Etapa C — Ruta de CC: paso `encuadernado_anillado` opcional + anilladora
+1. **Config**: agregar `CentroCopiadoConfig.maquinaAnilladoraId` (o resolver la
+   única ANILLADORA activa) + selector en la config de CC (como color/BN).
+2. **Provisionador** (provisionar-plantilla.ts, dentro de la misma tx): agregar un
+   2º `rutaPaso` (`encuadernado_anillado`), incluirlo en el snapshot de
+   `rutaVersion`, crear un 2º `productoConfigPaso` con `modoActivacion: OPCIONAL`,
+   su candidata de máquina ANILLADORA, y su `ProductoConfigPasoSlotMaterial` `anillo`
+   con `modoSeleccion: MOTOR_ELIGE_AUTO`, `criterioSeleccion:
+   MENOR_CAPACIDAD_QUE_CUMPLA`, `criterioInputCampo: hojasPorLibro`,
+   `criterioMaterialCampo: capacidadMaxHojas`, candidatos = variantes de anillo.
+3. Self-healing: el provisionador ya es idempotente/race-safe; agregar el paso a
+   plantillas ya provisionadas sin romperlas.
+
+### Etapa D — CC activa el anillado (Tomo-A compuesto)
+El anillado es **1 por libro**, no por sub-documento. Se resucita el compuesto
+Tomo-A (hoy `agregarTomo`/`construirTomo` ya suman sub-docs + concatenan pasos):
+- La terminación "Anillado" del tomo activa el paso: `jobContext.opcionalesActivados
+  [configPasoId_anillado] = true` + `hojasPorLibro` (que el service ya calcula) +
+  `cantidad = juegos`.
+- Como un tomo mezcla papeles, la **impresión** se sigue cotizando por sub-doc; el
+  **anillado** se cotiza una vez (segmento representativo con el paso activado) y se
+  extrae SÓLO el paso `encuadernado_anillado` + el material anillo, sumándolo al
+  compuesto del tomo (costo, pasos, precio). Documento suelto = sin anillado.
+- Degradación: sin anilladora cargada o sin anillo que cubra las hojas → aviso del
+  motor (COMPARE `anillo_soporta_hojas`); el tomo se cotiza sin la línea de anillado
+  y se marca el motivo (no rompe la carga).
+
+### Etapa E — Config/UI + verificación
+- Config de CC: selector de anilladora + (la terminación "Anillado" ya existe como
+  chip; deja de ser cosmética).
+- Verificación: unit del fix (A); spec de seed (B); spec del provisionador con 2
+  pasos (C); spec del tomo con anillado — costo = impresión + 1 anillo × juegos +
+  tiempo anilladora, y selección del Ø correcto por capacidad (D). tsc front+back,
+  jest CC+motor, eslint, css:guard, API restart.
+
+### Orden sugerido
+A (fix aislado, testeable ya) → B (datos) → C (ruta) → D (integración, la más
+gruesa) → E (UI+verif). A y B se pueden hacer y commitear sin tocar CC.
+
 ## 5. Qué NO cambia
 
 El motor de costeo, el modal del centro de copiado y el flujo cotización→OT se

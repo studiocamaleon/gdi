@@ -1103,6 +1103,24 @@ const encuadernado_anillado: DefinicionFamilia = {
       requerido: true,
       compatibilidadMaterial: MP.anillo,
     },
+    // Tapa frontal (acetato/PVC transparente) + contratapa (cartón). Se consumen
+    // 1 por libro (como el anillo); el centro de copiado las resuelve por tamaño
+    // del documento y las pinnea por slotMateriales. Opcionales a nivel motor
+    // (no rompen si el tenant no cargó tapas), pero el CC siempre las incluye.
+    {
+      codigo: 'tapa_frontal',
+      nombre: 'Tapa frontal (transparente)',
+      tipo: 'TAPA',
+      requerido: false,
+      compatibilidadMaterial: MP.tapa,
+    },
+    {
+      codigo: 'tapa_posterior',
+      nombre: 'Contratapa (cartón)',
+      tipo: 'TAPA',
+      requerido: false,
+      compatibilidadMaterial: MP.tapa,
+    },
   ],
   permiteSlotsAdicionales: false,
   plantillasCompatibles: [],

@@ -22,7 +22,9 @@ const dtoTomo = () => ({
     // Un suelto para verificar que NO se colapsa.
     { id: 'S', nombre: 'Suelto.pdf', paginas: 4, copias: 1, tamano: 'A4', tamanoAnchoMm: 210, tamanoAltoMm: 297, papelMateriaPrimaId: papel, color: 'BN' as const, faz: 1 as const },
   ],
-  grupos: [{ id: 'T', nombre: 'Expediente Paz', juegos: 2 }],
+  // Sin terminaciones: verifica el COLAPSO del tomo, no el anillado (que sumaría
+  // un renglón aparte si hay anilladora cargada en paralelo).
+  grupos: [{ id: 'T', nombre: 'Expediente Paz', juegos: 2, terminaciones: [] }],
 });
 
 beforeAll(async () => {

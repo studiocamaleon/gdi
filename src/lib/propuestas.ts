@@ -3,7 +3,15 @@ import { formatearMoneda, type Moneda } from "@/lib/moneda";
 
 export type TipoPropuesta = "orden_trabajo" | "presupuesto";
 
-export type UnidadPropuesta = "unidad" | "m2" | "metro_lineal";
+// "libros"/"hojas" son variantes de conteo (se comportan como "unidad" en toda
+// la lógica de área/lineal); sólo cambian la etiqueta que se muestra. Las usa el
+// centro de copiado para distinguir un renglón encuadernado (libros) de hojas sueltas.
+export type UnidadPropuesta =
+  | "unidad"
+  | "m2"
+  | "metro_lineal"
+  | "libros"
+  | "hojas";
 
 export type CotizacionPropuestaSnapshot = NonNullable<CotizarResponse["cotizacion"]>;
 
@@ -114,6 +122,8 @@ export function formatUnitPrice(value: number, moneda: Moneda) {
 export function formatUnidad(unidad: UnidadPropuesta) {
   if (unidad === "m2") return "m²";
   if (unidad === "metro_lineal") return "ml";
+  if (unidad === "libros") return "libros";
+  if (unidad === "hojas") return "hojas";
   return "u.";
 }
 

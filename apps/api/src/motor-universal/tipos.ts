@@ -875,6 +875,7 @@ export interface SlotCargado {
   criterioMotorAuto?: string | null;
   criterioInputCampo?: string | null;
   criterioMaterialCampo?: string | null;
+  criterioFiltroCampo?: string | null;
   materialVarianteId: string | null;
   candidatos: Array<{
     id: string;

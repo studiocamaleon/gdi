@@ -34,6 +34,13 @@ export function CentroCopiadoConfigView() {
   );
   const [maquinaColor, setMaquinaColor] = React.useState<string | null>(null);
   const [maquinaBn, setMaquinaBn] = React.useState<string | null>(null);
+  const [maquinaAnilladora, setMaquinaAnilladora] = React.useState<
+    string | null
+  >(null);
+  const [tapaFrontal, setTapaFrontal] = React.useState<string | null>(null);
+  const [tapaContratapa, setTapaContratapa] = React.useState<string | null>(
+    null,
+  );
   const [guardando, setGuardando] = React.useState(false);
 
   const cargar = React.useCallback((c: CentroCopiadoConfig) => {
@@ -63,6 +70,9 @@ export function CentroCopiadoConfigView() {
     setTerminaciones(new Set(c.terminaciones ?? c.disponibles.terminaciones));
     setMaquinaColor(c.maquinaColorId);
     setMaquinaBn(c.maquinaBnId);
+    setMaquinaAnilladora(c.maquinaAnilladoraId);
+    setTapaFrontal(c.tapaFrontalMateriaPrimaId);
+    setTapaContratapa(c.tapaContratapaMateriaPrimaId);
   }, []);
 
   React.useEffect(() => {
@@ -156,6 +166,9 @@ export function CentroCopiadoConfigView() {
           termArr.length === todos.terminaciones.length ? null : termArr,
         maquinaColorId: maquinaColor,
         maquinaBnId: maquinaBn,
+        maquinaAnilladoraId: maquinaAnilladora,
+        tapaFrontalMateriaPrimaId: tapaFrontal,
+        tapaContratapaMateriaPrimaId: tapaContratapa,
       });
       cargar(actualizada);
       toast.success("Configuración guardada.");
@@ -248,11 +261,6 @@ export function CentroCopiadoConfigView() {
             </label>
           </div>
         ) : null}
-        <span className={s.seccionHint} style={{ marginTop: 12 }}>
-          El centro de copiado cobra el tiempo real de impresión (sin redondear a
-          minutos enteros), así el precio por hoja es estable. Si querés un piso por
-          trabajo chico, activá el cobro y poné un setup (ej. 1 min).
-        </span>
       </div>
 
       {/* Precio y margen */}
@@ -287,10 +295,6 @@ export function CentroCopiadoConfigView() {
             />
           </label>
         </div>
-        <span className={s.seccionHint} style={{ marginTop: 8 }}>
-          El costo lo calcula el motor (papel, tóner, tiempo). El margen fija el
-          precio de venta; el mínimo es el piso de rentabilidad.
-        </span>
       </div>
 
       {/* Máquinas */}
@@ -335,6 +339,64 @@ export function CentroCopiadoConfigView() {
                 ))}
               </select>
             </label>
+            {cfg.disponibles.anilladoras.length > 0 ? (
+              <label className={s.campo}>
+                <span>Anilladora (terminación &quot;Anillado&quot;)</span>
+                <select
+                  className={s.select}
+                  value={maquinaAnilladora ?? ""}
+                  onChange={(e) =>
+                    setMaquinaAnilladora(e.target.value || null)
+                  }
+                >
+                  <option value="">
+                    {cfg.disponibles.anilladoras.length === 1
+                      ? "Automática (la única)"
+                      : "Sin anillado"}
+                  </option>
+                  {cfg.disponibles.anilladoras.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.nombre}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            {cfg.disponibles.anilladoras.length > 0 &&
+            cfg.disponibles.tapas.length > 0 ? (
+              <>
+                <label className={s.campo}>
+                  <span>Tapa frontal (transparente)</span>
+                  <select
+                    className={s.select}
+                    value={tapaFrontal ?? ""}
+                    onChange={(e) => setTapaFrontal(e.target.value || null)}
+                  >
+                    <option value="">Automática (transparente)</option>
+                    {cfg.disponibles.tapas.map((t) => (
+                      <option key={t.materiaPrimaId} value={t.materiaPrimaId}>
+                        {t.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={s.campo}>
+                  <span>Contratapa (plástica de color)</span>
+                  <select
+                    className={s.select}
+                    value={tapaContratapa ?? ""}
+                    onChange={(e) => setTapaContratapa(e.target.value || null)}
+                  >
+                    <option value="">Automática (color)</option>
+                    {cfg.disponibles.tapas.map((t) => (
+                      <option key={t.materiaPrimaId} value={t.materiaPrimaId}>
+                        {t.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </>
+            ) : null}
           </div>
         </div>
       ) : null}

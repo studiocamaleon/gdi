@@ -268,7 +268,13 @@ function getCotizacionCantidadPrecio(
 
 export function getCotizacionPasos(cotizacion: CotizacionExitosa) {
   return cotizacion.pasos
-    .filter((paso) => paso.activado)
+    .filter(
+      (paso) =>
+        // Se oculta el andamiaje: un paso activado sin tiempo NI costo (p.ej. la
+        // impresión en 0 del renglón de anillado) no es un paso de producción real.
+        paso.activado &&
+        (paso.costoTotal > 0 || (paso.tiempo?.totalMin ?? 0) > 0),
+    )
     .map((paso) => ({
       nombre: paso.nombreVisible?.trim() || humanizeCodigo(paso.familiaCodigo),
       centroCosto: paso.tiempo ? "Producción" : "Proceso",
@@ -3320,10 +3326,14 @@ export function ProductRow({
                   const isMedidasSpec = spec.lbl
                     .toLowerCase()
                     .includes("medida");
-                  const isModoColorSpec = spec.lbl
-                    .toLowerCase()
-                    .includes("modo de color");
-                  const isCarasSpec = spec.lbl.toLowerCase() === "caras";
+                  const isModoColorSpec =
+                    spec.lbl.toLowerCase().includes("modo de color") ||
+                    // Centro de copiado usa "Color" (mismo valor CMYK/B/N).
+                    spec.lbl.toLowerCase() === "color";
+                  const isCarasSpec =
+                    spec.lbl.toLowerCase() === "caras" ||
+                    // Centro de copiado usa "Faz" (simple/doble, mismo ícono).
+                    spec.lbl.toLowerCase() === "faz";
                   // "Estampas": una personalización por línea (multilínea, como
                   // "Medidas"). Ver docs/ot-merchandising-info-diseno.md
                   const isEstampasSpec = spec.lbl.toLowerCase() === "estampas";
@@ -4405,6 +4415,8 @@ function CargoOrdenSheet({
 function unidadDesdeCorta(cantidadUnidad: string): UnidadPropuesta {
   if (cantidadUnidad === "m²") return "m2";
   if (cantidadUnidad === "ml") return "metro_lineal";
+  if (cantidadUnidad === "libros") return "libros";
+  if (cantidadUnidad === "hojas") return "hojas";
   return "unidad";
 }
 

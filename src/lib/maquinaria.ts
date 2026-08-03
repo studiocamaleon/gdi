@@ -158,6 +158,7 @@ export type MaquinariaTemplateFieldUnit =
   | "metro_lineal"
   | "unidades_min"
   | "piezas_h"
+  | "hojas_h"
   | "copias_min"
   | "ppm"
   | "rpm"

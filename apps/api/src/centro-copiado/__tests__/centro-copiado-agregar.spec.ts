@@ -24,7 +24,10 @@ function dtoBoceto() {
       { id: 'C', nombre: 'Escritura.pdf', paginas: 10, copias: 1, tamano: 'A4', tamanoAnchoMm: 210, tamanoAltoMm: 297, papelMateriaPrimaId: papel, color: 'BN' as const, faz: 2 as const, grupoId: 'T' },
       { id: 'D', nombre: 'Reglamento.pdf', paginas: 4, copias: 1, tamano: 'A4', tamanoAnchoMm: 210, tamanoAltoMm: 297, papelMateriaPrimaId: papel, color: 'BN' as const, faz: 1 as const, grupoId: 'T' },
     ],
-    grupos: [{ id: 'T', nombre: 'Expediente', juegos: 2 }],
+    // Sin terminaciones: este spec verifica la estructura de IMPRESIÓN. Si el
+    // tomo anillara (default ['Anillado']) y hay anilladora cargada en paralelo,
+    // se sumaría un renglón de anillado y los conteos cambiarían.
+    grupos: [{ id: 'T', nombre: 'Expediente', juegos: 2, terminaciones: [] }],
   };
 }
 

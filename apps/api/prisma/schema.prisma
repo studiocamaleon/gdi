@@ -685,6 +685,15 @@ model CentroCopiadoConfig {
   /// hoy default = auto-resuelto; se aplican en un incremento posterior.
   maquinaColorId String? @db.Uuid
   maquinaBnId    String? @db.Uuid
+  /// Anilladora para la terminación "Anillado". null = la única ANILLADORA
+  /// activa del tenant (si hay una sola). Sin anilladora, el anillado no se ofrece.
+  maquinaAnilladoraId String? @db.Uuid
+  /// Materia prima de la TAPA frontal (transparente) y la CONTRATAPA (plástica
+  /// de color) del anillado. El tenant las elige en Configuración; el motor
+  /// consume 1 de cada una por libro. null = auto (heurística por transparencia).
+  /// El Wire-O no lleva tapas. Sólo A4/Oficio/A3 (se elige por tamaño del doc).
+  tapaFrontalMateriaPrimaId    String? @db.Uuid
+  tapaContratapaMateriaPrimaId String? @db.Uuid
 
   /// Papeles ofrecidos: [{ materiaPrimaId, gramajes?: number[] }]. null = todos.
   papelesJson       Json?
@@ -2379,6 +2388,9 @@ model ProductoConfigPasoSlotMaterial {
   criterioMotorAuto     String?
   criterioInputCampo    String?
   criterioMaterialCampo String?
+  /// Filtro previo de candidatos: atributo de la variante que debe coincidir con
+  /// el campo homónimo del JobContext (ej: 'tipoAnillo' → sólo el tipo elegido).
+  criterioFiltroCampo   String?
   materialVarianteId    String?                                   @db.Uuid
   /// 'simple' | 'm2-exact' | 'consumed-length' | 'plate-segments'.
   estrategiaCosto       String                                    @default("simple")

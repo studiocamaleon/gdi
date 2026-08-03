@@ -102,9 +102,12 @@ const RULES: Record<PlantillaMaquinariaDto, MachineTemplateRule> = {
   },
 
   // ─── §13 ANILLADORA ─────────────────────────────────────────────
-  // paramsTecnicos: tiposAnilloSoportados[], pasosOrificiosSoportados[].
+  // Sin campos requeridos de máquina: anchoUtil/altoUtil (largo/diámetro máx) y
+  // tiposAnilloSoportados se retiraron de la plantilla (el motor NO los lee para
+  // el anillado). La capacidad y el tipo salen de las variantes del anillo; el
+  // costo, del perfil. Exigirlos dejaba la anilladora "incompleta" para siempre.
   [PlantillaMaquinariaDto.anilladora]: {
-    requiredMachineKeys: ['anchoUtil', 'altoUtil', 'tiposAnilloSoportados'],
+    requiredMachineKeys: [],
   },
 
   // ─── §15 SOLDADORA (pendiente — sin schema definido todavía) ────

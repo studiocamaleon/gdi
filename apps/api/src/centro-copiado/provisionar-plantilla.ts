@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 
 /**
  * Provisiona el producto plantilla "Impresión de documento" (SYS-IMPRESION-DOC)
@@ -42,6 +42,27 @@ const esColorMaquina = (m: MaquinaConDetalle) =>
 const perfilSimpleFaz = (perfiles: { id: string; nombre: string }[]) =>
   perfiles.find((p) => /simple/i.test(p.nombre)) ?? perfiles[0] ?? null;
 
+// El paso de anillado toma su cantidad de `jobContext.juegos` (libros), NO de
+// `jobContext.cantidad` (que es las hojas de la impresión). Así impresión y
+// anillado conviven en una misma cotización sin pisarse: 1 anillo por libro, y
+// el tiempo escala por el multiplicador `hojasPorLibro`.
+const ANILLADO_MECANISMO_CANTIDAD = 'HEREDAR_DEL_OUTPUT_CANONICO';
+const ANILLADO_CANTIDAD_CONFIG = { campoOutput: 'juegos' };
+
+/**
+ * Perfil operativo de la anilladora que usa el paso de anillado (aporta el
+ * TIEMPO: productividad + setup/cleanup). Prefiere el de ESPIRAL_PLASTICO
+ * cuando la máquina tiene un perfil por tipo de anillo; si no, el primero.
+ */
+const perfilAnilladora = (
+  perfiles: { id: string; detalleJson?: unknown }[],
+): { id: string } | null => {
+  const esEspiral = (p: { detalleJson?: unknown }) =>
+    (p.detalleJson as { tipoAnillo?: string } | null)?.tipoAnillo ===
+    'ESPIRAL_PLASTICO';
+  return perfiles.find(esEspiral) ?? perfiles[0] ?? null;
+};
+
 export type ProvisionResultado =
   | { estado: 'ya_existe'; productoId: string }
   | { estado: 'creado'; productoId: string; detalle: string }
@@ -69,6 +90,9 @@ export async function provisionarPlantillaCentroCopiado(
         data: { sistemaCodigo: CC_SISTEMA_CODIGO },
       });
     }
+    // Self-healing del anillado: si el tenant cargó una anilladora + anillos
+    // después de provisionar, el paso opcional se agrega en el primer uso.
+    await asegurarPasoAnilladoCC(prisma, tenantId);
     return { estado: 'ya_existe', productoId: existente.id };
   }
 
@@ -76,7 +100,10 @@ export async function provisionarPlantillaCentroCopiado(
     where: { codigo: CC_SUBCAT_CODIGO },
   });
   if (!subcat)
-    return { estado: 'omitido', motivo: `sin subcategoría '${CC_SUBCAT_CODIGO}'` };
+    return {
+      estado: 'omitido',
+      motivo: `sin subcategoría '${CC_SUBCAT_CODIGO}'`,
+    };
 
   const laseres = (await prisma.maquina.findMany({
     where: { tenantId, plantilla: 'IMPRESORA_LASER', activo: true },
@@ -93,13 +120,17 @@ export async function provisionarPlantillaCentroCopiado(
       )[0] ?? null;
   const bnM = laseres.find((m) => !esColorMaquina(m)) ?? null;
 
-  const perfilColor = colorM ? perfilSimpleFaz(colorM.perfilesOperativos) : null;
+  const perfilColor = colorM
+    ? perfilSimpleFaz(colorM.perfilesOperativos)
+    : null;
   const perfilBn = bnM ? perfilSimpleFaz(bnM.perfilesOperativos) : null;
 
   const papeles = (
     await prisma.materiaPrima.findMany({
       where: { tenantId, subfamilia: 'SUSTRATO_HOJA' },
-      include: { variantes: { where: { activo: true }, orderBy: { sku: 'asc' } } },
+      include: {
+        variantes: { where: { activo: true }, orderBy: { sku: 'asc' } },
+      },
       orderBy: { nombre: 'asc' },
     })
   ).filter((p) => p.variantes.length > 0);
@@ -286,5 +317,444 @@ export async function provisionarPlantillaCentroCopiado(
     `color: ${colorM ? colorM.nombre : '—'} (${perfilColor ? perfilColor.nombre : '—'}) · ` +
     `B/N: ${bnM ? bnM.nombre : '—'} (${perfilBn ? perfilBn.nombre : '—'}) · ` +
     `papeles: ${papeles.map((p) => p.nombre).join(', ')} · default: ${papelDefault.nombre}`;
+  // El anillado se agrega aparte (opcional, condicionado a anilladora + anillos).
+  await asegurarPasoAnilladoCC(prisma, tenantId);
   return { estado: 'creado', productoId, detalle };
+}
+
+/**
+ * Cablea (idempotente, self-healing) el paso OPCIONAL `encuadernado_anillado` en la
+ * ruta de la plantilla de CC — la terminación "Anillado". Sólo lo agrega si el
+ * tenant tiene una ANILLADORA (config o la única activa) y anillos instalados
+ * (materia prima ANILLADO_ENCUADERNACION con variantes). Sin eso, no se ofrece.
+ *
+ * El paso es M-1 (máquina fija = anilladora), T-2 (productividad del perfil),
+ * cantidad DIRECT (= juegos), multiplicador hojasPorLibro (escala el TIEMPO; el
+ * anillo se consume 1 por libro). El slot `anillo` deja que el motor elija la
+ * variante por MENOR_CAPACIDAD_QUE_CUMPLA (Ø mínimo que aguanta las hojas del libro).
+ * Ver docs/anilladora-encuadernacion-espiral-diseno.md §4.bis (Etapa C).
+ */
+
+/**
+ * Deja el slot `anillo` con TODOS los anillos instalados como candidatos. Se
+ * llama en el self-heal: si el tenant agrega un 2º tipo (Wire-O) después de
+ * provisionar el paso, sin esto ese tipo no tendría candidato y saldría sin
+ * material ($0). No borra candidatos existentes; sólo agrega los que faltan.
+ */
+async function sincronizarCandidatosAnilloCC(
+  prisma: PrismaClient,
+  tenantId: string,
+  configPasoId: string,
+): Promise<void> {
+  const anillos = (
+    await prisma.materiaPrima.findMany({
+      where: {
+        tenantId,
+        familia: 'TERMINACION_EDITORIAL',
+        subfamilia: 'ANILLADO_ENCUADERNACION',
+      },
+      include: {
+        variantes: { where: { activo: true }, orderBy: { sku: 'asc' } },
+      },
+    })
+  ).filter((a) => a.variantes.length > 0);
+  const slot = await prisma.productoConfigPasoSlotMaterial.findFirst({
+    where: { productoConfigPasoId: configPasoId, slotCodigo: 'anillo' },
+    select: { id: true, candidatos: { select: { materiaPrimaId: true } } },
+  });
+  if (!slot) return;
+  const existentes = new Set(slot.candidatos.map((c) => c.materiaPrimaId));
+  let orden = slot.candidatos.length;
+  for (const a of anillos) {
+    if (existentes.has(a.id)) continue;
+    await prisma.productoConfigPasoSlotMaterialCandidato.create({
+      data: {
+        tenantId,
+        slotMaterialId: slot.id,
+        materiaPrimaId: a.id,
+        defaultVarianteId: a.variantes[0].id,
+        orden: orden++,
+        todasLasVariantes: true,
+      },
+    });
+  }
+}
+
+/** Cliente Prisma o transacción (ambos exponen los modelos que usamos). */
+type Db = PrismaClient | Prisma.TransactionClient;
+
+type TapaMP = { id: string; variantes: Array<{ id: string }> };
+
+/** Tapas de encuadernación instaladas (frontal transparente + contratapa). */
+async function cargarTapasCC(db: Db, tenantId: string): Promise<TapaMP[]> {
+  return (
+    await db.materiaPrima.findMany({
+      where: {
+        tenantId,
+        familia: 'TERMINACION_EDITORIAL',
+        subfamilia: 'TAPA_ENCUADERNACION',
+      },
+      include: {
+        variantes: { where: { activo: true }, orderBy: { sku: 'asc' } },
+      },
+    })
+  )
+    .filter((t) => t.variantes.length > 0)
+    .map((t) => ({ id: t.id, variantes: t.variantes.map((v) => ({ id: v.id })) }));
+}
+
+/**
+ * Asegura los 2 slots de tapa (frontal + contratapa) en el paso de anillado y
+ * los deja con TODAS las tapas instaladas como candidatos. El centro de copiado
+ * resuelve por tamaño del documento cuál variante va en cada slot y la pinnea
+ * con `slotMateriales` (como el papel de la impresión). Idempotente: crea el
+ * slot si falta y agrega los candidatos que falten (no borra). Si no hay tapas
+ * instaladas, no hace nada (el anillado funciona sin tapas). Se llama en la
+ * provisión fresca (dentro de la tx) y en el self-heal (cuando el tenant carga
+ * las tapas DESPUÉS de provisionar el paso).
+ */
+async function asegurarSlotsTapaCC(
+  db: Db,
+  tenantId: string,
+  configPasoId: string,
+  tapas: TapaMP[],
+): Promise<void> {
+  if (tapas.length === 0) return;
+  for (const slotCodigo of ['tapa_frontal', 'tapa_posterior'] as const) {
+    let slot = await db.productoConfigPasoSlotMaterial.findFirst({
+      where: { productoConfigPasoId: configPasoId, slotCodigo },
+      select: { id: true, candidatos: { select: { materiaPrimaId: true } } },
+    });
+    if (!slot) {
+      try {
+        const created = await db.productoConfigPasoSlotMaterial.create({
+          data: {
+            tenantId,
+            productoConfigPasoId: configPasoId,
+            slotCodigo,
+            slotRol: 'CONSUMIBLE',
+            // El CC lo pinnea por slotMateriales; se ofrecen todas las tapas como
+            // candidatos (mismo patrón que el papel de la impresión).
+            modoSeleccion: 'COMERCIAL_ELIGE',
+            estrategiaCosto: 'simple',
+            formula: 'por_unidad_productiva', // 1 tapa por libro (cantidad = juegos)
+            aplicaMultiCaras: false, // la tapa se cuenta por libro, no por carilla
+            activo: true,
+          },
+          select: { id: true },
+        });
+        slot = { id: created.id, candidatos: [] };
+      } catch (e) {
+        // Otra provisión/heal concurrente creó el slot: refetch idempotente.
+        if (
+          e instanceof Prisma.PrismaClientKnownRequestError &&
+          (e.code === 'P2002' || e.code === 'P2034')
+        ) {
+          slot = await db.productoConfigPasoSlotMaterial.findFirst({
+            where: { productoConfigPasoId: configPasoId, slotCodigo },
+            select: {
+              id: true,
+              candidatos: { select: { materiaPrimaId: true } },
+            },
+          });
+        } else {
+          throw e;
+        }
+      }
+    }
+    if (!slot) continue;
+    const existentes = new Set(slot.candidatos.map((c) => c.materiaPrimaId));
+    let orden = slot.candidatos.length;
+    for (const t of tapas) {
+      if (existentes.has(t.id)) continue;
+      await db.productoConfigPasoSlotMaterialCandidato.create({
+        data: {
+          tenantId,
+          slotMaterialId: slot.id,
+          materiaPrimaId: t.id,
+          defaultVarianteId: t.variantes[0].id,
+          orden: orden++,
+          todasLasVariantes: true,
+        },
+      });
+    }
+  }
+}
+
+export async function asegurarPasoAnilladoCC(
+  prisma: PrismaClient,
+  tenantId: string,
+): Promise<void> {
+  const producto = await prisma.producto.findUnique({
+    where: { tenantId_codigo: { tenantId, codigo: CC_PRODUCTO_CODIGO } },
+    select: {
+      rutasAlternativas: {
+        where: { activo: true },
+        take: 1,
+        select: {
+          id: true,
+          rutaId: true,
+          rutaVersion: true,
+          configPasos: {
+            select: {
+              id: true,
+              maquinaM1Id: true,
+              perfilM1Id: true,
+              mecanismoCantidad: true,
+              modoTiempo: true,
+              rutaPaso: { select: { familiaCodigo: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+  const rutaAlt = producto?.rutasAlternativas[0];
+  if (!rutaAlt) return;
+  const pasoExistente = rutaAlt.configPasos.find(
+    (cp) => cp.rutaPaso?.familiaCodigo === 'encuadernado_anillado',
+  );
+
+  // Anilladora: la elegida en la config o, si hay una sola, esa.
+  const config = await prisma.centroCopiadoConfig.findUnique({
+    where: { tenantId },
+    select: { maquinaAnilladoraId: true },
+  });
+  const anilladoras = await prisma.maquina.findMany({
+    where: { tenantId, plantilla: 'ANILLADORA', activo: true },
+    select: {
+      id: true,
+      perfilesOperativos: {
+        where: { activo: true },
+        select: { id: true, nombre: true, detalleJson: true },
+      },
+    },
+  });
+  const anilladora = config?.maquinaAnilladoraId
+    ? (anilladoras.find((m) => m.id === config.maquinaAnilladoraId) ?? null)
+    : anilladoras.length === 1
+      ? anilladoras[0]
+      : null;
+  if (!anilladora) return; // sin anilladora: no se ofrece el anillado
+
+  const perfil = perfilAnilladora(anilladora.perfilesOperativos);
+
+  // Si el paso YA existe: re-alinear su máquina/perfil con la anilladora vigente.
+  // Cubre el caso de cargar el perfil DESPUÉS de provisionar el paso (si no, el
+  // tiempo del anillado quedaría en 0 para siempre) o cambiar la anilladora.
+  if (pasoExistente) {
+    const nuevoPerfilId = perfil ? perfil.id : pasoExistente.perfilM1Id;
+    const cambiaMaquina = pasoExistente.maquinaM1Id !== anilladora.id;
+    const cambiaPerfil = pasoExistente.perfilM1Id !== nuevoPerfilId;
+    // Migrar pasos viejos: cantidad desde `jobContext.cantidad` (→ juegos) y el
+    // tiempo desde los params (T-2 → T-3, productividad del perfil).
+    const cambiaMecanismo =
+      pasoExistente.mecanismoCantidad !== ANILLADO_MECANISMO_CANTIDAD;
+    const cambiaTiempo = pasoExistente.modoTiempo !== 'T-3';
+    if (cambiaMaquina || cambiaPerfil || cambiaMecanismo || cambiaTiempo) {
+      await prisma.productoConfigPaso.update({
+        where: { id: pasoExistente.id },
+        data: {
+          maquinaM1Id: anilladora.id,
+          perfilM1Id: nuevoPerfilId,
+          mecanismoCantidad: ANILLADO_MECANISMO_CANTIDAD,
+          mecanismoCantidadConfigJson: ANILLADO_CANTIDAD_CONFIG,
+          modoTiempo: 'T-3',
+        },
+      });
+    }
+    // Migrar el slot viejo para que filtre por tipo de anillo (Ø dentro del tipo).
+    await prisma.productoConfigPasoSlotMaterial.updateMany({
+      where: {
+        productoConfigPasoId: pasoExistente.id,
+        slotCodigo: 'anillo',
+        criterioFiltroCampo: null,
+      },
+      data: { criterioFiltroCampo: 'tipoAnillo' },
+    });
+    // Sumar al slot los anillos instalados DESPUÉS de provisionar el paso (ej. un
+    // 2º tipo Wire-O): sin esto, elegir ese tipo no encuentra material y sale $0.
+    await sincronizarCandidatosAnilloCC(prisma, tenantId, pasoExistente.id);
+    // Tapas cargadas DESPUÉS de provisionar el paso: crea los slots (si faltan)
+    // y sincroniza candidatos. Idempotente; no-op si no hay tapas.
+    await asegurarSlotsTapaCC(
+      prisma,
+      tenantId,
+      pasoExistente.id,
+      await cargarTapasCC(prisma, tenantId),
+    );
+    return;
+  }
+
+  // Anillos instalados (materia prima con variantes) para poblar el slot.
+  const anillos = (
+    await prisma.materiaPrima.findMany({
+      where: {
+        tenantId,
+        familia: 'TERMINACION_EDITORIAL',
+        subfamilia: 'ANILLADO_ENCUADERNACION',
+      },
+      include: {
+        variantes: { where: { activo: true }, orderBy: { sku: 'asc' } },
+      },
+    })
+  ).filter((a) => a.variantes.length > 0);
+  if (anillos.length === 0) return; // sin anillos instalados: no se ofrece
+
+  // Tapas instaladas (opcionales): frontal transparente + contratapa cartón.
+  const tapas = await cargarTapasCC(prisma, tenantId);
+
+  try {
+    await provisionarPasoAnilladoTx(
+      prisma,
+      tenantId,
+      rutaAlt,
+      anilladora,
+      perfil,
+      anillos,
+      tapas,
+    );
+  } catch (e) {
+    // Dos cotizaciones concurrentes pueden entrar a la vez y chocar al crear el
+    // rutaPaso (unique tenantId+rutaId+version+orden) o el configPaso: otra tx ya
+    // lo creó. Es idempotente: si ya existe, listo. Cualquier otro error se propaga.
+    if (
+      e instanceof Prisma.PrismaClientKnownRequestError &&
+      (e.code === 'P2002' || e.code === 'P2034')
+    ) {
+      return;
+    }
+    throw e;
+  }
+}
+
+async function provisionarPasoAnilladoTx(
+  prisma: PrismaClient,
+  tenantId: string,
+  rutaAlt: {
+    id: string;
+    rutaId: string;
+    rutaVersion: number;
+  },
+  anilladora: { id: string },
+  perfil: { id: string } | null,
+  anillos: Array<{ id: string; variantes: Array<{ id: string }> }>,
+  tapas: TapaMP[],
+): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    // Re-check dentro de la tx (race-safe con otra provisión concurrente).
+    const existe = await tx.productoConfigPaso.findFirst({
+      where: {
+        productoRutaAlternativaId: rutaAlt.id,
+        rutaPaso: { familiaCodigo: 'encuadernado_anillado' },
+      },
+      select: { id: true },
+    });
+    if (existe) return;
+
+    const rutaPaso = await tx.rutaPaso.create({
+      data: {
+        tenantId,
+        rutaId: rutaAlt.rutaId,
+        version: rutaAlt.rutaVersion,
+        orden: 1,
+        familiaCodigo: 'encuadernado_anillado',
+        icono: 'BookOpen',
+        activo: true,
+      },
+    });
+
+    // El motor valida la ruta contra el snapshot de la RutaVersion: hay que
+    // agregar el paso ahí o cotizar falla ("paso fuera del snapshot").
+    const ver = await tx.rutaVersion.findFirst({
+      where: { rutaId: rutaAlt.rutaId, version: rutaAlt.rutaVersion },
+      select: { id: true, snapshotJson: true },
+    });
+    if (ver) {
+      const snap = (ver.snapshotJson ?? {}) as Record<string, unknown>;
+      const prev = Array.isArray(snap.pasos) ? (snap.pasos as unknown[]) : [];
+      // El motor filtra los configPasos por el `id` (rutaPasoId) del snapshot.
+      // Si quedó una entrada de anillado vieja (rutaPaso recreado), su id no
+      // matchea y el paso se excluiría. Se REEMPLAZA toda entrada de anillado
+      // por la del rutaPaso actual, así el snapshot siempre apunta al vigente.
+      const sinAnillado = prev.filter((p) => {
+        const fam = p as { familia?: string; familiaCodigo?: string };
+        return (
+          fam.familia !== 'encuadernado_anillado' &&
+          fam.familiaCodigo !== 'encuadernado_anillado'
+        );
+      });
+      const pasos = [
+        ...sinAnillado,
+        { id: rutaPaso.id, orden: 1, familia: 'encuadernado_anillado' },
+      ];
+      await tx.rutaVersion.update({
+        where: { id: ver.id },
+        data: {
+          snapshotJson: { ...snap, pasos } as Prisma.InputJsonObject,
+        },
+      });
+    }
+
+    const configPaso = await tx.productoConfigPaso.create({
+      data: {
+        tenantId,
+        productoRutaAlternativaId: rutaAlt.id,
+        rutaPasoId: rutaPaso.id,
+        modoActivacion: 'OPCIONAL',
+        // T-3 = productividad del PERFIL de la máquina (hojas/h de la anilladora).
+        // Con T-2 el motor lee la productividad de los params del paso, no del
+        // perfil, y el tiempo quedaría en 0. El tiempo = juegos × hojasPorLibro /
+        // productividad (el multiplicador escala a hojas totales perforadas).
+        modoTiempo: 'T-3',
+        mecanismoCantidad: ANILLADO_MECANISMO_CANTIDAD,
+        mecanismoCantidadConfigJson: ANILLADO_CANTIDAD_CONFIG,
+        multiplicadoresActivos: ['hojasPorLibro'],
+        maquinaM1Id: anilladora.id,
+        perfilM1Id: perfil ? perfil.id : null,
+        paramsPasoJson: {
+          productivityUnit: 'unidades_h',
+          timeCalculationMode: 'productivity',
+          productivityQuantitySource: 'cantidad',
+        },
+        activo: true,
+      },
+    });
+
+    const slot = await tx.productoConfigPasoSlotMaterial.create({
+      data: {
+        tenantId,
+        productoConfigPasoId: configPaso.id,
+        slotCodigo: 'anillo',
+        slotRol: 'CONSUMIBLE',
+        modoSeleccion: 'MOTOR_ELIGE_AUTO',
+        criterioMotorAuto: 'MENOR_CAPACIDAD_QUE_CUMPLA',
+        criterioInputCampo: 'hojasPorLibro',
+        criterioMaterialCampo: 'capacidadMaxHojas',
+        // El Ø auto se elige DENTRO del tipo pedido (jobContext.tipoAnillo).
+        criterioFiltroCampo: 'tipoAnillo',
+        estrategiaCosto: 'simple',
+        formula: 'por_unidad_productiva', // 1 anillo por libro (cantidad = juegos)
+        activo: true,
+      },
+    });
+
+    let ord = 0;
+    for (const a of anillos) {
+      await tx.productoConfigPasoSlotMaterialCandidato.create({
+        data: {
+          tenantId,
+          slotMaterialId: slot.id,
+          materiaPrimaId: a.id,
+          defaultVarianteId: a.variantes[0].id,
+          orden: ord++,
+          todasLasVariantes: true,
+        },
+      });
+    }
+
+    // Slots de tapa (frontal + contratapa) en el mismo paso. No-op si no hay
+    // tapas instaladas; el anillado igual queda operativo (sólo el anillo).
+    await asegurarSlotsTapaCC(tx, tenantId, configPaso.id, tapas);
+  });
 }

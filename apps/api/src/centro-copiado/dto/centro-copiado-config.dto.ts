@@ -73,6 +73,21 @@ export class ActualizarCentroCopiadoConfigDto {
   @IsUUID()
   maquinaBnId?: string | null;
 
+  /** Anilladora para el "Anillado"; null = la única activa (o sin anillado). */
+  @IsOptional()
+  @IsUUID()
+  maquinaAnilladoraId?: string | null;
+
+  /** Materia prima de la tapa frontal (transparente); null = auto/heurística. */
+  @IsOptional()
+  @IsUUID()
+  tapaFrontalMateriaPrimaId?: string | null;
+
+  /** Materia prima de la contratapa (plástica de color); null = auto/heurística. */
+  @IsOptional()
+  @IsUUID()
+  tapaContratapaMateriaPrimaId?: string | null;
+
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })

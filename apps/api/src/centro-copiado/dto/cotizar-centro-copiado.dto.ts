@@ -73,6 +73,11 @@ export class DocumentoCentroCopiadoDto {
   @IsString({ each: true })
   terminaciones?: string[];
 
+  /** Tipo de anillo elegido (ESPIRAL_PLASTICO | WIRE_O) para el anillado. */
+  @IsOptional()
+  @IsString()
+  tipoAnillo?: string;
+
   @IsOptional()
   @IsString()
   grupoId?: string | null;
@@ -95,6 +100,11 @@ export class GrupoCentroCopiadoDto {
   @IsArray()
   @IsString({ each: true })
   terminaciones?: string[];
+
+  /** Tipo de anillo elegido (ESPIRAL_PLASTICO | WIRE_O) para el anillado. */
+  @IsOptional()
+  @IsString()
+  tipoAnillo?: string;
 }
 
 export class CotizarCentroCopiadoDto {

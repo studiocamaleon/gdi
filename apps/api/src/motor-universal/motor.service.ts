@@ -86,6 +86,7 @@ import {
   normalizarNivelCobertura,
   type NivelCobertura,
 } from '../productos-servicios/cobertura-toner';
+import { seleccionarMenorCapacidadQueCumpla } from './seleccion-capacidad';
 import {
   calcularPerimetroPiezasM,
   congelarMedidaVisible,
@@ -131,6 +132,7 @@ interface PasoExtraSlotJson {
   criterioMotorAuto?: string | null;
   criterioInputCampo?: string | null;
   criterioMaterialCampo?: string | null;
+  criterioFiltroCampo?: string | null;
   materialVarianteId?: string | null;
   candidatos?: Array<{
     materiaPrimaId: string;
@@ -3465,6 +3467,14 @@ export class MotorUniversalService {
         .filter((slot) => slot.tipo === 'CONSUMIBLE_MAQUINA')
         .map((slot) => slot.codigo),
     );
+    // Slots OPCIONALES (requerido:false en la familia): si el comercial no eligió
+    // material, el slot simplemente no consume — NO es un error. Ej.: la
+    // tapa/contratapa del anillado (que el Wire-O no lleva).
+    const slotsOpcionales = new Set(
+      (familia?.slotsRequeridos ?? [])
+        .filter((slot) => slot.requerido === false)
+        .map((slot) => slot.codigo),
+    );
 
     for (const slot of paso.slots) {
       if (automaticSlotCodes.has(slot.slotCodigo)) {
@@ -3477,7 +3487,10 @@ export class MotorUniversalService {
         paso,
       );
       if (!materialSlot) {
-        if (slot.modoSeleccion === 'COMERCIAL_ELIGE') {
+        if (
+          slot.modoSeleccion === 'COMERCIAL_ELIGE' &&
+          !slotsOpcionales.has(slot.slotCodigo)
+        ) {
           errores.push(
             this.errorMaterialComercialRequerido(slot, paso, jobContext),
           );
@@ -3606,7 +3619,11 @@ export class MotorUniversalService {
         paso.multiplicadoresActivos.length > 0
       ) {
         for (const codigoMult of paso.multiplicadoresActivos) {
-          if (codigoMult === 'caras') {
+          // `caras` se maneja aparte (aplicaMultiCaras por slot). `hojasPorLibro`
+          // es un multiplicador de TIEMPO (la anilladora perfora hoja por hoja),
+          // NO de material: el anillo se consume 1 por LIBRO, no por hoja. Sin
+          // esta excepción el anillo se sobre-consumiría ×hojasPorLibro.
+          if (codigoMult === 'caras' || codigoMult === 'hojasPorLibro') {
             continue;
           }
           const valor = (jobContext as Record<string, unknown>)[codigoMult];
@@ -4210,7 +4227,13 @@ export class MotorUniversalService {
       materialPreliminar,
     );
     const caras = this.resolverCarasConsumible(paso, jobContext);
-    if (!Number.isFinite(areaImpresaM2) || areaImpresaM2 <= 0) {
+    // Área CERO = trabajo cero (ej. un ítem que sólo lleva un paso opcional y no
+    // imprime): 0 unidades ⇒ 0 consumibles, no es un error. Sólo un área inválida
+    // (NaN o negativa) sí lo es.
+    if (areaImpresaM2 === 0) {
+      return [];
+    }
+    if (!Number.isFinite(areaImpresaM2) || areaImpresaM2 < 0) {
       errores.push({
         codigo: 'consumibles_maquina_area_invalida',
         severidad: 'ERROR',
@@ -4584,9 +4607,27 @@ export class MotorUniversalService {
           this.cargarVariantePorId(tenantId, variantId),
         ),
       );
-      const validos = variantes.filter(
+      const todos = variantes.filter(
         (v): v is NonNullable<typeof v> => v != null,
       );
+      // Filtro previo: si el slot declara `criterioFiltroCampo` y el JobContext
+      // trae ese campo, sólo entran las variantes cuyo atributo homónimo coincide
+      // (ej. anillo: tipoAnillo = 'ESPIRAL_PLASTICO' vs 'WIRE_O'). Así el Ø auto
+      // se elige DENTRO del tipo pedido. Sin señal en el JobContext → no filtra.
+      const filtroCampo = slot.criterioFiltroCampo ?? '';
+      const filtroValor = filtroCampo
+        ? (jobContext as Record<string, unknown>)[filtroCampo]
+        : undefined;
+      const validos =
+        filtroCampo && filtroValor != null && filtroValor !== ''
+          ? todos.filter((v) => {
+              const attrs = (v.atributosVarianteJson ?? {}) as Record<
+                string,
+                unknown
+              >;
+              return String(attrs[filtroCampo] ?? '') === String(filtroValor);
+            })
+          : todos;
       if (validos.length === 0) return null;
 
       const criterio = slot.criterioMotorAuto ?? 'MENOR_COSTO';
@@ -4638,24 +4679,19 @@ export class MotorUniversalService {
       }
 
       if (criterio === 'MENOR_CAPACIDAD_QUE_CUMPLA') {
-        // Necesita criterioInputCampo del JobContext y criterioMaterialCampo de cada variante
+        // Necesita criterioInputCampo del JobContext y criterioMaterialCampo de cada
+        // variante. El campo de capacidad se lee de atributosVarianteJson (ver
+        // seleccion-capacidad.ts): sin esto cap=0 y el motor no auto-selecciona.
         const inputValor = Number(
           (jobContext as Record<string, unknown>)[
             slot.criterioInputCampo ?? ''
           ] ?? 0,
         );
-        const validosOrdenados = validos
-          .map((v) => ({
-            v,
-            cap: Number(
-              (v as Record<string, unknown>)[
-                slot.criterioMaterialCampo ?? ''
-              ] ?? 0,
-            ),
-          }))
-          .filter((x) => x.cap >= inputValor)
-          .sort((a, b) => a.cap - b.cap);
-        return validosOrdenados[0]?.v ?? null;
+        return seleccionarMenorCapacidadQueCumpla(
+          validos,
+          slot.criterioMaterialCampo ?? '',
+          inputValor,
+        );
       }
     }
 
@@ -6737,6 +6773,7 @@ export class MotorUniversalService {
           criterioMotorAuto: s.criterioMotorAuto,
           criterioInputCampo: s.criterioInputCampo,
           criterioMaterialCampo: s.criterioMaterialCampo,
+          criterioFiltroCampo: s.criterioFiltroCampo,
           materialVarianteId: s.materialVarianteId,
           candidatos: s.candidatos.map((c) => ({
             id: c.id,
@@ -7417,6 +7454,7 @@ export class MotorUniversalService {
           criterioMotorAuto: s.criterioMotorAuto ?? null,
           criterioInputCampo: s.criterioInputCampo ?? null,
           criterioMaterialCampo: s.criterioMaterialCampo ?? null,
+          criterioFiltroCampo: s.criterioFiltroCampo ?? null,
           materialVarianteId: s.materialVarianteId ?? null,
           candidatos: await Promise.all(
             (s.candidatos ?? []).map(async (c, ci) => {

@@ -45,12 +45,24 @@ beforeAll(async () => {
     where: { tenantId_codigo: { tenantId, codigo: CC_PRODUCTO_CODIGO } },
     include: {
       rutasAlternativas: {
-        include: { configPasos: { include: { maquinasCandidatas: true } } },
+        include: {
+          configPasos: {
+            include: {
+              maquinasCandidatas: true,
+              rutaPaso: { select: { familiaCodigo: true } },
+            },
+          },
+        },
       },
     },
   });
   productoId = producto.id;
-  const cp = producto.rutasAlternativas[0].configPasos[0];
+  // Tomar SIEMPRE el paso de impresión (la ruta compartida puede tener el 2º
+  // paso opcional de anillado si un spec de anillado corre en paralelo).
+  const cp =
+    producto.rutasAlternativas[0].configPasos.find(
+      (c) => c.rutaPaso?.familiaCodigo === 'impresion_por_hoja',
+    ) ?? producto.rutasAlternativas[0].configPasos[0];
   configPasoId = cp.id;
   const pref =
     cp.maquinasCandidatas.find((c) => c.esPreferida) ?? cp.maquinasCandidatas[0];

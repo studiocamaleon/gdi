@@ -753,6 +753,34 @@ const presets = [
     variantes: brocheVariants(),
   },
   {
+    // Biblioteca de espirales plásticos (paso 4:1) para el paso encuadernado_anillado
+    // y el "Anillado" del centro de copiado. La capacidad (hojas a 80g) sale de la
+    // tabla de la industria y es EDITABLE por el tenant (varía por fabricante/gramaje).
+    // Ver docs/anilladora-encuadernacion-espiral-diseno.md.
+    key: 'ESPIRAL_PLASTICO',
+    nombreCanonico: 'Espiral plástico (anillado)',
+    descripcionCorta:
+      'Espirales de PVC paso 4:1 para encuadernación por anillo. La capacidad (hojas a 80g) es editable por variante.',
+    iconKind: 'plastic',
+    aliasDisponibles: [
+      'Espiral',
+      'Espiral plástico',
+      'Coil',
+      'PVC coil',
+      'Anillado plástico',
+    ],
+    usosRecomendados: ['anillado', 'encuadernacion', 'centro_copiado'],
+    procesosCompatibles: ['encuadernado_anillado'],
+    advertencias: [
+      'La capacidad en hojas es a 80g; con papel más pesado baja ~15-20%.',
+    ],
+    familia: FamiliaMateriaPrima.TERMINACION_EDITORIAL,
+    subfamilia: SubfamiliaMateriaPrima.ANILLADO_ENCUADERNACION,
+    tipoTecnico: 'anillado_encuadernacion',
+    templateId: 'anillado_encuadernacion_v1',
+    variantes: espiralPlasticoVariants(),
+  },
+  {
     key: 'VINILO_ADHESIVO_IMPRIMIBLE_BLANCO',
     nombreCanonico: 'Vinilo adhesivo imprimible blanco',
     descripcionCorta:
@@ -3858,6 +3886,50 @@ function brocheVariants() {
       moneda: 'ARS',
     };
   });
+}
+
+// Espiral plástico (PVC coil) paso 4:1: Ø → capacidad en hojas a 80g (tabla de la
+// industria). Cada variante es un diámetro con su capacidadMaxHojas EDITABLE por el
+// tenant. El motor elige el menor Ø que cubre las hojas del libro
+// (MENOR_CAPACIDAD_QUE_CUMPLA). v1: sólo negro, sólo espiral plástico.
+function espiralPlasticoVariants() {
+  // [diámetroMm, capacidadMaxHojas @80g]
+  const tabla = [
+    [6, 35],
+    [8, 60],
+    [10, 80],
+    [12, 100],
+    [14, 120],
+    [16, 140],
+    [18, 160],
+    [20, 180],
+    [25, 230],
+    [32, 290],
+    [40, 350],
+    [50, 440],
+  ];
+  const color = 'Negro';
+  return tabla.map(([diametroMm, capacidadMaxHojas]) => ({
+    skuSugerido: `ESPIRAL-PVC-${diametroMm}MM-NEGRO`,
+    nombreVarianteSugerido: `Espiral plástico ${diametroMm}mm · negro (${capacidadMaxHojas} hojas)`,
+    formato: `${diametroMm}mm`,
+    espesor: null,
+    color,
+    // Los diámetros más usados en un centro de copiado.
+    recomendada: [10, 12, 16].includes(diametroMm),
+    atributosVarianteJson: {
+      tipoAnillo: 'ESPIRAL_PLASTICO',
+      diametro: diametroMm,
+      capacidadMaxHojas,
+      color,
+      material: 'PVC',
+      pasoPerforacion: '4:1',
+    },
+    unidadStock: UnidadMateriaPrima.UNIDAD,
+    unidadCompra: UnidadMateriaPrima.CAJA,
+    precioReferencia: null,
+    moneda: 'ARS',
+  }));
 }
 
 // Ganchos metálicos de emblocado: distintas medidas, caja x 1000.

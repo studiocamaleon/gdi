@@ -77,7 +77,7 @@ it('el tomo también omite el setup (en cada segmento cotizado)', async () => {
         { ...doc('T1', 6), grupoId: 'T' },
         { ...doc('T2', 4), grupoId: 'T' },
       ],
-      grupos: [{ id: 'T', juegos: 2 }],
+      grupos: [{ id: 'T', juegos: 2, terminaciones: [] }],
     },
     '2026-03',
   );

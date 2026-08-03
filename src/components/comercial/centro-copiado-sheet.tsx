@@ -49,6 +49,8 @@ type DocRow = TamanoFila & {
   copias: number;
   /** Terminaciones (pasos opcionales) del documento suelto. */
   terminaciones: string[];
+  /** Tipo de anillo elegido (cuando la terminación Anillado está activa). */
+  tipoAnillo: string;
   /** Archivo original subido (para persistir en R2 al guardar la orden). */
   file: File | null;
   grupoId: string | null;
@@ -62,8 +64,13 @@ type Defaults = TamanoFila & {
   copias: number;
 };
 
-/** Estado de un tomo (grupo anillado): juegos, nombre y sus terminaciones. */
-type GrupoState = { juegos: number; nombre: string; terminaciones: string[] };
+/** Estado de un tomo (grupo anillado): juegos, nombre, terminaciones y tipo de anillo. */
+type GrupoState = {
+  juegos: number;
+  nombre: string;
+  terminaciones: string[];
+  tipoAnillo: string;
+};
 
 interface Props {
   open: boolean;
@@ -100,11 +107,16 @@ type MetaCarga = {
   faz?: FazDoc;
   cobertura?: string | null;
   terminaciones?: string[];
+  /** Tipo de anillo elegido (para rehidratar la elección al editar). */
+  tipoAnillo?: string | null;
   // Tomo compuesto:
   esTomo?: boolean;
   segmentos?: SegMeta[];
   juegos?: number;
   tomoNombre?: string;
+  // Renglón de anillado (derivado de la terminación, no es un documento): al
+  // rehidratar se saltea y se vuelve a derivar de las terminaciones.
+  esAnillado?: boolean;
 };
 
 let seqRow = 0;
@@ -277,6 +289,10 @@ export default function CentroCopiadoSheet({
   >({});
   // Terminaciones (pasos opcionales) disponibles; las trae el backend.
   const [terminacionesDisp, setTerminacionesDisp] = React.useState<string[]>([]);
+  // Tipos de anillo instalados (para el selector cuando hay Anillado).
+  const [tiposAnilloDisp, setTiposAnilloDisp] = React.useState<
+    { value: string; label: string }[]
+  >([]);
   const [sel, setSel] = React.useState<Set<string>>(new Set());
   const [preview, setPreview] = React.useState<CotizarCentroCopiadoResponse | null>(null);
   const [previewError, setPreviewError] = React.useState<string | null>(null);
@@ -295,6 +311,7 @@ export default function CentroCopiadoSheet({
         if (!vivo) return;
         setPapeles(o.papeles);
         setTerminacionesDisp(o.terminaciones ?? []);
+        setTiposAnilloDisp(o.tiposAnillo ?? []);
         setTamanosOfrecidos(o.tamanosOfrecidos ?? null);
         if (o.papelDefaultId) {
           const tipo = o.papeles.find((p) => p.materiaPrimaId === o.papelDefaultId);
@@ -356,12 +373,15 @@ export default function CentroCopiadoSheet({
       const meta = (it.jobContext as { _centroCopiado?: MetaCarga } | undefined)
         ?._centroCopiado;
       if (!meta) continue;
+      // El renglón de anillado se re-deriva de la terminación del doc/tomo.
+      if (meta.esAnillado) continue;
       if (meta.esTomo && meta.segmentos?.length) {
         const gid = `g${g++}-${Date.now().toString(36)}`;
         nuevosGrupos[gid] = {
           juegos: meta.juegos ?? 1,
           nombre: meta.tomoNombre ?? "",
           terminaciones: meta.terminaciones ?? ["Anillado"],
+          tipoAnillo: meta.tipoAnillo ?? "",
         };
         for (const seg of meta.segmentos) {
           const tn = seg.tamano ?? "A4";
@@ -381,6 +401,7 @@ export default function CentroCopiadoSheet({
             cobertura: seg.cobertura ?? "alta",
             copias: meta.juegos ?? 1,
             terminaciones: [], // las terminaciones viven en el tomo, no en el segmento
+            tipoAnillo: "",
             file: null, // al editar no se re-sube el archivo original (ya está en R2)
             grupoId: gid,
           });
@@ -403,6 +424,7 @@ export default function CentroCopiadoSheet({
           cobertura: meta.cobertura ?? "alta",
           copias: Number(meta.copias) || 1,
           terminaciones: meta.terminaciones ?? [],
+          tipoAnillo: meta.tipoAnillo ?? "",
           file: null, // al editar no se re-sube el archivo original (ya está en R2)
           grupoId: null,
         });
@@ -463,6 +485,7 @@ export default function CentroCopiadoSheet({
           faz: d.faz,
           cobertura: d.cobertura,
           terminaciones: d.terminaciones,
+          tipoAnillo: d.tipoAnillo || undefined,
           grupoId: d.grupoId,
         })),
         grupos: Object.entries(grupos).map(([id, g]) => ({
@@ -470,6 +493,7 @@ export default function CentroCopiadoSheet({
           juegos: g.juegos,
           nombre: g.nombre.trim() || undefined,
           terminaciones: g.terminaciones,
+          tipoAnillo: g.tipoAnillo || undefined,
         })),
       })
         .then((r) => {
@@ -514,6 +538,7 @@ export default function CentroCopiadoSheet({
           cobertura: "alta",
           copias: defaults.copias,
           terminaciones: [],
+          tipoAnillo: "",
           file: n.file ?? null,
           grupoId: null,
         })),
@@ -618,11 +643,16 @@ export default function CentroCopiadoSheet({
     const termIni = terminacionesDisp.includes("Anillado") ? ["Anillado"] : [];
     setGrupos((prev) => ({
       ...prev,
-      [gid]: { juegos: 1, nombre: "", terminaciones: termIni },
+      [gid]: {
+        juegos: 1,
+        nombre: "",
+        terminaciones: termIni,
+        tipoAnillo: tiposAnilloDisp[0]?.value ?? "",
+      },
     }));
     setDocs((prev) => prev.map((d) => (sel.has(d.id) ? { ...d, grupoId: gid } : d)));
     setSel(new Set());
-  }, [sel, terminacionesDisp]);
+  }, [sel, terminacionesDisp, tiposAnilloDisp]);
 
   const desagrupar = (gid: string) => {
     setDocs((prev) => prev.map((d) => (d.grupoId === gid ? { ...d, grupoId: null } : d)));
@@ -641,10 +671,16 @@ export default function CentroCopiadoSheet({
       return n;
     });
 
+  // Etiqueta legible del tipo de anillo (de las opciones del backend).
+  const labelTipoAnillo = (v: string) =>
+    tiposAnilloDisp.find((t) => t.value === v)?.label ??
+    (v ? v.replaceAll("_", " ") : "Anillado");
+
   const previewDoc = (id: string) => preview?.documentos.find((d) => d.id === id);
   const subtotalDoc = (id: string) => previewDoc(id)?.subtotal ?? null;
   const errorDoc = (id: string) => previewDoc(id)?.error ?? null;
-  // Precio (neto) por hoja física: le sirve al comercial para tenerlo claro.
+  // Precio (neto) por hoja física: le sirve al comercial para tenerlo claro. El
+  // subtotal del doc es impresión sola (el anillado es una línea aparte).
   const precioHojaDoc = (id: string) => {
     const p = previewDoc(id);
     if (!p || p.error || !p.hojas) return null;
@@ -680,6 +716,7 @@ export default function CentroCopiadoSheet({
           faz: d.faz,
           cobertura: d.cobertura,
           terminaciones: d.terminaciones,
+          tipoAnillo: d.tipoAnillo || undefined,
           grupoId: d.grupoId,
         })),
         grupos: Object.entries(grupos).map(([id, g]) => ({
@@ -687,6 +724,7 @@ export default function CentroCopiadoSheet({
           juegos: g.juegos,
           nombre: g.nombre.trim() || undefined,
           terminaciones: g.terminaciones,
+          tipoAnillo: g.tipoAnillo || undefined,
         })),
       });
       const conError = r.items.filter((i) => i.error);
@@ -924,7 +962,40 @@ export default function CentroCopiadoSheet({
               />
             </label>
           )}
+          {/* Tipo de anillo: sólo si hay más de uno instalado y el doc anilla. */}
+          {!enGrupo &&
+            tiposAnilloDisp.length > 1 &&
+            d.terminaciones.includes("Anillado") && (
+              <label className={s.ctrl}>
+                <span>Tipo de anillo</span>
+                <SysSelect
+                  value={d.tipoAnillo || tiposAnilloDisp[0].value}
+                  onChange={(v) => editar(d.id, { tipoAnillo: v })}
+                  options={tiposAnilloDisp}
+                  ariaLabel="Tipo de anillo"
+                  triggerClassName="w-[150px]"
+                />
+              </label>
+            )}
         </div>
+        {!enGrupo &&
+          previewDoc(d.id)?.anillado &&
+          (previewDoc(d.id)!.anillado!.error ? (
+            <div className={s.tomoAnilladoWarn}>
+              ⚠ {previewDoc(d.id)!.anillado!.error} — se cotiza sin anillado.
+            </div>
+          ) : (
+            <div className={s.tomoAnillado}>
+              <span className={s.tomoAnilladoLbl}>
+                Anillado ·{" "}
+                {labelTipoAnillo(previewDoc(d.id)!.anillado!.tipoAnillo)}
+                {previewDoc(d.id)!.anillado!.diametroMm
+                  ? ` Ø${previewDoc(d.id)!.anillado!.diametroMm} mm`
+                  : ""}
+              </span>
+              <span className={s.tomoAnilladoPrecio}>incluido en el precio</span>
+            </div>
+          ))}
       </div>
     );
   };
@@ -1205,6 +1276,27 @@ export default function CentroCopiadoSheet({
                             triggerClassName="w-[160px]"
                           />
                         )}
+                        {/* Tipo de anillo del tomo: sólo si hay más de uno y anilla. */}
+                        {tiposAnilloDisp.length > 1 &&
+                          (grupos[gid]?.terminaciones ?? []).includes(
+                            "Anillado",
+                          ) && (
+                            <SysSelect
+                              value={
+                                grupos[gid]?.tipoAnillo ||
+                                tiposAnilloDisp[0].value
+                              }
+                              onChange={(v) =>
+                                setGrupos((prev) => ({
+                                  ...prev,
+                                  [gid]: { ...prev[gid], tipoAnillo: v },
+                                }))
+                              }
+                              options={tiposAnilloDisp}
+                              ariaLabel="Tipo de anillo del tomo"
+                              triggerClassName="w-[150px]"
+                            />
+                          )}
                         <span className={s.tomoMeta}>
                           {gprev ? `${gprev.hojasPorLibro} hojas/juego` : ""}
                         </span>
@@ -1218,6 +1310,26 @@ export default function CentroCopiadoSheet({
                           ✕
                         </button>
                       </div>
+                      {gprev?.anillado &&
+                        (gprev.anillado.error ? (
+                          <div className={s.tomoAnilladoWarn}>
+                            ⚠ {gprev.anillado.error} — el tomo se cotiza sin
+                            anillado.
+                          </div>
+                        ) : (
+                          <div className={s.tomoAnillado}>
+                            <span className={s.tomoAnilladoLbl}>
+                              Anillado ·{" "}
+                              {labelTipoAnillo(gprev.anillado.tipoAnillo)}
+                              {gprev.anillado.diametroMm
+                                ? ` Ø${gprev.anillado.diametroMm} mm`
+                                : ""}
+                            </span>
+                            <span className={s.tomoAnilladoPrecio}>
+                              incluido en el precio
+                            </span>
+                          </div>
+                        ))}
                       {miembros.map((d) => renderCard(d, idx++, true))}
                     </div>
                   );

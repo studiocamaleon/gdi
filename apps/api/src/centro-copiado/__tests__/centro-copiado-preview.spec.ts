@@ -57,7 +57,10 @@ it('cotiza sueltos + un tomo: aritmética, agrupación y totales', async () => {
       { id: 'C', paginas: 10, copias: 1, tamano: 'A4', tamanoAnchoMm: 210, tamanoAltoMm: 297, papelMateriaPrimaId: papel, color: 'BN' as const, faz: 2 as const, grupoId: 'T' },
       { id: 'D', paginas: 4, copias: 1, tamano: 'A4', tamanoAnchoMm: 210, tamanoAltoMm: 297, papelMateriaPrimaId: papel, color: 'BN' as const, faz: 1 as const, grupoId: 'T' },
     ],
-    grupos: [{ id: 'T', juegos: 2 }],
+    // Sin anillado: este spec verifica la ARITMÉTICA de impresión. Si el tomo
+    // anillara (default) y hay anilladora cargada en paralelo, el subtotal del
+    // tomo sumaría el anillado y no cerraría contra C+D.
+    grupos: [{ id: 'T', juegos: 2, terminaciones: [] }],
   };
 
   const r = await service.cotizar(tenantId, dto, '2026-03');
