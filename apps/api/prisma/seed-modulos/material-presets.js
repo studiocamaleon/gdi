@@ -753,6 +753,103 @@ const presets = [
     variantes: brocheVariants(),
   },
   {
+    // Biblioteca de espirales plásticos (paso 4:1) para el paso encuadernado_anillado
+    // y el "Anillado" del centro de copiado. La capacidad (hojas a 80g) sale de la
+    // tabla de la industria y es EDITABLE por el tenant (varía por fabricante/gramaje).
+    // Ver docs/anilladora-encuadernacion-espiral-diseno.md.
+    key: 'ESPIRAL_PLASTICO',
+    nombreCanonico: 'Espiral plástico (anillado)',
+    descripcionCorta:
+      'Espirales de PVC paso 4:1 para encuadernación por anillo. La capacidad (hojas a 80g) es editable por variante.',
+    iconKind: 'plastic',
+    aliasDisponibles: [
+      'Espiral',
+      'Espiral plástico',
+      'Coil',
+      'PVC coil',
+      'Anillado plástico',
+    ],
+    usosRecomendados: ['anillado', 'encuadernacion', 'centro_copiado'],
+    procesosCompatibles: ['encuadernado_anillado'],
+    advertencias: [
+      'La capacidad en hojas es a 80g; con papel más pesado baja ~15-20%.',
+    ],
+    familia: FamiliaMateriaPrima.TERMINACION_EDITORIAL,
+    subfamilia: SubfamiliaMateriaPrima.ANILLADO_ENCUADERNACION,
+    tipoTecnico: 'anillado_encuadernacion',
+    templateId: 'anillado_encuadernacion_v1',
+    variantes: espiralPlasticoVariants(),
+  },
+  {
+    key: 'ESPIRAL_WIRE_O',
+    nombreCanonico: 'Wire-O (anillo metálico doble)',
+    descripcionCorta:
+      'Anillo metálico doble para encuadernación premium (paso 3:1, y 2:1 en los Ø grandes). La capacidad (hojas a 80g) es editable por variante.',
+    iconKind: 'objeto',
+    aliasDisponibles: [
+      'Wire-O',
+      'Doble anillo',
+      'Anillo metálico',
+      'Doble O',
+      'Doble bucle',
+    ],
+    usosRecomendados: ['anillado', 'encuadernacion', 'centro_copiado'],
+    procesosCompatibles: ['encuadernado_anillado'],
+    advertencias: [
+      'La capacidad en hojas es a 80g; con papel más pesado baja ~15-20%.',
+      'El Wire-O no lleva tapa/contratapa plástica (encuadernación premium).',
+    ],
+    familia: FamiliaMateriaPrima.TERMINACION_EDITORIAL,
+    subfamilia: SubfamiliaMateriaPrima.ANILLADO_ENCUADERNACION,
+    tipoTecnico: 'anillado_encuadernacion',
+    templateId: 'anillado_encuadernacion_v1',
+    variantes: wireOVariants(),
+  },
+  {
+    key: 'TAPA_ENCUADERNACION_TRANSPARENTE',
+    nombreCanonico: 'Tapa transparente (encuadernación)',
+    descripcionCorta:
+      'Tapa frontal de polipropileno transparente para anillado. Viene en A4, Oficio y A3 (se elige por el tamaño del documento).',
+    iconKind: 'transparent',
+    aliasDisponibles: [
+      'Tapa transparente',
+      'Portada transparente',
+      'Tapa PVC',
+      'Acetato',
+      'Tapa cristal',
+    ],
+    usosRecomendados: ['anillado', 'encuadernacion', 'centro_copiado'],
+    procesosCompatibles: ['encuadernado_anillado'],
+    advertencias: [],
+    familia: FamiliaMateriaPrima.TERMINACION_EDITORIAL,
+    subfamilia: SubfamiliaMateriaPrima.TAPA_ENCUADERNACION,
+    tipoTecnico: 'tapa_encuadernacion',
+    templateId: 'tapa_encuadernacion_v1',
+    variantes: tapaEncuadernacionVariants('transparente', 'Transparente'),
+  },
+  {
+    key: 'CONTRATAPA_ENCUADERNACION_COLOR',
+    nombreCanonico: 'Contratapa opaca de color (encuadernación)',
+    descripcionCorta:
+      'Contratapa de polipropileno opaco (negro) para anillado. Viene en A4, Oficio y A3. Duplicá el material para ofrecer otros colores.',
+    iconKind: 'plastic',
+    aliasDisponibles: [
+      'Contratapa',
+      'Contratapa negra',
+      'Tapa posterior',
+      'Respaldo',
+      'Contraportada',
+    ],
+    usosRecomendados: ['anillado', 'encuadernacion', 'centro_copiado'],
+    procesosCompatibles: ['encuadernado_anillado'],
+    advertencias: [],
+    familia: FamiliaMateriaPrima.TERMINACION_EDITORIAL,
+    subfamilia: SubfamiliaMateriaPrima.TAPA_ENCUADERNACION,
+    tipoTecnico: 'tapa_encuadernacion',
+    templateId: 'tapa_encuadernacion_v1',
+    variantes: tapaEncuadernacionVariants('negro', 'Negro'),
+  },
+  {
     key: 'VINILO_ADHESIVO_IMPRIMIBLE_BLANCO',
     nombreCanonico: 'Vinilo adhesivo imprimible blanco',
     descripcionCorta:
@@ -3858,6 +3955,123 @@ function brocheVariants() {
       moneda: 'ARS',
     };
   });
+}
+
+// Espiral plástico (PVC coil) paso 4:1: Ø → capacidad en hojas a 80g (tabla de la
+// industria). Cada variante es un diámetro con su capacidadMaxHojas EDITABLE por el
+// tenant. El motor elige el menor Ø que cubre las hojas del libro
+// (MENOR_CAPACIDAD_QUE_CUMPLA). v1: sólo negro, sólo espiral plástico.
+function espiralPlasticoVariants() {
+  // [diámetroMm, capacidadMaxHojas @80g]
+  const tabla = [
+    [6, 35],
+    [8, 60],
+    [10, 80],
+    [12, 100],
+    [14, 120],
+    [16, 140],
+    [18, 160],
+    [20, 180],
+    [25, 230],
+    [32, 290],
+    [40, 350],
+    [50, 440],
+  ];
+  const color = 'Negro';
+  return tabla.map(([diametroMm, capacidadMaxHojas]) => ({
+    skuSugerido: `ESPIRAL-PVC-${diametroMm}MM-NEGRO`,
+    nombreVarianteSugerido: `Espiral plástico ${diametroMm}mm · negro (${capacidadMaxHojas} hojas)`,
+    formato: `${diametroMm}mm`,
+    espesor: null,
+    color,
+    // Los diámetros más usados en un centro de copiado.
+    recomendada: [10, 12, 16].includes(diametroMm),
+    atributosVarianteJson: {
+      tipoAnillo: 'ESPIRAL_PLASTICO',
+      diametro: diametroMm,
+      capacidadMaxHojas,
+      color,
+      material: 'PVC',
+      pasoPerforacion: '4:1',
+    },
+    unidadStock: UnidadMateriaPrima.UNIDAD,
+    unidadCompra: UnidadMateriaPrima.CAJA,
+    precioReferencia: null,
+    moneda: 'ARS',
+  }));
+}
+
+// Wire-O (anillo metálico doble). Capacidades investigadas a 80g: paso 3:1 en
+// los Ø chicos/medios, 2:1 en los grandes.
+function wireOVariants() {
+  // [diámetroMm, capacidadMaxHojas @80g, paso]
+  const tabla = [
+    [6.9, 45, '3:1'],
+    [7.9, 60, '3:1'],
+    [9.5, 75, '3:1'],
+    [11, 90, '3:1'],
+    [12.7, 105, '3:1'],
+    [14.3, 120, '3:1'],
+    [15.9, 135, '3:1'],
+    [19, 165, '2:1'],
+    [22, 190, '2:1'],
+    [25.4, 220, '2:1'],
+  ];
+  const color = 'Negro';
+  return tabla.map(([diametroMm, capacidadMaxHojas, pasoPerforacion]) => ({
+    skuSugerido: `WIREO-${String(diametroMm).replace('.', 'p')}MM-NEGRO`,
+    nombreVarianteSugerido: `Wire-O ${diametroMm}mm · negro (${capacidadMaxHojas} hojas)`,
+    formato: `${diametroMm}mm`,
+    espesor: null,
+    color,
+    // Los diámetros más usados en un centro de copiado.
+    recomendada: [9.5, 12.7, 15.9].includes(diametroMm),
+    atributosVarianteJson: {
+      tipoAnillo: 'WIRE_O',
+      diametro: diametroMm,
+      capacidadMaxHojas,
+      color,
+      material: 'metal',
+      pasoPerforacion,
+    },
+    unidadStock: UnidadMateriaPrima.UNIDAD,
+    unidadCompra: UnidadMateriaPrima.CAJA,
+    precioReferencia: null,
+    moneda: 'ARS',
+  }));
+}
+
+// Tapa/contratapa de anillado (polipropileno). Sólo A4/Oficio/A3; se elige por
+// el tamaño del documento (la menor que lo cubre). `colorBase` distingue el rol:
+// transparente = tapa frontal, opaco de color = contratapa.
+function tapaEncuadernacionVariants(colorBase, colorLabel) {
+  // [nombre, anchoMm, altoMm]
+  const tamanos = [
+    ['A4', 210, 297],
+    ['Oficio', 216, 330],
+    ['A3', 297, 420],
+  ];
+  return tamanos.map(([nombre, anchoMm, altoMm]) => ({
+    skuSugerido: `TAPA-${colorLabel.toUpperCase()}-${nombre.toUpperCase()}`,
+    nombreVarianteSugerido: `${nombre} · tapa ${colorLabel.toLowerCase()}`,
+    formato: nombre,
+    espesor: null,
+    color: colorLabel,
+    recomendada: nombre === 'A4',
+    atributosVarianteJson: {
+      formatoComercial: nombre,
+      ancho: anchoMm,
+      alto: altoMm,
+      anchoMm,
+      altoMm,
+      material: 'polipropileno',
+      colorBase,
+    },
+    unidadStock: UnidadMateriaPrima.UNIDAD,
+    unidadCompra: UnidadMateriaPrima.CAJA,
+    precioReferencia: null,
+    moneda: 'ARS',
+  }));
 }
 
 // Ganchos metálicos de emblocado: distintas medidas, caja x 1000.

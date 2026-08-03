@@ -60,7 +60,13 @@ export function sumCargosPaso(paso: PasoCosteo) {
 }
 
 export function getVisibleCostSteps(pasos: PasoCosteo[]) {
-  return pasos.filter((paso) => paso.activado || paso.costoTotal > 0);
+  return pasos.filter((paso) => {
+    if (paso.costoTotal > 0) return true;
+    // Un paso activado pero SIN costo NI tiempo es andamiaje/ruido: p.ej. la
+    // impresión en 0 del renglón de anillado, que sólo existe para que el motor
+    // pueda cotizar el paso opcional. No aporta al costo → se oculta del desglose.
+    return paso.activado && (paso.tiempo?.totalMin ?? 0) > 0;
+  });
 }
 
 /** Un renglón de la cascada del precio. */

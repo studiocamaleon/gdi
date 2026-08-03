@@ -1,0 +1,50 @@
+/* Agrupación visual de los renglones de un tomo (centro de copiado) en la ficha. */
+.tomoHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--signal);
+  background: var(--signal-bg);
+  border: 1px solid var(--signal);
+  border-bottom: none;
+  border-radius: var(--r-2) var(--r-2) 0 0;
+}
+.tomoHead .cuenta {
+  color: var(--muted-text);
+  font-weight: 400;
+}
+.enTomo {
+  border-left: 2px solid var(--signal);
+}
+/* Referencia visual del renglón (archivo/tomo) junto al nombre del producto. */
+.variante {
+  color: var(--muted-text);
+  font-weight: 400;
+  margin-left: 6px;
+  font-size: 0.92em;
+}
+/* Ojito "ver precios por hoja" junto al nombre del producto (centro de copiado). */
+.verPrecios {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-left: 8px;
+  border-radius: var(--r-1);
+  color: var(--muted-text-2);
+  cursor: pointer;
+  vertical-align: middle;
+}
+.verPrecios:hover {
+  color: var(--signal);
+  background: var(--signal-bg);
+}
+.verPrecios svg {
+  width: 15px;
+  height: 15px;
+}

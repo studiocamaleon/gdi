@@ -21,7 +21,8 @@ export class RutasProduccionService {
 
   async listarRutas(tenantId: string) {
     const rutas = await this.prisma.ruta.findMany({
-      where: { tenantId, activo: true },
+      // Las rutas de sistema (plantilla del centro de copiado) no se listan.
+      where: { tenantId, activo: true, sistemaCodigo: null },
       orderBy: { nombre: 'asc' },
       include: {
         _count: { select: { productosAlternativas: true } },
@@ -197,6 +198,11 @@ export class RutasProduccionService {
       },
     });
     if (!existente) throw new NotFoundException(`Ruta ${id} no encontrada`);
+    if (existente.sistemaCodigo) {
+      throw new BadRequestException(
+        'Esta ruta la gestiona un módulo del sistema y no se edita desde acá.',
+      );
+    }
 
     if (dto.pasos) {
       this.familias.validarFamiliasDePasos(dto.pasos);
@@ -388,6 +394,11 @@ export class RutasProduccionService {
       include: { productosAlternativas: { take: 1 } },
     });
     if (!existente) throw new NotFoundException(`Ruta ${id} no encontrada`);
+    if (existente.sistemaCodigo) {
+      throw new BadRequestException(
+        'Esta ruta la gestiona un módulo del sistema y no se borra desde acá.',
+      );
+    }
 
     if (existente.productosAlternativas.length > 0) {
       throw new BadRequestException(

@@ -81,6 +81,13 @@ export const SECCIONES_CONFIG: SeccionConfig[] = [
     permiso: "costos.ver",
   },
   {
+    key: "centro-copiado",
+    href: "/configuracion/centro-copiado",
+    label: "Centro de copiado",
+    detalle: "Papeles, tamaños y terminaciones que ofrece el TPV",
+    permiso: "costos.gestionar",
+  },
+  {
     key: "almacenamiento",
     href: "/configuracion/almacenamiento",
     label: "Almacenamiento",

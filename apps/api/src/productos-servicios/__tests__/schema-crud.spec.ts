@@ -179,7 +179,9 @@ describe('Schema CRUD — Modelo Universal V2', () => {
     it('hay 5 rutas activas', async () => {
       if (!tenantId) return;
       const count = await prisma.ruta.count({
-        where: { tenantId, activo: true },
+        // Las rutas de sistema (plantilla del centro de copiado) no son del
+        // catálogo del usuario; no cuentan acá.
+        where: { tenantId, activo: true, sistemaCodigo: null },
       });
       expect(count).toBe(5);
     });

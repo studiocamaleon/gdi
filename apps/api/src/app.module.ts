@@ -39,6 +39,7 @@ import { ArchivosModule } from './archivos/archivos.module';
 import { IntegracionesModule } from './integraciones/integraciones.module';
 import { CobroModule } from './cobro/cobro.module';
 import { SuscripcionesModule } from './suscripciones/suscripciones.module';
+import { CentroCopiadoModule } from './centro-copiado/centro-copiado.module';
 
 @Module({
   imports: [
@@ -103,6 +104,7 @@ import { SuscripcionesModule } from './suscripciones/suscripciones.module';
     EtaModule,
     ArchivosModule,
     IntegracionesModule,
+    CentroCopiadoModule,
   ],
   controllers: [AppController],
   providers: [

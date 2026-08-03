@@ -121,6 +121,10 @@ import {
   validateRuleGroup,
 } from "@/lib/rule-builder";
 import { getVarianteOptionChips } from "@/lib/materias-primas-variantes-display";
+import {
+  NIVELES_COBERTURA,
+  NIVEL_COBERTURA_LABELS,
+} from "@/lib/cobertura-toner";
 import { tecnologiaMaquinaItems } from "@/lib/maquinaria";
 import {
   getMachineTechnology,
@@ -3097,6 +3101,17 @@ export function ConfigPasosEditorView({
     });
   };
 
+  // Cobertura de tóner por defecto del paso (láser). Vive en paramsPasoJson: se
+  // guarda con el "Guardar paso" (currentParams) y el motor la lee por paso.
+  const setCoberturaPaso = (rutaPasoId: string, nivel: string) => {
+    setConfigs((prev) => {
+      const cfg = prev[rutaPasoId];
+      const params = asRecord(cfg.paramsPasoJson);
+      const nextParams = { ...params, coberturaDefault: nivel };
+      return { ...prev, [rutaPasoId]: { ...cfg, paramsPasoJson: nextParams } };
+    });
+  };
+
   const updateNestingExtraMargins = (
     rutaPasoId: string,
     patch: Record<string, number | null>,
@@ -4682,6 +4697,7 @@ export function ConfigPasosEditorView({
                               setMaquinaCandidataModoColorAllowed={
                                 setMaquinaCandidataModoColorAllowed
                               }
+                              setCoberturaPaso={setCoberturaPaso}
                               materialesApi={materialesApiEsquema}
                               nestingApi={nestingApiEsquema}
                               panelEditorPasoId={panelEditorPasoId}
@@ -6422,6 +6438,7 @@ export function ConfigPasosEditorView({
           setMaquinaCandidataModoColorAllowed={
             setMaquinaCandidataModoColorAllowed
           }
+          setCoberturaPaso={setCoberturaPaso}
           materialesApi={materialesApiEsquema}
           nestingApi={nestingApiEsquema}
           panelEditorPasoId={panelEditorPasoId}
@@ -9869,7 +9886,6 @@ function CandidatasDetalladoEditor({
                                             );
                                           })}
                                         </div>
-                                      
     </>
   );
 }
@@ -10214,6 +10230,7 @@ function SeccionesEsquemaPaso({
   setMaquinaCandidataPreferida,
   setMaquinaCandidataPerfilDefault,
   setMaquinaCandidataModoColorAllowed,
+  setCoberturaPaso,
   materialesApi,
   nestingApi,
   panelEditorPasoId,
@@ -10260,6 +10277,7 @@ function SeccionesEsquemaPaso({
     maquinaId: string,
     modes: string[],
   ) => void;
+  setCoberturaPaso: (pasoId: string, nivel: string) => void;
   materialesApi: MaterialesApiAsistente;
   nestingApi: NestingApi;
   panelEditorPasoId: string | null;
@@ -10514,6 +10532,28 @@ function SeccionesEsquemaPaso({
                   }
                 />
               </div>
+            );
+          }
+          if (id === "cobertura-toner") {
+            const paramsCob = (cfg.paramsPasoJson ?? {}) as Record<
+              string,
+              unknown
+            >;
+            const nivelActual =
+              typeof paramsCob.coberturaDefault === "string"
+                ? paramsCob.coberturaDefault
+                : "alta";
+            return (
+              <HumanSelect
+                value={nivelActual}
+                onValueChange={(v) =>
+                  setCoberturaPaso(pasoActual.id, v || "alta")
+                }
+                options={NIVELES_COBERTURA.map((nivel) => ({
+                  value: nivel,
+                  label: NIVEL_COBERTURA_LABELS[nivel],
+                }))}
+              />
             );
           }
           if (id === "agregar-slot") {
@@ -10898,6 +10938,7 @@ function AsistenteGuiado({
   setMaquinaCandidataPreferida,
   setMaquinaCandidataPerfilDefault,
   setMaquinaCandidataModoColorAllowed,
+  setCoberturaPaso,
   materialesApi,
   nestingApi,
   panelEditorPasoId,
@@ -10945,6 +10986,7 @@ function AsistenteGuiado({
     maquinaId: string,
     modes: string[],
   ) => void;
+  setCoberturaPaso: (pasoId: string, nivel: string) => void;
   materialesApi: MaterialesApiAsistente;
   nestingApi: NestingApi;
   panelEditorPasoId: string | null;
@@ -11094,6 +11136,7 @@ function AsistenteGuiado({
             setMaquinaCandidataModoColorAllowed={
               setMaquinaCandidataModoColorAllowed
             }
+            setCoberturaPaso={setCoberturaPaso}
             materialesApi={materialesApi}
             nestingApi={nestingApi}
             panelEditorPasoId={panelEditorPasoId}

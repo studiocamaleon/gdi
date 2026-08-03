@@ -6,10 +6,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { buildModoColorOptionsFromProfiles } from './modo-color-comercial';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  PaginationDto,
-  paginatedResponse,
-} from '../common/dto/pagination.dto';
+import { PaginationDto, paginatedResponse } from '../common/dto/pagination.dto';
 import { resolverFamilia } from './pasos/familias';
 import type {
   ActualizarProductoDto,
@@ -37,6 +34,9 @@ export class ProductosService {
     const { pagination, activo, search } = opts;
     const where: Prisma.ProductoWhereInput = {
       tenantId,
+      // Los productos de sistema (ej. la plantilla del centro de copiado) no se
+      // listan en el catálogo: los gestiona su módulo, no el usuario.
+      sistemaCodigo: null,
       ...(activo !== undefined ? { activo } : {}),
       // Búsqueda por título (nombre) y código, no por la descripción.
       ...(search
@@ -103,7 +103,8 @@ export class ProductosService {
     });
     const medidaDefault = medidas.find((medida) => medida.esDefault);
     const codigoManual = dto.codigo?.trim();
-    const codigoBase = codigoManual || this.codigoFromNombre(dto.nombre, 'PRODUCTO');
+    const codigoBase =
+      codigoManual || this.codigoFromNombre(dto.nombre, 'PRODUCTO');
 
     for (let intento = 0; intento < 5; intento += 1) {
       const codigo = await this.nextCopyCode(tenantId, codigoBase);
@@ -167,7 +168,9 @@ export class ProductosService {
       }
     }
 
-    throw new BadRequestException('No se pudo generar un código de producto único.');
+    throw new BadRequestException(
+      'No se pudo generar un código de producto único.',
+    );
   }
 
   async actualizarProducto(
@@ -179,6 +182,11 @@ export class ProductosService {
       where: { id, tenantId },
     });
     if (!existente) throw new NotFoundException(`Producto ${id} no encontrado`);
+    if (existente.sistemaCodigo) {
+      throw new BadRequestException(
+        'Este producto lo gestiona un módulo del sistema y no se edita desde el catálogo.',
+      );
+    }
 
     const data: Prisma.ProductoUpdateInput = {};
     const touchedMedidas =
@@ -282,6 +290,11 @@ export class ProductosService {
       },
     });
     if (!existente) throw new NotFoundException(`Producto ${id} no encontrado`);
+    if (existente.sistemaCodigo) {
+      throw new BadRequestException(
+        'Este producto lo gestiona un módulo del sistema y no se borra desde el catálogo.',
+      );
+    }
 
     if (existente.cotizacionItems.length > 0) {
       return this.prisma.producto.update({
@@ -351,10 +364,16 @@ export class ProductosService {
             minimoComercialBase: origen.minimoComercialBase,
             medidaDefaultAnchoMm: origen.medidaDefaultAnchoMm,
             medidaDefaultAltoMm: origen.medidaDefaultAltoMm,
-            medidasPredefinidasJson: this.jsonOrNull(origen.medidasPredefinidasJson),
-            personalizacionesJson: this.jsonOrNull(origen.personalizacionesJson),
+            medidasPredefinidasJson: this.jsonOrNull(
+              origen.medidasPredefinidasJson,
+            ),
+            personalizacionesJson: this.jsonOrNull(
+              origen.personalizacionesJson,
+            ),
             precioConfigJson: this.jsonOrNull(origen.precioConfigJson),
-            atributosComercialesJson: this.jsonOrNull(origen.atributosComercialesJson),
+            atributosComercialesJson: this.jsonOrNull(
+              origen.atributosComercialesJson,
+            ),
             activo: dto.activo ?? false,
           },
           include: {
@@ -371,7 +390,9 @@ export class ProductosService {
               rutaVersion: rutaAlt.rutaVersion,
               nombre: rutaAlt.nombre,
               esPreferida: rutaAlt.esPreferida,
-              reglaAutoSeleccionJson: this.jsonOrNull(rutaAlt.reglaAutoSeleccionJson),
+              reglaAutoSeleccionJson: this.jsonOrNull(
+                rutaAlt.reglaAutoSeleccionJson,
+              ),
               orden: rutaAlt.orden,
               activo: rutaAlt.activo,
             },
@@ -384,10 +405,14 @@ export class ProductosService {
                 productoRutaAlternativaId: rutaDuplicada.id,
                 rutaPasoId: config.rutaPasoId,
                 modoActivacion: config.modoActivacion,
-                condicionActivacionJson: this.jsonOrNull(config.condicionActivacionJson),
+                condicionActivacionJson: this.jsonOrNull(
+                  config.condicionActivacionJson,
+                ),
                 modoTiempo: config.modoTiempo,
                 mecanismoCantidad: config.mecanismoCantidad,
-                mecanismoCantidadConfigJson: this.jsonOrNull(config.mecanismoCantidadConfigJson),
+                mecanismoCantidadConfigJson: this.jsonOrNull(
+                  config.mecanismoCantidadConfigJson,
+                ),
                 multiplicadoresActivos: config.multiplicadoresActivos,
                 paramsPasoJson: this.jsonOrNull(config.paramsPasoJson),
                 nombreVisible: config.nombreVisible,
@@ -404,26 +429,27 @@ export class ProductosService {
             });
 
             for (const slot of config.slotsMateriales) {
-              const slotDuplicado = await tx.productoConfigPasoSlotMaterial.create({
-                data: {
-                  tenantId,
-                  productoConfigPasoId: configDuplicada.id,
-                  slotCodigo: slot.slotCodigo,
-                  slotNombre: slot.slotNombre,
-                  slotRol: slot.slotRol,
-                  modoSeleccion: slot.modoSeleccion,
-                  criterioMotorAuto: slot.criterioMotorAuto,
-                  criterioInputCampo: slot.criterioInputCampo,
-                  criterioMaterialCampo: slot.criterioMaterialCampo,
-                  materialVarianteId: slot.materialVarianteId,
-                  estrategiaCosto: slot.estrategiaCosto,
-                  formula: slot.formula,
-                  cantidadFactor: slot.cantidadFactor,
-                  cantidadBase: slot.cantidadBase,
-                  aplicaMultiCaras: slot.aplicaMultiCaras,
-                  activo: slot.activo,
-                },
-              });
+              const slotDuplicado =
+                await tx.productoConfigPasoSlotMaterial.create({
+                  data: {
+                    tenantId,
+                    productoConfigPasoId: configDuplicada.id,
+                    slotCodigo: slot.slotCodigo,
+                    slotNombre: slot.slotNombre,
+                    slotRol: slot.slotRol,
+                    modoSeleccion: slot.modoSeleccion,
+                    criterioMotorAuto: slot.criterioMotorAuto,
+                    criterioInputCampo: slot.criterioInputCampo,
+                    criterioMaterialCampo: slot.criterioMaterialCampo,
+                    materialVarianteId: slot.materialVarianteId,
+                    estrategiaCosto: slot.estrategiaCosto,
+                    formula: slot.formula,
+                    cantidadFactor: slot.cantidadFactor,
+                    cantidadBase: slot.cantidadBase,
+                    aplicaMultiCaras: slot.aplicaMultiCaras,
+                    activo: slot.activo,
+                  },
+                });
 
               for (const candidato of slot.candidatos) {
                 const candidatoDuplicado =
@@ -437,14 +463,16 @@ export class ProductosService {
                     },
                   });
                 if (candidato.variantes.length > 0) {
-                  await tx.productoConfigPasoSlotMaterialCandidatoVariante.createMany({
-                    data: candidato.variantes.map((variante) => ({
-                      tenantId,
-                      candidatoId: candidatoDuplicado.id,
-                      varianteId: variante.varianteId,
-                      orden: variante.orden,
-                    })),
-                  });
+                  await tx.productoConfigPasoSlotMaterialCandidatoVariante.createMany(
+                    {
+                      data: candidato.variantes.map((variante) => ({
+                        tenantId,
+                        candidatoId: candidatoDuplicado.id,
+                        varianteId: variante.varianteId,
+                        orden: variante.orden,
+                      })),
+                    },
+                  );
                 }
               }
             }
@@ -471,7 +499,9 @@ export class ProductosService {
                   productoConfigPasoId: configDuplicada.id,
                   cargoDirectoCatalogoId: cargo.cargoDirectoCatalogoId,
                   modoActivacion: cargo.modoActivacion,
-                  condicionActivacionJson: this.jsonOrNull(cargo.condicionActivacionJson),
+                  condicionActivacionJson: this.jsonOrNull(
+                    cargo.condicionActivacionJson,
+                  ),
                   configOverrideJson: this.jsonOrNull(cargo.configOverrideJson),
                   activo: cargo.activo,
                 })),
@@ -489,17 +519,27 @@ export class ProductosService {
               ordenInterno: paso.ordenInterno,
               familiaCodigo: paso.familiaCodigo,
               modoActivacion: paso.modoActivacion,
-              condicionActivacionJson: this.jsonOrNull(paso.condicionActivacionJson),
+              condicionActivacionJson: this.jsonOrNull(
+                paso.condicionActivacionJson,
+              ),
               modoTiempo: paso.modoTiempo,
               mecanismoCantidad: paso.mecanismoCantidad,
-              mecanismoCantidadConfigJson: this.jsonOrNull(paso.mecanismoCantidadConfigJson),
+              mecanismoCantidadConfigJson: this.jsonOrNull(
+                paso.mecanismoCantidadConfigJson,
+              ),
               multiplicadoresActivos: paso.multiplicadoresActivos,
               paramsPasoJson: this.jsonOrNull(paso.paramsPasoJson),
               maquinaM1Id: paso.maquinaM1Id,
               perfilM1Id: paso.perfilM1Id,
-              configSlotsMaterialesJson: this.jsonOrNull(paso.configSlotsMaterialesJson),
-              configMaquinasCandidatasJson: this.jsonOrNull(paso.configMaquinasCandidatasJson),
-              configCargosDirectosJson: this.jsonOrNull(paso.configCargosDirectosJson),
+              configSlotsMaterialesJson: this.jsonOrNull(
+                paso.configSlotsMaterialesJson,
+              ),
+              configMaquinasCandidatasJson: this.jsonOrNull(
+                paso.configMaquinasCandidatasJson,
+              ),
+              configCargosDirectosJson: this.jsonOrNull(
+                paso.configCargosDirectosJson,
+              ),
               activo: paso.activo,
             })),
           });
@@ -512,7 +552,9 @@ export class ProductosService {
               productoId: productoDuplicado.id,
               cargoDirectoCatalogoId: cargo.cargoDirectoCatalogoId,
               modoActivacion: cargo.modoActivacion,
-              condicionActivacionJson: this.jsonOrNull(cargo.condicionActivacionJson),
+              condicionActivacionJson: this.jsonOrNull(
+                cargo.condicionActivacionJson,
+              ),
               configOverrideJson: this.jsonOrNull(cargo.configOverrideJson),
               activo: cargo.activo,
             })),
@@ -580,7 +622,9 @@ export class ProductosService {
       });
       if (!exists) return candidate;
     }
-    throw new BadRequestException('No se pudo generar un código de copia único.');
+    throw new BadRequestException(
+      'No se pudo generar un código de copia único.',
+    );
   }
 
   private codigoFromNombre(nombre: string, fallback = 'PRODUCTO-COPIA') {
@@ -635,10 +679,14 @@ export class ProductosService {
     if (politica !== 'ADVERTIR_FACTURAR_MINIMO' && politica !== 'BLOQUEAR') {
       return 'cantidad_comercial';
     }
-    return base === 'pliegos_impresos' ? 'pliegos_impresos' : 'cantidad_comercial';
+    return base === 'pliegos_impresos'
+      ? 'pliegos_impresos'
+      : 'cantidad_comercial';
   }
 
-  private jsonToMedidas(value: Prisma.JsonValue | null): MedidaPredefinidaDto[] | null {
+  private jsonToMedidas(
+    value: Prisma.JsonValue | null,
+  ): MedidaPredefinidaDto[] | null {
     return Array.isArray(value) ? (value as MedidaPredefinidaDto[]) : null;
   }
 
@@ -683,7 +731,9 @@ export class ProductosService {
       const anchoMm = Number(medida.anchoMm);
       const altoMm = Number(medida.altoMm);
       if (!Number.isFinite(anchoMm) || anchoMm <= 0) {
-        throw new BadRequestException('Cada medida debe tener ancho mayor a 0.');
+        throw new BadRequestException(
+          'Cada medida debe tener ancho mayor a 0.',
+        );
       }
       if (!Number.isFinite(altoMm) || altoMm <= 0) {
         throw new BadRequestException('Cada medida debe tener alto mayor a 0.');
@@ -778,7 +828,12 @@ export class ProductosService {
                   },
                 },
                 perfilM1: {
-                  select: { id: true, nombre: true, tipoPerfil: true, detalleJson: true },
+                  select: {
+                    id: true,
+                    nombre: true,
+                    tipoPerfil: true,
+                    detalleJson: true,
+                  },
                 },
                 centroCosto: {
                   select: {
@@ -958,10 +1013,10 @@ export class ProductosService {
       tenantId,
       producto.pasosExtras,
     );
-	    return {
-	      ...producto,
-	      rutasAlternativas: producto.rutasAlternativas.map((rutaAlt) => ({
-	        ...rutaAlt,
+    return {
+      ...producto,
+      rutasAlternativas: producto.rutasAlternativas.map((rutaAlt) => ({
+        ...rutaAlt,
         ruta: {
           ...rutaAlt.ruta,
           // `familiaNombre` resuelto en el server: para una familia TENANT el
@@ -974,142 +1029,142 @@ export class ProductosService {
               familiaNombre:
                 resolverFamilia(paso.familiaCodigo)?.nombre ?? null,
             })),
-	        },
-	        // G-F3: extras de ESTA ruta alternativa (scope por ruta).
-	        pasosExtras: producto.pasosExtras
-	          .filter((pe) => pe.rutaAlternativaId === rutaAlt.id)
-	          .map((pe) => ({
-	            ...pe,
-	            maquinasCandidatas: pasoExtraCandidatas.get(pe.id) ?? [],
+        },
+        // G-F3: extras de ESTA ruta alternativa (scope por ruta).
+        pasosExtras: producto.pasosExtras
+          .filter((pe) => pe.rutaAlternativaId === rutaAlt.id)
+          .map((pe) => ({
+            ...pe,
+            maquinasCandidatas: pasoExtraCandidatas.get(pe.id) ?? [],
             slotsMateriales: pasoExtraSlots.get(pe.id) ?? [],
-	          })),
-	        configPasos: rutaAlt.configPasos.map((configPaso) => ({
-	          ...configPaso,
-	          rutaPaso: configPaso.rutaPaso
-	            ? {
-	                ...configPaso.rutaPaso,
-	                familiaNombre:
-	                  resolverFamilia(configPaso.rutaPaso.familiaCodigo)
-	                    ?.nombre ?? null,
-	              }
-	            : configPaso.rutaPaso,
-	          modoColorOptions: this.buildModoColorOptions(configPaso),
-	          maquinasCandidatas: configPaso.maquinasCandidatas.map(
-	            (candidata) => ({
-	              ...candidata,
-	              modoColorOptions: this.buildModoColorOptionsForProfiles(
-	                candidata.maquina?.perfilesOperativos ?? [],
-	                configPaso.paramsPasoJson,
-	                candidata.modoColorAllowedModes,
-	              ),
-	            }),
-	          ),
-	        })),
-	      })),
-	    };
-	  }
+          })),
+        configPasos: rutaAlt.configPasos.map((configPaso) => ({
+          ...configPaso,
+          rutaPaso: configPaso.rutaPaso
+            ? {
+                ...configPaso.rutaPaso,
+                familiaNombre:
+                  resolverFamilia(configPaso.rutaPaso.familiaCodigo)?.nombre ??
+                  null,
+              }
+            : configPaso.rutaPaso,
+          modoColorOptions: this.buildModoColorOptions(configPaso),
+          maquinasCandidatas: configPaso.maquinasCandidatas.map(
+            (candidata) => ({
+              ...candidata,
+              modoColorOptions: this.buildModoColorOptionsForProfiles(
+                candidata.maquina?.perfilesOperativos ?? [],
+                configPaso.paramsPasoJson,
+                candidata.modoColorAllowedModes,
+              ),
+            }),
+          ),
+        })),
+      })),
+    };
+  }
 
-	  /**
-	   * M-2 en extras — hidrata `configMaquinasCandidatasJson` (sólo ids) de cada
-	   * paso extra a candidatas con máquina + perfiles + modoColorOptions, con el
-	   * mismo shape que las candidatas de ProductoConfigPaso. Devuelve un mapa
-	   * pasoExtraId → candidatas (preferida primero). Descarta candidatas cuya
-	   * máquina no exista o esté inactiva.
-	   */
-	  private async hydratePasoExtraCandidatas(
-	    tenantId: string,
-	    pasosExtras: Array<{
-	      id: string;
-	      paramsPasoJson: Prisma.JsonValue | null;
-	      configMaquinasCandidatasJson: Prisma.JsonValue | null;
-	    }>,
-	  ) {
-	    type CandidataJson = {
-	      maquinaId?: string;
-	      perfilDefaultId?: string | null;
-	      modoColorAllowedModes?: string[];
-	      esPreferida?: boolean;
-	      orden?: number;
-	    };
-	    const parse = (json: Prisma.JsonValue | null): CandidataJson[] =>
-	      Array.isArray(json) ? (json as CandidataJson[]) : [];
+  /**
+   * M-2 en extras — hidrata `configMaquinasCandidatasJson` (sólo ids) de cada
+   * paso extra a candidatas con máquina + perfiles + modoColorOptions, con el
+   * mismo shape que las candidatas de ProductoConfigPaso. Devuelve un mapa
+   * pasoExtraId → candidatas (preferida primero). Descarta candidatas cuya
+   * máquina no exista o esté inactiva.
+   */
+  private async hydratePasoExtraCandidatas(
+    tenantId: string,
+    pasosExtras: Array<{
+      id: string;
+      paramsPasoJson: Prisma.JsonValue | null;
+      configMaquinasCandidatasJson: Prisma.JsonValue | null;
+    }>,
+  ) {
+    type CandidataJson = {
+      maquinaId?: string;
+      perfilDefaultId?: string | null;
+      modoColorAllowedModes?: string[];
+      esPreferida?: boolean;
+      orden?: number;
+    };
+    const parse = (json: Prisma.JsonValue | null): CandidataJson[] =>
+      Array.isArray(json) ? (json as CandidataJson[]) : [];
 
-	    const maquinaIds = new Set<string>();
-	    for (const pe of pasosExtras) {
-	      for (const c of parse(pe.configMaquinasCandidatasJson)) {
-	        if (c.maquinaId) maquinaIds.add(c.maquinaId);
-	      }
-	    }
-	    const maquinas =
-	      maquinaIds.size === 0
-	        ? []
-	        : await this.prisma.maquina.findMany({
-	            where: { tenantId, id: { in: [...maquinaIds] }, activo: true },
-	            select: {
-	              id: true,
-	              codigo: true,
-	              nombre: true,
-	              plantilla: true,
-	              anchoUtil: true,
-	              parametrosTecnicosJson: true,
-	              centroCostoPrincipalId: true,
-	              centroCostoPrincipal: {
-	                select: { id: true, codigo: true, nombre: true },
-	              },
-	              perfilesOperativos: {
-	                where: { activo: true },
-	                select: {
-	                  id: true,
-	                  nombre: true,
-	                  activo: true,
-	                  tipoPerfil: true,
-	                  detalleJson: true,
-	                },
-	              },
-	            },
-	          });
-	    const maquinaMap = new Map(maquinas.map((m) => [m.id, m]));
+    const maquinaIds = new Set<string>();
+    for (const pe of pasosExtras) {
+      for (const c of parse(pe.configMaquinasCandidatasJson)) {
+        if (c.maquinaId) maquinaIds.add(c.maquinaId);
+      }
+    }
+    const maquinas =
+      maquinaIds.size === 0
+        ? []
+        : await this.prisma.maquina.findMany({
+            where: { tenantId, id: { in: [...maquinaIds] }, activo: true },
+            select: {
+              id: true,
+              codigo: true,
+              nombre: true,
+              plantilla: true,
+              anchoUtil: true,
+              parametrosTecnicosJson: true,
+              centroCostoPrincipalId: true,
+              centroCostoPrincipal: {
+                select: { id: true, codigo: true, nombre: true },
+              },
+              perfilesOperativos: {
+                where: { activo: true },
+                select: {
+                  id: true,
+                  nombre: true,
+                  activo: true,
+                  tipoPerfil: true,
+                  detalleJson: true,
+                },
+              },
+            },
+          });
+    const maquinaMap = new Map(maquinas.map((m) => [m.id, m]));
 
-	    return new Map(
-	      pasosExtras.map((pe) => {
-	        const candidatas = parse(pe.configMaquinasCandidatasJson)
-	          .flatMap((c, i) => {
-	            const maquina = c.maquinaId
-	              ? maquinaMap.get(c.maquinaId)
-	              : undefined;
-	            if (!maquina) return [];
-	            const perfilDefault = c.perfilDefaultId
-	              ? (maquina.perfilesOperativos.find(
-	                  (p) => p.id === c.perfilDefaultId,
-	                ) ?? null)
-	              : null;
-	            return [
-	              {
-	                id: `${pe.id}:cand:${i}`,
-	                maquinaId: maquina.id,
-	                perfilDefaultId: c.perfilDefaultId ?? null,
-	                modoColorAllowedModes: c.modoColorAllowedModes ?? [],
-	                modoColorOptions: this.buildModoColorOptionsForProfiles(
-	                  maquina.perfilesOperativos,
-	                  pe.paramsPasoJson,
-	                  c.modoColorAllowedModes,
-	                ),
-	                esPreferida: c.esPreferida ?? false,
-	                orden: c.orden ?? i,
-	                perfilDefault,
-	                maquina,
-	              },
-	            ];
-	          })
-	          .sort(
-	            (a, b) =>
-	              Number(b.esPreferida) - Number(a.esPreferida) ||
-	              a.orden - b.orden,
-	          );
-	        return [pe.id, candidatas] as const;
-	      }),
-	    );
-	  }
+    return new Map(
+      pasosExtras.map((pe) => {
+        const candidatas = parse(pe.configMaquinasCandidatasJson)
+          .flatMap((c, i) => {
+            const maquina = c.maquinaId
+              ? maquinaMap.get(c.maquinaId)
+              : undefined;
+            if (!maquina) return [];
+            const perfilDefault = c.perfilDefaultId
+              ? (maquina.perfilesOperativos.find(
+                  (p) => p.id === c.perfilDefaultId,
+                ) ?? null)
+              : null;
+            return [
+              {
+                id: `${pe.id}:cand:${i}`,
+                maquinaId: maquina.id,
+                perfilDefaultId: c.perfilDefaultId ?? null,
+                modoColorAllowedModes: c.modoColorAllowedModes ?? [],
+                modoColorOptions: this.buildModoColorOptionsForProfiles(
+                  maquina.perfilesOperativos,
+                  pe.paramsPasoJson,
+                  c.modoColorAllowedModes,
+                ),
+                esPreferida: c.esPreferida ?? false,
+                orden: c.orden ?? i,
+                perfilDefault,
+                maquina,
+              },
+            ];
+          })
+          .sort(
+            (a, b) =>
+              Number(b.esPreferida) - Number(a.esPreferida) ||
+              a.orden - b.orden,
+          );
+        return [pe.id, candidatas] as const;
+      }),
+    );
+  }
 
   /**
    * G-F4 en extras — hidrata `configSlotsMaterialesJson` (sólo ids) de cada paso
@@ -1209,7 +1264,9 @@ export class ProductosService {
     // Variantes activas por id (para resolver el modo "todas": sus ids no
     // están en el JSON, salen de la lista viva del material).
     const mpVarianteMap = new Map(
-      materiaPrimas.flatMap((mp) => mp.variantes.map((v) => [v.id, v] as const)),
+      materiaPrimas.flatMap((mp) =>
+        mp.variantes.map((v) => [v.id, v] as const),
+      ),
     );
 
     return new Map(
@@ -1240,7 +1297,8 @@ export class ProductosService {
                     sku: materialVariante.sku,
                     nombreVariante: materialVariante.nombreVariante,
                     precioReferencia: materialVariante.precioReferencia,
-                    atributosVarianteJson: materialVariante.atributosVarianteJson,
+                    atributosVarianteJson:
+                      materialVariante.atributosVarianteJson,
                     materiaPrima: {
                       id: mvMateriaPrima.id,
                       codigo: mvMateriaPrima.codigo,
@@ -1253,7 +1311,9 @@ export class ProductosService {
                   }
                 : null,
             candidatos: (s.candidatos ?? []).flatMap((c, ci) => {
-              const mp = c.materiaPrimaId ? mpMap.get(c.materiaPrimaId) : undefined;
+              const mp = c.materiaPrimaId
+                ? mpMap.get(c.materiaPrimaId)
+                : undefined;
               if (!mp) return [];
               const defaultVariante = c.defaultVarianteId
                 ? (varianteMap.get(c.defaultVarianteId) ?? null)
@@ -1313,104 +1373,104 @@ export class ProductosService {
     );
   }
 
-	  private buildModoColorOptions(configPaso: {
-	    paramsPasoJson?: Prisma.JsonValue | null;
-	    maquinaM1?: {
-	      perfilesOperativos?: Array<{
-	        id: string;
-	        activo?: boolean;
-	        tipoPerfil?: string | null;
-	        detalleJson?: Prisma.JsonValue | null;
-	      }>;
-	    } | null;
-	    maquinasCandidatas?: Array<{
-	      maquina?: {
-	        perfilesOperativos?: Array<{
-	          id: string;
-	          activo?: boolean;
-	          tipoPerfil?: string | null;
-	          detalleJson?: Prisma.JsonValue | null;
-	        }>;
-	      } | null;
-	    }>;
-	  }) {
-	    const params =
-	      configPaso.paramsPasoJson &&
-	      typeof configPaso.paramsPasoJson === 'object' &&
-	      !Array.isArray(configPaso.paramsPasoJson)
-	        ? (configPaso.paramsPasoJson as Record<string, unknown>)
-	        : {};
-	    const modoColorConfig =
-	      params.modoColorConfig &&
-	      typeof params.modoColorConfig === 'object' &&
-	      !Array.isArray(params.modoColorConfig)
-	        ? (params.modoColorConfig as Record<string, unknown>)
-	        : {};
-	    const profiles = [
-	      ...(configPaso.maquinaM1?.perfilesOperativos ?? []),
-	      ...(configPaso.maquinasCandidatas ?? []).flatMap(
-	        (candidate) => candidate.maquina?.perfilesOperativos ?? [],
-	      ),
-	    ];
-	    return buildModoColorOptionsFromProfiles(
-	      profiles,
-	      modoColorConfig.allowedModes,
-	    );
-	  }
+  private buildModoColorOptions(configPaso: {
+    paramsPasoJson?: Prisma.JsonValue | null;
+    maquinaM1?: {
+      perfilesOperativos?: Array<{
+        id: string;
+        activo?: boolean;
+        tipoPerfil?: string | null;
+        detalleJson?: Prisma.JsonValue | null;
+      }>;
+    } | null;
+    maquinasCandidatas?: Array<{
+      maquina?: {
+        perfilesOperativos?: Array<{
+          id: string;
+          activo?: boolean;
+          tipoPerfil?: string | null;
+          detalleJson?: Prisma.JsonValue | null;
+        }>;
+      } | null;
+    }>;
+  }) {
+    const params =
+      configPaso.paramsPasoJson &&
+      typeof configPaso.paramsPasoJson === 'object' &&
+      !Array.isArray(configPaso.paramsPasoJson)
+        ? (configPaso.paramsPasoJson as Record<string, unknown>)
+        : {};
+    const modoColorConfig =
+      params.modoColorConfig &&
+      typeof params.modoColorConfig === 'object' &&
+      !Array.isArray(params.modoColorConfig)
+        ? (params.modoColorConfig as Record<string, unknown>)
+        : {};
+    const profiles = [
+      ...(configPaso.maquinaM1?.perfilesOperativos ?? []),
+      ...(configPaso.maquinasCandidatas ?? []).flatMap(
+        (candidate) => candidate.maquina?.perfilesOperativos ?? [],
+      ),
+    ];
+    return buildModoColorOptionsFromProfiles(
+      profiles,
+      modoColorConfig.allowedModes,
+    );
+  }
 
-	  private buildModoColorOptionsForProfiles(
-	    profiles: Array<{
-	      id: string;
-	      activo?: boolean;
-	      tipoPerfil?: string | null;
-	      detalleJson?: Prisma.JsonValue | null;
-	    }>,
-	    paramsPasoJson?: Prisma.JsonValue | null,
-	    allowedModesOverride?: string[] | null,
-	  ) {
-	    const params =
-	      paramsPasoJson &&
-	      typeof paramsPasoJson === 'object' &&
-	      !Array.isArray(paramsPasoJson)
-	        ? (paramsPasoJson as Record<string, unknown>)
-	        : {};
-	    const modoColorConfig =
-	      params.modoColorConfig &&
-	      typeof params.modoColorConfig === 'object' &&
-	      !Array.isArray(params.modoColorConfig)
-	        ? (params.modoColorConfig as Record<string, unknown>)
-	        : {};
-	    const explicitAllowed = Array.isArray(allowedModesOverride)
-	      ? allowedModesOverride.length > 0
-	        ? allowedModesOverride
-	        : null
-	      : Array.isArray(modoColorConfig.allowedModes)
-	        ? modoColorConfig.allowedModes
-	        : null;
-	    const options = buildModoColorOptionsFromProfiles(
-	      profiles,
-	      explicitAllowed ?? undefined,
-	    );
-	    const shouldIncludeSinImpresion =
-	      !explicitAllowed ||
-	      explicitAllowed.some(
-	        (mode) => typeof mode === 'string' && mode === 'SIN_IMPRESION',
-	      );
-	    if (
-	      shouldIncludeSinImpresion &&
-	      !options.some((option) => option.value === 'SIN_IMPRESION')
-	    ) {
-	      return [
-	        {
-	          value: 'SIN_IMPRESION',
-	          label: 'Sin impresión',
-	          perfilIds: [],
-	        },
-	        ...options,
-	      ];
-	    }
-	    return options;
-	  }
+  private buildModoColorOptionsForProfiles(
+    profiles: Array<{
+      id: string;
+      activo?: boolean;
+      tipoPerfil?: string | null;
+      detalleJson?: Prisma.JsonValue | null;
+    }>,
+    paramsPasoJson?: Prisma.JsonValue | null,
+    allowedModesOverride?: string[] | null,
+  ) {
+    const params =
+      paramsPasoJson &&
+      typeof paramsPasoJson === 'object' &&
+      !Array.isArray(paramsPasoJson)
+        ? (paramsPasoJson as Record<string, unknown>)
+        : {};
+    const modoColorConfig =
+      params.modoColorConfig &&
+      typeof params.modoColorConfig === 'object' &&
+      !Array.isArray(params.modoColorConfig)
+        ? (params.modoColorConfig as Record<string, unknown>)
+        : {};
+    const explicitAllowed = Array.isArray(allowedModesOverride)
+      ? allowedModesOverride.length > 0
+        ? allowedModesOverride
+        : null
+      : Array.isArray(modoColorConfig.allowedModes)
+        ? modoColorConfig.allowedModes
+        : null;
+    const options = buildModoColorOptionsFromProfiles(
+      profiles,
+      explicitAllowed ?? undefined,
+    );
+    const shouldIncludeSinImpresion =
+      !explicitAllowed ||
+      explicitAllowed.some(
+        (mode) => typeof mode === 'string' && mode === 'SIN_IMPRESION',
+      );
+    if (
+      shouldIncludeSinImpresion &&
+      !options.some((option) => option.value === 'SIN_IMPRESION')
+    ) {
+      return [
+        {
+          value: 'SIN_IMPRESION',
+          label: 'Sin impresión',
+          perfilIds: [],
+        },
+        ...options,
+      ];
+    }
+    return options;
+  }
 
   listarCatalogoComercial() {
     return this.prisma.productoCategoriaComercial.findMany({

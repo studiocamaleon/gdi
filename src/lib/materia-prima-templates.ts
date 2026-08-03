@@ -730,16 +730,24 @@ export const materiaPrimaTemplatesV1: MateriaPrimaTemplateDef[] = [
     unidadStock: "unidad",
     unidadCompra: "caja",
     camposTecnicos: [
+      { key: "tipoAnillo", label: "Tipo de anillo", type: "text", options: ["ESPIRAL_PLASTICO", "WIRE_O"], required: true },
       { key: "diametro", label: "Diámetro", type: "number", unit: "mm", required: true },
-      { key: "material", label: "Material", type: "text", required: true },
+      { key: "capacidadMaxHojas", label: "Capacidad (hojas, 80g)", type: "number", required: true },
+      { key: "color", label: "Color", type: "text", required: false },
+      { key: "material", label: "Material", type: "text", required: false },
     ],
-    dimensionesVariante: ["diametro", "material"],
-    requiredAtributos: ["diametro", "material"],
+    // capacidadMaxHojas va como dimensión de variante (numérica, editable por
+    // tenant) igual que `gramaje` en el papel o `rendimientoPaginasIso` en el
+    // tóner: la capacidad depende del Ø y la ajusta cada imprenta por fabricante.
+    dimensionesVariante: ["tipoAnillo", "diametro", "capacidadMaxHojas", "color"],
+    requiredAtributos: ["tipoAnillo", "diametro", "capacidadMaxHojas"],
     atributosIniciales: {
+      tipoAnillo: "ESPIRAL_PLASTICO",
       diametro: 10,
-      material: "plastico",
+      capacidadMaxHojas: 80,
+      material: "PVC",
       color: "negro",
-      pasoPerforacion: "3:1",
+      pasoPerforacion: "4:1",
     },
   },
   {

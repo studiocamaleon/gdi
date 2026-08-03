@@ -1,0 +1,216 @@
+/* z-index 50 = capa de overlays del sistema (ver centro-copiado-sheet). */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 20, 26, 0.42);
+  z-index: 50;
+}
+.sheet {
+  position: fixed;
+  z-index: 50;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(720px, calc(100vw - 40px));
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: var(--r-4);
+  box-shadow: var(--shadow-pop);
+  overflow: hidden;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid var(--hairline);
+}
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-text-2);
+  font-family: var(--font-mono);
+}
+.titulo {
+  margin: 4px 0 0;
+  font-size: 19px;
+  font-weight: 650;
+}
+.sub {
+  margin: 4px 0 0;
+  color: var(--muted-text);
+  font-size: 12.5px;
+}
+.close {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: var(--r-2);
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+  color: var(--muted-text);
+  flex: none;
+}
+.close:hover {
+  color: var(--ink);
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.estado {
+  padding: 28px;
+  text-align: center;
+  color: var(--muted-text);
+  font-size: 13px;
+}
+
+/* Grupo de papel */
+.papel {
+  border: 1px solid var(--border);
+  border-radius: var(--r-3);
+  overflow: hidden;
+}
+.papelHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 13px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--hairline);
+}
+.papelNombre {
+  font-weight: 650;
+  font-size: 14px;
+}
+.papelHojas {
+  font-size: 12px;
+  color: var(--muted-text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Filas por config */
+.fila {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 9px 13px;
+  border-top: 1px solid var(--hairline);
+}
+.fila:first-child {
+  border-top: none;
+}
+.config {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.configLbl {
+  font-size: 13px;
+  font-weight: 550;
+}
+.configMeta {
+  font-size: 11.5px;
+  color: var(--muted-text-2);
+  font-variant-numeric: tabular-nums;
+}
+.hoja {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.hojaNeto {
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+.hojaFinal {
+  font-size: 11.5px;
+  color: var(--muted-text);
+  font-family: var(--font-mono);
+}
+.hojaCap {
+  display: block;
+  font-size: 10px;
+  color: var(--muted-text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.sub2 {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sub2Neto {
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+.sub2Final {
+  font-size: 11.5px;
+  color: var(--muted-text);
+  font-family: var(--font-mono);
+}
+
+/* Total del papel */
+.papelTotal {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px 16px;
+  padding: 8px 13px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-2) 60%, var(--surface));
+  font-size: 12.5px;
+}
+.papelTotalLbl {
+  color: var(--muted-text);
+}
+
+/* Total general */
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 22px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.footLbl {
+  font-size: 12px;
+  color: var(--muted-text);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.footNums {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.footNeto {
+  font-size: 20px;
+  font-weight: 650;
+  font-family: var(--font-mono);
+}
+.footFinal {
+  font-size: 12.5px;
+  color: var(--muted-text);
+  font-family: var(--font-mono);
+}

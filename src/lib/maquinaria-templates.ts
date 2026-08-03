@@ -126,11 +126,6 @@ const tipoAnilloOptions = [
   option("WIRE_O", "Wire-O"),
 ];
 
-const pasosOrificiosOptions = [
-  option("3:1", "Paso 3:1"),
-  option("2:1", "Paso 2:1"),
-];
-
 // ─── Secciones comunes a todas las plantillas ─────────────────────
 
 const commonTemplateSections = maquinariaBaseSectionOrder;
@@ -572,35 +567,24 @@ function buildRouterCncSections(): MaquinariaTemplateSection[] {
 /** §13 — ANILLADORA con discriminante tipoAnillo. */
 function buildAnilladoraSections(): MaquinariaTemplateSection[] {
   return [
-    section({
-      id: "capacidades_fisicas",
-      title: "Capacidades físicas",
-      description: "Largo máx del anillado y diámetro máx de anillo.",
-      fields: [
-        field({ key: "anchoUtil", label: "Largo máx anillado", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Largo máx del libro a anillar (ej. 360mm)." }),
-        field({ key: "altoUtil", label: "Diámetro máx anillo", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Diámetro máx soportado (ej. 50mm)." }),
-      ],
-    }),
-    section({
-      id: "parametros_tecnicos",
-      title: "Parámetros técnicos",
-      description: "Tipos de anillo y pasos de orificios soportados.",
-      fields: [
-        field({ key: "tiposAnilloSoportados", label: "Tipos de anillo", scope: "maquina", kind: "multiselect", required: true, options: tipoAnilloOptions, description: "Espiral plástico y/o wire-O." }),
-        field({ key: "pasosOrificiosSoportados", label: "Pasos de orificios", scope: "maquina", kind: "multiselect", options: pasosOrificiosOptions, description: "3:1 y/o 2:1." }),
-      ],
-    }),
+    // Se quitaron "Capacidades físicas" (anchoUtil/altoUtil) y "Parámetros
+    // técnicos" (tiposAnilloSoportados/pasosOrificiosSoportados): el motor NO los
+    // lee para el anillado. La capacidad (hojas por Ø) y el TIPO de anillo salen
+    // de las variantes de la materia prima (el filtro por tipo usa el tipoAnillo
+    // del anillo, no el de la máquina). El perfil sólo aporta el TIEMPO.
     section({
       id: "perfiles_operativos",
       title: "Perfiles operativos por tipo de anillo",
       description: "Un perfil por tipo de anillo (espiral plástico vs wire-O).",
       fields: [
         field({ key: "nombre", label: "Nombre del perfil", scope: "perfil_operativo", kind: "text", required: true, description: "Ej. Espiral plástico." }),
-        field({ key: "productivityValue", label: "Productividad", scope: "perfil_operativo", kind: "number", unit: "piezas_h", required: true, description: "Hojas por hora (ej. 1200)." }),
+        field({ key: "productivityValue", label: "Productividad", scope: "perfil_operativo", kind: "number", unit: "hojas_h", required: true, description: "Hojas perforadas por hora (ej. 1200). Un libro grueso tarda más." }),
         field({ key: "setupMin", label: "Setup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de calibración del paso de orificios." }),
         field({ key: "cleanupMin", label: "Cleanup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de limpieza." }),
         field({ key: "tipoAnillo", label: "Tipo de anillo", scope: "perfil_operativo", kind: "select", required: true, options: tipoAnilloOptions, description: "Espiral plástico o wire-O." }),
-        field({ key: "diametrosSoportadosMm", label: "Diámetros soportados", scope: "perfil_operativo", kind: "multiselect", description: "JSON: array de mm. Ej. [6, 10, 15, 20, 30, 50]." }),
+        // La capacidad (hojas por Ø) NO va acá: vive en cada variante del espiral
+        // (materia prima), editable por tenant. El motor elige el Ø por capacidad
+        // del material (MENOR_CAPACIDAD_QUE_CUMPLA), no por el perfil.
       ],
     }),
   ];

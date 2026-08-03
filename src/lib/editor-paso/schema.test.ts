@@ -59,6 +59,7 @@ const CENSO: Record<string, string[]> = {
     "maquina.maquina",
     "maquina.perfil",
     "maquina.candidatas",
+    "maquina.cobertura",
     "maquina.modo_color",
   ],
   // Sub-fase C — Materiales: agregar es a nivel paso; el resto se evalúa

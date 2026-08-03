@@ -23,7 +23,7 @@ import { estadoDePrueba, type EstadoPrueba } from './trial';
  * control plane, auditado en PlataformaEvento (plataforma.service).
  */
 
-export type FeaturePlan = 'afip' | 'whatsapp';
+export type FeaturePlan = 'afip' | 'whatsapp' | 'centroCopiado';
 
 export type LimitesPlan = {
   /** Nombre del plan que fija estos topes. `null` = sin suscripción (legacy). */
@@ -36,6 +36,10 @@ export type LimitesPlan = {
 type Features = {
   afip?: boolean;
   whatsapp?: boolean;
+  /** Módulo Centro de copiado (TPV de impresión por hoja). El guard aún NO se
+   *  enforcea: encenderlo requiere marcar los planes que lo incluyen para no
+   *  apagarlo a quien ya lo usa. Ver docs/centro-copiado-modulo-configurable-diseno.md. */
+  centroCopiado?: boolean;
   usuariosMax?: number;
   ordenesMesMax?: number;
   storageGb?: number;

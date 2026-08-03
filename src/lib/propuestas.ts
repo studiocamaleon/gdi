@@ -3,7 +3,15 @@ import { formatearMoneda, type Moneda } from "@/lib/moneda";
 
 export type TipoPropuesta = "orden_trabajo" | "presupuesto";
 
-export type UnidadPropuesta = "unidad" | "m2" | "metro_lineal";
+// "libros"/"hojas" son variantes de conteo (se comportan como "unidad" en toda
+// la lógica de área/lineal); sólo cambian la etiqueta que se muestra. Las usa el
+// centro de copiado para distinguir un renglón encuadernado (libros) de hojas sueltas.
+export type UnidadPropuesta =
+  | "unidad"
+  | "m2"
+  | "metro_lineal"
+  | "libros"
+  | "hojas";
 
 export type CotizacionPropuestaSnapshot = NonNullable<CotizarResponse["cotizacion"]>;
 
@@ -47,6 +55,12 @@ export type PropuestaItem = {
     visible: boolean;
     orden: number;
   }>;
+  /**
+   * Archivos originales a subir a R2 cuando el ítem se persista como ORDEN_ITEM
+   * (los PDF del centro de copiado). Sólo en memoria — no se serializa ni se
+   * manda al backend; se sube por el flujo de Archivos al guardar la orden.
+   */
+  archivosPendientes?: File[];
 };
 
 export type PropuestaCargoDirecto = {
@@ -108,6 +122,8 @@ export function formatUnitPrice(value: number, moneda: Moneda) {
 export function formatUnidad(unidad: UnidadPropuesta) {
   if (unidad === "m2") return "m²";
   if (unidad === "metro_lineal") return "ml";
+  if (unidad === "libros") return "libros";
+  if (unidad === "hojas") return "hojas";
   return "u.";
 }
 

@@ -17,6 +17,7 @@ import {
   ExpandIcon,
   FactoryIcon,
   FileIcon,
+  EyeIcon,
   FolderIcon,
   HistoryIcon,
   PackageIcon,
@@ -60,6 +61,11 @@ import { emitirPresupuesto } from "@/lib/presupuestos-api";
 import { enlacePublicoUrl } from "@/lib/enlaces-publicos";
 import { itemsConSelloDe } from "@/lib/sello-arte/diseno";
 import { mensajeDeArtes, publicarArtesDeSello } from "@/lib/sello-arte/publicar";
+import {
+  subirArchivo,
+  listarArchivos,
+  eliminarArchivo,
+} from "@/lib/archivos-api";
 import {
   getConfiguracionProduccion,
   getDiasNoLaborables,
@@ -122,6 +128,14 @@ import {
 import { type Moneda } from "@/lib/moneda";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { AgregarProductoSheet } from "@/components/comercial/agregar-producto-sheet";
+import CentroCopiadoSheet from "@/components/comercial/centro-copiado-sheet";
+import CentroCopiadoPreciosSheet from "@/components/comercial/centro-copiado-precios-sheet";
+import ccFicha from "@/components/comercial/centro-copiado-ficha.module.css";
+import {
+  guardarTomoCentroCopiado,
+  dimsDeFormato,
+  estadoCentroCopiado,
+} from "@/lib/centro-copiado-api";
 import { CostosOrdenTab } from "@/components/comercial/costos-orden-tab";
 import {
   type MutacionAplicadaView,
@@ -254,7 +268,13 @@ function getCotizacionCantidadPrecio(
 
 export function getCotizacionPasos(cotizacion: CotizacionExitosa) {
   return cotizacion.pasos
-    .filter((paso) => paso.activado)
+    .filter(
+      (paso) =>
+        // Se oculta el andamiaje: un paso activado sin tiempo NI costo (p.ej. la
+        // impresión en 0 del renglón de anillado) no es un paso de producción real.
+        paso.activado &&
+        (paso.costoTotal > 0 || (paso.tiempo?.totalMin ?? 0) > 0),
+    )
     .map((paso) => ({
       nombre: paso.nombreVisible?.trim() || humanizeCodigo(paso.familiaCodigo),
       centroCosto: paso.tiempo ? "Producción" : "Proceso",
@@ -3096,6 +3116,7 @@ export function ProductRow({
   onToggle,
   onRemove,
   onEdit,
+  onVerPrecios,
   onEditPanels,
   onChangeFechaEntrega,
   fechaEstimada,
@@ -3113,6 +3134,8 @@ export function ProductRow({
   /** Ausentes en modo lectura (OT emitida): la fila no se puede mutar. */
   onRemove?: () => void;
   onEdit?: () => void;
+  /** Sólo para ítems de centro de copiado: abre el resumen de precios por hoja. */
+  onVerPrecios?: () => void;
   onEditPanels?: (item: PropuestaItem, paso: PanelEditorPaso) => void;
   onChangeFechaEntrega?: (fechaEntrega: string) => void;
   fechaEstimada: string;
@@ -3169,6 +3192,30 @@ export function ProductRow({
         <div className="prod">
           <div className="nm">
             {item.productoNombre}
+            {item.varianteNombre ? (
+              <span className={ccFicha.variante}>· {item.varianteNombre}</span>
+            ) : null}
+            {onVerPrecios ? (
+              <span
+                role="button"
+                tabIndex={0}
+                className={ccFicha.verPrecios}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onVerPrecios();
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onVerPrecios();
+                  }
+                }}
+                title="Ver precios de impresión por hoja"
+              >
+                <EyeIcon />
+              </span>
+            ) : null}
             {tienePrecioEspecial ? (
               <span
                 className="op-especial"
@@ -3279,10 +3326,14 @@ export function ProductRow({
                   const isMedidasSpec = spec.lbl
                     .toLowerCase()
                     .includes("medida");
-                  const isModoColorSpec = spec.lbl
-                    .toLowerCase()
-                    .includes("modo de color");
-                  const isCarasSpec = spec.lbl.toLowerCase() === "caras";
+                  const isModoColorSpec =
+                    spec.lbl.toLowerCase().includes("modo de color") ||
+                    // Centro de copiado usa "Color" (mismo valor CMYK/B/N).
+                    spec.lbl.toLowerCase() === "color";
+                  const isCarasSpec =
+                    spec.lbl.toLowerCase() === "caras" ||
+                    // Centro de copiado usa "Faz" (simple/doble, mismo ícono).
+                    spec.lbl.toLowerCase() === "faz";
                   // "Estampas": una personalización por línea (multilínea, como
                   // "Medidas"). Ver docs/ot-merchandising-info-diseno.md
                   const isEstampasSpec = spec.lbl.toLowerCase() === "estampas";
@@ -4364,6 +4415,8 @@ function CargoOrdenSheet({
 function unidadDesdeCorta(cantidadUnidad: string): UnidadPropuesta {
   if (cantidadUnidad === "m²") return "m2";
   if (cantidadUnidad === "ml") return "metro_lineal";
+  if (cantidadUnidad === "libros") return "libros";
+  if (cantidadUnidad === "hojas") return "hojas";
   return "unidad";
 }
 
@@ -4717,6 +4770,27 @@ export function PropuestaFicha({
     [items, cargosOrden],
   );
   const [addOpen, setAddOpen] = React.useState(false);
+  const [copiadoOpen, setCopiadoOpen] = React.useState(false);
+  // Módulo activo (config del tenant): esconde el botón/atajo si está pausado.
+  // Fail-open: ante error de red se asume activo (no esconder por un glitch).
+  const [ccActivo, setCcActivo] = React.useState(true);
+  React.useEffect(() => {
+    let vivo = true;
+    void estadoCentroCopiado()
+      .then((e) => {
+        if (vivo) setCcActivo(e.activo);
+      })
+      .catch(() => {});
+    return () => {
+      vivo = false;
+    };
+  }, []);
+  // Resumen de precios de impresión por hoja (modal OT-wide).
+  const [preciosOpen, setPreciosOpen] = React.useState(false);
+  // Edición: la CARGA completa (todos los renglones que entraron juntos).
+  const [copiadoEditItems, setCopiadoEditItems] = React.useState<
+    PropuestaItem[] | null
+  >(null);
   const [cargoOpen, setCargoOpen] = React.useState(false);
   const [editingItem, setEditingItem] = React.useState<PropuestaItem | null>(
     null,
@@ -5049,6 +5123,74 @@ export function PropuestaFicha({
   );
 
   /**
+   * Sube a R2 los PDF originales del centro de copiado, colgándolos del ítem de
+   * la OT (scope ORDEN_ITEM), igual que los sellos suben sus artes. Los archivos
+   * viajan en memoria en `item.archivosPendientes` y acá se matchean por
+   * `cotizacionItemId` con el producto ya persistido. Nunca lanza: la orden ya
+   * está guardada. Reemplaza sólo lo autogenerado por el centro de copiado.
+   */
+  const subirArchivosCentroCopiado = React.useCallback(
+    async (
+      productos: OrdenTrabajoProducto[],
+      filesPorCotItem: Map<string, File[]>,
+    ) => {
+      if (filesPorCotItem.size === 0) return;
+      const MARCA = "centro-copiado";
+      const fallidos: string[] = [];
+      for (const p of productos) {
+        const files = p.cotizacionItemId
+          ? filesPorCotItem.get(p.cotizacionItemId)
+          : undefined;
+        if (!files?.length) continue;
+        try {
+          const previos = await listarArchivos("ORDEN_ITEM", p.id);
+          for (const a of previos) {
+            if (a.autogeneradoPor === MARCA) await eliminarArchivo(a.id);
+          }
+          for (const file of files) {
+            await subirArchivo(file, {
+              scope: "ORDEN_ITEM",
+              entidadId: p.id,
+              descripcion: `Documento · ${file.name}`,
+              autogeneradoPor: MARCA,
+            });
+          }
+        } catch (error) {
+          fallidos.push(
+            error instanceof Error ? error.message : "no se pudo subir",
+          );
+        }
+      }
+      if (fallidos.length > 0) {
+        toast.warning(
+          `${fallidos.length} archivo(s) del centro de copiado no se pudieron guardar (${fallidos.join(" · ")}). Podés subirlos a mano desde la pestaña Archivos del ítem.`,
+          { duration: 10000 },
+        );
+      }
+    },
+    [],
+  );
+
+  /** Mapea cotizacionItemId → archivos pendientes, para el matcheo con la OT. */
+  const mapaArchivosCC = React.useCallback(
+    (
+      itemsConSnapshot: Array<{
+        item: PropuestaItem;
+        cotizacionItemId?: string;
+      }>,
+    ): Map<string, File[]> => {
+      const m = new Map<string, File[]>();
+      for (const { item, cotizacionItemId } of itemsConSnapshot) {
+        if (cotizacionItemId && item.archivosPendientes?.length) {
+          m.set(cotizacionItemId, item.archivosPendientes);
+        }
+      }
+      return m;
+    },
+    [],
+  );
+
+  /**
    * Persiste alta/edición de un item: primero el snapshot del cotizador
    * (recotizar si ya existía, cotizar-y-guardar encadenado a la Cotizacion
    * de origen si es nuevo), después la proyección. Lanza en error — el
@@ -5109,8 +5251,12 @@ export function PropuestaFicha({
           : p.id === item.id,
       );
       await publicarArtes(tocado);
+      await subirArchivosCentroCopiado(
+        tocado,
+        mapaArchivosCC([{ item, cotizacionItemId }]),
+      );
     },
-    [orden, clienteId, publicarArtes],
+    [orden, clienteId, publicarArtes, subirArchivosCentroCopiado, mapaArchivosCC],
   );
 
   /** Baja en staging: sólo saca la fila local; el DELETE va en Guardar. */
@@ -5313,6 +5459,75 @@ export function PropuestaFicha({
     setAddOpen(true);
   }, []);
 
+  const abrirCentroCopiado = React.useCallback(() => {
+    setCopiadoEditItems(null);
+    setCopiadoOpen(true);
+  }, []);
+
+  /** Un renglón que salió del centro de copiado (para rutear su edición). */
+  const esCentroCopiado = React.useCallback(
+    (item: PropuestaItem) =>
+      item.productoCodigo === "SYS-IMPRESION-DOC" ||
+      Boolean(
+        (item.jobContext as { _centroCopiado?: unknown } | undefined)
+          ?._centroCopiado,
+      ),
+    [],
+  );
+
+  /** Id del tomo (grupo anillado) al que pertenece un renglón del centro de copiado. */
+  const tomoDeItem = React.useCallback(
+    (item: PropuestaItem | undefined): string | null =>
+      (
+        item?.jobContext as
+          | { _centroCopiado?: { grupoTomoId?: string | null } }
+          | undefined
+      )?._centroCopiado?.grupoTomoId ?? null,
+    [],
+  );
+  const tomoNombreDeItem = React.useCallback(
+    (item: PropuestaItem): string | null =>
+      (
+        item.jobContext as
+          | { _centroCopiado?: { tomoNombre?: string | null } }
+          | undefined
+      )?._centroCopiado?.tomoNombre ?? null,
+    [],
+  );
+
+  /** Id de la carga (todos los renglones de una misma pasada del centro de copiado). */
+  const cargaDeItem = React.useCallback(
+    (item: PropuestaItem | undefined): string | null =>
+      (
+        item?.jobContext as
+          | { _centroCopiado?: { grupoCargaId?: string | null } }
+          | undefined
+      )?._centroCopiado?.grupoCargaId ?? null,
+    [],
+  );
+
+  /**
+   * Editar: los del centro de copiado reabren SU modal con la CARGA COMPLETA
+   * (todos los renglones que entraron juntos), para no re-cotizar aislado; el
+   * resto abre el sheet normal.
+   */
+  const abrirEdicion = React.useCallback(
+    (item: PropuestaItem) => {
+      if (esCentroCopiado(item)) {
+        const carga = cargaDeItem(item);
+        const deLaCarga = carga
+          ? items.filter((i) => cargaDeItem(i) === carga)
+          : [item];
+        setCopiadoEditItems(deLaCarga);
+        setCopiadoOpen(true);
+      } else {
+        setEditingItem(item);
+        setAddOpen(true);
+      }
+    },
+    [esCentroCopiado, cargaDeItem, items],
+  );
+
   /**
    * Persiste el snapshot de cada item (cotizar-y-guardar, encadenando la
    * misma Cotizacion). Los que ya se guardaron (recotizaciones) conservan
@@ -5330,6 +5545,64 @@ export function PropuestaFicha({
           item,
           cotizacionItemId: item.cotizacionItemId,
         });
+        continue;
+      }
+      // Tomo compuesto (centro de copiado): se persiste como UN CotizacionItem
+      // sintético; no pasa por cotizarYGuardar (que cotiza un solo jobContext).
+      const metaTomo = (
+        item.jobContext as
+          | {
+              _centroCopiado?: {
+                esTomo?: boolean;
+                tomoNombre?: string;
+                juegos?: number;
+                segmentos?: Array<{
+                  nombre?: string | null;
+                  paginas: number;
+                  tamano: string;
+                  tamanoAnchoMm?: number;
+                  tamanoAltoMm?: number;
+                  papelMateriaPrimaId: string;
+                  gramaje?: number | null;
+                  color: "BN" | "COLOR";
+                  faz: 1 | 2;
+                }>;
+              };
+            }
+          | undefined
+      )?._centroCopiado;
+      if (metaTomo?.esTomo) {
+        const resp = await guardarTomoCentroCopiado({
+          documentos: (metaTomo.segmentos ?? []).map((s, i) => ({
+            id: `s${i}`,
+            nombre: s.nombre ?? undefined,
+            paginas: s.paginas,
+            copias: 1,
+            tamano: s.tamano,
+            // Cargas nuevas traen las medidas; para las viejas, se resuelven por
+            // el nombre del formato contra el catálogo del sistema.
+            tamanoAnchoMm: s.tamanoAnchoMm ?? dimsDeFormato(s.tamano).anchoMm,
+            tamanoAltoMm: s.tamanoAltoMm ?? dimsDeFormato(s.tamano).altoMm,
+            papelMateriaPrimaId: s.papelMateriaPrimaId,
+            gramaje: s.gramaje,
+            color: s.color,
+            faz: s.faz,
+            grupoId: "T",
+          })),
+          grupos: [
+            { id: "T", nombre: metaTomo.tomoNombre, juegos: metaTomo.juegos ?? 1 },
+          ],
+          cotizacionId,
+          clienteId: clienteId || null,
+        });
+        if (resp.error || !resp.cotizacionItemId) {
+          throw new Error(
+            resp.error ??
+              `No se pudo guardar el tomo ${item.productoNombre}.`,
+          );
+        }
+        cotizacionId = resp.cotizacionId ?? cotizacionId;
+        itemsConSnapshot.push({ item, cotizacionItemId: resp.cotizacionItemId });
         continue;
       }
       if (!item.motorCodigo || !item.jobContext) {
@@ -5504,9 +5777,14 @@ export function PropuestaFicha({
         }
       }
 
-      // El arte de los sellos, antes de mostrar el cartel de emitida: si algo
-      // falla, el aviso llega mientras la orden todavía está en pantalla.
+      // El arte de los sellos + los PDF del centro de copiado, antes de mostrar
+      // el cartel de emitida: si algo falla, el aviso llega con la orden en
+      // pantalla.
       await publicarArtes(orden.productos);
+      await subirArchivosCentroCopiado(
+        orden.productos,
+        mapaArchivosCC(itemsConSnapshot),
+      );
 
       setEmisionNumero(orden.numero);
     } catch (error) {
@@ -5526,6 +5804,8 @@ export function PropuestaFicha({
     persistirSnapshotsItems,
     fechaEntregaOrden,
     publicarArtes,
+    subirArchivosCentroCopiado,
+    mapaArchivosCC,
   ]);
 
   const finalizarEmision = React.useCallback(() => {
@@ -5566,6 +5846,10 @@ export function PropuestaFicha({
         ),
       });
       await publicarArtes(orden.productos);
+      await subirArchivosCentroCopiado(
+        orden.productos,
+        mapaArchivosCC(itemsConSnapshot),
+      );
       toast.success(
         `Borrador ${orden.numero} guardado. Seguí trabajándolo desde acá.`,
       );
@@ -5587,6 +5871,8 @@ export function PropuestaFicha({
     persistirSnapshotsItems,
     fechaEntregaOrden,
     publicarArtes,
+    subirArchivosCentroCopiado,
+    mapaArchivosCC,
     router,
   ]);
 
@@ -5709,24 +5995,36 @@ export function PropuestaFicha({
       const isEditableTarget =
         target?.closest("input, textarea, select, [contenteditable='true']") !=
         null;
+      if (
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        event.shiftKey ||
+        isEditableTarget
+      ) {
+        return;
+      }
       const key = event.key.toLowerCase();
-      const isAddShortcut =
-        key === "n" &&
-        !event.metaKey &&
-        !event.ctrlKey &&
-        !event.altKey &&
-        !event.shiftKey &&
-        !isEditableTarget;
-      if (!isAddShortcut) return;
-
+      // P = agregar producto · C = centro de copiado (si el módulo está activo).
+      if (key !== "p" && key !== "c") return;
+      if (key === "c" && !ccActivo) return;
       event.preventDefault();
-      if (addOpen || cargoOpen || panelEditor) return;
-      abrirAgregarProducto();
+      if (addOpen || cargoOpen || panelEditor || copiadoOpen) return;
+      if (key === "p") abrirAgregarProducto();
+      else abrirCentroCopiado();
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [abrirAgregarProducto, addOpen, cargoOpen, panelEditor]);
+  }, [
+    abrirAgregarProducto,
+    abrirCentroCopiado,
+    addOpen,
+    cargoOpen,
+    panelEditor,
+    copiadoOpen,
+    ccActivo,
+  ]);
 
   function toggle(id: string) {
     setOpenIds((prev) => {
@@ -6170,10 +6468,22 @@ export function PropuestaFicha({
                   Agregar cargo
                 </button>
               ) : null}
+              {ccActivo ? (
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={abrirCentroCopiado}
+                  title="Centro de copiado (C)"
+                >
+                  <PlusIcon />
+                  Centro de copiado
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="btn btn-primary"
                 onClick={abrirAgregarProducto}
+                title="Agregar producto (P)"
               >
                 <PlusIcon />
                 Agregar producto
@@ -6203,10 +6513,23 @@ export function PropuestaFicha({
               </div>
             ) : null}
             <div className="orows">
-              {items.map((item, index) => (
+              {items.map((item, index) => {
+                const tomo = tomoDeItem(item);
+                const iniciaTomo = !!tomo && tomo !== tomoDeItem(items[index - 1]);
+                const cuentaTomo = tomo
+                  ? items.filter((x) => tomoDeItem(x) === tomo).length
+                  : 0;
+                return (
+                <React.Fragment key={item.id}>
+                {iniciaTomo && (
+                  <div className={ccFicha.tomoHead}>
+                    Tomo anillado
+                    {tomoNombreDeItem(item) ? ` · ${tomoNombreDeItem(item)}` : ""}
+                    <span className={ccFicha.cuenta}>· {cuentaTomo} documentos</span>
+                  </div>
+                )}
                 <div
-                  key={item.id}
-                  className={`order-row-wrap${recotizandoIds.has(item.id) ? " is-requoting" : ""}`}
+                  className={`order-row-wrap${recotizandoIds.has(item.id) ? " is-requoting" : ""}${tomo ? ` ${ccFicha.enTomo}` : ""}`}
                   ref={(node) => {
                     if (node) {
                       rowRefs.current.set(item.id, node);
@@ -6238,15 +6561,14 @@ export function PropuestaFicha({
                     onEdit={
                       modoOrden
                         ? itemsEnEdicion && item.jobContext && item.motorCodigo
-                          ? () => {
-                              setEditingItem(item);
-                              setAddOpen(true);
-                            }
+                          ? () => abrirEdicion(item)
                           : undefined
-                        : () => {
-                            setEditingItem(item);
-                            setAddOpen(true);
-                          }
+                        : () => abrirEdicion(item)
+                    }
+                    onVerPrecios={
+                      esCentroCopiado(item)
+                        ? () => setPreciosOpen(true)
+                        : undefined
                     }
                     onEditPanels={(targetItem, paso) => {
                       setPanelEditor({ item: targetItem, paso });
@@ -6268,7 +6590,9 @@ export function PropuestaFicha({
                     readOnly={modoOrden}
                   />
                 </div>
-              ))}
+                </React.Fragment>
+                );
+              })}
             </div>
             {!modoOrden || itemsEnEdicion ? (
               <button
@@ -6589,6 +6913,38 @@ export function PropuestaFicha({
           setEditingItem(null);
           focusProductRow(item.id);
         }}
+      />
+      <CentroCopiadoSheet
+        open={copiadoOpen}
+        editItems={copiadoEditItems}
+        onOpenChange={(open) => {
+          setCopiadoOpen(open);
+          if (!open) setCopiadoEditItems(null);
+        }}
+        onAgregar={(nuevos) => {
+          if (nuevos.length === 0) return;
+          // En edición se reemplaza la CARGA completa (todos sus renglones).
+          const cargaEditada = copiadoEditItems?.length
+            ? cargaDeItem(copiadoEditItems[0])
+            : null;
+          setItems((current) => {
+            const base = cargaEditada
+              ? current.filter((i) => cargaDeItem(i) !== cargaEditada)
+              : current;
+            return [...base, ...nuevos];
+          });
+          // Se agregan COLAPSADOS (son varios renglones; expandir todos ocupa
+          // demasiado). Se los diferencia por la referencia (varianteNombre).
+          setCopiadoOpen(false);
+          setCopiadoEditItems(null);
+          focusProductRow(nuevos[0].id);
+        }}
+      />
+      <CentroCopiadoPreciosSheet
+        open={preciosOpen}
+        onClose={() => setPreciosOpen(false)}
+        items={items}
+        moneda={moneda}
       />
       <CargoOrdenSheet
         open={cargoOpen}

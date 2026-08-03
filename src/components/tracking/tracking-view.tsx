@@ -361,7 +361,6 @@ export function TrackingView({
   const entrega = fechaLarga(data.fechaEntrega);
   const celebra = data.estado === "finalizada" || data.estado === "entregada";
   const ultimaAct = data.actividad[0]?.fecha;
-  const telDigits = data.vendedor?.telefono?.replace(/\D/g, "") ?? "";
   // Puede venir sin `contacto` si el navegador tiene cacheada la respuesta
   // vieja: la página se re-consulta sola y no vale la pena romperla por eso.
   const contacto = data.imprenta.contacto ?? {
@@ -476,10 +475,17 @@ export function TrackingView({
               <div className="nm">{data.vendedor.nombre}</div>
               <div className="role">Cualquier duda, escribinos.</div>
             </div>
-            {data.vendedor.telefono ? (
+            {/* El canal de contacto es el de la EMPRESA (configurado en
+                Configuración › Empresa), no el celular personal del vendedor:
+                es el número que la imprenta monitorea. El vendedor es la cara. */}
+            {contacto.telefono || contacto.whatsapp ? (
               <div className="t-contact-actions">
-                <a className="ic-btn" title="Llamar" href={`tel:${data.vendedor.telefono}`}><IcoPhone /></a>
-                <a className="ic-btn wa" title="WhatsApp" href={`https://wa.me/${telDigits}`} target="_blank" rel="noreferrer"><IcoWa /></a>
+                {contacto.telefono ? (
+                  <a className="ic-btn" title="Llamar" href={`tel:${contacto.telefono}`}><IcoPhone /></a>
+                ) : null}
+                {contacto.whatsapp ? (
+                  <a className="ic-btn wa" title="WhatsApp" href={`https://wa.me/${contacto.whatsapp}`} target="_blank" rel="noreferrer"><IcoWa /></a>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -514,9 +520,9 @@ export function TrackingView({
                   <span className="txt">{contacto.horario}</span>
                 </div>
               ) : null}
-              {/* Los botones sólo cuando el vendedor no los ofreció ya: dos
-                  pares de teléfonos en la misma pantalla sólo hacen dudar. */}
-              {!data.vendedor?.telefono && (contacto.telefono || contacto.whatsapp) ? (
+              {/* Sólo si no hay card de asesor: esa ya ofrece el contacto de la
+                  empresa, y dos pares de teléfonos en pantalla hacen dudar. */}
+              {!data.vendedor && (contacto.telefono || contacto.whatsapp) ? (
                 <div className="t-contact-actions" style={{ marginTop: 4 }}>
                   {contacto.telefono ? (
                     <a className="ic-btn" title="Llamar" href={`tel:${contacto.telefono}`}><IcoPhone /></a>

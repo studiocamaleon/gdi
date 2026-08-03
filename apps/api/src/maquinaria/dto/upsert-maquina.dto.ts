@@ -230,6 +230,11 @@ export class MaquinaConsumibleItemDto {
   @IsNumber()
   consumoBase?: number;
 
+  /** g/m² de tóner por nivel de cobertura. Vacío = usar consumoBase (Normal). */
+  @IsOptional()
+  @IsObject()
+  consumoPorCobertura?: { borrador?: number; normal?: number; alta?: number };
+
   @IsOptional()
   @IsUUID()
   perfilOperativoId?: string;
