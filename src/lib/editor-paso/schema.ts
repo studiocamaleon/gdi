@@ -555,9 +555,12 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
       tipo: "texto",
       placeholder: (ctx) => ctx.familia?.nombre ?? "Nombre del paso",
       valor: (ctx) => ctx.cfg.nombreVisible ?? "",
+      // SIN trim acá: aplica en cada tecla sobre un input controlado, y el
+      // trim se comía el espacio recién tipeado ("Hendido Perforado" era
+      // imposible de escribir). El guardado trimea antes de persistir.
       aplicar: (_ctx, v) => ({
         tipo: "config",
-        patch: { nombreVisible: v.trim() || null },
+        patch: { nombreVisible: v || null },
       }),
     },
   },

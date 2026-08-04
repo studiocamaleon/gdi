@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { PlusIcon, XIcon } from "lucide-react";
+import { CopyIcon, PlusIcon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
@@ -25,6 +25,7 @@ import {
   type CategoriaComponenteCostoCentro,
   getCategoriaComponenteCostoLabel,
   getCurrentPeriodo,
+  periodoAnterior,
   getTipoCentroLabel,
   SeccionCentroCostoLinea,
   tipoCentroItems,
@@ -302,6 +303,37 @@ export function CentroCostoFicha({
     setTab("datos");
     void cargar();
   }, [open, cargar]);
+
+  // Trae la planilla del período anterior al form actual (no la guarda: el
+  // usuario revisa y guarda). El motor ya arrastra las tarifas mes a mes solo;
+  // esto es para EDITAR partiendo de lo anterior.
+  const [copiando, setCopiando] = React.useState(false);
+  const copiarDelAnterior = async () => {
+    if (!centro?.id) return;
+    const anterior = periodoAnterior(periodo);
+    setCopiando(true);
+    try {
+      const detalle = await getCentroCostoConfiguracion(centro.id, anterior);
+      if (detalle.lineas.length === 0 && !detalle.capacidad) {
+        toast.error(`No hay datos en ${anterior} para copiar.`);
+        return;
+      }
+      setLineas(detalle.lineas.map(desdeServidor));
+      setHorasProductivas(
+        detalle.capacidad ? String(detalle.capacidad.horasProductivas) : "",
+      );
+      marcar();
+      toast.success(`Copiado de ${anterior}. Revisá y guardá para publicar.`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudo copiar el período anterior.",
+      );
+    } finally {
+      setCopiando(false);
+    }
+  };
 
   const porSeccion = React.useMemo(
     () => ({
@@ -856,6 +888,24 @@ export function CentroCostoFicha({
                           }
                         />
                       </label>
+                      {centro?.id ? (
+                        <label>
+                          <span>Arrancar del período anterior</span>
+                          <button
+                            type="button"
+                            className="ccosto-agregar"
+                            style={{ alignSelf: "flex-start" }}
+                            disabled={copiando || isLoading}
+                            onClick={() => void copiarDelAnterior()}
+                            title={`Traer la planilla de ${periodoAnterior(periodo)} a este período`}
+                          >
+                            <CopyIcon className="size-4" />
+                            {copiando
+                              ? "Copiando…"
+                              : `Copiar de ${periodoAnterior(periodo)}`}
+                          </button>
+                        </label>
+                      ) : null}
                       <label>
                         <span>Horas productivas</span>
                         <input

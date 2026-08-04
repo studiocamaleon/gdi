@@ -465,27 +465,6 @@ export async function eliminarFamiliaTenant(id: string): Promise<void> {
   });
 }
 
-/** E.1 — defaults declarados de CUALQUIER familia (sistema o tenant). */
-export async function guardarDefaultsFamilia(
-  familiaCodigo: string,
-  input: {
-    centroCostoId?: string | null;
-    productividadHora?: number | null;
-    tiempoFijoMin?: number | null;
-    demasiaMm?: number | null;
-    solapePanelMm?: number | null;
-    tercerizado?: boolean | null;
-    proveedorId?: string | null;
-    fuenteCostoTercerizado?: string | null;
-    plazoProveedorDias?: number | null;
-  },
-): Promise<unknown> {
-  return apiRequest(
-    `/productos-servicios/familias/${familiaCodigo}/defaults`,
-    { method: "PUT", body: JSON.stringify(input) },
-  );
-}
-
 export async function previewCosteoFamiliaTenant(input: {
   cantidad: number;
   modoTiempo: string;
@@ -889,6 +868,12 @@ export interface NestingViewerInput {
       distribution: "equilibrada" | "libre" | null;
       widthInterpretation: "total" | "util" | null;
       panelCount: number;
+    };
+    /** Máquina del paso (rollo): alimenta la boca de impresora del viewer. */
+    maquina?: {
+      nombre: string;
+      anchoUtilMm: number | null;
+      tecnologia: string | null;
     };
   };
   costingPreview?: {

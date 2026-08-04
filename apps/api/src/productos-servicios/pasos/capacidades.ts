@@ -141,6 +141,20 @@ export const ALIAS_LEGACY: Record<string, AliasLegacy> = {
   pliego_impresion_area_m2: { capacidad: 'pliegos', etiqueta: 'área del pliego (m²)', atributo: true },
   pliego_impresion_mp_variante_id: { capacidad: 'pliegos', etiqueta: 'papel del pliego', atributo: true },
   talonario_pilas: { capacidad: 'grupos', etiqueta: 'pilas de talonario' },
+  // Imposición de cuadernillo a caballete (2026-08-04):
+  hojas_por_libro: { capacidad: 'imposicion', etiqueta: 'hojas por libro', atributo: true },
+  paginas_blancas: { capacidad: 'imposicion', etiqueta: 'páginas en blanco', atributo: true },
+  libros_por_juego: { capacidad: 'imposicion', etiqueta: 'libros por juego', atributo: true },
+  plan_imposicion: { capacidad: 'imposicion', etiqueta: 'plan de imposición', atributo: true },
+  libros_abrochados: { capacidad: 'unidades_procesadas', etiqueta: 'libros abrochados' },
+  // F1 cartelería (2026-08-04):
+  ml_estructura: { capacidad: 'metros_lineales', etiqueta: 'metros de perfil' },
+  puntos_soldadura: { capacidad: 'unidades_procesadas', etiqueta: 'puntos de soldadura', atributo: true },
+  cenefa_m2: { capacidad: 'm2_consumidos', etiqueta: 'm² de cenefa', atributo: true },
+  pintura_m2: { capacidad: 'm2_consumidos', etiqueta: 'm² a pintar', atributo: true },
+  fondo_m2: { capacidad: 'm2_consumidos', etiqueta: 'm² de chapa trasera', atributo: true },
+  modulos_led: { capacidad: 'unidades_procesadas', etiqueta: 'módulos LED' },
+  watts_led: { capacidad: 'unidades_procesadas', etiqueta: 'watts cargados', atributo: true },
 
   // ── impresión ───────────────────────────────────────────────────────
   pliegos_impresos: { capacidad: 'pliegos', etiqueta: 'pliegos impresos' },

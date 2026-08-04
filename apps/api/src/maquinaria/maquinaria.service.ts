@@ -46,6 +46,7 @@ import {
   validateMachinePayloadByTemplate,
 } from './maquinaria-template-machine-rules';
 import { validatePerfilOperativoByTemplate } from './maquinaria-template-profile-rules';
+import { deriveProductividadPlanchaTermica } from './plancha-termica';
 import {
   consumableTypeForChannel,
   consumableUnitForTemplate,
@@ -136,27 +137,33 @@ const TEMPLATE_CATALOG_RULES: Record<
   },
   corte_laser: {
     geometry: GeometriaTrabajoMaquinaDto.plano,
-    defaultProductionUnit: UnidadProduccionMaquinaDto.hora,
+    // Velocidad de recorrido en mm/s (láser, como LightBurn).
+    defaultProductionUnit: UnidadProduccionMaquinaDto.mm_s,
   },
   router_cnc: {
     geometry: GeometriaTrabajoMaquinaDto.volumen,
-    defaultProductionUnit: UnidadProduccionMaquinaDto.m2_h,
+    // Feed rate de recorrido en mm/min (CNC).
+    defaultProductionUnit: UnidadProduccionMaquinaDto.mm_min,
   },
   anilladora: {
     geometry: GeometriaTrabajoMaquinaDto.pliego,
     defaultProductionUnit: UnidadProduccionMaquinaDto.hora,
   },
-  soldadora: {
-    geometry: GeometriaTrabajoMaquinaDto.volumen,
-    defaultProductionUnit: UnidadProduccionMaquinaDto.hora,
-  },
-  cabina_pintura: {
-    geometry: GeometriaTrabajoMaquinaDto.volumen,
-    defaultProductionUnit: UnidadProduccionMaquinaDto.m2_h,
-  },
   mesa_de_corte: {
     geometry: GeometriaTrabajoMaquinaDto.plano,
     defaultProductionUnit: UnidadProduccionMaquinaDto.m2,
+  },
+  // Plancha térmica: plancha plana, productividad en piezas/hora (derivada del
+  // ciclo de prensado en el perfil).
+  plancha_termica: {
+    geometry: GeometriaTrabajoMaquinaDto.plano,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.piezas_h,
+  },
+  // Impresora 3D: el perfil declara el CAUDAL de material (g/h) y el motor lo
+  // aplica a los gramos de la pieza. La envolvente X/Y/Z es informativa.
+  impresora_3d: {
+    geometry: GeometriaTrabajoMaquinaDto.plano,
+    defaultProductionUnit: UnidadProduccionMaquinaDto.g_h,
   },
 };
 
@@ -336,6 +343,7 @@ export class MaquinariaService {
       UnidadProduccionMaquinaDto.pliegos_min,
       UnidadProduccionMaquinaDto.m_min,
       UnidadProduccionMaquinaDto.mm_s,
+      UnidadProduccionMaquinaDto.mm_min,
     ]);
 
   constructor(private readonly prisma: PrismaService) {}
@@ -757,6 +765,14 @@ export class MaquinariaService {
     const detalle: Record<string, unknown> = {
       ...(payload.detalle ?? {}),
     };
+    // PLANCHA_TERMICA — perfil "por ciclo": derivamos la productividad (piezas/h)
+    // de los segundos del ciclo, así el motor la consume por el camino T-3
+    // genérico sin tocarse. El desglose del ciclo queda en `detalle`.
+    const derivadoPlancha = deriveProductividadPlanchaTermica(detalle);
+    const productivityValue =
+      derivadoPlancha?.productivityValue ?? payload.productivityValue;
+    const productivityUnit =
+      derivadoPlancha?.productivityUnit ?? payload.productivityUnit;
     return {
       tenantId,
       maquinaId,
@@ -765,9 +781,9 @@ export class MaquinariaService {
         payload.tipoPerfil,
       ),
       activo: payload.activo,
-      productivityValue: this.toDecimal(payload.productivityValue),
-      productivityUnit: payload.productivityUnit
-        ? this.toPrismaEnum<UnidadProduccionMaquina>(payload.productivityUnit)
+      productivityValue: this.toDecimal(productivityValue),
+      productivityUnit: productivityUnit
+        ? this.toPrismaEnum<UnidadProduccionMaquina>(productivityUnit)
         : null,
       setupMin: this.toDecimal(payload.setupMin),
       cleanupMin: this.toDecimal(payload.cleanupMin),

@@ -1,0 +1,954 @@
+/* Configurador 3D de cartelería — editor fullscreen + viewport.
+   Estilos portados VERBATIM del prototipo signage/signage.css
+   (claude.ai/design): tema claro "papel blueprint", sidebars blancos,
+   acentos de tinta, mono para metadatos. Tokens remapeados a valores
+   literales (el módulo no comparte :root con el prototipo). */
+
+/* Paleta del prototipo:
+   bg #f3f1ec · bg-2 #ebe9e3 · surface #fff · surface-2 #fafaf9
+   border #e0ddd6 · border-strong #c8c4ba · hairline #ece9e2
+   ink #14141a · ink-2 #2c2c33 · muted #6e6e76 · muted-2 #92929b
+   blue #1d4ed8 · ok #16794a · ok-bg #e9f4ee · led #f59e0b */
+
+/* ── Configurador inline (cuerpo del sheet de cartelería) ── */
+.sheetHost {
+  /* Llena el alto disponible del cuerpo del sheet (flex del sheetBodyFull):
+     así el pie del sheet nunca tapa el configurador. */
+  flex: 1;
+  min-height: 0;
+  border: 1px solid #e0ddd6;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #f3f1ec;
+  display: flex;
+  flex-direction: column;
+}
+
+/* El cuerpo del sheet en cartelería: columna sin scroll propio (las columnas
+   del configurador scrollean adentro). Encadenado ×3 para ganarle a
+   `.ot-v1 .ap-body` (0,2,0). */
+.sheetBodyFull.sheetBodyFull.sheetBodyFull {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+  padding: 14px 18px 16px;
+}
+/* El banner no se encoge; sólo el configurador flexea. */
+.sheetBodyFull.sheetBodyFull.sheetBodyFull > * {
+  flex: 0 0 auto;
+}
+.sheetBodyFull.sheetBodyFull.sheetBodyFull > .sheetHost {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.configurador {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 320px 1fr 380px;
+  min-height: 0;
+  overflow: hidden;
+  color: #14141a;
+  font-size: 13px;
+  letter-spacing: -0.005em;
+  text-align: left;
+}
+.notasArea {
+  width: 100%;
+  resize: vertical;
+  background: #ffffff;
+  border: 1px solid #e0ddd6;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 12.5px;
+  color: #14141a;
+  outline: none;
+}
+.notasArea:focus {
+  border-color: #14141a;
+  box-shadow: 0 0 0 3px rgba(20, 20, 26, 0.06);
+}
+
+/* ── Overlay del editor ── */
+.editorOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  background: #f3f1ec;
+  color: #14141a;
+  font-size: 13px;
+  letter-spacing: -0.005em;
+}
+
+.editorHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 16px;
+  height: 52px;
+  flex: 0 0 auto;
+  border-bottom: 1px solid #e0ddd6;
+  background: #ffffff;
+}
+
+.editorTitle {
+  font-size: 12.5px;
+  color: #6e6e76;
+}
+.editorTitle strong {
+  color: #14141a;
+  font-weight: 600;
+}
+.editorCode {
+  margin-left: 10px;
+  font-size: 10.5px;
+  font-family: ui-monospace, "Geist Mono", monospace;
+  color: #2c2c33;
+  border: 1px solid #e0ddd6;
+  background: #f3f1ec;
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
+.editorHeadActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btnGhost,
+.btnPrimary,
+.btnClose {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid #e0ddd6;
+  background: #ffffff;
+  color: #14141a;
+}
+.btnGhost:hover {
+  border-color: #c8c4ba;
+  background: #fafaf9;
+}
+.btnPrimary {
+  background: #14141a;
+  border-color: #14141a;
+  color: #fff;
+  font-weight: 600;
+}
+.btnPrimary:hover {
+  background: #000;
+}
+.btnClose {
+  padding: 0 8px;
+  border-color: transparent;
+  background: transparent;
+  color: #6e6e76;
+}
+.btnClose:hover {
+  background: #fafaf9;
+  color: #14141a;
+  border-color: #e0ddd6;
+}
+
+.editorBody {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 320px 1fr 380px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Panel de parámetros (izquierda, blanco) ── */
+.paramsCol {
+  background: #ffffff;
+  border-right: 1px solid #e0ddd6;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.paramsCol::-webkit-scrollbar {
+  width: 6px;
+}
+.paramsCol::-webkit-scrollbar-thumb {
+  background: #c8c4ba;
+  border-radius: 6px;
+}
+/* El acordeón no se encoge: sin esto flexbox recorta las secciones. */
+.paramsCol > * {
+  flex: 0 0 auto;
+}
+
+/* ── Acordeón ── */
+.acc {
+  border-bottom: 1px solid #ece9e2;
+}
+.accHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 11px 16px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.12s ease;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+}
+.accHead:hover {
+  background: #fafaf9;
+}
+.accIco {
+  width: 24px;
+  height: 24px;
+  background: #f3f1ec;
+  border: 1px solid #e0ddd6;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #2c2c33;
+  flex: 0 0 auto;
+}
+.accBody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.accNm {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: #14141a;
+}
+.accMeta {
+  font-size: 11px;
+  color: #6e6e76;
+  margin-top: 1px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.accChev {
+  color: #92929b;
+  transition: transform 0.15s ease;
+  flex: 0 0 auto;
+  display: inline-flex;
+}
+.accOpen .accChev {
+  transform: rotate(90deg);
+}
+.accContent {
+  padding: 4px 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── Campos ── */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.field > label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6e6e76;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.fieldUnit {
+  font-family: ui-monospace, "Geist Mono", monospace;
+  color: #92929b;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 10.5px;
+  font-weight: 400;
+}
+
+.infoBox {
+  padding: 10px 12px;
+  background: #f3f1ec;
+  border: 1px solid #e0ddd6;
+  border-radius: 6px;
+  font-size: 11.5px;
+  color: #6e6e76;
+  line-height: 1.45;
+}
+.infoBox strong {
+  color: #2c2c33;
+  font-weight: 600;
+}
+
+.divider {
+  height: 1px;
+  background: #e0ddd6;
+  margin: 2px 0;
+}
+
+.hint {
+  font-size: 11px;
+  color: #6e6e76;
+  line-height: 1.45;
+  margin: 0;
+}
+.hint strong {
+  color: #2c2c33;
+}
+
+/* ── Stepper ── */
+.stepper {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid #e0ddd6;
+  border-radius: 6px;
+  background: #ffffff;
+  overflow: hidden;
+}
+.stepper:focus-within {
+  border-color: #14141a;
+  box-shadow: 0 0 0 3px rgba(20, 20, 26, 0.06);
+}
+.stepper button {
+  width: 28px;
+  background: #f3f1ec;
+  border: none;
+  color: #2c2c33;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.stepper button:hover {
+  background: #e0ddd6;
+}
+.stepper input {
+  flex: 1;
+  border: none;
+  outline: none;
+  text-align: center;
+  font: inherit;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  min-width: 0;
+  background: transparent;
+  padding: 7px 4px;
+  color: #14141a;
+}
+.stepperUnit {
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  font-family: ui-monospace, "Geist Mono", monospace;
+  font-size: 10.5px;
+  color: #6e6e76;
+  border-left: 1px solid #e0ddd6;
+  background: #f3f1ec;
+}
+
+/* ── Segmented ── */
+.seg {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 4px;
+  background: #f3f1ec;
+  border: 1px solid #e0ddd6;
+  border-radius: 6px;
+  padding: 3px;
+}
+.seg button {
+  background: transparent;
+  border: none;
+  padding: 6px 6px;
+  font-size: 11.5px;
+  color: #6e6e76;
+  border-radius: 4px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.seg button:hover {
+  color: #14141a;
+}
+.seg button.on {
+  background: #ffffff;
+  color: #14141a;
+  box-shadow: 0 1px 0 rgba(20, 20, 26, 0.04), 0 1px 2px rgba(20, 20, 26, 0.04);
+}
+
+/* ── Toggle ── */
+.toggleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #f3f1ec;
+  border: 1px solid #e0ddd6;
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+  text-align: left;
+  color: inherit;
+  width: 100%;
+  font: inherit;
+}
+.toggleSwitch {
+  width: 32px;
+  height: 18px;
+  border-radius: 999px;
+  background: #c8c4ba;
+  position: relative;
+  flex: 0 0 auto;
+  transition: background 0.15s ease;
+}
+.toggleSwitch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: transform 0.15s ease;
+}
+.toggleRow.on .toggleSwitch {
+  background: #14141a;
+}
+.toggleRow.on .toggleSwitch::after {
+  transform: translateX(14px);
+}
+.toggleBody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.toggleNm {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #14141a;
+}
+.toggleSub {
+  font-size: 11px;
+  color: #6e6e76;
+  margin-top: 1px;
+}
+
+/* ── Material picker ── */
+.mats {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mat {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid #e0ddd6;
+  background: #ffffff;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  text-align: left;
+  color: inherit;
+  width: 100%;
+  font: inherit;
+}
+.mat:hover {
+  border-color: #c8c4ba;
+}
+.mat.on {
+  border-color: #14141a;
+  box-shadow: 0 0 0 1px #14141a;
+}
+.matPip {
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid #c8c4ba;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: center;
+}
+.mat.on .matPip {
+  border-color: #14141a;
+  background: #14141a;
+}
+.mat.on .matPip::after {
+  content: "";
+  width: 5px;
+  height: 5px;
+  background: #fff;
+  border-radius: 50%;
+}
+.matBody {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.matNm {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #14141a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.matMeta {
+  font-size: 10.5px;
+  color: #6e6e76;
+  font-family: ui-monospace, "Geist Mono", monospace;
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Columna del 3D ── */
+.viewportCol {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  background: #ebe9e3;
+}
+
+/* ── Listado y costo (derecha, blanco) ── */
+.precioCol {
+  background: #ffffff;
+  border-left: 1px solid #e0ddd6;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.precioHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid #ece9e2;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #14141a;
+  flex: 0 0 auto;
+}
+.liveDot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #16794a;
+  margin-left: auto;
+  animation: carteleriaPulse 1.6s ease-in-out infinite;
+}
+.liveDotBusy {
+  background: #f59e0b;
+}
+@keyframes carteleriaPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(22, 121, 74, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(22, 121, 74, 0);
+  }
+}
+.liveLabel {
+  font-size: 10.5px;
+  color: #16794a;
+  font-family: ui-monospace, "Geist Mono", monospace;
+  background: #e9f4ee;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid #cfe6d8;
+  font-weight: 400;
+}
+
+.motorError {
+  margin: 10px 16px 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid #f4d3c0;
+  background: #fef3ed;
+  color: #c2410c;
+  font-size: 11.5px;
+  line-height: 1.45;
+  flex: 0 0 auto;
+}
+
+.pasosList {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+.pasosList::-webkit-scrollbar {
+  width: 6px;
+}
+.pasosList::-webkit-scrollbar-thumb {
+  background: #c8c4ba;
+  border-radius: 6px;
+}
+
+.bomSect {
+  border-bottom: 1px solid #ece9e2;
+}
+.bomSectHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px 8px;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6e6e76;
+  font-weight: 500;
+  background: #fafaf9;
+}
+.bomSectSum {
+  margin-left: auto;
+  font-family: ui-monospace, "Geist Mono", monospace;
+  font-variant-numeric: tabular-nums;
+  color: #2c2c33;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.bomItem {
+  display: grid;
+  grid-template-columns: 22px 1fr 76px;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 16px;
+  transition: background 0.12s ease;
+  border-left: 2px solid transparent;
+}
+.bomItem:hover {
+  background: #fafaf9;
+  border-left-color: #14141a;
+}
+.bomIx {
+  font-family: ui-monospace, "Geist Mono", monospace;
+  font-size: 9.5px;
+  color: #92929b;
+  text-align: right;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.bomBody {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.bomNm {
+  font-size: 12.5px;
+  color: #14141a;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bomQty {
+  font-size: 11px;
+  color: #6e6e76;
+  font-family: ui-monospace, "Geist Mono", monospace;
+  font-variant-numeric: tabular-nums;
+  margin-top: 1px;
+}
+.bomPrice {
+  text-align: right;
+  font-family: ui-monospace, "Geist Mono", monospace;
+  font-size: 12px;
+  color: #14141a;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+.precioFoot {
+  padding: 14px 16px 16px;
+  background: #fafaf9;
+  border-top: 1px solid #e0ddd6;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.precioRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 12px;
+  color: #6e6e76;
+  font-variant-numeric: tabular-nums;
+  padding: 3px 0;
+}
+.precioRow span:last-child {
+  font-family: ui-monospace, "Geist Mono", monospace;
+  color: #2c2c33;
+  font-weight: 500;
+}
+.precioTotal {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 2px solid #14141a;
+}
+.precioTotal span:first-child {
+  font-size: 13px;
+  font-weight: 600;
+  color: #14141a;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.precioTotal span:last-child {
+  font-size: 22px;
+  font-weight: 700;
+  color: #14141a;
+  letter-spacing: -0.015em;
+  font-family: inherit;
+}
+.atenuado {
+  opacity: 0.45;
+}
+
+/* ── Viewport ── */
+.viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.canvasHost {
+  position: absolute;
+  inset: 0;
+}
+.canvasHost canvas {
+  display: block;
+  cursor: grab;
+  outline: none;
+}
+.canvasHost canvas:active {
+  cursor: grabbing;
+}
+
+.overlay {
+  position: absolute;
+  z-index: 2;
+  pointer-events: auto;
+}
+
+.vpTitle {
+  top: 14px;
+  left: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.vpName {
+  font-family: ui-monospace, "Geist Mono", monospace;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #14141a;
+  background: rgba(243, 241, 236, 0.85);
+  padding: 4px 8px;
+  border: 1px solid #e0ddd6;
+  border-radius: 4px;
+  backdrop-filter: blur(4px);
+}
+.vpDims {
+  font-family: ui-monospace, "Geist Mono", monospace;
+  font-size: 10.5px;
+  color: #1d4ed8;
+  background: rgba(243, 241, 236, 0.85);
+  padding: 3px 7px;
+  border: 1px solid #e0ddd6;
+  border-radius: 4px;
+  backdrop-filter: blur(4px);
+  font-variant-numeric: tabular-nums;
+}
+
+.vpViews {
+  top: 14px;
+  right: 16px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid #e0ddd6;
+  border-radius: 6px;
+  padding: 3px;
+  display: flex;
+  gap: 2px;
+  backdrop-filter: blur(4px);
+}
+.vpViews button {
+  background: transparent;
+  border: none;
+  padding: 6px 10px;
+  font-size: 11.5px;
+  color: #6e6e76;
+  border-radius: 4px;
+  font-family: ui-monospace, "Geist Mono", monospace;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+.vpViews button:hover {
+  color: #14141a;
+}
+.vpViews button.on {
+  background: #14141a;
+  color: #fff;
+}
+.vpMood {
+  top: 56px;
+}
+.vpMood button.on {
+  background: #b45309;
+}
+
+.vpExplode {
+  bottom: 14px;
+  right: 16px;
+}
+.explodeBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid #e0ddd6;
+  color: #2c2c33;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 500;
+  font-family: ui-monospace, "Geist Mono", monospace;
+  text-transform: uppercase;
+  backdrop-filter: blur(4px);
+  transition: all 0.12s ease;
+  cursor: pointer;
+}
+.explodeBtn:hover {
+  border-color: #c8c4ba;
+}
+.explodeBtn.on {
+  background: #14141a;
+  color: #fff;
+  border-color: #14141a;
+}
+
+.vpLayers {
+  bottom: 14px;
+  left: 16px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid #e0ddd6;
+  border-radius: 6px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  backdrop-filter: blur(4px);
+}
+.lgnd {
+  font-size: 10px;
+  color: #6e6e76;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+.layer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 11.5px;
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  color: #14141a;
+  text-align: left;
+  font: inherit;
+}
+.layer:hover {
+  background: #f3f1ec;
+}
+.layerOff {
+  color: #92929b;
+}
+.swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid;
+  flex: 0 0 auto;
+}
+
+.vpScale {
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #e0ddd6;
+  border-radius: 6px;
+  padding: 6px 10px;
+  backdrop-filter: blur(4px);
+}
+.vpScale .lgnd {
+  margin-bottom: 0;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 10.5px;
+  color: #6e6e76;
+  font-family: ui-monospace, "Geist Mono", monospace;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.on {
+  /* estado activo genérico */
+}
+
+/* ── El sheet toma la pantalla completa en cartelería ──
+   Encadenado ×4 para ganarle a `.ot-v1 .sheet.sheet-ap` (0,3,0). */
+.sheetFull.sheetFull.sheetFull.sheetFull {
+  width: 100vw;
+  max-width: 100vw;
+  left: 0;
+  right: 0;
+  border-radius: 0;
+}

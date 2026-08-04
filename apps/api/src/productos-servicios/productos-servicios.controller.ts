@@ -17,7 +17,6 @@ import { ListProductosQueryDto } from './dto/list-productos-query.dto';
 import {
   ActualizarFamiliaTenantDto,
   CrearFamiliaTenantDto,
-  DefaultsFamiliaPasoDto,
   PreviewCosteoFamiliaDto,
 } from './dto/familia-tenant.dto';
 import { FamiliasTenantService } from './familias-tenant.service';
@@ -277,18 +276,6 @@ export class ProductosServiciosController {
     return this.service.listarFamilias(tenantId);
   }
 
-  /** E.1 — defaults declarados de CUALQUIER familia (sistema o tenant). */
-  @Put('familias/:codigo/defaults')
-  @Permiso('costos.gestionar')
-  guardarDefaultsFamilia(
-    @Req() req: RequestWithAuth,
-    @Param('codigo') codigo: string,
-    @Body() dto: DefaultsFamiliaPasoDto,
-  ) {
-    const tenantId = req.auth?.tenantId;
-    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
-    return this.service.guardarDefaultsFamilia(tenantId, codigo, dto);
-  }
 
   // ── Familias del tenant (pasos componibles, Etapa C) ──────────────────
   // Mismo permiso que editar rutas y productos: definir cómo se costea un

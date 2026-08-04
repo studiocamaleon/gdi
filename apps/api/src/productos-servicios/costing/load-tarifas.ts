@@ -52,9 +52,15 @@ export async function loadTarifasHorarias(
     return new Map();
   }
 
+  // Carry-forward: si el período pedido no tiene tarifa PUBLICADA, se usa la más
+  // reciente de un período ANTERIOR (los `periodo` son "YYYY-MM", ordenables como
+  // string). Así una imprenta no tiene que re-cargar las tarifas cada mes: valen
+  // las del último mes publicado hasta que las cambie. Cuando el período pedido SÍ
+  // tiene tarifa, gana ella (es la mayor ≤ período). Ver
+  // docs/centros-de-costo-carry-forward-diseno.md
   const where: Prisma.CentroCostoTarifaPeriodoWhereInput = {
     tenantId: input.tenantId,
-    periodo: input.periodo,
+    periodo: { lte: input.periodo },
     estado: EstadoTarifaCentroCostoPeriodo.PUBLICADA,
   };
   if (input.centroCostoIds) {
@@ -65,15 +71,23 @@ export async function loadTarifasHorarias(
     where,
     select: {
       centroCostoId: true,
+      periodo: true,
       tarifaCalculada: true,
       tarifaManoObra: true,
     },
+    // Mayor período primero: el primero que vemos por centro es el vigente
+    // (el del período pedido si existe, si no el último anterior).
+    orderBy: { periodo: 'desc' },
   });
 
-  return new Map(
-    tarifas.map((t) => [
-      t.centroCostoId,
-      { tarifa: t.tarifaCalculada, manoObra: t.tarifaManoObra },
-    ]),
-  );
+  const map: TarifaByCentroId = new Map();
+  for (const t of tarifas) {
+    if (!map.has(t.centroCostoId)) {
+      map.set(t.centroCostoId, {
+        tarifa: t.tarifaCalculada,
+        manoObra: t.tarifaManoObra,
+      });
+    }
+  }
+  return map;
 }

@@ -16,12 +16,13 @@
 export type FamiliaCodigo =
   // Pre-prensa
   | 'pre_prensa'
-  | 'proof'
   // Producción / impresión
   | 'impresion_por_hoja'
   | 'impresion_por_area'
   | 'impresion_por_pieza'
+  | 'impresion_3d'
   | 'aplicacion_transfer'
+  | 'aplicacion_transfer_textil'
   | 'grabado_laser'
   // Corte y formado
   | 'corte_guillotina'
@@ -30,40 +31,29 @@ export type FamiliaCodigo =
   | 'troquelado_digital'
   | 'cnc'
   | 'plegado'
-  | 'perforado'
   | 'corte_manual' // [Fase E]
   // Terminaciones
   | 'laminado'
   | 'plastificado_pouch'
-  | 'barniz'
-  | 'acabado_decorativo'
   | 'pintura_superficial'
-  | 'lijado_canteado' // [Fase E]
   // Encuadernación / armado
-  | 'encuadernado_engrapado'
+  | 'abrochado_caballete'
   | 'encuadernado_anillado'
   | 'engomado_emblocado'
-  | 'armado_cajas'
   // Estructural / montaje
-  | 'soldadura'
   | 'montaje_sobre_sustrato'
   | 'ensamble_estructural'
-  | 'instalacion_electrica'
+  | 'estructura_bastidor'
+  | 'iluminacion_led'
   // Operaciones manuales
   | 'embalaje'
-  | 'conteo_manual'
-  | 'atado_banding'
-  | 'etiquetado_manual'
-  | 'control_calidad'
   | 'trabajo_manual'
   // Modificaciones físicas (sub-categoría dentro de manuales)
   | 'modificacion_pre'
   | 'modificacion_post'
   | 'colocacion_ojales'
   // Logística / instalación
-  | 'envio'
   | 'instalacion_in_situ'
-  | 'toma_medidas'
   // Servicios profesionales
   | 'diseno_grafico';
 

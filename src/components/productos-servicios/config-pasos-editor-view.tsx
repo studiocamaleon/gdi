@@ -3735,7 +3735,9 @@ export function ConfigPasosEditorView({
         // pasos-extras. Slots y candidatas M-2 se guardan embebidos en
         // configSlotsMaterialesJson / configMaquinasCandidatasJson.
         await actualizarPasoExtra(rutaPasoId, {
-          nombreVisible: cfgActual.nombreVisible ?? null,
+          // El input del nombre no trimea por tecla (se comía los espacios);
+          // el valor se limpia acá, al persistir.
+          nombreVisible: cfgActual.nombreVisible?.trim() || null,
           modoActivacion: cfgActual.modoActivacion ?? undefined,
           condicionActivacionJson,
           modoTiempo: cfgActual.modoTiempo ?? undefined,
@@ -3757,6 +3759,7 @@ export function ConfigPasosEditorView({
       } else {
         await upsertConfigPaso(rutaAlternativa.id, {
           ...cfgActual,
+          nombreVisible: cfgActual.nombreVisible?.trim() || null,
           centroCostoId: centroCostoIdEfectivo,
           condicionActivacionJson,
           mecanismoCantidad: mecanismoCantidadEfectivo,
@@ -3923,17 +3926,38 @@ export function ConfigPasosEditorView({
   });
   // Props compartidos por las dos presentaciones del esquema (asistente
   // flotante y vista guiada expandida): una fuente, dos shells.
-  const onHerenciaEsquema = (pasoId: string, origen: OrigenHerencia | null) =>
+  // Herencia explícita: el TEXTO (jsonTexts) es la fuente al guardar, pero la
+  // pregunta del esquema, los pendientes y el detector de cambios sin guardar
+  // leen configs.mecanismoCantidadConfigJson. Hay que actualizar los DOS: si
+  // no, "Aplicar" no marcaba cambios, el asistente salteaba el guardado y el
+  // click parecía no hacer nada.
+  const aplicarOrigenHerencia = (
+    pasoId: string,
+    origen: OrigenHerencia | null,
+  ) => {
+    const texto = escribirOrigenHerencia(
+      jsonTexts[pasoId]?.mecanismo ?? "",
+      origen,
+    );
     setJsonTexts((prev) => ({
       ...prev,
       [pasoId]: {
         ...(prev[pasoId] ?? { params: "", mecanismo: "" }),
-        mecanismo: escribirOrigenHerencia(
-          prev[pasoId]?.mecanismo ?? "",
-          origen,
-        ),
+        mecanismo: texto,
       },
     }));
+    const parsed = textToJson(texto);
+    if (parsed.ok) {
+      setConfigs((prev) => ({
+        ...prev,
+        [pasoId]: {
+          ...prev[pasoId],
+          mecanismoCantidadConfigJson: parsed.value,
+        },
+      }));
+    }
+  };
+  const onHerenciaEsquema = aplicarOrigenHerencia;
   const reglaPropsEsquema = {
     includeMeasureFields:
       producto.modoMedidas === "LIBRE" || producto.modoMedidas === "MIXTA",
@@ -5403,20 +5427,7 @@ export function ConfigPasosEditorView({
                                           : "unidades_procesadas";
                                       const setOrigen = (
                                         o: OrigenHerencia | null,
-                                      ) =>
-                                        setJsonTexts((prev) => ({
-                                          ...prev,
-                                          [paso.id]: {
-                                            ...(prev[paso.id] ?? {
-                                              params: "",
-                                              mecanismo: "",
-                                            }),
-                                            mecanismo: escribirOrigenHerencia(
-                                              prev[paso.id]?.mecanismo ?? "",
-                                              o,
-                                            ),
-                                          },
-                                        }));
+                                      ) => aplicarOrigenHerencia(paso.id, o);
                                       const nombrePaso = (p: {
                                         id: string;
                                         familiaCodigo: string;
@@ -6747,6 +6758,16 @@ function AcomodadoDetalladoEditor({
                                           </div>
                                         </div>
                                       </div>
+                                      {familia?.codigo ===
+                                      "impresion_por_hoja" ? (
+                                        <ImposicionCuadernilloEditor
+                                          pasoId={pasoId}
+                                          nestingConfig={nestingConfig}
+                                          updateNestingConfig={
+                                            updateNestingConfig
+                                          }
+                                        />
+                                      ) : null}
                                       {familia?.codigo ===
                                         "impresion_por_hoja" && (
                                         <div className="space-y-3 rounded-[11px] border p-4">
@@ -8835,6 +8856,259 @@ function RitmoGuiado({
         />
         <span style={notaStyle}>h — si lo completás, no se calcula por ritmo</span>
       </div>
+    </div>
+  );
+}
+
+/**
+ * "Hojas 1 a 4" → "páginas 1-8, 25-32". En caballete se eligen HOJAS, y cada
+ * hoja arrastra dos páginas del principio y dos del final del documento: sin
+ * esta traducción, nadie entiende qué está pidiendo.
+ */
+function describirHojasEnPaginas(
+  modo: string,
+  desde: number,
+  hasta: number,
+  paginasRef: number,
+): string | null {
+  if (modo === "todas") return null;
+  if (!paginasRef || paginasRef < 4) {
+    return "Cargá las páginas por defecto para ver qué páginas incluye.";
+  }
+  const N = Math.max(4, Math.ceil(paginasRef / 4) * 4);
+  const H = N / 4;
+  const indices =
+    modo === "tapa"
+      ? [1]
+      : modo === "interior"
+        ? Array.from({ length: H - 1 }, (_, i) => i + 2)
+        : Array.from({ length: H }, (_, i) => i + 1).filter(
+            (h) => h >= desde && h <= Math.min(hasta, H),
+          );
+  if (indices.length === 0) return "Ninguna hoja: revisá el rango.";
+  const paginas = indices
+    .flatMap((i) => [N - 2 * i + 2, 2 * i - 1, 2 * i, N - 2 * i + 1])
+    .sort((a, b) => a - b);
+  // Colapsar correlativas en rangos legibles.
+  const rangos: string[] = [];
+  let ini = paginas[0];
+  let prev = paginas[0];
+  for (const p of paginas.slice(1)) {
+    if (p === prev + 1) {
+      prev = p;
+      continue;
+    }
+    rangos.push(ini === prev ? `${ini}` : `${ini}-${prev}`);
+    ini = p;
+    prev = p;
+  }
+  rangos.push(ini === prev ? `${ini}` : `${ini}-${prev}`);
+  return `Con ${paginasRef} páginas: incluye las páginas ${rangos.join(", ")}.`;
+}
+
+/**
+ * Imposición de cuadernillo en el paso de impresión
+ * (docs/imposicion-cuadernillos-diseno.md): activa el esquema caballete y sus
+ * parámetros, incluido QUÉ HOJAS imprime este paso — lo que permite tapa e
+ * interior en papeles o colores distintos. Vive en `nestingConfig.imposicion`;
+ * el comercial NO lo toca (él sólo carga las páginas al cotizar).
+ */
+function ImposicionCuadernilloEditor({
+  pasoId,
+  nestingConfig,
+  updateNestingConfig,
+}: {
+  pasoId: string;
+  nestingConfig: Record<string, unknown>;
+  updateNestingConfig: (
+    rutaPasoId: string,
+    patch: Record<string, unknown>,
+  ) => void;
+}) {
+  const imposicion = asRecord(nestingConfig.imposicion);
+  const activa =
+    String(imposicion.esquema ?? "").toLowerCase() === "caballete";
+  const patch = (cambios: Record<string, unknown>) =>
+    updateNestingConfig(pasoId, {
+      imposicion: { esquema: "caballete", ...imposicion, ...cambios },
+    });
+  // Qué hojas imprime este paso: lo que permite tapa y interior en papeles
+  // (o colores) distintos. Se elige por HOJA, y el sistema traduce a páginas.
+  const hojasRaw = imposicion.hojas;
+  const hojasModo =
+    typeof hojasRaw === "string"
+      ? hojasRaw
+      : String(asRecord(hojasRaw).modo || "todas");
+  const rangoDesde = Number(asRecord(hojasRaw).desde) || 1;
+  const rangoHasta = Number(asRecord(hojasRaw).hasta) || 1;
+  const paginasRef = Number(imposicion.paginasDefault) || 0;
+  const traduccion = describirHojasEnPaginas(
+    hojasModo,
+    rangoDesde,
+    rangoHasta,
+    paginasRef,
+  );
+  return (
+    <div className="space-y-2">
+      <LabelConTooltip
+        label="Imposición de cuadernillo"
+        tooltip="Para productos multipágina abrochados (revista, folleto). La pieza que se acomoda pasa a ser el PAR de páginas enfrentadas y el motor calcula hojas por libro, pliegos y el plan de imposición. El comercial carga las páginas al cotizar."
+        iconSize="sm"
+      />
+      <HumanSelect
+        value={activa ? "caballete" : "ninguna"}
+        onValueChange={(v) =>
+          updateNestingConfig(pasoId, {
+            imposicion:
+              v === "caballete" ? { esquema: "caballete" } : null,
+          })
+        }
+        options={[
+          {
+            value: "ninguna",
+            label: "Sin imposición",
+            description: "Acomodo normal de piezas sueltas.",
+          },
+          {
+            value: "caballete",
+            label: "Cuadernillo a caballete",
+            description:
+              "Hojas anidadas y abrochadas al lomo (revista, folleto multipágina).",
+          },
+        ]}
+      />
+      {activa ? (
+        <div className="space-y-2">
+          <LabelConTooltip
+            label="Qué hojas imprime este paso"
+            tooltip="Permite que la tapa salga en otro papel (o a color) que el interior: se agregan DOS pasos de impresión, uno con la tapa y otro con el interior. En caballete se elige por hoja, no por página: cada hoja lleva dos páginas del principio y dos del final."
+            iconSize="sm"
+          />
+          <HumanSelect
+            value={hojasModo}
+            onValueChange={(v) =>
+              patch({
+                hojas:
+                  v === "rango"
+                    ? { modo: "rango", desde: rangoDesde, hasta: rangoHasta }
+                    : v,
+              })
+            }
+            options={[
+              {
+                value: "todas",
+                label: "Todas las hojas",
+                description: "Un solo paso imprime la revista entera.",
+              },
+              {
+                value: "tapa",
+                label: "Solo la tapa (hoja 1)",
+                description: "La hoja exterior: tapa, contratapa y sus retiros.",
+              },
+              {
+                value: "interior",
+                label: "Interior (sin la tapa)",
+                description: "Todas las hojas menos la exterior.",
+              },
+              {
+                value: "rango",
+                label: "Rango de hojas",
+                description: "Ej. el pliego central a color.",
+              },
+            ]}
+          />
+          {hojasModo === "rango" ? (
+            <div className="ps-grid2">
+              <div className="space-y-2">
+                <LabelConTooltip label="Desde la hoja" iconSize="sm" />
+                <Input
+                  type="number"
+                  min={1}
+                  value={String(rangoDesde)}
+                  onChange={(e) =>
+                    patch({
+                      hojas: {
+                        modo: "rango",
+                        desde: Number(e.target.value) || 1,
+                        hasta: rangoHasta,
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <LabelConTooltip label="Hasta la hoja" iconSize="sm" />
+                <Input
+                  type="number"
+                  min={1}
+                  value={String(rangoHasta)}
+                  onChange={(e) =>
+                    patch({
+                      hojas: {
+                        modo: "rango",
+                        desde: rangoDesde,
+                        hasta: Number(e.target.value) || 1,
+                      },
+                    })
+                  }
+                />
+              </div>
+            </div>
+          ) : null}
+          {traduccion ? (
+            <p className="ps-hint text-xs text-muted-foreground">{traduccion}</p>
+          ) : null}
+        </div>
+      ) : null}
+      {activa ? (
+        <div className="ps-grid2">
+          <div className="space-y-2">
+            <LabelConTooltip
+              label="Páginas por defecto"
+              tooltip="Sugerencia para el cotizador; el comercial la puede pisar. Vacío = el comercial siempre las carga."
+              iconSize="sm"
+            />
+            <Input
+              type="number"
+              min={4}
+              step={4}
+              placeholder="ej. 16"
+              value={
+                imposicion.paginasDefault != null
+                  ? String(imposicion.paginasDefault)
+                  : ""
+              }
+              onChange={(e) =>
+                patch({
+                  paginasDefault:
+                    e.target.value === "" ? undefined : Number(e.target.value),
+                })
+              }
+            />
+          </div>
+          <div className="space-y-2">
+            <LabelConTooltip
+              label="Máx. hojas anidadas"
+              tooltip="Tope físico del caballete: pasado este espesor la cotización corta y sugiere anillado o alzado. Default 25."
+              iconSize="sm"
+            />
+            <Input
+              type="number"
+              min={1}
+              placeholder="25"
+              value={
+                imposicion.maxHojas != null ? String(imposicion.maxHojas) : ""
+              }
+              onChange={(e) =>
+                patch({
+                  maxHojas:
+                    e.target.value === "" ? undefined : Number(e.target.value),
+                })
+              }
+            />
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -154,14 +154,6 @@ export class ProductosServiciosService {
     return this.familias.listarFamilias(tenantId);
   }
 
-  /** E.1 — defaults declarados del paso (delegado). */
-  guardarDefaultsFamilia(
-    tenantId: string,
-    familiaCodigo: string,
-    input: Parameters<FamiliasPasosService['guardarDefaultsFamilia']>[2],
-  ) {
-    return this.familias.guardarDefaultsFamilia(tenantId, familiaCodigo, input);
-  }
 
   listarLookupsConfigPaso(tenantId: string) {
     return this.familias.listarLookupsConfigPaso(tenantId);

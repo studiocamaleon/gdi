@@ -26,6 +26,11 @@
 
 import type { DefinicionFamiliaResuelta } from '../productos-servicios/pasos/types';
 import { calculateGuillotinaCutsFromImposicion } from '../productos-servicios/nesting/helpers/guillotina-cuts';
+import {
+  calcularEstructuraBastidor,
+  parsearParamsEstructuraBastidor,
+} from './estructura-bastidor';
+import { paramsEfectivos } from './params-runtime';
 import type {
   PasoCargado,
   JobContext,
@@ -182,6 +187,36 @@ function computeOutput(
     const sheet = nestingDispatch?.substrates.find((sub) => sub.kind === 'sheet');
     if (sheet?.kind !== 'sheet') return null;
     return (sheet.widthMm * sheet.heightMm) / 1_000_000;
+  }
+
+  // ─── Imposición de cuadernillo a caballete ────────────────────────
+  if (
+    key === 'hojas_por_libro' ||
+    key === 'paginas_blancas' ||
+    key === 'libros_por_juego' ||
+    key === 'plan_imposicion'
+  ) {
+    const cuadernillo = nestingDispatch?.imposicionCuadernillo;
+    if (!cuadernillo) return null;
+    if (key === 'hojas_por_libro') return cuadernillo.hojasPorLibro;
+    if (key === 'paginas_blancas') return cuadernillo.paginasBlancas;
+    if (key === 'libros_por_juego') return cuadernillo.librosPorJuego;
+    // plan_imposicion: el objeto completo, para que la OT/viewer rendericen
+    // la tabla hoja → frente/dorso sin recalcular nada. `plan` trae SOLO las
+    // hojas de este paso (tapa e interior son pasos distintos), y
+    // `paginasDelPaso` las páginas que arrastran esas hojas.
+    return {
+      paginasSolicitadas: cuadernillo.paginasSolicitadas,
+      paginasEfectivas: cuadernillo.paginasEfectivas,
+      paginasBlancas: cuadernillo.paginasBlancas,
+      hojasPorLibro: cuadernillo.hojasPorLibro,
+      hojasDelPaso: cuadernillo.hojasDelPaso,
+      seleccionHojas: cuadernillo.seleccionHojas,
+      paginasDelPaso: cuadernillo.paginasDelPaso,
+      librosPorJuego: cuadernillo.librosPorJuego,
+      juegos: cuadernillo.juegos,
+      plan: cuadernillo.plan,
+    };
   }
 
   if (key === 'talonario_pilas') {
@@ -355,6 +390,48 @@ function computeOutput(
     // La cantidad del paso YA son los ojales: los deriva `resolverCantidad`
     // del perímetro VISIBLE.
     return cantidadEfectiva || null;
+  }
+
+  // ─── F1 cartelería ────────────────────────────────────────────────
+  if (key === 'ml_estructura') {
+    // La cantidad del paso YA son los metros de perfil derivados.
+    return cantidadEfectiva || null;
+  }
+  if (
+    key === 'puntos_soldadura' ||
+    key === 'cenefa_m2' ||
+    key === 'pintura_m2' ||
+    key === 'fondo_m2'
+  ) {
+    // Params EFECTIVOS: el configurador 3D puede pisar refuerzos/solapa por
+    // runtime, y el output tiene que reflejar lo que se cotizó de verdad.
+    // Estos outputs son los DRIVERS que heredan soldadura/pintura/cenefa/
+    // chapa trasera (§15).
+    const resultado = calcularEstructuraBastidor(
+      jobContext,
+      parsearParamsEstructuraBastidor(
+        paramsEfectivos(
+          paso.paramsPasoJson,
+          jobContext.configPasoRuntime?.[paso.configPasoId],
+          ['sepRefuerzoVcm', 'sepRefuerzoHcm', 'solapaCenefaCm'],
+        ),
+      ),
+    );
+    if (!resultado) return null;
+    if (key === 'puntos_soldadura') return resultado.puntosSoldadura;
+    if (key === 'cenefa_m2') return resultado.cenefaM2 || null;
+    if (key === 'pintura_m2') return resultado.pinturaM2 || null;
+    return resultado.fondoM2 || null;
+  }
+  if (key === 'modulos_led') {
+    // La cantidad del paso YA son los módulos sembrados.
+    return cantidadEfectiva || null;
+  }
+  if (key === 'watts_led') {
+    const calc = (jobContext as Record<string, unknown>).__iluminacionLed as
+      | { watts?: number }
+      | undefined;
+    return calc?.watts ?? null;
   }
 
   // ─── Casos puntuales ──────────────────────────────────────────────

@@ -33,9 +33,18 @@ export function camposEditablesComercial(paramsPasoJson: unknown): string[] {
 export function paramsEfectivos(
   paramsPasoJson: unknown,
   runtimeDelPaso: unknown,
+  /**
+   * Campos editables POR DISEÑO de una herramienta (ej. el configurador 3D de
+   * cartelería), sin que el modelador tenga que declararlos abiertos. Los
+   * aporta el caller según la familia del paso.
+   */
+  editablesExtra: string[] = [],
 ): Record<string, unknown> {
   const base = { ...((paramsPasoJson ?? {}) as Record<string, unknown>) };
-  const editables = camposEditablesComercial(paramsPasoJson);
+  const editables = [
+    ...camposEditablesComercial(paramsPasoJson),
+    ...editablesExtra,
+  ];
   if (editables.length === 0) return base;
 
   const runtime = (runtimeDelPaso ?? {}) as Record<string, unknown>;

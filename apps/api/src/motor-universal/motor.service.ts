@@ -43,6 +43,7 @@ import type {
 } from './tipos';
 import {
   esSustratoRollo,
+  getImposicionCaballeteConfig,
   runNestingForPaso,
   type NestingDispatchResult,
 } from './nesting-dispatcher';
@@ -75,6 +76,7 @@ import {
   type CostingStrategyKind,
 } from '../productos-servicios/nesting/costing';
 import { calculateSustratoToPliegoConversion } from '../productos-servicios/nesting/helpers/sustrato-to-pliego';
+import { MAX_HOJAS_CABALLETE_DEFAULT } from '../productos-servicios/nesting/helpers/cuadernillo-imposicion';
 import {
   getModoColorsFromPerfil,
   MODO_COLOR_LABELS,
@@ -87,6 +89,8 @@ import {
   type NivelCobertura,
 } from '../productos-servicios/cobertura-toner';
 import { seleccionarMenorCapacidadQueCumpla } from './seleccion-capacidad';
+import { indicePerfilUnicoPorOperacion } from './seleccion-perfil-operacion';
+import { runMinPorProductividad } from './productividad-tiempo';
 import {
   calcularPerimetroPiezasM,
   congelarMedidaVisible,
@@ -112,8 +116,28 @@ import {
   calcularLayoutOjales,
   parsearParamsColocacionOjales,
 } from './colocacion-ojales';
+import {
+  calcularBarrasNecesarias,
+  calcularEstructuraBastidor,
+  parsearParamsEstructuraBastidor,
+} from './estructura-bastidor';
+import {
+  calcularIluminacionLed,
+  parsearAtributosModuloLed,
+  parsearParamsIluminacionLed,
+} from './iluminacion-led';
 
 const MODO_SIN_IMPRESION = 'SIN_IMPRESION';
+
+/**
+ * Campos que el comercial puede pisar por diseño de una HERRAMIENTA (el
+ * configurador 3D de cartelería), sin que el modelador los declare abiertos.
+ * Espejo del merge del sheet (getCarteleriaDeRuta → configPasoRuntime).
+ */
+const CAMPOS_SIEMPRE_EDITABLES_POR_FAMILIA: Record<string, string[]> = {
+  estructura_bastidor: ['sepRefuerzoVcm', 'sepRefuerzoHcm', 'solapaCenefaCm'],
+  iluminacion_led: ['densidad'],
+};
 const FAMILIAS_IMPRESION = new Set([
   'impresion_por_area',
   'impresion_por_hoja',
@@ -366,15 +390,12 @@ function defaultOutputParaHeredar(familiaCodigo: string): string | null {
       return 'pliegos_impresos';
     case 'laminado':
       return 'pliegos_impresos';
-    case 'barniz':
-      return 'pliegos_impresos';
     case 'plegado':
       return 'pliegos_impresos';
     case 'troquelado_digital':
       return 'pliegos_impresos';
     case 'engomado_emblocado':
       return 'pliegos_impresos';
-    case 'encuadernado_engrapado':
     case 'encuadernado_anillado':
       return 'pliegos_impresos';
     case 'modificacion_post':
@@ -425,12 +446,17 @@ export class MotorUniversalService {
    * lo que eligió el comercial. Ver `params-runtime.ts`.
    */
   private paramsEfectivosDelPaso(
-    paso: { configPasoId: string; paramsPasoJson?: unknown },
+    paso: {
+      configPasoId: string;
+      paramsPasoJson?: unknown;
+      familiaCodigo?: string;
+    },
     jobContext: JobContext,
   ): Record<string, unknown> {
     return paramsEfectivos(
       paso.paramsPasoJson,
       jobContext.configPasoRuntime?.[paso.configPasoId],
+      CAMPOS_SIEMPRE_EDITABLES_POR_FAMILIA[paso.familiaCodigo ?? ''] ?? [],
     );
   }
 
@@ -743,6 +769,44 @@ export class MotorUniversalService {
             mensaje: `El paso "${ejecucion.nombreVisible ?? paso.familiaCodigo}" no declara separación entre ojales ni lados, así que no puede calcular cuántos ojales entran.`,
             sugerencia:
               'Configurar en el paso la separación máxima entre ojales (mm) y los lados donde van.',
+          });
+        }
+      }
+
+      // F1 cartelería — mismos silencios que ojales: sin estos datos la
+      // cantidad sale 0 y el paso cobraría $0 sin avisar.
+      if (paso.familiaCodigo === 'estructura_bastidor' && ejecucion.activado) {
+        const resultado = calcularEstructuraBastidor(
+          jobContext,
+          parsearParamsEstructuraBastidor(
+            this.paramsEfectivosDelPaso(paso, jobContext),
+          ),
+        );
+        if (!resultado) {
+          errores.push({
+            codigo: 'estructura_bastidor_sin_profundidad',
+            severidad: 'ERROR',
+            rutaPasoId: paso.rutaPasoId,
+            rutaPasoOrden: paso.rutaPasoOrden,
+            familiaCodigo: paso.familiaCodigo,
+            mensaje: `El paso "${ejecucion.nombreVisible ?? paso.familiaCodigo}" es un bastidor DOBLE (cajón) pero no tiene profundidad: sin ella no se pueden derivar los metros de perfil.`,
+            sugerencia:
+              'Cargá la profundidad del cajón al cotizar, fijala en el paso, o cambiá el bastidor a "simple" si es un marco plano.',
+          });
+        }
+      }
+      if (paso.familiaCodigo === 'iluminacion_led' && ejecucion.activado) {
+        const calc = (jobContext as Record<string, unknown>).__iluminacionLed;
+        if (!calc) {
+          errores.push({
+            codigo: 'iluminacion_led_sin_modulo',
+            severidad: 'ERROR',
+            rutaPasoId: paso.rutaPasoId,
+            rutaPasoOrden: paso.rutaPasoOrden,
+            familiaCodigo: paso.familiaCodigo,
+            mensaje: `El paso "${ejecucion.nombreVisible ?? paso.familiaCodigo}" no pudo derivar los módulos LED: el módulo del slot no declara cobertura (m²) ni paso (mm) en sus atributos, o el slot quedó sin material.`,
+            sugerencia:
+              'Completá coberturaM2 (sembrado por área) o pasoMm (por recorrido) en la variante del módulo LED de la biblioteca.',
           });
         }
       }
@@ -2180,6 +2244,41 @@ export class MotorUniversalService {
         )
       : null;
 
+    // F1 cartelería — iluminacion_led publica los watts requeridos ANTES de
+    // resolver los slots: el slot `fuente` los usa como criterioInputCampo
+    // del selector MENOR_CAPACIDAD_QUE_CUMPLA (el algoritmo de la anilladora).
+    // El módulo se resuelve POR CÓDIGO de slot: el orden de paso.slots no
+    // está garantizado y slots[0] puede ser la fuente.
+    if (paso.familiaCodigo === 'iluminacion_led') {
+      const slotModulo =
+        paso.slots.find((sl) => sl.slotCodigo === 'modulos_led') ??
+        paso.slots[0] ??
+        null;
+      const materialModulo = slotModulo
+        ? slotModulo === paso.slots[0]
+          ? materialPreliminar
+          : await this.resolverMaterialSlot(tenantId, slotModulo, jobContext, paso)
+        : null;
+      const modulo = parsearAtributosModuloLed(
+        materialModulo?.atributosVarianteJson,
+      );
+      const iluminacion = modulo
+        ? calcularIluminacionLed(
+            jobContext,
+            parsearParamsIluminacionLed(
+              this.paramsEfectivosDelPaso(paso, jobContext),
+            ),
+            modulo,
+          )
+        : null;
+      if (iluminacion) {
+        const ctx = jobContext as Record<string, unknown>;
+        ctx.watts_requeridos_led = iluminacion.wattsRequeridos;
+        // Cálculo completo para los slots secundarios (cableado) y outputs.
+        ctx.__iluminacionLed = iluminacion;
+      }
+    }
+
     // d) NESTING (G-M1 — F.2.13): si el paso usa CALCULADO_POR_PASO y la familia
     //    está soportada por el dispatcher, ejecutamos el algoritmo correspondiente
     //    y obtenemos cantidadCalculada con desperdicio real. Para impresión por
@@ -2239,9 +2338,30 @@ export class MotorUniversalService {
             ),
         },
         {
+          // Corta en dos escenarios: pliego AUTOMÁTICO sin candidato válido,
+          // o pliego FIJO resoluble (medidas de pliego y de pieza presentes)
+          // donde no salió layout → la pieza no entra en el pliego. Antes el
+          // caso fijo caía al fallback silencioso y el síntoma aparecía
+          // pasos después (guillotina sin pliegos_calculados).
           familia: 'impresion_por_hoja',
-          debeCortar: () => this.tienePliegoImpresionAutomatico(paso),
-          error: () => this.errorPliegoImpresionAutomaticoInvalido(paso),
+          debeCortar: () =>
+            this.tienePliegoImpresionAutomatico(paso) ||
+            getImposicionCaballeteConfig(paso) != null ||
+            this.hojaTienePliegoResoluble(paso, jobContext, materialPreliminar),
+          error: () =>
+            this.tienePliegoImpresionAutomatico(paso)
+              ? this.errorPliegoImpresionAutomaticoInvalido(paso)
+              : getImposicionCaballeteConfig(paso) != null
+                ? this.errorImposicionCaballete(
+                    paso,
+                    jobContext,
+                    materialPreliminar,
+                  )
+                : this.errorPiezaNoEntraEnPliegoImpresion(
+                    paso,
+                    jobContext,
+                    materialPreliminar,
+                  ),
         },
         {
           // Sólo corta si el sustrato es resoluble (rollo o pliego con
@@ -2293,6 +2413,28 @@ export class MotorUniversalService {
         errores.push(this.errorNestingTenantSinLayout(paso, superficieTenant));
         return this.pasoAbortado(paso);
       }
+    }
+
+    // F3 cartelería — un rollo más ancho que la boca de la máquina no se
+    // puede cargar físicamente, aunque el acomodo geométrico cierre. Sin este
+    // guard el motor cotizaba una lona de 3,20 m en una impresora de 1,80 y
+    // el viewer dibujaba el imposible.
+    const rolloDispatch = nestingDispatch?.substrates?.find(
+      (sub) => sub.kind === 'roll',
+    );
+    const bocaMm = Number(paso.maquina?.anchoUtil ?? 0);
+    if (rolloDispatch && bocaMm > 0 && rolloDispatch.widthMm > bocaMm) {
+      errores.push({
+        codigo: 'rollo_mas_ancho_que_boca',
+        severidad: 'ERROR',
+        rutaPasoId: paso.rutaPasoId,
+        rutaPasoOrden: paso.rutaPasoOrden,
+        familiaCodigo: paso.familiaCodigo,
+        mensaje: `El rollo elegido mide ${Math.round(rolloDispatch.widthMm)} mm de ancho y la boca de "${paso.maquina?.nombre ?? 'la máquina'}" es de ${Math.round(bocaMm)} mm: no se puede cargar.`,
+        sugerencia:
+          'Elegí un rollo que entre en la máquina, o una máquina con boca más ancha.',
+      });
+      return this.pasoAbortado(paso);
     }
 
     // d.1) El look-ahead de pre_prensa se retiró: pre-prensa espiaba el paso
@@ -2799,13 +2941,24 @@ export class MotorUniversalService {
       // Productividad del perfil — necesita: cantidad y productividad
       const productividad = Number(paso.perfil?.productivityValue ?? 0);
       if (productividad > 0) {
-        // F.2.3 — Mecanismo de cantidad (nesting tiene prioridad si aplica)
-        let cantidadEfectiva = this.resolverCantidad(
-          paso,
-          jobContext,
-          nestingDispatch,
-          materialPreliminar,
-        );
+        // F.2.3 — Mecanismo de cantidad (nesting tiene prioridad si aplica).
+        // Si la familia declara una magnitud propia del tiempo (láser/CNC por
+        // recorrido, grabado por área), la resolvemos con el resolver
+        // magnitud-aware; el resto sigue por `resolverCantidad` (comportamiento
+        // idéntico al histórico para impresión/guillotina/laminado/etc.).
+        let cantidadEfectiva = magnitudTiempoDefaultDeFamilia(paso.familiaCodigo)
+          ? this.resolverCantidadProductividadPropia(
+              paso,
+              jobContext,
+              nestingDispatch,
+              materialPreliminar,
+            )
+          : this.resolverCantidad(
+              paso,
+              jobContext,
+              nestingDispatch,
+              materialPreliminar,
+            );
         // Para T-3 con shelf-rollo, la productividad suele estar en m²/h y la
         // cantidadCalculada del nesting está en metros lineales. Convertimos a m²
         // multiplicando por el ancho útil del rollo (que viene en el sustrato).
@@ -3448,6 +3601,181 @@ export class MotorUniversalService {
     };
   }
 
+  /**
+   * Diagnóstico de la imposición de cuadernillo cuando el dispatcher no dio
+   * layout, en orden de causa probable: faltan páginas → excede el tope de
+   * hojas del caballete → el PAR de páginas no entra en el pliego.
+   */
+  private errorImposicionCaballete(
+    paso: PasoCargado,
+    jobContext: JobContext,
+    material: MaterialResueltoParaNestingConfig | null,
+  ): ErrorMotor {
+    const base = {
+      severidad: 'ERROR' as const,
+      rutaPasoId: paso.rutaPasoId,
+      rutaPasoOrden: paso.rutaPasoOrden,
+      familiaCodigo: paso.familiaCodigo,
+    };
+    const imposicion = getImposicionCaballeteConfig(paso);
+    const paginas = Number(
+      jobContext.paginas ?? imposicion?.paginasDefault ?? 0,
+    );
+    if (!Number.isFinite(paginas) || paginas <= 0) {
+      return {
+        ...base,
+        codigo: 'imposicion_sin_paginas',
+        mensaje:
+          'La imposición de cuadernillo necesita las PÁGINAS del documento y no llegaron.',
+        contexto: { configPasoId: paso.configPasoId },
+        sugerencia:
+          'Cargá la cantidad de páginas al cotizar (o un default de páginas en el paso de impresión).',
+      };
+    }
+
+    const hojas = Math.max(4, Math.ceil(paginas / 4) * 4) / 4;
+    const seleccion = imposicion?.hojas ?? { modo: 'todas' as const };
+    // Un paso que imprime el interior de un documento de una sola hoja no
+    // tiene nada que hacer: es un error de configuración, no de cotización.
+    if (hojas === 1 && seleccion.modo === 'interior') {
+      return {
+        ...base,
+        codigo: 'imposicion_paso_sin_hojas',
+        mensaje:
+          `Este paso imprime el interior, pero un documento de ${paginas} ` +
+          'páginas tiene una sola hoja (que es la tapa).',
+        contexto: { paginas, hojas, seleccion },
+        sugerencia:
+          'Sacá el paso de interior de la ruta, o subí las páginas del documento.',
+      };
+    }
+    const maxHojas = imposicion?.maxHojas ?? MAX_HOJAS_CABALLETE_DEFAULT;
+    if (hojas > maxHojas) {
+      return {
+        ...base,
+        codigo: 'caballete_excede_hojas',
+        mensaje:
+          `${paginas} páginas son ${hojas} hojas anidadas y el caballete admite ` +
+          `hasta ${maxHojas}: no se puede abrochar al lomo.`,
+        contexto: { paginas, hojas, maxHojas },
+        sugerencia:
+          'Usá encuadernación anillada para este espesor, o subí el tope de hojas del paso si tu abrochadora lo banca.',
+      };
+    }
+
+    const ctx = this.getJobContextParaNesting(paso, jobContext);
+    const config = resolveNestingConfig(paso, ctx, material);
+    const pagina = ctx.medidaCustomMm ?? ctx.piezas?.[0] ?? null;
+    const parAnchoMm = Math.round(Number(pagina?.anchoMm ?? 0) * 2);
+    const parAltoMm = Math.round(Number(pagina?.altoMm ?? 0));
+    return {
+      ...base,
+      codigo: 'par_no_entra_en_pliego_imposicion',
+      mensaje:
+        `El par de páginas (${parAnchoMm}×${parAltoMm}mm, dos páginas enfrentadas) ` +
+        `no entra en el pliego de impresión de ${Math.round(config.sheetWidthMm ?? 0)}×` +
+        `${Math.round(config.sheetHeightMm ?? 0)}mm con sus márgenes.`,
+      contexto: {
+        parAnchoMm,
+        parAltoMm,
+        pliegoAnchoMm: config.sheetWidthMm ?? null,
+        pliegoAltoMm: config.sheetHeightMm ?? null,
+      },
+      sugerencia:
+        'Configurá un pliego más grande en el paso de impresión, o achicá la medida de página del producto.',
+    };
+  }
+
+  /** Pliego de impresión FIJO con medidas de pliego Y de pieza: si con eso el
+   *  dispatcher no dio layout, la pieza no entra — hay que cortar con
+   *  diagnóstico en el paso de impresión, no dejar el fallback silencioso.
+   *  Sin medidas (material sin resolver, ruta legacy sin pliego) NO corta. */
+  private hojaTienePliegoResoluble(
+    paso: PasoCargado,
+    jobContext: JobContext,
+    material: MaterialResueltoParaNestingConfig | null,
+  ): boolean {
+    if (paso.familiaCodigo !== 'impresion_por_hoja') return false;
+    const ctx = this.getJobContextParaNesting(paso, jobContext);
+    const config = resolveNestingConfig(paso, ctx, material);
+    if ((config.sheetWidthMm ?? 0) <= 0 || (config.sheetHeightMm ?? 0) <= 0) {
+      return false;
+    }
+    const pieza = this.medidaPiezaParaHoja(paso, ctx);
+    return pieza.anchoMm > 0 && pieza.altoMm > 0;
+  }
+
+  /** Medida de la pieza que la impresión por hoja intenta imponer (misma
+   *  precedencia que runGrid2DSingle: medida custom → piezas → params). Para
+   *  el diagnóstico, con varias piezas se toma la de lado mayor. */
+  private medidaPiezaParaHoja(
+    paso: PasoCargado,
+    ctx: JobContext,
+  ): { anchoMm: number; altoMm: number } {
+    if (ctx.medidaCustomMm) {
+      return {
+        anchoMm: Number(ctx.medidaCustomMm.anchoMm ?? 0),
+        altoMm: Number(ctx.medidaCustomMm.altoMm ?? 0),
+      };
+    }
+    const piezas = ctx.piezas ?? [];
+    if (piezas.length > 0) {
+      const mayor = [...piezas].sort(
+        (a, b) =>
+          Math.max(b.anchoMm, b.altoMm) - Math.max(a.anchoMm, a.altoMm),
+      )[0];
+      return { anchoMm: mayor.anchoMm, altoMm: mayor.altoMm };
+    }
+    const params = this.asRecord(paso.paramsPasoJson);
+    return {
+      anchoMm: Number(params.piezaAnchoMm ?? 0),
+      altoMm: Number(params.piezaAltoMm ?? 0),
+    };
+  }
+
+  private errorPiezaNoEntraEnPliegoImpresion(
+    paso: PasoCargado,
+    jobContext: JobContext,
+    material: MaterialResueltoParaNestingConfig | null,
+  ): ErrorMotor {
+    const ctx = this.getJobContextParaNesting(paso, jobContext);
+    const config = resolveNestingConfig(paso, ctx, material);
+    const pieza = this.medidaPiezaParaHoja(paso, ctx);
+    const pliegoAnchoMm = Math.round(config.sheetWidthMm ?? 0);
+    const pliegoAltoMm = Math.round(config.sheetHeightMm ?? 0);
+    const utilAnchoMm = Math.max(
+      0,
+      Math.round(pliegoAnchoMm - config.margins.leftMm - config.margins.rightMm),
+    );
+    const utilAltoMm = Math.max(
+      0,
+      Math.round(pliegoAltoMm - config.margins.topMm - config.margins.bottomMm),
+    );
+    return {
+      codigo: 'pieza_no_entra_en_pliego_impresion',
+      severidad: 'ERROR',
+      mensaje:
+        `La pieza de ${Math.round(pieza.anchoMm)}×${Math.round(pieza.altoMm)}mm no entra en el ` +
+        `pliego de impresión de ${pliegoAnchoMm}×${pliegoAltoMm}mm ` +
+        `(área útil ${utilAnchoMm}×${utilAltoMm}mm con los márgenes` +
+        `${config.allowRotation ? '' : ', sin rotación'}).`,
+      rutaPasoId: paso.rutaPasoId,
+      rutaPasoOrden: paso.rutaPasoOrden,
+      familiaCodigo: paso.familiaCodigo,
+      contexto: {
+        piezaAnchoMm: pieza.anchoMm,
+        piezaAltoMm: pieza.altoMm,
+        pliegoAnchoMm,
+        pliegoAltoMm,
+        utilAnchoMm,
+        utilAltoMm,
+        allowRotation: config.allowRotation,
+      },
+      sugerencia:
+        'Configurá un pliego de impresión más grande en el paso (ej. SRA3), o achicá la medida de la pieza.',
+    };
+  }
+
   /** D.5 — Calcular materiales consumidos. F.2.5: soporta los 3 modos de selección. */
   private async calcularMateriales(
     tenantId: string,
@@ -3513,6 +3841,12 @@ export class MotorUniversalService {
       // Cantidad: depende de la fórmula. Si hay nesting, ajustamos a la
       // cantidad real con desperdicio.
       let cantidad = 0;
+      const cantidadPrimitiva = this.cantidadSlotPrimitivaCarteleria(
+        paso,
+        slot,
+        jobContext,
+        materialResuelto,
+      );
       const cantidadPorBase = this.resolverCantidadSlotPorBase(
         slot,
         paso,
@@ -3520,7 +3854,9 @@ export class MotorUniversalService {
         nestingDispatch,
         materialResuelto,
       );
-      if (cantidadPorBase !== null) {
+      if (cantidadPrimitiva !== null) {
+        cantidad = cantidadPrimitiva;
+      } else if (cantidadPorBase !== null) {
         cantidad = cantidadPorBase;
       } else if (slot.formula === 'por_unidad_productiva') {
         // G-M9 fix (validación end-to-end 2026-04-25): la cantidad de
@@ -4630,7 +4966,15 @@ export class MotorUniversalService {
           : todos;
       if (validos.length === 0) return null;
 
-      const criterio = slot.criterioMotorAuto ?? 'MENOR_COSTO';
+      // F1 cartelería: el slot `fuente` de iluminacion_led trae el selector
+      // por capacidad de fábrica — sin obligar al modelador a configurar los
+      // tres campos del criterio (los puede pisar si quiere).
+      const esFuenteLed =
+        paso?.familiaCodigo === 'iluminacion_led' &&
+        slot.slotCodigo === 'fuente';
+      const criterio =
+        slot.criterioMotorAuto ??
+        (esFuenteLed ? 'MENOR_CAPACIDAD_QUE_CUMPLA' : 'MENOR_COSTO');
 
       if (criterio === 'MENOR_COSTO') {
         return validos.sort(
@@ -4682,14 +5026,17 @@ export class MotorUniversalService {
         // Necesita criterioInputCampo del JobContext y criterioMaterialCampo de cada
         // variante. El campo de capacidad se lee de atributosVarianteJson (ver
         // seleccion-capacidad.ts): sin esto cap=0 y el motor no auto-selecciona.
+        const inputCampo =
+          slot.criterioInputCampo ??
+          (esFuenteLed ? 'watts_requeridos_led' : '');
+        const materialCampo =
+          slot.criterioMaterialCampo ?? (esFuenteLed ? 'capacidad' : '');
         const inputValor = Number(
-          (jobContext as Record<string, unknown>)[
-            slot.criterioInputCampo ?? ''
-          ] ?? 0,
+          (jobContext as Record<string, unknown>)[inputCampo] ?? 0,
         );
         return seleccionarMenorCapacidadQueCumpla(
           validos,
-          slot.criterioMaterialCampo ?? '',
+          materialCampo,
           inputValor,
         );
       }
@@ -5195,6 +5542,38 @@ export class MotorUniversalService {
         if (params) return calcularCantidadOjales(jobContext, params);
         return 0;
       }
+      // F1 cartelería — `estructura_bastidor`: la cantidad del paso son los
+      // METROS de perfil derivados de W×H×D y la separación de refuerzos.
+      if (paso.familiaCodigo === 'estructura_bastidor') {
+        const resultado = calcularEstructuraBastidor(
+          jobContext,
+          parsearParamsEstructuraBastidor(
+            this.paramsEfectivosDelPaso(paso, jobContext),
+          ),
+        );
+        return resultado?.mlTotal ?? 0;
+      }
+      // F1 cartelería — `iluminacion_led`: la cantidad son los MÓDULOS,
+      // derivados de la geometría y de los atributos del módulo del slot.
+      if (paso.familiaCodigo === 'iluminacion_led') {
+        // La pre-pasada del paso ya calculó con el MÓDULO del slot correcto.
+        const calc = (jobContext as Record<string, unknown>).__iluminacionLed as
+          | { modulos?: number }
+          | undefined;
+        if (calc?.modulos) return calc.modulos;
+        const modulo = parsearAtributosModuloLed(
+          materialResuelto?.atributosVarianteJson,
+        );
+        if (!modulo) return 0;
+        const resultado = calcularIluminacionLed(
+          jobContext,
+          parsearParamsIluminacionLed(
+            this.paramsEfectivosDelPaso(paso, jobContext),
+          ),
+          modulo,
+        );
+        return resultado?.modulos ?? 0;
+      }
       // Fallback histórico: m² crudos de las piezas (sin desperdicio) cuando
       // la familia no tiene algoritmo soportado por el dispatcher.
       if (
@@ -5229,6 +5608,77 @@ export class MotorUniversalService {
     }
 
     return Number(jobContext.cantidad ?? 0);
+  }
+
+  /**
+   * F1 cartelería — cantidades de slots que se DERIVAN de la geometría, no de
+   * la fórmula configurada (FRONTERA-PRIMITIVA, como el layout de ojales):
+   *   estructura_bastidor: chapa_cenefa (m²) y pintura (m² de superficie).
+   *   iluminacion_led: fuente (1, la elige MENOR_CAPACIDAD) y cableado (ml).
+   * Devuelve null para cualquier otro slot → sigue el camino normal.
+   */
+  private cantidadSlotPrimitivaCarteleria(
+    paso: PasoCargado,
+    slot: PasoCargado['slots'][number],
+    jobContext: JobContext,
+    materialResuelto?: {
+      atributosVarianteJson?: Record<string, unknown> | null;
+    } | null,
+  ): number | null {
+    if (paso.familiaCodigo === 'estructura_bastidor') {
+      const slotsDerivados = new Set([
+        'perfil_estructural',
+        'chapa_cenefa',
+        'pintura',
+        'chapa_fondo',
+        'anclaje',
+      ]);
+      if (!slotsDerivados.has(slot.slotCodigo)) return null;
+      const resultado = calcularEstructuraBastidor(
+        jobContext,
+        parsearParamsEstructuraBastidor(
+          this.paramsEfectivosDelPaso(paso, jobContext),
+        ),
+      );
+      if (!resultado) return 0;
+      if (slot.slotCodigo === 'perfil_estructural') {
+        // Compra REAL: si la variante declara `largoBarra` (m), se cobran
+        // barras ENTERAS con packing del despiece (el sobrante se paga igual,
+        // como en la ferretería). Sin el atributo, sigue por ml consumidos.
+        const attrs = materialResuelto?.atributosVarianteJson ?? {};
+        const largoBarraMm =
+          Number((attrs as Record<string, unknown>).largoBarra ?? 0) * 1000;
+        if (largoBarraMm > 0) {
+          const barras = calcularBarrasNecesarias(
+            resultado.despieceMm,
+            largoBarraMm,
+          );
+          if (barras) return barras.barras;
+          // Tramo más largo que la barra: no se puede cortar — 0 hace que el
+          // paso no cobre en silencio... mejor caer a ml y que se vea el
+          // costo, con el diagnóstico fino como mejora futura.
+          return resultado.mlTotal;
+        }
+        return null; // sin largoBarra → fórmula normal (ml)
+      }
+      if (slot.slotCodigo === 'chapa_cenefa') return resultado.cenefaM2;
+      if (slot.slotCodigo === 'pintura') return resultado.pinturaM2;
+      if (slot.slotCodigo === 'chapa_fondo') return resultado.fondoM2;
+      return resultado.anclajes;
+    }
+    if (paso.familiaCodigo === 'iluminacion_led') {
+      if (slot.slotCodigo === 'fuente') return 1;
+      if (slot.slotCodigo === 'cableado') {
+        // El cálculo completo lo publicó la pre-pasada del paso (depende del
+        // módulo resuelto del slot principal, que acá ya no está a mano).
+        const calc = (jobContext as Record<string, unknown>).__iluminacionLed as
+          | { cableMl?: number }
+          | undefined;
+        return Number(calc?.cableMl ?? 0);
+      }
+      return null;
+    }
+    return null;
   }
 
   private resolverCantidadSlotPorBase(
@@ -5423,6 +5873,24 @@ export class MotorUniversalService {
       );
     }
 
+    // Impresión 3D: la magnitud son los GRAMOS de material, no el área ni la
+    // caja de la pieza (dos piezas iguales por fuera consumen muy distinto
+    // según relleno y paredes). Los gramos por pieza los declara el paso y
+    // normalmente el modelador los deja abiertos al comercial, que los saca
+    // del slicer. Sin el dato no hay magnitud: cae a la cantidad y el tiempo
+    // queda mal, así que el paso debería usar T-4 en ese caso.
+    if (source === 'gramos_material') {
+      const params = this.paramsEfectivosDelPaso(paso, jobContext);
+      const gramosPorPieza = this.numeroPositivo(params.gramosPorPieza);
+      const cantidad = this.resolverCantidad(
+        paso,
+        jobContext,
+        nestingDispatch,
+        materialResuelto,
+      );
+      return gramosPorPieza != null ? gramosPorPieza * cantidad : cantidad;
+    }
+
     return this.resolverCantidad(
       paso,
       jobContext,
@@ -5478,30 +5946,21 @@ export class MotorUniversalService {
     }
 
     const unidad = String(paso.perfil?.productivityUnit ?? '').toUpperCase();
-
-    if (unidad === 'PPM') {
-      const factorA4 = this.factorA4EquivalenteParaImpresionPorHoja(
-        paso,
-        jobContext,
-        nestingDispatch,
-      );
-      return (cantidadEfectiva * factorA4) / productividad;
-    }
-
-    if (
-      unidad === 'CORTES_MIN' ||
-      unidad === 'GOLPES_MIN' ||
-      unidad === 'PLIEGOS_MIN' ||
-      unidad === 'M_MIN'
-    ) {
-      return cantidadEfectiva / productividad;
-    }
-
-    if (unidad === 'MM_S') {
-      return cantidadEfectiva / productividad / 60;
-    }
-
-    return (cantidadEfectiva / productividad) * 60;
+    // factorA4 solo aplica a PPM; se computa lazy para no tocar el resto.
+    const factorA4 =
+      unidad === 'PPM'
+        ? this.factorA4EquivalenteParaImpresionPorHoja(
+            paso,
+            jobContext,
+            nestingDispatch,
+          )
+        : 1;
+    return runMinPorProductividad(
+      cantidadEfectiva,
+      productividad,
+      unidad,
+      factorA4,
+    );
   }
 
   private calcularRunMinGuillotina(
@@ -5910,6 +6369,31 @@ export class MotorUniversalService {
       }
       // Override inválido (perfil de otra máquina / inactivo): se ignora y
       // sigue la resolución automática.
+    }
+
+    // ─── Láser/CNC: auto-selección por OPERACIÓN ────────────────────
+    // Una máquina con un perfil por operación (un CORTE, un GRABADO) resuelve
+    // sola: el paso corte_laser toma el de CORTE, grabado_laser el de GRABADO.
+    // Con varios perfiles de la misma operación (por material×espesor) elige el
+    // comercial hasta que el contexto exponga material+espesor (Fase 3).
+    const idxPorOperacion = indicePerfilUnicoPorOperacion(
+      paso.familiaCodigo,
+      perfilesDisponibles,
+    );
+    if (idxPorOperacion !== null) {
+      const elegido = perfilesDisponibles[idxPorOperacion];
+      if (elegido.id === paso.perfilM1Id) return null; // ya es el default
+      return {
+        id: elegido.id,
+        nombre: elegido.nombre,
+        tipoPerfil: elegido.tipoPerfil,
+        productivityValue: elegido.productivityValue,
+        productivityUnit: elegido.productivityUnit ?? null,
+        setupMin: elegido.setupMin,
+        cleanupMin: elegido.cleanupMin,
+        feedReloadMin: elegido.feedReloadMin,
+        detalleJson: elegido.detalleJson,
+      };
     }
 
     // ─── 1. Impresión por hoja: color + caras + escalón de gramaje ──

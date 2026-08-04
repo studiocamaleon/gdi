@@ -573,7 +573,7 @@ export const familiaPlantillaLabels: DiccionarioLabels = {
   },
   terminacion: {
     label: "Terminación y armado",
-    descripcion: "Guillotina, laminadora, anilladora, soldadora, cabina pintura.",
+    descripcion: "Guillotina, laminadora, anilladora, plancha térmica.",
   },
 };
 

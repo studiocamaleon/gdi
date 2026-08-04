@@ -41,7 +41,6 @@ import {
   getCatalogoFamilias,
   getFamiliasTenant,
   getLookupsConfigPaso,
-  guardarDefaultsFamilia,
   previewCosteoFamiliaTenant,
   type LookupsConfigPaso,
 } from "@/lib/productos-servicios-api";
@@ -434,10 +433,6 @@ export function PasosFamiliasView() {
   const [wizardAbierto, setWizardAbierto] = React.useState(false);
   const [aEditar, setAEditar] = React.useState<FamiliaTenant | null>(null);
   const [aEliminar, setAEliminar] = React.useState<FamiliaTenant | null>(null);
-  // E.1 — familia del SISTEMA cuyos defaults se están configurando.
-  const [defaultsDe, setDefaultsDe] = React.useState<FamiliaListItem | null>(
-    null,
-  );
 
   const recargar = React.useCallback(async () => {
     const filas = await getFamiliasTenant();
@@ -482,9 +477,11 @@ export function PasosFamiliasView() {
 
   const sistema = React.useMemo(
     () =>
-      (catalogo?.familias ?? []).filter(
-        (f) => f.origen !== "tenant" && f.visibleEnSelector !== false,
-      ),
+      (catalogo?.familias ?? [])
+        .filter((f) => f.origen !== "tenant" && f.visibleEnSelector !== false)
+        .sort((a, b) =>
+          a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }),
+        ),
     [catalogo],
   );
 
@@ -649,7 +646,6 @@ export function PasosFamiliasView() {
               <th>Nombre</th>
               <th>Descripción</th>
               <th>Categoría</th>
-              <th className="right">Defaults</th>
             </tr>
           </thead>
           <tbody>
@@ -662,15 +658,6 @@ export function PasosFamiliasView() {
                   <div className="desc">{f.descripcion}</div>
                 </td>
                 <td>{getLabel(categoriaFamiliaLabels, f.categoria).label}</td>
-                <td className="right">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setDefaultsDe(f)}
-                  >
-                    {f.defaults ? "Defaults ✓" : "Configurar"}
-                  </Button>
-                </td>
               </tr>
             ))}
           </tbody>
@@ -694,23 +681,6 @@ export function PasosFamiliasView() {
             setWizardAbierto(false);
             setAEditar(null);
             await recargar();
-          }}
-        />
-      ) : null}
-
-      {defaultsDe ? (
-        <DefaultsSheet
-          familia={defaultsDe}
-          centros={centros}
-          proveedores={proveedores}
-          onCerrar={() => setDefaultsDe(null)}
-          onGuardado={async () => {
-            setDefaultsDe(null);
-            try {
-              setCatalogo(await getCatalogoFamilias());
-            } catch {
-              /* la próxima carga lo trae */
-            }
           }}
         />
       ) : null}
@@ -1740,250 +1710,5 @@ function PasoFinal({
         </div>
       ) : null}
     </>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────
-// E.1 — Defaults declarados de una familia del SISTEMA ("tu guillotina la
-// cobra el centro X"). Sólo muestra los campos que la forma soporta.
-// ─────────────────────────────────────────────────────────────────────
-
-function DefaultsSheet({
-  familia,
-  centros,
-  proveedores,
-  onCerrar,
-  onGuardado,
-}: {
-  familia: FamiliaListItem;
-  centros: Array<{ id: string; nombre: string }>;
-  proveedores: Array<{ id: string; nombre: string }>;
-  onCerrar: () => void;
-  onGuardado: () => Promise<void>;
-}) {
-  const d = familia.defaults;
-  const [centroCostoId, setCentroCostoId] = React.useState<string | null>(
-    d?.centroCostoId ?? null,
-  );
-  const [ritmo, setRitmo] = React.useState(
-    d?.productividadHora != null ? String(d.productividadHora) : "",
-  );
-  const [tiempoFijo, setTiempoFijo] = React.useState(
-    d?.tiempoFijoMin != null ? String(d.tiempoFijoMin) : "",
-  );
-  const [demasia, setDemasia] = React.useState(
-    d?.demasiaMm != null ? String(d.demasiaMm) : "",
-  );
-  const [solape, setSolape] = React.useState(
-    d?.solapePanelMm != null ? String(d.solapePanelMm) : "",
-  );
-  // E.2 — tercerización declarada del paso.
-  const [tercerizado, setTercerizado] = React.useState(d?.tercerizado ?? false);
-  const [proveedorId, setProveedorId] = React.useState<string | null>(
-    d?.proveedorId ?? null,
-  );
-  const [fuenteCosto, setFuenteCosto] = React.useState(
-    d?.fuenteCostoTercerizado ?? "matriz",
-  );
-  const [plazoDias, setPlazoDias] = React.useState(
-    d?.plazoProveedorDias != null ? String(d.plazoProveedorDias) : "",
-  );
-  const [guardando, setGuardando] = React.useState(false);
-
-  const soportaT2 = familia.modosTiempoSoportados.includes("T-2");
-  const soportaT1 = familia.modosTiempoSoportados.includes("T-1");
-  const soportaManual = familia.relacionMaquinaSoportada.includes("M-0");
-  // Nestea = deja pliegos o m² (Registro de Capacidades, B.3).
-  const nestea = (familia.capacidades ?? []).some(
-    (c) => c.key === "pliegos" || c.key === "m2_consumidos",
-  );
-  const panela = familia.codigo === "impresion_por_area";
-
-  const guardar = async () => {
-    setGuardando(true);
-    try {
-      await guardarDefaultsFamilia(familia.codigo, {
-        centroCostoId,
-        productividadHora: soportaT2 ? numeroONull(ritmo) : null,
-        tiempoFijoMin: soportaT1 ? numeroONull(tiempoFijo) : null,
-        demasiaMm: nestea ? numeroONull(demasia) : null,
-        solapePanelMm: panela ? numeroONull(solape) : null,
-        tercerizado: tercerizado ? true : null,
-        proveedorId: tercerizado ? proveedorId : null,
-        fuenteCostoTercerizado: tercerizado ? fuenteCosto : null,
-        plazoProveedorDias: tercerizado ? numeroONull(plazoDias) : null,
-      });
-      toast.success("Defaults guardados");
-      await onGuardado();
-    } catch (error) {
-      toast.error(
-        error instanceof ApiError ? error.message : "No se pudo guardar.",
-      );
-    } finally {
-      setGuardando(false);
-    }
-  };
-
-  return (
-    <Sheet open onOpenChange={(open) => !open && onCerrar()}>
-      <SheetContent className={s.wizard} style={{ maxWidth: 480 }}>
-        <SheetHeader className={s.wizardHead}>
-          <SheetTitle>Defaults de {familia.nombre}</SheetTitle>
-          <SheetDescription>
-            Valores típicos de TU taller para este paso. Cada producto puede
-            pisarlos al configurar su ruta; vacío = sin sugerencia.
-          </SheetDescription>
-        </SheetHeader>
-        <div className={s.wizardBody}>
-          {!soportaManual && !soportaT2 && !soportaT1 && !nestea && !panela ? (
-            <p className={s.ayuda}>
-              Este paso no tiene defaults de tiempo/costo propios: la máquina
-              pone la tarifa y el tiempo. Igual podés declarar que lo
-              terceriza un proveedor.
-            </p>
-          ) : null}
-          {soportaManual ? (
-            <div className="field">
-              <span className={s.previewLabel}>¿En qué centro productivo se hace?</span>
-              <HumanSelect
-                value={centroCostoId ?? ""}
-                onValueChange={(id) => setCentroCostoId(id || null)}
-                options={centros.map((c) => ({ value: c.id, label: c.nombre }))}
-                placeholder="Centro de costo (para pasos sin máquina)"
-              />
-              <span className={s.previewPista}>
-                Aplica cuando el paso se hace a mano; con máquina la tarifa la
-                pone la máquina.
-              </span>
-            </div>
-          ) : null}
-          {soportaT2 ? (
-            <div className="field">
-              <span className={s.previewLabel}>Ritmo típico</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <Input
-                  value={ritmo}
-                  onChange={(e) => setRitmo(e.target.value)}
-                  placeholder="Ej: 60"
-                  inputMode="decimal"
-                  style={{ maxWidth: 120 }}
-                />
-                <span className={s.previewPista}>unidades por hora</span>
-              </div>
-            </div>
-          ) : null}
-          {soportaT1 ? (
-            <div className="field">
-              <span className={s.previewLabel}>Duración típica</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <Input
-                  value={tiempoFijo}
-                  onChange={(e) => setTiempoFijo(e.target.value)}
-                  placeholder="Ej: 30"
-                  inputMode="decimal"
-                  style={{ maxWidth: 120 }}
-                />
-                <span className={s.previewPista}>minutos, fijos</span>
-              </div>
-            </div>
-          ) : null}
-          {nestea ? (
-            <div className="field">
-              <span className={s.previewLabel}>Demasía típica por pieza</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <Input
-                  value={demasia}
-                  onChange={(e) => setDemasia(e.target.value)}
-                  placeholder="Ej: 3"
-                  inputMode="decimal"
-                  style={{ maxWidth: 120 }}
-                />
-                <span className={s.previewPista}>mm por lado</span>
-              </div>
-            </div>
-          ) : null}
-          <label className={s.fijarActivacion}>
-            <Switch
-              checked={tercerizado}
-              onCheckedChange={(v) => setTercerizado(v)}
-            />
-            <span>
-              <span className={s.opcionTitulo}>Lo terceriza un proveedor</span>
-              <span className={s.opcionDesc}>
-                Las configuraciones nuevas de producto nacen con la
-                tercerización prendida y precargada; cada producto puede
-                internalizarlo o cambiar de proveedor.
-              </span>
-            </span>
-          </label>
-          {tercerizado ? (
-            <>
-              <div className="field">
-                <span className={s.previewLabel}>Proveedor habitual</span>
-                <HumanSelect
-                  value={proveedorId ?? ""}
-                  onValueChange={(id) => setProveedorId(id || null)}
-                  options={proveedores.map((pv) => ({
-                    value: pv.id,
-                    label: pv.nombre,
-                  }))}
-                  placeholder="Elegir proveedor (opcional)"
-                />
-              </div>
-              <div className="field">
-                <span className={s.previewLabel}>¿Cómo cotiza?</span>
-                <HumanSelect
-                  value={fuenteCosto}
-                  onValueChange={(v) => setFuenteCosto(v || "matriz")}
-                  options={[
-                    { value: "matriz", label: "Con una grilla de precios" },
-                    { value: "tarifa_magnitud", label: "Por cantidad o medida" },
-                    { value: "fijo", label: "Precio fijo por trabajo" },
-                  ]}
-                />
-              </div>
-              <div className="field">
-                <span className={s.previewLabel}>Plazo típico</span>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <Input
-                    value={plazoDias}
-                    onChange={(e) => setPlazoDias(e.target.value)}
-                    placeholder="Ej: 5"
-                    inputMode="numeric"
-                    style={{ maxWidth: 120 }}
-                  />
-                  <span className={s.previewPista}>días hábiles</span>
-                </div>
-              </div>
-            </>
-          ) : null}
-          {panela ? (
-            <div className="field">
-              <span className={s.previewLabel}>Solape típico de panel</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <Input
-                  value={solape}
-                  onChange={(e) => setSolape(e.target.value)}
-                  placeholder="Ej: 30"
-                  inputMode="decimal"
-                  style={{ maxWidth: 120 }}
-                />
-                <span className={s.previewPista}>
-                  mm donde un panel pisa al otro para soldar
-                </span>
-              </div>
-            </div>
-          ) : null}
-        </div>
-        <div className={s.wizardFooter}>
-          <Button variant="ghost" onClick={onCerrar}>
-            Cancelar
-          </Button>
-          <Button onClick={guardar} disabled={guardando}>
-            {guardando ? "Guardando…" : "Guardar defaults"}
-          </Button>
-        </div>
-      </SheetContent>
-    </Sheet>
   );
 }

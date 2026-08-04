@@ -2309,13 +2309,17 @@ describe('MotorUniversalService — smoke tests', () => {
     }
 
     try {
+      // Piezas que ENTRAN en el pliego del paso de impresión (650×450, útil
+      // 640×440): desde el guard `pieza_no_entra_en_pliego_impresion`, una
+      // pieza imposible de imponer corta la cotización en vez de caer al
+      // fallback silencioso — este test es de T-2, no de ese guard.
       const result = await motorService.cotizar({
         tenantId,
         productoId: tarjetas.id,
         periodo: '2026-06',
         jobContext: {
           cantidad: 100,
-          piezas: [{ cantidad: 2, anchoMm: 1000, altoMm: 500 }],
+          piezas: [{ cantidad: 2, anchoMm: 625, altoMm: 400 }],
         },
       });
       expect(result.errores).toEqual([]);
@@ -2323,7 +2327,8 @@ describe('MotorUniversalService — smoke tests', () => {
       const pasoEmbalaje = result.cotizacion!.pasos.find(
         (p) => p.familiaCodigo === 'embalaje',
       );
-      expect(pasoEmbalaje!.tiempo!.runMin).toBeCloseTo(12, 2);
+      // 2 piezas × 0,25 m² = 0,5 m² a 5 m²/h → 6 min.
+      expect(pasoEmbalaje!.tiempo!.runMin).toBeCloseTo(6, 2);
     } finally {
       await prisma.productoConfigPaso.update({
         where: { id: embalaje!.id },

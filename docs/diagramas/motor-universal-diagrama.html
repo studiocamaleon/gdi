@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>Motor universal de costeo — Grafoprint</title>
+<style>
+  @page { size: A4 landscape; margin: 12mm 12mm 10mm; }
+  * { box-sizing: border-box; }
+  :root{
+    --bg:#f6f6f4; --surface:#fff; --surface2:#fafaf9; --border:#e7e5e2;
+    --border2:#d4d2cd; --hair:#efece8; --ink:#14141a; --ink2:#2c2c33;
+    --muted:#6e6e76; --muted2:#92929b; --ok:#15803d; --cyan:#0891b2;
+    --amber:#b45309; --violet:#6d28d9;
+  }
+  body{
+    margin:0; background:#fff; color:var(--ink);
+    font-family:"Geist","Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    font-size:11.14px; line-height:1.4; letter-spacing:-.005em;
+    -webkit-font-smoothing:antialiased;
+  }
+  .page{ height:188mm; page-break-after:always; padding-bottom:4mm; }
+  .page:last-child{ page-break-after:auto; }
+
+  h1{ font-size:22.04px; font-weight:600; letter-spacing:-.02em; margin:0 0 2.32px; }
+  .sub{ font-size:12.18px; color:var(--muted); margin:0 0 16.24px; }
+  .kicker{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:9.86px;
+    letter-spacing:.12em; text-transform:uppercase; color:var(--muted2); font-weight:600; }
+
+  /* ── bloques ── */
+  .stage{ border:1.16px solid var(--border2); border-radius:10.44px; background:var(--surface);
+    padding:10.44px 12.76px 11.6px; position:relative; }
+  .stage.accent{ border-color:var(--ink); border-width:1.62px; }
+  .stage-h{ display:flex; align-items:baseline; gap:8.12px; margin-bottom:6.96px; }
+  .stage-n{ font-family:ui-monospace,monospace; font-size:9.86px; background:var(--ink);
+    color:#fff; border-radius:3.48px; padding:1.74px 5.8px; font-weight:600; }
+  .stage-t{ font-size:13.34px; font-weight:600; letter-spacing:-.01em; }
+  .stage-d{ font-size:10.44px; color:var(--muted); }
+
+  .row{ display:flex; gap:10.44px; }
+  .col{ flex:1; min-width:0; }
+
+  .chip{ border:1.16px solid var(--border); background:var(--surface2); border-radius:6.96px;
+    padding:5.8px 8.12px; margin-bottom:5.8px; }
+  .chip:last-child{ margin-bottom:0; }
+  .chip b{ font-weight:600; display:block; font-size:10.9px; margin-bottom:1.16px; }
+  .chip span{ color:var(--muted); font-size:10.21px; display:block; }
+  .mono{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:9.74px; color:var(--ink2); }
+
+  .arrow{ text-align:center; color:var(--border2); font-size:17.4px; line-height:1; margin:5.8px 0; }
+  .arrow-r{ display:flex; align-items:center; color:var(--border2); font-size:17.4px; padding:0 1.16px; }
+
+  /* ── cinta jobContext ── */
+  .belt{ border:1.62px dashed var(--cyan); border-radius:9.28px; background:#ecfeff;
+    padding:8.12px 11.6px; }
+  .belt .t{ font-weight:600; color:#0e7490; font-size:11.14px; }
+  .belt .d{ color:#0e7490; opacity:.85; font-size:10.21px; }
+
+  /* ── pasos a..h ── */
+  .steps{ display:flex; flex-direction:column; gap:4.64px; }
+  .step{ display:flex; gap:8.12px; align-items:flex-start; border:1.16px solid var(--border);
+    border-radius:6.96px; padding:5.8px 8.12px; background:var(--surface); }
+  .step .k{ font-family:ui-monospace,monospace; font-size:9.98px; font-weight:700;
+    color:#fff; background:var(--ink2); border-radius:3.48px; padding:1.16px 4.64px; flex:none; margin-top:1.16px; }
+  .step .body{ min-width:0; }
+  .step b{ font-size:11.02px; font-weight:600; }
+  .step span{ display:block; color:var(--muted); font-size:10.09px; }
+  .step.gate{ border-color:#fca5a5; background:#fef2f2; }
+  .step.gate .k{ background:#b91c1c; }
+  .step.out{ border-color:var(--cyan); background:#ecfeff; }
+  .step.out .k{ background:var(--cyan); }
+
+  /* ── tablas de vocabulario ── */
+  table{ width:100%; border-collapse:collapse; }
+  th{ text-align:left; font-size:9.74px; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--muted2); font-weight:600; padding:0 6.96px 4.64px 0; border-bottom:1.16px solid var(--border); }
+  td{ padding:4.64px 6.96px 4.64px 0; border-bottom:1.16px solid var(--hair); vertical-align:top; font-size:10.44px; }
+  td.code{ font-family:ui-monospace,monospace; font-size:9.86px; color:var(--ink2); white-space:nowrap; }
+  tr:last-child td{ border-bottom:0; }
+
+  .note{ border-left:2.9px solid var(--amber); background:#fffbeb; padding:6.96px 10.44px;
+    border-radius:0 5.8px 5.8px 0; font-size:10.32px; color:#78350f; }
+  .note b{ color:#78350f; }
+  .foot{ margin-top:10.44px; padding-top:6.96px; border-top:1.16px solid var(--hair);
+    font-size:9.63px; color:var(--muted2); display:flex; justify-content:space-between; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════ PÁGINA 1 ══════════════ -->
+<div class="page">
+  <div class="kicker">Grafoprint · motor universal de costeo</div>
+  <h1>Cómo cotiza el sistema, de punta a punta</h1>
+  <p class="sub">Una cotización es <b>un producto + una ruta de pasos</b> recorridos en orden, donde cada paso lee lo que dejó el anterior y publica lo suyo.</p>
+
+  <div class="row">
+    <!-- ENTRADA -->
+    <div class="col" style="max-width:20%">
+      <div class="stage">
+        <div class="stage-h"><span class="stage-n">IN</span><span class="stage-t">Lo que entra</span></div>
+        <div class="chip"><b>Producto + ruta</b><span>Qué se fabrica y con qué secuencia de pasos.</span></div>
+        <div class="chip"><b>JobContext</b><span class="mono">cantidad · medidas/piezas · caras · opcionales activados · elecciones del comercial</span></div>
+        <div class="chip"><b>Período</b><span>Define qué tarifa por hora rige.</span></div>
+      </div>
+    </div>
+
+    <div class="arrow-r">→</div>
+
+    <!-- ETAPAS -->
+    <div class="col">
+      <div class="stage">
+        <div class="stage-h"><span class="stage-n">1</span><span class="stage-t">Inicialización</span></div>
+        <div class="row">
+          <div class="col">
+            <div class="chip"><b>Cargar y normalizar</b><span>Producto, ruta, config de cada paso, slots y máquinas candidatas.</span></div>
+          </div>
+          <div class="col">
+            <div class="chip"><b>Derivar medidas</b><span>Si el producto trae medida fija, se sintetizan. Se <b>congela la medida visible</b></span></div>
+          </div>
+          <div class="col">
+            <div class="chip"><b>Arrastre de opcionales</b><span>Un opcional puede encender a otro del que depende.</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow">↓</div>
+
+      <div class="stage accent">
+        <div class="stage-h"><span class="stage-n">2</span><span class="stage-t">Recorrido de los pasos</span>
+          <span class="stage-d">— el corazón del motor (detalle en la página 2)</span></div>
+
+        <div class="belt" style="margin-bottom:7px">
+          <span class="t">JobContext →</span>
+          <span class="d">cinta mutable: entra con cantidad y medidas, y <b>cada paso le agrega lo que produjo</b> (pliegos, poses, cortes, m², minutos). El siguiente lee de ahí.</span>
+        </div>
+
+        <div class="row">
+          <div class="col"><div class="chip" style="background:#fff"><b>Paso 1 · Pre-prensa</b><span class="mono">publica: —</span></div></div>
+          <div class="arrow-r">→</div>
+          <div class="col"><div class="chip" style="background:#fff"><b>Paso 2 · Impresión</b><span class="mono">acomoda → publica pliegos, poses, cortes</span></div></div>
+          <div class="arrow-r">→</div>
+          <div class="col"><div class="chip" style="background:#fff"><b>Paso 3 · Guillotina</b><span class="mono">hereda pliegos y cortes</span></div></div>
+          <div class="arrow-r">→</div>
+          <div class="col"><div class="chip" style="background:#fff"><b>Paso n · Acabados</b><span class="mono">opcionales / tercerizados</span></div></div>
+        </div>
+        <div style="margin-top:6px" class="note">
+          <b>Si un paso falla, el recorrido se corta ahí</b> — el error dice qué paso, qué faltó y qué hacer.
+        </div>
+      </div>
+
+      <div class="arrow">↓</div>
+
+      <div class="row">
+        <div class="col">
+          <div class="stage">
+            <div class="stage-h"><span class="stage-n">3</span><span class="stage-t">Costo</span></div>
+            <div class="chip"><b>Suma de todos los pasos</b><span class="mono">tiempo (hs × tarifa) + materiales + consumibles y desgaste + cargos + tercerizados</span></div>
+          </div>
+        </div>
+        <div class="arrow-r">→</div>
+        <div class="col">
+          <div class="stage">
+            <div class="stage-h"><span class="stage-n">4</span><span class="stage-t">Precio</span></div>
+            <div class="chip"><b>Del costo al precio de venta</b><span>Método de precio del producto, precio especial del cliente, <b>impuestos y comisiones</b></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow-r">→</div>
+
+    <!-- SALIDA -->
+    <div class="col" style="max-width:20%">
+      <div class="stage">
+        <div class="stage-h"><span class="stage-n">OUT</span><span class="stage-t">Lo que sale</span></div>
+        <div class="chip"><b>Precio y costo</b><span>Con desglose: cuánto puso cada paso y por qué.</span></div>
+        <div class="chip"><b>Plan de producción</b><span>Tiempos, máquina y perfil por paso → OT, tablero y ETA.</span></div>
+        <div class="chip"><b>Acomodo visual</b><span>Cómo entran las piezas, con el desperdicio.</span></div>
+        <div class="chip"><b>Errores explicados</b><span>En qué paso y qué falta.</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot"><span>Motor universal de costeo por pasos</span><span>página 1 de 3</span></div>
+</div>
+
+<!-- ══════════════ PÁGINA 2 ══════════════ -->
+<div class="page">
+  <div class="kicker">Grafoprint · motor universal de costeo</div>
+  <h1>Anatomía de un paso</h1>
+  <p class="sub">Todos los pasos —imprimir, cortar, anillar, instalar— recorren <b>la misma secuencia</b>. Lo que cambia es qué declara su familia.</p>
+
+  <div class="row">
+    <div class="col" style="flex:1.15">
+      <div class="stage accent">
+        <div class="stage-h"><span class="stage-n">⚙</span><span class="stage-t">Qué hace el motor con cada paso, en orden</span></div>
+        <div class="steps">
+          <div class="step"><span class="k">a</span><div class="body"><b>¿Se ejecuta?</b><span>Obligatorio, opcional (lo enciende el comercial) o condicional (una regla mira el trabajo: material, medida, cantidad…). Si no, el paso se saltea.</span></div></div>
+          <div class="step"><span class="k">b</span><div class="body"><b>¿Con qué máquina?</b><span>Si el paso tiene varias candidatas, se resuelve por lo que eligió el comercial o por la preferida.</span></div></div>
+          <div class="step"><span class="k">c</span><div class="body"><b>¿Con qué perfil?</b><span>El perfil operativo de esa máquina se elige solo: por color y caras, por escalón de gramaje, por operación (corte/grabado) o por una regla declarada.</span></div></div>
+          <div class="step"><span class="k">d</span><div class="body"><b>¿Cuánto material entra?</b><span>Si el paso acomoda, corre el <b>nesting</b>: prueba cómo entran las piezas en el pliego o el rollo y devuelve cuántos hacen falta, con el desperdicio real.</span></div></div>
+          <div class="step gate"><span class="k">!</span><div class="body"><b>Guardas</b><span>Si el paso debía acomodar y no pudo (la pieza no entra), corta acá con el diagnóstico — no sigue en silencio.</span></div></div>
+          <div class="step"><span class="k">e</span><div class="body"><b>¿Cuánto tarda?</b><span>Setup + producción + limpieza, según el modo de tiempo de la familia. × la tarifa horaria del centro de costo del período.</span></div></div>
+          <div class="step"><span class="k">f</span><div class="body"><b>¿Qué consume?</b><span>Materiales de los slots (fijo, lo elige el comercial, o lo elige el motor) + consumibles de la máquina (tinta, tóner) + desgaste de componentes.</span></div></div>
+          <div class="step"><span class="k">g</span><div class="body"><b>¿Tiene cargos propios?</b><span>Cargos directos del paso (flete, matricería, un tercerizado).</span></div></div>
+          <div class="step out"><span class="k">h</span><div class="body"><b>¿Qué le deja al que sigue?</b><span>Publica sus <b>outputs canónicos</b> al JobContext: pliegos calculados, poses, cortes, m², minutos reales. Así la guillotina sabe cuántos pliegos cortar sin que nadie se lo diga.</span></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="stage">
+        <div class="stage-h"><span class="stage-n">T</span><span class="stage-t">De dónde sale el tiempo</span></div>
+        <table>
+          <tr><td class="code">T-1</td><td><b>Fijo</b> — el modelador lo declara (ej. diseño: 2 h).</td></tr>
+          <tr><td class="code">T-2</td><td><b>Productividad propia del paso</b> — 50 cajas/h, 8 m²/h.</td></tr>
+          <tr><td class="code">T-3</td><td><b>Del perfil de la máquina</b> — la impresora hace 33 A4/min; el láser corta a 20 mm/s.</td></tr>
+          <tr><td class="code">T-4</td><td><b>Lo estima el comercial</b> al cotizar — la salida de emergencia para lo irregular.</td></tr>
+        </table>
+      </div>
+
+      <div style="height:9px"></div>
+
+      <div class="stage">
+        <div class="stage-h"><span class="stage-n">Q</span><span class="stage-t">De dónde sale la cantidad</span></div>
+        <table>
+          <tr><td class="code">Directa</td><td>La del pedido (500 tarjetas).</td></tr>
+          <tr><td class="code">Calculada</td><td>La calcula el propio paso acomodando (→ 13 pliegos).</td></tr>
+          <tr><td class="code">Heredada</td><td>La toma de lo que publicó un paso anterior (los 13 pliegos que dejó la impresión).</td></tr>
+        </table>
+      </div>
+
+      <div style="height:9px"></div>
+
+      <div class="stage">
+        <div class="stage-h"><span class="stage-n">M</span><span class="stage-t">Relación con la máquina</span></div>
+        <table>
+          <tr><td class="code">M-0</td><td>Sin máquina: es trabajo manual.</td></tr>
+          <tr><td class="code">M-1</td><td>Una máquina fija.</td></tr>
+          <tr><td class="code">M-2</td><td>Varias candidatas: se elige al cotizar.</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot"><span>Anatomía de un paso · el mismo esqueleto para las 28 familias</span><span>página 2 de 3</span></div>
+</div>
+
+<!-- ══════════════ PÁGINA 3 ══════════════ -->
+<div class="page">
+  <div class="kicker">Grafoprint · motor universal de costeo</div>
+  <h1>Por qué un solo motor sirve para todo</h1>
+  <p class="sub">El motor no sabe qué es una guillotina. Sabe leer <b>lo que la familia del paso declara</b>. Agregar un proceso nuevo es describirlo, no programarlo.</p>
+
+  <div class="row">
+    <div class="col">
+      <div class="stage accent">
+        <div class="stage-h"><span class="stage-n">★</span><span class="stage-t">Lo que declara una familia de paso</span></div>
+        <table>
+          <tr><th style="width:34%">Qué declara</th><th>Para qué lo usa el motor</th></tr>
+          <tr><td class="code">modos de tiempo</td><td>Qué formas de calcular la duración acepta (T-1…T-4).</td></tr>
+          <tr><td class="code">mecanismos de cantidad</td><td>Si la cantidad es directa, la calcula el paso o la hereda.</td></tr>
+          <tr><td class="code">relación con máquina</td><td>Manual, una máquina, o varias candidatas.</td></tr>
+          <tr><td class="code">slots de material</td><td>Qué insumos pide y de qué tipo (sustrato, consumible, accesorio).</td></tr>
+          <tr><td class="code">plantillas compatibles</td><td>Qué tipos de máquina puede usar.</td></tr>
+          <tr><td class="code">outputs canónicos</td><td>Qué publica al JobContext para los pasos siguientes.</td></tr>
+          <tr><td class="code">validaciones</td><td>Qué necesita sí o sí para poder cotizar.</td></tr>
+          <tr><td class="code">superficie de acomodo</td><td>Si acomoda piezas, sobre pliego o sobre rollo.</td></tr>
+        </table>
+        <div style="margin-top:8px" class="note">
+          Esa declaración es <b>la misma</b> para las familias que traemos nosotros y para las que crea el tenant.
+          El tenant compone con nuestro vocabulario: elige entre las opciones de arriba, nunca escribe lógica.
+        </div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="stage">
+        <div class="stage-h"><span class="stage-n">◆</span><span class="stage-t">Las piezas que rodean al motor</span></div>
+        <div class="chip"><b>Centros de costo → tarifa por hora</b><span>Cada centro declara sus gastos y horas del mes; de ahí sale el valor de la hora que el motor multiplica. Las tarifas se heredan mes a mes.</span></div>
+        <div class="chip"><b>Máquinas y perfiles</b><span>La plantilla define qué campos tiene cada tipo de máquina; los perfiles operativos traen la velocidad real por material y operación.</span></div>
+        <div class="chip"><b>Biblioteca de materiales</b><span>Materias primas con variantes, medidas y precio de referencia. El nesting usa sus medidas; el costeo, su precio.</span></div>
+        <div class="chip"><b>Pricing e impuestos</b><span>Método de precio por producto, precio especial por cliente, impuestos por país y comisiones.</span></div>
+      </div>
+
+      <div style="height:9px"></div>
+
+      <div class="stage">
+        <div class="stage-h"><span class="stage-n">→</span><span class="stage-t">Qué se hace después con el resultado</span></div>
+        <div class="chip"><b>Presupuesto y orden de trabajo</b><span>La cotización queda congelada como snapshot: lo que se cotizó es lo que se produce.</span></div>
+        <div class="chip"><b>Tablero y capacidad</b><span>Los tiempos por paso alimentan la cola de cada estación y la fecha de entrega comprometida.</span></div>
+        <div class="chip"><b>Costo real vs. cotizado</b><span>Al cerrar la orden se compara lo estimado con lo que efectivamente se midió.</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot"><span>El motor lee declaraciones, no casos particulares</span><span>página 3 de 3</span></div>
+</div>
+
+</body>
+</html>

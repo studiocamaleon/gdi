@@ -104,6 +104,19 @@ export interface JobContext {
   tipoCopia?: 1 | 2 | 3;
   /** Hojas por talonario (ej: 50, 100). */
   numerosXTalonario?: number;
+  /**
+   * Páginas del documento final (revista/folleto multipágina). Lo usa la
+   * imposición de cuadernillo del paso de impresión
+   * (docs/imposicion-cuadernillos-diseno.md); se rellena a múltiplo de 4.
+   */
+  paginas?: number;
+  /**
+   * Profundidad del cartel/cajón en mm (cartelería: backlight, light box).
+   * La lee `estructura_bastidor` para derivar el perfil del marco doble y la
+   * cenefa (docs/carteleria-configurador-diseno.md §4.3). Si el paso la fija
+   * en sus params, el JobContext tiene prioridad.
+   */
+  profundidadMm?: number;
   /** Tintas adicionales para impresión rígida (barniz, blanco). */
   tintasAdicionales?: string[];
   /** Modo de color comercial global de compatibilidad (preferir modoColor_<configPasoId>). */
@@ -532,6 +545,12 @@ export interface NestingVisualConfig {
     distribution: 'equilibrada' | 'libre' | null;
     widthInterpretation: 'total' | 'util' | null;
     panelCount: number;
+  };
+  /** Máquina del paso, para la ilustración del viewer (boca de impresora). */
+  maquina?: {
+    nombre: string;
+    anchoUtilMm: number | null;
+    tecnologia: string | null;
   };
 }
 

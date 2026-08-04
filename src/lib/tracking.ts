@@ -110,10 +110,6 @@ const COPY_FAMILIA: Record<string, CopyPaso> = {
     simple: "Preparamos los archivos",
     desc: "Revisamos y acomodamos tu archivo para que entre a producción sin sorpresas.",
   },
-  proof: {
-    simple: "Prueba de color",
-    desc: "Imprimimos una prueba para verificar que los colores coincidan con tu archivo.",
-  },
   impresion_por_hoja: {
     simple: "Imprimiendo tu pedido",
     desc: "Estamos imprimiendo tu trabajo.",
@@ -129,6 +125,10 @@ const COPY_FAMILIA: Record<string, CopyPaso> = {
   aplicacion_transfer: {
     simple: "Estampado / transfer",
     desc: "Aplicamos el diseño sobre el material.",
+  },
+  aplicacion_transfer_textil: {
+    simple: "Estampado textil",
+    desc: "Planchamos el transfer sobre tu prenda.",
   },
   grabado_laser: { simple: "Grabado láser", desc: "Grabamos tu diseño con láser." },
   corte_guillotina: {
@@ -150,13 +150,10 @@ const COPY_FAMILIA: Record<string, CopyPaso> = {
     simple: "Aplicamos el laminado",
     desc: "Pasamos tu pedido por la laminadora para la terminación.",
   },
-  barniz: { simple: "Barnizado", desc: "Aplicamos el barniz de terminación." },
   encuadernado_anillado: {
     simple: "Encuadernado",
     desc: "Anillamos / encuadernamos tu trabajo.",
   },
-  armado_cajas: { simple: "Armado", desc: "Armamos las piezas de tu pedido." },
-  soldadura: { simple: "Armado estructural", desc: "Soldamos la estructura." },
   montaje_sobre_sustrato: {
     simple: "Montaje",
     desc: "Montamos el material sobre su sustrato.",
@@ -165,16 +162,10 @@ const COPY_FAMILIA: Record<string, CopyPaso> = {
     simple: "Control final y empaque",
     desc: "Verificamos todo y embalamos tu pedido.",
   },
-  control_calidad: {
-    simple: "Control de calidad",
-    desc: "Revisamos color, corte y cantidad antes de entregar.",
-  },
-  envio: { simple: "Preparando el envío", desc: "Coordinamos la entrega de tu pedido." },
   instalacion_in_situ: {
     simple: "Instalación",
     desc: "Instalamos tu trabajo en el lugar.",
   },
-  toma_medidas: { simple: "Toma de medidas", desc: "Relevamos las medidas del trabajo." },
   trabajo_manual: {
     simple: "Trabajo manual",
     desc: "Realizamos tareas manuales sobre tu pedido.",

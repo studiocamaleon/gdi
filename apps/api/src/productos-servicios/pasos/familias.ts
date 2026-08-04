@@ -46,6 +46,10 @@ const MP = {
       'TEXTIL_INDUMENTARIA',
     ],
   },
+  aditiva3d: {
+    familiasMateriaPrima: ['ADITIVA_3D'],
+    subfamiliasMateriaPrima: ['FILAMENTO_3D', 'RESINA_3D'],
+  },
   sustratoGrabable: {
     familiasMateriaPrima: [
       'SUSTRATO',
@@ -209,7 +213,7 @@ const MP = {
 } satisfies Record<string, CompatibilidadMaterialSlot>;
 
 // ============================================================================
-// 3.1 Pre-prensa (2)
+// 3.1 Pre-prensa (1)
 // ============================================================================
 
 const pre_prensa: DefinicionFamilia = {
@@ -252,42 +256,8 @@ const pre_prensa: DefinicionFamilia = {
   ],
 };
 
-const proof: DefinicionFamilia = {
-  codigo: 'proof',
-  nombre: 'Proof / pruebas de color',
-  categoria: 'pre_prensa',
-  descripcion:
-    'Impresión de prueba para validar color con el cliente antes de tirada.',
-  relacionMaquinaSoportada: ['M-1'],
-  modosTiempoSoportados: ['T-1'],
-  mecanismosCantidadSoportados: [
-    'DIRECT_FROM_JOBCONTEXT',
-    'HEREDAR_DEL_OUTPUT_CANONICO',
-  ],
-  modosActivacionSoportados: ['OPCIONAL'],
-  modoActivacionDefault: 'OPCIONAL',
-  multiplicadoresSoportados: [],
-  slotsRequeridos: [
-    {
-      codigo: 'sustrato_proof',
-      nombre: 'Sustrato del proof',
-      tipo: 'SUSTRATO',
-      requerido: true,
-      compatibilidadMaterial: MP.sustratoHoja,
-    },
-  ],
-  permiteSlotsAdicionales: false,
-  // v3.0: solo IMPRESORA_LASER (INYECCION_TINTA descartada según doc §4).
-  plantillasCompatibles: ['IMPRESORA_LASER'],
-  inputsRequeridos: [],
-  outputsCanonicos: ['proof_aprobado'],
-  validaciones: [],
-  paramsPasoSchema: [],
-  productosTipicos: ['Productos premium con muestra previa'],
-};
-
 // ============================================================================
-// 3.2 Producción / impresión (5)
+// 3.2 Producción / impresión (6)
 // ============================================================================
 
 const impresion_por_hoja: DefinicionFamilia = {
@@ -344,6 +314,12 @@ const impresion_por_hoja: DefinicionFamilia = {
     'pliego_impresion_area_m2',
     'pliego_impresion_mp_variante_id',
     'tiempo_real_impresion',
+    // Imposición de cuadernillo a caballete (cuando el paso la activa):
+    // el abrochado valida EXISTS_OUTPUT sobre hojas_por_libro.
+    'hojas_por_libro',
+    'paginas_blancas',
+    'libros_por_juego',
+    'plan_imposicion',
   ],
   validaciones: [
     {
@@ -492,18 +468,82 @@ const impresion_por_pieza: DefinicionFamilia = {
   productosTipicos: ['Letras corpóreas', 'Tazas personalizadas', 'Remeras DTG'],
 };
 
-const aplicacion_transfer: DefinicionFamilia = {
-  codigo: 'aplicacion_transfer',
-  nombre: 'Aplicación de transfer (DTF, DTG)',
+const impresion_3d: DefinicionFamilia = {
+  codigo: 'impresion_3d',
+  nombre: 'Impresión 3D',
   categoria: 'produccion_impresion',
   descripcion:
-    'Aplica film/transfer impreso al sustrato. Con plancha/máquina (DTG, DTF textil) o manual (DTF UV sobre objetos: tazas, botellas).',
-  // Soporta ambas: manual (M-0, ej. DTF UV a mano) y con máquina (M-1, ej. DTG
-  // con plancha). El modelador elige por paso.
-  relacionMaquinaSoportada: ['M-0', 'M-1'],
-  // T-2 = productividad propia (manual, ej. X piezas/h a mano); T-3 = del perfil
-  // de la máquina. El modelador elige según sea manual o con máquina.
-  modosTiempoSoportados: ['T-2', 'T-3'],
+    'Fabricación aditiva por filamento (FDM) o resina. El tiempo sale del caudal del perfil aplicado a los gramos de la pieza; si el taller ya tiene las horas del slicer, las carga a mano (T-4).',
+  relacionMaquinaSoportada: ['M-1', 'M-2'],
+  // T-3: caudal del perfil (g/h) sobre los gramos de la pieza.
+  // T-4: el comercial carga las horas exactas del slicer — el caso del taller
+  //      que sliceó la pieza antes de cotizar, que es el dato más fiel.
+  modosTiempoSoportados: ['T-3', 'T-4'],
+  mecanismosCantidadSoportados: ['DIRECT_FROM_JOBCONTEXT'],
+  modosActivacionSoportados: ['OBLIGATORIO', 'OPCIONAL'],
+  modoActivacionDefault: 'OBLIGATORIO',
+  multiplicadoresSoportados: [],
+  // La magnitud NO es el área ni la caja de la pieza: dos piezas del mismo
+  // tamaño consumen distinto según relleno y paredes. Son los gramos.
+  magnitudTiempoDefault: 'gramos_material',
+  slotsRequeridos: [
+    {
+      codigo: 'material_3d',
+      nombre: 'Filamento / resina',
+      tipo: 'SUSTRATO',
+      requerido: true,
+      compatibilidadMaterial: MP.aditiva3d,
+    },
+  ],
+  permiteSlotsAdicionales: true,
+  plantillasCompatibles: ['IMPRESORA_3D'],
+  tiposPerfilCompatibles: ['FABRICACION'],
+  inputsRequeridos: ['cantidad'],
+  outputsCanonicos: ['piezas_impresas', 'tiempo_real_impresion'],
+  validaciones: [
+    {
+      codigo: 'requires_cantidad',
+      tipo: 'REQUIRES_INPUT',
+      campo: 'cantidad',
+      mensaje: 'Falta declarar cantidad',
+    },
+  ],
+  paramsPasoSchema: [
+    {
+      campo: 'gramosPorPieza',
+      etiqueta: 'Gramos por pieza',
+      tipo: 'number',
+      requerido: false,
+      descripcion:
+        'Material que consume UNA pieza, según el slicer. Es la magnitud del tiempo (gramos ÷ caudal del perfil). Conviene dejarlo abierto al comercial: cambia con cada modelo.',
+    },
+    {
+      campo: 'rellenoPct',
+      etiqueta: 'Relleno (%)',
+      tipo: 'number',
+      requerido: false,
+      descripcion:
+        'Densidad de relleno del slicer. Informativo para producción: el consumo real ya viaja en los gramos por pieza.',
+    },
+  ],
+  productosTipicos: [
+    'Prototipos y maquetas',
+    'Piezas de repuesto',
+    'Souvenirs y trofeos impresos',
+  ],
+};
+
+const aplicacion_transfer: DefinicionFamilia = {
+  codigo: 'aplicacion_transfer',
+  nombre: 'Aplicación DTF UV manual',
+  categoria: 'produccion_impresion',
+  descripcion:
+    'Aplicación MANUAL del transfer sobre objetos (DTF UV sobre tazas, botellas, rígidos) — sin plancha térmica. El planchado sobre prenda con máquina vive en "Aplicación de transfer textil".',
+  // Solo manual (M-0). Lo que lleva plancha térmica (M-1) es la familia
+  // aplicacion_transfer_textil.
+  relacionMaquinaSoportada: ['M-0'],
+  // T-2 = productividad propia (X piezas/h a mano).
+  modosTiempoSoportados: ['T-2'],
   mecanismosCantidadSoportados: [
     'DIRECT_FROM_JOBCONTEXT',
     'HEREDAR_DEL_OUTPUT_CANONICO',
@@ -514,11 +554,11 @@ const aplicacion_transfer: DefinicionFamilia = {
   slotsRequeridos: [
     {
       codigo: 'textil',
-      nombre: 'Sustrato / objeto base',
+      nombre: 'Objeto base',
       tipo: 'SUSTRATO',
       requerido: true,
-      // Acepta prenda (remera), objeto (taza/botella) o rígido. Su costo entra
-      // por unidad (formula por_pieza).
+      // Acepta objeto (taza/botella) o rígido. Su costo entra por unidad
+      // (formula por_pieza).
       compatibilidadMaterial: MP.sustratoPieza,
     },
     {
@@ -527,24 +567,66 @@ const aplicacion_transfer: DefinicionFamilia = {
       tipo: 'INSUMO_PASO',
       // OPCIONAL: solo se completa si se compra el transfer ya impreso. Si el
       // film se imprime en un paso previo (impresion_por_area con tecnologia
-      // DTF_UV/DTF_TEXTIL), su costo ya está ahí — dejar este slot vacío para no
-      // duplicarlo.
+      // DTF_UV), su costo ya está ahí — dejar este slot vacío para no duplicarlo.
       requerido: false,
       compatibilidadMaterial: MP.filmTransfer,
     },
   ],
   permiteSlotsAdicionales: false,
-  // v3.0: la impresión del FILM DTF la hace IMPRESORA_GRAN_FORMATO_POR_AREA
-  // con tecnologia=DTF_UV o DTF_TEXTIL (paso anterior). Esta familia es la
-  // APLICACIÓN del transfer al sustrato/objeto — con plancha (M-1) o manual
-  // (M-0, ej. DTF UV sobre tazas). El film ya viene costeado del paso previo,
-  // por eso el slot de film es opcional.
   plantillasCompatibles: [],
   inputsRequeridos: ['cantidad'],
   outputsCanonicos: ['piezas_aplicadas'],
   validaciones: [],
   paramsPasoSchema: [],
-  productosTipicos: ['Remeras estampadas', 'Camperas con logo'],
+  productosTipicos: ['Tazas DTF UV', 'Botellas personalizadas'],
+};
+
+const aplicacion_transfer_textil: DefinicionFamilia = {
+  codigo: 'aplicacion_transfer_textil',
+  nombre: 'Aplicación de transfer textil',
+  categoria: 'produccion_impresion',
+  descripcion:
+    'Planchado del transfer sobre la prenda con PLANCHA TÉRMICA (M-1): DTF textil, sublimación, vinilo textil, serigrafía-transfer. El film ya viene impreso de un paso previo (gran formato) o se compra listo.',
+  // Con máquina: la plancha térmica. El tiempo sale del perfil (T-3).
+  relacionMaquinaSoportada: ['M-1'],
+  modosTiempoSoportados: ['T-3'],
+  mecanismosCantidadSoportados: [
+    'DIRECT_FROM_JOBCONTEXT',
+    'HEREDAR_DEL_OUTPUT_CANONICO',
+  ],
+  modosActivacionSoportados: ['OBLIGATORIO'],
+  modoActivacionDefault: 'OBLIGATORIO',
+  multiplicadoresSoportados: [],
+  slotsRequeridos: [
+    {
+      codigo: 'prenda',
+      nombre: 'Prenda / sustrato textil',
+      tipo: 'SUSTRATO',
+      requerido: true,
+      // Remera, buzo, etc. Su costo entra por unidad (formula por_pieza).
+      compatibilidadMaterial: MP.sustratoPieza,
+    },
+    {
+      codigo: 'film_transfer',
+      nombre: 'Film transfer impreso (comprado listo)',
+      tipo: 'INSUMO_PASO',
+      // OPCIONAL: solo si se compra el transfer ya impreso. Si el film se imprime
+      // en un paso previo (impresion_por_area con tecnologia DTF_TEXTIL/SUBLIMACION),
+      // su costo ya está ahí — dejar este slot vacío para no duplicarlo.
+      requerido: false,
+      compatibilidadMaterial: MP.filmTransfer,
+    },
+  ],
+  permiteSlotsAdicionales: false,
+  // La APLICACIÓN se hace con plancha térmica; la productividad sale de su
+  // perfil operativo (piezas/hora, derivada del ciclo de prensado).
+  plantillasCompatibles: ['PLANCHA_TERMICA'],
+  tiposPerfilCompatibles: ['FABRICACION'],
+  inputsRequeridos: ['cantidad'],
+  outputsCanonicos: ['piezas_aplicadas'],
+  validaciones: [],
+  paramsPasoSchema: [],
+  productosTipicos: ['Remeras estampadas', 'Buzos con logo', 'Camperas'],
 };
 
 const grabado_laser: DefinicionFamilia = {
@@ -559,6 +641,9 @@ const grabado_laser: DefinicionFamilia = {
   modosActivacionSoportados: ['OBLIGATORIO'],
   modoActivacionDefault: 'OBLIGATORIO',
   multiplicadoresSoportados: [],
+  // Grabado VECTORIAL por RECORRIDO (perfil en mm/s, misma unidad que el corte en
+  // la máquina láser). Un grabado raster de relleno usa T-4 manual.
+  magnitudTiempoDefault: 'perimetro_piezas_m',
   slotsRequeridos: [
     {
       codigo: 'sustrato',
@@ -578,7 +663,7 @@ const grabado_laser: DefinicionFamilia = {
 };
 
 // ============================================================================
-// 3.3 Corte y formado (8)
+// 3.3 Corte y formado (7)
 // ============================================================================
 
 const corte_guillotina: DefinicionFamilia = {
@@ -603,7 +688,13 @@ const corte_guillotina: DefinicionFamilia = {
       codigo: 'existe_pliegos',
       tipo: 'EXISTS_OUTPUT',
       outputCanonico: 'pliegos_calculados',
-      mensaje: 'Guillotina necesita pliegos calculados por pre-prensa',
+      // Desde la Etapa A la imposición la hace el paso que imprime (pre-prensa
+      // ya no la publica). Si esto salta, lo más probable es que la impresión
+      // no haya podido acomodar la pieza en el pliego.
+      mensaje:
+        'Guillotina necesita los pliegos calculados por el paso de impresión ' +
+        'y ningún paso anterior los publicó. Revisá que la imposición haya ' +
+        'podido acomodar la pieza en el pliego configurado.',
     },
     {
       // El run sale de los cortes, no de la productividad: sin cortes el
@@ -613,10 +704,10 @@ const corte_guillotina: DefinicionFamilia = {
       tipo: 'EXISTS_OUTPUT',
       outputCanonico: 'cortes_calculados',
       mensaje:
-        'Guillotina no puede calcular el tiempo: el acomodo de pre-prensa no ' +
-        'dejó una grilla de columnas por filas, así que no hay cortes que ' +
-        'contar. Suele pasar cuando el trabajo tiene piezas de medidas ' +
-        'distintas en el mismo pliego.',
+        'Guillotina no puede calcular el tiempo: la imposición del paso de ' +
+        'impresión no dejó una grilla de columnas por filas, así que no hay ' +
+        'cortes que contar. Suele pasar cuando el trabajo tiene piezas de ' +
+        'medidas distintas en el mismo pliego.',
     },
   ],
   paramsPasoSchema: [],
@@ -678,6 +769,9 @@ const corte_laser: DefinicionFamilia = {
   modosActivacionSoportados: ['OBLIGATORIO', 'OPCIONAL'],
   modoActivacionDefault: 'OPCIONAL',
   multiplicadoresSoportados: [],
+  // El tiempo T-3 se mide por RECORRIDO: el perfil trae la velocidad (mm/s) y el
+  // motor la aplica al perímetro de las piezas. Cortes calados usan T-4 manual.
+  magnitudTiempoDefault: 'perimetro_piezas_m',
   slotsRequeridos: [],
   permiteSlotsAdicionales: false,
   plantillasCompatibles: ['CORTE_LASER'],
@@ -719,11 +813,15 @@ const cnc: DefinicionFamilia = {
   descripcion:
     'Router CNC para piezas planas (3D fuera de scope hoy). Cortes complejos en MDF, PVC, foam.',
   relacionMaquinaSoportada: ['M-1'],
-  modosTiempoSoportados: ['T-3'],
+  modosTiempoSoportados: ['T-3', 'T-4'],
   mecanismosCantidadSoportados: ['DIRECT_FROM_JOBCONTEXT'],
   modosActivacionSoportados: ['OBLIGATORIO', 'OPCIONAL'],
   modoActivacionDefault: 'OPCIONAL',
   multiplicadoresSoportados: [],
+  // El tiempo T-3 se mide por RECORRIDO: el perfil trae la velocidad (mm/min, feed
+  // rate) y el motor la aplica al perímetro de las piezas. Fresado/desbaste o
+  // formas caladas usan T-4 manual.
+  magnitudTiempoDefault: 'perimetro_piezas_m',
   slotsRequeridos: [],
   permiteSlotsAdicionales: false,
   plantillasCompatibles: ['ROUTER_CNC'],
@@ -738,10 +836,12 @@ const plegado: DefinicionFamilia = {
   codigo: 'plegado',
   nombre: 'Plegado manual',
   categoria: 'corte_y_formado',
+  // MANUAL: sin máquina (M-0) y con productividad propia (T-2). Antes tenía M-1/T-3
+  // por herencia, pero es inconsistente con "manual".
   descripcion: 'Plegado de pliegos para folletos, dípticos, trípticos.',
   visibleEnSelector: false,
-  relacionMaquinaSoportada: ['M-0', 'M-1'],
-  modosTiempoSoportados: ['T-2', 'T-3'],
+  relacionMaquinaSoportada: ['M-0'],
+  modosTiempoSoportados: ['T-2'],
   mecanismosCantidadSoportados: ['HEREDAR_DEL_OUTPUT_CANONICO'],
   modosActivacionSoportados: ['OBLIGATORIO', 'OPCIONAL'],
   modoActivacionDefault: 'OPCIONAL',
@@ -764,34 +864,9 @@ const plegado: DefinicionFamilia = {
   productosTipicos: ['Folletos plegados', 'Dípticos', 'Trípticos'],
 };
 
-const perforado: DefinicionFamilia = {
-  codigo: 'perforado',
-  nombre: 'Perforado / puntillado (industrial)',
-  categoria: 'corte_y_formado',
-  descripcion:
-    'Perforación con máquina industrial de perforado (NO confundir con modificacion_post manual).',
-  relacionMaquinaSoportada: ['M-1'],
-  modosTiempoSoportados: ['T-3'],
-  mecanismosCantidadSoportados: [
-    'HEREDAR_DEL_OUTPUT_CANONICO',
-    'DIRECT_FROM_JOBCONTEXT',
-  ],
-  modosActivacionSoportados: ['OBLIGATORIO', 'OPCIONAL'],
-  modoActivacionDefault: 'OPCIONAL',
-  multiplicadoresSoportados: ['perforacionesPorPieza'],
-  slotsRequeridos: [],
-  permiteSlotsAdicionales: false,
-  plantillasCompatibles: [],
-  inputsRequeridos: ['cantidad'],
-  outputsCanonicos: ['piezas_perforadas'],
-  validaciones: [],
-  paramsPasoSchema: [],
-  productosTipicos: ['Talonarios numerados (puntillado para arrancar)'],
-};
-
 const corte_manual: DefinicionFamilia = {
   codigo: 'corte_manual',
-  nombre: 'Corte manual (trincheta / sierra)',
+  nombre: 'Refilado manual',
   categoria: 'corte_y_formado',
   descripcion:
     'Corte manual con trincheta o sierra para señalética PVC, MDF fino. Sin máquina industrial.',
@@ -815,12 +890,12 @@ const corte_manual: DefinicionFamilia = {
 };
 
 // ============================================================================
-// 3.4 Terminaciones (5)
+// 3.4 Terminaciones (3)
 // ============================================================================
 
 const laminado: DefinicionFamilia = {
   codigo: 'laminado',
-  nombre: 'Laminado',
+  nombre: 'Laminado Polipropileno',
   categoria: 'terminaciones',
   descripcion:
     'Aplicación de film BOPP (mate, brillo, texturado) con laminadora.',
@@ -929,69 +1004,6 @@ const plastificado_pouch: DefinicionFamilia = {
   productosTipicos: ['Credenciales plastificadas', 'Menús plastificados', 'Tarjetas rígidas pouch'],
 };
 
-const barniz: DefinicionFamilia = {
-  codigo: 'barniz',
-  nombre: 'Barniz',
-  categoria: 'terminaciones',
-  descripcion: 'Aplicación de barniz UV o al agua sobre superficie impresa.',
-  relacionMaquinaSoportada: ['M-1'],
-  modosTiempoSoportados: ['T-3'],
-  mecanismosCantidadSoportados: ['HEREDAR_DEL_OUTPUT_CANONICO'],
-  modosActivacionSoportados: ['OPCIONAL'],
-  modoActivacionDefault: 'OPCIONAL',
-  multiplicadoresSoportados: [],
-  slotsRequeridos: [
-    {
-      codigo: 'barniz',
-      nombre: 'Tipo de barniz',
-      tipo: 'INSUMO_PASO',
-      requerido: true,
-      compatibilidadMaterial: MP.quimicoAcabado,
-    },
-  ],
-  permiteSlotsAdicionales: false,
-  plantillasCompatibles: [],
-  inputsRequeridos: [],
-  outputsCanonicos: ['piezas_barnizadas'],
-  validaciones: [],
-  paramsPasoSchema: [],
-};
-
-const acabado_decorativo: DefinicionFamilia = {
-  codigo: 'acabado_decorativo',
-  nombre: 'Acabado decorativo (hotstamping, dorado, gofrado)',
-  categoria: 'terminaciones',
-  descripcion: 'Aplicación de film metálico con prensa térmica.',
-  relacionMaquinaSoportada: ['M-1'],
-  modosTiempoSoportados: ['T-3'],
-  mecanismosCantidadSoportados: ['DIRECT_FROM_JOBCONTEXT'],
-  modosActivacionSoportados: ['OPCIONAL'],
-  modoActivacionDefault: 'OPCIONAL',
-  multiplicadoresSoportados: [],
-  slotsRequeridos: [
-    {
-      codigo: 'film_metalico',
-      nombre: 'Film metálico (oro/plata/holograma)',
-      tipo: 'INSUMO_PASO',
-      requerido: true,
-      compatibilidadMaterial: MP.filmMetalico,
-    },
-    {
-      codigo: 'matriz',
-      nombre: 'Matriz custom (opcional)',
-      tipo: 'OTRO',
-      requerido: false,
-      compatibilidadMaterial: MP.matriz,
-    },
-  ],
-  permiteSlotsAdicionales: false,
-  plantillasCompatibles: [],
-  inputsRequeridos: ['cantidad'],
-  outputsCanonicos: ['piezas_decoradas'],
-  validaciones: [],
-  paramsPasoSchema: [],
-};
-
 const pintura_superficial: DefinicionFamilia = {
   codigo: 'pintura_superficial',
   nombre: 'Pintura superficial',
@@ -999,7 +1011,10 @@ const pintura_superficial: DefinicionFamilia = {
   descripcion: 'Pintura, laca o barniz protector sobre piezas rígidas.',
   relacionMaquinaSoportada: ['M-0', 'M-1'],
   modosTiempoSoportados: ['T-2', 'T-3'],
-  mecanismosCantidadSoportados: ['DIRECT_FROM_JOBCONTEXT'],
+  mecanismosCantidadSoportados: [
+    'DIRECT_FROM_JOBCONTEXT',
+    'HEREDAR_DEL_OUTPUT_CANONICO',
+  ],
   modosActivacionSoportados: ['OPCIONAL'],
   modoActivacionDefault: 'OPCIONAL',
   multiplicadoresSoportados: [],
@@ -1028,59 +1043,51 @@ const pintura_superficial: DefinicionFamilia = {
   ],
 };
 
-const lijado_canteado: DefinicionFamilia = {
-  codigo: 'lijado_canteado',
-  nombre: 'Lijado / canteado de bordes',
-  categoria: 'terminaciones',
-  descripcion:
-    'Acabado manual de bordes en piezas rígidas (lija, multiherramienta).',
-  relacionMaquinaSoportada: ['M-0'],
-  modosTiempoSoportados: ['T-2'],
-  mecanismosCantidadSoportados: ['DIRECT_FROM_JOBCONTEXT'],
-  modosActivacionSoportados: ['OPCIONAL'],
-  modoActivacionDefault: 'OPCIONAL',
-  multiplicadoresSoportados: [],
-  slotsRequeridos: [],
-  permiteSlotsAdicionales: false,
-  plantillasCompatibles: [],
-  inputsRequeridos: ['cantidad'],
-  outputsCanonicos: ['piezas_lijadas'],
-  validaciones: [],
-  paramsPasoSchema: [],
-  productosTipicos: ['Letras corpóreas MDF', 'Cuadros con bordes finos'],
-};
-
 // ============================================================================
-// 3.5 Encuadernación / armado (4)
+// 3.5 Encuadernación / armado (2)
 // ============================================================================
 
-const encuadernado_engrapado: DefinicionFamilia = {
-  codigo: 'encuadernado_engrapado',
-  nombre: 'Engrapado (caballete / lateral)',
+const abrochado_caballete: DefinicionFamilia = {
+  codigo: 'abrochado_caballete',
+  nombre: 'Abrochado a caballete',
   categoria: 'encuadernacion_armado',
   descripcion:
-    'Engrapado manual de pliegos con grapas. Caso único, sin sub-tipos.',
+    'Broches al lomo de un cuadernillo anidado (revista, folleto multipágina). Requiere que el paso de impresión haya corrido la imposición de cuadernillo (docs/imposicion-cuadernillos-diseno.md).',
+  // Manual (abrochadora de mesa) por ahora: cuando haya plantilla de
+  // abrochadora eléctrica se suma M-1 sin tocar el resto.
   relacionMaquinaSoportada: ['M-0'],
   modosTiempoSoportados: ['T-2'],
   mecanismosCantidadSoportados: ['DIRECT_FROM_JOBCONTEXT'],
-  modosActivacionSoportados: ['OPCIONAL'],
-  modoActivacionDefault: 'OPCIONAL',
+  modosActivacionSoportados: ['OBLIGATORIO', 'OPCIONAL'],
+  modoActivacionDefault: 'OBLIGATORIO',
   multiplicadoresSoportados: [],
-  slotsRequeridos: [
-    {
-      codigo: 'grapas',
-      nombre: 'Grapas',
-      tipo: 'INSUMO_PASO',
-      requerido: true,
-      compatibilidadMaterial: MP.grapas,
-    },
-  ],
-  permiteSlotsAdicionales: false,
+  slotsRequeridos: [],
+  permiteSlotsAdicionales: true,
   plantillasCompatibles: [],
   inputsRequeridos: ['cantidad'],
-  outputsCanonicos: ['libros_engrapados'],
-  validaciones: [],
-  paramsPasoSchema: [],
+  outputsCanonicos: ['libros_abrochados'],
+  validaciones: [
+    {
+      codigo: 'existe_imposicion_cuadernillo',
+      tipo: 'EXISTS_OUTPUT',
+      outputCanonico: 'hojas_por_libro',
+      mensaje:
+        'El abrochado a caballete necesita la imposición de cuadernillo del ' +
+        'paso de impresión (ningún paso anterior publicó hojas por libro). ' +
+        'Activá "Imposición: cuadernillo a caballete" en el paso de impresión.',
+    },
+  ],
+  paramsPasoSchema: [
+    {
+      campo: 'brochesPorLibro',
+      etiqueta: 'Broches por libro',
+      tipo: 'number',
+      default: 2,
+      requerido: false,
+      descripcion: 'Cantidad de broches al lomo por ejemplar (típico: 2).',
+    },
+  ],
+  productosTipicos: ['Revistas', 'Folletos multipágina', 'Catálogos finos'],
 };
 
 const encuadernado_anillado: DefinicionFamilia = {
@@ -1193,72 +1200,9 @@ const engomado_emblocado: DefinicionFamilia = {
   productosTipicos: ['Talonarios'],
 };
 
-const armado_cajas: DefinicionFamilia = {
-  codigo: 'armado_cajas',
-  nombre: 'Armado de cajas / packaging',
-  categoria: 'encuadernacion_armado',
-  descripcion: 'Armado manual de cajas de cartón (plegado + cinta).',
-  relacionMaquinaSoportada: ['M-0'],
-  modosTiempoSoportados: ['T-2'],
-  mecanismosCantidadSoportados: ['DIRECT_FROM_JOBCONTEXT'],
-  modosActivacionSoportados: ['OBLIGATORIO'],
-  modoActivacionDefault: 'OBLIGATORIO',
-  multiplicadoresSoportados: [],
-  slotsRequeridos: [
-    {
-      codigo: 'cinta',
-      nombre: 'Cinta',
-      tipo: 'INSUMO_PASO',
-      requerido: true,
-      compatibilidadMaterial: MP.cinta,
-    },
-    {
-      codigo: 'plantilla_caja',
-      nombre: 'Plantilla de caja',
-      tipo: 'SUSTRATO',
-      requerido: true,
-      compatibilidadMaterial: MP.plantillaCaja,
-    },
-  ],
-  permiteSlotsAdicionales: false,
-  plantillasCompatibles: [],
-  inputsRequeridos: ['cantidad'],
-  outputsCanonicos: ['cajas_armadas'],
-  validaciones: [],
-  paramsPasoSchema: [],
-};
-
 // ============================================================================
-// 3.6 Estructural / montaje físico (3)
+// 3.6 Estructural / montaje físico (2)
 // ============================================================================
-
-const soldadura: DefinicionFamilia = {
-  codigo: 'soldadura',
-  nombre: 'Soldadura (herrería)',
-  categoria: 'estructural_montaje',
-  descripcion: 'Soldadura para estructuras metálicas (cartelería, marcos).',
-  relacionMaquinaSoportada: ['M-0', 'M-1'],
-  modosTiempoSoportados: ['T-2'],
-  mecanismosCantidadSoportados: ['DIRECT_FROM_JOBCONTEXT'],
-  modosActivacionSoportados: ['OBLIGATORIO'],
-  modoActivacionDefault: 'OBLIGATORIO',
-  multiplicadoresSoportados: [],
-  slotsRequeridos: [
-    {
-      codigo: 'electrodos',
-      nombre: 'Electrodos',
-      tipo: 'INSUMO_PASO',
-      requerido: true,
-      compatibilidadMaterial: MP.soldadura,
-    },
-  ],
-  permiteSlotsAdicionales: true,
-  plantillasCompatibles: [],
-  inputsRequeridos: [],
-  outputsCanonicos: ['piezas_soldadas'],
-  validaciones: [],
-  paramsPasoSchema: [],
-};
 
 const ensamble_estructural: DefinicionFamilia = {
   codigo: 'ensamble_estructural',
@@ -1278,6 +1222,182 @@ const ensamble_estructural: DefinicionFamilia = {
   outputsCanonicos: ['piezas_ensambladas'],
   validaciones: [],
   paramsPasoSchema: [],
+};
+
+const estructura_bastidor: DefinicionFamilia = {
+  codigo: 'estructura_bastidor',
+  nombre: 'Estructura de bastidor',
+  categoria: 'estructural_montaje',
+  descripcion:
+    'Corte de los hierros del bastidor (backlight, frontlight) + derivación geométrica: publica ml, puntos de soldadura y m² de cenefa/fondo/pintura como outputs que los pasos siguientes HEREDAN (soldadura, pintura, cenefas — docs/carteleria-configurador-diseno.md §15).',
+  // Herrería manual por ahora; cuando haya plantilla de soldadora se suma M-1.
+  relacionMaquinaSoportada: ['M-0'],
+  modosTiempoSoportados: ['T-2', 'T-3'],
+  // CALCULADO_POR_PASO: la cantidad del paso son los ml de perfil derivados.
+  mecanismosCantidadSoportados: ['CALCULADO_POR_PASO'],
+  modosActivacionSoportados: ['OBLIGATORIO', 'OPCIONAL'],
+  modoActivacionDefault: 'OBLIGATORIO',
+  multiplicadoresSoportados: [],
+  slotsRequeridos: [
+    {
+      codigo: 'perfil_estructural',
+      nombre: 'Perfil / caño estructural',
+      tipo: 'INSUMO_PASO',
+      requerido: true,
+      compatibilidadMaterial: MP.soldadura,
+      // El consumo son los ml derivados (la cantidad del paso).
+      formulaForzada: 'por_unidad_productiva',
+    },
+    {
+      codigo: 'anclaje',
+      nombre: 'Anclajes (opcional)',
+      tipo: 'INSUMO_PASO',
+      requerido: false,
+      compatibilidadMaterial: {
+        familiasMateriaPrima: ['HERRAJE_ACCESORIO'],
+        subfamiliasMateriaPrima: ['SISTEMA_COLGADO_MONTAJE', 'FIJACION_AUXILIAR'],
+      },
+    },
+  ],
+  permiteSlotsAdicionales: true,
+  plantillasCompatibles: [],
+  inputsRequeridos: [],
+  outputsCanonicos: [
+    'ml_estructura',
+    'puntos_soldadura',
+    'cenefa_m2',
+    'pintura_m2',
+    'fondo_m2',
+  ],
+  validaciones: [],
+  paramsPasoSchema: [
+    {
+      campo: 'tipoBastidor',
+      etiqueta: 'Tipo de bastidor',
+      tipo: 'enum',
+      valoresPermitidos: ['simple', 'doble'],
+      default: 'doble',
+      requerido: true,
+      descripcion:
+        'Simple: un marco plano (frontlight). Doble: cajón con frente y contra unidos por la profundidad (backlight).',
+    },
+    {
+      campo: 'sepRefuerzoVcm',
+      etiqueta: 'Separación máx. refuerzos verticales (cm)',
+      tipo: 'number',
+      default: 100,
+      requerido: false,
+      descripcion: 'Cada cuántos cm va una barra vertical. 0 = sin refuerzos.',
+    },
+    {
+      campo: 'sepRefuerzoHcm',
+      etiqueta: 'Separación máx. refuerzos horizontales (cm)',
+      tipo: 'number',
+      default: 0,
+      requerido: false,
+    },
+    {
+      campo: 'solapaCenefaCm',
+      etiqueta: 'Solapa del plegado (cm por lado)',
+      tipo: 'number',
+      default: 2,
+      requerido: false,
+    },
+    {
+      campo: 'profundidadMm',
+      etiqueta: 'Profundidad fija del cajón (mm)',
+      tipo: 'number',
+      requerido: false,
+      descripcion:
+        'Si el producto tiene profundidad fija. Si el comercial la carga al cotizar, manda la del trabajo.',
+    },
+  ],
+  productosTipicos: [
+    'Cartel backlight',
+    'Cartel frontlight',
+    'Marquesina',
+    'Estructura de valla',
+  ],
+};
+
+const iluminacion_led: DefinicionFamilia = {
+  codigo: 'iluminacion_led',
+  nombre: 'Iluminación LED',
+  categoria: 'estructural_montaje',
+  descripcion:
+    'Sembrado de módulos LED + fuente + cableado para cartelería luminosa. La cantidad de módulos se DERIVA de la geometría (por área o por recorrido) y de los atributos del módulo elegido; la fuente se elige sola por capacidad (docs/carteleria-configurador-diseno.md §4.2).',
+  relacionMaquinaSoportada: ['M-0'],
+  modosTiempoSoportados: ['T-2'],
+  mecanismosCantidadSoportados: ['CALCULADO_POR_PASO'],
+  modosActivacionSoportados: ['OBLIGATORIO', 'OPCIONAL', 'CONDICIONAL'],
+  modoActivacionDefault: 'OBLIGATORIO',
+  multiplicadoresSoportados: [],
+  slotsRequeridos: [
+    {
+      // PRIMERO a propósito: es el slot principal (materialPreliminar) y sus
+      // atributos (coberturaM2/pasoMm/wattsModulo) definen la cantidad.
+      codigo: 'modulos_led',
+      nombre: 'Módulo LED',
+      tipo: 'INSUMO_PASO',
+      requerido: true,
+      compatibilidadMaterial: {
+        familiasMateriaPrima: ['ELECTRONICA_CARTELERIA', 'NEON_LUMINARIA'],
+        subfamiliasMateriaPrima: ['MODULO_LED_CARTELERIA', 'NEON_FLEX_LED'],
+      },
+      formulaForzada: 'por_unidad_productiva',
+    },
+    {
+      codigo: 'fuente',
+      nombre: 'Fuente de alimentación (auto por capacidad)',
+      tipo: 'INSUMO_PASO',
+      requerido: true,
+      compatibilidadMaterial: {
+        familiasMateriaPrima: ['ELECTRONICA_CARTELERIA'],
+        subfamiliasMateriaPrima: ['FUENTE_ALIMENTACION_LED'],
+      },
+    },
+    {
+      codigo: 'cableado',
+      nombre: 'Cable y conectores (opcional)',
+      tipo: 'INSUMO_PASO',
+      requerido: false,
+      compatibilidadMaterial: {
+        familiasMateriaPrima: ['ELECTRONICA_CARTELERIA'],
+        subfamiliasMateriaPrima: ['CABLEADO_CONECTICA'],
+      },
+    },
+  ],
+  permiteSlotsAdicionales: true,
+  plantillasCompatibles: [],
+  inputsRequeridos: [],
+  outputsCanonicos: ['modulos_led', 'watts_led'],
+  validaciones: [],
+  paramsPasoSchema: [
+    {
+      campo: 'modoSembrado',
+      etiqueta: 'Modo de sembrado',
+      tipo: 'enum',
+      valoresPermitidos: ['area', 'recorrido'],
+      default: 'area',
+      requerido: true,
+      descripcion:
+        'Por área: grilla sobre la cara (backlight, light box). Por recorrido: siguiendo el trazo (corpóreas).',
+    },
+    {
+      campo: 'densidad',
+      etiqueta: 'Densidad (multiplicador)',
+      tipo: 'number',
+      default: 1,
+      requerido: false,
+      descripcion:
+        '1 = densidad recomendada del módulo. 1,5 = 50% más módulos (más brillo).',
+    },
+  ],
+  productosTipicos: [
+    'Cartel backlight',
+    'Letra corpórea iluminada',
+    'Light box',
+  ],
 };
 
 const montaje_sobre_sustrato: DefinicionFamilia = {
@@ -1352,48 +1472,6 @@ const montaje_sobre_sustrato: DefinicionFamilia = {
   ],
 };
 
-const instalacion_electrica: DefinicionFamilia = {
-  codigo: 'instalacion_electrica',
-  nombre: 'Instalación eléctrica luminosos',
-  categoria: 'estructural_montaje',
-  descripcion: 'Cableado, transformadores, LEDs en carteles iluminados.',
-  relacionMaquinaSoportada: ['M-0'],
-  modosTiempoSoportados: ['T-2'],
-  mecanismosCantidadSoportados: ['DIRECT_FROM_JOBCONTEXT'],
-  modosActivacionSoportados: ['OPCIONAL'],
-  modoActivacionDefault: 'OPCIONAL',
-  multiplicadoresSoportados: [],
-  slotsRequeridos: [
-    {
-      codigo: 'cables',
-      nombre: 'Cables',
-      tipo: 'INSUMO_PASO',
-      requerido: true,
-      compatibilidadMaterial: MP.electricidad,
-    },
-    {
-      codigo: 'transformador',
-      nombre: 'Transformador',
-      tipo: 'INSUMO_PASO',
-      requerido: false,
-      compatibilidadMaterial: MP.electricidad,
-    },
-    {
-      codigo: 'leds',
-      nombre: 'LEDs',
-      tipo: 'INSUMO_PASO',
-      requerido: false,
-      compatibilidadMaterial: MP.electricidad,
-    },
-  ],
-  permiteSlotsAdicionales: true,
-  plantillasCompatibles: [],
-  inputsRequeridos: [],
-  outputsCanonicos: ['luminosos_instalados'],
-  validaciones: [],
-  paramsPasoSchema: [],
-};
-
 // ============================================================================
 // 3.7 Operaciones manuales
 // ============================================================================
@@ -1442,109 +1520,6 @@ const embalaje: DefinicionFamilia = {
     },
   ],
   productosTipicos: ['Tarjetas (cajas de 100)', 'Cualquier producto'],
-};
-
-const conteo_manual: DefinicionFamilia = {
-  codigo: 'conteo_manual',
-  nombre: 'Conteo manual',
-  categoria: 'operaciones_manuales',
-  descripcion: 'Verificación de cantidad o compaginado.',
-  visibleEnSelector: false,
-  relacionMaquinaSoportada: ['M-0'],
-  modosTiempoSoportados: ['T-2'],
-  mecanismosCantidadSoportados: [
-    'DIRECT_FROM_JOBCONTEXT',
-    'HEREDAR_DEL_OUTPUT_CANONICO',
-  ],
-  modosActivacionSoportados: ['OPCIONAL', 'OBLIGATORIO', 'CONDICIONAL'],
-  modoActivacionDefault: 'OPCIONAL',
-  multiplicadoresSoportados: [],
-  slotsRequeridos: [],
-  permiteSlotsAdicionales: false,
-  plantillasCompatibles: [],
-  inputsRequeridos: [],
-  outputsCanonicos: ['piezas_contadas'],
-  validaciones: [],
-  paramsPasoSchema: [],
-};
-
-const atado_banding: DefinicionFamilia = {
-  codigo: 'atado_banding',
-  nombre: 'Atado / banding',
-  categoria: 'operaciones_manuales',
-  descripcion: 'Atado de paquetes con cinta o hilo.',
-  visibleEnSelector: false,
-  relacionMaquinaSoportada: ['M-0'],
-  modosTiempoSoportados: ['T-2'],
-  mecanismosCantidadSoportados: ['DIRECT_FROM_JOBCONTEXT'],
-  modosActivacionSoportados: ['OPCIONAL'],
-  modoActivacionDefault: 'OPCIONAL',
-  multiplicadoresSoportados: [],
-  slotsRequeridos: [
-    {
-      codigo: 'cinta_banding',
-      nombre: 'Cinta / hilo',
-      tipo: 'INSUMO_PASO',
-      requerido: true,
-      compatibilidadMaterial: MP.banding,
-    },
-  ],
-  permiteSlotsAdicionales: false,
-  plantillasCompatibles: [],
-  inputsRequeridos: [],
-  outputsCanonicos: ['atados_completados'],
-  validaciones: [],
-  paramsPasoSchema: [],
-};
-
-const etiquetado_manual: DefinicionFamilia = {
-  codigo: 'etiquetado_manual',
-  nombre: 'Etiquetado manual',
-  categoria: 'operaciones_manuales',
-  descripcion: 'Aplicación manual de etiquetas adhesivas.',
-  visibleEnSelector: false,
-  relacionMaquinaSoportada: ['M-0'],
-  modosTiempoSoportados: ['T-2'],
-  mecanismosCantidadSoportados: ['DIRECT_FROM_JOBCONTEXT'],
-  modosActivacionSoportados: ['OPCIONAL'],
-  modoActivacionDefault: 'OPCIONAL',
-  multiplicadoresSoportados: [],
-  slotsRequeridos: [
-    {
-      codigo: 'etiqueta',
-      nombre: 'Etiqueta adhesiva',
-      tipo: 'INSUMO_PASO',
-      requerido: true,
-      compatibilidadMaterial: MP.etiqueta,
-    },
-  ],
-  permiteSlotsAdicionales: false,
-  plantillasCompatibles: [],
-  inputsRequeridos: ['cantidad'],
-  outputsCanonicos: ['piezas_etiquetadas'],
-  validaciones: [],
-  paramsPasoSchema: [],
-};
-
-const control_calidad: DefinicionFamilia = {
-  codigo: 'control_calidad',
-  nombre: 'Control de calidad',
-  categoria: 'operaciones_manuales',
-  descripcion: 'Verificación visual o técnica de calidad final.',
-  visibleEnSelector: false,
-  relacionMaquinaSoportada: ['M-0'],
-  modosTiempoSoportados: ['T-1', 'T-2'],
-  mecanismosCantidadSoportados: ['DIRECT_FROM_JOBCONTEXT'],
-  modosActivacionSoportados: ['OPCIONAL'],
-  modoActivacionDefault: 'OPCIONAL',
-  multiplicadoresSoportados: [],
-  slotsRequeridos: [],
-  permiteSlotsAdicionales: false,
-  plantillasCompatibles: [],
-  inputsRequeridos: [],
-  outputsCanonicos: ['piezas_verificadas'],
-  validaciones: [],
-  paramsPasoSchema: [],
 };
 
 const trabajo_manual: DefinicionFamilia = {
@@ -1597,7 +1572,7 @@ const trabajo_manual: DefinicionFamilia = {
 
 const modificacion_pre: DefinicionFamilia = {
   codigo: 'modificacion_pre',
-  nombre: 'Modificación pre-producción',
+  nombre: 'Refuerzo / bolsillo de lona (demasía)',
   categoria: 'operaciones_manuales',
   descripcion:
     'Demasía perimetral selectiva: agranda la medida de MATERIAL sobre los lados elegidos, antes de los pasos de producción. Bolsillos y refuerzos en lona. La unión (soldadura/pegado) se mide sobre la medida VISIBLE.',
@@ -1768,29 +1743,8 @@ const colocacion_ojales: DefinicionFamilia = {
 };
 
 // ============================================================================
-// 3.8 Logística / instalación in situ (3)
+// 3.8 Logística / instalación in situ (1)
 // ============================================================================
-
-const envio: DefinicionFamilia = {
-  codigo: 'envio',
-  nombre: 'Envío / despacho',
-  categoria: 'logistica_instalacion',
-  descripcion:
-    'Envío del producto al cliente. Cargos directos asociados (combustible, flete).',
-  relacionMaquinaSoportada: ['M-0'],
-  modosTiempoSoportados: ['T-1', 'T-2'],
-  mecanismosCantidadSoportados: ['DIRECT_FROM_JOBCONTEXT'],
-  modosActivacionSoportados: ['OPCIONAL'],
-  modoActivacionDefault: 'OPCIONAL',
-  multiplicadoresSoportados: [],
-  slotsRequeridos: [],
-  permiteSlotsAdicionales: false,
-  plantillasCompatibles: [],
-  inputsRequeridos: [],
-  outputsCanonicos: ['envios_realizados'],
-  validaciones: [],
-  paramsPasoSchema: [],
-};
 
 const instalacion_in_situ: DefinicionFamilia = {
   codigo: 'instalacion_in_situ',
@@ -1812,27 +1766,6 @@ const instalacion_in_situ: DefinicionFamilia = {
   validaciones: [],
   paramsPasoSchema: [],
   productosTipicos: ['Vinilo adhesivo', 'Cartelería'],
-};
-
-const toma_medidas: DefinicionFamilia = {
-  codigo: 'toma_medidas',
-  nombre: 'Toma de medidas en sitio',
-  categoria: 'logistica_instalacion',
-  descripcion:
-    'Visita al cliente para tomar medidas antes de cotizar / producir.',
-  relacionMaquinaSoportada: ['M-0'],
-  modosTiempoSoportados: ['T-1'],
-  mecanismosCantidadSoportados: ['DIRECT_FROM_JOBCONTEXT'],
-  modosActivacionSoportados: ['OPCIONAL'],
-  modoActivacionDefault: 'OPCIONAL',
-  multiplicadoresSoportados: [],
-  slotsRequeridos: [],
-  permiteSlotsAdicionales: false,
-  plantillasCompatibles: [],
-  inputsRequeridos: [],
-  outputsCanonicos: ['visitas_realizadas'],
-  validaciones: [],
-  paramsPasoSchema: [],
 };
 
 // ============================================================================
@@ -1876,11 +1809,12 @@ const diseno_grafico: DefinicionFamilia = {
 
 export const FAMILIAS: Record<FamiliaCodigo, DefinicionFamilia> = {
   pre_prensa,
-  proof,
   impresion_por_hoja,
   impresion_por_area,
   impresion_por_pieza,
+  impresion_3d,
   aplicacion_transfer,
+  aplicacion_transfer_textil,
   grabado_laser,
   corte_guillotina,
   plotter_corte,
@@ -1888,34 +1822,23 @@ export const FAMILIAS: Record<FamiliaCodigo, DefinicionFamilia> = {
   troquelado_digital,
   cnc,
   plegado,
-  perforado,
   corte_manual,
   laminado,
   plastificado_pouch,
-  barniz,
-  acabado_decorativo,
   pintura_superficial,
-  lijado_canteado,
-  encuadernado_engrapado,
+  abrochado_caballete,
   encuadernado_anillado,
   engomado_emblocado,
-  armado_cajas,
-  soldadura,
   montaje_sobre_sustrato,
   ensamble_estructural,
-  instalacion_electrica,
+  estructura_bastidor,
+  iluminacion_led,
   embalaje,
-  conteo_manual,
-  atado_banding,
-  etiquetado_manual,
-  control_calidad,
   trabajo_manual,
   modificacion_pre,
   modificacion_post,
   colocacion_ojales,
-  envio,
   instalacion_in_situ,
-  toma_medidas,
   diseno_grafico,
 };
 

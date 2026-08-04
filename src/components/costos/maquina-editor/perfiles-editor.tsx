@@ -27,6 +27,7 @@ import {
   getPerfilFieldValue,
   getTemplateUnitLabel,
   normalizePerfilTypeForTemplate,
+  productividadPlanchaEnVivo,
   restringirColoresDelPerfil,
   setPerfilFieldValue,
   setPerfilFieldValueForTemplate,
@@ -71,6 +72,8 @@ export function PerfilesOperativosEditor({
   // Tintas por perfil en todas las impresoras de la familia, láser incluida:
   // el consumo de tóner cambia con el papel, igual que la productividad.
   const conColumnaTinta = PRINTER_TEMPLATES_WITH_CONSUMIBLES.has(form.plantilla);
+  // Plancha térmica: la productividad se DERIVA del ciclo, se muestra en vivo.
+  const conColumnaProductividad = form.plantilla === "plancha_termica";
 
   const updatePerfil = (uiKey: string, next: LocalPerfil) => {
     setPerfiles((prev) => prev.map((p) => (p.uiKey === uiKey ? next : p)));
@@ -117,6 +120,11 @@ export function PerfilesOperativosEditor({
                     {field.required ? <span className="req"> *</span> : null}
                   </th>
                 ))}
+                {conColumnaProductividad ? (
+                  <th className="num" title="Se calcula desde los segundos del ciclo (pre + planchado + post).">
+                    Productividad<span className="unidad"> (piezas/h)</span>
+                  </th>
+                ) : null}
                 {conColumnaTinta ? <th className="tinta">Tinta</th> : null}
                 <th className="acciones" aria-label="Acciones" />
               </tr>
@@ -194,6 +202,20 @@ export function PerfilesOperativosEditor({
                         </td>
                       );
                     })}
+                    {conColumnaProductividad ? (
+                      (() => {
+                        const prod = productividadPlanchaEnVivo(perfil);
+                        return (
+                          <td className="num">
+                            {prod === null ? (
+                              <span className="na">—</span>
+                            ) : (
+                              <strong>{Math.round(prod)}</strong>
+                            )}
+                          </td>
+                        );
+                      })()
+                    ) : null}
                     {conColumnaTinta ? (
                       <td className="tinta">
                         {perfil.tipoPerfil === "corte" ? (

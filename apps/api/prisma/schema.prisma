@@ -103,12 +103,16 @@ enum EstadoTarifaCentroCostoPeriodo {
 /// Plantillas de maquinaria — modelo final v3.0 (2026-04-26).
 /// Doc: `docs/motor-por-pasos-analisis/06-maquinas-y-perfiles.md` §4.
 ///
-/// 13 plantillas finales después del cleanup:
+/// Después del cleanup:
 ///   - 8 impresoras viejas unificadas en IMPRESORA_GRAN_FORMATO_POR_AREA con
-///     discriminantes paramsTecnicosJson.tecnologia + .geometria.
-///   - 3 descartadas por no aplicar al rubro: INYECCION_TINTA, 3D, UV_CILINDRICA.
+///     discriminantes paramsTecnicosJson.tecnologia + .geometria (incluye la
+///     UV cilíndrica sobre objetos, vía `impresion_por_pieza`).
+///   - 2 descartadas por no aplicar al rubro: INYECCION_TINTA, UV_CILINDRICA
+///     como plantilla propia.
 ///   - 2 modeladas como familia (no plantilla): PERFORADORA, REDONDEADORA_PUNTAS
 ///     (pasaron a `modificacion_post`).
+///   - IMPRESORA_3D se sumó en 2026-08 (antes descartada por rubro): el
+///     merchandising y los productos compuestos la trajeron de vuelta.
 enum PlantillaMaquinaria {
   IMPRESORA_LASER
   IMPRESORA_GRAN_FORMATO_POR_AREA
@@ -119,9 +123,9 @@ enum PlantillaMaquinaria {
   CORTE_LASER
   ROUTER_CNC
   ANILLADORA
-  SOLDADORA
-  CABINA_PINTURA
   MESA_DE_CORTE
+  PLANCHA_TERMICA
+  IMPRESORA_3D
 }
 
 enum EstadoMaquina {
@@ -162,6 +166,10 @@ enum UnidadProduccionMaquina {
   PLIEGOS_MIN
   M_MIN
   MM_S
+  MM_MIN
+  /// Impresión 3D: caudal de material depositado (gramos por hora). El tiempo
+  /// sale de los gramos de la pieza (dato del slicer) ÷ este caudal.
+  G_H
 }
 
 enum TipoPerfilOperativoMaquina {

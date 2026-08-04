@@ -44,6 +44,12 @@ import {
   tercerizadoMatrizPasos,
 } from "@/components/comercial/cotizador-tercerizado-selectors";
 import {
+  CarteleriaConfigurador,
+  type CarteleriaTecnologia,
+  type CarteleriaValor,
+} from "@/components/carteleria/carteleria-editor-sheet";
+import cartS from "@/components/carteleria/carteleria.module.css";
+import {
   SelloEditorSheet,
   type DisenoSello,
   type SelloEditorModel,
@@ -161,6 +167,9 @@ type SlotComercialElige = {
   modoSeleccion: string;
   formula: string;
   slotCodigo: string;
+  /** Nombre visible del paso. Desambigua cuando dos pasos piden el MISMO slot
+   *  (revista: tapa e interior piden los dos "sustrato principal"). */
+  nombrePaso: string | null;
   candidatos: SlotMaterialCandidato[];
 };
 
@@ -230,6 +239,9 @@ type MotorConfigState = {
   disenoSello: DisenoSello | null;
   tipoCopia: 1 | 2 | 3;
   numerosXTalonario: number;
+  /** Páginas del documento (imposición de cuadernillo); null = usar default del paso. */
+  paginas: number | null;
+  profundidadCm: number | null;
   piezas: PiezaInput[];
   opcionalesActivados: Record<string, boolean>;
   seleccionMaterial: Record<string, string>;
@@ -388,12 +400,16 @@ const ENRICHED_SPEC_LABELS: Record<string, string> = {
   color_prenda: "Color",
   material_base: "Material base",
   personalizaciones: "Estampas",
+  paginas: "Páginas",
+  profundidad: "Profundidad",
 };
 
 const ENRICHED_SPEC_ORDER = [
   "medidas",
   "material",
   "caras",
+  "paginas",
+  "profundidad",
   "tipo_copia",
   "espesor",
   "tecnologia",
@@ -416,6 +432,8 @@ const DEFAULT_MOTOR_CONFIG: MotorConfigState = {
   disenoSello: null,
   tipoCopia: 1,
   numerosXTalonario: 50,
+  paginas: null,
+  profundidadCm: null,
   piezas: [],
   opcionalesActivados: {},
   seleccionMaterial: {},
@@ -833,6 +851,115 @@ function condicionRefiereTipoCopia(condicion: unknown): boolean {
  * corresponde el selector — no depende de que el producto esté en la
  * subcategoría "talonarios".
  */
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+/**
+ * Imposición de cuadernillo (revista/folleto abrochado): la ruta la activa el
+ * paso de impresión vía `nestingConfig.imposicion.esquema='caballete'`. Cuando
+ * está, el comercial carga las PÁGINAS del documento.
+ * Ver docs/imposicion-cuadernillos-diseno.md.
+ */
+function getImposicionCaballeteDeRuta(
+  ruta: RutaAlternativaDetalle | null,
+  includeConfig: (config: ConfigPasoDetalle) => boolean,
+): { paginasDefault: number | null } | null {
+  for (const config of ruta?.configPasos ?? []) {
+    if (!includeConfig(config)) continue;
+    const params = asRecord(config.paramsPasoJson);
+    const nesting = asRecord(params.nestingConfig);
+    const imposicion = asRecord(nesting.imposicion);
+    if (String(imposicion.esquema ?? "").toLowerCase() === "caballete") {
+      const def = Number(imposicion.paginasDefault);
+      return { paginasDefault: Number.isFinite(def) && def > 0 ? def : null };
+    }
+  }
+  return null;
+}
+
+/**
+ * Cartelería (backlight/light box): si la ruta tiene un bastidor DOBLE sin
+ * profundidad fija en el paso, el comercial carga la profundidad del cajón.
+ * Ver docs/carteleria-configurador-diseno.md §4.3.
+ */
+function getProfundidadDeRuta(
+  ruta: RutaAlternativaDetalle | null,
+  includeConfig: (config: ConfigPasoDetalle) => boolean,
+): { profundidadDefaultMm: number | null } | null {
+  for (const config of ruta?.configPasos ?? []) {
+    if (!includeConfig(config)) continue;
+    if (config.rutaPaso?.familiaCodigo !== "estructura_bastidor") continue;
+    const params = asRecord(config.paramsPasoJson);
+    if (String(params.tipoBastidor ?? "doble").toLowerCase() === "simple") {
+      continue;
+    }
+    const fija = Number(params.profundidadMm);
+    return {
+      profundidadDefaultMm: Number.isFinite(fija) && fija > 0 ? fija : null,
+    };
+  }
+  return null;
+}
+
+/**
+ * Cartelería: la ruta tiene configurador 3D si trae un paso de bastidor.
+ * Devuelve los configPasoId de los dos pasos (estructura + iluminación) y los
+ * params del paso como defaults del editor (los overrides del comercial van
+ * por `paramsComercial` → `configPasoRuntime`, el canal que ya existe).
+ */
+function getCarteleriaDeRuta(
+  ruta: RutaAlternativaDetalle | null,
+  includeConfig: (config: ConfigPasoDetalle) => boolean,
+): {
+  tipoCartel: "backlight" | "frontlight";
+  estructuraConfigPasoId: string;
+  ledConfigPasoId: string | null;
+  impresionConfigPasoId: string | null;
+  /** Pasos de la ruta REAL (§15): opcionales que activan los toggles. */
+  pinturaConfigPasoId: string | null;
+  fondoConfigPasoId: string | null;
+  cenefaConfigPasoId: string | null;
+  paramsEstructura: Record<string, unknown>;
+  paramsLed: Record<string, unknown>;
+} | null {
+  let estructura: ConfigPasoDetalle | null = null;
+  let led: ConfigPasoDetalle | null = null;
+  let impresion: ConfigPasoDetalle | null = null;
+  let pintura: ConfigPasoDetalle | null = null;
+  let fondo: ConfigPasoDetalle | null = null;
+  let cenefa: ConfigPasoDetalle | null = null;
+  for (const config of ruta?.configPasos ?? []) {
+    if (!includeConfig(config)) continue;
+    const familia = config.rutaPaso?.familiaCodigo;
+    if (familia === "estructura_bastidor") estructura = config;
+    if (familia === "iluminacion_led") led = config;
+    if (familia === "impresion_por_area") impresion = config;
+    if (familia === "pintura_superficial") pintura = config;
+    // Los pasos de trabajo_manual de la ruta se distinguen por su ROL,
+    // marcado por la provisión en paramsPasoJson.carteleriaRol.
+    const rol = String(asRecord(config.paramsPasoJson).carteleriaRol ?? "");
+    if (rol === "chapa_fondo") fondo = config;
+    if (rol === "cenefa") cenefa = config;
+  }
+  if (!estructura) return null;
+  const paramsEstructura = asRecord(estructura.paramsPasoJson);
+  const tipoBastidor = String(paramsEstructura.tipoBastidor ?? "doble").toLowerCase();
+  return {
+    tipoCartel: tipoBastidor === "simple" ? "frontlight" : "backlight",
+    estructuraConfigPasoId: estructura.id,
+    ledConfigPasoId: led?.id ?? null,
+    impresionConfigPasoId: impresion?.id ?? null,
+    pinturaConfigPasoId: pintura?.id ?? null,
+    fondoConfigPasoId: fondo?.id ?? null,
+    cenefaConfigPasoId: cenefa?.id ?? null,
+    paramsEstructura,
+    paramsLed: led ? asRecord(led.paramsPasoJson) : {},
+  };
+}
+
 function routeUsesTipoCopia(
   ruta: RutaAlternativaDetalle | null,
   includeConfig: (config: ConfigPasoDetalle) => boolean,
@@ -860,12 +987,31 @@ function mapSlotMaterial(
           modoSeleccion: slot.modoSeleccion,
           formula: slot.formula,
           slotCodigo: slot.slotCodigo,
+          nombrePaso: config.nombreVisible?.trim() || null,
           candidatos: slot.candidatos.map((candidate) => ({
             materiaPrimaId: candidate.materiaPrimaId,
             label: candidate.materiaPrima.nombre,
             defaultVarianteId: candidate.defaultVarianteId,
+            // Modo "todas las variantes": la lista fija del candidato viene
+            // vacía y la fuente son las variantes ACTIVAS del material (igual
+            // que el motor). Sin esto, los pickers quedaban mudos aunque el
+            // motor resolviera bien.
             variantes: sortSlotMaterialVariantsByThickness(
-              candidate.variantes.map((item) => {
+              (candidate.todasLasVariantes
+                ? (candidate.materiaPrima.variantes ?? []).map((v) => ({
+                    variante: {
+                      id: v.id,
+                      sku: v.sku,
+                      nombreVariante: v.nombreVariante,
+                      precioReferencia: v.precioReferencia,
+                      atributosVarianteJson: (v.atributosVarianteJson ?? null) as Record<
+                        string,
+                        unknown
+                      > | null,
+                    },
+                  }))
+                : candidate.variantes
+              ).map((item) => {
                 const variante = {
                   sku: item.variante.sku,
                   nombreVariante: item.variante.nombreVariante,
@@ -1086,15 +1232,28 @@ function getModoColorOptionsForConfig(
 ) {
   const candidatas = config.maquinasCandidatas ?? [];
   if (candidatas.length > 0 && motorConfig) {
-    // Unión de modos sobre TODAS las candidatas: el modo de color es la
-    // decisión visible y la máquina viene implícita en la opción elegida
-    // (elegir "Color" en la C8003 no requiere cambiar de máquina a mano).
+    // Unión de modos sobre las candidatas: el modo de color es la decisión
+    // visible y la máquina viene implícita en la opción elegida (elegir
+    // "Color" en la C8003 no requiere cambiar de máquina a mano).
+    // PERO si las candidatas abarcan más de una tecnología (UV vs eco), la
+    // unión se limita a la tecnología ACTIVA: los modos de la otra tecnología
+    // no existen para la máquina elegida (bug: "CMYK + Blanco" listado bajo
+    // eco-solvente) y elegirlos cambiaría la tecnología por la espalda.
     // Orden FIJO (preferida primero, luego el orden de las candidatas) para
     // que las cards no se reordenen al seleccionar.
-    const preferida = getPreferredCandidate(candidatas);
+    const tecnologias = new Set(candidatas.map(getCandidateTechnology));
+    const activa = getActiveCandidateForConfig(config, motorConfig);
+    const pool =
+      tecnologias.size > 1 && activa
+        ? candidatas.filter(
+            (candidate) =>
+              getCandidateTechnology(candidate) === getCandidateTechnology(activa),
+          )
+        : candidatas;
+    const preferida = getPreferredCandidate(pool);
     const ordenadas = [
       ...(preferida ? [preferida] : []),
-      ...candidatas.filter((candidate) => candidate !== preferida),
+      ...pool.filter((candidate) => candidate !== preferida),
     ];
     const union = new Map<
       string,
@@ -1127,6 +1286,27 @@ function getModoColorOptionsForConfig(
     }
   }
   return config.modoColorOptions ?? [];
+}
+
+/**
+ * Modo efectivo de un paso: lo guardado SOLO vale si sigue existiendo entre
+ * las opciones vigentes (al cambiar de tecnología la lista se achica y una
+ * selección vieja — p. ej. CMYK+Blanco en eco-solvente — debe caer al
+ * default). Mismo resolutor para el render y para el payload del motor.
+ */
+function resolveModoColorSeleccionado(
+  modo: Pick<ModoColorComercial, "options" | "defaultMode">,
+  stored: string | null | undefined,
+) {
+  const values = modo.options.map(
+    (option) => normalizeModoColor(option.value) ?? option.value,
+  );
+  const storedNorm = normalizeModoColor(stored);
+  if (storedNorm && values.includes(storedNorm)) return storedNorm;
+  if (modo.defaultMode && values.includes(modo.defaultMode)) {
+    return modo.defaultMode;
+  }
+  return values[0] ?? null;
 }
 
 function getModoColorsFromPerfil(perfil: { detalleJson?: Record<string, unknown> | null } | null | undefined) {
@@ -2230,6 +2410,29 @@ function buildJobContext(
     opcionalesActivados: config.opcionalesActivados,
     medidaModo: usaMedidaPersonalizadaReal ? "personalizada" : "predefinida",
   };
+  // Imposición de cuadernillo: las páginas del documento viajan al motor
+  // (lo cargado por el comercial, o el default del paso de impresión).
+  const imposicionRuta = getImposicionCaballeteDeRuta(
+    getRutaSeleccionada(productoDetalle, config.rutaAlternativaId ?? ""),
+    includeConfig,
+  );
+  if (imposicionRuta) {
+    const paginas = config.paginas ?? imposicionRuta.paginasDefault;
+    if (paginas && paginas > 0) ctx.paginas = paginas;
+  }
+  // Cartelería: la profundidad del cajón viaja al motor en mm (lo cargado por
+  // el comercial, o la fija del paso de bastidor).
+  const profundidadRuta = getProfundidadDeRuta(
+    getRutaSeleccionada(productoDetalle, config.rutaAlternativaId ?? ""),
+    includeConfig,
+  );
+  if (profundidadRuta) {
+    const profundidadMm =
+      config.profundidadCm != null && config.profundidadCm > 0
+        ? config.profundidadCm * 10
+        : profundidadRuta.profundidadDefaultMm;
+    if (profundidadMm && profundidadMm > 0) ctx.profundidadMm = profundidadMm;
+  }
   // Avanzado: caras por paso — el override gana sobre `caras` global en el
   // motor solo para ese paso (ej. original doble faz, duplicado simple).
   for (const [configPasoId, carasPaso] of Object.entries(
@@ -2407,6 +2610,37 @@ function buildJobContext(
     (configPasoId, modoActivacion) =>
       modoActivacion !== "OPCIONAL" || Boolean(opcionalesEfectivos[configPasoId]),
   );
+  // Configurador 3D de cartelería: sus campos son editables POR DISEÑO de la
+  // herramienta (no requieren que el modelador los declare abiertos), así que
+  // se fusionan aparte del filtro de `camposEditablesComercial`.
+  const carteleriaRuta = getCarteleriaDeRuta(rutaSel, includeConfig);
+  if (carteleriaRuta) {
+    const mergeCarteleria = (configPasoId: string | null, campos: string[]) => {
+      if (!configPasoId) return;
+      const elegido = config.paramsComercial?.[configPasoId];
+      if (!elegido) return;
+      const valores: Record<string, unknown> = {};
+      for (const campo of campos) {
+        const v = elegido[campo];
+        if (v !== undefined && v !== null) valores[campo] = v;
+      }
+      if (Object.keys(valores).length > 0) {
+        runtimeParams[configPasoId] = {
+          ...(runtimeParams[configPasoId] ?? {}),
+          ...valores,
+        };
+      }
+    };
+    // OJO: esta lista es el ESPEJO de CAMPOS_SIEMPRE_EDITABLES_POR_FAMILIA
+    // del motor — un campo que falte acá viaja como si el comercial no lo
+    // hubiera tocado (la chapa trasera cotizaba 0 m² por esto).
+    mergeCarteleria(carteleriaRuta.estructuraConfigPasoId, [
+      "sepRefuerzoVcm",
+      "sepRefuerzoHcm",
+      "solapaCenefaCm",
+    ]);
+    mergeCarteleria(carteleriaRuta.ledConfigPasoId, ["densidad"]);
+  }
   if (Object.keys(runtimeParams).length > 0) {
     ctx.configPasoRuntime = runtimeParams;
   }
@@ -2452,10 +2686,10 @@ function buildJobContext(
   );
   const modoColorPorPaso: Record<string, string> = {};
   for (const modo of modosColorComercial) {
-    const selected =
-      normalizeModoColor(config.seleccionModoColor[modo.configPasoId]) ??
-      modo.defaultMode ??
-      normalizeModoColor(modo.options[0]?.value);
+    const selected = resolveModoColorSeleccionado(
+      modo,
+      config.seleccionModoColor[modo.configPasoId],
+    );
     if (!selected) continue;
     modoColorPorPaso[modo.configPasoId] = selected;
     ctx[`modoColor_${modo.configPasoId}`] = selected;
@@ -2894,6 +3128,31 @@ function buildPresentableSpecs(
     setSpec("hojas_por_talonario", `${config.numerosXTalonario} hojas`);
     setSpec("copias_hojas", `${tipoCopia} · ${config.numerosXTalonario} hojas`);
   }
+  // Imposición de cuadernillo: las páginas quedan en la ficha/OT.
+  const imposicionSpec = getImposicionCaballeteDeRuta(
+    rutaSeleccionada,
+    isExecutableConfigPaso,
+  );
+  if (imposicionSpec) {
+    const paginasSpec = config.paginas ?? imposicionSpec.paginasDefault;
+    if (paginasSpec && paginasSpec > 0) {
+      setSpec("paginas", `${paginasSpec} páginas`);
+    }
+  }
+  // Cartelería: la profundidad del cajón queda en la ficha/OT.
+  const profundidadSpec = getProfundidadDeRuta(
+    rutaSeleccionada,
+    isExecutableConfigPaso,
+  );
+  if (profundidadSpec) {
+    const profundidadMmSpec =
+      config.profundidadCm != null && config.profundidadCm > 0
+        ? config.profundidadCm * 10
+        : profundidadSpec.profundidadDefaultMm;
+    if (profundidadMmSpec && profundidadMmSpec > 0) {
+      setSpec("profundidad", `${profundidadMmSpec / 10} cm de profundidad`);
+    }
+  }
   if (hasSpec("zona")) setSpec("zona", config.zonaInstalacion);
   if (hasSpec("m2_medidas_instaladas")) {
     setSpec(
@@ -3057,7 +3316,12 @@ function buildItem(
     categoriaComercialNombre: product.categoriaComercialNombre,
     subcategoriaComercialCodigo: product.subcategoriaComercialCodigo,
     subcategoriaComercialNombre: product.subcategoriaComercialNombre,
-    varianteNombre: product.descripcion,
+    // `varianteNombre` es la referencia visual del renglón (la ficha lo pinta
+    // como "· <ref>") y es propio del centro de copiado, donde todos los ítems
+    // comparten producto y se distinguen por archivo/tomo. Un producto de
+    // catálogo se distingue por su NOMBRE: acá venía la descripción comercial
+    // y aparecía pegada al nombre en la ficha.
+    varianteNombre: undefined,
     unidadMedida,
     cantidad: cantidadComercial,
     precioUnitario,
@@ -3215,6 +3479,22 @@ function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
         ? Number(ctx.m2_instalados)
         : DEFAULT_MOTOR_CONFIG.m2Instalados,
     personalizaciones: personalizacionesGuardadas,
+    // Imposición de cuadernillo y cartelería: sin esto, reabrir el ítem
+    // perdía las páginas, la profundidad y lo tocado en el configurador 3D.
+    paginas:
+      Number.isFinite(Number(ctx.paginas)) && Number(ctx.paginas) > 0
+        ? Number(ctx.paginas)
+        : null,
+    profundidadCm:
+      Number.isFinite(Number(ctx.profundidadMm)) && Number(ctx.profundidadMm) > 0
+        ? Number(ctx.profundidadMm) / 10
+        : null,
+    paramsComercial:
+      ctx.configPasoRuntime &&
+      typeof ctx.configPasoRuntime === "object" &&
+      !Array.isArray(ctx.configPasoRuntime)
+        ? (ctx.configPasoRuntime as Record<string, Record<string, unknown>>)
+        : {},
   };
 }
 
@@ -3515,6 +3795,17 @@ function ApConfigStep({
   const slotsMaterialesPrincipales = slotsComercialElige.filter(
     (slot) => slot.modoActivacion !== "OPCIONAL",
   );
+  // Slots que aparecen en más de un paso: ahí el código de slot solo es
+  // ambiguo y hay que anteponer el nombre del paso.
+  const slotCodigosDuplicados = React.useMemo(() => {
+    const cuenta = new Map<string, number>();
+    for (const slot of slotsComercialElige) {
+      cuenta.set(slot.slotCodigo, (cuenta.get(slot.slotCodigo) ?? 0) + 1);
+    }
+    return new Set(
+      [...cuenta.entries()].filter(([, n]) => n > 1).map(([codigo]) => codigo),
+    );
+  }, [slotsComercialElige]);
   // Configurador de sello: activo si el producto tiene la herramienta y hay un
   // cuerpo de sello elegido (variante con tamaño de polímero + líneas de texto).
   const editorSelloHabilitado = getHerramientaEditorSello(
@@ -4350,6 +4641,13 @@ function ApConfigStep({
     options?: { showHint?: boolean; collapseSingleCandidate?: boolean },
   ) => {
     const key = materialSelectionKey(slot.configPasoId, slot.slotCodigo);
+    // Con dos pasos pidiendo el MISMO slot (revista: tapa e interior piden los
+    // dos "sustrato principal"), el código de slot solo no alcanza: se antepone
+    // el nombre del paso. Con uno solo se deja limpio.
+    const etiquetaSlot =
+      slotCodigosDuplicados.has(slot.slotCodigo) && slot.nombrePaso
+        ? `${slot.nombrePaso} · ${humanizeCodigo(slot.slotCodigo)}`
+        : humanizeCodigo(slot.slotCodigo);
     const selected = motorConfig.seleccionMaterial[key] || defaultSlotCandidateId(slot) || "";
     const selectedCandidate =
       slot.candidatos.find((candidate) =>
@@ -4406,14 +4704,14 @@ function ApConfigStep({
       >
         {materialOptions.length === 0 ? (
           <>
-            <label>{humanizeCodigo(slot.slotCodigo)}</label>
+            <label>{etiquetaSlot}</label>
             <div className="ctrl-input">
               <span>Sin materiales candidatos configurados</span>
             </div>
           </>
         ) : hideFilmSelector ? null : (
           <>
-            <label>{humanizeCodigo(slot.slotCodigo)}</label>
+            <label>{etiquetaSlot}</label>
             {renderFilmChips(
               slot,
               selectedCandidate?.materiaPrimaId ?? "",
@@ -4857,6 +5155,112 @@ function ApConfigStep({
   const esTalonario =
     product.subcategoriaComercialCodigo === "talonarios" ||
     routeUsesTipoCopia(rutaSel, isExecutableConfigPaso);
+  const imposicionCaballete = getImposicionCaballeteDeRuta(
+    rutaSel,
+    isExecutableConfigPaso,
+  );
+  const profundidadCartel = getProfundidadDeRuta(rutaSel, isExecutableConfigPaso);
+  // Configurador 3D de cartelería (herramienta estilo sello): edita EN VIVO el
+  // motorConfig (medidas, profundidad, params comerciales de los dos pasos) y
+  // el precio se re-cotiza solo con el debounce del sheet.
+  const carteleriaInfo = getCarteleriaDeRuta(rutaSel, isExecutableConfigPaso);
+  const carteleriaValor: CarteleriaValor | null = React.useMemo(() => {
+    if (!carteleriaInfo) return null;
+    const overrides = asRecord(
+      motorConfig.paramsComercial?.[carteleriaInfo.estructuraConfigPasoId],
+    );
+    const overridesLed = carteleriaInfo.ledConfigPasoId
+      ? asRecord(motorConfig.paramsComercial?.[carteleriaInfo.ledConfigPasoId])
+      : {};
+    const base = carteleriaInfo.paramsEstructura;
+    const num = (v: unknown, def: number) => {
+      const n = Number(v);
+      return Number.isFinite(n) && n >= 0 ? n : def;
+    };
+    const pieza = motorConfig.piezas[0];
+    return {
+      anchoCm: num(pieza?.anchoMm, 2400) / 10,
+      altoCm: num(pieza?.altoMm, 1200) / 10,
+      profundidadCm:
+        motorConfig.profundidadCm ??
+        (num(base.profundidadMm, 0) / 10 ||
+          (profundidadCartel?.profundidadDefaultMm ?? 180) / 10),
+      sepRefuerzoVcm: num(overrides.sepRefuerzoVcm ?? base.sepRefuerzoVcm, 100),
+      sepRefuerzoHcm: num(overrides.sepRefuerzoHcm ?? base.sepRefuerzoHcm, 0),
+      // §15: los toggles activan PASOS OPCIONALES de la ruta real.
+      cenefa: carteleriaInfo.cenefaConfigPasoId
+        ? Boolean(motorConfig.opcionalesActivados[carteleriaInfo.cenefaConfigPasoId])
+        : false,
+      solapaCenefaCm: num(overrides.solapaCenefaCm ?? base.solapaCenefaCm, 2),
+      pintura: carteleriaInfo.pinturaConfigPasoId
+        ? Boolean(motorConfig.opcionalesActivados[carteleriaInfo.pinturaConfigPasoId])
+        : false,
+      fondo: carteleriaInfo.fondoConfigPasoId
+        ? Boolean(motorConfig.opcionalesActivados[carteleriaInfo.fondoConfigPasoId])
+        : false,
+      dobleFaz:
+        carteleriaInfo.impresionConfigPasoId != null &&
+        motorConfig.carasPorPaso?.[carteleriaInfo.impresionConfigPasoId] === 2,
+      densidad: num(
+        overridesLed.densidad ?? carteleriaInfo.paramsLed.densidad,
+        1,
+      ),
+    };
+  }, [carteleriaInfo, motorConfig, profundidadCartel]);
+  const aplicarCarteleria = React.useCallback(
+    (valor: CarteleriaValor) => {
+      if (!carteleriaInfo) return;
+      setMotorConfig((prev) => {
+        const piezas = prev.piezas.length
+          ? prev.piezas.map((p, i) =>
+              i === 0
+                ? { ...p, anchoMm: valor.anchoCm * 10, altoMm: valor.altoCm * 10 }
+                : p,
+            )
+          : [{ anchoMm: valor.anchoCm * 10, altoMm: valor.altoCm * 10 }];
+        const paramsComercial = { ...(prev.paramsComercial ?? {}) };
+        paramsComercial[carteleriaInfo.estructuraConfigPasoId] = {
+          ...asRecord(paramsComercial[carteleriaInfo.estructuraConfigPasoId]),
+          sepRefuerzoVcm: valor.sepRefuerzoVcm,
+          sepRefuerzoHcm: valor.sepRefuerzoHcm,
+          solapaCenefaCm: valor.solapaCenefaCm,
+        };
+        // Toggles → activación de los pasos opcionales de la ruta real (§15).
+        const opcionalesActivados = { ...prev.opcionalesActivados };
+        const setOpcional = (id: string | null, on: boolean) => {
+          if (!id) return;
+          if (on) opcionalesActivados[id] = true;
+          else delete opcionalesActivados[id];
+        };
+        setOpcional(carteleriaInfo.cenefaConfigPasoId, valor.cenefa);
+        setOpcional(carteleriaInfo.pinturaConfigPasoId, valor.pintura);
+        setOpcional(carteleriaInfo.fondoConfigPasoId, valor.fondo);
+        if (carteleriaInfo.ledConfigPasoId) {
+          paramsComercial[carteleriaInfo.ledConfigPasoId] = {
+            ...asRecord(paramsComercial[carteleriaInfo.ledConfigPasoId]),
+            densidad: valor.densidad,
+          };
+        }
+        const carasPorPaso = { ...prev.carasPorPaso };
+        if (carteleriaInfo.impresionConfigPasoId) {
+          if (valor.dobleFaz) {
+            carasPorPaso[carteleriaInfo.impresionConfigPasoId] = 2;
+          } else {
+            delete carasPorPaso[carteleriaInfo.impresionConfigPasoId];
+          }
+        }
+        return {
+          ...prev,
+          piezas: piezas as typeof prev.piezas,
+          profundidadCm: valor.profundidadCm,
+          paramsComercial,
+          opcionalesActivados,
+          carasPorPaso,
+        };
+      });
+    },
+    [carteleriaInfo, setMotorConfig],
+  );
   const metroLinealConMedidasVariables = isMetroLinealConMedidasVariables(productoDetalle);
   const mostrarEditorPiezas = usaPiezasParaCotizar(productoDetalle, motorConfig);
   const mostrarMaterialLinealDirecto =
@@ -5160,6 +5564,98 @@ function ApConfigStep({
           : current.piezas,
     }));
   };
+
+  // ── SHEET DE CARTELERÍA (§12 del doc) ──────────────────────────────
+  // Un producto de cartelería NO usa el cuerpo genérico (medidas duplicadas,
+  // opcionales vacíos, materiales sueltos): el configurador 3D ES el sheet.
+  // Medidas, cantidad, tecnología, lona, caño, chapas, LED, anclajes y notas
+  // viven adentro; el pie del sheet (precio + Agregar a la OT) sigue siendo
+  // el del padre.
+  if (carteleriaInfo && carteleriaValor) {
+    const tecnoPaso = pasosConTecnologias.find(
+      (paso) => paso.configPasoId === carteleriaInfo.impresionConfigPasoId,
+    );
+    const tecnologias: CarteleriaTecnologia[] = (tecnoPaso?.tecnologias ?? [])
+      .filter((tech) => tech.candidatas.length > 0)
+      .map((tech) => ({
+        value: tech.value,
+        label: tech.label,
+        maquinaId: tech.candidatas[0].maquinaId,
+        maquinaIds: tech.candidatas.map((candidate) => candidate.maquinaId),
+      }));
+    return (
+      <>
+        <div className="ap-product-banner">
+          <button type="button" className="ap-back" onClick={onBack}>
+            <ArrowLeftIcon />
+            Cambiar producto
+          </button>
+          <div className="ap-product-banner-info">
+            <div className="ap-product-banner-name">{product.name}</div>
+            <div className="ap-product-banner-desc">
+              Configurador de cartelería · el precio lo cotiza el motor en vivo
+            </div>
+          </div>
+        </div>
+        <div className={cartS.sheetHost}>
+          <CarteleriaConfigurador
+            tipoCartel={carteleriaInfo.tipoCartel}
+            valor={carteleriaValor}
+            onChange={aplicarCarteleria}
+            slots={slotsComercialElige.filter((slot) =>
+              [
+                carteleriaInfo.estructuraConfigPasoId,
+                carteleriaInfo.ledConfigPasoId,
+                carteleriaInfo.impresionConfigPasoId,
+                carteleriaInfo.pinturaConfigPasoId,
+                carteleriaInfo.fondoConfigPasoId,
+                carteleriaInfo.cenefaConfigPasoId,
+              ].includes(slot.configPasoId),
+            )}
+            getMaterial={(configPasoId, slotCodigo) =>
+              motorConfig.seleccionMaterial[
+                materialSelectionKey(configPasoId, slotCodigo)
+              ] ?? ""
+            }
+            setMaterial={(configPasoId, slotCodigo, variantId) =>
+              setMaterial(materialSelectionKey(configPasoId, slotCodigo), variantId)
+            }
+            estructuraConfigPasoId={carteleriaInfo.estructuraConfigPasoId}
+            ledConfigPasoId={carteleriaInfo.ledConfigPasoId}
+            impresionConfigPasoId={carteleriaInfo.impresionConfigPasoId}
+            pinturaConfigPasoId={carteleriaInfo.pinturaConfigPasoId}
+            fondoConfigPasoId={carteleriaInfo.fondoConfigPasoId}
+            cenefaConfigPasoId={carteleriaInfo.cenefaConfigPasoId}
+            tecnologias={tecnologias}
+            maquinaSeleccionadaId={
+              carteleriaInfo.impresionConfigPasoId
+                ? (motorConfig.seleccionMaquina[
+                    carteleriaInfo.impresionConfigPasoId
+                  ] ?? "")
+                : ""
+            }
+            onSelectTecnologia={(tec) => {
+              if (!carteleriaInfo.impresionConfigPasoId) return;
+              setMotorConfig((current) => ({
+                ...current,
+                seleccionMaquina: {
+                  ...current.seleccionMaquina,
+                  [carteleriaInfo.impresionConfigPasoId as string]: tec.maquinaId,
+                },
+              }));
+            }}
+            coberturaLedM2={0.0625}
+            cotizacion={cotizacion}
+            cotizando={cotizando}
+            qty={qty}
+            setQty={setQty}
+            notaProduccion={notaProduccion}
+            setNotaProduccion={setNotaProduccion}
+          />
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -5572,6 +6068,31 @@ function ApConfigStep({
               </>
             ) : null}
 
+            {imposicionCaballete ? (
+              <div className="ap-spec">
+                <label>Páginas del documento</label>
+                <input
+                  type="number"
+                  min="4"
+                  step="4"
+                  placeholder={String(imposicionCaballete.paginasDefault ?? 16)}
+                  value={motorConfig.paginas ?? ""}
+                  onChange={(event) => {
+                    const value = Number(event.target.value);
+                    updateMotorConfig({
+                      paginas: Number.isFinite(value) && value > 0 ? value : null,
+                    });
+                  }}
+                />
+                {motorConfig.paginas && motorConfig.paginas % 4 !== 0 ? (
+                  <span className="ap-section-hint">
+                    Se completa a {Math.ceil(motorConfig.paginas / 4) * 4}{" "}
+                    páginas con blancas al final (el caballete arma de a 4).
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
+
             {pasosConTecnologias.map((paso) => {
               const allCandidates = paso.tecnologias.flatMap((tech) => tech.candidatas);
               const selectedId = motorConfig.seleccionMaquina[paso.configPasoId] || "";
@@ -5662,10 +6183,10 @@ function ApConfigStep({
 
             {modosColorVisibles.map((modo) => {
               const value =
-                normalizeModoColor(motorConfig.seleccionModoColor[modo.configPasoId]) ??
-                modo.defaultMode ??
-                normalizeModoColor(modo.options[0]?.value) ??
-                "";
+                resolveModoColorSeleccionado(
+                  modo,
+                  motorConfig.seleccionModoColor[modo.configPasoId],
+                ) ?? "";
               // Si los modos vienen de máquinas distintas, la card muestra la
               // máquina asociada y elegir el modo también activa esa máquina.
               const maquinasEnOpciones = new Set(
@@ -6598,10 +7119,26 @@ export function AgregarProductoSheet({
 
   if (!open) return null;
 
+  // Cartelería toma la pantalla completa: el configurador 3D necesita las
+  // tres columnas (params · 3D · listado), no el drawer angosto.
+  const esCarteleriaFull =
+    step === "config" &&
+    Boolean(
+      getCarteleriaDeRuta(
+        getRutaSeleccionada(productoDetalle, motorConfig.rutaAlternativaId),
+        isExecutableConfigPaso,
+      ),
+    );
+
   return (
     <>
       <div className="sheet-backdrop" onClick={close} />
-      <div className="sheet sheet-ap" role="dialog" aria-modal="true" aria-labelledby="ap-title">
+      <div
+        className={`sheet sheet-ap${esCarteleriaFull ? ` ${cartS.sheetFull}` : ""}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ap-title"
+      >
         <div className="sheet-head ap-head">
           <div className="body">
             <div className="ap-eyebrow">
@@ -6633,7 +7170,9 @@ export function AgregarProductoSheet({
           </button>
         </div>
 
-        <div className="sheet-body ap-body">
+        <div
+          className={`sheet-body ap-body${esCarteleriaFull ? ` ${cartS.sheetBodyFull}` : ""}`}
+        >
           {step === "select" ? (
             <ApSelectStep
               query={query}

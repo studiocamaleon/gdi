@@ -167,9 +167,18 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
 
   // ─── §11 CORTE_LASER ────────────────────────────────────────────
   // Perfil único "Estándar". T-4 input manual → productividad NULL.
+  // Láser/CNC: tabla de perfiles por operación × material × espesor. La velocidad
+  // (productivityValue) va en la unidad nativa (mm/s láser, mm/min CNC) y el motor
+  // la aplica al recorrido de las piezas.
   [PlantillaMaquinariaDto.corte_laser]: buildRule({
-    detalleKeys: [],
-    requiredFieldKeys: ['nombre'],
+    detalleKeys: ['tipoOperacion', 'material', 'espesorMinMm', 'espesorMaxMm'],
+    requiredFieldKeys: [
+      'nombre',
+      'tipoOperacion',
+      'productivityValue',
+      'productivityUnit',
+    ],
+    modeSourceKeys: ['tipoOperacion', 'material'],
     allowedProfileTypes: [
       TipoPerfilOperativoMaquinaDto.corte,
       TipoPerfilOperativoMaquinaDto.grabado,
@@ -179,8 +188,14 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
   // ─── §12 ROUTER_CNC ─────────────────────────────────────────────
   // Perfil único "Estándar". Productividad nominal m²/h para T-3.
   [PlantillaMaquinariaDto.router_cnc]: buildRule({
-    detalleKeys: [],
-    requiredFieldKeys: ['nombre', 'productivityValue', 'productivityUnit'],
+    detalleKeys: ['tipoOperacion', 'material', 'espesorMinMm', 'espesorMaxMm'],
+    requiredFieldKeys: [
+      'nombre',
+      'tipoOperacion',
+      'productivityValue',
+      'productivityUnit',
+    ],
+    modeSourceKeys: ['tipoOperacion', 'material'],
     allowedProfileTypes: [TipoPerfilOperativoMaquinaDto.mecanizado],
   }),
 
@@ -199,25 +214,33 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
     allowedProfileTypes: [TipoPerfilOperativoMaquinaDto.fabricacion],
   }),
 
-  // ─── §15 SOLDADORA (pendiente, sin perfilado detallado todavía) ──
-  [PlantillaMaquinariaDto.soldadora]: buildRule({
-    detalleKeys: [],
-    requiredFieldKeys: ['nombre'],
-    allowedProfileTypes: [TipoPerfilOperativoMaquinaDto.fabricacion],
-  }),
-
-  // ─── §15 CABINA_PINTURA (pendiente) ─────────────────────────────
-  [PlantillaMaquinariaDto.cabina_pintura]: buildRule({
-    detalleKeys: [],
-    requiredFieldKeys: ['nombre'],
-    allowedProfileTypes: [TipoPerfilOperativoMaquinaDto.fabricacion],
-  }),
-
   // ─── MESA_DE_CORTE (postergada — evaluar) ────────────────────────
   [PlantillaMaquinariaDto.mesa_de_corte]: buildRule({
     detalleKeys: ['tipoCorte', 'modoOperacion'],
     requiredFieldKeys: ['nombre'],
     allowedProfileTypes: [TipoPerfilOperativoMaquinaDto.corte],
+  }),
+  // ─── PLANCHA_TERMICA (aplicación de transfer textil) ────────────
+  // Perfil "por ciclo": el modelador carga los segundos (pre + planchado + post)
+  // y el service (buildPerfilData) DERIVA productivityValue (piezas/h). Por eso
+  // el detalle trae los tiempos y productivityValue NO es required en el payload.
+  [PlantillaMaquinariaDto.plancha_termica]: buildRule({
+    detalleKeys: [
+      'tiempoPreplanchadoSeg',
+      'tiempoPrensadoSeg',
+      'tiempoPostplanchadoSeg',
+    ],
+    requiredFieldKeys: ['nombre', 'tiempoPrensadoSeg'],
+    allowedProfileTypes: [TipoPerfilOperativoMaquinaDto.fabricacion],
+  }),
+
+  // ─── IMPRESORA_3D ───────────────────────────────────────────────
+  // Perfil = material × calidad → caudal (g/h). El material es multi-valor:
+  // un mismo perfil suele cubrir PLA y PETG al mismo caudal.
+  [PlantillaMaquinariaDto.impresora_3d]: buildRule({
+    detalleKeys: ['material', 'calidad', 'alturaCapaMm'],
+    requiredFieldKeys: ['nombre'],
+    allowedProfileTypes: [TipoPerfilOperativoMaquinaDto.fabricacion],
   }),
 };
 

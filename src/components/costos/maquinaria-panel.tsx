@@ -249,7 +249,6 @@ export function MaquinariaPanel({
               </tr>
             ) : null}
             {filteredMaquinas.map((m) => {
-              const makeModel = [m.fabricante, m.modelo].filter(Boolean).join(" · ");
               return (
                 <tr
                   key={m.id}
@@ -258,7 +257,6 @@ export function MaquinariaPanel({
                 >
                   <td>
                     <div className="name">{m.nombre}</div>
-                    {makeModel ? <div className="desc">{makeModel}</div> : null}
                   </td>
                   <td className="maq-tipo" title={getMachineTechnologyLabel(m)}>
                     <span

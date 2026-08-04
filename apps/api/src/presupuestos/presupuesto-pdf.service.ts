@@ -403,14 +403,63 @@ export class PresupuestoPdfService {
   // texto discreta bajo el nombre. Lo moderno queda en la tipografía y el
   // aire, no en los adornos.
 
-  /** Anchos de las columnas numéricas; la descripción se queda con el resto. */
+  /** Anchos de las columnas numéricas; la descripción se queda con el resto.
+   *  Los fijos son MÍNIMOS de diseño: `calcularColumnas` los ensancha cuando
+   *  alguna cifra real no entra (un total de seis cifras en bold desbordaba
+   *  su columna y se pegaba al unitario). */
+  private colsDoc: {
+    orden: number;
+    cant: number;
+    unit: number;
+    total: number;
+  } | null = null;
+
   private get colNum(): {
     orden: number;
     cant: number;
     unit: number;
     total: number;
   } {
-    return { orden: px(22), cant: px(66), unit: px(96), total: px(104) };
+    return (
+      this.colsDoc ?? { orden: px(22), cant: px(66), unit: px(96), total: px(104) }
+    );
+  }
+
+  /** Mide cantidad/unitario/total de TODOS los renglones (y los rótulos) con
+   *  sus fuentes reales y fija los anchos de columna del documento: el máximo
+   *  contenido + aire. La descripción absorbe la diferencia. */
+  private calcularColumnas(
+    pdf: jsPDF,
+    items: PresupuestoPdfDatos['items'],
+  ): void {
+    const AIRE = px(16);
+    let wCant = 0;
+    let wUnit = 0;
+    let wTotal = 0;
+    this.fuente(pdf, 10, true);
+    const hCant = pdf.getTextWidth(this.espaciado('CANT.'));
+    const hUnit = pdf.getTextWidth(this.espaciado('UNITARIO'));
+    const hTotal = pdf.getTextWidth(this.espaciado('TOTAL'));
+    for (const item of items) {
+      const unitario =
+        item.cantidad > 0 ? item.total / item.cantidad : item.total;
+      this.fuente(pdf, 12.5, false);
+      wCant = Math.max(
+        wCant,
+        pdf.getTextWidth(
+          `${item.cantidad.toLocaleString('es-AR')} ${item.cantidadUnidad}`.trim(),
+        ),
+      );
+      wUnit = Math.max(wUnit, pdf.getTextWidth(this.money(unitario)));
+      this.fuente(pdf, 13, true);
+      wTotal = Math.max(wTotal, pdf.getTextWidth(this.money(item.total)));
+    }
+    this.colsDoc = {
+      orden: px(22),
+      cant: Math.max(px(66), Math.max(wCant, hCant) + AIRE),
+      unit: Math.max(px(96), Math.max(wUnit, hUnit) + AIRE),
+      total: Math.max(px(104), Math.max(wTotal, hTotal) + AIRE),
+    };
   }
 
   private get xColumnas(): {
@@ -443,6 +492,7 @@ export class PresupuestoPdfService {
   }
 
   private detalle(pdf: jsPDF, d: PresupuestoPdfDatos, y0: number): number {
+    this.calcularColumnas(pdf, d.items);
     let y = this.encabezadoTabla(pdf, y0);
 
     d.items.forEach((item, i) => {

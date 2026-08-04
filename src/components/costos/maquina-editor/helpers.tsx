@@ -414,6 +414,24 @@ export function setPerfilFieldValue(perfil: LocalPerfil, key: string, value: unk
   return { ...perfil, detalle: { ...(perfil.detalle ?? {}), [key]: value } };
 }
 
+/**
+ * PLANCHA_TERMICA — productividad (piezas/hora) en vivo desde los segundos del
+ * ciclo. Espeja `deriveProductividadPlanchaTermica` del backend (fuente de
+ * verdad al guardar); acá es solo para mostrar el cálculo mientras se edita.
+ */
+export function productividadPlanchaEnVivo(perfil: LocalPerfil): number | null {
+  const num = (key: string): number | null => {
+    const raw = getPerfilFieldValue(perfil, key);
+    const n = typeof raw === "string" ? Number(raw) : (raw as number);
+    return typeof n === "number" && Number.isFinite(n) ? n : null;
+  };
+  const planchado = num("tiempoPrensadoSeg");
+  if (planchado === null) return null;
+  const seg = (num("tiempoPreplanchadoSeg") ?? 0) + planchado + (num("tiempoPostplanchadoSeg") ?? 0);
+  if (seg <= 0) return null;
+  return 3600 / seg;
+}
+
 export function getDefaultProductivityUnit(form: MaquinaPayload): UnidadProduccionMaquina {
   return (
     getMaquinariaTemplate(form.plantilla)?.defaultProductionUnit ??
@@ -544,6 +562,9 @@ export function getTemplateUnitLabel(unit: MaquinariaTemplateField["unit"]) {
   if (!unit) return "";
   const labels: Partial<Record<NonNullable<MaquinariaTemplateField["unit"]>, string>> = {
     mm_s: "mm/seg",
+    mm_min: "mm/min",
+    g_h: "g/h",
+    gramos: "g",
     m2_h: "m²/h",
     g_m2: "g/m²",
     m_min: "m/min",
@@ -888,6 +909,9 @@ export function normalizeMarginValue(value: unknown): Record<string, number | un
 }
 
 export function getFriendlyFieldDescription(field: MaquinariaTemplateField) {
+  // La descripción de la plantilla gana (láser/CNC hablan de "usar", no de
+  // "imprimir"); los textos de acá quedan de fallback para templates viejos.
+  if (field.description) return field.description;
   if (field.key === "margenesNoImprimiblesMm") {
     return "Distancia que la máquina no puede imprimir en cada borde.";
   }

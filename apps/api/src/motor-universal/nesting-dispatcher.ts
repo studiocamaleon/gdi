@@ -48,6 +48,12 @@ import {
   type TalonarioGroupingResult,
 } from '../productos-servicios/nesting/helpers/talonario-grouping';
 import { calculateSustratoToPliegoConversion } from '../productos-servicios/nesting/helpers/sustrato-to-pliego';
+import {
+  calcularCuadernilloCaballete,
+  SELECCION_HOJAS_TODAS,
+  type CuadernilloCaballeteResult,
+  type SeleccionHojas,
+} from '../productos-servicios/nesting/helpers/cuadernillo-imposicion';
 import type {
   NestingResult,
   Placement,
@@ -96,6 +102,12 @@ export interface NestingDispatchResult {
   piezasAcomodadas: number;
   /** Datos normalizados para que el SVG muestre márgenes, área útil y separación. */
   visualConfig?: NestingVisualConfig;
+  /**
+   * Solo cuando el paso corrió imposición de CUADERNILLO a caballete
+   * (nestingConfig.imposicion.esquema='caballete'): hojas por libro, juegos,
+   * blancas y el plan página→posición. Ver cuadernillo-imposicion.ts.
+   */
+  imposicionCuadernillo?: CuadernilloCaballeteResult;
   /**
    * Solo cuando se aplicó talonario-grouping (post-nesting):
    * info sobre tandas/pliegos efectivos vs pedidos según el modo
@@ -280,6 +292,11 @@ async function despacharNesting(
 
   // ─── Caso 6: grid 2D single/multi (digital sobre pliego) ─────────
   if (paso.familiaCodigo === 'impresion_por_hoja') {
+    // Imposición de cuadernillo (caballete): la pieza que se acomoda es el
+    // PAR de páginas y el resultado pasa por el agrupamiento del libro.
+    if (getImposicionCaballeteConfig(paso)) {
+      return runImposicionCaballete(paso, jobContext, config);
+    }
     return runGrid2DSingle(paso, jobContext, materialResuelto, config);
   }
 
@@ -555,6 +572,7 @@ function runShelfRollo(
     consumedLengthMm,
     piezasAcomodadas: result.placements.length,
     visualConfig: buildVisualConfig({
+      maquina: maquinaVisualDe(paso),
       kind: 'roll',
       widthMm: rollWidthMm,
       heightMm: consumedLengthMm,
@@ -1048,6 +1066,172 @@ function buildRowType(
  * Heurística: si `jobContext.piezas` tiene >1 medida distinta → multi.
  * Si solo hay 1 medida (o sin piezas pero con medidaCustom/params) → single.
  */
+/** Config de imposición de cuadernillo del paso, o null si no está activada.
+ *  Vive en paramsPasoJson.nestingConfig.imposicion — la declara el MODELADOR
+ *  (no es editable por el comercial). */
+export function getImposicionCaballeteConfig(paso: {
+  paramsPasoJson?: unknown;
+}): {
+  maxHojas?: number;
+  paginasDefault?: number;
+  hojas: SeleccionHojas;
+} | null {
+  const params =
+    paso.paramsPasoJson && typeof paso.paramsPasoJson === 'object'
+      ? (paso.paramsPasoJson as Record<string, unknown>)
+      : {};
+  const nesting =
+    params.nestingConfig && typeof params.nestingConfig === 'object'
+      ? (params.nestingConfig as Record<string, unknown>)
+      : {};
+  const imposicion =
+    nesting.imposicion && typeof nesting.imposicion === 'object'
+      ? (nesting.imposicion as Record<string, unknown>)
+      : null;
+  if (!imposicion) return null;
+  if (String(imposicion.esquema ?? '').toLowerCase() !== 'caballete') {
+    return null;
+  }
+  const num = (v: unknown) => {
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  };
+  return {
+    maxHojas: num(imposicion.maxHojas),
+    paginasDefault: num(imposicion.paginasDefault),
+    hojas: parseSeleccionHojas(imposicion.hojas),
+  };
+}
+
+/** `hojas` del paso: 'todas' | 'tapa' | 'interior' | {desde, hasta}.
+ *  Cualquier cosa que no se entienda cae en 'todas' (el comportamiento
+ *  previo a que existiera el parámetro). */
+function parseSeleccionHojas(raw: unknown): SeleccionHojas {
+  if (typeof raw === 'string') {
+    const modo = raw.trim().toLowerCase();
+    if (modo === 'tapa' || modo === 'interior') return { modo };
+    return SELECCION_HOJAS_TODAS;
+  }
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const o = raw as Record<string, unknown>;
+    const modo = String(o.modo ?? '').toLowerCase();
+    if (modo === 'tapa' || modo === 'interior') return { modo };
+    if (modo === 'rango') {
+      const desde = Number(o.desde);
+      const hasta = Number(o.hasta);
+      if (Number.isFinite(desde) && Number.isFinite(hasta) && desde >= 1) {
+        return { modo: 'rango', desde, hasta };
+      }
+    }
+  }
+  return SELECCION_HOJAS_TODAS;
+}
+
+/**
+ * Imposición de cuadernillo a caballete sobre el pliego de impresión.
+ *
+ * La PIEZA que se acomoda no es la página sino el PAR de páginas enfrentadas
+ * (2·ancho × alto de la medida final): el grid dice cuántos pares entran por
+ * cara (K = copias del mismo pliego, se cortan al medio → K libros por juego)
+ * y `calcularCuadernilloCaballete` convierte eso en pliegos + plan.
+ *
+ * Devuelve null cuando falta un insumo (páginas, medida, pliego) o el par no
+ * entra o se excede el tope de hojas: el guard de `impresion_por_hoja` en el
+ * motor re-deriva la causa y corta con el diagnóstico específico.
+ */
+function runImposicionCaballete(
+  paso: PasoCargado,
+  jobContext: JobContext,
+  config: NestingConfigResolved,
+): NestingDispatchResult | null {
+  const imposicion = getImposicionCaballeteConfig(paso);
+  if (!imposicion) return null;
+
+  const paginas = Number(jobContext.paginas ?? imposicion.paginasDefault ?? 0);
+  if (!Number.isFinite(paginas) || paginas <= 0) return null;
+
+  const sheetWidthMm = config.sheetWidthMm;
+  const sheetHeightMm = config.sheetHeightMm;
+  if (!sheetWidthMm || !sheetHeightMm) return null;
+
+  // Medida de la PÁGINA final: medida custom o primera pieza (misma
+  // precedencia que el modo single).
+  const pagina = jobContext.medidaCustomMm ?? jobContext.piezas?.[0] ?? null;
+  const paginaAnchoMm = Number(pagina?.anchoMm ?? 0);
+  const paginaAltoMm = Number(pagina?.altoMm ?? 0);
+  if (paginaAnchoMm <= 0 || paginaAltoMm <= 0) return null;
+
+  const sustrato = {
+    kind: 'sheet' as const,
+    widthMm: sheetWidthMm,
+    heightMm: sheetHeightMm,
+    margins: {
+      leftMm: config.margins.leftMm,
+      rightMm: config.margins.rightMm,
+      topMm: config.margins.topMm,
+      bottomMm: config.margins.bottomMm,
+    },
+  };
+  const grid = nestGrid2DSingle(
+    {
+      id: 'par_paginas',
+      widthMm: paginaAnchoMm * 2,
+      heightMm: paginaAltoMm,
+      quantity: 1,
+    },
+    sustrato,
+    {
+      separationHMm: config.separationHMm,
+      separationVMm: config.separationVMm,
+      allowRotation: config.allowRotation,
+    },
+  );
+  const paresPorCara = grid.metrics.piezasPorSustrato ?? 0;
+  if (paresPorCara <= 0) return null;
+
+  const ejemplares = Number(jobContext.cantidad ?? 0);
+  const cuadernillo = calcularCuadernilloCaballete({
+    paginas,
+    ejemplares,
+    paresPorCara,
+    maxHojas: imposicion.maxHojas,
+    hojas: imposicion.hojas,
+  });
+  // Excede el caballete, o el paso quedó sin hojas que imprimir (ej. "interior"
+  // sobre un documento de 4 páginas): el guard del motor lo diagnostica.
+  if (cuadernillo.excedeMaxHojas || cuadernillo.hojasDelPaso === 0) return null;
+
+  return {
+    algorithm: 'grid-2d-single',
+    cantidadCalculada: cuadernillo.pliegos,
+    unidad: 'pliegos',
+    aprovechamientoPct: grid.metrics.aprovechamientoPct,
+    substrates: grid.substrates.map((s) => ({
+      ...s,
+      count: cuadernillo.pliegos,
+    })),
+    placements: grid.placements,
+    metricasRaw: grid.metrics,
+    piezasPorPliego: paresPorCara,
+    piezasAcomodadas: paresPorCara,
+    imposicionCuadernillo: cuadernillo,
+    visualConfig: buildVisualConfig({
+      kind: 'sheet',
+      widthMm: sheetWidthMm,
+      heightMm: sheetHeightMm,
+      margins: sustrato.margins,
+      pieceBleedMm: config.pieceBleedMm,
+      separationHMm: config.separationHMm,
+      separationVMm: config.separationVMm,
+      allowRotation: config.allowRotation,
+      substrateLabel: 'Pliego',
+      // Mismo criterio que las tarjetas (grid single en láser): si sobra
+      // pliego, el acomodo se dibuja centrado — el operario centra la carga.
+      centerPlacements: shouldCenterPlacementsForPaso(paso),
+    }),
+  };
+}
+
 function runGrid2DSingle(
   paso: PasoCargado,
   jobContext: JobContext,
@@ -1427,6 +1611,29 @@ function runGrid2DMulti(
   };
 }
 
+/**
+ * Datos de la máquina del paso para la ilustración del viewer (la "boca de
+ * impresora" sobre el rollo). `tecnologia` sale de los params técnicos de la
+ * plantilla gran formato; si no está, el viewer muestra solo el ancho útil.
+ */
+function maquinaVisualDe(
+  paso: PasoCargado,
+): NestingVisualConfig['maquina'] | undefined {
+  const maquina = paso.maquina;
+  if (!maquina?.nombre) return undefined;
+  const params = maquina.parametrosTecnicosJson ?? {};
+  const tecnologia =
+    typeof params.tecnologia === 'string' && params.tecnologia.trim()
+      ? params.tecnologia.trim()
+      : null;
+  const anchoUtil = Number(maquina.anchoUtil ?? params.anchoUtil);
+  return {
+    nombre: maquina.nombre,
+    anchoUtilMm: Number.isFinite(anchoUtil) && anchoUtil > 0 ? anchoUtil : null,
+    tecnologia,
+  };
+}
+
 function buildVisualConfig(input: {
   kind: 'roll' | 'sheet';
   widthMm: number;
@@ -1444,6 +1651,7 @@ function buildVisualConfig(input: {
   substrateLabel: string;
   centerPlacements?: boolean;
   panelizado?: NestingVisualConfig['panelizado'];
+  maquina?: NestingVisualConfig['maquina'];
 }): NestingVisualConfig {
   const displayMargins = {
     leftMm: Math.max(0, input.margins.leftMm - input.pieceBleedMm),
@@ -1478,6 +1686,7 @@ function buildVisualConfig(input: {
     substrateLabel: input.substrateLabel,
     centerPlacements: input.centerPlacements,
     panelizado: input.panelizado,
+    maquina: input.maquina,
     usableArea: {
       xMm: input.margins.leftMm,
       yMm: input.margins.topMm,

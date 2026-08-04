@@ -78,27 +78,24 @@ const RULES: Record<PlantillaMaquinariaDto, MachineTemplateRule> = {
   },
 
   // ─── §11 CORTE_LASER ────────────────────────────────────────────
-  // paramsTecnicos: tipoLaser{CO2|FIBRA}, potenciaWatts, operacionesSoportadas[].
+  // Sólo mesa (ancho/largo). Los "parámetros técnicos" (tipoLaser/
+  // potenciaWatts/operacionesSoportadas) se retiraron de la plantilla: el
+  // motor no los lee — la operación rutea por el tipoOperacion de cada
+  // perfil. `margenesNoImprimiblesMm` (opcional) lo leerá el nesting de placa.
   [PlantillaMaquinariaDto.corte_laser]: {
-    requiredMachineKeys: [
-      'anchoUtil',
-      'largoUtil',
-      'tipoLaser',
-      'operacionesSoportadas',
-    ],
+    requiredMachineKeys: ['anchoUtil', 'largoUtil'],
   },
 
   // ─── §12 ROUTER_CNC ─────────────────────────────────────────────
-  // paramsTecnicos: potenciaHusilloKw, velocidadMaxRPM, operacionesSoportadas[],
-  //   tieneAspiracionViruta.
+  // Sólo capacidades físicas (X/Y/Z). Los "parámetros técnicos"
+  // (potenciaHusilloKw/velocidadMaxRPM/operacionesSoportadas/
+  // tieneAspiracionViruta) y el espesorMaximo (= altoUtil) se retiraron de la
+  // plantilla: el motor no los lee — la operación rutea por el tipoOperacion
+  // de cada perfil. Mismo criterio que la anilladora.
+  // `margenesNoImprimiblesMm` (opcional, {sup,inf,izq,der}) sí lo leerá el
+  // nesting de placa: es el fallthrough default de resolveNestingConfig.
   [PlantillaMaquinariaDto.router_cnc]: {
-    requiredMachineKeys: [
-      'anchoUtil',
-      'largoUtil',
-      'altoUtil',
-      'potenciaHusilloKw',
-      'operacionesSoportadas',
-    ],
+    requiredMachineKeys: ['anchoUtil', 'largoUtil', 'altoUtil'],
   },
 
   // ─── §13 ANILLADORA ─────────────────────────────────────────────
@@ -110,19 +107,21 @@ const RULES: Record<PlantillaMaquinariaDto, MachineTemplateRule> = {
     requiredMachineKeys: [],
   },
 
-  // ─── §15 SOLDADORA (pendiente — sin schema definido todavía) ────
-  [PlantillaMaquinariaDto.soldadora]: {
-    requiredMachineKeys: [],
-  },
-
-  // ─── §15 CABINA_PINTURA (pendiente) ─────────────────────────────
-  [PlantillaMaquinariaDto.cabina_pintura]: {
-    requiredMachineKeys: [],
-  },
-
   // ─── MESA_DE_CORTE (postergada — evaluar) ────────────────────────
   [PlantillaMaquinariaDto.mesa_de_corte]: {
     requiredMachineKeys: ['anchoUtil', 'largoUtil'],
+  },
+  // Plancha térmica: el tamaño de plancha es informativo (no lo lee el motor),
+  // así que ningún campo de máquina es obligatorio.
+  [PlantillaMaquinariaDto.plancha_termica]: {
+    requiredMachineKeys: [],
+  },
+
+  // ─── IMPRESORA_3D ───────────────────────────────────────────────
+  // Envolvente X/Y/Z + tecnología (FDM/resina, define el consumible). El
+  // caudal (g/h) y la calidad viven en el perfil; el relleno, en el paso.
+  [PlantillaMaquinariaDto.impresora_3d]: {
+    requiredMachineKeys: ['anchoUtil', 'largoUtil', 'altoUtil', 'tecnologia'],
   },
 };
 

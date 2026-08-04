@@ -263,27 +263,6 @@ describe('FamiliasTenantService (integración, gdi_saas_test)', () => {
     ).rejects.toThrow(BadRequestException);
   });
 
-  it('E.1: guardarDefaultsFamilia funciona para familias del SISTEMA', async () => {
-    const familiasService = new FamiliasPasosService(
-      prisma as unknown as PrismaService,
-    );
-    await familiasService.guardarDefaultsFamilia(tenantId, 'corte_manual', {
-      productividadHora: 120,
-      demasiaMm: 2,
-    });
-    const listado = await familiasService.listarFamilias(tenantId);
-    const corte = listado.familias.find((f) => f.codigo === 'corte_manual');
-    expect(corte?.defaults?.productividadHora).toBe(120);
-    expect(corte?.defaults?.demasiaMm).toBe(2);
-
-    // familia inexistente → 400
-    await expect(
-      familiasService.guardarDefaultsFamilia(tenantId, 'no_existe', {
-        productividadHora: 1,
-      }),
-    ).rejects.toThrow(BadRequestException);
-  });
-
   it('el override de modoRegistro le gana al default de la categoría', async () => {
     const fila = await service.crear(tenantId, {
       ...SERIGRAFIA,

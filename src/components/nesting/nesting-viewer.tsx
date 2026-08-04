@@ -14,6 +14,7 @@ import {
   puntosOjales,
 } from "@/lib/nesting-overlay";
 import { cn } from "@/lib/utils";
+import s from "./nesting-viewer.module.css";
 
 export interface NestingViewerProps {
   result: NestingViewerInput;
@@ -230,6 +231,14 @@ export function NestingViewer({
 }: NestingViewerProps) {
   const pieceGroups = usePieceGroups(result.placements);
   const firstSubstrate = result.substrates[0];
+  // Imposición de cuadernillo: si el motor publicó el plan, el canvas dibuja
+  // cada PAR como dos páginas con su línea de plegado y números de la hoja 1.
+  const planImposicion = getPlanImposicion(result.outputsCanonicos);
+  // Boca de impresora (diseño "Nesting con boca de impresora"): solo para
+  // rollo y cuando el motor mandó la máquina del paso en el visualConfig.
+  const maquinaVisual = result.visualConfig?.maquina ?? null;
+  const conImpresora = firstSubstrate?.kind === "roll" && maquinaVisual != null;
+  const [verMaquina, setVerMaquina] = React.useState(true);
   const firstHeight =
     firstSubstrate?.kind === "sheet" ? firstSubstrate.heightMm : firstSubstrate?.lengthMm;
   const firstVisualConfig = firstSubstrate
@@ -324,6 +333,18 @@ export function NestingViewer({
         visualConfig={result.visualConfig}
         costingPreview={result.costingPreview}
         modificaciones={modificaciones}
+        tools={
+          conImpresora ? (
+            <button
+              type="button"
+              className={s.toolBtn}
+              aria-pressed={verMaquina}
+              onClick={() => setVerMaquina((v) => !v)}
+            >
+              Ver máquina
+            </button>
+          ) : null
+        }
       />
 
       <div className="nesting-canvas-list">
@@ -339,12 +360,16 @@ export function NestingViewer({
             maxPx={maxPx}
             showLabels={showLabels}
             modificaciones={modificaciones}
+            printer={idx === 0 && conImpresora ? maquinaVisual : null}
+            printerVisible={verMaquina}
+            planImposicion={planImposicion}
           />
         ))}
       </div>
 
       <NestingFooter result={result} />
       <NestingOutputsSummary outputs={result.outputsCanonicos} />
+      <PlanImposicionCuadernillo outputs={result.outputsCanonicos} />
       <PliegoSeleccionadoBanner seleccion={result.pliegoImpresionSeleccionado} />
       <TalonarioGrouping grouping={result.talonarioGrouping} copias={copias} />
     </section>
@@ -382,7 +407,14 @@ function NestingConfigStrip({
   const height = sub?.kind === "sheet" ? sub.heightMm : sub?.lengthMm;
   const visualConfig = sub ? getEffectiveVisualConfig(result.visualConfig, sub.widthMm, height ?? 0) : null;
   const panelizado = visualConfig?.panelizado;
+  const maquina = result.visualConfig?.maquina;
   const configItems = [
+    maquina
+      ? [
+          "Máquina",
+          `${maquina.nombre}${maquina.anchoUtilMm ? ` · útil ${formatNumber(maquina.anchoUtilMm / 1000, 2)} m` : ""}`,
+        ]
+      : null,
     ["Sustrato", substrateLabel],
     visualConfig
       ? [
@@ -527,8 +559,194 @@ function humanOutputLabel(key: string) {
     pliego_impresion_ancho_mm: "Ancho pliego",
     pliego_impresion_alto_mm: "Alto pliego",
     pliego_impresion_area_m2: "Área pliego",
+    hojas_por_libro: "Hojas por libro",
+    paginas_blancas: "Páginas en blanco",
+    libros_por_juego: "Libros por juego",
   };
   return labels[key] ?? key.replaceAll("_", " ");
+}
+
+// ─── Plan de imposición de cuadernillo (caballete) ────────────────
+// El motor publica `plan_imposicion` con el mapa página→posición por hoja.
+// Esta tabla ES la instrucción del operario: se muestra acá (cotizador) y en
+// la ficha/OT rehidratada. Ver docs/imposicion-cuadernillos-diseno.md.
+
+type PlanImposicionOutput = {
+  paginasSolicitadas: number;
+  paginasEfectivas: number;
+  paginasBlancas: number;
+  hojasPorLibro: number;
+  /** Hojas que imprime ESTE paso (tapa e interior son pasos distintos). */
+  hojasDelPaso?: number;
+  seleccionHojas?: { modo: string; desde?: number; hasta?: number };
+  paginasDelPaso?: number[];
+  librosPorJuego: number;
+  juegos: number;
+  plan: Array<{ hoja: number; frente: [number, number]; dorso: [number, number] }>;
+};
+
+/** "Tapa · páginas 1-2, 31-32" — qué parte del libro cubre este paso. */
+function describirSeleccion(plan: PlanImposicionOutput): string | null {
+  const modo = plan.seleccionHojas?.modo;
+  if (!modo || modo === "todas") return null;
+  const etiqueta =
+    modo === "tapa"
+      ? "Tapa"
+      : modo === "interior"
+        ? "Interior"
+        : `Hojas ${plan.seleccionHojas?.desde}–${plan.seleccionHojas?.hasta}`;
+  const paginas = plan.paginasDelPaso ?? [];
+  if (paginas.length === 0) return etiqueta;
+  const rangos: string[] = [];
+  let ini = paginas[0];
+  let prev = paginas[0];
+  for (const p of paginas.slice(1)) {
+    if (p === prev + 1) {
+      prev = p;
+      continue;
+    }
+    rangos.push(ini === prev ? `${ini}` : `${ini}-${prev}`);
+    ini = p;
+    prev = p;
+  }
+  rangos.push(ini === prev ? `${ini}` : `${ini}-${prev}`);
+  return `${etiqueta} · páginas ${rangos.join(", ")}`;
+}
+
+function getPlanImposicion(
+  outputs?: NestingViewerInput["outputsCanonicos"],
+): PlanImposicionOutput | null {
+  const raw = outputs?.plan_imposicion;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const plan = (raw as PlanImposicionOutput).plan;
+  if (!Array.isArray(plan) || plan.length === 0) return null;
+  return raw as PlanImposicionOutput;
+}
+
+/**
+ * Sobre cada PAR acomodado dibuja lo que el sistema realmente pensó: las dos
+ * páginas con su número (frente de la hoja 1, como pliego tipo) y la línea de
+ * plegado al medio. Cada juego repite este acomodo con las páginas de su hoja
+ * — eso lo dice la tabla del plan, abajo.
+ */
+function ImposicionOverlay({
+  placements,
+  displayTransform,
+  plan,
+}: {
+  placements: NestingViewerInput["placements"];
+  displayTransform: DisplayTransform;
+  plan: PlanImposicionOutput;
+}) {
+  const hoja1 = plan.plan[0];
+  if (!hoja1) return null;
+  return (
+    <g pointerEvents="none">
+      {placements.map((placement, idx) => {
+        const r = mapDisplayRect(
+          displayTransform,
+          placement.xMm,
+          placement.yMm,
+          placement.widthMm,
+          placement.heightMm,
+        );
+        const rotated = Boolean(placement.rotated);
+        // Sin rotar: páginas lado a lado (plegado vertical). Rotado 90°:
+        // páginas apiladas (plegado horizontal).
+        const fold = rotated
+          ? { x1: r.x + 3, y1: r.y + r.height / 2, x2: r.x + r.width - 3, y2: r.y + r.height / 2 }
+          : { x1: r.x + r.width / 2, y1: r.y + 3, x2: r.x + r.width / 2, y2: r.y + r.height - 3 };
+        const centro1 = rotated
+          ? { x: r.x + r.width / 2, y: r.y + r.height * 0.28 }
+          : { x: r.x + r.width * 0.25, y: r.y + r.height * 0.52 };
+        const centro2 = rotated
+          ? { x: r.x + r.width / 2, y: r.y + r.height * 0.78 }
+          : { x: r.x + r.width * 0.75, y: r.y + r.height * 0.52 };
+        const fs = Math.max(9, Math.min(15, Math.min(r.width, r.height) * 0.12));
+        const caption = Math.max(6.5, fs * 0.6);
+        return (
+          <g key={`${placement.pieceId}-imp-${idx}`}>
+            <line
+              x1={fold.x1}
+              y1={fold.y1}
+              x2={fold.x2}
+              y2={fold.y2}
+              stroke="#7d7768"
+              strokeWidth={1}
+              strokeDasharray="7 5"
+            />
+            <text x={centro1.x} y={centro1.y} textAnchor="middle" fontSize={fs} fontFamily="monospace" fill="#3f3b31">
+              pág {hoja1.frente[0]}
+            </text>
+            <text x={centro2.x} y={centro2.y} textAnchor="middle" fontSize={fs} fontFamily="monospace" fill="#3f3b31">
+              pág {hoja1.frente[1]}
+            </text>
+            <text x={r.x + 5} y={r.y + caption + 4} fontSize={caption} fontFamily="monospace" fill="#8a8577">
+              hoja {hoja1.hoja} · frente (dorso: {hoja1.dorso[0]} | {hoja1.dorso[1]})
+            </text>
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+function PlanImposicionCuadernillo({
+  outputs,
+}: {
+  outputs?: NestingViewerInput["outputsCanonicos"];
+}) {
+  const plan = getPlanImposicion(outputs);
+  if (!plan) return null;
+  const seleccion = describirSeleccion(plan);
+  const hojasDelPaso = plan.hojasDelPaso ?? plan.plan.length;
+  const esBlanca = (pagina: number) => pagina > plan.paginasSolicitadas;
+  const celda = (pagina: number) => (esBlanca(pagina) ? `${pagina}·bl` : String(pagina));
+  return (
+    <div className={s.planImposicion}>
+      <div className={s.planHead}>
+        <span className={s.planTitulo}>Plan de imposición · caballete</span>
+        <span className={s.planResumen}>
+          {seleccion ? (
+            <>
+              <strong>{seleccion}</strong>
+              {" · "}
+            </>
+          ) : null}
+          {hojasDelPaso} de {plan.hojasPorLibro} hoja
+          {plan.hojasPorLibro === 1 ? "" : "s"} del libro
+          {plan.librosPorJuego > 1 ? ` · ${plan.librosPorJuego} libros por juego (cortar al medio)` : ""}
+          {plan.paginasBlancas > 0 ? ` · ${plan.paginasBlancas} pág. en blanco al final` : ""}
+          {" · el gráfico muestra la primera hoja de este paso"}
+        </span>
+      </div>
+      <table className={s.planTabla}>
+        <thead>
+          <tr>
+            <th>Hoja</th>
+            <th>Frente</th>
+            <th>Dorso</th>
+          </tr>
+        </thead>
+        <tbody>
+          {plan.plan.map((h) => (
+            <tr key={h.hoja}>
+              <td>{h.hoja}</td>
+              <td>
+                {celda(h.frente[0])} | {celda(h.frente[1])}
+              </td>
+              <td>
+                {celda(h.dorso[0])} | {celda(h.dorso[1])}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {plan.paginasBlancas > 0 ? (
+        <span className={s.planNota}>·bl = página en blanco de relleno</span>
+      ) : null}
+    </div>
+  );
 }
 
 function NestingLegend({
@@ -536,11 +754,13 @@ function NestingLegend({
   visualConfig,
   costingPreview,
   modificaciones,
+  tools,
 }: {
   pieceGroups: ReturnType<typeof usePieceGroups>;
   visualConfig?: NestingViewerInput["visualConfig"];
   costingPreview?: NestingViewerInput["costingPreview"];
   modificaciones?: ModificacionesOverlay;
+  tools?: React.ReactNode;
 }) {
   const hasMargins = visualConfig && Object.values(visualConfig.margins).some((value) => value > 0);
   const hasBleed = visualConfig && getPieceBleedMm(visualConfig) > 0;
@@ -561,7 +781,8 @@ function NestingLegend({
     !showCosting &&
     !hasPanelizado &&
     !hasModificacion &&
-    !hasOjales
+    !hasOjales &&
+    !tools
   )
     return null;
 
@@ -589,6 +810,7 @@ function NestingLegend({
           <span className="ct">{piece.count}</span>
         </span>
       ))}
+      {tools ? <span className={s.tools}>{tools}</span> : null}
     </div>
   );
 }
@@ -616,6 +838,10 @@ function LegendChip({
   );
 }
 
+type MaquinaVisual = NonNullable<
+  NonNullable<NestingViewerInput["visualConfig"]>["maquina"]
+>;
+
 interface SubstrateViewProps {
   substrate: NestingViewerInput["substrates"][number];
   substrateIndex: number;
@@ -626,6 +852,11 @@ interface SubstrateViewProps {
   maxPx: number;
   showLabels: boolean;
   modificaciones?: ModificacionesOverlay;
+  /** Máquina a ilustrar como boca de impresora sobre el rollo (solo rollo). */
+  printer?: MaquinaVisual | null;
+  printerVisible?: boolean;
+  /** Plan de imposición de cuadernillo: dibuja páginas y plegado en cada par. */
+  planImposicion?: PlanImposicionOutput | null;
 }
 
 function SubstrateView({
@@ -638,6 +869,9 @@ function SubstrateView({
   maxPx,
   showLabels,
   modificaciones,
+  printer,
+  printerVisible,
+  planImposicion,
 }: SubstrateViewProps) {
   const widthMm = substrate.widthMm;
   const heightMm = substrate.kind === "sheet" ? substrate.heightMm : substrate.lengthMm;
@@ -649,14 +883,27 @@ function SubstrateView({
   // Un rollo largo escala por el LARGO al lado más largo → el ancho queda
   // diminuto. Para rollos escalamos por el ANCHO (a un ancho legible fijo) y el
   // largo se muestra a escala real, con scroll vertical cuando no entra.
-  const ROLL_WIDTH_PX = 280;
-  const scale = isRoll
-    ? ROLL_WIDTH_PX / displayWidthMm
-    : maxPx / longestMm;
+  // Con boca de impresora el canvas se agranda (presentación tipo diseño) y la
+  // escala respeta la PROPORCIÓN máquina/material: la boca mide el ancho útil
+  // de la máquina en los mismos px/mm que el rollo.
+  const printerAnchoMm =
+    printer?.anchoUtilMm && printer.anchoUtilMm > 0 ? printer.anchoUtilMm : null;
+  const ROLL_WIDTH_PX = printer != null ? 520 : 280;
+  let scale = isRoll ? ROLL_WIDTH_PX / displayWidthMm : maxPx / longestMm;
+  if (isRoll && printerAnchoMm && printerAnchoMm > displayWidthMm) {
+    // Máquina mucho más ancha que el material: acotar el canvas escalando
+    // todo hacia abajo (la proporción se conserva, que es lo que importa).
+    scale = Math.min(scale, 900 / printerAnchoMm);
+  }
   const wPx = displayWidthMm * scale;
   const hPx = displayHeightMm * scale;
   const padPx = 34;
-  const padXPx = Math.max(padPx, (360 - wPx) / 2);
+  // La boca (ancho útil de la máquina) necesita aire a los costados del rollo.
+  const mouthWPx = printerAnchoMm ? printerAnchoMm * scale : wPx + 12;
+  const padXPx =
+    isRoll && printer != null
+      ? Math.max(padPx, (mouthWPx + 96 - wPx) / 2)
+      : Math.max(padPx, (360 - wPx) / 2);
   const padYPx = padPx;
   const effectiveVisualConfig = getEffectiveVisualConfig(visualConfig, widthMm, heightMm);
   const displayTransform: DisplayTransform = {
@@ -675,12 +922,24 @@ function SubstrateView({
     substrate.kind,
   );
   const viewBoxW = wPx + padXPx * 2;
-  const viewBoxH = hPx + padYPx * 2;
+  // Boca de impresora sobre el rollo: el chasis ocupa una banda propia arriba
+  // y TODO el contenido existente se corre con un <g translate> (así ninguna
+  // capa cambia su matemática). El rollo asoma a 6px de la boca. La altura del
+  // chasis escala con el ancho de la boca (proporción del diseño original).
+  const showPrinter = isRoll && printer != null && printerVisible !== false;
+  const printerChassisH = showPrinter
+    ? Math.max(64, Math.min(120, Math.round(mouthWPx * 0.14)))
+    : 64;
+  const contentOffsetY = showPrinter
+    ? Math.max(0, printerChassisH + 6 - padYPx)
+    : 0;
+  const viewBoxH = hPx + padYPx * 2 + contentOffsetY;
   const hasMargins = Object.values(effectiveVisualConfig.margins).some((value) => value > 0);
   const largeSheet = substrate.kind === "sheet" && Math.max(widthMm, heightMm) >= 1000;
   // Rollo: ancho natural (no estirar el rollo angosto a lo ancho del canvas).
-  // El scroll vertical se hace cargo del largo. Alto máximo del contenedor.
-  const ROLL_MAX_CANVAS_HEIGHT_PX = 520;
+  // El scroll vertical se hace cargo del largo. Alto máximo del contenedor
+  // (más generoso con la boca de impresora, que agranda la presentación).
+  const ROLL_MAX_CANVAS_HEIGHT_PX = printer != null ? 760 : 520;
   const rollScrolls = isRoll && viewBoxH > ROLL_MAX_CANVAS_HEIGHT_PX;
   const canvasMaxWidth = isRoll
     ? viewBoxW
@@ -738,7 +997,35 @@ function SubstrateView({
                 height={printableClipRect.height}
               />
             </clipPath>
+            {showPrinter ? (
+              <>
+                <linearGradient id={`printer-body-${substrateIndex}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stopColor="#f1efec" />
+                  <stop offset="0.55" stopColor="#e4e1dc" />
+                  <stop offset="1" stopColor="#d5d2cc" />
+                </linearGradient>
+                <linearGradient id={`printer-slot-${substrateIndex}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stopColor="#2c2c33" />
+                  <stop offset="1" stopColor="#5b5b64" />
+                </linearGradient>
+                <linearGradient id={`printer-shade-${substrateIndex}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stopColor="rgba(20,20,26,.16)" />
+                  <stop offset="1" stopColor="rgba(20,20,26,0)" />
+                </linearGradient>
+              </>
+            ) : null}
           </defs>
+          {showPrinter && printer ? (
+            <PrinterMouth
+              maquina={printer}
+              substrateIndex={substrateIndex}
+              viewBoxW={viewBoxW}
+              chassisH={printerChassisH}
+              mouthX={padXPx + wPx / 2 - mouthWPx / 2}
+              mouthW={mouthWPx}
+            />
+          ) : null}
+          <g transform={contentOffsetY > 0 ? `translate(0 ${contentOffsetY})` : undefined}>
           <rect
             x={substrateRect.x}
             y={substrateRect.y}
@@ -801,6 +1088,7 @@ function SubstrateView({
             widthMm={displayWidthMm}
             heightMm={displayHeightMm}
             kind={substrate.kind}
+            hideWidthLabel={showPrinter}
           />
           <g clipPath={substrate.kind === "roll" ? `url(#printable-clip-${substrateIndex})` : undefined}>
             {placements.map((placement, idx) => (
@@ -808,15 +1096,182 @@ function SubstrateView({
                 key={`${placement.pieceId}-${idx}`}
                 placement={placement}
                 index={idx}
-                showLabels={showLabels}
+                showLabels={showLabels && !planImposicion}
                 displayTransform={placementTransform}
                 modificaciones={modificaciones}
               />
             ))}
+            {planImposicion ? (
+              <ImposicionOverlay
+                placements={placements}
+                displayTransform={placementTransform}
+                plan={planImposicion}
+              />
+            ) : null}
+          </g>
+          {isRoll && printer ? (
+            <PrintStartMarker
+              substrateRect={substrateRect}
+              printableTopY={printableClipRect.y}
+            />
+          ) : null}
+          {showPrinter ? (
+            <rect
+              x={substrateRect.x}
+              y={substrateRect.y}
+              width={substrateRect.width}
+              height={Math.min(26, 16 * (printerChassisH / 64))}
+              fill={`url(#printer-shade-${substrateIndex})`}
+              pointerEvents="none"
+            />
+          ) : null}
           </g>
         </svg>
       </div>
     </div>
+  );
+}
+
+/**
+ * Boca de impresora de gran formato sobre el rollo (diseño "Nesting con boca
+ * de impresora"): chasis con placa identificatoria, riel con carro, panel de
+ * control y la ranura por donde "sale" el material. Puro SVG presentacional,
+ * escalado al viewBox del canvas (~360 uds de ancho).
+ */
+function PrinterMouth({
+  maquina,
+  substrateIndex,
+  viewBoxW,
+  chassisH,
+  mouthX,
+  mouthW,
+}: {
+  maquina: MaquinaVisual;
+  substrateIndex: number;
+  viewBoxW: number;
+  chassisH: number;
+  mouthX: number;
+  mouthW: number;
+}) {
+  const chassisX = 2;
+  const chassisW = viewBoxW - 4;
+  // Factor de escala: el dibujo base está pensado a 64 de alto; con canvas
+  // grandes el chasis crece y todo escala con él.
+  const f = chassisH / 64;
+  const anchoM =
+    maquina.anchoUtilMm && maquina.anchoUtilMm > 0
+      ? formatNumber(maquina.anchoUtilMm / 1000, 2)
+      : null;
+  const plateSub = [anchoM ? `ancho útil ${anchoM} m` : null, maquina.tecnologia]
+    .filter(Boolean)
+    .join(" · ");
+  const mouthClampedX = Math.max(chassisX + 6 * f, mouthX);
+  const mouthClampedW = Math.min(mouthW, chassisX + chassisW - 6 * f - mouthClampedX);
+  const mouthCenterX = mouthClampedX + mouthClampedW / 2;
+  const carriageW = 56 * f;
+  const panelW = 50 * f;
+  const panelX = chassisX + chassisW - panelW - 8 * f;
+  const railY = chassisH * 0.63;
+  return (
+    <g aria-hidden pointerEvents="none">
+      <rect x={chassisX} y={2} width={chassisW} height={chassisH - 2} rx={7 * f} fill={`url(#printer-body-${substrateIndex})`} />
+      <rect x={chassisX + 7 * f} y={2} width={chassisW - 14 * f} height={2 * f} fill="#cbc7c1" />
+      {/* riel + carro */}
+      <rect x={chassisX + 22 * f} y={railY} width={chassisW - 44 * f} height={1.6 * f} fill="#b6b2ab" />
+      <rect x={chassisX + 22 * f} y={railY + 2.6 * f} width={chassisW - 44 * f} height={0.8 * f} fill="#efedea" />
+      <rect x={mouthCenterX - carriageW / 2} y={railY - 7 * f} width={carriageW} height={14 * f} rx={2.5 * f} fill="#23232a" />
+      <rect x={mouthCenterX - carriageW / 2 + 4 * f} y={railY - 4 * f} width={carriageW - 8 * f} height={4 * f} rx={1.2 * f} fill="#3d3d45" />
+      <rect x={mouthCenterX - 13 * f} y={railY + 5 * f} width={26 * f} height={2.2 * f} rx={f} fill="#0891b2" opacity={0.85} />
+      {/* placa identificatoria */}
+      <text x={chassisX + 10 * f} y={16 * f} fontSize={9 * f} fontFamily="var(--font-mono, monospace)" letterSpacing={0.4 * f} fill="#5f5f68">
+        {maquina.nombre.toUpperCase()}
+      </text>
+      {plateSub ? (
+        <text x={chassisX + 10 * f} y={27 * f} fontSize={7.5 * f} fontFamily="var(--font-mono, monospace)" fill="#9c998f">
+          {plateSub}
+        </text>
+      ) : null}
+      {/* panel de control */}
+      <rect x={panelX} y={9 * f} width={panelW} height={19 * f} rx={2.5 * f} fill="#f6f5f3" stroke="#c9c5be" strokeWidth={0.8 * f} />
+      <rect x={panelX + 4 * f} y={13 * f} width={24 * f} height={2.4 * f} rx={1.2 * f} fill="#d3cfc8" />
+      <rect x={panelX + 4 * f} y={18 * f} width={15 * f} height={2.4 * f} rx={1.2 * f} fill="#d3cfc8" />
+      <circle cx={panelX + panelW - 6 * f} cy={23 * f} r={2.2 * f} fill="#0891b2" />
+      {/* ventilaciones */}
+      <g stroke="#c9c5be" strokeWidth={f} strokeLinecap="round">
+        <line x1={panelX - 84 * f} y1={13 * f} x2={panelX - 14 * f} y2={13 * f} />
+        <line x1={panelX - 84 * f} y1={17.5 * f} x2={panelX - 14 * f} y2={17.5 * f} />
+        <line x1={panelX - 84 * f} y1={22 * f} x2={panelX - 14 * f} y2={22 * f} />
+      </g>
+      {/* boca: mide el ancho útil de la MÁQUINA a escala (el rollo, más angosto,
+          queda centrado debajo — se lee la proporción máquina/material) */}
+      <rect x={mouthClampedX - 4 * f} y={chassisH - 13 * f} width={mouthClampedW + 8 * f} height={13 * f} fill="#cdc9c3" />
+      <rect x={mouthClampedX} y={chassisH - 9 * f} width={mouthClampedW} height={9 * f} fill={`url(#printer-slot-${substrateIndex})`} />
+      {anchoM ? (
+        <text
+          x={mouthCenterX}
+          y={chassisH - 2.5 * f}
+          textAnchor="middle"
+          fontSize={6.5 * f}
+          fontFamily="var(--font-mono, monospace)"
+          letterSpacing={0.6 * f}
+          fill="#c4c0b9"
+        >
+          {`${anchoM} M ÚTIL`}
+        </text>
+      ) : null}
+      <rect x={chassisX} y={2} width={chassisW} height={chassisH - 2} rx={7 * f} fill="none" stroke="#c4c0b9" strokeWidth={1} />
+    </g>
+  );
+}
+
+/**
+ * Marcador "inicio de impresión": dónde arranca el área imprimible después
+ * del margen superior del rollo. La etiqueta solo entra si el margen da lugar.
+ */
+function PrintStartMarker({
+  substrateRect,
+  printableTopY,
+}: {
+  substrateRect: { x: number; y: number; width: number; height: number };
+  printableTopY: number;
+}) {
+  const centerX = substrateRect.x + substrateRect.width / 2;
+  const topMarginPx = printableTopY - substrateRect.y;
+  const showLabel = topMarginPx >= 12;
+  return (
+    <g aria-hidden pointerEvents="none">
+      <line
+        x1={centerX}
+        y1={substrateRect.y}
+        x2={centerX}
+        y2={printableTopY}
+        stroke="#0891b2"
+        strokeWidth={1.2}
+        strokeDasharray="4 3"
+      />
+      <line
+        x1={substrateRect.x}
+        y1={printableTopY}
+        x2={substrateRect.x + substrateRect.width}
+        y2={printableTopY}
+        stroke="#0891b2"
+        strokeWidth={1}
+        opacity={0.65}
+      />
+      <circle cx={centerX} cy={printableTopY} r={3.5} fill="#0891b2" />
+      {showLabel ? (
+        <text
+          x={substrateRect.x + substrateRect.width - 5}
+          y={printableTopY - 5}
+          textAnchor="end"
+          fontSize={9.5}
+          fontFamily="var(--font-mono, monospace)"
+          fill="#0891b2"
+        >
+          inicio de impresión
+        </text>
+      ) : null}
+    </g>
   );
 }
 
@@ -829,6 +1284,7 @@ function DimensionLabels({
   widthMm,
   heightMm,
   kind,
+  hideWidthLabel,
 }: {
   padPx: number;
   padXPx?: number;
@@ -838,12 +1294,16 @@ function DimensionLabels({
   widthMm: number;
   heightMm: number;
   kind: "sheet" | "roll";
+  /** Con la boca de impresora visible, el ancho ya lo dice la ranura. */
+  hideWidthLabel?: boolean;
 }) {
   return (
     <>
-      <text x={padXPx + widthPx / 2} y={Math.max(13, padYPx - 12)} textAnchor="middle" fontSize={11} fill="#4b5563" fontFamily="monospace">
-        {formatMm(widthMm)}
-      </text>
+      {!hideWidthLabel ? (
+        <text x={padXPx + widthPx / 2} y={Math.max(13, padYPx - 12)} textAnchor="middle" fontSize={11} fill="#4b5563" fontFamily="monospace">
+          {formatMm(widthMm)}
+        </text>
+      ) : null}
       <text
         x={Math.max(13, padXPx - 14)}
         y={padYPx + heightPx / 2}

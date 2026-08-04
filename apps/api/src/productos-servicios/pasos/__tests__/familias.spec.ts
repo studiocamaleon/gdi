@@ -21,8 +21,12 @@ import type {
 } from '../types';
 
 describe('Catálogo de familias', () => {
-  it('contiene exactamente 42 familias', () => {
-    expect(FAMILIAS_TOTAL).toBe(42);
+  it('contiene exactamente 32 familias', () => {
+    // Poda del catálogo 2026-08-03: se borraron 10 familias manuales sin uso ni
+    // cableado y se sumó aplicacion_transfer_textil (plancha térmica).
+    // 2026-08-04: se sumaron impresion_3d, abrochado_caballete y las dos de
+    // cartelería F1 (estructura_bastidor, iluminacion_led).
+    expect(FAMILIAS_TOTAL).toBe(32);
   });
 
   it('todas las familias tienen categoría válida', () => {
@@ -77,9 +81,9 @@ describe('Catálogo de familias', () => {
       const usaMaquina =
         familia.relacionMaquinaSoportada.includes('M-1') ||
         familia.relacionMaquinaSoportada.includes('M-2');
-      // Excepción: familias M-0 + M-1 mixtas (ej. plegado, soldadura) pueden tener
-      // plantillasCompatibles vacías si la máquina industrial no es estándar.
-      // No forzamos invariante estricta acá. Esto es informativo.
+      // Excepción: familias M-0 + M-1 mixtas (ej. aplicacion_transfer,
+      // pintura_superficial) pueden tener plantillasCompatibles vacías si la
+      // máquina industrial no es estándar. No forzamos invariante acá; es informativo.
       if (usaMaquina && familia.plantillasCompatibles.length === 0) {
         // eslint-disable-next-line no-console
         console.warn(
@@ -135,11 +139,28 @@ describe('Catálogo de familias', () => {
     const consumiblesMaquina = new Set(['TINTA_IMPRESION', 'TONER']);
     const sinSlotDirecto = new Set([
       'POLVO_DTF',
-      'FILAMENTO_3D',
-      'RESINA_3D',
+      // FILAMENTO_3D y RESINA_3D salieron de esta lista el 2026-08-04: la
+      // familia impresion_3d ya las consume por su slot `material_3d`.
       'ACCESORIO_MONTAJE_POP',
       'PORTABANNER_ESTRUCTURA',
       'PERFIL_BASTIDOR_TEXTIL',
+      // Poda 2026-08-03: quedaron sin paso que las consuma directamente al borrar
+      // instalacion_electrica (línea LED/cartelería), etiquetado_manual y armado_cajas.
+      'MODULO_LED_CARTELERIA',
+      'FUENTE_ALIMENTACION_LED',
+      'CABLEADO_CONECTICA',
+      'CONTROLADOR_LED',
+      'NEON_FLEX_LED',
+      'ACCESORIO_NEON_LED',
+      'ETIQUETADO_IDENTIFICACION',
+      'ACCESORIO_EXHIBIDOR_CARTON',
+      // Curación 2026-08-04: quedaron sin paso consumidor al borrar barniz
+      // (QUIMICO_ACABADO), soldadura + acabado_decorativo (CHAPA_METALICA,
+      // PERFIL_ESTRUCTURAL, FIJACION_AUXILIAR).
+      'QUIMICO_ACABADO',
+      'CHAPA_METALICA',
+      'PERFIL_ESTRUCTURAL',
+      'FIJACION_AUXILIAR',
     ]);
     const todas = [
       'SUSTRATO_HOJA',
@@ -257,8 +278,8 @@ describe('Helpers', () => {
     expect(() => getFamilia('familia_inexistente' as FamiliaCodigo)).toThrow();
   });
 
-  it('listarFamilias devuelve los 42 códigos', () => {
-    expect(listarFamilias().length).toBe(42);
+  it('listarFamilias devuelve los 32 códigos', () => {
+    expect(listarFamilias().length).toBe(32);
   });
 });
 

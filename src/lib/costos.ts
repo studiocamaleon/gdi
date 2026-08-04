@@ -458,3 +458,14 @@ export function getCurrentPeriodo() {
   return `${now.getFullYear()}-${month}`;
 }
 
+/** Período "YYYY-MM" inmediatamente anterior (retrocede de enero a diciembre). */
+export function periodoAnterior(periodo: string): string {
+  const [anioStr, mesStr] = periodo.split("-");
+  const anio = Number(anioStr);
+  const mes = Number(mesStr);
+  if (!Number.isFinite(anio) || !Number.isFinite(mes)) return periodo;
+  const prevMes = mes === 1 ? 12 : mes - 1;
+  const prevAnio = mes === 1 ? anio - 1 : anio;
+  return `${prevAnio}-${String(prevMes).padStart(2, "0")}`;
+}
+

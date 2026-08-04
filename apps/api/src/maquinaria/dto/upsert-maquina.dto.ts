@@ -27,9 +27,9 @@ export enum PlantillaMaquinariaDto {
   corte_laser = 'corte_laser',
   router_cnc = 'router_cnc',
   anilladora = 'anilladora',
-  soldadora = 'soldadora',
-  cabina_pintura = 'cabina_pintura',
   mesa_de_corte = 'mesa_de_corte',
+  plancha_termica = 'plancha_termica',
+  impresora_3d = 'impresora_3d',
 }
 
 export enum EstadoMaquinaDto {
@@ -70,6 +70,8 @@ export enum UnidadProduccionMaquinaDto {
   pliegos_min = 'pliegos_min',
   m_min = 'm_min',
   mm_s = 'mm_s',
+  mm_min = 'mm_min',
+  g_h = 'g_h',
 }
 
 export enum TipoPerfilOperativoMaquinaDto {

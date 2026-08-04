@@ -102,7 +102,7 @@ const REPLACEMENT_COMPONENT_OPTIONS = [
   "otro",
 ] as const;
 
-// v3.0: 12 plantillas finales (doc §4).
+// 11 plantillas (2026-08: sin soldadora/cabina_pintura, + plancha_termica).
 const MAQUINARIA_TEMPLATE_OPTIONS = [
   "impresora_laser",
   "impresora_gran_formato_por_area",
@@ -113,9 +113,8 @@ const MAQUINARIA_TEMPLATE_OPTIONS = [
   "corte_laser",
   "router_cnc",
   "anilladora",
-  "soldadora",
-  "cabina_pintura",
   "mesa_de_corte",
+  "plancha_termica",
 ];
 
 const REPLACEMENT_WEAR_UNIT_OPTIONS = [
@@ -195,9 +194,10 @@ const REPLACEMENT_COMPONENT_OPTIONS_BY_TEMPLATE: Record<PlantillaMaquinaria, str
   mesa_de_corte: ["cuchilla", "filtro", "kit_mantenimiento", "otro"],
   plotter_de_corte: ["cuchilla", "filtro", "kit_mantenimiento", "otro"],
   plotter_cad: ["cabezal", "filtro", "kit_mantenimiento", "otro"],
-  soldadora: ["kit_mantenimiento", "otro"],
-  cabina_pintura: ["filtro", "kit_mantenimiento", "otro"],
   anilladora: ["kit_mantenimiento", "otro"],
+  plancha_termica: ["kit_mantenimiento", "otro"],
+  // FDM: boquilla y cama. Resina: film FEP y pantalla LCD. Todos por horas de uso.
+  impresora_3d: ["kit_mantenimiento", "otro"],
 };
 
 export const materiaPrimaTemplatesV1: MateriaPrimaTemplateDef[] = [
@@ -1285,6 +1285,124 @@ export const materiaPrimaTemplatesV1: MateriaPrimaTemplateDef[] = [
       esRepuesto: false,
       esProductoBase: true,
       lockEsProductoBase: true,
+    },
+  },
+  // ── F1 cartelería (docs/carteleria-configurador-diseno.md) ──
+  // cobertura (m²) y paso (mm) son atributos DE LA VARIANTE porque cada módulo
+  // ilumina distinto: el motor los lee para derivar la cantidad sembrada.
+  {
+    id: "modulo_led_carteleria_v1",
+    nombre: "Módulo LED de cartelería",
+    descripcion: "Módulo LED para backlight, corpóreas y light box",
+    familia: "electronica_carteleria",
+    subfamilia: "modulo_led_carteleria",
+    tipoTecnico: "modulo_led_carteleria",
+    unidadStock: "unidad",
+    unidadCompra: "pack",
+    camposTecnicos: [
+      { key: "modelo", label: "Modelo", type: "text", required: true },
+      { key: "potencia", label: "Potencia por módulo", type: "number", unit: "w", required: true },
+      { key: "tension", label: "Tensión", type: "text", options: ["12V", "24V"], required: true },
+      { key: "cobertura", label: "Cobertura por módulo (sembrado por área)", type: "number", unit: "m2", required: false },
+      { key: "paso", label: "Paso entre módulos (sembrado por recorrido)", type: "number", unit: "mm", required: false },
+      { key: "temperaturaColor", label: "Temperatura de color", type: "text", options: ["Cálido", "Neutro", "Frío"], required: false },
+    ],
+    dimensionesVariante: ["modelo", "potencia", "tension", "temperaturaColor"],
+    requiredAtributos: ["modelo", "potencia", "tension"],
+    atributosIniciales: {
+      modelo: "SMD 2835 x3",
+      potencia: 0.72,
+      tension: "12V",
+      cobertura: 0.0625,
+      paso: 100,
+      temperaturaColor: "Frío",
+    },
+  },
+  {
+    id: "fuente_alimentacion_led_v1",
+    nombre: "Fuente de alimentación LED",
+    descripcion: "Fuente switching para cartelería luminosa (el motor elige por capacidad)",
+    familia: "electronica_carteleria",
+    subfamilia: "fuente_alimentacion_led",
+    tipoTecnico: "fuente_alimentacion_led",
+    unidadStock: "unidad",
+    unidadCompra: "unidad",
+    camposTecnicos: [
+      { key: "capacidad", label: "Capacidad", type: "number", unit: "w", required: true },
+      { key: "tension", label: "Tensión de salida", type: "text", options: ["12V", "24V"], required: true },
+      { key: "proteccion", label: "Protección", type: "text", options: ["IP20", "IP65", "IP67"], required: false },
+    ],
+    dimensionesVariante: ["capacidad", "tension", "proteccion"],
+    requiredAtributos: ["capacidad", "tension"],
+    atributosIniciales: {
+      capacidad: 150,
+      tension: "12V",
+      proteccion: "IP67",
+    },
+  },
+  {
+    id: "cableado_conectica_v1",
+    nombre: "Cable y conectores",
+    descripcion: "Cable de baja tensión y conectores para cartelería",
+    familia: "electronica_carteleria",
+    subfamilia: "cableado_conectica",
+    tipoTecnico: "cableado_conectica",
+    unidadStock: "metro_lineal",
+    unidadCompra: "rollo",
+    camposTecnicos: [
+      { key: "seccion", label: "Sección", type: "text", required: true },
+      { key: "tipo", label: "Tipo", type: "text", options: ["Cable taller", "Unipolar", "Conector fast"], required: false },
+    ],
+    dimensionesVariante: ["seccion", "tipo"],
+    requiredAtributos: ["seccion"],
+    atributosIniciales: {
+      seccion: "2×1 mm²",
+      tipo: "Cable taller",
+    },
+  },
+  {
+    id: "perfil_estructural_v1",
+    nombre: "Perfil / caño estructural",
+    descripcion: "Caño o perfil metálico para bastidores de cartelería",
+    familia: "metal_estructura",
+    subfamilia: "perfil_estructural",
+    tipoTecnico: "perfil_estructural",
+    unidadStock: "metro_lineal",
+    unidadCompra: "unidad",
+    camposTecnicos: [
+      { key: "seccion", label: "Sección", type: "text", required: true },
+      { key: "espesor", label: "Espesor de pared", type: "number", unit: "mm", required: false },
+      { key: "material", label: "Material", type: "text", options: ["Acero", "Aluminio", "Galvanizado"], required: true },
+      { key: "desarrolloSeccion", label: "Desarrollo de la sección (m²/ml, para pintura)", type: "number", unit: "m2", required: false },
+      { key: "largoBarra", label: "Largo de la barra comercial (se cobran barras enteras)", type: "number", unit: "m", required: false },
+    ],
+    dimensionesVariante: ["seccion", "material", "espesor"],
+    requiredAtributos: ["seccion", "material"],
+    atributosIniciales: {
+      seccion: "40×40 mm",
+      espesor: 1.6,
+      material: "Acero",
+      desarrolloSeccion: 0.16,
+    },
+  },
+  {
+    id: "chapa_metalica_v1",
+    nombre: "Chapa metálica",
+    descripcion: "Chapa para cenefas, fondos y plegados de cartelería",
+    familia: "metal_estructura",
+    subfamilia: "chapa_metalica",
+    tipoTecnico: "chapa_metalica",
+    unidadStock: "m2",
+    unidadCompra: "hoja",
+    camposTecnicos: [
+      { key: "tipo", label: "Tipo", type: "text", options: ["Galvanizada", "Prepintada", "Aluminio", "Inoxidable"], required: true },
+      { key: "espesor", label: "Espesor", type: "number", unit: "mm", required: true },
+    ],
+    dimensionesVariante: ["tipo", "espesor"],
+    requiredAtributos: ["tipo", "espesor"],
+    atributosIniciales: {
+      tipo: "Galvanizada",
+      espesor: 0.7,
     },
   },
 ];

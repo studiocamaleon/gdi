@@ -16,9 +16,9 @@ export type PlantillaMaquinaria =
   | "corte_laser"
   | "router_cnc"
   | "anilladora"
-  | "soldadora"
-  | "cabina_pintura"
-  | "mesa_de_corte";
+  | "mesa_de_corte"
+  | "plancha_termica"
+  | "impresora_3d";
 
 /**
  * Familias de plantilla — agrupación visual para el catálogo.
@@ -58,7 +58,9 @@ export type UnidadProduccionMaquina =
   | "golpes_min"
   | "pliegos_min"
   | "m_min"
-  | "mm_s";
+  | "mm_s"
+  | "mm_min"
+  | "g_h";
 
 export type TipoPerfilOperativoMaquina =
   | "impresion"
@@ -168,6 +170,9 @@ export type MaquinariaTemplateFieldUnit =
   | "litros"
   | "m_min"
   | "mm_s"
+  | "mm_min"
+  | "g_h"
+  | "gramos"
   | "seg"
   | "min"
   | "horas"
@@ -362,6 +367,8 @@ export const unidadProduccionMaquinaItems: Array<{
   { label: "Pliegos por minuto", value: "pliegos_min" },
   { label: "Metros por minuto", value: "m_min" },
   { label: "Milímetros por segundo", value: "mm_s" },
+  { label: "Milímetros por minuto", value: "mm_min" },
+  { label: "Gramos por hora", value: "g_h" },
 ];
 
 export const tipoPerfilOperativoMaquinaItems: Array<{

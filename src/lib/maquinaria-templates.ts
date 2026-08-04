@@ -97,17 +97,63 @@ const modoLaminadoOptions = [
   option("DOS_CARAS_2_PASADAS", "Dos caras (2 pasadas)"),
 ];
 
-const tipoLaserOptions = [option("CO2", "CO2"), option("FIBRA", "Fibra")];
-
-const operacionesLaserOptions = [
-  option("CORTE", "Corte"),
-  option("GRABADO", "Grabado"),
+const tecnologia3dOptions = [
+  option("FDM", "FDM / filamento"),
+  option("RESINA", "Resina (SLA/DLP)"),
 ];
 
-const operacionesCncOptions = [
-  option("CORTE_PASANTE", "Corte pasante"),
-  option("FRESADO", "Fresado"),
-  option("PERFORADO", "Perforado"),
+const material3dOptions = [
+  option("PLA", "PLA"),
+  option("PETG", "PETG"),
+  option("ABS", "ABS"),
+  option("TPU", "TPU / flexible"),
+  option("NYLON", "Nylon"),
+  option("RESINA_STD", "Resina estándar"),
+  option("RESINA_TECNICA", "Resina técnica"),
+  option("OTRO", "Otro"),
+];
+
+// Calidad = altura de capa. Es lo que más mueve el tiempo en 3D.
+const calidad3dOptions = [
+  option("BORRADOR", "Borrador (capa gruesa)"),
+  option("NORMAL", "Normal"),
+  option("ALTA", "Alta (capa fina)"),
+];
+
+// Operación de cada FILA de perfil (una velocidad por operación×material×espesor).
+const tipoOperacionLaserOptions = [
+  option("CORTE", "Corte"),
+  option("GRABADO", "Grabado (vector)"),
+  option("SEMICORTE", "Semicorte"),
+];
+
+const tipoOperacionCncOptions = [
+  option("CORTE", "Corte pasante"),
+  option("GRABADO", "Grabado / V-carve"),
+  option("SEMICORTE", "Semicorte"),
+  option("FRESADO", "Fresado / desbaste"),
+];
+
+const materialLaserOptions = [
+  option("ACRILICO", "Acrílico"),
+  option("MDF", "MDF"),
+  option("MADERA", "Madera"),
+  option("CARTON_PAPEL", "Cartón / papel"),
+  option("CUERO", "Cuero"),
+  option("GOMA", "Goma / caucho"),
+  option("METAL", "Metal (marcado/fibra)"),
+  option("OTRO", "Otro"),
+];
+
+const materialCncOptions = [
+  option("MDF", "MDF"),
+  option("PVC_EXPANDIDO", "PVC expandido"),
+  option("ACRILICO", "Acrílico"),
+  option("ACM", "ACM / composite"),
+  option("FOAM", "Foam / poliestireno"),
+  option("MADERA", "Madera maciza"),
+  option("ALUMINIO", "Aluminio"),
+  option("OTRO", "Otro"),
 ];
 
 const tipoTrabajoCadOptions = [
@@ -125,6 +171,7 @@ const tipoAnilloOptions = [
   option("ESPIRAL_PLASTICO", "Espiral plástico"),
   option("WIRE_O", "Wire-O"),
 ];
+
 
 // ─── Secciones comunes a todas las plantillas ─────────────────────
 
@@ -493,31 +540,30 @@ function buildCorteLaserSections(): MaquinariaTemplateSection[] {
     section({
       id: "capacidades_fisicas",
       title: "Capacidades físicas",
-      description: "Dimensiones de mesa y espesor máximo.",
+      description: "Dimensiones de mesa, espesor máximo y márgenes no utilizables.",
       fields: [
-        field({ key: "anchoUtil", label: "Ancho de mesa", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Ancho útil de la mesa (ej. 1300mm)." }),
-        field({ key: "largoUtil", label: "Largo de mesa", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Largo útil de la mesa (ej. 2500mm)." }),
+        field({ key: "anchoUtil", label: "Ancho de mesa", scope: "maquina", kind: "number", unit: "mm", required: true, placeholder: "1300", description: "Ancho útil de la mesa (ej. 1300mm)." }),
+        field({ key: "largoUtil", label: "Largo de mesa", scope: "maquina", kind: "number", unit: "mm", required: true, placeholder: "2500", description: "Largo útil de la mesa (ej. 2500mm)." }),
         field({ key: "espesorMaximo", label: "Altura ajustable de mesa", scope: "maquina", kind: "number", unit: "mm", description: "Altura máx ajustable (ej. 25mm)." }),
+        field({ key: "margenesNoImprimiblesMm", label: "Márgenes no utilizables", scope: "maquina", kind: "textarea", description: "Borde de la placa que el cabezal no puede usar en cada lado; el nesting descuenta estos márgenes del área útil." }),
       ],
     }),
-    section({
-      id: "parametros_tecnicos",
-      title: "Parámetros técnicos",
-      description: "Tipo de láser y operaciones soportadas.",
-      fields: [
-        field({ key: "tipoLaser", label: "Tipo de láser", scope: "maquina", kind: "select", required: true, options: tipoLaserOptions, description: "CO2 o Fibra." }),
-        field({ key: "potenciaWatts", label: "Potencia", scope: "maquina", kind: "number", unit: "kw", description: "Potencia del láser en watts." }),
-        field({ key: "operacionesSoportadas", label: "Operaciones", scope: "maquina", kind: "multiselect", required: true, options: operacionesLaserOptions, description: "Corte y/o grabado." }),
-      ],
-    }),
+    // Se quitó "Parámetros técnicos" (tipoLaser/potenciaWatts/
+    // operacionesSoportadas): el motor NO los lee — la operación que rutea vive
+    // en el tipoOperacion de cada perfil (auto-selección). Mismo criterio que
+    // el CNC y la anilladora.
     section({
       id: "perfiles_operativos",
-      title: "Perfil operativo (único)",
-      description: "Tiempo del trabajo NO se estandariza — el comercial lo ingresa al cotizar (T-4 input manual del RIP del láser).",
+      title: "Perfiles por operación × material × espesor",
+      description: "Una fila por combinación: la velocidad va en mm/s (como LightBurn). El motor la aplica al recorrido (perímetro) de las piezas. Cortes calados/filigrana usan T-4 (el comercial carga el tiempo real del RIP).",
       fields: [
-        field({ key: "nombre", label: "Nombre del perfil", scope: "perfil_operativo", kind: "text", required: true, description: "Estándar." }),
-        field({ key: "setupMin", label: "Setup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo típico de carga + calibración." }),
-        field({ key: "cleanupMin", label: "Cleanup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Tiempo de limpieza." }),
+        field({ key: "nombre", label: "Nombre del perfil", scope: "perfil_operativo", kind: "text", required: true, description: "Ej. Corte MDF 6mm." }),
+        field({ key: "tipoOperacion", label: "Operación", scope: "perfil_operativo", kind: "select", required: true, options: tipoOperacionLaserOptions, description: "Corte, grabado vectorial o semicorte." }),
+        field({ key: "material", label: "Materiales", scope: "perfil_operativo", kind: "multiselect", options: materialLaserOptions, description: "Materiales que cubre este perfil. Un mismo perfil puede valer para varios (ej. grabado sobre MDF, madera y acrílico)." }),
+        field({ key: "espesorMinMm", label: "Espesor mín", scope: "perfil_operativo", kind: "number", unit: "mm", description: "Desde qué espesor aplica (0 = sin mínimo)." }),
+        field({ key: "espesorMaxMm", label: "Espesor máx", scope: "perfil_operativo", kind: "number", unit: "mm", description: "Hasta qué espesor aplica." }),
+        field({ key: "productivityValue", label: "Velocidad", scope: "perfil_operativo", kind: "number", unit: "mm_s", required: true, placeholder: "33", description: "Velocidad de recorrido en mm/s. Referencia CO2: acrílico 3mm ~125, 5mm ~33, 10mm ~8; grabado ~400." }),
+        field({ key: "setupMin", label: "Setup", scope: "perfil_operativo", kind: "number", unit: "min", placeholder: "10", description: "Carga + calibración por trabajo." }),
       ],
     }),
     section({ id: "desgaste_repuestos", title: "Desgaste y repuestos", description: "Tubo láser por horas de uso.", fields: genericWearFields }),
@@ -530,34 +576,30 @@ function buildRouterCncSections(): MaquinariaTemplateSection[] {
     section({
       id: "capacidades_fisicas",
       title: "Capacidades físicas",
-      description: "Recorrido X/Y/Z y espesor máximo.",
+      description: "Recorrido X/Y/Z y márgenes no utilizables.",
       fields: [
-        field({ key: "anchoUtil", label: "Eje X útil", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Recorrido máx en X." }),
-        field({ key: "largoUtil", label: "Eje Y útil", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Recorrido máx en Y." }),
-        field({ key: "altoUtil", label: "Eje Z útil", scope: "maquina", kind: "number", unit: "mm", required: true, description: "Espesor máx (= eje Z)." }),
-        field({ key: "espesorMaximo", label: "Espesor máximo", scope: "maquina", kind: "number", unit: "mm", description: "Igual a alto útil para CNC." }),
+        field({ key: "anchoUtil", label: "Eje X útil", scope: "maquina", kind: "number", unit: "mm", required: true, placeholder: "2800", description: "Recorrido máx en X." }),
+        field({ key: "largoUtil", label: "Eje Y útil", scope: "maquina", kind: "number", unit: "mm", required: true, placeholder: "5000", description: "Recorrido máx en Y." }),
+        field({ key: "altoUtil", label: "Eje Z útil", scope: "maquina", kind: "number", unit: "mm", required: true, placeholder: "150", description: "Espesor máx de material (= recorrido Z)." }),
+        field({ key: "margenesNoImprimiblesMm", label: "Márgenes no utilizables", scope: "maquina", kind: "textarea", description: "Borde de la placa que la fresa no puede usar en cada lado (clamps, sacrificio); el nesting descuenta estos márgenes del área útil." }),
       ],
     }),
-    section({
-      id: "parametros_tecnicos",
-      title: "Parámetros técnicos",
-      description: "Husillo, velocidad y operaciones soportadas.",
-      fields: [
-        field({ key: "potenciaHusilloKw", label: "Potencia husillo", scope: "maquina", kind: "number", unit: "kw", required: true, description: "Potencia del husillo (ej. 5.5 kW)." }),
-        field({ key: "velocidadMaxRPM", label: "Velocidad máxima", scope: "maquina", kind: "number", unit: "rpm", description: "RPM máximas del husillo." }),
-        field({ key: "operacionesSoportadas", label: "Operaciones", scope: "maquina", kind: "multiselect", required: true, options: operacionesCncOptions, description: "Corte pasante, fresado, perforado." }),
-        field({ key: "tieneAspiracionViruta", label: "Aspiración de viruta", scope: "maquina", kind: "boolean", description: "Si la máquina tiene sistema de aspiración." }),
-      ],
-    }),
+    // Se quitó "Parámetros técnicos" (potenciaHusilloKw/velocidadMaxRPM/
+    // operacionesSoportadas/tieneAspiracionViruta): el motor NO los lee — la
+    // operación que rutea vive en el tipoOperacion de cada perfil (auto-selección),
+    // no en la máquina. Mismo criterio que la anilladora.
     section({
       id: "perfiles_operativos",
-      title: "Perfil operativo (único)",
-      description: "Productividad nominal m²/h para casos repetitivos. Casos custom usan T-4 input manual.",
+      title: "Perfiles por operación × material × espesor",
+      description: "Una fila por combinación: la velocidad va en mm/min (feed rate). El motor la aplica al recorrido (perímetro) de las piezas. Fresado/desbaste o formas caladas usan T-4 (el comercial carga el tiempo real del CAM).",
       fields: [
-        field({ key: "nombre", label: "Nombre del perfil", scope: "perfil_operativo", kind: "text", required: true, description: "Estándar." }),
-        field({ key: "productivityValue", label: "Productividad nominal", scope: "perfil_operativo", kind: "number", unit: "m2_h", required: true, description: "m²/hora para T-3." }),
-        field({ key: "setupMin", label: "Setup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Carga material + calibración." }),
-        field({ key: "cleanupMin", label: "Cleanup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Aspirar viruta + retirar piezas." }),
+        field({ key: "nombre", label: "Nombre del perfil", scope: "perfil_operativo", kind: "text", required: true, description: "Ej. Corte MDF 18mm." }),
+        field({ key: "tipoOperacion", label: "Operación", scope: "perfil_operativo", kind: "select", required: true, options: tipoOperacionCncOptions, description: "Corte, grabado, semicorte o fresado." }),
+        field({ key: "material", label: "Materiales", scope: "perfil_operativo", kind: "multiselect", options: materialCncOptions, description: "Materiales que cubre este perfil. Un mismo perfil puede valer para varios (ej. corte de MDF y madera maciza al mismo espesor)." }),
+        field({ key: "espesorMinMm", label: "Espesor mín", scope: "perfil_operativo", kind: "number", unit: "mm", description: "Desde qué espesor aplica (0 = sin mínimo)." }),
+        field({ key: "espesorMaxMm", label: "Espesor máx", scope: "perfil_operativo", kind: "number", unit: "mm", description: "Hasta qué espesor aplica." }),
+        field({ key: "productivityValue", label: "Velocidad", scope: "perfil_operativo", kind: "number", unit: "mm_min", required: true, placeholder: "1700", description: "Feed rate de recorrido en mm/min. Referencia: MDF 3mm ~1700, 9mm ~500, 18mm ~170; grabado ~16000." }),
+        field({ key: "setupMin", label: "Setup", scope: "perfil_operativo", kind: "number", unit: "min", placeholder: "10", description: "Carga material + calibración + cambio de fresa." }),
       ],
     }),
     section({ id: "desgaste_repuestos", title: "Desgaste y repuestos", description: "Fresa por horas de uso.", fields: genericWearFields }),
@@ -590,62 +632,6 @@ function buildAnilladoraSections(): MaquinariaTemplateSection[] {
   ];
 }
 
-/** §15 — SOLDADORA (pendiente, sin schema detallado). */
-function buildSoldadoraSections(): MaquinariaTemplateSection[] {
-  return [
-    section({
-      id: "capacidades_fisicas",
-      title: "Capacidades físicas",
-      description: "Volumen útil de trabajo.",
-      fields: [
-        field({ key: "anchoUtil", label: "Ancho útil", scope: "maquina", kind: "number", unit: "mm", description: "Espacio de trabajo." }),
-        field({ key: "largoUtil", label: "Largo útil", scope: "maquina", kind: "number", unit: "mm", description: "Espacio de trabajo." }),
-        field({ key: "altoUtil", label: "Alto útil", scope: "maquina", kind: "number", unit: "mm", description: "Espacio de trabajo." }),
-      ],
-    }),
-    section({
-      id: "perfiles_operativos",
-      title: "Perfiles operativos",
-      description: "Personalizar perfiles por tipo de soldadura (MIG, TIG, electrodo) y material.",
-      fields: [
-        field({ key: "nombre", label: "Nombre del perfil", scope: "perfil_operativo", kind: "text", required: true, description: "Ej. MIG acero estándar." }),
-        field({ key: "productivityValue", label: "Productividad", scope: "perfil_operativo", kind: "number", description: "cm/min lineales típicamente (T-2)." }),
-        field({ key: "setupMin", label: "Setup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Preparación inicial." }),
-        field({ key: "cleanupMin", label: "Cleanup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Limpieza." }),
-      ],
-    }),
-    section({ id: "consumibles", title: "Consumibles", description: "Electrodos, gas (argón, CO2).", fields: genericConsumableFields }),
-  ];
-}
-
-/** §15 — CABINA_PINTURA (pendiente). */
-function buildCabinaPinturaSections(): MaquinariaTemplateSection[] {
-  return [
-    section({
-      id: "capacidades_fisicas",
-      title: "Capacidades físicas",
-      description: "Volumen interior de la cabina.",
-      fields: [
-        field({ key: "anchoUtil", label: "Ancho útil", scope: "maquina", kind: "number", unit: "mm", description: "Ancho interior." }),
-        field({ key: "largoUtil", label: "Largo útil", scope: "maquina", kind: "number", unit: "mm", description: "Largo interior." }),
-        field({ key: "altoUtil", label: "Alto útil", scope: "maquina", kind: "number", unit: "mm", description: "Alto interior." }),
-      ],
-    }),
-    section({
-      id: "perfiles_operativos",
-      title: "Perfiles operativos",
-      description: "Por tipo de pintura (laca, esmalte) y curado (aire, horno).",
-      fields: [
-        field({ key: "nombre", label: "Nombre del perfil", scope: "perfil_operativo", kind: "text", required: true, description: "Ej. Laca poliuretánica." }),
-        field({ key: "productivityValue", label: "Productividad", scope: "perfil_operativo", kind: "number", unit: "m2_h", description: "m²/hora aproximado." }),
-        field({ key: "setupMin", label: "Setup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Preparación." }),
-        field({ key: "cleanupMin", label: "Cleanup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Limpieza de equipo." }),
-      ],
-    }),
-    section({ id: "consumibles", title: "Consumibles", description: "Pintura, laca, solvente, primer.", fields: genericConsumableFields }),
-  ];
-}
-
 /** Plantilla provisional MESA_DE_CORTE — postergada (doc §15). */
 function buildMesaCorteSections(): MaquinariaTemplateSection[] {
   return [
@@ -671,6 +657,81 @@ function buildMesaCorteSections(): MaquinariaTemplateSection[] {
       ],
     }),
     section({ id: "desgaste_repuestos", title: "Desgaste y repuestos", description: "Cuchillas y filtros.", fields: genericWearFields }),
+  ];
+}
+
+/** PLANCHA_TERMICA — aplicación de transfer textil (planchado sobre prenda).
+ *  Perfil "por ciclo": el modelador carga los segundos del ciclo de prensado y
+ *  el backend DERIVA la productividad (piezas/hora). */
+function buildPlanchaTermicaSections(): MaquinariaTemplateSection[] {
+  return [
+    section({
+      id: "capacidades_fisicas",
+      title: "Capacidades físicas",
+      description: "Tamaño de la plancha (informativo; a futuro, cuántas estampas chicas entran por bajada).",
+      fields: [
+        field({ key: "anchoUtil", label: "Ancho de plancha", scope: "maquina", kind: "number", unit: "mm", description: "Ancho útil de la plancha." }),
+        field({ key: "largoUtil", label: "Alto de plancha", scope: "maquina", kind: "number", unit: "mm", description: "Alto útil de la plancha." }),
+      ],
+    }),
+    section({
+      id: "perfiles_operativos",
+      title: "Perfiles operativos",
+      description: "Cargá los segundos del ciclo ACTIVO (pre-planchado + planchado + post-planchado): la productividad (piezas/hora) se calcula sola. En pelado en frío no cargues el enfriamiento (se asume que planchás la siguiente prenda mientras una enfría).",
+      fields: [
+        field({ key: "nombre", label: "Nombre del perfil", scope: "perfil_operativo", kind: "text", required: true, description: "Ej. DTF textil, Sublimación." }),
+        field({ key: "setupMin", label: "Setup de máquina", scope: "perfil_operativo", kind: "number", unit: "min", description: "Calentamiento inicial de la plancha (una vez por tanda)." }),
+        field({ key: "tiempoPreplanchadoSeg", label: "Pre-planchado", scope: "perfil_operativo", kind: "number", unit: "seg", description: "Prensada previa para quitar humedad/arrugas antes de poner el transfer (ej. 5-10s). 0 si no aplica." }),
+        field({ key: "tiempoPrensadoSeg", label: "Planchado", scope: "perfil_operativo", kind: "number", unit: "seg", required: true, description: "Prensado principal, plancha cerrada. Ej. DTF 15s, sublimación 50s." }),
+        field({ key: "tiempoPostplanchadoSeg", label: "Post-planchado", scope: "perfil_operativo", kind: "number", unit: "seg", description: "Curado / replanchado de sellado tras pelar el film (ej. 5-10s). 0 si no aplica." }),
+      ],
+    }),
+  ];
+}
+
+/** IMPRESORA_3D — envolvente + perfiles por material × calidad.
+ *
+ *  El tiempo NO sale de la caja de la pieza (dos piezas del mismo tamaño
+ *  consumen muy distinto según relleno y paredes) sino del CAUDAL de material:
+ *  el perfil declara g/h y el paso aporta los gramos de la pieza — el dato que
+ *  da cualquier slicer. Cuando el taller ya tiene el tiempo exacto del slicer,
+ *  el paso lo carga por tiempo manual (T-4) y este perfil no interviene.
+ */
+function buildImpresora3dSections(): MaquinariaTemplateSection[] {
+  return [
+    section({
+      id: "capacidades_fisicas",
+      title: "Volumen de impresión",
+      description: "La envolvente máxima que entra en la cama. Informativa: acota qué piezas puede hacer esta máquina.",
+      fields: [
+        field({ key: "anchoUtil", label: "Eje X", scope: "maquina", kind: "number", unit: "mm", required: true, placeholder: "256", description: "Ancho máx de la cama." }),
+        field({ key: "largoUtil", label: "Eje Y", scope: "maquina", kind: "number", unit: "mm", required: true, placeholder: "256", description: "Profundidad máx de la cama." }),
+        field({ key: "altoUtil", label: "Eje Z", scope: "maquina", kind: "number", unit: "mm", required: true, placeholder: "256", description: "Altura máx de impresión." }),
+      ],
+    }),
+    section({
+      id: "parametros_tecnicos",
+      title: "Tecnología",
+      description: "Define el consumible y cómo se mide el material.",
+      fields: [
+        field({ key: "tecnologia", label: "Tecnología", scope: "maquina", kind: "select", required: true, options: tecnologia3dOptions, description: "FDM consume filamento; resina consume resina líquida." }),
+      ],
+    }),
+    section({
+      id: "perfiles_operativos",
+      title: "Perfiles por material × calidad",
+      description: "Una fila por combinación. El caudal (g/h) es lo que la máquina deposita por hora con ese material y esa altura de capa; el motor lo aplica a los gramos de la pieza.",
+      fields: [
+        field({ key: "nombre", label: "Nombre del perfil", scope: "perfil_operativo", kind: "text", required: true, description: "Ej. PLA normal 0,2mm." }),
+        field({ key: "material", label: "Materiales", scope: "perfil_operativo", kind: "multiselect", options: material3dOptions, description: "Materiales que cubre este perfil." }),
+        field({ key: "calidad", label: "Calidad", scope: "perfil_operativo", kind: "select", options: calidad3dOptions, description: "Altura de capa: gruesa imprime más rápido, fina tarda más." }),
+        field({ key: "alturaCapaMm", label: "Altura de capa", scope: "perfil_operativo", kind: "number", unit: "mm", description: "Referencia del perfil del slicer (ej. 0,2mm)." }),
+        field({ key: "productivityValue", label: "Caudal de material", scope: "perfil_operativo", kind: "number", unit: "g_h", required: true, placeholder: "23", description: "Gramos por hora que deposita la máquina con este perfil. Referencia FDM: ~23 g/h en calidad normal." }),
+        field({ key: "setupMin", label: "Setup", scope: "perfil_operativo", kind: "number", unit: "min", description: "Nivelado, carga de material y preparación de la cama." }),
+        field({ key: "cleanupMin", label: "Post-proceso de máquina", scope: "perfil_operativo", kind: "number", unit: "min", description: "Retiro de la pieza y limpieza de la cama. El curado/lavado de resina o el retiro de soportes van como paso aparte." }),
+      ],
+    }),
+    section({ id: "desgaste_repuestos", title: "Desgaste y repuestos", description: "Boquilla, cama, film FEP: por horas de uso.", fields: genericWearFields }),
   ];
 }
 
@@ -799,13 +860,16 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
     family: "corte_mecanizado",
     description: "Láser CO2 o Fibra para corte y grabado de materiales rígidos.",
     geometry: "plano",
-    defaultProductionUnit: "hora",
+    defaultProductionUnit: "mm_s",
     allowedProfileTypes: ["corte", "grabado"],
     visibleSections: commonTemplateSections,
     sections: buildCorteLaserSections(),
     help: {
-      summary: "El tiempo del trabajo NO se estandariza — el comercial lo ingresa al cotizar (T-4 input manual del RIP).",
-      tips: ["Una misma máquina hace corte y grabado según potencia/velocidad usada."],
+      summary: "Perfiles por operación × material × espesor con velocidad en mm/s (como LightBurn). El motor cotiza por recorrido; cortes calados usan T-4 manual del RIP.",
+      tips: [
+        "Creá un perfil por material y rango de espesor (ej. Corte MDF 3-6mm).",
+        "El grabado raster de relleno conviene cargarlo por T-4 (el perímetro lo subvalúa).",
+      ],
       examples: ["Bodor BCL1309X, Trotec Speedy"],
     },
   }),
@@ -815,13 +879,16 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
     family: "corte_mecanizado",
     description: "Control Numérico Computarizado para corte/fresado/perforado de materiales rígidos.",
     geometry: "volumen",
-    defaultProductionUnit: "m2_h",
+    defaultProductionUnit: "mm_min",
     allowedProfileTypes: ["mecanizado"],
     visibleSections: commonTemplateSections,
     sections: buildRouterCncSections(),
     help: {
-      summary: "Productividad nominal m²/h para casos repetitivos (T-3). Casos custom usan T-4 input manual del CAM.",
-      tips: ["Declarar operacionesSoportadas según las herramientas disponibles."],
+      summary: "Perfiles por operación × material × espesor con velocidad en mm/min (feed rate). El motor cotiza por recorrido; fresado/desbaste usa T-4 manual del CAM.",
+      tips: [
+        "Creá un perfil por material y rango de espesor (ej. Corte MDF 12-18mm).",
+        "Declarar operacionesSoportadas según las herramientas disponibles.",
+      ],
       examples: ["Felder F500 CNC, ShopBot, AXYZ"],
     },
   }),
@@ -842,38 +909,6 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
     },
   }),
   template({
-    id: "soldadora",
-    label: "Soldadora",
-    family: "terminacion",
-    description: "Equipo de soldadura para herrería y cartelería estructural.",
-    geometry: "volumen",
-    defaultProductionUnit: "hora",
-    allowedProfileTypes: ["fabricacion"],
-    visibleSections: commonTemplateSections,
-    sections: buildSoldadoraSections(),
-    help: {
-      summary: "Plantilla pendiente de modelado detallado (doc §15). Personalizá perfiles por tipo (MIG/TIG/electrodo) y material.",
-      tips: ["Productividad típica T-2 (cm/min lineales)."],
-      examples: ["Soldadoras MIG/TIG para luminosos y carteles estructurales"],
-    },
-  }),
-  template({
-    id: "cabina_pintura",
-    label: "Cabina de pintura",
-    family: "terminacion",
-    description: "Cabina presurizada para aplicación de pintura sobre rígidos.",
-    geometry: "volumen",
-    defaultProductionUnit: "m2_h",
-    allowedProfileTypes: ["fabricacion"],
-    visibleSections: commonTemplateSections,
-    sections: buildCabinaPinturaSections(),
-    help: {
-      summary: "Plantilla pendiente de modelado detallado (doc §15). Personalizá perfiles según pintura y curado.",
-      tips: ["Definí consumibles de pintura, laca, primer y solvente por perfil."],
-      examples: ["Cabina con horno para letras corpóreas"],
-    },
-  }),
-  template({
     id: "mesa_de_corte",
     label: "Mesa de corte",
     family: "corte_mecanizado",
@@ -887,6 +922,46 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
       summary: "Plantilla provisional (doc §15: postergada — evaluar si CORTE_LASER + PLOTTER cubren los casos).",
       tips: ["Configurá perfiles por herramienta y material."],
       examples: ["Mesa Zünd, Esko Kongsberg"],
+    },
+  }),
+  template({
+    id: "plancha_termica",
+    label: "Plancha térmica",
+    family: "terminacion",
+    description: "Prensa de calor para aplicar transfers sobre prendas (DTF textil, sublimación, vinilo textil).",
+    geometry: "plano",
+    defaultProductionUnit: "piezas_h",
+    allowedProfileTypes: ["fabricacion"],
+    visibleSections: commonTemplateSections,
+    sections: buildPlanchaTermicaSections(),
+    help: {
+      summary: "Plancha térmica textil. La productividad (piezas/hora) se calcula a partir de los segundos del ciclo de prensado.",
+      tips: [
+        "Creá un perfil por tecnología: DTF, sublimación, vinilo textil.",
+        "Cargá el tiempo de prensado (plancha cerrada) y el de manipulación; el sistema deriva las piezas/hora.",
+      ],
+      examples: ["Prensa plana 40×50 para remeras", "Prensa para sublimación textil"],
+    },
+  }),
+  template({
+    id: "impresora_3d",
+    label: "Impresora 3D",
+    family: "impresion_digital",
+    description: "Fabricación aditiva por filamento (FDM) o resina.",
+    geometry: "plano",
+    defaultProductionUnit: "g_h",
+    allowedProfileTypes: ["fabricacion"],
+    visibleSections: commonTemplateSections,
+    sections: buildImpresora3dSections(),
+    help: {
+      summary: "El tiempo sale del CAUDAL de material: el perfil declara g/h y el paso aporta los gramos de la pieza (dato del slicer). Cuando ya tenés las horas exactas del slicer, cargalas como tiempo manual y el perfil no interviene.",
+      tips: [
+        "Creá un perfil por material y calidad (ej. PLA normal 0,2mm), no por tamaño de pieza.",
+        "El caudal típico de una FDM ronda 10–25 g/h; medilo con una pieza conocida: gramos ÷ horas reales.",
+        "El relleno (%) no va acá: es del paso, porque cambia trabajo a trabajo.",
+        "El filamento o la resina se cargan como consumible por gramo, desde la biblioteca de materia prima.",
+      ],
+      examples: ["Bambu Lab / Prusa (FDM)", "Elegoo / Anycubic (resina)"],
     },
   }),
 ];
