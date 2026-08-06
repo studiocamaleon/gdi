@@ -1,6 +1,6 @@
 # Pasos del tenant por PLANTILLA — diseño
 
-**Estado: EN REVISIÓN** (2026-08-07). Reemplaza el modelo de "familias tenant
+**Estado: E1 HECHA** (2026-08-07) — faltan E2 (catálogo/estación) y E3 (modal). Reemplaza el modelo de "familias tenant
 declaradas desde cero" por **instancias de una plantilla del sistema**, con
 herencia viva de toda la ficha.
 
@@ -214,9 +214,23 @@ nombre para no tocar relaciones.
 ## 6. Plan por etapas
 
 - **E0 — limpieza** ✅ hecha (2026-08-07): tabla vacía, cero huérfanos.
-- **E1 — modelo**: migración Prisma (drop de los 14 campos de forma,
-  `plantillaCodigo` obligatorio, defaults en la instancia), `resolverFamilia`
-  con herencia, proyección simplificada, validación reducida.
+- **E1 — modelo** ✅ (2026-08-07): migración `20260807120000_pasos_tenant_por_
+  plantilla` (tabla `PasoTenant`: `plantillaCodigo` + defaults propios; se
+  cayeron los 14 campos de forma). `paso-tenant.ts` reemplaza a
+  `familia-tenant-validacion.ts` (378 → 104 líneas: la forma no se valida
+  porque no se escribe) y `pasos-tenant.service.ts` a
+  `familias-tenant.service.ts`. Endpoints `pasos-tenant` (+ `/plantillas`).
+  **La proyección es la herencia**: `{...FAMILIAS[plantilla], codigo, nombre}`.
+  Efectos colaterales lindos: el catálogo pasó de DOS mapeos duplicados a UNA
+  serialización para ambos mundos, y murieron dos casos especiales de tenant
+  en el motor (`superficieDeFamiliaTenant` + su guard propio, ya cubiertos por
+  el `guardSinLayout` heredado) y `formaEmisionDeFamiliaTenant` (sin usos).
+  Verificado: una instancia de `impresion_por_hoja` trae nesting, las 5
+  primitivas, esImpresion, herencia default, 15 outputs y sus params — antes
+  tenía 0 ejes. Goldens: cartelería 7/7 idéntico; genérico re-baselineado a
+  148 casos (los 4 que faltan son del producto E2E borrado en E0, no un
+  cambio de pricing — los otros 148 idénticos). jest: 11 fallos en motor.spec,
+  los mismos pre y post. tsc y vitest 415 verdes.
 - **E2 — catálogo y lectura**: serializar los ejes heredados; ícono/label del
   tablero por plantilla; decidir el caso de `EstacionRegla`.
 - **E3 — alta por modal**: nace `paso-alta-dialog.tsx` calcado de

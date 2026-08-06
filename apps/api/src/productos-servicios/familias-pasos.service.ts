@@ -8,11 +8,12 @@ import {
   resolverFamilia,
 } from './pasos/familias';
 import { MODOS_ACTIVACION_UNIVERSALES } from './pasos/types';
-import { proyectarFamiliaTenant } from './pasos/familia-tenant-validacion';
+import { proyectarPasoTenant } from './pasos/paso-tenant';
 import { resumenCapacidades } from './pasos/capacidades';
 
 import { outputsReferenciadosPorRegla } from './pasos/validacion-pre-pasada';
 import type {
+  DefinicionFamiliaResuelta,
   FamiliaCodigo,
   MecanismoCantidad,
   ModoActivacion,
@@ -28,7 +29,7 @@ export class FamiliasPasosService {
    *  que consumen el editor de rutas y los selectores de pasos. */
   async listarFamilias(tenantId: string) {
     const [familiasTenant, defaultsRows] = await Promise.all([
-      this.prisma.familiaTenant.findMany({
+      this.prisma.pasoTenant.findMany({
         where: { tenantId, activo: true },
         orderBy: { nombre: 'asc' },
       }),
@@ -57,103 +58,19 @@ export class FamiliasPasosService {
     );
     return {
       categorias: Object.values(CATEGORIAS).sort((a, b) => a.orden - b.orden),
+      // Una sola serialización para AMBOS mundos: una instancia del tenant
+      // HEREDA la ficha entera de su plantilla (docs/pasos-tenant-por-
+      // plantilla-diseno.md), así que sale con los mismos ejes que un paso
+      // del sistema — antes eran dos mapeos con la mitad de los campos en
+      // null del lado tenant.
       familias: [
-        ...listarFamiliasCatalogo().map((codigo) => {
-          const f = FAMILIAS[codigo];
-          return {
-            codigo: f.codigo as string,
-            origen: 'sistema' as const,
-            nombre: f.nombre,
-            categoria: f.categoria as string,
-            descripcion: f.descripcion,
-            visibleEnSelector: f.visibleEnSelector ?? true,
-            relacionMaquinaSoportada: f.relacionMaquinaSoportada,
-            modoActivacionDefault: f.modoActivacionDefault as string,
-            modosTiempoSoportados: f.modosTiempoSoportados,
-            mecanismosCantidadSoportados: f.mecanismosCantidadSoportados,
-            modosActivacionSoportados: MODOS_ACTIVACION_UNIVERSALES,
-            multiplicadoresSoportados: f.multiplicadoresSoportados,
-            slotsRequeridos: f.slotsRequeridos,
-            // Derivadores: lo mínimo que el editor necesita para NOMBRAR la
-            // cantidad del paso (H1 del relevamiento del editor de ruta).
-            mutaMedidasEnPrePasada: f.mutaMedidasEnPrePasada ?? false,
-            // [Etapa F2] El editor decide la card Acomodado por declaración.
-            nestingConfig: f.nestingConfig ?? null,
-            // [Etapa F3] Ídem la pregunta de modo color.
-            esImpresion: f.esImpresion ?? false,
-            // [Tanda B] El editor lee la ficha, no listas propias.
-            tiposPerfilCompatibles: f.tiposPerfilCompatibles ?? null,
-            separacionNestingDefaultMm: f.separacionNestingDefaultMm ?? 0,
-            fuentesPiezasNesting: Object.keys(f.fuentesPiezasNesting ?? {}),
-            fuentePiezasDefault: f.fuentePiezasDefault ?? null,
-            outputHeredadoDefault: f.outputHeredadoDefault ?? null,
-            editorParamsGenerico: f.editorParamsGenerico ?? false,
-            mecanismoCantidadDefault: f.mecanismoCantidadDefault ?? null,
-            ritmoDefault: f.ritmoDefault ?? null,
-            derivador: f.derivador
-              ? {
-                  magnitudPrincipal: f.derivador.magnitudPrincipal,
-                  unidadPrincipal: f.derivador.unidadPrincipal ?? null,
-                  magnitudesTiempo: f.derivador.magnitudesTiempo ?? [],
-                }
-              : null,
-            permiteSlotsAdicionales: f.permiteSlotsAdicionales,
-            plantillasCompatibles: f.plantillasCompatibles,
-            inputsRequeridos: f.inputsRequeridos,
-            outputsCanonicos: f.outputsCanonicos,
-            // B.3.3 — para el selector "hereda de": qué deja este paso.
-            capacidades: resumenCapacidades(f.outputsCanonicos),
-            defaults: defaultsPorFamilia.get(f.codigo as string) ?? null,
-            validaciones: f.validaciones,
-            paramsPasoSchema: f.paramsPasoSchema,
-            productosTipicos: f.productosTipicos,
-          };
-        }),
-        ...familiasTenant.map(proyectarFamiliaTenant).map((f) => ({
-          codigo: f.codigo,
-          origen: 'tenant' as const,
-          nombre: f.nombre,
-          categoria: f.categoria as string,
-          descripcion: f.descripcion,
-          visibleEnSelector: true,
-          relacionMaquinaSoportada: f.relacionMaquinaSoportada,
-          modoActivacionDefault: f.modoActivacionDefault as string,
-          modosTiempoSoportados: f.modosTiempoSoportados,
-          mecanismosCantidadSoportados: f.mecanismosCantidadSoportados,
-          // A diferencia del catálogo (activación universal, decisión D.1),
-          // una familia TENANT puede FIJAR su activación: el editor del
-          // producto sólo ofrece lo que la familia declara.
-          modosActivacionSoportados: f.modosActivacionSoportados,
-          multiplicadoresSoportados: f.multiplicadoresSoportados,
-          slotsRequeridos: f.slotsRequeridos,
-          mutaMedidasEnPrePasada: false,
-          nestingConfig: f.nestingConfig ?? null,
-          esImpresion: f.esImpresion ?? false,
-          tiposPerfilCompatibles: f.tiposPerfilCompatibles ?? null,
-          separacionNestingDefaultMm: f.separacionNestingDefaultMm ?? 0,
-          fuentesPiezasNesting: Object.keys(f.fuentesPiezasNesting ?? {}),
-          fuentePiezasDefault: f.fuentePiezasDefault ?? null,
-          outputHeredadoDefault: f.outputHeredadoDefault ?? null,
-          editorParamsGenerico: f.editorParamsGenerico ?? false,
-          mecanismoCantidadDefault: f.mecanismoCantidadDefault ?? null,
-          ritmoDefault: f.ritmoDefault ?? null,
-          derivador: f.derivador
-            ? {
-                magnitudPrincipal: f.derivador.magnitudPrincipal,
-                unidadPrincipal: f.derivador.unidadPrincipal ?? null,
-                magnitudesTiempo: f.derivador.magnitudesTiempo ?? [],
-              }
-            : null,
-          permiteSlotsAdicionales: f.permiteSlotsAdicionales,
-          plantillasCompatibles: f.plantillasCompatibles,
-          inputsRequeridos: f.inputsRequeridos,
-          outputsCanonicos: f.outputsCanonicos,
-          capacidades: resumenCapacidades(f.outputsCanonicos),
-          defaults: defaultsPorFamilia.get(f.codigo) ?? null,
-          validaciones: f.validaciones,
-          paramsPasoSchema: f.paramsPasoSchema,
-          productosTipicos: [] as string[],
-        })),
+        ...listarFamiliasCatalogo().map((codigo) =>
+          serializarFamilia(FAMILIAS[codigo], 'sistema', defaultsPorFamilia),
+        ),
+        ...familiasTenant
+          .map((fila) => proyectarPasoTenant(fila))
+          .filter((f): f is NonNullable<typeof f> => f != null)
+          .map((f) => serializarFamilia(f, 'tenant', defaultsPorFamilia)),
       ],
     };
   }
@@ -372,4 +289,61 @@ export class FamiliasPasosService {
       throw new BadRequestException(`Familia desconocida: ${familiaCodigo}`);
     }
   }
+}
+
+/**
+ * Proyección de una familia al catálogo que consumen el editor de rutas y
+ * los selectores. Vale igual para las del sistema y para las instancias del
+ * tenant: una instancia trae la ficha heredada, así que no hay campos que
+ * anular. [E1 pasos-tenant: antes eran dos mapeos duplicados]
+ */
+function serializarFamilia(
+  f: DefinicionFamiliaResuelta,
+  origen: 'sistema' | 'tenant',
+  defaultsPorFamilia: Map<string, unknown>,
+) {
+  return {
+    codigo: f.codigo as string,
+    origen,
+    nombre: f.nombre,
+    categoria: f.categoria as string,
+    descripcion: f.descripcion,
+    visibleEnSelector: f.visibleEnSelector ?? true,
+    relacionMaquinaSoportada: f.relacionMaquinaSoportada,
+    modoActivacionDefault: f.modoActivacionDefault as string,
+    modosTiempoSoportados: f.modosTiempoSoportados,
+    mecanismosCantidadSoportados: f.mecanismosCantidadSoportados,
+    modosActivacionSoportados: MODOS_ACTIVACION_UNIVERSALES,
+    multiplicadoresSoportados: f.multiplicadoresSoportados,
+    slotsRequeridos: f.slotsRequeridos,
+    mutaMedidasEnPrePasada: f.mutaMedidasEnPrePasada ?? false,
+    nestingConfig: f.nestingConfig ?? null,
+    esImpresion: f.esImpresion ?? false,
+    tiposPerfilCompatibles: f.tiposPerfilCompatibles ?? null,
+    separacionNestingDefaultMm: f.separacionNestingDefaultMm ?? 0,
+    fuentesPiezasNesting: Object.keys(f.fuentesPiezasNesting ?? {}),
+    fuentePiezasDefault: f.fuentePiezasDefault ?? null,
+    outputHeredadoDefault: f.outputHeredadoDefault ?? null,
+    editorParamsGenerico: f.editorParamsGenerico ?? false,
+    mecanismoCantidadDefault: f.mecanismoCantidadDefault ?? null,
+    ritmoDefault: f.ritmoDefault ?? null,
+    derivador: f.derivador
+      ? {
+          magnitudPrincipal: f.derivador.magnitudPrincipal,
+          unidadPrincipal: f.derivador.unidadPrincipal ?? null,
+          magnitudesTiempo: f.derivador.magnitudesTiempo ?? [],
+        }
+      : null,
+    permiteSlotsAdicionales: f.permiteSlotsAdicionales,
+    plantillasCompatibles: f.plantillasCompatibles,
+    inputsRequeridos: f.inputsRequeridos,
+    outputsCanonicos: f.outputsCanonicos,
+    capacidades: resumenCapacidades(f.outputsCanonicos),
+    defaults: defaultsPorFamilia.get(f.codigo as string) ?? null,
+    validaciones: f.validaciones,
+    paramsPasoSchema: f.paramsPasoSchema,
+    productosTipicos: f.productosTipicos ?? [],
+    /** Sólo instancias: de qué plantilla hereda (para mostrarlo en la UI). */
+    plantillaCodigo: f.plantillaCodigo ?? null,
+  };
 }

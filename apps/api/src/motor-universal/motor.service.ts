@@ -116,7 +116,6 @@ import {
   familiaMutaMedidasEnPrePasada,
   familiaSinConsumiblesMaquina,
   magnitudTiempoDefaultDeFamilia,
-  superficieDeFamiliaTenant,
   perfilCompatibleConFamilia,
   slotIgnoraMultiplicadorCaras,
 } from '../productos-servicios/pasos/familias';
@@ -2345,16 +2344,10 @@ export class MotorUniversalService {
         return this.pasoAbortado(paso);
       }
 
-      // Familias de TENANT que eligieron una superficie en el wizard: deben
-      // acomodar como las del sistema, pero no tienen un guard propio. Si no
-      // salió layout, avisar en vez de cotizar con la cantidad cruda en
-      // silencio. Una familia de tenant SIN superficie (T-2, sin nesting) no
-      // llega acá: su fallback silencioso es legítimo.
-      const superficieTenant = superficieDeFamiliaTenant(familia);
-      if (superficieTenant) {
-        errores.push(this.errorNestingTenantSinLayout(paso, superficieTenant));
-        return this.pasoAbortado(paso);
-      }
+      // [E1 pasos-tenant] Acá vivía un guard aparte para familias de tenant
+      // "que eligieron superficie pero no tienen guard propio". Ya no existe
+      // ese caso: una instancia HEREDA el `guardSinLayout` de su plantilla,
+      // así que corta por la tabla de guards de arriba como cualquier paso.
     }
 
     // F3 cartelería — un rollo más ancho que la boca de la máquina no se
@@ -3327,24 +3320,6 @@ export class MotorUniversalService {
   /** Guard genérico para familias de tenant que acomodan: no hay un
    *  diagnóstico específico como en las del sistema, pero al menos nombra la
    *  superficie y evita que un paso mal configurado cotice en silencio. */
-  private errorNestingTenantSinLayout(
-    paso: PasoCargado,
-    superficie: string,
-  ): ErrorMotor {
-    const dondeLabel = superficie === 'rollo' ? 'el rollo' : 'el pliego';
-    return {
-      codigo: 'nesting_sin_layout',
-      severidad: 'ERROR',
-      mensaje: `El paso no pudo acomodar las piezas sobre ${dondeLabel}: alguna no entra, o falta el material del sustrato o sus medidas.`,
-      rutaPasoId: paso.rutaPasoId,
-      rutaPasoOrden: paso.rutaPasoOrden,
-      familiaCodigo: paso.familiaCodigo,
-      contexto: { superficie },
-      sugerencia:
-        'Revisá que el sustrato tenga medidas y que las piezas entren; si son más grandes que el sustrato, achicá la pieza o elegí uno más grande.',
-    };
-  }
-
   private errorMontajeSinNesting(
     paso: PasoCargado,
     jobContext: JobContext,

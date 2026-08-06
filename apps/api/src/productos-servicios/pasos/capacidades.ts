@@ -295,26 +295,6 @@ export function capacidadesDeclaradas(
   return [...set];
 }
 
-/**
- * La forma de emisión de una familia TENANT, leída de su definición. La
- * `superficie` llega en B.3.4 (nestingConfig); hoy el único disparador
- * extra es CONVERSION → el paso arma grupos (N unidades por caja/pila).
- */
-export function formaEmisionDeFamiliaTenant(input: {
-  mecanismosCantidad?: readonly string[];
-  nestingConfig?: { superficie?: string | null } | null;
-}): FormaEmision {
-  const superficie = input.nestingConfig?.superficie;
-  return {
-    superficie:
-      superficie === 'pliego' ||
-      superficie === 'pliegos_multiples' ||
-      superficie === 'rollo'
-        ? superficie
-        : null,
-    agrupa: (input.mecanismosCantidad ?? []).includes('CONVERSION'),
-  };
-}
 
 /** Resumen por familia para selectores de UI (B.3.3, "hereda de"). */
 export interface CapacidadResumen {

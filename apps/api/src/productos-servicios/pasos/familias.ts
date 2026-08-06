@@ -2067,11 +2067,11 @@ export const FAMILIAS_TOTAL = Object.keys(FAMILIAS).length;
 // ============================================================================
 //
 // Además del catálogo fijo de arriba existen las familias que crea cada
-// TENANT (tabla FamiliaTenant). Este registro en memoria las hace resolubles
+// TENANT (tabla PasoTenant). Este registro en memoria las hace resolubles
 // de forma SÍNCRONA, que es como el motor y todos los consumidores leen
 // familias — async-ificar ~10 call sites del motor sería mucho más invasivo.
 //
-// Quién lo llena: FamiliasTenantService — carga todo al bootear el módulo y
+// Quién lo llena: PasosTenantService — carga todo al bootear el módulo y
 // escribe-through en cada alta/edición/borrado. Trade-off asumido y
 // documentado en el plan: con VARIAS instancias del API una edición tarda
 // hasta el próximo boot en verse en las otras; hoy corre una sola.
@@ -2083,7 +2083,7 @@ export const FAMILIAS_TOTAL = Object.keys(FAMILIAS).length;
 const REGISTRO_TENANT = new Map<string, DefinicionFamiliaResuelta>();
 
 /** Reemplaza el registro entero (boot del módulo). */
-export function cargarRegistroFamiliasTenant(
+export function cargarRegistroPasosTenant(
   defs: DefinicionFamiliaResuelta[],
 ): void {
   REGISTRO_TENANT.clear();
@@ -2091,12 +2091,12 @@ export function cargarRegistroFamiliasTenant(
 }
 
 /** Alta o edición: escribe-through desde el service. */
-export function registrarFamiliaTenant(def: DefinicionFamiliaResuelta): void {
+export function registrarPasoTenant(def: DefinicionFamiliaResuelta): void {
   REGISTRO_TENANT.set(def.codigo, def);
 }
 
-/** Borrado físico (sólo familias vírgenes): sale del registro. */
-export function quitarFamiliaTenantDelRegistro(id: string): void {
+/** Borrado físico (sólo instancias vírgenes): sale del registro. */
+export function quitarPasoTenantDelRegistro(id: string): void {
   REGISTRO_TENANT.delete(id);
 }
 
@@ -2289,20 +2289,6 @@ export function separacionNestingDefaultDeFamilia(codigo: string): number {
  */
 export function separacionEsLiteral(codigo: string): boolean {
   return resolverFamilia(codigo)?.semanticaSeparacion === 'literal';
-}
-
-/**
- * Superficie sobre la que acomoda una familia de TENANT (la que eligió en el
- * wizard), o null si no aplica. Sólo devuelve algo para familias de tenant que
- * declararon superficie: las del sistema acomodan por su propio ruteo y las de
- * tenant sin superficie (T-2) no acomodan. El motor lo usa para el guard
- * genérico "no pudo acomodar" que las familias del sistema tienen a mano.
- */
-export function superficieDeFamiliaTenant(
-  familia: DefinicionFamiliaResuelta | null | undefined,
-): string | null {
-  if (!familia?.esDeTenant) return null;
-  return familia.nestingConfig?.superficie ?? null;
 }
 
 /** Magnitud que alimenta la productividad cuando el modelador no eligió una.

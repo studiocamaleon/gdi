@@ -606,9 +606,9 @@ export class ProduccionService {
     // Catálogo del sistema + familias del TENANT (pasos componibles, Etapa
     // C): las dos tienen que poder asignarse a una estación, así que el
     // picker lista ambas. Las tenant inhabilitadas no se ofrecen.
-    const familiasTenant = await this.prisma.familiaTenant.findMany({
+    const pasosTenant = await this.prisma.pasoTenant.findMany({
       where: { tenantId: auth.tenantId, activo: true },
-      select: { id: true, nombre: true, categoria: true },
+      select: { id: true, nombre: true, plantillaCodigo: true },
       orderBy: { nombre: 'asc' },
     });
     return [
@@ -620,13 +620,18 @@ export class ProduccionService {
         origen: 'sistema' as const,
         estaciones: porFamilia.get(familia.codigo) ?? [],
       })),
-      ...familiasTenant.map((familia) => ({
-        codigo: familia.id,
-        nombre: familia.nombre,
-        categoria: familia.categoria,
+      // La instancia HEREDA la categoría de su plantilla; y si no tiene
+      // regla propia de estación, hereda la de la plantilla (se puede
+      // cambiar). docs/pasos-tenant-por-plantilla-diseno.md
+      ...pasosTenant.map((paso) => ({
+        codigo: paso.id,
+        nombre: paso.nombre,
+        categoria: (resolverFamilia(paso.plantillaCodigo)?.categoria ??
+          'operaciones_manuales') as string,
         visibleEnSelector: true,
         origen: 'tenant' as const,
-        estaciones: porFamilia.get(familia.id) ?? [],
+        estaciones:
+          porFamilia.get(paso.id) ?? porFamilia.get(paso.plantillaCodigo) ?? [],
       })),
     ];
   }

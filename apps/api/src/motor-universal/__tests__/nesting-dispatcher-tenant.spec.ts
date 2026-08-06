@@ -5,8 +5,8 @@
  */
 import { runNestingForPaso } from '../nesting-dispatcher';
 import {
-  quitarFamiliaTenantDelRegistro,
-  registrarFamiliaTenant,
+  quitarPasoTenantDelRegistro,
+  registrarPasoTenant,
 } from '../../productos-servicios/pasos/familias';
 import type { DefinicionFamiliaResuelta } from '../../productos-servicios/pasos/types';
 import type { JobContext, PasoCargado } from '../tipos';
@@ -54,18 +54,18 @@ function pasoTenant(familiaCodigo: string): PasoCargado {
   } as unknown as PasoCargado;
 }
 
-describe('nesting-dispatcher: familias tenant (B.3.4)', () => {
+describe('nesting-dispatcher: pasos del tenant (instancias de plantilla)', () => {
   const ID_ROLLO = 'aaaaaaaa-0000-0000-0000-00000000roll';
   const ID_PLIEGO = 'bbbbbbbb-0000-0000-0000-0000000sheet';
 
   beforeAll(() => {
-    registrarFamiliaTenant({
+    registrarPasoTenant({
       ...FAMILIA_BASE,
       codigo: ID_ROLLO,
       nombre: 'Corte tenant sobre rollo',
       nestingConfig: { superficie: 'rollo' },
     });
-    registrarFamiliaTenant({
+    registrarPasoTenant({
       ...FAMILIA_BASE,
       codigo: ID_PLIEGO,
       nombre: 'Estampado tenant en pliego',
@@ -74,8 +74,8 @@ describe('nesting-dispatcher: familias tenant (B.3.4)', () => {
   });
 
   afterAll(() => {
-    quitarFamiliaTenantDelRegistro(ID_ROLLO);
-    quitarFamiliaTenantDelRegistro(ID_PLIEGO);
+    quitarPasoTenantDelRegistro(ID_ROLLO);
+    quitarPasoTenantDelRegistro(ID_PLIEGO);
   });
 
   it('superficie ROLLO → algoritmo de rollo con largo consumido real', async () => {

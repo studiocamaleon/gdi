@@ -15,11 +15,10 @@ import {
 import { Request } from 'express';
 import { ListProductosQueryDto } from './dto/list-productos-query.dto';
 import {
-  ActualizarFamiliaTenantDto,
-  CrearFamiliaTenantDto,
-  PreviewCosteoFamiliaDto,
-} from './dto/familia-tenant.dto';
-import { FamiliasTenantService } from './familias-tenant.service';
+  ActualizarPasoTenantDto,
+  CrearPasoTenantDto,
+} from './dto/paso-tenant.dto';
+import { PasosTenantService } from './pasos-tenant.service';
 import { ProductosServiciosService } from './productos-servicios.service';
 import {
   ActualizarProductoDto,
@@ -62,7 +61,7 @@ interface RequestWithAuth extends Request {
 export class ProductosServiciosController {
   constructor(
     private readonly service: ProductosServiciosService,
-    private readonly familiasTenant: FamiliasTenantService,
+    private readonly pasosTenant: PasosTenantService,
   ) {}
 
   @Get('catalogo-comercial')
@@ -282,57 +281,50 @@ export class ProductosServiciosController {
   // paso es configuración estructural (decisión §8.7 — por default sólo el
   // administrador tiene costos.gestionar).
 
-  @Get('familias-tenant')
+  @Get('pasos-tenant')
   @Permiso('costos.gestionar')
-  listarFamiliasTenant(@Req() req: RequestWithAuth) {
+  listarPasosTenant(@Req() req: RequestWithAuth) {
     const tenantId = req.auth?.tenantId;
     if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
-    return this.familiasTenant.listar(tenantId);
+    return this.pasosTenant.listar(tenantId);
   }
 
-  @Post('familias-tenant')
+  /** Las plantillas que ofrece el modal de alta. */
+  @Get('pasos-tenant/plantillas')
   @Permiso('costos.gestionar')
-  crearFamiliaTenant(
+  listarPlantillasPaso() {
+    return this.pasosTenant.listarPlantillas();
+  }
+
+  @Post('pasos-tenant')
+  @Permiso('costos.gestionar')
+  crearPasoTenant(
     @Req() req: RequestWithAuth,
-    @Body() dto: CrearFamiliaTenantDto,
+    @Body() dto: CrearPasoTenantDto,
   ) {
     const tenantId = req.auth?.tenantId;
     if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
-    return this.familiasTenant.crear(tenantId, dto);
+    return this.pasosTenant.crear(tenantId, dto);
   }
 
-  @Patch('familias-tenant/:id')
+  @Patch('pasos-tenant/:id')
   @Permiso('costos.gestionar')
-  actualizarFamiliaTenant(
-    @Req() req: RequestWithAuth,
-    @Param('id') id: string,
-    @Body() dto: ActualizarFamiliaTenantDto,
-  ) {
-    const tenantId = req.auth?.tenantId;
-    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
-    return this.familiasTenant.actualizar(tenantId, id, dto);
-  }
-
-  @Post('familias-tenant/preview-costeo')
-  @Permiso('costos.gestionar')
-  previewCosteoFamiliaTenant(
-    @Req() req: RequestWithAuth,
-    @Body() dto: PreviewCosteoFamiliaDto,
-  ) {
-    const tenantId = req.auth?.tenantId;
-    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
-    return this.familiasTenant.previewCosteo(tenantId, dto);
-  }
-
-  @Delete('familias-tenant/:id')
-  @Permiso('costos.gestionar')
-  eliminarFamiliaTenant(
+  actualizarPasoTenant(
     @Req() req: RequestWithAuth,
     @Param('id') id: string,
+    @Body() dto: ActualizarPasoTenantDto,
   ) {
     const tenantId = req.auth?.tenantId;
     if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
-    return this.familiasTenant.eliminar(tenantId, id);
+    return this.pasosTenant.actualizar(tenantId, id, dto);
+  }
+
+  @Delete('pasos-tenant/:id')
+  @Permiso('costos.gestionar')
+  eliminarPasoTenant(@Req() req: RequestWithAuth, @Param('id') id: string) {
+    const tenantId = req.auth?.tenantId;
+    if (!tenantId) throw new UnauthorizedException('Falta tenant en auth');
+    return this.pasosTenant.eliminar(tenantId, id);
   }
 
   @Get('lookups-config-paso')

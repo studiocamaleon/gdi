@@ -610,7 +610,7 @@ model Tenant {
   productosComisionesCatalogo                      ProductoComisionCatalogo[]
   estaciones                                       Estacion[]
   estacionFamilias                                 EstacionFamilia[]
-  familiasTenant                                   FamiliaTenant[]
+  pasosTenant                                      PasoTenant[]
   diasNoLaborables                                 DiaNoLaborable[]
   configuracionProduccion                          ConfiguracionProduccion?
   configuracionInsights                            ConfiguracionInsights?
@@ -990,6 +990,7 @@ model Proveedor {
   @@unique([tenantId, nombre])
   @@index([tenantId, nombre])
   familiaPasoDefaults FamiliaPasoDefaults[]
+  pasosTenant         PasoTenant[]
 }
 
 model Empleado {
@@ -1176,6 +1177,7 @@ model CentroCosto {
   @@index([tenantId, plantaId])
   @@index([tenantId, nombre])
   familiaPasoDefaults FamiliaPasoDefaults[]
+  pasosTenant         PasoTenant[]
 }
 
 /// La planilla del centro de costo: una línea por gasto, por persona o por
@@ -1678,7 +1680,7 @@ model EstacionFamilia {
   tenantId      String   @db.Uuid
   estacionId    String   @db.Uuid
   /// FamiliaCodigo del catálogo fijo (productos-servicios/pasos/familias)
-  /// O el UUID de una FamiliaTenant (pasos componibles, Etapa C): el ruteo a
+  /// O el UUID de un PasoTenant (instancia de plantilla): el ruteo a
   /// estaciones tiene una sola fuente de verdad y es esta tabla.
   familiaCodigo String
   tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -1693,7 +1695,7 @@ model EstacionFamilia {
 /// del paso: la familia sugiere, el producto pisa, la cotización ajusta.
 /// El motor los aplica como fallback VIVO al cotizar cuando la config del
 /// producto dejó el campo vacío. `familiaCodigo` puede ser un código del
-/// catálogo fijo O el UUID de una FamiliaTenant — mismo patrón que
+/// catálogo fijo O el UUID de un PasoTenant — mismo patrón que
 /// EstacionFamilia: una sola tabla para ambos mundos.
 model FamiliaPasoDefaults {
   id            String  @id @default(uuid()) @db.Uuid
@@ -1737,53 +1739,50 @@ model FamiliaPasoDefaults {
 /// fila; el resolver distingue por forma (UUID → esta tabla, si no →
 /// catálogo). La estación NO se duplica acá: el ruteo vive en
 /// EstacionFamilia, que la API de familias escribe con familiaCodigo = id.
-model FamiliaTenant {
-  id          String  @id @default(uuid()) @db.Uuid
-  tenantId    String  @db.Uuid
-  nombre      String
-  descripcion String?
-  /// CategoriaFamiliaCodigo del catálogo: agrupa en UI y da el default de
-  /// modoRegistro (produccion_impresion → solo_completar, resto cronómetro).
-  categoria   String
+/// Paso propio del tenant: una INSTANCIA de una plantilla del catálogo del
+/// sistema (docs/pasos-tenant-por-plantilla-diseno.md). NO declara su forma
+/// —la hereda VIVA de `plantillaCodigo` en resolverFamilia— así que tiene
+/// los mismos ejes que un paso de Grafo: derivador, nesting, primitivas.
+/// Guarda sólo lo del taller: cómo se llama y sus defaults.
+model PasoTenant {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
 
-  /// La FORMA (diseño §4.3): mismos vocabularios que DefinicionFamilia.
-  /// La única puerta de escritura es validarDefinicionFamiliaTenant
-  /// (pasos/familia-tenant-validacion.ts) — acá no hay enums de DB a
-  /// propósito, para no duplicar los vocabularios de types.ts.
-  relacionMaquina         Json
-  modosTiempo             Json
-  mecanismosCantidad      Json
-  modosActivacion         Json
-  modoActivacionDefault   String
-  slots                   Json
-  multiplicadores         Json
-  plantillasCompatibles   Json
-  tiposPerfilCompatibles  Json?
-  inputsRequeridos        Json
-  outputsCanonicos        Json
-  validaciones            Json
-  permiteSlotsAdicionales Boolean @default(false)
-  /// Override del registro en tablero; null = default por categoría.
-  modoRegistro            String?
-  /// B.3.4 — el paso acomoda piezas: { superficie: 'pliego' |
-  /// 'pliegos_multiples' | 'rollo' }. Presente ⇔ mecanismo
-  /// CALCULADO_POR_PASO (el tenant ELIGE nuestro algoritmo, nunca escribe
-  /// uno). null = no acomoda.
-  nestingConfigJson       Json?
+  /// FamiliaCodigo del catálogo del sistema del que hereda TODA la ficha.
+  /// Es la herencia: cambiarlo re-apunta el paso a otra plantilla.
+  plantillaCodigo String
+  nombre          String
+  descripcion     String?
+  /// Ícono propio; si se omite vale el de la plantilla.
+  icono           String?
+  /// Inhabilitado: fuera de selectores, pero el resolver lo sigue
+  /// resolviendo para rutas/OTs históricas.
+  activo          Boolean @default(true)
 
-  /// FamiliaCodigo del preset del catálogo del que nació, si nació de uno.
-  presetOrigen String?
-  /// Inhabilitada: fuera de selectores y wizard, pero el resolver la sigue
-  /// resolviendo para rutas/OTs históricas (decisión §8.6). Borrado físico
-  /// sólo si ninguna ruta/OT la referenció jamás.
-  activo    Boolean  @default(true)
+  /// Defaults del taller (antes en FamiliaPasoDefaults, que sobrevive para
+  /// las familias del sistema usadas sin instanciar). La instancia puede
+  /// tener los suyos porque hay VARIAS instancias por plantilla.
+  centroCostoId          String?  @db.Uuid
+  productividadHora      Decimal? @db.Decimal(12, 2)
+  tiempoFijoMin          Decimal? @db.Decimal(10, 2)
+  demasiaMm              Decimal? @db.Decimal(8, 2)
+  solapePanelMm          Decimal? @db.Decimal(8, 2)
+  tercerizado            Boolean?
+  proveedorId            String?  @db.Uuid
+  /// 'tarifa_magnitud' | 'matriz' | 'fijo'
+  fuenteCostoTercerizado String?
+  plazoProveedorDias     Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  centroCosto CentroCosto? @relation(fields: [centroCostoId], references: [id], onDelete: SetNull)
+  proveedor   Proveedor?   @relation(fields: [proveedorId], references: [id], onDelete: SetNull)
 
   @@unique([tenantId, nombre])
   @@index([tenantId, activo])
+  @@index([tenantId, plantillaCodigo])
 }
 
 /// Empleado habilitado para trabajar en una estación (N:M).

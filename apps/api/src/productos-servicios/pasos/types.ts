@@ -423,8 +423,11 @@ export type GuardSinLayoutNesting =
 
 export type DefinicionFamiliaResuelta = Omit<DefinicionFamilia, 'codigo'> & {
   codigo: string;
-  /** true si viene de una FamiliaTenant (fila de la base). */
+  /** true si es un PasoTenant (instancia de plantilla, fila de la base). */
   esDeTenant?: boolean;
+  /** Sólo para instancias: de qué plantilla del sistema HEREDA la ficha.
+   *  docs/pasos-tenant-por-plantilla-diseno.md */
+  plantillaCodigo?: string;
   tenantId?: string;
   /** Sólo para tenant: inhabilitada no aparece en selectores, pero el
    *  resolver la sigue resolviendo para rutas/OTs históricas (§8.6). */
