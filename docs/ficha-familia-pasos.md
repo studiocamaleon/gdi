@@ -184,9 +184,12 @@ pliego/placa, pregunta "¿qué monta?" (fuentes declaradas + default implícito)
 Los dos pendientes se resolvieron en la Tanda D (2026-08-06): las
 validaciones adelantadas son GENÉRICAS (param `requerido` sin default y sin
 valor → error, leído de paramsPasoSchema — bastidor/led no cambian porque
-sus requeridos tienen default); y `pre_prensa` DECLARA
-`modoTalonarioIncompleto` en su schema (la pregunta del editor existe por el
-param declarado). De paso `nestingAplica` quedó puro: `Boolean(nestingConfig)`
+sus requeridos tienen default); y el agrupado de talonario
+quedó declarado donde el motor lo CONSUME: `impresion_por_hoja` (el paso que
+hace la imposición) — corrección 2026-08-07 sobre un primer intento que lo
+declaraba en pre_prensa, donde el motor lo ignora; en el producto Talonarios
+la pregunta ahora muestra el valor real (`pose_completa`) y un producto sin
+pre-prensa puede configurarlo igual. De paso `nestingAplica` quedó puro: `Boolean(nestingConfig)`
 — murieron la excepción pre_prensa y el atajo CALCULADO (redundantes).
 Lista original:
 

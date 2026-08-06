@@ -247,21 +247,12 @@ const pre_prensa: DefinicionFamilia = {
       mensaje: 'Falta declarar cantidad',
     },
   ],
-  // [Tanda D] El agrupado de talonario es un param DECLARADO de pre-prensa:
-  // la pregunta del editor existe porque la ficha lo declara, no por nombre.
-  // (Sin `editorParamsGenerico`: su UI es la card a medida de talonarios.)
-  paramsPasoSchema: [
-    {
-      campo: 'modoTalonarioIncompleto',
-      etiqueta: 'Agrupado por talonario en el pliego',
-      tipo: 'enum',
-      valoresPermitidos: ['off', 'aprovechar_pliego', 'pose_completa'],
-      default: 'off',
-      requerido: false,
-      descripcion:
-        'Cómo se apilan los talonarios sueltos: estándar (off), compartiendo pliego (mínimo papel) o con poses vacías (listo para abrochar).',
-    },
-  ],
+  // El agrupado de talonario NO es de pre-prensa: lo consume el paso que
+  // hace la imposición (impresión por hoja) — pre-prensa hoy es revisión y
+  // armado por tiempo, nada más. [Corrección 2026-08-07: un duplicado
+  // efímero acá apuntaba la pregunta del editor a un param que el motor
+  // ignora en este paso.]
+  paramsPasoSchema: [],
   productosTipicos: [
     'Tarjetas de Visita',
     'Vinilo adhesivo',
@@ -377,12 +368,15 @@ const impresion_por_hoja: DefinicionFamilia = {
       // triplicado calculan sus pliegos pero no tocan ese número, que es el
       // que usa el abrochado para contar broches.
       campo: 'modoTalonarioIncompleto',
-      etiqueta: 'Modo de talonarios incompletos',
+      etiqueta: 'Agrupado por talonario en el pliego',
       tipo: 'enum',
-      valoresPermitidos: ['aprovechar_pliego', 'pose_completa'],
-      default: 'aprovechar_pliego',
+      // `off` es el default REAL del motor (sin agrupado); el schema viejo
+      // no lo listaba y declaraba un default que el motor nunca aplicó.
+      valoresPermitidos: ['off', 'aprovechar_pliego', 'pose_completa'],
+      default: 'off',
+      requerido: false,
       descripcion:
-        'Solo aplica para talonarios. Decide qué hacer cuando la cantidad pedida no completa un grupo entero de poses.',
+        'Cómo se apilan los talonarios sueltos: estándar (off), compartiendo pliego (mínimo papel) o con poses vacías (listo para abrochar).',
     },
   ],
   productosTipicos: [

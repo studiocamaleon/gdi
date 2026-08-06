@@ -378,7 +378,7 @@ describe("sección Tiempo y costo", () => {
     ).toBe(false);
   });
 
-  it("talonario: vive en oficio y sólo en pre-prensa; piezas a montar sólo en montaje", () => {
+  it("talonario: vive en oficio y sólo donde la ficha declara el param (impresión por hoja); piezas a montar sólo en montaje", () => {
     const claves = opcionesDeSeccion("tiempo", ctxBase()).map((o) => o.clave);
     expect(claves).not.toContain("tiempo.piezas_montar");
     expect(
@@ -386,10 +386,11 @@ describe("sección Tiempo y costo", () => {
     ).not.toContain("oficio.talonario");
     const clavesPrensa = opcionesDeSeccion(
       "oficio",
-      // [Tanda D] La ficha DECLARA el param (como el catálogo real).
+      // La ficha DECLARA el param — hoy lo declara impresión por hoja (el
+      // paso que hace la imposición), no pre-prensa (corrección 2026-08-07).
       ctxBase({
         familia: {
-          codigo: "pre_prensa",
+          codigo: "impresion_por_hoja",
           paramsPasoSchema: [
             { campo: "modoTalonarioIncompleto", etiqueta: "Agrupado", tipo: "enum" },
           ],
