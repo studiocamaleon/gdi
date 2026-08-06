@@ -45,6 +45,12 @@ export function plantillasInstanciables(): Array<{
     }));
 }
 
+/** Nombre humano de la plantilla. OJO: no sirve leerlo de la proyección —
+ *  ahí el nombre ya es el de la instancia. */
+export function nombrePlantilla(codigo: string): string | null {
+  return FAMILIAS[codigo as keyof typeof FAMILIAS]?.nombre ?? null;
+}
+
 /** La única puerta de escritura. Sin forma que validar, queda mínima. */
 export function validarPasoTenant(input: PasoTenantInput): ErrorPasoTenant[] {
   const errores: ErrorPasoTenant[] = [];

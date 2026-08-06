@@ -1,6 +1,6 @@
 # Pasos del tenant por PLANTILLA — diseño
 
-**Estado: E1 HECHA** (2026-08-07) — faltan E2 (catálogo/estación) y E3 (modal). Reemplaza el modelo de "familias tenant
+**Estado: E1 + E3 HECHAS** (2026-08-07) — falta E2 (ícono/label del tablero). Reemplaza el modelo de "familias tenant
 declaradas desde cero" por **instancias de una plantilla del sistema**, con
 herencia viva de toda la ficha.
 
@@ -233,10 +233,15 @@ nombre para no tocar relaciones.
   los mismos pre y post. tsc y vitest 415 verdes.
 - **E2 — catálogo y lectura**: serializar los ejes heredados; ícono/label del
   tablero por plantilla; decidir el caso de `EstacionRegla`.
-- **E3 — alta por modal**: nace `paso-alta-dialog.tsx` calcado de
-  `maquina-alta-dialog.tsx` (nombre + plantilla filtrable + Guardar → ficha).
-  Muere el wizard de 13 pantallas de `pasos-familias-view.tsx`; la vista
-  queda como listado + ficha de defaults.
+- **E3 — alta por modal** ✅ (2026-08-07): `paso-alta-dialog.tsx` calcado de
+  `maquina-alta-dialog.tsx` (nombre + plantilla filtrable + Guardar). La
+  vista pasó de **1.717 a 265 líneas**: murió el wizard de 13 pantallas y el
+  listado muestra de qué plantilla parte cada paso y si su estación es
+  heredada. Se adelantó a E2 porque el cambio de contrato del API dejó la
+  pantalla en "Error al cargar los pasos". E2E: se creó "Bordado" desde
+  `trabajo_manual` y el motor lo resolvió con la ficha heredada (M-0, T-2,
+  3 mecanismos, slot `insumo_manual`, output `trabajos_manuales_realizados`,
+  param `tipoTrabajo`).
 - **E4 — verificación**: goldens idénticos (no debería moverse un centavo:
   no hay instancias en uso), jest, vitest, E2E creando una instancia de
   `trabajo_manual` y usándola en una ruta.

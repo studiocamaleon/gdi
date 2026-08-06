@@ -35,6 +35,7 @@ import {
   registrarPasoTenant,
 } from './pasos/familias';
 import {
+  nombrePlantilla,
   plantillasInstanciables,
   proyectarPasoTenant,
   validarPasoTenant,
@@ -113,8 +114,9 @@ export class PasosTenantService implements OnModuleInit {
         icono: fila.icono,
         activo: fila.activo,
         plantillaCodigo: fila.plantillaCodigo,
-        /** Lo que hereda, para que la UI lo muestre como sólo-lectura. */
-        plantillaNombre: proyectada?.nombre ?? null,
+        /** El nombre de la PLANTILLA (no el de la instancia, que la
+         *  proyección ya pisó). */
+        plantillaNombre: nombrePlantilla(fila.plantillaCodigo),
         categoria: proyectada?.categoria ?? null,
         heredaFicha: proyectada != null,
         /** La instancia usa SU regla de estación si la tiene; si no, la de
@@ -256,7 +258,7 @@ export class PasosTenantService implements OnModuleInit {
       icono: fila.icono,
       activo: fila.activo,
       plantillaCodigo: fila.plantillaCodigo,
-      plantillaNombre: proyectada?.nombre ?? null,
+      plantillaNombre: nombrePlantilla(fila.plantillaCodigo),
       categoria: proyectada?.categoria ?? null,
     };
   }

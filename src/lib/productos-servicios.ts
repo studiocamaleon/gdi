@@ -573,64 +573,41 @@ export interface DefaultsFamiliaPaso {
   plazoProveedorDias?: number | null;
 }
 
-export interface FamiliaTenant {
+/** Un paso propio del tenant: INSTANCIA de una plantilla del sistema, de la
+ *  que hereda la ficha entera. docs/pasos-tenant-por-plantilla-diseno.md */
+export interface PasoTenant {
   id: string;
   nombre: string;
   descripcion: string | null;
-  categoria: string;
-  relacionMaquina: string[];
-  modosTiempo: string[];
-  mecanismosCantidad: string[];
-  modosActivacion: string[];
-  modoActivacionDefault: string;
-  slots: Array<{
-    codigo: string;
-    nombre: string;
-    tipo: string;
-    requerido: boolean;
-    compatibilidadMaterial?: { familiasMateriaPrima?: string[] };
-  }>;
-  multiplicadores: string[];
-  plantillasCompatibles: string[];
-  tiposPerfilCompatibles: string[] | null;
-  modoRegistro: string | null;
-  presetOrigen: string | null;
-  /** B.3.4 — superficie de acomodo; null = el paso no acomoda piezas. */
-  nestingConfigJson: { superficie?: string } | null;
+  icono: string | null;
   activo: boolean;
-  createdAt: string;
-  updatedAt: string;
+  /** De qué plantilla del catálogo hereda. */
+  plantillaCodigo: string;
+  plantillaNombre: string | null;
+  categoria: string | null;
+  /** false si la plantilla ya no existe en el catálogo. */
+  heredaFicha?: boolean;
   estacion: { id: string; nombre: string } | null;
-  /** E.1 — defaults declarados del paso. */
+  /** true si la estación viene de la plantilla (no tiene regla propia). */
+  estacionHeredada?: boolean;
   defaults?: DefaultsFamiliaPaso | null;
 }
 
-export interface UpsertFamiliaTenantInput {
+/** Plantilla instanciable que ofrece el modal de alta. */
+export interface PlantillaPaso {
+  codigo: string;
   nombre: string;
-  descripcion?: string;
   categoria: string;
-  relacionMaquina: string[];
-  modosTiempo: string[];
-  mecanismosCantidad: string[];
-  modosActivacion?: string[];
-  modoActivacionDefault?: string;
-  slots?: Array<{
-    codigo: string;
-    nombre: string;
-    tipo: string;
-    requerido: boolean;
-    compatibilidadMaterial?: { familiasMateriaPrima?: string[] };
-  }>;
-  multiplicadores?: string[];
-  plantillasCompatibles?: string[];
-  tiposPerfilCompatibles?: string[];
-  inputsRequeridos?: string[];
-  outputsCanonicos?: string[];
-  modoRegistro?: string;
-  presetOrigen?: string;
-  /** B.3.4 — presente ⇔ mecanismo CALCULADO_POR_PASO. */
-  nestingConfig?: { superficie: string } | null;
-  /** E.1 — defaults declarados del paso. */
+  descripcion?: string;
+}
+
+export interface UpsertPasoTenantInput {
+  nombre: string;
+  /** FamiliaCodigo del catálogo del que hereda. */
+  plantillaCodigo: string;
+  descripcion?: string | null;
+  icono?: string | null;
+  activo?: boolean;
   defaults?: Partial<DefaultsFamiliaPaso> | null;
 }
 
