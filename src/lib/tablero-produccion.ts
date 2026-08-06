@@ -51,6 +51,10 @@ export type TableroPasoData = {
   rutaPasoId: string | null;
   nombre: string;
   familiaCodigo: string;
+  /** Si el paso es una INSTANCIA del tenant, de qué plantilla del catálogo
+   *  hereda. Los mapas de UI y el ruteo a estaciones caen acá cuando el
+   *  código propio (un UUID) no matchea. docs/pasos-tenant-por-plantilla */
+  plantillaCodigo?: string | null;
   /** Categoría de alto nivel de la familia (agrupa la vista Por estación). */
   categoriaFamilia: string;
   centroCostoId: string | null;
@@ -177,8 +181,17 @@ export const FAMILIA_ICONOS: Record<string, string> = {
   instalacion_in_situ: "Wrench",
 };
 
-export function familiaIcono(familiaCodigo: string): string {
-  return FAMILIA_ICONOS[familiaCodigo] ?? "Tool";
+export function familiaIcono(
+  familiaCodigo: string,
+  plantillaCodigo?: string | null,
+): string {
+  // Una instancia del tenant tiene por código un UUID: cae al ícono de su
+  // plantilla antes que al genérico.
+  return (
+    FAMILIA_ICONOS[familiaCodigo] ??
+    (plantillaCodigo ? FAMILIA_ICONOS[plantillaCodigo] : undefined) ??
+    "Tool"
+  );
 }
 
 /** Orden y nombre visible de las categorías (vista Por estación). */
@@ -345,7 +358,11 @@ type EstacionRuteo = {
 
 type PasoRuteo = Pick<
   TableroPasoData,
-  "familiaCodigo" | "centroCostoId" | "maquinaId" | "tecnologia"
+  | "familiaCodigo"
+  | "plantillaCodigo"
+  | "centroCostoId"
+  | "maquinaId"
+  | "tecnologia"
 >;
 
 /**
@@ -385,17 +402,26 @@ export function resolverEstacionDePaso<T extends EstacionRuteo>(
     if (porTecnologia) return porTecnologia;
   }
   // 3. Por paso concreto (regla nueva; identidad del paso = su familiaCodigo).
+  // La regla puede apuntar al paso propio (su UUID) o a la plantilla de la
+  // que hereda: la instancia HEREDA la estación y puede tener la suya.
   const porPaso = activas.find((estacion) =>
     (estacion.reglas ?? []).some(
-      (regla) => regla.tipo === "paso" && regla.valor === paso.familiaCodigo,
+      (regla) =>
+        regla.tipo === "paso" &&
+        (regla.valor === paso.familiaCodigo ||
+          (paso.plantillaCodigo != null &&
+            regla.valor === paso.plantillaCodigo)),
     ),
   );
   if (porPaso) return porPaso;
 
   // 4. Por familia: la estación general (sin máquinas) de esa familia, o —si no
   //    hay general— la única candidata. Sin centro de costo (Fase D).
-  const candidatas = activas.filter((estacion) =>
-    estacion.familias.includes(paso.familiaCodigo),
+  const candidatas = activas.filter(
+    (estacion) =>
+      estacion.familias.includes(paso.familiaCodigo) ||
+      (paso.plantillaCodigo != null &&
+        estacion.familias.includes(paso.plantillaCodigo)),
   );
   if (candidatas.length === 0) return null;
   const general = candidatas.find((estacion) => estacion.maquinas.length === 0);

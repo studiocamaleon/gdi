@@ -313,7 +313,7 @@ function buildItemView(item: TableroItemData, estaciones: Estacion[]): ItemView 
     paso,
     status: stepStatus(paso),
     esActivo: paso.id === actual?.id,
-    iconKey: familiaIcono(paso.familiaCodigo),
+    iconKey: familiaIcono(paso.familiaCodigo, paso.plantillaCodigo),
     tec: paso.centroCostoNombre ?? "Paso manual",
   }));
   const currentStep = actual ? steps.find((s) => s.paso.id === actual.id) : undefined;

@@ -20,6 +20,8 @@ export type TrackingPaso = {
   /** Nombre técnico del paso (línea "tec" del diseño). */
   nombre: string;
   familiaCodigo: string;
+  /** Si es un paso propio del tenant, de qué plantilla hereda su copy. */
+  plantillaCodigo?: string | null;
   estado: TrackingPasoEstado;
   completadoEl: string | null;
   duracionEstimadaMin: number | null;
@@ -177,8 +179,17 @@ const COPY_DEFAULT: CopyPaso = {
   desc: "Avanzamos en la producción de tu pedido.",
 };
 
-export function copyDePaso(familiaCodigo: string): CopyPaso {
-  return COPY_FAMILIA[familiaCodigo] ?? COPY_DEFAULT;
+export function copyDePaso(
+  familiaCodigo: string,
+  plantillaCodigo?: string | null,
+): CopyPaso {
+  // Un paso propio del tenant tiene por código un UUID: el copy público cae
+  // al de la plantilla de la que hereda antes que al genérico.
+  return (
+    COPY_FAMILIA[familiaCodigo] ??
+    (plantillaCodigo ? COPY_FAMILIA[plantillaCodigo] : undefined) ??
+    COPY_DEFAULT
+  );
 }
 
 // ── Derivados de presentación ────────────────────────────────────────────

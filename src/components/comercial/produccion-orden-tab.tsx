@@ -77,7 +77,7 @@ const ST_LBL: Record<VisualStatus, string> = {
 
 function StepNode({ paso, compact }: { paso: TableroPasoData; compact?: boolean }) {
   const status = STATUS_OF[paso.estado];
-  const IcoC = Ico(familiaIcono(paso.familiaCodigo));
+  const IcoC = Ico(familiaIcono(paso.familiaCodigo, paso.plantillaCodigo));
   return (
     <div className={`otp-node ${status}`} title={`${paso.nombre} · ${ST_LBL[status]}`}>
       <span className="otp-ic">
@@ -144,7 +144,7 @@ function ProductoRuta({ item }: { item: TableroItemData }) {
           <div className="otp-detail-list">
             {route.map((s) => {
               const status = STATUS_OF[s.estado];
-              const IcoC = Ico(familiaIcono(s.familiaCodigo));
+              const IcoC = Ico(familiaIcono(s.familiaCodigo, s.plantillaCodigo));
               const dur = etiquetaDuracion(s.duracionEstimadaMin);
               // Hecho: quién lo completó y cuánto llevó (si el tiempo vale).
               const tiempoReal =

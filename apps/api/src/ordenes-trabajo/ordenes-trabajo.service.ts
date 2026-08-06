@@ -3034,6 +3034,11 @@ export class OrdenesTrabajoService {
         rutaPasoId: paso.rutaPasoId,
         nombre: paso.nombre,
         familiaCodigo: paso.familiaCodigo,
+        // [E2 pasos-tenant] Un paso del tenant tiene por código un UUID que
+        // ningún mapa de UI ni regla de estación conoce. Se deriva —no se
+        // guarda— la plantilla de la que hereda, para caer ahí.
+        plantillaCodigo:
+          resolverFamilia(paso.familiaCodigo)?.plantillaCodigo ?? null,
         categoriaFamilia: paso.categoriaFamilia,
         centroCostoId: paso.centroCostoId,
         centroCostoNombre: paso.centroCostoNombre,
@@ -3362,6 +3367,10 @@ export class OrdenesTrabajoService {
           indice: p.indice,
           nombre: p.nombre,
           familiaCodigo: p.familiaCodigo,
+          // [E2] Un paso propio del tenant cae al copy público de su
+          // plantilla (su código es un UUID que COPY_FAMILIA no conoce).
+          plantillaCodigo:
+            resolverFamilia(p.familiaCodigo)?.plantillaCodigo ?? null,
           estado: p.estado,
           completadoEl: p.completadoEl ? p.completadoEl.toISOString() : null,
           duracionEstimadaMin:

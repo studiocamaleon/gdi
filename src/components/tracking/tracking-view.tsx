@@ -126,7 +126,7 @@ function ItemTimeline({ item }: { item: TrackingItem }) {
     <div className="t-timeline">
       {item.pasos.map((paso, i) => {
         const state = pasoEstadoVisual(item.pasos, i);
-        const copy = copyDePaso(paso.familiaCodigo);
+        const copy = copyDePaso(paso.familiaCodigo, paso.plantillaCodigo);
         const dur = duracionTexto(paso.duracionEstimadaMin);
         return (
           <div key={paso.indice} className={`t-step ${state}`}>
@@ -171,7 +171,7 @@ function ProdHero({ item, total }: { item: TrackingItem; total: number }) {
   const idx = item.pasos.findIndex((p) => p.estado !== "hecho");
   const paso = idx >= 0 ? item.pasos[idx] : null;
   if (!paso) return null;
-  const copy = copyDePaso(paso.familiaCodigo);
+  const copy = copyDePaso(paso.familiaCodigo, paso.plantillaCodigo);
   const dur = duracionTexto(paso.duracionEstimadaMin);
   return (
     <div className="t-press-hero">
@@ -264,7 +264,7 @@ function ItemPanel({
         <div className="meta">
           <div className="nm">{item.nombre}</div>
           <div className="sub">
-            {listo ? "Completado" : item.pasoActual ? copyDePaso(pasoFamilia(item)).simple : "Por iniciar"}
+            {listo ? "Completado" : item.pasoActual ? copyDePaso(pasoFamilia(item).codigo, pasoFamilia(item).plantilla).simple : "Por iniciar"}
           </div>
         </div>
         <span className={`prog ${listo ? "ok" : ""}`}>{item.progresoPct}%</span>
@@ -294,9 +294,17 @@ function ItemPanel({
   );
 }
 
-function pasoFamilia(item: TrackingItem): string {
+/** El paso en curso, con su plantilla — para que el copy público de un paso
+ *  propio del tenant caiga al de la familia de la que hereda. */
+function pasoFamilia(item: TrackingItem): {
+  codigo: string;
+  plantilla?: string | null;
+} {
   const actual = item.pasos.find((p) => p.estado !== "hecho");
-  return actual?.familiaCodigo ?? "trabajo_manual";
+  return {
+    codigo: actual?.familiaCodigo ?? "trabajo_manual",
+    plantilla: actual?.plantillaCodigo ?? null,
+  };
 }
 
 // ── Vista principal ──────────────────────────────────────────────────────

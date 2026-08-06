@@ -1,6 +1,6 @@
 # Pasos del tenant por PLANTILLA — diseño
 
-**Estado: E1 + E3 HECHAS** (2026-08-07) — falta E2 (ícono/label del tablero). Reemplaza el modelo de "familias tenant
+**Estado: COMPLETO** (2026-08-07) — E0 a E4 hechas. Reemplaza el modelo de "familias tenant
 declaradas desde cero" por **instancias de una plantilla del sistema**, con
 herencia viva de toda la ficha.
 
@@ -231,8 +231,17 @@ nombre para no tocar relaciones.
   148 casos (los 4 que faltan son del producto E2E borrado en E0, no un
   cambio de pricing — los otros 148 idénticos). jest: 11 fallos en motor.spec,
   los mismos pre y post. tsc y vitest 415 verdes.
-- **E2 — catálogo y lectura**: serializar los ejes heredados; ícono/label del
-  tablero por plantilla; decidir el caso de `EstacionRegla`.
+- **E2 — lectura y ruteo** ✅ (2026-08-07): el paso lleva `plantillaCodigo`
+  **derivado al leer** (`resolverFamilia(...)?.plantillaCodigo`) — sin
+  columna nueva ni migración — en la proyección compartida por Tablero y tab
+  Producción, y en la de tracking. Con eso caen a la plantilla: el **ícono**
+  (`familiaIcono(codigo, plantilla)`), el **copy público** del tracking
+  (`copyDePaso`) y —lo importante, que era funcional y no cosmético— el
+  **ruteo a estaciones**: antes una instancia (UUID) no matcheaba ninguna
+  regla ni familia de estación y quedaba sin estación. Ahora matchea por su
+  propio código O por el de su plantilla, que es exactamente la decisión 2
+  (hereda la estación, puede tener la suya). La serialización de ejes
+  heredados ya había salido en E1 (un solo mapeo para ambos mundos).
 - **E3 — alta por modal** ✅ (2026-08-07): `paso-alta-dialog.tsx` calcado de
   `maquina-alta-dialog.tsx` (nombre + plantilla filtrable + Guardar). La
   vista pasó de **1.717 a 265 líneas**: murió el wizard de 13 pantallas y el
