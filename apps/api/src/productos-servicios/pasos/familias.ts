@@ -570,7 +570,11 @@ const impresion_3d: DefinicionFamilia = {
 
 const aplicacion_transfer: DefinicionFamilia = {
   codigo: 'aplicacion_transfer',
-  nombre: 'Aplicación DTF UV manual',
+  // Renombrada 2026-08-07 (pedido del usuario): el nombre viejo ("Aplicación
+  // DTF UV manual") ataba la familia a UNA técnica; aplica a cualquier
+  // transfer colocado a mano. El par con la hermana queda simétrico:
+  // "de transfer manual" / "de transfer textil".
+  nombre: 'Aplicación de transfer manual',
   categoria: 'produccion_impresion',
   descripcion:
     'Aplicación MANUAL del transfer sobre objetos (DTF UV sobre tazas, botellas, rígidos) — sin plancha térmica. El planchado sobre prenda con máquina vive en "Aplicación de transfer textil".',
