@@ -1747,7 +1747,14 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     pregunta: "¿Cómo se agrupan los talonarios en el pliego?",
     ayuda:
       "Agrupa talonarios de a N poses por pliego y define qué hacer con los sueltos: compartir pliego (menos papel) o poses vacías (listo para abrochar).",
-    visible: (ctx) => ctx.familia?.codigo === "pre_prensa",
+    // [Tanda D] La pregunta existe si la familia DECLARA el param en su
+    // schema (pre_prensa lo declara; su UI es esta card a medida).
+    visible: (ctx) =>
+      Boolean(
+        ctx.familia?.paramsPasoSchema?.some(
+          (p) => p.campo === "modoTalonarioIncompleto",
+        ),
+      ),
     resumen: (ctx) => {
       const valor = String(ctx.paramsPaso.modoTalonarioIncompleto ?? "off");
       return (

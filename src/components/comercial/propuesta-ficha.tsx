@@ -408,8 +408,10 @@ function parseLocalDate(value: string) {
 
 function isPanelEditableStep(paso: PasoCosteo): paso is PanelEditorPaso {
   const nesting = paso.nestingResult;
+  // [Tanda D] Sin chequeo de familia: el panelizado habilitado + algoritmo
+  // de rollo SOLO los produce el acomodado que lo declara (gran formato) —
+  // el dato del payload alcanza.
   return (
-    paso.familiaCodigo === "impresion_por_area" &&
     Boolean(nesting?.visualConfig?.panelizado?.enabled) &&
     (nesting?.algorithm === "shelf-rollo" ||
       nesting?.algorithm === "maxrects-rollo") &&

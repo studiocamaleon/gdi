@@ -9,8 +9,18 @@ import {
   estrategiaNestingDeFamilia,
   fallbackSinLayoutDeFamilia,
   guardSinLayoutDeFamilia,
+  primitivasDeFamilia,
   resolverFamilia,
 } from '../productos-servicios/pasos/familias';
+import {
+  REGISTRO_AVISOS,
+  REGISTRO_CANTIDAD_PROPIA,
+  REGISTRO_COMPRA_SUSTRATO,
+  REGISTRO_DESGASTE,
+  REGISTRO_FACTOR_VELOCIDAD,
+  REGISTRO_SELECCION_PERFIL,
+  REGISTRO_TIEMPO_RUN,
+} from './primitivas';
 import type {
   DefinicionFamiliaResuelta,
   FamiliaCodigo,
@@ -115,7 +125,6 @@ import { paramsEfectivos } from './params-runtime';
 import { regionalDelTenant } from '../common/regional';
 import {
   aplicarMutacionPre,
-  calcularMetrosLinealesUnion,
   parsearParamsModificacionPre,
 } from './modificaciones-pre';
 import { calcularBarrasNecesarias } from './estructura-bastidor';
@@ -2138,7 +2147,7 @@ export class MotorUniversalService {
       ? null
       : this.resolverPerfil(pasoConMaquina, jobContext);
     if (!sinImpresion) {
-      this.avisarFaltaPerfilDobleFaz(
+      this.emitirAvisosDeFamilia(
         errores,
         pasoConMaquina,
         jobContext,
@@ -2868,11 +2877,11 @@ export class MotorUniversalService {
       }
     } else if (
       modoTiempo === 'T-3' &&
-      // FRONTERA-PRIMITIVA: guillotina deriva el run de los cortes calculados,
-      // no de la productividad del perfil — algoritmo propio, Tipo B.
-      paso.familiaCodigo === 'corte_guillotina'
+      // El run propio del oficio lo declara la ficha (`primitivas.tiempoRun`)
+      // y vive en el catálogo de primitivas. [P1: era la rama guillotina]
+      primitivasDeFamilia(paso.familiaCodigo)?.tiempoRun
     ) {
-      runMin = this.calcularRunMinGuillotina(paso, jobContext);
+      runMin = this.runPorPrimitivaTiempo(paso, jobContext);
     } else if (modoTiempo === 'T-3') {
       // Productividad del perfil — necesita: cantidad y productividad
       const productividad = Number(paso.perfil?.productivityValue ?? 0);
@@ -4118,6 +4127,9 @@ export class MotorUniversalService {
     return dup as JobContext;
   }
 
+  /** Despacha el gancho `compraSustrato` declarado; sin declaración la
+   *  cantidad de consumo ES la de compra. [P2: era la conversión
+   *  pliegos→hojas propia de impresión por hoja] */
   private ajustarCantidadSustratoComprado(
     paso: PasoCargado,
     slotCodigo: string,
@@ -4129,69 +4141,17 @@ export class MotorUniversalService {
       atributosVarianteJson?: Record<string, unknown> | null;
     },
   ): number {
-    if (paso.familiaCodigo !== 'impresion_por_hoja') {
-      return cantidadPliegosImpresion;
-    }
-    if (slotCodigo !== 'sustrato_principal') {
-      return cantidadPliegosImpresion;
-    }
-    if (
-      !Number.isFinite(cantidadPliegosImpresion) ||
-      cantidadPliegosImpresion <= 0
-    ) {
-      return cantidadPliegosImpresion;
-    }
-
-    const printSheet = nestingDispatch?.substrates.find(
-      (
-        sub,
-      ): sub is Extract<
-        (typeof nestingDispatch.substrates)[number],
-        { kind: 'sheet' }
-      > => sub.kind === 'sheet',
+    const codigo = primitivasDeFamilia(paso.familiaCodigo)?.compraSustrato;
+    const primitiva = codigo ? REGISTRO_COMPRA_SUSTRATO[codigo] : undefined;
+    if (!primitiva) return cantidadPliegosImpresion;
+    return primitiva(
+      cantidadPliegosImpresion,
+      slotCodigo,
+      paso,
+      jobContext,
+      nestingDispatch,
+      materialResuelto,
     );
-    const ctx = jobContext as Record<string, unknown>;
-    const printSheetWidthMm = Number(
-      printSheet?.widthMm ?? ctx.pliego_impresion_ancho_mm ?? 0,
-    );
-    const printSheetHeightMm = Number(
-      printSheet?.heightMm ?? ctx.pliego_impresion_alto_mm ?? 0,
-    );
-    if (
-      !Number.isFinite(printSheetWidthMm) ||
-      printSheetWidthMm <= 0 ||
-      !Number.isFinite(printSheetHeightMm) ||
-      printSheetHeightMm <= 0
-    ) {
-      return cantidadPliegosImpresion;
-    }
-
-    const attrs = materialResuelto.atributosVarianteJson ?? {};
-    const anchoSustratoMm = Number(attrs.anchoMm ?? attrs.widthMm ?? 0);
-    const altoSustratoMm = Number(
-      attrs.largoMm ?? attrs.altoMm ?? attrs.heightMm ?? 0,
-    );
-    if (
-      !Number.isFinite(anchoSustratoMm) ||
-      anchoSustratoMm <= 0 ||
-      !Number.isFinite(altoSustratoMm) ||
-      altoSustratoMm <= 0
-    ) {
-      return cantidadPliegosImpresion;
-    }
-
-    const conversion = calculateSustratoToPliegoConversion({
-      sustrato: { anchoMm: anchoSustratoMm, altoMm: altoSustratoMm },
-      pliegoImpresion: {
-        anchoMm: printSheetWidthMm,
-        altoMm: printSheetHeightMm,
-      },
-    });
-
-    if (!conversion.esDerivado || conversion.pliegosPorSustrato <= 1) {
-      return cantidadPliegosImpresion;
-    }
-    return Math.ceil(cantidadPliegosImpresion / conversion.pliegosPorSustrato);
   }
 
   private calcularM2DesdePliegoImpresion(
@@ -4357,9 +4317,19 @@ export class MotorUniversalService {
     const maquina = paso.maquina;
     const componentes = maquina?.componentesDesgaste ?? [];
     if (!maquina || componentes.length === 0) return [];
-    if (paso.familiaCodigo !== 'impresion_por_hoja') return [];
+    // [P2] El desgaste lo declara la ficha (`primitivas.desgaste`); una
+    // familia sin el gancho no clickea — antes era el gate por familia.
+    const codigoDesgaste = primitivasDeFamilia(paso.familiaCodigo)?.desgaste;
+    const primitivaDesgaste = codigoDesgaste
+      ? REGISTRO_DESGASTE[codigoDesgaste]
+      : undefined;
+    if (!primitivaDesgaste) return [];
 
-    const clicks = this.clicksA4DelPaso(paso, jobContext, nestingDispatch);
+    const clicks = primitivaDesgaste(paso, jobContext, nestingDispatch, {
+      resolverCantidad: (p, jc, nd) => this.resolverCantidad(p, jc, nd),
+      carasConsumible: (p, jc) => this.resolverCarasConsumible(p, jc),
+      factorVelocidad: (p, jc, nd) => this.factorVelocidadDelPaso(p, jc, nd),
+    });
     if (clicks <= 0) return [];
 
     // Un trabajo en blanco y negro mueve sólo el drum negro: las piezas de
@@ -4417,29 +4387,6 @@ export class MotorUniversalService {
    * más grande que un A4 cuenta como los A4 que entran en él, redondeado
    * para arriba (un SRA3 son 2 clicks, no 2,31).
    */
-  private clicksA4DelPaso(
-    paso: PasoCargado,
-    jobContext: JobContext,
-    nestingDispatch: NestingDispatchResult | null,
-  ): number {
-    // El acomodo va SÍ o SÍ: los clicks son pliegos que pasan por la máquina,
-    // y sin él la cantidad cae a las piezas del trabajo — 500 tarjetas
-    // contarían 500 clicks cuando la máquina sólo vio 50 pliegos. Mientras la
-    // imposición la hacía pre-prensa, este paso heredaba pliegos y el error
-    // no se veía.
-    const pliegos = this.resolverCantidad(paso, jobContext, nestingDispatch);
-    if (!Number.isFinite(pliegos) || pliegos <= 0) return 0;
-    const caras = this.resolverCarasConsumible(paso, jobContext);
-    const factorA4 = Math.ceil(
-      this.factorA4EquivalenteParaImpresionPorHoja(
-        paso,
-        jobContext,
-        nestingDispatch,
-      ),
-    );
-    return Math.ceil(pliegos) * caras * Math.max(1, factorA4);
-  }
-
   private calcularConsumiblesMaquina(
     paso: PasoCargado,
     jobContext: JobContext,
@@ -5479,15 +5426,19 @@ export class MotorUniversalService {
       if (nestingDispatch) {
         return nestingDispatch.cantidadCalculada;
       }
-      // Etapa B — `modificacion_pre` calcula sus propios metros lineales de
-      // unión sobre la medida VISIBLE (la costura corre por el borde
-      // terminado, no crece con la demasía). Es el driver del tiempo T-2.
-      if (paso.familiaCodigo === 'modificacion_pre') {
-        const params = parsearParamsModificacionPre(
-          this.paramsEfectivosDelPaso(paso, jobContext),
-        );
-        if (params) return calcularMetrosLinealesUnion(jobContext, params);
-        return 0;
+      // Cantidad propia del oficio, declarada por la ficha
+      // (`primitivas.cantidadPropia`) y resuelta por el catálogo de
+      // primitivas. [P1: era la rama modificacion_pre]
+      const codigoCantidadPropia = primitivasDeFamilia(
+        paso.familiaCodigo,
+      )?.cantidadPropia;
+      if (codigoCantidadPropia) {
+        const primitiva = REGISTRO_CANTIDAD_PROPIA[codigoCantidadPropia];
+        if (primitiva) {
+          return primitiva(paso, jobContext, {
+            paramsEfectivos: (p, jc) => this.paramsEfectivosDelPaso(p, jc),
+          });
+        }
       }
       // Derivador geométrico — la cantidad del paso es la magnitud principal
       // del resultado cacheado (ml de perfil, módulos LED, ojales). Se derivó
@@ -5877,11 +5828,7 @@ export class MotorUniversalService {
     // factorA4 solo aplica a PPM; se computa lazy para no tocar el resto.
     const factorA4 =
       unidad === 'PPM'
-        ? this.factorA4EquivalenteParaImpresionPorHoja(
-            paso,
-            jobContext,
-            nestingDispatch,
-          )
+        ? this.factorVelocidadDelPaso(paso, jobContext, nestingDispatch)
         : 1;
     return runMinPorProductividad(
       cantidadEfectiva,
@@ -5891,85 +5838,29 @@ export class MotorUniversalService {
     );
   }
 
-  private calcularRunMinGuillotina(
+  /** Despacha el gancho `tiempoRun` declarado al catálogo de primitivas. */
+  private runPorPrimitivaTiempo(
     paso: PasoCargado,
     jobContext: JobContext,
   ): number {
-    const detalle = this.asRecord(paso.perfil?.detalleJson);
-    const pliegosMaxPorTanda = Number(detalle.pliegosMaxPorTanda ?? 0);
-    // El tiempo por corte vive en el perfil (2026-07-28). El valor de la
-    // máquina queda como respaldo de las guillotinas cargadas antes del
-    // cambio: sin él, ese paso costearía 0 minutos en silencio.
-    const tiempoPorCorteSeg = Number(
-      detalle.tiempoPorCorteSeg ??
-        paso.maquina?.parametrosTecnicosJson?.tiempoPorCorteSeg ??
-        0,
-    );
-    const cortesPorTanda = this.getCortesGuillotinaPorTanda(jobContext);
-    const pliegos = this.resolverCantidad(paso, jobContext, null);
-
-    if (
-      !Number.isFinite(pliegos) ||
-      pliegos <= 0 ||
-      !Number.isFinite(pliegosMaxPorTanda) ||
-      pliegosMaxPorTanda <= 0 ||
-      !Number.isFinite(tiempoPorCorteSeg) ||
-      tiempoPorCorteSeg <= 0 ||
-      !Number.isFinite(cortesPorTanda) ||
-      cortesPorTanda <= 0
-    ) {
-      return 0;
-    }
-
-    const tandas = Math.ceil(pliegos / pliegosMaxPorTanda);
-    const cortesMin = (tandas * cortesPorTanda * tiempoPorCorteSeg) / 60;
-    const recargasMin =
-      Math.max(0, tandas - 1) * Number(paso.perfil?.feedReloadMin ?? 0);
-    return cortesMin + recargasMin;
+    const codigo = primitivasDeFamilia(paso.familiaCodigo)?.tiempoRun;
+    const primitiva = codigo ? REGISTRO_TIEMPO_RUN[codigo] : undefined;
+    if (!primitiva) return 0;
+    return primitiva(paso, jobContext, {
+      resolverCantidad: (p, jc) => this.resolverCantidad(p, jc, null),
+    });
   }
 
-  private getCortesGuillotinaPorTanda(jobContext: JobContext): number {
-    const cortes = (jobContext as Record<string, unknown>).cortes_calculados;
-    if (typeof cortes === 'number') return cortes;
-    if (cortes && typeof cortes === 'object' && !Array.isArray(cortes)) {
-      return Number((cortes as Record<string, unknown>).cortesTotales ?? 0);
-    }
-    return 0;
-  }
-
-  private factorA4EquivalenteParaImpresionPorHoja(
+  /** Despacha el gancho `factorVelocidad` declarado; sin declaración es 1.
+   *  [P2: era `factorA4EquivalenteParaImpresionPorHoja`] */
+  private factorVelocidadDelPaso(
     paso: PasoCargado,
     jobContext: JobContext,
     nestingDispatch: NestingDispatchResult | null,
   ): number {
-    if (paso.familiaCodigo !== 'impresion_por_hoja') {
-      return 1;
-    }
-
-    const sheet = nestingDispatch?.substrates.find(
-      (
-        substrate,
-      ): substrate is Extract<
-        (typeof nestingDispatch.substrates)[number],
-        { kind: 'sheet' }
-      > => substrate.kind === 'sheet',
-    );
-    const ctx = jobContext as Record<string, unknown>;
-    const anchoMm = Number(
-      sheet?.widthMm ?? ctx.pliego_impresion_ancho_mm ?? 0,
-    );
-    const altoMm = Number(sheet?.heightMm ?? ctx.pliego_impresion_alto_mm ?? 0);
-    if (
-      !Number.isFinite(anchoMm) ||
-      anchoMm <= 0 ||
-      !Number.isFinite(altoMm) ||
-      altoMm <= 0
-    ) {
-      return 1;
-    }
-
-    const areaA4Mm2 = 210 * 297;
-    return Math.max(1, (anchoMm * altoMm) / areaA4Mm2);
+    const codigo = primitivasDeFamilia(paso.familiaCodigo)?.factorVelocidad;
+    const primitiva = codigo ? REGISTRO_FACTOR_VELOCIDAD[codigo] : undefined;
+    return primitiva ? primitiva(paso, jobContext, nestingDispatch) : 1;
   }
 
   /**
@@ -6324,27 +6215,24 @@ export class MotorUniversalService {
       };
     }
 
-    // ─── 1. Impresión por hoja: color + caras + escalón de gramaje ──
+    // ─── 1. Modo de color (genérico) + primitiva de selección ────────
     //
-    // Los tres discriminantes se ENCADENAN como filtros en vez de competir:
-    // antes ganaba el primer perfil que matcheara el color y el gramaje no
-    // se miraba nunca —tres perfiles de la misma máquina que sólo diferían
-    // en el papel eran inalcanzables—. Ver docs §5.
+    // El filtro por modo de color es del MOTOR: aplica a cualquier familia
+    // que lo declare al cotizar. La selección FINA es oficio de la familia
+    // (`primitivas.seleccionPerfil`): la cadena caras→gramaje de impresión
+    // por hoja, el escalón de gramaje de guillotina. Una primitiva que
+    // devuelve null NO decide y el pipeline sigue (reglas declarativas).
+    // [P3: eran dos bloques por familiaCodigo — ver docs §5 por la cadena]
     const modoColor = this.resolverModoColorComercial(paso, jobContext);
-    // FRONTERA-PRIMITIVA: la cadena color→caras→gramaje es la estrategia de
-    // selección de perfil propia de impresión por hoja — Tipo B.
-    const esImpresionPorHoja = paso.familiaCodigo === 'impresion_por_hoja';
-    if (modoColor || esImpresionPorHoja) {
-      const tieneSenalCaras =
-        esImpresionPorHoja &&
-        (typeof jobContext.caras === 'number' ||
-          (jobContext as Record<string, unknown>)[
-            `caras_${paso.configPasoId}`
-          ] !== undefined);
-      const buscarDoble =
-        tieneSenalCaras && this.carasEfectivasPaso(paso, jobContext) === 2;
-
-      // Filtro 1: modo de color. Si nadie lo declara, no descarta a nadie.
+    const codigoSeleccion = primitivasDeFamilia(
+      paso.familiaCodigo,
+    )?.seleccionPerfil;
+    const primitivaSeleccion = codigoSeleccion
+      ? REGISTRO_SELECCION_PERFIL[codigoSeleccion]
+      : undefined;
+    if (modoColor || primitivaSeleccion) {
+      // Filtro genérico: modo de color. Si nadie lo declara, no descarta a
+      // nadie; si descarta a todos, tampoco.
       let candidatos = modoColor
         ? perfilesDisponibles.filter((perfil) =>
             modoColorMatchesPerfil(perfil, modoColor),
@@ -6352,66 +6240,41 @@ export class MotorUniversalService {
         : perfilesDisponibles;
       if (candidatos.length === 0) candidatos = perfilesDisponibles;
 
-      // Filtro 2: caras. Si ningún perfil cubre las caras pedidas se sigue
-      // sin filtrar (el aviso lo emite `avisarFaltaPerfilDobleFaz`).
-      if (tieneSenalCaras) {
-        const porCaras = candidatos.filter(
-          (perfil) => this.perfilEsDobleFaz(perfil) === buscarDoble,
-        );
-        if (porCaras.length > 0) candidatos = porCaras;
+      const elegido = primitivaSeleccion
+        ? primitivaSeleccion(paso, jobContext, candidatos, {
+            carasEfectivas: (p, jc) => this.carasEfectivasPaso(p, jc),
+            perfilEsDobleFaz: (perfil) => this.perfilEsDobleFaz(perfil),
+            elegirPorEscalonDeGramaje: (cands, gramaje) =>
+              this.elegirPorEscalonDeGramaje(cands, gramaje),
+            numeroPositivo: (value) => this.numeroPositivo(value),
+          })
+        : // Sin primitiva: desempate genérico por escalón de gramaje y
+          // primer candidato (comportamiento histórico del modo color).
+          (() => {
+            const gramaje = this.numeroPositivo(
+              ctx.gramajeMaterialGr ?? ctx.gramajeGr ?? ctx.gramaje,
+            );
+            return gramaje
+              ? (this.elegirPorEscalonDeGramaje(candidatos, gramaje) ??
+                  candidatos[0])
+              : candidatos[0];
+          })();
+
+      if (elegido) {
+        if (elegido.id === paso.perfilM1Id) return null;
+        return {
+          id: elegido.id,
+          nombre: elegido.nombre,
+          tipoPerfil: elegido.tipoPerfil,
+          productivityValue: elegido.productivityValue,
+          productivityUnit: elegido.productivityUnit ?? null,
+          setupMin: elegido.setupMin,
+          cleanupMin: elegido.cleanupMin,
+          feedReloadMin: elegido.feedReloadMin,
+          detalleJson: elegido.detalleJson,
+        };
       }
-
-      // Filtro 3: escalón de gramaje, igual que en guillotina — gana el
-      // "hasta" más chico que todavía cubre el papel. Sin gramaje en el
-      // contexto o sin escalones declarados, queda el orden anterior.
-      const gramaje = this.numeroPositivo(
-        (jobContext as Record<string, unknown>).gramajeMaterialGr ??
-          (jobContext as Record<string, unknown>).gramajeGr ??
-          (jobContext as Record<string, unknown>).gramaje,
-      );
-      const candidato = gramaje
-        ? (this.elegirPorEscalonDeGramaje(candidatos, gramaje) ?? candidatos[0])
-        : candidatos[0];
-
-      if (!candidato || candidato.id === paso.perfilM1Id) return null;
-      return {
-        id: candidato.id,
-        nombre: candidato.nombre,
-        tipoPerfil: candidato.tipoPerfil,
-        productivityValue: candidato.productivityValue,
-        productivityUnit: candidato.productivityUnit ?? null,
-        setupMin: candidato.setupMin,
-        cleanupMin: candidato.cleanupMin,
-        feedReloadMin: candidato.feedReloadMin,
-        detalleJson: candidato.detalleJson,
-      };
-    }
-
-    // ─── 2. Guillotina: perfil por escalón de gramaje ────────────────
-    // FRONTERA-PRIMITIVA: selección de perfil propia de guillotina — Tipo B.
-    if (paso.familiaCodigo === 'corte_guillotina') {
-      const gramaje = this.numeroPositivo(
-        ctx.gramajeMaterialGr ?? ctx.gramajeGr ?? ctx.gramaje,
-      );
-      if (gramaje) {
-        const candidato = this.elegirPorEscalonDeGramaje(
-          perfilesDisponibles,
-          gramaje,
-        );
-        if (candidato && candidato.id !== paso.perfilM1Id) {
-          return {
-            id: candidato.id,
-            nombre: candidato.nombre,
-            tipoPerfil: candidato.tipoPerfil,
-            productivityValue: candidato.productivityValue,
-            productivityUnit: candidato.productivityUnit ?? null,
-            setupMin: candidato.setupMin,
-            cleanupMin: candidato.cleanupMin,
-            feedReloadMin: candidato.feedReloadMin,
-            detalleJson: candidato.detalleJson,
-          };
-        }
-      }
+      // Sin decisión → sigue el pipeline.
     }
 
     // ─── 3. G-M8 — Regla declarativa por perfil ──────────────────────
@@ -6445,55 +6308,26 @@ export class MotorUniversalService {
     return null;
   }
 
-  /**
-   * El trabajo pide doble faz y la máquina no tiene ningún perfil de doble
-   * faz: el motor cae en un perfil de simple faz y el tiempo sale a la
-   * mitad del real. Antes pasaba en silencio; ahora la cotización lo dice.
-   *
-   * Es WARNING y no ERROR a propósito: la cotización sale igual —la
-   * imprenta puede querer cotizar mientras termina de cargar la máquina—,
-   * pero queda escrito que ese tiempo está subestimado.
-   */
-  private avisarFaltaPerfilDobleFaz(
+  /** Corre los diagnósticos que la familia DECLARA (`primitivas.avisos`).
+   *  Son WARNINGS a propósito: nunca cortan la cotización.
+   *  [P4: era `avisarFaltaPerfilDobleFaz`, con gate por familiaCodigo] */
+  private emitirAvisosDeFamilia(
     errores: ErrorMotor[],
     paso: PasoCargado,
     jobContext: JobContext,
     perfilResuelto: NonNullable<PasoCargado['perfil']> | null,
   ) {
-    if (paso.familiaCodigo !== 'impresion_por_hoja') return;
-    const ctx = jobContext as Record<string, unknown>;
-    const tieneSenalCaras =
-      typeof jobContext.caras === 'number' ||
-      ctx[`caras_${paso.configPasoId}`] !== undefined;
-    if (!tieneSenalCaras) return;
-    if (this.carasEfectivasPaso(paso, jobContext) !== 2) return;
-
-    const perfilEnUso =
-      perfilResuelto ??
-      paso.perfilesDisponibles?.find((p) => p.id === paso.perfilM1Id) ??
-      paso.perfil;
-    if (perfilEnUso && this.perfilEsDobleFaz(perfilEnUso)) return;
-
-    const hayAlguno = this.filtrarPerfilesCompatibles(
-      paso.familiaCodigo,
-      paso.perfilesDisponibles,
-    ).some((perfil) => this.perfilEsDobleFaz(perfil));
-    if (hayAlguno) return;
-
-    errores.push({
-      codigo: 'perfil_doble_faz_faltante',
-      severidad: 'WARNING',
-      mensaje: `El paso ${paso.rutaPasoOrden} se cotiza a doble faz, pero ${paso.maquina?.nombre ?? 'la máquina'} no tiene ningún perfil de doble faz: el tiempo sale calculado con uno de simple faz y queda subestimado.`,
-      rutaPasoId: paso.rutaPasoId,
-      rutaPasoOrden: paso.rutaPasoOrden,
-      familiaCodigo: paso.familiaCodigo,
-      sugerencia:
-        'Agregar un perfil de doble faz a la máquina con su productividad real.',
-      contexto: {
-        maquinaId: paso.maquina?.id,
-        perfilId: perfilEnUso?.id ?? null,
-      },
-    });
+    const codigos = primitivasDeFamilia(paso.familiaCodigo)?.avisos ?? [];
+    for (const codigo of codigos) {
+      const primitiva = REGISTRO_AVISOS[codigo];
+      if (!primitiva) continue;
+      primitiva(paso, jobContext, perfilResuelto, errores, {
+        carasEfectivas: (p, jc) => this.carasEfectivasPaso(p, jc),
+        perfilEsDobleFaz: (perfil) => this.perfilEsDobleFaz(perfil),
+        perfilesCompatibles: (p) =>
+          this.filtrarPerfilesCompatibles(p.familiaCodigo, p.perfilesDisponibles),
+      });
+    }
   }
 
   /**

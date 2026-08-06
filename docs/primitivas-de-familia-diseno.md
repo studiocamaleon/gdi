@@ -1,6 +1,6 @@
 # Primitivas de familia — diseño del registro
 
-**Estado: EN REVISIÓN** (2026-08-06). Cierra la etapa 4.d de
+**Estado: P1-P4 HECHAS** (2026-08-06) — queda P5 (cierre/doc). Cierra la etapa 4.d de
 [ficha-familia-pasos.md](ficha-familia-pasos.md). Mismo patrón que
 [derivadores-geometricos-diseno.md](derivadores-geometricos-diseno.md):
 catálogo de funciones con nombre + la ficha declara cuáles usa.
@@ -146,15 +146,29 @@ figuraba como "publicación de outputs"; es un diagnóstico.)
 Cada etapa: baseline → mudar el algoritmo al catálogo + declarar → el motor
 llama al registro → goldens idénticos (152 + 7) + jest sin regresiones.
 
-- **P1 — andamiaje + los 2 simples**: `primitivas/tipos.ts` + `index.ts`;
-  `tiempoRun: guillotina_por_cortes` y `cantidadPropia: ml_union_visible`.
-  Riesgo bajo (helpers ya casi puros).
-- **P2 — el clúster de hoja**: `factorVelocidad`, `desgaste`,
-  `compraSustrato`. Comparten deps; salen juntos.
-- **P3 — selección de perfil**: `cadena_caras_gramaje` + `escalon_gramaje`,
-  con el split modoColor-genérico / cadena-propia. La más delicada (toca la
-  resolución de perfil de TODAS las familias) — golden + jest de perfil.
-- **P4 — avisos**: `perfil_doble_faz`. Trivial tras P3.
+- **P1 — andamiaje + los 2 simples** ✅ (2026-08-06): `primitivas/tipos.ts`
+  + `index.ts`; `tiempoRun: guillotina_por_cortes` y `cantidadPropia:
+  ml_union_visible` declarados y despachados por registro; murieron
+  `calcularRunMinGuillotina`/`getCortesGuillotinaPorTanda` del motor y la
+  rama modificacion_pre de resolverCantidad. Goldens 152/152 y 7/7 idénticos
+  (guillotina cubierta por el genérico, la costura por Demasía de tensado
+  del backlight); jest 1392 con los mismos 12 preexistentes; tsc limpio.
+- **P2 — el clúster de hoja** ✅ (2026-08-06): `a4_equivalente`,
+  `clicks_a4`, `pliegos_a_hojas` mudadas; murieron
+  `factorA4EquivalenteParaImpresionPorHoja`/`clicksA4DelPaso` y
+  `ajustarCantidadSustratoComprado` quedó de despachador. Goldens idénticos.
+- **P3 — selección de perfil** ✅ (2026-08-06): bloque unificado — filtro
+  de modo color genérico en el motor + primitiva declarada; contrato
+  `Perfil | null` donde null = sin decisión y el pipeline sigue (preserva
+  que guillotina caiga a las reglas G-M8 y hoja no). Goldens idénticos.
+  HALLAZGO de verificación: la suite jest COMPLETA es inestable entre
+  corridas (12/13/15 fallos sin tocar nada — paralelización sobre una DB;
+  los smoke de guillotina/PPM dependen del interleaving). El A/B limpio es
+  POR ARCHIVO: motor.spec solo da 11 fallos idénticos pre/post.
+- **P4 — avisos** ✅ (2026-08-06): `perfil_doble_faz` en REGISTRO_AVISOS;
+  `avisarFaltaPerfilDobleFaz` → `emitirAvisosDeFamilia` (corre la lista
+  declarada). Censo del motor: CERO ramas `familiaCodigo ===`/`!==` de
+  comportamiento (sólo un typeof de validación) — criterio §7 CUMPLIDO.
 - **P5 — cierre**: censo final `familiaCodigo` en motor-universal = sólo
   autoría de datos y labels; actualizar ficha-familia-pasos.md (§2 tabla +
   §6 universo con la columna Primitivas) y el memory.

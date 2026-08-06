@@ -1,7 +1,8 @@
 # La ficha de la familia de pasos — anatomía y hoja de ruta
 
 **Estado: VIVO** — este doc se actualiza cada vez que la ficha gana un campo.
-Última revisión: 2026-08-06 (Etapas F, F2, F3 de nesting/impresión/herencia).
+Última revisión: 2026-08-06 (Tandas A-C + primitivas P1-P4: el censo del
+motor quedó en CERO ramas por familiaCodigo).
 
 ## 1. El principio
 
@@ -80,6 +81,19 @@ Cada eje responde una pregunta en lenguaje de imprenta. `?` = opcional.
 | `outputs?` | ¿Qué publicás para que otros hereden? (puntos de soldadura) |
 | `materialSlot?` | ¿Qué material alimenta el cálculo? (los atributos del módulo LED) |
 | `mensajeSinDatos` (+ sugerencia/código) | ¿Qué diagnóstico das si no hay datos? (nunca $0 silencioso) |
+
+### Primitivas — `primitivas?` (docs/primitivas-de-familia-diseno.md)
+"Mi oficio tiene algoritmos propios" — catálogo en `motor-universal/primitivas/`.
+
+| Campo | Pregunta |
+|---|---|
+| `tiempoRun?` | ¿Tu run T-3 se calcula con algoritmo propio? (guillotina: por cortes) [P1] |
+| `cantidadPropia?` | ¿Tu cantidad CALCULADO sale de un cálculo propio? (ml de costura) [P1] |
+| `factorVelocidad?` | ¿La velocidad del perfil se ajusta al trabajo? (factor A4 del PPM) [P2] |
+| `desgaste?` | ¿Consumís clicks de los componentes de la máquina? [P2] |
+| `compraSustrato?` | ¿Tu consumo se convierte a unidades de compra? (pliegos→hojas) [P2] |
+| `seleccionPerfil?` | ¿Elegís perfil con cadena propia? (caras→gramaje / escalón) [P3] |
+| `avisos?` | ¿Qué diagnósticos propios emitís? (doble faz sin perfil) [P4] |
 
 ### Acomodado — `nestingConfig?` y satélites
 "Yo acomodo piezas dentro de un material."
@@ -167,10 +181,14 @@ editables, perfil/máquina compatible, panelizado/sanitize/separación, pliego
 automático, fórmula del film, labels de herencia (ahora genéricos: cualquier
 familia con `outputHeredadoDefault` etiqueta su opción Heredar), sustantivo
 pliego/placa, pregunta "¿qué monta?" (fuentes declaradas + default implícito).
-PENDIENTE que quedó de esta lista: las validaciones adelantadas de
-`modificacion_pre`/`colocacion_ojales` (view 1941-49) — necesitan un tipo de
-validación de params en la ficha; y la pregunta talonario de `pre_prensa`
-(UI a medida, migra cuando se modele su paramsPasoSchema). Lista original:
+Los dos pendientes se resolvieron en la Tanda D (2026-08-06): las
+validaciones adelantadas son GENÉRICAS (param `requerido` sin default y sin
+valor → error, leído de paramsPasoSchema — bastidor/led no cambian porque
+sus requeridos tienen default); y `pre_prensa` DECLARA
+`modoTalonarioIncompleto` en su schema (la pregunta del editor existe por el
+param declarado). De paso `nestingAplica` quedó puro: `Boolean(nestingConfig)`
+— murieron la excepción pre_prensa y el atajo CALCULADO (redundantes).
+Lista original:
 
 Duplicados frontend de campos que la ficha del API ya declara — la copia se
 desactualiza sola. Matarlos = serializar el campo en el catálogo y leerlo:
@@ -226,14 +244,14 @@ factorVelocidad?, compraMaterial?, publicaOutputs?, cantidadPropia? }`.
   compra (~4129); publicación de outputs (~6459).
 - `modificacion_pre`: metros lineales de costura sobre medida visible (~5479).
 
-### 4.e Centro de copiado — buscar por capacidad, no por nombre
+### 4.e Centro de copiado — HECHA (Tanda D, 2026-08-06)
 
-`centro-copiado.service` y `provisionar-plantilla` distinguen dos usos:
-- **Crear** pasos de `impresion_por_hoja` / `encuadernado_anillado` al
-  provisionar: legítimo — es autoría de datos, como elegirlos en el wizard.
-- **Buscar** "el paso que imprime" / "el paso que anilla" dentro de la ruta
-  (211, 911, 677, 2039, 2053, 515): migrar a búsqueda por capacidad declarada
-  (`esImpresion`, categoría `encuadernacion_armado`) o rol declarado.
+Los lookups del service buscan por CAPACIDAD declarada: "el paso que
+imprime" = `esImpresionDeFamilia`; "el paso que anilla" = el que publica
+`libros_anillados` (`familiaPublicaOutput`, helper genérico). Las
+referencias de `provisionar-plantilla` se QUEDAN por nombre: son autoría de
+datos (el provisionador crea y gestiona exactamente ese paso). 47/47 specs
+de centro de copiado verdes.
 
 ### 4.f Lo que NO se migra (y por qué)
 
@@ -247,6 +265,11 @@ factorVelocidad?, compraMaterial?, publicaOutputs?, cantidadPropia? }`.
 - **Código 3D estacionado** (`agregar-producto-sheet` 894-947,
   `carteleria-editor-sheet`): vive detrás de
   `CONFIGURADOR_3D_CARTELERIA_ACTIVO=false`; se sanea cuando el 3D vuelva.
+- **Presentación sobre payload de cotización** (`propuesta-ficha`
+  getMontajeSustratoMaterial): identifica el paso de montaje por nombre
+  porque el payload de la cotización no lleva la ficha; migra si el motor
+  serializa la declaración por paso. (El check de panelizado sí se pudo
+  derivar del dato y murió en la Tanda D.)
 
 ### Historial de saneamientos hechos
 - **Etapa A** (previa): márgenes/separación/fuentes de piezas/perfil
@@ -259,7 +282,15 @@ factorVelocidad?, compraMaterial?, publicaOutputs?, cantidadPropia? }`.
   `outputHeredadoDefault` (muere el switch G-M2).
 - **Tandas A+B+C** (2026-08-06): re-keys API + copias del editor muertas +
   `fallbackSinLayout`/`editorParamsGenerico`/`mecanismoCantidadDefault`/
-  `ritmoDefault`. Con esto 4.a-4.c CERRADAS; sigue 4.d (primitivas).
+  `ritmoDefault`. Con esto 4.a-4.c CERRADAS.
+- **Primitivas P1-P4** (2026-08-06): eje `primitivas` completo (7 ganchos, 8
+  primitivas en catálogo); 4.d CERRADA — el motor quedó sin ramas por
+  familiaCodigo (criterio §7 del doc de primitivas).
+- **Tanda D** (2026-08-06): validación genérica de params requeridos,
+  talonario declarado en pre_prensa, `nestingAplica` puro, centro de copiado
+  por capacidad (`esImpresionDeFamilia`/`familiaPublicaOutput`), panelizado
+  sin nombre en propuesta. 4.a-4.e CERRADAS; 4.f queda como lista de "no se
+  migra" documentada.
 
 ## 5. Reglas al agregar un campo nuevo
 
@@ -335,49 +366,49 @@ Impresión (`esImpresion`), Hereda default (`outputHeredadoDefault`),
 Pre-pasada (`mutaMedidasEnPrePasada`), y cantidades de outputs canónicos,
 params declarados y validaciones.
 
-| Familia | Derivador | Acomodado (superficie · estrategia · guard) | Impresión | Hereda default | Pre-pasada | Outputs | Params | Valid. |
-|---|---|---|---|---|---|---|---|---|
-| **Pre-prensa** | | | | | | | | |
-| `pre_prensa` | — | — | — | — | — | — | — | 1 |
-| **Producción / impresión** | | | | | | | | |
-| `aplicacion_transfer` | — | — | — | — | — | 1 | — | — |
-| `aplicacion_transfer_textil` | — | — | — | — | — | 1 | — | — |
-| `grabado_laser` | — | — | — | — | — | 1 | — | — |
-| `impresion_3d` | — | — | — | — | — | 2 | 2 | 1 |
-| `impresion_por_area` | — | segun_material · sustrato | ✓ | — | — | 3 | — | 1 |
-| `impresion_por_hoja` | — | pliego · pliego_digital · pliego_digital | ✓ | `pliegos_calculados` | — | 15 | 1 | 2 |
-| `impresion_por_pieza` | — | — | — | — | — | 1 | — | 1 |
-| **Corte y formado** | | | | | | | | |
-| `cnc` | — | — | — | — | — | 1 | — | — |
-| `corte_guillotina` | — | — | — | `pliegos_impresos` | — | 1 | — | 2 |
-| `corte_laser` | — | — | — | — | — | 2 | — | — |
-| `corte_manual` | — | — | — | `pliegos_impresos` | — | 1 | — | — |
-| `plegado` † | — | — | — | `pliegos_impresos` | — | 1 | 1 | — |
-| `plotter_corte` | — | rollo · corte_rollo | — | — | — | 2 | 1 | — |
-| `troquelado_digital` | — | — | — | `pliegos_impresos` | — | 1 | — | — |
-| **Terminaciones** | | | | | | | | |
-| `laminado` | — | rollo · laminado_rollo · laminado_rollo | — | `pliegos_impresos` | — | 2 | — | — |
-| `pintura_superficial` | — | — | — | — | — | 1 | 1 | — |
-| `plastificado_pouch` | — | pliego · pouch · pouch | — | — | — | 1 | 1 | — |
-| **Encuadernación y armado** | | | | | | | | |
-| `abrochado_caballete` | — | — | — | — | — | 1 | 1 | 1 |
-| `encuadernado_anillado` | — | — | — | `pliegos_impresos` | — | 1 | — | 1 |
-| `engomado_emblocado` | — | — | — | `pliegos_impresos` | — | 1 | — | — |
-| **Estructural / montaje** | | | | | | | | |
-| `ensamble_estructural` | — | — | — | — | — | 1 | — | — |
-| `estructura_bastidor` | `bastidor_rectangular` | — | — | — | — | 5 | 5 | — |
-| `iluminacion_led` | `sembrado_led` | — | — | — | — | 2 | 2 | — |
-| `montaje_sobre_sustrato` | — | segun_material · montaje · montaje | — | — | — | 3 | 1 | — |
-| **Operaciones manuales** | | | | | | | | |
-| `colocacion_ojales` | `layout_ojales` | — | — | — | — | 1 | 4 | — |
-| `embalaje` | — | — | — | — | — | 1 | 1 | — |
-| `modificacion_post` | — | — | — | `piezas_cortadas` | — | 1 | 1 | — |
-| `modificacion_pre` | — | — | — | — | ✓ | 2 | 3 | — |
-| `trabajo_manual` | — | — | — | — | — | 1 | 1 | — |
-| **Logística e instalación** | | | | | | | | |
-| `instalacion_in_situ` | — | — | — | — | — | 1 | — | — |
-| **Servicios profesionales** | | | | | | | | |
-| `diseno_grafico` | — | — | — | — | — | 1 | 1 | — |
+| Familia | Derivador | Acomodado (superficie · estrategia · guard) | Primitivas | Impresión | Hereda default | Pre-pasada | Outputs | Params | Valid. |
+|---|---|---|---|---|---|---|---|---|---|
+| **Pre-prensa** | | | | | | | | | |
+| `pre_prensa` | — | — | — | — | — | — | — | — | 1 |
+| **Producción / impresión** | | | | | | | | | |
+| `aplicacion_transfer` | — | — | — | — | — | — | 1 | — | — |
+| `aplicacion_transfer_textil` | — | — | — | — | — | — | 1 | — | — |
+| `grabado_laser` | — | — | — | — | — | — | 1 | — | — |
+| `impresion_3d` | — | — | — | — | — | — | 2 | 2 | 1 |
+| `impresion_por_area` | — | segun_material · sustrato | — | ✓ | — | — | 3 | — | 1 |
+| `impresion_por_hoja` | — | pliego · pliego_digital · pliego_digital | factorVelocidad, desgaste, compra, perfil, avisos | ✓ | `pliegos_calculados` | — | 15 | 1 | 2 |
+| `impresion_por_pieza` | — | — | — | — | — | — | 1 | — | 1 |
+| **Corte y formado** | | | | | | | | | |
+| `cnc` | — | — | — | — | — | — | 1 | — | — |
+| `corte_guillotina` | — | — | tiempoRun, perfil | — | `pliegos_impresos` | — | 1 | — | 2 |
+| `corte_laser` | — | — | — | — | — | — | 2 | — | — |
+| `corte_manual` | — | — | — | — | `pliegos_impresos` | — | 1 | — | — |
+| `plegado` † | — | — | — | — | `pliegos_impresos` | — | 1 | 1 | — |
+| `plotter_corte` | — | rollo · corte_rollo | — | — | — | — | 2 | 1 | — |
+| `troquelado_digital` | — | — | — | — | `pliegos_impresos` | — | 1 | — | — |
+| **Terminaciones** | | | | | | | | | |
+| `laminado` | — | rollo · laminado_rollo · laminado_rollo | — | — | `pliegos_impresos` | — | 2 | — | — |
+| `pintura_superficial` | — | — | — | — | — | — | 1 | 1 | — |
+| `plastificado_pouch` | — | pliego · pouch · pouch | — | — | — | — | 1 | 1 | — |
+| **Encuadernación y armado** | | | | | | | | | |
+| `abrochado_caballete` | — | — | — | — | — | — | 1 | 1 | 1 |
+| `encuadernado_anillado` | — | — | — | — | `pliegos_impresos` | — | 1 | — | 1 |
+| `engomado_emblocado` | — | — | — | — | `pliegos_impresos` | — | 1 | — | — |
+| **Estructural / montaje** | | | | | | | | | |
+| `ensamble_estructural` | — | — | — | — | — | — | 1 | — | — |
+| `estructura_bastidor` | `bastidor_rectangular` | — | — | — | — | — | 5 | 5 | — |
+| `iluminacion_led` | `sembrado_led` | — | — | — | — | — | 2 | 2 | — |
+| `montaje_sobre_sustrato` | — | segun_material · montaje · montaje | — | — | — | — | 3 | 1 | — |
+| **Operaciones manuales** | | | | | | | | | |
+| `colocacion_ojales` | `layout_ojales` | — | — | — | — | — | 1 | 4 | — |
+| `embalaje` | — | — | — | — | — | — | 1 | 1 | — |
+| `modificacion_post` | — | — | — | — | `piezas_cortadas` | — | 1 | 1 | — |
+| `modificacion_pre` | — | — | cantidadPropia | — | — | ✓ | 2 | 3 | — |
+| `trabajo_manual` | — | — | — | — | — | — | 1 | 1 | — |
+| **Logística e instalación** | | | | | | | | | |
+| `instalacion_in_situ` | — | — | — | — | — | — | 1 | — | — |
+| **Servicios profesionales** | | | | | | | | | |
+| `diseno_grafico` | — | — | — | — | — | — | 1 | 1 | — |
 
 ### 6.c Lecturas rápidas del censo
 

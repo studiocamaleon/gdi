@@ -247,7 +247,21 @@ const pre_prensa: DefinicionFamilia = {
       mensaje: 'Falta declarar cantidad',
     },
   ],
-  paramsPasoSchema: [],
+  // [Tanda D] El agrupado de talonario es un param DECLARADO de pre-prensa:
+  // la pregunta del editor existe porque la ficha lo declara, no por nombre.
+  // (Sin `editorParamsGenerico`: su UI es la card a medida de talonarios.)
+  paramsPasoSchema: [
+    {
+      campo: 'modoTalonarioIncompleto',
+      etiqueta: 'Agrupado por talonario en el pliego',
+      tipo: 'enum',
+      valoresPermitidos: ['off', 'aprovechar_pliego', 'pose_completa'],
+      default: 'off',
+      requerido: false,
+      descripcion:
+        'Cómo se apilan los talonarios sueltos: estándar (off), compartiendo pliego (mínimo papel) o con poses vacías (listo para abrochar).',
+    },
+  ],
   productosTipicos: [
     'Tarjetas de Visita',
     'Vinilo adhesivo',
@@ -262,6 +276,15 @@ const pre_prensa: DefinicionFamilia = {
 
 const impresion_por_hoja: DefinicionFamilia = {
   codigo: 'impresion_por_hoja',
+  // [P2] Antes: tres ramas impresion_por_hoja en el motor (factor A4 del
+  // PPM, clicks de desgaste, pliegos→hojas de compra).
+  primitivas: {
+    factorVelocidad: 'a4_equivalente',
+    desgaste: 'clicks_a4',
+    compraSustrato: 'pliegos_a_hojas',
+    seleccionPerfil: 'cadena_caras_gramaje',
+    avisos: ['perfil_doble_faz'],
+  },
   // [Tanda C] Antes: defaults cableados por nombre en el editor.
   mecanismoCantidadDefault: 'HEREDAR_DEL_OUTPUT_CANONICO',
   // [Etapa F3] Antes: FAMILIAS_IMPRESION en motor.service.
@@ -686,6 +709,11 @@ const grabado_laser: DefinicionFamilia = {
 
 const corte_guillotina: DefinicionFamilia = {
   codigo: 'corte_guillotina',
+  // [P1] Antes: rama corte_guillotina en el T-3 del motor.
+  primitivas: {
+    tiempoRun: 'guillotina_por_cortes',
+    seleccionPerfil: 'escalon_gramaje',
+  },
   // [Etapa F3] Antes: switch defaultOutputParaHeredar en motor.service.
   outputHeredadoDefault: 'pliegos_impresos',
   nombre: 'Corte con guillotina',
@@ -1697,6 +1725,8 @@ const trabajo_manual: DefinicionFamilia = {
 
 const modificacion_pre: DefinicionFamilia = {
   codigo: 'modificacion_pre',
+  // [P1] Antes: rama modificacion_pre en resolverCantidad del motor.
+  primitivas: { cantidadPropia: 'ml_union_visible' },
   // [Tanda B] Antes: FAMILIAS_CON_PARAMS_EDITABLES en el frontend.
   editorParamsGenerico: true,
   nombre: 'Refuerzo / bolsillo de lona (demasía)',
@@ -2181,6 +2211,29 @@ export function guardSinLayoutDeFamilia(
   codigo: string,
 ): NonNullable<DefinicionFamilia['nestingConfig']>['guardSinLayout'] | null {
   return resolverFamilia(codigo)?.nestingConfig?.guardSinLayout ?? null;
+}
+
+/** ¿La familia es de impresión? (esImpresion declarado). [Tanda D] */
+export function esImpresionDeFamilia(codigo: string): boolean {
+  return resolverFamilia(codigo)?.esImpresion === true;
+}
+
+/** ¿La familia PUBLICA este output canónico? Sirve para encontrar "el paso
+ *  que hace X" por capacidad declarada, no por nombre (el anillado es el que
+ *  publica libros_anillados). [Tanda D] */
+export function familiaPublicaOutput(
+  codigo: string | null | undefined,
+  output: string,
+): boolean {
+  if (!codigo) return false;
+  return resolverFamilia(codigo)?.outputsCanonicos.includes(output) ?? false;
+}
+
+/** Primitivas declaradas por la familia; null si no declara. [P1] */
+export function primitivasDeFamilia(
+  codigo: string,
+): DefinicionFamilia['primitivas'] | null {
+  return resolverFamilia(codigo)?.primitivas ?? null;
 }
 
 /** Fallback de cantidad cuando el acomodado no dio layout (y el guard no

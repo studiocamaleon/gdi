@@ -1930,6 +1930,9 @@ function validarBasico(
           requerido: boolean;
           tipo?: string;
         }>;
+        /** [Tanda D] Validación genérica de params requeridos de la ficha. */
+        editorParamsGenerico?: boolean;
+        paramsPasoSchema?: FamiliaListItem["paramsPasoSchema"];
         /** E.1 — defaults declarados: lo que cubren no se advierte. */
         defaults?: {
           centroCostoId: string | null;
@@ -1943,23 +1946,23 @@ function validarBasico(
   const errores: string[] = [];
   const warnings: string[] = [];
 
-  // Modificaciones físicas: el backend CORTA la cotización si estos params
-  // faltan (agrandaría nada y cobraría de menos en silencio). Los adelantamos
-  // acá para que el modelador lo vea al configurar y no al cotizar.
-  if (contexto?.familiaCodigo === "modificacion_pre") {
+  // Params del oficio: el backend CORTA la cotización si un param REQUERIDO
+  // sin default de fábrica falta (agrandaría nada y cobraría de menos en
+  // silencio). Se adelanta acá para que el modelador lo vea al configurar y
+  // no al cotizar — y la lista sale de la FICHA (paramsPasoSchema), no de
+  // nombres de familia. [Tanda D: eran dos bloques hardcodeados]
+  if (familia?.editorParamsGenerico) {
     const params = asRecord(cfg.paramsPasoJson);
-    const lados = Array.isArray(params.lados) ? params.lados : [];
-    if (lados.length === 0) errores.push("Sin lados afectados");
-    if (!readOptionalNumber(params.demasiaMm)) {
-      errores.push("Sin demasía por lado");
-    }
-  }
-  if (contexto?.familiaCodigo === "colocacion_ojales") {
-    const params = asRecord(cfg.paramsPasoJson);
-    const lados = Array.isArray(params.lados) ? params.lados : [];
-    if (lados.length === 0) errores.push("Sin lados con ojales");
-    if (!readOptionalNumber(params.separacionMaxMm)) {
-      errores.push("Sin separación entre ojales");
+    for (const param of familia.paramsPasoSchema ?? []) {
+      if (!param.requerido || param.default !== undefined) continue;
+      const valor = params[param.campo];
+      const vacio =
+        param.tipo === "multi-enum"
+          ? !Array.isArray(valor) || valor.length === 0
+          : param.tipo === "number"
+            ? !readOptionalNumber(valor)
+            : valor === undefined || valor === null || valor === "";
+      if (vacio) errores.push(`Sin ${param.etiqueta.toLowerCase()}`);
     }
   }
   const soportaManual =

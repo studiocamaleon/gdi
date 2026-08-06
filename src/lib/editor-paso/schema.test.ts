@@ -386,7 +386,15 @@ describe("sección Tiempo y costo", () => {
     ).not.toContain("oficio.talonario");
     const clavesPrensa = opcionesDeSeccion(
       "oficio",
-      ctxBase({ familia: { codigo: "pre_prensa" } }),
+      // [Tanda D] La ficha DECLARA el param (como el catálogo real).
+      ctxBase({
+        familia: {
+          codigo: "pre_prensa",
+          paramsPasoSchema: [
+            { campo: "modoTalonarioIncompleto", etiqueta: "Agrupado", tipo: "enum" },
+          ],
+        },
+      }),
     ).map((o) => o.clave);
     expect(clavesPrensa).toContain("oficio.talonario");
   });

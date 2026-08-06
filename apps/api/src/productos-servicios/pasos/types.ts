@@ -693,6 +693,38 @@ export interface DefinicionFamilia {
     codigoSinDatos?: string;
   };
 
+  // --- Primitivas de familia (docs/primitivas-de-familia-diseno.md) ---
+  /**
+   * Algoritmos propios del oficio de la familia, mudados del motor al
+   * catálogo `motor-universal/primitivas/`. Cada campo apunta a un registro
+   * tipado por gancho; sin declarar → vía genérica del motor.
+   * P1: `tiempoRun` y `cantidadPropia`. P2-P4 agregan factorVelocidad,
+   * desgaste, compraSustrato, seleccionPerfil y avisos.
+   */
+  primitivas?: {
+    /** T-3 con algoritmo propio: el run NO sale de productividad×cantidad
+     *  (la guillotina lo deriva del plan de cortes). */
+    tiempoRun?: string;
+    /** CALCULADO_POR_PASO sin nesting ni derivador: cantidad propia
+     *  (los ml de costura de una modificación física). */
+    cantidadPropia?: string;
+    /** Multiplicador (≥1) de la velocidad del perfil según el trabajo:
+     *  una PPM en páginas A4 rinde menos con pliegos grandes. [P2] */
+    factorVelocidad?: string;
+    /** Unidades de desgaste (clicks) que el paso consume de los componentes
+     *  de la máquina; sin declarar, el paso no clickea. [P2] */
+    desgaste?: string;
+    /** Consumo del slot → unidades de COMPRA del material (pliegos de
+     *  impresión → hojas comerciales). [P2] */
+    compraSustrato?: string;
+    /** Selección de perfil propia del oficio, sobre los candidatos ya
+     *  filtrados por modo de color (ese filtro es genérico del motor).
+     *  null de la primitiva = sin decisión, sigue el pipeline. [P3] */
+    seleccionPerfil?: string;
+    /** Diagnósticos propios (WARNINGS que no cortan la cotización). [P4] */
+    avisos?: string[];
+  };
+
   // --- Productos / aplicación ---
   /** Productos típicos donde aplica la familia (informativo, para UI). */
   productosTipicos?: string[];

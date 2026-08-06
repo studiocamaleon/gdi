@@ -6,6 +6,10 @@ import {
 import { randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  esImpresionDeFamilia,
+  familiaPublicaOutput,
+} from '../productos-servicios/pasos/familias';
 import { MotorUniversalService } from '../motor-universal/motor.service';
 import { seleccionarMenorCapacidadQueCumpla } from '../motor-universal/seleccion-capacidad';
 import type { CotizarOutput } from '../motor-universal/tipos';
@@ -206,9 +210,11 @@ function pasoImpresion<
   T extends { rutaPaso?: { familiaCodigo?: string | null } | null },
 >(configPasos: T[] | undefined | null): T | null {
   if (!configPasos?.length) return null;
+  // [Tanda D] "El paso que imprime" se busca por capacidad declarada
+  // (esImpresion), no por nombre de familia.
   return (
-    configPasos.find(
-      (c) => c.rutaPaso?.familiaCodigo === 'impresion_por_hoja',
+    configPasos.find((c) =>
+      esImpresionDeFamilia(c.rutaPaso?.familiaCodigo ?? ''),
     ) ?? configPasos[0]
   );
 }
@@ -672,9 +678,10 @@ export class CentroCopiadoService {
     if (!cp) {
       throw new Error('Centro de copiado sin paso de impresión');
     }
+    // [Tanda D] "El paso que anilla" = el que PUBLICA libros_anillados.
     const anilladoConfigPasoId =
-      rutaAlt.configPasos.find(
-        (c) => c.rutaPaso?.familiaCodigo === 'encuadernado_anillado',
+      rutaAlt.configPasos.find((c) =>
+        familiaPublicaOutput(c.rutaPaso?.familiaCodigo, 'libros_anillados'),
       )?.id ?? null;
     const color = cp.maquinasCandidatas.find((c) =>
       c.modoColorAllowedModes.includes('CMYK'),
@@ -907,8 +914,8 @@ export class CentroCopiadoService {
     iva: number;
     total: number;
   } {
-    const imp = cotizacion.pasos.find(
-      (p) => p.familiaCodigo === 'impresion_por_hoja',
+    const imp = cotizacion.pasos.find((p) =>
+      esImpresionDeFamilia(p.familiaCodigo ?? ''),
     );
     const pliegos = Number(imp?.outputsCanonicos?.pliegos_impresos ?? 0);
     const d = cotizacion.desglosePrecio;
@@ -2036,7 +2043,13 @@ export class CentroCopiadoService {
         ((s.cot.pasos as unknown as Array<Record<string, unknown>>) ?? [])
           // El anillado va UNA vez (mergeado abajo); el paso opcional inactivo de
           // cada segmento de impresión no debe aparecer.
-          .filter((p) => p.familiaCodigo !== 'encuadernado_anillado')
+          .filter(
+            (p) =>
+              !familiaPublicaOutput(
+                p.familiaCodigo as string,
+                'libros_anillados',
+              ),
+          )
           .map((p) => ({
             ...p,
             rutaPasoOrden: ordenGlobal++,
@@ -2050,7 +2063,9 @@ export class CentroCopiadoService {
     if (anilladoCot) {
       const anilPaso = (
         anilladoCot.pasos as unknown as Array<Record<string, unknown>>
-      ).find((p) => p.familiaCodigo === 'encuadernado_anillado');
+      ).find((p) =>
+        familiaPublicaOutput(p.familiaCodigo as string, 'libros_anillados'),
+      );
       if (anilPaso) {
         pasos.push({ ...anilPaso, rutaPasoOrden: ordenGlobal++ });
       }

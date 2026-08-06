@@ -396,10 +396,11 @@ export function modoColorAplica(
 
 /** ¿El paso muestra la card de Acomodado/nesting? La familia lo DECLARA
  *  (`nestingConfig` presente ⇔ acomoda piezas) — vale igual para familias de
- *  sistema y de tenant. [Etapa F2: era una lista de códigos hardcodeada]
- *
- *  Excepción de UI que se mantiene: pre_prensa calcula pliegos pero su card
- *  de acomodado siempre se ocultó (regla del detallado congelado). */
+ *  sistema y de tenant. [Tanda D: murieron la excepción pre_prensa y el
+ *  atajo CALCULADO_POR_PASO — eran redundantes: toda familia que calcula
+ *  acomodando declara su nesting (las de tenant lo exigen por validación),
+ *  y las que calculan SIN acomodar (derivadores, cantidadPropia, pre-prensa)
+ *  nunca debieron mostrar la card.] */
 export function nestingAplica(
   familia:
     | { codigo?: string; nestingConfig?: unknown }
@@ -407,10 +408,8 @@ export function nestingAplica(
     | undefined,
   cfg: UpsertConfigPasoPayload,
 ) {
-  if (!familia?.codigo) return false;
-  if (familia.codigo === "pre_prensa") return false;
-  if (cfg.mecanismoCantidad === "CALCULADO_POR_PASO") return true;
-  return Boolean(familia.nestingConfig);
+  void cfg;
+  return Boolean(familia?.codigo && familia.nestingConfig);
 }
 
 /** "pliegos_impresos" → "Pliegos impresos" — para nombrar en la UI el output
