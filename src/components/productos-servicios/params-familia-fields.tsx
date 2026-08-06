@@ -6,7 +6,7 @@ import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
 import type { FamiliaListItem } from "@/lib/productos-servicios";
 import {
   DESCRIPCIONES_VALOR_PARAM,
-  FAMILIAS_CON_PARAMS_EDITABLES,
+  familiaConParamsEditables,
   camposEditablesComercial,
   etiquetaValorParam,
   patchParaEnum,
@@ -48,7 +48,7 @@ export function ParamsFamiliaFields({
   onChange: (patch: Record<string, unknown>) => void;
 }) {
   const schema = familia.paramsPasoSchema ?? [];
-  if (!FAMILIAS_CON_PARAMS_EDITABLES.has(familia.codigo) || schema.length === 0) {
+  if (!familiaConParamsEditables(familia) || schema.length === 0) {
     return null;
   }
 

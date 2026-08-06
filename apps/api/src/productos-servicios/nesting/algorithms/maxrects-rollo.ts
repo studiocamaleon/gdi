@@ -21,6 +21,7 @@ import {
   buildGranFormatoPieceLabelCm,
   buildGranFormatoNestingOrientacion,
   countGranFormatoRowsAndPiecesPerRow,
+  MAX_PIEZAS_BUSQUEDA_EXHAUSTIVA,
   type EvaluateGranFormatoMixedShelfLayoutInput,
   type GranFormatoCostosPreviewPlacement,
   type GranFormatoMixedShelfLayoutResult,
@@ -286,6 +287,10 @@ export function evaluateGranFormatoMaxRectsRollLayout(
 ): GranFormatoMixedShelfLayoutResult | null {
   const pieces = buildPieces(input);
   if (!pieces?.length) return null;
+  // A granel el barrido de alturas × packs O(n²) tarda minutos y bloquea el
+  // event loop; devolvemos null y el dispatcher se queda con el shelf (que
+  // por encima del tope usa su camino greedy O(n·filas)).
+  if (pieces.length > MAX_PIEZAS_BUSQUEDA_EXHAUSTIVA) return null;
 
   const usefulAreaMm2 = input.medidas.reduce(
     (acc, item) => acc + item.anchoMm * item.altoMm * item.cantidad,

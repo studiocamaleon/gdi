@@ -10,7 +10,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { UpsertEstacionDto } from './dto/upsert-estacion.dto';
 import type { CrearDiaNoLaborableDto } from './dto/crear-dia-no-laborable.dto';
 import type { ActualizarConfiguracionProduccionDto } from './dto/actualizar-configuracion-produccion.dto';
-import { FAMILIAS, resolverFamilia } from '../productos-servicios/pasos/familias';
+import {
+  colaConsolidacionDeFamilia,
+  FAMILIAS,
+  resolverFamilia,
+} from '../productos-servicios/pasos/familias';
 import type { FamiliaCodigo } from '../productos-servicios/pasos/types';
 import {
   normalizarCalendarioAlmacenado,
@@ -705,8 +709,14 @@ export class ProduccionService {
     for (const orden of ordenes) {
       for (const item of orden.items) {
         // Frontera de la secuencia: el primer paso no hecho del item.
+        // [Tanda A] Entra a esta cola si su familia declara impresión sobre
+        // material continuo — antes preguntaba por familiaCodigo.
         const frontera = item.pasos.find((paso) => paso.estado !== 'hecho');
-        if (!frontera || frontera.familiaCodigo !== 'impresion_por_area') continue;
+        if (
+          !frontera ||
+          colaConsolidacionDeFamilia(frontera.familiaCodigo) !== 'gran_formato'
+        )
+          continue;
         // Bloqueado no es imprimible ni completable: el tablero lo señala.
         if (frontera.estado === 'bloqueado') continue;
         // El tercerizado lo imprime el proveedor: vive en Compras, no en el taller.
@@ -875,8 +885,13 @@ export class ProduccionService {
     const jobs: Array<ReturnType<typeof buildLaserJob>> = [];
     for (const orden of ordenes) {
       for (const item of orden.items) {
+        // [Tanda A] Ídem gran formato: impresión sobre pliego declarada.
         const frontera = item.pasos.find((paso) => paso.estado !== 'hecho');
-        if (!frontera || frontera.familiaCodigo !== 'impresion_por_hoja') continue;
+        if (
+          !frontera ||
+          colaConsolidacionDeFamilia(frontera.familiaCodigo) !== 'laser'
+        )
+          continue;
         if (frontera.estado === 'bloqueado') continue;
         // El tercerizado lo imprime el proveedor: vive en Compras, no en el taller.
         if (frontera.tipoEjecucion === 'tercerizado') continue;

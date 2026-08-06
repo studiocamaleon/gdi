@@ -450,6 +450,22 @@ export interface FamiliaListItem {
       templateIds?: string[];
       tipoTecnico?: string[];
     };
+    /** [Tanda B] Fórmula de consumo que el slot IMPONE (film de laminado =
+     *  por_metro_lineal); el editor la muestra resuelta, no la pregunta. */
+    formulaForzada?: string;
+    /** Derivadores (E2): la cantidad del slot es una magnitud derivada del
+     *  paso (cable = cableMl); con despiece + largoBarra → unidades enteras. */
+    magnitudDerivada?: string;
+    /** Derivadores (E2): consumo fijo por trabajo (la fuente LED: 1). */
+    cantidadFija?: number;
+    /** Derivadores (E2): selección por capacidad DE FÁBRICA — si el slot no
+     *  configura criterio, el motor usa MENOR_CAPACIDAD_QUE_CUMPLA con esto.
+     *  El editor debe mostrarlo como resuelto, no como pendiente. */
+    criterioCapacidadDefault?: {
+      inputMagnitud?: string;
+      inputCampo?: string;
+      materialCampo: string;
+    };
   }>;
   plantillasCompatibles: string[];
   inputsRequeridos: string[];
@@ -457,6 +473,50 @@ export interface FamiliaListItem {
   /** B.3.3 — qué deja este paso (Registro de Capacidades), para el
    *  selector "hereda de" del editor de configuración. */
   capacidades?: Array<{ key: string; nombre: string; heredable: boolean }>;
+  /** Derivadores: lo mínimo para que el editor NOMBRE la cantidad del paso
+   *  ("6 ml de perfil/h" en vez de "6 unid./h" — H1 del relevamiento). */
+  /** La familia MUTA medidas en la pre-pasada (demasías): no acomoda piezas
+   *  — el editor no le ofrece la card de Acomodado (H10). */
+  mutaMedidasEnPrePasada?: boolean;
+  /** [Etapa F3] La familia es de impresión con modos de color: habilita la
+   *  pregunta de modo color en el editor. */
+  esImpresion?: boolean;
+  /** [Tanda B] Tipos de perfil operativo que acepta; null/[] = cualquiera. */
+  tiposPerfilCompatibles?: string[] | null;
+  /** [Tanda B] Separación entre piezas por defecto (mm) del acomodado. */
+  separacionNestingDefaultMm?: number;
+  /** [Tanda B] Fuentes de piezas heredadas declaradas (códigos). La pregunta
+   *  "¿qué monta?" aparece cuando hay fuentes y el default es el implícito. */
+  fuentesPiezasNesting?: string[];
+  fuentePiezasDefault?: string | null;
+  /** [Tanda B] Output que hereda por default (etiqueta la opción Heredar). */
+  outputHeredadoDefault?: string | null;
+  /** [Tanda B] Sus params se editan con el editor genérico (antes lista
+   *  FAMILIAS_CON_PARAMS_EDITABLES). */
+  editorParamsGenerico?: boolean;
+  /** [Tanda C] Mecanismo de cantidad con el que arranca el paso en el
+   *  editor; null → el primero de los soportados. */
+  mecanismoCantidadDefault?: string | null;
+  /** [Tanda C] Cómo arranca el ritmo cuando nadie lo configuró. */
+  ritmoDefault?: {
+    unidad?: string;
+    modoCalculo?: string;
+    fuenteCantidad?: string;
+  } | null;
+  /** [Etapa F2] Presente ⇔ la familia acomoda piezas (nesting declarado);
+   *  el editor decide la card Acomodado por esto, no por listas de códigos. */
+  nestingConfig?: {
+    superficie: string;
+    estrategia?: string;
+    guardSinLayout?: string;
+  } | null;
+  derivador?: {
+    magnitudPrincipal: string;
+    unidadPrincipal: string | null;
+    /** Magnitudes derivadas ofrecidas como driver del tiempo ("cortes de
+     *  hierro") — el menú las muestra como `derivada:<magnitud>`. */
+    magnitudesTiempo?: Array<{ magnitud: string; etiqueta: string }>;
+  } | null;
   /** E.1 — defaults declarados del paso (null = sin defaults). */
   defaults?: DefaultsFamiliaPaso | null;
   validaciones: Array<{
@@ -473,6 +533,10 @@ export interface FamiliaListItem {
     default?: unknown;
     requerido?: boolean;
     descripcion?: string;
+    /** Editable por el comercial POR DISEÑO de la familia (densidad LED,
+     *  refuerzos del bastidor) — el sheet lo ofrece sin que el modelador lo
+     *  abra. Espejo de ParamsPasoDeclarado.expuestoAlComercial del API. */
+    expuestoAlComercial?: boolean;
   }>;
   productosTipicos?: string[];
 }

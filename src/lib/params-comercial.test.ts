@@ -136,13 +136,16 @@ describe("buildConfigPasoRuntime", () => {
     ).toEqual({});
   });
 
-  it("ignora campos que no están abiertos en ese paso", () => {
+  it("manda todo lo tocado sin filtrar por campos abiertos: la autoridad es paramsEfectivos del motor", () => {
+    // Etapa 3 derivadores: el filtro espejo client-side hacía que los campos
+    // `expuestoAlComercial` de la familia viajaran como si el comercial no
+    // los hubiera tocado. El motor ignora server-side lo que no corresponda.
     expect(
       buildConfigPasoRuntime(
         pasos,
         { "cfg-ojales": { demasiaMm: 5, separacionMaxMm: 300 } },
         activo,
       ),
-    ).toEqual({ "cfg-ojales": { separacionMaxMm: 300 } });
+    ).toEqual({ "cfg-ojales": { demasiaMm: 5, separacionMaxMm: 300 } });
   });
 });

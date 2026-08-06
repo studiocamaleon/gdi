@@ -74,6 +74,29 @@ export class FamiliasPasosService {
             modosActivacionSoportados: MODOS_ACTIVACION_UNIVERSALES,
             multiplicadoresSoportados: f.multiplicadoresSoportados,
             slotsRequeridos: f.slotsRequeridos,
+            // Derivadores: lo mínimo que el editor necesita para NOMBRAR la
+            // cantidad del paso (H1 del relevamiento del editor de ruta).
+            mutaMedidasEnPrePasada: f.mutaMedidasEnPrePasada ?? false,
+            // [Etapa F2] El editor decide la card Acomodado por declaración.
+            nestingConfig: f.nestingConfig ?? null,
+            // [Etapa F3] Ídem la pregunta de modo color.
+            esImpresion: f.esImpresion ?? false,
+            // [Tanda B] El editor lee la ficha, no listas propias.
+            tiposPerfilCompatibles: f.tiposPerfilCompatibles ?? null,
+            separacionNestingDefaultMm: f.separacionNestingDefaultMm ?? 0,
+            fuentesPiezasNesting: Object.keys(f.fuentesPiezasNesting ?? {}),
+            fuentePiezasDefault: f.fuentePiezasDefault ?? null,
+            outputHeredadoDefault: f.outputHeredadoDefault ?? null,
+            editorParamsGenerico: f.editorParamsGenerico ?? false,
+            mecanismoCantidadDefault: f.mecanismoCantidadDefault ?? null,
+            ritmoDefault: f.ritmoDefault ?? null,
+            derivador: f.derivador
+              ? {
+                  magnitudPrincipal: f.derivador.magnitudPrincipal,
+                  unidadPrincipal: f.derivador.unidadPrincipal ?? null,
+                  magnitudesTiempo: f.derivador.magnitudesTiempo ?? [],
+                }
+              : null,
             permiteSlotsAdicionales: f.permiteSlotsAdicionales,
             plantillasCompatibles: f.plantillasCompatibles,
             inputsRequeridos: f.inputsRequeridos,
@@ -103,6 +126,24 @@ export class FamiliasPasosService {
           modosActivacionSoportados: f.modosActivacionSoportados,
           multiplicadoresSoportados: f.multiplicadoresSoportados,
           slotsRequeridos: f.slotsRequeridos,
+          mutaMedidasEnPrePasada: false,
+          nestingConfig: f.nestingConfig ?? null,
+          esImpresion: f.esImpresion ?? false,
+          tiposPerfilCompatibles: f.tiposPerfilCompatibles ?? null,
+          separacionNestingDefaultMm: f.separacionNestingDefaultMm ?? 0,
+          fuentesPiezasNesting: Object.keys(f.fuentesPiezasNesting ?? {}),
+          fuentePiezasDefault: f.fuentePiezasDefault ?? null,
+          outputHeredadoDefault: f.outputHeredadoDefault ?? null,
+          editorParamsGenerico: f.editorParamsGenerico ?? false,
+          mecanismoCantidadDefault: f.mecanismoCantidadDefault ?? null,
+          ritmoDefault: f.ritmoDefault ?? null,
+          derivador: f.derivador
+            ? {
+                magnitudPrincipal: f.derivador.magnitudPrincipal,
+                unidadPrincipal: f.derivador.unidadPrincipal ?? null,
+                magnitudesTiempo: f.derivador.magnitudesTiempo ?? [],
+              }
+            : null,
           permiteSlotsAdicionales: f.permiteSlotsAdicionales,
           plantillasCompatibles: f.plantillasCompatibles,
           inputsRequeridos: f.inputsRequeridos,

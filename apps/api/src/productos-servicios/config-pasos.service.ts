@@ -9,6 +9,7 @@ import type { UpsertProductoConfigPasoDto } from './dto/producto-ruta.dto';
 import { FamiliasPasosService } from './familias-pasos.service';
 import { construirClaveMatch } from '../motor-universal/tercerizado-costo';
 import {
+  estrategiaNestingDeFamilia,
   formulaEfectivaSlot,
   perfilCompatibleConFamilia,
   resolverFamilia,
@@ -93,9 +94,10 @@ export class ConfigPasosService {
       }
 
       // FRONTERA-PRIMITIVA: la exigencia de corte integrado + perfil de corte
-      // es propia de la primitiva plotter sobre impresora híbrida — Tipo B.
+      // es propia del corte sobre rollo (estrategia declarada) en impresora
+      // híbrida — Tipo B. [Tanda A: preguntaba por familiaCodigo]
       if (
-        rutaPaso.familiaCodigo === 'plotter_corte' &&
+        estrategiaNestingDeFamilia(rutaPaso.familiaCodigo) === 'corte_rollo' &&
         maquina.plantilla === 'IMPRESORA_GRAN_FORMATO_POR_AREA'
       ) {
         const params = (maquina.parametrosTecnicosJson ?? {}) as Record<
@@ -453,7 +455,7 @@ export class ConfigPasosService {
 
       // FRONTERA-PRIMITIVA: misma exigencia que arriba, para candidatas M-2.
       if (
-        familiaCodigo === 'plotter_corte' &&
+        estrategiaNestingDeFamilia(familiaCodigo) === 'corte_rollo' &&
         maquina.plantilla === 'IMPRESORA_GRAN_FORMATO_POR_AREA'
       ) {
         const params = (maquina.parametrosTecnicosJson ?? {}) as Record<

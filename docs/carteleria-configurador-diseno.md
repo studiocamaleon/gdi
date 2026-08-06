@@ -521,3 +521,27 @@ teóricos: el sobrante se paga, como en la ferretería).
 Pendientes anotados: diagnóstico fino cuando un tramo no entra en ninguna
 barra (hoy cae a ml); mínimos de compra genéricos (`minimoCompra` en la
 variante) para otros rubros; stock de retazos (el sobrante hoy es del taller).
+
+
+## 17. Giro de rumbo (2026-08-05): derivadores genéricos, 3D a un costado
+
+Análisis con el usuario sobre si cartelería estaba "parchando" el motor.
+Conclusión de la auditoría de la ruta real de 9 pasos: el 80% ya es motor
+genérico puro; lo exclusivo se concentra en la derivación geométrica y en
+defaults/editabilidad por código en vez de por datos. Decisiones:
+
+1. **El objetivo es que un cartel se modele con pasos como cualquier
+   producto** (cerrado con solo cantidad, o abierto con elecciones del
+   comercial — lo decide el modelador, no la arquitectura).
+2. **El configurador 3D queda a un costado, sin usar**, hasta que eso esté:
+   es visualización, no dependencia. El early-return del sheet se desactiva.
+3. Las piezas hardcodeadas se convierten en primitivas declarables: contrato
+   de **derivadores geométricos** (patrón dispatcher de nesting), slots por
+   magnitud derivada, criterios de capacidad como datos, editabilidad por
+   campo del schema.
+4. La capa/provisión SYS-CARTEL-* + vista de Configuración por oficio (§12 y
+   conversación posterior) pasa a ser decisión de producto, post-refactor.
+
+Diseño completo y plan por etapas:
+[derivadores-geometricos-diseno.md](derivadores-geometricos-diseno.md).
+La F4 real es ese refactor; §15.5/§16 quedan como estado alcanzado previo.

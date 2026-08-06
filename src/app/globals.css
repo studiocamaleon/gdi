@@ -9665,7 +9665,10 @@ body {
 
   .editor-main {
     overflow-y: auto;
-    padding: 28px 32px 80px;
+    /* padding-bottom corto (2026-08-06): con 80px, la botonera sticky del
+       paso quedaba flotando 80px por encima del borde (el padding del scroll
+       container empuja los sticky bottom hacia arriba). */
+    padding: 28px 32px 12px;
     background: var(--bg);
   }
 

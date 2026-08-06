@@ -21,6 +21,15 @@ import type {
 import type { FamiliaListItem } from "../productos-servicios";
 import type { PendientePasoTipo } from "../pendientes-paso";
 import {
+  getRuleFields,
+  jsonLogicToRuleGroup,
+  summarizeRuleGroup,
+} from "../rule-builder";
+import {
+  familiaConParamsEditables,
+  etiquetaValorParam,
+} from "../params-familia";
+import {
   NIVEL_COBERTURA_LABELS,
   type NivelCobertura,
 } from "../cobertura-toner";
@@ -30,11 +39,14 @@ import {
   T2_TIME_CALCULATION_MODE_OPTIONS,
   getT2ProductivityUnitSuffix,
   getT2BatchUnitSuffix,
+  normalizeT2ProductivityUnit,
   getDefaultT2ProductivityUnit,
   getDefaultT2TimeCalculationMode,
   getDefaultT2QuantitySource,
   getDefaultMecanismoCantidad,
   getT2QuantitySourceOptions,
+  etiquetaFuenteDerivada,
+  humanizarOutputCanonico,
   getTiempoManualConfig,
   requiereMecanismoCantidad,
   getModoColorConfig,
@@ -77,6 +89,11 @@ export interface SlotDeclarado {
   nombre: string;
   requerido: boolean;
   tipo?: string;
+  /** Derivadores (E2): la cantidad del slot la deriva la geometría del paso
+   *  (el consumo no sale de la fórmula; el costeo por placas no aplica). */
+  magnitudDerivada?: string;
+  /** Derivadores (E2): consumo fijo por trabajo (la fuente LED: 1). */
+  cantidadFija?: number;
 }
 
 /** Contexto de UN slot de material (sub-fase C): las claves materiales.*
@@ -166,7 +183,8 @@ export type ControlOpcion =
         | "candidatos-slot-detallado"
         | "base-consumo"
         | "tercerizado-panel"
-        | "acomodado-detallado";
+        | "acomodado-detallado"
+        | "params-familia";
     };
 
 export interface OpcionPaso {
@@ -206,6 +224,17 @@ function labelMultiplicador(valor: string): string {
   return MULTIPLICADOR_LABELS[valor] ?? valor;
 }
 
+/** Derivadores (E2): el slot declarado por la familia puede traer la
+ *  selección por capacidad DE FÁBRICA (`criterioCapacidadDefault`). Si el
+ *  slot de config no fija criterio, el motor usa ese default: el editor lo
+ *  muestra resuelto en vez de marcarlo pendiente (H11 del relevamiento). */
+function criterioDeFabricaDelSlot(ctx: ContextoOpcion) {
+  const codigo = ctx.slot?.payload.slotCodigo;
+  if (!codigo) return undefined;
+  return ctx.familia?.slotsRequeridos?.find((s) => s.codigo === codigo)
+    ?.criterioCapacidadDefault;
+}
+
 function modosActivacionOfrecidos(ctx: ContextoOpcion): string[] {
   // La familia puede FIJAR su activación (Etapa D): se ofrecen sólo los
   // soportados; NO_EJECUTAR siempre se puede (apagar el paso por ruta).
@@ -241,8 +270,49 @@ function comercialEstimaTiempo(ctx: ContextoOpcion): boolean {
 function unidadRitmoEfectiva(ctx: ContextoOpcion): string {
   const raw = ctx.paramsPaso.productivityUnit;
   return typeof raw === "string"
-    ? raw
-    : getDefaultT2ProductivityUnit(ctx.familia?.codigo);
+    ? normalizeT2ProductivityUnit(raw)
+    : getDefaultT2ProductivityUnit(ctx.familia);
+}
+
+/**
+ * El NOMBRE de lo que el paso cuenta, cuando el sistema lo sabe (H1/H2):
+ *  - familia con derivador → su `unidadPrincipal` declarada ("ml de perfil").
+ *  - herencia por output (`campoOutput`) → el output humanizado.
+ *  - herencia con origen explícito y capacidad → esa capacidad humanizada.
+ * null = no hay nombre mejor que "unidades". Exportada standalone para que
+ * el CONTROL abierto del ritmo diga lo mismo que el resumen (T3b).
+ */
+export function unidadCantidadDe(
+  cfg: UpsertConfigPasoPayload,
+  familia: FamiliaListItem | undefined,
+): string | null {
+  const mecanismo =
+    cfg.mecanismoCantidad ??
+    getDefaultMecanismoCantidad(
+      familia,
+      familia?.mecanismosCantidadSoportados ?? [],
+    );
+  if (mecanismo === "CALCULADO_POR_PASO") {
+    return familia?.derivador?.unidadPrincipal ?? null;
+  }
+  if (mecanismo === "HEREDAR_DEL_OUTPUT_CANONICO") {
+    const config = (cfg.mecanismoCantidadConfigJson ?? {}) as {
+      origen?: { capacidad?: string };
+      campoOutput?: string;
+    };
+    const campo =
+      typeof config.campoOutput === "string" && config.campoOutput.trim()
+        ? config.campoOutput
+        : typeof config.origen?.capacidad === "string"
+          ? config.origen.capacidad
+          : null;
+    return campo ? campo.replaceAll("_", " ") : null;
+  }
+  return null;
+}
+
+function unidadCantidadEfectiva(ctx: ContextoOpcion): string | null {
+  return unidadCantidadDe(ctx.cfg, ctx.familia);
 }
 
 function ritmoModoEfectivo(ctx: ContextoOpcion): string {
@@ -250,10 +320,10 @@ function ritmoModoEfectivo(ctx: ContextoOpcion): string {
   const valor =
     typeof raw === "string"
       ? raw
-      : getDefaultT2TimeCalculationMode(ctx.familia?.codigo);
+      : getDefaultT2TimeCalculationMode(ctx.familia);
   return T2_TIME_CALCULATION_MODE_OPTIONS.some((o) => o.value === valor)
     ? valor
-    : getDefaultT2TimeCalculationMode(ctx.familia?.codigo);
+    : getDefaultT2TimeCalculationMode(ctx.familia);
 }
 
 function fuenteRitmoEfectiva(ctx: ContextoOpcion): string {
@@ -262,17 +332,26 @@ function fuenteRitmoEfectiva(ctx: ContextoOpcion): string {
   const crudo =
     typeof raw === "string"
       ? raw
-      : getDefaultT2QuantitySource(ctx.familia?.codigo, unidad);
+      : getDefaultT2QuantitySource(ctx.familia, unidad);
   const normalizado =
-    ctx.familia?.codigo === "montaje_sobre_sustrato" &&
+    ctx.familia?.ritmoDefault?.fuenteCantidad === "cantidad_montaje" &&
     unidad === "unidades_h" &&
     crudo === "cantidad"
       ? "cantidad_montaje"
       : crudo;
-  const opciones = getT2QuantitySourceOptions(unidad, ctx.familia?.codigo);
+  const opciones = getT2QuantitySourceOptions(unidad, ctx.familia);
   return opciones.some((o) => o.value === normalizado)
     ? normalizado
-    : getDefaultT2QuantitySource(ctx.familia?.codigo, unidad);
+    : getDefaultT2QuantitySource(ctx.familia, unidad);
+}
+
+/** Unidad nombrada para los sufijos del ritmo: la fuente derivada manda
+ *  ("cortes de hierro"), después lo que el paso cuenta ("ml de perfil"). */
+function unidadRitmoNombrada(ctx: ContextoOpcion): string | null {
+  return (
+    etiquetaFuenteDerivada(ctx.familia, fuenteRitmoEfectiva(ctx)) ??
+    unidadCantidadEfectiva(ctx)
+  );
 }
 
 function esT2(ctx: ContextoOpcion): boolean {
@@ -283,7 +362,7 @@ function mecanismoCantidadEfectivo(ctx: ContextoOpcion): string | null {
   return (
     ctx.cfg.mecanismoCantidad ??
     getDefaultMecanismoCantidad(
-      ctx.familia?.codigo,
+      ctx.familia,
       ctx.familia?.mecanismosCantidadSoportados ?? [],
     )
   );
@@ -293,13 +372,15 @@ function labelMecanismoCantidad(
   ctx: ContextoOpcion,
   mecanismo: string,
 ): string {
-  // corte_manual: la herencia se lee como "pliegos impresos" (mismo copy
-  // que el detallado congelado).
+  // [Tanda B] Si la ficha declara qué hereda por default, el resumen lo
+  // nombra (antes sólo corte_manual, con el copy cableado).
   if (
-    ctx.familia?.codigo === "corte_manual" &&
-    mecanismo === "HEREDAR_DEL_OUTPUT_CANONICO"
+    mecanismo === "HEREDAR_DEL_OUTPUT_CANONICO" &&
+    ctx.familia?.outputHeredadoDefault
   ) {
-    return "Pliegos impresos del paso anterior";
+    return `${humanizarOutputCanonico(
+      ctx.familia.outputHeredadoDefault,
+    )} del paso anterior`;
   }
   return mecanismoCantidadLabels[mecanismo]?.label ?? mecanismo;
 }
@@ -548,7 +629,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     resumen: (ctx) =>
       ctx.cfg.nombreVisible?.trim()
         ? `"${ctx.cfg.nombreVisible.trim()}"`
-        : `${ctx.familia?.nombre ?? "El nombre del paso"} (heredado)`,
+        : (ctx.familia?.nombre ?? "El nombre del paso"),
     origenValor: (ctx) =>
       ctx.cfg.nombreVisible?.trim() ? "config" : "default-paso",
     control: {
@@ -604,8 +685,23 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     ayuda:
       "La condición del pedido que enciende el paso: medida, opción elegida, tecnología…",
     visible: (ctx) => ctx.cfg.modoActivacion === "CONDICIONAL",
-    resumen: (ctx) =>
-      ctx.cfg.condicionActivacionJson ? "Regla definida" : "Sin regla todavía",
+    // La regla EN HUMANO ("Tipo de copia es mayor o igual que 2"), no el
+    // opaco "Regla definida" (H17). Si usa operadores/campos que el builder
+    // no modela, al menos avisa que es avanzada.
+    resumen: (ctx) => {
+      const json = ctx.cfg.condicionActivacionJson;
+      if (!json) return "Sin regla todavía";
+      const parsed = jsonLogicToRuleGroup(
+        json,
+        getRuleFields({ includeMeasureFields: true }),
+      );
+      return parsed.supported
+        ? summarizeRuleGroup(
+            parsed.group,
+            getRuleFields({ includeMeasureFields: true }),
+          )
+        : "Regla avanzada (abrila para verla)";
+    },
     origenValor: (ctx) =>
       ctx.cfg.condicionActivacionJson ? "config" : "sin-definir",
     pendiente: "regla_condicional",
@@ -840,6 +936,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
         return `${valor} ${getT2ProductivityUnitSuffix(
           unidadRitmoEfectiva(ctx),
           fuenteRitmoEfectiva(ctx),
+          unidadRitmoNombrada(ctx),
         )}`;
       }
       const delPaso = ctx.familia?.defaults?.productividadHora;
@@ -873,6 +970,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
         return `${tamano} ${getT2BatchUnitSuffix(
           unidadRitmoEfectiva(ctx),
           fuenteRitmoEfectiva(ctx),
+          unidadRitmoNombrada(ctx),
         )} cada ${tiempo} min`;
       }
       return "Sin definir todavía";
@@ -929,29 +1027,42 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     seccion: "tiempo",
     pregunta: "¿De qué paso hereda la cantidad?",
     ayuda:
-      "Este paso trabaja sobre lo que dejó un paso anterior (los pliegos impresos, las piezas cortadas…). Señalá cuál y qué número usa; sin origen, toma el del paso anterior que publica cantidad.",
+      "Este paso trabaja sobre un número que dejó un paso anterior (los pliegos impresos, los puntos de soldadura, los m² a pintar…). Señalá el paso, o la magnitud publicada que corresponda; sin origen, toma el del paso anterior que publica cantidad.",
     visible: (ctx) =>
       requiereMecanismoCantidad(ctx.cfg, ctx.familia) &&
       mecanismoCantidadEfectivo(ctx) === "HEREDAR_DEL_OUTPUT_CANONICO",
     resumen: (ctx) => {
-      const origen = (ctx.cfg.mecanismoCantidadConfigJson ?? {}) as {
+      const config = (ctx.cfg.mecanismoCantidadConfigJson ?? {}) as {
         origen?: { rutaPasoId?: string; capacidad?: string };
+        campoOutput?: string;
       };
-      const rutaPasoId = origen.origen?.rutaPasoId;
-      if (!rutaPasoId) return "Del paso anterior (automático)";
-      const nombre =
-        ctx.otrosPasos.find((p) => p.id === rutaPasoId)?.nombre ??
-        "un paso de la ruta";
-      const capacidad = origen.origen?.capacidad;
-      return capacidad
-        ? `Hereda de ${nombre} (${capacidad.replaceAll("_", " ")})`
-        : `Hereda de ${nombre}`;
+      const rutaPasoId = config.origen?.rutaPasoId;
+      if (rutaPasoId) {
+        const nombre =
+          ctx.otrosPasos.find((p) => p.id === rutaPasoId)?.nombre ??
+          "un paso de la ruta";
+        const capacidad = config.origen?.capacidad;
+        return capacidad
+          ? `Hereda de ${nombre} (${capacidad.replaceAll("_", " ")})`
+          : `Hereda de ${nombre}`;
+      }
+      // Herencia POR OUTPUT: hereda una magnitud publicada (puntos de
+      // soldadura, m² de pintura…) sin fijar de qué paso viene — la emite
+      // el que la publique. Origen tan válido como el explícito (H6).
+      if (typeof config.campoOutput === "string" && config.campoOutput.trim()) {
+        return `Hereda «${config.campoOutput.replaceAll("_", " ")}» del paso que lo publica`;
+      }
+      return "Del paso anterior (automático)";
     },
     origenValor: (ctx) => {
-      const origen = (ctx.cfg.mecanismoCantidadConfigJson ?? {}) as {
+      const config = (ctx.cfg.mecanismoCantidadConfigJson ?? {}) as {
         origen?: { rutaPasoId?: string };
+        campoOutput?: string;
       };
-      return origen.origen?.rutaPasoId ? "config" : "default-paso";
+      if (config.origen?.rutaPasoId) return "config";
+      if (typeof config.campoOutput === "string" && config.campoOutput.trim())
+        return "config";
+      return "default-paso";
     },
     pendiente: "herencia_origen",
     control: { tipo: "componente", id: "herencia-origen" },
@@ -965,12 +1076,12 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     visible: (ctx) => esT2(ctx) && !comercialEstimaTiempo(ctx),
     resumen: (ctx) => {
       const fuente = fuenteRitmoEfectiva(ctx);
-      return (
-        getT2QuantitySourceOptions(
-          unidadRitmoEfectiva(ctx),
-          ctx.familia?.codigo,
-        ).find((o) => o.value === fuente)?.label ?? fuente
-      );
+      const base =
+        getT2QuantitySourceOptions(unidadRitmoEfectiva(ctx), ctx.familia).find((o) => o.value === fuente)?.label ?? fuente;
+      // "Cantidad efectiva del paso" es un misterio cuando la efectiva es
+      // derivada o heredada: se aclara QUÉ cuenta (H2 del relevamiento).
+      const unidad = fuente === "cantidad" ? unidadCantidadEfectiva(ctx) : null;
+      return unidad ? `${base} (${unidad})` : base;
     },
     origenValor: (ctx) =>
       typeof ctx.paramsPaso.productivityQuantitySource === "string"
@@ -978,15 +1089,20 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
         : "default-paso",
     control: {
       tipo: "select",
-      opciones: (ctx) =>
-        getT2QuantitySourceOptions(
+      opciones: (ctx) => {
+        // Mismo criterio que el resumen (T3b): la opción "Cantidad efectiva
+        // del paso" NOMBRA qué cuenta cuando el sistema lo sabe.
+        const unidad = unidadCantidadEfectiva(ctx);
+        return getT2QuantitySourceOptions(
           unidadRitmoEfectiva(ctx),
-          ctx.familia?.codigo,
+          ctx.familia,
         ).map((o) => ({
           value: o.value,
-          label: o.label,
+          label:
+            o.value === "cantidad" && unidad ? `${o.label} (${unidad})` : o.label,
           descripcion: o.description,
-        })),
+        }));
+      },
       valor: (ctx) => fuenteRitmoEfectiva(ctx),
       aplicar: (_ctx, v) => ({
         tipo: "params",
@@ -1000,7 +1116,12 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     pregunta: "¿Qué monta: piezas del pedido o pliegos impresos?",
     ayuda:
       "Define qué medidas usa el paso para acomodar sobre el material de montaje.",
-    visible: (ctx) => ctx.familia?.codigo === "montaje_sobre_sustrato",
+    // [Tanda B] La pregunta aparece cuando la ficha declara fuentes de
+    // piezas heredadas Y el default es el implícito (el modelador ELIGE);
+    // laminado declara fuente pero con default forzado → no pregunta.
+    visible: (ctx) =>
+      (ctx.familia?.fuentesPiezasNesting?.length ?? 0) > 0 &&
+      ctx.familia?.fuentePiezasDefault === "piezas_jobcontext",
     resumen: (ctx) => {
       const valor = String(
         ctx.paramsPaso.fuentePiezasMontaje ?? "piezas_jobcontext",
@@ -1168,7 +1289,8 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
         typeof params.coberturaDefault === "string"
           ? (params.coberturaDefault as NivelCobertura)
           : "alta";
-      return NIVEL_COBERTURA_LABELS[nivel] ?? "Alta";
+      const etiqueta = NIVEL_COBERTURA_LABELS[nivel] ?? "Alta";
+      return `Cobertura ${etiqueta.toLowerCase()} de tóner`;
     },
     origenValor: () => "config",
     control: { tipo: "componente", id: "cobertura-toner" },
@@ -1180,7 +1302,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     ayuda:
       "Limita los modos de color que se pueden cotizar en este producto. Con candidatas, los modos se definen por máquina dentro de la pregunta anterior.",
     visible: (ctx) =>
-      modoColorAplica(ctx.familia?.codigo, ctx.cfg) &&
+      modoColorAplica(ctx.familia, ctx.cfg) &&
       ((ctx.familia?.relacionMaquinaSoportada ?? []).includes("M-2")
         ? (ctx.cfg.maquinasCandidatas?.length ?? 0) === 0
         : true),
@@ -1323,11 +1445,19 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     resumen: (ctx) => {
       const candidatos = ctx.slot?.payload.candidatos ?? [];
       if (candidatos.length === 0) return "Sin candidatos elegidos";
-      const variantes = candidatos.reduce(
+      // H19: con `todasLasVariantes` el junction va vacío — decir "0
+      // variantes" era mentira (se ofrecen todas las activas del material).
+      const conTodas = candidatos.some((c) => c.todasLasVariantes);
+      const explicitas = candidatos.reduce(
         (total, candidato) => total + candidato.varianteIds.length,
         0,
       );
-      return `${candidatos.length} material${candidatos.length === 1 ? "" : "es"} · ${variantes} variante${variantes === 1 ? "" : "s"}`;
+      const materiales = `${candidatos.length} material${candidatos.length === 1 ? "" : "es"}`;
+      if (conTodas && explicitas === 0)
+        return `${materiales} · todas sus variantes activas`;
+      if (conTodas)
+        return `${materiales} · todas las variantes + ${explicitas} explícita${explicitas === 1 ? "" : "s"}`;
+      return `${materiales} · ${explicitas} variante${explicitas === 1 ? "" : "s"}`;
     },
     origenValor: (ctx) =>
       (ctx.slot?.payload.candidatos?.length ?? 0) > 0
@@ -1345,12 +1475,21 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     visible: (ctx) => ctx.slot?.payload.modoSeleccion === "MOTOR_ELIGE_AUTO",
     resumen: (ctx) => {
       const criterio = ctx.slot?.payload.criterioMotorAuto;
-      return criterio
-        ? labelDe(CRITERIO_AUTO_OPTIONS, criterio)
-        : "Sin criterio elegido";
+      if (criterio) return labelDe(CRITERIO_AUTO_OPTIONS, criterio);
+      // Sin criterio en el slot: la familia puede traerlo DE FÁBRICA
+      // (selección por capacidad declarada — la fuente LED elige por watts).
+      // No falta nada; se muestra el default resuelto.
+      if (criterioDeFabricaDelSlot(ctx)) {
+        return labelDe(CRITERIO_AUTO_OPTIONS, "MENOR_CAPACIDAD_QUE_CUMPLA");
+      }
+      return "Sin criterio elegido";
     },
     origenValor: (ctx) =>
-      ctx.slot?.payload.criterioMotorAuto ? "config" : "sin-definir",
+      ctx.slot?.payload.criterioMotorAuto
+        ? "config"
+        : criterioDeFabricaDelSlot(ctx)
+          ? "default-paso"
+          : "sin-definir",
     control: {
       tipo: "pills",
       opciones: () =>
@@ -1373,13 +1512,28 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     ayuda:
       "La fórmula del motor para saber cuánto material gasta: por pieza, por m², por metro lineal…",
     visible: (ctx) => Boolean(ctx.slot),
-    resumen: (ctx) =>
-      labelDe(
+    resumen: (ctx) => {
+      // Slot derivado (E2): el consumo no sale de la fórmula — lo deriva la
+      // geometría del paso (ml de cable, pares de anclaje). El perfil además
+      // se compra en BARRAS enteras cuando la variante declara su largo
+      // (packing del despiece) — el editor lo dice, no lo esconde (H5).
+      const decl = ctx.slot?.decl;
+      if (decl?.magnitudDerivada) {
+        return decl.codigo === "perfil_estructural"
+          ? "Derivado de la geometría · barras enteras si la variante declara largo de barra"
+          : "Derivado de la geometría del paso";
+      }
+      return labelDe(
         FORMULA_OPTIONS,
         ctx.slot?.payload.formula ?? "por_unidad_productiva",
-      ),
+      );
+    },
     origenValor: (ctx) =>
-      ctx.slot?.payload.formula ? "config" : "default-paso",
+      ctx.slot?.decl?.magnitudDerivada
+        ? "default-paso"
+        : ctx.slot?.payload.formula
+          ? "config"
+          : "default-paso",
     control: {
       tipo: "select",
       opciones: () =>
@@ -1410,13 +1564,29 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
       !nestingDefineCosteo(ctx) &&
       !(
         ctx.slot?.payload.slotCodigo === "sustrato_principal" &&
-        nestingAplica(ctx.familia?.codigo, ctx.cfg)
-      ),
-    resumen: (ctx) =>
-      labelDe(
-        COSTING_STRATEGY_OPTIONS,
-        ctx.slot?.payload.estrategiaCosto ?? "simple",
-      ),
+        nestingAplica(ctx.familia, ctx.cfg)
+      ) &&
+      // Un INSUMO (caño, pintura, cable, film, módulos) nunca se costea por
+      // placas: el motor ignora la estrategia fuera del sustrato nesteado.
+      // Mostrar "Placas enteras" ahí era ruido puro (H5 del relevamiento).
+      ctx.slot?.decl?.tipo !== "INSUMO_PASO",
+    resumen: (ctx) => {
+      const estrategia = ctx.slot?.payload.estrategiaCosto ?? "simple";
+      const base = labelDe(COSTING_STRATEGY_OPTIONS, estrategia);
+      if (estrategia !== "plate-segments") return base;
+      // Los escalones REALES configurados (la descripción genérica dice
+      // "¼, ½, ¾ o entera", pero la chapa usa [100]: hoja entera siempre).
+      const nesting = ctx.paramsPaso.nestingConfig as
+        | { costing?: { segmentSteps?: unknown } }
+        | undefined;
+      const steps = Array.isArray(nesting?.costing?.segmentSteps)
+        ? (nesting.costing.segmentSteps as unknown[]).map(Number).filter(Number.isFinite)
+        : [];
+      if (steps.length === 1 && steps[0] === 100)
+        return `${base} · la última también se cobra entera`;
+      if (steps.length > 0) return `${base} · escalones ${steps.join("/")}%`;
+      return base;
+    },
     origenValor: (ctx) =>
       ctx.slot?.payload.estrategiaCosto &&
       ctx.slot.payload.estrategiaCosto !== "simple"
@@ -1446,14 +1616,19 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     visible: (ctx) =>
       Boolean(
         ctx.slot &&
-          (ctx.slot.esAdicional || ctx.slot.decl?.tipo === "INSUMO_PASO"),
+          (ctx.slot.esAdicional || ctx.slot.decl?.tipo === "INSUMO_PASO") &&
+          // H20: en slots derivados/fijos el motor ignora base × factor —
+          // la geometría manda; mostrar la pregunta era ruido.
+          !ctx.slot.decl?.magnitudDerivada &&
+          ctx.slot.decl?.cantidadFija === undefined,
       ),
     resumen: (ctx) => {
       const slot = ctx.slot;
       if (!slot) return "";
-      const base =
-        slot.payload.cantidadBase ??
-        (slot.esAdicional ? "cantidad_pedida" : "formula");
+      // H12: sin `cantidadBase` guardada el motor usa la FÓRMULA — también
+      // en slots adicionales (el default "cantidad pedida" era solo de la
+      // UI de alta y mentía sobre pasos ya guardados).
+      const base = slot.payload.cantidadBase ?? "formula";
       if (base === "formula") return "Según fórmula del consumo";
       const factor = slot.payload.cantidadFactor ?? 1;
       return `${factor} por ${labelDe(
@@ -1474,7 +1649,15 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     pregunta: "¿La doble faz gasta doble?",
     ayuda:
       "Si el trabajo va a dos caras, el consumo de este material se multiplica por las caras.",
-    visible: (ctx) => Boolean(ctx.slot),
+    // H9: en una familia sin multiplicador `caras` (herrería, LED) la
+    // pregunta era ruido. Se muestra solo donde puede multiplicar — o si
+    // alguien ya la activó (no esconder config existente).
+    visible: (ctx) =>
+      Boolean(ctx.slot) &&
+      Boolean(
+        ctx.familia?.multiplicadoresSoportados?.includes("caras") ||
+          ctx.slot?.payload.aplicaMultiCaras,
+      ),
     resumen: (ctx) =>
       ctx.slot?.payload.aplicaMultiCaras
         ? "Sí — multiplica por caras"
@@ -1503,11 +1686,65 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   // override (fila 3) ya migró como tiempo.tiempo_fijo.
   // ───────────────────────────────────────────────────────────────────
   {
+    clave: "oficio.params_familia",
+    seccion: "oficio",
+    pregunta: "¿Con qué parámetros trabaja este paso?",
+    ayuda:
+      "Los parámetros propios del oficio (refuerzos del bastidor, densidad del sembrado, lados y demasía del refuerzo…). Son los números que el motor usa para calcular este paso.",
+    visible: (ctx) =>
+      Boolean(
+        familiaConParamsEditables(ctx.familia) &&
+          (ctx.familia?.paramsPasoSchema?.length ?? 0) > 0,
+      ),
+    resumen: (ctx) => {
+      // Nombra los VALORES (regla T3b: el resumen dice lo que hay, no un
+      // opaco "parámetros definidos").
+      const schema = ctx.familia?.paramsPasoSchema ?? [];
+      const partes: string[] = [];
+      for (const param of schema) {
+        const crudo = ctx.paramsPaso[param.campo] ?? param.default;
+        if (crudo === null || crudo === undefined || crudo === "") continue;
+        if (Array.isArray(crudo)) {
+          if (crudo.length === 0) continue;
+          partes.push(
+            `${param.etiqueta.split("(")[0].trim()}: ${crudo
+              .map((v) => etiquetaValorParam(String(v)))
+              .join(" + ")}`,
+          );
+          continue;
+        }
+        const valor =
+          typeof crudo === "boolean"
+            ? crudo
+              ? "sí"
+              : "no"
+            : etiquetaValorParam(String(crudo));
+        partes.push(`${param.etiqueta.split("(")[0].trim()}: ${valor}`);
+      }
+      if (partes.length === 0) return "Con los valores por defecto";
+      const visibles = partes.slice(0, 3).join(" · ");
+      return partes.length > 3
+        ? `${visibles} · +${partes.length - 3} más`
+        : visibles;
+    },
+    origenValor: (ctx) => {
+      const schema = ctx.familia?.paramsPasoSchema ?? [];
+      return schema.some(
+        (param) =>
+          ctx.paramsPaso[param.campo] !== undefined &&
+          ctx.paramsPaso[param.campo] !== null,
+      )
+        ? "config"
+        : "default-paso";
+    },
+    control: { tipo: "componente", id: "params-familia" },
+  },
+  {
     // Vivía en Tiempo y costo; es una decisión de oficio sobre cómo se
     // arma el pliego (feedback del usuario: "¿dónde se ve?").
     clave: "oficio.talonario",
     seccion: "oficio",
-    pregunta: "¿Es un talonario? ¿Cómo se apila?",
+    pregunta: "¿Cómo se agrupan los talonarios en el pliego?",
     ayuda:
       "Agrupa talonarios de a N poses por pliego y define qué hacer con los sueltos: compartir pliego (menos papel) o poses vacías (listo para abrochar).",
     visible: (ctx) => ctx.familia?.codigo === "pre_prensa",
@@ -1594,7 +1831,13 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     pregunta: "¿Cómo se acomodan y cobran las piezas en el material?",
     ayuda:
       "Demasía por pieza, pliego de impresión, panelizado, márgenes extra y —en placa— cómo se cobra la última placa a medio usar.",
-    visible: (ctx) => nestingAplica(ctx.familia?.codigo, ctx.cfg),
+    // H10: una familia con DERIVADOR deriva geometría (no acomoda piezas) y
+    // una mutadora de medidas agranda la pieza (tampoco acomoda): la card de
+    // Acomodado ahí era ruido puro.
+    visible: (ctx) =>
+      nestingAplica(ctx.familia, ctx.cfg) &&
+      !ctx.familia?.derivador &&
+      ctx.familia?.mutaMedidasEnPrePasada !== true,
     resumen: (ctx) => {
       const nesting = ctx.paramsPaso.nestingConfig as
         | {
@@ -1607,6 +1850,20 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
           ? nesting.costing.strategy
           : "simple";
       const partes: string[] = [];
+      // Imposición de cuadernillo (H14): si el paso la tiene configurada,
+      // es LO más importante del acomodo — nombrarla, no "Acomodo estándar".
+      const imposicion = (
+        nesting as { imposicion?: { esquema?: unknown; hojas?: unknown } } | undefined
+      )?.imposicion;
+      if (imposicion?.esquema === "caballete") {
+        const hojas =
+          imposicion.hojas === "tapa"
+            ? "hojas de tapa"
+            : imposicion.hojas === "interior"
+              ? "hojas de interior"
+              : "todas las hojas";
+        partes.push(`Imposición a caballete (${hojas})`);
+      }
       // El costeo se nombra sólo si se salió del default Y el sustrato es
       // placa: en rollo la card no lo ofrece (el motor lo ignora), así que
       // mostrar una estrategia guardada de antes sería un dato muerto.
@@ -1614,14 +1871,22 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
         partes.push(
           `Costeo: ${labelDe(
             costingStrategyOptions(
-              ctx.familia?.codigo === "impresion_por_hoja" ? "pliego" : "placa",
+              // [Tanda B] El sustantivo lo da la superficie declarada.
+              ctx.familia?.nestingConfig?.superficie === "pliego" ||
+                ctx.familia?.nestingConfig?.superficie === "pliegos_multiples"
+                ? "pliego"
+                : "placa",
             ),
             estrategia,
           ).toLowerCase()}`,
         );
       }
       if (nesting?.paneling?.enabled === true) partes.push("Panelizado");
-      return partes.length > 0 ? partes.join(" · ") : "Acomodo estándar";
+      if (partes.length > 0) return partes.join(" · ");
+      // En rollo el acomodo tiene nombre: por ancho útil del material.
+      return sustratoLuceRollo(ctx)
+        ? "Acomodo en rollo (por ancho útil del material)"
+        : "Acomodo estándar";
     },
     origenValor: (ctx) =>
       ctx.paramsPaso.nestingConfig != null ? "config" : "default-paso",

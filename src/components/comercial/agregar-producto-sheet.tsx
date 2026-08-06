@@ -910,6 +910,13 @@ function getProfundidadDeRuta(
  * params del paso como defaults del editor (los overrides del comercial van
  * por `paramsComercial` → `configPasoRuntime`, el canal que ya existe).
  */
+/**
+ * §17 derivadores (2026-08-05): el configurador 3D queda A UN COSTADO hasta
+ * que vuelva como capa de visualización sobre el modelado declarativo. Los
+ * componentes (src/components/carteleria/) quedan en el repo sin cablear.
+ */
+const CONFIGURADOR_3D_CARTELERIA_ACTIVO = false;
+
 function getCarteleriaDeRuta(
   ruta: RutaAlternativaDetalle | null,
   includeConfig: (config: ConfigPasoDetalle) => boolean,
@@ -2610,37 +2617,10 @@ function buildJobContext(
     (configPasoId, modoActivacion) =>
       modoActivacion !== "OPCIONAL" || Boolean(opcionalesEfectivos[configPasoId]),
   );
-  // Configurador 3D de cartelería: sus campos son editables POR DISEÑO de la
-  // herramienta (no requieren que el modelador los declare abiertos), así que
-  // se fusionan aparte del filtro de `camposEditablesComercial`.
-  const carteleriaRuta = getCarteleriaDeRuta(rutaSel, includeConfig);
-  if (carteleriaRuta) {
-    const mergeCarteleria = (configPasoId: string | null, campos: string[]) => {
-      if (!configPasoId) return;
-      const elegido = config.paramsComercial?.[configPasoId];
-      if (!elegido) return;
-      const valores: Record<string, unknown> = {};
-      for (const campo of campos) {
-        const v = elegido[campo];
-        if (v !== undefined && v !== null) valores[campo] = v;
-      }
-      if (Object.keys(valores).length > 0) {
-        runtimeParams[configPasoId] = {
-          ...(runtimeParams[configPasoId] ?? {}),
-          ...valores,
-        };
-      }
-    };
-    // OJO: esta lista es el ESPEJO de CAMPOS_SIEMPRE_EDITABLES_POR_FAMILIA
-    // del motor — un campo que falte acá viaja como si el comercial no lo
-    // hubiera tocado (la chapa trasera cotizaba 0 m² por esto).
-    mergeCarteleria(carteleriaRuta.estructuraConfigPasoId, [
-      "sepRefuerzoVcm",
-      "sepRefuerzoHcm",
-      "solapaCenefaCm",
-    ]);
-    mergeCarteleria(carteleriaRuta.ledConfigPasoId, ["densidad"]);
-  }
+  // (El merge espejo de cartelería murió con la Etapa 3 de derivadores:
+  // `buildConfigPasoRuntime` ya no filtra campos client-side — la autoridad
+  // es `paramsEfectivos` del motor, que acepta los `expuestoAlComercial`
+  // declarados por la familia.)
   if (Object.keys(runtimeParams).length > 0) {
     ctx.configPasoRuntime = runtimeParams;
   }
@@ -5163,7 +5143,12 @@ function ApConfigStep({
   // Configurador 3D de cartelería (herramienta estilo sello): edita EN VIVO el
   // motorConfig (medidas, profundidad, params comerciales de los dos pasos) y
   // el precio se re-cotiza solo con el debounce del sheet.
-  const carteleriaInfo = getCarteleriaDeRuta(rutaSel, isExecutableConfigPaso);
+  // §17 derivadores (2026-08-05): A UN COSTADO — el cartel se cotiza por el
+  // flujo genérico (medidas + profundidad + opcionales + materiales + params
+  // expuestos). Reactivar cuando vuelva como capa de visualización.
+  const carteleriaInfo = CONFIGURADOR_3D_CARTELERIA_ACTIVO
+    ? getCarteleriaDeRuta(rutaSel, isExecutableConfigPaso)
+    : null;
   const carteleriaValor: CarteleriaValor | null = React.useMemo(() => {
     if (!carteleriaInfo) return null;
     const overrides = asRecord(
@@ -6090,6 +6075,37 @@ function ApConfigStep({
                     páginas con blancas al final (el caballete arma de a 4).
                   </span>
                 ) : null}
+              </div>
+            ) : null}
+
+            {/* Cartelería (patrón `paginas`): la ruta tiene un bastidor doble
+                sin profundidad fija — el comercial la carga acá. En cm (el
+                motor la recibe en mm). Volvió al flujo genérico cuando el
+                configurador 3D quedó a un costado (§17 derivadores). */}
+            {profundidadCartel ? (
+              <div className="ap-spec">
+                <label>Profundidad del cajón</label>
+                <input
+                  type="number"
+                  min="1"
+                  placeholder={
+                    profundidadCartel.profundidadDefaultMm
+                      ? String(profundidadCartel.profundidadDefaultMm / 10)
+                      : "18"
+                  }
+                  value={motorConfig.profundidadCm ?? ""}
+                  onChange={(event) => {
+                    const value = Number(event.target.value);
+                    updateMotorConfig({
+                      profundidadCm:
+                        Number.isFinite(value) && value > 0 ? value : null,
+                    });
+                  }}
+                />
+                <span className="ap-section-hint">
+                  En cm. Define los metros de perfil, la cenefa y los
+                  conectores del bastidor.
+                </span>
               </div>
             ) : null}
 
@@ -7122,6 +7138,7 @@ export function AgregarProductoSheet({
   // Cartelería toma la pantalla completa: el configurador 3D necesita las
   // tres columnas (params · 3D · listado), no el drawer angosto.
   const esCarteleriaFull =
+    CONFIGURADOR_3D_CARTELERIA_ACTIVO &&
     step === "config" &&
     Boolean(
       getCarteleriaDeRuta(

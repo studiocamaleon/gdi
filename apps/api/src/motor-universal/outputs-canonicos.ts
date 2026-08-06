@@ -26,11 +26,7 @@
 
 import type { DefinicionFamiliaResuelta } from '../productos-servicios/pasos/types';
 import { calculateGuillotinaCutsFromImposicion } from '../productos-servicios/nesting/helpers/guillotina-cuts';
-import {
-  calcularEstructuraBastidor,
-  parsearParamsEstructuraBastidor,
-} from './estructura-bastidor';
-import { paramsEfectivos } from './params-runtime';
+import { derivacionesDelJobContext } from './derivadores/tipos';
 import type {
   PasoCargado,
   JobContext,
@@ -94,6 +90,22 @@ function computeOutput(
     nestingDispatch,
     cantidadEfectiva,
   } = ctx;
+
+  // ─── Derivador geométrico: outputs ← magnitudes declaradas ────────
+  // La familia mapea outputs a magnitudes del derivador (un paso puede
+  // publicar varios drivers: el bastidor publica 5 aunque su cantidad sea
+  // una). La magnitud PRINCIPAL publica la cantidad efectiva del paso — bajo
+  // CALCULADO_POR_PASO es idéntica a la derivada, y bajo otros mecanismos
+  // respeta lo que el paso realmente produjo.
+  const magnitudMapeada = familia.derivador?.outputs?.[key];
+  if (magnitudMapeada) {
+    if (magnitudMapeada === familia.derivador?.magnitudPrincipal) {
+      return cantidadEfectiva || null;
+    }
+    const derivacion =
+      derivacionesDelJobContext(jobContext)[paso.configPasoId];
+    return derivacion?.magnitudes[magnitudMapeada] || null;
+  }
 
   // ─── Outputs estructurados del nesting de imposición ──────────────
   if (
@@ -349,7 +361,11 @@ function computeOutput(
     return null;
   }
 
-  if (key === 'piezas_laminadas' && familia.codigo === 'plastificado_pouch') {
+  // [Tanda A] El pouch (estrategia declarada) lamina piezas, no pliegos.
+  if (
+    key === 'piezas_laminadas' &&
+    familia.nestingConfig?.estrategia === 'pouch'
+  ) {
     return Number(jobContext.cantidad ?? 0) || null;
   }
 
@@ -384,54 +400,6 @@ function computeOutput(
     // traza rica vive en `jobContext.mutacionesAplicadas`, que se appendea —
     // acá un segundo paso PRE pisaría al primero.
     return true;
-  }
-
-  if (key === 'ojales_colocados') {
-    // La cantidad del paso YA son los ojales: los deriva `resolverCantidad`
-    // del perímetro VISIBLE.
-    return cantidadEfectiva || null;
-  }
-
-  // ─── F1 cartelería ────────────────────────────────────────────────
-  if (key === 'ml_estructura') {
-    // La cantidad del paso YA son los metros de perfil derivados.
-    return cantidadEfectiva || null;
-  }
-  if (
-    key === 'puntos_soldadura' ||
-    key === 'cenefa_m2' ||
-    key === 'pintura_m2' ||
-    key === 'fondo_m2'
-  ) {
-    // Params EFECTIVOS: el configurador 3D puede pisar refuerzos/solapa por
-    // runtime, y el output tiene que reflejar lo que se cotizó de verdad.
-    // Estos outputs son los DRIVERS que heredan soldadura/pintura/cenefa/
-    // chapa trasera (§15).
-    const resultado = calcularEstructuraBastidor(
-      jobContext,
-      parsearParamsEstructuraBastidor(
-        paramsEfectivos(
-          paso.paramsPasoJson,
-          jobContext.configPasoRuntime?.[paso.configPasoId],
-          ['sepRefuerzoVcm', 'sepRefuerzoHcm', 'solapaCenefaCm'],
-        ),
-      ),
-    );
-    if (!resultado) return null;
-    if (key === 'puntos_soldadura') return resultado.puntosSoldadura;
-    if (key === 'cenefa_m2') return resultado.cenefaM2 || null;
-    if (key === 'pintura_m2') return resultado.pinturaM2 || null;
-    return resultado.fondoM2 || null;
-  }
-  if (key === 'modulos_led') {
-    // La cantidad del paso YA son los módulos sembrados.
-    return cantidadEfectiva || null;
-  }
-  if (key === 'watts_led') {
-    const calc = (jobContext as Record<string, unknown>).__iluminacionLed as
-      | { watts?: number }
-      | undefined;
-    return calc?.watts ?? null;
   }
 
   // ─── Casos puntuales ──────────────────────────────────────────────

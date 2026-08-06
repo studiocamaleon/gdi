@@ -50,21 +50,40 @@ async function listarProductos(token) {
 }
 
 async function cotizar(token, productoId, job) {
-  const res = await fetch(`${API}/motor-universal/cotizar`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      productoId,
-      jobContext: {
-        cantidad: job.cantidad,
-        piezas: [{ cantidad: job.cantidad, anchoMm: job.anchoMm, altoMm: job.altoMm }],
-      },
-    }),
-  });
-  return res.json();
+  // Tolerante a hipos de red / restarts del watch: 3 intentos y, si aun así
+  // no responde, huella `transporte_fallido` (determinística) en vez de matar
+  // la corrida entera.
+  for (let intento = 1; intento <= 3; intento++) {
+    try {
+      let res;
+      for (;;) {
+        res = await fetch(`${API}/motor-universal/cotizar`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            productoId,
+            jobContext: {
+              cantidad: job.cantidad,
+              piezas: [{ cantidad: job.cantidad, anchoMm: job.anchoMm, altoMm: job.altoMm }],
+            },
+          }),
+        });
+        // Throttler del API (100 req/min): el body de un 429 NO es una
+        // cotización — si se toma como huella, la baseline entera queda
+        // `exitoso:false` sin errores (pasó el 2026-08-05). Esperar y seguir.
+        if (res.status !== 429) break;
+        await new Promise((r) => setTimeout(r, 5000));
+      }
+      return await res.json();
+    } catch (e) {
+      console.error(`  (intento ${intento}/3 falló: ${e.message})`);
+      await new Promise((r) => setTimeout(r, 1500 * intento));
+    }
+  }
+  return { exitoso: false, errores: [{ codigo: 'transporte_fallido' }] };
 }
 
 /** Huella determinística: precio + materiales resueltos + cantidades por paso. */
@@ -98,6 +117,9 @@ async function run(mode) {
       const key = `${prod.codigo}__${job.label}`;
       const out = await cotizar(token, prod.id, job);
       result[key] = fingerprint(out);
+      if (result[key].errores?.includes('transporte_fallido')) {
+        console.error(`  ✗ sin respuesta: ${key}`);
+      }
     }
   }
 

@@ -273,8 +273,19 @@ export function pendientesDePaso(
   // (la regla histórica), así que no bloquea — pero decidirlo evita
   // sorpresas (el bug del bordado que hereda pliegos).
   if (cfg.mecanismoCantidad === "HEREDAR_DEL_OUTPUT_CANONICO") {
-    const origen = asRecord(cfg.mecanismoCantidadConfigJson).origen;
-    if (!origen || typeof (origen as { rutaPasoId?: unknown }).rutaPasoId !== "string") {
+    const config = asRecord(cfg.mecanismoCantidadConfigJson);
+    const origen = config.origen;
+    const origenExplicito =
+      !!origen &&
+      typeof (origen as { rutaPasoId?: unknown }).rutaPasoId === "string";
+    // Herencia POR OUTPUT (`campoOutput`): el paso hereda una magnitud
+    // publicada (puntos_soldadura, pintura_m2…) sin importar qué paso la
+    // emite. Es un origen tan válido como el explícito — sin esto el editor
+    // marcaba "Falta: de qué paso hereda" en rutas que cotizan perfecto
+    // (H6 del relevamiento del editor).
+    const heredaPorOutput =
+      typeof config.campoOutput === "string" && config.campoOutput.trim() !== "";
+    if (!origenExplicito && !heredaPorOutput) {
       pendientes.push({
         tipo: "herencia_origen",
         etiqueta: "de qué paso hereda",
@@ -288,15 +299,30 @@ export function pendientesDePaso(
   return pendientes;
 }
 
-/** "Faltan: la máquina y el papel" / "Falta: el ritmo" — para el banner. */
+/**
+ * Nivel del conjunto: con al menos un bloqueante el paso NO cotiza bien
+ * ("faltan"); solo avisos no bloqueantes = cotiza con la regla automática y
+ * lo que hay es una sugerencia de precisión, no un faltante (H13 del
+ * relevamiento del editor: "Falta" para un advisory suena a error).
+ */
+export function nivelPendientes(
+  pendientes: PendientePaso[],
+): "faltan" | "sugerencia" | null {
+  if (pendientes.length === 0) return null;
+  return pendientes.some((p) => p.bloqueante) ? "faltan" : "sugerencia";
+}
+
+/** "Faltan: la máquina y el papel" / "Sugerencia: fijá el origen" — banner. */
 export function resumenPendientes(pendientes: PendientePaso[]): string | null {
+  const nivel = nivelPendientes(pendientes);
+  if (!nivel) return null;
   const bloqueantes = pendientes.filter((p) => p.bloqueante);
-  const lista = bloqueantes.length > 0 ? bloqueantes : pendientes;
-  if (lista.length === 0) return null;
+  const lista = nivel === "faltan" ? bloqueantes : pendientes;
   const etiquetas = [...new Set(lista.map((p) => p.etiqueta))];
   const cuerpo =
     etiquetas.length === 1
       ? etiquetas[0]
       : `${etiquetas.slice(0, -1).join(", ")} y ${etiquetas[etiquetas.length - 1]}`;
+  if (nivel === "sugerencia") return `Sugerencia: fijá ${cuerpo}`;
   return `${lista.length === 1 ? "Falta" : "Faltan"}: ${cuerpo}`;
 }

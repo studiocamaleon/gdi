@@ -86,6 +86,10 @@ const CENSO: Record<string, string[]> = {
   // El talonario se movió de Tiempo a oficio (feedback del usuario:
   // es una decisión sobre cómo se arma el pliego).
   oficio: [
+    // T4-H15: los parámetros propios de la familia (refuerzos del bastidor,
+    // densidad del sembrado, lados de la demasía) entran al guiado — antes
+    // sólo existían en el detallado (ParamsFamiliaFields).
+    "oficio.params_familia",
     "oficio.talonario",
     "oficio.setup",
     "oficio.cleanup",
@@ -482,8 +486,10 @@ describe("sección Máquina y perfil", () => {
     )!;
     expect(modoColor.visible(ctxBase())).toBe(false);
     const ctxImpresion = ctxBase({
+      // [Etapa F3] La familia declara ser de impresión, como el catálogo.
       familia: {
         codigo: "impresion_por_hoja",
+        esImpresion: true,
         relacionMaquinaSoportada: ["M-1"],
       },
       cfg: { maquinaM1Id: "mq-1" },
@@ -547,6 +553,8 @@ describe("sección Materiales", () => {
       (o) => o.clave,
     );
     expect(sinSlot).not.toContain("materiales.quien");
+    // H9: la familia base no multiplica por caras → la pregunta de doble
+    // faz no aparece (era ruido en herrería/LED).
     const conSlot = opcionesDeSeccion(
       "materiales",
       ctxBase({ slot: slotCtx({}) }),
@@ -556,8 +564,26 @@ describe("sección Materiales", () => {
       "materiales.material",
       "materiales.consumo",
       "materiales.costeo",
-      "materiales.caras",
     ]);
+  });
+
+  it("la doble faz aparece si la familia multiplica por caras, o si ya está activa (H9)", () => {
+    const familiaConCaras = {
+      ...ctxBase().familia!,
+      multiplicadoresSoportados: ["caras"],
+    };
+    const conCaras = opcionesDeSeccion(
+      "materiales",
+      ctxBase({ familia: familiaConCaras, slot: slotCtx({}) }),
+    ).map((o) => o.clave);
+    expect(conCaras).toContain("materiales.caras");
+    // Config existente encendida: no se esconde aunque la familia no la
+    // soporte (el modelador tiene que poder verla y apagarla).
+    const conActiva = opcionesDeSeccion(
+      "materiales",
+      ctxBase({ slot: slotCtx({ aplicaMultiCaras: true }) }),
+    ).map((o) => o.clave);
+    expect(conActiva).toContain("materiales.caras");
   });
 
   it("material fijo vs candidatos vs criterio siguen al modo de selección", () => {
@@ -659,14 +685,22 @@ describe("sección Materiales", () => {
 
   it("el costeo del SUSTRATO de un paso que acomoda vive en Ajustes, no acá (una pregunta, un lugar)", () => {
     const costeo = ESQUEMA_PASO.find((op) => op.clave === "materiales.costeo")!;
+    // [Etapa F2] La familia DECLARA que acomoda (nestingConfig), como en el
+    // catálogo real — nestingAplica ya no usa listas de códigos.
     const sustratoNesting = ctxBase({
-      familia: { codigo: "impresion_por_hoja" },
+      familia: {
+        codigo: "impresion_por_hoja",
+        nestingConfig: { superficie: "pliego", estrategia: "pliego_digital" },
+      },
       slot: slotCtx({ slotCodigo: "sustrato_principal" }),
     });
     expect(costeo.visible(sustratoNesting)).toBe(false);
     // Otros slots del mismo paso siguen preguntando su costeo.
     const otroSlot = ctxBase({
-      familia: { codigo: "impresion_por_hoja" },
+      familia: {
+        codigo: "impresion_por_hoja",
+        nestingConfig: { superficie: "pliego", estrategia: "pliego_digital" },
+      },
       slot: slotCtx({ slotCodigo: "broches" }, { esAdicional: true }),
     });
     expect(costeo.visible(otroSlot)).toBe(true);
@@ -766,7 +800,11 @@ describe("sección Ajustes del trabajo (oficio)", () => {
       acomodado.visible(ctxBase({ familia: { codigo: "pre_prensa" } })),
     ).toBe(false);
     const granFormato = ctxBase({
-      familia: { codigo: "impresion_por_area" },
+      // [Etapa F2] La familia declara su acomodado, como el catálogo real.
+      familia: {
+        codigo: "impresion_por_area",
+        nestingConfig: { superficie: "segun_material" },
+      },
       cfg: {
         paramsPasoJson: {
           nestingConfig: {

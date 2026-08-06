@@ -197,6 +197,15 @@ function uniquePieceOrders(orders: GranFormatoPiece[][]): GranFormatoPiece[][] {
 
 // ─── Algoritmo principal ────────────────────────────────────────────
 
+/**
+ * Tope de piezas para la búsqueda con beam (`solveOrder`) y para MaxRects.
+ * Por encima, sólo corre el greedy O(n·filas): el beam es O(n²·beam) en
+ * tiempo y memoria (cada estado clona filas y placements) y con miles de
+ * piezas (cantidad=5000 del golden master) monopolizaba el event loop del
+ * API por minutos — colgando de paso cualquier otro request.
+ */
+export const MAX_PIEZAS_BUSQUEDA_EXHAUSTIVA = 200;
+
 export function evaluateGranFormatoMixedShelfLayout(
   input: EvaluateGranFormatoMixedShelfLayoutInput,
 ): GranFormatoMixedShelfLayoutResult | null {
@@ -419,6 +428,135 @@ export function evaluateGranFormatoMixedShelfLayout(
     return [...states].sort(rankStates)[0] ?? null;
   };
 
+  const buildPlacement = (
+    piece: GranFormatoPiece,
+    option: { widthMm: number; heightMm: number; rotated: boolean },
+    xMm: number,
+    rowYMm: number,
+  ): GranFormatoCostosPreviewPlacement => ({
+    id: piece.id,
+    widthMm: option.widthMm,
+    heightMm: option.heightMm,
+    centerXMm: xMm + option.widthMm / 2,
+    centerYMm: rowYMm + option.heightMm / 2,
+    label: buildGranFormatoPieceLabelCm(
+      piece.originalWidthMm,
+      piece.originalHeightMm,
+    ),
+    rotated: option.rotated,
+    originalWidthMm: piece.originalWidthMm,
+    originalHeightMm: piece.originalHeightMm,
+    panelIndex: piece.panelIndex,
+    panelCount: piece.panelCount,
+    panelAxis: piece.panelAxis,
+    sourcePieceId: piece.sourcePieceId,
+    usefulWidthMm: piece.usefulWidthMm ?? piece.widthMm,
+    usefulHeightMm: piece.usefulHeightMm ?? piece.heightMm,
+    overlapStartMm: piece.overlapStartMm ?? 0,
+    overlapEndMm: piece.overlapEndMm ?? 0,
+  });
+
+  // First-fit decreciente sin beam, O(n·filas). Corre SIEMPRE y compite con
+  // el beam en el ranking final; con muchas piezas es el único (ver
+  // MAX_PIEZAS_BUSQUEDA_EXHAUSTIVA). Además de escalar, a granel suele
+  // GANARLE al beam: el ranking del beam es miope (elige la fila más baja
+  // pieza a pieza) y con piezas homogéneas pierde densidad; acá una fila
+  // nueva se abre con la orientación de menor largo-por-pieza y las filas
+  // existentes se rellenan sin agrandarlas.
+  const solveGreedyShelf = (): State | null => {
+    const orderedPieces = [...pieces].sort(
+      (a, b) =>
+        b.longestSide - a.longestSide ||
+        b.area - a.area ||
+        b.shortestSide - a.shortestSide,
+    );
+    const rows: Row[] = [];
+    const placements: GranFormatoCostosPreviewPlacement[] = [];
+
+    for (const piece of orderedPieces) {
+      const orientations = [
+        { widthMm: piece.widthMm, heightMm: piece.heightMm, rotated: false },
+        ...(input.permitirRotacion && piece.widthMm !== piece.heightMm
+          ? [
+              {
+                widthMm: piece.heightMm,
+                heightMm: piece.widthMm,
+                rotated: true,
+              },
+            ]
+          : []),
+      ].filter((option) => option.widthMm <= input.printableWidthMm);
+      if (!orientations.length) return null;
+
+      // En fila existente la altura ya está pagada: conviene la orientación
+      // más ANGOSTA que quepa (deja más ancho para las piezas que siguen).
+      const porAnchoAsc = [...orientations].sort(
+        (a, b) => a.widthMm - b.widthMm,
+      );
+      let placed = false;
+      for (const row of rows) {
+        for (const option of porAnchoAsc) {
+          if (option.heightMm > row.heightMm) continue;
+          const nextWidth =
+            row.usedWidthMm === 0
+              ? option.widthMm
+              : row.usedWidthMm +
+                input.separacionHorizontalMm +
+                option.widthMm;
+          if (nextWidth > input.printableWidthMm) continue;
+          const xMm =
+            row.usedWidthMm === 0
+              ? input.marginLeftMm
+              : input.marginLeftMm +
+                row.usedWidthMm +
+                input.separacionHorizontalMm;
+          row.usedWidthMm = nextWidth;
+          row.count += 1;
+          placements.push(buildPlacement(piece, option, xMm, row.yMm));
+          placed = true;
+          break;
+        }
+        if (placed) break;
+      }
+      if (placed) continue;
+
+      // Fila nueva: orientación con menor largo consumido por pieza si la
+      // fila se llenara con esta medida ((alto+sep) / piezas-por-fila).
+      const bestOption = orientations
+        .map((option) => {
+          const porFila = Math.max(
+            1,
+            Math.floor(
+              (input.printableWidthMm + input.separacionHorizontalMm) /
+                (option.widthMm + input.separacionHorizontalMm),
+            ),
+          );
+          return {
+            option,
+            costoPorPieza:
+              (option.heightMm + input.separacionVerticalMm) / porFila,
+          };
+        })
+        .sort(
+          (a, b) =>
+            a.costoPorPieza - b.costoPorPieza ||
+            a.option.heightMm - b.option.heightMm,
+        )[0].option;
+      const newRow: Row = {
+        yMm: resolveNextRowY(rows),
+        usedWidthMm: bestOption.widthMm,
+        heightMm: bestOption.heightMm,
+        count: 1,
+      };
+      rows.push(newRow);
+      placements.push(
+        buildPlacement(piece, bestOption, input.marginLeftMm, newRow.yMm),
+      );
+    }
+
+    return { rows, placements };
+  };
+
   const pieceOrders = uniquePieceOrders([
     pieces,
     [...pieces].sort((a, b) => b.area - a.area),
@@ -432,8 +570,11 @@ export function evaluateGranFormatoMixedShelfLayout(
       (a, b) => b.shortestSide - a.shortestSide || b.area - a.area,
     ),
   ]);
-  const bestState = pieceOrders
-    .map((order) => solveOrder(order))
+  const candidateStates =
+    pieces.length > MAX_PIEZAS_BUSQUEDA_EXHAUSTIVA
+      ? [solveGreedyShelf()]
+      : [...pieceOrders.map((order) => solveOrder(order)), solveGreedyShelf()];
+  const bestState = candidateStates
     .filter((state): state is State => state != null)
     .sort(rankStates)[0];
 

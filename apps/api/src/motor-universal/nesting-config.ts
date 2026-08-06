@@ -10,6 +10,7 @@ import type { PasoCargado, JobContext } from './tipos';
 import type { CostingStrategyKind } from '../productos-servicios/nesting/costing';
 import {
   campoSeparacionMaquinaDeFamilia,
+  estrategiaNestingDeFamilia,
   margenesNestingDefaultDeFamilia,
   origenMargenesNestingDeFamilia,
   separacionEsLiteral,
@@ -321,35 +322,36 @@ export function resolveNestingConfig(
   );
   const purchaseSheetWidthMm = readNumber(materialAttrs.anchoMm);
   const purchaseSheetHeightMm = readNumber(materialAttrs.altoMm, materialAttrs.largoMm);
+  // El pliego de impresión configurable es propio de la estrategia
+  // `pliego_digital` declarada por la familia. [Etapa F2: era un
+  // `familiaCodigo === 'impresion_por_hoja'` repetido 5 veces]
+  const soportaPliegoImpresion =
+    estrategiaNestingDeFamilia(paso.familiaCodigo) === 'pliego_digital';
   const printSheetMode =
-    paso.familiaCodigo === 'impresion_por_hoja' &&
+    soportaPliegoImpresion &&
     normalizePrintSheetMode(pliegoImpresionConfig.modo, pliegoImpresionConfig.mode) ===
       'automatic'
       ? 'automatic'
       : 'fixed';
-  const printSheetCostSource =
-    paso.familiaCodigo === 'impresion_por_hoja'
-      ? normalizePrintSheetCostSource(pliegoImpresionConfig.origenCosto)
-      : 'derivado';
-  const printSheetCandidates =
-    paso.familiaCodigo === 'impresion_por_hoja'
-      ? normalizePrintSheetCandidates(pliegoImpresionConfig.candidatos)
-      : [];
-  const configuredPrintSheetWidthMm =
-    paso.familiaCodigo === 'impresion_por_hoja'
-      ? readNumber(
-          pliegoImpresionConfig.anchoMm,
-          pliegoImpresionConfig.widthMm,
-        )
-      : null;
-  const configuredPrintSheetHeightMm =
-    paso.familiaCodigo === 'impresion_por_hoja'
-      ? readNumber(
-          pliegoImpresionConfig.altoMm,
-          pliegoImpresionConfig.largoMm,
-          pliegoImpresionConfig.heightMm,
-        )
-      : null;
+  const printSheetCostSource = soportaPliegoImpresion
+    ? normalizePrintSheetCostSource(pliegoImpresionConfig.origenCosto)
+    : 'derivado';
+  const printSheetCandidates = soportaPliegoImpresion
+    ? normalizePrintSheetCandidates(pliegoImpresionConfig.candidatos)
+    : [];
+  const configuredPrintSheetWidthMm = soportaPliegoImpresion
+    ? readNumber(
+        pliegoImpresionConfig.anchoMm,
+        pliegoImpresionConfig.widthMm,
+      )
+    : null;
+  const configuredPrintSheetHeightMm = soportaPliegoImpresion
+    ? readNumber(
+        pliegoImpresionConfig.altoMm,
+        pliegoImpresionConfig.largoMm,
+        pliegoImpresionConfig.heightMm,
+      )
+    : null;
 
   return {
     algorithm,

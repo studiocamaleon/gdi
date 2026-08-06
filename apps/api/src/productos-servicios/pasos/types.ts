@@ -228,6 +228,36 @@ export interface SlotDeclarado {
    *  paso las soporte (ej: el sustrato de impresión por hoja — los pliegos
    *  del nesting ya contemplan ambas caras). [Etapa A: era un if en motor] */
   ignoraMultiplicadorCaras?: boolean;
+
+  // --- Slot alimentado por el derivador geométrico de la familia ---
+  // (docs/derivadores-geometricos-diseno.md §4.1-4.2)
+  /**
+   * La cantidad del slot es esta magnitud del derivador del paso (cable =
+   * `cableMl`, anclajes = `anclajes`), no la fórmula configurada. Si además
+   * el paso publica un despiece bajo el CÓDIGO de este slot y la variante
+   * declara `largoBarra` (m), se cobran unidades ENTERAS con packing 1D
+   * (barras de perfil — el sobrante se paga, como en la ferretería).
+   * [Etapa 2 derivadores: era `cantidadSlotPrimitivaCarteleria` en motor]
+   */
+  magnitudDerivada?: string;
+  /** Cantidad fija del slot (la fuente LED: 1 por cartel), gane quien gane
+   *  la selección. [Etapa 2 derivadores: era un if por slot en motor] */
+  cantidadFija?: number;
+  /**
+   * Selección por capacidad de fábrica: si el slot de DB no configura los
+   * tres campos del criterio, el motor usa MENOR_CAPACIDAD_QUE_CUMPLA con
+   * estos defaults. `inputMagnitud` lee la magnitud del derivador del MISMO
+   * paso (watts requeridos — todavía no publicados como output durante la
+   * resolución de slots); `inputCampo` lee un flat key del JobContext.
+   * El modelador puede pisar cualquiera desde el slot de DB.
+   * [Etapa 2 derivadores: era el if `esFuenteLed` en motor]
+   */
+  criterioCapacidadDefault?: {
+    inputMagnitud?: string;
+    inputCampo?: string;
+    /** Atributo de la variante que declara la capacidad (ej: `capacidad`). */
+    materialCampo: string;
+  };
 }
 
 // ============================================================================
@@ -314,6 +344,16 @@ export interface ParamsPasoDeclarado {
   requerido?: boolean;
   /** Descripción para documentación / tooltip. */
   descripcion?: string;
+  /**
+   * El campo es editable por el COMERCIAL al cotizar POR DISEÑO de la
+   * familia, sin que el modelador lo declare en
+   * `paramsPasoJson.camposEditablesComercial` (la densidad LED, la
+   * separación de refuerzos del bastidor). El sheet lo ofrece siempre y
+   * `paramsEfectivos` del motor lo acepta del `configPasoRuntime`.
+   * [Etapa 3 derivadores: era CAMPOS_SIEMPRE_EDITABLES_POR_FAMILIA en motor
+   * + una lista espejo hardcodeada en el sheet]
+   */
+  expuestoAlComercial?: boolean;
 }
 
 // ============================================================================
@@ -341,6 +381,45 @@ export type SuperficieNesting =
   | 'pliegos_multiples'
   | 'rollo'
   | 'segun_material';
+
+/**
+ * Estrategia de acomodado que corre el dispatcher. Si la familia no declara
+ * una, la elige la superficie: rollo → shelf-rollo; pliego(s) → grid 2D.
+ * Las nombradas cubren los comportamientos que antes ruteaban por
+ * `familiaCodigo` (casos 2-6 del dispatcher):
+ *  - `corte_rollo`: shelf-rollo sin panelizado; en modo HOJAS no acomoda.
+ *  - `laminado_rollo`: rollo que envuelve pliegos ya impresos.
+ *  - `pouch`: plastificado en formato finito (pouch).
+ *  - `montaje`: piezas propias o de outputs previos sobre otro sustrato.
+ *  - `pliego_digital`: grid 2D single sobre pliego; si el paso tiene
+ *    imposición de caballete configurada, corre el caballete.
+ */
+export type EstrategiaNesting =
+  | 'corte_rollo'
+  | 'laminado_rollo'
+  | 'pouch'
+  | 'montaje'
+  | 'pliego_digital';
+
+/**
+ * Guard del motor cuando el acomodado declarado NO produjo layout: qué
+ * condición corta la cotización (en vez del fallback silencioso a cantidad
+ * cruda) y con qué diagnóstico. Cada valor nombra un guard del motor
+ * [Etapa F2: antes era una tabla por `familiaCodigo` en motor.service]:
+ *  - `laminado_rollo`: corta si el film va por metro lineal.
+ *  - `pouch`: corta si la cantidad es CALCULADO_POR_PASO.
+ *  - `pliego_digital`: corta con pliego automático sin candidato, caballete
+ *    inválido, o pliego fijo resoluble donde la pieza no entra.
+ *  - `sustrato`: corta sólo si el sustrato es resoluble (pieza no entra).
+ *  - `montaje`: corta siempre (sin plan de montaje no se cotiza).
+ * Sin declarar → sin guard: fallback silencioso (vía de tenant, intacta).
+ */
+export type GuardSinLayoutNesting =
+  | 'laminado_rollo'
+  | 'pouch'
+  | 'pliego_digital'
+  | 'sustrato'
+  | 'montaje';
 
 export type DefinicionFamiliaResuelta = Omit<DefinicionFamilia, 'codigo'> & {
   codigo: string;
@@ -431,14 +510,54 @@ export interface DefinicionFamilia {
   fuentePiezasDefault?: string;
 
   /**
-   * Superficie sobre la que el paso acomoda. Presente ⇔ el dispatcher rutea
-   * por esta declaración en vez de por `familiaCodigo`. Lo declaran las
-   * familias de tenant (elección del wizard, superficie fija) y las del
-   * sistema que ya se pasaron a esta vía (impresión por área, `segun_material`).
+   * Acomodado del paso. Presente ⇔ el paso hace nesting; el dispatcher rutea
+   * SOLO por esta declaración (ya no hay ruteo por `familiaCodigo`). Lo
+   * declaran las familias de tenant (elección del wizard, superficie fija) y
+   * todas las del sistema que acomodan piezas.
    */
   nestingConfig?: {
     superficie: SuperficieNesting;
+    /** Si se omite, la superficie elige (rollo → shelf, pliego → grid 2D). */
+    estrategia?: EstrategiaNesting;
+    /** Si se omite, sin layout el motor sigue con su fallback silencioso. */
+    guardSinLayout?: GuardSinLayoutNesting;
+    /** Cuando el dispatcher no dio layout (y el guard no cortó), ¿con qué se
+     *  cotiza la cantidad CALCULADO_POR_PASO? `m2_crudos` = m² de las piezas
+     *  sin desperdicio (el fallback histórico de impresión por área y
+     *  plotter). Sin declarar → cantidad del pedido tal cual.
+     *  [Tanda A: era un if con los dos nombres en motor.service] */
+    fallbackSinLayout?: 'm2_crudos';
   } | null;
+
+  /** Paso de IMPRESIÓN con modos de color (CMYK, sin impresión, etc.):
+   *  habilita el eje modo color en el motor y la pregunta en el editor.
+   *  [Etapa F3: era FAMILIAS_IMPRESION en motor.service + listas de códigos
+   *  en el editor] */
+  esImpresion?: boolean;
+
+  /** Mecanismo de cantidad con el que ARRANCA el paso en el editor cuando el
+   *  modelador no eligió (la lista `mecanismosCantidadSoportados` dice qué se
+   *  puede; esto dice cuál es el natural: corte manual arranca heredando).
+   *  Si se omite, el primero de la lista. [Tanda C: era un if por familia en
+   *  el editor] */
+  mecanismoCantidadDefault?: MecanismoCantidad;
+
+  /** Cómo arranca el RITMO del paso en el editor cuando nadie lo configuró:
+   *  en qué unidad se mide, si es productividad o tiempo por tanda, y qué
+   *  cantidad cuenta (montaje cuenta piezas a montar; instalación mide m²).
+   *  [Tanda C: eran tres funciones con nombres cableados en el editor] */
+  ritmoDefault?: {
+    unidad?: 'unidades_h' | 'm2_h' | 'ml_h';
+    modoCalculo?: 'productivity' | 'batch_time';
+    fuenteCantidad?: string;
+  };
+
+  /** Output canónico que este paso hereda POR DEFAULT cuando su mecanismo es
+   *  HEREDAR_DEL_OUTPUT_CANONICO y el modelador no fijó `campoOutput`.
+   *  Convención: el output natural del paso anterior (corte hereda
+   *  `pliegos_impresos`, impresión hereda `pliegos_calculados`).
+   *  [Etapa F3: era un switch por familia en motor.service] */
+  outputHeredadoDefault?: string;
 
   /**
    * De dónde sale el margen físico que el sustrato NO puede usar.
@@ -499,6 +618,12 @@ export interface DefinicionFamilia {
   /** Lista de params custom que el modelador puede llenar al configurar el paso del producto. */
   paramsPasoSchema: ParamsPasoDeclarado[];
 
+  /** Los params del schema se editan con el editor GENÉRICO de params (el
+   *  motor los consume vía paramsEfectivosDelPaso y la familia no tiene UI a
+   *  medida que los pise). [Tanda B: era FAMILIAS_CON_PARAMS_EDITABLES, una
+   *  lista curada en el frontend] */
+  editorParamsGenerico?: boolean;
+
   // --- Pre-pasada de medidas ---
   /**
    * La familia MUTA medidas del JobContext y el motor la resuelve en una
@@ -516,6 +641,57 @@ export interface DefinicionFamilia {
    * Ver docs/modificaciones-fisicas-lona-diseno.md
    */
   mutaMedidasEnPrePasada?: boolean;
+
+  // --- Derivador geométrico (docs/derivadores-geometricos-diseno.md §3) ---
+  /**
+   * La geometría del paso se DERIVA de las medidas (metros de perfil de un
+   * bastidor, módulos LED sembrados, ojales por perímetro): nadie la carga a
+   * mano. Presente ⇔ el motor corre el derivador del catálogo
+   * (`motor-universal/derivadores/`) UNA vez por paso y de su resultado salen
+   * la cantidad, los outputs canónicos, los slots derivados y el guard.
+   * [Refactor derivadores: eran ifs por familia en 4 lugares del motor]
+   */
+  derivador?: {
+    /** Código en el catálogo de derivadores (`derivadores/index.ts`). */
+    codigo: string;
+    /** Magnitud del resultado que es la cantidad del paso (CALCULADO_POR_PASO). */
+    magnitudPrincipal: string;
+    /**
+     * NOMBRE humano de esa magnitud ("ml de perfil", "módulos", "ojales").
+     * El editor lo usa para que el ritmo diga "6 ml de perfil/h" en vez de
+     * "6 unid./h" (H1 del relevamiento del editor de ruta).
+     */
+    unidadPrincipal?: string;
+    /**
+     * Magnitudes derivadas que el tenant puede elegir como DRIVER del
+     * tiempo del paso, además de la principal ("el corte se mide por
+     * cortes, no por ml" — feedback del usuario). El editor las ofrece en
+     * "¿El ritmo cuenta…?" y el motor las resuelve con
+     * `productivityQuantitySource: "derivada:<magnitud>"`.
+     */
+    magnitudesTiempo?: Array<{ magnitud: string; etiqueta: string }>;
+    /**
+     * Outputs canónicos ← magnitudes del derivador. Un paso puede publicar
+     * varios drivers (el bastidor publica 5) aunque su cantidad sea uno solo.
+     * Ej: { puntos_soldadura: 'puntosSoldadura' }.
+     */
+    outputs?: Record<string, string>;
+    /**
+     * Slot cuyo material alimenta al derivador (los atributos de la variante:
+     * coberturaM2/pasoMm del módulo LED). El motor lo resuelve ANTES de correr
+     * el derivador — declarado acá, no un if por familia.
+     */
+    materialSlot?: string;
+    /**
+     * Diagnóstico cuando el derivador devuelve null (sin esto la cantidad
+     * saldría 0 y el paso cobraría $0 en silencio). El motor antepone
+     * `El paso "<nombre>" `.
+     */
+    mensajeSinDatos: string;
+    sugerenciaSinDatos?: string;
+    /** Código del error. Default: `derivador_sin_datos`. */
+    codigoSinDatos?: string;
+  };
 
   // --- Productos / aplicación ---
   /** Productos típicos donde aplica la familia (informativo, para UI). */

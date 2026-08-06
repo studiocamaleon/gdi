@@ -370,7 +370,7 @@ export function ProductosServiciosTable({
                       const lblMedidas = getLabel(modoMedidasLabels, p.modoMedidas);
                       return (
                         <tr key={p.id} onClick={() => openProduct(p.id)}>
-                        <td>
+                        <td title={p.descripcion ?? undefined}>
                           <div className="name">
                             {highlightMatch(p.nombre, search)}
                             {p.tercerizado ? (
@@ -388,7 +388,6 @@ export function ProductosServiciosTable({
                               </span>
                             ) : null}
                           </div>
-                          <div className="desc">{p.descripcion ?? ""}</div>
                         </td>
                         <td>
                           <span className="tag muted">

@@ -7,22 +7,19 @@
  */
 
 /**
- * Familias cuyos `paramsPasoSchema` se editan desde la UI genérica.
+ * ¿Los `paramsPasoSchema` de la familia se editan desde la UI genérica?
  *
- * OPT-IN a propósito. Varias familias declaran params que el motor NO lee
- * —`tipoPliegue` no lo lee nadie— y exponerlos sería pedirle al modelador que
- * configure cosas que no hacen nada, justo el problema que este trabajo vino a
- * corregir. Se agrega una familia acá recién cuando se verificó que el motor
- * consume sus params.
- *
- * Tampoco entran las que ya tienen UI a medida para los mismos campos
+ * La familia lo DECLARA (`editorParamsGenerico`) — sigue siendo opt-in a
+ * propósito: una familia lo declara recién cuando el motor consume sus
+ * params, y no lo declara si tiene UI a medida para los mismos campos
  * (`pre_prensa`, `montaje_sobre_sustrato`, `diseno_grafico`): se duplicarían
- * los controles.
+ * los controles. [Tanda B: era la lista FAMILIAS_CON_PARAMS_EDITABLES acá]
  */
-export const FAMILIAS_CON_PARAMS_EDITABLES = new Set([
-  "modificacion_pre",
-  "colocacion_ojales",
-]);
+export function familiaConParamsEditables(
+  familia: { editorParamsGenerico?: boolean } | null | undefined,
+): boolean {
+  return familia?.editorParamsGenerico === true;
+}
 
 /** Etiquetas humanas de los valores de enum conocidos. */
 export const ETIQUETAS_VALOR_PARAM: Record<string, string> = {
@@ -32,6 +29,10 @@ export const ETIQUETAS_VALOR_PARAM: Record<string, string> = {
   derecho: "Derecho",
   bolsillo: "Bolsillo",
   refuerzo: "Refuerzo",
+  simple: "Simple (marco plano)",
+  doble: "Doble (cajón)",
+  area: "Por área (grilla sobre la cara)",
+  recorrido: "Por recorrido (siguiendo el trazo)",
 };
 
 export const DESCRIPCIONES_VALOR_PARAM: Record<string, string> = {

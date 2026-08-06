@@ -39,6 +39,7 @@ import { evaluateGranFormatoMaxRectsRollLayout } from '../productos-servicios/ne
 import { evaluateGranFormatoSequentialRollLayout } from '../productos-servicios/nesting/algorithms/secuencial-rollo';
 import { nestGrid2DSingle } from '../productos-servicios/nesting/algorithms/grid-2d-single';
 import {
+  estrategiaNestingDeFamilia,
   fuentePiezasNestingDeFamilia,
   resolverFamilia,
 } from '../productos-servicios/pasos/familias';
@@ -234,29 +235,54 @@ async function despacharNesting(
       ),
     );
   }
-  // ─── Caso 0: la familia DECLARA su superficie ────────────────────
-  // Rutea por la declaración, no por `familiaCodigo`. Lo declaran las familias
-  // de tenant (superficie fija, elegida en el wizard) y las del sistema que ya
-  // se pasaron a esta vía. `segun_material` decide en runtime por máquina +
-  // subfamilia del material (impresión por área corre sobre rollo Y placa).
+  // ─── Dispatch por declaración ────────────────────────────────────
+  // La familia declara su acomodado en `nestingConfig` (superficie +
+  // estrategia opcional); acá ya no se rutea por `familiaCodigo` [Etapa F].
+  // Sin declaración no hay nesting: el caller sigue con su fallback.
   const familiaResuelta = resolverFamilia(paso.familiaCodigo);
-  const superficieDeclarada = familiaResuelta?.nestingConfig?.superficie ?? null;
-  if (superficieDeclarada) {
-    const superficie =
-      superficieDeclarada === 'segun_material'
-        ? resolverSuperficieDinamica(config, materialResuelto)
-        : superficieDeclarada;
-    if (superficie === 'rollo') {
-      return runShelfRollo(paso, jobContext, materialResuelto, config);
-    }
-    // Hoja/placa finita: la medida sale del material del slot (o de la mesa de
-    // la máquina) vía resolveNestingConfig. Piezas uniformes caen solas a
-    // grid-2d-single (poses + imposición completa) dentro del multi.
-    return runGrid2DMultiForArea(paso, jobContext, config);
+  const declaracion = familiaResuelta?.nestingConfig ?? null;
+  if (!declaracion) return null;
+
+  // Estrategia nombrada: comportamiento específico (antes casos 2-6).
+  if (declaracion.estrategia) {
+    const estrategia = ESTRATEGIAS_NESTING[declaracion.estrategia];
+    if (!estrategia) return null;
+    return await estrategia(paso, jobContext, materialResuelto, config);
   }
 
-  // ─── Caso 2: shelf-rollo (corte sobre rollo) ─────────────────────
-  if (paso.familiaCodigo === 'plotter_corte') {
+  // Sin estrategia, la superficie decide (familias de tenant y las del
+  // sistema con acomodado estándar). `segun_material` resuelve en runtime
+  // por máquina + subfamilia del material (impresión por área corre sobre
+  // rollo Y placa).
+  const superficie =
+    declaracion.superficie === 'segun_material'
+      ? resolverSuperficieDinamica(config, materialResuelto)
+      : declaracion.superficie;
+  if (superficie === 'rollo') {
+    return runShelfRollo(paso, jobContext, materialResuelto, config);
+  }
+  // Hoja/placa finita: la medida sale del material del slot (o de la mesa de
+  // la máquina) vía resolveNestingConfig. Piezas uniformes caen solas a
+  // grid-2d-single (poses + imposición completa) dentro del multi.
+  return runGrid2DMultiForArea(paso, jobContext, config);
+}
+
+type EstrategiaNestingFn = (
+  paso: PasoCargado,
+  jobContext: JobContext,
+  materialResuelto: MaterialResueltoParaNesting | null,
+  config: NestingConfigResolved,
+) => NestingDispatchResult | null | Promise<NestingDispatchResult | null>;
+
+/**
+ * Registro de estrategias nombradas — mismo patrón que los derivadores: la
+ * familia declara el código, el motor busca acá. Las condiciones de runtime
+ * de cada comportamiento (modo HOJAS del plotter, caballete configurado)
+ * viven dentro de su estrategia, no en el dispatch.
+ */
+const ESTRATEGIAS_NESTING: Record<string, EstrategiaNestingFn> = {
+  /** Corte sobre rollo: shelf sin panelizado; en modo HOJAS no acomoda. */
+  corte_rollo: (paso, jobContext, materialResuelto, config) => {
     if (getPlotterModoOperacion(paso) === 'HOJAS') {
       return null;
     }
@@ -266,43 +292,32 @@ async function despacharNesting(
       materialResuelto,
       disablePanelizado(config),
     );
-  }
+  },
 
-  // ─── Caso 3: laminado en rollo sobre pliegos ya impresos ─────────
-  if (paso.familiaCodigo === 'laminado') {
-    return runLaminadoRollo(paso, jobContext, materialResuelto, config);
-  }
+  /** Laminado en rollo sobre pliegos ya impresos. */
+  laminado_rollo: (paso, jobContext, materialResuelto, config) =>
+    runLaminadoRollo(paso, jobContext, materialResuelto, config),
 
-  // ─── Caso 4: plastificado pouch sobre formato finito ──────────────
-  if (paso.familiaCodigo === 'plastificado_pouch') {
-    return runPlastificadoPouch(jobContext, materialResuelto, config);
-  }
+  /** Plastificado pouch sobre formato finito. */
+  pouch: (_paso, jobContext, materialResuelto, config) =>
+    runPlastificadoPouch(jobContext, materialResuelto, config),
 
-  // ─── Caso 5: montaje sobre otro sustrato ─────────────────────────
-  // Reusa los algoritmos existentes, pero permite que las piezas vengan
-  // de la medida comercial o de outputs publicados por pasos anteriores.
-  if (paso.familiaCodigo === 'montaje_sobre_sustrato') {
-    return await runMontajeSobreSustrato(
-      paso,
-      jobContext,
-      materialResuelto,
-      config,
-    );
-  }
+  /** Montaje sobre otro sustrato. Reusa los algoritmos existentes, pero
+   *  permite que las piezas vengan de la medida comercial o de outputs
+   *  publicados por pasos anteriores. */
+  montaje: (paso, jobContext, materialResuelto, config) =>
+    runMontajeSobreSustrato(paso, jobContext, materialResuelto, config),
 
-  // ─── Caso 6: grid 2D single/multi (digital sobre pliego) ─────────
-  if (paso.familiaCodigo === 'impresion_por_hoja') {
-    // Imposición de cuadernillo (caballete): la pieza que se acomoda es el
-    // PAR de páginas y el resultado pasa por el agrupamiento del libro.
+  /** Digital sobre pliego: grid 2D single; con imposición de cuadernillo
+   *  (caballete) la pieza que se acomoda es el PAR de páginas y el resultado
+   *  pasa por el agrupamiento del libro. */
+  pliego_digital: (paso, jobContext, materialResuelto, config) => {
     if (getImposicionCaballeteConfig(paso)) {
       return runImposicionCaballete(paso, jobContext, config);
     }
     return runGrid2DSingle(paso, jobContext, materialResuelto, config);
-  }
-
-  // No cubierto: caller sigue con fallback.
-  return null;
-}
+  },
+};
 
 function getPlotterModoOperacion(paso: PasoCargado): string | null {
   const detalle =
@@ -423,6 +438,22 @@ function buildJobContextPiezas(
       : typeof params.fuentePiezasMontaje === 'string'
         ? params.fuentePiezasMontaje
         : null;
+  // Fuente builtin `piezas_visibles`: el paso trabaja sobre la MEDIDA
+  // TERMINADA — la chapa trasera se corta al marco del cartel, no a la lona
+  // que la demasía de tensado agrandó. Hermana de `piezas_jobcontext` (que
+  // usa las piezas mutadas); si no hubo mutación, son lo mismo.
+  if (seleccion === 'piezas_visibles') {
+    const visibles = jobContext.piezasVisibles ?? [];
+    const piezas =
+      visibles.length > 0 ? visibles : getPiezasParaNesting(jobContext);
+    if (piezas.length === 0) return null;
+    return {
+      ...jobContext,
+      cantidad: piezas.reduce((acc, pieza) => acc + pieza.cantidad, 0),
+      piezas,
+    };
+  }
+
   const fuente = fuentePiezasNestingDeFamilia(paso.familiaCodigo, seleccion);
 
   if (fuente) {
@@ -1238,10 +1269,10 @@ function runGrid2DSingle(
   materialResuelto: MaterialResueltoParaNesting | null,
   config: NestingConfigResolved,
 ): NestingDispatchResult | null {
-  if (
-    paso.familiaCodigo === 'impresion_por_hoja' &&
-    config.printSheetMode === 'automatic'
-  ) {
+  // `printSheetMode` sólo puede ser 'automatic' si la familia declara la
+  // estrategia pliego_digital (gate en resolveNestingConfig) — no hace falta
+  // re-chequear la familia acá. [Etapa F2]
+  if (config.printSheetMode === 'automatic') {
     return runGrid2DSingleAutoPrintSheet(
       paso,
       jobContext,
@@ -1703,8 +1734,10 @@ function buildVisualConfig(input: {
 }
 
 function shouldCenterPlacementsForPaso(paso: PasoCargado) {
+  // El centrado en el pliego es de la impresión digital sobre pliego
+  // (estrategia declarada) cuando la máquina es láser. [Etapa F2]
   return (
-    paso.familiaCodigo === 'impresion_por_hoja' &&
+    estrategiaNestingDeFamilia(paso.familiaCodigo) === 'pliego_digital' &&
     paso.maquina?.plantilla?.toLowerCase() === 'impresora_laser'
   );
 }

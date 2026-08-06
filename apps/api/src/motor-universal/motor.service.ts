@@ -5,10 +5,16 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { resolverFamilia } from '../productos-servicios/pasos/familias';
+import {
+  estrategiaNestingDeFamilia,
+  fallbackSinLayoutDeFamilia,
+  guardSinLayoutDeFamilia,
+  resolverFamilia,
+} from '../productos-servicios/pasos/familias';
 import type {
   DefinicionFamiliaResuelta,
   FamiliaCodigo,
+  GuardSinLayoutNesting,
 } from '../productos-servicios/pasos/types';
 import { evaluarRegla } from './evaluador-jsonlogic';
 import { loadTarifasHorarias } from '../productos-servicios/costing/load-tarifas';
@@ -96,6 +102,7 @@ import {
   congelarMedidaVisible,
 } from './job-context-metrics';
 import {
+  camposExpuestosAlComercial,
   familiaMutaMedidasEnPrePasada,
   familiaSinConsumiblesMaquina,
   magnitudTiempoDefaultDeFamilia,
@@ -111,37 +118,14 @@ import {
   calcularMetrosLinealesUnion,
   parsearParamsModificacionPre,
 } from './modificaciones-pre';
+import { calcularBarrasNecesarias } from './estructura-bastidor';
+import { runDerivador } from './derivadores';
 import {
-  calcularCantidadOjales,
-  calcularLayoutOjales,
-  parsearParamsColocacionOjales,
-} from './colocacion-ojales';
-import {
-  calcularBarrasNecesarias,
-  calcularEstructuraBastidor,
-  parsearParamsEstructuraBastidor,
-} from './estructura-bastidor';
-import {
-  calcularIluminacionLed,
-  parsearAtributosModuloLed,
-  parsearParamsIluminacionLed,
-} from './iluminacion-led';
+  derivacionesDelJobContext,
+  type ResultadoDerivador,
+} from './derivadores/tipos';
 
 const MODO_SIN_IMPRESION = 'SIN_IMPRESION';
-
-/**
- * Campos que el comercial puede pisar por diseño de una HERRAMIENTA (el
- * configurador 3D de cartelería), sin que el modelador los declare abiertos.
- * Espejo del merge del sheet (getCarteleriaDeRuta → configPasoRuntime).
- */
-const CAMPOS_SIEMPRE_EDITABLES_POR_FAMILIA: Record<string, string[]> = {
-  estructura_bastidor: ['sepRefuerzoVcm', 'sepRefuerzoHcm', 'solapaCenefaCm'],
-  iluminacion_led: ['densidad'],
-};
-const FAMILIAS_IMPRESION = new Set([
-  'impresion_por_area',
-  'impresion_por_hoja',
-]);
 
 /**
  * Sub-fase 3 — shapes del config embebido de un paso extra. Espejan el draft
@@ -375,34 +359,13 @@ function precioMaterialPorUnidadDeConsumo(
 }
 
 /**
- * G-M2 — Mapeo familia → output canónico que hereda por default cuando
- * `mecanismoCantidad = HEREDAR_DEL_OUTPUT_CANONICO` y no se especificó
- * `campoOutput` en `mecanismoCantidadConfigJson`. Convención: cada familia
- * espera el output natural del paso anterior.
+ * G-M2 — output canónico que hereda por default cuando `mecanismoCantidad =
+ * HEREDAR_DEL_OUTPUT_CANONICO` y no se especificó `campoOutput`. La familia
+ * lo DECLARA (`outputHeredadoDefault`); antes era un switch por código.
+ * [Etapa F3]
  */
 function defaultOutputParaHeredar(familiaCodigo: string): string | null {
-  switch (familiaCodigo) {
-    case 'impresion_por_hoja':
-      return 'pliegos_calculados';
-    case 'corte_guillotina':
-      return 'pliegos_impresos';
-    case 'corte_manual':
-      return 'pliegos_impresos';
-    case 'laminado':
-      return 'pliegos_impresos';
-    case 'plegado':
-      return 'pliegos_impresos';
-    case 'troquelado_digital':
-      return 'pliegos_impresos';
-    case 'engomado_emblocado':
-      return 'pliegos_impresos';
-    case 'encuadernado_anillado':
-      return 'pliegos_impresos';
-    case 'modificacion_post':
-      return 'piezas_cortadas';
-    default:
-      return null;
-  }
+  return resolverFamilia(familiaCodigo)?.outputHeredadoDefault ?? null;
 }
 
 /**
@@ -456,7 +419,9 @@ export class MotorUniversalService {
     return paramsEfectivos(
       paso.paramsPasoJson,
       jobContext.configPasoRuntime?.[paso.configPasoId],
-      CAMPOS_SIEMPRE_EDITABLES_POR_FAMILIA[paso.familiaCodigo ?? ''] ?? [],
+      // Campos expuestos POR DISEÑO de la familia (`expuestoAlComercial` en
+      // su schema): el comercial los pisa sin que el modelador los abra.
+      camposExpuestosAlComercial(paso.familiaCodigo ?? ''),
     );
   }
 
@@ -669,6 +634,10 @@ export class MotorUniversalService {
      * validaciones COMPARE/REQUIRES_INPUT puedan referenciarlos.
      */
     const outputsAcumulados = new Set<string>();
+    // Derivadores geométricos: el cache por paso se crea en el JobContext
+    // ANTES del bucle, así el duplicado por caras (shallow copy) comparte la
+    // MISMA referencia y lo que un paso deriva adentro se ve acá afuera.
+    derivacionesDelJobContext(jobContext);
     let huboErrorEnPasoAnterior = false;
 
     for (let i = 0; i < producto.pasos.length; i++) {
@@ -739,75 +708,36 @@ export class MotorUniversalService {
       const trazaPre = mutacionesPrePasada.get(paso.rutaPasoId);
       if (trazaPre) ejecucion.mutacionAplicada = trazaPre;
 
-      // Misma lógica para ojales: sin separación ni lados la cantidad sale 0 y
-      // el paso no cobra nada, otra vez en silencio.
-      // FRONTERA-PRIMITIVA: colocacion_ojales calcula su layout con geometría
-      // propia (calcularLayoutOjales) — Tipo B, no es dato declarable.
-      if (paso.familiaCodigo === 'colocacion_ojales' && ejecucion.activado) {
-        const paramsOjales = parsearParamsColocacionOjales(
-          this.paramsEfectivosDelPaso(paso, jobContext),
-        );
-        if (paramsOjales) {
-          // Layout para el visor de nesting: dónde va cada ojal.
-          const layout = calcularLayoutOjales(jobContext, paramsOjales);
-          if (layout.length > 0) {
+      // Derivador geométrico — guard genérico anti-$0-silencioso: si la
+      // familia declara un derivador y no pudo derivar (cajón doble sin
+      // profundidad, módulo LED sin cobertura, ojales sin lados), la cantidad
+      // saldría 0 y el paso cobraría $0 sin avisar. El diagnóstico lo declara
+      // la familia; el andamiaje es uno solo.
+      const derivadorDecl = resolverFamilia(paso.familiaCodigo)?.derivador;
+      if (derivadorDecl && ejecucion.activado) {
+        const derivacion =
+          derivacionesDelJobContext(jobContext)[paso.configPasoId];
+        if (!derivacion) {
+          errores.push({
+            codigo: derivadorDecl.codigoSinDatos ?? 'derivador_sin_datos',
+            severidad: 'ERROR',
+            rutaPasoId: paso.rutaPasoId,
+            rutaPasoOrden: paso.rutaPasoOrden,
+            familiaCodigo: paso.familiaCodigo,
+            mensaje: `El paso "${ejecucion.nombreVisible ?? paso.familiaCodigo}" ${derivadorDecl.mensajeSinDatos}`,
+            sugerencia: derivadorDecl.sugerenciaSinDatos,
+          });
+        } else {
+          // Traza para el visor de nesting (ojales): las posiciones salen del
+          // motor para que el dibujo no pueda contradecir al cálculo.
+          const layout = derivacion.traza?.ojalesLayout as
+            | PasoEjecutado['ojalesLayout']
+            | undefined;
+          if (layout && layout.length > 0) {
             ejecucion.ojalesLayout = layout;
-            ejecucion.ojalesConfig = {
-              separacionMaxMm: paramsOjales.separacionMaxMm,
-              lados: paramsOjales.lados,
-              esquinasSiempre: paramsOjales.esquinasSiempre,
-            };
+            ejecucion.ojalesConfig = derivacion.traza
+              ?.ojalesConfig as PasoEjecutado['ojalesConfig'];
           }
-        }
-        if (!paramsOjales) {
-          errores.push({
-            codigo: 'colocacion_ojales_mal_configurada',
-            severidad: 'ERROR',
-            rutaPasoId: paso.rutaPasoId,
-            rutaPasoOrden: paso.rutaPasoOrden,
-            familiaCodigo: paso.familiaCodigo,
-            mensaje: `El paso "${ejecucion.nombreVisible ?? paso.familiaCodigo}" no declara separación entre ojales ni lados, así que no puede calcular cuántos ojales entran.`,
-            sugerencia:
-              'Configurar en el paso la separación máxima entre ojales (mm) y los lados donde van.',
-          });
-        }
-      }
-
-      // F1 cartelería — mismos silencios que ojales: sin estos datos la
-      // cantidad sale 0 y el paso cobraría $0 sin avisar.
-      if (paso.familiaCodigo === 'estructura_bastidor' && ejecucion.activado) {
-        const resultado = calcularEstructuraBastidor(
-          jobContext,
-          parsearParamsEstructuraBastidor(
-            this.paramsEfectivosDelPaso(paso, jobContext),
-          ),
-        );
-        if (!resultado) {
-          errores.push({
-            codigo: 'estructura_bastidor_sin_profundidad',
-            severidad: 'ERROR',
-            rutaPasoId: paso.rutaPasoId,
-            rutaPasoOrden: paso.rutaPasoOrden,
-            familiaCodigo: paso.familiaCodigo,
-            mensaje: `El paso "${ejecucion.nombreVisible ?? paso.familiaCodigo}" es un bastidor DOBLE (cajón) pero no tiene profundidad: sin ella no se pueden derivar los metros de perfil.`,
-            sugerencia:
-              'Cargá la profundidad del cajón al cotizar, fijala en el paso, o cambiá el bastidor a "simple" si es un marco plano.',
-          });
-        }
-      }
-      if (paso.familiaCodigo === 'iluminacion_led' && ejecucion.activado) {
-        const calc = (jobContext as Record<string, unknown>).__iluminacionLed;
-        if (!calc) {
-          errores.push({
-            codigo: 'iluminacion_led_sin_modulo',
-            severidad: 'ERROR',
-            rutaPasoId: paso.rutaPasoId,
-            rutaPasoOrden: paso.rutaPasoOrden,
-            familiaCodigo: paso.familiaCodigo,
-            mensaje: `El paso "${ejecucion.nombreVisible ?? paso.familiaCodigo}" no pudo derivar los módulos LED: el módulo del slot no declara cobertura (m²) ni paso (mm) en sus atributos, o el slot quedó sin material.`,
-            sugerencia:
-              'Completá coberturaM2 (sembrado por área) o pasoMm (por recorrido) en la variante del módulo LED de la biblioteca.',
-          });
         }
       }
     }
@@ -2244,39 +2174,40 @@ export class MotorUniversalService {
         )
       : null;
 
-    // F1 cartelería — iluminacion_led publica los watts requeridos ANTES de
-    // resolver los slots: el slot `fuente` los usa como criterioInputCampo
-    // del selector MENOR_CAPACIDAD_QUE_CUMPLA (el algoritmo de la anilladora).
-    // El módulo se resuelve POR CÓDIGO de slot: el orden de paso.slots no
-    // está garantizado y slots[0] puede ser la fuente.
-    if (paso.familiaCodigo === 'iluminacion_led') {
-      const slotModulo =
-        paso.slots.find((sl) => sl.slotCodigo === 'modulos_led') ??
-        paso.slots[0] ??
-        null;
-      const materialModulo = slotModulo
-        ? slotModulo === paso.slots[0]
-          ? materialPreliminar
-          : await this.resolverMaterialSlot(tenantId, slotModulo, jobContext, paso)
-        : null;
-      const modulo = parsearAtributosModuloLed(
-        materialModulo?.atributosVarianteJson,
-      );
-      const iluminacion = modulo
-        ? calcularIluminacionLed(
-            jobContext,
-            parsearParamsIluminacionLed(
-              this.paramsEfectivosDelPaso(paso, jobContext),
-            ),
-            modulo,
-          )
-        : null;
-      if (iluminacion) {
-        const ctx = jobContext as Record<string, unknown>;
-        ctx.watts_requeridos_led = iluminacion.wattsRequeridos;
-        // Cálculo completo para los slots secundarios (cableado) y outputs.
-        ctx.__iluminacionLed = iluminacion;
+    // Derivador geométrico — SE CORRE UNA VEZ POR PASO, antes de resolver los
+    // slots (la fuente LED se selecciona por los watts derivados) y del
+    // nesting. El resultado queda cacheado en el JobContext: de ahí leen la
+    // cantidad del paso, los outputs canónicos, los slots derivados y el
+    // guard del bucle principal. Si la familia declara `materialSlot`, sus
+    // atributos de variante alimentan la derivación (cobertura del módulo
+    // LED) — el slot se busca POR CÓDIGO: el orden de paso.slots no está
+    // garantizado y slots[0] puede ser otro.
+    if (familia?.derivador) {
+      let materialDerivador: {
+        atributosVarianteJson?: Record<string, unknown> | null;
+      } | null = null;
+      if (familia.derivador.materialSlot) {
+        const slotDeclarado =
+          paso.slots.find(
+            (sl) => sl.slotCodigo === familia.derivador?.materialSlot,
+          ) ?? null;
+        materialDerivador = slotDeclarado
+          ? slotDeclarado === slotPrincipal
+            ? materialPreliminar
+            : await this.resolverMaterialSlot(
+                tenantId,
+                slotDeclarado,
+                jobContext,
+                paso,
+              )
+          : null;
       }
+      derivacionesDelJobContext(jobContext)[paso.configPasoId] = runDerivador(
+        familia.derivador.codigo,
+        jobContext,
+        this.paramsEfectivosDelPaso(paso, jobContext),
+        materialDerivador?.atributosVarianteJson ?? null,
+      );
     }
 
     // d) NESTING (G-M1 — F.2.13): si el paso usa CALCULADO_POR_PASO y la familia
@@ -2307,15 +2238,16 @@ export class MotorUniversalService {
     // encuentra la pieza que no entra, montaje distingue la fuente de piezas—
     // pero el andamiaje (condición + corte con la cantidad en 0) es uno solo.
     // Cortan sólo si la familia debía nestear y el dispatcher no dio layout.
-    // Tipo B, se parametrizan en la Etapa B.
+    // Cada guard se activa por el `guardSinLayout` que la familia DECLARA en
+    // su nestingConfig, no por familiaCodigo. [Etapa F2]
     if (debeCalcularNestingProductivo && !nestingDispatch) {
       const guardsNesting: Array<{
-        familia: string;
+        guard: GuardSinLayoutNesting;
         debeCortar: () => boolean;
         error: () => ErrorMotor;
       }> = [
         {
-          familia: 'laminado',
+          guard: 'laminado_rollo',
           debeCortar: () =>
             !!materialPreliminar && this.debeCalcularNestingLaminado(paso),
           error: () =>
@@ -2326,7 +2258,7 @@ export class MotorUniversalService {
             ),
         },
         {
-          familia: 'plastificado_pouch',
+          guard: 'pouch',
           debeCortar: () =>
             !!materialPreliminar &&
             paso.mecanismoCantidad === 'CALCULADO_POR_PASO',
@@ -2343,7 +2275,7 @@ export class MotorUniversalService {
           // donde no salió layout → la pieza no entra en el pliego. Antes el
           // caso fijo caía al fallback silencioso y el síntoma aparecía
           // pasos después (guillotina sin pliegos_calculados).
-          familia: 'impresion_por_hoja',
+          guard: 'pliego_digital',
           debeCortar: () =>
             this.tienePliegoImpresionAutomatico(paso) ||
             getImposicionCaballeteConfig(paso) != null ||
@@ -2367,7 +2299,7 @@ export class MotorUniversalService {
           // Sólo corta si el sustrato es resoluble (rollo o pliego con
           // medidas): entonces una pieza NO ENTRA. Sin sustrato resoluble se
           // mantiene el fallback silencioso (material sin resolver).
-          familia: 'impresion_por_area',
+          guard: 'sustrato',
           debeCortar: () =>
             this.areaTieneSustratoResoluble(
               paso,
@@ -2389,14 +2321,15 @@ export class MotorUniversalService {
           // Sin layout, cotizar con la cantidad cruda dejaría el montaje sin
           // plan. Causa típica: fuentePiezasMontaje='pliegos_impresos' cuando
           // la impresión previa va en rollo y no publica pliegos.
-          familia: 'montaje_sobre_sustrato',
+          guard: 'montaje',
           debeCortar: () => true,
           error: () => this.errorMontajeSinNesting(paso, jobContext),
         },
       ];
 
+      const guardDeclarado = guardSinLayoutDeFamilia(paso.familiaCodigo);
       const guard = guardsNesting.find(
-        (g) => g.familia === paso.familiaCodigo && g.debeCortar(),
+        (g) => g.guard === guardDeclarado && g.debeCortar(),
       );
       if (guard) {
         errores.push(guard.error());
@@ -2627,7 +2560,8 @@ export class MotorUniversalService {
   }
 
   private esPasoImpresion(paso: Pick<PasoCargado, 'familiaCodigo'>) {
-    return FAMILIAS_IMPRESION.has(paso.familiaCodigo);
+    // [Etapa F3] La familia declara ser de impresión; antes era un Set.
+    return resolverFamilia(paso.familiaCodigo)?.esImpresion === true;
   }
 
   private esModoSinImpresion(paso: PasoCargado, jobContext: JobContext) {
@@ -2741,7 +2675,9 @@ export class MotorUniversalService {
     if (paso.mecanismoCantidad !== 'HEREDAR_DEL_OUTPUT_CANONICO') {
       return false;
     }
-    if (paso.familiaCodigo !== 'impresion_por_hoja') {
+    // El autocálculo al heredar sin output es de la impresión digital sobre
+    // pliego (estrategia declarada). [Etapa F2]
+    if (estrategiaNestingDeFamilia(paso.familiaCodigo) !== 'pliego_digital') {
       return false;
     }
 
@@ -3272,10 +3208,11 @@ export class MotorUniversalService {
     };
   }
 
-  // FRONTERA-NESTING: laminado nestea sólo si su film va por metro lineal.
+  // FRONTERA-NESTING: el laminado en rollo (estrategia declarada) nestea
+  // sólo si su film va por metro lineal. [Etapa F2]
   private debeCalcularNestingLaminado(paso: PasoCargado): boolean {
     return (
-      paso.familiaCodigo === 'laminado' &&
+      estrategiaNestingDeFamilia(paso.familiaCodigo) === 'laminado_rollo' &&
       paso.slots.some(
         (slot) =>
           slot.slotCodigo === 'film' && slot.formula === 'por_metro_lineal',
@@ -3574,7 +3511,9 @@ export class MotorUniversalService {
   }
 
   private tienePliegoImpresionAutomatico(paso: PasoCargado): boolean {
-    if (paso.familiaCodigo !== 'impresion_por_hoja') return false;
+    if (estrategiaNestingDeFamilia(paso.familiaCodigo) !== 'pliego_digital') {
+      return false;
+    }
     const params = this.asRecord(paso.paramsPasoJson);
     const nestingConfig = this.asRecord(params.nestingConfig);
     const pliego = this.asRecord(nestingConfig.pliegoImpresion);
@@ -3695,7 +3634,9 @@ export class MotorUniversalService {
     jobContext: JobContext,
     material: MaterialResueltoParaNestingConfig | null,
   ): boolean {
-    if (paso.familiaCodigo !== 'impresion_por_hoja') return false;
+    if (estrategiaNestingDeFamilia(paso.familiaCodigo) !== 'pliego_digital') {
+      return false;
+    }
     const ctx = this.getJobContextParaNesting(paso, jobContext);
     const config = resolveNestingConfig(paso, ctx, material);
     if ((config.sheetWidthMm ?? 0) <= 0 || (config.sheetHeightMm ?? 0) <= 0) {
@@ -3841,7 +3782,7 @@ export class MotorUniversalService {
       // Cantidad: depende de la fórmula. Si hay nesting, ajustamos a la
       // cantidad real con desperdicio.
       let cantidad = 0;
-      const cantidadPrimitiva = this.cantidadSlotPrimitivaCarteleria(
+      const cantidadPrimitiva = this.cantidadSlotDerivada(
         paso,
         slot,
         jobContext,
@@ -4966,15 +4907,19 @@ export class MotorUniversalService {
           : todos;
       if (validos.length === 0) return null;
 
-      // F1 cartelería: el slot `fuente` de iluminacion_led trae el selector
-      // por capacidad de fábrica — sin obligar al modelador a configurar los
-      // tres campos del criterio (los puede pisar si quiere).
-      const esFuenteLed =
-        paso?.familiaCodigo === 'iluminacion_led' &&
-        slot.slotCodigo === 'fuente';
+      // Selección por capacidad DE FÁBRICA: la familia puede declarar en su
+      // slot un `criterioCapacidadDefault` (la fuente LED se elige por los
+      // watts derivados) — sin obligar al modelador a configurar los tres
+      // campos del criterio; el slot de DB pisa cualquiera si los trae.
+      // (docs/derivadores-geometricos-diseno.md §4.2)
+      const capacidadDefault = paso
+        ? resolverFamilia(paso.familiaCodigo)?.slotsRequeridos.find(
+            (s) => s.codigo === slot.slotCodigo,
+          )?.criterioCapacidadDefault
+        : undefined;
       const criterio =
         slot.criterioMotorAuto ??
-        (esFuenteLed ? 'MENOR_CAPACIDAD_QUE_CUMPLA' : 'MENOR_COSTO');
+        (capacidadDefault ? 'MENOR_CAPACIDAD_QUE_CUMPLA' : 'MENOR_COSTO');
 
       if (criterio === 'MENOR_COSTO') {
         return validos.sort(
@@ -5027,13 +4972,21 @@ export class MotorUniversalService {
         // variante. El campo de capacidad se lee de atributosVarianteJson (ver
         // seleccion-capacidad.ts): sin esto cap=0 y el motor no auto-selecciona.
         const inputCampo =
-          slot.criterioInputCampo ??
-          (esFuenteLed ? 'watts_requeridos_led' : '');
+          slot.criterioInputCampo ?? capacidadDefault?.inputCampo ?? '';
         const materialCampo =
-          slot.criterioMaterialCampo ?? (esFuenteLed ? 'capacidad' : '');
-        const inputValor = Number(
+          slot.criterioMaterialCampo ?? capacidadDefault?.materialCampo ?? '';
+        let inputValor = Number(
           (jobContext as Record<string, unknown>)[inputCampo] ?? 0,
         );
+        if (!inputCampo && capacidadDefault?.inputMagnitud && paso) {
+          // `inputMagnitud`: el requisito sale de la derivación cacheada del
+          // MISMO paso (los watts todavía no se publicaron como output — los
+          // outputs se calculan al final del paso).
+          inputValor = Number(
+            derivacionesDelJobContext(jobContext)[paso.configPasoId]
+              ?.magnitudes[capacidadDefault.inputMagnitud] ?? 0,
+          );
+        }
         return seleccionarMenorCapacidadQueCumpla(
           validos,
           materialCampo,
@@ -5267,7 +5220,10 @@ export class MotorUniversalService {
   }
 
   private esPlotterCorteSobreHojas(paso: PasoCargado): boolean {
-    if (paso.familiaCodigo !== 'plotter_corte') return false;
+    // [Tanda A] Corte sobre rollo (estrategia declarada) en modo HOJAS.
+    if (estrategiaNestingDeFamilia(paso.familiaCodigo) !== 'corte_rollo') {
+      return false;
+    }
     const detalle = this.asRecord(paso.perfil?.detalleJson);
     return String(detalle.modoOperacion ?? '').toUpperCase() === 'HOJAS';
   }
@@ -5533,53 +5489,20 @@ export class MotorUniversalService {
         if (params) return calcularMetrosLinealesUnion(jobContext, params);
         return 0;
       }
-      // Etapa C — `colocacion_ojales` deriva su cantidad del perímetro VISIBLE
-      // (el ojal va al borde terminado, no crece con la demasía del refuerzo).
-      if (paso.familiaCodigo === 'colocacion_ojales') {
-        const params = parsearParamsColocacionOjales(
-          this.paramsEfectivosDelPaso(paso, jobContext),
-        );
-        if (params) return calcularCantidadOjales(jobContext, params);
-        return 0;
+      // Derivador geométrico — la cantidad del paso es la magnitud principal
+      // del resultado cacheado (ml de perfil, módulos LED, ojales). Se derivó
+      // UNA vez en ejecutarPaso; si no pudo (null), 0 — el guard del bucle ya
+      // corta con el diagnóstico de la familia.
+      const derivadorDecl = resolverFamilia(paso.familiaCodigo)?.derivador;
+      if (derivadorDecl) {
+        const derivacion =
+          derivacionesDelJobContext(jobContext)[paso.configPasoId];
+        return derivacion?.magnitudes[derivadorDecl.magnitudPrincipal] ?? 0;
       }
-      // F1 cartelería — `estructura_bastidor`: la cantidad del paso son los
-      // METROS de perfil derivados de W×H×D y la separación de refuerzos.
-      if (paso.familiaCodigo === 'estructura_bastidor') {
-        const resultado = calcularEstructuraBastidor(
-          jobContext,
-          parsearParamsEstructuraBastidor(
-            this.paramsEfectivosDelPaso(paso, jobContext),
-          ),
-        );
-        return resultado?.mlTotal ?? 0;
-      }
-      // F1 cartelería — `iluminacion_led`: la cantidad son los MÓDULOS,
-      // derivados de la geometría y de los atributos del módulo del slot.
-      if (paso.familiaCodigo === 'iluminacion_led') {
-        // La pre-pasada del paso ya calculó con el MÓDULO del slot correcto.
-        const calc = (jobContext as Record<string, unknown>).__iluminacionLed as
-          | { modulos?: number }
-          | undefined;
-        if (calc?.modulos) return calc.modulos;
-        const modulo = parsearAtributosModuloLed(
-          materialResuelto?.atributosVarianteJson,
-        );
-        if (!modulo) return 0;
-        const resultado = calcularIluminacionLed(
-          jobContext,
-          parsearParamsIluminacionLed(
-            this.paramsEfectivosDelPaso(paso, jobContext),
-          ),
-          modulo,
-        );
-        return resultado?.modulos ?? 0;
-      }
-      // Fallback histórico: m² crudos de las piezas (sin desperdicio) cuando
-      // la familia no tiene algoritmo soportado por el dispatcher.
-      if (
-        paso.familiaCodigo === 'impresion_por_area' ||
-        paso.familiaCodigo === 'plotter_corte'
-      ) {
+      // Fallback histórico DECLARADO (`fallbackSinLayout: 'm2_crudos'`):
+      // m² crudos de las piezas (sin desperdicio) cuando el dispatcher no
+      // dio layout. [Tanda A: era un if con los dos nombres]
+      if (fallbackSinLayoutDeFamilia(paso.familiaCodigo) === 'm2_crudos') {
         if (this.esPlotterCorteSobreHojas(paso)) {
           const m2Pliegos = this.calcularM2DesdePliegosImpresos(jobContext);
           if (m2Pliegos > 0) return m2Pliegos;
@@ -5611,13 +5534,18 @@ export class MotorUniversalService {
   }
 
   /**
-   * F1 cartelería — cantidades de slots que se DERIVAN de la geometría, no de
-   * la fórmula configurada (FRONTERA-PRIMITIVA, como el layout de ojales):
-   *   estructura_bastidor: chapa_cenefa (m²) y pintura (m² de superficie).
-   *   iluminacion_led: fuente (1, la elige MENOR_CAPACIDAD) y cableado (ml).
+   * Cantidades de slots que se DERIVAN de la geometría, no de la fórmula
+   * configurada — declaradas por la familia en su `SlotDeclarado`
+   * (docs/derivadores-geometricos-diseno.md §4.1):
+   *  - `cantidadFija`: el slot consume N por trabajo (la fuente LED: 1).
+   *  - `magnitudDerivada`: el slot consume esa magnitud del derivador del
+   *    paso (cable = cableMl, anclajes = anclajes, perfil = mlTotal). Si el
+   *    derivador además publica un despiece bajo el CÓDIGO del slot y la
+   *    variante declara `largoBarra` (m), se cobran unidades ENTERAS con
+   *    packing 1D (el sobrante se paga igual, como en la ferretería).
    * Devuelve null para cualquier otro slot → sigue el camino normal.
    */
-  private cantidadSlotPrimitivaCarteleria(
+  private cantidadSlotDerivada(
     paso: PasoCargado,
     slot: PasoCargado['slots'][number],
     jobContext: JobContext,
@@ -5625,60 +5553,40 @@ export class MotorUniversalService {
       atributosVarianteJson?: Record<string, unknown> | null;
     } | null,
   ): number | null {
-    if (paso.familiaCodigo === 'estructura_bastidor') {
-      const slotsDerivados = new Set([
-        'perfil_estructural',
-        'chapa_cenefa',
-        'pintura',
-        'chapa_fondo',
-        'anclaje',
-      ]);
-      if (!slotsDerivados.has(slot.slotCodigo)) return null;
-      const resultado = calcularEstructuraBastidor(
-        jobContext,
-        parsearParamsEstructuraBastidor(
-          this.paramsEfectivosDelPaso(paso, jobContext),
-        ),
-      );
-      if (!resultado) return 0;
-      if (slot.slotCodigo === 'perfil_estructural') {
-        // Compra REAL: si la variante declara `largoBarra` (m), se cobran
-        // barras ENTERAS con packing del despiece (el sobrante se paga igual,
-        // como en la ferretería). Sin el atributo, sigue por ml consumidos.
-        const attrs = materialResuelto?.atributosVarianteJson ?? {};
-        const largoBarraMm =
-          Number((attrs as Record<string, unknown>).largoBarra ?? 0) * 1000;
-        if (largoBarraMm > 0) {
-          const barras = calcularBarrasNecesarias(
-            resultado.despieceMm,
-            largoBarraMm,
-          );
-          if (barras) return barras.barras;
-          // Tramo más largo que la barra: no se puede cortar — 0 hace que el
-          // paso no cobre en silencio... mejor caer a ml y que se vea el
-          // costo, con el diagnóstico fino como mejora futura.
-          return resultado.mlTotal;
-        }
-        return null; // sin largoBarra → fórmula normal (ml)
+    const familia = resolverFamilia(paso.familiaCodigo);
+    const decl = familia?.slotsRequeridos.find(
+      (s) => s.codigo === slot.slotCodigo,
+    );
+    if (!decl) return null;
+    if (decl.cantidadFija !== undefined) return decl.cantidadFija;
+    if (!decl.magnitudDerivada) return null;
+
+    const derivacion =
+      derivacionesDelJobContext(jobContext)[paso.configPasoId] ?? null;
+    // Sin derivación no hay geometría: 0 — el guard del bucle ya corta con
+    // el diagnóstico declarado, nada se cobra en silencio.
+    if (!derivacion) return 0;
+
+    const despiece = derivacion.despieces?.[slot.slotCodigo];
+    if (despiece && despiece.length > 0) {
+      const attrs = materialResuelto?.atributosVarianteJson ?? {};
+      const largoBarraMm =
+        Number((attrs as Record<string, unknown>).largoBarra ?? 0) * 1000;
+      if (largoBarraMm > 0) {
+        const barras = calcularBarrasNecesarias(despiece, largoBarraMm);
+        if (barras) return barras.barras;
+        // Tramo más largo que la barra: no se puede cortar — 0 haría que el
+        // paso no cobre en silencio... mejor caer a la magnitud (ml) y que
+        // se vea el costo, con el diagnóstico fino como mejora futura.
+        return derivacion.magnitudes[decl.magnitudDerivada] ?? 0;
       }
-      if (slot.slotCodigo === 'chapa_cenefa') return resultado.cenefaM2;
-      if (slot.slotCodigo === 'pintura') return resultado.pinturaM2;
-      if (slot.slotCodigo === 'chapa_fondo') return resultado.fondoM2;
-      return resultado.anclajes;
-    }
-    if (paso.familiaCodigo === 'iluminacion_led') {
-      if (slot.slotCodigo === 'fuente') return 1;
-      if (slot.slotCodigo === 'cableado') {
-        // El cálculo completo lo publicó la pre-pasada del paso (depende del
-        // módulo resuelto del slot principal, que acá ya no está a mano).
-        const calc = (jobContext as Record<string, unknown>).__iluminacionLed as
-          | { cableMl?: number }
-          | undefined;
-        return Number(calc?.cableMl ?? 0);
+      if (decl.formulaForzada === 'por_unidad_productiva') {
+        // Sin largoBarra el consumo sigue la fórmula normal (los ml YA son
+        // la cantidad del paso) — mismo camino que antes del despiece.
+        return null;
       }
-      return null;
     }
-    return null;
+    return derivacion.magnitudes[decl.magnitudDerivada] ?? 0;
   }
 
   private resolverCantidadSlotPorBase(
@@ -5864,6 +5772,26 @@ export class MotorUniversalService {
       return (
         this.numeroPositivo(jobContext.piezaPerimetroTotalM) ??
         this.numeroPositivo(calcularPerimetroPiezasM(jobContext)) ??
+        this.resolverCantidad(
+          paso,
+          jobContext,
+          nestingDispatch,
+          materialResuelto,
+        )
+      );
+    }
+
+    // Magnitud DERIVADA como driver del tiempo (`derivada:<magnitud>`): el
+    // corte de hierros se mide por CORTES del despiece, no por ml — la
+    // familia declara qué magnitudes ofrece (`derivador.magnitudesTiempo`)
+    // y el valor sale de la derivación cacheada del paso. Sin derivación,
+    // cae a la cantidad efectiva (el guard ya cortó con diagnóstico).
+    if (source.startsWith('derivada:')) {
+      const magnitud = source.slice('derivada:'.length);
+      const derivacion =
+        derivacionesDelJobContext(jobContext)[paso.configPasoId];
+      return (
+        this.numeroPositivo(derivacion?.magnitudes[magnitud]) ??
         this.resolverCantidad(
           paso,
           jobContext,

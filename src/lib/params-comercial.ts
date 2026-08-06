@@ -64,22 +64,27 @@ export function getParamsComercialDeRuta(
 
   for (const config of configPasos) {
     const params = (config.paramsPasoJson ?? {}) as Record<string, unknown>;
-    const abiertos = camposEditablesComercial(params);
-    if (abiertos.length === 0) continue;
-
     const familia = familias.get(config.rutaPaso.familiaCodigo);
     const schema = familia?.paramsPasoSchema ?? [];
 
-    const campos = abiertos
-      .map((campo) => schema.find((p) => p.campo === campo))
-      .filter((p): p is NonNullable<typeof p> => Boolean(p))
+    // Abiertos por el modelador (paramsPasoJson) ∪ expuestos POR DISEÑO de
+    // la familia (`expuestoAlComercial` en el schema — densidad LED,
+    // refuerzos del bastidor). El motor acepta ambos en configPasoRuntime.
+    const abiertos = new Set([
+      ...camposEditablesComercial(params),
+      ...schema.filter((p) => p.expuestoAlComercial).map((p) => p.campo),
+    ]);
+    if (abiertos.size === 0) continue;
+
+    const campos = schema
+      .filter((p) => abiertos.has(p.campo))
       .map((p) => ({
         campo: p.campo,
         etiqueta: p.etiqueta,
         tipo: p.tipo,
         valoresPermitidos: p.valoresPermitidos ?? [],
         descripcion: p.descripcion,
-        sugerido: params[p.campo],
+        sugerido: params[p.campo] ?? p.default,
       }));
 
     if (campos.length === 0) continue;
@@ -116,9 +121,13 @@ export function valorEfectivoCampo(
  * campos que el comercial efectivamente cambió. Mandar la sugerencia sin
  * cambios sería ruido — el motor ya la tiene.
  *
- * NO necesita el catálogo de familias: qué campos están abiertos sale del
- * propio `paramsPasoJson`. El schema sólo hace falta para RENDERIZAR los
- * inputs (etiquetas, tipos, valores permitidos), no para armar el contexto.
+ * SIN filtro de campos del lado del cliente: la ÚNICA autoridad sobre qué se
+ * puede pisar es `paramsEfectivos` del motor (camposEditablesComercial del
+ * paso ∪ expuestoAlComercial de la familia). La UI solo ofrece controles
+ * para esos campos, y un campo de más que viaje se ignora server-side.
+ * [Etapa 3 derivadores: el filtro espejo acá hacía que los campos expuestos
+ * por la familia viajaran "como si el comercial no los hubiera tocado" — el
+ * bug de la chapa trasera en 0 m² que parchó mergeCarteleria.]
  */
 export function buildConfigPasoRuntime(
   configPasos: Array<{
@@ -136,13 +145,8 @@ export function buildConfigPasoRuntime(
     const elegido = elecciones[config.id];
     if (!elegido) continue;
 
-    const abiertos = camposEditablesComercial(
-      (config.paramsPasoJson ?? {}) as Record<string, unknown>,
-    );
     const delPaso: Record<string, unknown> = {};
-    for (const campo of abiertos) {
-      if (!(campo in elegido)) continue;
-      const valor = elegido[campo];
+    for (const [campo, valor] of Object.entries(elegido)) {
       if (valor === undefined || valor === null) continue;
       delPaso[campo] = valor;
     }

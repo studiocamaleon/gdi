@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 import {
   pendientesDePaso,
+  nivelPendientes,
   resumenPendientes,
   type FamiliaParaPendientes,
 } from "./pendientes-paso";
@@ -254,11 +255,31 @@ describe("pendientesDePaso (E.3.1)", () => {
     expect(resumenPendientes(pendientes)).toBe(
       "Faltan: el ritmo de trabajo y el centro productivo",
     );
+    expect(nivelPendientes(pendientes)).toBe("faltan");
     expect(resumenPendientes([])).toBeNull();
+    expect(nivelPendientes([])).toBeNull();
+  });
+
+  it("un aviso NO bloqueante es sugerencia, no faltante (H13): cotiza igual", () => {
     const soloSugerido = pendientesDePaso(
       cfgBase({ mecanismoCantidad: "HEREDAR_DEL_OUTPUT_CANONICO" }),
       FAMILIA_MANUAL,
     );
-    expect(resumenPendientes(soloSugerido)).toBe("Falta: de qué paso hereda");
+    expect(nivelPendientes(soloSugerido)).toBe("sugerencia");
+    expect(resumenPendientes(soloSugerido)).toBe(
+      "Sugerencia: fijá de qué paso hereda",
+    );
+  });
+
+  it("la herencia POR OUTPUT (campoOutput) es un origen válido: sin pendiente (H6)", () => {
+    expect(
+      pendientesDePaso(
+        cfgBase({
+          mecanismoCantidad: "HEREDAR_DEL_OUTPUT_CANONICO",
+          mecanismoCantidadConfigJson: { campoOutput: "puntos_soldadura" },
+        }),
+        FAMILIA_MANUAL,
+      ).filter((p) => p.tipo === "herencia_origen"),
+    ).toEqual([]);
   });
 });

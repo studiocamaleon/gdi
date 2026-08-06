@@ -47,6 +47,7 @@ import { PasoTercerizadoPanel } from "@/components/productos-servicios/paso-terc
 import {
   pendientesDePaso,
   type PendientePaso,
+  nivelPendientes,
   resumenPendientes,
 } from "@/lib/pendientes-paso";
 import {
@@ -54,6 +55,7 @@ import {
   type ContextoOpcion,
   type OpcionPaso,
   type PatchOpcion,
+  unidadCantidadDe,
 } from "@/lib/editor-paso/schema";
 import {
   SELECCION_MATERIAL_OPTIONS,
@@ -69,6 +71,9 @@ import {
   MONTAJE_SOURCE_OPTIONS,
   TALONARIO_MODE_OPTIONS,
   T2_PRODUCTIVITY_UNIT_OPTIONS,
+  normalizeT2ProductivityUnit,
+  t2ProductivityUnitOptions,
+  etiquetaFuenteDerivada,
   T2_TIME_CALCULATION_MODE_OPTIONS,
   TIEMPO_MANUAL_UNIDAD_OPTIONS,
   getT2ProductivityUnitSuffix,
@@ -84,6 +89,7 @@ import {
   getModoColorConfig,
   modoColorAplica,
   nestingAplica,
+  humanizarOutputCanonico,
 } from "@/lib/editor-paso/catalogo-tiempo";
 import {
   actualizarPasoExtra,
@@ -376,25 +382,30 @@ function profileOption(
 }
 
 function perfilCompatibleConFamilia(
-  familiaCodigo: string | undefined,
+  familia: Pick<FamiliaListItem, "tiposPerfilCompatibles"> | null | undefined,
   perfil: PerfilLookup | null | undefined,
 ) {
-  if (!familiaCodigo || !perfil) return true;
-  const tipoPerfil = String(perfil.tipoPerfil ?? "").toLowerCase();
-  if (familiaCodigo === "plotter_corte")
-    return tipoPerfil === "corte" || tipoPerfil === "mixto";
-  if (familiaCodigo === "impresion_por_area")
-    return tipoPerfil === "impresion" || tipoPerfil === "mixto";
-  return true;
+  // [Tanda B] La ficha declara los tipos de perfil (`tiposPerfilCompatibles`);
+  // antes había una copia local (plotter→corte, área→impresión) que se
+  // desactualizaba sola. Sin declaración = acepta cualquiera (regla del API).
+  if (!familia || !perfil) return true;
+  const tipos = familia.tiposPerfilCompatibles;
+  if (!tipos || tipos.length === 0) return true;
+  return tipos.includes(String(perfil.tipoPerfil ?? "").toUpperCase());
 }
 
 function maquinaCompatibleConFamilia(
-  familiaCodigo: string | undefined,
+  familia:
+    | Pick<FamiliaListItem, "tiposPerfilCompatibles" | "nestingConfig">
+    | null
+    | undefined,
   plantillasCompatibles: string[] | undefined,
   maquina: MaquinaLookup,
 ) {
   if (!(plantillasCompatibles ?? []).includes(maquina.plantilla)) return false;
-  if (familiaCodigo !== "plotter_corte") return true;
+  // [Tanda B] Exigencia del corte sobre rollo (estrategia declarada) en
+  // impresora híbrida — espeja el guard del backend (config-pasos.service).
+  if (familia?.nestingConfig?.estrategia !== "corte_rollo") return true;
   if (
     String(maquina.plantilla).toUpperCase() !==
     "IMPRESORA_GRAN_FORMATO_POR_AREA"
@@ -404,7 +415,7 @@ function maquinaCompatibleConFamilia(
   return (
     params.soportaCorteIntegrado === true &&
     maquina.perfilesOperativos.some((perfil) =>
-      perfilCompatibleConFamilia("plotter_corte", perfil),
+      perfilCompatibleConFamilia(familia, perfil),
     )
   );
 }
@@ -475,18 +486,17 @@ function modoColorSwatches(value: string): Array<{ bg: string; borde?: boolean }
 }
 
 function maquinaCandidataCompatibleConFamilia(
-  familiaCodigo: string | undefined,
+  familia:
+    | Pick<FamiliaListItem, "tiposPerfilCompatibles" | "nestingConfig">
+    | null
+    | undefined,
   plantillasCompatibles: string[] | undefined,
   maquina: MaquinaLookup,
 ) {
   return (
-    maquinaCompatibleConFamilia(
-      familiaCodigo,
-      plantillasCompatibles,
-      maquina,
-    ) &&
+    maquinaCompatibleConFamilia(familia, plantillasCompatibles, maquina) &&
     maquina.perfilesOperativos.some((perfil) =>
-      perfilCompatibleConFamilia(familiaCodigo, perfil),
+      perfilCompatibleConFamilia(familia, perfil),
     )
   );
 }
@@ -851,7 +861,7 @@ function buildExtraConfigDraft(
     mecanismoCantidad:
       (extra.mecanismoCantidad?.trim() || null) ??
       getDefaultMecanismoCantidad(
-        extra.familiaCodigo,
+        familia,
         familia?.mecanismosCantidadSoportados ?? [],
       ),
     mecanismoCantidadConfigJson:
@@ -1053,7 +1063,7 @@ function resolveModoColorAllowedModes(
 }
 
 function panelizadoAplica(
-  familiaCodigo: string | undefined,
+  familia: Pick<FamiliaListItem, "nestingConfig"> | null | undefined,
   nestingConfig: Record<string, unknown>,
   maquina:
     | { parametrosTecnicosJson?: Record<string, unknown> | null }
@@ -1061,7 +1071,8 @@ function panelizadoAplica(
     | undefined,
   tieneSustratoRollo: boolean,
 ) {
-  if (familiaCodigo !== "impresion_por_area") {
+  // [Tanda B] Panelizado = impresión sobre material continuo (declarado).
+  if (familia?.nestingConfig?.superficie !== "segun_material") {
     return false;
   }
   const algorithm = String(nestingConfig.algorithm ?? "auto");
@@ -1084,20 +1095,22 @@ function panelizadoAplica(
 
 function sanitizeNestingConfigForFamilia(
   nestingConfig: Record<string, unknown>,
-  familiaCodigo: string | undefined,
+  familia: Pick<FamiliaListItem, "nestingConfig"> | null | undefined,
 ) {
-  if (familiaCodigo === "impresion_por_area") return nestingConfig;
+  // [Tanda B] Sólo el acomodado sobre material continuo conserva panelizado.
+  if (familia?.nestingConfig?.superficie === "segun_material")
+    return nestingConfig;
   if (!("panelizado" in nestingConfig)) return nestingConfig;
   const next = { ...nestingConfig };
   delete next.panelizado;
   return next;
 }
 
-function defaultNestingSeparationForFamily(familiaCodigo: string | undefined) {
-  return familiaCodigo === "impresion_por_area" ||
-    familiaCodigo === "plotter_corte"
-    ? 5
-    : 0;
+function defaultNestingSeparationForFamily(
+  familia: Pick<FamiliaListItem, "separacionNestingDefaultMm"> | null | undefined,
+) {
+  // [Tanda B] La ficha declara la separación default; antes 5 mm cableados.
+  return familia?.separacionNestingDefaultMm ?? 0;
 }
 
 function getMachineMargins(
@@ -2015,6 +2028,9 @@ function validarMateriales(
           nombre: string;
           requerido: boolean;
           tipo?: string;
+          /** Selección por capacidad de fábrica (derivadores E2): con esto,
+           *  un slot MOTOR_ELIGE_AUTO sin criterio NO está incompleto. */
+          criterioCapacidadDefault?: unknown;
         }>;
       }
     | undefined,
@@ -2040,7 +2056,14 @@ function validarMateriales(
         `${slotDisplayName(slot, familia)}: sin variante de material`,
       );
     }
-    if (slot.modoSeleccion === "MOTOR_ELIGE_AUTO" && !slot.criterioMotorAuto) {
+    if (
+      slot.modoSeleccion === "MOTOR_ELIGE_AUTO" &&
+      !slot.criterioMotorAuto &&
+      // La familia puede traer el criterio DE FÁBRICA (selección por
+      // capacidad declarada, ej. la fuente LED por watts): sin criterio en
+      // el slot NO falta nada — el motor usa el default declarado.
+      !slotDecl?.criterioCapacidadDefault
+    ) {
       warnings.push(
         `${slotDisplayName(slot, familia)}: sin criterio del sistema`,
       );
@@ -2062,7 +2085,7 @@ function validarAvanzado(
   paramsPasoText: string,
   mecanismoCantidadConfigText: string,
   cfg?: UpsertConfigPasoPayload,
-  familia?: { codigo: string },
+  familia?: Pick<FamiliaListItem, "codigo" | "nestingConfig">,
 ): TabValidacion {
   const errores: string[] = [];
   const warnings: string[] = [];
@@ -2074,7 +2097,7 @@ function validarAvanzado(
     const r = textToJson(mecanismoCantidadConfigText);
     if (!r.ok) errores.push(`Config de cantidad: ${r.error}`);
   }
-  if (familia?.codigo === "impresion_por_hoja" && cfg) {
+  if (familia?.nestingConfig?.estrategia === "pliego_digital" && cfg) {
     const pliegoImpresion = getPliegoImpresionConfig(cfg.paramsPasoJson);
     const pliegoModo = getPliegoPresetValue(pliegoImpresion);
     if (pliegoModo === "automatico") {
@@ -2565,7 +2588,7 @@ export function ConfigPasosEditorView({
         mecanismoCantidad:
           (existente?.mecanismoCantidad?.trim() || null) ??
           getDefaultMecanismoCantidad(
-            paso.familiaCodigo,
+            familia,
             familia?.mecanismosCantidadSoportados ?? [],
           ),
         mecanismoCantidadConfigJson:
@@ -2693,6 +2716,22 @@ export function ConfigPasosEditorView({
             tipoTecnico: "",
             templateId: candidate.materiaPrima.templateId,
             variantes: candidate.variantes.map((item) => item.variante),
+          };
+        }
+        // Slot HARDCODED: el material fijo viene en `materialVariante`, no en
+        // candidatos. Sin esto, el resumen del guiado no puede nombrarlo y
+        // cae al opaco "Material definido" (H17 del relevamiento del editor).
+        const fijo = slot.materialVariante;
+        if (fijo?.materiaPrima && !map[fijo.materiaPrima.id]) {
+          map[fijo.materiaPrima.id] = {
+            id: fijo.materiaPrima.id,
+            codigo: fijo.materiaPrima.codigo,
+            nombre: fijo.materiaPrima.nombre,
+            familia: fijo.materiaPrima.familia,
+            subfamilia: fijo.materiaPrima.subfamilia,
+            tipoTecnico: "",
+            templateId: fijo.materiaPrima.templateId,
+            variantes: fijo.materiaPrima.variantes ?? [],
           };
         }
       }
@@ -2876,7 +2915,10 @@ export function ConfigPasosEditorView({
       const maquina = lookups.maquinas.find((item) => item.id === maquinaId);
       const perfilDefaultId =
         maquina?.perfilesOperativos.find((perfil) =>
-          perfilCompatibleConFamilia(paso?.familiaCodigo, perfil),
+          perfilCompatibleConFamilia(
+            familiasMap.get(paso?.familiaCodigo ?? ""),
+            perfil,
+          ),
         )?.id ?? null;
       const next = checked
         ? normalizeMaquinasCandidatas([
@@ -2931,7 +2973,10 @@ export function ConfigPasosEditorView({
       const perfilDefaultId =
         candidataActual?.perfilDefaultId ??
         maquina?.perfilesOperativos.find((perfil) =>
-          perfilCompatibleConFamilia(paso?.familiaCodigo, perfil),
+          perfilCompatibleConFamilia(
+            familiasMap.get(paso?.familiaCodigo ?? ""),
+            perfil,
+          ),
         )?.id ??
         null;
       const next = normalizeMaquinasCandidatas(
@@ -3415,10 +3460,13 @@ export function ConfigPasosEditorView({
         modoSeleccion: "HARDCODED",
         materialVarianteId: null,
         estrategiaCosto: "simple",
+        // [Tanda B] La fórmula forzada la declara el SLOT de la ficha
+        // (film de laminado → por metro lineal); antes copia local.
         formula:
-          familiaCodigo === "laminado" && slotCodigo === "film"
-            ? "por_metro_lineal"
-            : "por_unidad_productiva",
+          familiasMap
+            .get(familiaCodigo ?? "")
+            ?.slotsRequeridos?.find((slot) => slot.codigo === slotCodigo)
+            ?.formulaForzada ?? "por_unidad_productiva",
         aplicaMultiCaras: false,
       };
       return {
@@ -3616,7 +3664,7 @@ export function ConfigPasosEditorView({
         (configs[rutaPasoId].maquinasCandidatas ?? []).length > 0;
       const nestingConfig = sanitizeNestingConfigForFamilia(
         getNestingConfig(currentParams),
-        familia?.codigo,
+        familia,
       );
       const modoColorConfigRaw = getModoColorConfig(currentParams);
       const configExistente = rutaAlternativa.configPasos.find(
@@ -3635,9 +3683,7 @@ export function ConfigPasosEditorView({
       const modoColorOptions = buildModoColorOptions(
         maquinaGuardada,
         configExistente,
-        ["impresion_por_hoja", "impresion_por_area"].includes(
-          familiaCodigoGuardar ?? "",
-        ),
+        familia?.esImpresion === true,
       );
       const modoColorAllowed = Array.isArray(modoColorConfigRaw.allowedModes)
         ? modoColorConfigRaw.allowedModes
@@ -3683,14 +3729,14 @@ export function ConfigPasosEditorView({
         const unit =
           typeof paramsPasoJson.productivityUnit === "string"
             ? paramsPasoJson.productivityUnit
-            : getDefaultT2ProductivityUnit(familia?.codigo);
-        const sourceOptions = getT2QuantitySourceOptions(unit, familia?.codigo);
+            : getDefaultT2ProductivityUnit(familia);
+        const sourceOptions = getT2QuantitySourceOptions(unit, familia);
         const rawSource =
           typeof paramsPasoJson.productivityQuantitySource === "string"
             ? paramsPasoJson.productivityQuantitySource
-            : getDefaultT2QuantitySource(familia?.codigo, unit);
+            : getDefaultT2QuantitySource(familia, unit);
         const normalizedSource =
-          familia?.codigo === "montaje_sobre_sustrato" &&
+          familia?.ritmoDefault?.fuenteCantidad === "cantidad_montaje" &&
           unit === "unidades_h" &&
           rawSource === "cantidad"
             ? "cantidad_montaje"
@@ -3698,19 +3744,19 @@ export function ConfigPasosEditorView({
         const rawTimeMode =
           typeof paramsPasoJson.timeCalculationMode === "string"
             ? paramsPasoJson.timeCalculationMode
-            : getDefaultT2TimeCalculationMode(familia?.codigo);
+            : getDefaultT2TimeCalculationMode(familia);
         paramsPasoJson.productivityUnit = unit;
         paramsPasoJson.timeCalculationMode =
           T2_TIME_CALCULATION_MODE_OPTIONS.some(
             (option) => option.value === rawTimeMode,
           )
             ? rawTimeMode
-            : getDefaultT2TimeCalculationMode(familia?.codigo);
+            : getDefaultT2TimeCalculationMode(familia);
         paramsPasoJson.productivityQuantitySource = sourceOptions.some(
           (option) => option.value === normalizedSource,
         )
           ? normalizedSource
-          : getDefaultT2QuantitySource(familia?.codigo, unit);
+          : getDefaultT2QuantitySource(familia, unit);
       }
       if (Object.keys(nestingConfig).length > 0) {
         paramsPasoJson.nestingConfig = nestingConfig;
@@ -3807,7 +3853,7 @@ export function ConfigPasosEditorView({
           jsonText.params,
           cantidadRelevante ? jsonText.mecanismo : "",
           cfg,
-          familia ? { codigo: familia.codigo } : undefined,
+          familia,
         );
     const totalErrores =
       valBasico.errores.length +
@@ -4030,6 +4076,14 @@ export function ConfigPasosEditorView({
           </div>
           <div className="side-progress">
             <span>
+              {(() => {
+                // El "Paso X de Y" vive acá (feedback 2026-08-06): antes
+                // estaba arriba de las preguntas y duplicaba este sidebar.
+                const n = pasosUnificados.indexOf(activePasoId);
+                return n >= 0
+                  ? `Paso ${n + 1} de ${pasosUnificados.length} · `
+                  : "";
+              })()}
               {doneCount}/{activeStepCount} activos
               {skippedCount > 0
                 ? ` · ${skippedCount} omitido${skippedCount === 1 ? "" : "s"}`
@@ -4072,6 +4126,61 @@ export function ConfigPasosEditorView({
                   <span className="body">
                     <span className="ttl">{pasoLabel}</span>
                     <span className="sub">{summary.maquinaNombre}</span>
+                    {/* Estado del paso activo (feedback 2026-08-06): el
+                        "Listo para cotizar" / faltantes vive acá, no arriba
+                        de las preguntas. Sólo en el paso seleccionado para
+                        no ensuciar la lista. */}
+                    {paso.id === activePasoId && !summary.skipped
+                      ? (() => {
+                          const lineaBase: React.CSSProperties = {
+                            display: "block",
+                            marginTop: 2,
+                            fontSize: 11,
+                            fontWeight: 550,
+                            lineHeight: 1.4,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          };
+                          if (summary.totalErrores > 0) {
+                            return (
+                              <span
+                                style={{ ...lineaBase, color: "#b3412c" }}
+                              >
+                                {summary.totalErrores} error
+                                {summary.totalErrores === 1 ? "" : "es"} por
+                                corregir
+                              </span>
+                            );
+                          }
+                          const pend = pendientesDePaso(
+                            summary.cfg,
+                            summary.familia,
+                          );
+                          const resumen = resumenPendientes(pend);
+                          if (resumen && nivelPendientes(pend) === "faltan") {
+                            return (
+                              <span
+                                title={resumen}
+                                style={{ ...lineaBase, color: "#8a6d3b" }}
+                              >
+                                Para cotizar bien — {resumen}
+                              </span>
+                            );
+                          }
+                          return (
+                            <span
+                              title={resumen || undefined}
+                              style={{ ...lineaBase, color: "#1e7a46" }}
+                            >
+                              ✓ Listo para cotizar
+                              {summary.configExistente
+                                ? ""
+                                : " — guardá el paso"}
+                            </span>
+                          );
+                        })()
+                      : null}
                   </span>
                   <span className="status">
                     {summary.skipped
@@ -4171,52 +4280,8 @@ export function ConfigPasosEditorView({
             />
           ) : (
           <>
-          <div className="mini-graph">
-            {rutaAlternativa.ruta.pasos.map((paso, idx) => {
-              const summary = getPasoSummary(paso);
-              const pasoLabel =
-                configs[paso.id]?.nombreVisible?.trim() ||
-                summary.familia?.nombre ||
-                paso.familiaCodigo;
-              return (
-                <React.Fragment key={paso.id}>
-                  <button
-                    type="button"
-                    className={`mn ${summary.status} ${summary.optional ? "optional" : ""} ${paso.id === activePasoId ? "active" : ""}`}
-                    onClick={() => {
-                    setActivePasoId(paso.id);
-                    setEditingExtra(null);
-                  }}
-                    title={pasoLabel}
-                  >
-                    <span className="d">
-                      {summary.skipped
-                        ? "—"
-                        : summary.status === "done"
-                          ? "✓"
-                          : idx + 1}
-                    </span>
-                    <span className="lb">{pasoLabel.split(" ")[0]}</span>
-                  </button>
-                  {idx < rutaAlternativa.ruta.pasos.length - 1 && (
-                    <div
-                      className={`edge ${
-                        !summary.skipped &&
-                        summary.status === "done" &&
-                        !getPasoSummary(rutaAlternativa.ruta.pasos[idx + 1]!)
-                          .skipped &&
-                        getPasoSummary(rutaAlternativa.ruta.pasos[idx + 1]!)
-                          .status === "done"
-                          ? "done"
-                          : ""
-                      }`}
-                    />
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </div>
-
+          {/* El stepper horizontal (mini-graph) se quitó 2026-08-06:
+              duplicaba la lista del sidebar (feedback del usuario). */}
           {activePaso && configs[activePaso.id]
             ? [activePaso]
                 .map((paso) => {
@@ -4234,7 +4299,7 @@ export function ConfigPasosEditorView({
                   );
                   const maquinasCompatibles = lookups.maquinas.filter((m) =>
                     maquinaCompatibleConFamilia(
-                      paso.familiaCodigo,
+                      familia,
                       familia?.plantillasCompatibles,
                       m,
                     ),
@@ -4244,7 +4309,7 @@ export function ConfigPasosEditorView({
                   const maquinasCandidatasCompatibles = lookups.maquinas.filter(
                     (m) =>
                       maquinaCandidataCompatibleConFamilia(
-                        paso.familiaCodigo,
+                        familia,
                         familia?.plantillasCompatibles,
                         m,
                       ),
@@ -4273,7 +4338,7 @@ export function ConfigPasosEditorView({
                   const perfilOptions = ensureSelectedOption(
                     (maquinaSel?.perfilesOperativos ?? [])
                       .filter((p) =>
-                        perfilCompatibleConFamilia(paso.familiaCodigo, p),
+                        perfilCompatibleConFamilia(familia, p),
                       )
                       .map((p) => profileOption(p)),
                     cfg.perfilM1Id,
@@ -4305,15 +4370,20 @@ export function ConfigPasosEditorView({
                     ]
                   ).map((m) => {
                     const option = optionFromLabel(m, mecanismoCantidadLabels);
+                    // [Tanda B] Si la ficha declara qué hereda por default
+                    // (`outputHeredadoDefault`), la opción lo nombra — antes
+                    // sólo corte_manual tenía este copy, cableado.
                     if (
-                      familia?.codigo === "corte_manual" &&
-                      m === "HEREDAR_DEL_OUTPUT_CANONICO"
+                      m === "HEREDAR_DEL_OUTPUT_CANONICO" &&
+                      familia?.outputHeredadoDefault
                     ) {
                       return {
                         ...option,
-                        label: "Pliegos impresos del paso anterior",
+                        label: `${humanizarOutputCanonico(
+                          familia.outputHeredadoDefault,
+                        )} del paso anterior`,
                         description:
-                          "Usa la cantidad de pliegos ya impresos/montados, no la cantidad final de imanes.",
+                          "Usa lo que publicó el paso anterior, no la cantidad final del pedido.",
                       };
                     }
                     return option;
@@ -4343,7 +4413,7 @@ export function ConfigPasosEditorView({
                   const noEjecutar = cfg.modoActivacion === "NO_EJECUTAR";
                   const cantidadRelevante =
                     !noEjecutar && requiereMecanismoCantidad(cfg, familia);
-                  const mostrarNesting = nestingAplica(familia?.codigo, cfg);
+                  const mostrarNesting = nestingAplica(familia, cfg);
                   const mostrarSetupCleanupOverrides = Boolean(cfg.maquinaM1Id);
                   const mostrarTiempoFijoOverride =
                     cfg.modoTiempo === "T-1" && !cfg.maquinaM1Id;
@@ -4362,24 +4432,21 @@ export function ConfigPasosEditorView({
                   const timeCalculationModeRaw =
                     typeof paramsPaso.timeCalculationMode === "string"
                       ? paramsPaso.timeCalculationMode
-                      : getDefaultT2TimeCalculationMode(familia?.codigo);
+                      : getDefaultT2TimeCalculationMode(familia);
                   const timeCalculationMode =
                     T2_TIME_CALCULATION_MODE_OPTIONS.some(
                       (option) => option.value === timeCalculationModeRaw,
                     )
                       ? timeCalculationModeRaw
-                      : getDefaultT2TimeCalculationMode(familia?.codigo);
+                      : getDefaultT2TimeCalculationMode(familia);
                   const productivityUnit =
                     typeof paramsPaso.productivityUnit === "string"
                       ? paramsPaso.productivityUnit
-                      : getDefaultT2ProductivityUnit(familia?.codigo);
+                      : getDefaultT2ProductivityUnit(familia);
                   const productivityQuantitySourceRaw =
                     typeof paramsPaso.productivityQuantitySource === "string"
                       ? paramsPaso.productivityQuantitySource
-                      : getDefaultT2QuantitySource(
-                          familia?.codigo,
-                          productivityUnit,
-                        );
+                      : getDefaultT2QuantitySource(familia, productivityUnit);
                   const normalizedProductivityQuantitySourceRaw =
                     familia?.codigo === "montaje_sobre_sustrato" &&
                     productivityUnit === "unidades_h" &&
@@ -4387,20 +4454,14 @@ export function ConfigPasosEditorView({
                       ? "cantidad_montaje"
                       : productivityQuantitySourceRaw;
                   const productivityQuantitySourceOptions =
-                    getT2QuantitySourceOptions(
-                      productivityUnit,
-                      familia?.codigo,
-                    );
+                    getT2QuantitySourceOptions(productivityUnit, familia);
                   const productivityQuantitySource =
                     productivityQuantitySourceOptions.some(
                       (option) =>
                         option.value === normalizedProductivityQuantitySourceRaw,
                     )
                       ? normalizedProductivityQuantitySourceRaw
-                      : getDefaultT2QuantitySource(
-                          familia?.codigo,
-                          productivityUnit,
-                        );
+                      : getDefaultT2QuantitySource(familia, productivityUnit);
                   const productivityUnitSuffix = getT2ProductivityUnitSuffix(
                     productivityUnit,
                     productivityQuantitySource,
@@ -4434,16 +4495,11 @@ export function ConfigPasosEditorView({
                         configExistente?.maquinaM1?.parametrosTecnicosJson
                       ? configExistente.maquinaM1
                       : (maquinaSel ?? configExistente?.maquinaM1);
-                  const mostrarModoColor = modoColorAplica(
-                    familia?.codigo,
-                    cfg,
-                  );
+                  const mostrarModoColor = modoColorAplica(familia, cfg);
                   const modoColorOptions = buildModoColorOptions(
                     maquinaGuardada,
                     configExistente,
-                    ["impresion_por_hoja", "impresion_por_area"].includes(
-                      paso.familiaCodigo,
-                    ),
+                    familia?.esImpresion === true,
                   );
                   const modoColorPerfilDefault =
                     modosColorFromPerfil(perfilGuardado)[0] ?? "";
@@ -4462,7 +4518,7 @@ export function ConfigPasosEditorView({
                         jsonText.params,
                         cantidadRelevante ? jsonText.mecanismo : "",
                         cfg,
-                        familia ? { codigo: familia.codigo } : undefined,
+                        familia,
                       );
                   // Un paso tercerizado no usa máquina/material: su validez es
                   // la de su fuente de costo (la chequea el backend), no estas
@@ -4481,32 +4537,14 @@ export function ConfigPasosEditorView({
 
                   return (
                     <React.Fragment key={paso.id}>
+                      {/* Header mínimo (feedback 2026-08-06): el número de
+                          paso, el estado Configurado y el "Listo para cotizar"
+                          viven en el sidebar; el centro de costo ya se lee ahí.
+                          Los botones Siguiente/Guardar flotan al pie del scroll
+                          (barra sticky al final del paso). */}
                       <div className="step-head">
                         <div style={{ flex: 1 }}>
                           <div className="pill-row">
-                            <span
-                              style={{
-                                color: "var(--muted-text)",
-                                fontFamily: "var(--font-mono)",
-                                fontSize: 12,
-                              }}
-                            >
-                              Paso {idx + 1} de {pasosUnificados.length}
-                            </span>
-                            {!noEjecutar ? (
-                              <span
-                                className={`tag ${totalErrores === 0 && totalWarnings === 0 ? "ok" : "warm"}`}
-                              >
-                                <span className="d" />
-                                {totalErrores > 0
-                                  ? `${totalErrores} error${totalErrores === 1 ? "" : "es"}`
-                                  : totalWarnings > 0
-                                    ? `${totalWarnings} pendiente${totalWarnings === 1 ? "" : "s"}`
-                                    : configExistente
-                                      ? "Configurado"
-                                      : "Pendiente"}
-                              </span>
-                            ) : null}
                             <span className="tag muted">
                               {cfg.modoActivacion
                                 ? getLabel(
@@ -4517,165 +4555,62 @@ export function ConfigPasosEditorView({
                             </span>
                           </div>
                           <h1>{pasoLabel}</h1>
-                          <div className="sub">
-                            {maquinaGuardada ? (
-                              <>
-                                Máquina:{" "}
-                                <strong
-                                  style={{
-                                    color: "var(--ink)",
-                                    fontWeight: 500,
-                                  }}
-                                >
-                                  {maquinaGuardada.nombre}
-                                </strong>
-                                {perfilGuardado ? (
-                                  <> · perfil {perfilGuardado.nombre}</>
-                                ) : null}
-                              </>
-                            ) : cfg.centroCostoId ? (
-                              <>
-                                Centro de costo:{" "}
-                                <strong
-                                  style={{
-                                    color: "var(--ink)",
-                                    fontWeight: 500,
-                                  }}
-                                >
-                                  {lookups.centrosCosto.find(
-                                    (centro) => centro.id === cfg.centroCostoId,
-                                  )?.nombre ?? "Seleccionado"}
-                                </strong>
-                              </>
-                            ) : familia?.defaults?.centroCostoId ? (
-                              <>
-                                Centro del paso:{" "}
-                                <strong
-                                  style={{
-                                    color: "var(--ink)",
-                                    fontWeight: 500,
-                                  }}
-                                >
-                                  {lookups.centrosCosto.find(
-                                    (centro) =>
-                                      centro.id ===
-                                      familia?.defaults?.centroCostoId,
-                                  )?.nombre ?? "default"}
-                                </strong>{" "}
-                                (default)
-                              </>
-                            ) : (
-                              "Sin centro asignado"
-                            )}
+                          {maquinaGuardada && perfilGuardado ? (
+                            <div className="sub">
+                              Perfil:{" "}
+                              <strong
+                                style={{
+                                  color: "var(--ink)",
+                                  fontWeight: 500,
+                                }}
+                              >
+                                {perfilGuardado.nombre}
+                              </strong>
+                            </div>
+                          ) : null}
+                        </div>
+                        {/* Deshabilitado 2026-07-31: la ficha usa SÓLO la
+                            vista Guiada (paridad completa — reusa los mismos
+                            sub-editores). Detallado y Asistente quedan en el
+                            código, ocultos con `false &&`, para revertir sin
+                            reescribir nada. Borrado quirúrgico = paso 2. */}
+                        {false && (
+                          <div className="pill-row">
+                            <button
+                              className="btn"
+                              type="button"
+                              aria-pressed={vistaEditor === "detallado"}
+                              style={
+                                vistaEditor === "detallado"
+                                  ? { fontWeight: 650 }
+                                  : { opacity: 0.6 }
+                              }
+                              onClick={() => setVistaEditor("detallado")}
+                            >
+                              Detallado
+                            </button>
+                            <button
+                              className="btn"
+                              type="button"
+                              aria-pressed={vistaEditor === "guiado"}
+                              style={
+                                vistaEditor === "guiado"
+                                  ? { fontWeight: 650 }
+                                  : { opacity: 0.6 }
+                              }
+                              onClick={() => setVistaEditor("guiado")}
+                            >
+                              Guiado
+                            </button>
+                            <button
+                              className="btn"
+                              type="button"
+                              onClick={() => setAsistenteAbierto(true)}
+                            >
+                              Asistente guiado
+                            </button>
                           </div>
-                          {/* E.3.1 — el motor de pendientes, en humano. */}
-                          {!noEjecutar
-                            ? (() => {
-                                const resumen = resumenPendientes(
-                                  pendientesDePaso(cfg, familia),
-                                );
-                                return resumen ? (
-                                  <div
-                                    className="sub"
-                                    style={{ color: "#8a6d3b", marginTop: 4 }}
-                                  >
-                                    Para cotizar bien — {resumen}
-                                  </div>
-                                ) : (
-                                  <div
-                                    className="sub"
-                                    style={{ color: "#2e7d32", marginTop: 4 }}
-                                  >
-                                    ✓ Listo para cotizar
-                                    {configExistente
-                                      ? ""
-                                      : " — guardalo para confirmar"}
-                                  </div>
-                                );
-                              })()
-                            : null}
-                        </div>
-                        <div className="pill-row">
-                          {/* Deshabilitado 2026-07-31: la ficha usa SÓLO la
-                              vista Guiada (paridad completa — reusa los mismos
-                              sub-editores). Detallado y Asistente quedan en el
-                              código, ocultos con `false &&`, para revertir sin
-                              reescribir nada. Borrado quirúrgico = paso 2. */}
-                          {false && (
-                            <>
-                              <button
-                                className="btn"
-                                type="button"
-                                aria-pressed={vistaEditor === "detallado"}
-                                style={
-                                  vistaEditor === "detallado"
-                                    ? { fontWeight: 650 }
-                                    : { opacity: 0.6 }
-                                }
-                                onClick={() => setVistaEditor("detallado")}
-                              >
-                                Detallado
-                              </button>
-                              <button
-                                className="btn"
-                                type="button"
-                                aria-pressed={vistaEditor === "guiado"}
-                                style={
-                                  vistaEditor === "guiado"
-                                    ? { fontWeight: 650 }
-                                    : { opacity: 0.6 }
-                                }
-                                onClick={() => setVistaEditor("guiado")}
-                              >
-                                Guiado
-                              </button>
-                              <button
-                                className="btn"
-                                type="button"
-                                onClick={() => setAsistenteAbierto(true)}
-                              >
-                                Asistente guiado
-                              </button>
-                            </>
-                          )}
-                          <button
-                            className="btn"
-                            type="button"
-                            onClick={goPrev}
-                            disabled={idx === 0}
-                          >
-                            <ArrowLeftIcon className="size-4" />
-                          </button>
-                          <button
-                            className="btn"
-                            type="button"
-                            onClick={goNext}
-                            disabled={idx === pasosUnificados.length - 1}
-                          >
-                            Siguiente →
-                          </button>
-                          <button
-                            className="btn btn-primary"
-                            type="button"
-                            onClick={() => guardarPaso(paso.id)}
-                            disabled={
-                              guardando === paso.id ||
-                              totalErrores > 0 ||
-                              !pasoTieneCambios
-                            }
-                          >
-                            {pasoTieneCambios ? (
-                              <SaveIcon className="size-4" />
-                            ) : (
-                              <CheckIcon className="size-4" />
-                            )}
-                            {guardando === paso.id
-                              ? "Guardando..."
-                              : pasoTieneCambios
-                                ? "Guardar paso"
-                                : "Guardado"}
-                          </button>
-                        </div>
+                        )}
                       </div>
 
                       <div className="config-step-content pasos-sections">
@@ -5210,7 +5145,7 @@ export function ConfigPasosEditorView({
                                                 timeCalculationMode:
                                                   value ||
                                                   getDefaultT2TimeCalculationMode(
-                                                    familia?.codigo,
+                                                    familia,
                                                   ),
                                               })
                                             }
@@ -5367,15 +5302,12 @@ export function ConfigPasosEditorView({
                                               const nextUnit =
                                                 value ||
                                                 getDefaultT2ProductivityUnit(
-                                                  familia?.codigo,
+                                                  familia,
                                                 );
                                               updateStepParams(paso.id, {
                                                 productivityUnit: nextUnit,
                                                 productivityQuantitySource:
-                                                  getDefaultT2QuantitySource(
-                                                    familia?.codigo,
-                                                    nextUnit,
-                                                  ),
+                                                  getDefaultT2QuantitySource(familia, nextUnit),
                                               });
                                             }}
                                             options={
@@ -5533,10 +5465,7 @@ export function ConfigPasosEditorView({
                                           updateStepParams(paso.id, {
                                             productivityQuantitySource:
                                               value ||
-                                              getDefaultT2QuantitySource(
-                                                familia?.codigo,
-                                                productivityUnit,
-                                              ),
+                                              getDefaultT2QuantitySource(familia, productivityUnit),
                                           })
                                         }
                                         options={productivityQuantitySourceOptions}
@@ -5682,7 +5611,6 @@ export function ConfigPasosEditorView({
                                       {soportaM2 ? (
                                         <CandidatasDetalladoEditor
                                           pasoId={paso.id}
-                                          familiaCodigo={paso.familiaCodigo}
                                           cfg={cfg}
                                           familia={familia}
                                           lookups={lookups}
@@ -6416,6 +6344,67 @@ export function ConfigPasosEditorView({
                           </>
                         )}
                       </div>
+
+                      {/* Botonera flotante (feedback 2026-08-06): sólo los
+                          botones quedan siempre visibles — sticky al borde
+                          inferior de .editor-main (el contenedor con scroll),
+                          no un header entero que tape contenido. */}
+                      <div
+                        style={{
+                          position: "sticky",
+                          bottom: 12,
+                          zIndex: 30,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          width: "fit-content",
+                          marginLeft: "auto",
+                          marginTop: 14,
+                          padding: "8px 10px",
+                          borderRadius: 12,
+                          background: "var(--surface, #fff)",
+                          border: "1px solid var(--hairline, #e6e2dc)",
+                          boxShadow: "0 8px 24px rgba(20, 16, 12, 0.14)",
+                        }}
+                      >
+                        <button
+                          className="btn"
+                          type="button"
+                          onClick={goPrev}
+                          disabled={idx === 0}
+                        >
+                          <ArrowLeftIcon className="size-4" />
+                        </button>
+                        <button
+                          className="btn"
+                          type="button"
+                          onClick={goNext}
+                          disabled={idx === pasosUnificados.length - 1}
+                        >
+                          Siguiente →
+                        </button>
+                        <button
+                          className="btn btn-primary"
+                          type="button"
+                          onClick={() => guardarPaso(paso.id)}
+                          disabled={
+                            guardando === paso.id ||
+                            totalErrores > 0 ||
+                            !pasoTieneCambios
+                          }
+                        >
+                          {pasoTieneCambios ? (
+                            <SaveIcon className="size-4" />
+                          ) : (
+                            <CheckIcon className="size-4" />
+                          )}
+                          {guardando === paso.id
+                            ? "Guardando..."
+                            : pasoTieneCambios
+                              ? "Guardar paso"
+                              : "Guardado"}
+                        </button>
+                      </div>
                     </React.Fragment>
                   );
                 })
@@ -6571,9 +6560,7 @@ function AcomodadoDetalladoEditor({
         return enabled && varianteLooksLikeRoll(variante);
       });
     });
-  const defaultSeparation = defaultNestingSeparationForFamily(
-    familia?.codigo,
-  );
+  const defaultSeparation = defaultNestingSeparationForFamily(familia);
   const legacySeparationH = getResolvedNestingNumber(
     nestingConfig.separationHMm,
     undefined,
@@ -6651,7 +6638,7 @@ function AcomodadoDetalladoEditor({
     0,
   );
   const mostrarPanelizado = panelizadoAplica(
-    familia?.codigo,
+    familia,
     nestingConfig,
     maquinaParaDefaults,
     sustratoRolloDisponible,
@@ -8729,14 +8716,22 @@ function RitmoGuiado({
   onParams: (pasoId: string, patch: Record<string, unknown>) => void;
 }) {
   const params = asRecord(cfg.paramsPasoJson);
+  // Normalizada: hay pasos guardados con el alias "piezas_h" y el selector
+  // mostraba "Valor no disponible" (H7 del relevamiento del editor).
   const unidad =
     typeof params.productivityUnit === "string"
-      ? params.productivityUnit
-      : getDefaultT2ProductivityUnit(familia?.codigo);
+      ? normalizeT2ProductivityUnit(params.productivityUnit)
+      : getDefaultT2ProductivityUnit(familia);
   const fuente =
     typeof params.productivityQuantitySource === "string"
       ? params.productivityQuantitySource
-      : getDefaultT2QuantitySource(familia?.codigo, unidad);
+      : getDefaultT2QuantitySource(familia, unidad);
+  // T3b: el control ABIERTO dice lo mismo que el resumen — si el sistema
+  // sabe qué cuenta el paso (ml de perfil, puntos soldadura, cortes), lo
+  // nombra en el sufijo del input y en el selector de unidad. La fuente
+  // derivada elegida ("cortes de hierro") le gana a la magnitud principal.
+  const unidadCantidad =
+    etiquetaFuenteDerivada(familia, fuente) ?? unidadCantidadDe(cfg, familia);
   const [ritmoTexto, setRitmoTexto] = React.useState(
     params.productivityValue != null ? String(params.productivityValue) : "",
   );
@@ -8784,7 +8779,7 @@ function RitmoGuiado({
             style={{ maxWidth: 220 }}
           />
           <span style={notaStyle}>
-            {getT2ProductivityUnitSuffix(unidad, fuente)}
+            {getT2ProductivityUnitSuffix(unidad, fuente, unidadCantidad)}
           </span>
         </div>
       ) : (
@@ -8800,7 +8795,7 @@ function RitmoGuiado({
             style={{ maxWidth: 110 }}
           />
           <span style={notaStyle}>
-            {getT2BatchUnitSuffix(unidad, fuente)} cada
+            {getT2BatchUnitSuffix(unidad, fuente, unidadCantidad)} cada
           </span>
           <Input
             value={loteTiempoTexto}
@@ -8820,16 +8815,13 @@ function RitmoGuiado({
         <HumanSelect
           value={unidad}
           onValueChange={(value) => {
-            const nextUnit = value || getDefaultT2ProductivityUnit(familia?.codigo);
+            const nextUnit = value || getDefaultT2ProductivityUnit(familia);
             onParams(pasoId, {
               productivityUnit: nextUnit,
-              productivityQuantitySource: getDefaultT2QuantitySource(
-                familia?.codigo,
-                nextUnit,
-              ),
+              productivityQuantitySource: getDefaultT2QuantitySource(familia, nextUnit),
             });
           }}
-          options={T2_PRODUCTIVITY_UNIT_OPTIONS}
+          options={t2ProductivityUnitOptions(unidadCantidad)}
           placeholder="Elegir unidad"
         />
       </div>
@@ -9688,7 +9680,6 @@ function ModoColorDetalladoEditor({
 
 function CandidatasDetalladoEditor({
   pasoId,
-  familiaCodigo,
   cfg,
   familia,
   lookups,
@@ -9700,7 +9691,6 @@ function CandidatasDetalladoEditor({
   setMaquinaCandidataModoColorAllowed,
 }: {
   pasoId: string;
-  familiaCodigo: string;
   cfg: UpsertConfigPasoPayload;
   familia: FamiliaListItem | undefined;
   lookups: LookupsConfigPaso;
@@ -9931,7 +9921,7 @@ function CandidatasDetalladoEditor({
                                               maquina.perfilesOperativos.filter(
                                                 (perfil) =>
                                                   perfilCompatibleConFamilia(
-                                                    familiaCodigo,
+                                                    familia,
                                                     perfil,
                                                   ),
                                               );
@@ -10585,7 +10575,14 @@ function SeccionesEsquemaPaso({
           otrosPasos: pasos
             .filter((p) => p.id !== pasoActual.id)
             .map((p) => ({ id: p.id, nombre: p.nombre })),
-          lookups,
+          // Los lookups del API traen `materiasPrimas` VACÍO (la búsqueda es
+          // on-demand): los resúmenes del esquema no podían NOMBRAR el
+          // material fijo y caían al opaco "Material definido" (H17). Se
+          // completan con los materiales ya hidratados de los slots.
+          lookups: {
+            ...lookups,
+            materiasPrimas: Object.values(materialesApi.candidateMaterials),
+          },
         };
         const pendientesVivos = new Set(vivos.map((pend) => pend.tipo));
         const onAplicar = (patch: PatchOpcion) => {
@@ -10594,7 +10591,7 @@ function SeccionesEsquemaPaso({
         };
         const maquinasCompatibles = lookups.maquinas.filter((m) =>
           maquinaCompatibleConFamilia(
-            pasoActual.familiaCodigo,
+            familia,
             familia?.plantillasCompatibles,
             m,
           ),
@@ -10760,10 +10757,7 @@ function SeccionesEsquemaPaso({
                 }
                 options={(maquinaSel?.perfilesOperativos ?? [])
                   .filter((perfil) =>
-                    perfilCompatibleConFamilia(
-                      pasoActual.familiaCodigo,
-                      perfil,
-                    ),
+                    perfilCompatibleConFamilia(familia, perfil),
                   )
                   .map((perfil) => ({
                     value: perfil.id,
@@ -10778,22 +10772,18 @@ function SeccionesEsquemaPaso({
               <div className="pasos-sections wiz-grid">
                 <CandidatasDetalladoEditor
                   pasoId={pasoActual.id}
-                  familiaCodigo={pasoActual.familiaCodigo}
                   cfg={cfg}
                   familia={familia}
                   lookups={lookups}
                   maquinasCandidatasCompatibles={lookups.maquinas.filter(
                     (m) =>
                       maquinaCandidataCompatibleConFamilia(
-                        pasoActual.familiaCodigo,
+                        familia,
                         familia?.plantillasCompatibles,
                         m,
                       ),
                   )}
-                  mostrarModoColor={modoColorAplica(
-                    familia?.codigo,
-                    cfg,
-                  )}
+                  mostrarModoColor={modoColorAplica(familia, cfg)}
                   toggleMaquinaCandidata={toggleMaquinaCandidata}
                   setMaquinaCandidataPreferida={
                     setMaquinaCandidataPreferida
@@ -10883,6 +10873,19 @@ function SeccionesEsquemaPaso({
               />
             );
           }
+          if (id === "params-familia") {
+            // T4-H15: los parámetros propios de la familia, en el guiado —
+            // el mismo componente del detallado (una opción, un editor).
+            return familia ? (
+              <div className="pasos-sections wiz-grid">
+                <ParamsFamiliaFields
+                  familia={familia}
+                  params={asRecord(cfg.paramsPasoJson)}
+                  onChange={(patch) => onParams(pasoActual.id, patch)}
+                />
+              </div>
+            ) : null;
+          }
           if (id === "acomodado-detallado") {
             return (
               <div className="pasos-sections">
@@ -10914,9 +10917,7 @@ function SeccionesEsquemaPaso({
                   modoColorOptions={buildModoColorOptions(
                     maquinaSel,
                     null,
-                    ["impresion_por_hoja", "impresion_por_area"].includes(
-                      pasoActual.familiaCodigo,
-                    ),
+                    familia?.esImpresion === true,
                   )}
                   modoColorPerfilDefault={
                     modosColorFromPerfil(perfilSel)[0] ?? ""
@@ -11171,6 +11172,13 @@ function SeccionesEsquemaPaso({
           <div style={{ fontSize: 17, fontWeight: 650, color: "#2e7d32" }}>
             ✓ Listo para cotizar
           </div>
+          {vivos.length > 0 ? (
+            // Avisos NO bloqueantes: cotiza igual con la regla automática —
+            // es una sugerencia de precisión, no un faltante (H13).
+            <div style={{ ...notaStyle, color: "#64748b" }}>
+              {resumenPendientes(vivos)}
+            </div>
+          ) : null}
           <div style={notaStyle}>
             Todo sale de lo que el paso ya declara (defaults, estación,
             activación). Cualquier ajuste fino queda arriba, en sus

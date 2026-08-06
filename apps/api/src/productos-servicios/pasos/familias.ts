@@ -262,8 +262,20 @@ const pre_prensa: DefinicionFamilia = {
 
 const impresion_por_hoja: DefinicionFamilia = {
   codigo: 'impresion_por_hoja',
+  // [Tanda C] Antes: defaults cableados por nombre en el editor.
+  mecanismoCantidadDefault: 'HEREDAR_DEL_OUTPUT_CANONICO',
+  // [Etapa F3] Antes: FAMILIAS_IMPRESION en motor.service.
+  esImpresion: true,
+  // [Etapa F3] Antes: switch defaultOutputParaHeredar en motor.service.
+  outputHeredadoDefault: 'pliegos_calculados',
   nombre: 'Impresión por hoja',
   categoria: 'produccion_impresion',
+  // [Etapa F] Antes: caso 6 del dispatcher, ruteado por familiaCodigo.
+  nestingConfig: {
+    superficie: 'pliego',
+    estrategia: 'pliego_digital',
+    guardSinLayout: 'pliego_digital',
+  },
   descripcion:
     'Imprime sobre papel/cartulina cortado a tamaño pliego. Típico de Tarjetas, Talonarios, Volantes.',
   relacionMaquinaSoportada: ['M-1', 'M-2'],
@@ -360,6 +372,8 @@ const impresion_por_hoja: DefinicionFamilia = {
 
 const impresion_por_area: DefinicionFamilia = {
   codigo: 'impresion_por_area',
+  // [Etapa F3] Antes: FAMILIAS_IMPRESION en motor.service.
+  esImpresion: true,
   nombre: 'Impresión por área',
   categoria: 'produccion_impresion',
   descripcion:
@@ -400,7 +414,11 @@ const impresion_por_area: DefinicionFamilia = {
   // Acomoda sobre rollo (lona/vinilo) o placa (rígido) según el material y la
   // máquina — el dispatcher lo resuelve por `segun_material`. Ruteaba por un
   // `familiaCodigo === 'impresion_por_area'` con cascada propia. [Palanca 1b]
-  nestingConfig: { superficie: 'segun_material' },
+  nestingConfig: {
+    superficie: 'segun_material',
+    guardSinLayout: 'sustrato',
+    fallbackSinLayout: 'm2_crudos',
+  },
   inputsRequeridos: ['piezas'], // gap H7: lista de piezas
   outputsCanonicos: [
     'm2_calculados',
@@ -668,6 +686,8 @@ const grabado_laser: DefinicionFamilia = {
 
 const corte_guillotina: DefinicionFamilia = {
   codigo: 'corte_guillotina',
+  // [Etapa F3] Antes: switch defaultOutputParaHeredar en motor.service.
+  outputHeredadoDefault: 'pliegos_impresos',
   nombre: 'Corte con guillotina',
   categoria: 'corte_y_formado',
   descripcion:
@@ -718,6 +738,12 @@ const plotter_corte: DefinicionFamilia = {
   codigo: 'plotter_corte',
   nombre: 'Plotter de corte',
   categoria: 'corte_y_formado',
+  // [Etapa F] Antes: caso 2 del dispatcher, ruteado por familiaCodigo.
+  nestingConfig: {
+    superficie: 'rollo',
+    estrategia: 'corte_rollo',
+    fallbackSinLayout: 'm2_crudos',
+  },
   descripcion:
     'Corte de vinilo o papel adhesivo con plotter (Skycut, Roland). Soporta medio corte / corte profundo / corte completo.',
   relacionMaquinaSoportada: ['M-1'],
@@ -784,6 +810,8 @@ const corte_laser: DefinicionFamilia = {
 
 const troquelado_digital: DefinicionFamilia = {
   codigo: 'troquelado_digital',
+  // [Etapa F3] Antes: switch defaultOutputParaHeredar en motor.service.
+  outputHeredadoDefault: 'pliegos_impresos',
   nombre: 'Troquelado digital',
   categoria: 'corte_y_formado',
   descripcion: 'Mesa de corte digital tipo Esko/Zund. Sustrato en hoja.',
@@ -834,6 +862,8 @@ const cnc: DefinicionFamilia = {
 
 const plegado: DefinicionFamilia = {
   codigo: 'plegado',
+  // [Etapa F3] Antes: switch defaultOutputParaHeredar en motor.service.
+  outputHeredadoDefault: 'pliegos_impresos',
   nombre: 'Plegado manual',
   categoria: 'corte_y_formado',
   // MANUAL: sin máquina (M-0) y con productividad propia (T-2). Antes tenía M-1/T-3
@@ -866,6 +896,10 @@ const plegado: DefinicionFamilia = {
 
 const corte_manual: DefinicionFamilia = {
   codigo: 'corte_manual',
+  // [Tanda C] Antes: defaults cableados por nombre en el editor.
+  mecanismoCantidadDefault: 'HEREDAR_DEL_OUTPUT_CANONICO',
+  // [Etapa F3] Antes: switch defaultOutputParaHeredar en motor.service.
+  outputHeredadoDefault: 'pliegos_impresos',
   nombre: 'Refilado manual',
   categoria: 'corte_y_formado',
   descripcion:
@@ -895,8 +929,16 @@ const corte_manual: DefinicionFamilia = {
 
 const laminado: DefinicionFamilia = {
   codigo: 'laminado',
+  // [Etapa F3] Antes: switch defaultOutputParaHeredar en motor.service.
+  outputHeredadoDefault: 'pliegos_impresos',
   nombre: 'Laminado Polipropileno',
   categoria: 'terminaciones',
+  // [Etapa F] Antes: caso 3 del dispatcher, ruteado por familiaCodigo.
+  nestingConfig: {
+    superficie: 'rollo',
+    estrategia: 'laminado_rollo',
+    guardSinLayout: 'laminado_rollo',
+  },
   descripcion:
     'Aplicación de film BOPP (mate, brillo, texturado) con laminadora.',
   relacionMaquinaSoportada: ['M-1'],
@@ -959,6 +1001,12 @@ const plastificado_pouch: DefinicionFamilia = {
   codigo: 'plastificado_pouch',
   nombre: 'Plastificado pouch',
   categoria: 'terminaciones',
+  // [Etapa F] Antes: caso 4 del dispatcher, ruteado por familiaCodigo.
+  nestingConfig: {
+    superficie: 'pliego',
+    estrategia: 'pouch',
+    guardSinLayout: 'pouch',
+  },
   descripcion:
     'Plastificado térmico en pouch A4/A3 con acomodo de piezas y corte posterior.',
   relacionMaquinaSoportada: ['M-0'],
@@ -1092,6 +1140,8 @@ const abrochado_caballete: DefinicionFamilia = {
 
 const encuadernado_anillado: DefinicionFamilia = {
   codigo: 'encuadernado_anillado',
+  // [Etapa F3] Antes: switch defaultOutputParaHeredar en motor.service.
+  outputHeredadoDefault: 'pliegos_impresos',
   nombre: 'Encuadernación con anillo (espiral / wire-o)',
   categoria: 'encuadernacion_armado',
   descripcion:
@@ -1151,6 +1201,8 @@ const encuadernado_anillado: DefinicionFamilia = {
 
 const engomado_emblocado: DefinicionFamilia = {
   codigo: 'engomado_emblocado',
+  // [Etapa F3] Antes: switch defaultOutputParaHeredar en motor.service.
+  outputHeredadoDefault: 'pliegos_impresos',
   nombre: 'Engomado / emblocado',
   categoria: 'encuadernacion_armado',
   descripcion:
@@ -1226,6 +1278,8 @@ const ensamble_estructural: DefinicionFamilia = {
 
 const estructura_bastidor: DefinicionFamilia = {
   codigo: 'estructura_bastidor',
+  // [Tanda B] Antes: FAMILIAS_CON_PARAMS_EDITABLES en el frontend.
+  editorParamsGenerico: true,
   nombre: 'Estructura de bastidor',
   categoria: 'estructural_montaje',
   descripcion:
@@ -1245,8 +1299,10 @@ const estructura_bastidor: DefinicionFamilia = {
       tipo: 'INSUMO_PASO',
       requerido: true,
       compatibilidadMaterial: MP.soldadura,
-      // El consumo son los ml derivados (la cantidad del paso).
+      // El consumo son los ml derivados; si la variante declara `largoBarra`,
+      // el despiece del derivador se empaqueta en barras enteras.
       formulaForzada: 'por_unidad_productiva',
+      magnitudDerivada: 'mlTotal',
     },
     {
       codigo: 'anclaje',
@@ -1257,6 +1313,8 @@ const estructura_bastidor: DefinicionFamilia = {
         familiasMateriaPrima: ['HERRAJE_ACCESORIO'],
         subfamiliasMateriaPrima: ['SISTEMA_COLGADO_MONTAJE', 'FIJACION_AUXILIAR'],
       },
+      // Pares de soportes cada ~80 cm de ancho (los deriva el bastidor).
+      magnitudDerivada: 'anclajes',
     },
   ],
   permiteSlotsAdicionales: true,
@@ -1269,6 +1327,27 @@ const estructura_bastidor: DefinicionFamilia = {
     'pintura_m2',
     'fondo_m2',
   ],
+  derivador: {
+    codigo: 'bastidor_rectangular',
+    magnitudPrincipal: 'mlTotal',
+    unidadPrincipal: 'ml de perfil',
+    magnitudesTiempo: [
+      { magnitud: 'cortes', etiqueta: 'cortes de hierro' },
+      { magnitud: 'puntosSoldadura', etiqueta: 'puntos de soldadura' },
+    ],
+    outputs: {
+      ml_estructura: 'mlTotal',
+      puntos_soldadura: 'puntosSoldadura',
+      cenefa_m2: 'cenefaM2',
+      pintura_m2: 'pinturaM2',
+      fondo_m2: 'fondoM2',
+    },
+    mensajeSinDatos:
+      'es un bastidor DOBLE (cajón) pero no tiene profundidad: sin ella no se pueden derivar los metros de perfil.',
+    sugerenciaSinDatos:
+      'Cargá la profundidad del cajón al cotizar, fijala en el paso, o cambiá el bastidor a "simple" si es un marco plano.',
+    codigoSinDatos: 'estructura_bastidor_sin_profundidad',
+  },
   validaciones: [],
   paramsPasoSchema: [
     {
@@ -1288,6 +1367,7 @@ const estructura_bastidor: DefinicionFamilia = {
       default: 100,
       requerido: false,
       descripcion: 'Cada cuántos cm va una barra vertical. 0 = sin refuerzos.',
+      expuestoAlComercial: true,
     },
     {
       campo: 'sepRefuerzoHcm',
@@ -1295,6 +1375,7 @@ const estructura_bastidor: DefinicionFamilia = {
       tipo: 'number',
       default: 0,
       requerido: false,
+      expuestoAlComercial: true,
     },
     {
       campo: 'solapaCenefaCm',
@@ -1302,6 +1383,7 @@ const estructura_bastidor: DefinicionFamilia = {
       tipo: 'number',
       default: 2,
       requerido: false,
+      expuestoAlComercial: true,
     },
     {
       campo: 'profundidadMm',
@@ -1322,6 +1404,8 @@ const estructura_bastidor: DefinicionFamilia = {
 
 const iluminacion_led: DefinicionFamilia = {
   codigo: 'iluminacion_led',
+  // [Tanda B] Antes: FAMILIAS_CON_PARAMS_EDITABLES en el frontend.
+  editorParamsGenerico: true,
   nombre: 'Iluminación LED',
   categoria: 'estructural_montaje',
   descripcion:
@@ -1355,6 +1439,13 @@ const iluminacion_led: DefinicionFamilia = {
         familiasMateriaPrima: ['ELECTRONICA_CARTELERIA'],
         subfamiliasMateriaPrima: ['FUENTE_ALIMENTACION_LED'],
       },
+      // Una fuente por cartel; la variante la elige el selector por capacidad
+      // contra los watts derivados (margen ×1,3 ya incluido en la magnitud).
+      cantidadFija: 1,
+      criterioCapacidadDefault: {
+        inputMagnitud: 'wattsRequeridos',
+        materialCampo: 'capacidad',
+      },
     },
     {
       codigo: 'cableado',
@@ -1365,12 +1456,29 @@ const iluminacion_led: DefinicionFamilia = {
         familiasMateriaPrima: ['ELECTRONICA_CARTELERIA'],
         subfamiliasMateriaPrima: ['CABLEADO_CONECTICA'],
       },
+      // ml estimados: perímetro × 1,4 + 12 cm por módulo (los deriva el sembrado).
+      magnitudDerivada: 'cableMl',
     },
   ],
   permiteSlotsAdicionales: true,
   plantillasCompatibles: [],
   inputsRequeridos: [],
   outputsCanonicos: ['modulos_led', 'watts_led'],
+  derivador: {
+    codigo: 'sembrado_led',
+    magnitudPrincipal: 'modulos',
+    unidadPrincipal: 'módulos',
+    outputs: {
+      modulos_led: 'modulos',
+      watts_led: 'watts',
+    },
+    materialSlot: 'modulos_led',
+    mensajeSinDatos:
+      'no pudo derivar los módulos LED: el módulo del slot no declara cobertura (m²) ni paso (mm) en sus atributos, o el slot quedó sin material.',
+    sugerenciaSinDatos:
+      'Completá coberturaM2 (sembrado por área) o pasoMm (por recorrido) en la variante del módulo LED de la biblioteca.',
+    codigoSinDatos: 'iluminacion_led_sin_modulo',
+  },
   validaciones: [],
   paramsPasoSchema: [
     {
@@ -1391,6 +1499,7 @@ const iluminacion_led: DefinicionFamilia = {
       requerido: false,
       descripcion:
         '1 = densidad recomendada del módulo. 1,5 = 50% más módulos (más brillo).',
+      expuestoAlComercial: true,
     },
   ],
   productosTipicos: [
@@ -1402,8 +1511,18 @@ const iluminacion_led: DefinicionFamilia = {
 
 const montaje_sobre_sustrato: DefinicionFamilia = {
   codigo: 'montaje_sobre_sustrato',
+  // [Tanda C] Antes: defaults cableados por nombre en el editor.
+  mecanismoCantidadDefault: 'CALCULADO_POR_PASO',
+  ritmoDefault: { modoCalculo: 'batch_time', fuenteCantidad: 'cantidad_montaje' },
   nombre: 'Montado sobre material',
   categoria: 'estructural_montaje',
+  // [Etapa F] Antes: caso 5 del dispatcher, ruteado por familiaCodigo. La
+  // superficie real la decide el material de montaje elegido en runtime.
+  nestingConfig: {
+    superficie: 'segun_material',
+    estrategia: 'montaje',
+    guardSinLayout: 'montaje',
+  },
   descripcion:
     'Monta una salida impresa o cortada sobre otro sustrato, calculando el consumo del material de montaje con nesting propio.',
   relacionMaquinaSoportada: ['M-0', 'M-1'],
@@ -1459,10 +1578,14 @@ const montaje_sobre_sustrato: DefinicionFamilia = {
       campo: 'fuentePiezasMontaje',
       etiqueta: 'Piezas a montar',
       tipo: 'enum',
-      valoresPermitidos: ['piezas_jobcontext', 'pliegos_impresos'],
+      valoresPermitidos: [
+        'piezas_jobcontext',
+        'piezas_visibles',
+        'pliegos_impresos',
+      ],
       default: 'piezas_jobcontext',
       descripcion:
-        'Define si el montaje usa las piezas del producto o los pliegos ya impresos por un paso anterior.',
+        'Define si el montaje usa las piezas del producto (con las demasías que hayan agregado pasos previos), la medida VISIBLE terminada (chapa trasera cortada al marco), o los pliegos ya impresos por un paso anterior.',
     },
   ],
   productosTipicos: [
@@ -1478,6 +1601,8 @@ const montaje_sobre_sustrato: DefinicionFamilia = {
 
 const embalaje: DefinicionFamilia = {
   codigo: 'embalaje',
+  // [Tanda C] Antes: defaults cableados por nombre en el editor.
+  ritmoDefault: { modoCalculo: 'batch_time' },
   nombre: 'Embalaje',
   categoria: 'operaciones_manuales',
   descripcion: 'Embalado en cajas o bolsas para entrega.',
@@ -1572,6 +1697,8 @@ const trabajo_manual: DefinicionFamilia = {
 
 const modificacion_pre: DefinicionFamilia = {
   codigo: 'modificacion_pre',
+  // [Tanda B] Antes: FAMILIAS_CON_PARAMS_EDITABLES en el frontend.
+  editorParamsGenerico: true,
   nombre: 'Refuerzo / bolsillo de lona (demasía)',
   categoria: 'operaciones_manuales',
   descripcion:
@@ -1634,6 +1761,8 @@ const modificacion_pre: DefinicionFamilia = {
 
 const modificacion_post: DefinicionFamilia = {
   codigo: 'modificacion_post',
+  // [Etapa F3] Antes: switch defaultOutputParaHeredar en motor.service.
+  outputHeredadoDefault: 'piezas_cortadas',
   nombre: 'Modificación post-producción',
   categoria: 'operaciones_manuales',
   descripcion:
@@ -1673,6 +1802,8 @@ const modificacion_post: DefinicionFamilia = {
 
 const colocacion_ojales: DefinicionFamilia = {
   codigo: 'colocacion_ojales',
+  // [Tanda B] Antes: FAMILIAS_CON_PARAMS_EDITABLES en el frontend.
+  editorParamsGenerico: true,
   nombre: 'Colocación de ojales',
   categoria: 'operaciones_manuales',
   descripcion:
@@ -1703,6 +1834,19 @@ const colocacion_ojales: DefinicionFamilia = {
   plantillasCompatibles: [],
   inputsRequeridos: [],
   outputsCanonicos: ['ojales_colocados'],
+  derivador: {
+    codigo: 'layout_ojales',
+    magnitudPrincipal: 'ojales',
+    unidadPrincipal: 'ojales',
+    outputs: {
+      ojales_colocados: 'ojales',
+    },
+    mensajeSinDatos:
+      'no declara separación entre ojales ni lados, así que no puede calcular cuántos ojales entran.',
+    sugerenciaSinDatos:
+      'Configurar en el paso la separación máxima entre ojales (mm) y los lados donde van.',
+    codigoSinDatos: 'colocacion_ojales_mal_configurada',
+  },
   validaciones: [],
   paramsPasoSchema: [
     {
@@ -1748,6 +1892,8 @@ const colocacion_ojales: DefinicionFamilia = {
 
 const instalacion_in_situ: DefinicionFamilia = {
   codigo: 'instalacion_in_situ',
+  // [Tanda C] Antes: defaults cableados por nombre en el editor.
+  ritmoDefault: { unidad: 'm2_h', fuenteCantidad: 'area_piezas_m2' },
   nombre: 'Instalación en sitio',
   categoria: 'logistica_instalacion',
   descripcion:
@@ -2021,6 +2167,52 @@ export function campoSeparacionMaquinaDeFamilia(
   return resolverFamilia(codigo)?.campoSeparacionMaquina ?? null;
 }
 
+/** Estrategia de nesting declarada por la familia; null si no declara.
+ *  [Etapa F2] */
+export function estrategiaNestingDeFamilia(
+  codigo: string,
+): NonNullable<DefinicionFamilia['nestingConfig']>['estrategia'] | null {
+  return resolverFamilia(codigo)?.nestingConfig?.estrategia ?? null;
+}
+
+/** Guard sin-layout declarado por la familia; null → fallback silencioso.
+ *  [Etapa F2] */
+export function guardSinLayoutDeFamilia(
+  codigo: string,
+): NonNullable<DefinicionFamilia['nestingConfig']>['guardSinLayout'] | null {
+  return resolverFamilia(codigo)?.nestingConfig?.guardSinLayout ?? null;
+}
+
+/** Fallback de cantidad cuando el acomodado no dio layout (y el guard no
+ *  cortó); null → cantidad del pedido tal cual. [Tanda A] */
+export function fallbackSinLayoutDeFamilia(
+  codigo: string,
+): NonNullable<DefinicionFamilia['nestingConfig']>['fallbackSinLayout'] | null {
+  return resolverFamilia(codigo)?.nestingConfig?.fallbackSinLayout ?? null;
+}
+
+/**
+ * Cola de consolidación donde entra un ítem cuyo paso FRONTERA (primer paso
+ * no hecho) es de esta familia: impresión sobre material continuo
+ * (`segun_material`) → simulador de gran formato; impresión sobre pliego →
+ * simulador láser. Derivado de `esImpresion` + superficie declarada.
+ * [Tanda A: los simuladores preguntaban por familiaCodigo]
+ */
+export function colaConsolidacionDeFamilia(
+  codigo: string,
+): 'gran_formato' | 'laser' | null {
+  const f = resolverFamilia(codigo);
+  if (!f?.esImpresion || !f.nestingConfig) return null;
+  if (f.nestingConfig.superficie === 'segun_material') return 'gran_formato';
+  if (
+    f.nestingConfig.superficie === 'pliego' ||
+    f.nestingConfig.superficie === 'pliegos_multiples'
+  ) {
+    return 'laser';
+  }
+  return null;
+}
+
 /** Márgenes de nesting por defecto de la familia; cero si no declara. [Etapa A] */
 export function margenesNestingDefaultDeFamilia(
   codigo: string,
@@ -2096,4 +2288,16 @@ export function fuentePiezasNestingDeFamilia(
  */
 export function familiaMutaMedidasEnPrePasada(familiaCodigo: string): boolean {
   return resolverFamilia(familiaCodigo)?.mutaMedidasEnPrePasada === true;
+}
+
+/**
+ * Campos del schema que el COMERCIAL puede pisar por runtime aunque el
+ * modelador no los haya abierto (`expuestoAlComercial` en la declaración).
+ * Ver `ParamsPasoDeclarado.expuestoAlComercial` en types.ts.
+ * [Etapa 3 derivadores: era CAMPOS_SIEMPRE_EDITABLES_POR_FAMILIA en motor]
+ */
+export function camposExpuestosAlComercial(familiaCodigo: string): string[] {
+  return (resolverFamilia(familiaCodigo)?.paramsPasoSchema ?? [])
+    .filter((p) => p.expuestoAlComercial === true)
+    .map((p) => p.campo);
 }

@@ -1,0 +1,250 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8">
+<title>Censo de productos · Grafoprint</title>
+<style>
+@page { size: A4; margin: 11mm 12mm; }
+* { box-sizing: border-box; }
+body { margin:0; font-family: "Geist","Inter",-apple-system,sans-serif; font-size:10.5px;
+  line-height:1.4; color:#14141a; background:#fff; letter-spacing:-.005em; }
+.mono { font-family: ui-monospace,"Geist Mono",monospace; }
+header { border-bottom:2.5px solid #14141a; padding-bottom:10px; margin-bottom:14px; }
+.kicker { font-family:ui-monospace,monospace; font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:#92929b; font-weight:600; }
+h1 { font-size:21px; margin:2px 0 3px; letter-spacing:-.02em; }
+.sub-t { color:#6e6e76; font-size:11px; }
+.stats { display:flex; gap:8px; margin:12px 0 16px; }
+.stat { flex:1; border:1px solid #e0ddd6; border-radius:8px; padding:8px 12px; background:#fafaf9; }
+.stat .v { font-size:19px; font-weight:700; letter-spacing:-.02em; }
+.stat .l { font-size:9.5px; color:#6e6e76; }
+.stat.g .v { color:#16794a; } .stat.r .v { color:#c2410c; }
+.cat { margin-bottom:14px; break-inside:avoid-page; }
+.cat-h { display:flex; align-items:baseline; justify-content:space-between; border-bottom:1.5px solid #14141a; padding-bottom:3px; margin-bottom:8px; }
+h2 { font-size:14px; margin:0; letter-spacing:-.01em; }
+.cat-stat { font-family:ui-monospace,monospace; font-size:10px; color:#6e6e76; }
+.sub { margin-bottom:8px; }
+.sub-h { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:#6e6e76; font-weight:600; margin:6px 0 5px; }
+.cnt { color:#c8c4ba; }
+.prods { display:grid; grid-template-columns:1fr 1fr; gap:5px; }
+.prod { border:1px solid #e0ddd6; border-radius:7px; padding:6px 9px; break-inside:avoid; }
+.prod-head { display:flex; justify-content:space-between; gap:8px; align-items:baseline; }
+.nm { font-weight:600; font-size:11px; }
+.ok { color:#16794a; font-family:ui-monospace,monospace; font-size:10px; font-weight:600; white-space:nowrap; }
+.bad { color:#c2410c; font-family:ui-monospace,monospace; font-size:9.5px; font-weight:600; white-space:nowrap; }
+.sys { font-size:8.5px; border:1px solid #e0ddd6; border-radius:8px; padding:0 5px; color:#6e6e76; vertical-align:1px; }
+.prod-meta { color:#92929b; font-size:9px; margin:1px 0 4px; }
+.code { font-family:ui-monospace,monospace; }
+.ruta { display:flex; flex-wrap:wrap; gap:2px 3px; align-items:center; }
+.chip { border:1px solid #e0ddd6; background:#f3f1ec; border-radius:4px; padding:.5px 5px; font-size:8.5px; color:#2c2c33; white-space:nowrap; }
+.chip.op { border-style:dashed; background:#fff; color:#6e6e76; }
+.arrow { color:#c8c4ba; font-size:8px; }
+.att-sec { break-inside:avoid-page; margin-top:16px; }
+.att { border:1px solid #f4d3c0; background:#fef7f2; border-radius:7px; padding:8px 11px; margin-bottom:6px; break-inside:avoid; }
+.att-info { border-color:#e0ddd6; background:#fafaf9; }
+.att-h { font-size:11px; margin-bottom:2px; }
+.att-err { font-family:ui-monospace,monospace; font-size:9px; color:#c2410c; margin-bottom:3px; }
+.att-info .att-err { color:#6e6e76; }
+.att-dx { font-size:10px; color:#2c2c33; }
+.metodo { margin-top:14px; border-top:1px solid #ece9e2; padding-top:8px; font-size:9px; color:#92929b; }
+.legend { display:flex; gap:14px; margin:0 0 12px; font-size:9.5px; color:#6e6e76; align-items:center; }
+.legend .chip { font-size:8.5px; }
+</style></head><body>
+<header>
+  <div class="kicker">Grafoprint · censo de productos cotizables</div>
+  <h1>Qué puede cotizar el sistema hoy</h1>
+  <div class="sub-t">Cada producto fue cotizado DE VERDAD contra el motor universal con un contexto estándar (medida default o adecuada, materiales default, opcionales apagados). 2026-08-04 · rama feat/carteleria-configurador · tenant demo.</div>
+</header>
+<div class="stats">
+  <div class="stat"><div class="v">38</div><div class="l">productos activos</div></div>
+  <div class="stat g"><div class="v">34</div><div class="l">cotizan OK (precio real del motor)</div></div>
+  <div class="stat r"><div class="v">3</div><div class="l">a revisar (config o datos)</div></div>
+  <div class="stat"><div class="v">1</div><div class="l">cotiza por su propio flujo (TPV)</div></div>
+</div>
+<div class="legend"><span><span class="chip">Paso</span> obligatorio</span><span><span class="chip op">Paso</span> opcional</span><span>✓ precio total de la corrida de prueba (cantidad × medida indicadas)</span></div>
+<section class="cat">
+      <div class="cat-h"><h2>Impresión comercial en hoja</h2><span class="cat-stat">15/17 cotizan</span></div>
+      <div class="sub"><div class="sub-h">Tarjetas <span class="cnt">1</span></div><div class="prods"><div class="prod">
+              <div class="prod-head"><span class="nm">Tarjetas de visita</span><span class="ok">✓ $17.137</span></div>
+              <div class="prod-meta"><span class="code">TARJETAS-DE-VISITA</span> · 10 u. · 90×50 mm</div>
+              <div class="ruta"><span class="chip op">Diseño</span><span class="arrow">→</span><span class="chip">Pre-prensa</span><span class="arrow">→</span><span class="chip">Impresión hoja</span><span class="arrow">→</span><span class="chip op">Laminado</span><span class="arrow">→</span><span class="chip">Guillotina</span></div>
+            </div></div></div><div class="sub"><div class="sub-h">Volantes y folletos <span class="cnt">5</span></div><div class="prods"><div class="prod">
+              <div class="prod-head"><span class="nm">Cartel backlight de prueba</span><span class="ok">✓ $232.936</span></div>
+              <div class="prod-meta"><span class="code">CARTEL-BACKLIGHT</span> · 10 u. · 500×500 mm</div>
+              <div class="ruta"><span class="chip">Corte hierros</span><span class="arrow">→</span><span class="chip">Manual</span><span class="arrow">→</span><span class="chip op">Pintura</span><span class="arrow">→</span><span class="chip">Demasía/refuerzo</span><span class="arrow">→</span><span class="chip">Impresión GF</span><span class="arrow">→</span><span class="chip op">Manual</span><span class="arrow">→</span><span class="chip">Iluminación LED</span><span class="arrow">→</span><span class="chip">Manual</span><span class="arrow">→</span><span class="chip op">Manual</span></div>
+            </div><div class="prod">
+              <div class="prod-head"><span class="nm">Folletos / flyers</span><span class="ok">✓ $15.657</span></div>
+              <div class="prod-meta"><span class="code">FOLLETOS-FLYERS</span> · 10 u. · 95×140 mm</div>
+              <div class="ruta"><span class="chip op">Diseño</span><span class="arrow">→</span><span class="chip">Pre-prensa</span><span class="arrow">→</span><span class="chip">Impresión hoja</span><span class="arrow">→</span><span class="chip">Guillotina</span></div>
+            </div><div class="prod">
+              <div class="prod-head"><span class="nm">Folletos dípticos en impresion laser</span><span class="ok">✓ $26.243</span></div>
+              <div class="prod-meta"><span class="code">FOLLETOS-DIPTICOS-EN-IMPRESION-LASER</span> · 10 u. · 180×140 mm</div>
+              <div class="ruta"><span class="chip op">Diseño</span><span class="arrow">→</span><span class="chip">Pre-prensa</span><span class="arrow">→</span><span class="chip">Impresión hoja</span><span class="arrow">→</span><span class="chip">Guillotina</span><span class="arrow">→</span><span class="chip">Manual</span></div>
+            </div><div class="prod">
+              <div class="prod-head"><span class="nm">Revista de prueba</span><span class="ok">✓ $32.872</span></div>
+              <div class="prod-meta"><span class="code">REVISTA-PRUEBA</span> · 10 u. · 148×210 mm</div>
+              <div class="ruta"><span class="chip">Impresión hoja</span><span class="arrow">→</span><span class="chip">Impresión hoja</span><span class="arrow">→</span><span class="chip">Plegado</span><span class="arrow">→</span><span class="chip">Abrochado</span><span class="arrow">→</span><span class="chip">Guillotina</span></div>
+            </div><div class="prod">
+              <div class="prod-head"><span class="nm">Tapas en cartulina amarilla de Distrigas</span><span class="ok">✓ $19.217</span></div>
+              <div class="prod-meta"><span class="code">TAPAS-EN-CARTULINA-COLOR</span> · 10 u. · 240×280 mm</div>
+              <div class="ruta"><span class="chip op">Diseño</span><span class="arrow">→</span><span class="chip">Pre-prensa</span><span class="arrow">→</span><span class="chip">Impresión hoja</span></div>
+            </div></div></div><div class="sub"><div class="sub-h">Papelería comercial <span class="cnt">6</span></div><div class="prods"><div class="prod">
+              <div class="prod-head"><span class="nm">Carpetas con solapa para hojas A4</span><span class="ok">✓ $30.708</span></div>
+              <div class="prod-meta"><span class="code">CARPETAS-CON-SOLAPA-PARA-HOJAS-A4</span> · 10 u. · 450×310 mm</div>
+              <div class="ruta"><span class="chip op">Diseño</span><span class="arrow">→</span><span class="chip">Pre-prensa</span><span class="arrow">→</span><span class="chip">Impresión hoja</span><span class="arrow">→</span><span class="chip op">Laminado</span><span class="arrow">→</span><span class="chip">Manual</span><span class="arrow">→</span><span class="chip">Manual</span></div>
+            </div><div class="prod">
+              <div class="prod-head"><span class="nm">Imanes PRUEBA serigrafia E2E</span><span class="ok">✓ $35.818</span></div>
+              <div class="prod-meta"><span class="code">IMANES-PRUEBA-SERIGRAFIA-E2E</span> · 10 u. · 60×40 mm</div>
+              <div class="ruta"><span class="chip op">Diseño</span><span class="arrow">→</span><span class="chip">Pre-prensa</span><span class="arrow">→</span><span class="chip">Impresión hoja</span><span class="arrow">→</span><span class="chip op">Laminado</span><span class="arrow">→</span><span class="chip">Montaje</span><span class="arrow">→</span><span class="chip">Corte manual</span></div>
+            </div><div class="prod">
+              <div class="prod-head"><span class="nm">Imanes de heladera</span><span class="ok">✓ $28.825</span></div>
+              <div class="prod-meta"><span class="code">IMANES-DE-HELADERA</span> · 10 u. · 60×40 mm</div>
+              <div class="ruta"><span class="chip op">Diseño</span><span class="arrow">→</span><span class="chip">Pre-prensa</span><span class="arrow">→</span><span class="chip">Impresión hoja</span><span class="arrow">→</span><span class="chip op">Laminado</span><span class="arrow">→</span><span class="chip">Montaje</span><span class="arrow">→</span><span class="chip">Corte manual</span></div>
+            </div><div class="prod">
+              <div class="prod-head"><span class="nm">Impresión de documento <span class="sys">sistema</span></span><span class="bad">✗ pieza_no_entra_en_pliego_impresion</span></div>
+              <div class="prod-meta"><span class="code">SYS-IMPRESION-DOC</span> · 10 u. · 210×297 mm</div>
+              <div class="ruta"><span class="chip">Impresión hoja</span><span class="arrow">→</span><span class="chip op">Anillado</span></div>
+            </div><div class="prod">
+              <div class="prod-head"><span class="nm">Plano CAD impreso</span><span class="bad">✗ rollo_mas_ancho_que_boca</span></div>
+              <div class="prod-meta"><span class="code">PLANO-CAD-IMPRESO</span> · 1 u. · 500×500 mm</div>
+              <div class="ruta"><span class="chip">Impresión GF</span></div>
+            </div><div class="prod">
+              <div class="prod-head"><span class="nm">Talonarios en papel obra</span><span class="ok">✓ $40.617</span></div>
+              <div class="prod-meta"><span class="code">TALONARIOS-EN-PAPEL-OBRA</span> · 10 u. · 160×200 mm</div>
+              <div class="ruta"><span class="chip">Pre-prensa</span><span class="arrow">→</span><span class="chip">Impresión hoja</span><span class="arrow">→</span><span class="chip">Impresión hoja</span><span class="arrow">→</span><span class="chip">Impresión hoja</span><span class="arrow">→</span><span class="chip">Manual</span><span class="arrow">→</span><span class="chip">Guillotina</span></div>
+            </div></div></div><div class="sub"><div class="sub-h">Stickers en hoja <span class="cnt">2</span></div><div class="prods"><div class="prod">
+              <div class="prod-head"><span class="nm">Papel OPP troquelado</span><span class="ok">✓ $43.219</span></div>
+              <div class="prod-meta"><span class="code">PAPEL-OPP-TROQUELADO</span> · 10 u. · 270×400 mm</div>
+              <div class="ruta"><span class="chip op">Diseño</span><span class="arrow">→</span><span class="chip">Pre-prensa</span><span class="arrow">→</span><span class="chip">Impresión hoja</span><span class="arrow">→</span><span class="chip">Plotter corte</span></div>
+            </div><div class="prod">
+              <div class="prod-head"><span class="nm">Papel adhesivo / sticker troquelado</span><span class="ok">✓ $29.546</span></div>
+              <div class="prod-meta"><span class="code">PAPEL-ADHESIVO-STICKER-TROQUELADO</span> · 10 u. · 270×400 mm</div>
+              <div class="ruta"><span class="chip op">Diseño</span><span class="arrow">→</span><span class="chip">Pre-prensa</span><span class="arrow">→</span><span class="chip">Impresión hoja</span><span class="arrow">→</span><span class="chip">Plotter corte</span></div>
+            </div></div></div><div class="sub"><div class="sub-h">Postales e invitaciones <span class="cnt">3</span></div><div class="prods"><div class="prod">
+              <div class="prod-head"><span class="nm">Postales / Invitaciones</span><span class="ok">✓ $15.781</span></div>
+              <div class="prod-meta"><span class="code">POSTALES</span> · 10 u. · 140×95 mm</div>
+              <div class="ruta"><span class="chip op">Diseño</span><span class="arrow">→</span><span class="chip">Pre-prensa</span><span class="arrow">→</span><span class="chip">Impresión hoja</span><span class="arrow">→</span><span class="chip op">Laminado</span><span class="arrow">→</span><span class="chip">Guillotina</span></div>
+            </div><div class="prod">
+              <div class="prod-head"><span class="nm">Señaladores para libros</span><span class="ok">✓ $15.992</span></div>
+              <div class="prod-meta"><span class="code">SENALADORES-PARA-LIBROS</span> · 10 u. · 50×150 mm</div>
+              <div class="ruta"><span class="chip op">Diseño</span><span class="arrow">→</span><span class="chip">Pre-prensa</span><span class="arrow">→</span><span class="chip">Impresión hoja</span><span class="arrow">→</span><span class="chip op">Laminado</span><span class="arrow">→</span><span class="chip">Guillotina</span></div>
+            </div><div class="prod">
+              <div class="prod-head"><span class="nm">Tarjetones en Opalina</span><span class="ok">✓ $16.016</span></div>
+              <div class="prod-meta"><span class="code">TARJETONES-EN-OPALINA</span> · 10 u. · 140×95 mm</div>
+              <div class="ruta"><span class="chip op">Diseño</span><span class="arrow">→</span><span class="chip">Pre-prensa</span><span class="arrow">→</span><span class="chip">Impresión hoja</span><span class="arrow">→</span><span class="chip">Guillotina</span></div>
+            </div></div></div>
+    </section><section class="cat">
+      <div class="cat-h"><h2>Gran formato flexible</h2><span class="cat-stat">11/12 cotizan</span></div>
+      <div class="sub"><div class="sub-h">Vinilos impresos <span class="cnt">8</span></div><div class="prods"><div class="prod">
+              <div class="prod-head"><span class="nm">Carteleria PVC con vinilo</span><span class="bad">✗ montaje_sin_nesting</span></div>
+              <div class="prod-meta"><span class="code">CARTELERIA-PVC-CON-VINILO</span> · 1 u. · 500×500 mm</div>
+              <div class="ruta"><span class="chip">Impresión GF</span><span class="arrow">→</span><span class="chip">Manual</span></div>
+            </div><div class="prod">
+              <div class="prod-head"><span class="nm">Metalex Impreso UV</span><span class="ok">✓ $102.617</span></div>
+              <div class="prod-meta"><span class="code">METALEX-IMPRESO-UV</span> · 1 u. · 500×500 mm</div>
+              <div class="ruta"><span class="chip">Impresión GF</span></div>
+            </div><div class="prod">
+              <div class="prod-head"><span class="nm">PVC Espumado</span><span class="ok">✓ $29.520</span></div>
+              <div class="prod-meta"><span class="code">PVC-ESPUMADO</span> · 1 u. · 500×500 mm</div>
+              <div class="ruta"><span class="chip">Impresión GF</span><span class="arrow">→</span><span class="chip">Manual</span></div>
+            </div><div class="prod">
+              <div class="prod-head"><span class="nm">Papel Fotografico en gran formato</span><span class="ok">✓ $20.071</span></div>
+              <div class="prod-meta"><span class="code">PAPEL-FOTOGRAFICO-EN-GRAN-FORMATO</span> · 1 u. · 500×500 mm</div>
+              <div class="ruta"><span class="chip">Impresión GF</span><span class="arrow">→</span><span class="chip">Manual</span></div>
+            </div><div class="prod">
+              <div class="prod-head"><span class="nm">Vinilo Microperforado</span><span class="ok">✓ $23.483</span></div>
+              <div class="prod-meta"><span class="code">VINILO-MICROPERFORADO</span> · 1 u. · 500×500 mm</div>
+              <div class="ruta"><span class="chip">Impresión GF</span><span class="arrow">→</span><span class="chip">Manual</span></div>
+            </div><div class="prod">
+              <div class="prod-head"><span class="nm">Vinilo glitter impreso</span><span class="ok">✓ $23.883</span></div>
+              <div class="prod-meta"><span class="code">VINILO-GLITTER-IMPRESO</span> · 1 u. · 500×500 mm</div>
+              <div class="ruta"><span class="chip">Impresión GF</span><span class="arrow">→</span><span class="chip">Manual</span></div>
+            </div><div class="prod">
+              <div class="prod-head"><span class="nm">Vinilo impreso blanco</span><span class="ok">✓ $19.737</span></div>
+              <div class="prod-meta"><span class="code">VINILO-IMPRESO-BLANCO</span> · 1 u. · 500×500 mm</div>
+              <div class="ruta"><span class="chip">Impresión GF</span><span class="arrow">→</span><span class="chip">Manual</span></div>
+            </div><div class="prod">
+              <div class="prod-head"><span class="nm">Vinilo tornasolado impreso</span><span class="ok">✓ $23.939</span></div>
+              <div class="prod-meta"><span class="code">VINILO-TORNASOLADO-IMPRESO</span> · 1 u. · 500×500 mm</div>
+              <div class="ruta"><span class="chip">Impresión GF</span><span class="arrow">→</span><span class="chip">Manual</span></div>
+            </div></div></div><div class="sub"><div class="sub-h">Lonas y banners <span class="cnt">3</span></div><div class="prods"><div class="prod">
+              <div class="prod-head"><span class="nm">Lona Backlight</span><span class="ok">✓ $25.410</span></div>
+              <div class="prod-meta"><span class="code">LONA-BACKLIGHT</span> · 1 u. · 500×500 mm</div>
+              <div class="ruta"><span class="chip">Impresión GF</span><span class="arrow">→</span><span class="chip">Manual</span></div>
+            </div><div class="prod">
+              <div class="prod-head"><span class="nm">Lona Frontlight</span><span class="ok">✓ $19.799</span></div>
+              <div class="prod-meta"><span class="code">LONA-FRONTLIGHT</span> · 1 u. · 500×500 mm</div>
+              <div class="ruta"><span class="chip">Impresión GF</span><span class="arrow">→</span><span class="chip">Manual</span></div>
+            </div><div class="prod">
+              <div class="prod-head"><span class="nm">Lona Mesh</span><span class="ok">✓ $28.327</span></div>
+              <div class="prod-meta"><span class="code">LONA-MESH</span> · 1 u. · 500×500 mm</div>
+              <div class="ruta"><span class="chip">Impresión GF</span><span class="arrow">→</span><span class="chip">Manual</span></div>
+            </div></div></div><div class="sub"><div class="sub-h">Roll-ups y displays <span class="cnt">1</span></div><div class="prods"><div class="prod">
+              <div class="prod-head"><span class="nm">Portabanner Roll Up (incluye lona UV)</span><span class="ok">✓ $613.907</span></div>
+              <div class="prod-meta"><span class="code">PORTABANNER-ROLL-UP-INCLUYE-LONA-UV</span> · 10 u. · 800×2000 mm</div>
+              <div class="ruta"><span class="chip op">Diseño</span><span class="arrow">→</span><span class="chip">Impresión GF</span><span class="arrow">→</span><span class="chip">Manual</span><span class="arrow">→</span><span class="chip">Ensamble</span></div>
+            </div></div></div>
+    </section><section class="cat">
+      <div class="cat-h"><h2>Señalética, rígidos y corpóreos</h2><span class="cat-stat">2/2 cotizan</span></div>
+      <div class="sub"><div class="sub-h">Rígidos impresos <span class="cnt">2</span></div><div class="prods"><div class="prod">
+              <div class="prod-head"><span class="nm">Iman vehicular</span><span class="ok">✓ $73.019</span></div>
+              <div class="prod-meta"><span class="code">IMAN-VEHICULAR</span> · 10 u. · 500×500 mm</div>
+              <div class="ruta"><span class="chip op">Diseño</span><span class="arrow">→</span><span class="chip">Pre-prensa</span><span class="arrow">→</span><span class="chip">Impresión GF</span><span class="arrow">→</span><span class="chip">Montaje</span><span class="arrow">→</span><span class="chip">Manual</span></div>
+            </div><div class="prod">
+              <div class="prod-head"><span class="nm">MDF Impreso</span><span class="ok">✓ $24.726</span></div>
+              <div class="prod-meta"><span class="code">MDF-IMPRESO</span> · 1 u. · 500×500 mm</div>
+              <div class="ruta"><span class="chip">Impresión GF</span><span class="arrow">→</span><span class="chip op">Manual</span></div>
+            </div></div></div>
+    </section><section class="cat">
+      <div class="cat-h"><h2>Textil y personalización</h2><span class="cat-stat">5/6 cotizan</span></div>
+      <div class="sub"><div class="sub-h">Remeras e indumentaria <span class="cnt">3</span></div><div class="prods"><div class="prod">
+              <div class="prod-head"><span class="nm">Remera de algodon personalizada</span><span class="ok">✓ $39.469</span></div>
+              <div class="prod-meta"><span class="code">REMERA-DE-ALGODON-PERSONALIZADA</span> · 10 u. · 500×500 mm</div>
+              <div class="ruta"><span class="chip">Impresión GF</span><span class="arrow">→</span><span class="chip">Transfer</span></div>
+            </div><div class="prod">
+              <div class="prod-head"><span class="nm">Tela bandera impresa UV</span><span class="ok">✓ $33.726</span></div>
+              <div class="prod-meta"><span class="code">TELA-BANDERA-IMPRESA</span> · 1 u. · 500×500 mm</div>
+              <div class="ruta"><span class="chip">Impresión GF</span><span class="arrow">→</span><span class="chip">Manual</span></div>
+            </div><div class="prod">
+              <div class="prod-head"><span class="nm">Tela canvas impresa</span><span class="ok">✓ $30.887</span></div>
+              <div class="prod-meta"><span class="code">TELA-CANVAS-IMPRESA</span> · 1 u. · 500×500 mm</div>
+              <div class="ruta"><span class="chip">Impresión GF</span><span class="arrow">→</span><span class="chip">Manual</span></div>
+            </div></div></div><div class="sub"><div class="sub-h">DTF y transfer <span class="cnt">2</span></div><div class="prods"><div class="prod">
+              <div class="prod-head"><span class="nm">Film DTF Textil por metro</span><span class="ok">✓ $19.500</span></div>
+              <div class="prod-meta"><span class="code">DTF-TEXTIL-IMPRESION-POR-METRO</span> · 1 u. · 500×500 mm</div>
+              <div class="ruta"><span class="chip">Impresión GF</span></div>
+            </div><div class="prod">
+              <div class="prod-head"><span class="nm">Film DTF UV por metro</span><span class="bad">✗ pieza_no_entra_en_sustrato</span></div>
+              <div class="prod-meta"><span class="code">DTF-UV-IMPRESION-POR-METRO</span> · 1 u. · 500×500 mm</div>
+              <div class="ruta"><span class="chip">Impresión GF</span></div>
+            </div></div></div><div class="sub"><div class="sub-h">Objetos personalizados <span class="cnt">1</span></div><div class="prods"><div class="prod">
+              <div class="prod-head"><span class="nm">Taza ceramica personalizada</span><span class="ok">✓ $67.753</span></div>
+              <div class="prod-meta"><span class="code">TAZA-CERAMICA-PERSONALIZADA</span> · 10 u. · 200×80 mm</div>
+              <div class="ruta"><span class="chip">Impresión GF</span><span class="arrow">→</span><span class="chip">Transfer</span></div>
+            </div></div></div>
+    </section><section class="cat">
+      <div class="cat-h"><h2>Sellos</h2><span class="cat-stat">1/1 cotizan</span></div>
+      <div class="sub"><div class="sub-h">Sellos automáticos <span class="cnt">1</span></div><div class="prods"><div class="prod">
+              <div class="prod-head"><span class="nm">Sello automatico Trodat 3911</span><span class="ok">✓ $92.281</span></div>
+              <div class="prod-meta"><span class="code">SELLO-AUTOMATICO-TRODAT-3911</span> · 10 u. · 38×14 mm</div>
+              <div class="ruta"><span class="chip">Pre-prensa</span><span class="arrow">→</span><span class="chip">Manual</span><span class="arrow">→</span><span class="chip">Ensamble</span></div>
+            </div></div></div>
+    </section>
+<section class="att-sec">
+  <div class="cat-h"><h2>Los 4 que requieren atención</h2></div>
+  <div class="att ">
+      <div class="att-h"><strong>Carteleria PVC con vinilo</strong> <span class="code">CARTELERIA-PVC-CON-VINILO</span></div>
+      <div class="att-err">montaje_sin_nesting — El montaje sobre material no pudo calcular el nesting: no encontró piezas para montar ni un sustrato con dimensiones. Revisá el material del montaje y la fuente</div>
+      <div class="att-dx">El paso de montaje pide piezas de una fuente que la impresión en rollo no publica (fuentePiezasMontaje). Revisar la config del paso.</div>
+    </div><div class="att ">
+      <div class="att-h"><strong>Film DTF UV por metro</strong> <span class="code">DTF-UV-IMPRESION-POR-METRO</span></div>
+      <div class="att-err">pieza_no_entra_en_sustrato — La pieza de 300×300mm no entra en el ancho útil del sustrato 280mm. Activá el panelizado para dividirla o elegí un sustrato más ancho.</div>
+      <div class="att-dx">La pieza no entra en el ancho útil del film configurado, incluso a 300×300. Revisar rollo/medidas del sustrato del paso.</div>
+    </div><div class="att ">
+      <div class="att-h"><strong>Plano CAD impreso</strong> <span class="code">PLANO-CAD-IMPRESO</span></div>
+      <div class="att-err">rollo_mas_ancho_que_boca — El rollo elegido mide 914 mm de ancho y la boca de &quot;Plotter de Planos CAD&quot; es de 910 mm: no se puede cargar.</div>
+      <div class="att-dx">El guard nuevo detectó que el rollo cargado es más ancho que la boca del plotter: dato de máquina o de rollo a corregir.</div>
+    </div><div class="att att-info">
+      <div class="att-h"><strong>Impresión de documento</strong> <span class="code">SYS-IMPRESION-DOC</span></div>
+      <div class="att-err">pieza_no_entra_en_pliego_impresion — La pieza de 210×297mm no entra en el pliego de impresión de 210×297mm (área útil 200×287mm con los márgenes, sin rotación).</div>
+      <div class="att-dx">Producto del sistema del TPV Centro de copiado: cotiza por su propio flujo (páginas → hojas), no por medida libre. No es un error.</div>
+    </div>
+</section>
+<div class="metodo">Método: script sobre el motor real (MotorUniversalService.cotizar) por producto activo, ruta preferida, con slotMaterial defaults y sin opcionales; los precios usan la config de precio del producto (— cuando no tiene método de precio configurado, se muestra el costo). Los fallos conservan el código de diagnóstico del motor.</div>
+</body></html>

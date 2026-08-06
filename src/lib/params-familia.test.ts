@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  FAMILIAS_CON_PARAMS_EDITABLES,
+  familiaConParamsEditables,
   etiquetaValorParam,
   paramVacio,
   patchParaEnum,
@@ -11,21 +11,19 @@ import {
 
 const LADOS = ["superior", "inferior", "izquierdo", "derecho"];
 
-describe("FAMILIAS_CON_PARAMS_EDITABLES", () => {
-  it("sólo incluye familias cuyos params lee el motor", () => {
-    expect(FAMILIAS_CON_PARAMS_EDITABLES.has("modificacion_pre")).toBe(true);
-    expect(FAMILIAS_CON_PARAMS_EDITABLES.has("colocacion_ojales")).toBe(true);
+describe("familiaConParamsEditables", () => {
+  it("es la familia quien lo DECLARA (editorParamsGenerico), no una lista", () => {
+    expect(
+      familiaConParamsEditables({ editorParamsGenerico: true }),
+    ).toBe(true);
   });
 
-  it("deja afuera las que declaran params muertos o ya tienen UI propia", () => {
-    // `tipoPliegue` no lo lee nadie en el backend.
-    expect(FAMILIAS_CON_PARAMS_EDITABLES.has("plegado")).toBe(false);
-    // Estas ya tienen controles a medida: se duplicarían.
-    expect(FAMILIAS_CON_PARAMS_EDITABLES.has("pre_prensa")).toBe(false);
-    expect(FAMILIAS_CON_PARAMS_EDITABLES.has("montaje_sobre_sustrato")).toBe(
-      false,
-    );
-    expect(FAMILIAS_CON_PARAMS_EDITABLES.has("diseno_grafico")).toBe(false);
+  it("sin declaración (params muertos o UI a medida) no edita genérico", () => {
+    expect(familiaConParamsEditables({})).toBe(false);
+    expect(
+      familiaConParamsEditables({ editorParamsGenerico: false }),
+    ).toBe(false);
+    expect(familiaConParamsEditables(undefined)).toBe(false);
   });
 });
 
