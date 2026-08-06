@@ -227,17 +227,20 @@ nombre para no tocar relaciones.
   no hay instancias en uso), jest, vitest, E2E creando una instancia de
   `trabajo_manual` y usándola en una ruta.
 
-## 7. Preguntas abiertas (para Lucas)
+## 7. Decisiones de Lucas (2026-08-07) — todas cerradas
 
-1. ~~Journey de creación~~ **DEFINIDO** (§3.4): modal estilo alta de máquina.
-   Queda por confirmar sólo el **rótulo** de la sección (hoy "Tus pasos") y
-   el del botón ("Nuevo paso").
-2. **`EstacionRegla`** (§5, última fila): ¿la regla de la plantilla alcanza a
-   sus instancias, o cada instancia se rutea sola? Mi recomendación: que
-   alcance por plantilla, con override opcional por instancia.
-3. **¿Renombrar la tabla** `FamiliaTenant` → `PasoTenant`? Es el momento
-   (está vacía), pero toca relaciones en Prisma.
-4. **Instancias de familias con máquina**: ¿tiene sentido que un tenant
-   instancie `impresion_por_hoja` como "Impresión Xerox interior"? Mi lectura
-   es que sí (es *su* nombre para *su* proceso) y que no hay razón para
-   limitar las plantillas instanciables a las manuales.
+1. **Journey de creación**: modal estilo alta de máquina (§3.4). ✅
+2. **Estación**: la instancia **hereda** la regla de estación de su plantilla,
+   pero **se puede cambiar a otra estación** — override por instancia. Si una
+   regla rutea `trabajo_manual` al Taller, "Bordado" nace ahí y puede mudarse
+   sin tocar la plantilla.
+3. **Renombrar** `FamiliaTenant` → `PasoTenant`: **sí** (la tabla está vacía,
+   es el momento sin costo de migración).
+4. **Rótulo de la sección**: "Tus pasos" **queda**. Cambios de copy ya
+   aplicados: se eliminó la bajada del estado vacío ("Si lo que tu taller
+   hace no está en el catálogo… crealo acá"), que describía el modelo viejo
+   de declarar desde cero; y el botón "+ Nuevo paso" del encabezado ahora
+   sólo aparece **cuando ya hay pasos** — sin pasos manda el CTA "Crear el
+   primero" del estado vacío, nunca los dos juntos.
+5. **Instanciar familias con máquina**: sí, sin restricción — "Impresión
+   Xerox interior" es un nombre legítimo del taller.

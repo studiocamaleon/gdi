@@ -558,7 +558,11 @@ export function PasosFamiliasView() {
             sistema más los que crea tu empresa.
           </p>
         </div>
-        <Button onClick={() => setWizardAbierto(true)}>+ Nuevo paso</Button>
+        {/* Sin pasos propios manda el CTA del estado vacío ("Crear el
+            primero"); con pasos, este. Nunca los dos a la vez. */}
+        {familias.length > 0 ? (
+          <Button onClick={() => setWizardAbierto(true)}>+ Nuevo paso</Button>
+        ) : null}
       </div>
       <div className={s.wrap}>
 
@@ -578,7 +582,6 @@ export function PasosFamiliasView() {
           <EstadoVacio
             variant="compacto"
             titulo="Todavía no creaste pasos propios"
-            descripcion="Si lo que tu taller hace no está en el catálogo —serigrafía, bordado, armado especial— crealo acá y usalo en cualquier ruta."
             cta={{ label: "Crear el primero", onClick: () => setWizardAbierto(true) }}
           />
         ) : (
