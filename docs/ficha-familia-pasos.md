@@ -1,8 +1,10 @@
 # La ficha de la familia de pasos — anatomía y hoja de ruta
 
 **Estado: VIVO** — este doc se actualiza cada vez que la ficha gana un campo.
-Última revisión: 2026-08-06 (Tandas A-C + primitivas P1-P4: el censo del
-motor quedó en CERO ramas por familiaCodigo).
+Última revisión: 2026-08-07 — Tandas A-D + primitivas P1-P4 (el censo del
+motor quedó en CERO ramas por familiaCodigo) y el censo §6 regenerado con
+TODOS los ejes, incluida la corrección del agrupado de talonario (se declara
+en `impresion_por_hoja`, que es quien lo consume, no en `pre_prensa`).
 
 ## 1. El principio
 
@@ -307,69 +309,73 @@ de centro de copiado verdes.
    re-baselineado a propósito.
 6. Actualizar ESTE doc.
 
-## 6. El universo de familias hoy (censo 2026-08-06)
+## 6. El universo de familias hoy (censo 2026-08-07)
 
-Las **32 familias** del catálogo del sistema, agrupadas por categoría, con los
-ejes de su ficha. Generado leyendo el catálogo compilado (`familias.js`) — al
-agregar o cambiar una familia, regenerar la tabla con el mismo método.
+Las **32 familias** del catálogo del sistema, agrupadas por categoría, con
+TODOS los ejes de su ficha. Generado leyendo el catálogo compilado
+(`dist/.../familias.js`) — al agregar o cambiar una familia, regenerar con el
+mismo método (§5 regla 6).
 
-† = no visible en el selector (disponible sólo para productos existentes).
-"+" en Slots = permite slots adicionales del modelador.
+Convenciones: `†` = no visible en el selector (queda para productos que ya la
+usan) · `+` en Slots = permite slots adicionales · `★` = mecanismo de cantidad
+con el que arranca el editor · `✎` = sus params se editan con el editor
+genérico (`editorParamsGenerico`).
 
 ### 6.a Ejes básicos
 
-| Familia | M | T | Cantidad | Activación def. | Slots (req/tot) | Multiplicadores |
-|---|---|---|---|---|---|---|
-| **Pre-prensa** | | | | | | |
-| `pre_prensa` | M-0 | T-1 | directa, calcula | obligatorio | 0/0 | — |
-| **Producción / impresión** | | | | | | |
-| `aplicacion_transfer` | M-0 | T-2 | directa, hereda | obligatorio | 1/2 | — |
-| `aplicacion_transfer_textil` | M-1 | T-3 | directa, hereda | obligatorio | 1/2 | — |
-| `grabado_laser` | M-1 | T-3, T-4 | directa | obligatorio | 1/1 | — |
-| `impresion_3d` | M-1, M-2 | T-3, T-4 | directa | obligatorio | 1/1 + | — |
-| `impresion_por_area` | M-1, M-2 | T-3 | calcula | obligatorio | 2/2 | caras |
-| `impresion_por_hoja` | M-1, M-2 | T-3 | hereda, calcula | obligatorio | 2/2 | caras, tipoCopia |
-| `impresion_por_pieza` | M-1, M-2 | T-3 | directa, hereda | obligatorio | 2/2 | caras |
-| **Corte y formado** | | | | | | |
-| `cnc` | M-1 | T-3, T-4 | directa | opcional | 0/0 | — |
-| `corte_guillotina` | M-1 | T-3 | hereda | obligatorio | 0/0 | — |
-| `corte_laser` | M-1 | T-3, T-4 | directa | opcional | 0/0 | — |
-| `corte_manual` | M-0 | T-2 | directa, hereda | opcional | 0/0 | — |
-| `plegado` † | M-0 | T-2 | hereda | opcional | 0/0 | — |
-| `plotter_corte` | M-1 | T-3 | calcula | opcional | 0/0 | — |
-| `troquelado_digital` | M-1 | T-3 | directa | opcional | 0/0 | — |
-| **Terminaciones** | | | | | | |
-| `laminado` | M-1 | T-3 | hereda, directa | opcional | 1/1 | caras |
-| `pintura_superficial` | M-0, M-1 | T-2, T-3 | directa, hereda | opcional | 1/1 | — |
-| `plastificado_pouch` | M-0 | T-2 | calcula | opcional | 1/1 | — |
-| **Encuadernación y armado** | | | | | | |
-| `abrochado_caballete` | M-0 | T-2 | directa | obligatorio | 0/0 + | — |
-| `encuadernado_anillado` | M-1 | T-2 | directa | opcional | 1/3 | hojasPorLibro |
-| `engomado_emblocado` | M-0 | T-2 | directa | obligatorio | 1/4 | — |
-| **Estructural / montaje** | | | | | | |
-| `ensamble_estructural` | M-0 | T-1, T-2 | directa | obligatorio | 0/0 + | — |
-| `estructura_bastidor` | M-0 | T-2, T-3 | calcula | obligatorio | 1/2 + | — |
-| `iluminacion_led` | M-0 | T-2 | calcula | obligatorio | 2/3 + | — |
-| `montaje_sobre_sustrato` | M-0, M-1 | T-2, T-3 | calcula | opcional | 1/2 + | — |
-| **Operaciones manuales** | | | | | | |
-| `colocacion_ojales` | M-0 | T-1, T-2 | calcula, directa | opcional | 1/1 + | — |
-| `embalaje` | M-0 | T-2 | conversión, directa | obligatorio | 1/2 | — |
-| `modificacion_post` | M-0 | T-1, T-2 | directa, hereda | opcional | 0/0 + | cantidadModificacionesPorPieza |
-| `modificacion_pre` | M-0 | T-1, T-2 | calcula, directa | opcional | 0/0 + | — |
-| `trabajo_manual` | M-0 | T-2 | directa, hereda, conversión | opcional | 0/1 + | — |
-| **Logística e instalación** | | | | | | |
-| `instalacion_in_situ` | M-0 | T-2 | directa | opcional | 0/0 | — |
-| **Servicios profesionales** | | | | | | |
-| `diseno_grafico` | M-0 | T-1, T-2 | directa | opcional | 0/0 | — |
+| Familia | M | T | Cantidad (★ = default) | Ritmo default | Activación def. | Slots (req/tot) | Multiplicadores |
+|---|---|---|---|---|---|---|---|
+| **Pre-prensa** | | | | | | | |
+| `pre_prensa` | M-0 | T-1 | directa, calcula | — | obligatorio | 0/0 | — |
+| **Producción / impresión** | | | | | | | |
+| `aplicacion_transfer` | M-0 | T-2 | directa, hereda | — | obligatorio | 1/2 | — |
+| `aplicacion_transfer_textil` | M-1 | T-3 | directa, hereda | — | obligatorio | 1/2 | — |
+| `grabado_laser` | M-1 | T-3, T-4 | directa | — | obligatorio | 1/1 | — |
+| `impresion_3d` | M-1, M-2 | T-3, T-4 | directa | — | obligatorio | 1/1 + | — |
+| `impresion_por_area` | M-1, M-2 | T-3 | calcula | — | obligatorio | 2/2 | caras |
+| `impresion_por_hoja` | M-1, M-2 | T-3 | hereda★, calcula | — | obligatorio | 2/2 | caras, tipoCopia |
+| `impresion_por_pieza` | M-1, M-2 | T-3 | directa, hereda | — | obligatorio | 2/2 | caras |
+| **Corte y formado** | | | | | | | |
+| `cnc` | M-1 | T-3, T-4 | directa | — | opcional | 0/0 | — |
+| `corte_guillotina` | M-1 | T-3 | hereda | — | obligatorio | 0/0 | — |
+| `corte_laser` | M-1 | T-3, T-4 | directa | — | opcional | 0/0 | — |
+| `corte_manual` | M-0 | T-2 | directa, hereda★ | — | opcional | 0/0 | — |
+| `plegado` † | M-0 | T-2 | hereda | — | opcional | 0/0 | — |
+| `plotter_corte` | M-1 | T-3 | calcula | — | opcional | 0/0 | — |
+| `troquelado_digital` | M-1 | T-3 | directa | — | opcional | 0/0 | — |
+| **Terminaciones** | | | | | | | |
+| `laminado` | M-1 | T-3 | hereda, directa | — | opcional | 1/1 | caras |
+| `pintura_superficial` | M-0, M-1 | T-2, T-3 | directa, hereda | — | opcional | 1/1 | — |
+| `plastificado_pouch` | M-0 | T-2 | calcula | — | opcional | 1/1 | — |
+| **Encuadernación y armado** | | | | | | | |
+| `abrochado_caballete` | M-0 | T-2 | directa | — | obligatorio | 0/0 + | — |
+| `encuadernado_anillado` | M-1 | T-2 | directa | — | opcional | 1/3 | hojasPorLibro |
+| `engomado_emblocado` | M-0 | T-2 | directa | — | obligatorio | 1/4 | — |
+| **Estructural / montaje** | | | | | | | |
+| `ensamble_estructural` | M-0 | T-1, T-2 | directa | — | obligatorio | 0/0 + | — |
+| `estructura_bastidor` | M-0 | T-2, T-3 | calcula | — | obligatorio | 1/2 + | — |
+| `iluminacion_led` | M-0 | T-2 | calcula | — | obligatorio | 2/3 + | — |
+| `montaje_sobre_sustrato` | M-0, M-1 | T-2, T-3 | calcula★ | batch_time · cantidad_montaje | opcional | 1/2 + | — |
+| **Operaciones manuales** | | | | | | | |
+| `colocacion_ojales` | M-0 | T-1, T-2 | calcula, directa | — | opcional | 1/1 + | — |
+| `embalaje` | M-0 | T-2 | conversión, directa | batch_time | obligatorio | 1/2 | — |
+| `modificacion_post` | M-0 | T-1, T-2 | directa, hereda | — | opcional | 0/0 + | cantidadModificacionesPorPieza |
+| `modificacion_pre` | M-0 | T-1, T-2 | calcula, directa | — | opcional | 0/0 + | — |
+| `trabajo_manual` | M-0 | T-2 | directa, hereda, conversión | — | opcional | 0/1 + | — |
+| **Logística e instalación** | | | | | | | |
+| `instalacion_in_situ` | M-0 | T-2 | directa | m2_h · area_piezas_m2 | opcional | 0/0 | — |
+| **Servicios profesionales** | | | | | | | |
+| `diseno_grafico` | M-0 | T-1, T-2 | directa | — | opcional | 0/0 | — |
 
 ### 6.b Ejes avanzados
 
-Columnas: Derivador (calculadora geométrica), Acomodado (nesting declarado),
-Impresión (`esImpresion`), Hereda default (`outputHeredadoDefault`),
-Pre-pasada (`mutaMedidasEnPrePasada`), y cantidades de outputs canónicos,
-params declarados y validaciones.
+Derivador (calculadora geométrica) · Acomodado (nesting declarado, con guard y
+fallback) · Primitivas (algoritmos de oficio) · Impr. (`esImpresion`) · Hereda
+default (`outputHeredadoDefault`) · Pre-pasada (`mutaMedidasEnPrePasada`) ·
+Out/Params/Val = cantidad de outputs canónicos, params declarados y
+validaciones.
 
-| Familia | Derivador | Acomodado (superficie · estrategia · guard) | Primitivas | Impresión | Hereda default | Pre-pasada | Outputs | Params | Valid. |
+| Familia | Derivador | Acomodado (superficie · estrategia · guard · fallback) | Primitivas | Impr. | Hereda default | Pre-pasada | Out | Params | Val |
 |---|---|---|---|---|---|---|---|---|---|
 | **Pre-prensa** | | | | | | | | | |
 | `pre_prensa` | — | — | — | — | — | — | — | — | 1 |
@@ -378,16 +384,16 @@ params declarados y validaciones.
 | `aplicacion_transfer_textil` | — | — | — | — | — | — | 1 | — | — |
 | `grabado_laser` | — | — | — | — | — | — | 1 | — | — |
 | `impresion_3d` | — | — | — | — | — | — | 2 | 2 | 1 |
-| `impresion_por_area` | — | segun_material · sustrato | — | ✓ | — | — | 3 | — | 1 |
-| `impresion_por_hoja` | — | pliego · pliego_digital · pliego_digital | factorVelocidad, desgaste, compra, perfil, avisos | ✓ | `pliegos_calculados` | — | 15 | 1 | 2 |
+| `impresion_por_area` | — | segun_material · sustrato · m2_crudos | — | ✓ | — | — | 3 | — | 1 |
+| `impresion_por_hoja` | — | pliego · pliego_digital · pliego_digital | `factorVelocidad:a4_equivalente`<br>`desgaste:clicks_a4`<br>`compraSustrato:pliegos_a_hojas`<br>`seleccionPerfil:cadena_caras_gramaje`<br>`avisos:perfil_doble_faz` | ✓ | `pliegos_calculados` | — | 15 | 1 | 2 |
 | `impresion_por_pieza` | — | — | — | — | — | — | 1 | — | 1 |
 | **Corte y formado** | | | | | | | | | |
 | `cnc` | — | — | — | — | — | — | 1 | — | — |
-| `corte_guillotina` | — | — | tiempoRun, perfil | — | `pliegos_impresos` | — | 1 | — | 2 |
+| `corte_guillotina` | — | — | `tiempoRun:guillotina_por_cortes`<br>`seleccionPerfil:escalon_gramaje` | — | `pliegos_impresos` | — | 1 | — | 2 |
 | `corte_laser` | — | — | — | — | — | — | 2 | — | — |
 | `corte_manual` | — | — | — | — | `pliegos_impresos` | — | 1 | — | — |
 | `plegado` † | — | — | — | — | `pliegos_impresos` | — | 1 | 1 | — |
-| `plotter_corte` | — | rollo · corte_rollo | — | — | — | — | 2 | 1 | — |
+| `plotter_corte` | — | rollo · corte_rollo · m2_crudos | — | — | — | — | 2 | 1 | — |
 | `troquelado_digital` | — | — | — | — | `pliegos_impresos` | — | 1 | — | — |
 | **Terminaciones** | | | | | | | | | |
 | `laminado` | — | rollo · laminado_rollo · laminado_rollo | — | — | `pliegos_impresos` | — | 2 | — | — |
@@ -399,14 +405,14 @@ params declarados y validaciones.
 | `engomado_emblocado` | — | — | — | — | `pliegos_impresos` | — | 1 | — | — |
 | **Estructural / montaje** | | | | | | | | | |
 | `ensamble_estructural` | — | — | — | — | — | — | 1 | — | — |
-| `estructura_bastidor` | `bastidor_rectangular` | — | — | — | — | — | 5 | 5 | — |
-| `iluminacion_led` | `sembrado_led` | — | — | — | — | — | 2 | 2 | — |
+| `estructura_bastidor` | `bastidor_rectangular` | — | — | — | — | — | 5 | 5 ✎ | — |
+| `iluminacion_led` | `sembrado_led` | — | — | — | — | — | 2 | 2 ✎ | — |
 | `montaje_sobre_sustrato` | — | segun_material · montaje · montaje | — | — | — | — | 3 | 1 | — |
 | **Operaciones manuales** | | | | | | | | | |
-| `colocacion_ojales` | `layout_ojales` | — | — | — | — | — | 1 | 4 | — |
+| `colocacion_ojales` | `layout_ojales` | — | — | — | — | — | 1 | 4 ✎ | — |
 | `embalaje` | — | — | — | — | — | — | 1 | 1 | — |
 | `modificacion_post` | — | — | — | — | `piezas_cortadas` | — | 1 | 1 | — |
-| `modificacion_pre` | — | — | cantidadPropia | — | — | ✓ | 2 | 3 | — |
+| `modificacion_pre` | — | — | `cantidadPropia:ml_union_visible` | — | — | ✓ | 2 | 3 ✎ | — |
 | `trabajo_manual` | — | — | — | — | — | — | 1 | 1 | — |
 | **Logística e instalación** | | | | | | | | | |
 | `instalacion_in_situ` | — | — | — | — | — | — | 1 | — | — |
@@ -415,12 +421,17 @@ params declarados y validaciones.
 
 ### 6.c Lecturas rápidas del censo
 
-- **3 familias derivan geometría** (bastidor, LED, ojales) y **6 acomodan
-  piezas** (las de nesting) — no se solapan: derivar y acomodar son ejes
-  distintos y hoy ningún paso hace ambos.
+- **3 familias derivan geometría** (bastidor, LED, ojales), **6 acomodan
+  piezas** y **3 tienen primitivas de oficio** (impresión por hoja con 5,
+  guillotina con 2, modificación pre con 1). Los tres ejes son ortogonales:
+  ninguna familia usa los tres a la vez.
 - **2 son de impresión** con modos de color (por hoja / por área).
-- **9 declaran qué heredan por default** — la cadena del pliego (impresión →
-  corte → terminación) más `modificacion_post`.
-- Las familias de **detalle mínimo** (varias de operaciones manuales y
-  terminaciones) tienen pocos ejes avanzados: se completan cuando aparece el
-  primer producto que las exige — esa es la regla del catálogo, no un olvido.
+- **9 declaran qué heredan por default**: la cadena del pliego (impresión →
+  corte/laminado/plegado/troquelado/engomado/anillado) más `modificacion_post`.
+- **Sólo 3 declaran mecanismo de cantidad default** y **3 un ritmo default**:
+  el resto arranca con la convención genérica del editor.
+- **4 usan el editor genérico de params** (las dos de modificaciones físicas y
+  las dos de cartelería) — el resto o no tiene params, o tiene UI a medida.
+- Las familias de **ficha mínima** (varias manuales y de terminaciones) tienen
+  pocos ejes avanzados: se completan cuando aparece el primer producto que las
+  exige — es la regla del catálogo, no un olvido.
