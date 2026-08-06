@@ -117,6 +117,47 @@ trabajo manual a todos los efectos; y el día que exista la plantilla
 **falta una plantilla** — y eso es feedback de producto para Grafo, no un
 agujero que el tenant deba tapar solo. Vale registrar esos intentos.
 
+### 3.4 El journey de creación (definido por Lucas, 2026-08-07)
+
+**Igual que el alta de máquina**: un modal chico que pide lo mínimo y crea
+con los defaults de la plantilla. El modelo a copiar existe y funciona —
+[`maquina-alta-dialog.tsx`](../src/components/costos/maquina-editor/maquina-alta-dialog.tsx),
+167 líneas, cuyo propio comentario dice *"Reemplaza al sheet gigante de alta"*.
+
+```
+[+ Nuevo paso]
+      ↓
+┌─ Nuevo paso ─────────────────────────┐
+│  Nombre del paso *                   │   ej: "Bordado"
+│  [_________________________]         │
+│                                      │
+│  Tipo (plantilla de paso) *          │
+│  🔍 [búsqueda________]               │
+│  ┌──────────────────────────────┐    │
+│  │ Trabajo manual            ✓  │    │   ← lista filtrable de las
+│  │ Impresión por hoja           │    │      plantillas del sistema
+│  │ Corte con guillotina         │    │
+│  │ …                            │    │
+│  └──────────────────────────────┘    │
+│              [Cancelar]  [Guardar]   │
+└──────────────────────────────────────┘
+      ↓
+  se crea la instancia y te lleva a su ficha,
+  donde configurás los defaults del taller
+  (centro de costo, ritmo típico, tercerización)
+```
+
+**Lo que muere**: el sheet actual (`pasos-familias-view.tsx`, 1.714 líneas)
+con su wizard de **13 pantallas** — arranque, quién lo hace, proveedor,
+máquina, máquinas candidatas, tiempo, materiales, cantidad, activación,
+centro, registro, final. Todas esas decisiones ahora vienen de la plantilla
+(las de forma) o se configuran después en la ficha (los defaults) y en el
+editor de ruta del producto (lo específico de ese producto).
+
+Es el mismo movimiento que ya se hizo con maquinaria en la Fase D del
+rediseño estilo Holdprint: **el alta pide lo mínimo, la ficha completa el
+resto**.
+
 ## 4. Decisiones de diseño (cerradas)
 
 ### 4.1 Herencia VIVA, no foto congelada
@@ -178,16 +219,19 @@ nombre para no tocar relaciones.
   con herencia, proyección simplificada, validación reducida.
 - **E2 — catálogo y lectura**: serializar los ejes heredados; ícono/label del
   tablero por plantilla; decidir el caso de `EstacionRegla`.
-- **E3 — wizard**: la vista "Tus pasos" pasa a ser "elegí una plantilla y
-  ponele tu nombre" + panel de defaults.
+- **E3 — alta por modal**: nace `paso-alta-dialog.tsx` calcado de
+  `maquina-alta-dialog.tsx` (nombre + plantilla filtrable + Guardar → ficha).
+  Muere el wizard de 13 pantallas de `pasos-familias-view.tsx`; la vista
+  queda como listado + ficha de defaults.
 - **E4 — verificación**: goldens idénticos (no debería moverse un centavo:
   no hay instancias en uso), jest, vitest, E2E creando una instancia de
   `trabajo_manual` y usándola en una ruta.
 
 ## 7. Preguntas abiertas (para Lucas)
 
-1. **Nombre del concepto en la UI**: hoy es "Tus pasos". ¿Queda así, o pasa a
-   algo como "Mis pasos" / "Pasos de mi taller"?
+1. ~~Journey de creación~~ **DEFINIDO** (§3.4): modal estilo alta de máquina.
+   Queda por confirmar sólo el **rótulo** de la sección (hoy "Tus pasos") y
+   el del botón ("Nuevo paso").
 2. **`EstacionRegla`** (§5, última fila): ¿la regla de la plantilla alcanza a
    sus instancias, o cada instancia se rutea sola? Mi recomendación: que
    alcance por plantilla, con override opcional por instancia.
