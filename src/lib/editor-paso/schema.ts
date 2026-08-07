@@ -213,6 +213,7 @@ export type ControlOpcion =
         | "params-familia"
         | "activacion-modo"
         | "tiempo-comercial-ayudas"
+        | "centro-productivo"
         | "efectos-paso";
     };
 
@@ -996,8 +997,18 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     pregunta: "¿En qué centro productivo se realiza este paso?",
     ayuda:
       "El centro define la tarifa horaria del paso. Si el paso usa máquina, el centro lo pone la máquina.",
-    visible: (ctx) => !ctx.cfg.maquinaM1Id,
+    // Siempre visible: si el paso usa máquina, en vez de esconder el selector
+    // se muestra —read-only— el centro que pone la máquina (feedback usuario).
+    visible: () => true,
     resumen: (ctx) => {
+      // Con máquina, el centro lo pone ella.
+      if (ctx.cfg.maquinaM1Id) {
+        const maq = ctx.lookups.maquinas.find(
+          (m) => m.id === ctx.cfg.maquinaM1Id,
+        );
+        const nombre = maq?.centroCostoPrincipal?.nombre;
+        return nombre ? `${nombre} · lo pone la máquina` : "Lo pone la máquina";
+      }
       const elegido = ctx.lookups.centrosCosto.find(
         (c) => c.id === ctx.cfg.centroCostoId,
       );
@@ -1012,25 +1023,17 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
       return "Sin centro elegido";
     },
     origenValor: (ctx) =>
-      ctx.cfg.centroCostoId
-        ? "config"
-        : ctx.familia?.defaults?.centroCostoId
-          ? "default-paso"
-          : "sin-definir",
+      ctx.cfg.maquinaM1Id
+        ? "default-maquina"
+        : ctx.cfg.centroCostoId
+          ? "config"
+          : ctx.familia?.defaults?.centroCostoId
+            ? "default-paso"
+            : "sin-definir",
+    // Sin máquina y sin centro sigue siendo un pendiente; con máquina no, porque
+    // el centro ya está resuelto (origenValor no es "sin-definir").
     pendiente: "centro",
-    control: {
-      tipo: "select",
-      opciones: (ctx) =>
-        ctx.lookups.centrosCosto.map((c) => ({
-          value: c.id,
-          label: c.nombre,
-        })),
-      valor: (ctx) => ctx.cfg.centroCostoId ?? "",
-      aplicar: (_ctx, v) => ({
-        tipo: "config",
-        patch: { centroCostoId: v || null },
-      }),
-    },
+    control: { tipo: "componente", id: "centro-productivo" },
   },
   {
     clave: "tiempo.dotacion",

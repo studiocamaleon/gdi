@@ -11498,6 +11498,52 @@ function SeccionesEsquemaPaso({
         const maquinaSel =
           lookups.maquinas.find((m) => m.id === cfg.maquinaM1Id) ?? null;
         const renderComponente = (id: string): React.ReactNode => {
+          if (id === "centro-productivo") {
+            // Con máquina: el centro lo pone ella → se muestra read-only en vez
+            // de esconder la sección "Dónde se hace". Sin máquina: el selector.
+            if (cfg.maquinaM1Id) {
+              const centro = maquinaSel?.centroCostoPrincipal?.nombre;
+              return (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    minHeight: 34,
+                    fontSize: 12.5,
+                    color: "var(--fg, #14141a)",
+                  }}
+                >
+                  <span>{centro ?? "—"}</span>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: "var(--muted-text-2, #92929b)",
+                    }}
+                  >
+                    lo pone la máquina
+                  </span>
+                </div>
+              );
+            }
+            return (
+              <HumanSelect
+                value={cfg.centroCostoId ?? ""}
+                onValueChange={(v) =>
+                  onPatch(pasoActual.id, { centroCostoId: v || null })
+                }
+                options={lookups.centrosCosto.map((c) => ({
+                  value: c.id,
+                  label: c.nombre,
+                }))}
+                placeholder={
+                  lookups.centrosCosto.length === 0
+                    ? "No hay centros"
+                    : "Elegir centro"
+                }
+              />
+            );
+          }
           if (id === "regla-condicional") {
             return (
               <RuleBuilder

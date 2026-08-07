@@ -369,10 +369,27 @@ describe("sección Tiempo y costo", () => {
     });
     expect(centro.resumen(ctx)).toBe("Usando el del paso: Taller general");
     expect(centro.origenValor(ctx)).toBe("default-paso");
-    // Con máquina, el centro lo pone la máquina: la pregunta no aparece.
-    expect(centro.visible(ctxBase({ cfg: { maquinaM1Id: "mq-1" } }))).toBe(
-      false,
-    );
+    // Con máquina el centro lo pone ella: la sección sigue visible pero muestra
+    // —read-only— el centro de la máquina, en vez de esconderse.
+    const ctxMaq = ctxBase({
+      cfg: { maquinaM1Id: "mq-1" },
+      lookups: {
+        maquinas: [
+          {
+            id: "mq-1",
+            centroCostoPrincipal: {
+              id: "cc-9",
+              codigo: "IMP",
+              nombre: "Impresión",
+            },
+          },
+        ],
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+    expect(centro.visible(ctxMaq)).toBe(true);
+    expect(centro.resumen(ctxMaq)).toBe("Impresión · lo pone la máquina");
+    expect(centro.origenValor(ctxMaq)).toBe("default-maquina");
   });
 
   it("ritmo: productividad y tanda se excluyen según cómo se mide", () => {
