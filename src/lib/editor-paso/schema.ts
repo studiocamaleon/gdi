@@ -206,7 +206,7 @@ export interface GrupoEje {
   id: string;
   /** Sin título = el grupo no se anuncia (la bifurcación raíz del eje). */
   titulo?: string;
-  ayuda?: string;
+  ayuda?: string | ((ctx: ContextoOpcion) => string);
   /** `bifurcacion` = la decisión que apaga el resto del eje, en dos tarjetas
    *  grandes. `campos` = etiqueta + control, en grilla. */
   estilo?: "bifurcacion" | "campos";
@@ -2027,7 +2027,10 @@ export const GRUPOS_EJE_TIEMPO: GrupoEje[] = [
   {
     id: "donde",
     titulo: "Dónde se hace",
-    ayuda: "El centro define la tarifa por hora.",
+    ayuda: (ctx) =>
+      comercialEstimaTiempo(ctx)
+        ? "El centro define el costo por hora que se aplica al tiempo que carga el comercial."
+        : "El centro define la tarifa por hora.",
     estilo: "campos",
     columnas: "minmax(0, 1fr) 168px",
   },

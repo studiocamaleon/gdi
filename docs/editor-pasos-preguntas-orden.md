@@ -301,6 +301,39 @@ primera pasada no tenía:
 Del diseño se tomó todo salvo el pie del cálculo, y se corrigieron las dos
 frases de ayuda que explicaban el modelo al revés (arriba).
 
+Después vinieron dos cirugías sobre los controles, que son las que hacían que
+el bloque del ritmo no se pareciera al diseño:
+
+- **El ritmo es una oración.** "¿A qué ritmo?" pedía tres cosas en tres
+  lugares: el número, la *Unidad* (ml/h, m²/h, unid./h) y, en otra card, *el
+  ritmo cuenta*. Para el modelador es una sola idea —"30 metros de borde por
+  hora"— y separarlas obligaba a acertar la combinación. Ahora las magnitudes
+  se ofrecen ya combinadas y elegir una escribe los dos params. La card "El
+  ritmo cuenta" sólo sobrevive en tanda, donde no hay oración.
+- **El tiempo fijo es un modo, no una nota al pie.** Vivía como un escape
+  ("o un tiempo fijo estimado") cuando el motor le da PRIORIDAD sobre el
+  ritmo: era lo más determinante del bloque, en el renglón más chico. Ahora es
+  la tercera opción del segmented. Se sigue guardando en `horasEstimadas`;
+  `timeCalculationMode: "tiempo_fijo"` sólo declara la intención y es inerte
+  para el motor. Un paso con horas cargadas se muestra como tiempo fijo aunque
+  tenga guardado otro modo —es lo que el motor va a hacer— y salir del modo
+  borra las horas, porque si quedaran el ritmo recién elegido no se usaría.
+
+### La rama del comercial
+
+Segundo diseño de Lucas, para cuando el paso lo estima quien cotiza. Se tomó
+entero: la pregunta que ve el comercial, la unidad, el valor sugerido, el rango
+aceptado y el interruptor de obligatorio, en dos bloques con nombre ("Qué se le
+pide al comercial", "Ayudas y validación") colgando de la misma línea.
+
+**Lo único que no se implementó, y por qué**: el diseño ofrecía *"Carga el
+tiempo en minutos **por cada** [pieza del ítem]"*. El motor no hace eso: en
+`resolverTiempoManualMin` lo que carga el comercial ES el `runMin` del paso, sin
+multiplicar por la cantidad. Un selector que no hace nada es peor que no tener
+selector, así que la oración quedó *"Carga el tiempo en minutos para todo el
+ítem, sin multiplicar por la cantidad"*. Si el "por cada pieza" se quiere de
+verdad, es una funcionalidad del motor con su propio diseño, no un control.
+
 ## 6. Hallazgos abiertos
 
 Numerados para discutirlos de a uno. Ninguno implementado.
