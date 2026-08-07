@@ -455,6 +455,27 @@ Del diseño quedó afuera una sola cosa, y es de motor, no de estilo: el operado
 >, ≥, <, ≤ y el motor evalúa jsonLogic con esos; agregar un `between` es tocar
 el evaluador, no el editor. Si hace falta, es su propio trabajo.
 
+## 7.ter Materiales — una card por material (2026-08-07)
+
+**Decisión: una card de eje por material** (recomendación tomada). Cada slot
+—"Sustrato principal", "Tinta"— es una decisión con nombre propio, así que se
+lee como las demás cards: cerrada, la línea de estado ("Papel ilustración
+brillante · Material fijo · Por unidad producida"); abierta, dos sub-bloques:
+
+- **Cuál material** — quién lo decide (fijo / comercial / motor), cuál o entre
+  cuáles, y con qué criterio si elige el motor.
+- **Consumo y costo** — cómo se calcula el consumo, cómo se cobra, cada cuántos
+  y si la doble faz gasta doble.
+
+Para esto se generalizó `EjeGuiado`: dejó de computar sus opciones desde un
+`eje` y ahora las recibe explícitas (`opciones` + `grupos`), más una acción a
+la izquierda del "Cambiar" (el "Quitar" del material). El mismo componente sirve
+para los cinco ejes y para cada material. La sección "Materiales" quedó con su
+título y la pregunta de nivel paso ("¿qué materiales gasta acá?", que agrega un
+material); cada material configurado es su card debajo.
+
+Sin cambios de motor: golden masters 148/148 y 7/7.
+
 ## 8. El repaso, familia por familia
 
 Abrir un paso REAL de cada familia en dev y leer lo que muestra, como se hizo

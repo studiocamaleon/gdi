@@ -1577,6 +1577,8 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "materiales.nombre",
     seccion: "materiales",
+    grupo: "cual",
+    etiqueta: "Nombre",
     pregunta: "¿Cómo se llama?",
     ayuda:
       "El nombre operativo del componente o accesorio dentro del paso (portabanner, solapa, ojales…).",
@@ -1600,6 +1602,8 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "materiales.quien",
     seccion: "materiales",
+    grupo: "cual",
+    etiqueta: "Quién decide",
     pregunta: "¿Quién decide cuál se usa?",
     ayuda:
       "Material fijo (lo dejás definido acá), el comercial elige al cotizar, o el sistema elige solo con un criterio.",
@@ -1633,6 +1637,8 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "materiales.material",
     seccion: "materiales",
+    grupo: "cual",
+    anchoCompleto: true,
     pregunta: "¿Cuál exactamente?",
     ayuda:
       "Buscá la materia prima compatible y dejá fija la variante que usa este paso.",
@@ -1650,6 +1656,8 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "materiales.candidatos",
     seccion: "materiales",
+    grupo: "cual",
+    anchoCompleto: true,
     pregunta: "¿Entre cuáles se elige?",
     ayuda:
       "Las variantes entre las que elige el comercial al cotizar (o el sistema, según su criterio). Marcá una como predeterminada.",
@@ -1683,6 +1691,8 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "materiales.criterio",
     seccion: "materiales",
+    grupo: "cual",
+    etiqueta: "Criterio del sistema",
     pregunta: "¿Con qué criterio elige el sistema?",
     ayuda:
       "Entre los candidatos: el más barato, el de mejor aprovechamiento, o la capacidad mínima que cumpla.",
@@ -1722,6 +1732,8 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "materiales.consumo",
     seccion: "materiales",
+    grupo: "consumo",
+    etiqueta: "Consumo",
     pregunta: "¿Cómo se calcula el consumo?",
     ayuda:
       "La fórmula del motor para saber cuánto material gasta: por pieza, por m², por metro lineal…",
@@ -1766,6 +1778,8 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "materiales.costeo",
     seccion: "materiales",
+    grupo: "consumo",
+    etiqueta: "Costeo",
     pregunta: "¿Cómo se costea este material?",
     ayuda:
       "Cobrar exactamente lo consumido, sólo los m² de las piezas, o la placa/rollo según cómo se aprovecha.",
@@ -1824,6 +1838,8 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "materiales.base",
     seccion: "materiales",
+    grupo: "consumo",
+    anchoCompleto: true,
     pregunta: "¿Por cada cuántos se gasta uno?",
     ayuda:
       "Base × factor: 2 broches por talonario, 1 cartón por pila, 4 ojales por pieza.",
@@ -1860,6 +1876,8 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "materiales.caras",
     seccion: "materiales",
+    grupo: "consumo",
+    etiqueta: "Doble faz",
     pregunta: "¿La doble faz gasta doble?",
     ayuda:
       "Si el trabajo va a dos caras, el consumo de este material se multiplica por las caras.",
@@ -2238,6 +2256,24 @@ const GRUPOS_MAQUINA: GrupoEje[] = [
   },
 ];
 
+/** Los sub-bloques de la card de UN material (se repite por slot). */
+export const GRUPOS_MATERIAL: GrupoEje[] = [
+  {
+    id: "cual",
+    titulo: "Cuál material",
+    ayuda: "Qué se usa y quién lo decide al cotizar.",
+    estilo: "campos",
+    columnas: "minmax(0, 1fr) minmax(0, 260px)",
+  },
+  {
+    id: "consumo",
+    titulo: "Consumo y costo",
+    ayuda: "Cuánto se gasta de este material y cómo se cobra.",
+    estilo: "campos",
+    columnas: "minmax(0, 1fr) minmax(0, 260px)",
+  },
+];
+
 /** Los sub-bloques de cada eje, en orden de lectura. */
 export const GRUPOS_EJE: Record<EjePaso, GrupoEje[]> = {
   identidad: GRUPOS_IDENTIDAD,
@@ -2255,6 +2291,17 @@ export function opcionesDeEje(
   ctx: ContextoOpcion,
 ): OpcionPaso[] {
   return ESQUEMA_PASO.filter((op) => op.eje === eje && op.visible(ctx));
+}
+
+/** Las opciones de UN material (todas las de materiales salvo "agregar"),
+ *  evaluadas con el slot en el contexto. */
+export function opcionesDeMaterial(ctx: ContextoOpcion): OpcionPaso[] {
+  return ESQUEMA_PASO.filter(
+    (op) =>
+      op.seccion === "materiales" &&
+      op.clave !== "materiales.agregar" &&
+      op.visible(ctx),
+  );
 }
 
 /** Las opciones visibles de una sección, en orden de declaración. */

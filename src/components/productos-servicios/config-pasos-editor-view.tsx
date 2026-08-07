@@ -55,6 +55,8 @@ import {
   opcionesDeSeccion,
   GRUPOS_EJE,
   opcionesDeEje,
+  opcionesDeMaterial,
+  GRUPOS_MATERIAL,
   modosActivacionOfrecidos,
   MODO_ACTIVACION_LABELS,
   MODO_ACTIVACION_CONSECUENCIA,
@@ -10312,17 +10314,22 @@ function SeccionGuiada({
 function EjeGuiado({
   titulo,
   subtitulo,
-  eje,
+  opciones,
+  grupos,
   resumenPrincipal,
   ctx,
   pendientesVivos,
   onAplicar,
   renderComponente,
+  accionExtra,
 }: {
   titulo: string;
-  subtitulo: string;
-  eje: EjePaso;
-  /** Claves cuyo resumen define el eje, en orden de prioridad: es lo que se
+  subtitulo?: string;
+  /** Opciones de la card ya filtradas (por eje, o por material en un slot). */
+  opciones: OpcionPaso[];
+  /** Sus sub-bloques, en orden. */
+  grupos: GrupoEje[];
+  /** Claves cuyo resumen define la card, en orden de prioridad: es lo que se
    *  lee con la card cerrada. Sin esto la línea arrancaría por la primera
    *  opción declarada, que casi nunca es la que importa. */
   resumenPrincipal: string[];
@@ -10330,9 +10337,9 @@ function EjeGuiado({
   pendientesVivos: Set<string>;
   onAplicar: (patch: PatchOpcion) => void;
   renderComponente: (id: string) => React.ReactNode;
+  /** Un control extra a la izquierda del "Cambiar" (p.ej. "Quitar" material). */
+  accionExtra?: React.ReactNode;
 }) {
-  const grupos = GRUPOS_EJE[eje];
-  const opciones = opcionesDeEje(eje, ctx);
   const sinResolver = (op: OpcionPaso) =>
     op.origenValor(ctx) === "sin-definir" ||
     (op.pendiente != null && pendientesVivos.has(op.pendiente));
@@ -10430,17 +10437,27 @@ function EjeGuiado({
               maxWidth: 560,
             }}
           >
-            {abierto ? subtitulo : linea}
+            {abierto ? (subtitulo ?? linea) : linea}
           </div>
         </div>
-        <button
-          type="button"
-          className="btn"
-          style={{ fontSize: 12, whiteSpace: "nowrap" }}
-          onClick={() => setAbierto(!abierto)}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+            flexShrink: 0,
+          }}
         >
-          {abierto ? "Listo" : "Cambiar"}
-        </button>
+          {accionExtra}
+          <button
+            type="button"
+            className="btn"
+            style={{ fontSize: 12, whiteSpace: "nowrap" }}
+            onClick={() => setAbierto(!abierto)}
+          >
+            {abierto ? "Listo" : "Cambiar"}
+          </button>
+        </div>
       </div>
 
       {abierto ? (
@@ -11750,7 +11767,8 @@ function SeccionesEsquemaPaso({
             <EjeGuiado
               titulo="Qué paso es"
               subtitulo="Cómo se llama acá y quién lo hace."
-              eje="identidad"
+              opciones={opcionesDeEje("identidad", ctx)}
+              grupos={GRUPOS_EJE.identidad}
               resumenPrincipal={["activacion.nombre", "quien.tercerizado"]}
               ctx={ctx}
               pendientesVivos={pendientesVivos}
@@ -11760,7 +11778,8 @@ function SeccionesEsquemaPaso({
             <EjeGuiado
               titulo="Cuándo se ejecuta"
               subtitulo="Si corre siempre, si es opcional o si depende de una condición del pedido."
-              eje="activacion"
+              opciones={opcionesDeEje("activacion", ctx)}
+              grupos={GRUPOS_EJE.activacion}
               resumenPrincipal={["activacion.cuando", "activacion.regla"]}
               ctx={ctx}
               pendientesVivos={pendientesVivos}
@@ -11775,7 +11794,8 @@ function SeccionesEsquemaPaso({
                 <EjeGuiado
                   titulo="En qué máquina"
                   subtitulo="El fierro que ejecuta el paso y cómo queda configurado."
-                  eje="maquina"
+                  opciones={opcionesDeEje("maquina", ctx)}
+                  grupos={GRUPOS_EJE.maquina}
                   resumenPrincipal={[
                     "maquina.maquina",
                     "maquina.candidatas",
@@ -11789,14 +11809,41 @@ function SeccionesEsquemaPaso({
                 {/* Materiales (sub-fase C): agregar a nivel paso + un
                     grupo por slot configurado, cada uno con las
                     preguntas del esquema evaluadas con ese slot. */}
-                <SeccionGuiada
-                  titulo="Materiales"
-                  seccion="materiales"
-                  ctx={ctx}
-                  pendientesVivos={pendientesVivos}
-                  onAplicar={onAplicar}
-                  renderComponente={renderComponente}
-                />
+                {/* Materiales: el título de la sección y su única
+                    pregunta de nivel paso ("¿qué materiales gasta acá?", que
+                    es el afijo de agregar). Cada material configurado es su
+                    propia card de eje abajo. */}
+                <div
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 650,
+                    letterSpacing: 0.4,
+                    textTransform: "uppercase",
+                    color: "var(--muted-text, #6e6e76)",
+                  }}
+                >
+                  Materiales
+                </div>
+                {opcionesDeSeccion("materiales", ctx)
+                  .filter((op) => op.clave === "materiales.agregar")
+                  .map((op) => (
+                    <OpcionGuiadaFila
+                      key={op.clave}
+                      opcion={op}
+                      ctx={ctx}
+                      abiertaInicial={
+                        (op.pendiente != null &&
+                          pendientesVivos.has(op.pendiente)) ||
+                        op.origenValor(ctx) === "sin-definir"
+                      }
+                      pendienteVivo={
+                        op.pendiente != null &&
+                        pendientesVivos.has(op.pendiente)
+                      }
+                      onAplicar={onAplicar}
+                      renderComponente={renderComponente}
+                    />
+                  ))}
                 {(cfg.slotsMateriales ?? []).map((slot, slotIdx) => {
                   const decl =
                     familia?.slotsRequeridos.find(
@@ -11903,67 +11950,38 @@ function SeccionesEsquemaPaso({
                     return renderComponente(id);
                   };
                   return (
-                    <div
+                    <EjeGuiado
                       key={`${slot.slotCodigo}:${slotIdx}`}
-                      style={{
-                        border: "1px solid var(--hairline, #e6e2dc)",
-                        borderRadius: 12,
-                        padding: "12px 14px",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 8,
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          gap: 8,
-                        }}
-                      >
-                        <div style={{ fontSize: 13.5, fontWeight: 650 }}>
-                          {familia
-                            ? slotDisplayName(slot, familia)
-                            : (slot.slotNombre ?? slot.slotCodigo)}
-                        </div>
+                      titulo={
+                        familia
+                          ? slotDisplayName(slot, familia)
+                          : (slot.slotNombre ?? slot.slotCodigo)
+                      }
+                      opciones={opcionesDeMaterial(ctxSlot)}
+                      grupos={GRUPOS_MATERIAL}
+                      resumenPrincipal={[
+                        "materiales.material",
+                        "materiales.candidatos",
+                        "materiales.quien",
+                        "materiales.consumo",
+                      ]}
+                      ctx={ctxSlot}
+                      pendientesVivos={pendSlot}
+                      onAplicar={onAplicarSlot}
+                      renderComponente={renderComponenteSlot}
+                      accionExtra={
                         <Button
                           type="button"
                           variant="ghost"
                           size="sm"
                           onClick={() =>
-                            materialesApi.removeSlot(
-                              pasoActual.id,
-                              slotIdx,
-                            )
+                            materialesApi.removeSlot(pasoActual.id, slotIdx)
                           }
                         >
                           Quitar
                         </Button>
-                      </div>
-                      {opcionesDeSeccion("materiales", ctxSlot)
-                        .filter(
-                          (op) => op.clave !== "materiales.agregar",
-                        )
-                        .map((op) => (
-                          <OpcionGuiadaFila
-                            key={op.clave}
-                            opcion={op}
-                            ctx={ctxSlot}
-                            abiertaInicial={
-                              (op.pendiente != null &&
-                                pendSlot.has(op.pendiente)) ||
-                              op.origenValor(ctxSlot) === "sin-definir"
-                            }
-                            pendienteVivo={
-                              op.pendiente != null &&
-                              pendSlot.has(op.pendiente)
-                            }
-                            onAplicar={onAplicarSlot}
-                            renderComponente={renderComponenteSlot}
-                          />
-                        ))}
-                    </div>
+                      }
+                    />
                   );
                 })}
                 {/* Ajustes del trabajo (sub-fase D): setup/cleanup +
@@ -11980,7 +11998,8 @@ function SeccionesEsquemaPaso({
                 <EjeGuiado
                   titulo="Cuánto tarda"
                   subtitulo="Cómo se calcula el tiempo de este paso: quién lo estima, a qué ritmo y sobre cuántas piezas."
-                  eje="tiempo"
+                  opciones={opcionesDeEje("tiempo", ctx)}
+                  grupos={GRUPOS_EJE.tiempo}
                   resumenPrincipal={[
                     "tiempo.productividad",
                     "tiempo.batch",
