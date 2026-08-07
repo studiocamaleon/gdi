@@ -67,7 +67,12 @@ export function ParamsFamiliaFields({
   /** Patch shallow sobre `paramsPasoJson`. */
   onChange: (patch: Record<string, unknown>) => void;
 }) {
-  const schema = familia.paramsPasoSchema ?? [];
+  // `modoTalonarioIncompleto` se declara en el schema pero NO se edita acá: es
+  // un modo del control "Imposición del pliego" (Acomodado). Si lo dejáramos,
+  // aparecería dos veces.
+  const schema = (familia.paramsPasoSchema ?? []).filter(
+    (p) => p.campo !== "modoTalonarioIncompleto",
+  );
   if (!familiaConParamsEditables(familia) || schema.length === 0) {
     return null;
   }

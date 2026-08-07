@@ -96,7 +96,9 @@ const CENSO: Record<string, string[]> = {
     "oficio.params_familia",
     // [Efectos] lo que el paso le exige al trabajo (demasía de medida).
     "oficio.efectos",
-    "oficio.talonario",
+    // El talonario dejó de ser opción propia: se fusionó con la imposición
+    // de cuadernillo en UN control "Imposición del pliego" (mismo eje —
+    // un pliego se impone de una sola forma). Vive en el Acomodado, no acá.
     "oficio.setup",
     "oficio.cleanup",
     "oficio.acomodado",
@@ -421,16 +423,15 @@ describe("sección Tiempo y costo", () => {
     ).toBe(false);
   });
 
-  it("talonario: vive en oficio y sólo donde la ficha declara el param (impresión por hoja); piezas a montar sólo en montaje", () => {
+  it("talonario ya no es opción propia: se fusionó con la imposición del pliego (ni en oficio ni aun declarando el param); piezas a montar sólo en montaje", () => {
     const claves = opcionesDeSeccion("tiempo", ctxBase()).map((o) => o.clave);
     expect(claves).not.toContain("tiempo.piezas_montar");
-    expect(
-      opcionesDeSeccion("oficio", ctxBase()).map((o) => o.clave),
-    ).not.toContain("oficio.talonario");
+    // Antes talonario aparecía como opción de oficio cuando la ficha declaraba
+    // modoTalonarioIncompleto. Ahora es un MODO del control "Imposición del
+    // pliego" (dentro del Acomodado), no una opción del esquema — así que no
+    // aparece por opcionesDeSeccion ni siquiera declarando el param.
     const clavesPrensa = opcionesDeSeccion(
       "oficio",
-      // La ficha DECLARA el param — hoy lo declara impresión por hoja (el
-      // paso que hace la imposición), no pre-prensa (corrección 2026-08-07).
       ctxBase({
         familia: {
           codigo: "impresion_por_hoja",
@@ -440,7 +441,7 @@ describe("sección Tiempo y costo", () => {
         },
       }),
     ).map((o) => o.clave);
-    expect(clavesPrensa).toContain("oficio.talonario");
+    expect(clavesPrensa).not.toContain("oficio.talonario");
   });
 
   it("la herencia aparece con mecanismo HEREDAR y nombra el paso origen", () => {

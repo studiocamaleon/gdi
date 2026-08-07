@@ -41,7 +41,6 @@ import {
 } from "../cobertura-toner";
 import {
   MONTAJE_SOURCE_OPTIONS,
-  TALONARIO_MODE_OPTIONS,
   T2_TIME_CALCULATION_MODE_OPTIONS,
   getT2ProductivityUnitSuffix,
   getT2BatchUnitSuffix,
@@ -1939,12 +1938,19 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     visible: (ctx) =>
       Boolean(
         familiaConParamsEditables(ctx.familia) &&
-          (ctx.familia?.paramsPasoSchema?.length ?? 0) > 0,
+          // `modoTalonarioIncompleto` no cuenta: lo edita el control de
+          // Imposición del pliego, no esta tabla (evita una tabla vacía en
+          // impresión por hoja, cuyo único param propio es ese).
+          (ctx.familia?.paramsPasoSchema?.filter(
+            (p) => p.campo !== "modoTalonarioIncompleto",
+          ).length ?? 0) > 0,
       ),
     resumen: (ctx) => {
       // Nombra los VALORES (regla T3b: el resumen dice lo que hay, no un
       // opaco "parámetros definidos").
-      const schema = ctx.familia?.paramsPasoSchema ?? [];
+      const schema = (ctx.familia?.paramsPasoSchema ?? []).filter(
+        (p) => p.campo !== "modoTalonarioIncompleto",
+      );
       const partes: string[] = [];
       for (const param of schema) {
         const crudo = ctx.paramsPaso[param.campo] ?? param.default;
@@ -1973,7 +1979,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
         : visibles;
     },
     origenValor: (ctx) => {
-      const schema = ctx.familia?.paramsPasoSchema ?? [];
+      const schema = (ctx.familia?.paramsPasoSchema ?? []).filter(
+        (p) => p.campo !== "modoTalonarioIncompleto",
+      );
       return schema.some(
         (param) =>
           ctx.paramsPaso[param.campo] !== undefined &&
@@ -2008,50 +2016,6 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     origenValor: (ctx) =>
       declaraEfectoDemasia(ctx.paramsPaso) ? "config" : "default-paso",
     control: { tipo: "componente", id: "efectos-paso" },
-  },
-  {
-    // Vivía en Tiempo y costo; es una decisión de oficio sobre cómo se
-    // arma el pliego (feedback del usuario: "¿dónde se ve?").
-    clave: "oficio.talonario",
-    seccion: "oficio",
-    eje: "trabajo",
-    grupo: "labores",
-    anchoCompleto: true,
-    pregunta: "¿Cómo se agrupan los talonarios en el pliego?",
-    ayuda:
-      "Agrupa talonarios de a N poses por pliego y define qué hacer con los sueltos: compartir pliego (menos papel) o poses vacías (listo para abrochar).",
-    // [Tanda D] La pregunta existe si la familia DECLARA el param en su
-    // schema (pre_prensa lo declara; su UI es esta card a medida).
-    visible: (ctx) =>
-      Boolean(
-        ctx.familia?.paramsPasoSchema?.some(
-          (p) => p.campo === "modoTalonarioIncompleto",
-        ),
-      ),
-    resumen: (ctx) => {
-      const valor = String(ctx.paramsPaso.modoTalonarioIncompleto ?? "off");
-      return (
-        TALONARIO_MODE_OPTIONS.find((o) => o.value === valor)?.label ?? valor
-      );
-    },
-    origenValor: (ctx) =>
-      typeof ctx.paramsPaso.modoTalonarioIncompleto === "string"
-        ? "config"
-        : "default-paso",
-    control: {
-      tipo: "pills",
-      opciones: () =>
-        TALONARIO_MODE_OPTIONS.map((o) => ({
-          value: o.value,
-          label: o.label,
-          descripcion: o.description,
-        })),
-      valor: (ctx) => String(ctx.paramsPaso.modoTalonarioIncompleto ?? "off"),
-      aplicar: (_ctx, v) => ({
-        tipo: "params",
-        patch: { modoTalonarioIncompleto: v === "off" ? null : v },
-      }),
-    },
   },
   {
     clave: "oficio.setup",

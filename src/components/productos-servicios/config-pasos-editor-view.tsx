@@ -6543,6 +6543,7 @@ export function ConfigPasosEditorView({
                                         addNestingPliegoCandidato,
                                         removeNestingPliegoCandidato,
                                       }}
+                                      onParams={updateStepParams}
                                     />
                                   )}
 
@@ -6713,6 +6714,7 @@ function AcomodadoDetalladoEditor({
   setPanelEditorPasoId,
   panelMeasures,
   nestingApi,
+  onParams,
 }: {
   pasoId: string;
   cfg: UpsertConfigPasoPayload;
@@ -6731,6 +6733,8 @@ function AcomodadoDetalladoEditor({
   panelEditorPasoId: string | null;
   setPanelEditorPasoId: React.Dispatch<React.SetStateAction<string | null>>;
   nestingApi: NestingApi;
+  /** Escribe en paramsPasoJson (lo usa la imposición para el modo talonario). */
+  onParams: (rutaPasoId: string, patch: Record<string, unknown>) => void;
 }) {
   const {
     updateNestingConfig,
@@ -6965,6 +6969,16 @@ function AcomodadoDetalladoEditor({
                                           nestingConfig={nestingConfig}
                                           updateNestingConfig={
                                             updateNestingConfig
+                                          }
+                                          modoTalonario={String(
+                                            asRecord(cfg.paramsPasoJson)
+                                              .modoTalonarioIncompleto ?? "off",
+                                          )}
+                                          onModoTalonario={(modo) =>
+                                            onParams(pasoId, {
+                                              modoTalonarioIncompleto:
+                                                modo === "off" ? null : modo,
+                                            })
                                           }
                                         />
                                       ) : null}
@@ -9052,6 +9066,8 @@ function ImposicionCuadernilloEditor({
   pasoId,
   nestingConfig,
   updateNestingConfig,
+  modoTalonario,
+  onModoTalonario,
 }: {
   pasoId: string;
   nestingConfig: Record<string, unknown>;
@@ -9059,10 +9075,37 @@ function ImposicionCuadernilloEditor({
     rutaPasoId: string,
     patch: Record<string, unknown>,
   ) => void;
+  /** Modo de agrupado por talonario (paramsPaso.modoTalonarioIncompleto).
+   *  Va acá porque es el MISMO eje que la imposición: un pliego se impone o
+   *  normal, o como cuadernillo, o como talonario — nunca dos a la vez. */
+  modoTalonario: string;
+  onModoTalonario: (modo: string) => void;
 }) {
   const imposicion = asRecord(nestingConfig.imposicion);
   const activa =
     String(imposicion.esquema ?? "").toLowerCase() === "caballete";
+  const modoImposicion = activa
+    ? "caballete"
+    : modoTalonario === "aprovechar_pliego"
+      ? "talonario_aprovechar"
+      : modoTalonario === "pose_completa"
+        ? "talonario_poses"
+        : "ninguna";
+  const aplicarImposicion = (v: string) => {
+    // Cada modo escribe donde vive: caballete → nestingConfig.imposicion;
+    // talonario → paramsPaso.modoTalonarioIncompleto. Son excluyentes, así que
+    // al elegir uno se apaga el otro. El motor lee lo de siempre → golden igual.
+    updateNestingConfig(pasoId, {
+      imposicion: v === "caballete" ? { esquema: "caballete" } : null,
+    });
+    onModoTalonario(
+      v === "talonario_aprovechar"
+        ? "aprovechar_pliego"
+        : v === "talonario_poses"
+          ? "pose_completa"
+          : "off",
+    );
+  };
   const patch = (cambios: Record<string, unknown>) =>
     updateNestingConfig(pasoId, {
       imposicion: { esquema: "caballete", ...imposicion, ...cambios },
@@ -9086,18 +9129,13 @@ function ImposicionCuadernilloEditor({
   return (
     <div className="space-y-2">
       <LabelConTooltip
-        label="Imposición de cuadernillo"
-        tooltip="Para productos multipágina abrochados (revista, folleto). La pieza que se acomoda pasa a ser el PAR de páginas enfrentadas y el motor calcula hojas por libro, pliegos y el plan de imposición. El comercial carga las páginas al cotizar."
+        label="Imposición del pliego"
+        tooltip="Cómo se acomodan las piezas en el pliego. Normal (sueltas), como cuadernillo abrochado al lomo, o agrupando talonarios. Son excluyentes: el pliego se impone de una sola forma."
         iconSize="sm"
       />
       <HumanSelect
-        value={activa ? "caballete" : "ninguna"}
-        onValueChange={(v) =>
-          updateNestingConfig(pasoId, {
-            imposicion:
-              v === "caballete" ? { esquema: "caballete" } : null,
-          })
-        }
+        value={modoImposicion}
+        onValueChange={aplicarImposicion}
         options={[
           {
             value: "ninguna",
@@ -9109,6 +9147,18 @@ function ImposicionCuadernilloEditor({
             label: "Cuadernillo a caballete",
             description:
               "Hojas anidadas y abrochadas al lomo (revista, folleto multipágina).",
+          },
+          {
+            value: "talonario_aprovechar",
+            label: "Talonario · compartir pliego",
+            description:
+              "Los talonarios sueltos comparten pliego para gastar el mínimo de papel.",
+          },
+          {
+            value: "talonario_poses",
+            label: "Talonario · poses vacías",
+            description:
+              "Cada talonario en su pose completa, listo para abrochar (más papel).",
           },
         ]}
       />
@@ -11839,6 +11889,7 @@ function SeccionesEsquemaPaso({
                   setPanelEditorPasoId={setPanelEditorPasoId}
                   panelMeasures={panelMeasures}
                   nestingApi={nestingApi}
+                  onParams={onParams}
                 />
               </div>
             );
