@@ -1,6 +1,6 @@
 # Efectos de paso — lo que un paso le HACE al trabajo
 
-**Estado: EN REVISIÓN** (2026-08-07). Convierte lo que hoy es exclusivo de la
+**Estado: DISEÑO CERRADO** (2026-08-07) — listo para implementar F1. Convierte lo que hoy es exclusivo de la
 familia `modificacion_pre` (agrandar la medida) en un **eje que cualquier
 paso puede declarar**.
 
@@ -131,7 +131,7 @@ efectosSoportados?: Array<'demasiaMedida'>;
 | 2 | El efecto es POR LADO | **Cerrado**: el eje lo declara así, igual que hoy |
 | 3 | Acumulación entre pasos | **Cerrado** (§3.2): suman, ya funciona así |
 | 4 | El orden (efecto anterior al paso) | **Cerrado**: la pre-pasada se mantiene, es el mecanismo correcto |
-| 5 | **Cómo cuenta su tiempo el paso que hereda el efecto** | 🔴 **ABIERTO** — ver abajo |
+| 5 | Cómo cuenta su tiempo el paso que hereda el efecto | **Cerrado** (Lucas): perímetro de los **lados afectados**, sobre la medida **VISIBLE** |
 
 ### El punto abierto: el tiempo de la costura
 
@@ -151,18 +151,43 @@ contar sus metros. Tres caminos:
 - **(c)** Una fuente de cantidad nueva, "perímetro de los lados afectados",
   derivada del propio efecto declarado.
 
-Mi recomendación es **(c)**: es la que respeta la regla de oro sin atar la
-primitiva a una familia, y encaja con el eje de magnitudes derivadas que ya
-existe. Pero es la decisión que falta.
+**DECISIÓN (Lucas, 2026-08-07): opción (c)** — perímetro de los lados que el
+efecto declara afectados, medido sobre la **medida VISIBLE**. Con la lona de
+2 × 1 m y 100 mm por lado: tensado en los 4 lados = **6,00 m** (no 6,80 de la
+lona agrandada); un bolsillo arriba y abajo = 4,00 m.
+
+**Hallazgo del relevamiento**: hoy "Tensado de lona" cuenta
+`perimetro_piezas_m`, que se calcula DESPUÉS de la pre-pasada — o sea sobre la
+lona ya agrandada: 6,80 m en vez de 6,00. Un 13 % de más, y contradice la
+regla de oro. La fusión lo corrige de paso.
 
 ## 8. Migración
 
 - La ruta del Backlight pierde el paso 4: "Tensado de lona" (paso 8) hereda
   el efecto con sus 100 mm × 4 lados. **La cotización debe dar idéntica** —
   golden master como juez.
-- `modificacion_pre` deja de ser una familia-artefacto. Dos caminos: podarla
-  del catálogo (y migrar sus pasos existentes a `trabajo_manual` + efecto), o
-  dejarla como preset instanciable. A decidir.
+- **`modificacion_pre` SE PODA del catálogo** (decisión Lucas). La absorbe
+  `trabajo_manual` + efecto, y la comparación de fichas muestra que sale
+  ganando:
+
+  | | `modificacion_pre` | `trabajo_manual` |
+  |---|---|---|
+  | Slots de material | **ninguno** — no se puede cargar el hilo ni los tornillos | `insumo_manual` |
+  | Mecanismos | CALCULADO, DIRECT | DIRECT, HEREDAR, CONVERSION |
+
+  Lo único que tenía de más era `CALCULADO_POR_PASO` para su primitiva de
+  metros; con la fuente de cantidad de §7 ya no hace falta (es un T-2 normal).
+  No queda ningún caso donde sea insustituible: una lona que sólo se refuerza
+  es un `trabajo_manual` llamado "Dobladillo perimetral" con su efecto.
+
+  **Se poda al FINAL** (F4), después de migrar sus dos pasos en dev (el
+  backlight y el Frontlight, que la tiene sin configurar): podarla antes deja
+  esos pasos sin resolver. Hay precedente del procedimiento en la poda de las
+  9 familias de 2026-08.
+
+  Dos cosas a preservar: el **preset** (`bolsillo`/`refuerzo`, que precarga
+  100-150 mm y 30-50 mm — ya previsto dentro del efecto) y revisar quién
+  hereda sus **outputs** (`metros_lineales_union`, `mutacion_aplicada`).
 - `mutaMedidasEnPrePasada` de la ficha se reemplaza por `efectosSoportados`.
 
 ## 9. Plan por etapas (protocolo golden en cada una)
@@ -173,17 +198,21 @@ existe. Pero es la decisión que falta.
 - **F2** — el editor: card "¿Este paso le exige algo al trabajo?" en los pasos
   cuya familia lo soporte, con lados + mm.
 - **F3** — el tiempo: resolver el punto abierto §7 y darle al paso su magnitud.
-- **F4** — migración: la ruta del Backlight pasa a 8 pasos; decidir el destino
-  de `modificacion_pre`.
+- **F4** — migración y poda: la ruta del Backlight pasa a 8 pasos ("Tensado
+  de lona" absorbe el efecto y sus 100 mm × 4 lados); el Frontlight suelta su
+  paso sin configurar; y recién ahí `modificacion_pre` sale del catálogo.
+  Golden master idéntico como juez de toda la migración.
 
-## 10. Preguntas para Lucas
+## 10. Lo que queda por definir
 
 1. **El nombre del eje**: dijiste "un paso *necesita* ciertos requerimientos".
    ¿`efectos` (lo que el paso le hace al trabajo) o `requerimientos` (lo que
    el paso necesita)? Me inclino por el primero porque describe la mecánica,
-   pero el segundo describe mejor tu intuición.
-2. **El punto abierto §7** (cómo cuenta su tiempo el paso).
-3. **¿Ves otros efectos** además de agrandar la medida? Se me ocurren: forzar
-   un material, exigir doble faz, imponer un mínimo de cantidad. No los
-   diseñaría ahora — pero si alguno es real, conviene que el eje nazca con la
-   forma correcta.
+   pero el segundo describe mejor la intuición. **Sin definir** — el doc usa
+   `efectos` provisoriamente.
+2. ~~El punto abierto §7~~ **RESUELTO**: medida visible, lados afectados.
+3. ~~El destino de `modificacion_pre`~~ **RESUELTO**: se poda en F4.
+4. **¿Otros efectos** además de agrandar la medida? Se me ocurren: forzar un
+   material, exigir doble faz, imponer un mínimo de cantidad. No se diseñan
+   ahora — pero si alguno es real, conviene que el eje nazca con la forma
+   correcta. **Sin definir.**
