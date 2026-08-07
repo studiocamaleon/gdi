@@ -11505,20 +11505,53 @@ function SeccionesEsquemaPaso({
               const centro = maquinaSel?.centroCostoPrincipal?.nombre;
               return (
                 <div
+                  title="El centro lo define la máquina del paso"
                   style={{
-                    display: "flex",
+                    display: "inline-flex",
                     alignItems: "center",
-                    gap: 8,
-                    minHeight: 34,
+                    gap: 7,
+                    height: 34,
+                    maxWidth: "100%",
+                    padding: "0 10px",
+                    border: "1px dashed var(--border-strong, #c8c4ba)",
+                    borderRadius: 7,
+                    background: "var(--surface-2, #fafaf9)",
                     fontSize: 12.5,
                     color: "var(--fg, #14141a)",
                   }}
                 >
-                  <span>{centro ?? "—"}</span>
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.7"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    style={{
+                      color: "var(--muted-text-2, #92929b)",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <rect x="3" y="8" width="18" height="12" rx="2" />
+                    <path d="M7 8V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2M12 12v4" />
+                  </svg>
                   <span
                     style={{
-                      fontSize: 11,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {centro ?? "Sin centro en la máquina"}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 10.5,
+                      fontFamily: "var(--font-mono, ui-monospace)",
                       color: "var(--muted-text-2, #92929b)",
+                      whiteSpace: "nowrap",
                     }}
                   >
                     lo pone la máquina
