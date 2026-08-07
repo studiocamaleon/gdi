@@ -274,6 +274,33 @@ modelador configura creyendo otra cosa. De paso se corrigió la ayuda de
 Calcularlo en el frontend sería duplicar el motor —el pecado que este refactor
 viene borrando— y hacerlo bien pedía un endpoint de simulación por paso.
 
+### El diseño de referencia
+
+Lucas armó la card en Claude Design (`pasos/Cuánto tarda.html` del proyecto
+`019e1ce2-2c55-78f3-931e-3bafe60d533f`) y de ahí salieron los detalles que la
+primera pasada no tenía:
+
+- **Contador con − y +** para las personas, en vez de un input suelto. Lo
+  declara el control: `stepper: true` en el `numero`.
+- **Segmented** para el tipo de ritmo, en vez de botones sueltos. Cualquier
+  control `pills` dentro de un eje se renderiza así.
+- **Grilla por bloque**: el select ancho al lado del contador chico
+  (`minmax(0,1fr) 168px`), no dos columnas iguales. Lo declara el grupo
+  (`columnas`).
+- **Cajas de control de 34 px** con el mismo alto y el mismo borde para todos
+  los campos del eje.
+- **Chip de equivalencia**: "Equivale a 30 m de borde/h · el sistema lo guarda
+  como ml/h". El modelador escribe en su idioma y ve cómo queda guardado, sin
+  que la unidad interna sea un control.
+- **La rama cuelga de una línea**: los bloques que dependen de la bifurcación
+  llevan `border-left`, así se ve que son consecuencia de la decisión de
+  arriba.
+- **Escape al pie y en chico**: "o un tiempo fijo estimado" dejó de competir en
+  tamaño con el ritmo, que es lo principal.
+
+Del diseño se tomó todo salvo el pie del cálculo, y se corrigieron las dos
+frases de ayuda que explicaban el modelo al revés (arriba).
+
 ## 6. Hallazgos abiertos
 
 Numerados para discutirlos de a uno. Ninguno implementado.

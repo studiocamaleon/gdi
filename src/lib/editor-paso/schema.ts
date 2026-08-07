@@ -162,6 +162,9 @@ export type ControlOpcion =
       tipo: "numero";
       min?: number;
       step?: number;
+      /** Contador con − y + : para números chicos y acotados (personas). */
+      stepper?: boolean;
+      max?: number;
       /** Sufijo de unidad mostrado junto al input ("min", "unid./h"). */
       sufijo?: (ctx: ContextoOpcion) => string;
       placeholder?: (ctx: ContextoOpcion) => string;
@@ -207,6 +210,9 @@ export interface GrupoEje {
   /** `bifurcacion` = la decisión que apaga el resto del eje, en dos tarjetas
    *  grandes. `campos` = etiqueta + control, en grilla. */
   estilo?: "bifurcacion" | "campos";
+  /** `grid-template-columns` del bloque. Un select ancho al lado de un
+   *  contador chico se lee mejor que dos columnas iguales. */
+  columnas?: string;
 }
 
 export interface OpcionPaso {
@@ -923,7 +929,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     control: {
       tipo: "numero",
       min: 1,
+      max: 20,
       step: 1,
+      stepper: true,
       valor: (ctx) => ctx.cfg.dotacionOperarios ?? 1,
       aplicar: (_ctx, v) => ({
         tipo: "config",
@@ -2000,22 +2008,24 @@ export const GRUPOS_EJE_TIEMPO: GrupoEje[] = [
   {
     id: "donde",
     titulo: "Dónde se hace",
-    ayuda:
-      "El centro define la tarifa por hora. Sumar personas no acorta el trabajo: multiplica la mano de obra, y sólo en pasos sin máquina.",
+    ayuda: "El centro define la tarifa por hora.",
     estilo: "campos",
+    columnas: "minmax(0, 1fr) 168px",
   },
   {
     id: "ritmo",
     titulo: "Ritmo de trabajo",
     ayuda:
-      "Cómo se mide la velocidad del paso. Es lo único que cambia los minutos.",
+      "Cómo se mide la velocidad del paso. Es lo único que cambia los minutos por ítem.",
     estilo: "campos",
+    columnas: "minmax(0, 1fr)",
   },
   {
     id: "cantidad",
     titulo: "Sobre qué cantidad se aplica",
     ayuda: "Qué número multiplica al ritmo cuando entra una orden.",
     estilo: "campos",
+    columnas: "minmax(0, 1fr)",
   },
 ];
 

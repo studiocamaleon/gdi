@@ -8839,11 +8839,41 @@ function RitmoGuiado({
           placeholder="Elegir unidad"
         />
       </div>
+      {/* Cómo lo guarda el sistema: el modelador escribe "30 m de borde/h" y
+          adentro queda `ml/h`. Decirlo evita la sorpresa de ver otra unidad
+          en la ficha del paso o en un export. */}
+      {variante === "productividad" && ritmoTexto.trim() !== "" ? (
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 7,
+            width: "fit-content",
+            fontSize: 11,
+            color: "var(--muted-text, #6e6e76)",
+            background: "var(--surface-2, #fafaf9)",
+            border: "1px solid var(--hairline, #eeebe4)",
+            borderRadius: 6,
+            padding: "4px 8px",
+          }}
+        >
+          Equivale a{" "}
+          <b style={{ fontWeight: 500, color: "var(--fg-2, #2c2c33)" }}>
+            {ritmoTexto} {getT2ProductivityUnitSuffix(unidad, fuente, unidadCantidad)}
+          </b>{" "}
+          · el sistema lo guarda como{" "}
+          <b style={{ fontWeight: 500, color: "var(--fg-2, #2c2c33)" }}>
+            {unidad.replace("_", "/")}
+          </b>
+        </div>
+      ) : null}
       {/* Paridad con el detallado: el escape de tiempo fijo del ritmo
           (horasEstimadas) — si se completa, el motor lo usa y no calcula
-          por ritmo. */}
-      <div style={filaStyle}>
-        <span style={notaStyle}>O un tiempo fijo estimado:</span>
+          por ritmo. Es un escape, así que va al pie y en chico. */}
+      <div style={{ ...filaStyle, gap: 7 }}>
+        <span style={{ ...notaStyle, fontSize: 11.5 }}>
+          O un tiempo fijo estimado:
+        </span>
         <Input
           value={horasTexto}
           onChange={(e) => {
@@ -8858,9 +8888,11 @@ function RitmoGuiado({
           }}
           placeholder="Opcional"
           inputMode="decimal"
-          style={{ maxWidth: 110 }}
+          style={{ maxWidth: 92, height: 30 }}
         />
-        <span style={notaStyle}>h — si lo completás, no se calcula por ritmo</span>
+        <span style={{ ...notaStyle, fontSize: 11.5 }}>
+          h — si lo completás, no se calcula por ritmo
+        </span>
       </div>
     </div>
   );
@@ -10370,7 +10402,7 @@ function EjeGuiado({
       </div>
 
       {abierto ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {gruposConOpciones.map(({ grupo, items }, idx) => (
             <div
               key={grupo.id}
@@ -10378,26 +10410,30 @@ function EjeGuiado({
                 display: "flex",
                 flexDirection: "column",
                 gap: 10,
-                ...(idx > 0
+                // Los bloques que dependen de la bifurcación cuelgan de una
+                // línea, como en el diseño: se ve que son consecuencia de la
+                // decisión de arriba y no cosas sueltas.
+                ...(grupo.estilo === "campos"
                   ? {
-                      borderTop: "1px solid var(--hairline, #eee7de)",
-                      paddingTop: 16,
+                      borderLeft: "2px solid var(--hairline, #eee7de)",
+                      paddingLeft: 16,
+                      paddingTop: idx > 0 ? 4 : 6,
                     }
                   : {}),
               }}
             >
               {grupo.titulo ? (
                 <div>
-                  <div style={{ fontSize: 13.5, fontWeight: 600 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 600 }}>
                     {grupo.titulo}
                   </div>
                   {grupo.ayuda ? (
                     <div
                       style={{
-                        fontSize: 12,
+                        fontSize: 11.5,
                         color: "var(--muted-text, #6e6e76)",
                         marginTop: 2,
-                        maxWidth: 560,
+                        maxWidth: "64ch",
                       }}
                     >
                       {grupo.ayuda}
@@ -10410,7 +10446,8 @@ function EjeGuiado({
                   display: "grid",
                   gridTemplateColumns:
                     grupo.estilo === "campos"
-                      ? "repeat(auto-fit, minmax(230px, 1fr))"
+                      ? (grupo.columnas ??
+                        "repeat(auto-fit, minmax(230px, 1fr))")
                       : "1fr",
                   gap: 12,
                   alignItems: "start",
@@ -10429,9 +10466,15 @@ function EjeGuiado({
                   }}
                 >
                   {grupo.estilo === "bifurcacion" ? null : (
-                    <div style={{ fontSize: 12.5, fontWeight: 550 }}>
+                    <label
+                      style={{
+                        fontSize: 11.5,
+                        fontWeight: 450,
+                        color: "var(--fg-2, #2c2c33)",
+                      }}
+                    >
                       {etiquetaDe(opcion)}
-                    </div>
+                    </label>
                   )}
                   {/* La ayuda de la opción sólo donde el grupo no la cubre y
                       todavía no hay respuesta: si ya está contestada, el texto
@@ -10452,6 +10495,7 @@ function EjeGuiado({
                     ctx={ctx}
                     onAplicar={onAplicar}
                     renderComponente={renderComponente}
+                    variante="eje"
                   />
                 </div>
               ))}
@@ -10599,18 +10643,190 @@ function OpcionGuiadaFila({
   );
 }
 
+/** Caja de control del eje: 34px, borde fino, el mismo alto para todos. */
+const CAJA_EJE: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  height: 34,
+  border: "1px solid var(--hairline, #e5e2db)",
+  borderRadius: 7,
+  background: "var(--surface, #fff)",
+  padding: "0 9px",
+  gap: 6,
+};
+
 function ControlGuiado({
   opcion,
   ctx,
   onAplicar,
   renderComponente,
+  variante,
 }: {
   opcion: OpcionPaso;
   ctx: ContextoOpcion;
   onAplicar: (patch: PatchOpcion) => void;
   renderComponente: (id: string) => React.ReactNode;
+  /** "eje" = adentro de una card de eje: controles compactos y alineados. */
+  variante?: "eje";
 }) {
   const control = opcion.control;
+  const enEje = variante === "eje";
+
+  // Segmented: dos o tres opciones excluyentes que en el eje se leen mejor
+  // como un solo control que como botones sueltos.
+  if (control.tipo === "pills" && enEje) {
+    const actual = control.valor(ctx);
+    return (
+      <div
+        style={{
+          display: "inline-flex",
+          background: "var(--surface-2, #f3f1ec)",
+          border: "1px solid var(--hairline, #e5e2db)",
+          borderRadius: 8,
+          padding: 2.5,
+          gap: 2,
+          width: "fit-content",
+          maxWidth: "100%",
+          flexWrap: "wrap",
+        }}
+      >
+        {control.opciones(ctx).map((op) => {
+          const activa = actual === op.value;
+          return (
+            <button
+              key={op.value}
+              type="button"
+              title={op.descripcion}
+              onClick={() => onAplicar(control.aplicar(ctx, op.value))}
+              style={{
+                border: 0,
+                background: activa ? "var(--fg, #14141a)" : "transparent",
+                color: activa ? "#fff" : "var(--muted-text, #6e6e76)",
+                padding: "5.5px 11px",
+                borderRadius: 6,
+                fontSize: 12.5,
+                fontWeight: 500,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {op.label}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
+  if (control.tipo === "numero" && enEje) {
+    const valor = control.valor(ctx) ?? 0;
+    const min = control.min ?? 0;
+    const max = control.max ?? Number.MAX_SAFE_INTEGER;
+    if (control.stepper) {
+      const paso = (delta: number) =>
+        onAplicar(
+          control.aplicar(ctx, Math.min(max, Math.max(min, valor + delta))),
+        );
+      const botonStyle: React.CSSProperties = {
+        width: 32,
+        height: "100%",
+        border: 0,
+        background: "var(--surface-2, #fafaf9)",
+        fontSize: 15,
+        lineHeight: 1,
+        color: "var(--muted-text, #6e6e76)",
+        cursor: "pointer",
+      };
+      return (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            height: 34,
+            width: 118,
+            border: "1px solid var(--hairline, #e5e2db)",
+            borderRadius: 7,
+            overflow: "hidden",
+            background: "var(--surface, #fff)",
+          }}
+        >
+          <button
+            type="button"
+            aria-label="Uno menos"
+            style={botonStyle}
+            onClick={() => paso(-(control.step ?? 1))}
+          >
+            −
+          </button>
+          <input
+            value={valor}
+            inputMode="numeric"
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              if (Number.isFinite(n)) {
+                onAplicar(control.aplicar(ctx, Math.min(max, Math.max(min, n))));
+              }
+            }}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              border: 0,
+              outline: 0,
+              textAlign: "center",
+              fontSize: 13,
+              fontVariantNumeric: "tabular-nums",
+              background: "transparent",
+            }}
+          />
+          <button
+            type="button"
+            aria-label="Uno más"
+            style={botonStyle}
+            onClick={() => paso(control.step ?? 1)}
+          >
+            +
+          </button>
+        </div>
+      );
+    }
+    return (
+      <div style={{ ...CAJA_EJE, maxWidth: 200 }}>
+        <input
+          value={valor}
+          inputMode="decimal"
+          placeholder={control.placeholder?.(ctx)}
+          onChange={(e) => {
+            const n = Number(e.target.value);
+            onAplicar(
+              control.aplicar(ctx, e.target.value === "" || !Number.isFinite(n) ? null : n),
+            );
+          }}
+          style={{
+            border: 0,
+            outline: 0,
+            background: "transparent",
+            width: "100%",
+            minWidth: 0,
+            fontSize: 13,
+            textAlign: "right",
+            fontVariantNumeric: "tabular-nums",
+          }}
+        />
+        {control.sufijo ? (
+          <span
+            style={{
+              fontSize: 11,
+              color: "var(--muted-text-2, #92929b)",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {control.sufijo(ctx)}
+          </span>
+        ) : null}
+      </div>
+    );
+  }
+
   if (control.tipo === "texto") {
     return (
       <Input
