@@ -53,7 +53,9 @@ import {
 } from "@/lib/pendientes-paso";
 import {
   opcionesDeSeccion,
-  GRUPOS_EJE_TIEMPO,
+  GRUPOS_EJE,
+  opcionesDeEje,
+  type EjePaso,
   type ContextoOpcion,
   type OpcionPaso,
   type GrupoEje,
@@ -10307,8 +10309,7 @@ function SeccionGuiada({
 function EjeGuiado({
   titulo,
   subtitulo,
-  seccion,
-  grupos,
+  eje,
   resumenPrincipal,
   ctx,
   pendientesVivos,
@@ -10317,8 +10318,7 @@ function EjeGuiado({
 }: {
   titulo: string;
   subtitulo: string;
-  seccion: Parameters<typeof opcionesDeSeccion>[0];
-  grupos: GrupoEje[];
+  eje: EjePaso;
   /** Claves cuyo resumen define el eje, en orden de prioridad: es lo que se
    *  lee con la card cerrada. Sin esto la línea arrancaría por la primera
    *  opción declarada, que casi nunca es la que importa. */
@@ -10328,7 +10328,8 @@ function EjeGuiado({
   onAplicar: (patch: PatchOpcion) => void;
   renderComponente: (id: string) => React.ReactNode;
 }) {
-  const opciones = opcionesDeSeccion(seccion, ctx);
+  const grupos = GRUPOS_EJE[eje];
+  const opciones = opcionesDeEje(eje, ctx);
   const sinResolver = (op: OpcionPaso) =>
     op.origenValor(ctx) === "sin-definir" ||
     (op.pendiente != null && pendientesVivos.has(op.pendiente));
@@ -11547,17 +11548,21 @@ function SeccionesEsquemaPaso({
           <>
             {/* Sub-fase D: la bifurcación tercerizado va PRIMERA
                 (E.2); si la familia la declara aparece colapsada. */}
-            <SeccionGuiada
-              titulo="Quién lo hace"
-              seccion="quien"
+            <EjeGuiado
+              titulo="Qué paso es"
+              subtitulo="Cómo se llama acá y quién lo hace."
+              eje="identidad"
+              resumenPrincipal={["activacion.nombre", "quien.tercerizado"]}
               ctx={ctx}
               pendientesVivos={pendientesVivos}
               onAplicar={onAplicar}
               renderComponente={renderComponente}
             />
-            <SeccionGuiada
-              titulo="Activación"
-              seccion="activacion"
+            <EjeGuiado
+              titulo="Cuándo se ejecuta"
+              subtitulo="Si corre siempre, si es opcional o si depende de una condición."
+              eje="activacion"
+              resumenPrincipal={["activacion.cuando", "activacion.regla"]}
               ctx={ctx}
               pendientesVivos={pendientesVivos}
               onAplicar={onAplicar}
@@ -11569,25 +11574,14 @@ function SeccionesEsquemaPaso({
             {!noEjecutar && !cfg.tercerizado ? (
               <>
                 <EjeGuiado
-                  titulo="Cuánto tarda"
-                  subtitulo="Cómo se calcula el tiempo de este paso: quién lo estima, a qué ritmo y sobre cuántas piezas."
-                  seccion="tiempo"
-                  grupos={GRUPOS_EJE_TIEMPO}
+                  titulo="En qué máquina"
+                  subtitulo="El fierro que ejecuta el paso y cómo queda configurado."
+                  eje="maquina"
                   resumenPrincipal={[
-                    "tiempo.productividad",
-                    "tiempo.batch",
-                    "tiempo.tiempo_fijo",
-                    "tiempo.cantidad_operativa",
-                    "tiempo.dotacion",
+                    "maquina.maquina",
+                    "maquina.candidatas",
+                    "maquina.perfil",
                   ]}
-                  ctx={ctx}
-                  pendientesVivos={pendientesVivos}
-                  onAplicar={onAplicar}
-                  renderComponente={renderComponente}
-                />
-                <SeccionGuiada
-                  titulo="Máquina y perfil"
-                  seccion="maquina"
                   ctx={ctx}
                   pendientesVivos={pendientesVivos}
                   onAplicar={onAplicar}
@@ -11783,7 +11777,23 @@ function SeccionesEsquemaPaso({
                   onAplicar={onAplicar}
                   renderComponente={renderComponente}
                 />
-              </>
+
+                <EjeGuiado
+                  titulo="Cuánto tarda"
+                  subtitulo="Cómo se calcula el tiempo de este paso: quién lo estima, a qué ritmo y sobre cuántas piezas."
+                  eje="tiempo"
+                  resumenPrincipal={[
+                    "tiempo.productividad",
+                    "tiempo.batch",
+                    "tiempo.tiempo_fijo",
+                    "tiempo.cantidad_operativa",
+                    "tiempo.dotacion",
+                  ]}
+                  ctx={ctx}
+                  pendientesVivos={pendientesVivos}
+                  onAplicar={onAplicar}
+                  renderComponente={renderComponente}
+                />              </>
             ) : null}
           </>
         );

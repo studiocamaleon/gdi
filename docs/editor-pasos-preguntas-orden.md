@@ -370,10 +370,10 @@ Numerados para discutirlos de a uno. Ninguno implementado.
 | H-1 | Le pregunta por **talonarios a un folleto**: la card se muestra porque la FAMILIA declara `modoTalonarioIncompleto`, no porque el producto sea de talonarios. | `oficio.talonario` | Abierto |
 | H-2 | El **acomodado queda último**, detrás de setup y limpieza. Para impresión por hoja es *la* decisión de oficio: cuántas poses entran, el aprovechamiento, cuánto papel se compra. | `oficio.acomodado` | Abierto |
 | H-3 | Las **caras se preguntan dos veces** y no se ve que sean parientes: una multiplica el tiempo, la otra el material. Que sean dos está bien; que estén lejos y con nombres distintos, no. | `activacion.multiplicadores` + `materiales.caras` | Abierto |
-| H-4 | **"Calculado por nesting"** como respuesta visible: es el nombre del mecanismo interno, no lo que hace. | `tiempo.cantidad_operativa` | Abierto |
+| H-4 | **"Calculado por nesting"** como respuesta visible: era el nombre del mecanismo interno, no lo que hace. | `tiempo.cantidad_operativa` | **CERRADO** — dice "La calcula el propio paso" |
 | H-5 | El **tóner vive en "Máquina y perfil"**: es consumo, no una propiedad del fierro. | `maquina.cobertura` | Abierto |
-| H-6 | El **nombre del paso vive en "Activación"**, cuando es identidad — y es lo primero que uno quiere ver. | `activacion.nombre` | Abierto |
-| H-7 | **"¿Arrastra otros pasos?" en un paso que corre siempre**: si es obligatorio, arrastrar no cambia nada. | `activacion.coejecucion` | Abierto |
+| H-6 | El **nombre del paso vivía en "Activación"**, cuando es identidad. | `activacion.nombre` | **CERRADO** — abre el eje "Qué paso es" |
+| H-7 | **"¿Arrastra otros pasos?" en un paso que corre siempre**: si es obligatorio, arrastrar no cambia nada. | `activacion.coejecucion` | **CERRADO** — sólo en opcionales y condicionales |
 | H-8 | El encabezado muestra **"Perfil: Papel intermedio"** pero no hay pregunta para tocarlo (se esconde cuando hay candidatas). Se lee como un perfil clavado. | `maquina.perfil` | Abierto |
 
 ## 7. Los dos caminos
@@ -393,6 +393,30 @@ que una familia nueva traiga su editor puesta.
 sin inventar una abstracción nueva ni tocar el motor. Cuando los ejes existan
 como agrupador de verdad, hacer que la ficha los ordene y los filtre es un
 cambio chico.
+
+## 7.bis Los tres ejes de la cabecera (2026-08-07)
+
+Con el eje del tiempo cerrado, se convirtieron los tres de arriba —los que se
+leen primero y hacían que el editor pareciera dos aplicaciones distintas: cuatro
+acordeones viejos, la card del tiempo, más acordeones—.
+
+Con eso se dio el **paso A del §7**: cada opción declara ahora a qué **eje**
+pertenece (`eje` en `OpcionPaso`) en vez de agruparse por su sección, y el
+render filtra por eje (`opcionesDeEje`). La sección sobrevive porque el
+detallado congelado y el test de paridad todavía la usan.
+
+| Eje | Bloques | Se lee |
+|---|---|---|
+| **Qué paso es** | nombre + quién lo hace; el proveedor si es tercerizado | "Impresión por hoja · Lo produce la empresa" |
+| **Cuándo se ejecuta** | cuándo; la condición; a quién arrastra | "Siempre" |
+| **En qué máquina** | máquina/candidatas + perfil; cómo se configura (color, tóner) | "1 candidata: Ricoh C8003 · Cobertura alta de tóner" |
+
+**El tiempo se mudó al final.** Estaba donde vivía la vieja sección "Tiempo y
+costo", entre activación y máquina, contra el orden que este mismo documento
+acordó: el ritmo sale del perfil de la máquina y la cantidad sale del acomodado,
+así que preguntarlo antes es preguntar sin los datos.
+
+De paso cerraron tres hallazgos (§6): H-4, H-6 y H-7.
 
 ## 8. El repaso, familia por familia
 

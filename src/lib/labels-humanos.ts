@@ -131,7 +131,9 @@ export const mecanismoCantidadLabels: DiccionarioLabels = {
     ejemplo: "Impresión hereda los pliegos que pre-prensa decidió.",
   },
   CALCULADO_POR_PASO: {
-    label: "Calculado por nesting",
+    // [H-4] Decía "Calculado por nesting": el nombre del mecanismo interno,
+    // no lo que hace. El modelador quiere saber de dónde sale el número.
+    label: "La calcula el propio paso",
     descripcion:
       "El paso ejecuta un algoritmo de nesting (acomodo de piezas) para determinar la cantidad real con desperdicio.",
     ejemplo: "Vinilo gran formato → calcula metros de rollo necesarios.",

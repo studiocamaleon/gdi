@@ -75,6 +75,21 @@ import {
 // "ajustes" (escape hatches) se eliminó como sección: los dos escapes
 // genuinos (algoritmo y layout manual de paneles) viven dentro del card
 // de Acomodado (oficio.acomodado), igual que en el detallado.
+/**
+ * El EJE al que pertenece una opción: UNA decisión del paso, aunque el modelo
+ * la guarde en varios campos. Reemplaza a `seccion` como agrupador de la UI —
+ * la sección sobrevive porque el detallado congelado y el test de paridad
+ * todavía la usan. Ver docs/editor-pasos-preguntas-orden.md §4.
+ */
+export type EjePaso =
+  | "identidad"
+  | "activacion"
+  | "maquina"
+  | "materiales"
+  | "trabajo"
+  | "cantidad"
+  | "tiempo";
+
 export type SeccionPaso =
   | "quien"
   | "activacion"
@@ -220,6 +235,9 @@ export interface OpcionPaso {
   /** 'seccion.campo' — la clave del test de paridad. */
   clave: string;
   seccion: SeccionPaso;
+  /** El eje que la contiene. Sin declarar, la opción sigue el viejo camino
+   *  por sección (quedan las que todavía no se convirtieron). */
+  eje?: EjePaso;
   /**
    * La pregunta completa, en idioma de taller. Es lo que se muestra cuando la
    * opción vive sola en su tarjeta.
@@ -614,6 +632,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   // ───────────────────────────────────────────────────────────────────
   {
     clave: "quien.tercerizado",
+    eje: "identidad",
+    grupo: "identidad",
+    etiqueta: "Quién lo hace",
     seccion: "quien",
     pregunta: "¿Quién hace este paso?",
     ayuda:
@@ -645,6 +666,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   },
   {
     clave: "quien.proveedor",
+    eje: "identidad",
+    grupo: "proveedor",
+    anchoCompleto: true,
     seccion: "quien",
     pregunta: "¿A quién se le compra y a qué precio?",
     ayuda:
@@ -670,6 +694,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   },
   {
     clave: "activacion.nombre",
+    eje: "identidad",
+    grupo: "identidad",
+    etiqueta: "Nombre del paso",
     seccion: "activacion",
     pregunta: "¿Cómo se llama este paso acá?",
     ayuda:
@@ -696,6 +723,8 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   },
   {
     clave: "activacion.cuando",
+    eje: "activacion",
+    grupo: "raiz",
     seccion: "activacion",
     pregunta: "¿Cuándo se ejecuta?",
     ayuda:
@@ -729,6 +758,10 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   },
   {
     clave: "activacion.regla",
+    eje: "activacion",
+    grupo: "regla",
+    etiqueta: " ",
+    anchoCompleto: true,
     seccion: "activacion",
     pregunta: "¿Con qué regla se activa?",
     ayuda:
@@ -758,11 +791,21 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   },
   {
     clave: "activacion.coejecucion",
+    eje: "activacion",
+    grupo: "arrastre",
+    etiqueta: " ",
+    anchoCompleto: true,
     seccion: "activacion",
     pregunta: "¿Arrastra otros pasos al activarse?",
     ayuda:
       "Al activarse este paso, enciende también los que marques aunque sean opcionales (los ojales arrastran el refuerzo).",
-    visible: (ctx) => ctx.otrosPasos.length > 0,
+    // [H-7] Un paso OBLIGATORIO ya corre siempre: arrastrar no cambia nada.
+    // La pregunta sólo tiene sentido donde el paso puede estar apagado.
+    visible: (ctx) =>
+      ctx.otrosPasos.length > 0 &&
+      (ctx.cfg.modoActivacion === "OPCIONAL" ||
+        ctx.cfg.modoActivacion === "CONDICIONAL" ||
+        (ctx.cfg.requiereRutaPasoIds?.length ?? 0) > 0),
     resumen: (ctx) => {
       const ids = new Set(ctx.cfg.requiereRutaPasoIds ?? []);
       if (ids.size === 0) return "No arrastra otros pasos";
@@ -820,6 +863,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "tiempo.comercial",
     seccion: "tiempo",
+    eje: "tiempo",
     grupo: "raiz",
     pregunta: "¿El tiempo lo estima el comercial al cotizar?",
     ayuda:
@@ -844,6 +888,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     // que definir. Ver docs/editor-pasos-preguntas-orden.md.
     clave: "tiempo.comercial_ayudas",
     seccion: "tiempo",
+    eje: "tiempo",
     grupo: "ayudas",
     anchoCompleto: true,
     etiqueta: " ",
@@ -878,6 +923,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "tiempo.modo",
     seccion: "tiempo",
+    eje: "tiempo",
     grupo: "ritmo",
     etiqueta: "Cómo se mide",
     pregunta: "¿Cómo se mide el tiempo acá?",
@@ -913,6 +959,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "tiempo.centro",
     seccion: "tiempo",
+    eje: "tiempo",
     grupo: "donde",
     etiqueta: "Centro productivo",
     pregunta: "¿En qué centro productivo se realiza este paso?",
@@ -957,6 +1004,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "tiempo.dotacion",
     seccion: "tiempo",
+    eje: "tiempo",
     grupo: "donde",
     etiqueta: "Personas en simultáneo",
     pregunta: "¿Cuántas personas trabajan?",
@@ -985,6 +1033,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "tiempo.ritmo_modo",
     seccion: "tiempo",
+    eje: "tiempo",
     anchoCompleto: true,
     grupo: "ritmo",
     etiqueta: "Tipo de ritmo",
@@ -1026,6 +1075,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "tiempo.productividad",
     seccion: "tiempo",
+    eje: "tiempo",
     anchoCompleto: true,
     grupo: "ritmo",
     // En tiempo fijo el campo son horas por orden, no un ritmo: la etiqueta
@@ -1065,6 +1115,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "tiempo.batch",
     seccion: "tiempo",
+    eje: "tiempo",
     anchoCompleto: true,
     grupo: "ritmo",
     etiqueta: "Tanda",
@@ -1098,6 +1149,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "tiempo.cantidad_operativa",
     seccion: "tiempo",
+    eje: "tiempo",
     grupo: "cantidad",
     etiqueta: "Base de cantidad",
     pregunta: "¿Sobre cuántas piezas trabaja?",
@@ -1139,6 +1191,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "tiempo.herencia",
     seccion: "tiempo",
+    eje: "tiempo",
     anchoCompleto: true,
     grupo: "cantidad",
     etiqueta: "Hereda de",
@@ -1187,6 +1240,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "tiempo.calcular_segun",
     seccion: "tiempo",
+    eje: "tiempo",
     grupo: "ritmo",
     etiqueta: "El ritmo cuenta",
     pregunta: "¿El ritmo cuenta piezas, m² o metros?",
@@ -1239,6 +1293,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "tiempo.piezas_montar",
     seccion: "tiempo",
+    eje: "tiempo",
     grupo: "cantidad",
     etiqueta: "Qué monta",
     pregunta: "¿Qué monta: piezas del pedido o pliegos impresos?",
@@ -1281,6 +1336,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "tiempo.tiempo_fijo",
     seccion: "tiempo",
+    eje: "tiempo",
     grupo: "ritmo",
     etiqueta: "Minutos por trabajo",
     pregunta: "¿Cuántos minutos lleva?",
@@ -1330,6 +1386,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   // ───────────────────────────────────────────────────────────────────
   {
     clave: "maquina.maquina",
+    eje: "maquina",
+    grupo: "cual",
+    etiqueta: "Máquina",
     seccion: "maquina",
     pregunta: "¿En qué máquina se hace?",
     ayuda:
@@ -1361,6 +1420,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   },
   {
     clave: "maquina.perfil",
+    eje: "maquina",
+    grupo: "cual",
+    etiqueta: "Perfil",
     seccion: "maquina",
     pregunta: "¿Con qué perfil?",
     ayuda:
@@ -1383,6 +1445,10 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   },
   {
     clave: "maquina.candidatas",
+    eje: "maquina",
+    grupo: "cual",
+    etiqueta: "Máquinas candidatas",
+    anchoCompleto: true,
     seccion: "maquina",
     pregunta: "¿Entre qué máquinas elige el comercial?",
     ayuda:
@@ -1408,6 +1474,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   },
   {
     clave: "maquina.cobertura",
+    eje: "maquina",
+    grupo: "ajustes",
+    etiqueta: "Cobertura de tóner",
     seccion: "maquina",
     pregunta: "¿Cuánto tóner gasta por defecto?",
     ayuda:
@@ -1427,6 +1496,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   },
   {
     clave: "maquina.modo_color",
+    eje: "maquina",
+    grupo: "ajustes",
+    etiqueta: "Modo de color",
     seccion: "maquina",
     pregunta: "¿Se imprime a color o en negro?",
     ayuda:
@@ -2060,7 +2132,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
  * sin máquina, donde la capacidad se mide en horas-hombre). Ver
  * `calcularTiempoYCosto` en motor.service.ts.
  */
-export const GRUPOS_EJE_TIEMPO: GrupoEje[] = [
+const GRUPOS_TIEMPO: GrupoEje[] = [
   { id: "raiz", estilo: "bifurcacion" },
   {
     id: "donde",
@@ -2101,6 +2173,70 @@ export const GRUPOS_EJE_TIEMPO: GrupoEje[] = [
     columnas: "minmax(0, 1fr)",
   },
 ];
+
+const GRUPOS_IDENTIDAD: GrupoEje[] = [
+  {
+    id: "identidad",
+    estilo: "campos",
+    columnas: "minmax(0, 1fr) minmax(0, 260px)",
+  },
+  {
+    id: "proveedor",
+    titulo: "El proveedor",
+    ayuda: "A quién se le compra, cómo cotiza y en cuánto entrega.",
+    estilo: "campos",
+    columnas: "minmax(0, 1fr)",
+  },
+];
+
+const GRUPOS_ACTIVACION: GrupoEje[] = [
+  { id: "raiz", estilo: "campos", columnas: "minmax(0, 1fr)" },
+  {
+    id: "regla",
+    titulo: "La condición",
+    ayuda: "El paso corre sólo cuando esto se cumple.",
+    estilo: "campos",
+    columnas: "minmax(0, 1fr)",
+  },
+  {
+    id: "arrastre",
+    titulo: "Arrastra a otros",
+    ayuda:
+      "Al encenderse, prende también estos pasos aunque sean opcionales.",
+    estilo: "campos",
+    columnas: "minmax(0, 1fr)",
+  },
+];
+
+const GRUPOS_MAQUINA: GrupoEje[] = [
+  { id: "cual", estilo: "campos", columnas: "minmax(0, 1fr) minmax(0, 260px)" },
+  {
+    id: "ajustes",
+    titulo: "Cómo se configura",
+    ayuda: "Lo que cambia el consumo y el tiempo de esta máquina.",
+    estilo: "campos",
+    columnas: "repeat(auto-fit, minmax(200px, 1fr))",
+  },
+];
+
+/** Los sub-bloques de cada eje, en orden de lectura. */
+export const GRUPOS_EJE: Record<EjePaso, GrupoEje[]> = {
+  identidad: GRUPOS_IDENTIDAD,
+  activacion: GRUPOS_ACTIVACION,
+  maquina: GRUPOS_MAQUINA,
+  tiempo: GRUPOS_TIEMPO,
+  materiales: [],
+  trabajo: [],
+  cantidad: [],
+};
+
+/** Las opciones visibles de un EJE, en orden de declaración. */
+export function opcionesDeEje(
+  eje: EjePaso,
+  ctx: ContextoOpcion,
+): OpcionPaso[] {
+  return ESQUEMA_PASO.filter((op) => op.eje === eje && op.visible(ctx));
+}
 
 /** Las opciones visibles de una sección, en orden de declaración. */
 export function opcionesDeSeccion(
