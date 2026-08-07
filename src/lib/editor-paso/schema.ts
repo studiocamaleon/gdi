@@ -2231,6 +2231,8 @@ const GRUPOS_IDENTIDAD: GrupoEje[] = [
     ayuda: "A quién se le compra, cómo cotiza y en cuánto entrega.",
     estilo: "campos",
     columnas: "minmax(0, 1fr)",
+    // Título arriba, a todo el ancho, sin la barra vertical del costado.
+    encabezado: "arriba",
   },
 ];
 

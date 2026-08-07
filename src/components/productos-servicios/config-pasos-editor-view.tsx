@@ -12000,13 +12000,12 @@ function SeccionesEsquemaPaso({
             );
           }
           if (id === "tercerizado-panel") {
+            // Sin onToggle: el "quién lo hace" ya lo maneja el eje Identidad
+            // (pills); acá va sólo la config del proveedor, al estilo del diseño.
             return (
               <PasoTercerizadoPanel
                 value={cfg}
                 onChange={(patch) => onPatch(pasoActual.id, patch)}
-                onToggle={(tercerizado) =>
-                  onPatch(pasoActual.id, { tercerizado })
-                }
               />
             );
           }

@@ -2,21 +2,23 @@
 
 import * as React from "react";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
-import { PlusIcon, XIcon } from "lucide-react";
+import { PlusIcon, Trash2Icon, XIcon } from "lucide-react";
 import { getProveedores } from "@/lib/proveedores-api";
 import type {
   TercerizadoEje,
   TercerizadoEntradaPayload,
   UpsertConfigPasoPayload,
 } from "@/lib/productos-servicios-api";
+import s from "./el-proveedor.module.css";
 
 /**
  * Panel de configuración de un paso TERCERIZADO (proveedor + fuente de costo).
- * UI portada verbatim del diseño canónico (claude.ai/design ·
- * "Tercerización proveedor.html"); estilos scopeados bajo `.terc` en globals.css.
- * Usa `<select>` nativos (como el diseño): renderizan inline y no cierran el
- * sheet del cotizador (el editor de rutas no es sheet, pero mantenemos paridad).
- * docs/productos-tercerizados-diseno.md §7a.
+ * UI portada del diseño canónico (claude.ai/design · "El proveedor.html").
+ *
+ * El "quién lo hace" ya lo maneja el eje Identidad (pills): cuando esta pantalla
+ * se monta es porque el paso es tercerizado, así que NO lleva toggle propio. El
+ * `onToggle` sigue siendo opcional para el editor detallado viejo, que sí
+ * necesita prender/apagar la tercerización desde acá.
  */
 
 type Patch = Partial<UpsertConfigPasoPayload>;
@@ -24,10 +26,18 @@ type Patch = Partial<UpsertConfigPasoPayload>;
 const CLAVE_CANTIDAD = "cantidad";
 
 const FUENTES = [
-  { value: "matriz", label: "Matriz de costos" },
+  { value: "matriz", label: "Matriz de cantidades" },
   { value: "tarifa_magnitud", label: "Tarifa por magnitud" },
-  { value: "fijo", label: "Costo fijo" },
+  { value: "fijo", label: "Precio fijo" },
 ] as const;
+
+const FUENTE_HINT: Record<string, string> = {
+  matriz:
+    "Precio por combinación de atributos y corte de cantidad. Es lo que manda el proveedor en su lista.",
+  tarifa_magnitud:
+    "Un precio por unidad de magnitud — el costo escala con el tamaño del trabajo.",
+  fijo: "Un único precio por orden, sin importar cantidad ni medida.",
+};
 
 const MAGNITUDES = [
   { value: "area_m2", label: "Área (m²)" },
@@ -36,8 +46,6 @@ const MAGNITUDES = [
   { value: "cantidad", label: "Cantidad (unidades)" },
 ] as const;
 
-// Tecnología del proceso tercerizado (para que los reportes lo clasifiquen aunque
-// no tenga máquina propia). Incluye procesos que la gráfica no hace in-house.
 const SIN_TECNOLOGIA = "__none__";
 const TECNOLOGIAS_TERCERIZADO = [
   { value: "offset", label: "Offset" },
@@ -51,8 +59,8 @@ const TECNOLOGIAS_TERCERIZADO = [
   { value: "otra", label: "Otra" },
 ] as const;
 
-const slug = (s: string) =>
-  s
+const slug = (str: string) =>
+  str
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
     .replace(/[^a-zA-Z0-9]+/g, "_")
@@ -88,8 +96,9 @@ export function PasoTercerizadoPanel({
 }: {
   value: UpsertConfigPasoPayload;
   onChange: (patch: Patch) => void;
-  /** Prende/apaga la tercerización del paso (limpia máquina/perfil al prender). */
-  onToggle: (tercerizado: boolean) => void;
+  /** Sólo el editor detallado viejo: prende/apaga la tercerización desde acá.
+   *  En el editor guiado lo maneja el eje Identidad y no se pasa. */
+  onToggle?: (tercerizado: boolean) => void;
 }) {
   const [proveedores, setProveedores] = React.useState<
     Array<{ id: string; nombre: string }>
@@ -99,7 +108,8 @@ export function PasoTercerizadoPanel({
     let vivo = true;
     getProveedores()
       .then((res) => {
-        if (vivo) setProveedores(res.map((p) => ({ id: p.id, nombre: p.nombre })));
+        if (vivo)
+          setProveedores(res.map((p) => ({ id: p.id, nombre: p.nombre })));
       })
       .catch(() => {});
     return () => {
@@ -107,9 +117,9 @@ export function PasoTercerizadoPanel({
     };
   }, []);
 
-  const on = !!value.tercerizado;
+  const gated = typeof onToggle === "function";
+  const on = gated ? !!value.tercerizado : true;
 
-  // El panel muestra "matriz" por default; hay que dejarlo también en el estado.
   React.useEffect(() => {
     if (on && !value.fuenteCostoTercerizado) {
       onChange({ fuenteCostoTercerizado: "matriz" });
@@ -123,116 +133,150 @@ export function PasoTercerizadoPanel({
     onChange({ tercerizadoConfigJson: { ...cfg, ...extra } });
 
   return (
-    <div className="terc">
-      <button
-        type="button"
-        className={`toggle-card ${on ? "on" : ""}`}
-        onClick={() => onToggle(!on)}
-        aria-pressed={on}
-      >
-        <span className="switch" />
-        <div>
-          <div className="tt">Lo terceriza un proveedor</div>
-          <div className="ts">
-            No lo produce la empresa — el costo lo define la grilla del proveedor.
-          </div>
-        </div>
-      </button>
+    <div className={s.root}>
+      {gated ? (
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 9,
+            cursor: "pointer",
+            marginBottom: on ? 12 : 0,
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={on}
+            onChange={(e) => onToggle?.(e.target.checked)}
+          />
+          <span style={{ fontSize: 12.5, fontWeight: 500 }}>
+            Lo terceriza un proveedor
+          </span>
+        </label>
+      ) : null}
 
       {on ? (
-        <div className="panel">
-          {/* proveedor */}
-          <div className="sec">
-            <div className="fields">
-              <div className="field">
-                <label>Proveedor</label>
-                <select
-                  className="ctl"
-                  value={value.proveedorId ?? ""}
-                  onChange={(e) => onChange({ proveedorId: e.target.value || null })}
+        <>
+          <div className={s.sec}>
+            <div className={s.fields}>
+              <div className={s.f}>
+                <span className={s.k}>Proveedor</span>
+                <span
+                  className={`${s.ctl} ${s.sel} ${
+                    value.proveedorId ? "" : s.warnb
+                  }`}
                 >
-                  <option value="">Elegí un proveedor</option>
-                  {proveedores.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.nombre}
-                    </option>
-                  ))}
-                </select>
+                  <select
+                    value={value.proveedorId ?? ""}
+                    onChange={(e) =>
+                      onChange({ proveedorId: e.target.value || null })
+                    }
+                  >
+                    <option value="">— elegí un proveedor —</option>
+                    {proveedores.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </span>
               </div>
-              <div className="field">
-                <label>Fuente de costo</label>
-                <select
-                  className="ctl"
-                  value={fuente}
-                  onChange={(e) =>
+              <div className={s.f}>
+                <span className={s.k}>
+                  Plazo de entrega <span className={s.o}>· opcional</span>
+                </span>
+                <span className={s.ctl}>
+                  <input
+                    className={s.num}
+                    inputMode="numeric"
+                    placeholder="—"
+                    value={value.plazoProveedorDias ?? ""}
+                    onChange={(e) =>
+                      onChange({
+                        plazoProveedorDias:
+                          e.target.value === ""
+                            ? null
+                            : Number(e.target.value),
+                      })
+                    }
+                  />
+                  <span className={s.u}>días hábiles</span>
+                </span>
+              </div>
+              <div className={`${s.f} ${s.full}`}>
+                <span className={s.k}>
+                  Tecnología{" "}
+                  <span className={s.o}>
+                    · solo para reportes, no afecta el costo
+                  </span>
+                </span>
+                <span
+                  className={`${s.ctl} ${s.sel}`}
+                  style={{ maxWidth: 300 }}
+                >
+                  <select
+                    value={
+                      typeof cfg.tecnologia === "string" && cfg.tecnologia
+                        ? cfg.tecnologia
+                        : SIN_TECNOLOGIA
+                    }
+                    onChange={(e) =>
+                      patchCfg({
+                        tecnologia:
+                          e.target.value === SIN_TECNOLOGIA
+                            ? null
+                            : e.target.value,
+                      })
+                    }
+                  >
+                    <option value={SIN_TECNOLOGIA}>Sin tecnología</option>
+                    {TECNOLOGIAS_TERCERIZADO.map((t) => (
+                      <option key={t.value} value={t.value}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className={s.sec}>
+            <h4 className={s.h4}>Cómo cotiza</h4>
+            <p className={s.hint}>{FUENTE_HINT[fuente]}</p>
+            <div className={s.seg}>
+              {FUENTES.map((f) => (
+                <button
+                  key={f.value}
+                  type="button"
+                  aria-pressed={fuente === f.value}
+                  onClick={() =>
                     onChange({
-                      fuenteCostoTercerizado: e.target.value,
-                      // Cambiar la fuente resetea la config específica pero conserva
-                      // la tecnología del proceso.
+                      fuenteCostoTercerizado: f.value,
+                      // cambiar de fuente resetea la config específica pero
+                      // conserva la tecnología del proceso.
                       tercerizadoConfigJson: cfg.tecnologia
                         ? { tecnologia: cfg.tecnologia }
                         : {},
                     })
                   }
                 >
-                  {FUENTES.map((f) => (
-                    <option key={f.value} value={f.value}>
-                      {f.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="field">
-                <label>Plazo del proveedor (días)</label>
-                <input
-                  className="ctl mono"
-                  type="number"
-                  min={0}
-                  placeholder="Ej: 5"
-                  value={value.plazoProveedorDias ?? ""}
-                  onChange={(e) =>
-                    onChange({
-                      plazoProveedorDias:
-                        e.target.value === "" ? null : Number(e.target.value),
-                    })
-                  }
-                />
-              </div>
-              <div className="field">
-                <label>Tecnología (para reportes)</label>
-                <select
-                  className="ctl"
-                  value={
-                    typeof cfg.tecnologia === "string" && cfg.tecnologia
-                      ? cfg.tecnologia
-                      : SIN_TECNOLOGIA
-                  }
-                  onChange={(e) =>
-                    patchCfg({
-                      tecnologia: e.target.value === SIN_TECNOLOGIA ? null : e.target.value,
-                    })
-                  }
-                >
-                  <option value={SIN_TECNOLOGIA}>Sin tecnología</option>
-                  {TECNOLOGIAS_TERCERIZADO.map((t) => (
-                    <option key={t.value} value={t.value}>
-                      {t.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  {f.label}
+                </button>
+              ))}
             </div>
+            {fuente === "tarifa_magnitud" ? (
+              <TarifaEditor cfg={cfg} patchCfg={patchCfg} />
+            ) : fuente === "fijo" ? (
+              <FijoEditor cfg={cfg} patchCfg={patchCfg} />
+            ) : null}
           </div>
 
-          {fuente === "tarifa_magnitud" ? (
-            <TarifaEditor cfg={cfg} patchCfg={patchCfg} />
-          ) : fuente === "fijo" ? (
-            <FijoEditor cfg={cfg} patchCfg={patchCfg} />
-          ) : (
+          {fuente === "matriz" ? (
             <MatrizEditor value={value} onChange={onChange} />
-          )}
+          ) : null}
 
-          <div className="foot">
+          <div className={s.foot}>
             <p>
               Cada celda es el costo del proveedor para esa combinación y tanda.
               Dejá vacías las combinaciones que no ofrece.
@@ -242,7 +286,7 @@ export function PasoTercerizadoPanel({
               sale del margen configurado en el tab <b>Pricing</b>.
             </p>
           </div>
-        </div>
+        </>
       ) : null}
     </div>
   );
@@ -259,16 +303,27 @@ function TarifaEditor({
   const { moneda } = useConfigRegional();
   const numOrNull = (v: string) => (v === "" ? null : Number(v));
   return (
-    <div className="sec">
-      <div className="sec-head">
-        <h2>Tarifa por magnitud</h2>
-        <span className="hint">el costo se calcula por unidad de magnitud</span>
+    <div
+      className={s.fields}
+      style={{ marginTop: 12, maxWidth: 520 }}
+    >
+      <div className={s.f}>
+        <span className={s.k}>Tarifa</span>
+        <span className={s.ctl}>
+          <span className={s.pre}>{moneda.simbolo}</span>
+          <input
+            className={s.num}
+            inputMode="decimal"
+            placeholder="0"
+            value={(cfg.tarifa as number) ?? ""}
+            onChange={(e) => patchCfg({ tarifa: numOrNull(e.target.value) })}
+          />
+        </span>
       </div>
-      <div className="fields four">
-        <div className="field">
-          <label>Magnitud</label>
+      <div className={s.f}>
+        <span className={s.k}>Por unidad de</span>
+        <span className={`${s.ctl} ${s.sel}`}>
           <select
-            className="ctl"
             value={String(cfg.magnitud ?? "area_m2")}
             onChange={(e) => patchCfg({ magnitud: e.target.value })}
           >
@@ -278,46 +333,40 @@ function TarifaEditor({
               </option>
             ))}
           </select>
-        </div>
-        <div className="field">
-          <label>Tarifa ({moneda.simbolo})</label>
-          <div className="money">
-            <span className="mp">{moneda.simbolo}</span>
-            <input
-              className="ctl mono"
-              type="number"
-              min={0}
-              placeholder="0"
-              value={(cfg.tarifa as number) ?? ""}
-              onChange={(e) => patchCfg({ tarifa: numOrNull(e.target.value) })}
-            />
-          </div>
-        </div>
-        <div className="field">
-          <label>Mínimo de magnitud</label>
+        </span>
+      </div>
+      <div className={s.f}>
+        <span className={s.k}>
+          Mínimo de magnitud <span className={s.o}>· opcional</span>
+        </span>
+        <span className={s.ctl}>
           <input
-            className="ctl mono"
-            type="number"
-            min={0}
-            placeholder="opcional"
+            className={s.num}
+            inputMode="decimal"
+            placeholder="—"
             value={(cfg.minimoMagnitud as number) ?? ""}
-            onChange={(e) => patchCfg({ minimoMagnitud: numOrNull(e.target.value) })}
+            onChange={(e) =>
+              patchCfg({ minimoMagnitud: numOrNull(e.target.value) })
+            }
           />
-        </div>
-        <div className="field">
-          <label>Mínimo de costo ({moneda.simbolo})</label>
-          <div className="money">
-            <span className="mp">{moneda.simbolo}</span>
-            <input
-              className="ctl mono"
-              type="number"
-              min={0}
-              placeholder="opcional"
-              value={(cfg.minimoCosto as number) ?? ""}
-              onChange={(e) => patchCfg({ minimoCosto: numOrNull(e.target.value) })}
-            />
-          </div>
-        </div>
+        </span>
+      </div>
+      <div className={s.f}>
+        <span className={s.k}>
+          Mínimo de costo <span className={s.o}>· opcional</span>
+        </span>
+        <span className={s.ctl}>
+          <span className={s.pre}>{moneda.simbolo}</span>
+          <input
+            className={s.num}
+            inputMode="decimal"
+            placeholder="—"
+            value={(cfg.minimoCosto as number) ?? ""}
+            onChange={(e) =>
+              patchCfg({ minimoCosto: numOrNull(e.target.value) })
+            }
+          />
+        </span>
       </div>
     </div>
   );
@@ -333,39 +382,38 @@ function FijoEditor({
 }) {
   const { moneda } = useConfigRegional();
   return (
-    <div className="sec">
-      <div className="sec-head">
-        <h2>Costo fijo</h2>
-        <span className="hint">un costo único para el producto</span>
+    <div
+      className={s.fields}
+      style={{ marginTop: 12, maxWidth: 520 }}
+    >
+      <div className={s.f}>
+        <span className={s.k}>Precio por orden</span>
+        <span className={s.ctl}>
+          <span className={s.pre}>{moneda.simbolo}</span>
+          <input
+            className={s.num}
+            inputMode="decimal"
+            placeholder="0"
+            value={(cfg.costo as number) ?? ""}
+            onChange={(e) =>
+              patchCfg({
+                costo: e.target.value === "" ? null : Number(e.target.value),
+              })
+            }
+          />
+        </span>
       </div>
-      <div className="fields">
-        <div className="field">
-          <label>Costo ({moneda.simbolo})</label>
-          <div className="money">
-            <span className="mp">{moneda.simbolo}</span>
-            <input
-              className="ctl mono"
-              type="number"
-              min={0}
-              placeholder="0"
-              value={(cfg.costo as number) ?? ""}
-              onChange={(e) =>
-                patchCfg({ costo: e.target.value === "" ? null : Number(e.target.value) })
-              }
-            />
-          </div>
-        </div>
-        <div className="field">
-          <label>Se cobra por</label>
+      <div className={s.f}>
+        <span className={s.k}>Se cobra por</span>
+        <span className={`${s.ctl} ${s.sel}`}>
           <select
-            className="ctl"
             value={String(cfg.por ?? "trabajo")}
             onChange={(e) => patchCfg({ por: e.target.value })}
           >
             <option value="trabajo">Trabajo (una vez)</option>
             <option value="unidad">Unidad (× cantidad)</option>
           </select>
-        </div>
+        </span>
       </div>
     </div>
   );
@@ -391,7 +439,11 @@ function MatrizEditor({
 
   const setEjes = (next: TercerizadoEje[]) =>
     onChange({
-      tercerizadoConfigJson: { ...cfg, ejes: next, columnaEjeClave: CLAVE_CANTIDAD },
+      tercerizadoConfigJson: {
+        ...cfg,
+        ejes: next,
+        columnaEjeClave: CLAVE_CANTIDAD,
+      },
     });
 
   const setEntradas = (next: TercerizadoEntradaPayload[]) =>
@@ -416,7 +468,10 @@ function MatrizEditor({
     if (costo == null || Number.isNaN(costo)) {
       setEntradas(resto);
     } else {
-      setEntradas([...resto, { valores, cantidad: Number(cantClave) || 1, costo }]);
+      setEntradas([
+        ...resto,
+        { valores, cantidad: Number(cantClave) || 1, costo },
+      ]);
     }
   };
 
@@ -433,12 +488,18 @@ function MatrizEditor({
   const patchEje = (clave: string, patch: Partial<TercerizadoEje>) => {
     const next = ejes.map((e) => (e.clave === clave ? { ...e, ...patch } : e));
     setEjes(
-      next.filter((e) => e.clave !== CLAVE_CANTIDAD).concat(cantidadEje ? [cantidadEje] : []),
+      next
+        .filter((e) => e.clave !== CLAVE_CANTIDAD)
+        .concat(cantidadEje ? [cantidadEje] : []),
     );
   };
 
   const removeEje = (clave: string) =>
-    setEjes(atributos.filter((e) => e.clave !== clave).concat(cantidadEje ? [cantidadEje] : []));
+    setEjes(
+      atributos
+        .filter((e) => e.clave !== clave)
+        .concat(cantidadEje ? [cantidadEje] : []),
+    );
 
   const addValor = (ejeClave: string, texto: string) => {
     const t = texto.trim();
@@ -453,7 +514,9 @@ function MatrizEditor({
   const removeValor = (ejeClave: string, valClave: string) => {
     const eje = atributos.find((e) => e.clave === ejeClave);
     if (!eje) return;
-    patchEje(ejeClave, { valores: eje.valores.filter((v) => v.clave !== valClave) });
+    patchEje(ejeClave, {
+      valores: eje.valores.filter((v) => v.clave !== valClave),
+    });
   };
 
   const setCantidades = (vals: Array<{ clave: string; label: string }>) => {
@@ -478,58 +541,86 @@ function MatrizEditor({
     atributos.every((e) => e.valores.length > 0) &&
     cantidades.length > 0;
 
+  const totalCeldas = combos.length * cantidades.length;
+  const cargadas = combos.reduce(
+    (acc, combo) =>
+      acc +
+      cantidades.filter(
+        (c) =>
+          (costoPorClave.get(
+            claveDe({ ...combo, [CLAVE_CANTIDAD]: c.clave }),
+          ) ?? 0) > 0,
+      ).length,
+    0,
+  );
+
   return (
     <>
       {/* atributos */}
-      <div className="sec">
-        <div className="sec-head">
-          <h2>Atributos</h2>
-          <span className="hint">definen las filas de la grilla</span>
-          <span className="grow" />
-          <button type="button" className="btn-add" onClick={addEje}>
-            <PlusIcon /> Agregar atributo
+      <div className={s.sec}>
+        <div className={s.sechd}>
+          <div>
+            <h4 className={s.h4}>
+              Atributos{" "}
+              {combos.length ? (
+                <span className={s.n}>{combos.length} combinaciones</span>
+              ) : null}
+            </h4>
+            <p className={s.hint}>
+              Cada combinación de valores es una fila de la grilla. Ej: gramaje,
+              color, terminación.
+            </p>
+          </div>
+          <div className={s.sp} />
+          <button type="button" className={`${s.btn} ${s.btnGh}`} onClick={addEje}>
+            <PlusIcon className="size-3.5" />
+            Agregar atributo
           </button>
         </div>
-        <div className="attr-list">
-          {atributos.length === 0 ? (
-            <p style={{ fontSize: 12.5, color: "var(--muted-text-2)", margin: 0 }}>
-              Agregá los atributos que mueven el precio (medida, faz, papel…).
-            </p>
-          ) : (
-            atributos.map((eje) => (
-              <div className="attr-row" key={eje.clave}>
-                <div className="attr-top">
+        {atributos.length === 0 ? (
+          <p style={{ fontSize: 12.5, color: "var(--muted-text-2, #92929b)", margin: 0 }}>
+            Agregá los atributos que mueven el precio (medida, faz, papel…).
+          </p>
+        ) : (
+          <div className={s.attrs}>
+            {atributos.map((eje) => (
+              <div className={s.attr} key={eje.clave}>
+                <div className={s.ah}>
                   <input
-                    className="attr-name"
+                    className={s.nm}
                     value={eje.label}
                     placeholder="Nombre del atributo"
                     onChange={(e) => patchEje(eje.clave, { label: e.target.value })}
                   />
+                  <span className={s.rc}>
+                    {eje.valores.length
+                      ? `${eje.valores.length} ${eje.valores.length > 1 ? "valores" : "valor"}`
+                      : "sin valores"}
+                  </span>
                   <button
                     type="button"
-                    className="attr-del"
+                    className={s.icb}
                     onClick={() => removeEje(eje.clave)}
                     title="Quitar atributo"
                   >
-                    <XIcon />
+                    <Trash2Icon className="size-3.5" />
                   </button>
                 </div>
-                <div className="vals">
+                <div className={s.av}>
                   {eje.valores.map((v) => (
-                    <span className="pill" key={v.clave}>
+                    <span className={s.vchip} key={v.clave}>
                       {v.label}
                       <button
                         type="button"
-                        className="x"
                         onClick={() => removeValor(eje.clave, v.clave)}
                         aria-label={`Quitar ${v.label}`}
                       >
-                        <XIcon />
+                        <XIcon className="size-3" />
                       </button>
                     </span>
                   ))}
                   <input
-                    className="val-in"
+                    className={s.vadd}
                     placeholder="Agregar valor…"
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
@@ -541,37 +632,45 @@ function MatrizEditor({
                   />
                 </div>
               </div>
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* cantidades */}
-      <div className="sec">
-        <div className="sec-head">
-          <h2>Cantidades</h2>
-          <span className="hint">definen las columnas de la grilla</span>
+      <div className={s.sec}>
+        <div className={s.sechd}>
+          <div>
+            <h4 className={s.h4}>
+              Cantidades{" "}
+              {cantidades.length ? (
+                <span className={s.n}>{cantidades.length} columnas</span>
+              ) : null}
+            </h4>
+            <p className={s.hint}>
+              Los cortes de tirada que cotiza el proveedor. Cada uno es una
+              columna.
+            </p>
+          </div>
         </div>
-        <div className="qty-row">
+        <div className={s.qty}>
           {cantidades.map((c) => (
-            <span className="qpill" key={c.clave}>
+            <span className={s.vchip} key={c.clave}>
               {Number(c.clave).toLocaleString("es-AR")}
               <button
                 type="button"
-                className="x"
                 onClick={() =>
                   setCantidades(cantidades.filter((x) => x.clave !== c.clave))
                 }
                 aria-label={`Quitar ${c.label}`}
               >
-                <XIcon />
+                <XIcon className="size-3" />
               </button>
             </span>
           ))}
           <input
-            className="qty-in"
-            type="number"
-            min={0}
+            className={`${s.vadd} ${s.qadd}`}
+            inputMode="numeric"
             placeholder="Ej: 5000"
             onKeyDown={(e) => {
               if (e.key === "Enter") {
@@ -585,23 +684,33 @@ function MatrizEditor({
       </div>
 
       {/* grilla */}
-      <div className="sec">
-        <div className="sec-head">
-          <h2>
-            Grilla de costos{" "}
-            <span style={{ color: "var(--muted-text-2)", fontWeight: 500 }}>· neto</span>
-          </h2>
-        </div>
-        <div className="grid-scroll">
+      <div className={`${s.sec} ${s.secLast}`}>
+        <div className={s.sechd}>
+          <div>
+            <h4 className={s.h4}>Grilla de costos</h4>
+            <p className={s.hint}>
+              Precio neto por combinación y cantidad, sin impuestos ni margen.
+            </p>
+          </div>
+          <div className={s.sp} />
           {gridLista ? (
-            <table className="cgrid">
+            <span
+              className={`${s.pill} ${cargadas < totalCeldas ? s.pillW : ""}`}
+            >
+              {cargadas} de {totalCeldas} precios
+            </span>
+          ) : null}
+        </div>
+        <div className={s.gwrap}>
+          {gridLista ? (
+            <table className={s.table}>
               <thead>
                 <tr>
                   {atributos.map((e) => (
                     <th key={e.clave}>{e.label || "—"}</th>
                   ))}
                   {cantidades.map((c) => (
-                    <th key={c.clave} className="q">
+                    <th key={c.clave} className={s.q}>
                       {Number(c.clave).toLocaleString("es-AR")}
                     </th>
                   ))}
@@ -611,11 +720,9 @@ function MatrizEditor({
                 {combos.map((combo, i) => (
                   <tr key={i}>
                     {atributos.map((e) => (
-                      <td key={e.clave} className="attr-col">
-                        <span className="v">
-                          {e.valores.find((v) => v.clave === combo[e.clave])?.label ??
-                            combo[e.clave]}
-                        </span>
+                      <td key={e.clave}>
+                        {e.valores.find((v) => v.clave === combo[e.clave])
+                          ?.label ?? combo[e.clave]}
                       </td>
                     ))}
                     {cantidades.map((c) => {
@@ -624,24 +731,25 @@ function MatrizEditor({
                           claveDe({ ...combo, [CLAVE_CANTIDAD]: c.clave }),
                         ) ?? "";
                       return (
-                        <td key={c.clave} className="cell">
-                          <div className="cell-wrap">
+                        <td key={c.clave} className={s.pr}>
+                          <span className={`${s.ctl} ${val === "" ? s.zero : ""}`}>
+                            <span className={s.pre}>{moneda.simbolo}</span>
                             <input
-                              className={`cell-in ${val !== "" ? "filled" : ""}`}
-                              type="number"
-                              min={0}
+                              className={s.num}
+                              inputMode="decimal"
                               placeholder="0"
                               value={val}
                               onChange={(ev) =>
                                 setCosto(
                                   combo,
                                   c.clave,
-                                  ev.target.value === "" ? null : Number(ev.target.value),
+                                  ev.target.value === ""
+                                    ? null
+                                    : Number(ev.target.value),
                                 )
                               }
                             />
-                            <span className="pfx">{moneda.simbolo}</span>
-                          </div>
+                          </span>
                         </td>
                       );
                     })}
@@ -650,11 +758,14 @@ function MatrizEditor({
               </tbody>
             </table>
           ) : (
-            <div className="empty-grid">
-              Agregá atributos con valores y al menos una cantidad para generar la
-              grilla.
+            <div className={s.gempty}>
+              <b>La grilla se arma sola</b>
+              Cargá al menos un valor de atributo y un corte de cantidad.
             </div>
           )}
+        </div>
+        <div className={s.gfoot}>
+          <span>Entre cortes de cantidad, el sistema interpola.</span>
         </div>
       </div>
     </>
