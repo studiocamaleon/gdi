@@ -1644,9 +1644,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     seccion: "materiales",
     grupo: "cual",
     anchoCompleto: true,
+    etiqueta: " ",
     pregunta: "¿Cuál exactamente?",
-    ayuda:
-      "Buscá la materia prima compatible y dejá fija la variante que usa este paso.",
+    // Sin ayuda: el componente ("Qué material se usa") ya trae su propio hint.
     visible: (ctx) => ctx.slot?.payload.modoSeleccion === "HARDCODED",
     resumen: (ctx) => {
       const varianteId = ctx.slot?.payload.materialVarianteId;
@@ -1662,10 +1662,10 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     clave: "materiales.candidatos",
     seccion: "materiales",
     grupo: "cual",
+    etiqueta: " ",
     anchoCompleto: true,
     pregunta: "¿Entre cuáles se elige?",
-    ayuda:
-      "Las variantes entre las que elige el comercial al cotizar (o el sistema, según su criterio). Marcá una como predeterminada.",
+    // Sin ayuda: el componente ("Materiales candidatos") ya trae su hint.
     visible: (ctx) =>
       Boolean(ctx.slot) &&
       ctx.slot?.payload.modoSeleccion !== "HARDCODED",
@@ -1738,7 +1738,8 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     clave: "materiales.consumo",
     seccion: "materiales",
     grupo: "descuento",
-    etiqueta: "Consumo",
+    // Sin etiqueta: el título del bloque ("Cuánto se descuenta") ya lo dice.
+    etiqueta: " ",
     pregunta: "¿Cómo se calcula el consumo?",
     ayuda:
       "La fórmula del motor para saber cuánto material gasta: por pieza, por m², por metro lineal…",
@@ -2271,9 +2272,10 @@ export const GRUPOS_MATERIAL: GrupoEje[] = [
     encabezado: "arriba",
   },
   {
+    // Sin título propio: el picker (materiales.material / .candidatos) trae su
+    // encabezado —"Qué material se usa" / "Materiales candidatos"— y repetir
+    // "El material" arriba era decir dos veces lo mismo.
     id: "cual",
-    titulo: "El material",
-    ayuda: "Qué materia prima gasta este componente.",
     estilo: "campos",
     columnas: "minmax(0, 1fr)",
     encabezado: "arriba",

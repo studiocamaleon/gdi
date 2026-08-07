@@ -23,6 +23,9 @@ export interface HumanSelectOption {
   disabled?: boolean;
   badge?: string | null;
   group?: string | null;
+  /** No repetir el `label` dentro del ítem cuando ya lo dicen los `details`
+   *  (los tags). El trigger sí lo usa. */
+  hideLabelInItem?: boolean;
 }
 
 interface HumanSelectProps {
@@ -173,14 +176,16 @@ function HumanSelectTriggerValue({
 function HumanSelectItem({ option }: { option: HumanSelectOption }) {
   return (
     <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-left">
-      <span className="flex min-w-0 items-center gap-2">
-        <span className="truncate font-medium">{option.label}</span>
-        {option.badge && (
-          <span className="rounded border bg-muted px-1 py-0.5 text-[10px] font-medium text-muted-foreground">
-            {option.badge}
-          </span>
-        )}
-      </span>
+      {option.hideLabelInItem && option.details && option.details.length > 0 ? null : (
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="truncate font-medium">{option.label}</span>
+          {option.badge && (
+            <span className="rounded border bg-muted px-1 py-0.5 text-[10px] font-medium text-muted-foreground">
+              {option.badge}
+            </span>
+          )}
+        </span>
+      )}
       {option.code && (
         <span className="flex min-w-0 flex-col gap-0.5">
           <span className="truncate font-mono text-[10px] text-muted-foreground">
@@ -194,11 +199,11 @@ function HumanSelectItem({ option }: { option: HumanSelectOption }) {
         </span>
       )}
       {option.details && option.details.length > 0 && (
-        <span className="flex min-w-0 flex-wrap gap-1 pt-0.5">
+        <span className="flex min-w-0 flex-wrap gap-1.5 pt-0.5">
           {option.details.map((detail) => (
             <span
               key={`${detail.label}:${detail.value}`}
-              className="rounded border bg-muted px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground"
+              className="rounded border bg-muted px-2 py-1 text-[11.5px] leading-none text-muted-foreground"
             >
               <span className="font-medium text-foreground">{detail.label}:</span>{" "}
               {detail.value}

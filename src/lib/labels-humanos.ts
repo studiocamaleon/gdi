@@ -150,20 +150,17 @@ export const mecanismoCantidadLabels: DiccionarioLabels = {
 export const modoSeleccionMaterialLabels: DiccionarioLabels = {
   HARDCODED: {
     label: "Material fijo",
-    descripcion:
-      "El material está predefinido por el modelador. El comercial no puede cambiarlo al cotizar.",
+    descripcion: "Siempre el mismo. No se pregunta nada al cotizar.",
     ejemplo: "Sustrato 'Opalina 300gr' fijo para tarjetas premium.",
   },
   COMERCIAL_ELIGE: {
-    label: "El comercial elige al cotizar",
-    descripcion:
-      "El modelador define una lista de candidatos. El comercial elige cuál usar en cada cotización.",
+    label: "Lo elige el comercial",
+    descripcion: "Elige entre los candidatos al armar el presupuesto.",
     ejemplo: "Film para laminado: brillo o mate, lo elige el cliente.",
   },
   MOTOR_ELIGE_AUTO: {
-    label: "El sistema elige automáticamente",
-    descripcion:
-      "El motor elige el mejor material de una lista de candidatos según un criterio (menor costo, mayor aprovechamiento, capacidad mínima que cumpla).",
+    label: "Lo elige el sistema",
+    descripcion: "Se resuelve solo con un criterio y la geometría del ítem.",
     ejemplo: "Vinilo: el sistema elige el rollo que aproveche mejor.",
   },
 };

@@ -584,11 +584,11 @@ function materialVariantOption(
   return {
     value: variante.id,
     label: variantLabel,
-    code: variante.sku,
-    description: variante.precioReferencia
-      ? `${mp.nombre} · Referencia: ${formatearMoneda(Number(variante.precioReferencia), monedaDe(variante.moneda))}`
-      : `${mp.nombre} · ${mp.codigo}`,
+    // El SKU y el precio de referencia sobran en la lista: los tags (details)
+    // ya dicen la variante. El label se oculta en el ítem para no repetir los
+    // tags (el trigger sí lo usa).
     details: variantDetails,
+    hideLabelInItem: variantDetails.length > 0,
     group: mp.nombre,
   };
 }
@@ -8329,10 +8329,20 @@ const persistedHardcoded =
                                                   : "Sin seleccionar"));
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <LabelConTooltip
-        label="Qué material se usa"
-        tooltip="Elegí una materia prima compatible y luego una variante concreta para dejar fija en este paso."
-      />
+      <div>
+        <div style={{ fontSize: 12.5, fontWeight: 600 }}>
+          Qué material se usa
+        </div>
+        <div
+          style={{
+            fontSize: 11.5,
+            color: "var(--muted-text, #6e6e76)",
+            marginTop: 2,
+          }}
+        >
+          Un solo material, con la variante ya definida. Elegilo de la lista.
+        </div>
+      </div>
       <MaterialSearchSelect
         compatibilidad={slotDecl?.compatibilidadMaterial}
         placeholder="Buscar materia prima compatible..."
@@ -8636,21 +8646,35 @@ function CandidatosSlotDetalladoEditor({
       <div
         style={{
           display: "flex",
-          alignItems: "center",
+          alignItems: "flex-start",
           justifyContent: "space-between",
           gap: 8,
         }}
       >
-        <LabelConTooltip
-          label="Materiales candidatos"
-          tooltip="Lista de variantes entre las que podrá elegir el comercial, o entre las que el sistema resolverá automáticamente."
-        />
+        <div>
+          <div style={{ fontSize: 12.5, fontWeight: 600 }}>
+            Materiales candidatos
+          </div>
+          <div
+            style={{
+              fontSize: 11.5,
+              color: "var(--muted-text, #6e6e76)",
+              marginTop: 2,
+              maxWidth: "72ch",
+            }}
+          >
+            {slot.modoSeleccion === "MOTOR_ELIGE_AUTO"
+              ? "Entre estos elige el sistema con el criterio de abajo. Necesita al menos dos para poder comparar."
+              : "Entre estos elige el comercial al cotizar. Si dejás uno solo, no hay nada que elegir."}
+          </div>
+        </div>
         <span
           className={
             selectedCandidates.length > 0
               ? "ps-count-ok"
               : "text-muted-foreground text-[11px]"
           }
+          style={{ whiteSpace: "nowrap", flexShrink: 0 }}
         >
           {selectedCandidates.length} seleccionada
           {selectedCandidates.length === 1 ? "" : "s"}
