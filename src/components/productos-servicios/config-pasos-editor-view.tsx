@@ -6914,54 +6914,52 @@ function AcomodadoDetalladoEditor({
   return (
     <>
                                     <>
-                                    <div className="ps-card">
-                                      <div className="ps-card-head">
-                                        <span className="ps-ic">
-                                          <Grid2X2Icon />
-                                        </span>
-                                        <LabelConTooltip
-                                          label={
-                                            <span className="ps-tt normal-case tracking-normal">
-                                              Acomodado / nesting
-                                            </span>
-                                          }
-                                          tooltip="Configuración del acomodo de piezas para este paso. Se guarda como nestingConfig, pero se edita desde controles visuales."
-                                        />
-                                      </div>
-                                      <div className="ps-card-body space-y-4">
+                                    <div className={trab.root}>
+                                      <div className={trab.sec}>
+                                        <h4 className={trab.h4}>
+                                          Acomodado de las piezas
+                                        </h4>
+                                        <p className={trab.hint}>
+                                          Cómo entra cada pieza en el material y
+                                          cuánto se cobra por ella.
+                                        </p>
+                                        <div className="space-y-4">
                                       {/* El selector de Algoritmo se retiró: la física
                                           (superficie del paso, geometría de máquina y
                                           material) ya determina cuál corre, y de 116 pasos
                                           uno solo lo había tocado. El motor sigue
                                           respetando `nestingConfig.algorithm` si viniera
                                           de una config antigua. */}
-                                      <div className="ps-grid2">
-                                        <div className="space-y-2">
-                                          <LabelConTooltip
-                                            label="Demasía por lado"
-                                            tooltip="Margen extra alrededor de cada pieza. Entre dos piezas se acumulan ambos lados."
-                                            iconSize="sm"
+                                      <div
+                                        className={trab.frow}
+                                        style={{ marginBottom: 13 }}
+                                      >
+                                        <span className={trab.frowlb}>
+                                          Demasía por lado
+                                        </span>
+                                        <span
+                                          className={trab.ctl}
+                                          style={{ width: 104 }}
+                                        >
+                                          <input
+                                            className={trab.num}
+                                            inputMode="decimal"
+                                            value={String(resolvedPieceBleed)}
+                                            onChange={(e) =>
+                                              updateNestingPieceBleed(
+                                                pasoId,
+                                                e.target.value === ""
+                                                  ? 0
+                                                  : Number(e.target.value),
+                                              )
+                                            }
                                           />
-                                          <div className="ps-inp">
-                                            <Input
-                                              type="number"
-                                              min={0}
-                                              step={0.5}
-                                              value={String(
-                                                resolvedPieceBleed,
-                                              )}
-                                              onChange={(e) =>
-                                                updateNestingPieceBleed(
-                                                  pasoId,
-                                                  e.target.value === ""
-                                                    ? 0
-                                                    : Number(e.target.value),
-                                                )
-                                              }
-                                            />
-                                            <span className="ps-u">mm</span>
-                                          </div>
-                                        </div>
+                                          <span className={trab.u}>mm</span>
+                                        </span>
+                                        <span className={trab.frowlb}>
+                                          de material extra alrededor de cada
+                                          pieza, para el corte
+                                        </span>
                                       </div>
                                       {familia?.codigo ===
                                       "impresion_por_hoja" ? (
@@ -7622,70 +7620,74 @@ function AcomodadoDetalladoEditor({
                                           </p>
                                         </div>
                                       )}
-                                      <label
-                                        className={`ps-toggle ${
+                                      <button
+                                        type="button"
+                                        className={trab.sw2}
+                                        aria-pressed={
                                           nestingConfig.allowRotation !== false
-                                            ? "on"
-                                            : ""
-                                        }`}
+                                        }
+                                        onClick={() =>
+                                          updateNestingConfig(pasoId, {
+                                            allowRotation:
+                                              nestingConfig.allowRotation ===
+                                              false,
+                                          })
+                                        }
                                       >
-                                        <input
-                                          type="checkbox"
-                                          checked={
-                                            nestingConfig.allowRotation !==
-                                            false
-                                          }
-                                          onChange={(e) =>
-                                            updateNestingConfig(pasoId, {
-                                              allowRotation: e.target.checked,
-                                            })
-                                          }
-                                        />
-                                        <span className="ps-sw" />
-                                        <span>Permitir rotar piezas</span>
-                                      </label>
+                                        <span className={trab.tr} />
+                                        <span>
+                                          <span className={trab.sw2t}>
+                                            Permitir rotar piezas
+                                          </span>
+                                          <span className={trab.sw2d}>
+                                            El nesting puede girar la pieza 90°
+                                            si así entra mejor. Apagalo cuando el
+                                            material tiene veta o dirección de
+                                            impresión.
+                                          </span>
+                                        </span>
+                                      </button>
 
                                       {mostrarPanelizado && (
                                         <div className="ps-nest">
                                           <div className="ps-nest-head">
-                                            <label
-                                              className={`ps-toggle ${
-                                                panelizadoConfig.enabled ===
-                                                true
-                                                  ? "on"
-                                                  : ""
-                                              }`}
+                                            <button
+                                              type="button"
+                                              className={trab.sw2}
+                                              aria-pressed={
+                                                panelizadoConfig.enabled === true
+                                              }
+                                              onClick={() => {
+                                                const next =
+                                                  panelizadoConfig.enabled !==
+                                                  true;
+                                                updateNestingPanelizado(pasoId, {
+                                                  enabled: next,
+                                                  mode: next
+                                                    ? panelizadoMode
+                                                    : "automatic",
+                                                  axis: next
+                                                    ? panelizadoAxis
+                                                    : "automatic",
+                                                  manualLayout: next
+                                                    ? panelizadoConfig.manualLayout
+                                                    : null,
+                                                });
+                                              }}
                                             >
-                                              <input
-                                                type="checkbox"
-                                                checked={
-                                                  panelizadoConfig.enabled ===
-                                                  true
-                                                }
-                                                onChange={(e) =>
-                                                  updateNestingPanelizado(
-                                                    pasoId,
-                                                    {
-                                                      enabled: e.target.checked,
-                                                      mode: e.target.checked
-                                                        ? panelizadoMode
-                                                        : "automatic",
-                                                      axis: e.target.checked
-                                                        ? panelizadoAxis
-                                                        : "automatic",
-                                                      manualLayout: e.target
-                                                        .checked
-                                                        ? panelizadoConfig.manualLayout
-                                                        : null,
-                                                    },
-                                                  )
-                                                }
-                                              />
-                                              <span className="ps-sw" />
+                                              <span className={trab.tr} />
                                               <span>
-                                                Panelizar piezas grandes
+                                                <span className={trab.sw2t}>
+                                                  Panelizar piezas grandes
+                                                </span>
+                                                <span className={trab.sw2d}>
+                                                  Si la pieza no entra en el
+                                                  ancho del material, se corta en
+                                                  paneles que después se
+                                                  empalman.
+                                                </span>
                                               </span>
-                                            </label>
+                                            </button>
                                             {panelSummary ? (
                                               <span className="ps-badge">
                                                 {panelSummary}
@@ -7694,14 +7696,18 @@ function AcomodadoDetalladoEditor({
                                           </div>
                                           {panelizadoConfig.enabled ===
                                             true && (
-                                            <div className="ps-nest-body space-y-4">
-                                            <div className="ps-grid3">
-                                              <div className="space-y-1">
-                                                <LabelConTooltip
-                                                  label="Modo"
-                                                  tooltip="Automático divide las piezas grandes según reglas. Manual usa el layout de paneles definido por el usuario."
-                                                  iconSize="sm"
-                                                />
+                                            <div className={trab.subtog}>
+                                              <div className={trab.prow2}>
+                                                <span>
+                                                  <span className={trab.p2a}>
+                                                    Modo
+                                                  </span>
+                                                  <span className={trab.p2b}>
+                                                    Automático corta la cantidad
+                                                    mínima de paneles que entren
+                                                    en el ancho útil.
+                                                  </span>
+                                                </span>
                                                 <HumanSelect
                                                   value={panelizadoMode}
                                                   onValueChange={(v) =>
@@ -7730,12 +7736,17 @@ function AcomodadoDetalladoEditor({
                                                   triggerClassName="min-h-9 text-xs"
                                                 />
                                               </div>
-                                              <div className="space-y-1">
-                                                <LabelConTooltip
-                                                  label="Dirección"
-                                                  tooltip="Define si se divide el ancho o el alto de la pieza cuando no entra en el rollo."
-                                                  iconSize="sm"
-                                                />
+                                              <div className={trab.prow2}>
+                                                <span>
+                                                  <span className={trab.p2a}>
+                                                    Dirección
+                                                  </span>
+                                                  <span className={trab.p2b}>
+                                                    Por dónde se parte la pieza.
+                                                    Automática elige la que
+                                                    genere menos paneles.
+                                                  </span>
+                                                </span>
                                                 <HumanSelect
                                                   value={
                                                     panelizadoMode ===
@@ -7771,17 +7782,21 @@ function AcomodadoDetalladoEditor({
                                                   triggerClassName="min-h-9 text-xs"
                                                 />
                                               </div>
-                                              <div className="space-y-1">
-                                                <LabelConTooltip
-                                                  label="Solape"
-                                                  tooltip="Milímetros que se agregan entre paneles para poder montarlos."
-                                                  iconSize="sm"
-                                                />
-                                                <div className="ps-inp">
-                                                  <Input
-                                                    type="number"
-                                                    min={0}
-                                                    step={1}
+                                              <div className={trab.prow2}>
+                                                <span>
+                                                  <span className={trab.p2a}>
+                                                    Solape
+                                                  </span>
+                                                  <span className={trab.p2b}>
+                                                    Material compartido entre
+                                                    paneles contiguos para
+                                                    empalmar. Se suma al consumo.
+                                                  </span>
+                                                </span>
+                                                <span className={trab.ctl}>
+                                                  <input
+                                                    className={trab.num}
+                                                    inputMode="decimal"
                                                     value={String(
                                                       resolvedPanelOverlap,
                                                     )}
@@ -7790,38 +7805,37 @@ function AcomodadoDetalladoEditor({
                                                         pasoId,
                                                         {
                                                           overlapMm:
-                                                            e.target.value ===
-                                                            ""
+                                                            e.target.value === ""
                                                               ? 0
                                                               : Number(
-                                                                  e.target
-                                                                    .value,
+                                                                  e.target.value,
                                                                 ),
                                                         },
                                                       )
                                                     }
                                                   />
-                                                  <span className="ps-u">
+                                                  <span className={trab.u}>
                                                     mm
                                                   </span>
-                                                </div>
+                                                </span>
                                               </div>
-                                              <div className="space-y-1">
-                                                <LabelConTooltip
-                                                  label="Ancho máx. por panel"
-                                                  tooltip="Límite físico de cada panel en centímetros. Si queda en 0, el motor usa el ancho útil del rollo. Valores menores a 30 cm se tratan como 0 para evitar paneles demasiado angostos."
-                                                  iconSize="sm"
-                                                />
-                                                <div className="ps-inp">
-                                                  {/* Se edita en cm y se guarda en mm (patrón de los
-                                                      márgenes). El valor crudo se muestra mientras se
-                                                      edita; la regla "<30 cm se trata como 0" se aplica
-                                                      al salir del campo (blur), no por keystroke — si
-                                                      no, es imposible tipear un valor. */}
-                                                  <Input
-                                                    type="number"
-                                                    min={0}
-                                                    step={0.5}
+                                              <div className={trab.prow2}>
+                                                <span>
+                                                  <span className={trab.p2a}>
+                                                    Ancho máx. por panel
+                                                  </span>
+                                                  <span className={trab.p2b}>
+                                                    Vacío = el ancho imprimible
+                                                    de la máquina.
+                                                  </span>
+                                                </span>
+                                                <span className={trab.ctl}>
+                                                  {/* Se edita en cm y se guarda en mm. La regla
+                                                      "<30 cm se trata como 0" se aplica al blur. */}
+                                                  <input
+                                                    className={trab.num}
+                                                    inputMode="decimal"
+                                                    placeholder="ancho imprimible"
                                                     value={mmToCmInput(
                                                       getResolvedNestingNumber(
                                                         panelizadoConfig.maxPanelWidthMm,
@@ -7842,9 +7856,9 @@ function AcomodadoDetalladoEditor({
                                                     }
                                                     onBlur={(e) => {
                                                       const valorMm =
-                                                        (cmInputToMm(
+                                                        cmInputToMm(
                                                           e.target.value,
-                                                        ) ?? 0);
+                                                        ) ?? 0;
                                                       if (
                                                         valorMm > 0 &&
                                                         valorMm <
@@ -7852,24 +7866,27 @@ function AcomodadoDetalladoEditor({
                                                       ) {
                                                         updateNestingPanelizado(
                                                           pasoId,
-                                                          {
-                                                            maxPanelWidthMm: 0,
-                                                          },
+                                                          { maxPanelWidthMm: 0 },
                                                         );
                                                       }
                                                     }}
                                                   />
-                                                  <span className="ps-u">
+                                                  <span className={trab.u}>
                                                     cm
                                                   </span>
-                                                </div>
+                                                </span>
                                               </div>
-                                              <div className="space-y-1">
-                                                <LabelConTooltip
-                                                  label="Distribución"
-                                                  tooltip="Define cómo reparte la medida útil entre paneles."
-                                                  iconSize="sm"
-                                                />
+                                              <div className={trab.prow2}>
+                                                <span>
+                                                  <span className={trab.p2a}>
+                                                    Distribución
+                                                  </span>
+                                                  <span className={trab.p2b}>
+                                                    Equilibrada reparte el ancho
+                                                    en paneles iguales; llenar
+                                                    deja el resto en el último.
+                                                  </span>
+                                                </span>
                                                 <HumanSelect
                                                   value={String(
                                                     panelizadoConfig.distribution ??
@@ -7890,12 +7907,17 @@ function AcomodadoDetalladoEditor({
                                                   triggerClassName="min-h-9 text-xs"
                                                 />
                                               </div>
-                                              <div className="space-y-1 md:col-span-2">
-                                                <LabelConTooltip
-                                                  label="Interpretación del ancho"
-                                                  tooltip="Define si el ancho máximo contempla el panel completo o sólo la parte útil."
-                                                  iconSize="sm"
-                                                />
+                                              <div className={trab.prow2}>
+                                                <span>
+                                                  <span className={trab.p2a}>
+                                                    Interpretación del ancho
+                                                  </span>
+                                                  <span className={trab.p2b}>
+                                                    Si el máximo de arriba
+                                                    incluye el solape o es el
+                                                    ancho neto visible.
+                                                  </span>
+                                                </span>
                                                 <HumanSelect
                                                   value={String(
                                                     panelizadoConfig.widthInterpretation ??
@@ -7917,38 +7939,34 @@ function AcomodadoDetalladoEditor({
                                                 />
                                               </div>
                                               {panelizadoMode === "manual" ? (
-                                                <div className="space-y-1 md:col-span-3">
-                                                  <LabelConTooltip
-                                                    label="Layout manual de paneles"
-                                                    tooltip="Define los cortes de panel para las medidas fijas o predefinidas del producto."
-                                                    iconSize="sm"
-                                                  />
-                                                  <div className="flex flex-wrap items-center gap-2">
-                                                    <Button
-                                                      type="button"
-                                                      size="sm"
-                                                      variant="outline"
-                                                      disabled={
-                                                        panelMeasures.length ===
-                                                        0
-                                                      }
-                                                      onClick={() =>
-                                                        setPanelEditorPasoId(
-                                                          pasoId,
-                                                        )
-                                                      }
-                                                    >
-                                                      Editar paneles
-                                                    </Button>
-                                                    <span className="text-xs text-muted-foreground">
+                                                <div className={trab.prow2}>
+                                                  <span>
+                                                    <span className={trab.p2a}>
+                                                      Layout manual de paneles
+                                                    </span>
+                                                    <span className={trab.p2b}>
                                                       {panelManualLayout
                                                         ? `${panelManualLayout.items.length} medida${panelManualLayout.items.length === 1 ? "" : "s"} con layout manual`
                                                         : "Sin layout manual guardado"}
                                                     </span>
-                                                  </div>
+                                                  </span>
+                                                  <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    disabled={
+                                                      panelMeasures.length === 0
+                                                    }
+                                                    onClick={() =>
+                                                      setPanelEditorPasoId(
+                                                        pasoId,
+                                                      )
+                                                    }
+                                                  >
+                                                    Editar paneles
+                                                  </Button>
                                                 </div>
                                               ) : null}
-                                            </div>
                                             </div>
                                           )}
                                           <PanelManualEditorSheet
@@ -7994,6 +8012,7 @@ function AcomodadoDetalladoEditor({
                                       )}
 
                                       </div>
+                                    </div>
                                     </div>
 
                                     <div className={trab.root}>

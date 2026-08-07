@@ -107,13 +107,13 @@
   gap: 14px;
   align-items: center;
 }
-.prow2 .a {
+.p2a {
   display: block;
   font-size: 12.5px;
   font-weight: 450;
   color: var(--c-ink);
 }
-.prow2 .b {
+.p2b {
   display: block;
   font-size: 11px;
   color: var(--c-muted-2);

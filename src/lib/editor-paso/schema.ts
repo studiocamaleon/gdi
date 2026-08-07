@@ -2081,6 +2081,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     eje: "trabajo",
     grupo: "labores",
     anchoCompleto: true,
+    // El componente trae su propio encabezado ("Acomodado de las piezas"): la
+    // etiqueta en blanco evita repetir la pregunta arriba.
+    etiqueta: " ",
     pregunta: "¿Cómo se acomodan y cobran las piezas en el material?",
     ayuda:
       "Demasía por pieza, pliego de impresión, panelizado, márgenes extra y —en placa— cómo se cobra la última placa a medio usar.",
