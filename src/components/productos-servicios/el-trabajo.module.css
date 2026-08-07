@@ -440,11 +440,13 @@
   box-shadow: 0 1px 2px rgba(20, 20, 26, 0.2);
   transition: transform 0.13s;
 }
-.tog[aria-pressed="true"] .tr {
+.tog[aria-pressed="true"] .tr,
+.sw2[aria-pressed="true"] .tr {
   background: var(--c-ink);
   border-color: var(--c-ink);
 }
-.tog[aria-pressed="true"] .tr::after {
+.tog[aria-pressed="true"] .tr::after,
+.sw2[aria-pressed="true"] .tr::after {
   transform: translateX(13px);
 }
 .togt {
