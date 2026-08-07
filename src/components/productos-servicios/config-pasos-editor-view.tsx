@@ -1607,7 +1607,7 @@ function MaterialSearchSelect({
                       alignItems: "center",
                       gap: 10,
                       width: "100%",
-                      padding: "9px 12px",
+                      padding: "7px 12px",
                       background: selected
                         ? "var(--surface-2, #fafaf9)"
                         : "var(--surface, #fff)",
@@ -1642,9 +1642,26 @@ function MaterialSearchSelect({
                         <CheckIcon className="size-2.5" strokeWidth={3.4} />
                       ) : null}
                     </span>
+                    {/* Avatar como el diseño: chico, gris si no está elegido,
+                        negro si sí (no el color por material). */}
                     <span
-                      className="ps-mat-chip"
-                      style={{ background: chip.bg }}
+                      aria-hidden
+                      style={{
+                        width: 26,
+                        height: 26,
+                        borderRadius: 6,
+                        flexShrink: 0,
+                        display: "grid",
+                        placeItems: "center",
+                        fontFamily: "var(--font-mono, ui-monospace)",
+                        fontSize: 10,
+                        fontWeight: 500,
+                        letterSpacing: "0.02em",
+                        background: selected
+                          ? "var(--fg, #14141a)"
+                          : "#e9e6df",
+                        color: selected ? "#fff" : "var(--muted-text, #6e6e76)",
+                      }}
                     >
                       {chip.ini}
                     </span>
@@ -1667,7 +1684,7 @@ function MaterialSearchSelect({
                   {selected ? (
                     <div
                       style={{
-                        padding: "10px 12px 12px 37px",
+                        padding: "10px 12px 12px 48px",
                         background: "var(--surface-2, #fafaf9)",
                         borderTop: "1px solid var(--hairline, #eeebe4)",
                       }}
