@@ -105,9 +105,6 @@ efectos?: {
   demasiaMedida?: {
     lados: ('superior' | 'inferior' | 'izquierdo' | 'derecho')[];
     mm: number;
-    /** Preset informativo que precarga valores y nombra el paso en la OT
-     *  (bolsillo, refuerzo, tensado…). No es una rama de código. */
-    preset?: string;
   };
 };
 ```
@@ -122,6 +119,15 @@ efectosSoportados?: Array<'demasiaMedida'>;
 
 `trabajo_manual` lo declararía (es la familia de tensado, refuerzo y bolsillo);
 `impresion_por_hoja` no.
+
+**Sin preset** (decisión Lucas, 2026-08-07). El `subTipo: bolsillo | refuerzo`
+de hoy era un sustituto pobre: existía porque el tenant no tenía forma de
+tener dos pasos manuales distintos. Con los pasos del tenant por plantilla
+([pasos-tenant-por-plantilla-diseno.md](pasos-tenant-por-plantilla-diseno.md),
+implementado el mismo día) eso ya no hace falta: "Bolsillo" y "Refuerzo" son
+**dos instancias** de `trabajo_manual`, cada una con su nombre, sus lados,
+sus milímetros y sus materiales, configuradas en la ruta de cada producto.
+Un campo menos en el eje, y el paso se llama como se llama en el taller.
 
 ## 7. Decisiones a cerrar (los matices de la charla)
 
@@ -185,9 +191,10 @@ regla de oro. La fusión lo corrige de paso.
   esos pasos sin resolver. Hay precedente del procedimiento en la poda de las
   9 familias de 2026-08.
 
-  Dos cosas a preservar: el **preset** (`bolsillo`/`refuerzo`, que precarga
-  100-150 mm y 30-50 mm — ya previsto dentro del efecto) y revisar quién
-  hereda sus **outputs** (`metros_lineales_union`, `mutacion_aplicada`).
+  El **preset no se preserva** (decisión Lucas): `subTipo` desaparece — lo
+  reemplazan pasos del tenant con nombre propio. Sí queda por revisar quién
+  hereda sus **outputs** (`metros_lineales_union`, `mutacion_aplicada`) antes
+  de podarla.
 - `mutaMedidasEnPrePasada` de la ficha se reemplaza por `efectosSoportados`.
 
 ## 9. Plan por etapas (protocolo golden en cada una)
