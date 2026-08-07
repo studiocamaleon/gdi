@@ -203,9 +203,9 @@ desactualiza sola. Matarlos = serializar el campo en el catálogo y leerlo:
   viaja en slotsRequeridos).
 - Compatibilidad de perfil del plotter (view 389-412) →
   `tiposPerfilCompatibles` (serializar).
-- Validaciones adelantadas de `modificacion_pre` / `colocacion_ojales`
-  (view 1941-1949) → espejan validaciones que el motor ya corta; expresarlas
-  como `validaciones[]` de la ficha y que el editor las lea.
+- Validaciones adelantadas de `colocacion_ojales` (view 1941-1949) → espejan
+  validaciones que el motor ya corta; expresarlas como `validaciones[]` de la
+  ficha y que el editor las lea.
 - Pliego automático de impresión por hoja (view 2092) → estrategia
   `pliego_digital` serializada.
 
@@ -247,7 +247,6 @@ factorVelocidad?, compraMaterial?, publicaOutputs?, cantidadPropia? }`.
 - Impresión por hoja: cadena de perfil color→caras→gramaje (~6332); clicks A4
   de desgaste (~4357); factor A4 equivalente PPM (~5941); pliegos→hojas de
   compra (~4129); publicación de outputs (~6459).
-- `modificacion_pre`: metros lineales de costura sobre medida visible (~5479).
 
 ### 4.e Centro de copiado — HECHA (Tanda D, 2026-08-06)
 
@@ -360,7 +359,6 @@ genérico (`editorParamsGenerico`).
 | `colocacion_ojales` | M-0 | T-1, T-2 | calcula, directa | — | opcional | 1/1 + | — |
 | `embalaje` | M-0 | T-2 | conversión, directa | batch_time | obligatorio | 1/2 | — |
 | `modificacion_post` | M-0 | T-1, T-2 | directa, hereda | — | opcional | 0/0 + | cantidadModificacionesPorPieza |
-| `modificacion_pre` | M-0 | T-1, T-2 | calcula, directa | — | opcional | 0/0 + | — |
 | `trabajo_manual` | M-0 | T-2 | directa, hereda, conversión | — | opcional | 0/1 + | — |
 | **Logística e instalación** | | | | | | | |
 | `instalacion_in_situ` | M-0 | T-2 | directa | m2_h · area_piezas_m2 | opcional | 0/0 | — |
@@ -371,11 +369,11 @@ genérico (`editorParamsGenerico`).
 
 Derivador (calculadora geométrica) · Acomodado (nesting declarado, con guard y
 fallback) · Primitivas (algoritmos de oficio) · Impr. (`esImpresion`) · Hereda
-default (`outputHeredadoDefault`) · Pre-pasada (`mutaMedidasEnPrePasada`) ·
-Out/Params/Val = cantidad de outputs canónicos, params declarados y
-validaciones.
+default (`outputHeredadoDefault`) · Efectos (`efectosSoportados`: qué le puede
+exigir al trabajo un paso de esa familia) · Out/Params/Val = cantidad de
+outputs canónicos, params declarados y validaciones.
 
-| Familia | Derivador | Acomodado (superficie · estrategia · guard · fallback) | Primitivas | Impr. | Hereda default | Pre-pasada | Out | Params | Val |
+| Familia | Derivador | Acomodado (superficie · estrategia · guard · fallback) | Primitivas | Impr. | Hereda default | Efectos | Out | Params | Val |
 |---|---|---|---|---|---|---|---|---|---|
 | **Pre-prensa** | | | | | | | | | |
 | `pre_prensa` | — | — | — | — | — | — | — | — | 1 |
@@ -412,8 +410,7 @@ validaciones.
 | `colocacion_ojales` | `layout_ojales` | — | — | — | — | — | 1 | 4 ✎ | — |
 | `embalaje` | — | — | — | — | — | — | 1 | 1 | — |
 | `modificacion_post` | — | — | — | — | `piezas_cortadas` | — | 1 | 1 | — |
-| `modificacion_pre` | — | — | `cantidadPropia:ml_union_visible` | — | — | ✓ | 2 | 3 ✎ | — |
-| `trabajo_manual` | — | — | — | — | — | — | 1 | 1 | — |
+| `trabajo_manual` | — | — | — | — | — | `demasiaMedida` | 1 | 1 | — |
 | **Logística e instalación** | | | | | | | | | |
 | `instalacion_in_situ` | — | — | — | — | — | — | 1 | — | — |
 | **Servicios profesionales** | | | | | | | | | |

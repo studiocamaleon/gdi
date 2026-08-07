@@ -28,45 +28,17 @@ describe("familiaConParamsEditables", () => {
 });
 
 describe("patchParaEnum", () => {
-  it("el preset bolsillo precarga lados horizontales y 100mm", () => {
-    expect(patchParaEnum("subTipo", "bolsillo", {})).toEqual({
-      subTipo: "bolsillo",
-      lados: ["superior", "inferior"],
-      demasiaMm: 100,
-    });
-  });
-
-  it("el preset refuerzo precarga los 4 lados y 40mm", () => {
-    expect(patchParaEnum("subTipo", "refuerzo", {})).toEqual({
-      subTipo: "refuerzo",
-      lados: ["superior", "inferior", "izquierdo", "derecho"],
-      demasiaMm: 40,
-    });
-  });
-
-  it("NO pisa lo que el modelador ya cargó", () => {
-    expect(
-      patchParaEnum("subTipo", "refuerzo", {
-        lados: ["superior"],
-        demasiaMm: 75,
-      }),
-    ).toEqual({ subTipo: "refuerzo" });
-  });
-
-  it("completa sólo los campos que están vacíos", () => {
-    expect(
-      patchParaEnum("subTipo", "bolsillo", { lados: [], demasiaMm: 75 }),
-    ).toEqual({ subTipo: "bolsillo", lados: ["superior", "inferior"] });
-  });
-
-  it("un enum que no es subTipo no dispara presets", () => {
-    expect(patchParaEnum("otroCampo", "bolsillo", {})).toEqual({
-      otroCampo: "bolsillo",
+  it("escribe el valor elegido y nada más", () => {
+    // [F4 efectos] Antes precargaba lados y milímetros según el preset
+    // `subTipo`. Ese preset murió con la familia `modificacion_pre`: la
+    // demasía es un EFECTO del paso y tiene su propia card.
+    expect(patchParaEnum("subTipo", "perforacion")).toEqual({
+      subTipo: "perforacion",
     });
   });
 
   it("un valor vacío borra el campo", () => {
-    expect(patchParaEnum("subTipo", "", {})).toEqual({ subTipo: null });
+    expect(patchParaEnum("subTipo", "")).toEqual({ subTipo: null });
   });
 });
 

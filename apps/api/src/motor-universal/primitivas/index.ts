@@ -78,21 +78,6 @@ const guillotina_por_cortes: PrimitivaTiempoRun = (paso, jobContext, deps) => {
 
 // ─── cantidadPropia ─────────────────────────────────────────────────
 
-/**
- * Metros lineales de unión sobre la medida VISIBLE: la costura corre por el
- * borde terminado, no crece con la demasía. Con params inválidos devuelve 0
- * (la pre-pasada ya corta la cotización con su propio diagnóstico).
- * [P1: era la rama `modificacion_pre` de resolverCantidad]
- */
-const ml_union_visible: PrimitivaCantidadPropia = (paso, jobContext, deps) => {
-  // [F1 efectos] Lee el EFECTO del paso (formato nuevo o viejo), así el
-  // cálculo vale igual para "Demasía de tensado" que para el "Tensado de
-  // lona" que lo absorba en la migración.
-  const efecto = leerEfectoDemasia(deps.paramsEfectivos(paso, jobContext));
-  if (efecto) return calcularMetrosLinealesUnion(jobContext, efecto);
-  return 0;
-};
-
 // ─── factorVelocidad ────────────────────────────────────────────────
 
 /**
@@ -359,7 +344,6 @@ export const REGISTRO_TIEMPO_RUN: Record<string, PrimitivaTiempoRun> = {
 
 export const REGISTRO_CANTIDAD_PROPIA: Record<string, PrimitivaCantidadPropia> =
   {
-    ml_union_visible,
   };
 
 export const REGISTRO_FACTOR_VELOCIDAD: Record<

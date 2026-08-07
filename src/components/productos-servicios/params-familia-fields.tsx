@@ -56,22 +56,20 @@ export function ParamsFamiliaFields({
 
   /**
    * Deja que el comercial cambie este campo al cotizar. Lo modelado pasa a ser
-   * la sugerencia. `subTipo` queda afuera: es el preset que define de qué
-   * modificación se trata, no un dato de la cotización.
+   * la sugerencia.
    */
-  const renderToggleEditable = (param: ParamSchema) =>
-    param.campo === "subTipo" ? null : (
-      <label className="text-muted-foreground mt-1 flex items-center gap-1.5 text-xs">
-        <input
-          type="checkbox"
-          checked={abiertos.includes(param.campo)}
-          onChange={(e) =>
-            onChange(toggleCampoEditable(params, param.campo, e.target.checked))
-          }
-        />
-        El comercial puede cambiarlo al cotizar
-      </label>
-    );
+  const renderToggleEditable = (param: ParamSchema) => (
+    <label className="text-muted-foreground mt-1 flex items-center gap-1.5 text-xs">
+      <input
+        type="checkbox"
+        checked={abiertos.includes(param.campo)}
+        onChange={(e) =>
+          onChange(toggleCampoEditable(params, param.campo, e.target.checked))
+        }
+      />
+      El comercial puede cambiarlo al cotizar
+    </label>
+  );
 
   const renderCampo = (param: ParamSchema) => {
     const valor = params[param.campo];
@@ -88,7 +86,7 @@ export function ParamsFamiliaFields({
             value={
               typeof valor === "string" ? valor : String(param.default ?? "")
             }
-            onValueChange={(v) => onChange(patchParaEnum(param.campo, v, params))}
+            onValueChange={(v) => onChange(patchParaEnum(param.campo, v))}
             options={opcionesDeEnum(param.valoresPermitidos ?? [])}
             placeholder="Elegir"
           />

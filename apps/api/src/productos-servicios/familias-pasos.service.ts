@@ -319,7 +319,6 @@ function serializarFamilia(
     modosActivacionSoportados: MODOS_ACTIVACION_UNIVERSALES,
     multiplicadoresSoportados: f.multiplicadoresSoportados,
     slotsRequeridos: f.slotsRequeridos,
-    mutaMedidasEnPrePasada: f.mutaMedidasEnPrePasada ?? false,
     efectosSoportados: f.efectosSoportados ?? [],
     nestingConfig: f.nestingConfig ?? null,
     esImpresion: f.esImpresion ?? false,

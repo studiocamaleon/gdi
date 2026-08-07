@@ -389,19 +389,6 @@ function computeOutput(
     return cantidadEfectiva || null;
   }
 
-  // ─── Modificaciones físicas PRE (etapa B) ─────────────────────────
-  if (key === 'metros_lineales_union') {
-    // La cantidad del paso YA son los metros lineales de unión: los calcula
-    // `resolverCantidad` sobre la medida VISIBLE.
-    return cantidadEfectiva || null;
-  }
-  if (key === 'mutacion_aplicada') {
-    // Booleano a propósito: sólo sirve para validaciones EXISTS_OUTPUT. La
-    // traza rica vive en `jobContext.mutacionesAplicadas`, que se appendea —
-    // acá un segundo paso PRE pisaría al primero.
-    return true;
-  }
-
   // ─── Casos puntuales ──────────────────────────────────────────────
   if (key === 'proof_aprobado') {
     // Si el paso se ejecutó sin errores, asumimos proof aprobado.

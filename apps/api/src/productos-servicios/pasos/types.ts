@@ -49,7 +49,8 @@ export type FamiliaCodigo =
   | 'embalaje'
   | 'trabajo_manual'
   // Modificaciones físicas (sub-categoría dentro de manuales)
-  | 'modificacion_pre'
+  // [F4 efectos] `modificacion_pre` se podó: agrandar la medida dejó de ser
+  // una familia y pasó a ser un EFECTO que declara cualquier paso real.
   | 'modificacion_post'
   | 'colocacion_ojales'
   // Logística / instalación
@@ -640,24 +641,6 @@ export interface DefinicionFamilia {
    * de la familia `modificacion_pre`.
    */
   efectosSoportados?: Array<'demasiaMedida'>;
-
-  // --- Pre-pasada de medidas ---
-  /**
-   * La familia MUTA medidas del JobContext y el motor la resuelve en una
-   * PASADA PREVIA al bucle, sin importar dónde esté en la ruta.
-   *
-   * Así el orden de la ruta puede ser el orden REAL de producción (en una lona
-   * se imprime, después se refuerza) sin que el costo salga mal: la impresión
-   * lee la medida ya agrandada aunque el refuerzo figure después.
-   *
-   * A cambio, la familia NO puede depender de nada que publique un paso
-   * anterior — en la pre-pasada todavía no corrió ninguno. El motor no le
-   * permite `HEREDAR_DEL_OUTPUT_CANONICO` y su regla CONDICIONAL no puede
-   * referenciar outputs canónicos (lo valida `validacion-pre-pasada.ts`).
-   *
-   * Ver docs/modificaciones-fisicas-lona-diseno.md
-   */
-  mutaMedidasEnPrePasada?: boolean;
 
   // --- Derivador geométrico (docs/derivadores-geometricos-diseno.md §3) ---
   /**

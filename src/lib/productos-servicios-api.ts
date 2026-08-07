@@ -1057,12 +1057,14 @@ export interface CotizarResponse {
       /** El paso se encendió porque otro lo exige (ojales arrastra refuerzo). */
       activadoPorDependencia?: { requeridoPorNombre: string } | null;
       /**
-       * Sólo pasos `modificacion_pre`: qué medida agrandó y en cuánto. El
-       * cliente pidió la medida `antes`, el taller corta la `despues`.
-       * Ver docs/modificaciones-fisicas-lona-diseno.md.
+       * Un paso que EXIGE material extra (tensar, coser un bolsillo): qué
+       * medida agrandó y en cuánto. El cliente pidió la medida `antes`, el
+       * taller corta la `despues`. Ver docs/efectos-de-paso-diseno.md.
        */
       mutacionAplicada?: {
-        subTipo: string;
+        nombrePaso: string;
+        /** LEGACY: el preset de las cotizaciones viejas. */
+        subTipo?: string;
         lados: string[];
         demasiaMm: number;
         deltaAnchoMm: number;

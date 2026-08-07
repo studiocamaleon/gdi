@@ -1,13 +1,16 @@
 /**
- * Presentación de las modificaciones físicas PRE (bolsillos y refuerzos en
- * lona) en el desglose de la cotización y en la OT.
+ * Presentación del material extra que un paso le exige al trabajo (tensar una
+ * lona, coser un bolsillo) en el desglose de la cotización y en la OT.
  *
  * El dato lo produce el motor como `PasoEjecutado.mutacionAplicada`.
- * Ver `docs/modificaciones-fisicas-lona-diseno.md`.
+ * Ver `docs/efectos-de-paso-diseno.md`.
  */
 
 export interface MutacionAplicadaView {
-  subTipo: string;
+  /** El paso que lo pidió: es el nombre que el taller le puso. */
+  nombrePaso?: string;
+  /** LEGACY: el preset `bolsillo`/`refuerzo` de las cotizaciones viejas. */
+  subTipo?: string;
   lados: string[];
   demasiaMm: number;
   deltaAnchoMm: number;
@@ -50,8 +53,20 @@ export interface LayoutOjalesView {
   posiciones: PosicionOjalView[];
 }
 
-export function etiquetaSubTipoModificacion(subTipo: string): string {
-  return ETIQUETA_SUBTIPO[subTipo] ?? subTipo;
+/**
+ * Cómo se llama la modificación en la frase. Lo natural es el NOMBRE DEL PASO
+ * ("Tensado de lona"), que es como se llama en el taller; el preset viejo
+ * queda como respaldo para leer cotizaciones anteriores a los efectos.
+ */
+export function etiquetaModificacion(mutacion: {
+  nombrePaso?: string;
+  subTipo?: string;
+}): string {
+  const nombre = mutacion.nombrePaso?.trim();
+  if (nombre) return nombre;
+  const preset = mutacion.subTipo?.trim();
+  if (!preset) return "Material extra";
+  return ETIQUETA_SUBTIPO[preset] ?? preset;
 }
 
 /**
@@ -76,9 +91,9 @@ export function describirLados(lados: string[]): string {
   return `${etiquetas.slice(0, -1).join(", ")} y ${etiquetas[etiquetas.length - 1]}`;
 }
 
-/** "Refuerzo en los 4 lados · +40 mm por lado" */
+/** "Tensado de lona en los 4 lados · +100 mm por lado" */
 export function resumenModificacion(mutacion: MutacionAplicadaView): string {
-  return `${etiquetaSubTipoModificacion(mutacion.subTipo)} en ${describirLados(
+  return `${etiquetaModificacion(mutacion)} en ${describirLados(
     mutacion.lados,
   )} · +${mutacion.demasiaMm} mm por lado`;
 }

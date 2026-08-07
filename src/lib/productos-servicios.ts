@@ -475,9 +475,6 @@ export interface FamiliaListItem {
   capacidades?: Array<{ key: string; nombre: string; heredable: boolean }>;
   /** Derivadores: lo mínimo para que el editor NOMBRE la cantidad del paso
    *  ("6 ml de perfil/h" en vez de "6 unid./h" — H1 del relevamiento). */
-  /** La familia MUTA medidas en la pre-pasada (demasías): no acomoda piezas
-   *  — el editor no le ofrece la card de Acomodado (H10). */
-  mutaMedidasEnPrePasada?: boolean;
   /** [Efectos] Qué le puede exigir al trabajo un paso de esta familia
    *  (docs/efectos-de-paso-diseno.md). Gobierna qué ofrece el editor. */
   efectosSoportados?: string[];

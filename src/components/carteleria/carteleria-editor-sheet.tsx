@@ -78,7 +78,6 @@ const HOVER_POR_FAMILIA: Record<string, string> = {
   estructura_bastidor: "frame",
   iluminacion_led: "led",
   impresion_por_area: "front",
-  modificacion_pre: "front",
 };
 
 /** Nombre humano del slot en el listado (desambigua cenefa vs chapa trasera). */

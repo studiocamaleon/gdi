@@ -26,11 +26,13 @@ const OUT = join(__dirname, 'carteleria-golden-master.baseline.json');
 const PRODUCTO_CODIGO = 'CARTEL-BACKLIGHT';
 
 // configPasoIds de la ruta RUTA-CARTEL-BACKLIGHT en dev (dump 2026-08-05).
+// [F4 efectos, 2026-08-07] Se cayó `demasia`: el paso fantasma "Demasía de
+// tensado" (modificacion_pre) salió de la ruta y su efecto lo declara ahora
+// "Tensado de lona". La ruta pasó de 9 a 8 pasos.
 const PASO = {
   corteHierros: '234a24d0-cb0b-443b-8ea0-d7f276d7bfbc',
   soldadura: '62849922-906a-49c7-9fe3-1194952bff87',
   pintura: '19d5f028-8fb5-4a99-b627-5f38a7970d09',
-  demasia: '08300960-a93f-44d7-ba9c-27f9959abde2',
   impresion: '2ac89d50-c6db-41ca-9c01-0960887b44dc',
   chapaTrasera: 'ad7e90d7-432f-465a-936d-a5eadaa44bb0',
   iluminacion: '8df31f17-eadc-4328-8305-64536a848c7f',

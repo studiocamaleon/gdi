@@ -97,7 +97,7 @@ describe('Registro de Capacidades (B.3.1)', () => {
       'minutos_reales',
     ]);
     expect(capacidadesDeclaradas(['proof_aprobado'])).toEqual([]);
-    expect(capacidadesDeclaradas(['metros_lineales_union', 'mutacion_aplicada'])).toEqual([
+    expect(capacidadesDeclaradas(['ml_estructura', 'proof_aprobado'])).toEqual([
       'metros_lineales',
     ]);
   });

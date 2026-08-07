@@ -8,7 +8,7 @@ describe('outputsCanonicosConocidos', () => {
   it('junta los outputs que declaran las familias', () => {
     const outputs = outputsCanonicosConocidos();
     expect(outputs.has('pliegos_calculados')).toBe(true);
-    expect(outputs.has('metros_lineales_union')).toBe(true);
+    expect(outputs.has('trabajos_manuales_realizados')).toBe(true);
     expect(outputs.has('ojales_colocados')).toBe(true);
     // Un campo del comercial NO es un output canónico.
     expect(outputs.has('cantidad')).toBe(false);

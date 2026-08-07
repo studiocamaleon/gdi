@@ -205,7 +205,6 @@ export const ALIAS_LEGACY: Record<string, AliasLegacy> = {
   visitas_realizadas: { capacidad: 'unidades_procesadas', etiqueta: 'visitas realizadas' },
 
   // ── modificaciones físicas (lona) ───────────────────────────────────
-  metros_lineales_union: { capacidad: 'metros_lineales', etiqueta: 'metros de unión' },
   piezas_modificadas: { capacidad: 'unidades_procesadas', etiqueta: 'piezas modificadas' },
   ojales_colocados: { capacidad: 'unidades_procesadas', etiqueta: 'ojales colocados' },
 };
@@ -213,8 +212,12 @@ export const ALIAS_LEGACY: Record<string, AliasLegacy> = {
 /**
  * Traza interna de primitivas: se publica al jobContext pero NO es una
  * capacidad de usuario (no aparece en "este paso deja" ni en herencia).
+ *
+ * [F4 efectos] Quedó vacío al podar `modificacion_pre`: su `mutacion_aplicada`
+ * era el único caso. La traza de la demasía vive en
+ * `jobContext.mutacionesAplicadas`, que no es un output canónico.
  */
-export const KEYS_INTERNAS: ReadonlySet<string> = new Set(['mutacion_aplicada']);
+export const KEYS_INTERNAS: ReadonlySet<string> = new Set<string>();
 
 /**
  * Podadas por decisión de diseño (§B.2): "no se usa y no se va a usar".

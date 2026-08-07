@@ -1868,13 +1868,12 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     pregunta: "¿Cómo se acomodan y cobran las piezas en el material?",
     ayuda:
       "Demasía por pieza, pliego de impresión, panelizado, márgenes extra y —en placa— cómo se cobra la última placa a medio usar.",
-    // H10: una familia con DERIVADOR deriva geometría (no acomoda piezas) y
-    // una mutadora de medidas agranda la pieza (tampoco acomoda): la card de
-    // Acomodado ahí era ruido puro.
+    // H10: una familia con DERIVADOR deriva geometría, no acomoda piezas: la
+    // card de Acomodado ahí era ruido puro. (El otro caso que se excluía —la
+    // familia que mutaba medidas— murió con `modificacion_pre`: ahora la
+    // demasía es un EFECTO y el paso que la declara sí puede acomodar.)
     visible: (ctx) =>
-      nestingAplica(ctx.familia, ctx.cfg) &&
-      !ctx.familia?.derivador &&
-      ctx.familia?.mutaMedidasEnPrePasada !== true,
+      nestingAplica(ctx.familia, ctx.cfg) && !ctx.familia?.derivador,
     resumen: (ctx) => {
       const nesting = ctx.paramsPaso.nestingConfig as
         | {

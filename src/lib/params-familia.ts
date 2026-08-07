@@ -27,30 +27,13 @@ export const ETIQUETAS_VALOR_PARAM: Record<string, string> = {
   inferior: "Inferior",
   izquierdo: "Izquierdo",
   derecho: "Derecho",
-  bolsillo: "Bolsillo",
-  refuerzo: "Refuerzo",
   simple: "Simple (marco plano)",
   doble: "Doble (cajón)",
   area: "Por área (grilla sobre la cara)",
   recorrido: "Por recorrido (siguiendo el trazo)",
 };
 
-export const DESCRIPCIONES_VALOR_PARAM: Record<string, string> = {
-  bolsillo: "Demasía grande para que entre el caño. Suele ir arriba y abajo.",
-  refuerzo: "Demasía chica para reforzar el borde. Suele ir en los 4 lados.",
-};
-
-/**
- * Presets del `subTipo` de `modificacion_pre`. Bolsillo y refuerzo son la
- * misma primitiva con valores distintos, así que el sub-tipo sólo precarga.
- */
-export const PRESETS_SUBTIPO: Record<string, Record<string, unknown>> = {
-  bolsillo: { lados: ["superior", "inferior"], demasiaMm: 100 },
-  refuerzo: {
-    lados: ["superior", "inferior", "izquierdo", "derecho"],
-    demasiaMm: 40,
-  },
-};
+export const DESCRIPCIONES_VALOR_PARAM: Record<string, string> = {};
 
 export function etiquetaValorParam(valor: string): string {
   return ETIQUETAS_VALOR_PARAM[valor] ?? valor;
@@ -62,25 +45,17 @@ export function paramVacio(valor: unknown): boolean {
 }
 
 /**
- * Patch al elegir un valor de enum. Si el campo es `subTipo` y hay preset,
- * completa los campos que estén VACÍOS — nunca pisa lo que el modelador ya
- * escribió, porque el preset es una ayuda, no una regla.
+ * Patch al elegir un valor de enum.
+ *
+ * [F4 efectos] Antes había presets: elegir `subTipo: refuerzo` precargaba
+ * lados y milímetros. Murieron con `modificacion_pre` — la demasía dejó de ser
+ * un param de familia y pasó a ser un EFECTO del paso, con su propia card.
  */
 export function patchParaEnum(
   campo: string,
   valor: string,
-  paramsActuales: Record<string, unknown>,
 ): Record<string, unknown> {
-  const patch: Record<string, unknown> = { [campo]: valor || null };
-  if (campo !== "subTipo") return patch;
-
-  const preset = PRESETS_SUBTIPO[valor];
-  if (!preset) return patch;
-
-  for (const [campoPreset, valorPreset] of Object.entries(preset)) {
-    if (paramVacio(paramsActuales[campoPreset])) patch[campoPreset] = valorPreset;
-  }
-  return patch;
+  return { [campo]: valor || null };
 }
 
 /**

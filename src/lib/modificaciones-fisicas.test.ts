@@ -60,7 +60,26 @@ describe("describirLados", () => {
 });
 
 describe("resumenModificacion", () => {
-  it("arma la frase del caso A", () => {
+  it("nombra la modificación con el nombre del PASO", () => {
+    // [F4 efectos] La frase la encabeza el paso que pidió el material extra,
+    // que es como se llama en el taller. El preset bolsillo/refuerzo murió.
+    expect(
+      resumenModificacion({
+        ...BOLSILLO,
+        subTipo: undefined,
+        nombrePaso: "Tensado de lona",
+        lados: ["superior", "inferior", "izquierdo", "derecho"],
+      }),
+    ).toBe("Tensado de lona en los 4 lados · +100 mm por lado");
+  });
+
+  it("sin nombre ni preset, no inventa: dice qué es", () => {
+    expect(resumenModificacion({ ...BOLSILLO, subTipo: undefined })).toBe(
+      "Material extra en arriba y abajo · +100 mm por lado",
+    );
+  });
+
+  it("compat: una cotización vieja sigue leyéndose por su preset", () => {
     expect(resumenModificacion(BOLSILLO)).toBe(
       "Bolsillo en arriba y abajo · +100 mm por lado",
     );

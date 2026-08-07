@@ -1,7 +1,7 @@
 # Efectos de paso — lo que un paso le HACE al trabajo
 
-**Estado: F1–F3 IMPLEMENTADAS** (2026-08-07) — falta F4 (migrar las rutas del
-Backlight y el Frontlight, y podar `modificacion_pre` del catálogo). Convierte lo que hoy es exclusivo de la
+**Estado: COMPLETO** (2026-08-07) — F1 a F4 en el repo. `modificacion_pre` ya
+no existe: agrandar la medida es un efecto que declara cualquier paso real. Convierte lo que hoy es exclusivo de la
 familia `modificacion_pre` (agrandar la medida) en un **eje que cualquier
 paso puede declarar**.
 
@@ -220,10 +220,28 @@ regla de oro. La fusión lo corrige de paso.
   declara, medidos sobre la medida VISIBLE. Es la opción (c) del §7. El editor
   la ofrece sólo cuando el paso tiene el efecto configurado, y el ritmo se
   nombra "m de borde/h". Ninguna ruta la usa todavía — la elige F4.
-- **F4** — migración y poda: la ruta del Backlight pasa a 8 pasos ("Tensado
-  de lona" absorbe el efecto y sus 100 mm × 4 lados); el Frontlight suelta su
-  paso sin configurar; y recién ahí `modificacion_pre` sale del catálogo.
-  Golden master idéntico como juez de toda la migración.
+- **F4 — HECHA**: migración y poda. La ruta del Backlight pasó de 9 a 8 pasos:
+  "Tensado de lona" absorbió el efecto (100 mm × 4 lados, deja banda plana) y
+  cuenta su tiempo con la fuente de F3. El Frontlight comparte esa ruta, así
+  que soltó el paso al mismo tiempo. Después salieron del catálogo la familia,
+  su código en `FamiliaCodigo`, su regla de estación, la primitiva
+  `ml_union_visible` y los outputs `metros_lineales_union` /
+  `mutacion_aplicada` — todos sin dueño una vez podada la familia.
+
+  **La cotización SÍ se movió, y era el punto** (§7): −$3.776,35 sobre
+  $467.535,21 en el caso completo (−0,81 %). El delta está explicado al peso
+  en los 7 casos y son sólo dos renglones:
+
+  | | antes | ahora |
+  |---|---|---|
+  | "Demasía de tensado" | 8 min · $3.356,76 | *no existe* |
+  | "Tensado de lona" | 16 min · $6.713,51 (8,00 m de la lona agrandada) | 15 min · $6.293,92 (7,20 m del borde visible) |
+  | Impresión de lona | 2,8 m² · $47.851,66 | **idéntica** |
+
+  Que la impresión no se moviera es la prueba de que el efecto sigue
+  agrandando el material: la lona se sigue comprando grande, lo que dejó de
+  cobrarse es el paso fantasma y el 13 % de más que el tensado medía sobre la
+  pieza agrandada, contra la regla de oro del propio sistema.
 
 ## 10. Lo que queda por definir
 
