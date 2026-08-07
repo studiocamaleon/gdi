@@ -662,6 +662,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     clave: "quien.tercerizado",
     eje: "identidad",
     grupo: "identidad",
+    // A la derecha: el nombre del paso va primero (izquierda), quién lo hace
+    // después (derecha) — pedido del usuario.
+    orden: 1,
     etiqueta: "Quién lo hace",
     seccion: "quien",
     pregunta: "¿Quién hace este paso?",
@@ -724,6 +727,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     clave: "activacion.nombre",
     eje: "identidad",
     grupo: "identidad",
+    orden: 0,
     etiqueta: "Nombre del paso",
     seccion: "activacion",
     pregunta: "¿Cómo se llama este paso acá?",
@@ -2214,7 +2218,12 @@ const GRUPOS_IDENTIDAD: GrupoEje[] = [
   {
     id: "identidad",
     estilo: "campos",
-    columnas: "minmax(0, 1fr) minmax(0, 260px)",
+    // `encabezado: "arriba"` mata la barra vertical del costado (era de los
+    // campos "que cuelgan de una bifurcación") pero conserva las columnas:
+    // Nombre del paso a la izquierda, Quién lo hace (pills) a la derecha.
+    // auto-fit para que apilen prolijo cuando el panel es angosto.
+    encabezado: "arriba",
+    columnas: "repeat(auto-fit, minmax(240px, 1fr))",
   },
   {
     id: "proveedor",
