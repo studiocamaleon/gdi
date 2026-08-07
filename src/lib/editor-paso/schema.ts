@@ -2075,8 +2075,7 @@ export const GRUPOS_EJE_TIEMPO: GrupoEje[] = [
   {
     id: "ritmo",
     titulo: "Ritmo de trabajo",
-    ayuda:
-      "Cómo se mide la velocidad del paso. Es lo único que cambia los minutos por ítem.",
+    ayuda: "Es lo único que cambia los minutos por ítem.",
     estilo: "campos",
     columnas: "minmax(0, 1fr)",
   },
@@ -2088,7 +2087,7 @@ export const GRUPOS_EJE_TIEMPO: GrupoEje[] = [
         ? "Cuántas piezas procesa el paso. Con el tiempo cargado a mano no cambia los minutos, pero sí lo que el paso consume."
         : "Qué número multiplica al ritmo cuando entra una orden.",
     estilo: "campos",
-    columnas: "minmax(0, 1fr)",
+    columnas: "minmax(0, 360px)",
   },
   {
     // Último a propósito: es lo único opcional del eje. Primero se define
@@ -2097,7 +2096,7 @@ export const GRUPOS_EJE_TIEMPO: GrupoEje[] = [
     id: "ayudas",
     titulo: "Ayudas y validación",
     ayuda:
-      "Opcional. Sirve para que dos comerciales no coticen el mismo trabajo con tiempos muy distintos.",
+      "Opcional. Evita que dos comerciales coticen el mismo trabajo muy distinto.",
     estilo: "campos",
     columnas: "minmax(0, 1fr)",
   },

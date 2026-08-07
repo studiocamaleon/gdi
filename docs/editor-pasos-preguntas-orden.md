@@ -349,6 +349,18 @@ Tres ajustes de Lucas sobre la primera versión de esta rama:
   `tiempo_manual_requerido`). Es una propiedad de la pregunta, como el
   asterisco de un campo requerido.
 
+### El encabezado del bloque va al costado (Lucas)
+
+Título y ayuda del bloque ocupaban un renglón entero arriba de sus campos,
+teniendo ancho de sobra al lado. Ahora cada bloque es una grilla de dos
+columnas —encabezado angosto (140–200 px) + campos— y la card entra en la mitad
+del alto. Sirve para los cuatro bloques del eje, incluidos los del comercial.
+
+Efecto de segundo orden: la ayuda vive en una columna angosta, así que se
+acortó a **una** frase, y a la que aporta. "Cómo se mide la velocidad del paso.
+Es lo único que cambia los minutos por ítem." se quedó con la segunda mitad: la
+primera ya la dice el título del bloque.
+
 ## 6. Hallazgos abiertos
 
 Numerados para discutirlos de a uno. Ninguno implementado.

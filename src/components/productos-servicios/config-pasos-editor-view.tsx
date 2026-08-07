@@ -9345,13 +9345,24 @@ function TiempoComercialDetalladoEditor({
 
   const pregunta = (
     <div style={bloque}>
-      <div>
-        <div style={tituloStyle}>Qué se le pide al comercial</div>
-        <div style={hintStyle}>
-          Este texto aparece en el presupuesto, al lado del campo que tiene que
-          completar.
+      {/* Mismo armado que los bloques del eje: encabezado al costado de sus
+          campos, no arriba. */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(140px, 200px) minmax(0, 1fr)",
+          gap: 18,
+          alignItems: "start",
+        }}
+      >
+        <div>
+          <div style={tituloStyle}>Qué se le pide al comercial</div>
+          <div style={hintStyle}>
+            Este texto aparece en el presupuesto, al lado del campo que tiene
+            que completar.
+          </div>
         </div>
-      </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {/* La pregunta y su unidad van en la misma fila: el input de texto solo
           ocupaba un renglón entero sin necesitarlo. */}
       <div
@@ -9435,12 +9446,14 @@ function TiempoComercialDetalladoEditor({
       </label>
       {tiempoManualConfig.obligatorio === true &&
       tiempoManualDefaultMin == null ? (
-        <div style={{ fontSize: 11.5, color: "#b7791f", maxWidth: "64ch" }}>
+        <div style={{ fontSize: 11.5, color: "#b7791f" }}>
           Sin valor sugerido, la cotización queda bloqueada hasta que el
           comercial cargue el tiempo. Es lo esperable en pasos tipo láser —
           confirmá que es lo que querés.
         </div>
       ) : null}
+        </div>
+      </div>
     </div>
   );
 
@@ -10447,39 +10460,53 @@ function EjeGuiado({
                   : {}),
               }}
             >
-              {grupo.titulo ? (
-                <div>
-                  <div style={{ fontSize: 12.5, fontWeight: 600 }}>
-                    {grupo.titulo}
-                  </div>
-                  {grupo.ayuda ? (
-                    <div
-                      style={{
-                        fontSize: 11.5,
-                        color: "var(--muted-text, #6e6e76)",
-                        marginTop: 2,
-                        maxWidth: "64ch",
-                      }}
-                    >
-                      {typeof grupo.ayuda === "function"
-                        ? grupo.ayuda(ctx)
-                        : grupo.ayuda}
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
+              {/* El encabezado del bloque va al COSTADO de sus campos, no
+                  arriba: el eje tiene ancho de sobra y apilar título, ayuda y
+                  controles hacía la card el doble de alta de lo necesario. */}
               <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns:
-                    grupo.estilo === "campos"
-                      ? (grupo.columnas ??
-                        "repeat(auto-fit, minmax(230px, 1fr))")
-                      : "1fr",
-                  gap: 12,
-                  alignItems: "start",
-                }}
+                style={
+                  grupo.titulo
+                    ? {
+                        display: "grid",
+                        gridTemplateColumns: "minmax(140px, 200px) minmax(0, 1fr)",
+                        gap: 18,
+                        alignItems: "start",
+                      }
+                    : undefined
+                }
               >
+                {grupo.titulo ? (
+                  <div>
+                    <div style={{ fontSize: 12.5, fontWeight: 600 }}>
+                      {grupo.titulo}
+                    </div>
+                    {grupo.ayuda ? (
+                      <div
+                        style={{
+                          fontSize: 11.5,
+                          color: "var(--muted-text, #6e6e76)",
+                          marginTop: 2,
+                        }}
+                      >
+                        {typeof grupo.ayuda === "function"
+                          ? grupo.ayuda(ctx)
+                          : grupo.ayuda}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      grupo.estilo === "campos"
+                        ? (grupo.columnas ??
+                          "repeat(auto-fit, minmax(230px, 1fr))")
+                        : "1fr",
+                    gap: 12,
+                    alignItems: "start",
+                  }}
+                >
               {items.map((opcion) => (
                 <div
                   key={opcion.clave}
@@ -10526,6 +10553,7 @@ function EjeGuiado({
                   />
                 </div>
               ))}
+                </div>
               </div>
             </div>
           ))}
