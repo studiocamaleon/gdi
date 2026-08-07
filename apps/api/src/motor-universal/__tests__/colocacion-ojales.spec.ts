@@ -414,7 +414,7 @@ describe('calcularLayoutOjales', () => {
     const jc = lona();
     aplicarMutacionPre(
       jc,
-      { subTipo: 'refuerzo', lados: CUATRO_LADOS, demasiaMm: 40 },
+      { refuerza: true, lados: CUATRO_LADOS, mm: 40 },
       { rutaPasoId: 'rp-1', nombrePaso: 'Refuerzo' },
     );
 
@@ -434,7 +434,7 @@ describe('calcularLayoutOjales', () => {
     const jc = lona();
     aplicarMutacionPre(
       jc,
-      { subTipo: 'refuerzo', lados: CUATRO_LADOS, demasiaMm: 40 },
+      { refuerza: true, lados: CUATRO_LADOS, mm: 40 },
       { rutaPasoId: 'rp-1', nombrePaso: 'Refuerzo' },
     );
 
@@ -448,7 +448,7 @@ describe('calcularLayoutOjales', () => {
     const jc = lona();
     aplicarMutacionPre(
       jc,
-      { subTipo: 'bolsillo', lados: ['superior', 'inferior'], demasiaMm: 100 },
+      { refuerza: false, lados: ['superior', 'inferior'], mm: 100 },
       { rutaPasoId: 'rp-1', nombrePaso: 'Bolsillo' },
     );
 
@@ -464,12 +464,12 @@ describe('calcularLayoutOjales', () => {
     const jc = lona();
     aplicarMutacionPre(
       jc,
-      { subTipo: 'bolsillo', lados: ['superior', 'inferior'], demasiaMm: 100 },
+      { refuerza: false, lados: ['superior', 'inferior'], mm: 100 },
       { rutaPasoId: 'rp-1', nombrePaso: 'Bolsillo' },
     );
     aplicarMutacionPre(
       jc,
-      { subTipo: 'refuerzo', lados: ['izquierdo', 'derecho'], demasiaMm: 40 },
+      { refuerza: true, lados: ['izquierdo', 'derecho'], mm: 40 },
       { rutaPasoId: 'rp-2', nombrePaso: 'Refuerzo lateral' },
     );
 
@@ -511,7 +511,7 @@ describe('calcularCantidadOjales', () => {
 
     aplicarMutacionPre(
       jc,
-      { subTipo: 'refuerzo', lados: CUATRO_LADOS, demasiaMm: 40 },
+      { refuerza: true, lados: CUATRO_LADOS, mm: 40 },
       { rutaPasoId: 'rp-1', nombrePaso: 'Refuerzo perimetral' },
     );
 

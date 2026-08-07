@@ -12,6 +12,7 @@ import { proyectarPasoTenant } from './pasos/paso-tenant';
 import { resumenCapacidades } from './pasos/capacidades';
 
 import { outputsReferenciadosPorRegla } from './pasos/validacion-pre-pasada';
+import { declaraEfectoDemasia } from '../motor-universal/efectos-paso';
 import type {
   DefinicionFamiliaResuelta,
   FamiliaCodigo,
@@ -258,16 +259,18 @@ export class FamiliasPasosService {
       );
     }
 
-    // Una familia que muta medidas se resuelve ANTES del bucle, cuando todavía
-    // no corrió ningún paso: su condición no puede mirar un output canónico,
-    // porque daría falso y la mutación no se aplicaría en silencio.
-    if (familia.mutaMedidasEnPrePasada && dto.condicionActivacionJson) {
+    // [F1 efectos] Un paso con EFECTO sobre la medida se resuelve ANTES del
+    // bucle, cuando todavía no corrió nadie: su condición no puede mirar un
+    // output canónico, porque daría falso y el efecto no se aplicaría en
+    // silencio. La regla dejó de ser de la familia y pasó a ser del PASO:
+    // ahora cualquiera puede llevar el efecto. docs/efectos-de-paso-diseno.md
+    if (declaraEfectoDemasia(dto.paramsPasoJson) && dto.condicionActivacionJson) {
       const outputs = outputsReferenciadosPorRegla(dto.condicionActivacionJson);
       if (outputs.length > 0) {
         throw new BadRequestException(
-          `La condición de ${familiaCodigo} no puede depender de ${outputs.join(', ')}: ` +
-            'esta familia se resuelve antes que el resto de los pasos, así que ese ' +
-            'dato todavía no existe. Usá datos del pedido (medidas, cantidad, opciones).',
+          `La condición de este paso no puede depender de ${outputs.join(', ')}: ` +
+            'un paso que agranda la medida se resuelve antes que el resto, así que ' +
+            'ese dato todavía no existe. Usá datos del pedido (medidas, cantidad, opciones).',
         );
       }
     }

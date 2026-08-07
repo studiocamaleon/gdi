@@ -1,8 +1,8 @@
 import {
   aplicarMutacionPre,
   calcularMetrosLinealesUnion,
-  parsearParamsModificacionPre,
 } from '../modificaciones-pre';
+import { declaraEfectoDemasia, leerEfectoDemasia } from '../efectos-paso';
 import { congelarMedidaVisible } from '../job-context-metrics';
 import type { JobContext } from '../tipos';
 
@@ -19,45 +19,64 @@ function lona(cantidad = 1): JobContext {
   return jc;
 }
 
-describe('parsearParamsModificacionPre', () => {
-  it('lee lados y demasía, y normaliza el orden de los lados', () => {
+describe('leerEfectoDemasia', () => {
+  it('lee el formato NUEVO y normaliza el orden de los lados', () => {
     expect(
-      parsearParamsModificacionPre({
-        subTipo: 'bolsillo',
-        lados: ['inferior', 'superior'],
-        demasiaMm: 100,
+      leerEfectoDemasia({
+        efectos: {
+          demasiaMedida: {
+            lados: ['inferior', 'superior'],
+            mm: 100,
+            refuerza: false,
+          },
+        },
       }),
-    ).toEqual({
-      subTipo: 'bolsillo',
-      lados: ['superior', 'inferior'],
-      demasiaMm: 100,
-    });
+    ).toEqual({ lados: ['superior', 'inferior'], mm: 100, refuerza: false });
+  });
+
+  /** Compat: las rutas guardadas antes de los efectos tienen los campos en la
+   *  raíz de paramsPasoJson, con el preset en vez de la capacidad. */
+  it('lee el formato VIEJO y deriva `refuerza` del preset', () => {
+    expect(
+      leerEfectoDemasia({
+        subTipo: 'refuerzo',
+        lados: ['superior'],
+        demasiaMm: 40,
+      }),
+    ).toEqual({ lados: ['superior'], mm: 40, refuerza: true });
+
+    expect(
+      leerEfectoDemasia({
+        subTipo: 'bolsillo',
+        lados: ['superior'],
+        demasiaMm: 100,
+      })?.refuerza,
+    ).toBe(false);
   });
 
   it('descarta lados desconocidos', () => {
     expect(
-      parsearParamsModificacionPre({
-        lados: ['superior', 'diagonal'],
-        demasiaMm: 40,
-      })?.lados,
+      leerEfectoDemasia({ lados: ['superior', 'diagonal'], mm: 40 })?.lados,
     ).toEqual(['superior']);
   });
 
   it('devuelve null si no hay lados o la demasía no sirve', () => {
-    expect(parsearParamsModificacionPre({ demasiaMm: 100 })).toBeNull();
-    expect(parsearParamsModificacionPre({ lados: [] , demasiaMm: 100 })).toBeNull();
-    expect(
-      parsearParamsModificacionPre({ lados: ['superior'], demasiaMm: 0 }),
-    ).toBeNull();
-    expect(parsearParamsModificacionPre({ lados: ['superior'] })).toBeNull();
-    expect(parsearParamsModificacionPre(null)).toBeNull();
+    expect(leerEfectoDemasia({ mm: 100 })).toBeNull();
+    expect(leerEfectoDemasia({ lados: [], mm: 100 })).toBeNull();
+    expect(leerEfectoDemasia({ lados: ['superior'], mm: 0 })).toBeNull();
   });
+});
 
-  it('cae a refuerzo cuando no se declara subTipo', () => {
-    expect(
-      parsearParamsModificacionPre({ lados: ['superior'], demasiaMm: 40 })
-        ?.subTipo,
-    ).toBe('refuerzo');
+describe('declaraEfectoDemasia', () => {
+  it('distingue "no tiene efecto" de "lo quiso pero le falta un dato"', () => {
+    // Sin efecto: el paso se ignora en la pre-pasada.
+    expect(declaraEfectoDemasia({ tipoTrabajo: 'tensado' })).toBe(false);
+    // Con intención pero incompleto: el motor tiene que AVISAR, no cotizar
+    // de menos en silencio.
+    expect(declaraEfectoDemasia({ lados: ['superior'] })).toBe(true);
+    expect(declaraEfectoDemasia({ efectos: { demasiaMedida: { mm: 40 } } })).toBe(
+      true,
+    );
   });
 });
 
@@ -66,9 +85,7 @@ describe('calcularMetrosLinealesUnion', () => {
     const jc = lona();
     expect(
       calcularMetrosLinealesUnion(jc, {
-        subTipo: 'bolsillo',
         lados: ['superior', 'inferior'],
-        demasiaMm: 100,
       }),
     ).toBeCloseTo(3, 6);
   });
@@ -77,9 +94,7 @@ describe('calcularMetrosLinealesUnion', () => {
     const jc = lona();
     expect(
       calcularMetrosLinealesUnion(jc, {
-        subTipo: 'refuerzo',
         lados: ['superior', 'inferior', 'izquierdo', 'derecho'],
-        demasiaMm: 40,
       }),
     ).toBeCloseTo(5, 6);
   });
@@ -88,9 +103,7 @@ describe('calcularMetrosLinealesUnion', () => {
     const jc = lona(3);
     expect(
       calcularMetrosLinealesUnion(jc, {
-        subTipo: 'bolsillo',
         lados: ['superior', 'inferior'],
-        demasiaMm: 100,
       }),
     ).toBeCloseTo(9, 6);
   });
@@ -103,9 +116,7 @@ describe('calcularMetrosLinealesUnion', () => {
 
     expect(
       calcularMetrosLinealesUnion(jc, {
-        subTipo: 'refuerzo',
         lados: ['izquierdo', 'derecho'],
-        demasiaMm: 40,
       }),
       // Sobre la visible: 2 × 1000mm = 2.00 ml. Sobre la mutada daría 2.40.
     ).toBeCloseTo(2, 6);
@@ -120,7 +131,7 @@ describe('aplicarMutacionPre', () => {
 
     const traza = aplicarMutacionPre(
       jc,
-      { subTipo: 'bolsillo', lados: ['superior', 'inferior'], demasiaMm: 100 },
+      { refuerza: false, lados: ['superior', 'inferior'], mm: 100 },
       paso,
     );
 
@@ -137,7 +148,7 @@ describe('aplicarMutacionPre', () => {
 
     expect(traza).toMatchObject({
       rutaPasoId: 'rp-1',
-      subTipo: 'bolsillo',
+      refuerza: false,
       deltaAnchoMm: 0,
       deltaAltoMm: 200,
       metrosLinealesUnion: 3,
@@ -156,9 +167,9 @@ describe('aplicarMutacionPre', () => {
     aplicarMutacionPre(
       jc,
       {
-        subTipo: 'refuerzo',
+        refuerza: true,
         lados: ['superior', 'inferior', 'izquierdo', 'derecho'],
-        demasiaMm: 40,
+        mm: 40,
       },
       paso,
     );
@@ -177,12 +188,12 @@ describe('aplicarMutacionPre', () => {
 
     aplicarMutacionPre(
       jc,
-      { subTipo: 'bolsillo', lados: ['superior', 'inferior'], demasiaMm: 100 },
+      { refuerza: false, lados: ['superior', 'inferior'], mm: 100 },
       { rutaPasoId: 'rp-1', nombrePaso: 'Bolsillo' },
     );
     aplicarMutacionPre(
       jc,
-      { subTipo: 'refuerzo', lados: ['izquierdo', 'derecho'], demasiaMm: 40 },
+      { refuerza: true, lados: ['izquierdo', 'derecho'], mm: 40 },
       { rutaPasoId: 'rp-2', nombrePaso: 'Refuerzo lateral' },
     );
 
@@ -209,7 +220,7 @@ describe('aplicarMutacionPre', () => {
 
     const traza = aplicarMutacionPre(
       jc,
-      { subTipo: 'bolsillo', lados: ['superior'], demasiaMm: 100 },
+      { refuerza: false, lados: ['superior'], mm: 100 },
       paso,
     );
 
@@ -229,7 +240,7 @@ describe('aplicarMutacionPre', () => {
 
     aplicarMutacionPre(
       jc,
-      { subTipo: 'bolsillo', lados: ['superior', 'inferior'], demasiaMm: 100 },
+      { refuerza: false, lados: ['superior', 'inferior'], mm: 100 },
       paso,
     );
 
@@ -243,7 +254,7 @@ describe('aplicarMutacionPre', () => {
     expect(
       aplicarMutacionPre(
         jc,
-        { subTipo: 'bolsillo', lados: ['superior'], demasiaMm: 100 },
+        { refuerza: false, lados: ['superior'], mm: 100 },
         paso,
       ),
     ).toBeNull();

@@ -44,8 +44,13 @@ export type LadoPieza = 'superior' | 'inferior' | 'izquierdo' | 'derecho';
 export interface MutacionAplicada {
   rutaPasoId: string;
   nombrePaso: string;
-  /** Preset del paso: `bolsillo` | `refuerzo`. */
-  subTipo: string;
+  /** Preset del paso (`bolsillo` | `refuerzo`). LEGACY: lo escriben las
+   *  cotizaciones anteriores a los efectos de paso; se conserva para leer
+   *  snapshots históricos. Lo reemplaza `refuerza`. */
+  subTipo?: string;
+  /** La demasía deja banda plana perforable (refuerzo) vs un tubo (bolsillo).
+   *  Los ojales se centran sobre la banda. [F1 efectos] */
+  refuerza: boolean;
   lados: LadoPieza[];
   demasiaMm: number;
   /** Demasía total agregada a cada eje (demasiaMm × lados de ese eje). */

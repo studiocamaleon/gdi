@@ -1675,6 +1675,8 @@ const embalaje: DefinicionFamilia = {
 
 const trabajo_manual: DefinicionFamilia = {
   codigo: 'trabajo_manual',
+  // [F1 efectos] El paso puede exigirle demasía al trabajo.
+  efectosSoportados: ['demasiaMedida'],
   nombre: 'Trabajo manual',
   categoria: 'operaciones_manuales',
   descripcion:
@@ -1723,6 +1725,8 @@ const trabajo_manual: DefinicionFamilia = {
 
 const modificacion_pre: DefinicionFamilia = {
   codigo: 'modificacion_pre',
+  // [F1 efectos] El paso puede exigirle demasía al trabajo.
+  efectosSoportados: ['demasiaMedida'],
   // [P1] Antes: rama modificacion_pre en resolverCantidad del motor.
   primitivas: { cantidadPropia: 'ml_union_visible' },
   // [Tanda B] Antes: FAMILIAS_CON_PARAMS_EDITABLES en el frontend.
@@ -2227,6 +2231,15 @@ export function familiaPublicaOutput(
   return resolverFamilia(codigo)?.outputsCanonicos.includes(output) ?? false;
 }
 
+/** ¿Un paso de esta familia puede declarar este efecto? Gobierna la UI: el
+ *  motor aplica lo que el paso tenga configurado. [F1 efectos] */
+export function familiaSoportaEfecto(
+  codigo: string,
+  efecto: 'demasiaMedida',
+): boolean {
+  return resolverFamilia(codigo)?.efectosSoportados?.includes(efecto) ?? false;
+}
+
 /** Primitivas declaradas por la familia; null si no declara. [P1] */
 export function primitivasDeFamilia(
   codigo: string,
@@ -2317,14 +2330,6 @@ export function fuentePiezasNestingDeFamilia(
   const clave = seleccion || familia?.fuentePiezasDefault;
   if (!clave) return null;
   return fuentes[clave] ?? null;
-}
-
-/**
- * La familia muta medidas del JobContext y el motor la resuelve en la
- * PRE-PASADA, antes del bucle. Ver `mutaMedidasEnPrePasada` en types.ts.
- */
-export function familiaMutaMedidasEnPrePasada(familiaCodigo: string): boolean {
-  return resolverFamilia(familiaCodigo)?.mutaMedidasEnPrePasada === true;
 }
 
 /**

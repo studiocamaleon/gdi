@@ -627,6 +627,20 @@ export interface DefinicionFamilia {
    *  lista curada en el frontend] */
   editorParamsGenerico?: boolean;
 
+  // --- Efectos (docs/efectos-de-paso-diseno.md) ---
+  /**
+   * Efectos que un paso de esta familia PUEDE declarar: cosas que el paso le
+   * exige al trabajo, más allá de consumir tiempo y materiales.
+   *
+   *  - `demasiaMedida`: agranda la medida del trabajo (el tensado de una lona
+   *    necesita 100 mm por lado para envolver el bastidor).
+   *
+   * Gobierna qué ofrece el EDITOR; el motor aplica lo que el paso tenga
+   * configurado. Antes esto era `mutaMedidasEnPrePasada`, un flag exclusivo
+   * de la familia `modificacion_pre`.
+   */
+  efectosSoportados?: Array<'demasiaMedida'>;
+
   // --- Pre-pasada de medidas ---
   /**
    * La familia MUTA medidas del JobContext y el motor la resuelve en una

@@ -113,7 +113,6 @@ import {
 } from './job-context-metrics';
 import {
   camposExpuestosAlComercial,
-  familiaMutaMedidasEnPrePasada,
   familiaSinConsumiblesMaquina,
   magnitudTiempoDefaultDeFamilia,
   perfilCompatibleConFamilia,
@@ -122,10 +121,11 @@ import {
 import { resolverArrastreOpcionales } from './arrastre-opcionales';
 import { paramsEfectivos } from './params-runtime';
 import { regionalDelTenant } from '../common/regional';
+import { aplicarMutacionPre } from './modificaciones-pre';
 import {
-  aplicarMutacionPre,
-  parsearParamsModificacionPre,
-} from './modificaciones-pre';
+  declaraEfectoDemasia,
+  leerEfectoDemasia,
+} from './efectos-paso';
 import { calcularBarrasNecesarias } from './estructura-bastidor';
 import { runDerivador } from './derivadores';
 import {
@@ -590,32 +590,36 @@ export class MotorUniversalService {
       });
     }
 
-    // 1d. PRE-PASADA DE MEDIDAS — las familias que declaran
-    // `mutaMedidasEnPrePasada` aplican su demasía ANTES del bucle, sin importar
-    // dónde estén en la ruta. Así el modelador puede ordenar la ruta como se
-    // produce de verdad (una lona se imprime y DESPUÉS se refuerza) sin que la
-    // impresión cotice sobre la medida chica.
+    // 1d. PRE-PASADA DE MEDIDAS — los pasos que declaran el EFECTO
+    // `demasiaMedida` lo aplican ANTES del bucle, sin importar dónde estén en
+    // la ruta. Así el modelador puede ordenar la ruta como se produce de
+    // verdad (una lona se imprime y DESPUÉS se tensa) sin que la impresión
+    // cotice sobre la medida chica.
     //
-    // Es seguro porque esas familias no pueden depender de nada que publique un
-    // paso anterior: no soportan HEREDAR_DEL_OUTPUT_CANONICO y su regla
-    // CONDICIONAL no puede mirar outputs canónicos (`validacion-pre-pasada.ts`).
-    // Ver docs/modificaciones-fisicas-lona-diseno.md §6.1.
+    // [F1 efectos] El gate ya NO pregunta por la familia: pregunta si ESTE
+    // paso configuró el efecto. Así "Tensado de lona" —un trabajo real, con
+    // su tiempo y sus tornillos— declara los 100 mm que necesita, en vez de
+    // exigir un paso fantasma "Demasía de tensado" al lado.
+    // docs/efectos-de-paso-diseno.md
+    //
+    // Sigue siendo seguro porque un paso con efecto no puede condicionar su
+    // activación sobre outputs canónicos (`validacion-pre-pasada.ts`): acá
+    // todavía no corrió nadie y ese dato no existe.
     const mutacionesPrePasada = new Map<string, MutacionAplicada>();
     for (const paso of producto.pasos) {
-      if (!familiaMutaMedidasEnPrePasada(paso.familiaCodigo)) continue;
+      const paramsPaso = this.paramsEfectivosDelPaso(paso, jobContext);
+      if (!declaraEfectoDemasia(paramsPaso)) continue;
       const activacion = this.evaluarActivacion(paso, jobContext);
       if (!activacion.activado) continue;
 
       const nombrePaso = paso.nombreVisible ?? paso.familiaCodigo;
-      const params = parsearParamsModificacionPre(
-        this.paramsEfectivosDelPaso(paso, jobContext),
-      );
-      if (!params) {
+      const efecto = leerEfectoDemasia(paramsPaso);
+      if (!efecto) {
         // Corta la cotización a propósito: un PRE activo pero sin lados ni
         // demasía dejaría la medida de material sin agrandar y cobraría de
         // menos EN SILENCIO — justo lo que esta familia existe para evitar.
         errores.push({
-          codigo: 'modificacion_pre_mal_configurada',
+          codigo: 'efecto_demasia_mal_configurado',
           severidad: 'ERROR',
           rutaPasoId: paso.rutaPasoId,
           rutaPasoOrden: paso.rutaPasoOrden,
@@ -626,7 +630,7 @@ export class MotorUniversalService {
         });
         continue;
       }
-      const traza = aplicarMutacionPre(jobContext, params, {
+      const traza = aplicarMutacionPre(jobContext, efecto, {
         rutaPasoId: paso.rutaPasoId,
         nombrePaso,
       });

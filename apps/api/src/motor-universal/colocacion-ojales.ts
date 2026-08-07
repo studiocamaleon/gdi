@@ -31,8 +31,6 @@ export const DISTANCIA_BORDE_OJAL_MM_DEFAULT = 10;
  * puede perforar un ojal. El `bolsillo` queda afuera a propósito: es un tubo
  * para el caño, y centrar el ojal en él lo metería innecesariamente adentro.
  */
-export const SUBTIPOS_QUE_REFUERZAN = ['refuerzo'];
-
 export interface ParamsColocacionOjales {
   /** Separación MÁXIMA entre ojales. Se reparte pareja sin superarla. */
   separacionMaxMm: number;
@@ -294,7 +292,7 @@ export function calcularLayoutOjales(
   // El bolsillo es un tubo para el caño, no una zona reforzada, así que no
   // arrastra la posición del ojal.
   const demasia = demasiaAcumuladaPorLado(jobContext, {
-    soloSubTipos: SUBTIPOS_QUE_REFUERZAN,
+    soloQueRefuerzan: true,
   });
 
   return piezas.flatMap((pieza) => {

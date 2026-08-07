@@ -23,42 +23,12 @@ import {
 } from './job-context-metrics';
 import { LADOS_EJE_ALTO, largoDelLadoMm, parsearLados } from './lados-pieza';
 import type { JobContext, LadoPieza, MutacionAplicada } from './tipos';
-
-export interface ParamsModificacionPre {
-  /** Preset: `bolsillo` (lados horizontales, demasía grande) o `refuerzo`. */
-  subTipo: string;
-  lados: LadoPieza[];
-  demasiaMm: number;
-}
-
-/**
- * Lee y valida `paramsPasoJson` de un paso `modificacion_pre`.
- * Devuelve null si el paso está mal configurado (sin lados o sin demasía útil),
- * de modo que el motor pueda avisar en vez de mutar con basura.
- */
-export function parsearParamsModificacionPre(
-  paramsPasoJson: unknown,
-): ParamsModificacionPre | null {
-  const params = (paramsPasoJson ?? {}) as Record<string, unknown>;
-
-  const lados = parsearLados(params.lados);
-  if (lados.length === 0) return null;
-
-  const demasiaMm = Number(params.demasiaMm ?? NaN);
-  if (!Number.isFinite(demasiaMm) || demasiaMm <= 0) return null;
-
-  const subTipo =
-    typeof params.subTipo === 'string' && params.subTipo.trim()
-      ? params.subTipo.trim()
-      : 'refuerzo';
-
-  return { subTipo, lados, demasiaMm };
-}
+import type { EfectoDemasiaMedida } from './efectos-paso';
 
 /**
  * Demasía acumulada por lado de los pasos PRE ya ejecutados.
  *
- * Con `soloSubTipos` se puede acotar a un tipo de modificación. Lo usa
+ * Con `soloQueRefuerzan` se acota a las demasías que dejan banda plana. Lo usa
  * `colocacion_ojales` para mirar SÓLO el refuerzo: al doblarse hacia atrás, un
  * refuerzo deja sobre la pieza terminada una banda plana de su mismo ancho, y
  * el ojal se centra ahí. Un BOLSILLO no sirve para eso — es un tubo para el
@@ -66,7 +36,7 @@ export function parsearParamsModificacionPre(
  */
 export function demasiaAcumuladaPorLado(
   jobContext: JobContext,
-  opciones?: { soloSubTipos?: string[] },
+  opciones?: { soloQueRefuerzan?: boolean },
 ): Record<LadoPieza, number> {
   const total: Record<LadoPieza, number> = {
     superior: 0,
@@ -75,11 +45,15 @@ export function demasiaAcumuladaPorLado(
     derecho: 0,
   };
   for (const mutacion of jobContext.mutacionesAplicadas ?? []) {
-    if (
-      opciones?.soloSubTipos &&
-      !opciones.soloSubTipos.includes(mutacion.subTipo)
-    ) {
-      continue;
+    // [F1 efectos] Se filtra por la CAPACIDAD declarada (¿deja banda plana
+    // perforable?), no por el nombre del preset. Trazas históricas: si no
+    // traen `refuerza`, se deriva del viejo subTipo.
+    if (opciones?.soloQueRefuerzan) {
+      const refuerza =
+        typeof mutacion.refuerza === 'boolean'
+          ? mutacion.refuerza
+          : mutacion.subTipo === 'refuerzo';
+      if (!refuerza) continue;
     }
     for (const lado of mutacion.lados) {
       total[lado] += mutacion.demasiaMm;
@@ -99,7 +73,7 @@ export function demasiaAcumuladaPorLado(
  */
 export function calcularMetrosLinealesUnion(
   jobContext: JobContext,
-  params: ParamsModificacionPre,
+  params: { lados: LadoPieza[] },
 ): number {
   const piezas = jobContext.piezasVisibles ?? jobContext.piezas;
   if (!piezas || piezas.length === 0) return 0;
@@ -130,14 +104,14 @@ export function calcularMetrosLinealesUnion(
  */
 export function aplicarMutacionPre(
   jobContext: JobContext,
-  params: ParamsModificacionPre,
+  params: EfectoDemasiaMedida,
   paso: { rutaPasoId: string; nombrePaso: string },
 ): MutacionAplicada | null {
   if (!jobContext.piezas || jobContext.piezas.length === 0) return null;
 
   const ladosAlto = params.lados.filter((l) => LADOS_EJE_ALTO.includes(l));
-  const deltaAltoMm = ladosAlto.length * params.demasiaMm;
-  const deltaAnchoMm = (params.lados.length - ladosAlto.length) * params.demasiaMm;
+  const deltaAltoMm = ladosAlto.length * params.mm;
+  const deltaAnchoMm = (params.lados.length - ladosAlto.length) * params.mm;
 
   const metrosLinealesUnion = calcularMetrosLinealesUnion(jobContext, params);
 
@@ -160,9 +134,9 @@ export function aplicarMutacionPre(
   const traza: MutacionAplicada = {
     rutaPasoId: paso.rutaPasoId,
     nombrePaso: paso.nombrePaso,
-    subTipo: params.subTipo,
+    refuerza: params.refuerza,
     lados: params.lados,
-    demasiaMm: params.demasiaMm,
+    demasiaMm: params.mm,
     deltaAnchoMm,
     deltaAltoMm,
     metrosLinealesUnion,

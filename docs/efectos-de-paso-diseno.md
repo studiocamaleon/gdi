@@ -1,6 +1,7 @@
 # Efectos de paso — lo que un paso le HACE al trabajo
 
-**Estado: DISEÑO CERRADO** (2026-08-07) — listo para implementar F1. Convierte lo que hoy es exclusivo de la
+**Estado: F1 IMPLEMENTADA** (2026-08-07) — falta F2 (editor), F3 (tiempo) y F4
+(migrar rutas + podar `modificacion_pre`). Convierte lo que hoy es exclusivo de la
 familia `modificacion_pre` (agrandar la medida) en un **eje que cualquier
 paso puede declarar**.
 
@@ -199,9 +200,14 @@ regla de oro. La fusión lo corrige de paso.
 
 ## 9. Plan por etapas (protocolo golden en cada una)
 
-- **F1** — el eje: `efectos` en el paso + `efectosSoportados` en la ficha; la
-  pre-pasada recoge efectos en vez de familias. Sin cambiar ninguna ruta:
-  `modificacion_pre` declara el efecto y todo sigue igual.
+- **F1 — HECHA**: el eje existe. `efectos-paso.ts` lee el efecto del paso (formato
+  nuevo `efectos.demasiaMedida`, y compat con el viejo `lados`+`demasiaMm` de la
+  raíz, que es como están guardadas las rutas de hoy); la pre-pasada del motor
+  gatilla por `declaraEfectoDemasia(params)` en vez de por familia; la ficha
+  declara `efectosSoportados`. El `subTipo` bolsillo/refuerzo murió: en su lugar
+  el efecto declara la **capacidad** `refuerza` — "esta demasía deja una banda
+  plana perforable" — que es lo único que los ojales miraban. Ninguna ruta se
+  tocó: golden masters 148 y 7 idénticos.
 - **F2** — el editor: card "¿Este paso le exige algo al trabajo?" en los pasos
   cuya familia lo soporte, con lados + mm.
 - **F3** — el tiempo: resolver el punto abierto §7 y darle al paso su magnitud.

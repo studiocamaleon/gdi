@@ -6,10 +6,8 @@
  * `primitivas` y el motor despacha por estos registros — cero `if` por
  * familia en el motor.
  */
-import {
-  calcularMetrosLinealesUnion,
-  parsearParamsModificacionPre,
-} from '../modificaciones-pre';
+import { calcularMetrosLinealesUnion } from '../modificaciones-pre';
+import { leerEfectoDemasia } from '../efectos-paso';
 import { calculateSustratoToPliegoConversion } from '../../productos-servicios/nesting/helpers/sustrato-to-pliego';
 import type {
   PrimitivaAviso,
@@ -87,10 +85,11 @@ const guillotina_por_cortes: PrimitivaTiempoRun = (paso, jobContext, deps) => {
  * [P1: era la rama `modificacion_pre` de resolverCantidad]
  */
 const ml_union_visible: PrimitivaCantidadPropia = (paso, jobContext, deps) => {
-  const params = parsearParamsModificacionPre(
-    deps.paramsEfectivos(paso, jobContext),
-  );
-  if (params) return calcularMetrosLinealesUnion(jobContext, params);
+  // [F1 efectos] Lee el EFECTO del paso (formato nuevo o viejo), así el
+  // cálculo vale igual para "Demasía de tensado" que para el "Tensado de
+  // lona" que lo absorba en la migración.
+  const efecto = leerEfectoDemasia(deps.paramsEfectivos(paso, jobContext));
+  if (efecto) return calcularMetrosLinealesUnion(jobContext, efecto);
   return 0;
 };
 
