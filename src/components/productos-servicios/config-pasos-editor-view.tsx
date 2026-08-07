@@ -46,6 +46,7 @@ import {
 import { RuleBuilder } from "@/components/productos-servicios/rule-builder";
 import { PasoTercerizadoPanel } from "@/components/productos-servicios/paso-tercerizado-panel";
 import maq from "@/components/productos-servicios/en-que-maquina.module.css";
+import trab from "@/components/productos-servicios/el-trabajo.module.css";
 import {
   pendientesDePaso,
   type PendientePaso,
@@ -7995,66 +7996,176 @@ function AcomodadoDetalladoEditor({
                                       </div>
                                     </div>
 
-                                    <div className="ps-card">
-                                      <div className="ps-card-head">
-                                        <span className="ps-ic">
-                                          <svg
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth="1.7"
-                                          >
-                                            <rect
-                                              x="3"
-                                              y="3"
-                                              width="18"
-                                              height="18"
-                                              rx="2"
-                                            />
-                                            <rect
-                                              x="7"
-                                              y="7"
-                                              width="10"
-                                              height="10"
-                                              rx="1"
-                                              strokeDasharray="2 2"
-                                            />
-                                          </svg>
-                                        </span>
-                                        <span className="ps-tt">
+                                    <div className={trab.root}>
+                                      <div
+                                        className={`${trab.sec} ${trab.secLast}`}
+                                      >
+                                        <h4 className={trab.h4}>
                                           Márgenes del pliego
-                                        </span>
-                                      </div>
-                                      <div className="ps-card-body">
-                                        <div className="ps-margins-grid">
-                                          <div>
-                                            <div className="ps-mbox-t">
-                                              Margen extra del pliego
-                                            </div>
-                                            <p className="ps-mbox-help">
-                                              Se suma al margen de máquina. No
-                                              cambia la separación entre
-                                              piezas.
-                                            </p>
-                                            <div className="ps-bm">
+                                        </h4>
+                                        <p className={trab.hint}>
+                                          Bordes del material que el nesting no
+                                          puede usar. Se acumulan: primero el de
+                                          la máquina, después el de este paso.
+                                        </p>
+                                        <div className={trab.marg}>
+                                          {(() => {
+                                            const lados = [
+                                              ["topMm", "Sup."],
+                                              ["rightMm", "Der."],
+                                              ["bottomMm", "Inf."],
+                                              ["leftMm", "Izq."],
+                                            ] as const;
+                                            const marginOverride = lados.some(
+                                              ([k]) => nestingMargins[k] != null,
+                                            );
+                                            const cm = (k: string) =>
+                                              formatNumber(
+                                                (Number(
+                                                  (
+                                                    machineMargins as Record<
+                                                      string,
+                                                      unknown
+                                                    >
+                                                  )[k],
+                                                ) || 0) / 10,
+                                              );
+                                            return (
+                                              <div className={trab.mgrp}>
+                                                <span>
+                                                  <span className={trab.mgrpa}>
+                                                    No imprimible
+                                                    <span
+                                                      className={trab.pill}
+                                                    >
+                                                      heredado {cm("topMm")} ·{" "}
+                                                      {cm("rightMm")} ·{" "}
+                                                      {cm("bottomMm")} ·{" "}
+                                                      {cm("leftMm")} cm
+                                                    </span>
+                                                  </span>
+                                                  <span className={trab.mgrpb}>
+                                                    Lo impone el cabezal:
+                                                    ninguna máquina imprime al
+                                                    ras del borde. Viene de la
+                                                    máquina preferida — editá
+                                                    solo si esta ruta usa un
+                                                    borde distinto.
+                                                  </span>
+                                                  {marginOverride ? (
+                                                    <span
+                                                      className={trab.inhrow}
+                                                    >
+                                                      <span>
+                                                        Sobrescribís el margen
+                                                        de la máquina.
+                                                      </span>
+                                                      <button
+                                                        type="button"
+                                                        className={trab.lnk}
+                                                        onClick={() =>
+                                                          updateNestingMargins(
+                                                            pasoId,
+                                                            {
+                                                              topMm: null,
+                                                              rightMm: null,
+                                                              bottomMm: null,
+                                                              leftMm: null,
+                                                            },
+                                                          )
+                                                        }
+                                                      >
+                                                        Volver al heredado
+                                                      </button>
+                                                    </span>
+                                                  ) : null}
+                                                </span>
+                                                <span className={trab.mfields}>
+                                                  {lados.map(([key, label]) => (
+                                                    <span
+                                                      key={key}
+                                                      className={trab.mf}
+                                                    >
+                                                      <span
+                                                        className={trab.mfk}
+                                                      >
+                                                        {label}
+                                                      </span>
+                                                      <span
+                                                        className={trab.ctl}
+                                                      >
+                                                        <input
+                                                          className={trab.num}
+                                                          inputMode="decimal"
+                                                          value={mmToCmInput(
+                                                            getResolvedNestingNumber(
+                                                              nestingMargins[
+                                                                key
+                                                              ],
+                                                              machineMargins[
+                                                                key as keyof typeof machineMargins
+                                                              ],
+                                                              0,
+                                                            ),
+                                                          )}
+                                                          onChange={(e) =>
+                                                            updateNestingMargins(
+                                                              pasoId,
+                                                              {
+                                                                [key]:
+                                                                  cmInputToMm(
+                                                                    e.target
+                                                                      .value,
+                                                                  ),
+                                                              },
+                                                            )
+                                                          }
+                                                        />
+                                                        <span
+                                                          className={trab.u}
+                                                        >
+                                                          cm
+                                                        </span>
+                                                      </span>
+                                                    </span>
+                                                  ))}
+                                                </span>
+                                              </div>
+                                            );
+                                          })()}
+                                          <div className={trab.mgrp}>
+                                            <span>
+                                              <span className={trab.mgrpa}>
+                                                Extra de este paso
+                                              </span>
+                                              <span className={trab.mgrpb}>
+                                                Se suma al anterior y sale del
+                                                área útil, pero no cambia la
+                                                separación entre piezas. Sirve
+                                                para pinza, agarre o refilado
+                                                posterior.
+                                              </span>
+                                            </span>
+                                            <span className={trab.mfields}>
                                               {(
                                                 [
-                                                  ["topMm", "Sup.", "ps-bm-top"],
-                                                  ["leftMm", "Izq.", "ps-bm-left"],
-                                                  ["rightMm", "Der.", "ps-bm-right"],
-                                                  ["bottomMm", "Inf.", "ps-bm-bot"],
+                                                  ["topMm", "Sup."],
+                                                  ["rightMm", "Der."],
+                                                  ["bottomMm", "Inf."],
+                                                  ["leftMm", "Izq."],
                                                 ] as const
-                                              ).map(([key, label, pos]) => (
-                                                <div
+                                              ).map(([key, label]) => (
+                                                <span
                                                   key={key}
-                                                  className={`ps-mini ${pos}`}
+                                                  className={trab.mf}
                                                 >
-                                                  <label>{label}</label>
-                                                  <div className="ps-box">
-                                                    <Input
-                                                      type="number"
-                                                      min={0}
-                                                      step={0.5}
+                                                  <span className={trab.mfk}>
+                                                    {label}
+                                                  </span>
+                                                  <span className={trab.ctl}>
+                                                    <input
+                                                      className={trab.num}
+                                                      inputMode="decimal"
                                                       value={String(
                                                         nestingExtraMargins[
                                                           key
@@ -8065,8 +8176,8 @@ function AcomodadoDetalladoEditor({
                                                           pasoId,
                                                           {
                                                             [key]:
-                                                              e.target
-                                                                .value === ""
+                                                              e.target.value ===
+                                                              ""
                                                                 ? null
                                                                 : Number(
                                                                     e.target
@@ -8077,87 +8188,13 @@ function AcomodadoDetalladoEditor({
                                                       }
                                                       placeholder="0"
                                                     />
-                                                    <span className="ps-u">
+                                                    <span className={trab.u}>
                                                       mm
                                                     </span>
-                                                  </div>
-                                                </div>
-                                              ))}
-                                              <div className="ps-bm-sheet">
-                                                <div className="ps-sheet">
-                                                  <div className="ps-inner" />
-                                                  <span className="ps-lbl">
-                                                    Pliego
                                                   </span>
-                                                </div>
-                                              </div>
-                                            </div>
-                                          </div>
-                                          <div>
-                                            <div className="ps-mbox-t">
-                                              Márgenes no imprimibles
-                                            </div>
-                                            <p className="ps-mbox-help">
-                                              Margen técnico efectivo. Si lo
-                                              editás, sobrescribe el heredado
-                                              de la máquina.
-                                            </p>
-                                            <div className="ps-bm">
-                                              {(
-                                                [
-                                                  ["topMm", "Sup.", "ps-bm-top"],
-                                                  ["leftMm", "Izq.", "ps-bm-left"],
-                                                  ["rightMm", "Der.", "ps-bm-right"],
-                                                  ["bottomMm", "Inf.", "ps-bm-bot"],
-                                                ] as const
-                                              ).map(([key, label, pos]) => (
-                                                <div
-                                                  key={key}
-                                                  className={`ps-mini ${pos}`}
-                                                >
-                                                  <label>{label}</label>
-                                                  <div className="ps-box">
-                                                    <Input
-                                                      type="number"
-                                                      min={0}
-                                                      step={0.1}
-                                                      value={mmToCmInput(
-                                                        getResolvedNestingNumber(
-                                                          nestingMargins[key],
-                                                          machineMargins[
-                                                            key as keyof typeof machineMargins
-                                                          ],
-                                                          0,
-                                                        ),
-                                                      )}
-                                                      onChange={(e) =>
-                                                        updateNestingMargins(
-                                                          pasoId,
-                                                          {
-                                                            [key]: cmInputToMm(
-                                                              e.target.value,
-                                                            ),
-                                                          },
-                                                        )
-                                                      }
-                                                    />
-                                                    <span className="ps-u">
-                                                      cm
-                                                    </span>
-                                                  </div>
-                                                </div>
+                                                </span>
                                               ))}
-                                              <div className="ps-bm-sheet">
-                                                <div className="ps-sheet blue">
-                                                  <div className="ps-inner" />
-                                                  <span className="ps-lbl">
-                                                    Área
-                                                    <br />
-                                                    imprimible
-                                                  </span>
-                                                </div>
-                                              </div>
-                                            </div>
+                                            </span>
                                           </div>
                                         </div>
                                       </div>
