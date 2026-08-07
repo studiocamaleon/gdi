@@ -12228,24 +12228,106 @@ function SeccionesEsquemaPaso({
                     </div>
                   );
                 })()}
-                {/* Ajustes del trabajo (sub-fase D): setup/cleanup +
-                    el card de Acomodado del detallado. */}
-                <EjeGuiado
-                  titulo="El trabajo"
-                  subtitulo="Cómo se acomoda en el material y con qué parámetros trabaja el paso."
-                  opciones={opcionesDeEje("trabajo", ctx)}
-                  grupos={GRUPOS_EJE.trabajo}
-                  fijo
-                  resumenPrincipal={[
-                    "oficio.acomodado",
-                    "oficio.params_familia",
-                    "oficio.efectos",
-                  ]}
-                  ctx={ctx}
-                  pendientesVivos={pendientesVivos}
-                  onAplicar={onAplicar}
-                  renderComponente={renderComponente}
-                />
+                {/* El trabajo: acomodado + parámetros del oficio. Si el paso no
+                    configura nada propio, el caso vacío del diseño en vez de
+                    esconder la sección (El trabajo.html · c-vacio). */}
+                {opcionesDeEje("trabajo", ctx).length > 0 ? (
+                  <EjeGuiado
+                    titulo="El trabajo"
+                    subtitulo="Cómo se acomoda en el material y con qué parámetros trabaja el paso."
+                    opciones={opcionesDeEje("trabajo", ctx)}
+                    grupos={GRUPOS_EJE.trabajo}
+                    fijo
+                    resumenPrincipal={[
+                      "oficio.acomodado",
+                      "oficio.params_familia",
+                      "oficio.efectos",
+                    ]}
+                    ctx={ctx}
+                    pendientesVivos={pendientesVivos}
+                    onAplicar={onAplicar}
+                    renderComponente={renderComponente}
+                  />
+                ) : (
+                  <div
+                    className={trab.root}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 10,
+                    }}
+                  >
+                    <div style={{ padding: "2px 2px 0" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 7,
+                          fontSize: 15,
+                          fontWeight: 650,
+                        }}
+                      >
+                        <span
+                          aria-hidden
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            width: 16,
+                            height: 16,
+                            borderRadius: "50%",
+                            flexShrink: 0,
+                            background: "#22a06b",
+                            color: "#fff",
+                          }}
+                        >
+                          <CheckIcon className="size-2.5" strokeWidth={3.2} />
+                        </span>
+                        El trabajo
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 12.5,
+                          color: "var(--muted-text, #6e6e76)",
+                          marginTop: 2,
+                          marginLeft: 23,
+                        }}
+                      >
+                        Este paso no configura nada propio.
+                      </div>
+                    </div>
+                    <div className={trab.empty}>
+                      <span className={trab.emptyIc}>
+                        <svg
+                          width="17"
+                          height="17"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.6"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <rect x="3" y="3" width="18" height="18" rx="2" />
+                          <path d="M8 8h8v8H8z" strokeDasharray="2 2" />
+                        </svg>
+                      </span>
+                      <div>
+                        <div className={trab.emptyT}>
+                          Trabaja sobre la medida que le llega
+                        </div>
+                        <div className={trab.emptyD}>
+                          Este paso no acomoda ni parametriza nada: toma la pieza
+                          como viene del paso anterior. Si necesita que llegue
+                          más grande — para agarre, pinza o refilado — pedí ese
+                          material acá.
+                        </div>
+                      </div>
+                      <div className={trab.emptySp} />
+                      {renderComponente("agregar-slot")}
+                    </div>
+                  </div>
+                )}
 
                 <EjeGuiado
                   titulo="Cuánto tarda"
