@@ -1577,6 +1577,26 @@ function MaterialSearchSelect({
                 disabled={selected}
               >
                 <span
+                  aria-hidden
+                  style={{
+                    width: 15,
+                    height: 15,
+                    borderRadius: 4,
+                    flexShrink: 0,
+                    display: "grid",
+                    placeItems: "center",
+                    border: selected
+                      ? "1.5px solid var(--fg, #14141a)"
+                      : "1.5px solid var(--hairline-strong, #c8c4ba)",
+                    background: selected ? "var(--fg, #14141a)" : "transparent",
+                    color: "#fff",
+                  }}
+                >
+                  {selected ? (
+                    <CheckIcon className="size-2.5" strokeWidth={3.4} />
+                  ) : null}
+                </span>
+                <span
                   className="ps-mat-chip"
                   style={{ background: chip.bg }}
                 >
@@ -8395,15 +8415,14 @@ function CandidatosSlotDetalladoEditor({
                                                               </button>
                                                             </div>
                                                             <div className="ps-sel-body">
-                                                            <label className="mb-3 flex cursor-pointer select-none items-center gap-2">
-                                                              <input
-                                                                type="checkbox"
+                                                            <label className="mb-3 flex cursor-pointer select-none items-center gap-2.5">
+                                                              <Switch
                                                                 checked={
                                                                   candidate.todasLasVariantes ??
                                                                   false
                                                                 }
-                                                                onChange={(
-                                                                  event,
+                                                                onCheckedChange={(
+                                                                  valor,
                                                                 ) =>
                                                                   updateSlotCandidate(
                                                                     pasoId,
@@ -8411,17 +8430,14 @@ function CandidatosSlotDetalladoEditor({
                                                                     candidate.materiaPrimaId,
                                                                     {
                                                                       todasLasVariantes:
-                                                                        event
-                                                                          .target
-                                                                          .checked,
+                                                                        valor,
                                                                     },
                                                                   )
                                                                 }
                                                               />
                                                               <span className="text-[13px] font-medium">
                                                                 Usar todas las
-                                                                variantes del
-                                                                material
+                                                                variantes activas
                                                               </span>
                                                             </label>
                                                             {candidate.todasLasVariantes ? (
@@ -8568,6 +8584,11 @@ function CandidatosSlotDetalladoEditor({
                                                                 </div>
                                                               )
                                                             ) : null}
+                                                            {/* Sin variantes cargadas no hay default posible: mostrar
+                                                                el select vacío decía "Valor no disponible". El aviso de
+                                                                arriba ("sin variantes habilitadas") ya cubre el caso. */}
+                                                            {variantOptions.length >
+                                                            0 ? (
                                                             <div className="space-y-1">
                                                               <Label className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
                                                                 Variante
@@ -8603,6 +8624,7 @@ function CandidatosSlotDetalladoEditor({
                                                                 contentClassName="min-w-[520px]"
                                                               />
                                                             </div>
+                                                            ) : null}
                                                             </div>
                                                           </div>
                                                         );
