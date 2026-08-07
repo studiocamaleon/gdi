@@ -229,7 +229,7 @@ export interface OpcionPaso {
    * la pregunta larga ya la contesta el título del grupo: "¿En qué centro
    * productivo se realiza este paso?" se vuelve "Centro productivo".
    */
-  etiqueta?: string;
+  etiqueta?: string | ((ctx: ContextoOpcion) => string);
   /** Sub-bloque del eje al que pertenece (id de un `GrupoEje`). */
   grupo?: string;
   /** Dentro del eje ocupa la fila entera: los controles anchos (el ritmo con
@@ -359,6 +359,11 @@ function unidadCantidadEfectiva(ctx: ContextoOpcion): string | null {
 }
 
 function ritmoModoEfectivo(ctx: ContextoOpcion): string {
+  // Un paso con horas cargadas ES de tiempo fijo, aunque tenga guardado otro
+  // modo: el motor le da prioridad a `horasEstimadas` sobre el ritmo. Mostrar
+  // "Productividad por hora" ahí sería mentir sobre lo que va a pasar.
+  const horas = Number(ctx.paramsPaso.horasEstimadas ?? NaN);
+  if (Number.isFinite(horas) && horas > 0) return "tiempo_fijo";
   const raw = ctx.paramsPaso.timeCalculationMode;
   const valor =
     typeof raw === "string"
@@ -971,7 +976,12 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
       valor: (ctx) => ritmoModoEfectivo(ctx),
       aplicar: (_ctx, v) => ({
         tipo: "params",
-        patch: { timeCalculationMode: v },
+        // Salir de tiempo fijo tiene que BORRAR las horas: si quedan, el
+        // motor las sigue prefiriendo y el ritmo elegido no se usaría.
+        patch:
+          v === "tiempo_fijo"
+            ? { timeCalculationMode: v }
+            : { timeCalculationMode: v, horasEstimadas: null },
       }),
     },
   },
@@ -980,7 +990,10 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     seccion: "tiempo",
     anchoCompleto: true,
     grupo: "ritmo",
-    etiqueta: "Ritmo",
+    // En tiempo fijo el campo son horas por orden, no un ritmo: la etiqueta
+    // sigue al modo elegido.
+    etiqueta: (ctx) =>
+      ritmoModoEfectivo(ctx) === "tiempo_fijo" ? "Horas por orden" : "Ritmo",
     pregunta: "¿A qué ritmo?",
     ayuda:
       "Cuánto produce el paso por hora. No es por persona: sumar gente no lo acelera (ver Dónde se hace). Si el paso ya declara un ritmo, se usa ese.",
@@ -1139,9 +1152,15 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     grupo: "ritmo",
     etiqueta: "El ritmo cuenta",
     pregunta: "¿El ritmo cuenta piezas, m² o metros?",
+    // En productividad la magnitud ya viaja en la misma oración del ritmo
+    // ("30 metros de borde por hora"): repetirla acá era preguntar dos veces
+    // lo mismo. En tanda y tiempo fijo no hay oración, así que sigue.
     ayuda:
       "Qué magnitud cronometra la productividad: cantidad, área, metros lineales o perímetro.",
-    visible: (ctx) => esT2(ctx) && !comercialEstimaTiempo(ctx),
+    visible: (ctx) =>
+      esT2(ctx) &&
+      !comercialEstimaTiempo(ctx) &&
+      ritmoModoEfectivo(ctx) === "batch_time",
     resumen: (ctx) => {
       const fuente = fuenteRitmoEfectiva(ctx);
       const base =

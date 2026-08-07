@@ -74,7 +74,6 @@ import {
   TALONARIO_MODE_OPTIONS,
   T2_PRODUCTIVITY_UNIT_OPTIONS,
   normalizeT2ProductivityUnit,
-  t2ProductivityUnitOptions,
   etiquetaFuenteDerivada,
   T2_TIME_CALCULATION_MODE_OPTIONS,
   TIEMPO_MANUAL_UNIDAD_OPTIONS,
@@ -85,6 +84,7 @@ import {
   getDefaultT2QuantitySource,
   getDefaultMecanismoCantidad,
   getT2QuantitySourceOptions,
+  getRitmoMagnitudOptions,
   getTiempoManualConfig,
   isConsumibleMaquinaSlot,
   requiereMecanismoCantidad,
@@ -8723,7 +8723,7 @@ function RitmoGuiado({
   familia,
   onParams,
 }: {
-  variante: "productividad" | "batch";
+  variante: "productividad" | "batch" | "fijo";
   pasoId: string;
   cfg: UpsertConfigPasoPayload;
   familia: FamiliaListItem | undefined;
@@ -8772,9 +8772,39 @@ function RitmoGuiado({
     fontSize: 12.5,
     color: "var(--muted-text, #6e6e76)",
   };
+  const magnitudes = getRitmoMagnitudOptions(
+    familia,
+    params,
+    unidadCantidad,
+  );
+  const magnitudActual = `${unidad}|${fuente}`;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      {variante === "productividad" ? (
+      {variante === "fijo" ? (
+        // Tiempo fijo: el paso tarda lo mismo sin importar la cantidad. Se
+        // guarda en `horasEstimadas`, que el motor prefiere sobre el ritmo.
+        <div style={filaStyle}>
+          <Input
+            value={horasTexto}
+            onChange={(e) => {
+              setHorasTexto(e.target.value);
+              const n = Number(e.target.value);
+              onParams(pasoId, {
+                horasEstimadas:
+                  e.target.value.trim() !== "" && Number.isFinite(n) && n >= 0
+                    ? n
+                    : null,
+              });
+            }}
+            placeholder="Ej: 1,5"
+            inputMode="decimal"
+            style={{ maxWidth: 110 }}
+          />
+          <span style={notaStyle}>h por orden, sin importar la cantidad</span>
+        </div>
+      ) : variante === "productividad" ? (
+        // Una sola oración: "30 metros de borde por hora". La magnitud trae
+        // su unidad puesta, así no hay que acertar la combinación.
         <div style={filaStyle}>
           <Input
             value={ritmoTexto}
@@ -8786,15 +8816,31 @@ function RitmoGuiado({
             }}
             placeholder={
               familia?.defaults?.productividadHora
-                ? `Usando el ritmo del paso: ${familia.defaults.productividadHora}/h`
+                ? `${familia.defaults.productividadHora}`
                 : "Ej: 60"
             }
             inputMode="decimal"
-            style={{ maxWidth: 220 }}
+            style={{ maxWidth: 92, textAlign: "right" }}
           />
-          <span style={notaStyle}>
-            {getT2ProductivityUnitSuffix(unidad, fuente, unidadCantidad)}
-          </span>
+          <div style={{ minWidth: 190 }}>
+            <HumanSelect
+              value={magnitudActual}
+              onValueChange={(value) => {
+                const elegida = magnitudes.find((m) => m.value === value);
+                if (!elegida) return;
+                onParams(pasoId, {
+                  productivityUnit: elegida.unidad,
+                  productivityQuantitySource: elegida.fuente,
+                });
+              }}
+              options={magnitudes.map((m) => ({
+                value: m.value,
+                label: m.label,
+              }))}
+              placeholder="Elegir magnitud"
+            />
+          </div>
+          <span style={notaStyle}>por hora</span>
         </div>
       ) : (
         <div style={filaStyle}>
@@ -8824,21 +8870,6 @@ function RitmoGuiado({
           <span style={notaStyle}>min</span>
         </div>
       )}
-      <div style={filaStyle}>
-        <span style={notaStyle}>Unidad:</span>
-        <HumanSelect
-          value={unidad}
-          onValueChange={(value) => {
-            const nextUnit = value || getDefaultT2ProductivityUnit(familia);
-            onParams(pasoId, {
-              productivityUnit: nextUnit,
-              productivityQuantitySource: getDefaultT2QuantitySource(familia, nextUnit),
-            });
-          }}
-          options={t2ProductivityUnitOptions(unidadCantidad)}
-          placeholder="Elegir unidad"
-        />
-      </div>
       {/* Cómo lo guarda el sistema: el modelador escribe "30 m de borde/h" y
           adentro queda `ml/h`. Decirlo evita la sorpresa de ver otra unidad
           en la ficha del paso o en un export. */}
@@ -8867,33 +8898,6 @@ function RitmoGuiado({
           </b>
         </div>
       ) : null}
-      {/* Paridad con el detallado: el escape de tiempo fijo del ritmo
-          (horasEstimadas) — si se completa, el motor lo usa y no calcula
-          por ritmo. Es un escape, así que va al pie y en chico. */}
-      <div style={{ ...filaStyle, gap: 7 }}>
-        <span style={{ ...notaStyle, fontSize: 11.5 }}>
-          O un tiempo fijo estimado:
-        </span>
-        <Input
-          value={horasTexto}
-          onChange={(e) => {
-            setHorasTexto(e.target.value);
-            const n = Number(e.target.value);
-            onParams(pasoId, {
-              horasEstimadas:
-                e.target.value.trim() !== "" && Number.isFinite(n) && n >= 0
-                  ? n
-                  : null,
-            });
-          }}
-          placeholder="Opcional"
-          inputMode="decimal"
-          style={{ maxWidth: 92, height: 30 }}
-        />
-        <span style={{ ...notaStyle, fontSize: 11.5 }}>
-          h — si lo completás, no se calcula por ritmo
-        </span>
-      </div>
     </div>
   );
 }
@@ -10323,7 +10327,10 @@ function EjeGuiado({
     { grupo: { id: "__resto" } as GrupoEje, items: opciones.filter((op) => !op.grupo) },
   ].filter((g) => g.items.length > 0);
 
-  const etiquetaDe = (op: OpcionPaso) => op.etiqueta ?? op.pregunta;
+  const etiquetaDe = (op: OpcionPaso) =>
+    typeof op.etiqueta === "function"
+      ? op.etiqueta(ctx)
+      : (op.etiqueta ?? op.pregunta);
 
   return (
     <div
@@ -11234,10 +11241,20 @@ function SeccionesEsquemaPaso({
             );
           }
           if (id === "ritmo-productividad" || id === "ritmo-batch") {
+            const horasCargadas = Number(
+              asRecord(cfg.paramsPasoJson).horasEstimadas ?? NaN,
+            );
             return (
               <RitmoGuiado
                 variante={
-                  id === "ritmo-batch" ? "batch" : "productividad"
+                  id === "ritmo-batch"
+                    ? "batch"
+                    : Number.isFinite(horasCargadas) && horasCargadas > 0
+                      ? "fijo"
+                      : asRecord(cfg.paramsPasoJson).timeCalculationMode ===
+                          "tiempo_fijo"
+                        ? "fijo"
+                        : "productividad"
                 }
                 pasoId={pasoActual.id}
                 cfg={cfg}

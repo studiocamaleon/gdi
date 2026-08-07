@@ -69,24 +69,6 @@ export const T2_PRODUCTIVITY_UNIT_OPTIONS = [
   },
 ];
 
-/**
- * Opciones del selector de unidad del ritmo, con la primera opción NOMBRADA
- * cuando el sistema sabe qué cuenta el paso (T3b): "Lo que cuenta el paso
- * (ml de perfil)" le gana a un genérico "Unidades o pliegos/h" que obliga a
- * adivinar.
- */
-export function t2ProductivityUnitOptions(unidadCantidad?: string | null) {
-  if (!unidadCantidad) return T2_PRODUCTIVITY_UNIT_OPTIONS;
-  return T2_PRODUCTIVITY_UNIT_OPTIONS.map((option) =>
-    option.value === "unidades_h"
-      ? {
-          ...option,
-          label: `Lo que cuenta el paso (${unidadCantidad})`,
-          description: `La cantidad del paso son ${unidadCantidad}: el ritmo se mide ahí.`,
-        }
-      : option,
-  );
-}
 
 export const T2_TIME_CALCULATION_MODE_OPTIONS = [
   {
@@ -98,6 +80,16 @@ export const T2_TIME_CALCULATION_MODE_OPTIONS = [
     value: "batch_time",
     label: "Tiempo por lote",
     description: "Ejemplo: 2 pliegos cada 1 minuto.",
+  },
+  {
+    // El tiempo fijo del paso vivía escondido como un escape al pie del
+    // ritmo ("o un tiempo fijo estimado"). Es un modo, no una nota al pie:
+    // el motor le da prioridad sobre el ritmo. Se guarda en `horasEstimadas`
+    // como siempre; `timeCalculationMode: "tiempo_fijo"` sólo declara la
+    // intención (el motor lo trata como "no es por lote", que es correcto).
+    value: "tiempo_fijo",
+    label: "Tiempo fijo",
+    description: "Ejemplo: 1,5 h por orden, sin importar la cantidad.",
   },
 ];
 
@@ -351,6 +343,63 @@ export function getT2QuantitySourceOptions(
     ),
     ...derivadas,
   ];
+}
+
+/**
+ * Las magnitudes con las que se puede medir el ritmo, con su unidad puesta.
+ *
+ * Antes eran DOS controles: "Unidad" (ml/h, m²/h, unid./h) y "el ritmo cuenta"
+ * (de dónde sale el número). Para el modelador es una sola idea —"30 metros de
+ * borde por hora"— y separarlas obligaba a acertar la combinación: elegir m²/h
+ * y después buscar qué área. Acá se ofrecen ya combinadas; al elegir una se
+ * escriben los dos params, que es lo que el motor y el guardado esperan.
+ */
+export function getRitmoMagnitudOptions(
+  familia?: FamiliaParaMagnitudes & FamiliaParaDefaults,
+  paramsPaso?: Record<string, unknown> | null,
+  unidadCantidad?: string | null,
+): Array<{ value: string; label: string; unidad: string; fuente: string }> {
+  const NOMBRES: Record<string, string> = {
+    cantidad_montaje: "piezas a montar",
+    area_piezas_m2: "metros cuadrados",
+    m2_instalados: "m² instalados",
+    metros_lineales: "metros lineales cotizados",
+    perimetro_piezas_m: "metros de perímetro",
+    perimetro_lados_efecto: "metros de borde",
+  };
+  const salida: Array<{
+    value: string;
+    label: string;
+    unidad: string;
+    fuente: string;
+  }> = [];
+  const vistos = new Set<string>();
+  for (const unidad of ["unidades_h", "m2_h", "ml_h"]) {
+    for (const opcion of getT2QuantitySourceOptions(
+      unidad,
+      familia,
+      paramsPaso,
+    )) {
+      // "Cantidad efectiva del paso" existe bajo las tres unidades y es una
+      // sola idea: se ofrece una vez, contando lo que el paso cuenta.
+      if (opcion.value === "cantidad" && vistos.has("cantidad")) continue;
+      vistos.add(opcion.value);
+      const label =
+        opcion.value === "cantidad"
+          ? (unidadCantidad ?? "unidades")
+          : (NOMBRES[opcion.value] ??
+            (opcion.value.startsWith("derivada:")
+              ? opcion.label.split(" (")[0].toLowerCase()
+              : opcion.label.toLowerCase()));
+      salida.push({
+        value: `${unidad}|${opcion.value}`,
+        label,
+        unidad,
+        fuente: opcion.value,
+      });
+    }
+  }
+  return salida;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
