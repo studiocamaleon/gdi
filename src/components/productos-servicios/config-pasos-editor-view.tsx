@@ -10299,6 +10299,100 @@ function SeccionGuiada({
 }
 
 /**
+ * Encabezado de un GRUPO de cards (sin fondo, como en el diseño): un check de
+ * estado, el título con un chip de conteo, la descripción, y una acción a la
+ * derecha (p.ej. "Agregar componente"). Lo usan los grupos que tienen varias
+ * cards debajo — hoy, los materiales.
+ */
+function EncabezadoGrupo({
+  titulo,
+  conteo,
+  descripcion,
+  resuelto,
+  derecha,
+}: {
+  titulo: string;
+  conteo?: string;
+  descripcion?: string;
+  resuelto: boolean;
+  derecha?: React.ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "flex-start",
+        gap: 10,
+        padding: "2px 2px 4px",
+      }}
+    >
+      <span
+        aria-hidden
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 18,
+          height: 18,
+          borderRadius: "50%",
+          flexShrink: 0,
+          marginTop: 1,
+          ...(resuelto
+            ? { background: "#22a06b", color: "#fff" }
+            : {
+                background: "color-mix(in srgb, #b7791f 14%, transparent)",
+                border: "1px solid #d8b671",
+              }),
+        }}
+      >
+        {resuelto ? <CheckIcon className="size-3" strokeWidth={3} /> : null}
+      </span>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            fontSize: 15,
+            fontWeight: 600,
+          }}
+        >
+          {titulo}
+          {conteo ? (
+            <span
+              style={{
+                fontFamily: "var(--font-mono, ui-monospace)",
+                fontSize: 10.5,
+                color: "var(--muted-text-2, #92929b)",
+                border: "1px solid var(--hairline, #e5e2db)",
+                borderRadius: 5,
+                padding: "2px 7px",
+                background: "var(--surface, #fff)",
+              }}
+            >
+              {conteo}
+            </span>
+          ) : null}
+        </div>
+        {descripcion ? (
+          <div
+            style={{
+              fontSize: 12.5,
+              color: "var(--muted-text, #6e6e76)",
+              marginTop: 2,
+              maxWidth: "66ch",
+            }}
+          >
+            {descripcion}
+          </div>
+        ) : null}
+      </div>
+      {derecha ? <div style={{ flexShrink: 0 }}>{derecha}</div> : null}
+    </div>
+  );
+}
+
+/**
  * La card de EJE (docs/editor-pasos-preguntas-orden.md §3).
  *
  * Un eje es UNA decisión ("cuánto tarda este paso"), aunque el modelo la
@@ -10322,6 +10416,7 @@ function EjeGuiado({
   onAplicar,
   renderComponente,
   accionExtra,
+  fijo = false,
 }: {
   titulo: string;
   subtitulo?: string;
@@ -10339,12 +10434,19 @@ function EjeGuiado({
   renderComponente: (id: string) => React.ReactNode;
   /** Un control extra a la izquierda del "Cambiar" (p.ej. "Quitar" material). */
   accionExtra?: React.ReactNode;
+  /**
+   * `fijo`: encabezado de sección siempre abierto, sin fondo ni "Cambiar" —
+   * el check del encabezado dice si está resuelto. Para las secciones que se
+   * revisan de arriba a abajo. Sin `fijo` (materiales), la card colapsa.
+   */
+  fijo?: boolean;
 }) {
   const sinResolver = (op: OpcionPaso) =>
     op.origenValor(ctx) === "sin-definir" ||
     (op.pendiente != null && pendientesVivos.has(op.pendiente));
   const faltaAlgo = opciones.some(sinResolver);
-  const [abierto, setAbierto] = React.useState(faltaAlgo);
+  const [colapsado, setColapsado] = React.useState(!faltaAlgo);
+  const abierto = fijo || !colapsado;
   if (opciones.length === 0) return null;
 
   // La línea del eje: primero lo que lo define (el ritmo, no "se calcula
@@ -10437,7 +10539,7 @@ function EjeGuiado({
               maxWidth: 560,
             }}
           >
-            {abierto ? (subtitulo ?? linea) : linea}
+            {fijo ? subtitulo : abierto ? (subtitulo ?? linea) : linea}
           </div>
         </div>
         <div
@@ -10449,14 +10551,16 @@ function EjeGuiado({
           }}
         >
           {accionExtra}
-          <button
-            type="button"
-            className="btn"
-            style={{ fontSize: 12, whiteSpace: "nowrap" }}
-            onClick={() => setAbierto(!abierto)}
-          >
-            {abierto ? "Listo" : "Cambiar"}
-          </button>
+          {fijo ? null : (
+            <button
+              type="button"
+              className="btn"
+              style={{ fontSize: 12, whiteSpace: "nowrap" }}
+              onClick={() => setColapsado(!colapsado)}
+            >
+              {abierto ? "Listo" : "Cambiar"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -10770,6 +10874,79 @@ function ControlGuiado({
 
   // Segmented: dos o tres opciones excluyentes que en el eje se leen mejor
   // como un solo control que como botones sueltos.
+  if (control.tipo === "pills" && enEje && control.presentacion === "tarjetas") {
+    // Tarjetas con radio: una decisión importante (quién elige el material),
+    // no un toggle de pasada. Como la bifurcación del tiempo.
+    const actual = control.valor(ctx);
+    return (
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gap: 8,
+        }}
+      >
+        {control.opciones(ctx).map((op) => {
+          const activa = actual === op.value;
+          return (
+            <button
+              key={op.value}
+              type="button"
+              onClick={() => onAplicar(control.aplicar(ctx, op.value))}
+              style={{
+                textAlign: "left",
+                borderRadius: 9,
+                padding: "10px 12px",
+                background: "var(--surface, #fff)",
+                border: activa
+                  ? "1.5px solid var(--fg, #14141a)"
+                  : "1px solid var(--hairline, #e5e2db)",
+                cursor: "pointer",
+                display: "flex",
+                gap: 9,
+                alignItems: "flex-start",
+              }}
+            >
+              <span
+                aria-hidden
+                style={{
+                  marginTop: 2,
+                  width: 14,
+                  height: 14,
+                  borderRadius: "50%",
+                  flexShrink: 0,
+                  border: activa
+                    ? "4px solid var(--fg, #14141a)"
+                    : "1px solid var(--hairline-strong, #c8c4ba)",
+                }}
+              />
+              <span style={{ minWidth: 0 }}>
+                <span
+                  style={{ display: "block", fontSize: 12.5, fontWeight: 500 }}
+                >
+                  {op.label}
+                </span>
+                {op.descripcion ? (
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: 11,
+                      color: "var(--muted-text, #6e6e76)",
+                      marginTop: 2,
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {op.descripcion}
+                  </span>
+                ) : null}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
   if (control.tipo === "pills" && enEje) {
     const actual = control.valor(ctx);
     return (
@@ -11769,6 +11946,7 @@ function SeccionesEsquemaPaso({
               subtitulo="Cómo se llama acá y quién lo hace."
               opciones={opcionesDeEje("identidad", ctx)}
               grupos={GRUPOS_EJE.identidad}
+              fijo
               resumenPrincipal={["activacion.nombre", "quien.tercerizado"]}
               ctx={ctx}
               pendientesVivos={pendientesVivos}
@@ -11780,6 +11958,7 @@ function SeccionesEsquemaPaso({
               subtitulo="Si corre siempre, si es opcional o si depende de una condición del pedido."
               opciones={opcionesDeEje("activacion", ctx)}
               grupos={GRUPOS_EJE.activacion}
+              fijo
               resumenPrincipal={["activacion.cuando", "activacion.regla"]}
               ctx={ctx}
               pendientesVivos={pendientesVivos}
@@ -11796,6 +11975,7 @@ function SeccionesEsquemaPaso({
                   subtitulo="El fierro que ejecuta el paso y cómo queda configurado."
                   opciones={opcionesDeEje("maquina", ctx)}
                   grupos={GRUPOS_EJE.maquina}
+                  fijo
                   resumenPrincipal={[
                     "maquina.maquina",
                     "maquina.candidatas",
@@ -11809,41 +11989,34 @@ function SeccionesEsquemaPaso({
                 {/* Materiales (sub-fase C): agregar a nivel paso + un
                     grupo por slot configurado, cada uno con las
                     preguntas del esquema evaluadas con ese slot. */}
-                {/* Materiales: el título de la sección y su única
-                    pregunta de nivel paso ("¿qué materiales gasta acá?", que
-                    es el afijo de agregar). Cada material configurado es su
-                    propia card de eje abajo. */}
-                <div
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 650,
-                    letterSpacing: 0.4,
-                    textTransform: "uppercase",
-                    color: "var(--muted-text, #6e6e76)",
-                  }}
-                >
-                  Materiales
-                </div>
-                {opcionesDeSeccion("materiales", ctx)
-                  .filter((op) => op.clave === "materiales.agregar")
-                  .map((op) => (
-                    <OpcionGuiadaFila
-                      key={op.clave}
-                      opcion={op}
-                      ctx={ctx}
-                      abiertaInicial={
-                        (op.pendiente != null &&
-                          pendientesVivos.has(op.pendiente)) ||
-                        op.origenValor(ctx) === "sin-definir"
+                {/* Encabezado de grupo (sin fondo): cada material es su
+                    card debajo. "Agregar componente" agrega un material. */}
+                {(() => {
+                  const slotsVisibles = (cfg.slotsMateriales ?? []).filter(
+                    (sl) => {
+                      const d = familia?.slotsRequeridos.find(
+                        (sr) => sr.codigo === sl.slotCodigo,
+                      );
+                      return !(d && isConsumibleMaquinaSlot(d));
+                    },
+                  );
+                  const materialesFaltan = vivos.some(
+                    (pnd) => pnd.slotCodigo != null,
+                  );
+                  return (
+                    <EncabezadoGrupo
+                      titulo="Materiales que consume"
+                      conteo={
+                        slotsVisibles.length === 1
+                          ? "1 componente"
+                          : `${slotsVisibles.length} componentes`
                       }
-                      pendienteVivo={
-                        op.pendiente != null &&
-                        pendientesVivos.has(op.pendiente)
-                      }
-                      onAplicar={onAplicar}
-                      renderComponente={renderComponente}
+                      descripcion="Un componente por cada tipo de material que gasta el paso: sustrato, tinta, perfilería, chapa. Cada uno define qué se usa, quién lo elige y cuánto se descuenta."
+                      resuelto={slotsVisibles.length > 0 && !materialesFaltan}
+                      derecha={renderComponente("agregar-slot")}
                     />
-                  ))}
+                  );
+                })()}
                 {(cfg.slotsMateriales ?? []).map((slot, slotIdx) => {
                   const decl =
                     familia?.slotsRequeridos.find(
@@ -12000,6 +12173,7 @@ function SeccionesEsquemaPaso({
                   subtitulo="Cómo se calcula el tiempo de este paso: quién lo estima, a qué ritmo y sobre cuántas piezas."
                   opciones={opcionesDeEje("tiempo", ctx)}
                   grupos={GRUPOS_EJE.tiempo}
+                  fijo
                   resumenPrincipal={[
                     "tiempo.productividad",
                     "tiempo.batch",

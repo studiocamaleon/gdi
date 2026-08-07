@@ -159,6 +159,9 @@ export type ControlOpcion =
     }
   | {
       tipo: "pills" | "select";
+      /** `tarjetas`: en vez de botones chicos, tarjetas con radio + título +
+       *  descripción (una decisión importante, como "quién elige el material"). */
+      presentacion?: "tarjetas";
       opciones: (ctx: ContextoOpcion) => Array<{
         value: string;
         label: string;
@@ -1602,8 +1605,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "materiales.quien",
     seccion: "materiales",
-    grupo: "cual",
-    etiqueta: "Quién decide",
+    grupo: "quien",
+    etiqueta: " ",
+    anchoCompleto: true,
     pregunta: "¿Quién decide cuál se usa?",
     ayuda:
       "Material fijo (lo dejás definido acá), el comercial elige al cotizar, o el sistema elige solo con un criterio.",
@@ -1622,6 +1626,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
           label: o.label,
           descripcion: o.description,
         })),
+      presentacion: "tarjetas",
       valor: (ctx) => ctx.slot?.payload.modoSeleccion ?? "HARDCODED",
       aplicar: (_ctx, v) => ({
         tipo: "slot",
@@ -1691,7 +1696,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "materiales.criterio",
     seccion: "materiales",
-    grupo: "cual",
+    grupo: "criterio",
     etiqueta: "Criterio del sistema",
     pregunta: "¿Con qué criterio elige el sistema?",
     ayuda:
@@ -1732,7 +1737,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "materiales.consumo",
     seccion: "materiales",
-    grupo: "consumo",
+    grupo: "descuento",
     etiqueta: "Consumo",
     pregunta: "¿Cómo se calcula el consumo?",
     ayuda:
@@ -1778,7 +1783,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "materiales.costeo",
     seccion: "materiales",
-    grupo: "consumo",
+    grupo: "descuento",
     etiqueta: "Costeo",
     pregunta: "¿Cómo se costea este material?",
     ayuda:
@@ -1838,7 +1843,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "materiales.base",
     seccion: "materiales",
-    grupo: "consumo",
+    grupo: "descuento",
     anchoCompleto: true,
     pregunta: "¿Por cada cuántos se gasta uno?",
     ayuda:
@@ -1876,7 +1881,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   {
     clave: "materiales.caras",
     seccion: "materiales",
-    grupo: "consumo",
+    grupo: "descuento",
     etiqueta: "Doble faz",
     pregunta: "¿La doble faz gasta doble?",
     ayuda:
@@ -2259,18 +2264,35 @@ const GRUPOS_MAQUINA: GrupoEje[] = [
 /** Los sub-bloques de la card de UN material (se repite por slot). */
 export const GRUPOS_MATERIAL: GrupoEje[] = [
   {
-    id: "cual",
-    titulo: "Cuál material",
-    ayuda: "Qué se usa y quién lo decide al cotizar.",
+    id: "quien",
+    titulo: "Quién elige el material",
     estilo: "campos",
-    columnas: "minmax(0, 1fr) minmax(0, 260px)",
+    columnas: "minmax(0, 1fr)",
+    encabezado: "arriba",
   },
   {
-    id: "consumo",
-    titulo: "Consumo y costo",
-    ayuda: "Cuánto se gasta de este material y cómo se cobra.",
+    id: "cual",
+    titulo: "El material",
+    ayuda: "Qué materia prima gasta este componente.",
+    estilo: "campos",
+    columnas: "minmax(0, 1fr)",
+    encabezado: "arriba",
+  },
+  {
+    id: "criterio",
+    titulo: "Con qué criterio elige",
+    ayuda: "Entre los candidatos, cuál toma cuando hay más de uno que sirve.",
+    estilo: "campos",
+    columnas: "minmax(0, 1fr)",
+    encabezado: "arriba",
+  },
+  {
+    id: "descuento",
+    titulo: "Cuánto se descuenta",
+    ayuda: "Cómo se calcula el material que consume el paso en cada OT.",
     estilo: "campos",
     columnas: "minmax(0, 1fr) minmax(0, 260px)",
+    encabezado: "arriba",
   },
 ];
 

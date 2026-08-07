@@ -476,6 +476,35 @@ material); cada material configurado es su card debajo.
 
 Sin cambios de motor: golden masters 148/148 y 7/7.
 
+## 7.quater El patrón de encabezado fijo + Materiales rediseñado (2026-08-07)
+
+**Decisión de Lucas, con la que coincido**: en el editor enfocado (una pantalla
+por paso, se recorre de arriba a abajo) el "Cambiar" de cada sección es un click
+de más. Las secciones pasan a estar **siempre abiertas**, con el **check del
+encabezado** cargando la señal de "resuelto/falta" que antes daba la línea
+colapsada. Sólo los **materiales** siguen en acordeón, porque un paso puede
+tener varios y abrirlos todos comería la pantalla.
+
+Precisión de Lucas sobre el fondo: **las secciones llevan card (fondo); sin
+fondo van sólo los encabezados de grupo.** Así:
+
+- Cada eje (Qué paso es, Cuándo se ejecuta, En qué máquina, Cuánto tarda) es una
+  card siempre abierta, sin "Cambiar" (`fijo` en `EjeGuiado`).
+- **Materiales** es un **encabezado de grupo sin fondo** —"Materiales que
+  consume · N componentes" + descripción + "Agregar componente"
+  (`EncabezadoGrupo`)— y **cada material una card** que sí colapsa.
+
+Y el interior de la card de material se rehízo sobre el diseño
+`pasos/Materiales que consume.html`: cuatro sub-secciones apiladas — **Quién
+elige el material** (tres tarjetas con radio: fijo / comercial / sistema, no
+tres pills), **El material** (el buscador + lista), **Con qué criterio elige**
+(sólo cuando elige el sistema) y **Cuánto se descuenta**. El buscador de
+materiales reusa los componentes que ya traían los datos reales.
+
+Nada de esto es maquillaje suelto: `EjeGuiado` ganó un modo `fijo`, las pills
+un `presentacion: "tarjetas"`, y los grupos de material se declaran igual que
+los de cualquier eje. Golden masters 148/148 y 7/7.
+
 ## 8. El repaso, familia por familia
 
 Abrir un paso REAL de cada familia en dev y leer lo que muestra, como se hizo
