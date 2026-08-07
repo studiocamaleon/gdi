@@ -114,6 +114,7 @@ import {
 } from "@/lib/producto-personalizaciones";
 import { PasoExtraEditor } from "@/components/productos-servicios/paso-extra-editor";
 import { ParamsFamiliaFields } from "@/components/productos-servicios/params-familia-fields";
+import { EfectosPasoFields } from "@/components/productos-servicios/efectos-paso-fields";
 import {
   getLabel,
   mecanismoCantidadLabels,
@@ -10888,6 +10889,17 @@ function SeccionesEsquemaPaso({
                 />
               </div>
             ) : null;
+          }
+          if (id === "efectos-paso") {
+            // [Efectos] Lo que el paso le exige al trabajo. Escribe en
+            // paramsPasoJson igual que los params de familia, así el motor
+            // lo lee sin una columna nueva.
+            return (
+              <EfectosPasoFields
+                params={asRecord(cfg.paramsPasoJson)}
+                onChange={(patch) => onParams(pasoActual.id, patch)}
+              />
+            );
           }
           if (id === "acomodado-detallado") {
             return (

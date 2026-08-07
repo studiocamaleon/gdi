@@ -320,6 +320,7 @@ function serializarFamilia(
     multiplicadoresSoportados: f.multiplicadoresSoportados,
     slotsRequeridos: f.slotsRequeridos,
     mutaMedidasEnPrePasada: f.mutaMedidasEnPrePasada ?? false,
+    efectosSoportados: f.efectosSoportados ?? [],
     nestingConfig: f.nestingConfig ?? null,
     esImpresion: f.esImpresion ?? false,
     tiposPerfilCompatibles: f.tiposPerfilCompatibles ?? null,

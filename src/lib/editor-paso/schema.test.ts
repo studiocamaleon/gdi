@@ -90,6 +90,8 @@ const CENSO: Record<string, string[]> = {
     // densidad del sembrado, lados de la demasía) entran al guiado — antes
     // sólo existían en el detallado (ParamsFamiliaFields).
     "oficio.params_familia",
+    // [Efectos] lo que el paso le exige al trabajo (demasía de medida).
+    "oficio.efectos",
     "oficio.talonario",
     "oficio.setup",
     "oficio.cleanup",

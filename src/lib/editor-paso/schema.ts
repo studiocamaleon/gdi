@@ -30,6 +30,12 @@ import {
   etiquetaValorParam,
 } from "../params-familia";
 import {
+  declaraEfectoDemasia,
+  leerEfectoDemasia,
+  resumirEfectoDemasia,
+  soportaDemasiaMedida,
+} from "../efectos-paso";
+import {
   NIVEL_COBERTURA_LABELS,
   type NivelCobertura,
 } from "../cobertura-toner";
@@ -184,7 +190,8 @@ export type ControlOpcion =
         | "base-consumo"
         | "tercerizado-panel"
         | "acomodado-detallado"
-        | "params-familia";
+        | "params-familia"
+        | "efectos-paso";
     };
 
 export interface OpcionPaso {
@@ -1738,6 +1745,28 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
         : "default-paso";
     },
     control: { tipo: "componente", id: "params-familia" },
+  },
+  {
+    // [Efectos] Lo que el paso le EXIGE al trabajo, más allá de consumir
+    // tiempo y materiales: el tensado de una lona necesita 100 mm por lado
+    // para envolver el bastidor. Antes esto sólo existía como una familia
+    // aparte ("Modificación previa"), un paso fantasma que no producía nada.
+    clave: "oficio.efectos",
+    seccion: "oficio",
+    pregunta: "¿Este paso le exige algo al trabajo?",
+    ayuda:
+      "Si para hacerlo la pieza tiene que venir más grande (envolver un bastidor, coser un bolsillo, dejar borde para perforar), decilo acá: el material se agranda antes de imprimir, aunque este paso vaya al final.",
+    visible: (ctx) => soportaDemasiaMedida(ctx.familia),
+    resumen: (ctx) => {
+      const efecto = leerEfectoDemasia(ctx.paramsPaso);
+      if (efecto) return `Material extra: ${resumirEfectoDemasia(efecto)}`;
+      return declaraEfectoDemasia(ctx.paramsPaso)
+        ? "Pide material extra, pero falta el lado o los milímetros"
+        : "No exige nada: trabaja sobre la medida que llega";
+    },
+    origenValor: (ctx) =>
+      declaraEfectoDemasia(ctx.paramsPaso) ? "config" : "default-paso",
+    control: { tipo: "componente", id: "efectos-paso" },
   },
   {
     // Vivía en Tiempo y costo; es una decisión de oficio sobre cómo se

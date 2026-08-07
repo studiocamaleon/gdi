@@ -478,6 +478,9 @@ export interface FamiliaListItem {
   /** La familia MUTA medidas en la pre-pasada (demasías): no acomoda piezas
    *  — el editor no le ofrece la card de Acomodado (H10). */
   mutaMedidasEnPrePasada?: boolean;
+  /** [Efectos] Qué le puede exigir al trabajo un paso de esta familia
+   *  (docs/efectos-de-paso-diseno.md). Gobierna qué ofrece el editor. */
+  efectosSoportados?: string[];
   /** [Etapa F3] La familia es de impresión con modos de color: habilita la
    *  pregunta de modo color en el editor. */
   esImpresion?: boolean;

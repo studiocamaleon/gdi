@@ -1729,8 +1729,10 @@ const modificacion_pre: DefinicionFamilia = {
   efectosSoportados: ['demasiaMedida'],
   // [P1] Antes: rama modificacion_pre en resolverCantidad del motor.
   primitivas: { cantidadPropia: 'ml_union_visible' },
-  // [Tanda B] Antes: FAMILIAS_CON_PARAMS_EDITABLES en el frontend.
-  editorParamsGenerico: true,
+  // [F2 efectos] Ya NO declara `editorParamsGenerico`: sus tres params
+  // (subTipo, lados, demasiaMm) son exactamente el efecto, y tenerlos también
+  // en la card genérica daba dos controles para el mismo dato. El schema queda
+  // como documentación de lo que guardaron las rutas viejas.
   nombre: 'Refuerzo / bolsillo de lona (demasía)',
   categoria: 'operaciones_manuales',
   descripcion:

@@ -208,8 +208,13 @@ regla de oro. La fusión lo corrige de paso.
   el efecto declara la **capacidad** `refuerza` — "esta demasía deja una banda
   plana perforable" — que es lo único que los ojales miraban. Ninguna ruta se
   tocó: golden masters 148 y 7 idénticos.
-- **F2** — el editor: card "¿Este paso le exige algo al trabajo?" en los pasos
-  cuya familia lo soporte, con lados + mm.
+- **F2 — HECHA**: el editor. Card `oficio.efectos` ("¿Este paso le exige algo al
+  trabajo?") visible en toda familia que declare `efectosSoportados`: lados,
+  milímetros por lado y la capacidad "deja una banda plana donde se puede
+  perforar". Escribe en el formato nuevo y apaga el viejo en el mismo patch, así
+  un paso nunca queda con dos verdades. `modificacion_pre` soltó
+  `editorParamsGenerico`: sus tres params ERAN el efecto y tener las dos cards
+  daba dos controles para el mismo dato.
 - **F3** — el tiempo: resolver el punto abierto §7 y darle al paso su magnitud.
 - **F4** — migración y poda: la ruta del Backlight pasa a 8 pasos ("Tensado
   de lona" absorbe el efecto y sus 100 mm × 4 lados); el Frontlight suelta su
